@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from ..core.config import Settings, get_settings
@@ -32,8 +32,15 @@ from ..models.provider import (
     ListProvidersResponse,
     Provider,
 )
+from ..models.model import (
+    Model,
+    ModelRegistrationRequest,
+    ModelUpdateRequest,
+    ListModelsResponse,
+)
 from ..services.executor import EvaluationExecutor
 from ..services.mlflow_client import MLFlowClient
+from ..services.model_service import ModelService
 from ..services.parser import RequestParser
 from ..services.provider_service import ProviderService
 from ..services.response_builder import ResponseBuilder
@@ -68,9 +75,19 @@ def get_response_builder(settings: Settings = Depends(get_settings)) -> Response
     return ResponseBuilder(settings)
 
 
-def get_provider_service(settings: Settings = Depends(get_settings)) -> ProviderService:
-    """Dependency to get provider service."""
-    return ProviderService(settings)
+def get_provider_service(request: Request) -> ProviderService:
+    """Dependency to get provider service from app state (loaded at startup)."""
+    if not hasattr(request.app.state, 'provider_service'):
+        settings = get_settings()
+        provider_service = ProviderService(settings)
+        provider_service.initialize()
+        request.app.state.provider_service = provider_service
+    return request.app.state.provider_service
+
+
+def get_model_service(settings: Settings = Depends(get_settings)) -> ModelService:
+    """Dependency to get model service."""
+    return ModelService(settings)
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -688,6 +705,169 @@ async def reload_providers(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to reload providers: {str(e)}",
+        )
+
+
+# Model Management Endpoints
+
+
+@router.get("/models", response_model=ListModelsResponse)
+async def list_models(
+    include_inactive: bool = Query(True, description="Include inactive models"),
+    model_service: ModelService = Depends(get_model_service),
+) -> ListModelsResponse:
+    """List all registered and runtime models."""
+    logger.info("Listing all models", include_inactive=include_inactive)
+    return model_service.get_all_models(include_inactive=include_inactive)
+
+
+@router.get("/models/{model_id}", response_model=Model)
+async def get_model(
+    model_id: str,
+    model_service: ModelService = Depends(get_model_service),
+) -> Model:
+    """Get details of a specific model."""
+    model = model_service.get_model_by_id(model_id)
+    if not model:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Model {model_id} not found",
+        )
+
+    logger.info("Retrieved model details", model_id=model_id)
+    return model
+
+
+@router.post("/models", response_model=Model, status_code=status.HTTP_201_CREATED)
+async def register_model(
+    request: ModelRegistrationRequest,
+    model_service: ModelService = Depends(get_model_service),
+) -> Model:
+    """Register a new model."""
+    try:
+        model = model_service.register_model(request)
+        logger.info(
+            "Model registered successfully",
+            model_id=request.model_id,
+            model_name=request.model_name,
+        )
+        return model
+    except ValueError as e:
+        logger.error(
+            "Failed to register model",
+            model_id=request.model_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        logger.error(
+            "Unexpected error registering model",
+            model_id=request.model_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to register model: {str(e)}",
+        )
+
+
+@router.put("/models/{model_id}", response_model=Model)
+async def update_model(
+    model_id: str,
+    request: ModelUpdateRequest,
+    model_service: ModelService = Depends(get_model_service),
+) -> Model:
+    """Update an existing registered model."""
+    try:
+        model = model_service.update_model(model_id, request)
+        if not model:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Model {model_id} not found",
+            )
+
+        logger.info("Model updated successfully", model_id=model_id)
+        return model
+    except ValueError as e:
+        logger.error(
+            "Failed to update model",
+            model_id=model_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        logger.error(
+            "Unexpected error updating model",
+            model_id=model_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update model: {str(e)}",
+        )
+
+
+@router.delete("/models/{model_id}")
+async def delete_model(
+    model_id: str,
+    model_service: ModelService = Depends(get_model_service),
+) -> JSONResponse:
+    """Delete a registered model."""
+    try:
+        success = model_service.delete_model(model_id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Model {model_id} not found",
+            )
+
+        logger.info("Model deleted successfully", model_id=model_id)
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"message": f"Model {model_id} deleted successfully"},
+        )
+    except ValueError as e:
+        logger.error(
+            "Failed to delete model",
+            model_id=model_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        logger.error(
+            "Unexpected error deleting model",
+            model_id=model_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete model: {str(e)}",
+        )
+
+
+@router.post("/models/reload")
+async def reload_runtime_models(
+    model_service: ModelService = Depends(get_model_service),
+) -> dict[str, str]:
+    """Reload runtime models from environment variables."""
+    try:
+        model_service.reload_runtime_models()
+        logger.info("Runtime models reloaded successfully")
+        return {"message": "Runtime models reloaded from environment variables successfully"}
+    except Exception as e:
+        logger.error("Failed to reload runtime models", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reload runtime models: {str(e)}",
         )
 
 

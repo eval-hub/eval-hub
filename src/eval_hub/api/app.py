@@ -12,6 +12,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 from ..core.config import get_settings
 from ..core.exceptions import EvaluationServiceError, ExecutionError, ValidationError
 from ..core.logging import get_logger, log_request_end, log_request_start, setup_logging
+from ..services.provider_service import ProviderService
 from .routes import router
 
 # Prometheus metrics
@@ -39,6 +40,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Set startup time for health checks
     app.state.start_time = time.time()
+
+    # Initialize and load provider service at startup
+    provider_service = ProviderService(settings)
+    provider_service.initialize()
+    app.state.provider_service = provider_service
+    logger.info("Provider service initialized and loaded into memory")
 
     yield
 

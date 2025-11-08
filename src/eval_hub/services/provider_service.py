@@ -71,9 +71,16 @@ class ProviderService:
 
             return self._providers_data
 
+        except FileNotFoundError as e:
+            logger.error("Failed to load providers data", error=str(e))
+            raise
         except Exception as e:
             logger.error("Failed to load providers data", error=str(e))
             raise
+
+    def initialize(self) -> None:
+        """Initialize and load providers data at startup."""
+        self._load_providers_data()
 
     def _build_lookup_tables(self) -> None:
         """Build lookup tables for fast access to providers, benchmarks, and collections."""
