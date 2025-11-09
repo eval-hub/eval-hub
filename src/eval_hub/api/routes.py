@@ -298,7 +298,7 @@ async def create_single_benchmark_evaluation(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Validation error: {e.message}",
-        )
+        ) from e
 
     except Exception as e:
         logger.error(
@@ -310,7 +310,7 @@ async def create_single_benchmark_evaluation(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create evaluation: {str(e)}",
-        )
+        ) from e
 
 
 @router.post(
@@ -393,7 +393,7 @@ async def create_evaluation(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Validation error: {e.message}",
-        )
+        ) from e
 
     except Exception as e:
         logger.error(
@@ -404,7 +404,7 @@ async def create_evaluation(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create evaluation: {str(e)}",
-        )
+        ) from e
 
 
 @router.get("/evaluations/{request_id}", response_model=EvaluationResponse)
@@ -621,7 +621,7 @@ async def list_all_benchmarks(
             }
             benchmarks.append(benchmark_dict)
 
-        provider_ids = list(set(b["provider_id"] for b in benchmarks))
+        provider_ids = list({b["provider_id"] for b in benchmarks})
 
         return ListBenchmarksResponse(
             benchmarks=benchmarks,
@@ -723,7 +723,7 @@ async def reload_providers(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to reload providers: {str(e)}",
-        )
+        ) from e
 
 
 # Model Server Management Endpoints
@@ -780,7 +780,7 @@ async def register_server(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
     except Exception as e:
         logger.error(
             "Unexpected error registering server",
@@ -790,7 +790,7 @@ async def register_server(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to register server: {str(e)}",
-        )
+        ) from e
 
 
 @router.put("/servers/{server_id}", response_model=ModelServer)
@@ -819,7 +819,7 @@ async def update_server(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
     except Exception as e:
         logger.error(
             "Unexpected error updating server",
@@ -829,7 +829,7 @@ async def update_server(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update server: {str(e)}",
-        )
+        ) from e
 
 
 @router.delete("/servers/{server_id}")
@@ -860,7 +860,7 @@ async def delete_server(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
     except Exception as e:
         logger.error(
             "Unexpected error deleting server",
@@ -870,7 +870,7 @@ async def delete_server(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete server: {str(e)}",
-        )
+        ) from e
 
 
 # Model Management Endpoints
@@ -925,7 +925,7 @@ async def register_model(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
     except Exception as e:
         logger.error(
             "Unexpected error registering model",
@@ -935,7 +935,7 @@ async def register_model(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to register model: {str(e)}",
-        )
+        ) from e
 
 
 @router.put("/models/{model_id}", response_model=Model)
@@ -964,7 +964,7 @@ async def update_model(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
     except Exception as e:
         logger.error(
             "Unexpected error updating model",
@@ -974,7 +974,7 @@ async def update_model(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update model: {str(e)}",
-        )
+        ) from e
 
 
 @router.delete("/models/{model_id}")
@@ -1005,7 +1005,7 @@ async def delete_model(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
     except Exception as e:
         logger.error(
             "Unexpected error deleting model",
@@ -1015,7 +1015,7 @@ async def delete_model(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete model: {str(e)}",
-        )
+        ) from e
 
 
 @router.post("/models/reload")
@@ -1037,7 +1037,7 @@ async def reload_runtime_models(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to reload runtime models: {str(e)}",
-        )
+        ) from e
 
 
 @router.post("/servers/reload")
@@ -1054,7 +1054,7 @@ async def reload_runtime_servers(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to reload runtime servers: {str(e)}",
-        )
+        ) from e
 
 
 async def _execute_evaluation_async(
