@@ -149,14 +149,19 @@ curl -X POST "{{baseUrl}}/evaluations?async_mode=true" \
 curl -X POST "{{baseUrl}}/evaluations?async_mode=true" \
 -H "Content-Type: application/json" \
 -d '{
+  "model": {
+    "server": "vllm",
+    "name": "meta-llama/llama-3.1-8b",
+    "configuration": {
+      "temperature": 0.1,
+      "max_tokens": 512,
+      "top_p": 0.95
+    }
+  },
   "evaluations": [
     {
       "name": "Core Language Model Evaluation",
       "description": "Standard benchmarks for language model capabilities",
-      "model": {
-        "server": "ollama",
-        "name": "meta-llama/llama-3.1-8b"
-      },
       "benchmarks": [
         {
           "benchmark_id": "arc_easy",
@@ -180,10 +185,6 @@ curl -X POST "{{baseUrl}}/evaluations?async_mode=true" \
     {
       "name": "RAG and Security Assessment",
       "description": "Comprehensive safety and RAG evaluation",
-      "model": {
-        "server": "vllm",
-        "name": "meta-llama/llama-3.1-8b"
-      },
       "benchmarks": [
         {
           "benchmark_id": "faithfulness",
@@ -254,16 +255,18 @@ curl -X POST "{{baseUrl}}/evaluations?async_mode=true" \
 **Commentary**:
 
 The evaluation request uses a clean, flat structure for maximum simplicity and consistency:
+- **Single Model Configuration**: All evaluations in a request use the same model
 - **Evaluation** → **Benchmarks** with direct provider references
 - **Simple benchmark specification**: Each benchmark directly references `benchmark_id` + `provider_id`
 - **Provider-specific parameters**: All provider-specific config goes in the benchmark's `config` object
-- **Consistent schema**: No complex nesting - just model + benchmarks array
+- **Consistent schema**: No complex nesting - just model + evaluations + benchmarks array
 
 **Key Features:**
+- **Single Model Evaluation**: One model configuration applies to all benchmarks and evaluations in the request
 - **Direct provider mapping**: `"provider_id": "lm_evaluation_harness"` directly maps to available providers
-- **Benchmark flexibility**: Mix providers freely - LMEval, RAGAS, Garak in same evaluation
+- **Benchmark flexibility**: Mix providers freely - LMEval, RAGAS, Garak in same request
 - **Provider-specific config**: Each benchmark config contains only parameters relevant to that provider
-- **Model consistency**: Same model specification applies to all benchmarks in the evaluation
+- **Evaluation grouping**: Logical grouping of benchmarks for organization and reporting
 - **Async/sync modes**: Default async returns immediately with tracking IDs, sync blocks until completion
 - **MLFlow integration**: Automatic experiment tracking and result persistence
 
@@ -1083,13 +1086,13 @@ The `/evaluations` endpoint uses a simple, consistent structure for maximum clar
 
 ```
 EvaluationRequest
-├── evaluations[]                    # Multiple evaluation jobs
+├── model                           # Single model specification for all evaluations
+│   ├── server                      # Model server (vllm, ollama, etc.)
+│   ├── name                        # Model identifier
+│   └── configuration               # Model-specific params (temperature, etc.)
+├── evaluations[]                   # Multiple evaluation jobs
     ├── name                        # Human-readable name
     ├── description                 # Job description
-    ├── model                       # Model specification
-    │   ├── server                  # Model server (vllm, ollama, etc.)
-    │   ├── name                    # Model identifier
-    │   └── configuration           # Model-specific params (temperature, etc.)
     └── benchmarks[]                # Array of benchmarks to run
         ├── benchmark_id            # Direct benchmark identifier
         ├── provider_id             # Provider to use (lm_evaluation_harness, ragas, garak)
@@ -1162,39 +1165,58 @@ EvaluationRequest
 
 The simplified structure provides clear configuration patterns:
 
-1. **Model Configuration**: Applies to all benchmarks in the evaluation
-2. **Benchmark Configuration**: Each benchmark has its own provider-specific config
-3. **Provider Consistency**: All config for a provider goes in the benchmark's `config` object
+1. **Model Configuration**: Single model applies to all benchmarks and evaluations in the request
+2. **Evaluation Configuration**: Logical grouping of related benchmarks
+3. **Benchmark Configuration**: Each benchmark has its own provider-specific config
+4. **Provider Consistency**: All config for a provider goes in the benchmark's `config` object
 
-**Example of Multiple Benchmarks with Same Provider:**
+**Example of Multiple Evaluations with Mixed Providers:**
 ```json
 {
   "model": {
     "server": "vllm",
     "name": "meta-llama/llama-3.1-8b",
     "configuration": {
-      "temperature": 0.1,           // Applies to all benchmarks
+      "temperature": 0.1,           // Applies to all benchmarks across all evaluations
       "max_tokens": 512
     }
   },
-  "benchmarks": [
+  "evaluations": [
     {
-      "benchmark_id": "arc_easy",
-      "provider_id": "lm_evaluation_harness",
-      "config": {
-        "batch_size": 32,           // Specific to this benchmark
-        "num_fewshot": 0,
-        "device": "cuda:0"
-      }
+      "name": "Language Understanding",
+      "benchmarks": [
+        {
+          "benchmark_id": "arc_easy",
+          "provider_id": "lm_evaluation_harness",
+          "config": {
+            "batch_size": 32,       // Specific to this benchmark
+            "num_fewshot": 0,
+            "device": "cuda:0"
+          }
+        },
+        {
+          "benchmark_id": "mmlu",
+          "provider_id": "lm_evaluation_harness",
+          "config": {
+            "batch_size": 16,       // Different batch size for this benchmark
+            "num_fewshot": 5,
+            "device": "cuda:0"
+          }
+        }
+      ]
     },
     {
-      "benchmark_id": "mmlu",
-      "provider_id": "lm_evaluation_harness",
-      "config": {
-        "batch_size": 16,           // Different batch size for this benchmark
-        "num_fewshot": 5,
-        "device": "cuda:0"
-      }
+      "name": "RAG Evaluation",
+      "benchmarks": [
+        {
+          "benchmark_id": "faithfulness",
+          "provider_id": "ragas",
+          "config": {
+            "dataset_path": "./data/rag_test_set.jsonl",
+            "batch_size": 4         // RAGAS-specific configuration
+          }
+        }
+      ]
     }
   ]
 }
@@ -1269,6 +1291,199 @@ curl -X POST "{{baseUrl}}/evaluations" \
 # 3. Wait for completion
 # 4. Parse results for gate decisions
 ```
+
+---
+
+## Collection Evaluation Flow
+
+The eval-hub API efficiently handles collection evaluation by destructuring collections into individual benchmarks and routing them to appropriate providers. This section shows how the API optimizes provider execution through intelligent batching.
+
+### Collection to Provider Routing
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API as Eval-Hub API
+    participant DB as Collection DB
+    participant LMEval as LM-Eval Provider
+    participant RAGAS as RAGAS Provider
+    participant Garak as Garak Provider
+    participant MLFlow as MLFlow Tracking
+
+    Note over Client,MLFlow: Collection Evaluation Request Flow
+
+    Client->>API: POST /evaluations/collections/healthcare_safety_v1
+    Note right of Client: Collection-based evaluation request
+
+    API->>DB: GET /collections/healthcare_safety_v1
+    DB->>API: Collection details with benchmark list
+
+    Note over API: Collection contains:<br/>- medqa (lm_evaluation_harness)<br/>- medical_safety (lm_evaluation_harness)<br/>- medical_reasoning (lm_evaluation_harness)<br/>- hipaa_compliance (garak)<br/>- faithfulness (ragas)<br/>- answer_relevancy (ragas)
+
+    Note over API: Group benchmarks by provider
+
+    rect rgb(200, 230, 255)
+        Note over API,LMEval: LM-Eval supports batch execution
+        API->>LMEval: Single request with multiple benchmarks
+        Note right of API: POST /evaluate<br/>{<br/>  "model": {...},<br/>  "benchmarks": [<br/>    "medqa",<br/>    "medical_safety",<br/>    "medical_reasoning"<br/>  ]<br/>}
+        LMEval->>LMEval: Execute all 3 benchmarks in single run
+        LMEval->>API: Batch results for all 3 benchmarks
+    end
+
+    rect rgb(255, 230, 200)
+        Note over API,RAGAS: RAGAS individual executions
+        API->>RAGAS: POST /evaluate (faithfulness)
+        API->>RAGAS: POST /evaluate (answer_relevancy)
+        RAGAS->>API: faithfulness results
+        RAGAS->>API: answer_relevancy results
+    end
+
+    rect rgb(230, 255, 200)
+        Note over API,Garak: Garak individual execution
+        API->>Garak: POST /evaluate (hipaa_compliance)
+        Garak->>API: hipaa_compliance results
+    end
+
+    Note over API: Aggregate all provider results
+    API->>MLFlow: Log collection evaluation experiment
+    MLFlow->>API: Experiment ID and tracking URL
+
+    API->>Client: 202 ACCEPTED<br/>{<br/>  "request_id": "uuid",<br/>  "collection_id": "healthcare_safety_v1",<br/>  "evaluations": [<br/>    {"benchmark_id": "medqa", "provider_id": "lm_evaluation_harness"},<br/>    {"benchmark_id": "medical_safety", "provider_id": "lm_evaluation_harness"},<br/>    {"benchmark_id": "medical_reasoning", "provider_id": "lm_evaluation_harness"},<br/>    {"benchmark_id": "hipaa_compliance", "provider_id": "garak"},<br/>    {"benchmark_id": "faithfulness", "provider_id": "ragas"},<br/>    {"benchmark_id": "answer_relevancy", "provider_id": "ragas"}<br/>  ]<br/>}
+
+    Note over Client,MLFlow: Parallel execution across providers<br/>LMEval: 1 batch job (3 benchmarks)<br/>RAGAS: 2 individual jobs<br/>Garak: 1 individual job
+```
+
+### API Implementation Flow
+
+```mermaid
+flowchart TD
+    A[Collection Evaluation Request] --> B[Fetch Collection Definition]
+    B --> C[Extract Benchmark List]
+    C --> D[Group by Provider]
+
+    D --> E{Provider Capabilities}
+
+    E -->|LM-Eval<br/>Batch Capable| F[Create Single LMEval Request<br/>Multiple Benchmarks]
+    E -->|RAGAS<br/>Individual Only| G[Create Multiple RAGAS Requests<br/>One per Benchmark]
+    E -->|Garak<br/>Individual Only| H[Create Multiple Garak Requests<br/>One per Benchmark]
+
+    F --> I[Execute LMEval Batch]
+    G --> J[Execute RAGAS Jobs]
+    H --> K[Execute Garak Jobs]
+
+    I --> L[Collect Results]
+    J --> L
+    K --> L
+
+    L --> M[Aggregate Collection Results]
+    M --> N[Log to MLFlow]
+    N --> O[Return Tracking Response]
+
+    style F fill:#e1f5fe
+    style G fill:#fff3e0
+    style H fill:#f3e5f5
+```
+
+#### **POST** `/evaluations/collections/{collection_id}` - Evaluate Collection
+
+**Purpose**: Submit evaluation for an entire benchmark collection with automatic provider optimization
+**Response Model**: `EvaluationResponse`
+**Status Code**: `202 ACCEPTED`
+
+```bash
+curl -X POST "{{baseUrl}}/evaluations/collections/healthcare_safety_v1?async_mode=true" \
+-H "Content-Type: application/json" \
+-d '{
+  "model": {
+    "server": "vllm",
+    "name": "meta-llama/llama-3.1-8b",
+    "configuration": {
+      "temperature": 0.1,
+      "max_tokens": 512,
+      "top_p": 0.95
+    }
+  },
+  "experiment_name": "healthcare-model-certification",
+  "tags": {
+    "environment": "production",
+    "certification": "healthcare",
+    "model_version": "v2.1.0"
+  }
+}'
+```
+
+**Response Example**:
+```json
+{
+  "request_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "pending",
+  "collection_id": "healthcare_safety_v1",
+  "collection_name": "Healthcare Safety Assessment v1",
+  "optimizations_applied": {
+    "lm_evaluation_harness": {
+      "benchmarks_batched": 3,
+      "original_jobs": 3,
+      "optimized_jobs": 1,
+      "time_savings_percent": 67
+    },
+    "ragas": {
+      "benchmarks_batched": 0,
+      "original_jobs": 2,
+      "optimized_jobs": 2,
+      "time_savings_percent": 0
+    },
+    "garak": {
+      "benchmarks_batched": 0,
+      "original_jobs": 1,
+      "optimized_jobs": 1,
+      "time_savings_percent": 0
+    }
+  },
+  "evaluations": [
+    {
+      "evaluation_id": "eval_001_batch",
+      "name": "LMEval Healthcare Batch",
+      "benchmarks": [
+        {"benchmark_id": "medqa", "provider_id": "lm_evaluation_harness"},
+        {"benchmark_id": "medical_safety", "provider_id": "lm_evaluation_harness"},
+        {"benchmark_id": "medical_reasoning", "provider_id": "lm_evaluation_harness"}
+      ],
+      "status": "pending",
+      "batch_optimization": true
+    },
+    {
+      "evaluation_id": "eval_002",
+      "benchmark": {"benchmark_id": "faithfulness", "provider_id": "ragas"},
+      "status": "pending"
+    },
+    {
+      "evaluation_id": "eval_003",
+      "benchmark": {"benchmark_id": "answer_relevancy", "provider_id": "ragas"},
+      "status": "pending"
+    },
+    {
+      "evaluation_id": "eval_004",
+      "benchmark": {"benchmark_id": "hipaa_compliance", "provider_id": "garak"},
+      "status": "pending"
+    }
+  ],
+  "total_jobs": 4,
+  "total_benchmarks": 6,
+  "estimated_completion": "2025-01-15T11:45:00Z",
+  "experiment_id": "exp_12345",
+  "experiment_url": "http://mlflow:5000/experiments/12345",
+  "created_at": "2025-01-15T10:30:00Z"
+}
+```
+
+**Commentary**: Collection evaluation automatically optimizes execution by:
+
+1. **Provider Grouping**: Benchmarks are grouped by provider_id
+2. **Batch Optimization**: LM-Evaluation-Harness supports multi-benchmark execution, reducing from 3 jobs to 1
+3. **Parallel Execution**: Different providers run concurrently (4 total jobs vs 6 sequential)
+4. **Time Efficiency**: ~60% reduction in total execution time through intelligent batching
+5. **Resource Optimization**: Fewer job spawns, better resource utilization
+6. **Transparent Tracking**: Full visibility into optimization decisions and job structure
 
 ---
 
