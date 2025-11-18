@@ -1,0 +1,3453 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Eval Hub",
+    "description": "API REST server for evaluation backend orchestration on OpenShift",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/metrics": {
+      "get": {
+        "summary": "Metrics",
+        "description": "Prometheus metrics endpoint.",
+        "operationId": "metrics_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Health check endpoint.",
+        "operationId": "health_check_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/evaluations/benchmarks/{provider_id}/{benchmark_id}": {
+      "post": {
+        "summary": "Create Single Benchmark Evaluation",
+        "description": "Run an evaluation on a single benchmark (Llama Stack compatible API).",
+        "operationId": "create_single_benchmark_evaluation_api_v1_evaluations_benchmarks__provider_id___benchmark_id__post",
+        "parameters": [
+          {
+            "name": "provider_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider Id"
+            }
+          },
+          {
+            "name": "benchmark_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Benchmark Id"
+            }
+          },
+          {
+            "name": "async_mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Run evaluation asynchronously",
+              "default": true,
+              "title": "Async Mode"
+            },
+            "description": "Run evaluation asynchronously"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SingleBenchmarkEvaluationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/evaluations": {
+      "post": {
+        "summary": "Create Evaluation",
+        "description": "Create and execute evaluation request.",
+        "operationId": "create_evaluation_api_v1_evaluations_post",
+        "parameters": [
+          {
+            "name": "async_mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Run evaluation asynchronously",
+              "default": true,
+              "title": "Async Mode"
+            },
+            "description": "Run evaluation asynchronously"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List Evaluations",
+        "description": "List all evaluation requests.",
+        "operationId": "list_evaluations_api_v1_evaluations_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Maximum number of evaluations to return",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Maximum number of evaluations to return"
+          },
+          {
+            "name": "status_filter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by status",
+              "title": "Status Filter"
+            },
+            "description": "Filter by status"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EvaluationResponse"
+                  },
+                  "title": "Response List Evaluations Api V1 Evaluations Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/evaluations/{request_id}": {
+      "get": {
+        "summary": "Get Evaluation Status",
+        "description": "Get the status of an evaluation request.",
+        "operationId": "get_evaluation_status_api_v1_evaluations__request_id__get",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Cancel Evaluation",
+        "description": "Cancel a running evaluation.",
+        "operationId": "cancel_evaluation_api_v1_evaluations__request_id__delete",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/evaluations/{request_id}/summary": {
+      "get": {
+        "summary": "Get Evaluation Summary",
+        "description": "Get a summary of an evaluation request.",
+        "operationId": "get_evaluation_summary_api_v1_evaluations__request_id__summary_get",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Evaluation Summary Api V1 Evaluations  Request Id  Summary Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/metrics/system": {
+      "get": {
+        "summary": "Get System Metrics",
+        "description": "Get system metrics and statistics.",
+        "operationId": "get_system_metrics_api_v1_metrics_system_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get System Metrics Api V1 Metrics System Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/providers": {
+      "get": {
+        "summary": "List Providers",
+        "description": "List all registered evaluation providers.",
+        "operationId": "list_providers_api_v1_providers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListProvidersResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/providers/{provider_id}": {
+      "get": {
+        "summary": "Get Provider",
+        "description": "Get details of a specific provider.",
+        "operationId": "get_provider_api_v1_providers__provider_id__get",
+        "parameters": [
+          {
+            "name": "provider_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Provider"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/benchmarks": {
+      "get": {
+        "summary": "List All Benchmarks",
+        "description": "List all available benchmarks across providers (similar to Llama Stack format).",
+        "operationId": "list_all_benchmarks_api_v1_benchmarks_get",
+        "parameters": [
+          {
+            "name": "provider_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by provider ID",
+              "title": "Provider Id"
+            },
+            "description": "Filter by provider ID"
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by benchmark category",
+              "title": "Category"
+            },
+            "description": "Filter by benchmark category"
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by tags (comma-separated)",
+              "title": "Tags"
+            },
+            "description": "Filter by tags (comma-separated)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListBenchmarksResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/providers/{provider_id}/benchmarks": {
+      "get": {
+        "summary": "List Provider Benchmarks",
+        "description": "List benchmarks for a specific provider.",
+        "operationId": "list_provider_benchmarks_api_v1_providers__provider_id__benchmarks_get",
+        "parameters": [
+          {
+            "name": "provider_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BenchmarkDetail"
+                  },
+                  "title": "Response List Provider Benchmarks Api V1 Providers  Provider Id  Benchmarks Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/providers/{provider_id}/benchmarks/{benchmark_id}": {
+      "get": {
+        "summary": "Get Benchmark",
+        "description": "Get details of a specific benchmark.",
+        "operationId": "get_benchmark_api_v1_providers__provider_id__benchmarks__benchmark_id__get",
+        "parameters": [
+          {
+            "name": "provider_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider Id"
+            }
+          },
+          {
+            "name": "benchmark_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Benchmark Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BenchmarkDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/collections": {
+      "get": {
+        "summary": "List Collections",
+        "description": "List all benchmark collections.",
+        "operationId": "list_collections_api_v1_collections_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCollectionsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Collection",
+        "description": "Create a new collection.",
+        "operationId": "create_collection_api_v1_collections_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionCreationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Collection"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/collections/{collection_id}": {
+      "get": {
+        "summary": "Get Collection",
+        "description": "Get details of a specific collection.",
+        "operationId": "get_collection_api_v1_collections__collection_id__get",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Collection"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update Collection",
+        "description": "Update an existing collection.",
+        "operationId": "update_collection_api_v1_collections__collection_id__put",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Collection"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Collection",
+        "description": "Delete a collection.",
+        "operationId": "delete_collection_api_v1_collections__collection_id__delete",
+        "parameters": [
+          {
+            "name": "collection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/providers/reload": {
+      "post": {
+        "summary": "Reload Providers",
+        "description": "Reload provider configuration from file.",
+        "operationId": "reload_providers_api_v1_providers_reload_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Reload Providers Api V1 Providers Reload Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/servers": {
+      "get": {
+        "summary": "List Servers",
+        "description": "List all registered and runtime model servers.",
+        "operationId": "list_servers_api_v1_servers_get",
+        "parameters": [
+          {
+            "name": "include_inactive",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include inactive servers",
+              "default": true,
+              "title": "Include Inactive"
+            },
+            "description": "Include inactive servers"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListModelServersResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Register Server",
+        "description": "Register a new model server.",
+        "operationId": "register_server_api_v1_servers_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelServerRegistrationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelServer"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/servers/{server_id}": {
+      "get": {
+        "summary": "Get Server",
+        "description": "Get details of a specific model server.",
+        "operationId": "get_server_api_v1_servers__server_id__get",
+        "parameters": [
+          {
+            "name": "server_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Server Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelServer"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update Server",
+        "description": "Update an existing registered model server.",
+        "operationId": "update_server_api_v1_servers__server_id__put",
+        "parameters": [
+          {
+            "name": "server_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Server Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelServerUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelServer"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Server",
+        "description": "Delete a registered model server.",
+        "operationId": "delete_server_api_v1_servers__server_id__delete",
+        "parameters": [
+          {
+            "name": "server_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Server Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models": {
+      "get": {
+        "summary": "List Models",
+        "description": "List all models across all servers.",
+        "operationId": "list_models_api_v1_models_get",
+        "parameters": [
+          {
+            "name": "include_inactive",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include inactive models",
+              "default": true,
+              "title": "Include Inactive"
+            },
+            "description": "Include inactive models"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListModelsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Register Model",
+        "description": "Register a new model.",
+        "operationId": "register_model_api_v1_models_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelRegistrationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Model"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models/{model_id}": {
+      "get": {
+        "summary": "Get Model",
+        "description": "Get a model by ID.",
+        "operationId": "get_model_api_v1_models__model_id__get",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Model"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update Model",
+        "description": "Update an existing model.",
+        "operationId": "update_model_api_v1_models__model_id__put",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Model"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Model",
+        "description": "Delete a model.",
+        "operationId": "delete_model_api_v1_models__model_id__delete",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models/reload": {
+      "post": {
+        "summary": "Reload Runtime Models",
+        "description": "Reload runtime models from environment variables.",
+        "operationId": "reload_runtime_models_api_v1_models_reload_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/servers/reload": {
+      "post": {
+        "summary": "Reload Runtime Servers",
+        "description": "Reload runtime model servers from environment variables.",
+        "operationId": "reload_runtime_servers_api_v1_servers_reload_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Reload Runtime Servers Api V1 Servers Reload Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/api/v1/evaluation-results": {
+      "post": {
+        "summary": "Receive Evaluation Results",
+        "description": "Receive evaluation results from completed evaluation jobs via HTTP callback.",
+        "operationId": "receive_evaluation_results_api_v1_api_v1_evaluation_results_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Receive Evaluation Results Api V1 Api V1 Evaluation Results Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BackendSpec": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Backend name/identifier"
+          },
+          "type": {
+            "$ref": "#/components/schemas/BackendType",
+            "description": "Backend type"
+          },
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint",
+            "description": "Backend API endpoint"
+          },
+          "config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Config",
+            "description": "Backend-specific configuration"
+          },
+          "benchmarks": {
+            "items": {
+              "$ref": "#/components/schemas/BenchmarkSpec"
+            },
+            "type": "array",
+            "title": "Benchmarks",
+            "description": "Benchmarks to run on this backend"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name",
+          "type",
+          "benchmarks"
+        ],
+        "title": "BackendSpec",
+        "description": "Specification for an evaluation backend."
+      },
+      "BackendType": {
+        "type": "string",
+        "enum": [
+          "lm-evaluation-harness",
+          "guidellm",
+          "nemo-evaluator",
+          "custom"
+        ],
+        "title": "BackendType",
+        "description": "Supported evaluation backends."
+      },
+      "Benchmark": {
+        "properties": {
+          "benchmark_id": {
+            "type": "string",
+            "title": "Benchmark Id",
+            "description": "Unique benchmark identifier"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Human-readable benchmark name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Benchmark description"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "description": "Benchmark category"
+          },
+          "metrics": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Metrics",
+            "description": "List of metrics provided by this benchmark"
+          },
+          "num_few_shot": {
+            "type": "integer",
+            "title": "Num Few Shot",
+            "description": "Number of few-shot examples"
+          },
+          "dataset_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Size",
+            "description": "Size of the evaluation dataset"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "description": "Tags for categorization"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "benchmark_id",
+          "name",
+          "description",
+          "category",
+          "metrics",
+          "num_few_shot"
+        ],
+        "title": "Benchmark",
+        "description": "Benchmark specification."
+      },
+      "BenchmarkDetail": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "BenchmarkReference": {
+        "properties": {
+          "provider_id": {
+            "type": "string",
+            "title": "Provider Id",
+            "description": "Provider identifier"
+          },
+          "benchmark_id": {
+            "type": "string",
+            "title": "Benchmark Id",
+            "description": "Benchmark identifier"
+          },
+          "weight": {
+            "type": "number",
+            "title": "Weight",
+            "description": "Weight for this benchmark in collection scoring",
+            "default": 1.0
+          },
+          "config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Config",
+            "description": "Benchmark-specific configuration"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "provider_id",
+          "benchmark_id"
+        ],
+        "title": "BenchmarkReference",
+        "description": "Reference to a benchmark within a collection."
+      },
+      "BenchmarkSpec": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Benchmark name"
+          },
+          "tasks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tasks",
+            "description": "List of tasks to evaluate"
+          },
+          "num_fewshot": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Fewshot",
+            "description": "Number of few-shot examples"
+          },
+          "batch_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Size",
+            "description": "Batch size for evaluation"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit",
+            "description": "Limit number of examples"
+          },
+          "device": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device",
+            "description": "Device to run evaluation on"
+          },
+          "config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Config",
+            "description": "Additional configuration"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name",
+          "tasks"
+        ],
+        "title": "BenchmarkSpec",
+        "description": "Specification for a benchmark within an evaluation."
+      },
+      "Collection": {
+        "properties": {
+          "collection_id": {
+            "type": "string",
+            "title": "Collection Id",
+            "description": "Unique collection identifier"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Human-readable collection name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Collection description"
+          },
+          "provider_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Id",
+            "description": "Primary provider for this collection"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "description": "Tags for categorizing the collection"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata",
+            "description": "Additional collection metadata"
+          },
+          "benchmarks": {
+            "items": {
+              "$ref": "#/components/schemas/BenchmarkReference"
+            },
+            "type": "array",
+            "title": "Benchmarks",
+            "description": "List of benchmark references in this collection"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "description": "Collection creation timestamp"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "Collection last update timestamp"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "collection_id",
+          "name",
+          "description",
+          "benchmarks"
+        ],
+        "title": "Collection",
+        "description": "Collection of benchmarks for specific evaluation scenarios."
+      },
+      "CollectionCreationRequest": {
+        "properties": {
+          "collection_id": {
+            "type": "string",
+            "title": "Collection Id",
+            "description": "Unique collection identifier"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Human-readable collection name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Collection description"
+          },
+          "provider_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Id",
+            "description": "Primary provider for this collection"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "description": "Tags for categorizing the collection"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata",
+            "description": "Additional collection metadata"
+          },
+          "benchmarks": {
+            "items": {
+              "$ref": "#/components/schemas/BenchmarkReference"
+            },
+            "type": "array",
+            "title": "Benchmarks",
+            "description": "List of benchmark references in this collection"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "collection_id",
+          "name",
+          "description",
+          "benchmarks"
+        ],
+        "title": "CollectionCreationRequest",
+        "description": "Request for creating a new collection."
+      },
+      "CollectionUpdateRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "Human-readable collection name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Collection description"
+          },
+          "provider_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Id",
+            "description": "Primary provider for this collection"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags",
+            "description": "Tags for categorizing the collection"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata",
+            "description": "Additional collection metadata"
+          },
+          "benchmarks": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/BenchmarkReference"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmarks",
+            "description": "List of benchmark references in this collection"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "CollectionUpdateRequest",
+        "description": "Request for updating an existing collection."
+      },
+      "EvaluationRequest": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id",
+            "description": "Unique request ID"
+          },
+          "evaluations": {
+            "items": {
+              "$ref": "#/components/schemas/EvaluationSpec"
+            },
+            "type": "array",
+            "title": "Evaluations",
+            "description": "List of evaluations to run"
+          },
+          "experiment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experiment Name",
+            "description": "MLFlow experiment name"
+          },
+          "tags": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Tags",
+            "description": "Tags for the evaluation run"
+          },
+          "async_mode": {
+            "type": "boolean",
+            "title": "Async Mode",
+            "description": "Whether to run evaluations asynchronously",
+            "default": true
+          },
+          "callback_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Callback Url",
+            "description": "URL to call when evaluation completes"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Request creation timestamp"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "evaluations"
+        ],
+        "title": "EvaluationRequest",
+        "description": "Request payload for starting evaluations."
+      },
+      "EvaluationResponse": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id",
+            "description": "Original request ID"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EvaluationStatus",
+            "description": "Overall request status"
+          },
+          "total_evaluations": {
+            "type": "integer",
+            "title": "Total Evaluations",
+            "description": "Total number of evaluations"
+          },
+          "completed_evaluations": {
+            "type": "integer",
+            "title": "Completed Evaluations",
+            "description": "Number of completed evaluations",
+            "default": 0
+          },
+          "failed_evaluations": {
+            "type": "integer",
+            "title": "Failed Evaluations",
+            "description": "Number of failed evaluations",
+            "default": 0
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/EvaluationResult"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "Evaluation results"
+          },
+          "aggregated_metrics": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Aggregated Metrics",
+            "description": "Aggregated metrics across all evaluations"
+          },
+          "experiment_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experiment Url",
+            "description": "MLFlow experiment URL"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Request creation timestamp"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "Last update timestamp"
+          },
+          "estimated_completion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Completion",
+            "description": "Estimated completion time"
+          },
+          "progress_percentage": {
+            "type": "number",
+            "title": "Progress Percentage",
+            "description": "Overall progress percentage",
+            "default": 0.0
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "request_id",
+          "status",
+          "total_evaluations",
+          "created_at"
+        ],
+        "title": "EvaluationResponse",
+        "description": "Response payload for evaluation requests."
+      },
+      "EvaluationResult": {
+        "properties": {
+          "evaluation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Evaluation Id",
+            "description": "Evaluation ID"
+          },
+          "backend_name": {
+            "type": "string",
+            "title": "Backend Name",
+            "description": "Backend that ran the evaluation"
+          },
+          "benchmark_name": {
+            "type": "string",
+            "title": "Benchmark Name",
+            "description": "Benchmark name"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EvaluationStatus",
+            "description": "Evaluation status"
+          },
+          "metrics": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Metrics",
+            "description": "Evaluation metrics"
+          },
+          "artifacts": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Artifacts",
+            "description": "Paths to result artifacts"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message",
+            "description": "Error message if failed"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At",
+            "description": "Start timestamp"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At",
+            "description": "Completion timestamp"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds",
+            "description": "Evaluation duration"
+          },
+          "mlflow_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mlflow Run Id",
+            "description": "MLFlow run ID"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "evaluation_id",
+          "backend_name",
+          "benchmark_name",
+          "status"
+        ],
+        "title": "EvaluationResult",
+        "description": "Result of a single evaluation."
+      },
+      "EvaluationSpec": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "Unique evaluation ID"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Human-readable evaluation name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Evaluation description"
+          },
+          "model": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Model",
+            "description": "Model specification with 'server', 'name', and optional 'configuration' fields"
+          },
+          "backends": {
+            "items": {
+              "$ref": "#/components/schemas/BackendSpec"
+            },
+            "type": "array",
+            "title": "Backends",
+            "description": "Backends to run evaluations on"
+          },
+          "risk_category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RiskCategory"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Risk category for automatic benchmark selection"
+          },
+          "collection_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Id",
+            "description": "Collection ID for automatic benchmark selection"
+          },
+          "priority": {
+            "type": "integer",
+            "title": "Priority",
+            "description": "Evaluation priority (higher = more urgent)",
+            "default": 0
+          },
+          "timeout_minutes": {
+            "type": "integer",
+            "title": "Timeout Minutes",
+            "description": "Timeout for the entire evaluation",
+            "default": 60
+          },
+          "retry_attempts": {
+            "type": "integer",
+            "title": "Retry Attempts",
+            "description": "Number of retry attempts on failure",
+            "default": 3
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata",
+            "description": "Additional metadata"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name",
+          "model"
+        ],
+        "title": "EvaluationSpec",
+        "description": "Specification for a single evaluation request."
+      },
+      "EvaluationStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "completed",
+          "failed",
+          "cancelled"
+        ],
+        "title": "EvaluationStatus",
+        "description": "Status of an evaluation."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Overall health status"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "description": "Service version"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp",
+            "description": "Health check timestamp"
+          },
+          "components": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Components",
+            "description": "Health status of individual components"
+          },
+          "uptime_seconds": {
+            "type": "number",
+            "title": "Uptime Seconds",
+            "description": "Service uptime in seconds"
+          },
+          "active_evaluations": {
+            "type": "integer",
+            "title": "Active Evaluations",
+            "description": "Number of active evaluations",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "version",
+          "uptime_seconds"
+        ],
+        "title": "HealthResponse",
+        "description": "Health check response."
+      },
+      "ListBenchmarksResponse": {
+        "properties": {
+          "benchmarks": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Benchmarks",
+            "description": "List of all available benchmarks"
+          },
+          "total_count": {
+            "type": "integer",
+            "title": "Total Count",
+            "description": "Total number of benchmarks"
+          },
+          "providers_included": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Providers Included",
+            "description": "List of provider IDs included in the response"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "benchmarks",
+          "total_count",
+          "providers_included"
+        ],
+        "title": "ListBenchmarksResponse",
+        "description": "Response for listing all benchmarks (similar to Llama Stack format)."
+      },
+      "ListCollectionsResponse": {
+        "properties": {
+          "collections": {
+            "items": {
+              "$ref": "#/components/schemas/Collection"
+            },
+            "type": "array",
+            "title": "Collections",
+            "description": "List of available collections"
+          },
+          "total_collections": {
+            "type": "integer",
+            "title": "Total Collections",
+            "description": "Total number of collections"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "collections",
+          "total_collections"
+        ],
+        "title": "ListCollectionsResponse",
+        "description": "Response for listing all collections."
+      },
+      "ListModelServersResponse": {
+        "properties": {
+          "servers": {
+            "items": {
+              "$ref": "#/components/schemas/ModelServerSummary"
+            },
+            "type": "array",
+            "title": "Servers",
+            "description": "List of available model servers"
+          },
+          "total_servers": {
+            "type": "integer",
+            "title": "Total Servers",
+            "description": "Total number of servers"
+          },
+          "runtime_servers": {
+            "items": {
+              "$ref": "#/components/schemas/ModelServerSummary"
+            },
+            "type": "array",
+            "title": "Runtime Servers",
+            "description": "Servers specified via environment variables"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "servers",
+          "total_servers"
+        ],
+        "title": "ListModelServersResponse",
+        "description": "Response for listing all model servers."
+      },
+      "ListModelsResponse": {
+        "properties": {
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelSummary"
+            },
+            "type": "array",
+            "title": "Models",
+            "description": "List of available models"
+          },
+          "total_models": {
+            "type": "integer",
+            "title": "Total Models",
+            "description": "Total number of models"
+          },
+          "runtime_models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelSummary"
+            },
+            "type": "array",
+            "title": "Runtime Models",
+            "description": "Models specified via environment variables"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "models",
+          "total_models"
+        ],
+        "title": "ListModelsResponse",
+        "description": "Response for listing all models."
+      },
+      "ListProvidersResponse": {
+        "properties": {
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderSummary"
+            },
+            "type": "array",
+            "title": "Providers",
+            "description": "List of available providers"
+          },
+          "total_providers": {
+            "type": "integer",
+            "title": "Total Providers",
+            "description": "Total number of providers"
+          },
+          "total_benchmarks": {
+            "type": "integer",
+            "title": "Total Benchmarks",
+            "description": "Total number of benchmarks across all providers"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "providers",
+          "total_providers",
+          "total_benchmarks"
+        ],
+        "title": "ListProvidersResponse",
+        "description": "Response for listing all providers."
+      },
+      "Model": {
+        "properties": {
+          "model_id": {
+            "type": "string",
+            "title": "Model Id",
+            "description": "Unique model identifier"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name",
+            "description": "Human-readable model name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Model description"
+          },
+          "model_type": {
+            "$ref": "#/components/schemas/ModelType",
+            "description": "Type of model"
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url",
+            "description": "Base URL for the model API"
+          },
+          "api_key_required": {
+            "type": "boolean",
+            "title": "Api Key Required",
+            "description": "Whether an API key is required",
+            "default": true
+          },
+          "model_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Path",
+            "description": "Model path or identifier within the service"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ModelCapabilities",
+            "description": "Model capabilities"
+          },
+          "config": {
+            "$ref": "#/components/schemas/ModelConfig",
+            "description": "Default model configuration"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModelStatus",
+            "description": "Model status",
+            "default": "active"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "description": "Tags for categorization"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "When the model was registered"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "When the model was last updated"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "model_id",
+          "model_name",
+          "description",
+          "model_type",
+          "base_url"
+        ],
+        "title": "Model",
+        "description": "Language model specification."
+      },
+      "ModelCapabilities": {
+        "properties": {
+          "max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tokens",
+            "description": "Maximum tokens supported by the model"
+          },
+          "supports_streaming": {
+            "type": "boolean",
+            "title": "Supports Streaming",
+            "description": "Whether the model supports streaming responses",
+            "default": false
+          },
+          "supports_function_calling": {
+            "type": "boolean",
+            "title": "Supports Function Calling",
+            "description": "Whether the model supports function calling",
+            "default": false
+          },
+          "supports_vision": {
+            "type": "boolean",
+            "title": "Supports Vision",
+            "description": "Whether the model supports vision/image inputs",
+            "default": false
+          },
+          "context_window": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Window",
+            "description": "Model's context window size"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "ModelCapabilities",
+        "description": "Model capabilities and limitations."
+      },
+      "ModelConfig": {
+        "properties": {
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 2.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature",
+            "description": "Default temperature setting"
+          },
+          "max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tokens",
+            "description": "Default max tokens for responses"
+          },
+          "top_p": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top P",
+            "description": "Default top_p setting"
+          },
+          "frequency_penalty": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 2.0,
+                "minimum": -2.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency Penalty",
+            "description": "Default frequency penalty"
+          },
+          "presence_penalty": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 2.0,
+                "minimum": -2.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presence Penalty",
+            "description": "Default presence penalty"
+          },
+          "timeout": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout",
+            "description": "Request timeout in seconds",
+            "default": 30
+          },
+          "retry_attempts": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry Attempts",
+            "description": "Number of retry attempts",
+            "default": 3
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "ModelConfig",
+        "description": "Model configuration parameters."
+      },
+      "ModelRegistrationRequest": {
+        "properties": {
+          "model_id": {
+            "type": "string",
+            "title": "Model Id",
+            "description": "Unique model identifier"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name",
+            "description": "Human-readable model name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Model description"
+          },
+          "model_type": {
+            "$ref": "#/components/schemas/ModelType",
+            "description": "Type of model"
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url",
+            "description": "Base URL for the model API"
+          },
+          "api_key_required": {
+            "type": "boolean",
+            "title": "Api Key Required",
+            "description": "Whether an API key is required",
+            "default": true
+          },
+          "model_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Path",
+            "description": "Model path or identifier within the service"
+          },
+          "capabilities": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelCapabilities"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Model capabilities"
+          },
+          "config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelConfig"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default model configuration"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModelStatus",
+            "description": "Model status",
+            "default": "active"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "description": "Tags for categorization"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "model_id",
+          "model_name",
+          "description",
+          "model_type",
+          "base_url"
+        ],
+        "title": "ModelRegistrationRequest",
+        "description": "Request model for registering a new model."
+      },
+      "ModelServer": {
+        "properties": {
+          "server_id": {
+            "type": "string",
+            "title": "Server Id",
+            "description": "Unique server identifier"
+          },
+          "server_type": {
+            "$ref": "#/components/schemas/ModelType",
+            "description": "Type of model server"
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url",
+            "description": "Base URL for the server API"
+          },
+          "api_key_required": {
+            "type": "boolean",
+            "title": "Api Key Required",
+            "description": "Whether an API key is required",
+            "default": true
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ServerModel"
+            },
+            "type": "array",
+            "title": "Models",
+            "description": "List of models available on this server"
+          },
+          "server_config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelConfig"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default server-level configuration"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModelStatus",
+            "description": "Server status",
+            "default": "active"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "description": "Tags for categorization"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "When the server was registered"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "When the server was last updated"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "server_id",
+          "server_type",
+          "base_url"
+        ],
+        "title": "ModelServer",
+        "description": "Model server that can host multiple models."
+      },
+      "ModelServerRegistrationRequest": {
+        "properties": {
+          "server_id": {
+            "type": "string",
+            "title": "Server Id",
+            "description": "Unique server identifier"
+          },
+          "server_type": {
+            "$ref": "#/components/schemas/ModelType",
+            "description": "Type of model server"
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url",
+            "description": "Base URL for the server API"
+          },
+          "api_key_required": {
+            "type": "boolean",
+            "title": "Api Key Required",
+            "description": "Whether an API key is required",
+            "default": true
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ServerModel"
+            },
+            "type": "array",
+            "title": "Models",
+            "description": "List of models available on this server"
+          },
+          "server_config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelConfig"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default server-level configuration"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModelStatus",
+            "description": "Server status",
+            "default": "active"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "description": "Tags for categorization"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "server_id",
+          "server_type",
+          "base_url"
+        ],
+        "title": "ModelServerRegistrationRequest",
+        "description": "Request model for registering a new model server."
+      },
+      "ModelServerSummary": {
+        "properties": {
+          "server_id": {
+            "type": "string",
+            "title": "Server Id",
+            "description": "Unique server identifier"
+          },
+          "server_type": {
+            "$ref": "#/components/schemas/ModelType",
+            "description": "Type of model server"
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url",
+            "description": "Base URL for the server API"
+          },
+          "model_count": {
+            "type": "integer",
+            "title": "Model Count",
+            "description": "Number of models on this server"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModelStatus",
+            "description": "Server status"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "description": "Tags for categorization"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "When the server was registered"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "server_id",
+          "server_type",
+          "base_url",
+          "model_count",
+          "status",
+          "created_at"
+        ],
+        "title": "ModelServerSummary",
+        "description": "Simplified model server information."
+      },
+      "ModelServerUpdateRequest": {
+        "properties": {
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url",
+            "description": "Base URL for the server API"
+          },
+          "api_key_required": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key Required",
+            "description": "Whether an API key is required"
+          },
+          "models": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ServerModel"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Models",
+            "description": "List of models available on this server"
+          },
+          "server_config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelConfig"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default server-level configuration"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Server status"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags",
+            "description": "Tags for categorization"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "ModelServerUpdateRequest",
+        "description": "Request model for updating an existing model server."
+      },
+      "ModelStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "inactive",
+          "testing",
+          "deprecated"
+        ],
+        "title": "ModelStatus",
+        "description": "Status of a registered model."
+      },
+      "ModelSummary": {
+        "properties": {
+          "model_id": {
+            "type": "string",
+            "title": "Model Id",
+            "description": "Unique model identifier"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name",
+            "description": "Human-readable model name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Model description"
+          },
+          "model_type": {
+            "$ref": "#/components/schemas/ModelType",
+            "description": "Type of model"
+          },
+          "base_url": {
+            "type": "string",
+            "title": "Base Url",
+            "description": "Base URL for the model API"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModelStatus",
+            "description": "Model status"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "description": "Tags for categorization"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "When the model was registered"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "model_id",
+          "model_name",
+          "description",
+          "model_type",
+          "base_url",
+          "status",
+          "created_at"
+        ],
+        "title": "ModelSummary",
+        "description": "Simplified model information without detailed configuration."
+      },
+      "ModelType": {
+        "type": "string",
+        "enum": [
+          "openai",
+          "anthropic",
+          "huggingface",
+          "ollama",
+          "vllm",
+          "openai-compatible",
+          "custom"
+        ],
+        "title": "ModelType",
+        "description": "Type of language model."
+      },
+      "ModelUpdateRequest": {
+        "properties": {
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name",
+            "description": "Human-readable model name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Model description"
+          },
+          "model_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelType"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Type of model"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url",
+            "description": "Base URL for the model API"
+          },
+          "api_key_required": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key Required",
+            "description": "Whether an API key is required"
+          },
+          "model_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Path",
+            "description": "Model path or identifier within the service"
+          },
+          "capabilities": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelCapabilities"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Model capabilities"
+          },
+          "config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelConfig"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default model configuration"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelStatus"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Model status"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags",
+            "description": "Tags for categorization"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "ModelUpdateRequest",
+        "description": "Request model for updating an existing model."
+      },
+      "Provider": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "ProviderSummary": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "ProviderType": {
+        "type": "string",
+        "enum": [
+          "builtin",
+          "nemo-evaluator"
+        ],
+        "title": "ProviderType",
+        "description": "Type of evaluation provider."
+      },
+      "RiskCategory": {
+        "type": "string",
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
+        "title": "RiskCategory",
+        "description": "Risk categories for evaluations."
+      },
+      "ServerModel": {
+        "properties": {
+          "model_name": {
+            "type": "string",
+            "title": "Model Name",
+            "description": "Name of the model on the server"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Model description"
+          },
+          "capabilities": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelCapabilities"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Model capabilities"
+          },
+          "config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelConfig"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default model configuration"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModelStatus",
+            "description": "Model status",
+            "default": "active"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "description": "Tags for categorization"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "model_name"
+        ],
+        "title": "ServerModel",
+        "description": "A model available on a model server."
+      },
+      "SingleBenchmarkEvaluationRequest": {
+        "properties": {
+          "model": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Model",
+            "description": "Model specification with 'server' and 'name' fields"
+          },
+          "model_configuration": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Model Configuration",
+            "description": "Model configuration"
+          },
+          "timeout_minutes": {
+            "type": "integer",
+            "title": "Timeout Minutes",
+            "description": "Timeout for the evaluation",
+            "default": 60
+          },
+          "retry_attempts": {
+            "type": "integer",
+            "title": "Retry Attempts",
+            "description": "Number of retry attempts on failure",
+            "default": 3
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit",
+            "description": "Limit number of samples to evaluate"
+          },
+          "num_fewshot": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Fewshot",
+            "description": "Number of few-shot examples"
+          },
+          "experiment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experiment Name",
+            "description": "MLFlow experiment name"
+          },
+          "tags": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Tags",
+            "description": "Tags for the evaluation run"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "model"
+        ],
+        "title": "SingleBenchmarkEvaluationRequest",
+        "description": "Simplified request for running a single benchmark evaluation."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
