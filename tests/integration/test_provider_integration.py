@@ -227,7 +227,7 @@ class TestProviderEndpointsIntegration:
 
     def test_debug_data(self, integration_client):
         """Debug test to see what data is actually loaded."""
-        response = integration_client.get("/api/v1/providers")
+        response = integration_client.get("/api/v1/evaluations/providers")
         assert response.status_code == 200
 
         data = response.json()
@@ -239,7 +239,7 @@ class TestProviderEndpointsIntegration:
     def test_full_provider_workflow(self, integration_client):
         """Test the complete provider workflow."""
         # Step 1: List all providers
-        response = integration_client.get("/api/v1/providers")
+        response = integration_client.get("/api/v1/evaluations/providers")
         assert response.status_code == 200
 
         providers_data = response.json()
@@ -253,7 +253,9 @@ class TestProviderEndpointsIntegration:
         assert "garak" in provider_ids
 
         # Step 2: Get specific provider details
-        response = integration_client.get("/api/v1/providers/lm_evaluation_harness")
+        response = integration_client.get(
+            "/api/v1/evaluations/providers/lm_evaluation_harness"
+        )
         assert response.status_code == 200
 
         lm_eval_data = response.json()
@@ -276,7 +278,7 @@ class TestProviderEndpointsIntegration:
 
         # Step 4: Get provider-specific benchmarks
         response = integration_client.get(
-            "/api/v1/providers/lm_evaluation_harness/benchmarks"
+            "/api/v1/evaluations/providers/lm_evaluation_harness/benchmarks"
         )
         assert response.status_code == 200
 
@@ -355,7 +357,7 @@ class TestProviderEndpointsIntegration:
 
     def test_provider_type_validation(self, integration_client):
         """Test that provider types are correctly validated."""
-        response = integration_client.get("/api/v1/providers")
+        response = integration_client.get("/api/v1/evaluations/providers")
         assert response.status_code == 200
 
         providers = response.json()["providers"]
@@ -435,10 +437,12 @@ class TestProviderEndpointsIntegration:
     def test_error_handling_integration(self, integration_client):
         """Test error handling in integration scenarios."""
         # Test 404 errors
-        response = integration_client.get("/api/v1/providers/nonexistent")
+        response = integration_client.get("/api/v1/evaluations/providers/nonexistent")
         assert response.status_code == 404
 
-        response = integration_client.get("/api/v1/providers/nonexistent/benchmarks")
+        response = integration_client.get(
+            "/api/v1/evaluations/providers/nonexistent/benchmarks"
+        )
         assert response.status_code == 404
 
         # Test invalid query parameters (should handle gracefully)
@@ -453,7 +457,7 @@ class TestProviderEndpointsIntegration:
     def test_response_format_consistency(self, integration_client):
         """Test that all responses follow consistent formatting."""
         # Test providers response format
-        response = integration_client.get("/api/v1/providers")
+        response = integration_client.get("/api/v1/evaluations/providers")
         assert response.status_code == 200
         providers_data = response.json()
 
@@ -485,11 +489,11 @@ class TestProviderEndpointsIntegration:
 
         # Measure response times for key endpoints
         endpoints = [
-            "/api/v1/providers",
+            "/api/v1/evaluations/providers",
             "/api/v1/benchmarks",
             "/api/v1/collections",
-            "/api/v1/providers/lm_evaluation_harness",
-            "/api/v1/providers/lm_evaluation_harness/benchmarks",
+            "/api/v1/evaluations/providers/lm_evaluation_harness",
+            "/api/v1/evaluations/providers/lm_evaluation_harness/benchmarks",
         ]
 
         response_times = []
@@ -524,10 +528,10 @@ class TestProviderEndpointsIntegration:
         # Check that our provider endpoints are documented
         paths = schema["paths"]
         expected_paths = [
-            "/api/v1/providers",
-            "/api/v1/providers/{provider_id}",
+            "/api/v1/evaluations/providers",
+            "/api/v1/evaluations/providers/{provider_id}",
             "/api/v1/benchmarks",
-            "/api/v1/providers/{provider_id}/benchmarks",
+            "/api/v1/evaluations/providers/{provider_id}/benchmarks",
             "/api/v1/collections",
         ]
 

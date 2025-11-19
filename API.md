@@ -552,12 +552,12 @@ curl -X GET "{{baseUrl}}/evaluations/jobs/550e8400-e29b-41d4-a716-446655440000/s
 
 ### Provider Management Endpoints
 
-#### **GET** `/providers` \- List All Providers
+#### **GET** `/evaluations/providers` \- List All Providers
 
 **Purpose**: Discover available evaluation providers and their capabilities **Response Model**: `ListProvidersResponse`
 
 ```shell
-curl -X GET "{{baseUrl}}/providers"
+curl -X GET "{{baseUrl}}/evaluations/providers"
 ```
 
 **Response Example**:
@@ -596,17 +596,14 @@ curl -X GET "{{baseUrl}}/providers"
 
 **Commentary**: Provides provider discovery with capability summary. Each provider exposes different benchmark categories \- LM Eval Harness for comprehensive model evaluation, RAGAS for RAG-specific assessment, and Garak for security scanning.
 
-#### **GET** `/providers/{provider_id}` \- Get Provider Details
+#### **GET** `/evaluations/providers/{provider_id}` \- Get Provider Details
 
 **Purpose**: Retrieve detailed provider information including all benchmarks
 
 ```shell
-curl -X GET "{{baseUrl}}/providers/lm_evaluation_harness"
+curl -X GET "{{baseUrl}}/evaluations/providers/lm_evaluation_harness"
 ```
 
-#### **POST** `/providers/reload` \- Reload Provider Configuration
-
-**Purpose**: Hot-reload provider configuration without service restart
 
 ---
 
@@ -676,20 +673,20 @@ curl -X GET "{{baseUrl}}/benchmarks?tags=math,science"
 
 **Commentary**: Unified benchmark catalog across providers. Each benchmark has a clean `benchmark_id` and separate `provider_id` for clarity. Supports powerful filtering by provider, category, and tags for targeted discovery.
 
-#### **GET** `/providers/{provider_id}/benchmarks` \- Provider-Specific Benchmarks
+#### **GET** `/evaluations/providers/{provider_id}/benchmarks` \- Provider-Specific Benchmarks
 
 **Purpose**: Get benchmarks for a specific provider
 
 ```shell
-curl -X GET "{{baseUrl}}/providers/lm_evaluation_harness/benchmarks"
+curl -X GET "{{baseUrl}}/evaluations/providers/lm_evaluation_harness/benchmarks"
 ```
 
-#### **GET** `/providers/{provider_id}/benchmarks/{benchmark_id}` \- Get Benchmark Details
+#### **GET** `/evaluations/providers/{provider_id}/benchmarks/{benchmark_id}` \- Get Benchmark Details
 
 **Purpose**: Get details of a specific benchmark **Response Model**: `BenchmarkDetail`
 
 ```shell
-curl -X GET "{{baseUrl}}/providers/lm_evaluation_harness/benchmarks/arc_easy"
+curl -X GET "{{baseUrl}}/evaluations/providers/lm_evaluation_harness/benchmarks/arc_easy"
 ```
 
 ---

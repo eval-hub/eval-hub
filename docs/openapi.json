@@ -375,11 +375,14 @@
         }
       }
     },
-    "/api/v1/providers": {
+    "/api/v1/evaluations/providers": {
       "get": {
+        "tags": [
+          "Providers"
+        ],
         "summary": "List Providers",
         "description": "List all registered evaluation providers.",
-        "operationId": "list_providers_api_v1_providers_get",
+        "operationId": "list_providers_api_v1_evaluations_providers_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -394,11 +397,14 @@
         }
       }
     },
-    "/api/v1/providers/{provider_id}": {
+    "/api/v1/evaluations/providers/{provider_id}": {
       "get": {
+        "tags": [
+          "Providers"
+        ],
         "summary": "Get Provider",
         "description": "Get details of a specific provider.",
-        "operationId": "get_provider_api_v1_providers__provider_id__get",
+        "operationId": "get_provider_api_v1_evaluations_providers__provider_id__get",
         "parameters": [
           {
             "name": "provider_id",
@@ -519,11 +525,14 @@
         }
       }
     },
-    "/api/v1/providers/{provider_id}/benchmarks": {
+    "/api/v1/evaluations/providers/{provider_id}/benchmarks": {
       "get": {
+        "tags": [
+          "Providers"
+        ],
         "summary": "List Provider Benchmarks",
         "description": "List benchmarks for a specific provider.",
-        "operationId": "list_provider_benchmarks_api_v1_providers__provider_id__benchmarks_get",
+        "operationId": "list_provider_benchmarks_api_v1_evaluations_providers__provider_id__benchmarks_get",
         "parameters": [
           {
             "name": "provider_id",
@@ -545,7 +554,7 @@
                   "items": {
                     "$ref": "#/components/schemas/BenchmarkDetail"
                   },
-                  "title": "Response List Provider Benchmarks Api V1 Providers  Provider Id  Benchmarks Get"
+                  "title": "Response List Provider Benchmarks Api V1 Evaluations Providers  Provider Id  Benchmarks Get"
                 }
               }
             }
@@ -563,11 +572,14 @@
         }
       }
     },
-    "/api/v1/providers/{provider_id}/benchmarks/{benchmark_id}": {
+    "/api/v1/evaluations/providers/{provider_id}/benchmarks/{benchmark_id}": {
       "get": {
+        "tags": [
+          "Providers"
+        ],
         "summary": "Get Benchmark",
         "description": "Get details of a specific benchmark.",
-        "operationId": "get_benchmark_api_v1_providers__provider_id__benchmarks__benchmark_id__get",
+        "operationId": "get_benchmark_api_v1_evaluations_providers__provider_id__benchmarks__benchmark_id__get",
         "parameters": [
           {
             "name": "provider_id",
@@ -800,29 +812,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/providers/reload": {
-      "post": {
-        "summary": "Reload Providers",
-        "description": "Reload provider configuration from file.",
-        "operationId": "reload_providers_api_v1_providers_reload_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "type": "object",
-                  "title": "Response Reload Providers Api V1 Providers Reload Post"
                 }
               }
             }

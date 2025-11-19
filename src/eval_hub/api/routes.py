@@ -601,7 +601,9 @@ async def get_system_metrics(
 # Provider and Benchmark Management Endpoints
 
 
-@router.get("/providers", response_model=ListProvidersResponse)
+@router.get(
+    "/evaluations/providers", response_model=ListProvidersResponse, tags=["Providers"]
+)
 async def list_providers(
     provider_service: ProviderService = Depends(get_provider_service),
 ) -> ListProvidersResponse:
@@ -610,7 +612,9 @@ async def list_providers(
     return provider_service.get_all_providers()
 
 
-@router.get("/providers/{provider_id}", response_model=Provider)
+@router.get(
+    "/evaluations/providers/{provider_id}", response_model=Provider, tags=["Providers"]
+)
 async def get_provider(
     provider_id: str,
     provider_service: ProviderService = Depends(get_provider_service),
@@ -676,7 +680,11 @@ async def list_all_benchmarks(
         return provider_service.get_all_benchmarks()
 
 
-@router.get("/providers/{provider_id}/benchmarks", response_model=list[BenchmarkDetail])
+@router.get(
+    "/evaluations/providers/{provider_id}/benchmarks",
+    response_model=list[BenchmarkDetail],
+    tags=["Providers"],
+)
 async def list_provider_benchmarks(
     provider_id: str,
     provider_service: ProviderService = Depends(get_provider_service),
@@ -702,7 +710,9 @@ async def list_provider_benchmarks(
 
 
 @router.get(
-    "/providers/{provider_id}/benchmarks/{benchmark_id}", response_model=BenchmarkDetail
+    "/evaluations/providers/{provider_id}/benchmarks/{benchmark_id}",
+    response_model=BenchmarkDetail,
+    tags=["Providers"],
 )
 async def get_benchmark(
     provider_id: str,
@@ -875,23 +885,6 @@ async def delete_collection(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete collection: {str(e)}",
-        ) from e
-
-
-@router.post("/providers/reload")
-async def reload_providers(
-    provider_service: ProviderService = Depends(get_provider_service),
-) -> dict[str, str]:
-    """Reload provider configuration from file."""
-    try:
-        provider_service.reload_providers()
-        logger.info("Providers configuration reloaded successfully")
-        return {"message": "Providers configuration reloaded successfully"}
-    except Exception as e:
-        logger.error("Failed to reload providers configuration", error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to reload providers: {str(e)}",
         ) from e
 
 

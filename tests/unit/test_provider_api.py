@@ -223,7 +223,7 @@ class TestProviderAPI:
         """Test successful listing of all providers."""
         client, mock_service = client_with_mock_provider
 
-        response = client.get("/api/v1/providers")
+        response = client.get("/api/v1/evaluations/providers")
 
         assert response.status_code == 200
         data = response.json()
@@ -252,7 +252,7 @@ class TestProviderAPI:
         """Test successful retrieval of specific provider."""
         client, mock_service = client_with_mock_provider
 
-        response = client.get("/api/v1/providers/test_provider")
+        response = client.get("/api/v1/evaluations/providers/test_provider")
 
         assert response.status_code == 200
         data = response.json()
@@ -269,7 +269,7 @@ class TestProviderAPI:
         """Test getting non-existent provider."""
         client, mock_service = client_with_mock_provider
 
-        response = client.get("/api/v1/providers/nonexistent_provider")
+        response = client.get("/api/v1/evaluations/providers/nonexistent_provider")
 
         assert response.status_code == 404
         data = response.json()
@@ -406,7 +406,7 @@ class TestProviderAPI:
         """Test successful retrieval of provider-specific benchmarks."""
         client, mock_service = client_with_mock_provider
 
-        response = client.get("/api/v1/providers/test_provider/benchmarks")
+        response = client.get("/api/v1/evaluations/providers/test_provider/benchmarks")
 
         assert response.status_code == 200
         data = response.json()
@@ -422,7 +422,9 @@ class TestProviderAPI:
         # Mock service to return None for non-existent provider
         mock_service.get_provider_by_id.return_value = None
 
-        response = client.get("/api/v1/providers/nonexistent_provider/benchmarks")
+        response = client.get(
+            "/api/v1/evaluations/providers/nonexistent_provider/benchmarks"
+        )
 
         assert response.status_code == 404
         data = response.json()
@@ -520,7 +522,7 @@ class TestProviderServiceIntegration:
         # Mock service to raise exception
         mock_service.get_all_providers.side_effect = Exception("Service error")
 
-        response = client.get("/api/v1/providers")
+        response = client.get("/api/v1/evaluations/providers")
 
         # Should return 500 internal server error
         assert response.status_code == 500
@@ -569,7 +571,7 @@ class TestAPIValidation:
         ]
 
         for invalid_id in invalid_ids:
-            response = client.get(f"/api/v1/providers/{invalid_id}")
+            response = client.get(f"/api/v1/evaluations/providers/{invalid_id}")
             # Should handle gracefully (either 404 or proper encoding)
             assert response.status_code in [200, 404]
 

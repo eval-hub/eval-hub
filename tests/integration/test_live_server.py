@@ -32,7 +32,7 @@ class TestLiveServer:
 
     def test_list_providers_live(self, live_server):
         """Test listing providers with live server."""
-        response = requests.get(f"{live_server}/api/v1/providers")
+        response = requests.get(f"{live_server}/api/v1/evaluations/providers")
 
         assert response.status_code == 200
         data = response.json()
