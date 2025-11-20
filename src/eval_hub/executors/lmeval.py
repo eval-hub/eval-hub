@@ -243,7 +243,8 @@ class LMEvalExecutor(Executor):
 
             return EvaluationResult(
                 evaluation_id=context.evaluation_id,
-                backend_name="lm-evaluation-harness",
+                provider_id="lm_evaluation_harness",
+                benchmark_id=context.benchmark_spec.name,
                 benchmark_name=context.benchmark_spec.name,
                 status=EvaluationStatus.FAILED,
                 error_message=str(e),
@@ -638,7 +639,8 @@ class LMEvalExecutor(Executor):
 
         return EvaluationResult(
             evaluation_id=context.evaluation_id,
-            backend_name="lm-evaluation-harness",
+            provider_id="lm_evaluation_harness",
+            benchmark_id=context.benchmark_spec.name,
             benchmark_name=context.benchmark_spec.name,
             status=EvaluationStatus.COMPLETED,
             metrics=metrics,
@@ -738,7 +740,8 @@ class LMEvalExecutor(Executor):
                     message = status.get("message", "Job failed")
                     return EvaluationResult(
                         evaluation_id=context.evaluation_id,
-                        backend_name="lm-evaluation-harness",
+                        provider_id="lm_evaluation_harness",
+                        benchmark_id=context.benchmark_spec.name,
                         benchmark_name=context.benchmark_spec.name,
                         status=EvaluationStatus.FAILED,
                         error_message=message,
@@ -817,7 +820,8 @@ class LMEvalExecutor(Executor):
 
         return EvaluationResult(  # type: ignore[call-arg]
             evaluation_id=context.evaluation_id,
-            backend_name="lm-evaluation-harness",
+            provider_id="lm_evaluation_harness",
+            benchmark_id=context.benchmark_spec.name,
             benchmark_name=context.benchmark_spec.name,
             status=EvaluationStatus.COMPLETED,
             metrics=metrics_typed,

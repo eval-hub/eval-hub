@@ -18,7 +18,6 @@ from ..models.provider import (
     Provider,
     ProvidersData,
     ProviderSummary,
-    ProviderType,
 )
 
 logger = get_logger(__name__)
@@ -102,7 +101,6 @@ class ProviderService:
                 benchmark_detail = BenchmarkDetail(
                     benchmark_id=benchmark.benchmark_id,
                     provider_id=provider.provider_id,
-                    provider_name=provider.provider_name,
                     name=benchmark.name,
                     description=benchmark.description,
                     category=benchmark.category,
@@ -110,8 +108,6 @@ class ProviderService:
                     num_few_shot=benchmark.num_few_shot,
                     dataset_size=benchmark.dataset_size,
                     tags=benchmark.tags,
-                    provider_type=ProviderType(provider.provider_type.value),
-                    base_url=provider.base_url,
                 )
 
                 # Use composite key for uniqueness

@@ -205,26 +205,27 @@ class ResponseBuilder:
             aggregated["avg_duration_seconds"] = statistics.mean(durations)
             aggregated["total_duration_seconds"] = sum(durations)
 
-        # Backend and benchmark statistics
-        backend_counts: dict[str, int] = {}
+        # Provider and benchmark statistics
+        provider_counts: dict[str, int] = {}
         benchmark_counts: dict[str, int] = {}
         for result in completed_results:
-            backend_counts[result.backend_name] = (
-                backend_counts.get(result.backend_name, 0) + 1
+            provider_counts[result.provider_id] = (
+                provider_counts.get(result.provider_id, 0) + 1
             )
-            benchmark_counts[result.benchmark_name] = (
-                benchmark_counts.get(result.benchmark_name, 0) + 1
+            benchmark_name = result.benchmark_name or result.benchmark_id
+            benchmark_counts[benchmark_name] = (
+                benchmark_counts.get(benchmark_name, 0) + 1
             )
 
-        aggregated["backends_used"] = len(backend_counts)
+        aggregated["providers_used"] = len(provider_counts)
         aggregated["benchmarks_used"] = len(benchmark_counts)
-        most_used_backend: str | None = (
-            max(backend_counts, key=lambda x: backend_counts[x])
-            if backend_counts
+        most_used_provider: str | None = (
+            max(provider_counts, key=lambda x: provider_counts[x])
+            if provider_counts
             else None
         )
-        aggregated["most_used_backend"] = (
-            most_used_backend if most_used_backend else "none"
+        aggregated["most_used_provider"] = (
+            most_used_provider if most_used_provider else "none"
         )
         most_used_benchmark: str | None = (
             max(benchmark_counts, key=lambda x: benchmark_counts[x])
@@ -338,13 +339,13 @@ class ResponseBuilder:
                     "Long evaluation execution time - consider optimization"
                 )
 
-        # Backend insights
-        backends_used_val = aggregated_metrics.get("backends_used", 0)
-        backends_used = (
-            int(backends_used_val) if isinstance(backends_used_val, int | float) else 0
+        # Provider insights
+        providers_used_val = aggregated_metrics.get("providers_used", 0)
+        providers_used = (
+            int(providers_used_val) if isinstance(providers_used_val, int | float) else 0
         )
-        if backends_used > 1:
-            insights.append(f"Multi-backend evaluation across {backends_used} backends")
+        if providers_used > 1:
+            insights.append(f"Multi-provider evaluation across {providers_used} providers")
 
         return {
             "request_id": str(request.request_id),
@@ -352,7 +353,7 @@ class ResponseBuilder:
                 "total_evaluations": len(results),
                 "success_rate": f"{success_rate:.1%}",
                 "avg_duration": f"{aggregated_metrics.get('avg_duration_seconds', 0):.1f}s",
-                "backends_used": aggregated_metrics.get("backends_used", 0),
+                "providers_used": aggregated_metrics.get("providers_used", 0),
                 "benchmarks_used": aggregated_metrics.get("benchmarks_used", 0),
             },
             "status_breakdown": {

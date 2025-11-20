@@ -65,7 +65,8 @@ class EvaluationExecutor:
                 # Create error result for failed evaluation
                 error_result = EvaluationResult(
                     evaluation_id=request.evaluations[i].id,
-                    backend_name="unknown",
+                    provider_id="unknown",
+                    benchmark_id="unknown",
                     benchmark_name="unknown",
                     status=EvaluationStatus.FAILED,
                     error_message=str(result),
@@ -125,7 +126,8 @@ class EvaluationExecutor:
                     # Create error result for failed backend
                     error_result = EvaluationResult(
                         evaluation_id=evaluation.id,
-                        backend_name=evaluation.backends[i].name,
+                        provider_id=evaluation.backends[i].name,
+                        benchmark_id="unknown",
                         benchmark_name="unknown",
                         status=EvaluationStatus.FAILED,
                         error_message=str(backend_result),
@@ -159,7 +161,8 @@ class EvaluationExecutor:
             # Create error result
             error_result = EvaluationResult(
                 evaluation_id=evaluation.id,
-                backend_name="unknown",
+                provider_id="unknown",
+                benchmark_id="unknown",
                 benchmark_name="unknown",
                 status=EvaluationStatus.FAILED,
                 error_message=str(e),
@@ -251,7 +254,8 @@ class EvaluationExecutor:
                 # Create error result for the combined execution
                 error_result = EvaluationResult(
                     evaluation_id=evaluation.id,
-                    backend_name=backend.name,
+                    provider_id=backend.name,
+                    benchmark_id=f"collection-{'-'.join([b.name for b in backend.benchmarks])}",
                     benchmark_name=f"collection-{'-'.join([b.name for b in backend.benchmarks])}",
                     status=EvaluationStatus.FAILED,
                     error_message=str(e),
@@ -280,7 +284,8 @@ class EvaluationExecutor:
                     # Create error result
                     error_result = EvaluationResult(
                         evaluation_id=evaluation.id,
-                        backend_name=backend.name,
+                        provider_id=backend.name,
+                        benchmark_id=benchmark.name,
                         benchmark_name=benchmark.name,
                         status=EvaluationStatus.FAILED,
                         error_message=str(e),
@@ -372,7 +377,8 @@ class EvaluationExecutor:
             # All retries failed
             return EvaluationResult(
                 evaluation_id=context.evaluation_id,
-                backend_name=backend.name,
+                provider_id=backend.name,
+                benchmark_id=benchmark.name,
                 benchmark_name=benchmark.name,
                 status=EvaluationStatus.FAILED,
                 error_message=f"Failed after {context.retry_attempts + 1} attempts: {last_error}",
@@ -462,7 +468,8 @@ class EvaluationExecutor:
 
                 return EvaluationResult(
                     evaluation_id=context.evaluation_id,
-                    backend_name=backend_name,
+                    provider_id=backend_name,
+                    benchmark_id=benchmark_name,
                     benchmark_name=benchmark_name,
                     status=EvaluationStatus.FAILED,
                     error_message=str(e),
@@ -534,7 +541,8 @@ class EvaluationExecutor:
 
         return EvaluationResult(
             evaluation_id=context.evaluation_id,
-            backend_name=context.backend_spec.name,
+            provider_id=context.backend_spec.name,
+            benchmark_id=context.benchmark_spec.name,
             benchmark_name=context.benchmark_spec.name,
             status=EvaluationStatus.COMPLETED,
             metrics=metrics,
@@ -577,7 +585,8 @@ class EvaluationExecutor:
 
         return EvaluationResult(
             evaluation_id=context.evaluation_id,
-            backend_name=context.backend_spec.name,
+            provider_id=context.backend_spec.name,
+            benchmark_id=context.benchmark_spec.name,
             benchmark_name=context.benchmark_spec.name,
             status=EvaluationStatus.COMPLETED,
             metrics=metrics,
@@ -618,7 +627,8 @@ class EvaluationExecutor:
 
         return EvaluationResult(
             evaluation_id=context.evaluation_id,
-            backend_name=context.backend_spec.name,
+            provider_id=context.backend_spec.name,
+            benchmark_id=context.benchmark_spec.name,
             benchmark_name=context.benchmark_spec.name,
             status=EvaluationStatus.COMPLETED,
             metrics=metrics,

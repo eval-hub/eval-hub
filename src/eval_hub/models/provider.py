@@ -254,7 +254,6 @@ class BenchmarkDetail(BaseModel):
 
     benchmark_id: str = Field(..., description="Unique benchmark identifier")
     provider_id: str = Field(..., description="Provider that owns this benchmark")
-    provider_name: str = Field(..., description="Human-readable provider name")
     name: str = Field(..., description="Human-readable benchmark name")
     description: str = Field(..., description="Benchmark description")
     category: str = Field(..., description="Benchmark category")
@@ -264,21 +263,3 @@ class BenchmarkDetail(BaseModel):
     num_few_shot: int = Field(..., description="Number of few-shot examples")
     dataset_size: int | None = Field(None, description="Size of the evaluation dataset")
     tags: list[str] = Field(default_factory=list, description="Tags for categorization")
-    provider_type: ProviderType = Field(
-        ..., description="Type of provider (builtin/nemo-evaluator)"
-    )
-    base_url: str | None = Field(
-        default=None, description="Base URL for the provider API"
-    )
-
-    @model_serializer(mode="wrap")
-    def serialize_model(
-        self,
-        serializer: Callable[[BaseModel], dict[str, Any]],
-        info: SerializationInfo,
-    ) -> dict[str, Any]:
-        """Custom serialization to exclude base_url for builtin providers when it's None."""
-        data = serializer(self)
-        if self.provider_type == ProviderType.BUILTIN and self.base_url is None:
-            data.pop("base_url", None)
-        return data

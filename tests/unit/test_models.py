@@ -7,12 +7,15 @@ import pytest
 from eval_hub.models.evaluation import (
     BackendSpec,
     BackendType,
+    BenchmarkConfig,
     BenchmarkSpec,
     EvaluationRequest,
     EvaluationResult,
     EvaluationSpec,
     EvaluationStatus,
+    Model,
     RiskCategory,
+    SimpleEvaluationRequest,
 )
 
 
@@ -65,9 +68,10 @@ class TestEvaluationModels:
             name="test-backend", type=BackendType.CUSTOM, benchmarks=[benchmark]
         )
 
+        model = Model(url="http://test-server:8000", name="test-model")
         eval_spec = EvaluationSpec(
             name="Test Evaluation",
-            model={"url": "http://test-server:8000", "name": "test-model"},
+            model=model,
             backends=[backend],
             risk_category=RiskCategory.MEDIUM,
             priority=1,
@@ -91,9 +95,10 @@ class TestEvaluationModels:
         backend = BackendSpec(
             name="test-backend", type=BackendType.CUSTOM, benchmarks=[benchmark]
         )
+        model = Model(url="http://test-server:8000", name="test-model")
         eval_spec = EvaluationSpec(
             name="Test Evaluation",
-            model={"url": "http://test-server:8000", "name": "test-model"},
+            model=model,
             backends=[backend],
         )
 
@@ -117,8 +122,9 @@ class TestEvaluationModels:
 
         result = EvaluationResult(
             evaluation_id=eval_id,
-            backend_name="test-backend",
-            benchmark_name="test-benchmark",
+            provider_id="lm_evaluation_harness",
+            benchmark_id="test-benchmark",
+            benchmark_name="Test Benchmark",
             status=EvaluationStatus.COMPLETED,
             metrics={"accuracy": 0.85, "f1_score": 0.78},
             artifacts={"results": "/path/to/results.json"},
@@ -129,8 +135,9 @@ class TestEvaluationModels:
         )
 
         assert result.evaluation_id == eval_id
-        assert result.backend_name == "test-backend"
-        assert result.benchmark_name == "test-benchmark"
+        assert result.provider_id == "lm_evaluation_harness"
+        assert result.benchmark_id == "test-benchmark"
+        assert result.benchmark_name == "Test Benchmark"
         assert result.status == EvaluationStatus.COMPLETED
         assert result.metrics["accuracy"] == 0.85
         assert result.metrics["f1_score"] == 0.78
@@ -189,9 +196,10 @@ class TestEvaluationModels:
         assert benchmark.device is None
         assert benchmark.config == {}
 
+        model = Model(url="http://test-server:8000", name="test-model")
         eval_spec = EvaluationSpec(
             name="Test",
-            model={"url": "http://test-server:8000", "name": "test-model"},
+            model=model,
             backends=[],
         )
         assert eval_spec.risk_category is None
@@ -209,3 +217,136 @@ class TestEvaluationModels:
         )
         assert hasattr(benchmark, "extra_field")
         assert benchmark.extra_field == "extra_value"
+
+    def test_model_creation(self):
+        """Test Model model creation."""
+        model = Model(
+            url="http://test-server:8000",
+            name="test-model",
+            configuration={"temperature": 0.1, "max_tokens": 512}
+        )
+
+        assert model.url == "http://test-server:8000"
+        assert model.name == "test-model"
+        assert model.configuration == {"temperature": 0.1, "max_tokens": 512}
+
+    def test_model_defaults(self):
+        """Test Model model default values."""
+        model = Model(url="http://test-server:8000", name="test-model")
+        assert model.url == "http://test-server:8000"
+        assert model.name == "test-model"
+        assert model.configuration == {}
+
+    def test_benchmark_config_creation(self):
+        """Test BenchmarkConfig model creation."""
+        config = BenchmarkConfig(
+            benchmark_id="mmlu",
+            provider_id="lm_evaluation_harness",
+            config={
+                "num_fewshot": 5,
+                "limit": None,
+                "batch_size": 16,
+                "include_path": "./custom_prompts/mmlu_cot.yaml",
+                "fewshot_as_multiturn": False,
+                "trust_remote_code": False
+            }
+        )
+
+        assert config.benchmark_id == "mmlu"
+        assert config.provider_id == "lm_evaluation_harness"
+        assert config.config["num_fewshot"] == 5
+        assert config.config["limit"] is None
+        assert config.config["batch_size"] == 16
+        assert config.config["include_path"] == "./custom_prompts/mmlu_cot.yaml"
+        assert config.config["fewshot_as_multiturn"] is False
+        assert config.config["trust_remote_code"] is False
+
+    def test_benchmark_config_minimal(self):
+        """Test BenchmarkConfig with minimal required fields."""
+        config = BenchmarkConfig(
+            benchmark_id="arc_easy",
+            provider_id="lm_evaluation_harness"
+        )
+
+        assert config.benchmark_id == "arc_easy"
+        assert config.provider_id == "lm_evaluation_harness"
+        assert config.config == {}
+
+    def test_simple_evaluation_request_creation(self):
+        """Test SimpleEvaluationRequest model creation."""
+        model = Model(
+            url="http://test-server:8000",
+            name="meta-llama/llama-3.1-8b",
+            configuration={
+                "temperature": 0.1,
+                "max_tokens": 512,
+                "top_p": 0.95
+            }
+        )
+
+        benchmarks = [
+            BenchmarkConfig(
+                benchmark_id="arc_easy",
+                provider_id="lm_evaluation_harness",
+                config={
+                    "num_fewshot": 0,
+                    "limit": 1000,
+                    "batch_size": 16,
+                    "include_path": "./custom_prompts/arc_easy.yaml"
+                }
+            ),
+            BenchmarkConfig(
+                benchmark_id="mmlu",
+                provider_id="lm_evaluation_harness",
+                config={
+                    "num_fewshot": 5,
+                    "limit": None,
+                    "batch_size": 16,
+                    "include_path": "./custom_prompts/mmlu_cot.yaml",
+                    "fewshot_as_multiturn": False,
+                    "trust_remote_code": False
+                }
+            )
+        ]
+
+        request = SimpleEvaluationRequest(
+            model=model,
+            benchmarks=benchmarks,
+            experiment_name="llama-3.1-8b-reasoning-eval",
+            tags={
+                "environment": "production",
+                "model_family": "llama-3.1",
+                "evaluation_type": "reasoning"
+            }
+        )
+
+        assert request.model.url == "http://test-server:8000"
+        assert request.model.name == "meta-llama/llama-3.1-8b"
+        assert len(request.benchmarks) == 2
+        assert request.benchmarks[0].benchmark_id == "arc_easy"
+        assert request.benchmarks[1].benchmark_id == "mmlu"
+        assert request.experiment_name == "llama-3.1-8b-reasoning-eval"
+        assert request.tags["environment"] == "production"
+        assert request.tags["model_family"] == "llama-3.1"
+        assert request.tags["evaluation_type"] == "reasoning"
+        assert isinstance(request.request_id, type(uuid4()))
+        assert isinstance(request.created_at, datetime)
+
+    def test_simple_evaluation_request_defaults(self):
+        """Test SimpleEvaluationRequest model default values."""
+        model = Model(url="http://test-server:8000", name="test-model")
+        benchmarks = [BenchmarkConfig(benchmark_id="test", provider_id="test_provider")]
+
+        request = SimpleEvaluationRequest(
+            model=model,
+            benchmarks=benchmarks
+        )
+
+        assert request.experiment_name is None
+        assert request.tags == {}
+        assert request.timeout_minutes == 60
+        assert request.retry_attempts == 3
+        assert request.async_mode is True
+        assert request.callback_url is None
+        assert isinstance(request.request_id, type(uuid4()))
+        assert isinstance(request.created_at, datetime)

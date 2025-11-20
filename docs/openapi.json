@@ -119,31 +119,17 @@
     "/api/v1/evaluations/jobs": {
       "post": {
         "tags": [
-          "Benchmarks"
+          "Evaluations"
         ],
         "summary": "Create Evaluation",
-        "description": "Create and execute evaluation request.",
+        "description": "Create and execute evaluation request using the simplified benchmark schema.",
         "operationId": "create_evaluation_api_v1_evaluations_jobs_post",
-        "parameters": [
-          {
-            "name": "async_mode",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "description": "Run evaluation asynchronously",
-              "default": true,
-              "title": "Async Mode"
-            },
-            "description": "Run evaluation asynchronously"
-          }
-        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/EvaluationRequest"
+                "$ref": "#/components/schemas/SimpleEvaluationRequest"
               }
             }
           }
@@ -794,65 +780,6 @@
   },
   "components": {
     "schemas": {
-      "BackendSpec": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Backend name/identifier"
-          },
-          "type": {
-            "$ref": "#/components/schemas/BackendType",
-            "description": "Backend type"
-          },
-          "endpoint": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Endpoint",
-            "description": "Backend API endpoint"
-          },
-          "config": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Config",
-            "description": "Backend-specific configuration"
-          },
-          "benchmarks": {
-            "items": {
-              "$ref": "#/components/schemas/BenchmarkSpec"
-            },
-            "type": "array",
-            "title": "Benchmarks",
-            "description": "Benchmarks to run on this backend"
-          }
-        },
-        "additionalProperties": true,
-        "type": "object",
-        "required": [
-          "name",
-          "type",
-          "benchmarks"
-        ],
-        "title": "BackendSpec",
-        "description": "Specification for an evaluation backend."
-      },
-      "BackendType": {
-        "type": "string",
-        "enum": [
-          "lm-evaluation-harness",
-          "guidellm",
-          "nemo-evaluator",
-          "custom"
-        ],
-        "title": "BackendType",
-        "description": "Supported evaluation backends."
-      },
       "Benchmark": {
         "properties": {
           "benchmark_id": {
@@ -922,9 +849,108 @@
         "title": "Benchmark",
         "description": "Benchmark specification."
       },
-      "BenchmarkDetail": {
+      "BenchmarkConfig": {
+        "properties": {
+          "benchmark_id": {
+            "type": "string",
+            "title": "Benchmark Id",
+            "description": "Benchmark identifier"
+          },
+          "provider_id": {
+            "type": "string",
+            "title": "Provider Id",
+            "description": "Provider identifier"
+          },
+          "config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Config",
+            "description": "Benchmark configuration including num_fewshot, limit, batch_size, etc."
+          }
+        },
         "additionalProperties": true,
-        "type": "object"
+        "type": "object",
+        "required": [
+          "benchmark_id",
+          "provider_id"
+        ],
+        "title": "BenchmarkConfig",
+        "description": "New simplified benchmark specification."
+      },
+      "BenchmarkDetail": {
+        "properties": {
+          "benchmark_id": {
+            "type": "string",
+            "title": "Benchmark Id",
+            "description": "Unique benchmark identifier"
+          },
+          "provider_id": {
+            "type": "string",
+            "title": "Provider Id",
+            "description": "Provider that owns this benchmark"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Human-readable benchmark name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Benchmark description"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "description": "Benchmark category"
+          },
+          "metrics": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Metrics",
+            "description": "List of metrics provided by this benchmark"
+          },
+          "num_few_shot": {
+            "type": "integer",
+            "title": "Num Few Shot",
+            "description": "Number of few-shot examples"
+          },
+          "dataset_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Size",
+            "description": "Size of the evaluation dataset"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "description": "Tags for categorization"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "benchmark_id",
+          "provider_id",
+          "name",
+          "description",
+          "category",
+          "metrics",
+          "num_few_shot"
+        ],
+        "title": "BenchmarkDetail",
+        "description": "Detailed benchmark information for API responses."
       },
       "BenchmarkReference": {
         "properties": {
@@ -959,85 +985,6 @@
         ],
         "title": "BenchmarkReference",
         "description": "Reference to a benchmark within a collection."
-      },
-      "BenchmarkSpec": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Benchmark name"
-          },
-          "tasks": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Tasks",
-            "description": "List of tasks to evaluate"
-          },
-          "num_fewshot": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Num Fewshot",
-            "description": "Number of few-shot examples"
-          },
-          "batch_size": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Batch Size",
-            "description": "Batch size for evaluation"
-          },
-          "limit": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Limit",
-            "description": "Limit number of examples"
-          },
-          "device": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Device",
-            "description": "Device to run evaluation on"
-          },
-          "config": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Config",
-            "description": "Additional configuration"
-          }
-        },
-        "additionalProperties": true,
-        "type": "object",
-        "required": [
-          "name",
-          "tasks"
-        ],
-        "title": "BenchmarkSpec",
-        "description": "Specification for a benchmark within an evaluation."
       },
       "Collection": {
         "properties": {
@@ -1276,75 +1223,6 @@
         "title": "CollectionUpdateRequest",
         "description": "Request for updating an existing collection."
       },
-      "EvaluationRequest": {
-        "properties": {
-          "request_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Request Id",
-            "description": "Unique request ID"
-          },
-          "evaluations": {
-            "items": {
-              "$ref": "#/components/schemas/EvaluationSpec"
-            },
-            "type": "array",
-            "title": "Evaluations",
-            "description": "List of evaluations to run"
-          },
-          "experiment_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Experiment Name",
-            "description": "MLFlow experiment name"
-          },
-          "tags": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object",
-            "title": "Tags",
-            "description": "Tags for the evaluation run"
-          },
-          "async_mode": {
-            "type": "boolean",
-            "title": "Async Mode",
-            "description": "Whether to run evaluations asynchronously",
-            "default": true
-          },
-          "callback_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Callback Url",
-            "description": "URL to call when evaluation completes"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At",
-            "description": "Request creation timestamp"
-          }
-        },
-        "additionalProperties": true,
-        "type": "object",
-        "required": [
-          "evaluations"
-        ],
-        "title": "EvaluationRequest",
-        "description": "Request payload for starting evaluations."
-      },
       "EvaluationResponse": {
         "properties": {
           "request_id": {
@@ -1463,15 +1341,27 @@
             "title": "Evaluation Id",
             "description": "Evaluation ID"
           },
-          "backend_name": {
+          "provider_id": {
             "type": "string",
-            "title": "Backend Name",
-            "description": "Backend that ran the evaluation"
+            "title": "Provider Id",
+            "description": "Provider that ran the evaluation"
+          },
+          "benchmark_id": {
+            "type": "string",
+            "title": "Benchmark Id",
+            "description": "Benchmark identifier"
           },
           "benchmark_name": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Benchmark Name",
-            "description": "Benchmark name"
+            "description": "Benchmark display name"
           },
           "status": {
             "$ref": "#/components/schemas/EvaluationStatus",
@@ -1570,106 +1460,12 @@
         "type": "object",
         "required": [
           "evaluation_id",
-          "backend_name",
-          "benchmark_name",
+          "provider_id",
+          "benchmark_id",
           "status"
         ],
         "title": "EvaluationResult",
         "description": "Result of a single evaluation."
-      },
-      "EvaluationSpec": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id",
-            "description": "Unique evaluation ID"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Human-readable evaluation name"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description",
-            "description": "Evaluation description"
-          },
-          "model": {
-            "$ref": "#/components/schemas/Model",
-            "description": "Model specification for evaluation"
-          },
-          "backends": {
-            "items": {
-              "$ref": "#/components/schemas/BackendSpec"
-            },
-            "type": "array",
-            "title": "Backends",
-            "description": "Backends to run evaluations on"
-          },
-          "risk_category": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/RiskCategory"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Risk category for automatic benchmark selection"
-          },
-          "collection_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Collection Id",
-            "description": "Collection ID for automatic benchmark selection"
-          },
-          "priority": {
-            "type": "integer",
-            "title": "Priority",
-            "description": "Evaluation priority (higher = more urgent)",
-            "default": 0
-          },
-          "timeout_minutes": {
-            "type": "integer",
-            "title": "Timeout Minutes",
-            "description": "Timeout for the entire evaluation",
-            "default": 60
-          },
-          "retry_attempts": {
-            "type": "integer",
-            "title": "Retry Attempts",
-            "description": "Number of retry attempts on failure",
-            "default": 3
-          },
-          "metadata": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Metadata",
-            "description": "Additional metadata"
-          }
-        },
-        "additionalProperties": true,
-        "type": "object",
-        "required": [
-          "name",
-          "model"
-        ],
-        "title": "EvaluationSpec",
-        "description": "Specification for a single evaluation request."
       },
       "EvaluationStatus": {
         "type": "string",
@@ -1880,16 +1676,91 @@
         "title": "ProviderType",
         "description": "Type of evaluation provider."
       },
-      "RiskCategory": {
-        "type": "string",
-        "enum": [
-          "low",
-          "medium",
-          "high",
-          "critical"
+      "SimpleEvaluationRequest": {
+        "properties": {
+          "model": {
+            "$ref": "#/components/schemas/Model",
+            "description": "Model specification for evaluation"
+          },
+          "benchmarks": {
+            "items": {
+              "$ref": "#/components/schemas/BenchmarkConfig"
+            },
+            "type": "array",
+            "title": "Benchmarks",
+            "description": "List of benchmarks to evaluate"
+          },
+          "experiment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experiment Name",
+            "description": "Name for the evaluation experiment (optional)"
+          },
+          "tags": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Tags",
+            "description": "Tags for the evaluation run"
+          },
+          "timeout_minutes": {
+            "type": "integer",
+            "title": "Timeout Minutes",
+            "description": "Timeout for the entire evaluation",
+            "default": 60
+          },
+          "retry_attempts": {
+            "type": "integer",
+            "title": "Retry Attempts",
+            "description": "Number of retry attempts on failure",
+            "default": 3
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id",
+            "description": "Unique request ID"
+          },
+          "async_mode": {
+            "type": "boolean",
+            "title": "Async Mode",
+            "description": "Whether to run evaluations asynchronously",
+            "default": true
+          },
+          "callback_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Callback Url",
+            "description": "URL to call when evaluation completes"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Request creation timestamp"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "model",
+          "benchmarks"
         ],
-        "title": "RiskCategory",
-        "description": "Risk categories for evaluations."
+        "title": "SimpleEvaluationRequest",
+        "description": "Simplified evaluation request using the new schema."
       },
       "SingleBenchmarkEvaluationRequest": {
         "properties": {

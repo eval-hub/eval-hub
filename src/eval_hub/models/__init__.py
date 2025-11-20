@@ -2,6 +2,7 @@
 
 from .evaluation import (
     BackendSpec,
+    BenchmarkConfig,
     BenchmarkSpec,
     EvaluationRequest,
     EvaluationResponse,
@@ -9,22 +10,25 @@ from .evaluation import (
     EvaluationSpec,
     Model,
     RiskCategory,
+    SimpleEvaluationRequest,
     SingleBenchmarkEvaluationRequest,
 )
 from .health import HealthResponse
 from .status import EvaluationStatus, TaskStatus
 
 __all__ = [
+    "BackendSpec",
+    "BenchmarkConfig",
+    "BenchmarkSpec",
     "EvaluationRequest",
     "EvaluationResponse",
-    "EvaluationSpec",
     "EvaluationResult",
-    "BackendSpec",
-    "BenchmarkSpec",
+    "EvaluationSpec",
     "HealthResponse",
     "EvaluationStatus",
     "Model",
     "RiskCategory",
+    "SimpleEvaluationRequest",
     "SingleBenchmarkEvaluationRequest",
     "TaskStatus",
 ]

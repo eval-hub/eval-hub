@@ -163,7 +163,8 @@ class NemoEvaluatorExecutor(Executor):
 
             return EvaluationResult(
                 evaluation_id=context.evaluation_id,
-                backend_name="nemo-evaluator",
+                provider_id="nemo-evaluator",
+                benchmark_id=context.benchmark_spec.name,
                 benchmark_name=context.benchmark_spec.name,
                 status=EvaluationStatus.FAILED,
                 error_message=str(e),
@@ -399,7 +400,8 @@ class NemoEvaluatorExecutor(Executor):
 
         return EvaluationResult(
             evaluation_id=context.evaluation_id,
-            backend_name="nemo-evaluator",
+            provider_id="nemo-evaluator",
+            benchmark_id=context.benchmark_spec.name,
             benchmark_name=context.benchmark_spec.name,
             status=EvaluationStatus.COMPLETED,
             metrics=metrics_typed,

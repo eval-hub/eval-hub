@@ -69,6 +69,19 @@ class BenchmarkSpec(BaseModel):
     )
 
 
+class BenchmarkConfig(BaseModel):
+    """New simplified benchmark specification."""
+
+    model_config = ConfigDict(extra="allow")
+
+    benchmark_id: str = Field(..., description="Benchmark identifier")
+    provider_id: str = Field(..., description="Provider identifier")
+    config: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Benchmark configuration including num_fewshot, limit, batch_size, etc."
+    )
+
+
 class BackendSpec(BaseModel):
     """Specification for an evaluation backend."""
 
@@ -189,14 +202,50 @@ class EvaluationRequest(BaseModel):
     )
 
 
+class SimpleEvaluationRequest(BaseModel):
+    """Simplified evaluation request using the new schema."""
+
+    model_config = ConfigDict(extra="allow")
+
+    model: Model = Field(..., description="Model specification for evaluation")
+    benchmarks: list[BenchmarkConfig] = Field(
+        ..., description="List of benchmarks to evaluate"
+    )
+    experiment_name: str | None = Field(
+        None, description="Name for the evaluation experiment (optional)"
+    )
+    tags: dict[str, str] = Field(
+        default_factory=dict, description="Tags for the evaluation run"
+    )
+    timeout_minutes: int = Field(
+        default=60, description="Timeout for the entire evaluation"
+    )
+    retry_attempts: int = Field(
+        default=3, description="Number of retry attempts on failure"
+    )
+    request_id: UUID = Field(
+        default_factory=uuid4, description="Unique request ID"
+    )
+    async_mode: bool = Field(
+        default=True, description="Whether to run evaluations asynchronously"
+    )
+    callback_url: str | None = Field(
+        None, description="URL to call when evaluation completes"
+    )
+    created_at: datetime = Field(
+        default_factory=get_utc_now, description="Request creation timestamp"
+    )
+
+
 class EvaluationResult(BaseModel):
     """Result of a single evaluation."""
 
     model_config = ConfigDict(extra="allow")
 
     evaluation_id: UUID = Field(..., description="Evaluation ID")
-    backend_name: str = Field(..., description="Backend that ran the evaluation")
-    benchmark_name: str = Field(..., description="Benchmark name")
+    provider_id: str = Field(..., description="Provider that ran the evaluation")
+    benchmark_id: str = Field(..., description="Benchmark identifier")
+    benchmark_name: str | None = Field(None, description="Benchmark display name")
     status: EvaluationStatus = Field(..., description="Evaluation status")
     metrics: dict[str, float | int | str] = Field(
         default_factory=dict, description="Evaluation metrics"

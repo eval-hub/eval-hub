@@ -22,12 +22,14 @@ from ..core.logging import get_logger
 from ..models.evaluation import (
     BackendSpec,
     BackendType,
+    BenchmarkConfig,
     BenchmarkSpec,
     EvaluationRequest,
     EvaluationResponse,
     EvaluationResult,
     EvaluationSpec,
     EvaluationStatus,
+    SimpleEvaluationRequest,
     SingleBenchmarkEvaluationRequest,
 )
 from ..models.health import HealthResponse
@@ -322,12 +324,11 @@ async def create_single_benchmark_evaluation(
     "/evaluations/jobs",
     response_model=EvaluationResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    tags=["Benchmarks"],
+    tags=["Evaluations"],
 )
 async def create_evaluation(
-    request: EvaluationRequest,
+    request: SimpleEvaluationRequest,
     background_tasks: BackgroundTasks,
-    async_mode: bool = Query(True, description="Run evaluation asynchronously"),
     parser: RequestParser = Depends(get_request_parser),
     executor: EvaluationExecutor = Depends(get_evaluation_executor),
     mlflow_client: MLFlowClient = Depends(get_mlflow_client),
@@ -335,25 +336,117 @@ async def create_evaluation(
     settings: Settings = Depends(get_settings),
     provider_service: ProviderService = Depends(get_provider_service),
 ) -> EvaluationResponse:
-    """Create and execute evaluation request."""
+    """Create and execute evaluation request using the simplified benchmark schema."""
     logger.info(
         "Received evaluation request",
         request_id=str(request.request_id),
-        evaluation_count=len(request.evaluations),
-        async_mode=async_mode,
+        benchmark_count=len(request.benchmarks),
+        experiment_name=request.experiment_name,
+        async_mode=request.async_mode,
     )
 
     try:
-        # Parse and validate the request
-        parsed_request = await parser.parse_evaluation_request(
-            request, provider_service
+        # Validate benchmarks exist
+        for benchmark in request.benchmarks:
+            benchmark_detail = provider_service.get_benchmark_by_id(
+                benchmark.provider_id, benchmark.benchmark_id
+            )
+            if not benchmark_detail:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Benchmark {benchmark.provider_id}::{benchmark.benchmark_id} not found",
+                )
+
+        # Convert SimpleEvaluationRequest to legacy EvaluationRequest format for processing
+        evaluation_specs = []
+
+        # Group benchmarks by provider to create backend specs
+        provider_benchmarks: dict[str, list[BenchmarkConfig]] = {}
+        for benchmark in request.benchmarks:
+            if benchmark.provider_id not in provider_benchmarks:
+                provider_benchmarks[benchmark.provider_id] = []
+            provider_benchmarks[benchmark.provider_id].append(benchmark)
+
+        # Create evaluation spec
+        backend_specs = []
+        for provider_id, benchmarks in provider_benchmarks.items():
+            # Get provider to determine backend type
+            provider = provider_service.get_provider_by_id(provider_id)
+            if not provider:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Provider {provider_id} not found",
+                )
+
+            # Map provider type to backend type
+            if provider.provider_type.value == "builtin" and provider_id == "lm_evaluation_harness":
+                backend_type = BackendType.LMEVAL
+            elif provider.provider_type.value == "nemo-evaluator":
+                backend_type = BackendType.NEMO_EVALUATOR
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Unsupported provider type: {provider.provider_type} (provider_id: {provider_id})",
+                )
+
+            # Convert BenchmarkConfigs to BenchmarkSpecs
+            benchmark_specs = []
+            for benchmark in benchmarks:
+                # Get benchmark details for additional info
+                benchmark_detail = provider_service.get_benchmark_by_id(
+                    benchmark.provider_id, benchmark.benchmark_id
+                )
+
+                benchmark_spec = BenchmarkSpec(
+                    name=benchmark.benchmark_id,
+                    tasks=[benchmark.benchmark_id],
+                    num_fewshot=benchmark.config.get("num_fewshot"),
+                    batch_size=benchmark.config.get("batch_size"),
+                    limit=benchmark.config.get("limit"),
+                    device=benchmark.config.get("device"),
+                    config=benchmark.config,
+                )
+                benchmark_specs.append(benchmark_spec)
+
+            backend_spec = BackendSpec(
+                name=f"{provider_id}-backend",
+                type=backend_type,
+                endpoint=provider.base_url,
+                config={},
+                benchmarks=benchmark_specs,
+            )
+            backend_specs.append(backend_spec)
+
+        evaluation_spec = EvaluationSpec(
+            name=request.experiment_name or f"Evaluation-{request.request_id.hex[:8]}",
+            description=f"Evaluation with {len(request.benchmarks)} benchmarks",
+            model=request.model,
+            backends=backend_specs,
+            timeout_minutes=request.timeout_minutes,
+            retry_attempts=request.retry_attempts,
         )
 
-        # Create MLFlow experiment (mocked)
+        # Create legacy evaluation request
+        legacy_request = EvaluationRequest(
+            request_id=request.request_id,
+            evaluations=[evaluation_spec],
+            experiment_name=request.experiment_name,
+            tags=request.tags,
+            async_mode=request.async_mode,
+            callback_url=request.callback_url,
+            created_at=request.created_at,
+        )
+
+        # Use existing evaluation processing logic
+        parsed_request = await parser.parse_evaluation_request(
+            legacy_request, provider_service
+        )
+
+        # Create MLFlow experiment
         experiment_id = await mlflow_client.create_experiment(parsed_request)
         experiment_url = await mlflow_client.get_experiment_url(experiment_id)
 
-        if async_mode:
+        if request.async_mode:
             # Initialize response for async execution
             initial_response = await response_builder.build_response(
                 parsed_request,
@@ -362,17 +455,8 @@ async def create_evaluation(
             )
             initial_response.status = EvaluationStatus.PENDING
 
-            # Calculate total number of benchmark evaluations that will be executed
-            try:
-                total_benchmarks = sum(
-                    len(backend.benchmarks)
-                    for eval_spec in parsed_request.evaluations
-                    for backend in eval_spec.backends
-                )
-                initial_response.total_evaluations = total_benchmarks
-            except (TypeError, AttributeError):
-                # Handle mock objects or malformed requests
-                pass
+            # Calculate total number of benchmark evaluations
+            initial_response.total_evaluations = len(request.benchmarks)
 
             # Store in active evaluations
             active_evaluations[str(request.request_id)] = initial_response
@@ -380,7 +464,7 @@ async def create_evaluation(
             # Start background task
             task = asyncio.create_task(
                 _execute_evaluation_async(
-                    parsed_request,
+                    legacy_request,
                     experiment_id,
                     experiment_url,
                     executor,
@@ -395,12 +479,12 @@ async def create_evaluation(
         else:
             # Synchronous execution
             results = await _execute_evaluation_sync(
-                parsed_request, experiment_id, executor, mlflow_client
+                legacy_request, experiment_id, executor, mlflow_client
             )
 
             # Build final response
             response = await response_builder.build_response(
-                parsed_request, results, experiment_url
+                legacy_request, results, experiment_url
             )
 
             return response
