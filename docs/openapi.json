@@ -9,7 +9,7 @@
     "/metrics": {
       "get": {
         "summary": "Metrics",
-        "description": "Prometheus metrics endpoint.",
+        "description": "Prometheus metrics endpoint with MLflow health check.",
         "operationId": "metrics_metrics_get",
         "responses": {
           "200": {
@@ -35,80 +35,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HealthResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/evaluations/benchmarks/{provider_id}/{benchmark_id}": {
-      "post": {
-        "tags": [
-          "Benchmarks"
-        ],
-        "summary": "Create Single Benchmark Evaluation",
-        "description": "Run an evaluation on a single benchmark (Llama Stack compatible API).",
-        "operationId": "create_single_benchmark_evaluation_api_v1_evaluations_benchmarks__provider_id___benchmark_id__post",
-        "parameters": [
-          {
-            "name": "provider_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Provider Id"
-            }
-          },
-          {
-            "name": "benchmark_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Benchmark Id"
-            }
-          },
-          {
-            "name": "async_mode",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "description": "Run evaluation asynchronously",
-              "default": true,
-              "title": "Async Mode"
-            },
-            "description": "Run evaluation asynchronously"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SingleBenchmarkEvaluationRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "202": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EvaluationResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -159,7 +85,7 @@
       },
       "get": {
         "tags": [
-          "Benchmarks"
+          "Evaluations"
         ],
         "summary": "List Evaluations",
         "description": "List all evaluation requests.",
@@ -229,7 +155,7 @@
     "/api/v1/evaluations/jobs/{id}": {
       "get": {
         "tags": [
-          "Benchmarks"
+          "Evaluations"
         ],
         "summary": "Get Evaluation Status",
         "description": "Get the status of an evaluation request.",
@@ -271,7 +197,7 @@
       },
       "delete": {
         "tags": [
-          "Benchmarks"
+          "Evaluations"
         ],
         "summary": "Cancel Evaluation",
         "description": "Cancel a running evaluation.",
@@ -313,7 +239,7 @@
     "/api/v1/evaluations/jobs/{id}/summary": {
       "get": {
         "tags": [
-          "Benchmarks"
+          "Evaluations"
         ],
         "summary": "Get Evaluation Summary",
         "description": "Get a summary of an evaluation request.",
@@ -513,58 +439,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ListBenchmarksResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/evaluations/providers/{provider_id}/benchmarks/{benchmark_id}": {
-      "get": {
-        "tags": [
-          "Providers"
-        ],
-        "summary": "Get Benchmark",
-        "description": "Get details of a specific benchmark.",
-        "operationId": "get_benchmark_api_v1_evaluations_providers__provider_id__benchmarks__benchmark_id__get",
-        "parameters": [
-          {
-            "name": "provider_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Provider Id"
-            }
-          },
-          {
-            "name": "benchmark_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Benchmark Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BenchmarkDetail"
                 }
               }
             }
@@ -876,81 +750,6 @@
         ],
         "title": "BenchmarkConfig",
         "description": "New simplified benchmark specification."
-      },
-      "BenchmarkDetail": {
-        "properties": {
-          "benchmark_id": {
-            "type": "string",
-            "title": "Benchmark Id",
-            "description": "Unique benchmark identifier"
-          },
-          "provider_id": {
-            "type": "string",
-            "title": "Provider Id",
-            "description": "Provider that owns this benchmark"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Human-readable benchmark name"
-          },
-          "description": {
-            "type": "string",
-            "title": "Description",
-            "description": "Benchmark description"
-          },
-          "category": {
-            "type": "string",
-            "title": "Category",
-            "description": "Benchmark category"
-          },
-          "metrics": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Metrics",
-            "description": "List of metrics provided by this benchmark"
-          },
-          "num_few_shot": {
-            "type": "integer",
-            "title": "Num Few Shot",
-            "description": "Number of few-shot examples"
-          },
-          "dataset_size": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dataset Size",
-            "description": "Size of the evaluation dataset"
-          },
-          "tags": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Tags",
-            "description": "Tags for categorization"
-          }
-        },
-        "additionalProperties": true,
-        "type": "object",
-        "required": [
-          "benchmark_id",
-          "provider_id",
-          "name",
-          "description",
-          "category",
-          "metrics",
-          "num_few_shot"
-        ],
-        "title": "BenchmarkDetail",
-        "description": "Detailed benchmark information for API responses."
       },
       "BenchmarkReference": {
         "properties": {
@@ -1479,6 +1278,30 @@
         "title": "EvaluationStatus",
         "description": "Status of an evaluation."
       },
+      "ExperimentConfig": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Experiment name for MLFlow tracking"
+          },
+          "tags": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Tags",
+            "description": "Tags for the evaluation experiment"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ExperimentConfig",
+        "description": "Configuration for MLFlow experiment tracking."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1690,25 +1513,9 @@
             "title": "Benchmarks",
             "description": "List of benchmarks to evaluate"
           },
-          "experiment_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Experiment Name",
-            "description": "Name for the evaluation experiment (optional)"
-          },
-          "tags": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object",
-            "title": "Tags",
-            "description": "Tags for the evaluation run"
+          "experiment": {
+            "$ref": "#/components/schemas/ExperimentConfig",
+            "description": "Experiment configuration for MLFlow tracking"
           },
           "timeout_minutes": {
             "type": "integer",
@@ -1757,81 +1564,11 @@
         "type": "object",
         "required": [
           "model",
-          "benchmarks"
+          "benchmarks",
+          "experiment"
         ],
         "title": "SimpleEvaluationRequest",
         "description": "Simplified evaluation request using the new schema."
-      },
-      "SingleBenchmarkEvaluationRequest": {
-        "properties": {
-          "model": {
-            "$ref": "#/components/schemas/Model",
-            "description": "Model specification for evaluation"
-          },
-          "timeout_minutes": {
-            "type": "integer",
-            "title": "Timeout Minutes",
-            "description": "Timeout for the evaluation",
-            "default": 60
-          },
-          "retry_attempts": {
-            "type": "integer",
-            "title": "Retry Attempts",
-            "description": "Number of retry attempts on failure",
-            "default": 3
-          },
-          "limit": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Limit",
-            "description": "Limit number of samples to evaluate"
-          },
-          "num_fewshot": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Num Fewshot",
-            "description": "Number of few-shot examples"
-          },
-          "experiment_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Experiment Name",
-            "description": "MLFlow experiment name"
-          },
-          "tags": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object",
-            "title": "Tags",
-            "description": "Tags for the evaluation run"
-          }
-        },
-        "additionalProperties": true,
-        "type": "object",
-        "required": [
-          "model"
-        ],
-        "title": "SingleBenchmarkEvaluationRequest",
-        "description": "Simplified request for running a single benchmark evaluation."
       },
       "ValidationError": {
         "properties": {
