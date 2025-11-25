@@ -852,6 +852,10 @@ curl -X POST "{{baseUrl}}/collections" \
 
 #### **PUT** `/collections/{collection_id}` \- Update Collection
 
+#### **PATCH** `/collections/{collection_id}` \- Patch Collection
+
+Use PATCH to partially update a collection without resending the full payload.
+
 #### **DELETE** `/collections/{collection_id}` \- Delete Collection
 
 ---

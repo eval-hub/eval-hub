@@ -460,6 +460,32 @@ class TestProviderAPI:
         assert collections[0]["name"] == "Test Collection"
         assert len(collections[0]["benchmarks"]) == 2
 
+    def test_patch_collection_success(self, client_with_mock_provider):
+        """Test partially updating a collection."""
+        client, mock_service = client_with_mock_provider
+
+        patched_collection = Collection(
+            collection_id="test_collection",
+            name="Updated Name",
+            description="Updated Description",
+            provider_id="test_provider",
+            tags=["updated"],
+            metadata={},
+            benchmarks=[],
+            created_at="2024-01-01T00:00:00Z",
+            updated_at="2024-01-02T00:00:00Z",
+        )
+        mock_service.update_collection.return_value = patched_collection
+
+        payload = {"name": "Updated Name", "tags": ["updated"]}
+        response = client.patch("/api/v1/collections/test_collection", json=payload)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "Updated Name"
+        assert data["tags"] == ["updated"]
+        mock_service.update_collection.assert_called_once()
+
 
 class TestProviderServiceIntegration:
     """Integration tests for provider service with API."""
