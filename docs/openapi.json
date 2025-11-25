@@ -456,14 +456,14 @@
         }
       }
     },
-    "/api/v1/collections": {
+    "/api/v1/evaluations/collections": {
       "get": {
         "tags": [
           "Collections"
         ],
         "summary": "List Collections",
         "description": "List all benchmark collections.",
-        "operationId": "list_collections_api_v1_collections_get",
+        "operationId": "list_collections_api_v1_evaluations_collections_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -483,7 +483,7 @@
         ],
         "summary": "Create Collection",
         "description": "Create a new collection.",
-        "operationId": "create_collection_api_v1_collections_post",
+        "operationId": "create_collection_api_v1_evaluations_collections_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -518,14 +518,14 @@
         }
       }
     },
-    "/api/v1/collections/{collection_id}": {
+    "/api/v1/evaluations/collections/{collection_id}": {
       "get": {
         "tags": [
           "Collections"
         ],
         "summary": "Get Collection",
         "description": "Get details of a specific collection.",
-        "operationId": "get_collection_api_v1_collections__collection_id__get",
+        "operationId": "get_collection_api_v1_evaluations_collections__collection_id__get",
         "parameters": [
           {
             "name": "collection_id",
@@ -566,7 +566,7 @@
         ],
         "summary": "Update Collection",
         "description": "Update an existing collection.",
-        "operationId": "update_collection_api_v1_collections__collection_id__put",
+        "operationId": "update_collection_api_v1_evaluations_collections__collection_id__put",
         "parameters": [
           {
             "name": "collection_id",
@@ -617,7 +617,7 @@
         ],
         "summary": "Patch Collection",
         "description": "Partially update an existing collection.",
-        "operationId": "patch_collection_api_v1_collections__collection_id__patch",
+        "operationId": "patch_collection_api_v1_evaluations_collections__collection_id__patch",
         "parameters": [
           {
             "name": "collection_id",
@@ -668,7 +668,7 @@
         ],
         "summary": "Delete Collection",
         "description": "Delete a collection.",
-        "operationId": "delete_collection_api_v1_collections__collection_id__delete",
+        "operationId": "delete_collection_api_v1_evaluations_collections__collection_id__delete",
         "parameters": [
           {
             "name": "collection_id",

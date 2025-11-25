@@ -445,7 +445,7 @@ class TestProviderAPI:
         """Test successful listing of collections."""
         client, mock_service = client_with_mock_provider
 
-        response = client.get("/api/v1/collections")
+        response = client.get("/api/v1/evaluations/collections")
 
         assert response.status_code == 200
         data = response.json()
@@ -478,7 +478,9 @@ class TestProviderAPI:
         mock_service.update_collection.return_value = patched_collection
 
         payload = {"name": "Updated Name", "tags": ["updated"]}
-        response = client.patch("/api/v1/collections/test_collection", json=payload)
+        response = client.patch(
+            "/api/v1/evaluations/collections/test_collection", json=payload
+        )
 
         assert response.status_code == 200
         data = response.json()

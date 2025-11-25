@@ -294,7 +294,7 @@ class TestProviderEndpointsIntegration:
         )
 
         # Step 5: List collections
-        response = integration_client.get("/api/v1/collections")
+        response = integration_client.get("/api/v1/evaluations/collections")
         assert response.status_code == 200
 
         collections_data = response.json()
@@ -402,7 +402,7 @@ class TestProviderEndpointsIntegration:
     def test_collection_integrity(self, integration_client):
         """Test that collections have valid structure and content."""
         # Get all collections
-        response = integration_client.get("/api/v1/collections")
+        response = integration_client.get("/api/v1/evaluations/collections")
         assert response.status_code == 200
         collections_data = response.json()
         assert collections_data["total_collections"] == 4  # Real data has 4 collections
@@ -490,7 +490,7 @@ class TestProviderEndpointsIntegration:
             assert field in benchmarks_data
 
         # Test collections response format
-        response = integration_client.get("/api/v1/collections")
+        response = integration_client.get("/api/v1/evaluations/collections")
         assert response.status_code == 200
         collections_data = response.json()
 
@@ -506,7 +506,7 @@ class TestProviderEndpointsIntegration:
         endpoints = [
             "/api/v1/evaluations/providers",
             "/api/v1/evaluations/benchmarks",
-            "/api/v1/collections",
+            "/api/v1/evaluations/collections",
             "/api/v1/evaluations/providers/lm_evaluation_harness",
             "/api/v1/evaluations/benchmarks?provider_id=lm_evaluation_harness",
         ]
@@ -546,7 +546,7 @@ class TestProviderEndpointsIntegration:
             "/api/v1/evaluations/providers",
             "/api/v1/evaluations/providers/{provider_id}",
             "/api/v1/evaluations/benchmarks",
-            "/api/v1/collections",
+            "/api/v1/evaluations/collections",
         ]
 
         for expected_path in expected_paths:

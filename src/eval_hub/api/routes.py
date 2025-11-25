@@ -558,7 +558,9 @@ async def list_all_benchmarks(
 
 
 @router.get(
-    "/collections", response_model=ListCollectionsResponse, tags=["Collections"]
+    "/evaluations/collections",
+    response_model=ListCollectionsResponse,
+    tags=["Collections"],
 )
 async def list_collections(
     provider_service: ProviderService = Depends(get_provider_service),
@@ -569,7 +571,9 @@ async def list_collections(
 
 
 @router.get(
-    "/collections/{collection_id}", response_model=Collection, tags=["Collections"]
+    "/evaluations/collections/{collection_id}",
+    response_model=Collection,
+    tags=["Collections"],
 )
 async def get_collection(
     collection_id: str,
@@ -588,7 +592,7 @@ async def get_collection(
 
 
 @router.post(
-    "/collections",
+    "/evaluations/collections",
     response_model=Collection,
     status_code=status.HTTP_201_CREATED,
     tags=["Collections"],
@@ -628,7 +632,9 @@ async def create_collection(
 
 
 @router.put(
-    "/collections/{collection_id}", response_model=Collection, tags=["Collections"]
+    "/evaluations/collections/{collection_id}",
+    response_model=Collection,
+    tags=["Collections"],
 )
 async def update_collection(
     collection_id: str,
@@ -669,7 +675,9 @@ async def update_collection(
 
 
 @router.patch(
-    "/collections/{collection_id}", response_model=Collection, tags=["Collections"]
+    "/evaluations/collections/{collection_id}",
+    response_model=Collection,
+    tags=["Collections"],
 )
 async def patch_collection(
     collection_id: str,
@@ -707,7 +715,7 @@ async def patch_collection(
         ) from e
 
 
-@router.delete("/collections/{collection_id}", tags=["Collections"])
+@router.delete("/evaluations/collections/{collection_id}", tags=["Collections"])
 async def delete_collection(
     collection_id: str,
     provider_service: ProviderService = Depends(get_provider_service),

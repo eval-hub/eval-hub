@@ -657,13 +657,13 @@ curl -X GET "{{baseUrl}}/evaluations/providers/lm_evaluation_harness/benchmarks/
 
 ### Collection Management Endpoints
 
-#### **GET** `/collections` \- List Benchmark Collections
+#### **GET** `/evaluations/collections` \- List Benchmark Collections
 
 **Purpose**: Discover curated benchmark collections for specific domains
 **Response Model**: `ListCollectionsResponse`
 
 ```shell
-curl -X GET "{{baseUrl}}/collections"
+curl -X GET "{{baseUrl}}/evaluations/collections"
 ```
 
 **Response Example**:
@@ -696,12 +696,12 @@ curl -X GET "{{baseUrl}}/collections"
 
 **Commentary**: Pre-curated benchmark collections for domain-specific evaluation. Healthcare, automotive, finance, and general collections provide standardized evaluation suites for compliance and model validation.
 
-#### **GET** `/collections/{collection_id}` \- Get Collection Details
+#### **GET** `/evaluations/collections/{collection_id}` \- Get Collection Details
 
 **Purpose**: Detailed collection specification with benchmark list and usage metrics
 
 ```shell
-curl -X GET "{{baseUrl}}/collections/healthcare_safety_v1"
+curl -X GET "{{baseUrl}}/evaluations/collections/healthcare_safety_v1"
 ```
 
 **Response Example**:
@@ -823,19 +823,19 @@ curl -X GET "{{baseUrl}}/collections/healthcare_safety_v1"
     "regulatory_frameworks": ["HIPAA", "FDA_510k", "EU_MDR"]
   },
   "collection_tags": ["healthcare", "medical", "safety", "compliance", "regulatory"],
-  "documentation_url": "https://docs.eval-hub.ai/collections/healthcare_safety_v1",
+  "documentation_url": "https://docs.eval-hub.ai/evaluations/collections/healthcare_safety_v1",
   "citation": "Healthcare Safety Assessment Collection v1.0, TrustyAI Evaluation Hub, 2024"
 }
 ```
 
 **Commentary**: Comprehensive collection details including benchmark specifications with weights, usage statistics showing adoption patterns, performance metrics across all benchmarks, and compliance requirements for healthcare applications. Essential for understanding collection effectiveness and model certification requirements.
 
-#### **POST** `/collections` \- Create Custom Collection
+#### **POST** `/evaluations/collections` \- Create Custom Collection
 
 **Purpose**: Create custom benchmark collections for organizational needs
 
 ```shell
-curl -X POST "{{baseUrl}}/collections" \
+curl -X POST "{{baseUrl}}/evaluations/collections" \
 -H "Content-Type: application/json" \
 -d '{
   "collection_id": "custom_eval_v1",
@@ -850,13 +850,13 @@ curl -X POST "{{baseUrl}}/collections" \
 }'
 ```
 
-#### **PUT** `/collections/{collection_id}` \- Update Collection
+#### **PUT** `/evaluations/collections/{collection_id}` \- Update Collection
 
-#### **PATCH** `/collections/{collection_id}` \- Patch Collection
+#### **PATCH** `/evaluations/collections/{collection_id}` \- Patch Collection
 
 Use PATCH to partially update a collection without resending the full payload.
 
-#### **DELETE** `/collections/{collection_id}` \- Delete Collection
+#### **DELETE** `/evaluations/collections/{collection_id}` \- Delete Collection
 
 ---
 
@@ -1332,7 +1332,7 @@ sequenceDiagram
     Client->>API: POST /evaluations/collections/healthcare_safety_v1
     Note right of Client: Collection-based evaluation request
 
-    API->>DB: GET /collections/healthcare_safety_v1
+    API->>DB: GET /evaluations/collections/healthcare_safety_v1
     DB->>API: Collection details with benchmark list
 
     Note over API: Collection contains:<br/>- medqa (lm_evaluation_harness)<br/>- medical_safety (lm_evaluation_harness)<br/>- medical_reasoning (lm_evaluation_harness)<br/>- hipaa_compliance (garak)<br/>- faithfulness (ragas)<br/>- answer_relevancy (ragas)
