@@ -668,6 +668,45 @@ async def update_collection(
         ) from e
 
 
+@router.patch(
+    "/collections/{collection_id}", response_model=Collection, tags=["Collections"]
+)
+async def patch_collection(
+    collection_id: str,
+    request: CollectionUpdateRequest,
+    provider_service: ProviderService = Depends(get_provider_service),
+) -> Collection:
+    """Partially update an existing collection."""
+    try:
+        collection = provider_service.update_collection(collection_id, request)
+        if not collection:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Collection {collection_id} not found",
+            )
+
+        logger.info("Collection patched successfully", collection_id=collection_id)
+        return collection
+    except ValueError as e:
+        logger.error(
+            "Failed to patch collection", collection_id=collection_id, error=str(e)
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+    except Exception as e:
+        logger.error(
+            "Unexpected error patching collection",
+            collection_id=collection_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to patch collection: {str(e)}",
+        ) from e
+
+
 @router.delete("/collections/{collection_id}", tags=["Collections"])
 async def delete_collection(
     collection_id: str,
