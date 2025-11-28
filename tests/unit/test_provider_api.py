@@ -3,6 +3,8 @@
 from unittest.mock import Mock, patch
 
 import pytest
+from fastapi.testclient import TestClient
+
 from eval_hub.api.app import create_app
 from eval_hub.models.provider import (
     Benchmark,
@@ -16,7 +18,6 @@ from eval_hub.models.provider import (
     ProviderType,
 )
 from eval_hub.services.provider_service import ProviderService
-from fastapi.testclient import TestClient
 
 
 @pytest.fixture

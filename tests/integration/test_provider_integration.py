@@ -7,10 +7,11 @@ from unittest.mock import patch
 
 import pytest
 import yaml
+from fastapi.testclient import TestClient
+
 from eval_hub.api.app import create_app
 from eval_hub.core.config import Settings
 from eval_hub.services.provider_service import ProviderService
-from fastapi.testclient import TestClient
 
 
 @pytest.fixture
@@ -434,14 +435,14 @@ class TestProviderEndpointsIntegration:
                 assert "benchmark_id" in bench_ref
 
                 # Check that provider exists (basic sanity check)
-                assert (
-                    bench_ref["provider_id"] in available_providers
-                ), f"Collection references unknown provider: {bench_ref['provider_id']}"
+                assert bench_ref["provider_id"] in available_providers, (
+                    f"Collection references unknown provider: {bench_ref['provider_id']}"
+                )
 
                 # Check benchmark_id is not empty
-                assert (
-                    bench_ref["benchmark_id"].strip() != ""
-                ), "Collection has empty benchmark_id"
+                assert bench_ref["benchmark_id"].strip() != "", (
+                    "Collection has empty benchmark_id"
+                )
 
     def test_error_handling_integration(self, integration_client):
         """Test error handling in integration scenarios."""
@@ -526,9 +527,9 @@ class TestProviderEndpointsIntegration:
 
         # Average response time should be reasonable for integration testing with real data
         avg_response_time = sum(response_times) / len(response_times)
-        assert (
-            avg_response_time < 0.5
-        ), f"Average response time too slow: {avg_response_time}"
+        assert avg_response_time < 0.5, (
+            f"Average response time too slow: {avg_response_time}"
+        )
 
     def test_openapi_schema_integration(self, integration_client):
         """Test that OpenAPI schema is correctly generated."""

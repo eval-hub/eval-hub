@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/ruivieira/eval-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/ruivieira/eval-hub/actions/workflows/ci.yml)
 
-An API REST server that serves as a routing and orchestration layer for evaluation backends on OpenShift.
+An API REST server that serves as a routing and orchestration layer for evaluation backends on Kubernetes/OpenShift.
 
 ## Overview
 

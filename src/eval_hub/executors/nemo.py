@@ -401,9 +401,9 @@ class NemoEvaluatorExecutor(TrackedExecutor):
                         metrics[full_metric_name] = score.value
 
         # Add some default artifacts
-        artifacts[
-            "nemo_evaluator_response"
-        ] = f"/tmp/nemo_eval_{context.evaluation_id}_{context.benchmark_spec.name}_response.json"
+        artifacts["nemo_evaluator_response"] = (
+            f"/tmp/nemo_eval_{context.evaluation_id}_{context.benchmark_spec.name}_response.json"
+        )
 
         # Save the full response for debugging
         with open(artifacts["nemo_evaluator_response"], "w") as f:
