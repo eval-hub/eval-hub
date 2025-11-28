@@ -3,9 +3,10 @@
 from unittest.mock import patch
 
 import pytest
+from fastapi.testclient import TestClient
+
 from eval_hub.api.app import create_app
 from eval_hub.core.config import Settings
-from fastapi.testclient import TestClient
 
 
 @pytest.fixture

@@ -3,10 +3,11 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastapi.testclient import TestClient
+
 from eval_hub.api.app import create_app
 from eval_hub.core.config import Settings
 from eval_hub.models.provider import Provider, ProviderType
-from fastapi.testclient import TestClient
 
 
 @pytest.fixture

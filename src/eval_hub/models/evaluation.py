@@ -37,6 +37,7 @@ class BackendType(str, Enum):
     LMEVAL = "lm-evaluation-harness"
     GUIDELLM = "guidellm"
     NEMO_EVALUATOR = "nemo-evaluator"
+    KFP = "kubeflow-pipelines"
     CUSTOM = "custom"
 
 
