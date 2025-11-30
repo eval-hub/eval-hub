@@ -208,7 +208,11 @@ class EvaluationResult(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    evaluation_id: UUID = Field(..., description="Evaluation ID")
+    evaluation_id: UUID | None = Field(
+        None,
+        description="Evaluation ID",
+        exclude=True,
+    )  # Internal tracking only
     provider_id: str = Field(..., description="Provider that ran the evaluation")
     benchmark_id: str = Field(..., description="Benchmark identifier")
     benchmark_name: str | None = Field(None, description="Benchmark display name")

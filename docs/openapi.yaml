@@ -777,11 +777,6 @@ components:
       description: Response payload for evaluation requests.
     EvaluationResult:
       properties:
-        evaluation_id:
-          type: string
-          format: uuid
-          title: Evaluation Id
-          description: Evaluation ID
         provider_id:
           type: string
           title: Provider Id
@@ -849,7 +844,6 @@ components:
       additionalProperties: true
       type: object
       required:
-      - evaluation_id
       - provider_id
       - benchmark_id
       - status

@@ -147,6 +147,22 @@ class TestEvaluationModels:
         assert result.duration_seconds == 120.5
         assert result.mlflow_run_id == "test-run-123"
 
+    def test_evaluation_result_serialization_excludes_id(self):
+        """EvaluationResult should hide evaluation_id in serialized output."""
+        eval_id = uuid4()
+
+        result = EvaluationResult(
+            evaluation_id=eval_id,
+            provider_id="lm_evaluation_harness",
+            benchmark_id="test-benchmark",
+            status=EvaluationStatus.PENDING,
+        )
+
+        serialized = result.model_dump()
+
+        assert "evaluation_id" not in serialized
+        assert result.evaluation_id == eval_id
+
     def test_risk_category_values(self):
         """Test RiskCategory enum values."""
         assert RiskCategory.LOW.value == "low"
