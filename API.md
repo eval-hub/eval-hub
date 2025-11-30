@@ -330,7 +330,6 @@ curl -X GET "{{baseUrl}}/evaluations/jobs/550e8400-e29b-41d4-a716-446655440000"
       "status": "running",
       "progress": 0.65,
       "started_at": "2025-01-15T10:31:00Z",
-      "estimated_completion": "2025-01-15T10:45:00Z"
     },
     {
       "benchmark_id": "faithfulness",
@@ -1504,7 +1503,6 @@ curl -X POST "{{baseUrl}}/evaluations/collections/healthcare_safety_v1?async_mod
   ],
   "total_jobs": 4,
   "total_benchmarks": 6,
-  "estimated_completion": "2025-01-15T11:45:00Z",
   "experiment_id": "exp_12345",
   "experiment_url": "http://mlflow:5000/experiments/12345",
   "created_at": "2025-01-15T10:30:00Z"

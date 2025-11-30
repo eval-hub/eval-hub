@@ -136,37 +136,6 @@ class TestResponseBuilderStatusLogic:
         # Should default to COMPLETED for any other case
         assert status == EvaluationStatus.COMPLETED
 
-    def test_calculate_progress_percentage_empty(self, response_builder):
-        """Test progress calculation with no evaluations."""
-        progress = response_builder._calculate_progress_percentage({}, 0)
-        assert progress == 0.0
-
-    def test_calculate_progress_percentage_all_completed(self, response_builder):
-        """Test progress calculation with all completed."""
-        status_counts = {EvaluationStatus.COMPLETED: 5}
-        progress = response_builder._calculate_progress_percentage(status_counts, 5)
-        assert progress == 100.0
-
-    def test_calculate_progress_percentage_mixed(self, response_builder):
-        """Test progress calculation with mixed statuses."""
-        status_counts = {
-            EvaluationStatus.COMPLETED: 2,  # 100% each = 2.0
-            EvaluationStatus.FAILED: 1,  # 100% each = 1.0
-            EvaluationStatus.RUNNING: 2,  # 50% each = 1.0
-            EvaluationStatus.PENDING: 1,  # 0% each = 0.0
-        }
-        # Total weight: 2 + 1 + 1 = 4.0 out of 6 total = 66.67%
-        progress = response_builder._calculate_progress_percentage(status_counts, 6)
-        expected = (4.0 / 6.0) * 100.0
-        assert abs(progress - expected) < 0.1
-
-    def test_calculate_progress_percentage_capped_at_100(self, response_builder):
-        """Test that progress percentage is capped at 100%."""
-        # Edge case: more results than expected total (shouldn't happen but test safety)
-        status_counts = {EvaluationStatus.COMPLETED: 5}
-        progress = response_builder._calculate_progress_percentage(status_counts, 3)
-        assert progress == 100.0
-
     async def test_build_response_calls_status_methods(
         self, response_builder, sample_evaluation_request
     ):
@@ -185,55 +154,12 @@ class TestResponseBuilderStatusLogic:
         # Verify the response uses the calculated status
         assert response.status == EvaluationStatus.RUNNING  # Because one is running
         assert response.total_evaluations > 0
-        assert response.progress_percentage > 0
         assert response.results == results
 
-    async def test_build_response_completion_estimation_with_completed_results(
+    async def test_build_response_excludes_progress_fields(
         self, response_builder, sample_evaluation_request
     ):
-        """Test completion time estimation when some results are completed."""
-        # Create mix of results with some completed having duration
-        results = [
-            create_evaluation_result(
-                EvaluationStatus.COMPLETED, duration_seconds=120.0
-            ),
-            create_evaluation_result(
-                EvaluationStatus.COMPLETED, duration_seconds=180.0
-            ),
-            create_evaluation_result(EvaluationStatus.RUNNING),
-            create_evaluation_result(EvaluationStatus.PENDING),
-        ]
-        experiment_url = "http://test-mlflow:5000/experiments/1"
-
-        response = await response_builder.build_response(
-            sample_evaluation_request, results, experiment_url
-        )
-
-        # Should use average of completed durations for estimation
-        assert response.estimated_completion is not None
-
-    async def test_build_response_completion_estimation_no_completed_results(
-        self, response_builder, sample_evaluation_request
-    ):
-        """Test completion time estimation when no results are completed."""
-        results = [
-            create_evaluation_result(EvaluationStatus.RUNNING),
-            create_evaluation_result(EvaluationStatus.PENDING),
-        ]
-        experiment_url = "http://test-mlflow:5000/experiments/1"
-
-        response = await response_builder.build_response(
-            sample_evaluation_request, results, experiment_url
-        )
-
-        # Should use default estimation (5 minutes = 300 seconds)
-        assert response.estimated_completion is not None
-
-    async def test_build_response_completion_estimation_no_duration_data(
-        self, response_builder, sample_evaluation_request
-    ):
-        """Test completion time estimation when completed results have no duration."""
-        # Create completed results without duration_seconds
+        """build_response should not include progress/estimation fields."""
         results = [
             create_evaluation_result(EvaluationStatus.COMPLETED, duration_seconds=None),
             create_evaluation_result(EvaluationStatus.RUNNING),
@@ -245,32 +171,6 @@ class TestResponseBuilderStatusLogic:
             sample_evaluation_request, results, experiment_url
         )
 
-        # Should fallback to default when no duration data available
-        assert response.estimated_completion is not None
-
-    async def test_build_response_concurrency_estimation(
-        self, response_builder, sample_evaluation_request
-    ):
-        """Test completion time estimation with concurrency consideration."""
-        # Create many pending/running results to test concurrency logic
-        results = [
-            create_evaluation_result(
-                EvaluationStatus.COMPLETED, duration_seconds=100.0
-            ),
-            create_evaluation_result(EvaluationStatus.RUNNING),
-            create_evaluation_result(EvaluationStatus.RUNNING),
-            create_evaluation_result(EvaluationStatus.PENDING),
-            create_evaluation_result(EvaluationStatus.PENDING),
-            create_evaluation_result(EvaluationStatus.PENDING),
-        ]
-        experiment_url = "http://test-mlflow:5000/experiments/1"
-
-        # Mock max_concurrent_evaluations to test concurrency logic
-        response_builder.settings.max_concurrent_evaluations = 2
-
-        response = await response_builder.build_response(
-            sample_evaluation_request, results, experiment_url
-        )
-
-        # Should account for concurrency in time estimation
-        assert response.estimated_completion is not None
+        dumped = response.model_dump()
+        assert "estimated_completion" not in dumped
+        assert "progress_percentage" not in dumped

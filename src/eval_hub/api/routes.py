@@ -340,7 +340,8 @@ async def get_evaluation_status(
         "Retrieved evaluation status",
         request_id=request_id_str,
         status=response.status,
-        progress=response.progress_percentage,
+        completed=response.completed_evaluations,
+        total=response.total_evaluations,
     )
 
     return response

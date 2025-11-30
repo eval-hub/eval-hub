@@ -1,7 +1,6 @@
 """Response builder service for aggregating evaluation results."""
 
 import statistics
-from datetime import datetime, timedelta
 from typing import Any
 
 from ..core.config import Settings
@@ -46,16 +45,8 @@ class ResponseBuilder:
             status_counts, total_evaluations
         )
 
-        # Calculate progress percentage
-        progress_percentage = self._calculate_progress_percentage(
-            status_counts, total_evaluations
-        )
-
         # Aggregate metrics
         aggregated_metrics = await self._aggregate_metrics(results)
-
-        # Estimate completion time
-        estimated_completion = self._estimate_completion_time(results, overall_status)
 
         response = EvaluationResponse(
             id=request.request_id,
@@ -68,15 +59,12 @@ class ResponseBuilder:
             experiment_url=experiment_url,
             created_at=request.created_at,
             updated_at=utcnow(),
-            estimated_completion=estimated_completion,
-            progress_percentage=progress_percentage,
         )
 
         self.logger.info(
             "Built evaluation response",
             request_id=str(request.request_id),
             overall_status=overall_status,
-            progress_percentage=progress_percentage,
             completed_count=completed_evaluations,
             failed_count=failed_evaluations,
         )
@@ -123,22 +111,6 @@ class ResponseBuilder:
             return EvaluationStatus.COMPLETED
         else:
             return EvaluationStatus.COMPLETED
-
-    def _calculate_progress_percentage(
-        self, status_counts: dict[EvaluationStatus, int], total_evaluations: int
-    ) -> float:
-        """Calculate overall progress percentage."""
-        if total_evaluations == 0:
-            return 0.0
-
-        completed = status_counts.get(EvaluationStatus.COMPLETED, 0)
-        failed = status_counts.get(EvaluationStatus.FAILED, 0)
-        running = status_counts.get(EvaluationStatus.RUNNING, 0)
-
-        # Completed and failed count as 100% progress
-        # Running counts as 50% progress
-        progress_weight = completed + failed + (running * 0.5)
-        return min(100.0, (progress_weight / total_evaluations) * 100.0)
 
     async def _aggregate_metrics(
         self, results: list[EvaluationResult]
@@ -237,60 +209,6 @@ class ResponseBuilder:
         )
 
         return aggregated
-
-    def _estimate_completion_time(
-        self, results: list[EvaluationResult], overall_status: EvaluationStatus
-    ) -> datetime | None:
-        """Estimate when all evaluations will be completed."""
-        if overall_status in [EvaluationStatus.COMPLETED, EvaluationStatus.FAILED]:
-            return None  # Already completed
-
-        running_results = [r for r in results if r.status == EvaluationStatus.RUNNING]
-        pending_results = [r for r in results if r.status == EvaluationStatus.PENDING]
-
-        if not running_results and not pending_results:
-            return None
-
-        # Estimate based on average duration of completed evaluations
-        completed_results = [
-            r
-            for r in results
-            if r.status == EvaluationStatus.COMPLETED and r.duration_seconds
-        ]
-
-        if completed_results:
-            durations_for_estimate = [
-                r.duration_seconds
-                for r in completed_results
-                if r.duration_seconds is not None
-            ]
-            avg_duration = (
-                statistics.mean(durations_for_estimate)
-                if durations_for_estimate
-                else 300.0
-            )
-        else:
-            # Use default estimation
-            avg_duration = 300.0  # 5 minutes default
-
-        # Estimate remaining time
-        remaining_count = len(running_results) + len(pending_results)
-
-        # Account for concurrency
-        concurrent_slots = min(
-            remaining_count, self.settings.max_concurrent_evaluations
-        )
-        if concurrent_slots > 0:
-            estimated_seconds = (remaining_count / concurrent_slots) * avg_duration
-        else:
-            estimated_seconds = remaining_count * avg_duration
-
-        # Add buffer time
-        estimated_seconds *= 1.2  # 20% buffer
-
-        return utcnow().replace(microsecond=0) + timedelta(
-            seconds=int(estimated_seconds)
-        )
 
     async def build_summary_response(
         self, request: EvaluationRequest, results: list[EvaluationResult]

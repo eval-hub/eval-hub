@@ -1151,25 +1151,6 @@
             "format": "date-time",
             "title": "Updated At",
             "description": "Last update timestamp"
-          },
-          "estimated_completion": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Estimated Completion",
-            "description": "Estimated completion time"
-          },
-          "progress_percentage": {
-            "type": "number",
-            "title": "Progress Percentage",
-            "description": "Overall progress percentage",
-            "default": 0.0
           }
         },
         "additionalProperties": true,

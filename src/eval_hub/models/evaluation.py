@@ -255,9 +255,3 @@ class EvaluationResponse(BaseModel):
     updated_at: datetime = Field(
         default_factory=get_utc_now, description="Last update timestamp"
     )
-    estimated_completion: datetime | None = Field(
-        None, description="Estimated completion time"
-    )
-    progress_percentage: float = Field(
-        default=0.0, description="Overall progress percentage"
-    )
