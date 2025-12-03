@@ -29,9 +29,8 @@ FROM registry.access.redhat.com/ubi9/python-312-minimal:latest as production
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Set work directory and create required directories
+# Set work directory
 WORKDIR /app
-RUN mkdir -p /app/logs /app/data
 
 # Copy application code from builder stage (using numeric UID 1001 for UBI9 default user)
 COPY --from=builder --chown=1001:0 /app/src ./src
@@ -40,8 +39,9 @@ COPY --from=builder --chown=1001:0 /app/pyproject.toml /app/README.md ./
 # Install the package in production stage
 RUN /opt/app-root/bin/python3 -m pip install -e .
 
-# Set proper ownership for app directory (UID 1001 is the default non-root user in UBI9 Python)
-RUN chown -R 1001:0 /app && \
+# Create required directories and set proper ownership for app directory (UID 1001 is the default non-root user in UBI9 Python)
+RUN mkdir -p /app/logs /app/data && \
+    chown -R 1001:0 /app && \
     chmod 755 /app/src/eval_hub/data && \
     chmod 644 /app/src/eval_hub/data/providers.yaml
 
