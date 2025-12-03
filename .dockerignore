@@ -64,7 +64,17 @@ dist/
 .env.local
 .env.development
 .env.test
+.venv
 
 # Kubernetes
 k8s/
 docker/
+
+# Coverage
+htmlcov
+
+# External frameworks
+containers
+
+# Documentation
+examples
