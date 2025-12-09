@@ -26,5 +26,5 @@ class TestLiveServer:
         assert response.status_code == 200
         data = response.json()
 
-        assert "providers" in data
-        assert "total_providers" in data
+        assert "items" in data
+        assert "total_count" in data

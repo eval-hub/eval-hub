@@ -14,6 +14,8 @@ from pydantic import (
     model_serializer,
 )
 
+from .evaluation import Resource
+
 
 class ProviderType(str, Enum):
     """Type of evaluation provider."""
@@ -22,11 +24,8 @@ class ProviderType(str, Enum):
     NEMO_EVALUATOR = "nemo-evaluator"
 
 
-# BenchmarkCategory enum removed - using flexible string categories instead
-
-
-class Benchmark(BaseModel):
-    """Benchmark specification."""
+class BenchmarkRecord(BaseModel):
+    """Internal benchmark schema used for provider configuration."""
 
     model_config = ConfigDict(extra="allow")
 
@@ -42,8 +41,8 @@ class Benchmark(BaseModel):
     tags: list[str] = Field(default_factory=list, description="Tags for categorization")
 
 
-class Provider(BaseModel):
-    """Evaluation provider specification."""
+class ProviderRecord(BaseModel):
+    """Internal provider schema used for configuration."""
 
     model_config = ConfigDict(extra="allow")
 
@@ -54,7 +53,7 @@ class Provider(BaseModel):
     base_url: str | None = Field(
         default=None, description="Base URL for the provider API"
     )
-    benchmarks: list[Benchmark] = Field(
+    benchmarks: list[BenchmarkRecord] = Field(
         ..., description="List of benchmarks supported by this provider"
     )
 
@@ -85,29 +84,36 @@ class Provider(BaseModel):
 class BenchmarkReference(BaseModel):
     """Reference to a benchmark within a collection."""
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    provider_id: str = Field(..., description="Provider identifier")
-    benchmark_id: str = Field(..., description="Benchmark identifier")
+    provider_id: str = Field(
+        ..., title="Provider Id", description="Provider identifier"
+    )
+    benchmark_id: str = Field(
+        ..., title="Benchmark Id", description="Benchmark identifier", alias="id"
+    )
     weight: float = Field(
-        default=1.0, description="Weight for this benchmark in collection scoring"
+        default=1.0,
+        title="Weight",
+        description="Weight for this benchmark in collection scoring",
     )
     config: dict[str, Any] = Field(
-        default_factory=dict, description="Benchmark-specific configuration"
+        default_factory=dict,
+        title="Config",
+        description="Benchmark-specific configuration",
     )
 
 
 class Collection(BaseModel):
     """Collection of benchmarks for specific evaluation scenarios."""
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
 
-    collection_id: str = Field(..., description="Unique collection identifier")
+    collection_id: str = Field(
+        ..., description="Unique collection identifier", alias="id"
+    )
     name: str = Field(..., description="Human-readable collection name")
     description: str = Field(..., description="Collection description")
-    provider_id: str | None = Field(
-        default=None, description="Primary provider for this collection"
-    )
     tags: list[str] = Field(
         default_factory=list, description="Tags for categorizing the collection"
     )
@@ -130,7 +136,9 @@ class ProvidersData(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    providers: list[Provider] = Field(..., description="List of evaluation providers")
+    providers: list[ProviderRecord] = Field(
+        ..., description="List of evaluation providers"
+    )
     collections: list[Collection] = Field(
         ..., description="List of benchmark collections"
     )
@@ -207,22 +215,26 @@ class ListCollectionsResponse(BaseModel):
 class CollectionCreationRequest(BaseModel):
     """Request for creating a new collection."""
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
 
-    collection_id: str = Field(..., description="Unique collection identifier")
-    name: str = Field(..., description="Human-readable collection name")
-    description: str = Field(..., description="Collection description")
-    provider_id: str | None = Field(
-        default=None, description="Primary provider for this collection"
+    name: str = Field(..., title="Name", description="Human-readable collection name")
+    description: str = Field(
+        ..., title="Description", description="Collection description"
     )
     tags: list[str] = Field(
-        default_factory=list, description="Tags for categorizing the collection"
+        default_factory=list,
+        title="Tags",
+        description="Tags for categorizing the collection",
     )
-    metadata: dict[str, Any] = Field(
-        default_factory=dict, description="Additional collection metadata"
+    custom: dict[str, Any] = Field(
+        default_factory=dict,
+        title="Custom",
+        description="Additional collection metadata",
     )
     benchmarks: list[BenchmarkReference] = Field(
-        ..., description="List of benchmark references in this collection"
+        ...,
+        title="Benchmarks",
+        description="List of benchmark references in this collection",
     )
 
 
@@ -231,19 +243,50 @@ class CollectionUpdateRequest(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    name: str | None = Field(default=None, description="Human-readable collection name")
-    description: str | None = Field(default=None, description="Collection description")
+    name: str | None = Field(
+        default=None,
+        description="Human-readable collection name",
+        json_schema_extra={"anyOf": [{"type": "string"}, {"type": "null"}]},
+    )
+    description: str | None = Field(
+        default=None,
+        description="Collection description",
+        json_schema_extra={"anyOf": [{"type": "string"}, {"type": "null"}]},
+    )
     provider_id: str | None = Field(
-        default=None, description="Primary provider for this collection"
+        default=None,
+        description="Primary provider for this collection",
+        json_schema_extra={"anyOf": [{"type": "string"}, {"type": "null"}]},
     )
     tags: list[str] | None = Field(
-        default=None, description="Tags for categorizing the collection"
+        default=None,
+        description="Tags for categorizing the collection",
+        json_schema_extra={
+            "anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "null"}]
+        },
     )
     metadata: dict[str, Any] | None = Field(
-        default=None, description="Additional collection metadata"
+        default=None,
+        description="Additional collection metadata",
+        json_schema_extra={
+            "anyOf": [
+                {"type": "object", "additionalProperties": True},
+                {"type": "null"},
+            ]
+        },
     )
     benchmarks: list[BenchmarkReference] | None = Field(
-        default=None, description="List of benchmark references in this collection"
+        default=None,
+        description="List of benchmark references in this collection",
+        json_schema_extra={
+            "anyOf": [
+                {
+                    "type": "array",
+                    "items": {"$ref": "#/components/schemas/BenchmarkReference"},
+                },
+                {"type": "null"},
+            ]
+        },
     )
 
 
@@ -263,3 +306,113 @@ class BenchmarkDetail(BaseModel):
     num_few_shot: int = Field(..., description="Number of few-shot examples")
     dataset_size: int | None = Field(None, description="Size of the evaluation dataset")
     tags: list[str] = Field(default_factory=list, description="Tags for categorization")
+
+
+class SupportedBenchmark(BaseModel):
+    """Simplified benchmark reference for provider list response."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(..., description="Benchmark identifier")
+
+
+class Provider(BaseModel):
+    """Provider specification."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(..., description="Provider identifier")
+    label: str = Field(..., description="Provider display name")
+    supported_benchmarks: list[SupportedBenchmark] = Field(
+        default_factory=list, description="Supported benchmarks"
+    )
+
+
+class ProviderList(BaseModel):
+    """Response for listing providers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    total_count: int = Field(..., description="Total number of providers")
+    items: list[Provider] = Field(..., description="List of providers")
+
+
+class Benchmark(BaseModel):
+    """Benchmark specification."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    benchmark_id: str = Field(
+        ..., title="Benchmark Id", description="Unique benchmark identifier", alias="id"
+    )
+    provider_id: str = Field(..., description="The provider of this benchmark")
+    name: str = Field(
+        ..., title="Label", description="Human-readable benchmark name", alias="label"
+    )
+    description: str = Field(
+        ..., title="Description", description="Benchmark description"
+    )
+    category: str = Field(..., title="Category", description="Benchmark category")
+    metrics: list[str] = Field(
+        ..., title="Metrics", description="List of metrics provided by this benchmark"
+    )
+    num_few_shot: int = Field(
+        ..., title="Num Few Shot", description="Number of few-shot examples"
+    )
+    dataset_size: int | None = Field(
+        None, title="Dataset Size", description="Size of the evaluation dataset"
+    )
+    tags: list[str] = Field(
+        default_factory=list, title="Tags", description="Tags for categorization"
+    )
+
+
+class BenchmarksList(BaseModel):
+    """Response for listing benchmarks."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    total_count: int = Field(
+        ..., title="Total Count", description="Total number of benchmarks"
+    )
+    items: list[Benchmark] = Field(
+        ..., title="Benchmarks", description="List of all available benchmarks"
+    )
+
+
+class PaginationLink(BaseModel):
+    """Pagination link with href field."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    href: str = Field(..., description="Link URL")
+
+
+class CollectionResource(BaseModel):
+    """Collection resource."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Resource metadata field
+    resource: Resource = Field(..., description="Resource metadata")
+
+    # Collection fields
+    name: str = Field(..., description="Collection name")
+    description: str = Field(..., description="Collection description")
+    tags: list[str] = Field(default_factory=list, description="Collection tags")
+    custom: dict[str, Any] = Field(default_factory=dict, description="Custom metadata")
+    benchmarks: list[BenchmarkReference] = Field(
+        default_factory=list, description="Collection benchmarks"
+    )
+
+
+class CollectionResourceList(BaseModel):
+    """List of collection resources."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    first: PaginationLink = Field(..., description="Link to first page")
+    next: PaginationLink | None = Field(None, description="Link to next page")
+    limit: int = Field(..., description="Page size limit")
+    total_count: int = Field(..., description="Total number of items")
+    items: list[CollectionResource] = Field(..., description="Collection resources")

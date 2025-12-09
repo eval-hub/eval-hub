@@ -235,9 +235,8 @@ class TestProviderEndpointsIntegration:
 
         data = response.json()
         print("\n=== DEBUG DATA ===")
-        print(f"Total providers: {data['total_providers']}")
-        print(f"Total benchmarks: {data['total_benchmarks']}")
-        print(f"Provider IDs: {[p['provider_id'] for p in data['providers']]}")
+        print(f"Total providers: {data['total_count']}")
+        print(f"Provider IDs: {[p['id'] for p in data['items']]}")
 
     def test_full_provider_workflow(self, integration_client):
         """Test the complete provider workflow."""
@@ -247,10 +246,9 @@ class TestProviderEndpointsIntegration:
 
         providers_data = response.json()
         # Update expectations to match the actual data being loaded
-        assert providers_data["total_providers"] == 4
-        assert providers_data["total_benchmarks"] == 186
+        assert providers_data["total_count"] == 4
 
-        provider_ids = [p["provider_id"] for p in providers_data["providers"]]
+        provider_ids = [p["id"] for p in providers_data["items"]]
         assert "lm_evaluation_harness" in provider_ids
         assert "lighteval" in provider_ids
         assert "ragas" in provider_ids
@@ -263,9 +261,11 @@ class TestProviderEndpointsIntegration:
         assert response.status_code == 200
 
         lm_eval_data = response.json()
-        assert lm_eval_data["provider_id"] == "lm_evaluation_harness"
-        assert lm_eval_data["provider_name"] == "LM Evaluation Harness"
-        assert len(lm_eval_data["benchmarks"]) == 168  # Real data has 168 benchmarks
+        assert lm_eval_data["id"] == "lm_evaluation_harness"
+        assert lm_eval_data["label"] == "LM Evaluation Harness"
+        assert (
+            len(lm_eval_data["supported_benchmarks"]) == 168
+        )  # Real data has 168 benchmarks
 
         # Step 3: List all benchmarks
         response = integration_client.get("/api/v1/evaluations/benchmarks")
@@ -275,10 +275,7 @@ class TestProviderEndpointsIntegration:
         assert (
             benchmarks_data["total_count"] == 186
         )  # Real data has 186 total benchmarks (176 + 10 from lighteval)
-        assert len(benchmarks_data["benchmarks"]) == 186
-        assert (
-            len(benchmarks_data["providers_included"]) == 4
-        )  # Real data has 4 providers (lm_eval, lighteval, ragas, garak)
+        assert len(benchmarks_data["items"]) == 186
 
         # Step 4: Get provider-specific benchmarks
         response = integration_client.get(
@@ -288,11 +285,11 @@ class TestProviderEndpointsIntegration:
 
         lm_eval_benchmarks_data = response.json()
         assert (
-            len(lm_eval_benchmarks_data["benchmarks"]) == 168
+            len(lm_eval_benchmarks_data["items"]) == 168
         )  # Real data has 168 lm_eval benchmarks
         assert all(
             b["provider_id"] == "lm_evaluation_harness"
-            for b in lm_eval_benchmarks_data["benchmarks"]
+            for b in lm_eval_benchmarks_data["items"]
         )
 
         # Step 5: List collections
@@ -300,8 +297,8 @@ class TestProviderEndpointsIntegration:
         assert response.status_code == 200
 
         collections_data = response.json()
-        assert collections_data["total_collections"] == 4  # Real data has 4 collections
-        assert len(collections_data["collections"]) == 4
+        assert collections_data["total_count"] == 4  # Real data has 4 collections
+        assert len(collections_data["items"]) == 4
 
     def test_benchmark_filtering_scenarios(self, integration_client):
         """Test various benchmark filtering scenarios."""
@@ -311,7 +308,7 @@ class TestProviderEndpointsIntegration:
         )
         assert response.status_code == 200
         data = response.json()
-        lm_eval_benchmarks = data["benchmarks"]
+        lm_eval_benchmarks = data["items"]
         assert len(lm_eval_benchmarks) == 168  # Real data has 168 lm_eval benchmarks
         assert all(
             b["provider_id"] == "lm_evaluation_harness" for b in lm_eval_benchmarks
@@ -323,7 +320,7 @@ class TestProviderEndpointsIntegration:
         )
         assert response.status_code == 200
         data = response.json()
-        safety_benchmarks = data["benchmarks"]
+        safety_benchmarks = data["items"]
         assert (
             len(safety_benchmarks) == 17
         )  # Real data has 17 safety benchmarks (16 + lighteval truthfulqa)
@@ -335,7 +332,7 @@ class TestProviderEndpointsIntegration:
         )
         assert response.status_code == 200
         data = response.json()
-        reasoning_benchmarks = data["benchmarks"]
+        reasoning_benchmarks = data["items"]
         assert (
             len(reasoning_benchmarks) == 21
         )  # Real data has 21 reasoning benchmarks (16 + 5 from lighteval)
@@ -347,16 +344,16 @@ class TestProviderEndpointsIntegration:
         )
         assert response.status_code == 200
         data = response.json()
-        filtered_benchmarks = data["benchmarks"]
+        filtered_benchmarks = data["items"]
         assert len(filtered_benchmarks) == 1  # toxicity
-        assert filtered_benchmarks[0]["benchmark_id"] == "garak::toxicity"
+        assert filtered_benchmarks[0]["id"] == "toxicity"
 
     def test_category_diversity(self, integration_client):
         """Test that we have good category diversity in our test data."""
         response = integration_client.get("/api/v1/evaluations/benchmarks")
         assert response.status_code == 200
 
-        benchmarks = response.json()["benchmarks"]
+        benchmarks = response.json()["items"]
         categories = {b["category"] for b in benchmarks}
 
         expected_categories = {
@@ -375,16 +372,19 @@ class TestProviderEndpointsIntegration:
         response = integration_client.get("/api/v1/evaluations/providers")
         assert response.status_code == 200
 
-        providers = response.json()["providers"]
+        providers = response.json()["items"]
         for provider in providers:
-            assert provider["provider_type"] in ["builtin", "nemo-evaluator"]
+            # Provider API model only includes id, label, and supported_benchmarks
+            assert "id" in provider
+            assert "label" in provider
+            assert "supported_benchmarks" in provider
 
     def test_benchmark_metrics_consistency(self, integration_client):
         """Test that benchmark metrics are consistent and valid."""
         response = integration_client.get("/api/v1/evaluations/benchmarks")
         assert response.status_code == 200
 
-        benchmarks = response.json()["benchmarks"]
+        benchmarks = response.json()["items"]
         for benchmark in benchmarks:
             assert "metrics" in benchmark
             assert isinstance(benchmark["metrics"], list)
@@ -397,7 +397,7 @@ class TestProviderEndpointsIntegration:
         response = integration_client.get("/api/v1/evaluations/benchmarks")
         assert response.status_code == 200
 
-        benchmarks = response.json()["benchmarks"]
+        benchmarks = response.json()["items"]
 
         # Check that we have benchmarks with different dataset sizes
         sizes = [b["dataset_size"] for b in benchmarks if b["dataset_size"] is not None]
@@ -411,14 +411,14 @@ class TestProviderEndpointsIntegration:
         response = integration_client.get("/api/v1/evaluations/collections")
         assert response.status_code == 200
         collections_data = response.json()
-        assert collections_data["total_collections"] == 4  # Real data has 4 collections
+        assert collections_data["total_count"] == 4  # Real data has 4 collections
 
-        collections = collections_data["collections"]
+        collections = collections_data["items"]
 
         # Get all benchmarks for reference
         response = integration_client.get("/api/v1/evaluations/benchmarks")
         assert response.status_code == 200
-        benchmarks = response.json()["benchmarks"]
+        benchmarks = response.json()["items"]
 
         # Get available providers for reference
         available_providers = {b["provider_id"] for b in benchmarks}
@@ -426,7 +426,8 @@ class TestProviderEndpointsIntegration:
         # Validate each collection structure
         for collection in collections:
             # Check required fields
-            assert "collection_id" in collection
+            assert "resource" in collection
+            assert "id" in collection["resource"]
             assert "name" in collection
             assert "description" in collection
             assert "benchmarks" in collection
@@ -437,16 +438,16 @@ class TestProviderEndpointsIntegration:
             # Check benchmark reference structure
             for bench_ref in collection["benchmarks"]:
                 assert "provider_id" in bench_ref
-                assert "benchmark_id" in bench_ref
+                assert "id" in bench_ref  # Uses alias "id" instead of "benchmark_id"
 
                 # Check that provider exists (basic sanity check)
                 assert bench_ref["provider_id"] in available_providers, (
                     f"Collection references unknown provider: {bench_ref['provider_id']}"
                 )
 
-                # Check benchmark_id is not empty
-                assert bench_ref["benchmark_id"].strip() != "", (
-                    "Collection has empty benchmark_id"
+                # Check benchmark id is not empty
+                assert bench_ref["id"].strip() != "", (
+                    "Collection has empty benchmark id"
                 )
 
     def test_error_handling_integration(self, integration_client):
@@ -482,7 +483,7 @@ class TestProviderEndpointsIntegration:
         assert response.status_code == 200
         providers_data = response.json()
 
-        required_provider_fields = ["providers", "total_providers", "total_benchmarks"]
+        required_provider_fields = ["items", "total_count"]
         for field in required_provider_fields:
             assert field in providers_data
 
@@ -491,7 +492,7 @@ class TestProviderEndpointsIntegration:
         assert response.status_code == 200
         benchmarks_data = response.json()
 
-        required_benchmark_fields = ["benchmarks", "total_count", "providers_included"]
+        required_benchmark_fields = ["items", "total_count"]
         for field in required_benchmark_fields:
             assert field in benchmarks_data
 
@@ -500,7 +501,7 @@ class TestProviderEndpointsIntegration:
         assert response.status_code == 200
         collections_data = response.json()
 
-        required_collection_fields = ["collections", "total_collections"]
+        required_collection_fields = ["items", "total_count"]
         for field in required_collection_fields:
             assert field in collections_data
 
@@ -550,7 +551,7 @@ class TestProviderEndpointsIntegration:
         paths = schema["paths"]
         expected_paths = [
             "/api/v1/evaluations/providers",
-            "/api/v1/evaluations/providers/{provider_id}",
+            "/api/v1/evaluations/providers/{id}",
             "/api/v1/evaluations/benchmarks",
             "/api/v1/evaluations/collections",
         ]

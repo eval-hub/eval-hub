@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from eval_hub.api.app import create_app
 from eval_hub.core.config import Settings
-from eval_hub.models.provider import Provider, ProviderType
+from eval_hub.models.provider import ProviderRecord, ProviderType
 
 
 @pytest.fixture
@@ -44,7 +44,8 @@ class TestRoutesErrorHandling:
             "model": {"url": "http://test-server:8000", "name": "test-model"},
             "benchmarks": [
                 {
-                    "benchmark_id": "nonexistent_benchmark",
+                    "name": "Nonexistent Test",
+                    "id": "nonexistent_benchmark",
                     "provider_id": "lm_evaluation_harness",
                     "config": {"num_fewshot": 0, "limit": 100},
                 }
@@ -90,7 +91,8 @@ class TestRoutesErrorHandling:
             "model": {"url": "http://test-server:8000", "name": "test-model"},
             "benchmarks": [
                 {
-                    "benchmark_id": "arc_easy",  # Use existing benchmark
+                    "name": "ARC Easy Test",
+                    "id": "arc_easy",  # Use existing benchmark
                     "provider_id": "nonexistent_provider",  # Use non-existent provider
                     "config": {"num_fewshot": 0, "limit": 100},
                 }
@@ -138,7 +140,8 @@ class TestRoutesErrorHandling:
             "model": {"url": "http://test-server:8000", "name": "test-model"},
             "benchmarks": [
                 {
-                    "benchmark_id": "arc_easy",  # Use existing benchmark
+                    "name": "ARC Easy Test",
+                    "id": "arc_easy",  # Use existing benchmark
                     "provider_id": "unsupported_provider",
                     "config": {"num_fewshot": 0, "limit": 100},
                 }
@@ -154,12 +157,12 @@ class TestRoutesErrorHandling:
         )
 
         # Second call returns provider with unsupported type (BUILTIN but not lm_evaluation_harness)
-        mock_provider = Provider(
+        mock_provider = ProviderRecord(
             provider_id="unsupported_provider",
             provider_name="Unsupported Provider",
-            description="Provider with unsupported type",
-            provider_type=ProviderType.BUILTIN,  # But not lm_evaluation_harness
-            base_url="http://unsupported:8080",
+            description="An unsupported provider",
+            provider_type=ProviderType.BUILTIN,
+            base_url=None,
             benchmarks=[],
         )
         mock_service.get_provider_by_id.return_value = mock_provider

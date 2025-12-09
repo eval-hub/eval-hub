@@ -266,8 +266,8 @@ class RequestParser:
             benchmarks = []
             for benchmark_ref in benchmark_refs:
                 benchmark = BenchmarkSpec(
-                    name=benchmark_ref.benchmark_id,
-                    tasks=[benchmark_ref.benchmark_id],
+                    name=benchmark_ref.id,
+                    tasks=[benchmark_ref.id],
                     config=benchmark_ref.config.copy(),
                     num_fewshot=benchmark_ref.config.get("num_fewshot"),
                     batch_size=benchmark_ref.config.get("batch_size"),

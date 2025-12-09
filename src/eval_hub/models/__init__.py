@@ -1,24 +1,61 @@
 """Data models for the evaluation service."""
 
 from .evaluation import (
+    # Other evaluation models
     BackendSpec,
     BenchmarkConfig,
     BenchmarkSpec,
+    Error,
+    EvaluationJobRequest,
+    EvaluationJobResource,
+    EvaluationJobResourceList,
     EvaluationRequest,
     EvaluationResponse,
     EvaluationResult,
     EvaluationSpec,
     ExperimentConfig,
     Model,
+    Page,
     PaginatedEvaluations,
-    PaginationLink,
+    Patch,
+    Resource,
     RiskCategory,
-    SimpleEvaluationRequest,
+    Status,
 )
 from .health import HealthResponse
+from .provider import (
+    Benchmark,
+    BenchmarkReference,
+    BenchmarksList,
+    CollectionCreationRequest,
+    CollectionResource,
+    CollectionResourceList,
+    CollectionUpdateRequest,
+    Provider,
+    ProviderList,
+)
 from .status import EvaluationStatus, TaskStatus
 
 __all__ = [
+    "Patch",
+    "Page",
+    "Status",
+    "Resource",
+    "EvaluationJobRequest",
+    "EvaluationJobResource",
+    "EvaluationJobResourceList",
+    "BenchmarkReference",
+    "CollectionCreationRequest",
+    "CollectionUpdateRequest",
+    "Benchmark",
+    "BenchmarksList",
+    "CollectionResourceList",
+    "ProviderList",
+    "Provider",
+    "CollectionResource",
+    "HealthResponse",
+    "Error",
+    # Other models
     "BackendSpec",
     "BenchmarkConfig",
     "BenchmarkSpec",
@@ -26,13 +63,10 @@ __all__ = [
     "EvaluationResponse",
     "EvaluationResult",
     "EvaluationSpec",
-    "PaginatedEvaluations",
-    "PaginationLink",
     "ExperimentConfig",
-    "HealthResponse",
     "EvaluationStatus",
     "Model",
+    "PaginatedEvaluations",
     "RiskCategory",
-    "SimpleEvaluationRequest",
     "TaskStatus",
 ]
