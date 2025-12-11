@@ -63,7 +63,9 @@ dev = [
     "ruff>=0.1.6",
     "mypy>=1.7.1",
     "pre-commit>=3.5.0",
-    "kfp>=2.0.0",
+    "kfp>=2.14.6",
+    "kfp-kubernetes>=2.14.6",
+    "boto3>=1.35.88"
 ]
 
 test = [
@@ -76,7 +78,9 @@ test = [
 ]
 
 kfp = [
-    "kfp>=2.0.0",
+    "kfp>=2.14.6",
+    "kfp-kubernetes>=2.14.6",
+    "boto3>=1.35.88",  # For S3 artifact storage
 ]
 
 [project.urls]

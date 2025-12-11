@@ -186,15 +186,10 @@ def real_providers_yaml():
 
 @pytest.fixture
 def temp_providers_file_integration(real_providers_yaml):
-    """Create a temporary providers YAML file for integration testing."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-        yaml.dump(real_providers_yaml, f)
-        temp_file_path = f.name
-
-    yield temp_file_path
-
-    # Cleanup
-    os.unlink(temp_file_path)
+    """Use the actual providers.yaml file for integration testing."""
+    # Use the real providers.yaml from the project
+    providers_file = Path(__file__).parent.parent.parent / "src" / "eval_hub" / "data" / "providers.yaml"
+    return str(providers_file)
 
 
 @pytest.fixture
@@ -248,7 +243,7 @@ class TestProviderEndpointsIntegration:
         providers_data = response.json()
         # Update expectations to match the actual data being loaded
         assert providers_data["total_providers"] == 4
-        assert providers_data["total_benchmarks"] == 186
+        assert providers_data["total_benchmarks"] == 193  # Includes Garak benchmarks
 
         provider_ids = [p["provider_id"] for p in providers_data["providers"]]
         assert "lm_evaluation_harness" in provider_ids
@@ -273,9 +268,9 @@ class TestProviderEndpointsIntegration:
 
         benchmarks_data = response.json()
         assert (
-            benchmarks_data["total_count"] == 186
-        )  # Real data has 186 total benchmarks (176 + 10 from lighteval)
-        assert len(benchmarks_data["benchmarks"]) == 186
+            benchmarks_data["total_count"] == 193
+        )  # Real data has 193 total benchmarks (168 lmeval; 10 lighteval; 4 ragas; 11 garak)
+        assert len(benchmarks_data["benchmarks"]) == 193
         assert (
             len(benchmarks_data["providers_included"]) == 4
         )  # Real data has 4 providers (lm_eval, lighteval, ragas, garak)
@@ -325,8 +320,8 @@ class TestProviderEndpointsIntegration:
         data = response.json()
         safety_benchmarks = data["benchmarks"]
         assert (
-            len(safety_benchmarks) == 17
-        )  # Real data has 17 safety benchmarks (16 + lighteval truthfulqa)
+            len(safety_benchmarks) == 19
+        )  # Real data has 19 safety benchmarks (16 + lighteval truthfulqa + 2 garak)
         assert all(b["category"] == "safety" for b in safety_benchmarks)
 
         # Test filter by tags
@@ -348,8 +343,8 @@ class TestProviderEndpointsIntegration:
         assert response.status_code == 200
         data = response.json()
         filtered_benchmarks = data["benchmarks"]
-        assert len(filtered_benchmarks) == 1  # toxicity
-        assert filtered_benchmarks[0]["benchmark_id"] == "garak::toxicity"
+        assert len(filtered_benchmarks) == 3  # quick, standard, toxicity
+        assert filtered_benchmarks[0]["benchmark_id"] in ["garak::quick", "garak::standard", "garak::toxicity"]
 
     def test_category_diversity(self, integration_client):
         """Test that we have good category diversity in our test data."""

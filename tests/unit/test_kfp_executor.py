@@ -266,12 +266,16 @@ class TestKFPExecutorClientCreation:
         mock_client = Mock()
         mock_kfp_module.Client.return_value = mock_client
 
-        with patch.dict("sys.modules", {"kfp": mock_kfp_module}):
+        # Mock the token retrieval
+        with patch.dict("sys.modules", {"kfp": mock_kfp_module}), \
+             patch.object(kfp_executor, '_get_kfp_token', return_value='test-token'):
             client = kfp_executor._get_kfp_client()
 
             assert client == mock_client
             mock_kfp_module.Client.assert_called_once_with(
-                host="http://kfp.example.com", namespace="kubeflow"
+                host="http://kfp.example.com",
+                namespace="kubeflow",
+                existing_token='test-token'
             )
 
     def test_get_kfp_client_caches_instance(self, kfp_executor):
@@ -280,7 +284,9 @@ class TestKFPExecutorClientCreation:
         mock_client = Mock()
         mock_kfp_module.Client.return_value = mock_client
 
-        with patch.dict("sys.modules", {"kfp": mock_kfp_module}):
+        # Mock the token retrieval
+        with patch.dict("sys.modules", {"kfp": mock_kfp_module}), \
+             patch.object(kfp_executor, '_get_kfp_token', return_value='test-token'):
             client1 = kfp_executor._get_kfp_client()
             client2 = kfp_executor._get_kfp_client()
 
@@ -329,6 +335,23 @@ class TestKFPExecutorBenchmarkExecution:
                 "get_adapter",
                 return_value=mock_adapter,
             ),
+            # Mock MLflow tracking methods from TrackedExecutor
+            patch.object(
+                kfp_executor,
+                "_track_start",
+                new_callable=AsyncMock,
+                return_value="mock-mlflow-run-id",
+            ),
+            patch.object(
+                kfp_executor,
+                "_track_complete",
+                new_callable=AsyncMock,
+            ),
+            patch.object(
+                kfp_executor,
+                "_with_tracking",
+                side_effect=lambda result, run_id: result,
+            ),
         ):
             result = await kfp_executor.execute_benchmark(execution_context)
 
@@ -368,6 +391,10 @@ class TestKFPExecutorBenchmarkExecution:
                 "get_adapter",
                 return_value=mock_adapter,
             ),
+            # Mock MLflow tracking methods
+            patch.object(kfp_executor, "_track_start", new_callable=AsyncMock, return_value=None),
+            patch.object(kfp_executor, "_track_complete", new_callable=AsyncMock),
+            patch.object(kfp_executor, "_with_tracking", side_effect=lambda r, _: r),
         ):
             await kfp_executor.execute_benchmark(execution_context, progress_callback)
 
@@ -383,8 +410,13 @@ class TestKFPExecutorBenchmarkExecution:
         """Test benchmark execution fails when config validation fails."""
         mock_adapter.validate_config = Mock(return_value=False)
 
-        with patch.object(
-            kfp_executor.adapter_registry, "get_adapter", return_value=mock_adapter
+        with (
+            patch.object(
+                kfp_executor.adapter_registry, "get_adapter", return_value=mock_adapter
+            ),
+            # Mock MLflow tracking methods
+            patch.object(kfp_executor, "_track_start", new_callable=AsyncMock, return_value=None),
+            patch.object(kfp_executor, "_track_failure", new_callable=AsyncMock, return_value=None),
         ):
             result = await kfp_executor.execute_benchmark(execution_context)
 
@@ -408,6 +440,9 @@ class TestKFPExecutorBenchmarkExecution:
                 "get_adapter",
                 return_value=mock_adapter,
             ),
+            # Mock MLflow tracking methods
+            patch.object(kfp_executor, "_track_start", new_callable=AsyncMock, return_value=None),
+            patch.object(kfp_executor, "_track_failure", new_callable=AsyncMock, return_value=None),
         ):
             result = await kfp_executor.execute_benchmark(execution_context)
 
@@ -452,6 +487,7 @@ class TestKFPExecutorPipelineManagement:
             patch("kfp.compiler.Compiler") as mock_compiler_class,
             patch("kfp.components.load_component_from_text"),
             patch("kfp.dsl.pipeline"),
+            patch("kfp.kubernetes.use_secret_as_env"),  # Mock kubernetes secret injection
         ):
             mock_compiler = Mock()
             mock_compiler_class.return_value = mock_compiler
@@ -470,35 +506,42 @@ class TestKFPExecutorPipelineManagement:
         """Test monitoring a successful pipeline run."""
         mock_client = Mock()
         mock_run_detail = Mock()
-        mock_run_detail.run.status = "Succeeded"
+        mock_run_detail.state = "SUCCEEDED"  # KFP v2 API uses 'state'
 
         mock_client.get_run = Mock(return_value=mock_run_detail)
 
-        with patch.object(
-            kfp_executor,
-            "_extract_pipeline_artifacts",
-            new_callable=AsyncMock,
-            return_value={"metrics": "/path/to/metrics.json"},
+        with (
+            patch.object(
+                kfp_executor,
+                "_download_artifacts_from_s3",  # Now downloads from S3
+                new_callable=AsyncMock,
+                return_value={"output_metrics": "/tmp/metrics.json"},
+            ),
+            patch("asyncio.sleep", new_callable=AsyncMock),  # Prevent actual sleep delays
         ):
             result = await kfp_executor._monitor_pipeline_run(
                 mock_client, "run-123", execution_context
             )
 
-            assert result["status"] == "Succeeded"
+            assert result["status"] == "SUCCEEDED"
             assert result["run_id"] == "run-123"
-            assert "metrics" in result["artifacts"]
+            assert "output_metrics" in result["artifacts"]
 
     @pytest.mark.asyncio
     async def test_monitor_pipeline_run_failure(self, kfp_executor, execution_context):
         """Test monitoring a failed pipeline run."""
         mock_client = Mock()
         mock_run_detail = Mock()
-        mock_run_detail.run.status = "Failed"
+        mock_run_detail.state = "FAILED"  # Changed to match KFP v2 API
+        mock_run_detail.run = Mock()
         mock_run_detail.run.error = "Test error"
 
         mock_client.get_run = Mock(return_value=mock_run_detail)
 
-        with pytest.raises(BackendError, match="Pipeline execution failed"):
+        with (
+            patch("asyncio.sleep", new_callable=AsyncMock),  # Prevent actual sleep
+            pytest.raises(BackendError, match="Pipeline execution failed"),
+        ):
             await kfp_executor._monitor_pipeline_run(
                 mock_client, "run-123", execution_context
             )
@@ -511,12 +554,13 @@ class TestKFPExecutorPipelineManagement:
 
         mock_client = Mock()
         mock_run_detail = Mock()
-        mock_run_detail.run.status = "Running"
+        mock_run_detail.state = "RUNNING"  # KFP v2 API uses 'state'
 
         mock_client.get_run = Mock(return_value=mock_run_detail)
 
         with (
             patch("time.time", side_effect=[0, 100]),  # Simulate time passing
+            patch("asyncio.sleep", new_callable=AsyncMock),  # Prevent actual sleep
             pytest.raises(TimeoutError, match="exceeded timeout"),
         ):
             await kfp_executor._monitor_pipeline_run(
@@ -524,32 +568,39 @@ class TestKFPExecutorPipelineManagement:
             )
 
     @pytest.mark.asyncio
-    async def test_extract_pipeline_artifacts(self, kfp_executor):
-        """Test extracting artifacts from pipeline run."""
-        mock_client = Mock()
-        mock_run_detail = Mock()
+    async def test_download_artifacts_from_s3(self, kfp_executor, execution_context):
+        """Test downloading artifacts from S3."""
+        # Set S3 config in backend_config
+        kfp_executor.backend_config["s3_bucket"] = "test-bucket"
+        kfp_executor.backend_config["s3_prefix"] = "test-prefix"
+        
+        # Mock boto3 S3 client with proper response structure
+        mock_s3_client = Mock()
+        mock_body = Mock()
+        mock_body.read.return_value = b'{"test": "data"}'
+        mock_response = {"Body": mock_body}  # Dict, not Mock
+        mock_s3_client.get_object.return_value = mock_response
 
-        # Mock workflow manifest with artifacts
-        manifest_yaml = """
-status:
-  outputs:
-    artifacts:
-      - name: output_metrics
-        s3:
-          key: /artifacts/metrics.json
-      - name: output_results
-        path: /results/output.json
-"""
+        with (
+            patch("boto3.client", return_value=mock_s3_client),
+            patch("tempfile.mkdtemp", return_value="/tmp/test_artifacts"),
+            patch("builtins.open", create=True) as mock_open,
+            patch.dict("os.environ", {
+                "AWS_ACCESS_KEY_ID": "test-key",
+                "AWS_SECRET_ACCESS_KEY": "test-secret",
+                "AWS_S3_ENDPOINT": "http://test-endpoint",
+            }),
+        ):
+            mock_file = Mock()
+            mock_open.return_value.__enter__.return_value = mock_file
+            
+            artifacts = await kfp_executor._download_artifacts_from_s3(execution_context)
 
-        mock_run_detail.pipeline_runtime.workflow_manifest = manifest_yaml
-
-        mock_client.get_run = Mock(return_value=mock_run_detail)
-
-        artifacts = await kfp_executor._extract_pipeline_artifacts(
-            mock_client, "run-123"
-        )
-
-        assert "output_metrics" in artifacts
-        assert "output_results" in artifacts
-        assert artifacts["output_metrics"] == "/artifacts/metrics.json"
-        assert artifacts["output_results"] == "/results/output.json"
+            # Verify S3 client was called
+            assert mock_s3_client.get_object.call_count >= 2  # metrics + results
+            
+            # Verify artifacts returned with temp paths
+            assert "output_metrics" in artifacts
+            assert "output_results" in artifacts
+            assert artifacts["output_metrics"].startswith("/tmp/test_artifacts")
+            assert artifacts["output_results"].startswith("/tmp/test_artifacts")
