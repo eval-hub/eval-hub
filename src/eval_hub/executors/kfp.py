@@ -2,6 +2,8 @@
 
 import asyncio
 import json
+import os
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -14,10 +16,11 @@ from ..models.evaluation import (
     EvaluationStatus,
 )
 from ..utils import utcnow
-from .base import ExecutionContext, Executor
+from .base import ExecutionContext
+from .tracked import TrackedExecutor
 
 
-class KFPExecutor(Executor):
+class KFPExecutor(TrackedExecutor):
     """Executor for running evaluations using Kubeflow Pipelines.
 
     This executor uses schema adapters to transform eval-hub requests into
@@ -99,6 +102,50 @@ class KFPExecutor(Executor):
         """
         return "kubeflow-pipelines"
 
+    def _get_kfp_token(self) -> str:
+        """Get the token for the KFP client.
+
+        Returns:
+            str: Token for the KFP client
+        """
+        import os
+        token = os.environ.get("KFP_TOKEN") or self._get_token()
+
+        if not token:
+            raise BackendError("KFP_TOKEN environment variable must be set for KFP client")
+        return token
+
+    def _get_token(self) -> str:
+        """Get authentication token from kubernetes config."""
+        try:
+            from kubernetes.client.configuration import (
+                Configuration,  # type: ignore[import-untyped]
+            )
+            from kubernetes.client.exceptions import (
+                ApiException,  # type: ignore[import-untyped]
+            )
+            from kubernetes.config.config_exception import (
+                ConfigException,  # type: ignore[import-untyped]
+            )
+            from kubernetes.config.kube_config import (
+                load_kube_config,  # type: ignore[import-untyped]
+            )
+
+            config = Configuration()
+
+            load_kube_config(client_configuration=config)
+            token: str = config.api_key["authorization"].split(" ")[-1]
+            return token
+        except (KeyError, ConfigException) as e:
+            raise ApiException(
+                401, "Unauthorized, try running command like `oc login` first"
+            ) from e
+        except ImportError as e:
+            raise BackendError(
+                "kubernetes client is not installed. Install with: pip install kubernetes"
+            ) from e
+
+
     def _get_kfp_client(self) -> Any:
         """Get or create KFP client instance.
 
@@ -113,7 +160,8 @@ class KFPExecutor(Executor):
                 import kfp
 
                 self._kfp_client = kfp.Client(
-                    host=self.kfp_endpoint, namespace=self.namespace
+                    host=self.kfp_endpoint, namespace=self.namespace,
+                    existing_token=self._get_kfp_token()
                 )
                 self.logger.info(
                     "Created KFP client",
@@ -175,6 +223,9 @@ class KFPExecutor(Executor):
             benchmark=context.benchmark_spec.name,
         )
 
+        # Start MLflow tracking
+        run_id = await self._track_start(context, self.framework or "kfp")
+
         try:
             # Get the schema adapter for this framework
             assert self.framework is not None, "Framework must be configured"
@@ -225,13 +276,22 @@ class KFPExecutor(Executor):
                     str(context.evaluation_id), 1.0, "Evaluation completed"
                 )
 
-            return evaluation_result
+            # Attach MLflow tracking and log completion
+            final_result = self._with_tracking(evaluation_result, run_id)
+            await self._track_complete(final_result, context)
+
+            return final_result
 
         except Exception as e:
             self.logger.error(
                 "KFP pipeline execution failed",
                 evaluation_id=str(context.evaluation_id),
                 error=str(e),
+            )
+
+            # Use common error tracking
+            failed_run_id = await self._track_failure(
+                context, self.framework or "kfp", str(e), run_id
             )
 
             # Return failed result
@@ -252,7 +312,7 @@ class KFPExecutor(Executor):
                 completed_at=completed_at,
                 duration_seconds=duration,
                 metrics={},
-                mlflow_run_id=None,
+                mlflow_run_id=failed_run_id,
                 error_message=str(e),
             )
 
@@ -280,9 +340,12 @@ class KFPExecutor(Executor):
         """
         try:
             import kfp
-            from kfp import dsl
+            from kfp import dsl, kubernetes
 
             client = self._get_kfp_client()
+
+            # Get S3 credentials secret name (same secret KFP uses for artifacts)
+            s3_credentials_secret = self.backend_config.get("s3_credentials_secret")
 
             # Create a simple pipeline with the component
             @dsl.pipeline(
@@ -296,7 +359,20 @@ class KFPExecutor(Executor):
                     json.dumps(component_spec)
                 )
                 # Create component instance with arguments
-                component_op(**kfp_args)
+                task = component_op(**kfp_args)
+
+                # Inject S3 credentials from Kubernetes secret
+                kubernetes.use_secret_as_env(
+                    task,
+                    secret_name=s3_credentials_secret,
+                    secret_key_to_env={
+                        "AWS_ACCESS_KEY_ID": "AWS_ACCESS_KEY_ID",
+                        "AWS_SECRET_ACCESS_KEY": "AWS_SECRET_ACCESS_KEY",
+                        "AWS_DEFAULT_REGION": "AWS_DEFAULT_REGION",
+                        "AWS_S3_BUCKET": "AWS_S3_BUCKET",
+                        "AWS_S3_ENDPOINT": "AWS_S3_ENDPOINT",
+                    },
+                )
 
             if progress_callback:
                 progress_callback(
@@ -328,7 +404,7 @@ class KFPExecutor(Executor):
             run_name = f"eval-{context.evaluation_id}"
             run = await asyncio.to_thread(
                 client.run_pipeline,
-                experiment_id=experiment.id,
+                experiment_id=experiment.experiment_id,
                 job_name=run_name,
                 pipeline_package_path=pipeline_file,
                 enable_caching=self.enable_caching,
@@ -336,19 +412,19 @@ class KFPExecutor(Executor):
 
             self.logger.info(
                 "Submitted KFP pipeline run",
-                run_id=run.id,
+                run_id=run.run_id,
                 run_name=run_name,
-                experiment_id=experiment.id,
+                experiment_id=experiment.experiment_id,
             )
 
             if progress_callback:
                 progress_callback(
-                    str(context.evaluation_id), 0.5, f"Submitted pipeline run {run.id}"
+                    str(context.evaluation_id), 0.5, f"Submitted pipeline run {run.run_id}"
                 )
 
             # Monitor pipeline execution
             result = await self._monitor_pipeline_run(
-                client, run.id, context, progress_callback
+                client, run.run_id, context, progress_callback
             )
 
             # Cleanup pipeline file
@@ -402,7 +478,7 @@ class KFPExecutor(Executor):
 
             # Get run status
             run_detail = await asyncio.to_thread(client.get_run, run_id=run_id)
-            status = run_detail.run.status
+            status = run_detail.state
 
             # Log status changes
             if status != last_status:
@@ -425,13 +501,14 @@ class KFPExecutor(Executor):
                     )
 
             # Check if completed
-            if status in ["Succeeded", "Failed", "Error", "Skipped"]:
-                if status != "Succeeded":
+            if status.lower() in ["succeeded", "failed", "error", "skipped"]:
+                if status.lower() != "succeeded":
                     error_msg = getattr(run_detail.run, "error", "Unknown error")
                     raise BackendError(f"Pipeline execution failed: {error_msg}")
 
-                # Extract artifacts from run
-                artifacts = await self._extract_pipeline_artifacts(client, run_id)
+                # artifacts = await self._extract_pipeline_artifacts(client, run_id)
+                ## Download artifacts from S3
+                artifacts = await self._download_artifacts_from_s3(context)
 
                 return {
                     "status": status,
@@ -490,6 +567,140 @@ class KFPExecutor(Executor):
                 "Failed to extract pipeline artifacts", run_id=run_id, error=str(e)
             )
             return {}
+
+    async def _download_artifacts_from_s3(
+        self, context: ExecutionContext
+    ) -> dict[str, str]:
+        """Download artifacts from S3.
+
+        The garak component uploads results to a predictable S3 location:
+        s3://{bucket}/{prefix}/{job_id}/{artifact_name}.json
+
+        Args:
+            context: Execution context with evaluation_id and config
+
+        Returns:
+            dict mapping artifact names to local temp file paths
+
+        Raises:
+            BackendError: If S3 download fails
+        """
+        try:
+            import boto3  # type: ignore[import-untyped]
+            from botocore.exceptions import ClientError  # type: ignore[import-untyped]
+        except ImportError as e:
+            raise BackendError(
+                "boto3 is required for S3 artifact download. "
+                "Install with: pip install 'eval-hub[kfp]'"
+            ) from e
+
+        # Get S3 configuration
+        s3_bucket = self.backend_config.get("s3_bucket")
+        s3_prefix = self.backend_config.get("s3_prefix", "")
+        job_id = str(context.evaluation_id)
+
+        if not s3_bucket:
+            raise BackendError(
+                "s3_bucket must be configured in backend_config for garak provider"
+            )
+
+        # Create S3 client
+        endpoint_url = os.environ.get('AWS_S3_ENDPOINT')
+        aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
+        aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+        region_name = os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
+
+        if not aws_access_key_id or not aws_secret_access_key:
+            raise BackendError(
+                "AWS credentials required. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY"
+            )
+
+        try:
+            s3_client = boto3.client(
+                's3',
+                endpoint_url=endpoint_url,
+                aws_access_key_id=aws_access_key_id,
+                aws_secret_access_key=aws_secret_access_key,
+                region_name=region_name,
+            )
+
+            # Build S3 keys
+            s3_prefix_clean = s3_prefix.rstrip("/").strip() if s3_prefix else ""
+
+            if s3_prefix_clean:
+                metrics_key = f"{s3_prefix_clean}/{job_id}/metrics.json"
+                results_key = f"{s3_prefix_clean}/{job_id}/results.json"
+            else:
+                metrics_key = f"{job_id}/metrics.json"
+                results_key = f"{job_id}/results.json"
+
+            self.logger.info(
+                "Downloading artifacts from S3",
+                bucket=s3_bucket,
+                metrics_key=metrics_key,
+                results_key=results_key,
+            )
+
+            # Download to temp files
+            artifacts = {}
+            temp_dir = tempfile.mkdtemp(prefix=f"garak_artifacts_{job_id}_")
+
+            # Download metrics
+            try:
+                metrics_path = os.path.join(temp_dir, "metrics.json")
+                response = s3_client.get_object(Bucket=s3_bucket, Key=metrics_key)
+                with open(metrics_path, 'wb') as f:
+                    f.write(response['Body'].read())
+                artifacts["output_metrics"] = metrics_path
+                self.logger.info("Downloaded metrics artifact", path=metrics_path)
+            except ClientError as e:
+                error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+                self.logger.error(
+                    "Failed to download metrics",
+                    bucket=s3_bucket,
+                    key=metrics_key,
+                    error=error_code,
+                )
+                raise BackendError(
+                    f"Failed to download metrics from s3://{s3_bucket}/{metrics_key}: {error_code}"
+                ) from e
+
+            # Download results
+            try:
+                results_path = os.path.join(temp_dir, "results.json")
+                response = s3_client.get_object(Bucket=s3_bucket, Key=results_key)
+                with open(results_path, 'wb') as f:
+                    f.write(response['Body'].read())
+                artifacts["output_results"] = results_path
+                self.logger.info("Downloaded results artifact", path=results_path)
+            except ClientError as e:
+                error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+                self.logger.error(
+                    "Failed to download results",
+                    bucket=s3_bucket,
+                    key=results_key,
+                    error=error_code,
+                )
+                raise BackendError(
+                    f"Failed to download results from s3://{s3_bucket}/{results_key}: {error_code}"
+                ) from e
+
+            self.logger.info(
+                "Successfully downloaded artifacts from S3",
+                artifact_count=len(artifacts),
+                temp_dir=temp_dir,
+            )
+
+            return artifacts
+
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            raise BackendError(
+                f"S3 client error: {error_code}. "
+                f"Check bucket={s3_bucket}, endpoint={endpoint_url}"
+            ) from e
+        except Exception as e:
+            raise BackendError(f"Failed to download artifacts from S3: {e}") from e
 
     def get_recommended_timeout_minutes(self) -> int:
         """Get the recommended timeout for KFP execution.

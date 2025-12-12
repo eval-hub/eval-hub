@@ -2198,54 +2198,92 @@ providers:
     - recall
 - provider_id: garak
   provider_name: Garak
-  description: LLM vulnerability scanner and red-teaming framework
+  description: LLM vulnerability scanner and red-teaming framework with KFP support
   provider_type: builtin
-  base_url: null
   benchmarks:
+  # Quick testing benchmark
+  - benchmark_id: quick
+    name: Quick Security Scan
+    description: Fast 1-probe security scan for testing (~2 minutes)
+    category: safety
+    metrics:
+    - attack_success_rate
+    - security_score
+    - total_attempts
+    - vulnerable_attempts
+    num_few_shot: 0
+    tags:
+    - safety
+    - quick
+    - red_team
+    config:
+      probes:
+      - dan.Dan_11_0
+      timeout: 300
+  - benchmark_id: standard
+    name: Standard Security Scan
+    description: Standard 5-probe scan covering common attack vectors (~30 minutes)
+    category: safety
+    metrics:
+    - attack_success_rate
+    - security_score
+    - total_attempts
+    - vulnerable_attempts
+    num_few_shot: 0
+    tags:
+    - safety
+    - standard
+    - red_team
+    config:
+      probes:
+      - dan
+      - encoding
+      - promptinject
+      - realtoxicityprompts
+      - continuation
+      timeout: 1800
+  # Individual probe-based benchmarks
   - benchmark_id: toxicity
     name: Toxicity Detection
     description: Tests model's tendency to generate toxic content
     category: safety
     metrics:
+    - attack_success_rate
+    - security_score
     - toxicity_rate
-    - severity_score
     num_few_shot: 0
     dataset_size: 500
     tags:
     - safety
     - toxicity
     - red_team
+    config:
+      probes:
+      - realtoxicityprompts
+      timeout: 3600
   - benchmark_id: bias_detection
     name: Bias Detection
     description: Evaluates model for various forms of bias
     category: fairness
     metrics:
+    - attack_success_rate
     - bias_score
-    - demographic_parity
     num_few_shot: 0
     dataset_size: 1000
     tags:
     - fairness
     - bias
     - demographic
-  - benchmark_id: pii_leakage
-    name: PII Leakage
-    description: Tests for personally identifiable information leakage
-    category: privacy
-    metrics:
-    - pii_leak_rate
-    - sensitivity_score
-    num_few_shot: 0
-    dataset_size: 300
-    tags:
-    - privacy
-    - pii
-    - security
+    config:
+      probes:
+      - continuation
+      timeout: 3600
   - benchmark_id: prompt_injection
     name: Prompt Injection
     description: Tests resilience against prompt injection attacks
     category: security
     metrics:
+    - attack_success_rate
     - injection_success_rate
     - defense_effectiveness
     num_few_shot: 0
@@ -2254,6 +2292,115 @@ providers:
     - security
     - injection
     - adversarial
+    config:
+      probes:
+      - promptinject
+      - latentinjection
+      timeout: 10800
+  - benchmark_id: jailbreak
+    name: Jailbreak Resistance
+    description: Tests resistance to jailbreak attempts (DAN, etc.)
+    category: security
+    metrics:
+    - attack_success_rate
+    - security_score
+    num_few_shot: 0
+    dataset_size: 200
+    tags:
+    - security
+    - jailbreak
+    - adversarial
+    config:
+      probes:
+      - dan
+      - phrasing
+      timeout: 10800
+  - benchmark_id: encoding_attacks
+    name: Encoding Attacks
+    description: Tests for encoding-based injection attacks (Base64, etc.)
+    category: security
+    metrics:
+    - attack_success_rate
+    - security_score
+    num_few_shot: 0
+    dataset_size: 200
+    tags:
+    - security
+    - encoding
+    - injection
+    config:
+      probes:
+      - encoding
+      timeout: 3600
+  # Taxonomy-based comprehensive benchmarks
+  - benchmark_id: owasp_llm_top10
+    name: OWASP LLM Top 10
+    description: OWASP Top 10 for Large Language Model Applications (~2 hours)
+    category: compliance
+    metrics:
+    - attack_success_rate
+    - security_score
+    - total_attempts
+    - vulnerable_attempts
+    num_few_shot: 0
+    tags:
+    - compliance
+    - owasp
+    config:
+      taxonomy_filters:
+      - owasp:llm
+      timeout: 43200
+  - benchmark_id: avid_security
+    name: AVID Security
+    description: AI Vulnerability Database - Security vulnerabilities (~2 hours)
+    category: security
+    metrics:
+    - attack_success_rate
+    - security_score
+    - total_attempts
+    - vulnerable_attempts
+    num_few_shot: 0
+    tags:
+    - security
+    - avid
+    config:
+      taxonomy_filters:
+      - avid-effect:security
+      timeout: 43200
+  - benchmark_id: avid_ethics
+    name: AVID Ethics
+    description: AI Vulnerability Database - Ethical concerns (~1 hour)
+    category: security
+    metrics:
+    - attack_success_rate
+    - security_score
+    - total_attempts
+    - vulnerable_attempts
+    num_few_shot: 0
+    tags:
+    - security
+    - avid
+    config:
+      taxonomy_filters:
+      - avid-effect:ethics
+      timeout: 3600
+  - benchmark_id: avid_performance
+    name: AVID Performance
+    description: AI Vulnerability Database - Performance issues (~1 hour)
+    category: security
+    metrics:
+    - attack_success_rate
+    - security_score
+    - total_attempts
+    - vulnerable_attempts
+    num_few_shot: 0
+    tags:
+    - security
+    - avid
+    config:
+      taxonomy_filters:
+      - avid-effect:performance
+      timeout: 3600
 collections:
 - collection_id: healthcare_safety_v1
   name: Healthcare Safety Collection v1
@@ -2267,8 +2414,6 @@ collections:
     benchmark_id: medmcqa
   - provider_id: garak
     benchmark_id: bias_detection
-  - provider_id: garak
-    benchmark_id: pii_leakage
 - collection_id: automotive_safety_v1
   name: Automotive Safety Collection v1
   description: Automotive AI safety and reliability evaluation suite
@@ -2291,8 +2436,6 @@ collections:
     benchmark_id: mathqa
   - provider_id: lm_evaluation_harness
     benchmark_id: truthfulqa
-  - provider_id: garak
-    benchmark_id: pii_leakage
 - collection_id: general_llm_eval_v1
   name: General LLM Evaluation v1
   description: Comprehensive general-purpose LLM evaluation suite

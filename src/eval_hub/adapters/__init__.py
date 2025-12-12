@@ -6,10 +6,12 @@ integration with various evaluation frameworks via Kubeflow Pipelines (KFP).
 """
 
 from .base import SchemaAdapter
+from .frameworks.garak import GarakAdapter
 from .frameworks.lighteval import LightevalAdapter
 from .registry import AdapterRegistry
 
 # Auto-register built-in adapters
 AdapterRegistry.register("lighteval", LightevalAdapter)
+AdapterRegistry.register("garak", GarakAdapter)
 
-__all__ = ["SchemaAdapter", "AdapterRegistry", "LightevalAdapter"]
+__all__ = ["SchemaAdapter", "AdapterRegistry", "LightevalAdapter", "GarakAdapter"]

@@ -256,6 +256,7 @@ class RequestParser:
             "lm_evaluation_harness": BackendType.LMEVAL,
             "nemo_evaluator": BackendType.NEMO_EVALUATOR,
             "guidellm": BackendType.GUIDELLM,
+            "garak": BackendType.KFP,  # Garak runs on KFP
         }
 
         for provider_id, benchmark_refs in providers.items():
@@ -276,13 +277,27 @@ class RequestParser:
                 )
                 benchmarks.append(benchmark)
 
+            # Build backend config
+            backend_config: dict[str, Any] = {"batch_size": 1, "device": "auto"}
+
+            # For KFP-based providers (like garak), add KFP configuration
+            if backend_type == BackendType.KFP:
+                import os
+                backend_config["framework"] = provider_id
+                backend_config["kfp_endpoint"] = os.environ.get("KFP_ENDPOINT", "")
+                backend_config["namespace"] = os.environ.get("KFP_NAMESPACE", "kubeflow")
+                # S3 configuration for artifact storage
+                backend_config["s3_bucket"] = os.environ.get("AWS_S3_BUCKET", "")
+                backend_config["s3_prefix"] = os.environ.get("AWS_S3_PREFIX", "garak-results")
+                backend_config["s3_credentials_secret"] = os.environ.get("KFP_S3_CREDENTIALS_SECRET_NAME", "")
+
             # Create backend spec
             backend = BackendSpec(
                 name=f"collection-{provider_id}",
                 type=backend_type,
                 endpoint=None,
                 benchmarks=benchmarks,
-                config={"batch_size": 1, "device": "auto"},
+                config=backend_config,
             )
             backends.append(backend)
 
