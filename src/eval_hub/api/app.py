@@ -3,10 +3,13 @@
 import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
 
 import httpx
 from fastapi import FastAPI, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
@@ -20,6 +23,7 @@ from structlog.typing import FilteringBoundLogger
 from ..core.config import get_settings
 from ..core.exceptions import EvaluationServiceError, ExecutionError, ValidationError
 from ..core.logging import get_logger, log_request_end, log_request_start, setup_logging
+from ..models.evaluation import Page, Patch
 from ..services.provider_service import ProviderService
 from .routes import router
 
@@ -38,6 +42,32 @@ MLFLOW_HEALTH = Gauge(
     "mlflow_health_status",
     "MLflow tracking server health status (1 = healthy, 0 = unhealthy)",
 )
+
+
+def custom_openapi() -> dict[str, Any]:
+    """Custom OpenAPI generator to ensure base schemas are included."""
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+
+    # Ensure base schemas used only through inheritance are included
+    if "components" not in openapi_schema:
+        openapi_schema["components"] = {}
+    if "schemas" not in openapi_schema["components"]:
+        openapi_schema["components"]["schemas"] = {}
+
+    # Include Page and Patch schemas
+    openapi_schema["components"]["schemas"]["Page"] = Page.model_json_schema()
+    openapi_schema["components"]["schemas"]["Patch"] = Patch.model_json_schema()
+
+    app.openapi_schema = openapi_schema
+    return openapi_schema
 
 
 async def check_mlflow_health(tracking_uri: str, logger: FilteringBoundLogger) -> bool:
@@ -175,6 +205,27 @@ def create_app() -> FastAPI:
             },
         )
 
+    # Custom handler for FastAPI request validation errors (422)
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_error_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        """Handle FastAPI request validation errors with custom Error schema."""
+        logger.warning(
+            "Request validation error",
+            errors=exc.errors(),
+            path=request.url.path,
+        )
+        # Format according to our Error schema
+        return JSONResponse(
+            status_code=422,
+            content={
+                "code": "validation_error",
+                "message": f"Validation failed: {len(exc.errors())} error(s)",
+                "type": "RequestValidationError",
+            },
+        )
+
     @app.exception_handler(ExecutionError)
     async def execution_error_handler(
         request: Request, exc: ExecutionError
@@ -252,11 +303,14 @@ def create_app() -> FastAPI:
     # Include API routes
     app.include_router(router, prefix=settings.api_prefix)
 
+    # Set custom OpenAPI generator
+    app.openapi = custom_openapi  # type: ignore[method-assign]
+
     logger.info(
         "FastAPI application created",
         title=settings.app_name,
         version=settings.version,
-        debug=settings.debug,
+        docs_url=app.docs_url,
     )
 
     return app

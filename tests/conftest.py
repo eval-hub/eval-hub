@@ -15,7 +15,6 @@ from eval_hub.models.provider import (
     ListCollectionsResponse,
     ListProvidersResponse,
     Provider,
-    ProviderType,
 )
 from eval_hub.services.provider_service import ProviderService
 
@@ -263,18 +262,24 @@ class TestDataFactory:
         if benchmarks is None:
             benchmarks = [TestDataFactory.create_benchmark()]
 
-        defaults = {
-            "description": f"{provider_name} description",
-            "provider_type": ProviderType.EXTERNAL,
-            "base_url": "http://test:8080",
-        }
-        defaults.update(kwargs)
+        # Convert benchmarks to supported_benchmarks format
+        supported_benchmarks = []
+        if benchmarks:
+            from eval_hub.models.provider import SupportedBenchmark
+
+            supported_benchmarks = [
+                SupportedBenchmark(
+                    id=bench.benchmark_id
+                    if hasattr(bench, "benchmark_id")
+                    else str(bench)
+                )
+                for bench in benchmarks
+            ]
 
         return Provider(
-            provider_id=provider_id,
-            provider_name=provider_name,
-            benchmarks=benchmarks,
-            **defaults,
+            id=provider_id,
+            label=provider_name,
+            supported_benchmarks=supported_benchmarks,
         )
 
     @staticmethod

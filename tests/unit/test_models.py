@@ -10,6 +10,8 @@ from eval_hub.models.evaluation import (
     BackendType,
     BenchmarkConfig,
     BenchmarkSpec,
+    EvaluationJobBenchmarkConfig,
+    EvaluationJobRequest,
     EvaluationRequest,
     EvaluationResult,
     EvaluationSpec,
@@ -17,7 +19,6 @@ from eval_hub.models.evaluation import (
     ExperimentConfig,
     Model,
     RiskCategory,
-    SimpleEvaluationRequest,
 )
 
 
@@ -287,16 +288,17 @@ class TestEvaluationModels:
         assert config.provider_id == "lm_evaluation_harness"
         assert config.config == {}
 
-    def test_simple_evaluation_request_creation(self):
-        """Test SimpleEvaluationRequest model creation."""
+    def test_evaluation_job_request_creation(self):
+        """Test EvaluationJobRequest model creation."""
         model = Model(
             url="http://test-server:8000",
             name="meta-llama/llama-3.1-8b",
         )
 
         benchmarks = [
-            BenchmarkConfig(
-                benchmark_id="arc_easy",
+            EvaluationJobBenchmarkConfig(
+                name="ARC Easy Benchmark",
+                id="arc_easy",
                 provider_id="lm_evaluation_harness",
                 config={
                     "num_fewshot": 0,
@@ -305,8 +307,9 @@ class TestEvaluationModels:
                     "include_path": "./custom_prompts/arc_easy.yaml",
                 },
             ),
-            BenchmarkConfig(
-                benchmark_id="mmlu",
+            EvaluationJobBenchmarkConfig(
+                name="MMLU Benchmark",
+                id="mmlu",
                 provider_id="lm_evaluation_harness",
                 config={
                     "num_fewshot": 5,
@@ -319,45 +322,46 @@ class TestEvaluationModels:
             ),
         ]
 
-        request = SimpleEvaluationRequest(
-            model=model,
-            benchmarks=benchmarks,
-            experiment=ExperimentConfig(
-                name="llama-3.1-8b-reasoning-eval",
-                tags={
+        request = EvaluationJobRequest(
+            model=model.model_dump(),
+            benchmarks=[bench.model_dump() for bench in benchmarks],
+            experiment={
+                "name": "llama-3.1-8b-reasoning-eval",
+                "tags": {
                     "environment": "production",
                     "model_family": "llama-3.1",
                     "evaluation_type": "reasoning",
                 },
-            ),
+            },
         )
 
         assert request.model.url == "http://test-server:8000"
         assert request.model.name == "meta-llama/llama-3.1-8b"
         assert len(request.benchmarks) == 2
-        assert request.benchmarks[0].benchmark_id == "arc_easy"
-        assert request.benchmarks[1].benchmark_id == "mmlu"
+        assert request.benchmarks[0].id == "arc_easy"
+        assert request.benchmarks[1].id == "mmlu"
         assert request.experiment.name == "llama-3.1-8b-reasoning-eval"
         assert request.experiment.tags["environment"] == "production"
         assert request.experiment.tags["model_family"] == "llama-3.1"
         assert request.experiment.tags["evaluation_type"] == "reasoning"
-        assert isinstance(request.created_at, datetime)
 
-    def test_simple_evaluation_request_defaults(self):
-        """Test SimpleEvaluationRequest model default values."""
+    def test_evaluation_job_request_defaults(self):
+        """Test EvaluationJobRequest model default values."""
         model = Model(url="http://test-server:8000", name="test-model")
-        benchmarks = [BenchmarkConfig(benchmark_id="test", provider_id="test_provider")]
+        benchmarks = [
+            EvaluationJobBenchmarkConfig(
+                name="Test Benchmark", id="test", provider_id="test_provider"
+            )
+        ]
 
-        request = SimpleEvaluationRequest(
-            model=model,
-            benchmarks=benchmarks,
-            experiment=ExperimentConfig(name="test-experiment"),
+        request = EvaluationJobRequest(
+            model=model.model_dump(),
+            benchmarks=[bench.model_dump() for bench in benchmarks],
+            experiment={"name": "test-experiment"},
         )
 
         assert request.experiment.name == "test-experiment"
-        assert request.experiment.tags == {}
+        assert getattr(request.experiment, "tags", {}) == {}
         assert request.timeout_minutes == 60
         assert request.retry_attempts == 3
-        assert request.async_mode is True
         assert request.callback_url is None
-        assert isinstance(request.created_at, datetime)

@@ -8,16 +8,15 @@ import yaml  # type: ignore[import-untyped]
 from ..core.config import Settings
 from ..core.logging import get_logger
 from ..models.provider import (
+    Benchmark,
     BenchmarkDetail,
+    BenchmarksList,
     Collection,
     CollectionCreationRequest,
     CollectionUpdateRequest,
-    ListBenchmarksResponse,
     ListCollectionsResponse,
-    ListProvidersResponse,
-    Provider,
+    ProviderRecord,
     ProvidersData,
-    ProviderSummary,
 )
 
 logger = get_logger(__name__)
@@ -29,7 +28,7 @@ class ProviderService:
     def __init__(self, settings: Settings):
         self.settings = settings
         self._providers_data: ProvidersData | None = None
-        self._providers_by_id: dict[str, Provider] = {}
+        self._providers_by_id: dict[str, ProviderRecord] = {}
         self._benchmarks_by_id: dict[str, BenchmarkDetail] = {}
         self._collections_by_id: dict[str, Collection] = {}
 
@@ -118,66 +117,46 @@ class ProviderService:
         for collection in self._providers_data.collections:
             self._collections_by_id[collection.collection_id] = collection
 
-    def get_all_providers(self) -> ListProvidersResponse:
-        """Get all providers without benchmark details."""
+    def get_all_providers(self) -> list[ProviderRecord]:
+        """Get all providers in public API format."""
         providers_data = self._load_providers_data()
 
-        # Convert to ProviderSummary objects without benchmark details
-        provider_summaries = []
-        for provider in providers_data.providers:
-            summary = ProviderSummary(
-                provider_id=provider.provider_id,
-                provider_name=provider.provider_name,
-                description=provider.description,
-                provider_type=provider.provider_type,
-                base_url=provider.base_url,
-                benchmark_count=len(provider.benchmarks),
-            )
-            provider_summaries.append(summary)
+        return providers_data.providers
 
-        total_benchmarks = sum(
-            len(provider.benchmarks) for provider in providers_data.providers
-        )
-
-        return ListProvidersResponse(
-            providers=provider_summaries,
-            total_providers=len(providers_data.providers),
-            total_benchmarks=total_benchmarks,
-        )
-
-    def get_provider_by_id(self, provider_id: str) -> Provider | None:
+    def get_provider_by_id(self, provider_id: str) -> ProviderRecord | None:
         """Get a provider by ID."""
         self._load_providers_data()
-        return self._providers_by_id.get(provider_id)
+        provider = self._providers_by_id.get(provider_id)
+        if not provider:
+            return None
+        return provider
 
-    def get_all_benchmarks(self) -> ListBenchmarksResponse:
-        """Get all benchmarks in Llama Stack format."""
+    def get_all_benchmarks(self) -> BenchmarksList:
+        """Get all benchmarks in public API format."""
         self._load_providers_data()
 
-        # Convert to Llama Stack format
-        benchmarks = []
+        benchmarks: list[Benchmark] = []
+        providers_included = set()
+
         for benchmark_detail in self._benchmarks_by_id.values():
-            benchmark_dict = {
-                "benchmark_id": f"{benchmark_detail.provider_id}::{benchmark_detail.benchmark_id}",
-                "provider_id": benchmark_detail.provider_id,
-                "name": benchmark_detail.name,
-                "description": benchmark_detail.description,
-                "category": benchmark_detail.category,
-                "metrics": benchmark_detail.metrics,
-                "num_few_shot": benchmark_detail.num_few_shot,
-                "dataset_size": benchmark_detail.dataset_size,
-                "tags": benchmark_detail.tags,
-            }
-            benchmarks.append(benchmark_dict)
+            benchmarks.append(
+                Benchmark(
+                    id=benchmark_detail.benchmark_id,
+                    provider_id=benchmark_detail.provider_id,
+                    label=benchmark_detail.name,
+                    description=benchmark_detail.description,
+                    category=benchmark_detail.category,
+                    metrics=benchmark_detail.metrics,
+                    num_few_shot=benchmark_detail.num_few_shot,
+                    dataset_size=benchmark_detail.dataset_size,
+                    tags=benchmark_detail.tags,
+                )
+            )
+            providers_included.add(benchmark_detail.provider_id)
 
-        provider_ids: list[str] = [
-            str(b["provider_id"]) for b in benchmarks if "provider_id" in b
-        ]
-
-        return ListBenchmarksResponse(
-            benchmarks=benchmarks,
+        return BenchmarksList(
+            items=benchmarks,
             total_count=len(benchmarks),
-            providers_included=list(set(provider_ids)),
         )
 
     def get_benchmarks_by_provider(self, provider_id: str) -> list[BenchmarkDetail]:
@@ -255,12 +234,11 @@ class ProviderService:
     def create_collection(self, request: CollectionCreationRequest) -> Collection:
         """Create a new collection."""
         from datetime import datetime
+        from uuid import uuid4
 
         self._load_providers_data()
 
-        # Check if collection already exists
-        if request.collection_id in self._collections_by_id:
-            raise ValueError(f"Collection {request.collection_id} already exists")
+        new_id = uuid4().hex
 
         # Validate that all benchmarks exist
         for benchmark_ref in request.benchmarks:
@@ -273,12 +251,11 @@ class ProviderService:
         # Create the collection
         now = datetime.utcnow().isoformat() + "Z"
         collection = Collection(
-            collection_id=request.collection_id,
+            id=new_id,
             name=request.name,
             description=request.description,
-            provider_id=request.provider_id,
             tags=request.tags,
-            metadata=request.metadata,
+            metadata=request.custom,
             benchmarks=request.benchmarks,
             created_at=now,
             updated_at=now,

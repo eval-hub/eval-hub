@@ -7,12 +7,12 @@ import pytest
 
 from eval_hub.core.config import Settings
 from eval_hub.models.evaluation import (
-    BenchmarkConfig,
+    EvaluationJobBenchmarkConfig,
+    EvaluationJobRequest,
     EvaluationResult,
     EvaluationStatus,
     ExperimentConfig,
     Model,
-    SimpleEvaluationRequest,
 )
 from eval_hub.services.response_builder import ResponseBuilder
 
@@ -29,17 +29,18 @@ def sample_request():
     """Create a simple evaluation request."""
     model = Model(url="http://test-server:8000", name="test-model")
     benchmarks = [
-        BenchmarkConfig(
-            benchmark_id="test_benchmark",
+        EvaluationJobBenchmarkConfig(
+            name="Test Benchmark",
+            id="test_benchmark",
             provider_id="lm_evaluation_harness",
             config={"num_fewshot": 1},
         )
     ]
     experiment = ExperimentConfig(name="Test Experiment")
-    return SimpleEvaluationRequest(
-        model=model,
-        benchmarks=benchmarks,
-        experiment=experiment,
+    return EvaluationJobRequest(
+        model=model.model_dump(),
+        benchmarks=[bench.model_dump() for bench in benchmarks],
+        experiment=experiment.model_dump(),
         timeout_minutes=45,
         retry_attempts=2,
     )
@@ -139,7 +140,7 @@ class TestResponseBuilderResponseShape:
         results = [
             create_evaluation_result(
                 EvaluationStatus.COMPLETED,
-                benchmark_id=sample_request.benchmarks[0].benchmark_id,
+                benchmark_id=sample_request.benchmarks[0].id,
                 duration_seconds=12.5,
             )
         ]
@@ -149,15 +150,11 @@ class TestResponseBuilderResponseShape:
             request_id, sample_request, results, experiment_url
         )
 
-        assert response.system.status.state == "success"
-        assert response.results is not None
-        assert response.results.mlflow_experiment_url == experiment_url
-        assert (
-            response.results.benchmarks[0].name
-            == sample_request.benchmarks[0].benchmark_id
-        )
-        assert response.results.aggregated_metrics["total_evaluations"] == 1
+        assert response.system.status.state == "completed"
         assert response.evaluation_results == results
+        assert len(response.evaluation_results) == 1
+        assert response.evaluation_results[0].status == EvaluationStatus.COMPLETED
+        assert response.evaluation_results[0].duration_seconds == 12.5
 
     async def test_build_response_failure_hides_results(
         self, response_builder, sample_request
@@ -167,7 +164,7 @@ class TestResponseBuilderResponseShape:
         results = [
             create_evaluation_result(
                 EvaluationStatus.FAILED,
-                benchmark_id=sample_request.benchmarks[0].benchmark_id,
+                benchmark_id=sample_request.benchmarks[0].id,
                 error_message="backend error",
             )
         ]

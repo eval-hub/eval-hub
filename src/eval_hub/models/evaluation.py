@@ -2,10 +2,10 @@
 
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, RootModel
 
 
 class Model(BaseModel):
@@ -20,6 +20,153 @@ class Model(BaseModel):
 def get_utc_now() -> datetime:
     """Get current UTC timestamp."""
     return datetime.now(UTC)
+
+
+# ===== New Base Schemas for RESTful API =====
+
+
+class Resource(BaseModel):
+    """Resource"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(..., title="")
+    created_at: datetime = Field(..., title="")
+    updated_at: datetime = Field(..., title="")
+
+
+class Page(BaseModel):
+    """Generic pagination schema."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "type": "object",
+            "properties": {
+                "first": {
+                    "type": "object",
+                    "properties": {"href": {"type": "string"}},
+                },
+                "next": {
+                    "type": "object",
+                    "properties": {"href": {"type": "string"}},
+                },
+                "limit": {"type": "integer"},
+                "total_count": {"type": "integer"},
+            },
+            "required": ["first", "limit", "total_count"],
+        },
+    )
+
+    first: dict[str, str] = Field(..., description="Link to first page")
+    next: dict[str, str] | None = Field(None, description="Link to next page")
+    limit: int = Field(..., description="Page size limit")
+    total_count: int = Field(..., description="Total number of items")
+
+
+class Status(BaseModel):
+    """Status"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    state: Literal["pending", "running", "completed", "failed", "cancelled"] = Field(
+        ..., title="", description="Current state"
+    )
+    message: str = Field(..., title="", description="Status message")
+    benchmarks: list[dict[str, Any]] = Field(
+        default_factory=list,
+        json_schema_extra={
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "state": {
+                        "type": "string",
+                        "enum": [
+                            "pending",
+                            "running",
+                            "completed",
+                            "failed",
+                            "cancelled",
+                        ],
+                    },
+                    "started_at": {"type": "string", "format": "date-time"},
+                    "completed_at": {"type": "string", "format": "date-time"},
+                    "message": {"type": "string"},
+                    "logs": {
+                        "type": "object",
+                        "properties": {"path": {"type": "string"}},
+                    },
+                },
+                "additionalProperties": True,
+            },
+        },
+    )
+
+
+class System(BaseModel):
+    """System information containing status and other system-level metadata."""
+
+    model_config = ConfigDict(extra="allow")
+
+    status: Status = Field(..., description="System status information")
+
+
+class Error(BaseModel):
+    """Error"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str | None = Field(default=None, title="")
+    message: str | None = Field(default=None, title="Message")
+    type: str | None = Field(default=None, title="Error Type")
+
+
+class PatchOperation(BaseModel):
+    """Single JSON Patch operation."""
+
+    model_config = ConfigDict(extra="allow")
+
+    op: str = Field(..., description="Operation type")
+    path: str = Field(..., description="JSON path to operate on")
+    value: Any = Field(None, description="Value for operation")
+
+
+# Patch is an array of PatchOperation-like objects; keep schema inline to avoid extra components
+class Patch(RootModel[list[dict[str, Any]]]):
+    """Patch"""
+
+    root: list[dict[str, Any]]
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "op": {
+                        "type": "string",
+                        "enum": ["replace", "add", "remove"],
+                    },
+                    "path": {"type": "string"},
+                    "value": {"type": "object"},
+                },
+            },
+        },
+    )
+
+    def __iter__(self) -> Any:
+        """Make Patch iterable like a list."""
+        return iter(self.root)
+
+    def __len__(self) -> int:
+        """Get length of patch operations."""
+        return len(self.root)
+
+    def __getitem__(self, index: int) -> dict[str, Any]:
+        """Get patch operation by index."""
+        return self.root[index]
 
 
 class RiskCategory(str, Enum):
@@ -172,35 +319,179 @@ class EvaluationRequest(BaseModel):
     )
 
 
-class SimpleEvaluationRequest(BaseModel):
+# ===== New Request Schemas for Proposal API =====
+
+
+class EvaluationJobBenchmarkConfig(BaseModel):
+    """Benchmark configuration for EvaluationJobRequest."""
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    name: str = Field(..., description="the user provide name for this benchmark")
+    id: str = Field(
+        ...,
+        description="Benchmark identifier",
+        validation_alias=AliasChoices("id", "benchmark_id"),
+    )
+    provider_id: str = Field(
+        ..., description="Provider identifier", alias="provider_id"
+    )
+    config: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Benchmark configuration including num_fewshot, limit, batch_size, etc.",
+    )
+
+
+class EvaluationJobBenchmarkSpec(BaseModel):
+    """Benchmark specification for EvaluationJobResource response."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., description="User-provided name for this benchmark")
+    id: str = Field(..., description="Benchmark identifier")
+    provider_id: str = Field(..., description="Provider identifier")
+    config: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Benchmark configuration including num_fewshot, limit, batch_size, etc.",
+    )
+
+
+class EvaluationJobRequest(BaseModel):
     """Simplified evaluation request using the new schema."""
 
     model_config = ConfigDict(extra="forbid")
 
     model: Model = Field(..., description="Model specification for evaluation")
-    benchmarks: list[BenchmarkConfig] = Field(
-        ..., description="List of benchmarks to evaluate"
+    benchmarks: list[EvaluationJobBenchmarkConfig] = Field(
+        ...,
+        title="Benchmarks",
+        description="List of benchmarks to evaluate",
     )
     experiment: ExperimentConfig = Field(
-        ..., description="Experiment configuration for MLFlow tracking"
+        ...,
+        description="Experiment configuration for MLFlow tracking",
     )
     timeout_minutes: int = Field(
-        default=60, description="Timeout for the entire evaluation"
+        default=60,
+        title="Timeout Minutes",
+        description="Timeout for the entire evaluation",
     )
     retry_attempts: int = Field(
-        default=3, description="Number of retry attempts on failure"
-    )
-    async_mode: bool = Field(
-        default=True, description="Whether to run evaluations asynchronously"
+        default=3,
+        title="Retry Attempts",
+        description="Number of retry attempts on failure",
     )
     callback_url: str | None = Field(
-        None, description="URL to call when evaluation completes"
+        None,
+        title="Callback Url",
+        description="URL to call when evaluation completes",
+        json_schema_extra={"anyOf": [{"type": "string"}, {"type": "null"}]},
     )
-    created_at: datetime = Field(
-        default_factory=get_utc_now, description="Request creation timestamp"
+
+
+# ===== New Response Schemas for Proposal API =====
+
+
+class EvaluationResultSummary(BaseModel):
+    """Lightweight benchmark result for the proposal API."""
+
+    model_config = ConfigDict(extra="allow")
+
+    provider_id: str = Field(..., description="Provider identifier")
+    id: str = Field(..., description="Benchmark identifier")
+    status: str = Field(..., description="Result status")
+    name: str | None = Field(None, description="Benchmark name")
+    metrics: dict[str, float | int | str] = Field(
+        default_factory=dict, description="Evaluation metrics"
     )
-    custom: dict[str, Any] = Field(
-        default_factory=dict, description="Custom fields for additional request data"
+    artifacts: dict[str, str] = Field(
+        default_factory=dict, description="Paths to result artifacts"
+    )
+    mlflow_run_id: str | None = Field(None, description="MLFlow run ID")
+
+
+class EvaluationJobBenchmarkResult(BaseModel):
+    """Benchmark result for EvaluationJobResource - matches proposal structure."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., description="Benchmark name")
+    metrics: dict[str, float | int | str] = Field(
+        default_factory=dict, description="Evaluation metrics"
+    )
+    artifacts: dict[str, str] = Field(
+        default_factory=dict, description="Paths to result artifacts"
+    )
+    mlflow_run_id: str | None = Field(None, description="MLFlow run ID")
+
+
+class EvaluationJobResults(BaseModel):
+    """Results section for EvaluationJobResource."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    total_evaluations: int = Field(..., description="Total number of evaluations")
+    completed_evaluations: int = Field(
+        default=0, description="Number of completed evaluations"
+    )
+    failed_evaluations: int = Field(
+        default=0, description="Number of failed evaluations"
+    )
+    benchmarks: list[EvaluationJobBenchmarkResult] = Field(
+        default_factory=list, description="Benchmark results"
+    )
+    aggregated_metrics: dict[str, float | int | str] = Field(
+        default_factory=dict, description="Aggregated metrics across all evaluations"
+    )
+    mlflow_experiment_url: str | None = Field(None, description="MLFlow experiment URL")
+
+
+class EvaluationJobResource(BaseModel):
+    """Evaluation job resource response schema matching the proposal."""
+
+    model_config = ConfigDict(extra="allow")
+
+    # Runtime validation fields
+    resource: Resource = Field(..., description="Resource metadata")
+    status: Status = Field(..., description="Current status")
+    results: EvaluationJobResults | None = Field(None, description="Evaluation results")
+
+    # Fields from EvaluationJobRequest
+    model: Model = Field(..., description="Model specification")
+    benchmarks: list[EvaluationJobBenchmarkSpec] = Field(
+        ..., description="Benchmark configurations"
+    )
+    experiment: ExperimentConfig = Field(..., description="Experiment configuration")
+    timeout_minutes: int = Field(default=60, description="Timeout in minutes")
+    retry_attempts: int = Field(default=3, description="Retry attempts")
+    callback_url: str | None = Field(None, description="Callback URL")
+
+
+class EvaluationJobResourceList(Page):
+    """List of evaluation job resources with pagination."""
+
+    model_config = ConfigDict(
+        extra="allow",
+        json_schema_extra={
+            "allOf": [
+                {"$ref": "#/components/schemas/Page"},
+                {
+                    "properties": {
+                        "items": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/components/schemas/EvaluationJobResource"
+                            },
+                        }
+                    }
+                },
+            ]
+        },
+    )
+
+    # Items field
+    items: list[EvaluationJobResource] = Field(
+        ..., description="Evaluation job resources"
     )
 
 
@@ -303,14 +594,6 @@ class ResultsPayload(BaseModel):
     )
 
 
-class PaginationLink(BaseModel):
-    """Hypermedia link used for pagination."""
-
-    model_config = ConfigDict(extra="allow")
-
-    href: str = Field(..., description="Link URL")
-
-
 class EvaluationResponse(BaseModel):
     """Response payload for evaluation requests."""
 
@@ -353,10 +636,24 @@ class EvaluationResponse(BaseModel):
 class PaginatedEvaluations(BaseModel):
     """Paginated list response for evaluation resources."""
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(
+        extra="allow",
+        json_schema_extra={
+            "properties": {
+                "first": {
+                    "type": "object",
+                    "properties": {"href": {"type": "string"}},
+                },
+                "next": {
+                    "type": "object",
+                    "properties": {"href": {"type": "string"}},
+                },
+            }
+        },
+    )
 
-    first: PaginationLink = Field(..., description="Link to the first page")
-    next: PaginationLink | None = Field(
+    first: dict[str, str] = Field(..., description="Link to the first page")
+    next: dict[str, str] | None = Field(
         default=None, description="Link to the next page, if available"
     )
     limit: int = Field(..., description="Page size used for this response")

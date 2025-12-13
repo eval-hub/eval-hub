@@ -2,20 +2,30 @@
 
 import statistics
 from datetime import datetime
-from typing import Any, cast
+from typing import Any, Literal, cast
 from uuid import UUID
 
 from ..core.config import Settings
 from ..core.logging import get_logger
 from ..models.evaluation import (
+    BenchmarkConfig,
     BenchmarkResultPayload,
+    EvaluationJobBenchmarkConfig,
+    EvaluationJobBenchmarkResult,
+    EvaluationJobBenchmarkSpec,
+    EvaluationJobRequest,
+    EvaluationJobResource,
+    EvaluationJobResults,
     EvaluationRequest,
     EvaluationResponse,
     EvaluationResult,
     EvaluationStatus,
+    ExperimentConfig,
+    Model,
+    Resource,
     ResultsPayload,
     RunStatus,
-    SimpleEvaluationRequest,
+    Status,
     SystemInfo,
     SystemStatus,
     get_utc_now,
@@ -32,7 +42,7 @@ class ResponseBuilder:
     async def build_response(
         self,
         request_id: UUID,
-        simple_request: SimpleEvaluationRequest,
+        job_request: EvaluationJobRequest,
         results: list[EvaluationResult],
         experiment_url: str | None = None,
     ) -> EvaluationResponse:
@@ -43,11 +53,13 @@ class ResponseBuilder:
             result_count=len(results),
         )
 
+        job_benchmarks = job_request.benchmarks
+
         status_counts = self._count_results_by_status(results)
-        expected_runs = len(simple_request.benchmarks)
+        expected_runs = len(job_benchmarks)
         system_state = self._determine_system_state(status_counts, expected_runs)
 
-        runs = self._build_runs(simple_request, results)
+        runs = self._build_runs(job_benchmarks, results)
         status_message = next((run.message for run in runs if run.message), "")
         status_logs = next((run.logs_path for run in runs if run.logs_path), None)
         completed_at = self._determine_completed_at(results, system_state)
@@ -79,21 +91,32 @@ class ResponseBuilder:
                 logs_path=status_logs,
                 runs=runs,
             ),
-            created_at=simple_request.created_at,
+            created_at=get_utc_now(),
             completed_at=completed_at,
         )
+
+        # Convert EvaluationJobBenchmarkConfig to BenchmarkConfig for response
+        converted_benchmarks = []
+        for benchmark in job_benchmarks:
+            converted_benchmarks.append(
+                BenchmarkConfig(
+                    benchmark_id=benchmark.id or "",
+                    provider_id=benchmark.provider_id or "",
+                    config=benchmark.config,
+                )
+            )
 
         response = EvaluationResponse(
             system=system_info,
             results=results_payload,
-            model=simple_request.model,
-            benchmarks=simple_request.benchmarks,
-            experiment=simple_request.experiment,
-            timeout_minutes=simple_request.timeout_minutes,
-            retry_attempts=simple_request.retry_attempts,
-            callback_url=simple_request.callback_url,
-            async_mode=simple_request.async_mode,
-            custom=simple_request.custom,
+            model=job_request.model,
+            benchmarks=converted_benchmarks,
+            experiment=job_request.experiment,
+            timeout_minutes=job_request.timeout_minutes,
+            retry_attempts=job_request.retry_attempts,
+            callback_url=job_request.callback_url,
+            async_mode=True,  # Always async in new API
+            custom={},  # Default empty dict
             evaluation_results=results,
         )
 
@@ -102,6 +125,161 @@ class ResponseBuilder:
             request_id=str(request_id),
             overall_status=system_state,
             completed_runs=len([r for r in runs if r.state == "success"]),
+        )
+
+        return response
+
+    async def build_job_resource_response(
+        self,
+        request_id: UUID,
+        job_request: EvaluationJobRequest,
+        results: list[EvaluationResult],
+        experiment_url: str | None = None,
+    ) -> EvaluationJobResource:
+        """Build a job resource response matching the proposal structure."""
+        self.logger.info(
+            "Building evaluation job resource response",
+            request_id=str(request_id),
+            result_count=len(results),
+        )
+
+        # Build resource metadata
+        resource = Resource(
+            id=str(request_id),
+            created_at=get_utc_now(),
+            updated_at=get_utc_now(),
+        )
+
+        # Build benchmarks status for the Status object
+        benchmarks_status = []
+        for benchmark in job_request.benchmarks:
+            benchmark_id = benchmark.id
+            benchmark_name = benchmark.name
+
+            # Find corresponding result
+            result = next((r for r in results if r.benchmark_id == benchmark_id), None)
+
+            if result:
+                state = self._map_status_to_state(result.status)
+                started_at = (
+                    result.started_at.isoformat() if result.started_at else None
+                )
+                completed_at = (
+                    result.completed_at.isoformat() if result.completed_at else None
+                )
+                message = result.error_message or ""
+            else:
+                state = "pending"
+                started_at = None
+                completed_at = None
+                message = ""
+
+            benchmark_status: dict[str, Any] = {
+                "name": benchmark_name,
+                "state": state,
+                "message": message,
+            }
+
+            if started_at:
+                benchmark_status["started_at"] = started_at
+            if completed_at:
+                benchmark_status["completed_at"] = completed_at
+
+            # Add logs if available
+            if result and result.artifacts.get("logs_path"):
+                benchmark_status["logs"] = {"path": result.artifacts["logs_path"]}
+
+            benchmarks_status.append(benchmark_status)
+
+        # Determine overall status
+        status_counts = self._count_results_by_status(results)
+        expected_runs = len(job_request.benchmarks)
+        overall_state = self._determine_system_state(status_counts, expected_runs)
+
+        status = Status(
+            state=overall_state,
+            message="",
+            benchmarks=benchmarks_status,
+        )
+
+        # Build results section
+        results_section = None
+        if results:
+            total_evaluations = len(job_request.benchmarks)
+            completed_evaluations = len(
+                [r for r in results if r.status == EvaluationStatus.COMPLETED]
+            )
+            failed_evaluations = len(
+                [r for r in results if r.status == EvaluationStatus.FAILED]
+            )
+
+            # Build benchmark results
+            benchmark_results = []
+            for result in results:
+                if result.status == EvaluationStatus.COMPLETED:
+                    benchmark_result = EvaluationJobBenchmarkResult(
+                        name=result.benchmark_name or result.benchmark_id,
+                        metrics=result.metrics,
+                        artifacts=result.artifacts,
+                        mlflow_run_id=result.mlflow_run_id,
+                    )
+                    benchmark_results.append(benchmark_result)
+
+            # Get aggregated metrics
+            aggregated_metrics = await self._aggregate_metrics(results)
+
+            results_section = EvaluationJobResults(
+                total_evaluations=total_evaluations,
+                completed_evaluations=completed_evaluations,
+                failed_evaluations=failed_evaluations,
+                benchmarks=benchmark_results,
+                aggregated_metrics=aggregated_metrics,
+                mlflow_experiment_url=experiment_url,
+            )
+
+        # Build model section with proper structure
+        model = Model(
+            url=job_request.model.url,
+            name=job_request.model.name,
+        )
+
+        # Build benchmarks array with proper structure
+        benchmarks = []
+        for benchmark in job_request.benchmarks:
+            benchmark_spec = EvaluationJobBenchmarkSpec(
+                name=benchmark.name,
+                id=benchmark.id,
+                provider_id=benchmark.provider_id,
+                config=benchmark.config,
+            )
+            benchmarks.append(benchmark_spec)
+
+        # Build experiment section
+        experiment = ExperimentConfig(
+            name=job_request.experiment.name,
+            tags=job_request.experiment.tags,
+        )
+
+        # Create the response
+        response = EvaluationJobResource(
+            resource=resource,
+            status=status,
+            results=results_section,
+            model=model,
+            benchmarks=benchmarks,
+            experiment=experiment,
+            timeout_minutes=job_request.timeout_minutes,
+            retry_attempts=job_request.retry_attempts,
+            callback_url=job_request.callback_url,
+        )
+
+        self.logger.info(
+            "Built evaluation job resource response",
+            request_id=str(request_id),
+            overall_status=overall_state,
+            completed_results=len(
+                [r for r in results if r.status == EvaluationStatus.COMPLETED]
+            ),
         )
 
         return response
@@ -118,7 +296,7 @@ class ResponseBuilder:
 
     def _determine_system_state(
         self, status_counts: dict[EvaluationStatus, int], expected_runs: int
-    ) -> str:
+    ) -> Literal["pending", "running", "completed", "failed", "cancelled"]:
         """Determine the overall system state for the response."""
         if not status_counts:
             return "pending"
@@ -137,14 +315,14 @@ class ResponseBuilder:
 
         completed = status_counts.get(EvaluationStatus.COMPLETED, 0)
         if expected_runs and completed >= expected_runs:
-            return "success"
+            return "completed"
 
         return "pending"
 
     def _map_status_to_state(self, status: EvaluationStatus) -> str:
         """Map internal evaluation status to API-facing state string."""
         if status == EvaluationStatus.COMPLETED:
-            return "success"
+            return "completed"
         if status == EvaluationStatus.FAILED:
             return "failed"
         if status == EvaluationStatus.CANCELLED:
@@ -153,7 +331,7 @@ class ResponseBuilder:
 
     def _build_runs(
         self,
-        simple_request: SimpleEvaluationRequest,
+        benchmarks: list[EvaluationJobBenchmarkConfig],
         results: list[EvaluationResult],
     ) -> list[RunStatus]:
         """Build run status objects using user-provided benchmarks and results."""
@@ -162,8 +340,9 @@ class ResponseBuilder:
         }
 
         runs: list[RunStatus] = []
-        for benchmark in simple_request.benchmarks:
-            result = result_lookup.get(benchmark.benchmark_id)
+        for benchmark in benchmarks:
+            benchmark_id = benchmark.id or ""
+            result = result_lookup.get(benchmark_id)
             result_state = (
                 self._map_status_to_state(result.status) if result else "pending"
             )
@@ -172,7 +351,7 @@ class ResponseBuilder:
 
             runs.append(
                 RunStatus(
-                    name=benchmark.benchmark_id,
+                    name=benchmark_id,
                     state=result_state,
                     message=message,
                     logs_path=logs_path,

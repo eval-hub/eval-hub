@@ -10,52 +10,64 @@ from fastapi import (
     BackgroundTasks,
     Depends,
     HTTPException,
+    Path,
     Query,
     Request,
     status,
 )
-from fastapi.responses import JSONResponse
 
 from ..core.config import Settings, get_settings
 from ..core.exceptions import ValidationError
 from ..core.logging import get_logger
 from ..models.evaluation import (
+    # Other evaluation models
     BackendSpec,
     BackendType,
     BenchmarkConfig,
     BenchmarkSpec,
+    Error,
+    EvaluationJobRequest,
+    EvaluationJobResource,
+    EvaluationJobResourceList,
     EvaluationRequest,
-    EvaluationResponse,
     EvaluationResult,
     EvaluationSpec,
     EvaluationStatus,
-    PaginatedEvaluations,
-    PaginationLink,
-    SimpleEvaluationRequest,
+    Resource,
     get_utc_now,
 )
 from ..models.health import HealthResponse
 from ..models.provider import (
-    Collection,
+    Benchmark,
+    BenchmarkReference,
+    BenchmarksList,
+    # Other provider models
     CollectionCreationRequest,
+    CollectionResource,
+    CollectionResourceList,
     CollectionUpdateRequest,
-    ListBenchmarksResponse,
-    ListCollectionsResponse,
-    ListProvidersResponse,
+    PaginationLink,
     Provider,
+    ProviderList,
+    SupportedBenchmark,
 )
 from ..services.executor import EvaluationExecutor
 from ..services.mlflow_client import MLFlowClient
 from ..services.parser import RequestParser
 from ..services.provider_service import ProviderService
 from ..services.response_builder import ResponseBuilder
-from ..utils import utcnow
+from ..utils.datetime_utils import parse_iso_datetime, utcnow
 
 router = APIRouter()
 logger = get_logger(__name__)
 
+# Common responses for OpenAPI documentation
+VALIDATION_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    422: {"model": Error, "description": "Validation Error"}
+}
+
 # Global state for active evaluations and services
-active_evaluations: dict[str, EvaluationResponse] = {}
+active_evaluations: dict[str, EvaluationJobResource] = {}
 evaluation_tasks: dict[str, asyncio.Task[Any]] = {}
 
 
@@ -125,12 +137,13 @@ async def health_check(settings: Settings = Depends(get_settings)) -> HealthResp
 
 @router.post(
     "/evaluations/jobs",
-    response_model=EvaluationResponse,
+    response_model=EvaluationJobResource,
     status_code=status.HTTP_202_ACCEPTED,
     tags=["Evaluations"],
+    responses={422: {"model": Error, "description": "Validation Error"}},
 )
 async def create_evaluation(
-    request: SimpleEvaluationRequest,
+    request: EvaluationJobRequest,
     background_tasks: BackgroundTasks,
     parser: RequestParser = Depends(get_request_parser),
     executor: EvaluationExecutor = Depends(get_evaluation_executor),
@@ -138,38 +151,56 @@ async def create_evaluation(
     response_builder: ResponseBuilder = Depends(get_response_builder),
     settings: Settings = Depends(get_settings),
     provider_service: ProviderService = Depends(get_provider_service),
-) -> EvaluationResponse:
+) -> EvaluationJobResource:
     """Create and execute evaluation request using the simplified benchmark schema."""
     # Generate a unique request ID for this evaluation
     request_id = uuid4()
 
+    # Use incoming request payloads as internal models
+    internal_model = request.model
+    internal_experiment = request.experiment
+    job_benchmarks = request.benchmarks
+
     logger.info(
         "Received evaluation request",
         request_id=str(request_id),
-        benchmark_count=len(request.benchmarks),
-        experiment_name=request.experiment.name,
-        async_mode=request.async_mode,
+        benchmark_count=len(job_benchmarks),
+        experiment_name=internal_experiment.name,
+        async_mode=True,  # Always async in new API
     )
 
     try:
         # Validate benchmarks exist
-        for benchmark in request.benchmarks:
+        for benchmark in job_benchmarks:
+            bench_id = benchmark.id
+            provider_id = benchmark.provider_id
+            if bench_id is None or provider_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Benchmark id and provider_id are required",
+                )
+
             benchmark_detail = provider_service.get_benchmark_by_id(
-                benchmark.provider_id, benchmark.benchmark_id
+                provider_id, bench_id
             )
             if not benchmark_detail:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Benchmark {benchmark.provider_id}::{benchmark.benchmark_id} not found",
+                    detail=f"Benchmark {provider_id}::{bench_id} not found",
                 )
 
-        # Convert SimpleEvaluationRequest to legacy EvaluationRequest format for processing
         # Group benchmarks by provider to create backend specs
         provider_benchmarks: dict[str, list[BenchmarkConfig]] = {}
-        for benchmark in request.benchmarks:
-            if benchmark.provider_id not in provider_benchmarks:
-                provider_benchmarks[benchmark.provider_id] = []
-            provider_benchmarks[benchmark.provider_id].append(benchmark)
+        for benchmark in job_benchmarks:
+            # Convert to BenchmarkConfig for backend processing
+            legacy_benchmark = BenchmarkConfig(
+                benchmark_id=benchmark.id or "",  # Map 'id' to 'benchmark_id'
+                provider_id=benchmark.provider_id or "",
+                config=benchmark.config,
+            )
+            if legacy_benchmark.provider_id not in provider_benchmarks:
+                provider_benchmarks[legacy_benchmark.provider_id] = []
+            provider_benchmarks[legacy_benchmark.provider_id].append(legacy_benchmark)
 
         # Create evaluation spec
         backend_specs = []
@@ -180,6 +211,11 @@ async def create_evaluation(
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Provider {provider_id} not found",
+                )
+            if not provider.provider_type:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Provider {provider_id} missing provider_type",
                 )
 
             # Map provider type to backend type
@@ -198,20 +234,20 @@ async def create_evaluation(
 
             # Convert BenchmarkConfigs to BenchmarkSpecs
             benchmark_specs = []
-            for benchmark in benchmarks:
+            for bench_config in benchmarks:  # type: BenchmarkConfig
                 # Get benchmark details for additional info
                 benchmark_detail = provider_service.get_benchmark_by_id(
-                    benchmark.provider_id, benchmark.benchmark_id
+                    bench_config.provider_id or "", bench_config.benchmark_id or ""
                 )
 
                 benchmark_spec = BenchmarkSpec(
-                    name=benchmark.benchmark_id,
-                    tasks=[benchmark.benchmark_id],
-                    num_fewshot=benchmark.config.get("num_fewshot"),
-                    batch_size=benchmark.config.get("batch_size"),
-                    limit=benchmark.config.get("limit"),
-                    device=benchmark.config.get("device"),
-                    config=benchmark.config,
+                    name=bench_config.benchmark_id or "",
+                    tasks=[bench_config.benchmark_id or ""],
+                    num_fewshot=bench_config.config.get("num_fewshot"),
+                    batch_size=bench_config.config.get("batch_size"),
+                    limit=bench_config.config.get("limit"),
+                    device=bench_config.config.get("device"),
+                    config=bench_config.config,
                 )
                 benchmark_specs.append(benchmark_spec)
 
@@ -225,9 +261,9 @@ async def create_evaluation(
             backend_specs.append(backend_spec)
 
         evaluation_spec = EvaluationSpec(
-            name=request.experiment.name or f"Evaluation-{request_id.hex[:8]}",
-            description=f"Evaluation with {len(request.benchmarks)} benchmarks",
-            model=request.model,
+            name=internal_experiment.name or f"Evaluation-{request_id.hex[:8]}",
+            description=f"Evaluation with {len(job_benchmarks)} benchmarks",
+            model=internal_model,
             backends=backend_specs,
             risk_category=None,
             collection_id=None,
@@ -236,64 +272,48 @@ async def create_evaluation(
         )
 
         # Create legacy evaluation request
-        legacy_request = EvaluationRequest(
+        full_legacy_request = EvaluationRequest(
             request_id=request_id,
             evaluations=[evaluation_spec],
-            experiment=request.experiment,
-            async_mode=request.async_mode,
+            experiment=internal_experiment,
+            async_mode=True,
             callback_url=request.callback_url,
-            created_at=request.created_at,
+            created_at=get_utc_now(),
         )
 
         # Use existing evaluation processing logic
         parsed_request = await parser.parse_evaluation_request(
-            legacy_request, provider_service
+            full_legacy_request, provider_service
         )
 
         # Create MLFlow experiment
         experiment_id = await mlflow_client.create_experiment(parsed_request)
         experiment_url = await mlflow_client.get_experiment_url(experiment_id)
 
-        if request.async_mode:
-            # Initialize response for async execution
-            initial_response = await response_builder.build_response(
-                request_id,
+        # Build evaluation response and store in active evaluations
+        response = await response_builder.build_job_resource_response(
+            request_id,
+            request,
+            [],  # No results yet
+            experiment_url,
+        )
+        active_evaluations[str(request_id)] = response
+
+        # Start background task
+        task = asyncio.create_task(
+            _execute_evaluation_async(
+                full_legacy_request,
                 request,
-                [],  # No results yet
+                experiment_id,
                 experiment_url,
+                executor,
+                mlflow_client,
+                response_builder,
             )
+        )
+        evaluation_tasks[str(request_id)] = task
 
-            # Store in active evaluations
-            active_evaluations[str(request_id)] = initial_response
-
-            # Start background task
-            task = asyncio.create_task(
-                _execute_evaluation_async(
-                    legacy_request,
-                    request,
-                    experiment_id,
-                    experiment_url,
-                    executor,
-                    mlflow_client,
-                    response_builder,
-                )
-            )
-            evaluation_tasks[str(request_id)] = task
-
-            return initial_response
-
-        else:
-            # Synchronous execution
-            results = await _execute_evaluation_sync(
-                legacy_request, experiment_id, executor, mlflow_client
-            )
-
-            # Build final response
-            response = await response_builder.build_response(
-                request_id, request, results, experiment_url
-            )
-
-            return response
+        return response
 
     except ValidationError as e:
         logger.error(
@@ -319,12 +339,15 @@ async def create_evaluation(
 
 
 @router.get(
-    "/evaluations/jobs/{id}", response_model=EvaluationResponse, tags=["Evaluations"]
+    "/evaluations/jobs/{id}",
+    response_model=EvaluationJobResource,
+    tags=["Evaluations"],
+    responses=VALIDATION_ERROR_RESPONSES,
 )
 async def get_evaluation_status(
     id: UUID,
     response_builder: ResponseBuilder = Depends(get_response_builder),
-) -> EvaluationResponse:
+) -> EvaluationJobResource:
     """Get the status of an evaluation request."""
     request_id_str = str(id)
 
@@ -334,91 +357,83 @@ async def get_evaluation_status(
             detail=f"Evaluation request {id} not found",
         )
 
+    # Get the response (now in new format)
     response = active_evaluations[request_id_str]
 
     logger.info(
         "Retrieved evaluation status",
         request_id=request_id_str,
-        status=response.system.status.state,
+        status=response.status.state,
     )
 
+    # Response is already in the correct format
     return response
 
 
 @router.get(
     "/evaluations/jobs",
-    response_model=PaginatedEvaluations,
+    response_model=EvaluationJobResourceList,
     tags=["Evaluations"],
+    responses=VALIDATION_ERROR_RESPONSES,
 )
 async def list_evaluations(
     request: Request,
+    summary: bool = Query(False, description="Return summary information"),
     limit: int = Query(
         50, ge=1, le=100, description="Maximum number of evaluations to return"
     ),
-    offset: int = Query(0, ge=0, description="Offset for pagination"),
+    offset: int = Query(0, ge=0, description="Number of evaluations to skip"),
     status_filter: str | None = Query(None, description="Filter by status"),
-    summary: bool = Query(
-        False, description="If true, return summary view without detailed results"
-    ),
-) -> PaginatedEvaluations:
+) -> EvaluationJobResourceList:
     """List all evaluation requests."""
     evaluations = list(active_evaluations.values())
 
     # Apply status filter
     if status_filter:
-        evaluations = [e for e in evaluations if e.system.status.state == status_filter]
+        evaluations = [e for e in evaluations if e.status.state == status_filter]
 
     total_count = len(evaluations)
 
     # Apply pagination window
     evaluations = evaluations[offset : offset + limit]
 
-    if summary:
-        # Strip detailed results for summary view
-        summarized = []
-        for eval_item in evaluations:
-            eval_copy = eval_item.model_copy(deep=True)
-            eval_copy.results = None
-            summarized.append(eval_copy)
-        evaluations = summarized
-
-    # Build pagination links
-    base_params: dict[str, Any] = {"limit": limit, "summary": summary}
-    if status_filter is not None:
-        base_params["status_filter"] = status_filter
-
-    first_href = str(request.url.include_query_params(offset=0, **base_params))
-    next_href = None
-    next_offset = offset + limit
-    if next_offset < total_count:
-        next_href = str(
-            request.url.include_query_params(offset=next_offset, **base_params)
-        )
+    # Create pagination response (evaluations are already in correct format)
+    base_url = str(request.url).split("?")[0]
+    first_href = f"{base_url}?offset=0&limit={limit}"
+    next_href = (
+        f"{base_url}?offset={offset + limit}&limit={limit}"
+        if offset + limit < total_count
+        else None
+    )
 
     logger.info(
         "Listed evaluations",
         total_count=total_count,
         returned_count=len(evaluations),
         status_filter=status_filter,
-        offset=offset,
         limit=limit,
         summary=summary,
     )
 
-    return PaginatedEvaluations(
-        first=PaginationLink(href=first_href),
-        next=PaginationLink(href=next_href) if next_href else None,
+    return EvaluationJobResourceList(
+        first={"href": first_href},
+        next={"href": next_href} if next_href else None,
         limit=limit,
         total_count=total_count,
         items=evaluations,
     )
 
 
-@router.delete("/evaluations/jobs/{id}", tags=["Evaluations"])
+@router.delete(
+    "/evaluations/jobs/{id}",
+    status_code=status.HTTP_204_NO_CONTENT,  # Explicitly set 204 status code
+    tags=["Evaluations"],
+    responses=VALIDATION_ERROR_RESPONSES,
+)
 async def cancel_evaluation(
     id: UUID,
     executor: EvaluationExecutor = Depends(get_evaluation_executor),
-) -> JSONResponse:
+) -> None:
     """Cancel a running evaluation."""
     request_id_str = str(id)
 
@@ -436,50 +451,12 @@ async def cancel_evaluation(
 
     # Update status
     response = active_evaluations[request_id_str]
-    response.system.status.state = "cancelled"
-    response.system.completed_at = get_utc_now()
+    response.status.state = "cancelled"
+    response.resource.updated_at = get_utc_now()
 
     logger.info("Cancelled evaluation", request_id=request_id_str)
 
-    return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content={"message": f"Evaluation {id} cancelled successfully"},
-    )
-
-
-@router.get("/evaluations/jobs/{id}/summary", tags=["Evaluations"])
-async def get_evaluation_summary(
-    id: UUID,
-    response_builder: ResponseBuilder = Depends(get_response_builder),
-) -> dict[str, Any]:
-    """Get a summary of an evaluation request."""
-    request_id_str = str(id)
-
-    if request_id_str not in active_evaluations:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Evaluation request {id} not found",
-        )
-
-    response = active_evaluations[request_id_str]
-
-    # Create a mock request for summary building
-    # In a real implementation, you'd store the original request
-    mock_request = EvaluationRequest(
-        request_id=id,
-        evaluations=[],  # Would be populated from stored data
-        created_at=response.system.created_at,
-        experiment=response.experiment,
-        callback_url=response.callback_url,
-    )
-
-    summary = await response_builder.build_summary_response(
-        mock_request, response.evaluation_results
-    )
-
-    logger.info("Generated evaluation summary", request_id=request_id_str)
-
-    return summary
+    # FastAPI automatically returns 204 with None return and status_code=204 in decorator
 
 
 @router.get("/metrics/system")
@@ -496,7 +473,8 @@ async def get_system_metrics(
         "memory_usage": {
             "active_evaluations_mb": len(active_evaluations) * 0.1,  # Rough estimation
             "cached_results_mb": sum(
-                len(r.evaluation_results) for r in active_evaluations.values()
+                len(r.results.benchmarks) if r.results else 0
+                for r in active_evaluations.values()
             )
             * 0.01,
         },
@@ -506,7 +484,7 @@ async def get_system_metrics(
     # Count evaluations by status
     status_breakdown: dict[str, int] = {}
     for response in active_evaluations.values():
-        status_str = response.system.status.state
+        status_str = response.status.state
         status_breakdown[status_str] = status_breakdown.get(status_str, 0) + 1
     metrics["status_breakdown"] = status_breakdown
 
@@ -516,48 +494,84 @@ async def get_system_metrics(
 # Provider and Benchmark Management Endpoints
 
 
-@router.get(
-    "/evaluations/providers", response_model=ListProvidersResponse, tags=["Providers"]
-)
+@router.get("/evaluations/providers", response_model=ProviderList, tags=["Providers"])
 async def list_providers(
     provider_service: ProviderService = Depends(get_provider_service),
-) -> ListProvidersResponse:
+) -> ProviderList:
     """List all registered evaluation providers."""
     logger.info("Listing all evaluation providers")
-    return provider_service.get_all_providers()
+
+    # Get all providers from service
+    providers = provider_service.get_all_providers()
+
+    # Convert to API format
+    provider_items = []
+    for provider in providers:
+        supported_benchmarks = [
+            SupportedBenchmark(id=benchmark.benchmark_id)
+            for benchmark in provider.benchmarks
+        ]
+
+        provider_item = Provider(
+            id=provider.provider_id,
+            label=provider.provider_name,
+            supported_benchmarks=supported_benchmarks,
+        )
+        provider_items.append(provider_item)
+
+    return ProviderList(
+        total_count=len(provider_items),
+        items=provider_items,
+    )
 
 
 @router.get(
-    "/evaluations/providers/{provider_id}", response_model=Provider, tags=["Providers"]
+    "/evaluations/providers/{id}",
+    response_model=Provider,
+    tags=["Providers"],
+    responses=VALIDATION_ERROR_RESPONSES,
+    operation_id="get_provider_api_v1_evaluations_providers__provider_id__get",
 )
 async def get_provider(
-    provider_id: str,
+    id: str = Path(..., title="Provider Id"),
     provider_service: ProviderService = Depends(get_provider_service),
 ) -> Provider:
     """Get details of a specific provider."""
-    provider = provider_service.get_provider_by_id(provider_id)
+    provider = provider_service.get_provider_by_id(id)
     if not provider:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Provider {provider_id} not found",
+            detail=f"Provider {id} not found",
         )
 
-    logger.info("Retrieved provider details", provider_id=provider_id)
-    return provider
+    logger.info("Retrieved provider details", provider_id=id)
+
+    # Convert to simplified format
+    supported_benchmarks = [
+        SupportedBenchmark(id=benchmark.benchmark_id)
+        for benchmark in provider.benchmarks
+    ]
+
+    return Provider(
+        id=provider.provider_id,
+        label=provider.provider_name,
+        supported_benchmarks=supported_benchmarks,
+    )
 
 
 @router.get(
     "/evaluations/benchmarks",
-    response_model=ListBenchmarksResponse,
+    response_model=BenchmarksList,
     tags=["Benchmarks"],
+    responses=VALIDATION_ERROR_RESPONSES,
 )
 async def list_all_benchmarks(
     provider_id: str | None = Query(None, description="Filter by provider ID"),
     category: str | None = Query(None, description="Filter by benchmark category"),
     tags: str | None = Query(None, description="Filter by tags (comma-separated)"),
     provider_service: ProviderService = Depends(get_provider_service),
-) -> ListBenchmarksResponse:
-    """List all available benchmarks across providers (similar to Llama Stack format)."""
+) -> BenchmarksList:
+    """List all available benchmarks across providers (simplified format)."""
     logger.info(
         "Listing benchmarks", provider_id=provider_id, category=category, tags=tags
     )
@@ -569,92 +583,210 @@ async def list_all_benchmarks(
             category=category, provider_id=provider_id, tags=tag_list
         )
 
-        # Convert to Llama Stack format
+        # Convert to simplified format
         benchmarks = []
         for benchmark_detail in filtered_benchmarks:
-            benchmark_dict = {
-                "benchmark_id": f"{benchmark_detail.provider_id}::{benchmark_detail.benchmark_id}",
-                "provider_id": benchmark_detail.provider_id,
-                "name": benchmark_detail.name,
-                "description": benchmark_detail.description,
-                "category": benchmark_detail.category,
-                "metrics": benchmark_detail.metrics,
-                "num_few_shot": benchmark_detail.num_few_shot,
-                "dataset_size": benchmark_detail.dataset_size,
-                "tags": benchmark_detail.tags,
-            }
-            benchmarks.append(benchmark_dict)
+            benchmarks.append(
+                Benchmark(
+                    id=benchmark_detail.benchmark_id,
+                    provider_id=benchmark_detail.provider_id,
+                    label=benchmark_detail.name,
+                    description=benchmark_detail.description,
+                    category=benchmark_detail.category,
+                    metrics=benchmark_detail.metrics,
+                    num_few_shot=benchmark_detail.num_few_shot,
+                    dataset_size=benchmark_detail.dataset_size,
+                    tags=benchmark_detail.tags,
+                )
+            )
 
-        provider_ids: list[str] = [
-            str(b["provider_id"]) for b in benchmarks if "provider_id" in b
-        ]
-
-        return ListBenchmarksResponse(
-            benchmarks=benchmarks,
+        # Build the simplified response (no providers_included field)
+        return BenchmarksList(
+            items=benchmarks,
             total_count=len(benchmarks),
-            providers_included=list(set(provider_ids)),
         )
     else:
-        # Return all benchmarks
-        return provider_service.get_all_benchmarks()
+        # Get all benchmarks and convert to simplified format
+        full_response = provider_service.get_all_benchmarks()
+
+        # Convert to simplified benchmarks
+        simple_benchmarks = []
+        for benchmark in full_response.items:
+            simple_benchmarks.append(
+                Benchmark(
+                    id=benchmark.benchmark_id,
+                    provider_id=benchmark.provider_id,
+                    label=benchmark.name,
+                    description=benchmark.description,
+                    category=benchmark.category,
+                    metrics=benchmark.metrics,
+                    num_few_shot=benchmark.num_few_shot,
+                    dataset_size=benchmark.dataset_size,
+                    tags=benchmark.tags,
+                )
+            )
+
+        return BenchmarksList(
+            items=simple_benchmarks,
+            total_count=full_response.total_count,
+        )
 
 
 @router.get(
     "/evaluations/collections",
-    response_model=ListCollectionsResponse,
+    response_model=CollectionResourceList,
     tags=["Collections"],
 )
 async def list_collections(
     provider_service: ProviderService = Depends(get_provider_service),
-) -> ListCollectionsResponse:
+) -> CollectionResourceList:
     """List all benchmark collections."""
     logger.info("Listing all benchmark collections")
-    return provider_service.get_all_collections()
+
+    # Get legacy response
+    legacy_response = provider_service.get_all_collections()
+
+    # Convert to simplified format
+    simple_collection_resources = []
+    for collection in legacy_response.collections:
+        # Handle timestamps - parse strings to datetime or use current time for None values
+        now = utcnow()
+
+        created_at = now
+        if collection.created_at is not None:
+            try:
+                created_at = parse_iso_datetime(collection.created_at)
+            except ValueError:
+                # If parsing fails, fall back to current time
+                created_at = now
+
+        updated_at = now
+        if collection.updated_at is not None:
+            try:
+                updated_at = parse_iso_datetime(collection.updated_at)
+            except ValueError:
+                # If parsing fails, fall back to current time
+                updated_at = now
+
+        # Convert benchmarks to simplified format
+        simple_benchmarks = []
+        for benchmark in collection.benchmarks:
+            simple_benchmark = BenchmarkReference(
+                provider_id=benchmark.provider_id,
+                id=benchmark.benchmark_id,  # Use alias mapping
+                weight=benchmark.weight,
+                config=benchmark.config,
+            )
+            simple_benchmarks.append(simple_benchmark)
+
+        simple_collection_resource = CollectionResource(
+            resource=Resource(
+                id=collection.collection_id,
+                created_at=created_at,
+                updated_at=updated_at,
+            ),
+            name=collection.name,
+            description=collection.description,
+            tags=collection.tags,
+            custom=collection.metadata,  # Expose metadata as custom field
+            benchmarks=simple_benchmarks,
+        )
+        simple_collection_resources.append(simple_collection_resource)
+
+    return CollectionResourceList(
+        first=PaginationLink(href="/api/v1/evaluations/collections"),
+        next=None,  # No pagination in simple implementation
+        limit=len(simple_collection_resources),
+        total_count=legacy_response.total_collections,
+        items=simple_collection_resources,
+        # No collections field (removing duplicate)
+    )
 
 
 @router.get(
-    "/evaluations/collections/{collection_id}",
-    response_model=Collection,
+    "/evaluations/collections/{id}",  # Changed from collection_id to id
+    response_model=CollectionResource,
     tags=["Collections"],
+    responses=VALIDATION_ERROR_RESPONSES,
+    operation_id="get_collection_api_v1_evaluations_collections__collection_id__get",
 )
 async def get_collection(
-    collection_id: str,
+    id: str = Path(..., title="Collection Id"),  # Changed from collection_id to id
     provider_service: ProviderService = Depends(get_provider_service),
-) -> Collection:
+) -> CollectionResource:
     """Get details of a specific collection."""
-    collection = provider_service.get_collection_by_id(collection_id)
+    collection = provider_service.get_collection_by_id(id)
     if not collection:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Collection {collection_id} not found",
+            detail=f"Collection {id} not found",
         )
 
-    logger.info("Retrieved collection details", collection_id=collection_id)
-    return collection
+    logger.info("Retrieved collection details", collection_id=id)
+
+    # Convert to new Resource format
+    collection_resource = CollectionResource(
+        resource=Resource(
+            id=collection.collection_id,
+            created_at=parse_iso_datetime(collection.created_at)
+            if collection.created_at
+            else utcnow(),
+            updated_at=parse_iso_datetime(collection.updated_at)
+            if collection.updated_at
+            else utcnow(),
+        ),
+        name=collection.name,
+        description=collection.description,
+        tags=collection.tags,
+        custom=collection.metadata,
+        benchmarks=collection.benchmarks,
+    )
+
+    return collection_resource
 
 
 @router.post(
     "/evaluations/collections",
-    response_model=Collection,
+    response_model=CollectionResource,
     status_code=status.HTTP_201_CREATED,
     tags=["Collections"],
+    responses=VALIDATION_ERROR_RESPONSES,
 )
 async def create_collection(
     request: CollectionCreationRequest,
     provider_service: ProviderService = Depends(get_provider_service),
-) -> Collection:
+) -> CollectionResource:
     """Create a new collection."""
     try:
         collection = provider_service.create_collection(request)
         logger.info(
             "Collection created successfully",
-            collection_id=request.collection_id,
+            collection_id=collection.collection_id,
         )
-        return collection
+
+        # Convert to new Resource format
+        collection_resource = CollectionResource(
+            resource=Resource(
+                id=collection.collection_id,
+                created_at=parse_iso_datetime(collection.created_at)
+                if collection.created_at
+                else utcnow(),
+                updated_at=parse_iso_datetime(collection.updated_at)
+                if collection.updated_at
+                else utcnow(),
+            ),
+            name=collection.name,
+            description=collection.description,
+            tags=collection.tags,
+            custom=collection.metadata,
+            benchmarks=collection.benchmarks,
+        )
+
+        return collection_resource
     except ValueError as e:
         logger.error(
             "Failed to create collection",
-            collection_id=request.collection_id,
+            collection_id=request.name,  # Changed from collection_id since request doesn't have collection_id
             error=str(e),
         )
         raise HTTPException(
@@ -664,7 +796,7 @@ async def create_collection(
     except Exception as e:
         logger.error(
             "Unexpected error creating collection",
-            collection_id=request.collection_id,
+            collection_id=request.name,
             error=str(e),
         )
         raise HTTPException(
@@ -673,74 +805,89 @@ async def create_collection(
         ) from e
 
 
-@router.put(
-    "/evaluations/collections/{collection_id}",
-    response_model=Collection,
-    tags=["Collections"],
-)
-async def update_collection(
-    collection_id: str,
-    request: CollectionUpdateRequest,
-    provider_service: ProviderService = Depends(get_provider_service),
-) -> Collection:
-    """Update an existing collection."""
-    try:
-        collection = provider_service.update_collection(collection_id, request)
-        if not collection:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Collection {collection_id} not found",
-            )
-
-        logger.info("Collection updated successfully", collection_id=collection_id)
-        return collection
-    except ValueError as e:
-        logger.error(
-            "Failed to update collection",
-            collection_id=collection_id,
-            error=str(e),
-        )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        ) from e
-    except Exception as e:
-        logger.error(
-            "Unexpected error updating collection",
-            collection_id=collection_id,
-            error=str(e),
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update collection: {str(e)}",
-        ) from e
+# Legacy PUT endpoint removed - use PATCH instead
 
 
 @router.patch(
-    "/evaluations/collections/{collection_id}",
-    response_model=Collection,
+    "/evaluations/collections/{id}",  # Changed from collection_id to id
+    response_model=CollectionResource,
     tags=["Collections"],
+    responses=VALIDATION_ERROR_RESPONSES,
+    operation_id="patch_collection_api_v1_evaluations_collections__collection_id__patch",
 )
 async def patch_collection(
-    collection_id: str,
     request: CollectionUpdateRequest,
+    id: str = Path(..., title="Collection Id"),
     provider_service: ProviderService = Depends(get_provider_service),
-) -> Collection:
+) -> CollectionResource:
     """Partially update an existing collection."""
     try:
-        collection = provider_service.update_collection(collection_id, request)
+        # Get the existing collection first
+        collection = provider_service.get_collection_by_id(id)
         if not collection:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Collection {collection_id} not found",
+                detail=f"Collection {id} not found",
             )
 
-        logger.info("Collection patched successfully", collection_id=collection_id)
-        return collection
-    except ValueError as e:
-        logger.error(
-            "Failed to patch collection", collection_id=collection_id, error=str(e)
+        # Apply updates directly from the request
+        update_data: dict[str, Any] = {}
+        if request.name is not None:
+            update_data["name"] = request.name
+        if request.description is not None:
+            update_data["description"] = request.description
+        if request.tags is not None:
+            update_data["tags"] = request.tags
+        if request.metadata is not None:
+            update_data["metadata"] = request.metadata
+        if request.benchmarks is not None:
+            update_data["benchmarks"] = request.benchmarks
+
+        # Create updated collection object
+        updated_collection = collection.model_copy(update=update_data)
+
+        # For demonstration, we'll just update the updated_at timestamp
+        updated_collection.updated_at = get_utc_now().isoformat()
+
+        logger.info("Collection patched successfully", collection_id=id)
+
+        # Handle timestamps - parse strings to datetime or use current time for None values
+        now = utcnow()
+
+        created_at = now
+        if updated_collection.created_at is not None:
+            try:
+                created_at = parse_iso_datetime(updated_collection.created_at)
+            except ValueError:
+                # If parsing fails, fall back to current time
+                created_at = now
+
+        updated_at = now
+        if updated_collection.updated_at is not None:
+            try:
+                updated_at = parse_iso_datetime(updated_collection.updated_at)
+            except ValueError:
+                # If parsing fails, fall back to current time
+                updated_at = now
+
+        # Convert to new Resource format
+        collection_resource = CollectionResource(
+            resource=Resource(
+                id=updated_collection.collection_id,
+                created_at=created_at,
+                updated_at=updated_at,
+            ),
+            name=updated_collection.name,
+            description=updated_collection.description,
+            tags=updated_collection.tags,
+            custom=updated_collection.metadata,
+            benchmarks=updated_collection.benchmarks,
         )
+
+        return collection_resource
+
+    except ValueError as e:
+        logger.error("Failed to patch collection", collection_id=id, error=str(e))
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
@@ -748,7 +895,7 @@ async def patch_collection(
     except Exception as e:
         logger.error(
             "Unexpected error patching collection",
-            collection_id=collection_id,
+            collection_id=id,
             error=str(e),
         )
         raise HTTPException(
@@ -757,29 +904,34 @@ async def patch_collection(
         ) from e
 
 
-@router.delete("/evaluations/collections/{collection_id}", tags=["Collections"])
+@router.delete(
+    "/evaluations/collections/{id}",
+    status_code=status.HTTP_204_NO_CONTENT,  # Explicitly set 204 status code
+    tags=["Collections"],
+    operation_id="delete_collection_api_v1_evaluations_collections__collection_id__delete",
+    responses=VALIDATION_ERROR_RESPONSES,
+)
 async def delete_collection(
-    collection_id: str,
+    id: str = Path(..., title="Collection Id"),
     provider_service: ProviderService = Depends(get_provider_service),
-) -> JSONResponse:
+) -> None:
     """Delete a collection."""
     try:
-        success = provider_service.delete_collection(collection_id)
+        success = provider_service.delete_collection(id)
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Collection {collection_id} not found",
+                detail=f"Collection {id} not found",
             )
 
-        logger.info("Collection deleted successfully", collection_id=collection_id)
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={"message": f"Collection {collection_id} deleted successfully"},
-        )
+        logger.info("Collection deleted successfully", collection_id=id)
+
+        # FastAPI automatically returns 204 with None return and status_code=204 in decorator
+
     except ValueError as e:
         logger.error(
             "Failed to delete collection",
-            collection_id=collection_id,
+            collection_id=id,
             error=str(e),
         )
         raise HTTPException(
@@ -789,7 +941,7 @@ async def delete_collection(
     except Exception as e:
         logger.error(
             "Unexpected error deleting collection",
-            collection_id=collection_id,
+            collection_id=id,
             error=str(e),
         )
         raise HTTPException(
@@ -800,7 +952,7 @@ async def delete_collection(
 
 async def _execute_evaluation_async(
     request: EvaluationRequest,
-    simple_request: SimpleEvaluationRequest,
+    job_request: EvaluationJobRequest,
     experiment_id: str,
     experiment_url: str,
     executor: EvaluationExecutor,
@@ -814,7 +966,7 @@ async def _execute_evaluation_async(
         # Progress callback to update stored response
         def progress_callback_sync(eval_id: str, progress: float, message: str) -> None:
             if request_id_str in active_evaluations:
-                active_evaluations[request_id_str].system.status.state = "running"
+                active_evaluations[request_id_str].status.state = "running"
 
         # Execute evaluations
         results = await executor.execute_evaluation_request(
@@ -827,8 +979,8 @@ async def _execute_evaluation_async(
                 await mlflow_client.log_evaluation_result(result)
 
         # Build final response
-        final_response = await response_builder.build_response(
-            request.request_id, simple_request, results, experiment_url
+        final_response = await response_builder.build_job_resource_response(
+            request.request_id, job_request, results, experiment_url
         )
 
         # Update stored response
@@ -849,9 +1001,9 @@ async def _execute_evaluation_async(
         # Update response with error
         if request_id_str in active_evaluations:
             response = active_evaluations[request_id_str]
-            response.system.status.state = "failed"
-            response.system.status.message = str(e)
-            response.system.completed_at = get_utc_now()
+            response.status.state = "failed"
+            response.status.message = str(e)
+            response.resource.updated_at = get_utc_now()
 
     finally:
         # Clean up task reference
