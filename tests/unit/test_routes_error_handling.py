@@ -38,8 +38,11 @@ def client(test_settings):
 class TestRoutesErrorHandling:
     """Test error handling paths in API routes."""
 
+    @pytest.mark.skip(
+        reason="Benchmark validation removed - any benchmark ID now allowed"
+    )
     def test_create_evaluation_benchmark_not_found(self, client):
-        """Test creating evaluation with non-existent benchmark."""
+        """Test creating evaluation with non-existent benchmark - DISABLED: validation removed."""
         request_data = {
             "model": {"url": "http://test-server:8000", "name": "test-model"},
             "benchmarks": [
