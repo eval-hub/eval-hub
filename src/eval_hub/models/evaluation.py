@@ -305,8 +305,8 @@ class EvaluationRequest(BaseModel):
     evaluations: list[EvaluationSpec] = Field(
         ..., description="List of evaluations to run"
     )
-    experiment: ExperimentConfig = Field(
-        ..., description="Experiment configuration for MLFlow tracking"
+    experiment: ExperimentConfig | None = Field(
+        None, description="Experiment configuration for MLFlow tracking (optional)"
     )
     async_mode: bool = Field(
         default=True, description="Whether to run evaluations asynchronously"
@@ -367,9 +367,9 @@ class EvaluationJobRequest(BaseModel):
         title="Benchmarks",
         description="List of benchmarks to evaluate",
     )
-    experiment: ExperimentConfig = Field(
-        ...,
-        description="Experiment configuration for MLFlow tracking",
+    experiment: ExperimentConfig | None = Field(
+        None,
+        description="Experiment configuration for MLFlow tracking (optional)",
     )
     timeout_minutes: int = Field(
         default=60,
@@ -461,7 +461,9 @@ class EvaluationJobResource(BaseModel):
     benchmarks: list[EvaluationJobBenchmarkSpec] = Field(
         ..., description="Benchmark configurations"
     )
-    experiment: ExperimentConfig = Field(..., description="Experiment configuration")
+    experiment: ExperimentConfig | None = Field(
+        None, description="Experiment configuration (optional)"
+    )
     timeout_minutes: int = Field(default=60, description="Timeout in minutes")
     retry_attempts: int = Field(default=3, description="Retry attempts")
     callback_url: str | None = Field(None, description="Callback URL")
@@ -607,8 +609,8 @@ class EvaluationResponse(BaseModel):
     benchmarks: list[BenchmarkConfig] = Field(
         ..., description="Benchmarks provided in the request"
     )
-    experiment: ExperimentConfig = Field(
-        ..., description="Experiment configuration provided by the user"
+    experiment: ExperimentConfig | None = Field(
+        None, description="Experiment configuration provided by the user (optional)"
     )
     timeout_minutes: int = Field(
         ..., description="Timeout for the entire evaluation (user-provided)"

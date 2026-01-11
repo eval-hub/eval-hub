@@ -165,7 +165,7 @@ async def create_evaluation(
         "Received evaluation request",
         request_id=str(request_id),
         benchmark_count=len(job_benchmarks),
-        experiment_name=internal_experiment.name,
+        experiment_name=internal_experiment.name if internal_experiment else None,
         async_mode=True,  # Always async in new API
     )
 
@@ -260,8 +260,15 @@ async def create_evaluation(
             )
             backend_specs.append(backend_spec)
 
+        # Determine evaluation name
+        evaluation_name = (
+            internal_experiment.name
+            if internal_experiment
+            else f"Evaluation-{request_id.hex[:8]}"
+        )
+
         evaluation_spec = EvaluationSpec(
-            name=internal_experiment.name or f"Evaluation-{request_id.hex[:8]}",
+            name=evaluation_name,
             description=f"Evaluation with {len(job_benchmarks)} benchmarks",
             model=internal_model,
             backends=backend_specs,
@@ -286,9 +293,12 @@ async def create_evaluation(
             full_legacy_request, provider_service
         )
 
-        # Create MLFlow experiment
-        experiment_id = await mlflow_client.create_experiment(parsed_request)
-        experiment_url = await mlflow_client.get_experiment_url(experiment_id)
+        # Conditionally create MLFlow experiment only if experiment config is provided
+        experiment_id = None
+        experiment_url = None
+        if internal_experiment is not None:
+            experiment_id = await mlflow_client.create_experiment(parsed_request)
+            experiment_url = await mlflow_client.get_experiment_url(experiment_id)
 
         # Build evaluation response and store in active evaluations
         response = await response_builder.build_job_resource_response(
@@ -953,8 +963,8 @@ async def delete_collection(
 async def _execute_evaluation_async(
     request: EvaluationRequest,
     job_request: EvaluationJobRequest,
-    experiment_id: str,
-    experiment_url: str,
+    experiment_id: str | None,
+    experiment_url: str | None,
     executor: EvaluationExecutor,
     mlflow_client: MLFlowClient,
     response_builder: ResponseBuilder,
@@ -970,13 +980,14 @@ async def _execute_evaluation_async(
 
         # Execute evaluations
         results = await executor.execute_evaluation_request(
-            request, progress_callback_sync, mlflow_client
+            request, progress_callback_sync, mlflow_client if experiment_id else None
         )
 
-        # Log results to MLFlow
-        for result in results:
-            if result.mlflow_run_id:
-                await mlflow_client.log_evaluation_result(result)
+        # Log results to MLFlow only if experiment_id is provided
+        if experiment_id is not None:
+            for result in results:
+                if result.mlflow_run_id:
+                    await mlflow_client.log_evaluation_result(result)
 
         # Build final response
         final_response = await response_builder.build_job_resource_response(
@@ -1013,17 +1024,20 @@ async def _execute_evaluation_async(
 
 async def _execute_evaluation_sync(
     request: EvaluationRequest,
-    experiment_id: str,
+    experiment_id: str | None,
     executor: EvaluationExecutor,
     mlflow_client: MLFlowClient,
 ) -> list[EvaluationResult]:
     """Execute evaluation synchronously."""
     # Execute evaluations
-    results = await executor.execute_evaluation_request(request, None, mlflow_client)
+    results = await executor.execute_evaluation_request(
+        request, None, mlflow_client if experiment_id else None
+    )
 
-    # Log results to MLFlow
-    for result in results:
-        if result.mlflow_run_id:
-            await mlflow_client.log_evaluation_result(result)
+    # Log results to MLFlow only if experiment_id is provided
+    if experiment_id is not None:
+        for result in results:
+            if result.mlflow_run_id:
+                await mlflow_client.log_evaluation_result(result)
 
     return results

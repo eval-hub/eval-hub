@@ -254,11 +254,13 @@ class ResponseBuilder:
             )
             benchmarks.append(benchmark_spec)
 
-        # Build experiment section
-        experiment = ExperimentConfig(
-            name=job_request.experiment.name,
-            tags=job_request.experiment.tags,
-        )
+        # Build experiment section - only if experiment exists
+        experiment = None
+        if job_request.experiment:
+            experiment = ExperimentConfig(
+                name=job_request.experiment.name,
+                tags=job_request.experiment.tags,
+            )
 
         # Create the response
         response = EvaluationJobResource(

@@ -58,7 +58,7 @@ class EvaluationExecutor:
                     evaluation,
                     progress_callback,
                     mlflow_client,
-                    request.experiment.name,
+                    request.experiment.name if request.experiment else None,
                 )
             )
             tasks.append(task)
