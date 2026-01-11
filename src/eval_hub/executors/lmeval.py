@@ -199,7 +199,7 @@ class LMEvalExecutor(TrackedExecutor):
                     cr_name=cr_name,
                 )
 
-                # Poll for completion and retrieve results (with tracking)
+                # Wait for CR completion and get results synchronously
                 cr_result = await self._wait_for_cr_completion_and_get_results(
                     cr_name, context, progress_callback, run_id
                 )

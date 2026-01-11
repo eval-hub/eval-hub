@@ -4,6 +4,7 @@ import asyncio
 import builtins
 import time
 from collections.abc import Callable
+from typing import Any
 from uuid import UUID
 
 from ..core.config import Settings
@@ -58,7 +59,7 @@ class EvaluationExecutor:
                     evaluation,
                     progress_callback,
                     mlflow_client,
-                    request.experiment.name,
+                    request.experiment.name if request.experiment else None,
                 )
             )
             tasks.append(task)
@@ -264,7 +265,9 @@ class EvaluationExecutor:
                     mlflow_client,
                     experiment_name,
                 )
-                results.append(result)
+                results.extend(
+                    self._expand_combined_lmeval_results(result, backend.benchmarks)
+                )
 
             except Exception as e:
                 self.logger.error(
@@ -274,19 +277,20 @@ class EvaluationExecutor:
                     error=str(e),
                 )
                 # Create error result for the combined execution
-                error_result = EvaluationResult(
-                    evaluation_id=evaluation.id,
-                    provider_id=backend.name,
-                    benchmark_id=f"collection-{'-'.join([b.name for b in backend.benchmarks])}",
-                    benchmark_name=f"collection-{'-'.join([b.name for b in backend.benchmarks])}",
-                    status=EvaluationStatus.FAILED,
-                    error_message=str(e),
-                    started_at=utcnow(),
-                    completed_at=utcnow(),
-                    duration_seconds=0.0,
-                    mlflow_run_id=None,
-                )
-                results.append(error_result)
+                for benchmark in backend.benchmarks:
+                    error_result = EvaluationResult(
+                        evaluation_id=evaluation.id,
+                        provider_id=backend.name,
+                        benchmark_id=benchmark.name,
+                        benchmark_name=benchmark.name,
+                        status=EvaluationStatus.FAILED,
+                        error_message=str(e),
+                        started_at=utcnow(),
+                        completed_at=utcnow(),
+                        duration_seconds=0.0,
+                        mlflow_run_id=None,
+                    )
+                    results.append(error_result)
         else:
             # Original behavior for non-LMEval backends - execute each benchmark individually
             for benchmark in backend.benchmarks:
@@ -324,6 +328,44 @@ class EvaluationExecutor:
                     results.append(error_result)
 
         return results
+
+    def _expand_combined_lmeval_results(
+        self, result: EvaluationResult, benchmarks: list[BenchmarkSpec]
+    ) -> list[EvaluationResult]:
+        if len(benchmarks) <= 1:
+            return [result]
+
+        metrics = result.metrics or {}
+        expanded_results = []
+
+        for benchmark in benchmarks:
+            benchmark_metrics: dict[str, Any] = {}
+            matched = False
+            for task in benchmark.tasks:
+                prefix = f"{task}_"
+                for metric_name, metric_value in metrics.items():
+                    if metric_name.startswith(prefix):
+                        matched = True
+                        stripped_name = metric_name[len(prefix) :]
+                        if stripped_name in benchmark_metrics:
+                            benchmark_metrics[metric_name] = metric_value
+                        else:
+                            benchmark_metrics[stripped_name] = metric_value
+
+            if not matched:
+                benchmark_metrics = metrics.copy()
+
+            expanded_results.append(
+                result.model_copy(
+                    update={
+                        "benchmark_id": benchmark.name,
+                        "benchmark_name": benchmark.name,
+                        "metrics": benchmark_metrics,
+                    }
+                )
+            )
+
+        return expanded_results
 
     async def _execute_benchmark(
         self,
@@ -676,6 +718,80 @@ class EvaluationExecutor:
     async def get_active_evaluations(self) -> list[TaskInfo]:
         """Get list of currently active evaluations."""
         return list(self.active_tasks.values())
+
+    async def check_and_update_evaluation_status(
+        self, evaluation_id: str, current_response: Any
+    ) -> Any | None:
+        """Check if a pending evaluation has completed and update its status.
+
+        This handles multi-benchmark evaluations by checking if all benchmarks have
+        completed based on the results counts.
+
+        Args:
+            evaluation_id: The evaluation ID to check
+            current_response: Current EvaluationJobResource response
+
+        Returns:
+            Updated response if evaluation should be marked completed, None if still pending
+        """
+        try:
+            # Skip if not pending
+            if current_response.status.state != "pending":
+                return None
+
+            # Check if we have results section with evaluation counts
+            if not hasattr(current_response, "results") or not current_response.results:
+                return None
+
+            results = current_response.results
+            total_evals = getattr(results, "total_evaluations", 0)
+            completed_evals = getattr(results, "completed_evaluations", 0)
+            failed_evals = getattr(results, "failed_evaluations", 0)
+
+            # If all evaluations are done (completed + failed >= total), mark as completed
+            if total_evals > 0 and (completed_evals + failed_evals >= total_evals):
+                from copy import deepcopy
+
+                updated_response = deepcopy(current_response)
+
+                # Determine overall status
+                if failed_evals > 0:
+                    updated_response.status.state = "completed"
+                    updated_response.status.message = f"Evaluation completed with mixed results: {completed_evals} succeeded, {failed_evals} failed"
+                else:
+                    updated_response.status.state = "completed"
+                    updated_response.status.message = (
+                        f"All {completed_evals} evaluations completed successfully"
+                    )
+
+                # Update benchmark statuses to match
+                if hasattr(updated_response.status, "benchmarks"):
+                    for benchmark_status in updated_response.status.benchmarks:
+                        if benchmark_status.state == "pending":
+                            # Mark remaining as completed (they should have results by now)
+                            benchmark_status.state = "completed"
+                            benchmark_status.message = "Evaluation completed"
+
+                self.logger.info(
+                    "Updated evaluation status from pending to completed",
+                    evaluation_id=evaluation_id,
+                    total=total_evals,
+                    completed=completed_evals,
+                    failed=failed_evals,
+                )
+
+                return updated_response
+
+            # Still have pending evaluations
+            return None
+
+        except Exception as e:
+            self.logger.error(
+                "Error checking evaluation status",
+                evaluation_id=evaluation_id,
+                error=str(e),
+            )
+            return None
 
     async def cancel_evaluation(self, evaluation_id: UUID) -> bool:
         """Cancel a running evaluation."""

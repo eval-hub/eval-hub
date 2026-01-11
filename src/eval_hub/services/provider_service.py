@@ -240,13 +240,8 @@ class ProviderService:
 
         new_id = uuid4().hex
 
-        # Validate that all benchmarks exist
-        for benchmark_ref in request.benchmarks:
-            composite_key = f"{benchmark_ref.provider_id}::{benchmark_ref.benchmark_id}"
-            if composite_key not in self._benchmarks_by_id:
-                raise ValueError(
-                    f"Benchmark {benchmark_ref.provider_id}::{benchmark_ref.benchmark_id} not found"
-                )
+        # Note: Allow any benchmark ID, even if not in predefined list
+        # Validation removed to support custom/external benchmarks
 
         # Create the collection
         now = datetime.utcnow().isoformat() + "Z"
@@ -282,15 +277,8 @@ class ProviderService:
             return None
 
         # Validate benchmarks if being updated
-        if request.benchmarks is not None:
-            for benchmark_ref in request.benchmarks:
-                composite_key = (
-                    f"{benchmark_ref.provider_id}::{benchmark_ref.benchmark_id}"
-                )
-                if composite_key not in self._benchmarks_by_id:
-                    raise ValueError(
-                        f"Benchmark {benchmark_ref.provider_id}::{benchmark_ref.benchmark_id} not found"
-                    )
+        # Note: Allow any benchmark ID, even if not in predefined list
+        # Validation removed to support custom/external benchmarks
 
         # Update fields that are provided
         update_data: dict[str, Any] = {}

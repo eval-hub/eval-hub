@@ -18,21 +18,40 @@ class MLFlowClient:
         self.settings = settings
         self.logger = get_logger(__name__)
         self.client: MlflowClient | None = None
+        self._client_initialized = False
 
-        # Set up real MLFlow client
+        # Set up real MLFlow client (lazy)
         self._setup_mlflow()
 
-        self.logger.info(
-            "MLFlow client configured",
-            tracking_uri=self.settings.mlflow_tracking_uri,
-        )
-
     def _setup_mlflow(self) -> None:
-        """Set up MLFlow configuration."""
+        """Set up MLFlow configuration (lazy initialization)."""
         try:
-            # Set MLFlow tracking URI
+            # Only set MLFlow tracking URI, don't test connection yet
             mlflow.set_tracking_uri(self.settings.mlflow_tracking_uri)
 
+            # Client will be created lazily when first needed
+            self.client = None
+            self._client_initialized = False
+
+            self.logger.info(
+                "MLFlow client configured for lazy initialization",
+                tracking_uri=self.settings.mlflow_tracking_uri,
+            )
+        except Exception as e:
+            self.logger.error(
+                "Failed to configure MLFlow",
+                tracking_uri=self.settings.mlflow_tracking_uri,
+                error=str(e),
+            )
+            self.client = None
+            self._client_initialized = False
+
+    def _ensure_client_initialized(self) -> None:
+        """Lazily initialize the MLFlow client when first needed."""
+        if self._client_initialized:
+            return
+
+        try:
             # Create MLFlow client instance
             self.client = MlflowClient()
 
@@ -43,6 +62,7 @@ class MLFlowClient:
                 tracking_uri=self.settings.mlflow_tracking_uri,
                 experiments_count=len(experiments),
             )
+            self._client_initialized = True
         except Exception as e:
             self.logger.error(
                 "Failed to connect to MLFlow",
@@ -51,9 +71,13 @@ class MLFlowClient:
             )
             # Create a dummy client that will fail gracefully
             self.client = None
+            self._client_initialized = True  # Mark as initialized to avoid retries
 
     async def create_experiment(self, request: EvaluationRequest) -> str:
         """Create or get an MLFlow experiment for the evaluation request."""
+        # Initialize client lazily when first needed
+        self._ensure_client_initialized()
+
         if not self.client:
             raise RuntimeError("MLFlow client not initialized")
 
@@ -109,6 +133,9 @@ class MLFlowClient:
         benchmark_name: str,
     ) -> str:
         """Start an MLFlow run for a specific evaluation."""
+        # Initialize client lazily when first needed
+        self._ensure_client_initialized()
+
         if not self.client:
             raise RuntimeError("MLFlow client not initialized")
 
@@ -170,6 +197,9 @@ class MLFlowClient:
 
     async def log_evaluation_result(self, result: EvaluationResult) -> None:
         """Log evaluation result to MLFlow."""
+        # Initialize client lazily when first needed
+        self._ensure_client_initialized()
+
         if not self.client:
             self.logger.warning(
                 "MLFlow client not initialized, skipping result logging"
@@ -271,6 +301,9 @@ class MLFlowClient:
 
     async def get_run_url(self, run_id: str) -> str:
         """Get the URL for viewing a run in the MLFlow UI."""
+        # Initialize client lazily when first needed
+        self._ensure_client_initialized()
+
         if not self.client:
             base_url = self.settings.mlflow_tracking_uri.rstrip("/")
             return f"{base_url}/#/experiments/0/runs/{run_id}"
@@ -293,6 +326,9 @@ class MLFlowClient:
         max_results: int = 100,
     ) -> list[dict[str, Any]]:
         """Search for runs in an experiment."""
+        # Initialize client lazily when first needed
+        self._ensure_client_initialized()
+
         if not self.client:
             return []
 
@@ -330,6 +366,9 @@ class MLFlowClient:
 
     async def get_run_metrics(self, run_id: str) -> dict[str, float]:
         """Get metrics for a specific run."""
+        # Initialize client lazily when first needed
+        self._ensure_client_initialized()
+
         if not self.client:
             return {}
 
@@ -351,6 +390,9 @@ class MLFlowClient:
 
     async def delete_experiment(self, experiment_id: str) -> None:
         """Delete an experiment."""
+        # Initialize client lazily when first needed
+        self._ensure_client_initialized()
+
         if not self.client:
             self.logger.warning(
                 "MLFlow client not initialized, cannot delete experiment"
@@ -373,7 +415,7 @@ class MLFlowClient:
 
     def _generate_experiment_name(self, request: EvaluationRequest) -> str:
         """Generate a unique experiment name for the request."""
-        if request.experiment.name:
+        if request.experiment and request.experiment.name:
             base_name = request.experiment.name
         else:
             # Generate name based on timestamp and request content

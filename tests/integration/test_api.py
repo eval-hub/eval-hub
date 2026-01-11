@@ -424,3 +424,44 @@ class TestAPIEndpoints:
             response = client.post("/api/v1/evaluations/jobs", json=request_data)
 
         assert response.status_code == 422  # Validation error
+
+    def test_create_evaluation_without_experiment(self, client):
+        """Test creating evaluation without experiment key - should not call MLflow."""
+        request_data = {
+            "model": {"url": "http://test-server:8000", "name": "test-model"},
+            "benchmarks": [
+                {
+                    "name": "ARC Easy",
+                    "id": "arc_easy",
+                    "provider_id": "lm_evaluation_harness",
+                    "config": {"num_fewshot": 0, "limit": 10},
+                }
+            ],
+            # No experiment key provided
+        }
+
+        # Mock MLFlow client initialization to prevent hanging during dependency injection
+        with patch("eval_hub.services.mlflow_client.MLFlowClient._setup_mlflow"):
+            with patch(
+                "eval_hub.services.mlflow_client.MLFlowClient.create_experiment"
+            ) as mock_create_exp:
+                with patch(
+                    "eval_hub.services.mlflow_client.MLFlowClient.get_experiment_url"
+                ) as mock_get_url:
+                    response = client.post(
+                        "/api/v1/evaluations/jobs", json=request_data
+                    )
+
+        assert response.status_code == 202
+        data = response.json()
+
+        assert "status" in data
+        assert data["status"]["state"] in ["pending", "running"]
+        assert data["model"]["name"] == request_data["model"]["name"]
+        assert len(data["benchmarks"]) == len(request_data["benchmarks"])
+        assert data.get("results") is None
+        assert data.get("experiment") is None  # Should be None when not provided
+
+        # Verify that MLflow methods were NOT called
+        mock_create_exp.assert_not_called()
+        mock_get_url.assert_not_called()

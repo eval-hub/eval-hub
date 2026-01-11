@@ -247,18 +247,21 @@ class ResponseBuilder:
         benchmarks = []
         for benchmark in job_request.benchmarks:
             benchmark_spec = EvaluationJobBenchmarkSpec(
-                name=benchmark.name,
+                name=benchmark.name
+                or benchmark.id,  # Use id as fallback if name is None
                 id=benchmark.id,
                 provider_id=benchmark.provider_id,
                 config=benchmark.config,
             )
             benchmarks.append(benchmark_spec)
 
-        # Build experiment section
-        experiment = ExperimentConfig(
-            name=job_request.experiment.name,
-            tags=job_request.experiment.tags,
-        )
+        # Build experiment section - only if experiment exists
+        experiment = None
+        if job_request.experiment:
+            experiment = ExperimentConfig(
+                name=job_request.experiment.name,
+                tags=job_request.experiment.tags,
+            )
 
         # Create the response
         response = EvaluationJobResource(

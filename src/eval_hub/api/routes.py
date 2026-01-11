@@ -165,12 +165,12 @@ async def create_evaluation(
         "Received evaluation request",
         request_id=str(request_id),
         benchmark_count=len(job_benchmarks),
-        experiment_name=internal_experiment.name,
+        experiment_name=internal_experiment.name if internal_experiment else None,
         async_mode=True,  # Always async in new API
     )
 
     try:
-        # Validate benchmarks exist
+        # Validate required benchmark fields
         for benchmark in job_benchmarks:
             bench_id = benchmark.id
             provider_id = benchmark.provider_id
@@ -179,15 +179,7 @@ async def create_evaluation(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail="Benchmark id and provider_id are required",
                 )
-
-            benchmark_detail = provider_service.get_benchmark_by_id(
-                provider_id, bench_id
-            )
-            if not benchmark_detail:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Benchmark {provider_id}::{bench_id} not found",
-                )
+            # Note: Allow any benchmark ID, even if not in predefined list
 
         # Group benchmarks by provider to create backend specs
         provider_benchmarks: dict[str, list[BenchmarkConfig]] = {}
@@ -235,11 +227,7 @@ async def create_evaluation(
             # Convert BenchmarkConfigs to BenchmarkSpecs
             benchmark_specs = []
             for bench_config in benchmarks:  # type: BenchmarkConfig
-                # Get benchmark details for additional info
-                benchmark_detail = provider_service.get_benchmark_by_id(
-                    bench_config.provider_id or "", bench_config.benchmark_id or ""
-                )
-
+                # Note: No longer fetching benchmark details since validation was removed
                 benchmark_spec = BenchmarkSpec(
                     name=bench_config.benchmark_id or "",
                     tasks=[bench_config.benchmark_id or ""],
@@ -260,8 +248,15 @@ async def create_evaluation(
             )
             backend_specs.append(backend_spec)
 
+        # Determine evaluation name
+        evaluation_name = (
+            internal_experiment.name
+            if internal_experiment
+            else f"Evaluation-{request_id.hex[:8]}"
+        )
+
         evaluation_spec = EvaluationSpec(
-            name=internal_experiment.name or f"Evaluation-{request_id.hex[:8]}",
+            name=evaluation_name,
             description=f"Evaluation with {len(job_benchmarks)} benchmarks",
             model=internal_model,
             backends=backend_specs,
@@ -286,9 +281,12 @@ async def create_evaluation(
             full_legacy_request, provider_service
         )
 
-        # Create MLFlow experiment
-        experiment_id = await mlflow_client.create_experiment(parsed_request)
-        experiment_url = await mlflow_client.get_experiment_url(experiment_id)
+        # Conditionally create MLFlow experiment only if experiment config is provided
+        experiment_id = None
+        experiment_url = None
+        if internal_experiment is not None:
+            experiment_id = await mlflow_client.create_experiment(parsed_request)
+            experiment_url = await mlflow_client.get_experiment_url(experiment_id)
 
         # Build evaluation response and store in active evaluations
         response = await response_builder.build_job_resource_response(
@@ -347,6 +345,7 @@ async def create_evaluation(
 async def get_evaluation_status(
     id: UUID,
     response_builder: ResponseBuilder = Depends(get_response_builder),
+    executor: EvaluationExecutor = Depends(get_evaluation_executor),
 ) -> EvaluationJobResource:
     """Get the status of an evaluation request."""
     request_id_str = str(id)
@@ -357,8 +356,18 @@ async def get_evaluation_status(
             detail=f"Evaluation request {id} not found",
         )
 
-    # Get the response (now in new format)
+    # Get the current response
     response = active_evaluations[request_id_str]
+
+    # If evaluation is still pending, check if the underlying job has completed
+    if response.status.state == "pending":
+        updated_response = await executor.check_and_update_evaluation_status(
+            request_id_str, response
+        )
+        if updated_response:
+            # Update stored evaluation with completed status
+            active_evaluations[request_id_str] = updated_response
+            response = updated_response
 
     logger.info(
         "Retrieved evaluation status",
@@ -366,7 +375,6 @@ async def get_evaluation_status(
         status=response.status.state,
     )
 
-    # Response is already in the correct format
     return response
 
 
@@ -953,8 +961,8 @@ async def delete_collection(
 async def _execute_evaluation_async(
     request: EvaluationRequest,
     job_request: EvaluationJobRequest,
-    experiment_id: str,
-    experiment_url: str,
+    experiment_id: str | None,
+    experiment_url: str | None,
     executor: EvaluationExecutor,
     mlflow_client: MLFlowClient,
     response_builder: ResponseBuilder,
@@ -970,13 +978,14 @@ async def _execute_evaluation_async(
 
         # Execute evaluations
         results = await executor.execute_evaluation_request(
-            request, progress_callback_sync, mlflow_client
+            request, progress_callback_sync, mlflow_client if experiment_id else None
         )
 
-        # Log results to MLFlow
-        for result in results:
-            if result.mlflow_run_id:
-                await mlflow_client.log_evaluation_result(result)
+        # Log results to MLFlow only if experiment_id is provided
+        if experiment_id is not None:
+            for result in results:
+                if result.mlflow_run_id:
+                    await mlflow_client.log_evaluation_result(result)
 
         # Build final response
         final_response = await response_builder.build_job_resource_response(
@@ -1013,17 +1022,20 @@ async def _execute_evaluation_async(
 
 async def _execute_evaluation_sync(
     request: EvaluationRequest,
-    experiment_id: str,
+    experiment_id: str | None,
     executor: EvaluationExecutor,
     mlflow_client: MLFlowClient,
 ) -> list[EvaluationResult]:
     """Execute evaluation synchronously."""
     # Execute evaluations
-    results = await executor.execute_evaluation_request(request, None, mlflow_client)
+    results = await executor.execute_evaluation_request(
+        request, None, mlflow_client if experiment_id else None
+    )
 
-    # Log results to MLFlow
-    for result in results:
-        if result.mlflow_run_id:
-            await mlflow_client.log_evaluation_result(result)
+    # Log results to MLFlow only if experiment_id is provided
+    if experiment_id is not None:
+        for result in results:
+            if result.mlflow_run_id:
+                await mlflow_client.log_evaluation_result(result)
 
     return results
