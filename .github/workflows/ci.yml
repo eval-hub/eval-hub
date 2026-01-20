@@ -44,6 +44,7 @@ jobs:
         uv run pytest tests/ -m "integration" --tb=short
 
     - name: Upload coverage reports to Codecov
+      continue-on-error: ${{ github.actor == 'dependabot[bot]' }}  # Don't fail CI on Dependabot PRs since they can't access secrets
       uses: codecov/codecov-action@v4
       with:
         file: ./coverage.xml
