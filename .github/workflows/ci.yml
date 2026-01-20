@@ -88,7 +88,7 @@ jobs:
 
     - name: Build Docker image
       run: |
-        docker build -t eval-hub:${{ github.sha }} .
+        docker build -t eval-hub:${{ github.sha }} -f Containerfile .
 
     - name: Test Docker image
       run: |
