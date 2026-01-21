@@ -186,10 +186,15 @@ def real_providers_yaml():
 
 @pytest.fixture
 def temp_providers_file_integration(real_providers_yaml):
-    """Use the actual providers.yaml file for integration testing."""
-    # Use the real providers.yaml from the project
-    providers_file = Path(__file__).parent.parent.parent / "src" / "eval_hub" / "data" / "providers.yaml"
-    return str(providers_file)
+    """Create a temporary providers YAML file for integration testing."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        yaml.dump(real_providers_yaml, f)
+        temp_file_path = f.name
+
+    yield temp_file_path
+
+    # Cleanup
+    os.unlink(temp_file_path)
 
 
 @pytest.fixture
@@ -269,7 +274,7 @@ class TestProviderEndpointsIntegration:
         benchmarks_data = response.json()
         assert (
             benchmarks_data["total_count"] == 193
-        )  # Real data has 193 total benchmarks (168 lmeval; 10 lighteval; 4 ragas; 11 garak)
+        )  # Real data has 193 benchmarks (172 + 10 lighteval; 11 garak)
         assert len(benchmarks_data["items"]) == 193
 
         # Step 4: Get provider-specific benchmarks
@@ -318,7 +323,7 @@ class TestProviderEndpointsIntegration:
         safety_benchmarks = data["items"]
         assert (
             len(safety_benchmarks) == 19
-        )  # Real data has 19 safety benchmarks (16 + lighteval truthfulqa + 2 garak)
+        )  # Real data has 19 safety benchmarks (16 + lighteval truthfulqa; 2 garak)
         assert all(b["category"] == "safety" for b in safety_benchmarks)
 
         # Test filter by tags
@@ -341,7 +346,6 @@ class TestProviderEndpointsIntegration:
         data = response.json()
         filtered_benchmarks = data["items"]
         assert len(filtered_benchmarks) == 3  # quick, standard, toxicity
-        # Main uses "id" field now, not "benchmark_id"
         assert filtered_benchmarks[0]["id"] in ["quick", "standard", "toxicity"]
 
     def test_category_diversity(self, integration_client):
