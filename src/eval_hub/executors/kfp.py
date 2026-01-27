@@ -109,26 +109,29 @@ class KFPExecutor(TrackedExecutor):
             str: Token for the KFP client
         """
         import os
+
         token = os.environ.get("KFP_TOKEN") or self._get_token()
 
         if not token:
-            raise BackendError("KFP_TOKEN environment variable must be set for KFP client")
+            raise BackendError(
+                "KFP_TOKEN environment variable must be set for KFP client"
+            )
         return token
 
     def _get_token(self) -> str:
         """Get authentication token from kubernetes config."""
         try:
-            from kubernetes.client.configuration import (
-                Configuration,  # type: ignore[import-untyped]
+            from kubernetes.client.configuration import (  # type: ignore[import-untyped]
+                Configuration,
             )
-            from kubernetes.client.exceptions import (
-                ApiException,  # type: ignore[import-untyped]
+            from kubernetes.client.exceptions import (  # type: ignore[import-untyped]
+                ApiException,
             )
-            from kubernetes.config.config_exception import (
-                ConfigException,  # type: ignore[import-untyped]
+            from kubernetes.config.config_exception import (  # type: ignore[import-untyped]
+                ConfigException,
             )
-            from kubernetes.config.kube_config import (
-                load_kube_config,  # type: ignore[import-untyped]
+            from kubernetes.config.kube_config import (  # type: ignore[import-untyped]
+                load_kube_config,
             )
 
             config = Configuration()
@@ -145,7 +148,6 @@ class KFPExecutor(TrackedExecutor):
                 "kubernetes client is not installed. Install with: pip install kubernetes"
             ) from e
 
-
     def _get_kfp_client(self) -> Any:
         """Get or create KFP client instance.
 
@@ -160,8 +162,9 @@ class KFPExecutor(TrackedExecutor):
                 import kfp
 
                 self._kfp_client = kfp.Client(
-                    host=self.kfp_endpoint, namespace=self.namespace,
-                    existing_token=self._get_kfp_token()
+                    host=self.kfp_endpoint,
+                    namespace=self.namespace,
+                    existing_token=self._get_kfp_token(),
                 )
                 self.logger.info(
                     "Created KFP client",
@@ -419,7 +422,9 @@ class KFPExecutor(TrackedExecutor):
 
             if progress_callback:
                 progress_callback(
-                    str(context.evaluation_id), 0.5, f"Submitted pipeline run {run.run_id}"
+                    str(context.evaluation_id),
+                    0.5,
+                    f"Submitted pipeline run {run.run_id}",
                 )
 
             # Monitor pipeline execution
@@ -542,7 +547,7 @@ class KFPExecutor(TrackedExecutor):
             if hasattr(run_detail, "pipeline_runtime") and hasattr(
                 run_detail.pipeline_runtime, "workflow_manifest"
             ):
-                import yaml  # type: ignore[import-untyped]
+                import yaml
 
                 manifest = yaml.safe_load(run_detail.pipeline_runtime.workflow_manifest)
 
@@ -586,8 +591,10 @@ class KFPExecutor(TrackedExecutor):
             BackendError: If S3 download fails
         """
         try:
-            import boto3  # type: ignore[import-untyped]
-            from botocore.exceptions import ClientError  # type: ignore[import-untyped]
+            import boto3  # type: ignore[import-not-found]
+            from botocore.exceptions import (  # type: ignore[import-not-found]
+                ClientError,
+            )
         except ImportError as e:
             raise BackendError(
                 "boto3 is required for S3 artifact download. "
@@ -605,10 +612,10 @@ class KFPExecutor(TrackedExecutor):
             )
 
         # Create S3 client
-        endpoint_url = os.environ.get('AWS_S3_ENDPOINT')
-        aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
-        aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
-        region_name = os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
+        endpoint_url = os.environ.get("AWS_S3_ENDPOINT")
+        aws_access_key_id = os.environ.get("AWS_ACCESS_KEY_ID")
+        aws_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+        region_name = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
 
         if not aws_access_key_id or not aws_secret_access_key:
             raise BackendError(
@@ -617,7 +624,7 @@ class KFPExecutor(TrackedExecutor):
 
         try:
             s3_client = boto3.client(
-                's3',
+                "s3",
                 endpoint_url=endpoint_url,
                 aws_access_key_id=aws_access_key_id,
                 aws_secret_access_key=aws_secret_access_key,
@@ -649,12 +656,12 @@ class KFPExecutor(TrackedExecutor):
             try:
                 metrics_path = os.path.join(temp_dir, "metrics.json")
                 response = s3_client.get_object(Bucket=s3_bucket, Key=metrics_key)
-                with open(metrics_path, 'wb') as f:
-                    f.write(response['Body'].read())
+                with open(metrics_path, "wb") as f:
+                    f.write(response["Body"].read())
                 artifacts["output_metrics"] = metrics_path
                 self.logger.info("Downloaded metrics artifact", path=metrics_path)
             except ClientError as e:
-                error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+                error_code = e.response.get("Error", {}).get("Code", "Unknown")
                 self.logger.error(
                     "Failed to download metrics",
                     bucket=s3_bucket,
@@ -669,12 +676,12 @@ class KFPExecutor(TrackedExecutor):
             try:
                 results_path = os.path.join(temp_dir, "results.json")
                 response = s3_client.get_object(Bucket=s3_bucket, Key=results_key)
-                with open(results_path, 'wb') as f:
-                    f.write(response['Body'].read())
+                with open(results_path, "wb") as f:
+                    f.write(response["Body"].read())
                 artifacts["output_results"] = results_path
                 self.logger.info("Downloaded results artifact", path=results_path)
             except ClientError as e:
-                error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+                error_code = e.response.get("Error", {}).get("Code", "Unknown")
                 self.logger.error(
                     "Failed to download results",
                     bucket=s3_bucket,
@@ -694,7 +701,7 @@ class KFPExecutor(TrackedExecutor):
             return artifacts
 
         except ClientError as e:
-            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            error_code = e.response.get("Error", {}).get("Code", "Unknown")
             raise BackendError(
                 f"S3 client error: {error_code}. "
                 f"Check bucket={s3_bucket}, endpoint={endpoint_url}"

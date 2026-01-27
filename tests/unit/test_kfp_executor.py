@@ -267,15 +267,17 @@ class TestKFPExecutorClientCreation:
         mock_kfp_module.Client.return_value = mock_client
 
         # Mock the token retrieval
-        with patch.dict("sys.modules", {"kfp": mock_kfp_module}), \
-             patch.object(kfp_executor, '_get_kfp_token', return_value='test-token'):
+        with (
+            patch.dict("sys.modules", {"kfp": mock_kfp_module}),
+            patch.object(kfp_executor, "_get_kfp_token", return_value="test-token"),
+        ):
             client = kfp_executor._get_kfp_client()
 
             assert client == mock_client
             mock_kfp_module.Client.assert_called_once_with(
                 host="http://kfp.example.com",
                 namespace="kubeflow",
-                existing_token='test-token'
+                existing_token="test-token",
             )
 
     def test_get_kfp_client_caches_instance(self, kfp_executor):
@@ -285,8 +287,10 @@ class TestKFPExecutorClientCreation:
         mock_kfp_module.Client.return_value = mock_client
 
         # Mock the token retrieval
-        with patch.dict("sys.modules", {"kfp": mock_kfp_module}), \
-             patch.object(kfp_executor, '_get_kfp_token', return_value='test-token'):
+        with (
+            patch.dict("sys.modules", {"kfp": mock_kfp_module}),
+            patch.object(kfp_executor, "_get_kfp_token", return_value="test-token"),
+        ):
             client1 = kfp_executor._get_kfp_client()
             client2 = kfp_executor._get_kfp_client()
 
@@ -392,7 +396,9 @@ class TestKFPExecutorBenchmarkExecution:
                 return_value=mock_adapter,
             ),
             # Mock MLflow tracking methods
-            patch.object(kfp_executor, "_track_start", new_callable=AsyncMock, return_value=None),
+            patch.object(
+                kfp_executor, "_track_start", new_callable=AsyncMock, return_value=None
+            ),
             patch.object(kfp_executor, "_track_complete", new_callable=AsyncMock),
             patch.object(kfp_executor, "_with_tracking", side_effect=lambda r, _: r),
         ):
@@ -415,8 +421,15 @@ class TestKFPExecutorBenchmarkExecution:
                 kfp_executor.adapter_registry, "get_adapter", return_value=mock_adapter
             ),
             # Mock MLflow tracking methods
-            patch.object(kfp_executor, "_track_start", new_callable=AsyncMock, return_value=None),
-            patch.object(kfp_executor, "_track_failure", new_callable=AsyncMock, return_value=None),
+            patch.object(
+                kfp_executor, "_track_start", new_callable=AsyncMock, return_value=None
+            ),
+            patch.object(
+                kfp_executor,
+                "_track_failure",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
             result = await kfp_executor.execute_benchmark(execution_context)
 
@@ -441,8 +454,15 @@ class TestKFPExecutorBenchmarkExecution:
                 return_value=mock_adapter,
             ),
             # Mock MLflow tracking methods
-            patch.object(kfp_executor, "_track_start", new_callable=AsyncMock, return_value=None),
-            patch.object(kfp_executor, "_track_failure", new_callable=AsyncMock, return_value=None),
+            patch.object(
+                kfp_executor, "_track_start", new_callable=AsyncMock, return_value=None
+            ),
+            patch.object(
+                kfp_executor,
+                "_track_failure",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
             result = await kfp_executor.execute_benchmark(execution_context)
 
@@ -487,7 +507,9 @@ class TestKFPExecutorPipelineManagement:
             patch("kfp.compiler.Compiler") as mock_compiler_class,
             patch("kfp.components.load_component_from_text"),
             patch("kfp.dsl.pipeline"),
-            patch("kfp.kubernetes.use_secret_as_env"),  # Mock kubernetes secret injection
+            patch(
+                "kfp.kubernetes.use_secret_as_env"
+            ),  # Mock kubernetes secret injection
         ):
             mock_compiler = Mock()
             mock_compiler_class.return_value = mock_compiler
@@ -517,7 +539,9 @@ class TestKFPExecutorPipelineManagement:
                 new_callable=AsyncMock,
                 return_value={"output_metrics": "/tmp/metrics.json"},
             ),
-            patch("asyncio.sleep", new_callable=AsyncMock),  # Prevent actual sleep delays
+            patch(
+                "asyncio.sleep", new_callable=AsyncMock
+            ),  # Prevent actual sleep delays
         ):
             result = await kfp_executor._monitor_pipeline_run(
                 mock_client, "run-123", execution_context
@@ -573,7 +597,7 @@ class TestKFPExecutorPipelineManagement:
         # Set S3 config in backend_config
         kfp_executor.backend_config["s3_bucket"] = "test-bucket"
         kfp_executor.backend_config["s3_prefix"] = "test-prefix"
-        
+
         # Mock boto3 S3 client with proper response structure
         mock_s3_client = Mock()
         mock_body = Mock()
@@ -585,20 +609,25 @@ class TestKFPExecutorPipelineManagement:
             patch("boto3.client", return_value=mock_s3_client),
             patch("tempfile.mkdtemp", return_value="/tmp/test_artifacts"),
             patch("builtins.open", create=True) as mock_open,
-            patch.dict("os.environ", {
-                "AWS_ACCESS_KEY_ID": "test-key",
-                "AWS_SECRET_ACCESS_KEY": "test-secret",
-                "AWS_S3_ENDPOINT": "http://test-endpoint",
-            }),
+            patch.dict(
+                "os.environ",
+                {
+                    "AWS_ACCESS_KEY_ID": "test-key",
+                    "AWS_SECRET_ACCESS_KEY": "test-secret",
+                    "AWS_S3_ENDPOINT": "http://test-endpoint",
+                },
+            ),
         ):
             mock_file = Mock()
             mock_open.return_value.__enter__.return_value = mock_file
-            
-            artifacts = await kfp_executor._download_artifacts_from_s3(execution_context)
+
+            artifacts = await kfp_executor._download_artifacts_from_s3(
+                execution_context
+            )
 
             # Verify S3 client was called
             assert mock_s3_client.get_object.call_count >= 2  # metrics + results
-            
+
             # Verify artifacts returned with temp paths
             assert "output_metrics" in artifacts
             assert "output_results" in artifacts

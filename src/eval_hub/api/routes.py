@@ -181,21 +181,26 @@ async def create_evaluation(
                 )
 
             # Validate benchmark exists (or allow custom for Garak with config)
-            benchmark_detail = provider_service.get_benchmark_by_id(provider_id, bench_id)
+            benchmark_detail = provider_service.get_benchmark_by_id(
+                provider_id, bench_id
+            )
 
             if not benchmark_detail:
                 # Only Garak supports custom benchmark IDs
                 if provider_id == "garak":
                     # Garak requires probes or taxonomy_filters for custom benchmarks
                     has_valid_config = bool(
-                        benchmark.config and
-                        ("probes" in benchmark.config or "taxonomy_filters" in benchmark.config)
+                        benchmark.config
+                        and (
+                            "probes" in benchmark.config
+                            or "taxonomy_filters" in benchmark.config
+                        )
                     )
                     if not has_valid_config:
                         raise HTTPException(
                             status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"Benchmark {provider_id}::{bench_id} not found. "
-                                   "For custom Garak benchmarks, provide 'probes' or 'taxonomy_filters' in config.",
+                            "For custom Garak benchmarks, provide 'probes' or 'taxonomy_filters' in config.",
                         )
                     # Garak with valid config - allow it to pass
                 else:
@@ -236,6 +241,7 @@ async def create_evaluation(
 
             # Map provider type to backend type
             import os
+
             backend_config: dict[str, Any] = {}
 
             if (
@@ -255,7 +261,9 @@ async def create_evaluation(
                     # S3 configuration for artifact storage
                     "s3_bucket": os.environ.get("AWS_S3_BUCKET", ""),
                     "s3_prefix": os.environ.get("AWS_S3_PREFIX", "garak-results"),
-                    "s3_credentials_secret": os.environ.get("KFP_S3_CREDENTIALS_SECRET_NAME"),
+                    "s3_credentials_secret": os.environ.get(
+                        "KFP_S3_CREDENTIALS_SECRET_NAME"
+                    ),
                 }
                 # Validate KFP endpoint is configured
                 if not backend_config["kfp_endpoint"]:
@@ -290,7 +298,7 @@ async def create_evaluation(
 
                 # Merge configs: providers.yaml defaults + request overrides
                 merged_config = {}
-                if benchmark_detail and hasattr(benchmark_detail, 'config'):
+                if benchmark_detail and hasattr(benchmark_detail, "config"):
                     merged_config.update(benchmark_detail.config or {})
                 merged_config.update(bench_config.config)  # Request overrides
 

@@ -283,13 +283,20 @@ class RequestParser:
             # For KFP-based providers (like garak), add KFP configuration
             if backend_type == BackendType.KFP:
                 import os
+
                 backend_config["framework"] = provider_id
                 backend_config["kfp_endpoint"] = os.environ.get("KFP_ENDPOINT", "")
-                backend_config["namespace"] = os.environ.get("KFP_NAMESPACE", "kubeflow")
+                backend_config["namespace"] = os.environ.get(
+                    "KFP_NAMESPACE", "kubeflow"
+                )
                 # S3 configuration for artifact storage
                 backend_config["s3_bucket"] = os.environ.get("AWS_S3_BUCKET", "")
-                backend_config["s3_prefix"] = os.environ.get("AWS_S3_PREFIX", "garak-results")
-                backend_config["s3_credentials_secret"] = os.environ.get("KFP_S3_CREDENTIALS_SECRET_NAME", "")
+                backend_config["s3_prefix"] = os.environ.get(
+                    "AWS_S3_PREFIX", "garak-results"
+                )
+                backend_config["s3_credentials_secret"] = os.environ.get(
+                    "KFP_S3_CREDENTIALS_SECRET_NAME", ""
+                )
 
             # Create backend spec
             backend = BackendSpec(

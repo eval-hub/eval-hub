@@ -86,7 +86,9 @@ class Report:
                     )
 
         except FileNotFoundError as e:
-            raise FileNotFoundError(f"Report file not found: {self.report_location}") from e
+            raise FileNotFoundError(
+                f"Report file not found: {self.report_location}"
+            ) from e
         except PermissionError as e:
             raise PermissionError(
                 f"Permission denied reading report file: {self.report_location}"

@@ -353,6 +353,7 @@ class GarakAdapter(SchemaAdapter):
             Container image URL for Garak scanner
         """
         import os
+
         return os.getenv("GARAK_KFP_IMAGE", "quay.io/evalhub/garak-kfp:latest")
 
     def supports_benchmark(self, benchmark_name: str) -> bool:
@@ -409,7 +410,6 @@ class GarakAdapter(SchemaAdapter):
             "eval_threshold": 0.5,
         }
 
-
     def _extract_metrics_from_scan_result(
         self, scan_result: dict[str, Any]
     ) -> dict[str, float | int | str]:
@@ -438,7 +438,9 @@ class GarakAdapter(SchemaAdapter):
                         "attack_success_rate"
                     ]
                 if "total_attempts" in aggregated:
-                    metrics[f"{probe_name}_total_attempts"] = aggregated["total_attempts"]
+                    metrics[f"{probe_name}_total_attempts"] = aggregated[
+                        "total_attempts"
+                    ]
                 if "vulnerable_responses" in aggregated:
                     metrics[f"{probe_name}_vulnerable_responses"] = aggregated[
                         "vulnerable_responses"

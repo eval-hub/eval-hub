@@ -12,7 +12,12 @@ from eval_hub.adapters.frameworks.garak import (
     GarakAdapter,
 )
 from eval_hub.executors.base import ExecutionContext
-from eval_hub.models.evaluation import BackendSpec, BackendType, BenchmarkSpec, EvaluationStatus
+from eval_hub.models.evaluation import (
+    BackendSpec,
+    BackendType,
+    BenchmarkSpec,
+    EvaluationStatus,
+)
 
 
 class TestGarakAdapter:
@@ -522,7 +527,11 @@ class TestGarakAdapterIntegration:
             started_at=datetime.now(UTC),
         )
 
-        backend_config = {"framework": "garak", "s3_bucket": "test", "s3_prefix": "test"}
+        backend_config = {
+            "framework": "garak",
+            "s3_bucket": "test",
+            "s3_prefix": "test",
+        }
         args = adapter.transform_to_kfp_args(custom_context, backend_config)
 
         # Verify taxonomy filters are used
@@ -557,10 +566,13 @@ class TestGarakAdapterIntegration:
             started_at=datetime.now(UTC),
         )
 
-        backend_config = {"framework": "garak", "s3_bucket": "test", "s3_prefix": "test"}
+        backend_config = {
+            "framework": "garak",
+            "s3_bucket": "test",
+            "s3_prefix": "test",
+        }
         args = adapter.transform_to_kfp_args(override_context, backend_config)
 
         # Verify overrides are respected
         assert args["probes"] == ["dan.Dan_13_0"]  # Not default probes
         assert args["timeout_seconds"] == 1200  # Not default timeout
-

@@ -39,4 +39,3 @@ echo "To push the image:"
 echo "  podman push ${FULL_IMAGE}"
 echo "  OR"
 echo "  PUSH_IMAGE=true ./build.sh"
-

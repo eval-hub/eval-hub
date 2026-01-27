@@ -178,17 +178,15 @@ def validate_inputs(args: argparse.Namespace) -> tuple[bool, list[str]]:
 
     # Validate probe/taxonomy configuration
     probes = json.loads(args.probes) if args.probes else []
-    taxonomy_filters = json.loads(args.taxonomy_filters) if args.taxonomy_filters else []
+    taxonomy_filters = (
+        json.loads(args.taxonomy_filters) if args.taxonomy_filters else []
+    )
 
     if not probes and not taxonomy_filters:
-        validation_errors.append(
-            "Either probes or taxonomy_filters must be specified"
-        )
+        validation_errors.append("Either probes or taxonomy_filters must be specified")
 
     if probes and taxonomy_filters:
-        validation_errors.append(
-            "Cannot specify both probes and taxonomy_filters"
-        )
+        validation_errors.append("Cannot specify both probes and taxonomy_filters")
 
     return len(validation_errors) == 0, validation_errors
 
@@ -209,10 +207,14 @@ def build_garak_command(
     command = ["garak"]
 
     # Model configuration
-    command.extend([
-        "--model_type", "openai.OpenAICompatible",
-        "--model_name", args.model_name,
-    ])
+    command.extend(
+        [
+            "--model_type",
+            "openai.OpenAICompatible",
+            "--model_name",
+            args.model_name,
+        ]
+    )
 
     # Generator options
     model_endpoint = args.model_url.rstrip("/")
@@ -239,7 +241,9 @@ def build_garak_command(
 
     # Add probes or taxonomy filters
     probes = json.loads(args.probes) if args.probes else []
-    taxonomy_filters = json.loads(args.taxonomy_filters) if args.taxonomy_filters else []
+    taxonomy_filters = (
+        json.loads(args.taxonomy_filters) if args.taxonomy_filters else []
+    )
 
     if taxonomy_filters:
         command.extend(["--probe_tags", ",".join(taxonomy_filters)])
@@ -409,14 +413,19 @@ def parse_garak_results(output_dir: str, eval_threshold: float) -> dict[str, Any
 
     # Calculate summary statistics
     total_attempts = len(results["generations"])
-    vulnerable_count = sum(1 for g in results["generations"] if g.get("vulnerable", False))
+    vulnerable_count = sum(
+        1 for g in results["generations"] if g.get("vulnerable", False)
+    )
 
     results["summary"] = {
         "total_attempts": total_attempts,
         "vulnerable_attempts": vulnerable_count,
         "safe_attempts": total_attempts - vulnerable_count,
-        "attack_success_rate": (vulnerable_count / total_attempts * 100) if total_attempts > 0 else 0.0,
-        "security_score": 100.0 - ((vulnerable_count / total_attempts * 100) if total_attempts > 0 else 0.0),
+        "attack_success_rate": (vulnerable_count / total_attempts * 100)
+        if total_attempts > 0
+        else 0.0,
+        "security_score": 100.0
+        - ((vulnerable_count / total_attempts * 100) if total_attempts > 0 else 0.0),
         "eval_threshold": eval_threshold,
         "probes_tested": list(results["scores"].keys()),
     }
@@ -504,11 +513,11 @@ def upload_to_s3(
     try:
         # Create S3 client
         s3_client = boto3.client(
-            's3',
-            endpoint_url=os.environ.get('AWS_S3_ENDPOINT'),
-            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-            region_name=os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'),
+            "s3",
+            endpoint_url=os.environ.get("AWS_S3_ENDPOINT"),
+            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
+            region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
         )
 
         # Build S3 keys
@@ -526,8 +535,8 @@ def upload_to_s3(
         s3_client.put_object(
             Bucket=s3_bucket,
             Key=metrics_key,
-            Body=json.dumps(metrics, indent=2).encode('utf-8'),
-            ContentType='application/json',
+            Body=json.dumps(metrics, indent=2).encode("utf-8"),
+            ContentType="application/json",
         )
 
         # Upload results
@@ -535,14 +544,14 @@ def upload_to_s3(
         s3_client.put_object(
             Bucket=s3_bucket,
             Key=results_key,
-            Body=json.dumps(results, indent=2).encode('utf-8'),
-            ContentType='application/json',
+            Body=json.dumps(results, indent=2).encode("utf-8"),
+            ContentType="application/json",
         )
 
         print("✅ Successfully uploaded results to S3")
 
     except ClientError as e:
-        error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+        error_code = e.response.get("Error", {}).get("Code", "Unknown")
         print(f"⚠️  S3 upload failed [{error_code}]: {e}")
         print(f"   Bucket: {s3_bucket}")
         print(f"   Endpoint: {os.environ.get('AWS_S3_ENDPOINT')}")
@@ -624,6 +633,7 @@ def main() -> int:
     except Exception as e:
         print(f"❌ Error running Garak scan: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         return 1
 

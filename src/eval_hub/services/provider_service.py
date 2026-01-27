@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-import yaml  # type: ignore[import-untyped]
+import yaml
 
 from ..core.config import Settings
 from ..core.logging import get_logger
@@ -107,7 +107,7 @@ class ProviderService:
                     num_few_shot=benchmark.num_few_shot,
                     dataset_size=benchmark.dataset_size,
                     tags=benchmark.tags,
-                    config=getattr(benchmark, 'config', {}),  # Include config from YAML
+                    config=getattr(benchmark, "config", {}),  # Include config from YAML
                 )
 
                 # Use composite key for uniqueness
