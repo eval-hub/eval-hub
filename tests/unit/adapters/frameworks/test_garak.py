@@ -225,7 +225,7 @@ class TestGarakAdapter:
 
         # With empty config, uses fallback default
         assert args["probes"] == ["dan.Dan_11_0"]  # Fallback default
-        assert args["timeout_seconds"] == 3600
+        assert args["timeout_seconds"] == 600  # Updated default (10 minutes)
 
     # Parse KFP Output Tests
 

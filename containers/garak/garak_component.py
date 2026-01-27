@@ -92,7 +92,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--timeout_seconds",
         type=int,
-        default=3600,
+        default=600,
         help="Maximum execution time in seconds",
     )
     parser.add_argument(
@@ -337,13 +337,21 @@ def generate_avid_report(output_dir: str) -> str:
         output_dir: Directory containing scan.report.jsonl
 
     Returns:
-        Content of the generated AVID report, or empty string if failed
+        Content of the generated AVID report, or empty string if generation fails
+
+    Note:
+        AVID report generation failure is non-fatal as it only provides
+        additional taxonomy metadata. The core scan results are still available
+        from the report.jsonl file.
     """
     report_file = Path(output_dir) / "scan.report.jsonl"
     avid_file = Path(output_dir) / "scan.avid.jsonl"
 
     if not report_file.exists():
-        print(f"Warning: Report file not found for AVID conversion: {report_file}")
+        print(
+            f"Warning: Report file not found for AVID conversion: {report_file}. "
+            "AVID taxonomy metadata will not be available."
+        )
         return ""
 
     try:
@@ -354,8 +362,19 @@ def generate_avid_report(output_dir: str) -> str:
         if avid_file.exists():
             with open(avid_file) as f:
                 return f.read()
+        else:
+            print(
+                f"Warning: AVID report file was not created: {avid_file}. "
+                "Scan results will be parsed without AVID taxonomy metadata."
+            )
     except Exception as e:
-        print(f"Warning: Failed to generate AVID report: {e}")
+        print(
+            f"Warning: Failed to generate AVID report: {e}. "
+            "Scan will continue without AVID taxonomy metadata."
+        )
+        import traceback
+
+        traceback.print_exc()
 
     return ""
 
@@ -375,16 +394,28 @@ def parse_garak_results(output_dir: str, eval_threshold: float) -> dict[str, Any
 
     Returns:
         Parsed scan result dictionary with generations, scores, and summary
+
+    Raises:
+        FileNotFoundError: If report file is not found
+        ValueError: If report file is empty or malformed
     """
     report_file = Path(output_dir) / "scan.report.jsonl"
 
     if not report_file.exists():
-        print(f"Warning: Report file not found: {report_file}")
-        return {"generations": [], "scores": {}, "summary": {}}
+        raise FileNotFoundError(
+            f"Garak report file not found: {report_file}. "
+            "This likely indicates the scan did not complete successfully."
+        )
 
     # Read report content
     with open(report_file) as f:
         report_content = f.read()
+
+    if not report_content.strip():
+        raise ValueError(
+            f"Garak report file is empty: {report_file}. "
+            "No scan results were generated."
+        )
 
     # Generate AVID report for taxonomy information
     print("Generating AVID taxonomy report...")

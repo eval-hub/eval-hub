@@ -95,7 +95,7 @@ class GarakAdapter(SchemaAdapter):
                 {
                     "name": "timeout_seconds",
                     "type": "Integer",
-                    "default": 3600,
+                    "default": 600,
                     "description": "Maximum execution time in seconds",
                 },
                 {
@@ -221,8 +221,13 @@ class GarakAdapter(SchemaAdapter):
         eval_threshold = spec_config.get(
             "eval_threshold", benchmark_config.get("eval_threshold", 0.5)
         )
+        # Timeout priority: spec_config > benchmark_config > default (600s/10min)
+        # Benchmark-specific timeouts from providers.yaml:
+        # - quick scans: 300s (5min)
+        # - standard scans: 1800s (30min)
+        # - comprehensive scans: 10800s+ (3+ hours)
         timeout_seconds = spec_config.get(
-            "timeout", benchmark_config.get("timeout", 3600)
+            "timeout", benchmark_config.get("timeout", 600)
         )
         parallel_attempts = spec_config.get("parallel_attempts", 8)
         generations = spec_config.get("generations", 1)
@@ -388,14 +393,14 @@ class GarakAdapter(SchemaAdapter):
             return {
                 "type": "probes",
                 "probes": spec_config["probes"],
-                "timeout": spec_config.get("timeout", 3600),
+                "timeout": spec_config.get("timeout", 600),
                 "eval_threshold": spec_config.get("eval_threshold", 0.5),
             }
         elif "taxonomy_filters" in spec_config:
             return {
                 "type": "taxonomy",
                 "taxonomy_filters": spec_config["taxonomy_filters"],
-                "timeout": spec_config.get("timeout", 3600),
+                "timeout": spec_config.get("timeout", 600),
                 "eval_threshold": spec_config.get("eval_threshold", 0.5),
             }
 
@@ -406,7 +411,7 @@ class GarakAdapter(SchemaAdapter):
         return {
             "type": "probes",
             "probes": ["dan.Dan_11_0"],  # Safe default probe
-            "timeout": 3600,
+            "timeout": 600,
             "eval_threshold": 0.5,
         }
 
