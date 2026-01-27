@@ -179,7 +179,36 @@ async def create_evaluation(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail="Benchmark id and provider_id are required",
                 )
-            # Note: Allow any benchmark ID, even if not in predefined list
+
+            # Validate benchmark exists (or allow custom for Garak with config)
+            benchmark_detail = provider_service.get_benchmark_by_id(
+                provider_id, bench_id
+            )
+
+            if not benchmark_detail:
+                # Only Garak supports custom benchmark IDs
+                if provider_id == "garak":
+                    # Garak requires probes or taxonomy_filters for custom benchmarks
+                    has_valid_config = bool(
+                        benchmark.config
+                        and (
+                            "probes" in benchmark.config
+                            or "taxonomy_filters" in benchmark.config
+                        )
+                    )
+                    if not has_valid_config:
+                        raise HTTPException(
+                            status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Benchmark {provider_id}::{bench_id} not found. "
+                            "For custom Garak benchmarks, provide 'probes' or 'taxonomy_filters' in config.",
+                        )
+                    # Garak with valid config - allow it to pass
+                else:
+                    # All other providers must use predefined benchmarks
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Benchmark {provider_id}::{bench_id} not found.",
+                    )
 
         # Group benchmarks by provider to create backend specs
         provider_benchmarks: dict[str, list[BenchmarkConfig]] = {}
@@ -211,6 +240,10 @@ async def create_evaluation(
                 )
 
             # Map provider type to backend type
+            import os
+
+            backend_config: dict[str, Any] = {}
+
             if (
                 provider.provider_type.value == "builtin"
                 and provider_id == "lm_evaluation_harness"
@@ -218,6 +251,37 @@ async def create_evaluation(
                 backend_type = BackendType.LMEVAL
             elif provider.provider_type.value == "nemo-evaluator":
                 backend_type = BackendType.NEMO_EVALUATOR
+            elif provider_id == "garak":
+                # Garak runs on KFP
+                backend_type = BackendType.KFP
+                backend_config = {
+                    "framework": "garak",
+                    "kfp_endpoint": os.environ.get("KFP_ENDPOINT", ""),
+                    "namespace": os.environ.get("KFP_NAMESPACE", "kubeflow"),
+                    # S3 configuration for artifact storage
+                    "s3_bucket": os.environ.get("AWS_S3_BUCKET", ""),
+                    "s3_prefix": os.environ.get("AWS_S3_PREFIX", "garak-results"),
+                    "s3_credentials_secret": os.environ.get(
+                        "KFP_S3_CREDENTIALS_SECRET_NAME"
+                    ),
+                }
+                # Validate KFP endpoint is configured
+                if not backend_config["kfp_endpoint"]:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="KFP_ENDPOINT environment variable must be set for garak provider",
+                    )
+                # Validate S3 bucket is configured
+                if not backend_config["s3_bucket"]:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="AWS_S3_BUCKET environment variable must be set for garak provider",
+                    )
+                if not backend_config["s3_credentials_secret"]:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="KFP_S3_CREDENTIALS_SECRET_NAME environment variable must be set for garak provider",
+                    )
             else:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -227,15 +291,25 @@ async def create_evaluation(
             # Convert BenchmarkConfigs to BenchmarkSpecs
             benchmark_specs = []
             for bench_config in benchmarks:  # type: BenchmarkConfig
-                # Note: No longer fetching benchmark details since validation was removed
+                # Get benchmark details from providers.yaml for config merging
+                benchmark_detail = provider_service.get_benchmark_by_id(
+                    bench_config.provider_id, bench_config.benchmark_id
+                )
+
+                # Merge configs: providers.yaml defaults + request overrides
+                merged_config = {}
+                if benchmark_detail and hasattr(benchmark_detail, "config"):
+                    merged_config.update(benchmark_detail.config or {})
+                merged_config.update(bench_config.config)  # Request overrides
+
                 benchmark_spec = BenchmarkSpec(
                     name=bench_config.benchmark_id or "",
                     tasks=[bench_config.benchmark_id or ""],
-                    num_fewshot=bench_config.config.get("num_fewshot"),
-                    batch_size=bench_config.config.get("batch_size"),
-                    limit=bench_config.config.get("limit"),
-                    device=bench_config.config.get("device"),
-                    config=bench_config.config,
+                    num_fewshot=merged_config.get("num_fewshot"),
+                    batch_size=merged_config.get("batch_size"),
+                    limit=merged_config.get("limit"),
+                    device=merged_config.get("device"),
+                    config=merged_config,  # Merged config
                 )
                 benchmark_specs.append(benchmark_spec)
 
@@ -243,7 +317,7 @@ async def create_evaluation(
                 name=f"{provider_id}-backend",
                 type=backend_type,
                 endpoint=provider.base_url,
-                config={},
+                config=backend_config,
                 benchmarks=benchmark_specs,
             )
             backend_specs.append(backend_spec)

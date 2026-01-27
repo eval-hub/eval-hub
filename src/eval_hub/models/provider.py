@@ -306,6 +306,10 @@ class BenchmarkDetail(BaseModel):
     num_few_shot: int = Field(..., description="Number of few-shot examples")
     dataset_size: int | None = Field(None, description="Size of the evaluation dataset")
     tags: list[str] = Field(default_factory=list, description="Tags for categorization")
+    config: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Benchmark-specific configuration (probes, timeout, etc.)",
+    )
 
 
 class SupportedBenchmark(BaseModel):

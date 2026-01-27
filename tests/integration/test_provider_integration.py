@@ -273,9 +273,9 @@ class TestProviderEndpointsIntegration:
 
         benchmarks_data = response.json()
         assert (
-            benchmarks_data["total_count"] == 186
-        )  # Real data has 186 total benchmarks (176 + 10 from lighteval)
-        assert len(benchmarks_data["items"]) == 186
+            benchmarks_data["total_count"] == 193
+        )  # Real data has 193 benchmarks (172 + 10 lighteval; 11 garak)
+        assert len(benchmarks_data["items"]) == 193
 
         # Step 4: Get provider-specific benchmarks
         response = integration_client.get(
@@ -322,8 +322,8 @@ class TestProviderEndpointsIntegration:
         data = response.json()
         safety_benchmarks = data["items"]
         assert (
-            len(safety_benchmarks) == 17
-        )  # Real data has 17 safety benchmarks (16 + lighteval truthfulqa)
+            len(safety_benchmarks) == 19
+        )  # Real data has 19 safety benchmarks (16 + lighteval truthfulqa; 2 garak)
         assert all(b["category"] == "safety" for b in safety_benchmarks)
 
         # Test filter by tags
@@ -345,8 +345,8 @@ class TestProviderEndpointsIntegration:
         assert response.status_code == 200
         data = response.json()
         filtered_benchmarks = data["items"]
-        assert len(filtered_benchmarks) == 1  # toxicity
-        assert filtered_benchmarks[0]["id"] == "toxicity"
+        assert len(filtered_benchmarks) == 3  # quick, standard, toxicity
+        assert filtered_benchmarks[0]["id"] in ["quick", "standard", "toxicity"]
 
     def test_category_diversity(self, integration_client):
         """Test that we have good category diversity in our test data."""
