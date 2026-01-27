@@ -98,7 +98,7 @@ This pattern enables:
 #### Two-Tier Configuration System
 Configuration uses Viper with a sophisticated loading strategy:
 
-1. **server.yaml** (cmd/eval_hub/server.yaml) - Default configuration loaded first
+1. **server.yaml** (config/server.yaml) - Default configuration loaded first
 2. **config.yaml** (optional, searched in `.` and `..`) - Cluster-specific overrides
 
 Configuration supports:
@@ -183,7 +183,7 @@ Main function (cmd/eval_hub/main.go) implements graceful shutdown:
 
 #### Configuration Discovery
 When running locally:
-- Loads `cmd/eval_hub/server.yaml` as defaults
+- Loads `config/server.yaml` as defaults
 - Searches for optional `config.yaml` in current directory and parent (errors ignored)
 - Environment variables override file config
 - Secrets from files (if directory exists) override everything

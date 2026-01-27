@@ -1,4 +1,4 @@
-package config
+package sql
 
 import (
 	"fmt"
@@ -6,9 +6,7 @@ import (
 )
 
 type DatabaseConfig struct {
-	SQL   map[string]SQLDatabaseConfig   `mapstructure:"sql,omitempty"`
-	JSON  map[string]JSONDatabaseConfig  `mapstructure:"json,omitempty"`
-	Other map[string]OtherDatabaseConfig `mapstructure:"other,omitempty"`
+	SQL map[string]SQLDatabaseConfig `mapstructure:"sql,omitempty"`
 }
 
 type SQLDatabaseConfig struct {
@@ -39,15 +37,4 @@ func (tc *SQLTableConfig) CheckConfig() error {
 		tc.JSONFieldType = "TEXT"
 	}
 	return nil
-}
-
-type JSONDatabaseConfig struct {
-	Enabled bool   `mapstructure:"enabled,omitempty"`
-	Driver  string `mapstructure:"driver"`
-	URL     string `mapstructure:"url"`
-}
-
-type OtherDatabaseConfig struct {
-	Enabled bool   `mapstructure:"enabled,omitempty"`
-	URL     string `mapstructure:"url"`
 }

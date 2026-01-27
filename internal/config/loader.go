@@ -52,7 +52,7 @@ func readConfig(logger *slog.Logger, defaultConfigValues *viper.Viper, name stri
 // multiple sources.
 //
 // Configuration loading order (later sources override earlier ones):
-//  1. server.yaml (cmd/eval_hub/server.yaml) - Default configuration loaded first
+//  1. server.yaml (config/server.yaml) - Default configuration loaded first
 //  2. config.yaml (optional, searched in "." and "..") - Cluster-specific overrides
 //  3. Environment variables - Mapped via env.mappings configuration
 //  4. Secrets from files - Mapped via secrets.mappings with secrets.dir
@@ -82,20 +82,13 @@ func readConfig(logger *slog.Logger, defaultConfigValues *viper.Viper, name stri
 //   - *Config: The loaded configuration with all sources applied
 //   - error: An error if configuration cannot be loaded or is invalid
 func LoadConfig(logger *slog.Logger, version string, build string, buildDate string) (*Config, error) {
-	// first load the server.yaml as the default config (the server.yaml from cmd/eval_hub)
-	defaultConfigValues, err := readConfig(logger, nil, "server", "yaml", "config", "./cmd/eval_hub", "../../cmd/eval_hub")
+	// first load the server.yaml as the default config (the server.yaml from config)
+	configValues, err := readConfig(logger, nil, "server", "yaml", "config")
 	if err != nil {
 		return nil, err
 	}
 
 	// now load the cluster config if found
-	configValues, err := readConfig(logger, defaultConfigValues, "config", "yaml", ".", "..")
-	// TODO: in production we need to find this file
-	// for now we ignre this error because there is no extra config when running locally
-	// if err != nil {
-	//	 return nil, err
-	// }
-
 	// set up the secrets from the secrets directory
 	secrets := SecretMap{}
 	if err := configValues.Unmarshal(&secrets); err != nil {

@@ -1,31 +1,37 @@
-package storage_sql
+package sql
 
 import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"strconv"
 	"time"
 
 	// import the postgres driver - "pgx"
+	"github.com/go-viper/mapstructure/v2"
 	_ "github.com/jackc/pgx/v5/stdlib"
+
 	// import the sqlite driver - "sqlite"
 	_ "modernc.org/sqlite"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
-	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 type SQLStorage struct {
-	sqlConfig *config.SQLDatabaseConfig
+	sqlConfig *SQLDatabaseConfig
 	pool      *sql.DB
 }
 
-func NewSQLStorage(sqlConfig *config.SQLDatabaseConfig, logger *slog.Logger) (abstractions.Storage, error) {
+func NewStorage(config map[string]any, logger *slog.Logger) (abstractions.Storage, error) {
+	var sqlConfig SQLDatabaseConfig
+	err := mapstructure.Decode(config, &sqlConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	logger.Info("Creating SQL storage", "driver", sqlConfig.Driver, "url", sqlConfig.URL)
 
 	pool, err := sql.Open(sqlConfig.Driver, sqlConfig.URL)
@@ -44,13 +50,17 @@ func NewSQLStorage(sqlConfig *config.SQLDatabaseConfig, logger *slog.Logger) (ab
 	}
 
 	storage := &SQLStorage{
-		sqlConfig: sqlConfig,
+		sqlConfig: &sqlConfig,
 		pool:      pool,
 	}
 
 	logger.Info("Pinging SQL storage", "driver", sqlConfig.Driver, "url", sqlConfig.URL)
 	err = storage.Ping(1 * time.Second)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := storage.checkTables(&storage.sqlConfig.Evaluations); err != nil {
 		return nil, err
 	}
 
@@ -74,23 +84,20 @@ func (s *SQLStorage) exec(query string, args ...any) (sql.Result, error) {
 	return s.pool.ExecContext(context.Background(), query, args...)
 }
 
-func (s *SQLStorage) checkDatabase() error {
-	if s.sqlConfig.DatabaseName == "" {
-		return fmt.Errorf("database name is required")
-	}
-	_, err := s.exec(createDatabaseStatement(), s.sqlConfig.DatabaseName)
-	return err
-}
+func (s *SQLStorage) checkTables(tableConfig *SQLTableConfig) error {
 
-func (s *SQLStorage) checkTable(tableConfig *config.SQLTableConfig) error {
-	if err := s.checkDatabase(); err != nil {
-		return err
-	}
 	if err := tableConfig.CheckConfig(); err != nil {
 		return err
 	}
-	_, err := s.exec(createTableStatement(), tableConfig.TableName, tableConfig.JSONFieldType)
-	return err
+	if _, err := s.exec(createEvaluationsTable()); err != nil {
+		return err
+	}
+
+	if _, err := s.exec(createCollectionsTable()); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // CreateEvaluationJob creates a new evaluation job in the database
@@ -98,9 +105,7 @@ func (s *SQLStorage) checkTable(tableConfig *config.SQLTableConfig) error {
 // the evaluation job is returned as a EvaluationJobResource
 // This should use transactions etc and requires cleaning up
 func (s *SQLStorage) CreateEvaluationJob(executionContext *executioncontext.ExecutionContext, evaluation *api.EvaluationJobConfig) (*api.EvaluationJobResource, error) {
-	if err := s.checkTable(&s.sqlConfig.Evaluations); err != nil {
-		return nil, err
-	}
+
 	evaluationJSON, err := json.Marshal(evaluation)
 	if err != nil {
 		return nil, err

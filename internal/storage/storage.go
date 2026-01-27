@@ -1,40 +1,27 @@
 package storage
 
 import (
-	"fmt"
 	"log/slog"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/config"
-	"github.com/eval-hub/eval-hub/internal/storage/storage_sql"
+	"github.com/eval-hub/eval-hub/internal/storage/sql"
 )
 
+// NewStorage creates a new storage instance based on the configuration.
+// It currently uses the SQL storage implementation.
 func NewStorage(serviceConfig *config.Config, logger *slog.Logger) (abstractions.Storage, error) {
-	// search for the first enabled database configuration
-	for name, sqlConfig := range serviceConfig.Database.SQL {
-		if sqlConfig.Enabled {
-			logger.Info("Using SQL database configuration", "name", name)
-			return storage_sql.NewSQLStorage(&sqlConfig, logger)
-		}
+	if serviceConfig.Database == nil {
+		return nil, &StorageError{Message: "database configuration is required"}
 	}
-	for name, jsonConfig := range serviceConfig.Database.JSON {
-		if jsonConfig.Enabled {
-			// return storage_json.NewJSONStorage(jsonConfig)
-			return nil, fmt.Errorf("JSON database configuration %s not supported yet", name)
-		}
-	}
-	for name, dbConfig := range serviceConfig.Database.Other {
-		if dbConfig.Enabled {
-			// return storage_json.NewJSONStorage(jsonConfig)
-			return nil, fmt.Errorf("Other database configuration %s not supported yet", name)
-		}
-	}
-	// if no other database configuration is enabled, use the fallback one
-	for name, sqlConfig := range serviceConfig.Database.SQL {
-		if sqlConfig.Fallback {
-			logger.Info("Using fallback SQL database configuration", "name", name)
-			return storage_sql.NewSQLStorage(&sqlConfig, logger)
-		}
-	}
-	return nil, fmt.Errorf("failed to find a supported and enabled database configuration")
+	return sql.NewStorage(*serviceConfig.Database, logger)
+}
+
+// StorageError represents an error in storage operations
+type StorageError struct {
+	Message string
+}
+
+func (e *StorageError) Error() string {
+	return e.Message
 }

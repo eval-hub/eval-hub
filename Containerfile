@@ -41,7 +41,7 @@ RUN microdnf install -y ca-certificates tzdata wget shadow-utils && \
 COPY --from=builder --chown=evalhub:evalhub /build/eval-hub /app/eval-hub
 
 # Copy configuration file
-COPY --chown=evalhub:evalhub cmd/eval_hub/server.yaml /app/config/server.yaml
+COPY --chown=evalhub:evalhub config/server.yaml /app/config/server.yaml
 
 # Set working directory
 WORKDIR /app
