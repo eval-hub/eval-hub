@@ -6,9 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Running the Service
 ```bash
-make run                # Run on default port 8080
-PORT=3000 make run      # Run on custom port
-go run cmd/eval_hub/main.go  # Direct Go execution
+make start-service                # Start service on default port 8080
+PORT=3000 make start-service      # Start service on custom port
+make stop-service                 # Stop service
+go run cmd/eval_hub/main.go       # Direct Go execution
 ```
 
 ### Building

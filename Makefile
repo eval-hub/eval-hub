@@ -55,7 +55,7 @@ ${SERVER_PID_FILE}:
 
 SERVICE_LOG ?= $(BIN_DIR)/service.log
 
-start-service: ${SERVER_PID_FILE} build## Run the application
+start-service: ${SERVER_PID_FILE} build ## Run the application in background
 	@echo "Running $(BINARY_NAME) on port $(PORT)..."
 	# @PORT=$(PORT) go run -ldflags "${LDFLAGS}" $(CMD_PATH)/main.go > ${SERVICE_LOG}
 	@./scripts/start_server.sh "${SERVER_PID_FILE}" "${BIN_DIR}/$(BINARY_NAME)" "${SERVICE_LOG}" ${PORT} ""
