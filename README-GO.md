@@ -20,13 +20,23 @@ make install-deps
 
 2. Run the server:
 ```bash
-make run
+make start-service
 ```
 
 The server will start on port 8080 by default. You can change this by setting the `PORT` environment variable:
 
 ```bash
-PORT=3000 make run
+PORT=3000 make start-service
+```
+
+To check the logs:
+```bash
+tail -f bin/service.log
+```
+
+3. Stop the server:
+```bash
+make stop-service
 ```
 
 #### Using Go directly
@@ -128,7 +138,7 @@ This builds the image with:
 
 Run the container locally:
 ```bash
-podman run -p 8080:8080 eval-hub:latest
+podman run --rm -p 8080:8080 eval-hub:latest
 ```
 
 The container will be available at `http://localhost:8080`.
@@ -140,7 +150,8 @@ The project includes a Makefile with common development tasks:
 - `make help` - Display all available targets
 - `make clean` - Remove build artifacts
 - `make build` - Build the binary
-- `make run` - Run the application
+- `make start-service` - Start the application
+- `make stop-service` - Stop the application
 - `make lint` - Lint the code (runs go vet)
 - `make fmt` - Format code with go fmt
 - `make vet` - Run go vet
