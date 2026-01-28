@@ -90,9 +90,19 @@ test-all: test test-fvt ## Run all tests (unit + FVT)
 
 test-coverage: ## Run unit tests with coverage
 	@echo "Running unit tests with coverage..."
-	@go test -v -coverprofile=coverage.out ./internal/...
-	@go tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report generated: coverage.html"
+	@mkdir -p $(BIN_DIR)
+	@go test -v -coverprofile=$(BIN_DIR)/coverage.out ./internal/...
+	@go tool cover -html=$(BIN_DIR)/coverage.out -o $(BIN_DIR)/coverage.html
+	@echo "Coverage report generated: $(BIN_DIR)/coverage.html"
+
+test-fvt-coverage: ## Run integration (FVT) tests with coverage
+	@echo "Running integration (FVT) tests with coverage..."
+	@mkdir -p $(BIN_DIR)
+	@go test -v -coverprofile=$(BIN_DIR)/coverage-fvt.out ./tests/features/...
+	@go tool cover -html=$(BIN_DIR)/coverage-fvt.out -o $(BIN_DIR)/coverage-fvt.html
+	@echo "Coverage report generated: $(BIN_DIR)/coverage-fvt.html"
+
+test-all-coverage: test-coverage test-fvt-coverage ## Run all tests (unit + FVT) with coverage
 
 install-deps: ## Install dependencies
 	@echo "Installing dependencies..."

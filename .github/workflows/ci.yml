@@ -36,17 +36,20 @@ jobs:
 
     - name: Run unit tests with coverage
       run: |
-        make test-coverage
-        go tool cover -func=coverage.out -o=coverage.txt
+        make test-all-coverage
+        # why are these here as we upload the .out files?
+        # go tool cover -func=bin/coverage.out -o=bin/coverage.txt
+        # go tool cover -func=bin/coverage-fvt.out -o=bin/coverage-fvt.txt
 
     - name: Run FVT tests
       run: make test-fvt
 
     - name: Upload coverage reports to Codecov
       continue-on-error: ${{ github.actor == 'dependabot[bot]' }}  # Don't fail CI on Dependabot PRs since they can't access secrets
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v5
       with:
-        file: ./coverage.out
+        files: ./bin/coverage.out,./bin/coverage-fvt.out
+        disable_search: true
         fail_ci_if_error: true
         token: ${{ secrets.CODECOV_TOKEN }}
 
