@@ -29,10 +29,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 # Runtime stage
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
-# Install runtime dependencies
-RUN microdnf install -y ca-certificates tzdata wget shadow-utils && \
-    microdnf clean all && \
-    groupadd -g 1000 evalhub && \
+# Create user and app directory
+RUN groupadd -g 1000 evalhub && \
     useradd -u 1000 -g evalhub -s /bin/bash -m evalhub && \
     mkdir -p /app/config && \
     chown -R evalhub:evalhub /app
@@ -64,9 +62,7 @@ LABEL org.opencontainers.image.title="eval-hub" \
       org.opencontainers.image.authors="eval-hub" \
       org.opencontainers.image.vendor="eval-hub"
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT}/health || exit 1
+# Health check removed - wget not available without package installation
 
 # Run the binary
 CMD ["/app/eval-hub"]
