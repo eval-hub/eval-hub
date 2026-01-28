@@ -20,17 +20,24 @@ type SecretMap struct {
 	Mappings map[string]string `mapstructure:"mappings,omitempty"`
 }
 
-func readConfig(logger *slog.Logger, defaultConfigValues *viper.Viper, name string, ext string, dirs ...string) (*viper.Viper, error) {
+// readConfig locates and reads a configuration file using Viper. It searches for
+// a file named "{name}.{ext}" in each of the given directories in order; the first
+// found file is read. The returned Viper instance contains the parsed config and
+// can be used for further unmarshaling or env binding.
+//
+// Parameters:
+//   - logger: Logger for config load messages (success and failure).
+//   - name: Config file base name without extension (e.g., "config").
+//   - ext: Config file extension/type (e.g., "yaml"); used by Viper as config type.
+//   - dirs: One or more directories to search for the file; first match wins.
+//
+// Returns:
+//   - *viper.Viper: Viper instance with the config loaded, or a new Viper if no file was read.
+//   - error: Non-nil if no config file was found in any dir or if reading failed.
+func readConfig(logger *slog.Logger, name string, ext string, dirs ...string) (*viper.Viper, error) {
 	logger.Info("Reading the configuration file", "file", fmt.Sprintf("%s.%s", name, ext), "dirs", fmt.Sprintf("%v", dirs))
 
 	configValues := viper.New()
-
-	if defaultConfigValues != nil {
-		// set the default values
-		for _, key := range defaultConfigValues.AllKeys() {
-			configValues.SetDefault(key, defaultConfigValues.Get(key))
-		}
-	}
 
 	configValues.SetConfigName(name) // name of config file (without extension)
 	configValues.SetConfigType(ext)  // REQUIRED if the config file does not have the extension in the name
@@ -50,7 +57,7 @@ func readConfig(logger *slog.Logger, defaultConfigValues *viper.Viper, name stri
 
 func loadProvider(logger *slog.Logger, file string) (api.ProviderResource, error) {
 	providerConfig := api.ProviderResource{}
-	configValues, err := readConfig(logger, nil, file, "yaml", "config/providers", "./config/providers", "../../config/providers")
+	configValues, err := readConfig(logger, file, "yaml", "config/providers", "./config/providers", "../../config/providers")
 	if err != nil {
 		return providerConfig, err
 	}
@@ -135,7 +142,7 @@ func LoadProviderConfigs(logger *slog.Logger) (map[string]api.ProviderResource, 
 //   - *Config: The loaded configuration with all sources applied
 //   - error: An error if configuration cannot be loaded or is invalid
 func LoadConfig(logger *slog.Logger, version string, build string, buildDate string) (*Config, error) {
-	configValues, err := readConfig(logger, nil, "config", "yaml", "config", "./config", "../../config")
+	configValues, err := readConfig(logger, "config", "yaml", "config", "./config", "../../config")
 	if err != nil {
 		return nil, err
 	}
