@@ -37,8 +37,9 @@ jobs:
     - name: Run unit tests with coverage
       run: |
         make test-all-coverage
-        go tool cover -func=bin/coverage.out -o=bin/coverage.txt
-        go tool cover -func=bin/coverage-fvt.out -o=bin/coverage-fvt.txt
+        # why are these here as we upload the .out files?
+        # go tool cover -func=bin/coverage.out -o=bin/coverage.txt
+        # go tool cover -func=bin/coverage-fvt.out -o=bin/coverage-fvt.txt
 
     - name: Run FVT tests
       run: make test-fvt
