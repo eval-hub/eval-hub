@@ -10,13 +10,13 @@ import (
 )
 
 func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, w http.ResponseWriter) {
-	if ctx.Method != http.MethodGet {
+	if ctx.Request.Method() != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	// Determine content type based on Accept header
-	accept := ctx.GetHeader("Accept")
+	accept := ctx.Request.Header("Accept")
 	contentType := "application/yaml"
 	if strings.Contains(accept, "application/json") {
 		contentType = "application/json"
@@ -60,13 +60,13 @@ func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, w http.
 }
 
 func (h *Handlers) HandleDocs(ctx *executioncontext.ExecutionContext, w http.ResponseWriter) {
-	if ctx.Method != http.MethodGet {
+	if ctx.Request.Method() != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	// Get the base URL for the OpenAPI spec
-	baseURL := ctx.BaseURL
+	baseURL := ctx.Request.URI()
 
 	html := `<!DOCTYPE html>
 <html>

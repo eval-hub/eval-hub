@@ -12,6 +12,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/handlers"
+	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/go-playground/validator/v10"
 
 	"github.com/google/uuid"
@@ -19,12 +20,13 @@ import (
 )
 
 type Server struct {
-	httpServer    *http.Server
-	port          int
-	logger        *slog.Logger
-	serviceConfig *config.Config
-	storage       abstractions.Storage
-	validate      *validator.Validate
+	httpServer      *http.Server
+	port            int
+	logger          *slog.Logger
+	serviceConfig   *config.Config
+	providerConfigs map[string]*api.ProviderResource
+	storage         abstractions.Storage
+	validate        *validator.Validate
 }
 
 // NewServer creates a new HTTP server instance with the provided logger and configuration.
@@ -46,7 +48,7 @@ type Server struct {
 // Returns:
 //   - *Server: A configured server instance
 //   - error: An error if logger or serviceConfig is nil
-func NewServer(logger *slog.Logger, serviceConfig *config.Config, storage abstractions.Storage, validate *validator.Validate) (*Server, error) {
+func NewServer(logger *slog.Logger, serviceConfig *config.Config, providerConfigs map[string]*api.ProviderResource, storage abstractions.Storage, validate *validator.Validate) (*Server, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger is required for the server")
 	}
@@ -61,11 +63,12 @@ func NewServer(logger *slog.Logger, serviceConfig *config.Config, storage abstra
 	}
 
 	return &Server{
-		port:          serviceConfig.Service.Port,
-		logger:        logger,
-		serviceConfig: serviceConfig,
-		storage:       storage,
-		validate:      validate,
+		port:            serviceConfig.Service.Port,
+		logger:          logger,
+		serviceConfig:   serviceConfig,
+		providerConfigs: providerConfigs,
+		storage:         storage,
+		validate:        validate,
 	}, nil
 }
 
@@ -235,6 +238,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		ctx := s.newExecutionContext(r)
 		h.HandleListProviders(ctx, w)
 	})
+
 	router.HandleFunc("/api/v1/evaluations/providers/", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		h.HandleGetProvider(ctx, w)

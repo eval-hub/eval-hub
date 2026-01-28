@@ -1,134 +1,133 @@
-provider:
-  provider_id: lighteval
-  provider_name: Lighteval
-  description: Lightweight LLM evaluation framework from Hugging Face
-  provider_type: builtin
-  base_url: null
-  benchmarks:
+provider_id: lighteval
+provider_name: Lighteval
+description: Lightweight LLM evaluation framework from Hugging Face
+provider_type: builtin
+base_url: null
+benchmarks:
   - benchmark_id: mmlu
     name: MMLU
     description: Massive Multitask Language Understanding - 57 subjects
     category: knowledge
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 5
     dataset_size: 15908
     tags:
-    - knowledge
-    - multitask
-    - lighteval
+      - knowledge
+      - multitask
+      - lighteval
   - benchmark_id: hellaswag
     name: HellaSwag
     description: Commonsense reasoning around everyday activities
     category: reasoning
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 10042
     tags:
-    - reasoning
-    - commonsense
-    - lighteval
+      - reasoning
+      - commonsense
+      - lighteval
   - benchmark_id: arc
     name: ARC
     description: AI2 Reasoning Challenge
     category: reasoning
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 3548
     tags:
-    - reasoning
-    - science
-    - lighteval
+      - reasoning
+      - science
+      - lighteval
   - benchmark_id: truthfulqa
     name: TruthfulQA
     description: Measures truthfulness and model hallucinations
     category: safety
     metrics:
-    - mc1
-    - mc2
+      - mc1
+      - mc2
     num_few_shot: 0
     dataset_size: 817
     tags:
-    - safety
-    - truthfulness
-    - lighteval
+      - safety
+      - truthfulness
+      - lighteval
   - benchmark_id: winogrande
     name: Winogrande
     description: Commonsense reasoning with pronoun resolution
     category: reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1267
     tags:
-    - reasoning
-    - commonsense
-    - lighteval
+      - reasoning
+      - commonsense
+      - lighteval
   - benchmark_id: gsm8k
     name: GSM8K
     description: Grade School Math 8K - arithmetic reasoning
     category: math
     metrics:
-    - exact_match
-    - accuracy
+      - exact_match
+      - accuracy
     num_few_shot: 8
     dataset_size: 1319
     tags:
-    - math
-    - reasoning
-    - lighteval
+      - math
+      - reasoning
+      - lighteval
   - benchmark_id: humaneval
     name: HumanEval
     description: Code generation benchmark with 164 programming problems
     category: code
     metrics:
-    - pass_at_1
-    - pass_at_10
+      - pass_at_1
+      - pass_at_10
     num_few_shot: 0
     dataset_size: 164
     tags:
-    - code
-    - generation
-    - lighteval
+      - code
+      - generation
+      - lighteval
   - benchmark_id: boolq
     name: BoolQ
     description: Boolean questions for reading comprehension
     category: reading_comprehension
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 3270
     tags:
-    - reading_comprehension
-    - boolean
-    - lighteval
+      - reading_comprehension
+      - boolean
+      - lighteval
   - benchmark_id: piqa
     name: PIQA
     description: Physical Interaction QA - physical commonsense reasoning
     category: reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1838
     tags:
-    - reasoning
-    - physical
-    - lighteval
+      - reasoning
+      - physical
+      - lighteval
   - benchmark_id: openbookqa
     name: OpenBookQA
     description: Question answering with open book knowledge
     category: knowledge
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 500
     tags:
-    - knowledge
-    - qa
-    - lighteval
+      - knowledge
+      - qa
+      - lighteval

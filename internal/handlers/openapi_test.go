@@ -63,7 +63,7 @@ func TestHandleOpenAPI(t *testing.T) {
 
 	t.Run("JSON content type when Accept header is application/json", func(t *testing.T) {
 		ctx := createExecutionContext(http.MethodGet, "/openapi.yaml")
-		ctx.SetHeader("Accept", "application/json")
+		ctx.Request.SetHeader("Accept", "application/json")
 		w := httptest.NewRecorder()
 
 		h.HandleOpenAPI(ctx, w)

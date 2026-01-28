@@ -99,12 +99,12 @@ This pattern enables:
 Configuration uses Viper with a sophisticated loading strategy:
 
 1. **server.yaml** (config/server.yaml) - Default configuration loaded first
-2. **config.yaml** (optional, searched in `.` and `..`) - Cluster-specific overrides
+
 
 Configuration supports:
 - **Environment variable mapping**: Define in `env.mappings` (e.g., `PORT` → `service.port`)
 - **Secrets from files**: Define in `secrets.mappings` with `secrets.dir` (e.g., `/tmp/db_password` → `database.password`)
-- Default values cascade from server.yaml to config.yaml to env vars to secrets
+- Default values cascade from server.yaml to env vars to secrets
 
 Example from server.yaml:
 ```yaml
@@ -184,7 +184,6 @@ Main function (cmd/eval_hub/main.go) implements graceful shutdown:
 #### Configuration Discovery
 When running locally:
 - Loads `config/server.yaml` as defaults
-- Searches for optional `config.yaml` in current directory and parent (errors ignored)
 - Environment variables override file config
 - Secrets from files (if directory exists) override everything
 

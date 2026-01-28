@@ -1,2011 +1,2025 @@
-provider:
-  provider_id: lm_evaluation_harness
-  provider_name: LM Evaluation Harness
-  description: Comprehensive evaluation framework for language models with 167 benchmarks
-  provider_type: builtin
-  base_url: null
-  benchmarks:
+provider_id: lm_evaluation_harness
+provider_name: LM Evaluation Harness
+description: Comprehensive evaluation framework for language models with 167 benchmarks
+provider_type: builtin
+base_url: null
+benchmarks:
   - benchmark_id: arc_easy
     name: ARC Easy
     description: ARC Easy evaluation benchmark - AI2 Reasoning Challenge (Easy)
     category: reasoning
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 2376
     tags:
-    - reasoning
-    - science
-    - lm_eval
+      - reasoning
+      - science
+      - lm_eval
   - benchmark_id: AraDiCE_boolq_lev
     name: Aradice Boolq Lev
     description: Aradice Boolq Lev evaluation benchmark
     category: general
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 3270
     tags:
-    - general
-    - lm_eval
+      - general
+      - lm_eval
   - benchmark_id: blimp
     name: Blimp
     description: Blimp evaluation benchmark
     category: general
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - general
-    - lm_eval
+      - general
+      - lm_eval
   - benchmark_id: blimp_anaphor_gender_agreement
     name: Blimp Anaphor Gender Agreement
     description: Blimp Anaphor Gender Agreement evaluation benchmark
     category: general
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - general
-    - lm_eval
+      - general
+      - lm_eval
   - benchmark_id: blimp_animate_subject_trans
     name: Blimp Animate Subject Trans
     description: Blimp Animate Subject Trans evaluation benchmark
     category: general
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - general
-    - lm_eval
+      - general
+      - lm_eval
   - benchmark_id: blimp_coordinate_structure_constraint_complex_left_branch
     name: Blimp Coordinate Structure Constraint Complex Left Branch
-    description: Blimp Coordinate Structure Constraint Complex Left Branch evaluation
+    description:
+      Blimp Coordinate Structure Constraint Complex Left Branch evaluation
       benchmark
     category: general
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - general
-    - lm_eval
+      - general
+      - lm_eval
   - benchmark_id: blimp_determiner_noun_agreement_2
     name: Blimp Determiner Noun Agreement 2
     description: Blimp Determiner Noun Agreement 2 evaluation benchmark
     category: general
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - general
-    - lm_eval
+      - general
+      - lm_eval
   - benchmark_id: blimp_determiner_noun_agreement_with_adj_2
     name: Blimp Determiner Noun Agreement With Adj 2
     description: Blimp Determiner Noun Agreement With Adj 2 evaluation benchmark
     category: general
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - general
-    - lm_eval
+      - general
+      - lm_eval
   - benchmark_id: blimp_determiner_noun_agreement_with_adjective_1
     name: Blimp Determiner Noun Agreement With Adjective 1
     description: Blimp Determiner Noun Agreement With Adjective 1 evaluation benchmark
     category: general
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - general
-    - lm_eval
+      - general
+      - lm_eval
   - benchmark_id: blimp_existential_there_object_raising
     name: Blimp Existential There Object Raising
     description: Blimp Existential There Object Raising evaluation benchmark
     category: general
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - general
-    - lm_eval
+      - general
+      - lm_eval
   - benchmark_id: blimp_existential_there_subject_raising
     name: Blimp Existential There Subject Raising
     description: Blimp Existential There Subject Raising evaluation benchmark
     category: general
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - general
-    - lm_eval
+      - general
+      - lm_eval
   - benchmark_id: blimp_intransitive
     name: Blimp Intransitive
     description: Blimp Intransitive evaluation benchmark
     category: general
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - general
-    - lm_eval
+      - general
+      - lm_eval
   - benchmark_id: blimp_irregular_plural_subject_verb_agreement_1
     name: Blimp Irregular Plural Subject Verb Agreement 1
     description: Blimp Irregular Plural Subject Verb Agreement 1 evaluation benchmark
     category: general
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - general
-    - lm_eval
+      - general
+      - lm_eval
   - benchmark_id: blimp_left_branch_island_simple_question
     name: Blimp Left Branch Island Simple Question
     description: Blimp Left Branch Island Simple Question evaluation benchmark
     category: general
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - general
-    - lm_eval
+      - general
+      - lm_eval
   - benchmark_id: blimp_npi_present_2
     name: Blimp Npi Present 2
     description: Blimp Npi Present 2 evaluation benchmark
     category: general
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - general
-    - lm_eval
+      - general
+      - lm_eval
   - benchmark_id: blimp_passive_1
     name: Blimp Passive 1
     description: Blimp Passive 1 evaluation benchmark
     category: general
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - general
-    - lm_eval
+      - general
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_egy
     name: Aradice Arabicmmlu Egy
     description: Aradice Arabicmmlu Egy evaluation benchmark
     category: knowledge
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - knowledge
-    - lm_eval
+      - knowledge
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_high_humanities_history_lev
     name: Aradice Arabicmmlu High Humanities History Lev
     description: Aradice Arabicmmlu High Humanities History Lev evaluation benchmark
     category: knowledge
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - knowledge
-    - lm_eval
+      - knowledge
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_high_humanities_philosophy_egy
     name: Aradice Arabicmmlu High Humanities Philosophy Egy
     description: Aradice Arabicmmlu High Humanities Philosophy Egy evaluation benchmark
     category: knowledge
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - knowledge
-    - lm_eval
+      - knowledge
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_high_language_arabic-language_lev
     name: Aradice Arabicmmlu High Language Arabic-Language Lev
     description: Aradice Arabicmmlu High Language Arabic-Language Lev evaluation benchmark
     category: knowledge
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - knowledge
-    - lm_eval
+      - knowledge
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_lev
     name: Aradice Arabicmmlu Lev
     description: Aradice Arabicmmlu Lev evaluation benchmark
     category: knowledge
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - knowledge
-    - lm_eval
+      - knowledge
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_middle_humanities_islamic-studies_egy
     name: Aradice Arabicmmlu Middle Humanities Islamic-Studies Egy
-    description: Aradice Arabicmmlu Middle Humanities Islamic-Studies Egy evaluation
+    description:
+      Aradice Arabicmmlu Middle Humanities Islamic-Studies Egy evaluation
       benchmark
     category: knowledge
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - knowledge
-    - lm_eval
+      - knowledge
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_middle_language_arabic-language_lev
     name: Aradice Arabicmmlu Middle Language Arabic-Language Lev
-    description: Aradice Arabicmmlu Middle Language Arabic-Language Lev evaluation
+    description:
+      Aradice Arabicmmlu Middle Language Arabic-Language Lev evaluation
       benchmark
     category: knowledge
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - knowledge
-    - lm_eval
+      - knowledge
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_na_humanities_islamic-studies_egy
     name: Aradice Arabicmmlu Na Humanities Islamic-Studies Egy
     description: Aradice Arabicmmlu Na Humanities Islamic-Studies Egy evaluation benchmark
     category: knowledge
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - knowledge
-    - lm_eval
+      - knowledge
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_na_language_arabic-language-general_lev
     name: Aradice Arabicmmlu Na Language Arabic-Language-General Lev
-    description: Aradice Arabicmmlu Na Language Arabic-Language-General Lev evaluation
+    description:
+      Aradice Arabicmmlu Na Language Arabic-Language-General Lev evaluation
       benchmark
     category: knowledge
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - knowledge
-    - lm_eval
+      - knowledge
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_na_other_driving-test_egy
     name: Aradice Arabicmmlu Na Other Driving-Test Egy
     description: Aradice Arabicmmlu Na Other Driving-Test Egy evaluation benchmark
     category: knowledge
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - knowledge
-    - lm_eval
+      - knowledge
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_na_other_general-knowledge_lev
     name: Aradice Arabicmmlu Na Other General-Knowledge Lev
     description: Aradice Arabicmmlu Na Other General-Knowledge Lev evaluation benchmark
     category: knowledge
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - knowledge
-    - lm_eval
+      - knowledge
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_primary_humanities_islamic-studies_egy
     name: Aradice Arabicmmlu Primary Humanities Islamic-Studies Egy
-    description: Aradice Arabicmmlu Primary Humanities Islamic-Studies Egy evaluation
+    description:
+      Aradice Arabicmmlu Primary Humanities Islamic-Studies Egy evaluation
       benchmark
     category: knowledge
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - knowledge
-    - lm_eval
+      - knowledge
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_primary_language_arabic-language_lev
     name: Aradice Arabicmmlu Primary Language Arabic-Language Lev
-    description: Aradice Arabicmmlu Primary Language Arabic-Language Lev evaluation
+    description:
+      Aradice Arabicmmlu Primary Language Arabic-Language Lev evaluation
       benchmark
     category: knowledge
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - knowledge
-    - lm_eval
+      - knowledge
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_univ_other_management_egy
     name: Aradice Arabicmmlu Univ Other Management Egy
     description: Aradice Arabicmmlu Univ Other Management Egy evaluation benchmark
     category: knowledge
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - knowledge
-    - lm_eval
+      - knowledge
+      - lm_eval
   - benchmark_id: AraDiCE_openbookqa_eng
     name: Aradice Openbookqa Eng
     description: Aradice Openbookqa Eng evaluation benchmark
     category: knowledge
     metrics:
-    - mc1
-    - mc2
-    - bleu
-    - rouge
+      - mc1
+      - mc2
+      - bleu
+      - rouge
     num_few_shot: 0
     dataset_size: 500
     tags:
-    - knowledge
-    - lm_eval
+      - knowledge
+      - lm_eval
   - benchmark_id: arabic_leaderboard_arabic_mt_boolq
     name: Arabic Leaderboard Arabic Mt Boolq
     description: Arabic Leaderboard Arabic Mt Boolq evaluation benchmark
     category: multilingual
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 3270
     tags:
-    - multilingual
-    - lm_eval
+      - multilingual
+      - lm_eval
   - benchmark_id: arabic_leaderboard_arabic_mt_boolq_light
     name: Arabic Leaderboard Arabic Mt Boolq Light
     description: Arabic Leaderboard Arabic Mt Boolq Light evaluation benchmark
     category: multilingual
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 3270
     tags:
-    - multilingual
-    - lm_eval
+      - multilingual
+      - lm_eval
   - benchmark_id: arabic_mt_boolq_light
     name: Arabic Mt Boolq Light
     description: Arabic Mt Boolq Light evaluation benchmark
     category: multilingual
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 3270
     tags:
-    - multilingual
-    - lm_eval
+      - multilingual
+      - lm_eval
   - benchmark_id: leaderboard_bbh_salient_translation_error_detection
     name: Leaderboard Bbh Salient Translation Error Detection
     description: Leaderboard Bbh Salient Translation Error Detection evaluation benchmark
     category: multilingual
     metrics:
-    - bleu
-    - chrf
+      - bleu
+      - chrf
     num_few_shot: 0
     dataset_size: 2000
     tags:
-    - multilingual
-    - lm_eval
+      - multilingual
+      - lm_eval
   - benchmark_id: aclue_ancient_chinese_culture
     name: Aclue Ancient Chinese Culture
     description: Aclue Ancient Chinese Culture evaluation benchmark
     category: multilingual
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 2000
     tags:
-    - multilingual
-    - lm_eval
+      - multilingual
+      - lm_eval
   - benchmark_id: african_flores
     name: African Flores
     description: African Flores evaluation benchmark
     category: multilingual
     metrics:
-    - bleu
-    - chrf
+      - bleu
+      - chrf
     num_few_shot: 0
     dataset_size: 2000
     tags:
-    - multilingual
-    - lm_eval
+      - multilingual
+      - lm_eval
   - benchmark_id: afrixnli-irokobench
     name: Afrixnli-Irokobench
     description: Afrixnli-Irokobench evaluation benchmark
     category: multilingual
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 2000
     tags:
-    - multilingual
-    - lm_eval
+      - multilingual
+      - lm_eval
   - benchmark_id: afrixnli_amh_prompt_2
     name: Afrixnli Amh Prompt 2
     description: Afrixnli Amh Prompt 2 evaluation benchmark
     category: multilingual
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 2000
     tags:
-    - multilingual
-    - lm_eval
+      - multilingual
+      - lm_eval
   - benchmark_id: afrixnli_amh_prompt_5
     name: Afrixnli Amh Prompt 5
     description: Afrixnli Amh Prompt 5 evaluation benchmark
     category: multilingual
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 2000
     tags:
-    - multilingual
-    - lm_eval
+      - multilingual
+      - lm_eval
   - benchmark_id: afrixnli_en_direct_ewe
     name: Afrixnli En Direct Ewe
     description: Afrixnli En Direct Ewe evaluation benchmark
     category: multilingual
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 2000
     tags:
-    - multilingual
-    - lm_eval
+      - multilingual
+      - lm_eval
   - benchmark_id: afrixnli_en_direct_ibo
     name: Afrixnli En Direct Ibo
     description: Afrixnli En Direct Ibo evaluation benchmark
     category: multilingual
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 2000
     tags:
-    - multilingual
-    - lm_eval
+      - multilingual
+      - lm_eval
   - benchmark_id: afrixnli_en_direct_lug
     name: Afrixnli En Direct Lug
     description: Afrixnli En Direct Lug evaluation benchmark
     category: multilingual
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 2000
     tags:
-    - multilingual
-    - lm_eval
+      - multilingual
+      - lm_eval
   - benchmark_id: afrixnli_en_direct_sot
     name: Afrixnli En Direct Sot
     description: Afrixnli En Direct Sot evaluation benchmark
     category: multilingual
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 2000
     tags:
-    - multilingual
-    - lm_eval
+      - multilingual
+      - lm_eval
   - benchmark_id: afrixnli_en_direct_wol
     name: Afrixnli En Direct Wol
     description: Afrixnli En Direct Wol evaluation benchmark
     category: multilingual
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 2000
     tags:
-    - multilingual
-    - lm_eval
+      - multilingual
+      - lm_eval
   - benchmark_id: afrixnli_en_direct_zul
     name: Afrixnli En Direct Zul
     description: Afrixnli En Direct Zul evaluation benchmark
     category: multilingual
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 2000
     tags:
-    - multilingual
-    - lm_eval
+      - multilingual
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_primary_stem_math_egy
     name: Aradice Arabicmmlu Primary Stem Math Egy
     description: Aradice Arabicmmlu Primary Stem Math Egy evaluation benchmark
     category: math
     metrics:
-    - exact_match
-    - accuracy
+      - exact_match
+      - accuracy
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - math
-    - lm_eval
+      - math
+      - lm_eval
   - benchmark_id: arabic_leaderboard_arabic_mmlu_college_mathematics_light
     name: Arabic Leaderboard Arabic Mmlu College Mathematics Light
-    description: Arabic Leaderboard Arabic Mmlu College Mathematics Light evaluation
+    description:
+      Arabic Leaderboard Arabic Mmlu College Mathematics Light evaluation
       benchmark
     category: math
     metrics:
-    - exact_match
-    - accuracy
+      - exact_match
+      - accuracy
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - math
-    - lm_eval
+      - math
+      - lm_eval
   - benchmark_id: arabic_leaderboard_arabic_mmlu_high_school_mathematics
     name: Arabic Leaderboard Arabic Mmlu High School Mathematics
-    description: Arabic Leaderboard Arabic Mmlu High School Mathematics evaluation
+    description:
+      Arabic Leaderboard Arabic Mmlu High School Mathematics evaluation
       benchmark
     category: math
     metrics:
-    - exact_match
-    - accuracy
+      - exact_match
+      - accuracy
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - math
-    - lm_eval
+      - math
+      - lm_eval
   - benchmark_id: cmmlu_college_mathematics
     name: Cmmlu College Mathematics
     description: Cmmlu College Mathematics evaluation benchmark
     category: math
     metrics:
-    - exact_match
-    - accuracy
+      - exact_match
+      - accuracy
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - math
-    - lm_eval
+      - math
+      - lm_eval
   - benchmark_id: cmmlu_high_school_mathematics
     name: Cmmlu High School Mathematics
     description: Cmmlu High School Mathematics evaluation benchmark
     category: math
     metrics:
-    - exact_match
-    - accuracy
+      - exact_match
+      - accuracy
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - math
-    - lm_eval
+      - math
+      - lm_eval
   - benchmark_id: global_mmlu_full_am_high_school_mathematics
     name: Global Mmlu Full Am High School Mathematics
     description: Global Mmlu Full Am High School Mathematics evaluation benchmark
     category: math
     metrics:
-    - exact_match
-    - accuracy
+      - exact_match
+      - accuracy
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - math
-    - lm_eval
+      - math
+      - lm_eval
   - benchmark_id: global_mmlu_full_ar_high_school_mathematics
     name: Global Mmlu Full Ar High School Mathematics
     description: Global Mmlu Full Ar High School Mathematics evaluation benchmark
     category: math
     metrics:
-    - exact_match
-    - accuracy
+      - exact_match
+      - accuracy
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - math
-    - lm_eval
+      - math
+      - lm_eval
   - benchmark_id: global_mmlu_full_bn_high_school_mathematics
     name: Global Mmlu Full Bn High School Mathematics
     description: Global Mmlu Full Bn High School Mathematics evaluation benchmark
     category: math
     metrics:
-    - exact_match
-    - accuracy
+      - exact_match
+      - accuracy
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - math
-    - lm_eval
+      - math
+      - lm_eval
   - benchmark_id: global_mmlu_full_cs_high_school_mathematics
     name: Global Mmlu Full Cs High School Mathematics
     description: Global Mmlu Full Cs High School Mathematics evaluation benchmark
     category: math
     metrics:
-    - exact_match
-    - accuracy
+      - exact_match
+      - accuracy
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - math
-    - lm_eval
+      - math
+      - lm_eval
   - benchmark_id: global_mmlu_full_de_high_school_mathematics
     name: Global Mmlu Full De High School Mathematics
     description: Global Mmlu Full De High School Mathematics evaluation benchmark
     category: math
     metrics:
-    - exact_match
-    - accuracy
+      - exact_match
+      - accuracy
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - math
-    - lm_eval
+      - math
+      - lm_eval
   - benchmark_id: global_mmlu_full_el_high_school_mathematics
     name: Global Mmlu Full El High School Mathematics
     description: Global Mmlu Full El High School Mathematics evaluation benchmark
     category: math
     metrics:
-    - exact_match
-    - accuracy
+      - exact_match
+      - accuracy
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - math
-    - lm_eval
+      - math
+      - lm_eval
   - benchmark_id: global_mmlu_full_en_high_school_mathematics
     name: Global Mmlu Full En High School Mathematics
     description: Global Mmlu Full En High School Mathematics evaluation benchmark
     category: math
     metrics:
-    - exact_match
-    - accuracy
+      - exact_match
+      - accuracy
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - math
-    - lm_eval
+      - math
+      - lm_eval
   - benchmark_id: global_mmlu_full_es_high_school_mathematics
     name: Global Mmlu Full Es High School Mathematics
     description: Global Mmlu Full Es High School Mathematics evaluation benchmark
     category: math
     metrics:
-    - exact_match
-    - accuracy
+      - exact_match
+      - accuracy
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - math
-    - lm_eval
+      - math
+      - lm_eval
   - benchmark_id: global_mmlu_full_fa_high_school_mathematics
     name: Global Mmlu Full Fa High School Mathematics
     description: Global Mmlu Full Fa High School Mathematics evaluation benchmark
     category: math
     metrics:
-    - exact_match
-    - accuracy
+      - exact_match
+      - accuracy
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - math
-    - lm_eval
+      - math
+      - lm_eval
   - benchmark_id: global_mmlu_full_fil_high_school_mathematics
     name: Global Mmlu Full Fil High School Mathematics
     description: Global Mmlu Full Fil High School Mathematics evaluation benchmark
     category: math
     metrics:
-    - exact_match
-    - accuracy
+      - exact_match
+      - accuracy
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - math
-    - lm_eval
+      - math
+      - lm_eval
   - benchmark_id: AraDiCE_piqa_lev
     name: Aradice Piqa Lev
     description: Aradice Piqa Lev evaluation benchmark
     category: reasoning
     metrics:
-    - mc1
-    - mc2
-    - bleu
-    - rouge
+      - mc1
+      - mc2
+      - bleu
+      - rouge
     num_few_shot: 0
     dataset_size: 1838
     tags:
-    - reasoning
-    - lm_eval
+      - reasoning
+      - lm_eval
   - benchmark_id: AraDiCE_winogrande_eng
     name: Aradice Winogrande Eng
     description: Aradice Winogrande Eng evaluation benchmark
     category: reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1267
     tags:
-    - reasoning
-    - lm_eval
+      - reasoning
+      - lm_eval
   - benchmark_id: arabic_leaderboard_arabic_mt_copa
     name: Arabic Leaderboard Arabic Mt Copa
     description: Arabic Leaderboard Arabic Mt Copa evaluation benchmark
     category: reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 500
     tags:
-    - reasoning
-    - lm_eval
+      - reasoning
+      - lm_eval
   - benchmark_id: arabic_leaderboard_arabic_mt_copa_light
     name: Arabic Leaderboard Arabic Mt Copa Light
     description: Arabic Leaderboard Arabic Mt Copa Light evaluation benchmark
     category: reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 500
     tags:
-    - reasoning
-    - lm_eval
+      - reasoning
+      - lm_eval
   - benchmark_id: arabic_leaderboard_arabic_mt_hellaswag
     name: Arabic Leaderboard Arabic Mt Hellaswag
     description: Arabic Leaderboard Arabic Mt Hellaswag evaluation benchmark
     category: reasoning
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 10042
     tags:
-    - reasoning
-    - lm_eval
+      - reasoning
+      - lm_eval
   - benchmark_id: arabic_leaderboard_arabic_mt_hellaswag_light
     name: Arabic Leaderboard Arabic Mt Hellaswag Light
     description: Arabic Leaderboard Arabic Mt Hellaswag Light evaluation benchmark
     category: reasoning
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 10042
     tags:
-    - reasoning
-    - lm_eval
+      - reasoning
+      - lm_eval
   - benchmark_id: arabic_leaderboard_arabic_mt_piqa
     name: Arabic Leaderboard Arabic Mt Piqa
     description: Arabic Leaderboard Arabic Mt Piqa evaluation benchmark
     category: reasoning
     metrics:
-    - mc1
-    - mc2
-    - bleu
-    - rouge
+      - mc1
+      - mc2
+      - bleu
+      - rouge
     num_few_shot: 0
     dataset_size: 1838
     tags:
-    - reasoning
-    - lm_eval
+      - reasoning
+      - lm_eval
   - benchmark_id: arabic_leaderboard_arabic_mt_piqa_light
     name: Arabic Leaderboard Arabic Mt Piqa Light
     description: Arabic Leaderboard Arabic Mt Piqa Light evaluation benchmark
     category: reasoning
     metrics:
-    - mc1
-    - mc2
-    - bleu
-    - rouge
+      - mc1
+      - mc2
+      - bleu
+      - rouge
     num_few_shot: 0
     dataset_size: 1838
     tags:
-    - reasoning
-    - lm_eval
+      - reasoning
+      - lm_eval
   - benchmark_id: arabic_mt_hellaswag
     name: Arabic Mt Hellaswag
     description: Arabic Mt Hellaswag evaluation benchmark
     category: reasoning
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 10042
     tags:
-    - reasoning
-    - lm_eval
+      - reasoning
+      - lm_eval
   - benchmark_id: arabic_mt_piqa
     name: Arabic Mt Piqa
     description: Arabic Mt Piqa evaluation benchmark
     category: reasoning
     metrics:
-    - mc1
-    - mc2
-    - bleu
-    - rouge
+      - mc1
+      - mc2
+      - bleu
+      - rouge
     num_few_shot: 0
     dataset_size: 1838
     tags:
-    - reasoning
-    - lm_eval
+      - reasoning
+      - lm_eval
   - benchmark_id: copa_ar
     name: Copa Ar
     description: Copa Ar evaluation benchmark
     category: reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 500
     tags:
-    - reasoning
-    - lm_eval
+      - reasoning
+      - lm_eval
   - benchmark_id: copal_id_colloquial
     name: Copal Id Colloquial
     description: Copal Id Colloquial evaluation benchmark
     category: reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 500
     tags:
-    - reasoning
-    - lm_eval
+      - reasoning
+      - lm_eval
   - benchmark_id: darijahellaswag
     name: Darijahellaswag
     description: Darijahellaswag evaluation benchmark
     category: reasoning
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 10042
     tags:
-    - reasoning
-    - lm_eval
+      - reasoning
+      - lm_eval
   - benchmark_id: egyhellaswag
     name: Egyhellaswag
     description: Egyhellaswag evaluation benchmark
     category: reasoning
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 10042
     tags:
-    - reasoning
-    - lm_eval
+      - reasoning
+      - lm_eval
   - benchmark_id: hellaswag_ar
     name: Hellaswag Ar
     description: Hellaswag Ar evaluation benchmark
     category: reasoning
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 10042
     tags:
-    - reasoning
-    - lm_eval
+      - reasoning
+      - lm_eval
   - benchmark_id: arabic_leaderboard_arabic_mt_race
     name: Arabic Leaderboard Arabic Mt Race
     description: Arabic Leaderboard Arabic Mt Race evaluation benchmark
     category: reading_comprehension
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 674
     tags:
-    - reading_comprehension
-    - lm_eval
+      - reading_comprehension
+      - lm_eval
   - benchmark_id: arabic_leaderboard_arabic_mt_race_light
     name: Arabic Leaderboard Arabic Mt Race Light
     description: Arabic Leaderboard Arabic Mt Race Light evaluation benchmark
     category: reading_comprehension
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 674
     tags:
-    - reading_comprehension
-    - lm_eval
+      - reading_comprehension
+      - lm_eval
   - benchmark_id: arabic_mt_race_light
     name: Arabic Mt Race Light
     description: Arabic Mt Race Light evaluation benchmark
     category: reading_comprehension
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 674
     tags:
-    - reading_comprehension
-    - lm_eval
+      - reading_comprehension
+      - lm_eval
   - benchmark_id: blimp_drop_argument
     name: Blimp Drop Argument
     description: Blimp Drop Argument evaluation benchmark
     category: reading_comprehension
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 9536
     tags:
-    - reading_comprehension
-    - lm_eval
+      - reading_comprehension
+      - lm_eval
   - benchmark_id: bigbench_gre_reading_comprehension_multiple_choice
     name: Bigbench Gre Reading Comprehension Multiple Choice
     description: Bigbench Gre Reading Comprehension Multiple Choice evaluation benchmark
     category: reading_comprehension
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 3000
     tags:
-    - reading_comprehension
-    - lm_eval
+      - reading_comprehension
+      - lm_eval
   - benchmark_id: eus_reading
     name: Eus Reading
     description: Eus Reading evaluation benchmark
     category: reading_comprehension
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 3000
     tags:
-    - reading_comprehension
-    - lm_eval
+      - reading_comprehension
+      - lm_eval
   - benchmark_id: longbench_qasper
     name: Longbench Qasper
     description: Longbench Qasper evaluation benchmark
     category: reading_comprehension
     metrics:
-    - mc1
-    - mc2
-    - bleu
-    - rouge
+      - mc1
+      - mc2
+      - bleu
+      - rouge
     num_few_shot: 0
     dataset_size: 3000
     tags:
-    - reading_comprehension
-    - lm_eval
+      - reading_comprehension
+      - lm_eval
   - benchmark_id: qasper_freeform
     name: Qasper Freeform
     description: Qasper Freeform evaluation benchmark
     category: reading_comprehension
     metrics:
-    - mc1
-    - mc2
-    - bleu
-    - rouge
+      - mc1
+      - mc2
+      - bleu
+      - rouge
     num_few_shot: 0
     dataset_size: 3000
     tags:
-    - reading_comprehension
-    - lm_eval
+      - reading_comprehension
+      - lm_eval
   - benchmark_id: ruler_qa_squad
     name: Ruler Qa Squad
     description: Ruler Qa Squad evaluation benchmark
     category: reading_comprehension
     metrics:
-    - mc1
-    - mc2
-    - bleu
-    - rouge
+      - mc1
+      - mc2
+      - bleu
+      - rouge
     num_few_shot: 0
     dataset_size: 3000
     tags:
-    - reading_comprehension
-    - lm_eval
+      - reading_comprehension
+      - lm_eval
   - benchmark_id: scrolls_qasper
     name: Scrolls Qasper
     description: Scrolls Qasper evaluation benchmark
     category: reading_comprehension
     metrics:
-    - mc1
-    - mc2
-    - bleu
-    - rouge
+      - mc1
+      - mc2
+      - bleu
+      - rouge
     num_few_shot: 0
     dataset_size: 3000
     tags:
-    - reading_comprehension
-    - lm_eval
+      - reading_comprehension
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_high_social-science_economics_egy
     name: Aradice Arabicmmlu High Social-Science Economics Egy
     description: Aradice Arabicmmlu High Social-Science Economics Egy evaluation benchmark
     category: science
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - science
-    - lm_eval
+      - science
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_high_social-science_geography_lev
     name: Aradice Arabicmmlu High Social-Science Geography Lev
     description: Aradice Arabicmmlu High Social-Science Geography Lev evaluation benchmark
     category: science
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - science
-    - lm_eval
+      - science
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_high_stem_computer-science_egy
     name: Aradice Arabicmmlu High Stem Computer-Science Egy
     description: Aradice Arabicmmlu High Stem Computer-Science Egy evaluation benchmark
     category: science
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - science
-    - lm_eval
+      - science
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_high_stem_physics_lev
     name: Aradice Arabicmmlu High Stem Physics Lev
     description: Aradice Arabicmmlu High Stem Physics Lev evaluation benchmark
     category: science
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - science
-    - lm_eval
+      - science
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_middle_social-science_civics_egy
     name: Aradice Arabicmmlu Middle Social-Science Civics Egy
     description: Aradice Arabicmmlu Middle Social-Science Civics Egy evaluation benchmark
     category: science
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - science
-    - lm_eval
+      - science
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_middle_social-science_economics_lev
     name: Aradice Arabicmmlu Middle Social-Science Economics Lev
-    description: Aradice Arabicmmlu Middle Social-Science Economics Lev evaluation
+    description:
+      Aradice Arabicmmlu Middle Social-Science Economics Lev evaluation
       benchmark
     category: science
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - science
-    - lm_eval
+      - science
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_middle_social-science_social-science_egy
     name: Aradice Arabicmmlu Middle Social-Science Social-Science Egy
-    description: Aradice Arabicmmlu Middle Social-Science Social-Science Egy evaluation
+    description:
+      Aradice Arabicmmlu Middle Social-Science Social-Science Egy evaluation
       benchmark
     category: science
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - science
-    - lm_eval
+      - science
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_middle_stem_computer-science_lev
     name: Aradice Arabicmmlu Middle Stem Computer-Science Lev
     description: Aradice Arabicmmlu Middle Stem Computer-Science Lev evaluation benchmark
     category: science
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - science
-    - lm_eval
+      - science
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_primary_social-science_geography_egy
     name: Aradice Arabicmmlu Primary Social-Science Geography Egy
-    description: Aradice Arabicmmlu Primary Social-Science Geography Egy evaluation
+    description:
+      Aradice Arabicmmlu Primary Social-Science Geography Egy evaluation
       benchmark
     category: science
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - science
-    - lm_eval
+      - science
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_primary_social-science_social-science_lev
     name: Aradice Arabicmmlu Primary Social-Science Social-Science Lev
-    description: Aradice Arabicmmlu Primary Social-Science Social-Science Lev evaluation
+    description:
+      Aradice Arabicmmlu Primary Social-Science Social-Science Lev evaluation
       benchmark
     category: science
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - science
-    - lm_eval
+      - science
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_primary_stem_natural-science_lev
     name: Aradice Arabicmmlu Primary Stem Natural-Science Lev
     description: Aradice Arabicmmlu Primary Stem Natural-Science Lev evaluation benchmark
     category: science
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - science
-    - lm_eval
+      - science
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_univ_social-science_accounting_lev
     name: Aradice Arabicmmlu Univ Social-Science Accounting Lev
-    description: Aradice Arabicmmlu Univ Social-Science Accounting Lev evaluation
+    description:
+      Aradice Arabicmmlu Univ Social-Science Accounting Lev evaluation
       benchmark
     category: science
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - science
-    - lm_eval
+      - science
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_univ_social-science_political-science_egy
     name: Aradice Arabicmmlu Univ Social-Science Political-Science Egy
-    description: Aradice Arabicmmlu Univ Social-Science Political-Science Egy evaluation
+    description:
+      Aradice Arabicmmlu Univ Social-Science Political-Science Egy evaluation
       benchmark
     category: science
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - science
-    - lm_eval
+      - science
+      - lm_eval
   - benchmark_id: AraDiCE_ArabicMMLU_univ_stem_computer-science_lev
     name: Aradice Arabicmmlu Univ Stem Computer-Science Lev
     description: Aradice Arabicmmlu Univ Stem Computer-Science Lev evaluation benchmark
     category: science
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - science
-    - lm_eval
+      - science
+      - lm_eval
   - benchmark_id: arabic_leaderboard_arabic_mmlu_college_biology_light
     name: Arabic Leaderboard Arabic Mmlu College Biology Light
     description: Arabic Leaderboard Arabic Mmlu College Biology Light evaluation benchmark
     category: science
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - science
-    - lm_eval
+      - science
+      - lm_eval
   - benchmark_id: agieval_logiqa_zh
     name: Agieval Logiqa Zh
     description: Agieval Logiqa Zh evaluation benchmark
     category: logic_reasoning
     metrics:
-    - mc1
-    - mc2
-    - bleu
-    - rouge
+      - mc1
+      - mc2
+      - bleu
+      - rouge
     num_few_shot: 0
     dataset_size: 651
     tags:
-    - logic_reasoning
-    - lm_eval
+      - logic_reasoning
+      - lm_eval
   - benchmark_id: bbh
     name: Bbh
     description: Bbh evaluation benchmark
     category: logic_reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - logic_reasoning
-    - lm_eval
+      - logic_reasoning
+      - lm_eval
   - benchmark_id: bbh_cot_fewshot
     name: Bbh Cot Fewshot
     description: Bbh Cot Fewshot evaluation benchmark
     category: logic_reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 5
     dataset_size: 1000
     tags:
-    - logic_reasoning
-    - lm_eval
+      - logic_reasoning
+      - lm_eval
   - benchmark_id: bbh_cot_fewshot_causal_judgement
     name: Bbh Cot Fewshot Causal Judgement
     description: Bbh Cot Fewshot Causal Judgement evaluation benchmark
     category: logic_reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 5
     dataset_size: 1000
     tags:
-    - logic_reasoning
-    - lm_eval
+      - logic_reasoning
+      - lm_eval
   - benchmark_id: bbh_cot_fewshot_dyck_languages
     name: Bbh Cot Fewshot Dyck Languages
     description: Bbh Cot Fewshot Dyck Languages evaluation benchmark
     category: logic_reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 5
     dataset_size: 1000
     tags:
-    - logic_reasoning
-    - lm_eval
+      - logic_reasoning
+      - lm_eval
   - benchmark_id: bbh_cot_fewshot_hyperbaton
     name: Bbh Cot Fewshot Hyperbaton
     description: Bbh Cot Fewshot Hyperbaton evaluation benchmark
     category: logic_reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 5
     dataset_size: 1000
     tags:
-    - logic_reasoning
-    - lm_eval
+      - logic_reasoning
+      - lm_eval
   - benchmark_id: bbh_cot_fewshot_logical_deduction_three_objects
     name: Bbh Cot Fewshot Logical Deduction Three Objects
     description: Bbh Cot Fewshot Logical Deduction Three Objects evaluation benchmark
     category: logic_reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 5
     dataset_size: 1000
     tags:
-    - logic_reasoning
-    - lm_eval
+      - logic_reasoning
+      - lm_eval
   - benchmark_id: bbh_cot_fewshot_navigate
     name: Bbh Cot Fewshot Navigate
     description: Bbh Cot Fewshot Navigate evaluation benchmark
     category: logic_reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 5
     dataset_size: 1000
     tags:
-    - logic_reasoning
-    - lm_eval
+      - logic_reasoning
+      - lm_eval
   - benchmark_id: bbh_cot_fewshot_reasoning_about_colored_objects
     name: Bbh Cot Fewshot Reasoning About Colored Objects
     description: Bbh Cot Fewshot Reasoning About Colored Objects evaluation benchmark
     category: logic_reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 5
     dataset_size: 1000
     tags:
-    - logic_reasoning
-    - lm_eval
+      - logic_reasoning
+      - lm_eval
   - benchmark_id: bbh_cot_fewshot_snarks
     name: Bbh Cot Fewshot Snarks
     description: Bbh Cot Fewshot Snarks evaluation benchmark
     category: logic_reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 5
     dataset_size: 1000
     tags:
-    - logic_reasoning
-    - lm_eval
+      - logic_reasoning
+      - lm_eval
   - benchmark_id: bbh_cot_fewshot_tracking_shuffled_objects_five_objects
     name: Bbh Cot Fewshot Tracking Shuffled Objects Five Objects
-    description: Bbh Cot Fewshot Tracking Shuffled Objects Five Objects evaluation
+    description:
+      Bbh Cot Fewshot Tracking Shuffled Objects Five Objects evaluation
       benchmark
     category: logic_reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 5
     dataset_size: 1000
     tags:
-    - logic_reasoning
-    - lm_eval
+      - logic_reasoning
+      - lm_eval
   - benchmark_id: bbh_cot_fewshot_web_of_lies
     name: Bbh Cot Fewshot Web Of Lies
     description: Bbh Cot Fewshot Web Of Lies evaluation benchmark
     category: logic_reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 5
     dataset_size: 1000
     tags:
-    - logic_reasoning
-    - lm_eval
+      - logic_reasoning
+      - lm_eval
   - benchmark_id: bbh_cot_zeroshot
     name: Bbh Cot Zeroshot
     description: Bbh Cot Zeroshot evaluation benchmark
     category: logic_reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - logic_reasoning
-    - lm_eval
+      - logic_reasoning
+      - lm_eval
   - benchmark_id: bbh_cot_zeroshot_causal_judgement
     name: Bbh Cot Zeroshot Causal Judgement
     description: Bbh Cot Zeroshot Causal Judgement evaluation benchmark
     category: logic_reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - logic_reasoning
-    - lm_eval
+      - logic_reasoning
+      - lm_eval
   - benchmark_id: bbh_cot_zeroshot_dyck_languages
     name: Bbh Cot Zeroshot Dyck Languages
     description: Bbh Cot Zeroshot Dyck Languages evaluation benchmark
     category: logic_reasoning
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - logic_reasoning
-    - lm_eval
+      - logic_reasoning
+      - lm_eval
   - benchmark_id: arabic_leaderboard_arabic_mmlu_anatomy
     name: Arabic Leaderboard Arabic Mmlu Anatomy
     description: Arabic Leaderboard Arabic Mmlu Anatomy evaluation benchmark
     category: medical
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - medical
-    - lm_eval
+      - medical
+      - lm_eval
   - benchmark_id: arabic_leaderboard_arabic_mmlu_clinical_knowledge
     name: Arabic Leaderboard Arabic Mmlu Clinical Knowledge
     description: Arabic Leaderboard Arabic Mmlu Clinical Knowledge evaluation benchmark
     category: medical
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - medical
-    - lm_eval
+      - medical
+      - lm_eval
   - benchmark_id: arabic_leaderboard_arabic_mmlu_medical_genetics
     name: Arabic Leaderboard Arabic Mmlu Medical Genetics
     description: Arabic Leaderboard Arabic Mmlu Medical Genetics evaluation benchmark
     category: medical
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - medical
-    - lm_eval
+      - medical
+      - lm_eval
   - benchmark_id: arabic_leaderboard_arabic_mmlu_professional_medicine
     name: Arabic Leaderboard Arabic Mmlu Professional Medicine
     description: Arabic Leaderboard Arabic Mmlu Professional Medicine evaluation benchmark
     category: medical
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - medical
-    - lm_eval
+      - medical
+      - lm_eval
   - benchmark_id: cmmlu_professional_medicine
     name: Cmmlu Professional Medicine
     description: Cmmlu Professional Medicine evaluation benchmark
     category: medical
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - medical
-    - lm_eval
+      - medical
+      - lm_eval
   - benchmark_id: cmmlu_traditional_chinese_medicine
     name: Cmmlu Traditional Chinese Medicine
     description: Cmmlu Traditional Chinese Medicine evaluation benchmark
     category: medical
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - medical
-    - lm_eval
+      - medical
+      - lm_eval
   - benchmark_id: global_mmlu_full_am_anatomy
     name: Global Mmlu Full Am Anatomy
     description: Global Mmlu Full Am Anatomy evaluation benchmark
     category: medical
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - medical
-    - lm_eval
+      - medical
+      - lm_eval
   - benchmark_id: global_mmlu_full_am_clinical_knowledge
     name: Global Mmlu Full Am Clinical Knowledge
     description: Global Mmlu Full Am Clinical Knowledge evaluation benchmark
     category: medical
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - medical
-    - lm_eval
+      - medical
+      - lm_eval
   - benchmark_id: global_mmlu_full_am_medical_genetics
     name: Global Mmlu Full Am Medical Genetics
     description: Global Mmlu Full Am Medical Genetics evaluation benchmark
     category: medical
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - medical
-    - lm_eval
+      - medical
+      - lm_eval
   - benchmark_id: global_mmlu_full_am_professional_medicine
     name: Global Mmlu Full Am Professional Medicine
     description: Global Mmlu Full Am Professional Medicine evaluation benchmark
     category: medical
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - medical
-    - lm_eval
+      - medical
+      - lm_eval
   - benchmark_id: global_mmlu_full_ar_anatomy
     name: Global Mmlu Full Ar Anatomy
     description: Global Mmlu Full Ar Anatomy evaluation benchmark
     category: medical
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - medical
-    - lm_eval
+      - medical
+      - lm_eval
   - benchmark_id: global_mmlu_full_ar_clinical_knowledge
     name: Global Mmlu Full Ar Clinical Knowledge
     description: Global Mmlu Full Ar Clinical Knowledge evaluation benchmark
     category: medical
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - medical
-    - lm_eval
+      - medical
+      - lm_eval
   - benchmark_id: global_mmlu_full_ar_medical_genetics
     name: Global Mmlu Full Ar Medical Genetics
     description: Global Mmlu Full Ar Medical Genetics evaluation benchmark
     category: medical
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - medical
-    - lm_eval
+      - medical
+      - lm_eval
   - benchmark_id: global_mmlu_full_ar_professional_medicine
     name: Global Mmlu Full Ar Professional Medicine
     description: Global Mmlu Full Ar Professional Medicine evaluation benchmark
     category: medical
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - medical
-    - lm_eval
+      - medical
+      - lm_eval
   - benchmark_id: global_mmlu_full_bn_anatomy
     name: Global Mmlu Full Bn Anatomy
     description: Global Mmlu Full Bn Anatomy evaluation benchmark
     category: medical
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 14042
     tags:
-    - medical
-    - lm_eval
+      - medical
+      - lm_eval
   - benchmark_id: lambada_openai
     name: Lambada Openai
     description: Lambada Openai evaluation benchmark
     category: language_modeling
     metrics:
-    - perplexity
-    - accuracy
+      - perplexity
+      - accuracy
     num_few_shot: 0
     dataset_size: 5153
     tags:
-    - language_modeling
-    - lm_eval
+      - language_modeling
+      - lm_eval
   - benchmark_id: lambada_openai_mt_en
     name: Lambada Openai Mt En
     description: Lambada Openai Mt En evaluation benchmark
     category: language_modeling
     metrics:
-    - perplexity
-    - accuracy
+      - perplexity
+      - accuracy
     num_few_shot: 0
     dataset_size: 5153
     tags:
-    - language_modeling
-    - lm_eval
+      - language_modeling
+      - lm_eval
   - benchmark_id: lambada_openai_mt_it
     name: Lambada Openai Mt It
     description: Lambada Openai Mt It evaluation benchmark
     category: language_modeling
     metrics:
-    - perplexity
-    - accuracy
+      - perplexity
+      - accuracy
     num_few_shot: 0
     dataset_size: 5153
     tags:
-    - language_modeling
-    - lm_eval
+      - language_modeling
+      - lm_eval
   - benchmark_id: lambada_openai_mt_stablelm_es
     name: Lambada Openai Mt Stablelm Es
     description: Lambada Openai Mt Stablelm Es evaluation benchmark
     category: language_modeling
     metrics:
-    - perplexity
-    - accuracy
+      - perplexity
+      - accuracy
     num_few_shot: 0
     dataset_size: 5153
     tags:
-    - language_modeling
-    - lm_eval
+      - language_modeling
+      - lm_eval
   - benchmark_id: lambada_openai_mt_stablelm_nl
     name: Lambada Openai Mt Stablelm Nl
     description: Lambada Openai Mt Stablelm Nl evaluation benchmark
     category: language_modeling
     metrics:
-    - perplexity
-    - accuracy
+      - perplexity
+      - accuracy
     num_few_shot: 0
     dataset_size: 5153
     tags:
-    - language_modeling
-    - lm_eval
+      - language_modeling
+      - lm_eval
   - benchmark_id: lambada_standard_cloze_yaml
     name: Lambada Standard Cloze Yaml
     description: Lambada Standard Cloze Yaml evaluation benchmark
     category: language_modeling
     metrics:
-    - perplexity
-    - accuracy
+      - perplexity
+      - accuracy
     num_few_shot: 0
     dataset_size: 5153
     tags:
-    - language_modeling
-    - lm_eval
+      - language_modeling
+      - lm_eval
   - benchmark_id: paloma_wikitext_103
     name: Paloma Wikitext 103
     description: Paloma Wikitext 103 evaluation benchmark
     category: language_modeling
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 4358
     tags:
-    - language_modeling
-    - lm_eval
+      - language_modeling
+      - lm_eval
   - benchmark_id: pile_arxiv
     name: Pile Arxiv
     description: Pile Arxiv evaluation benchmark
     category: language_modeling
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 210000000
     tags:
-    - language_modeling
-    - lm_eval
+      - language_modeling
+      - lm_eval
   - benchmark_id: pile_freelaw
     name: Pile Freelaw
     description: Pile Freelaw evaluation benchmark
     category: language_modeling
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 210000000
     tags:
-    - language_modeling
-    - lm_eval
+      - language_modeling
+      - lm_eval
   - benchmark_id: pile_hackernews
     name: Pile Hackernews
     description: Pile Hackernews evaluation benchmark
     category: language_modeling
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 210000000
     tags:
-    - language_modeling
-    - lm_eval
+      - language_modeling
+      - lm_eval
   - benchmark_id: pile_openwebtext2
     name: Pile Openwebtext2
     description: Pile Openwebtext2 evaluation benchmark
     category: language_modeling
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 210000000
     tags:
-    - language_modeling
-    - lm_eval
+      - language_modeling
+      - lm_eval
   - benchmark_id: pile_ubuntu-irc
     name: Pile Ubuntu-Irc
     description: Pile Ubuntu-Irc evaluation benchmark
     category: language_modeling
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 210000000
     tags:
-    - language_modeling
-    - lm_eval
+      - language_modeling
+      - lm_eval
   - benchmark_id: pile_youtubesubtitles
     name: Pile Youtubesubtitles
     description: Pile Youtubesubtitles evaluation benchmark
     category: language_modeling
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 210000000
     tags:
-    - language_modeling
-    - lm_eval
+      - language_modeling
+      - lm_eval
   - benchmark_id: wikitext
     name: Wikitext
     description: Wikitext evaluation benchmark
     category: language_modeling
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 4358
     tags:
-    - language_modeling
-    - lm_eval
+      - language_modeling
+      - lm_eval
   - benchmark_id: careqa_open_perplexity
     name: Careqa Open Perplexity
     description: Careqa Open Perplexity evaluation benchmark
     category: language_modeling
     metrics:
-    - mc1
-    - mc2
-    - bleu
-    - rouge
+      - mc1
+      - mc2
+      - bleu
+      - rouge
     num_few_shot: 0
     dataset_size: 10000
     tags:
-    - language_modeling
-    - lm_eval
+      - language_modeling
+      - lm_eval
   - benchmark_id: AraDiCE_truthfulqa_mc1_lev
     name: Aradice Truthfulqa Mc1 Lev
     description: Aradice Truthfulqa Mc1 Lev evaluation benchmark
     category: safety
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 817
     tags:
-    - safety
-    - lm_eval
+      - safety
+      - lm_eval
   - benchmark_id: metabench_truthfulqa_permute
     name: Metabench Truthfulqa Permute
     description: Metabench Truthfulqa Permute evaluation benchmark
     category: safety
     metrics:
-    - mc1
-    - mc2
-    - bleu
-    - rouge
+      - mc1
+      - mc2
+      - bleu
+      - rouge
     num_few_shot: 0
     dataset_size: 817
     tags:
-    - safety
-    - lm_eval
+      - safety
+      - lm_eval
   - benchmark_id: nortruthfulqa_gen_nno_p0
     name: Nortruthfulqa Gen Nno P0
     description: Nortruthfulqa Gen Nno P0 evaluation benchmark
     category: safety
     metrics:
-    - mc1
-    - mc2
-    - bleu
-    - rouge
+      - mc1
+      - mc2
+      - bleu
+      - rouge
     num_few_shot: 0
     dataset_size: 817
     tags:
-    - safety
-    - lm_eval
+      - safety
+      - lm_eval
   - benchmark_id: nortruthfulqa_gen_nno_p3
     name: Nortruthfulqa Gen Nno P3
     description: Nortruthfulqa Gen Nno P3 evaluation benchmark
     category: safety
     metrics:
-    - mc1
-    - mc2
-    - bleu
-    - rouge
+      - mc1
+      - mc2
+      - bleu
+      - rouge
     num_few_shot: 0
     dataset_size: 817
     tags:
-    - safety
-    - lm_eval
+      - safety
+      - lm_eval
   - benchmark_id: nortruthfulqa_gen_nob_p1
     name: Nortruthfulqa Gen Nob P1
     description: Nortruthfulqa Gen Nob P1 evaluation benchmark
     category: safety
     metrics:
-    - mc1
-    - mc2
-    - bleu
-    - rouge
+      - mc1
+      - mc2
+      - bleu
+      - rouge
     num_few_shot: 0
     dataset_size: 817
     tags:
-    - safety
-    - lm_eval
+      - safety
+      - lm_eval
   - benchmark_id: nortruthfulqa_gen_nob_p4
     name: Nortruthfulqa Gen Nob P4
     description: Nortruthfulqa Gen Nob P4 evaluation benchmark
     category: safety
     metrics:
-    - mc1
-    - mc2
-    - bleu
-    - rouge
+      - mc1
+      - mc2
+      - bleu
+      - rouge
     num_few_shot: 0
     dataset_size: 817
     tags:
-    - safety
-    - lm_eval
+      - safety
+      - lm_eval
   - benchmark_id: nortruthfulqa_mc_nno_p2
     name: Nortruthfulqa Mc Nno P2
     description: Nortruthfulqa Mc Nno P2 evaluation benchmark
     category: safety
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 817
     tags:
-    - safety
-    - lm_eval
+      - safety
+      - lm_eval
   - benchmark_id: nortruthfulqa_mc_nob_p0
     name: Nortruthfulqa Mc Nob P0
     description: Nortruthfulqa Mc Nob P0 evaluation benchmark
     category: safety
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 817
     tags:
-    - safety
-    - lm_eval
+      - safety
+      - lm_eval
   - benchmark_id: nortruthfulqa_mc_nob_p3
     name: Nortruthfulqa Mc Nob P3
     description: Nortruthfulqa Mc Nob P3 evaluation benchmark
     category: safety
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 817
     tags:
-    - safety
-    - lm_eval
+      - safety
+      - lm_eval
   - benchmark_id: tinyTruthfulQA
     name: Tinytruthfulqa
     description: Tinytruthfulqa evaluation benchmark
     category: safety
     metrics:
-    - mc1
-    - mc2
-    - bleu
-    - rouge
+      - mc1
+      - mc2
+      - bleu
+      - rouge
     num_few_shot: 0
     dataset_size: 817
     tags:
-    - safety
-    - lm_eval
+      - safety
+      - lm_eval
   - benchmark_id: truthfulqa-multi_gen_ca
     name: Truthfulqa-Multi Gen Ca
     description: Truthfulqa-Multi Gen Ca evaluation benchmark
     category: safety
     metrics:
-    - mc1
-    - mc2
-    - bleu
-    - rouge
+      - mc1
+      - mc2
+      - bleu
+      - rouge
     num_few_shot: 0
     dataset_size: 817
     tags:
-    - safety
-    - lm_eval
+      - safety
+      - lm_eval
   - benchmark_id: truthfulqa-multi_gen_eu
     name: Truthfulqa-Multi Gen Eu
     description: Truthfulqa-Multi Gen Eu evaluation benchmark
     category: safety
     metrics:
-    - mc1
-    - mc2
-    - bleu
-    - rouge
+      - mc1
+      - mc2
+      - bleu
+      - rouge
     num_few_shot: 0
     dataset_size: 817
     tags:
-    - safety
-    - lm_eval
+      - safety
+      - lm_eval
   - benchmark_id: truthfulqa-multi_mc1_en
     name: Truthfulqa-Multi Mc1 En
     description: Truthfulqa-Multi Mc1 En evaluation benchmark
     category: safety
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 817
     tags:
-    - safety
-    - lm_eval
+      - safety
+      - lm_eval
   - benchmark_id: truthfulqa-multi_mc1_gl
     name: Truthfulqa-Multi Mc1 Gl
     description: Truthfulqa-Multi Mc1 Gl evaluation benchmark
     category: safety
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 817
     tags:
-    - safety
-    - lm_eval
+      - safety
+      - lm_eval
   - benchmark_id: truthfulqa-multi_mc2_es
     name: Truthfulqa-Multi Mc2 Es
     description: Truthfulqa-Multi Mc2 Es evaluation benchmark
     category: safety
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 817
     tags:
-    - safety
-    - lm_eval
+      - safety
+      - lm_eval
   - benchmark_id: bigbench_code_line_description_multiple_choice
     name: Bigbench Code Line Description Multiple Choice
     description: Bigbench Code Line Description Multiple Choice evaluation benchmark
     category: code
     metrics:
-    - accuracy
-    - acc_norm
+      - accuracy
+      - acc_norm
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - code
-    - lm_eval
+      - code
+      - lm_eval
   - benchmark_id: ceval-valid_college_programming
     name: Ceval-Valid College Programming
     description: Ceval-Valid College Programming evaluation benchmark
     category: code
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - code
-    - lm_eval
+      - code
+      - lm_eval
   - benchmark_id: code2text_javascript
     name: Code2Text Javascript
     description: Code2Text Javascript evaluation benchmark
     category: code
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - code
-    - lm_eval
+      - code
+      - lm_eval
   - benchmark_id: code2text_ruby
     name: Code2Text Ruby
     description: Code2Text Ruby evaluation benchmark
     category: code
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - code
-    - lm_eval
+      - code
+      - lm_eval
   - benchmark_id: humaneval
     name: Humaneval
     description: Humaneval evaluation benchmark
     category: code
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - code
-    - lm_eval
+      - code
+      - lm_eval
   - benchmark_id: humaneval_instruct
     name: Humaneval Instruct
     description: Humaneval Instruct evaluation benchmark
     category: code
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - code
-    - lm_eval
+      - code
+      - lm_eval
   - benchmark_id: mbpp
     name: MBPP
     description: MBPP (Most Basic Python Programming) evaluation benchmark
     category: code
     metrics:
-    - accuracy
+      - accuracy
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - code
-    - lm_eval
+      - code
+      - lm_eval

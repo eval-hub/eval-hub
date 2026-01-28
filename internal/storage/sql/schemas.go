@@ -28,6 +28,12 @@ CREATE TABLE IF NOT EXISTS collections (
     id SERIAL PRIMARY KEY,
     entity JSONB NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_eval_entity
+ON evaluations (id);
+
+CREATE INDEX IF NOT EXISTS idx_collection_entity
+ON collections (id);
 `
 
 func SchemaForDriver(driver string) string {

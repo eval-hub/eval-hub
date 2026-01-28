@@ -181,5 +181,11 @@ func createServer(port int) (*server.Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create storage: %w", err)
 	}
-	return server.NewServer(logger, serviceConfig, storage, validate)
+	// set up the provider configs
+	providerConfigs, err := config.LoadProviderConfigs(logger)
+	if err != nil {
+		// we do this as no point trying to continue
+		return nil, fmt.Errorf("failed to load provider configs: %w", err)
+	}
+	return server.NewServer(logger, serviceConfig, providerConfigs, storage, validate)
 }

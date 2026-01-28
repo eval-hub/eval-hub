@@ -59,7 +59,14 @@ func main() {
 	}
 	// serviceConfig.Storage = storage
 
-	srv, err := server.NewServer(logger, serviceConfig, storage, validate)
+	// set up the provider configs
+	providerConfigs, err := config.LoadProviderConfigs(logger)
+	if err != nil {
+		// we do this as no point trying to continue
+		startUpFailed(serviceConfig, err, "Failed to create provider configs", logger)
+	}
+
+	srv, err := server.NewServer(logger, serviceConfig, providerConfigs, storage, validate)
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create server", logger)

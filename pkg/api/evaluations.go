@@ -19,7 +19,7 @@ type ModelRef struct {
 	Name string `json:"name"`
 }
 
-// BenchmarkRef represents a reference to a benchmark
+// BenchmarkConfig represents a reference to a benchmark
 type BenchmarkConfig struct {
 	Ref
 	Limit      *int           `json:"limit,omitempty"`

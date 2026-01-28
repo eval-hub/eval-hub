@@ -1,55 +1,54 @@
-provider:
-  provider_id: ragas
-  provider_name: RAGAS
-  description: Retrieval Augmented Generation Assessment framework
-  provider_type: builtin
-  base_url: null
-  benchmarks:
+provider_id: ragas
+provider_name: RAGAS
+description: Retrieval Augmented Generation Assessment framework
+provider_type: builtin
+base_url: null
+benchmarks:
   - benchmark_id: faithfulness
     name: Faithfulness
     description: Measures factual consistency of generated answer against given context
     category: rag_quality
     metrics:
-    - faithfulness_score
+      - faithfulness_score
     num_few_shot: 0
     dataset_size: null
     tags:
-    - rag
-    - faithfulness
-    - factuality
+      - rag
+      - faithfulness
+      - factuality
   - benchmark_id: answer_relevancy
     name: Answer Relevancy
     description: Measures how relevant generated answer is to the question
     category: rag_quality
     metrics:
-    - answer_relevancy_score
+      - answer_relevancy_score
     num_few_shot: 0
     dataset_size: null
     tags:
-    - rag
-    - relevancy
-    - quality
+      - rag
+      - relevancy
+      - quality
   - benchmark_id: context_precision
     name: Context Precision
     description: Measures precision of retrieved context
     category: rag_retrieval
     metrics:
-    - context_precision_score
+      - context_precision_score
     num_few_shot: 0
     dataset_size: null
     tags:
-    - rag
-    - retrieval
-    - precision
+      - rag
+      - retrieval
+      - precision
   - benchmark_id: context_recall
     name: Context Recall
     description: Measures recall of retrieved context
     category: rag_retrieval
     metrics:
-    - context_recall_score
+      - context_recall_score
     num_few_shot: 0
     dataset_size: null
     tags:
-    - rag
-    - retrieval
-    - recall
+      - rag
+      - retrieval
+      - recall

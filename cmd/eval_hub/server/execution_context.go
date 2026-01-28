@@ -2,8 +2,8 @@ package server
 
 import (
 	"context"
+	"io"
 	"net/http"
-	"time"
 
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
 )
@@ -31,29 +31,51 @@ func (s *Server) newExecutionContext(r *http.Request) *executioncontext.Executio
 	// Enhance logger with request-specific fields
 	requestID, enhancedLogger := s.loggerWithRequest(r)
 
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	baseURL := scheme + "://" + r.Host
-
 	return executioncontext.NewExecutionContext(
 		context.Background(),
 		requestID,
 		enhancedLogger,
-		r.Method,
-		r.URL.Path,
-		baseURL,
-		r.URL.RawQuery,
-		r.Header,
-		r.Body,
-		"",
-		"",
-		"",
-		time.Minute*60,
 		3,
-		make(map[string]interface{}),
 		nil,
-		"",
+		s.providerConfigs,
+		&ReqWrapper{Request: r},
 	)
+}
+
+// Abstract request objects to not depende on the underlying http framework.
+type ReqWrapper struct {
+	Request *http.Request
+}
+
+func (r *ReqWrapper) Method() string {
+	return r.Request.Method
+}
+
+func (r *ReqWrapper) URI() string {
+	return r.Request.RequestURI
+}
+
+func (r *ReqWrapper) Path() string {
+	return r.Request.URL.Path
+}
+
+func (r *ReqWrapper) Query(key string) map[string][]string {
+	return r.Request.URL.Query()
+}
+
+func (r *ReqWrapper) Header(key string) string {
+	return r.Request.Header.Get(key)
+}
+
+func (r *ReqWrapper) BodyAsBytes() ([]byte, error) {
+	bodyBytes, err := io.ReadAll(r.Request.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return bodyBytes, nil
+}
+
+func (r *ReqWrapper) SetHeader(key string, value string) {
+	r.Request.Header.Set(key, value)
 }

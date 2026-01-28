@@ -24,8 +24,8 @@ func New(storage abstractions.Storage, validate *validator.Validate) *Handlers {
 }
 
 func (h *Handlers) checkMethod(ctx *executioncontext.ExecutionContext, method string, w http.ResponseWriter) bool {
-	if ctx.Method != method {
-		http.Error(w, fmt.Sprintf("Method %s not allowed, expecting %s", ctx.Method, method), http.StatusMethodNotAllowed)
+	if ctx.Request.Method() != method {
+		http.Error(w, fmt.Sprintf("Method %s not allowed, expecting %s", ctx.Request.Method(), method), http.StatusMethodNotAllowed)
 		return false
 	}
 	return true

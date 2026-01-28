@@ -107,7 +107,17 @@ func (a *apiFeature) startLocalServer(port int) error {
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
-	a.server, err = server.NewServer(logger, serviceConfig, storage, validate)
+	logger.Info("Storage created.")
+
+	// set up the provider configs
+	providerConfigs, err := config.LoadProviderConfigs(logger)
+	if err != nil {
+		// we do this as no point trying to continue
+		return fmt.Errorf("failed to load provider configs: %w", err)
+	}
+
+	logger.Info("Providers loaded.")
+	a.server, err = server.NewServer(logger, serviceConfig, providerConfigs, storage, validate)
 	if err != nil {
 		return err
 	}

@@ -16,7 +16,44 @@ func TestNew(t *testing.T) {
 
 func createExecutionContext(method string, uri string) *executioncontext.ExecutionContext {
 	return &executioncontext.ExecutionContext{
-		Method: method,
-		URI:    uri,
+		Request: &MockRequest{
+			TestMethod: method,
+			TestURI:    uri,
+			headers:    make(map[string]string),
+		},
 	}
+}
+
+type MockRequest struct {
+	TestMethod string
+	TestURI    string
+	headers    map[string]string
+}
+
+func (r *MockRequest) Method() string {
+	return r.TestMethod
+}
+
+func (r *MockRequest) URI() string {
+	return r.TestURI
+}
+
+func (r *MockRequest) Path() string {
+	return ""
+}
+
+func (r *MockRequest) Query(key string) map[string][]string {
+	return make(map[string][]string)
+}
+
+func (r *MockRequest) Header(key string) string {
+	return r.headers[key]
+}
+
+func (r *MockRequest) BodyAsBytes() ([]byte, error) {
+	return []byte{}, nil
+}
+
+func (r *MockRequest) SetHeader(key string, value string) {
+	r.headers[key] = value
 }

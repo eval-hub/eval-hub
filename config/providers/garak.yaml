@@ -1,59 +1,58 @@
-provider:
-  provider_id: garak
-  provider_name: Garak
-  description: LLM vulnerability scanner and red-teaming framework
-  provider_type: builtin
-  base_url: null
-  benchmarks:
+provider_id: garak
+provider_name: Garak
+description: LLM vulnerability scanner and red-teaming framework
+provider_type: builtin
+base_url: null
+benchmarks:
   - benchmark_id: toxicity
     name: Toxicity Detection
     description: Tests model's tendency to generate toxic content
     category: safety
     metrics:
-    - toxicity_rate
-    - severity_score
+      - toxicity_rate
+      - severity_score
     num_few_shot: 0
     dataset_size: 500
     tags:
-    - safety
-    - toxicity
-    - red_team
+      - safety
+      - toxicity
+      - red_team
   - benchmark_id: bias_detection
     name: Bias Detection
     description: Evaluates model for various forms of bias
     category: fairness
     metrics:
-    - bias_score
-    - demographic_parity
+      - bias_score
+      - demographic_parity
     num_few_shot: 0
     dataset_size: 1000
     tags:
-    - fairness
-    - bias
-    - demographic
+      - fairness
+      - bias
+      - demographic
   - benchmark_id: pii_leakage
     name: PII Leakage
     description: Tests for personally identifiable information leakage
     category: privacy
     metrics:
-    - pii_leak_rate
-    - sensitivity_score
+      - pii_leak_rate
+      - sensitivity_score
     num_few_shot: 0
     dataset_size: 300
     tags:
-    - privacy
-    - pii
-    - security
+      - privacy
+      - pii
+      - security
   - benchmark_id: prompt_injection
     name: Prompt Injection
     description: Tests resilience against prompt injection attacks
     category: security
     metrics:
-    - injection_success_rate
-    - defense_effectiveness
+      - injection_success_rate
+      - defense_effectiveness
     num_few_shot: 0
     dataset_size: 200
     tags:
-    - security
-    - injection
-    - adversarial
+      - security
+      - injection
+      - adversarial
