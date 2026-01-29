@@ -1,0 +1,77 @@
+# EvalHub evaluation job pod template (single adapter container).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: eval-job-{{ .JobID }}
+  namespace: {{ .Namespace }}
+  labels:
+    app: evalhub
+    component: evaluation-job
+    job-id: {{ .JobID }}
+    provider-id: {{ .ProviderID }}
+    benchmark-id: {{ .BenchmarkID }}
+spec:
+  ttlSecondsAfterFinished: 3600
+  backoffLimit: {{ .RetryAttempts }}
+  template:
+    metadata:
+      labels:
+        app: evalhub
+        component: evaluation-job
+        job-id: {{ .JobID }}
+        provider-id: {{ .ProviderID }}
+        benchmark-id: {{ .BenchmarkID }}
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: adapter
+        image: {{ .AdapterImage }}
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+        - name: job-spec
+          mountPath: /etc/eval-job
+          readOnly: true
+        - name: data
+          mountPath: /app/data
+        - name: results
+          mountPath: /app/results
+        env:
+        - name: JOB_ID
+          value: "{{ .JobID }}"
+        - name: EVALHUB_SERVICE_URL
+          value: "{{ .EvalHubServiceURL }}"
+        - name: RESULTS_DIR
+          value: "/app/results"
+        - name: REGISTRY_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: {{ .RegistrySecretName }}
+              key: username
+        - name: REGISTRY_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .RegistrySecretName }}
+              key: password
+        - name: REGISTRY_URL
+          value: "{{ .RegistryURL }}"
+{{- if .DefaultEnv }}
+{{- range .DefaultEnv }}
+        - name: {{ .Name }}
+          value: "{{ .Value }}"
+{{- end }}
+{{- end }}
+        resources:
+          requests:
+            cpu: {{ .CPURequest }}
+            memory: {{ .MemoryRequest }}
+          limits:
+            cpu: {{ .CPULimit }}
+            memory: {{ .MemoryLimit }}
+      volumes:
+      - name: job-spec
+        configMap:
+          name: eval-job-{{ .JobID }}-spec
+      - name: data
+        emptyDir: {}
+      - name: results
+        emptyDir: {}

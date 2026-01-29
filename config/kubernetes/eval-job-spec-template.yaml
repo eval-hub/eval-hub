@@ -1,0 +1,15 @@
+# EvalHub job spec ConfigMap for an evaluation job.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eval-job-{{ .JobID }}-spec
+  namespace: {{ .Namespace }}
+  labels:
+    app: evalhub
+    component: evaluation-job
+    job-id: {{ .JobID }}
+    provider-id: {{ .ProviderID }}
+    benchmark-id: {{ .BenchmarkID }}
+data:
+  spec.json: |
+    {{ .JobSpecJSON }}
