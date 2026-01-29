@@ -24,7 +24,7 @@ type Server struct {
 	port            int
 	logger          *slog.Logger
 	serviceConfig   *config.Config
-	providerConfigs map[string]*api.ProviderResource
+	providerConfigs map[string]api.ProviderResource
 	storage         abstractions.Storage
 	validate        *validator.Validate
 }
@@ -48,7 +48,7 @@ type Server struct {
 // Returns:
 //   - *Server: A configured server instance
 //   - error: An error if logger or serviceConfig is nil
-func NewServer(logger *slog.Logger, serviceConfig *config.Config, providerConfigs map[string]*api.ProviderResource, storage abstractions.Storage, validate *validator.Validate) (*Server, error) {
+func NewServer(logger *slog.Logger, serviceConfig *config.Config, providerConfigs map[string]api.ProviderResource, storage abstractions.Storage, validate *validator.Validate) (*Server, error) {
 	if logger == nil {
 		return nil, fmt.Errorf("logger is required for the server")
 	}

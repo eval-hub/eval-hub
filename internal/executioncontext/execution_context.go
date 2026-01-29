@@ -22,7 +22,7 @@ type ExecutionContext struct {
 	Logger          *slog.Logger
 	StartedAt       time.Time
 	MLflowClient    interface{}
-	ProviderConfigs map[string]*api.ProviderResource
+	ProviderConfigs map[string]api.ProviderResource
 	Request         Request
 }
 
@@ -32,7 +32,7 @@ func NewExecutionContext(
 	logger *slog.Logger,
 	timeout time.Duration,
 	mlflowClient interface{},
-	providerConfigs map[string]*api.ProviderResource,
+	providerConfigs map[string]api.ProviderResource,
 	request Request,
 ) *ExecutionContext {
 	return &ExecutionContext{
