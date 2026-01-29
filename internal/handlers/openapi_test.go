@@ -15,10 +15,10 @@ func TestHandleOpenAPI(t *testing.T) {
 	h := handlers.New(nil, nil)
 
 	// Ensure the OpenAPI file exists for testing
-	apiPath := filepath.Join("..", "..", "api", "openapi.yaml")
+	apiPath := filepath.Join("..", "..", "docs", "openapi.yaml")
 	if _, err := os.Stat(apiPath); os.IsNotExist(err) {
 		// Try alternative path
-		apiPath = "api/openapi.yaml"
+		apiPath = "docs/openapi.yaml"
 		if _, err := os.Stat(apiPath); os.IsNotExist(err) {
 			t.Skip("OpenAPI spec file not found, skipping test")
 		}

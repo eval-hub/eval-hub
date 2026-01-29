@@ -28,10 +28,10 @@ func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, w http.
 	// Find the OpenAPI spec file relative to the working directory
 	// Try multiple possible locations
 	possiblePaths := []string{
-		filepath.Join("api", "openapi.yaml"),
-		filepath.Join("..", "api", "openapi.yaml"),
-		filepath.Join("..", "..", "api", "openapi.yaml"),
-		filepath.Join("..", "..", "..", "api", "openapi.yaml"),
+		filepath.Join("docs", "openapi.yaml"),
+		filepath.Join("..", "docs", "openapi.yaml"),
+		filepath.Join("..", "..", "docs", "openapi.yaml"),
+		filepath.Join("..", "..", "..", "docs", "openapi.yaml"),
 	}
 
 	var paths []string
@@ -55,7 +55,7 @@ func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, w http.
 		exePath, _ := os.Executable()
 		if exePath != "" {
 			exeDir := filepath.Dir(exePath)
-			specPath := filepath.Join(exeDir, "api", "openapi.yaml")
+			specPath := filepath.Join(exeDir, "docs", "openapi.yaml")
 			paths = append(paths, specPath)
 			spec, err = os.ReadFile(specPath)
 		}

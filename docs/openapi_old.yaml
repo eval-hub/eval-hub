@@ -1,0 +1,1192 @@
+openapi: 3.1.0
+info:
+  title: Eval Hub
+  description: API REST server for evaluation backend orchestration on OpenShift
+  version: 0.1.0
+paths:
+  /metrics:
+    get:
+      summary: Metrics
+      description: Prometheus metrics endpoint with MLflow health check.
+      operationId: metrics_metrics_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/v1/health:
+    get:
+      summary: Health Check
+      description: Health check endpoint.
+      operationId: health_check_api_v1_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /api/v1/evaluations/jobs:
+    post:
+      tags:
+      - Evaluations
+      summary: Create Evaluation
+      description: Create and execute evaluation request using the simplified benchmark
+        schema.
+      operationId: create_evaluation_api_v1_evaluations_jobs_post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvaluationJobRequest'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationJobResource'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags:
+      - Evaluations
+      summary: List Evaluations
+      description: List all evaluation requests.
+      operationId: list_evaluations_api_v1_evaluations_jobs_get
+      parameters:
+      - name: summary
+        in: query
+        required: false
+        schema:
+          type: boolean
+          description: Return summary information
+          default: false
+          title: Summary
+        description: Return summary information
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          description: Maximum number of evaluations to return
+          default: 50
+          title: Limit
+        description: Maximum number of evaluations to return
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Number of evaluations to skip
+          default: 0
+          title: Offset
+        description: Number of evaluations to skip
+      - name: status_filter
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Filter by status
+          title: Status Filter
+        description: Filter by status
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationJobResourceList'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/evaluations/jobs/{id}:
+    get:
+      tags:
+      - Evaluations
+      summary: Get Evaluation Status
+      description: Get the status of an evaluation request.
+      operationId: get_evaluation_status_api_v1_evaluations_jobs__id__get
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationJobResource'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+      - Evaluations
+      summary: Cancel Evaluation
+      description: Cancel a running evaluation.
+      operationId: cancel_evaluation_api_v1_evaluations_jobs__id__delete
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/metrics/system:
+    get:
+      summary: Get System Metrics
+      description: Get system metrics and statistics.
+      operationId: get_system_metrics_api_v1_metrics_system_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get System Metrics Api V1 Metrics System Get
+  /api/v1/evaluations/providers:
+    get:
+      tags:
+      - Providers
+      summary: List Providers
+      description: List all registered evaluation providers.
+      operationId: list_providers_api_v1_evaluations_providers_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderList'
+  /api/v1/evaluations/providers/{id}:
+    get:
+      tags:
+      - Providers
+      summary: Get Provider
+      description: Get details of a specific provider.
+      operationId: get_provider_api_v1_evaluations_providers__provider_id__get
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Provider Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Provider'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/evaluations/benchmarks:
+    get:
+      tags:
+      - Benchmarks
+      summary: List All Benchmarks
+      description: List all available benchmarks across providers (simplified format).
+      operationId: list_all_benchmarks_api_v1_evaluations_benchmarks_get
+      parameters:
+      - name: provider_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Filter by provider ID
+          title: Provider Id
+        description: Filter by provider ID
+      - name: category
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Filter by benchmark category
+          title: Category
+        description: Filter by benchmark category
+      - name: tags
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Filter by tags (comma-separated)
+          title: Tags
+        description: Filter by tags (comma-separated)
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BenchmarksList'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/evaluations/collections:
+    get:
+      tags:
+      - Collections
+      summary: List Collections
+      description: List all benchmark collections.
+      operationId: list_collections_api_v1_evaluations_collections_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionResourceList'
+    post:
+      tags:
+      - Collections
+      summary: Create Collection
+      description: Create a new collection.
+      operationId: create_collection_api_v1_evaluations_collections_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionCreationRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionResource'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/evaluations/collections/{id}:
+    get:
+      tags:
+      - Collections
+      summary: Get Collection
+      description: Get details of a specific collection.
+      operationId: get_collection_api_v1_evaluations_collections__collection_id__get
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Collection Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionResource'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      tags:
+      - Collections
+      summary: Patch Collection
+      description: Partially update an existing collection.
+      operationId: patch_collection_api_v1_evaluations_collections__collection_id__patch
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Collection Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionResource'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+      - Collections
+      summary: Delete Collection
+      description: Delete a collection.
+      operationId: delete_collection_api_v1_evaluations_collections__collection_id__delete
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Collection Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  schemas:
+    Benchmark:
+      properties:
+        id:
+          type: string
+          title: Benchmark Id
+          description: Unique benchmark identifier
+        provider_id:
+          type: string
+          title: Provider Id
+          description: The provider of this benchmark
+        label:
+          type: string
+          title: Label
+          description: Human-readable benchmark name
+        description:
+          type: string
+          title: Description
+          description: Benchmark description
+        category:
+          type: string
+          title: Category
+          description: Benchmark category
+        metrics:
+          items:
+            type: string
+          type: array
+          title: Metrics
+          description: List of metrics provided by this benchmark
+        num_few_shot:
+          type: integer
+          title: Num Few Shot
+          description: Number of few-shot examples
+        dataset_size:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Dataset Size
+          description: Size of the evaluation dataset
+        tags:
+          items:
+            type: string
+          type: array
+          title: Tags
+          description: Tags for categorization
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - provider_id
+      - label
+      - description
+      - category
+      - metrics
+      - num_few_shot
+      title: Benchmark
+      description: Benchmark specification.
+    BenchmarkReference:
+      properties:
+        provider_id:
+          type: string
+          title: Provider Id
+          description: Provider identifier
+        id:
+          type: string
+          title: Benchmark Id
+          description: Benchmark identifier
+        weight:
+          type: number
+          title: Weight
+          description: Weight for this benchmark in collection scoring
+          default: 1.0
+        config:
+          additionalProperties: true
+          type: object
+          title: Config
+          description: Benchmark-specific configuration
+      additionalProperties: false
+      type: object
+      required:
+      - provider_id
+      - id
+      title: BenchmarkReference
+      description: Reference to a benchmark within a collection.
+    BenchmarksList:
+      properties:
+        total_count:
+          type: integer
+          title: Total Count
+          description: Total number of benchmarks
+        items:
+          items:
+            $ref: '#/components/schemas/Benchmark'
+          type: array
+          title: Benchmarks
+          description: List of all available benchmarks
+      additionalProperties: false
+      type: object
+      required:
+      - total_count
+      - items
+      title: BenchmarksList
+      description: Response for listing benchmarks.
+    CollectionCreationRequest:
+      properties:
+        name:
+          type: string
+          title: Name
+          description: Human-readable collection name
+        description:
+          type: string
+          title: Description
+          description: Collection description
+        tags:
+          items:
+            type: string
+          type: array
+          title: Tags
+          description: Tags for categorizing the collection
+        custom:
+          additionalProperties: true
+          type: object
+          title: Custom
+          description: Additional collection metadata
+        benchmarks:
+          items:
+            $ref: '#/components/schemas/BenchmarkReference'
+          type: array
+          title: Benchmarks
+          description: List of benchmark references in this collection
+      additionalProperties: true
+      type: object
+      required:
+      - name
+      - description
+      - benchmarks
+      title: CollectionCreationRequest
+      description: Request for creating a new collection.
+    CollectionResource:
+      properties:
+        resource:
+          $ref: '#/components/schemas/Resource'
+          description: Resource metadata
+        name:
+          type: string
+          title: Name
+          description: Collection name
+        description:
+          type: string
+          title: Description
+          description: Collection description
+        tags:
+          items:
+            type: string
+          type: array
+          title: Tags
+          description: Collection tags
+        custom:
+          additionalProperties: true
+          type: object
+          title: Custom
+          description: Custom metadata
+        benchmarks:
+          items:
+            $ref: '#/components/schemas/BenchmarkReference'
+          type: array
+          title: Benchmarks
+          description: Collection benchmarks
+      additionalProperties: false
+      type: object
+      required:
+      - resource
+      - name
+      - description
+      title: CollectionResource
+      description: Collection resource.
+    CollectionResourceList:
+      properties:
+        first:
+          $ref: '#/components/schemas/PaginationLink'
+          description: Link to first page
+        next:
+          anyOf:
+          - $ref: '#/components/schemas/PaginationLink'
+          - type: 'null'
+          description: Link to next page
+        limit:
+          type: integer
+          title: Limit
+          description: Page size limit
+        total_count:
+          type: integer
+          title: Total Count
+          description: Total number of items
+        items:
+          items:
+            $ref: '#/components/schemas/CollectionResource'
+          type: array
+          title: Items
+          description: Collection resources
+      additionalProperties: false
+      type: object
+      required:
+      - first
+      - limit
+      - total_count
+      - items
+      title: CollectionResourceList
+      description: List of collection resources.
+    CollectionUpdateRequest:
+      properties:
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+          description: Human-readable collection name
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+          description: Collection description
+        provider_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Provider Id
+          description: Primary provider for this collection
+        tags:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Tags
+          description: Tags for categorizing the collection
+        metadata:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Metadata
+          description: Additional collection metadata
+        benchmarks:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/BenchmarkReference'
+            type: array
+          - type: 'null'
+          title: Benchmarks
+          description: List of benchmark references in this collection
+      additionalProperties: true
+      type: object
+      title: CollectionUpdateRequest
+      description: Request for updating an existing collection.
+    Error:
+      properties:
+        code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: ''
+        message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message
+        type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Type
+      additionalProperties: false
+      type: object
+      title: Error
+      description: Error
+    EvaluationJobBenchmarkConfig:
+      properties:
+        name:
+          type: string
+          title: Name
+          description: the user provide name for this benchmark
+        id:
+          type: string
+          title: Id
+          description: Benchmark identifier
+        provider_id:
+          type: string
+          title: Provider Id
+          description: Provider identifier
+        config:
+          additionalProperties: true
+          type: object
+          title: Config
+          description: Benchmark configuration including num_fewshot, limit, batch_size,
+            etc.
+      additionalProperties: true
+      type: object
+      required:
+      - name
+      - id
+      - provider_id
+      title: EvaluationJobBenchmarkConfig
+      description: Benchmark configuration for EvaluationJobRequest.
+    EvaluationJobBenchmarkResult:
+      properties:
+        name:
+          type: string
+          title: Name
+          description: Benchmark name
+        metrics:
+          additionalProperties:
+            anyOf:
+            - type: number
+            - type: integer
+            - type: string
+          type: object
+          title: Metrics
+          description: Evaluation metrics
+        artifacts:
+          additionalProperties:
+            type: string
+          type: object
+          title: Artifacts
+          description: Paths to result artifacts
+        mlflow_run_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Mlflow Run Id
+          description: MLFlow run ID
+      additionalProperties: false
+      type: object
+      required:
+      - name
+      title: EvaluationJobBenchmarkResult
+      description: Benchmark result for EvaluationJobResource - matches proposal structure.
+    EvaluationJobBenchmarkSpec:
+      properties:
+        name:
+          type: string
+          title: Name
+          description: User-provided name for this benchmark
+        id:
+          type: string
+          title: Id
+          description: Benchmark identifier
+        provider_id:
+          type: string
+          title: Provider Id
+          description: Provider identifier
+        config:
+          additionalProperties: true
+          type: object
+          title: Config
+          description: Benchmark configuration including num_fewshot, limit, batch_size,
+            etc.
+      additionalProperties: false
+      type: object
+      required:
+      - name
+      - id
+      - provider_id
+      title: EvaluationJobBenchmarkSpec
+      description: Benchmark specification for EvaluationJobResource response.
+    EvaluationJobRequest:
+      properties:
+        model:
+          $ref: '#/components/schemas/Model'
+          description: Model specification for evaluation
+        benchmarks:
+          items:
+            $ref: '#/components/schemas/EvaluationJobBenchmarkConfig'
+          type: array
+          title: Benchmarks
+          description: List of benchmarks to evaluate
+        experiment:
+          $ref: '#/components/schemas/ExperimentConfig'
+          description: Experiment configuration for MLFlow tracking
+        timeout_minutes:
+          type: integer
+          title: Timeout Minutes
+          description: Timeout for the entire evaluation
+          default: 60
+        retry_attempts:
+          type: integer
+          title: Retry Attempts
+          description: Number of retry attempts on failure
+          default: 3
+        callback_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Callback Url
+          description: URL to call when evaluation completes
+      additionalProperties: false
+      type: object
+      required:
+      - model
+      - benchmarks
+      - experiment
+      title: EvaluationJobRequest
+      description: Simplified evaluation request using the new schema.
+    EvaluationJobResource:
+      properties:
+        resource:
+          $ref: '#/components/schemas/Resource'
+          description: Resource metadata
+        status:
+          $ref: '#/components/schemas/Status'
+          description: Current status
+        results:
+          anyOf:
+          - $ref: '#/components/schemas/EvaluationJobResults'
+          - type: 'null'
+          description: Evaluation results
+        model:
+          $ref: '#/components/schemas/Model'
+          description: Model specification
+        benchmarks:
+          items:
+            $ref: '#/components/schemas/EvaluationJobBenchmarkSpec'
+          type: array
+          title: Benchmarks
+          description: Benchmark configurations
+        experiment:
+          $ref: '#/components/schemas/ExperimentConfig'
+          description: Experiment configuration
+        timeout_minutes:
+          type: integer
+          title: Timeout Minutes
+          description: Timeout in minutes
+          default: 60
+        retry_attempts:
+          type: integer
+          title: Retry Attempts
+          description: Retry attempts
+          default: 3
+        callback_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Callback Url
+          description: Callback URL
+      additionalProperties: true
+      type: object
+      required:
+      - resource
+      - status
+      - model
+      - benchmarks
+      - experiment
+      title: EvaluationJobResource
+      description: Evaluation job resource response schema matching the proposal.
+    EvaluationJobResourceList:
+      allOf:
+      - $ref: '#/components/schemas/Page'
+      - properties:
+          items:
+            items:
+              $ref: '#/components/schemas/EvaluationJobResource'
+            type: array
+      properties:
+        first:
+          additionalProperties:
+            type: string
+          type: object
+          title: First
+          description: Link to first page
+        next:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Next
+          description: Link to next page
+        limit:
+          type: integer
+          title: Limit
+          description: Page size limit
+        total_count:
+          type: integer
+          title: Total Count
+          description: Total number of items
+        items:
+          items:
+            $ref: '#/components/schemas/EvaluationJobResource'
+          type: array
+          title: Items
+          description: Evaluation job resources
+      additionalProperties: true
+      type: object
+      required:
+      - first
+      - limit
+      - total_count
+      - items
+      title: EvaluationJobResourceList
+      description: List of evaluation job resources with pagination.
+    EvaluationJobResults:
+      properties:
+        total_evaluations:
+          type: integer
+          title: Total Evaluations
+          description: Total number of evaluations
+        completed_evaluations:
+          type: integer
+          title: Completed Evaluations
+          description: Number of completed evaluations
+          default: 0
+        failed_evaluations:
+          type: integer
+          title: Failed Evaluations
+          description: Number of failed evaluations
+          default: 0
+        benchmarks:
+          items:
+            $ref: '#/components/schemas/EvaluationJobBenchmarkResult'
+          type: array
+          title: Benchmarks
+          description: Benchmark results
+        aggregated_metrics:
+          additionalProperties:
+            anyOf:
+            - type: number
+            - type: integer
+            - type: string
+          type: object
+          title: Aggregated Metrics
+          description: Aggregated metrics across all evaluations
+        mlflow_experiment_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Mlflow Experiment Url
+          description: MLFlow experiment URL
+      additionalProperties: false
+      type: object
+      required:
+      - total_evaluations
+      title: EvaluationJobResults
+      description: Results section for EvaluationJobResource.
+    ExperimentConfig:
+      properties:
+        name:
+          type: string
+          title: Name
+          description: Experiment name for MLFlow tracking
+        tags:
+          additionalProperties:
+            type: string
+          type: object
+          title: Tags
+          description: Tags for the evaluation experiment
+      additionalProperties: false
+      type: object
+      required:
+      - name
+      title: ExperimentConfig
+      description: Configuration for MLFlow experiment tracking.
+    HealthResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+          description: Overall health status
+        version:
+          type: string
+          title: Version
+          description: Service version
+        timestamp:
+          type: string
+          format: date-time
+          title: Timestamp
+          description: Health check timestamp
+        components:
+          additionalProperties:
+            additionalProperties: true
+            type: object
+          type: object
+          title: Components
+          description: Health status of individual components
+        uptime_seconds:
+          type: number
+          title: Uptime Seconds
+          description: Service uptime in seconds
+        active_evaluations:
+          type: integer
+          title: Active Evaluations
+          description: Number of active evaluations
+          default: 0
+      type: object
+      required:
+      - status
+      - version
+      - uptime_seconds
+      title: HealthResponse
+      description: Health check response.
+    Model:
+      properties:
+        url:
+          type: string
+          title: Url
+          description: Model endpoint URL
+        name:
+          type: string
+          title: Name
+          description: Model name/identifier
+      additionalProperties: false
+      type: object
+      required:
+      - url
+      - name
+      title: Model
+      description: Model specification for evaluation requests.
+    PaginationLink:
+      properties:
+        href:
+          type: string
+          title: Href
+          description: Link URL
+      additionalProperties: false
+      type: object
+      required:
+      - href
+      title: PaginationLink
+      description: Pagination link with href field.
+    Provider:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Provider identifier
+        label:
+          type: string
+          title: Label
+          description: Provider display name
+        supported_benchmarks:
+          items:
+            $ref: '#/components/schemas/SupportedBenchmark'
+          type: array
+          title: Supported Benchmarks
+          description: Supported benchmarks
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - label
+      title: Provider
+      description: Provider specification.
+    ProviderList:
+      properties:
+        total_count:
+          type: integer
+          title: Total Count
+          description: Total number of providers
+        items:
+          items:
+            $ref: '#/components/schemas/Provider'
+          type: array
+          title: Items
+          description: List of providers
+      additionalProperties: false
+      type: object
+      required:
+      - total_count
+      - items
+      title: ProviderList
+      description: Response for listing providers.
+    Resource:
+      properties:
+        id:
+          type: string
+          title: ''
+        created_at:
+          type: string
+          format: date-time
+          title: ''
+        updated_at:
+          type: string
+          format: date-time
+          title: ''
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - created_at
+      - updated_at
+      title: Resource
+      description: Resource
+    Status:
+      properties:
+        state:
+          type: string
+          enum:
+          - pending
+          - running
+          - completed
+          - failed
+          - cancelled
+          title: ''
+          description: Current state
+        message:
+          type: string
+          title: ''
+          description: Status message
+        benchmarks:
+          items:
+            properties:
+              name:
+                type: string
+              state:
+                type: string
+                enum:
+                - pending
+                - running
+                - completed
+                - failed
+                - cancelled
+              started_at:
+                type: string
+                format: date-time
+              completed_at:
+                type: string
+                format: date-time
+              message:
+                type: string
+              logs:
+                properties:
+                  path:
+                    type: string
+                type: object
+            additionalProperties: true
+            type: object
+          type: array
+          title: Benchmarks
+      additionalProperties: false
+      type: object
+      required:
+      - state
+      - message
+      title: Status
+      description: Status
+    SupportedBenchmark:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Benchmark identifier
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      title: SupportedBenchmark
+      description: Simplified benchmark reference for provider list response.
+    Page:
+      additionalProperties: false
+      description: Generic pagination schema.
+      properties:
+        first:
+          properties:
+            href:
+              type: string
+          type: object
+        next:
+          properties:
+            href:
+              type: string
+          type: object
+        limit:
+          type: integer
+        total_count:
+          type: integer
+      required:
+      - first
+      - limit
+      - total_count
+      title: Page
+      type: object
+    Patch:
+      description: Patch
+      items:
+        properties:
+          op:
+            enum:
+            - replace
+            - add
+            - remove
+            type: string
+          path:
+            type: string
+          value:
+            type: object
+        type: object
+      title: Patch
+      type: array
