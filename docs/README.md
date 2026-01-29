@@ -6,7 +6,7 @@ This directory contains the OpenAPI specifications and related assets for the Ev
 
 | File | Description |
 |------|-------------|
-| **openapi-source.yaml** | Single source of truth for the API. OpenAPI 3.1.0 spec with all paths, schemas, and (optionally) `x-internal`-marked content. Edit this file when changing the API contract. |
+| **src/openapi.yaml** | Single source of truth for the API. OpenAPI 3.1.0 spec with all paths, schemas, and (optionally) `x-internal`-marked content. Edit this file when changing the API contract. |
 | **redocly.yaml** | Redocly CLI config. Defines two API entry points (`internal@latest` and `external@latest`), both rooted at `openapi-source.yaml`. The external bundle uses the `remove-x-internal` decorator to strip internal-only content. |
 | **openapi.yaml** | **Generated.** Public API bundle produced by `make generate-public-docs`. Built from `openapi-source.yaml` with internal-only paths/schemas removed. Served at `/openapi.yaml` and used by Swagger UI at `/docs`. |
 | **openapi-internal.yaml** | **Generated.** Internal API bundle produced by `make generate-public-docs`. Full spec from `openapi-source.yaml` including `x-internal` content. For internal tooling and docs. |
