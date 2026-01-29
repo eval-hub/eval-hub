@@ -1912,9 +1912,6 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/PaginationLink"
-              },
-              {
-                "type": "null"
               }
             ],
             "description": "Link to the next page, if available"
