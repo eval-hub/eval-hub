@@ -13,13 +13,11 @@ This directory contains the OpenAPI specifications and related assets for the Ev
 |------|-------------|
 | **src/openapi.yaml** | Single source of truth for the API. OpenAPI 3.1.0 spec with all paths, schemas, and (optionally) `x-internal`-marked content. Edit this file when changing the API contract. |
 | **redocly.yaml** | Redocly CLI config. Defines two API entry points (`internal@latest` and `external@latest`), both rooted at `src/openapi.yaml`. The external bundle uses the `remove-x-internal` decorator to strip internal-only content. |
-| **openapi.yaml** | **Generated.** Public API bundle produced by `make generate-public-docs`. Built from `src/openapi.yaml` with internal-only paths/schemas removed. Served at `/openapi.yaml` and used by Swagger UI at `/docs`. |
-| **openapi-internal.yaml** | **Generated.** Internal API bundle produced by `make generate-public-docs`. Full spec from `src/openapi.yaml` including `x-internal` content. For internal tooling and docs. |
-| **openapi.json** | **Generated.** JSON form of the public bundle (same content as **openapi.yaml**). Used by **build-standalone-html.js** to produce **index-standalone.html**. |
-| **index.html** | Static Swagger UI page that loads the OpenAPI spec via `url: 'openapi.yaml'`. Use when serving this directory over HTTP (e.g. the Eval Hub server at `/docs`, or a local server). |
-| **index-standalone.html** | **Generated.** Swagger UI page with the OpenAPI spec **inlined**. Use this when opening docs as a local file (`file://`) to avoid CORS (browsers block fetching `openapi.yaml` from the file origin). |
-| **build-standalone-html.js** | Node script (run by `make generate-public-docs`) that inlines **openapi.json** into **index.html** and writes **index-standalone.html**. |
-| **openapi_old.yaml** / **openapi_old.json** | Legacy snapshots of the spec; kept for reference. Do not use for code generation or serving. |
+| **openapi.yaml/.json** | **Generated.** Public API bundle produced by `make generate-public-docs`. Built from `src/openapi.yaml` with internal-only paths/schemas removed. Served at `/openapi.yaml` and used by Swagger UI at `/docs`. |
+| **openapi-internal.yaml/.json** | **Generated.** Internal API bundle produced by `make generate-public-docs`. Full spec from `src/openapi.yaml` including `x-internal` content. For internal tooling and docs. |
+| **preview.html** | **Generated.** Static redoc UI page with the OpenAPI spec **inlined**. This generated page avoids CORS issues when loading a local file. |
+| **preview-internal.html** | **Generated.** Static redoc UI page with the OpenAPI spec **inlined**. This generated page avoids CORS issues when loading a local file. |
+| **old/openapi.yaml** / **old/openapi.json** | Legacy snapshots of the spec; kept for reference. Do not use for code generation or serving. |
 
 ## Generating the public (and internal) docs
 

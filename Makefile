@@ -181,10 +181,8 @@ generate-public-docs: ${REDOCLY_CLI}
 	cd docs && ${REDOCLY_CLI} bundle external@latest --ext json --output openapi.json
 	cd docs && ${REDOCLY_CLI} bundle internal@latest --output openapi-internal.yaml
 	cd docs && ${REDOCLY_CLI} bundle internal@latest --ext json --output openapi-internal.json
-	# node docs/build-standalone-html.js
-	# node docs/build-standalone-html.js --internal
-	cd docs && ${REDOCLY_CLI} build-docs openapi.json --output=preview.html --version
-	cd docs && ${REDOCLY_CLI} build-docs openapi-internal.json --output=preview-internal.html --version
+	cd docs && ${REDOCLY_CLI} build-docs openapi.json --output=preview.html
+	cd docs && ${REDOCLY_CLI} build-docs openapi-internal.json --output=preview-internal.html
 
 verify-api-docs: ${REDOCLY_CLI}
 	${REDOCLY_CLI} lint ./docs/openapi.yaml
