@@ -321,6 +321,43 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/v1/evaluations/jobs/{id}/update:
+    post:
+      x-internal: true
+      tags:
+        - Evaluations
+      summary: Update Evaluation
+      description: Update the evaluation job status or results.
+      operationId: update_evaluation_api_v1_evaluations_jobs_id_update_post
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            title: Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimpleEvaluationRequest'
+      responses:
+        '200':
+          description: Successful Update
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/metrics/system:
     get:
       summary: Get System Metrics

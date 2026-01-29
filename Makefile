@@ -166,11 +166,23 @@ cls:
 
 ## Targets for the API documentation
 
-.PHONY: verify-api-docs generate-ignore-file
+.PHONY: generate-public-docs verify-api-docs generate-ignore-file
 
-verify-api-docs:
-	node_modules/.bin/redocly lint ./docs/openapi.yaml
+REDOCLY_CLI ?= ${PWD}/node_modules/.bin/redocly
+
+node_modules:
+	npm install
+
+${REDOCLY_CLI}: node_modules
+	npm i @redocly/cli@latest
+
+generate-public-docs: ${REDOCLY_CLI}
+	cd docs && ${REDOCLY_CLI} bundle external@latest --output openapi.yaml
+	cd docs && ${REDOCLY_CLI} bundle internal@latest --output openapi-internal.yaml
+
+verify-api-docs: ${REDOCLY_CLI}
+	${REDOCLY_CLI} lint ./docs/openapi.yaml
 	echo "See https://editor.swagger.io/?url=https://raw.githubusercontent.com/julpayne/eval-hub/refs/heads/api-updates/docs/openapi.yaml"
 
-generate-ignore-file:
-	node_modules/.bin/redocly lint --generate-ignore-file ./docs/openapi.yaml
+generate-ignore-file: ${REDOCLY_CLI}
+	${REDOCLY_CLI} lint --generate-ignore-file ./docs/openapi.yaml
