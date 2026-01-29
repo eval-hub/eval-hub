@@ -1,7 +1,7 @@
 apis:
   internal@latest:
-    root: ./openapi_source.yaml
+    root: ./openapi-source.yaml
   external@latest:
-    root: ./openapi_source.yaml
+    root: ./openapi-source.yaml
     decorators:
       remove-x-internal: on

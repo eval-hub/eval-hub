@@ -170,10 +170,7 @@ cls:
 
 REDOCLY_CLI ?= ${PWD}/node_modules/.bin/redocly
 
-node_modules:
-	npm install
-
-${REDOCLY_CLI}: node_modules
+${REDOCLY_CLI}:
 	npm i @redocly/cli@latest
 
 generate-public-docs: ${REDOCLY_CLI}
