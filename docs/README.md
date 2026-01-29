@@ -4,7 +4,7 @@ This directory contains the OpenAPI specifications and related assets for the Ev
 
 ## Swagger UI
 
-- Public documentation: [index.html](index.html)
+- Public documentation: [index.html](https://raw.githubusercontent.com/julpayne/eval-hub/refs/heads/api-updates/docs/index.html)
 - Internal documentation: [index-internal.html](index-internal.html)
 
 ## Files
