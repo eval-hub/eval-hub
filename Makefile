@@ -170,6 +170,7 @@ cls:
 
 verify-api-docs:
 	node_modules/.bin/redocly lint ./docs/openapi.yaml
+	echo "See https://editor.swagger.io/?url=https://raw.githubusercontent.com/julpayne/eval-hub/refs/heads/api-updates/docs/openapi.yaml"
 
 generate-ignore-file:
 	node_modules/.bin/redocly lint --generate-ignore-file ./docs/openapi.yaml
