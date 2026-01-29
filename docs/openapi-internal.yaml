@@ -2,16 +2,16 @@ openapi: 3.1.0
 info:
   title: Eval Hub
   description: API REST server for evaluation backend orchestration
-  version: 0.1.0
+  version: 0.0.1
   contact:
     name: API Support
   license:
     name: Apache 2.0
     url: https://www.apache.org/licenses/LICENSE-2.0
 servers:
-  - url: http://localhost:8080
+  - url: http://127.0.0.1:8080
     description: Local development server
-  - url: https://api.example.com
+  - url: https://api.example.org
     description: Production server
 security: []
 tags:
@@ -156,7 +156,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SimpleEvaluationRequest'
+              $ref: '#/components/schemas/EvaluationRequest'
       responses:
         '202':
           description: Successful Response
@@ -312,7 +312,6 @@ paths:
               schema:
                 type: object
                 additionalProperties: true
-                title: Response Get Evaluation Summary Api V1 Evaluations Jobs  Id  Summary Get
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -342,14 +341,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SimpleEvaluationRequest'
+              $ref: '#/components/schemas/EvaluationResult'
       responses:
-        '200':
+        '204':
           description: Successful Update
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/EvaluationResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1150,7 +1145,6 @@ components:
         - provider_id
         - benchmark_id
         - status
-      title: EvaluationResult
       description: Result of a single evaluation.
     EvaluationStatus:
       type: string
@@ -1180,15 +1174,6 @@ components:
         - name
       title: ExperimentConfig
       description: Configuration for MLFlow experiment tracking.
-    HTTPValidationError:
-      properties:
-        detail:
-          items:
-            $ref: '#/components/schemas/ValidationError'
-          type: array
-          title: Detail
-      type: object
-      title: HTTPValidationError
     ListBenchmarksResponse:
       properties:
         benchmarks:
@@ -1326,13 +1311,6 @@ components:
     ProviderSummary:
       additionalProperties: true
       type: object
-    ProviderType:
-      type: string
-      enum:
-        - builtin
-        - nemo-evaluator
-      title: ProviderType
-      description: Type of evaluation provider.
     ResultsPayload:
       properties:
         benchmarks:
@@ -1388,7 +1366,7 @@ components:
         - state
       title: RunStatus
       description: Status information for an individual benchmark run.
-    SimpleEvaluationRequest:
+    EvaluationRequest:
       properties:
         model:
           $ref: '#/components/schemas/Model'
@@ -1439,7 +1417,7 @@ components:
         - model
         - benchmarks
         - experiment
-      title: SimpleEvaluationRequest
+      title: EvaluationRequest
       description: Simplified evaluation request using the new schema.
     SystemInfo:
       properties:
@@ -1500,24 +1478,3 @@ components:
         - state
       title: SystemStatus
       description: Overall status for an evaluation request.
-    ValidationError:
-      properties:
-        loc:
-          items:
-            anyOf:
-              - type: string
-              - type: integer
-          type: array
-          title: Location
-        msg:
-          type: string
-          title: Message
-        type:
-          type: string
-          title: Error Type
-      type: object
-      required:
-        - loc
-        - msg
-        - type
-      title: ValidationError

@@ -173,9 +173,16 @@ REDOCLY_CLI ?= ${PWD}/node_modules/.bin/redocly
 ${REDOCLY_CLI}:
 	npm i @redocly/cli@latest
 
+clean-docs:
+	rm -f docs/openapi.yaml docs/openapi.json docs/openapi-internal.yaml docs/openapi-internal.json docs/index.html docs/index-internal.html
+
 generate-public-docs: ${REDOCLY_CLI}
 	cd docs && ${REDOCLY_CLI} bundle external@latest --output openapi.yaml
+	cd docs && ${REDOCLY_CLI} bundle external@latest --ext json --output openapi.json
 	cd docs && ${REDOCLY_CLI} bundle internal@latest --output openapi-internal.yaml
+	cd docs && ${REDOCLY_CLI} bundle internal@latest --ext json --output openapi-internal.json
+	node docs/build-standalone-html.js
+	node docs/build-standalone-html.js --internal
 
 verify-api-docs: ${REDOCLY_CLI}
 	${REDOCLY_CLI} lint ./docs/openapi.yaml
