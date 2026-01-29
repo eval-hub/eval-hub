@@ -140,7 +140,6 @@ Please confirm the following before submitting:
 - [ ] Self-review of code has been performed
 - [ ] Code is properly commented
 - [ ] No new linting warnings introduced
-- [ ] Type hints added for new code
 
 ### Testing
 - [ ] Tests have been added for new functionality
