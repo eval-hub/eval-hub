@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@redocly/cli": "^2.15.0"
+  },
+  "scripts": {
+    "lint-openapi": "redocly lint docs/openapi.yaml",
+    "verify-api-docs": "redocly lint docs/openapi.yaml"
+  }
+}

@@ -163,3 +163,13 @@ grant-permissions:
 .PHONY: cls
 cls:
 	printf "\33c\e[3J"
+
+## Targets for the API documentation
+
+.PHONY: verify-api-docs generate-ignore-file
+
+verify-api-docs:
+	node_modules/.bin/redocly lint ./docs/openapi.yaml
+
+generate-ignore-file:
+	node_modules/.bin/redocly lint --generate-ignore-file ./docs/openapi.yaml

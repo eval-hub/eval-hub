@@ -1,15 +1,19 @@
 openapi: 3.1.0
 info:
   title: Eval Hub
-  description: API REST server for evaluation backend orchestration on OpenShift
+  description: API REST server for evaluation backend orchestration
   version: 0.1.0
   contact:
     name: API Support
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
 servers:
 - url: http://localhost:8080
   description: Local development server
 - url: https://api.example.com
   description: Production server
+security: []
 paths:
   /api/v1/health:
     get:
@@ -25,6 +29,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/status:
     get:
       summary: Get service status
@@ -46,7 +54,11 @@ paths:
               schema:
                 type: string
                 examples:
-                  - value: Method not allowed
+                  - Method not allowed
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /metrics:
     get:
       summary: Metrics
@@ -60,6 +72,10 @@ paths:
           content:
             application/json:
               schema: {}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /openapi.yaml:
     get:
       summary: OpenAPI specification
@@ -77,6 +93,10 @@ paths:
             application/json:
               schema:
                 type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /docs:
     get:
       summary: API documentation
@@ -91,6 +111,10 @@ paths:
             text/html:
               schema:
                 type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/evaluations/jobs:
     post:
       tags:
@@ -117,6 +141,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
     get:
       tags:
       - Evaluations
@@ -177,6 +205,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/evaluations/jobs/{id}:
     get:
       tags:
@@ -205,6 +237,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
     delete:
       tags:
       - Evaluations
@@ -231,6 +267,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/evaluations/jobs/{id}/summary:
     get:
       tags:
@@ -261,6 +301,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/metrics/system:
     get:
       summary: Get System Metrics
@@ -277,6 +321,10 @@ paths:
                 additionalProperties: true
                 type: object
                 title: Response Get System Metrics Api V1 Metrics System Get
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/evaluations/providers:
     get:
       tags:
@@ -291,6 +339,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListProvidersResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/evaluations/providers/{provider_id}:
     get:
       tags:
@@ -318,6 +370,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/evaluations/benchmarks:
     get:
       tags:
@@ -369,6 +425,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/evaluations/collections:
     get:
       tags:
@@ -383,6 +443,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListCollectionsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
     post:
       tags:
       - Collections
@@ -408,6 +472,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/evaluations/collections/{collection_id}:
     get:
       tags:
@@ -435,6 +503,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
     put:
       tags:
       - Collections
@@ -467,6 +539,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
     patch:
       tags:
       - Collections
@@ -499,6 +575,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
     delete:
       tags:
       - Collections
@@ -524,7 +604,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
 components:
+  responses:
+    BadRequest:
+      description: Bad Request
+    NotFound:
+      description: Not Found
   schemas:
     HealthResponse:
       properties:
@@ -575,23 +664,23 @@ components:
         service:
           type: string
           examples:
-            - value: eval-hub
+            - eval-hub
           description: Name of the service
         version:
           type: string
           examples:
-            - value: 1.0.0
+            - 1.0.0
           description: Version of the service
         status:
           type: string
           examples:
-            - value: running
+            - running
           description: Current status of the service
         timestamp:
           type: string
           format: date-time
           examples:
-            - value: '2024-01-13T10:23:48Z'
+            - '2024-01-13T10:23:48Z'
           description: Timestamp of the status check in RFC3339 format
     Benchmark:
       properties:
