@@ -2,14 +2,19 @@
 
 This directory contains the OpenAPI specifications and related assets for the Eval Hub API.
 
+## Swagger UI
+
+- Public documentation: [index.html](index.html)
+- Internal documentation: [index-internal.html](index-internal.html)
+
 ## Files
 
 | File | Description |
 |------|-------------|
 | **src/openapi.yaml** | Single source of truth for the API. OpenAPI 3.1.0 spec with all paths, schemas, and (optionally) `x-internal`-marked content. Edit this file when changing the API contract. |
-| **redocly.yaml** | Redocly CLI config. Defines two API entry points (`internal@latest` and `external@latest`), both rooted at `openapi-source.yaml`. The external bundle uses the `remove-x-internal` decorator to strip internal-only content. |
-| **openapi.yaml** | **Generated.** Public API bundle produced by `make generate-public-docs`. Built from `openapi-source.yaml` with internal-only paths/schemas removed. Served at `/openapi.yaml` and used by Swagger UI at `/docs`. |
-| **openapi-internal.yaml** | **Generated.** Internal API bundle produced by `make generate-public-docs`. Full spec from `openapi-source.yaml` including `x-internal` content. For internal tooling and docs. |
+| **redocly.yaml** | Redocly CLI config. Defines two API entry points (`internal@latest` and `external@latest`), both rooted at `src/openapi.yaml`. The external bundle uses the `remove-x-internal` decorator to strip internal-only content. |
+| **openapi.yaml** | **Generated.** Public API bundle produced by `make generate-public-docs`. Built from `src/openapi.yaml` with internal-only paths/schemas removed. Served at `/openapi.yaml` and used by Swagger UI at `/docs`. |
+| **openapi-internal.yaml** | **Generated.** Internal API bundle produced by `make generate-public-docs`. Full spec from `src/openapi.yaml` including `x-internal` content. For internal tooling and docs. |
 | **openapi.json** | **Generated.** JSON form of the public bundle (same content as **openapi.yaml**). Used by **build-standalone-html.js** to produce **index-standalone.html**. |
 | **index.html** | Static Swagger UI page that loads the OpenAPI spec via `url: 'openapi.yaml'`. Use when serving this directory over HTTP (e.g. the Eval Hub server at `/docs`, or a local server). |
 | **index-standalone.html** | **Generated.** Swagger UI page with the OpenAPI spec **inlined**. Use this when opening docs as a local file (`file://`) to avoid CORS (browsers block fetching `openapi.yaml` from the file origin). |
@@ -31,7 +36,7 @@ This target:
 3. Runs **internal** bundle to **openapi-internal.yaml** (full spec).
 4. Runs **build-standalone-html.js** to produce **index-standalone.html** (spec inlined for local file viewing).
 
-Run `make generate-public-docs` after editing **openapi-source.yaml** so that **openapi.yaml**, **openapi-internal.yaml**, and **index-standalone.html** stay in sync. The server serves **openapi.yaml** at `/openapi.yaml` and **index.html** at `/docs` (Swagger UI).
+Run `make generate-public-docs` after editing **src/openapi.yaml** so that **openapi.yaml**, **openapi-internal.yaml**, and **index-standalone.html** stay in sync. The server serves **openapi.yaml** at `/openapi.yaml` and **index.html** at `/docs` (Swagger UI).
 
 ## Viewing docs locally (avoiding CORS)
 
@@ -45,7 +50,7 @@ If you open **index.html** directly in the browser (`file:///path/to/docs/index.
 
 ## Related Make targets
 
-- **verify-api-docs** – Lint `docs/openapi.yaml` with Redocly and print a link to Swagger Editor.
+- **verify-api-docs** – Lint `docs/openapi.yaml` with Redocly.
 - **generate-ignore-file** – Generate a Redocly ignore file from current lint output (e.g. `.redocly.lint-ignore.yaml`).
 
 These targets are defined in the top-level **Makefile**.
