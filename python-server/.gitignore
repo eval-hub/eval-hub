@@ -40,5 +40,5 @@ htmlcov/
 .tox/
 
 # Binaries (will be populated during CI build)
-eval_hub_server/binaries/*
-!eval_hub_server/binaries/.gitkeep
+evalhub_server/binaries/*
+!evalhub_server/binaries/.gitkeep
