@@ -21,8 +21,8 @@ if [[ ! -f "${EXE}" ]]; then
   exit 2
 fi
 
-# This assumes that the service has already been built
-${EXE} > ${LOGFILE} 2>&1 &
+# This assumes that the service has already been built, note that the -local flag is passed to the service to run in local mode
+${EXE} -local=true > ${LOGFILE} 2>&1 &
 
 SERVICE_PID=$!
 
