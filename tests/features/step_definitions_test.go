@@ -343,12 +343,12 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 		if err != nil {
 			return err
 		}
-		id := extractIdFromPath(path)
-		if id == "" {
-			return fmt.Errorf("no ID found in path %s", path)
-		}
 		switch assetName {
 		case "evaluations":
+			id := extractIdFromPath(path)
+			if id == "" {
+				return fmt.Errorf("no ID found in path %s", path)
+			}
 			tc.removeAsset(assetName, id)
 		default:
 			// nothing to do here
