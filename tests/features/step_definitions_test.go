@@ -330,11 +330,7 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 				return err
 			}
 			if tc.lastId == "" {
-				resp, err := json.MarshalIndent(tc.body, "", "  ")
-				if err != nil {
-					return fmt.Errorf("failed to marshal response: %w", err)
-				}
-				return fmt.Errorf("response does not contain an ID in response %s", string(resp))
+				return fmt.Errorf("response does not contain an ID in response %s", string(tc.body))
 			}
 			tc.addAsset(assetName, tc.lastId)
 		default:
