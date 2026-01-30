@@ -144,7 +144,7 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, w
 	// Extract ID from path
 	evaluationJobID := getEvaluationJobID(ctx)
 	if evaluationJobID == "" {
-		handleError(ctx, w, fmt.Errorf("no evaluation job ID found in path"), 500)
+		handleError(ctx, w, fmt.Errorf("no evaluation job ID found in path"), 400)
 		return
 	}
 
@@ -163,7 +163,7 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 	// Extract ID from path
 	evaluationJobID := getEvaluationJobID(ctx)
 	if evaluationJobID == "" {
-		handleError(ctx, w, fmt.Errorf("no evaluation job ID found in path"), 500)
+		handleError(ctx, w, fmt.Errorf("no evaluation job ID found in path"), 400)
 		return
 	}
 
@@ -196,7 +196,7 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 	// Extract ID from path
 	evaluationJobID := getEvaluationJobID(ctx)
 	if evaluationJobID == "" {
-		handleError(ctx, w, fmt.Errorf("no evaluation job ID found in path"), 500)
+		handleError(ctx, w, fmt.Errorf("no evaluation job ID found in path"), 400)
 		return
 	}
 
