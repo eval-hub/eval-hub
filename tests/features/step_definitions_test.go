@@ -497,7 +497,7 @@ func tidyUpTests() {
 	}
 }
 
-// A bt of a havk to have some checks that the regexes are working as expected
+// A bit of a hack to have some checks that the regexes are working as expected
 func checkRegexes() {
 	paths := [][]string{
 		{"/api/v1/evaluations", "evaluations"},
