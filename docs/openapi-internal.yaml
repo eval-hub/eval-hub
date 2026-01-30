@@ -208,15 +208,6 @@ paths:
             description: Filter by status
             title: Status Filter
           description: Filter by status
-        - name: summary
-          in: query
-          required: false
-          schema:
-            type: boolean
-            description: If true, return summary view without detailed results
-            default: false
-            title: Summary
-          description: If true, return summary view without detailed results
       responses:
         '200':
           description: Successful Response
@@ -285,36 +276,6 @@ paths:
       responses:
         '204':
           description: Successful Response
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-  /api/v1/evaluations/jobs/{id}/summary:
-    get:
-      tags:
-        - Evaluations
-      summary: Get Evaluation Summary
-      description: Get a summary of an evaluation request.
-      operationId: get_evaluation_summary_api_v1_evaluations_jobs__id__summary_get
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            title: Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -743,55 +704,6 @@ components:
           examples:
             - '2024-01-13T10:23:48Z'
           description: Timestamp of the status check in RFC3339 format
-    Benchmark:
-      properties:
-        benchmark_id:
-          type: string
-          title: Benchmark Id
-          description: Unique benchmark identifier
-        name:
-          type: string
-          title: Name
-          description: Human-readable benchmark name
-        description:
-          type: string
-          title: Description
-          description: Benchmark description
-        category:
-          type: string
-          title: Category
-          description: Benchmark category
-        metrics:
-          items:
-            type: string
-          type: array
-          title: Metrics
-          description: List of metrics provided by this benchmark
-        num_few_shot:
-          type: integer
-          title: Num Few Shot
-          description: Number of few-shot examples
-        dataset_size:
-          type: integer
-          title: Dataset Size
-          description: Size of the evaluation dataset
-        tags:
-          items:
-            type: string
-          type: array
-          title: Tags
-          description: Tags for categorization
-      additionalProperties: true
-      type: object
-      required:
-        - benchmark_id
-        - name
-        - description
-        - category
-        - metrics
-        - num_few_shot
-      title: Benchmark
-      description: Benchmark specification.
     BenchmarkConfig:
       properties:
         benchmark_id:

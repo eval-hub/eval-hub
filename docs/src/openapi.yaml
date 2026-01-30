@@ -208,15 +208,15 @@ paths:
           description: Filter by status
           title: Status Filter
         description: Filter by status
-      - name: summary
-        in: query
-        required: false
-        schema:
-          type: boolean
-          description: If true, return summary view without detailed results
-          default: false
-          title: Summary
-        description: If true, return summary view without detailed results
+      #- name: summary
+      #  in: query
+      #  required: false
+      #  schema:
+      #    type: boolean
+      #    description: If true, return summary view without detailed results
+      #    default: false
+      #    title: Summary
+      #  description: If true, return summary view without detailed results
       responses:
         '200':
           description: Successful Response
@@ -287,37 +287,6 @@ paths:
       responses:
         '204':
           description: Successful Response
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-  /api/v1/evaluations/jobs/{id}/summary:
-    get:
-      tags:
-      - Evaluations
-      summary: Get Evaluation Summary
-      description: Get a summary of an evaluation request.
-      operationId: get_evaluation_summary_api_v1_evaluations_jobs__id__summary_get
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          # format: uuid
-          title: Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true # TODO: add schema
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':

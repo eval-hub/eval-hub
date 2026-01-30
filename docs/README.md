@@ -12,7 +12,7 @@ This directory contains the OpenAPI specifications and related assets for the Ev
 | File | Description |
 |------|-------------|
 | **src/openapi.yaml** | Single source of truth for the API. OpenAPI 3.1.0 spec with all paths, schemas, and (optionally) `x-internal`-marked content. Edit this file when changing the API contract. |
-| **redocly.yaml** | Redocly CLI config. Defines two API entry points (`internal@latest` and `external@latest`), both rooted at `src/openapi.yaml`. The external bundle uses the `remove-x-internal` decorator to strip internal-only content. |
+| **redocly.yaml** | Redocly CLI config. Defines two API entry points (`internal@latest` and `external@latest`), both rooted at `src/openapi.yaml`. The external bundle uses the `remove-x-internal` decorator to strip internal-only content. This file might also include some rules to avoid warnings when using the redocly vscode plugin. |
 | **openapi.yaml/.json** | **Generated.** Public API bundle produced by `make generate-public-docs`. Built from `src/openapi.yaml` with internal-only paths/schemas removed. Served at `/openapi.yaml` and used by Swagger UI at `/docs`. |
 | **openapi-internal.yaml/.json** | **Generated.** Internal API bundle produced by `make generate-public-docs`. Full spec from `src/openapi.yaml` including `x-internal` content. For internal tooling and docs. |
 | **preview.html** | **Generated.** Static redoc UI page with the OpenAPI spec **inlined**. This generated page avoids CORS issues when loading a local file. |

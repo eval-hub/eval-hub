@@ -177,9 +177,9 @@ clean-docs:
 	rm -f docs/openapi.yaml docs/openapi.json docs/openapi-internal.yaml docs/openapi-internal.json docs/*.html
 
 generate-public-docs: ${REDOCLY_CLI}
-	cd docs && ${REDOCLY_CLI} bundle external@latest --output openapi.yaml
+	cd docs && ${REDOCLY_CLI} bundle external@latest --output openapi.yaml --remove-unused-components
 	cd docs && ${REDOCLY_CLI} bundle external@latest --ext json --output openapi.json
-	cd docs && ${REDOCLY_CLI} bundle internal@latest --output openapi-internal.yaml
+	cd docs && ${REDOCLY_CLI} bundle internal@latest --output openapi-internal.yaml --remove-unused-components
 	cd docs && ${REDOCLY_CLI} bundle internal@latest --ext json --output openapi-internal.json
 	cd docs && ${REDOCLY_CLI} build-docs openapi.json --output=index-public.html
 	cd docs && ${REDOCLY_CLI} build-docs openapi-internal.json --output=index.html
