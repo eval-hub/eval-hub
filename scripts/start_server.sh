@@ -23,7 +23,7 @@ fi
 
 # This assumes that the service has already been built
 # Always run in local mode (CORS enabled)
-${EXE} -local > ${LOGFILE} 2>&1 &
+${EXE} --local > ${LOGFILE} 2>&1 &
 
 SERVICE_PID=$!
 
