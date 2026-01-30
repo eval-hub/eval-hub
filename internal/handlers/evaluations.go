@@ -200,7 +200,7 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	hardDelete, err := getParam(ctx, "hard_delete", false, false)
+	hardDelete, err := getParam(ctx, "hard_delete", true, false)
 	if err != nil {
 		rerr := fmt.Errorf("failed to get hard_delete query parameter: %w", err)
 		handleError(ctx, w, rerr, 400)

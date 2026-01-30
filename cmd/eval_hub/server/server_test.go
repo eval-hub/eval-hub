@@ -84,10 +84,9 @@ func TestServerSetupRoutes(t *testing.T) {
 		{http.MethodGet, "/docs", http.StatusOK, ""},
 		// Evaluation endpoints
 		{http.MethodPost, "/api/v1/evaluations/jobs", http.StatusAccepted, `{"model": {"url": "http://test.com", "name": "test"}}`},
-		{http.MethodGet, "/api/v1/evaluations/jobs", http.StatusNotImplemented, ""},
-		{http.MethodGet, "/api/v1/evaluations/jobs/test-id", http.StatusNotImplemented, ""},
-		// we can not delete - it is done automatically below so no need to test it {http.MethodDelete, "/api/v1/evaluations/jobs/test-id", http.StatusOK, ""},
-		{http.MethodGet, "/api/v1/evaluations/jobs/test-id/summary", http.StatusNotImplemented, ""},
+		{http.MethodGet, "/api/v1/evaluations/jobs", http.StatusOK, ""},
+		{http.MethodGet, "/api/v1/evaluations/jobs/test-id", http.StatusBadRequest, ""},
+		// we can not delete because we have no id
 		// Benchmarks
 		{http.MethodGet, "/api/v1/evaluations/benchmarks", http.StatusOK, ""},
 		// Collections
