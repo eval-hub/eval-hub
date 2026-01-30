@@ -14,13 +14,6 @@ PORT="$4"
 
 export GOCOVERDIR="$5"
 
-# Check if LOCAL_MODE environment variable is set to enable local mode (CORS)
-EXTRA_FLAGS=""
-if [[ -n "${LOCAL_MODE}" ]]; then
-  EXTRA_FLAGS="-local"
-  echo "Env variable LOCAL_MODE detected: starting in LOCAL MODE (CORS * enabled)"
-fi
-
 # set -x
 
 if [[ ! -f "${EXE}" ]]; then
@@ -29,7 +22,8 @@ if [[ ! -f "${EXE}" ]]; then
 fi
 
 # This assumes that the service has already been built
-${EXE} ${EXTRA_FLAGS} > ${LOGFILE} 2>&1 &
+# Always run in local mode (CORS enabled)
+${EXE} -local > ${LOGFILE} 2>&1 &
 
 SERVICE_PID=$!
 
