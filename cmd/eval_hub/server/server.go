@@ -328,7 +328,14 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	router.Handle("/metrics", promhttp.Handler())
 
 	// Wrap router with metrics middleware
-	return Middleware(router), nil
+	handler := Middleware(router)
+
+	// Enable CORS in local mode only (for development/testing)
+	if s.serviceConfig.Service.LocalMode {
+		handler = CorsMiddleware(handler, s.serviceConfig)
+	}
+
+	return handler, nil
 }
 
 // SetupRoutes exposes the route setup for testing
