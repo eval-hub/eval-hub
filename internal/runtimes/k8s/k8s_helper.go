@@ -1,18 +1,17 @@
 package k8s
 
+// Helper wrapper around the Kubernetes clientset.
 import (
 	"context"
 	"fmt"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
-
-// KubernetesManifestsDir is the directory under which YAML manifest files are looked up (relative to working directory).
-const KubernetesManifestsDir = "config/kubernetes"
 
 // KubernetesHelper wraps the Kubernetes client-go client and exposes methods to interact with the cluster.
 // Keeping this abstraction in one place allows all call sites to stay unchanged if we switch
@@ -74,6 +73,22 @@ func (h *KubernetesHelper) CreateConfigMap(
 		}
 	}
 	return h.clientset.CoreV1().ConfigMaps(namespace).Create(ctx, cm, metav1.CreateOptions{})
+}
+
+// CreateJob creates a Job in the given namespace.
+func (h *KubernetesHelper) CreateJob(ctx context.Context, job *batchv1.Job) (*batchv1.Job, error) {
+	if job == nil || job.Namespace == "" || job.Name == "" {
+		return nil, fmt.Errorf("job, namespace, and name are required")
+	}
+	return h.clientset.BatchV1().Jobs(job.Namespace).Create(ctx, job, metav1.CreateOptions{})
+}
+
+// DeleteConfigMap deletes a ConfigMap in the given namespace.
+func (h *KubernetesHelper) DeleteConfigMap(ctx context.Context, namespace, name string) error {
+	if namespace == "" || name == "" {
+		return fmt.Errorf("namespace and name are required")
+	}
+	return h.clientset.CoreV1().ConfigMaps(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // CreateConfigMapOptions holds optional metadata for CreateConfigMap.
