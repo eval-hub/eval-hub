@@ -115,6 +115,7 @@ func (r RespWrapper) WriteJSON(v any, code int) {
 		err := json.NewEncoder(r.Response).Encode(v)
 		if err != nil {
 			logging.LogRequestFailed(r.ctx, code, err.Error())
+			return
 		}
 	}
 	logging.LogRequestSuccess(r.ctx, code, v)
