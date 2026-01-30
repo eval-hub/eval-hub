@@ -17,4 +17,3 @@ database:
   driver: sqlite
   url: file::memory:?mode=memory&cache=shared
   database_name: eval_hub
-

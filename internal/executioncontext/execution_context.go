@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/eval-hub/eval-hub/internal/http_wrappers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -23,7 +24,7 @@ type ExecutionContext struct {
 	StartedAt       time.Time
 	MLflowClient    interface{}
 	ProviderConfigs map[string]api.ProviderResource
-	Request         Request
+	Request         http_wrappers.RequestWrapper
 }
 
 func NewExecutionContext(
@@ -33,7 +34,7 @@ func NewExecutionContext(
 	timeout time.Duration,
 	mlflowClient interface{},
 	providerConfigs map[string]api.ProviderResource,
-	request Request,
+	request http_wrappers.RequestWrapper,
 ) *ExecutionContext {
 	return &ExecutionContext{
 		Ctx:             ctx,
@@ -44,46 +45,4 @@ func NewExecutionContext(
 		Request:         request,
 		ProviderConfigs: providerConfigs,
 	}
-}
-
-// func (ctx *ExecutionContext) GetHeader(key string) string {
-// 	if (ctx.headers != nil) && (ctx.headers[key] != nil) && len(ctx.headers[key]) > 0 {
-// 		return ctx.headers[key][0]
-// 	}
-// 	return ""
-// }
-
-// func (ctx *ExecutionContext) SetHeader(key string, value string) {
-// 	if ctx.headers == nil {
-// 		ctx.headers = make(map[string][]string)
-// 	}
-// 	ctx.headers[key] = []string{value}
-// }
-
-// func (ctx *ExecutionContext) GetBody() io.ReadCloser {
-// 	return ctx.body
-// }
-
-// func (ctx *ExecutionContext) GetBodyAsBytes() ([]byte, error) {
-// 	// we could save the body bytes if we need to read this multiple times
-// 	// but for now we just allow a single read
-// 	if ctx.bodyBytesRead {
-// 		return nil, fmt.Errorf("body bytes already read")
-// 	}
-// 	bodyBytes, err := io.ReadAll(ctx.body)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	ctx.bodyBytesRead = true
-// 	return bodyBytes, nil
-// }
-
-type Request interface {
-	Method() string
-	URI() string
-	Header(key string) string
-	SetHeader(key string, value string)
-	Path() string
-	Query(key string) map[string][]string
-	BodyAsBytes() ([]byte, error)
 }

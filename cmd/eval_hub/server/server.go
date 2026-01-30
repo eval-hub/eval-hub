@@ -169,103 +169,159 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	// Health and status endpoints
 	router.HandleFunc("/api/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
-		h.HandleHealth(ctx, w)
+		resp := NewRespWrapper(w, ctx)
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleHealth(ctx, resp)
+		default:
+			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
+		}
+
 	})
 	router.HandleFunc("/api/v1/status", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
-		h.HandleStatus(ctx, w)
+		resp := NewRespWrapper(w, ctx)
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleStatus(ctx, resp)
+		default:
+			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
+		}
 	})
 
 	// Evaluation jobs endpoints
 	router.HandleFunc("/api/v1/evaluations/jobs", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
 		switch r.Method {
 		case http.MethodPost:
-			h.HandleCreateEvaluation(ctx, w)
+			h.HandleCreateEvaluation(ctx, resp)
 		case http.MethodGet:
-			h.HandleListEvaluations(ctx, w)
+			h.HandleListEvaluations(ctx, resp)
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
 		}
 	})
 	// Handle summary endpoint first (more specific)
 	router.HandleFunc("/api/v1/evaluations/jobs/", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		path := r.URL.Path
+		resp := NewRespWrapper(w, ctx)
 		if strings.HasSuffix(path, "/summary") && r.Method == http.MethodGet {
-			h.HandleGetEvaluationSummary(ctx, w)
+			h.HandleGetEvaluationSummary(ctx, resp)
 			return
 		}
 		// Handle individual job endpoints
 		switch r.Method {
 		case http.MethodGet:
-			h.HandleGetEvaluation(ctx, w)
+			h.HandleGetEvaluation(ctx, resp)
 		case http.MethodDelete:
-			h.HandleCancelEvaluation(ctx, w)
+			h.HandleCancelEvaluation(ctx, resp)
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
 		}
 	})
 
 	// Benchmarks endpoint
 	router.HandleFunc("/api/v1/evaluations/benchmarks", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
-		h.HandleListBenchmarks(ctx, w)
+		resp := NewRespWrapper(w, ctx)
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleListBenchmarks(ctx, resp)
+		default:
+			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
+		}
+
 	})
 
 	// Collections endpoints
 	router.HandleFunc("/api/v1/evaluations/collections", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
 		switch r.Method {
 		case http.MethodPost:
-			h.HandleCreateCollection(ctx, w)
+			h.HandleCreateCollection(ctx, resp)
 		case http.MethodGet:
-			h.HandleListCollections(ctx, w)
+			h.HandleListCollections(ctx, resp)
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
 		}
 	})
 	router.HandleFunc("/api/v1/evaluations/collections/", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
 		switch r.Method {
 		case http.MethodGet:
-			h.HandleGetCollection(ctx, w)
+			h.HandleGetCollection(ctx, resp)
 		case http.MethodPut:
-			h.HandleUpdateCollection(ctx, w)
+			h.HandleUpdateCollection(ctx, resp)
 		case http.MethodPatch:
-			h.HandlePatchCollection(ctx, w)
+			h.HandlePatchCollection(ctx, resp)
 		case http.MethodDelete:
-			h.HandleDeleteCollection(ctx, w)
+			h.HandleDeleteCollection(ctx, resp)
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
 		}
 	})
 
 	// Providers endpoints
 	router.HandleFunc("/api/v1/evaluations/providers", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
-		h.HandleListProviders(ctx, w)
+		resp := NewRespWrapper(w, ctx)
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleListProviders(ctx, resp)
+		default:
+			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
+		}
+
 	})
 
 	router.HandleFunc("/api/v1/evaluations/providers/", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
-		h.HandleGetProvider(ctx, w)
+		resp := NewRespWrapper(w, ctx)
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleGetProvider(ctx, resp)
+		default:
+			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
+		}
 	})
 
 	// System metrics endpoint
 	router.HandleFunc("/api/v1/metrics/system", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
-		h.HandleGetSystemMetrics(ctx, w)
+		resp := NewRespWrapper(w, ctx)
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleGetSystemMetrics(ctx, resp)
+		default:
+			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
+		}
 	})
 
 	// OpenAPI documentation endpoints
 	router.HandleFunc("/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
-		h.HandleOpenAPI(ctx, w)
+		resp := NewRespWrapper(w, ctx)
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleOpenAPI(ctx, resp)
+		default:
+			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
+		}
 	})
 	router.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
-		h.HandleDocs(ctx, w)
+		resp := NewRespWrapper(w, ctx)
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleDocs(ctx, resp)
+		default:
+			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
+		}
+
 	})
 
 	// Prometheus metrics endpoint

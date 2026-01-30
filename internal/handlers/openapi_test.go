@@ -1,7 +1,6 @@
 package handlers_test
 
 import (
-	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -25,13 +24,13 @@ func TestHandleOpenAPI(t *testing.T) {
 	}
 
 	t.Run("GET request returns OpenAPI spec", func(t *testing.T) {
-		ctx := createExecutionContext(http.MethodGet, "/openapi.yaml")
+		ctx := createExecutionContext("GET", "/openapi.yaml")
 		w := httptest.NewRecorder()
 
-		h.HandleOpenAPI(ctx, w)
+		h.HandleOpenAPI(ctx, &MockResponseWrapper{w})
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+		if w.Code != 200 {
+			t.Errorf("Expected status code %d, got %d", 200, w.Code)
 		}
 
 		contentType := w.Header().Get("Content-Type")
@@ -50,23 +49,12 @@ func TestHandleOpenAPI(t *testing.T) {
 		}
 	})
 
-	t.Run("POST request returns method not allowed", func(t *testing.T) {
-		ctx := createExecutionContext(http.MethodPost, "/openapi.yaml")
-		w := httptest.NewRecorder()
-
-		h.HandleOpenAPI(ctx, w)
-
-		if w.Code != http.StatusMethodNotAllowed {
-			t.Errorf("Expected status code %d, got %d", http.StatusMethodNotAllowed, w.Code)
-		}
-	})
-
 	t.Run("JSON content type when Accept header is application/json", func(t *testing.T) {
-		ctx := createExecutionContext(http.MethodGet, "/openapi.yaml")
+		ctx := createExecutionContext("GET", "/openapi.yaml")
 		ctx.Request.SetHeader("Accept", "application/json")
 		w := httptest.NewRecorder()
 
-		h.HandleOpenAPI(ctx, w)
+		h.HandleOpenAPI(ctx, &MockResponseWrapper{w})
 
 		contentType := w.Header().Get("Content-Type")
 		if contentType != "application/json" {
@@ -79,13 +67,13 @@ func TestHandleDocs(t *testing.T) {
 	h := handlers.New(nil, nil)
 
 	t.Run("GET request returns HTML documentation", func(t *testing.T) {
-		ctx := createExecutionContext(http.MethodGet, "/docs")
+		ctx := createExecutionContext("GET", "/docs")
 		w := httptest.NewRecorder()
 
-		h.HandleDocs(ctx, w)
+		h.HandleDocs(ctx, &MockResponseWrapper{w})
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+		if w.Code != 200 {
+			t.Errorf("Expected status code %d, got %d", 200, w.Code)
 		}
 
 		contentType := w.Header().Get("Content-Type")
@@ -103,14 +91,4 @@ func TestHandleDocs(t *testing.T) {
 		}
 	})
 
-	t.Run("POST request returns method not allowed", func(t *testing.T) {
-		ctx := createExecutionContext(http.MethodPost, "/docs")
-		w := httptest.NewRecorder()
-
-		h.HandleDocs(ctx, w)
-
-		if w.Code != http.StatusMethodNotAllowed {
-			t.Errorf("Expected status code %d, got %d", http.StatusMethodNotAllowed, w.Code)
-		}
-	})
 }

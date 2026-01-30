@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
-	"net/http"
+
 	"os"
 	"os/signal"
 	"syscall"
@@ -93,7 +93,7 @@ func main() {
 
 	// Start server in a goroutine
 	go func() {
-		if err := srv.Start(); err != nil && err != http.ErrServerClosed {
+		if err := srv.Start(); err != nil {
 			// we do this as no point trying to continue
 			startUpFailed(serviceConfig, err, "Server failed to start", logger)
 		}

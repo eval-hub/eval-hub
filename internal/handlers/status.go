@@ -1,23 +1,19 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
+	"github.com/eval-hub/eval-hub/internal/http_wrappers"
 )
 
-func (h *Handlers) HandleStatus(ctx *executioncontext.ExecutionContext, w http.ResponseWriter) {
-	if !h.checkMethod(ctx, http.MethodGet, w) {
-		return
-	}
+func (h *Handlers) HandleStatus(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	w.WriteJSON(map[string]interface{}{
 		"service":   "eval-hub",
 		"version":   "1.0.0",
 		"status":    "running",
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
-	})
+	}, 200)
+
 }

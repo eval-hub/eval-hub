@@ -1,18 +1,13 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
-
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
+	"github.com/eval-hub/eval-hub/internal/http_wrappers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 // HandleListBenchmarks handles GET /api/v1/evaluations/benchmarks
-func (h *Handlers) HandleListBenchmarks(ctx *executioncontext.ExecutionContext, w http.ResponseWriter) {
-	if !h.checkMethod(ctx, http.MethodGet, w) {
-		return
-	}
+func (h *Handlers) HandleListBenchmarks(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
 
 	benchmarks := []api.BenchmarkResource{}
 	for _, provider := range ctx.ProviderConfigs {
@@ -22,9 +17,9 @@ func (h *Handlers) HandleListBenchmarks(ctx *executioncontext.ExecutionContext, 
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(api.BenchmarkResourceList{
+	w.WriteJSON(api.BenchmarkResourceList{
 		TotalCount: len(benchmarks),
 		Items:      benchmarks,
-	})
+	}, 200)
+
 }

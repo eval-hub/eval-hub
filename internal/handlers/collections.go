@@ -1,89 +1,51 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
-	"strings"
-
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
+	"github.com/eval-hub/eval-hub/internal/http_wrappers"
 )
 
 // HandleListCollections handles GET /api/v1/evaluations/collections
-func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext, w http.ResponseWriter) {
-	if !h.checkMethod(ctx, http.MethodGet, w) {
-		return
-	}
+func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"collections":       []interface{}{},
-		"total_collections": 0,
-	})
+	w.Error("Not implemented", 501, ctx.RequestID)
+
 }
 
 // HandleCreateCollection handles POST /api/v1/evaluations/collections
-func (h *Handlers) HandleCreateCollection(ctx *executioncontext.ExecutionContext, w http.ResponseWriter) {
-	if !h.checkMethod(ctx, http.MethodPost, w) {
-		return
-	}
+func (h *Handlers) HandleCreateCollection(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Collection creation not yet implemented",
-	})
+	w.Error("Not implemented", 501, ctx.RequestID)
+
 }
 
 // HandleGetCollection handles GET /api/v1/evaluations/collections/{collection_id}
-func (h *Handlers) HandleGetCollection(ctx *executioncontext.ExecutionContext, w http.ResponseWriter) {
-	if !h.checkMethod(ctx, http.MethodGet, w) {
-		return
-	}
+func (h *Handlers) HandleGetCollection(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
 
 	// Extract collection_id from path
-	pathParts := strings.Split(ctx.Request.URI(), "/")
-	collectionID := pathParts[len(pathParts)-1]
+	//pathParts := strings.Split(ctx.Request.URI(), "/")
+	//collectionID := pathParts[len(pathParts)-1]
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":       "Collection retrieval not yet implemented",
-		"collection_id": collectionID,
-	})
+	w.Error("Not implemented", 501, ctx.RequestID)
+
 }
 
 // HandleUpdateCollection handles PUT /api/v1/evaluations/collections/{collection_id}
-func (h *Handlers) HandleUpdateCollection(ctx *executioncontext.ExecutionContext, w http.ResponseWriter) {
-	if !h.checkMethod(ctx, http.MethodPut, w) {
-		return
-	}
+func (h *Handlers) HandleUpdateCollection(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Collection update not yet implemented",
-	})
+	w.Error("Not implemented", 501, ctx.RequestID)
+
 }
 
 // HandlePatchCollection handles PATCH /api/v1/evaluations/collections/{collection_id}
-func (h *Handlers) HandlePatchCollection(ctx *executioncontext.ExecutionContext, w http.ResponseWriter) {
-	if !h.checkMethod(ctx, http.MethodPatch, w) {
-		return
-	}
+func (h *Handlers) HandlePatchCollection(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Collection patch not yet implemented",
-	})
+	w.Error("Not implemented", 501, ctx.RequestID)
 }
 
 // HandleDeleteCollection handles DELETE /api/v1/evaluations/collections/{collection_id}
-func (h *Handlers) HandleDeleteCollection(ctx *executioncontext.ExecutionContext, w http.ResponseWriter) {
-	if !h.checkMethod(ctx, http.MethodDelete, w) {
-		return
-	}
+func (h *Handlers) HandleDeleteCollection(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Collection deletion not yet implemented",
-	})
+	w.Error("Not implemented", 501, ctx.RequestID)
+
 }

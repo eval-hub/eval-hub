@@ -18,3 +18,8 @@ type CollectionResourceList struct {
 	Page
 	Items []CollectionResource `json:"items"`
 }
+
+type PublicCollectionResourceList struct {
+	TotalCount int                  `json:"total_count"`
+	Items      []CollectionResource `json:"items"`
+}

@@ -2,7 +2,7 @@ package handlers_test
 
 import (
 	"encoding/json"
-	"net/http"
+
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -14,13 +14,13 @@ func TestHandleHealth(t *testing.T) {
 	h := handlers.New(nil, nil)
 
 	t.Run("GET request returns healthy status", func(t *testing.T) {
-		ctx := createExecutionContext(http.MethodGet, "/health")
+		ctx := createExecutionContext("GET", "/health")
 		w := httptest.NewRecorder()
 
-		h.HandleHealth(ctx, w)
+		h.HandleHealth(ctx, &MockResponseWrapper{w})
 
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+		if w.Code != 200 {
+			t.Errorf("Expected status code %d, got %d", 200, w.Code)
 		}
 
 		contentType := w.Header().Get("Content-Type")
@@ -49,25 +49,4 @@ func TestHandleHealth(t *testing.T) {
 		}
 	})
 
-	t.Run("POST request returns method not allowed", func(t *testing.T) {
-		ctx := createExecutionContext(http.MethodPost, "/health")
-		w := httptest.NewRecorder()
-
-		h.HandleHealth(ctx, w)
-
-		if w.Code != http.StatusMethodNotAllowed {
-			t.Errorf("Expected status code %d, got %d", http.StatusMethodNotAllowed, w.Code)
-		}
-	})
-
-	t.Run("PUT request returns method not allowed", func(t *testing.T) {
-		ctx := createExecutionContext(http.MethodPut, "/health")
-		w := httptest.NewRecorder()
-
-		h.HandleHealth(ctx, w)
-
-		if w.Code != http.StatusMethodNotAllowed {
-			t.Errorf("Expected status code %d, got %d", http.StatusMethodNotAllowed, w.Code)
-		}
-	})
 }

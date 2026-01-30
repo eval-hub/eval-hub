@@ -1,11 +1,10 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
+	"github.com/eval-hub/eval-hub/internal/http_wrappers"
 	"github.com/eval-hub/eval-hub/internal/serialization"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -24,70 +23,50 @@ type BenchmarkSpec struct {
 }
 
 // HandleCreateEvaluation handles POST /api/v1/evaluations/jobs
-func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext, w http.ResponseWriter) {
-	if !h.checkMethod(ctx, http.MethodPost, w) {
-		return
-	}
+func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
+
 	// get the body bytes from the context
 	bodyBytes, err := ctx.Request.BodyAsBytes()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+
+		w.Error(err.Error(), 500, ctx.RequestID)
 		return
 	}
 	evaluation := &api.EvaluationJobConfig{}
 	err = serialization.Unmarshal(h.validate, ctx, bodyBytes, evaluation)
 	if err != nil {
-		h.serializationError(ctx, w, err, http.StatusBadRequest)
+		w.Error(err.Error(), 400, ctx.RequestID)
 		return
 	}
 
 	response, err := h.storage.CreateEvaluationJob(ctx, evaluation)
 	if err != nil {
-		h.errorResponse(ctx, w, err.Error(), http.StatusInternalServerError)
+		w.Error(err.Error(), 500, ctx.RequestID)
 		return
 	}
 
-	h.successResponse(ctx, w, response, http.StatusAccepted)
+	w.WriteJSON(response, 202)
 }
 
 // HandleListEvaluations handles GET /api/v1/evaluations/jobs
-func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext, w http.ResponseWriter) {
-	if !h.checkMethod(ctx, http.MethodGet, w) {
-		return
-	}
+func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"items":       []interface{}{},
-		"total_count": 0,
-		"limit":       50,
-		"first":       map[string]string{"href": ""},
-		"next":        nil,
-	})
+	w.Error("Not implemented", 501, ctx.RequestID)
+
 }
 
 // HandleGetEvaluation handles GET /api/v1/evaluations/jobs/{id}
-func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, w http.ResponseWriter) {
-	if !h.checkMethod(ctx, http.MethodGet, w) {
-		return
-	}
+func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
 
 	// Extract ID from path
-	pathParts := strings.Split(ctx.Request.URI(), "/")
-	id := pathParts[len(pathParts)-1]
+	//pathParts := strings.Split(ctx.Request.URI(), "/")
+	//id := pathParts[len(pathParts)-1]
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Evaluation retrieval not yet implemented",
-		"id":      id,
-	})
+	w.Error("Not implemented", 501, ctx.RequestID)
 }
 
 // HandleCancelEvaluation handles DELETE /api/v1/evaluations/jobs/{id}
-func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext, w http.ResponseWriter) {
-	if !h.checkMethod(ctx, http.MethodDelete, w) {
-		return
-	}
+func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
 
 	// Extract ID from path
 	pathParts := strings.Split(ctx.Request.URI(), "/")
@@ -95,21 +74,14 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 
 	err := h.storage.DeleteEvaluationJob(ctx, id, true)
 	if err != nil {
-		h.errorResponse(ctx, w, err.Error(), http.StatusInternalServerError)
+		w.Error(err.Error(), 500, ctx.RequestID)
 		return
 	}
-
-	h.successResponse(ctx, w, nil, http.StatusNoContent)
+	w.WriteJSON(nil, 204)
 }
 
 // HandleGetEvaluationSummary handles GET /api/v1/evaluations/jobs/{id}/summary
-func (h *Handlers) HandleGetEvaluationSummary(ctx *executioncontext.ExecutionContext, w http.ResponseWriter) {
-	if !h.checkMethod(ctx, http.MethodGet, w) {
-		return
-	}
+func (h *Handlers) HandleGetEvaluationSummary(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Evaluation summary not yet implemented",
-	})
+	w.Error("Not implemented", 501, ctx.RequestID)
 }

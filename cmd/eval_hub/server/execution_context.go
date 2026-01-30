@@ -2,10 +2,13 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
+	"github.com/eval-hub/eval-hub/internal/logging"
+	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 // newExecutionContext creates a new ExecutionContext with default values. This function
@@ -78,4 +81,56 @@ func (r *ReqWrapper) BodyAsBytes() ([]byte, error) {
 
 func (r *ReqWrapper) SetHeader(key string, value string) {
 	r.Request.Header.Set(key, value)
+}
+
+type RespWrapper struct {
+	Response http.ResponseWriter
+	ctx      *executioncontext.ExecutionContext
+}
+
+func NewRespWrapper(response http.ResponseWriter, ctx *executioncontext.ExecutionContext) RespWrapper {
+	return RespWrapper{
+		Response: response,
+		ctx:      ctx,
+	}
+}
+
+func (r RespWrapper) SetHeader(key string, value string) {
+	r.Response.Header().Set(key, value)
+}
+
+func (r RespWrapper) DeleteHeader(key string) {
+	r.Response.Header().Del(key)
+}
+
+func (r RespWrapper) Write(buf []byte) (int, error) {
+	return r.Response.Write(buf)
+}
+
+func (r RespWrapper) WriteJSON(v any, code int) {
+	r.SetHeader("Content-Type", "application/json")
+	r.SetStatusCode(code)
+
+	if v != nil {
+		err := json.NewEncoder(r.Response).Encode(v)
+		if err != nil {
+			logging.LogRequestFailed(r.ctx, code, err.Error())
+		}
+	}
+	logging.LogRequestSuccess(r.ctx, code, v)
+
+}
+
+func (r RespWrapper) SetStatusCode(code int) {
+	r.Response.WriteHeader(code)
+}
+
+func (r RespWrapper) Error(errorMessage string, code int, requestId string) {
+
+	r.DeleteHeader("Content-Length")
+
+	r.SetHeader("X-Content-Type-Options", "nosniff")
+	r.WriteJSON(api.Error{Message: errorMessage, Code: code, Trace: requestId}, code)
+
+	logging.LogRequestFailed(r.ctx, code, errorMessage)
 }
