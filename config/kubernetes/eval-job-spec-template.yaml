@@ -7,9 +7,9 @@ metadata:
   labels:
     app: evalhub
     component: evaluation-job
-    job-id: {{ .JobID }}
-    provider-id: {{ .ProviderID }}
-    benchmark-id: {{ .BenchmarkID }}
+    job-id: "{{ .JobID }}"
+    provider-id: "{{ .ProviderID }}"
+    benchmark-id: "{{ .BenchmarkID }}"
 data:
-  spec.json: |
-    {{ .JobSpecJSON }}
+  job.json: |
+{{- .JobSpecJSON | nindent 4 }}
