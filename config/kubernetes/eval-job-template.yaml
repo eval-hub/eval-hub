@@ -29,31 +29,20 @@ spec:
           imagePullPolicy: IfNotPresent
           volumeMounts:
             - name: job-spec
-              mountPath: /meta
+              mountPath: /meta/job.json
+              subPath: job.json
+              readOnly: true
+            - name: oci-registry-credentials
+              mountPath: /meta/connection-oci.yaml
+              subPath: connection-oci.yaml
               readOnly: true
             - name: data
               mountPath: /data
-            - name: results
-              mountPath: /results
           env:
             - name: JOB_ID
               value: "{{ .JobID }}"
             - name: EVALHUB_SERVICE_URL
               value: "{{ .EvalHubServiceURL }}"
-            - name: RESULTS_DIR
-              value: "/results"
-            - name: REGISTRY_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .RegistrySecretName }}
-                  key: username
-            - name: REGISTRY_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .RegistrySecretName }}
-                  key: password
-            - name: REGISTRY_URL
-              value: "{{ .RegistryURL }}"
 {{- if .DefaultEnv }}
 {{- range .DefaultEnv }}
             - name: {{ .Name }}
@@ -71,7 +60,8 @@ spec:
         - name: job-spec
           configMap:
             name: eval-job-{{ .JobID }}-spec
+        - name: oci-registry-credentials
+          secret:
+            secretName: {{ .RegistrySecretName }}
         - name: data
-          emptyDir: {}
-        - name: results
           emptyDir: {}
