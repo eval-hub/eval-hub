@@ -124,6 +124,10 @@ func (s *SQLStorage) getTenant(_ *executioncontext.ExecutionContext) (api.Tenant
 	return "TODO", nil
 }
 
+//#######################################################################
+// Evaluation job operations
+//#######################################################################
+
 // CreateEvaluationJob creates a new evaluation job in the database
 // the evaluation job is stored in the evaluations table as a JSON string
 // the evaluation job is returned as a EvaluationJobResource
@@ -239,7 +243,7 @@ func (s *SQLStorage) GetEvaluationJob(ctx *executioncontext.ExecutionContext, id
 	return evaluationResource, nil
 }
 
-func (s *SQLStorage) GetEvaluationJobs(ctx *executioncontext.ExecutionContext, summary bool, limit int, offset int, statusFilter string) (*api.EvaluationJobResourceList, error) {
+func (s *SQLStorage) GetEvaluationJobs(ctx *executioncontext.ExecutionContext, limit int, offset int, statusFilter string) (*api.EvaluationJobResourceList, error) {
 	// Get total count (with status filter if provided)
 	countQuery, countArgs, err := createCountEntitiesStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, statusFilter)
 	if err != nil {
@@ -315,12 +319,6 @@ func (s *SQLStorage) GetEvaluationJobs(ctx *executioncontext.ExecutionContext, s
 			},
 		}
 
-		// If summary mode, exclude Results (set to nil)
-		// Otherwise, also nil for now (TODO: retrieve results from database if needed)
-		if !summary {
-			resource.Results = nil // TODO: retrieve results from database if needed
-		}
-
 		items = append(items, resource)
 	}
 
@@ -350,9 +348,11 @@ func (s *SQLStorage) GetEvaluationJobs(ctx *executioncontext.ExecutionContext, s
 
 func (s *SQLStorage) DeleteEvaluationJob(ctx *executioncontext.ExecutionContext, id string, hardDelete bool) error {
 	if !hardDelete {
-		return s.UpdateEvaluationJobStatus(ctx, id, api.EvaluationJobState{
-			State:   api.StateCancelled,
-			Message: "Evaluation job cancelled",
+		return s.UpdateEvaluationJobStatus(ctx, id, &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{
+				State:   api.StateCancelled,
+				Message: "Evaluation job cancelled",
+			},
 		})
 	}
 
@@ -362,8 +362,6 @@ func (s *SQLStorage) DeleteEvaluationJob(ctx *executioncontext.ExecutionContext,
 	}
 
 	// Build the DELETE query
-	// Note: Currently only hard delete is supported as the table schema doesn't have a deleted_at column
-	// The hardDelete parameter is kept for future soft delete support
 	deleteQuery, err := createDeleteEntityStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS)
 	if err != nil {
 		return err
@@ -391,11 +389,7 @@ func (s *SQLStorage) DeleteEvaluationJob(ctx *executioncontext.ExecutionContext,
 	return nil
 }
 
-func (s *SQLStorage) UpdateBenchmarkStatusForJob(ctx *executioncontext.ExecutionContext, id string, status api.BenchmarkStatus) error {
-	return nil
-}
-
-func (s *SQLStorage) UpdateEvaluationJobStatus(ctx *executioncontext.ExecutionContext, id string, state api.EvaluationJobState) error {
+func (s *SQLStorage) UpdateEvaluationJobStatus(ctx *executioncontext.ExecutionContext, id string, status *api.EvaluationJobStatus) error {
 	evaluationID, err := s.getEvaluationJobID(id)
 	if err != nil {
 		return err
@@ -407,8 +401,10 @@ func (s *SQLStorage) UpdateEvaluationJobStatus(ctx *executioncontext.ExecutionCo
 		return err
 	}
 
+	// TODO: For now this only handles the status update
+
 	// Execute the UPDATE query
-	statusStr := string(state.State)
+	statusStr := string(status.EvaluationJobState.State)
 	result, err := s.exec(ctx.Ctx, updateQuery, statusStr, evaluationID)
 	if err != nil {
 		ctx.Logger.Error("Failed to update evaluation job status", "error", err, "id", id, "status", statusStr)
@@ -429,6 +425,10 @@ func (s *SQLStorage) UpdateEvaluationJobStatus(ctx *executioncontext.ExecutionCo
 	ctx.Logger.Info("Updated evaluation job status", "id", id, "status", statusStr)
 	return nil
 }
+
+//#######################################################################
+// Collection operations
+//#######################################################################
 
 func (s *SQLStorage) CreateCollection(ctx *executioncontext.ExecutionContext, collection *api.CollectionResource) error {
 	return nil

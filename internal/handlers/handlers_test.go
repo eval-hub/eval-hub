@@ -46,8 +46,8 @@ func (r *MockRequest) Path() string {
 	return ""
 }
 
-func (r *MockRequest) Query(key string) map[string][]string {
-	return make(map[string][]string)
+func (r *MockRequest) Query(key string) []string {
+	return make([]string, 0)
 }
 
 func (r *MockRequest) Header(key string) string {

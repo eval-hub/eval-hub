@@ -42,6 +42,11 @@ func newShutdownFunc(core zapcore.Core) ShutdownFunc {
 	}
 }
 
+func LogRequestStarted(ctx *executioncontext.ExecutionContext) {
+	// log the successful request, the request details and requestId have already been added to the logger
+	ctx.Logger.Info("Request started")
+}
+
 func LogRequestFailed(ctx *executioncontext.ExecutionContext, code int, errorMessage string) {
 	// log the failed request, the request details and requestId have already been added to the logger
 	ctx.Logger.Info("Request failed", "error", errorMessage, "code", code)

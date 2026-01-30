@@ -16,10 +16,9 @@ type Storage interface {
 	// Evaluation job operations
 	CreateEvaluationJob(ctx *executioncontext.ExecutionContext, evaluation *api.EvaluationJobConfig) (*api.EvaluationJobResource, error)
 	GetEvaluationJob(ctx *executioncontext.ExecutionContext, id string) (*api.EvaluationJobResource, error)
-	GetEvaluationJobs(ctx *executioncontext.ExecutionContext, summary bool, limit int, offset int, statusFilter string) (*api.EvaluationJobResourceList, error)
+	GetEvaluationJobs(ctx *executioncontext.ExecutionContext, limit int, offset int, statusFilter string) (*api.EvaluationJobResourceList, error)
 	DeleteEvaluationJob(ctx *executioncontext.ExecutionContext, id string, hardDelete bool) error
-	UpdateBenchmarkStatusForJob(ctx *executioncontext.ExecutionContext, id string, status api.BenchmarkStatus) error
-	UpdateEvaluationJobStatus(ctx *executioncontext.ExecutionContext, id string, state api.EvaluationJobState) error
+	UpdateEvaluationJobStatus(ctx *executioncontext.ExecutionContext, id string, state *api.EvaluationJobStatus) error
 
 	// Collection operations
 	CreateCollection(ctx *executioncontext.ExecutionContext, collection *api.CollectionResource) error

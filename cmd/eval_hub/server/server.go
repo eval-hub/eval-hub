@@ -178,6 +178,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		}
 
 	})
+
 	router.HandleFunc("/api/v1/status", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -202,13 +203,14 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
 		}
 	})
-	// Handle summary endpoint first (more specific)
+
+	// Handle update endpoint first (more specific)
 	router.HandleFunc("/api/v1/evaluations/jobs/", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		path := r.URL.Path
 		resp := NewRespWrapper(w, ctx)
-		if strings.HasSuffix(path, "/summary") && r.Method == http.MethodGet {
-			h.HandleGetEvaluationSummary(ctx, resp)
+		if strings.HasSuffix(path, "/update") && r.Method == http.MethodPost {
+			h.HandleUpdateEvaluation(ctx, resp)
 			return
 		}
 		// Handle individual job endpoints
@@ -232,7 +234,6 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		default:
 			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
 		}
-
 	})
 
 	// Collections endpoints
@@ -248,6 +249,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
 		}
 	})
+
 	router.HandleFunc("/api/v1/evaluations/collections/", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -275,7 +277,6 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		default:
 			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
 		}
-
 	})
 
 	router.HandleFunc("/api/v1/evaluations/providers/", func(w http.ResponseWriter, r *http.Request) {
@@ -312,6 +313,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
 		}
 	})
+
 	router.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -321,7 +323,6 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		default:
 			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
 		}
-
 	})
 
 	// Prometheus metrics endpoint

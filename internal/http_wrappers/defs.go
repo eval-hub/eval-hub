@@ -7,7 +7,7 @@ type RequestWrapper interface {
 	Header(key string) string
 	SetHeader(key string, value string)
 	Path() string
-	Query(key string) map[string][]string
+	Query(key string) []string
 	BodyAsBytes() ([]byte, error)
 }
 

@@ -55,15 +55,15 @@ func (r *ReqWrapper) Method() string {
 }
 
 func (r *ReqWrapper) URI() string {
-	return r.Request.RequestURI
+	return r.Request.URL.String()
 }
 
 func (r *ReqWrapper) Path() string {
 	return r.Request.URL.Path
 }
 
-func (r *ReqWrapper) Query(key string) map[string][]string {
-	return r.Request.URL.Query()
+func (r *ReqWrapper) Query(key string) []string {
+	return r.Request.URL.Query()[key]
 }
 
 func (r *ReqWrapper) Header(key string) string {
@@ -126,7 +126,6 @@ func (r RespWrapper) SetStatusCode(code int) {
 }
 
 func (r RespWrapper) Error(errorMessage string, code int, requestId string) {
-
 	r.DeleteHeader("Content-Length")
 
 	r.SetHeader("X-Content-Type-Options", "nosniff")
