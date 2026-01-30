@@ -213,7 +213,7 @@ func createServer(port int) (*server.Server, error) {
 		return nil, fmt.Errorf("failed to load provider configs: %w", err)
 	}
 	serviceConfig.Service.LocalMode = true // set local mode for testing
-	runtime, err := runtimes.NewRuntime(logger, serviceConfig)
+	runtime, err := runtimes.NewRuntime(logger, serviceConfig, providerConfigs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create runtime: %w", err)
 	}
