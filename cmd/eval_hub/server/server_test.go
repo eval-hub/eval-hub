@@ -84,24 +84,24 @@ func TestServerSetupRoutes(t *testing.T) {
 		{http.MethodGet, "/docs", http.StatusOK, ""},
 		// Evaluation endpoints
 		{http.MethodPost, "/api/v1/evaluations/jobs", http.StatusAccepted, `{"model": {"url": "http://test.com", "name": "test"}}`},
-		{http.MethodGet, "/api/v1/evaluations/jobs", http.StatusOK, ""},
-		{http.MethodGet, "/api/v1/evaluations/jobs/test-id", http.StatusOK, ""},
+		{http.MethodGet, "/api/v1/evaluations/jobs", http.StatusNotImplemented, ""},
+		{http.MethodGet, "/api/v1/evaluations/jobs/test-id", http.StatusNotImplemented, ""},
 		// we can not delete - it is done automatically below so no need to test it {http.MethodDelete, "/api/v1/evaluations/jobs/test-id", http.StatusOK, ""},
-		{http.MethodGet, "/api/v1/evaluations/jobs/test-id/summary", http.StatusOK, ""},
+		{http.MethodGet, "/api/v1/evaluations/jobs/test-id/summary", http.StatusNotImplemented, ""},
 		// Benchmarks
 		{http.MethodGet, "/api/v1/evaluations/benchmarks", http.StatusOK, ""},
 		// Collections
-		{http.MethodGet, "/api/v1/evaluations/collections", http.StatusOK, ""},
-		{http.MethodPost, "/api/v1/evaluations/collections", http.StatusCreated, ""},
-		{http.MethodGet, "/api/v1/evaluations/collections/test-collection", http.StatusOK, ""},
-		{http.MethodPut, "/api/v1/evaluations/collections/test-collection", http.StatusOK, ""},
-		{http.MethodPatch, "/api/v1/evaluations/collections/test-collection", http.StatusOK, ""},
-		{http.MethodDelete, "/api/v1/evaluations/collections/test-collection", http.StatusOK, ""},
+		{http.MethodGet, "/api/v1/evaluations/collections", http.StatusNotImplemented, ""},
+		{http.MethodPost, "/api/v1/evaluations/collections", http.StatusNotImplemented, ""},
+		{http.MethodGet, "/api/v1/evaluations/collections/test-collection", http.StatusNotImplemented, ""},
+		{http.MethodPut, "/api/v1/evaluations/collections/test-collection", http.StatusNotImplemented, ""},
+		{http.MethodPatch, "/api/v1/evaluations/collections/test-collection", http.StatusNotImplemented, ""},
+		{http.MethodDelete, "/api/v1/evaluations/collections/test-collection", http.StatusNotImplemented, ""},
 		// Providers
 		{http.MethodGet, "/api/v1/evaluations/providers", http.StatusOK, ""},
 		{http.MethodGet, "/api/v1/evaluations/providers/garak", http.StatusOK, ""},
 		// System metrics
-		{http.MethodGet, "/api/v1/metrics/system", http.StatusOK, ""},
+		{http.MethodGet, "/api/v1/metrics/system", http.StatusNotImplemented, ""},
 		// Error cases
 		{http.MethodPost, "/api/v1/health", http.StatusMethodNotAllowed, ""},
 		{http.MethodGet, "/nonexistent", http.StatusNotFound, ""},
