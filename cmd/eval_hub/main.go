@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"net/http"
 
 	"os"
 	"os/signal"
@@ -94,6 +95,10 @@ func main() {
 	go func() {
 		if err := srv.Start(); err != nil {
 			// we do this as no point trying to continue
+			if err == http.ErrServerClosed {
+				logger.Info("Server closed gracefully")
+				return
+			}
 			startUpFailed(serviceConfig, err, "Server failed to start", logger)
 		}
 	}()

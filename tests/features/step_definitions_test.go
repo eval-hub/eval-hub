@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -45,6 +47,14 @@ type scenarioConfig struct {
 	apiFeature   *apiFeature
 	response     *http.Response
 	body         []byte
+
+	lastId string
+
+	assets map[string][]string
+}
+
+func logDebug(format string, a ...any) {
+	fmt.Printf(format, a...)
 }
 
 func checkBaseURL(uri *url.URL, from string) {
@@ -73,7 +83,7 @@ func createApiFeature() (*apiFeature, error) {
 	port := 8080
 	if sport := os.Getenv("PORT"); sport != "" {
 		if eport, err := strconv.Atoi(sport); err != nil {
-			fmt.Printf("Invalid PORT: %v\n", err.Error())
+			logDebug("Invalid PORT: %v\n", err.Error())
 		} else {
 			port = eport
 		}
@@ -145,9 +155,6 @@ func (a *apiFeature) startLocalServer(port int) error {
 		return err
 	}
 
-	// port := listener.Addr().(*net.TCPAddr).Port
-	// a.baseURL = fmt.Sprintf("http://localhost:%d", port)
-
 	go func() {
 		a.httpServer.Serve(listener)
 	}()
@@ -168,7 +175,7 @@ func (tc *scenarioConfig) theServiceIsRunning(ctx context.Context) error {
 	// Check that the server is actually running by sending a request to the health endpoint
 	for range 10 {
 		if err := tc.checkHealthEndpoint(); err != nil {
-			fmt.Printf("Error checking health endpoint: %v\n", err.Error())
+			logDebug("Error checking health endpoint: %v\n", err.Error())
 			time.Sleep(1 * time.Second)
 		} else {
 			break
@@ -230,7 +237,49 @@ func (tc *scenarioConfig) getRequestBody(body string) (io.Reader, error) {
 	return strings.NewReader(body), nil
 }
 
+func (sc *scenarioConfig) addAsset(assetName, id string) {
+	sc.assets[assetName] = append(sc.assets[assetName], id)
+}
+
+func (sc *scenarioConfig) removeAsset(assetName, id string) {
+	ids := sc.assets[assetName]
+	if slices.Contains(ids, id) {
+		sc.assets[assetName] = slices.DeleteFunc(ids, func(s string) bool {
+			return s == id
+		})
+	}
+}
+
+func extractId(body []byte) (string, error) {
+	obj := make(map[string]interface{})
+	err := json.Unmarshal(body, &obj)
+	if err != nil {
+		return "", err
+	}
+	if id, ok := obj["id"]; ok {
+		return id.(string), nil
+	}
+	return "", nil
+}
+
+// firstPathSegment matches the first path segment after /api/v1/
+var firstPathSegment = regexp.MustCompile(`^/api/v1/([^/]+).*$`)
+
+func getAssetName(path string) (string, error) {
+	if matches := firstPathSegment.FindStringSubmatch(path); len(matches) >= 2 {
+		return matches[1], nil
+	}
+	return "", fmt.Errorf("no first path segment found in path %s", path)
+}
+
 func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) error {
+	if strings.Contains(path, "{id}") {
+		if tc.lastId == "" {
+			return fmt.Errorf("last ID is not set")
+		}
+		path = strings.Replace(path, "{id}", tc.lastId, 1)
+	}
+
 	url := fmt.Sprintf("%s%s", tc.apiFeature.baseURL.String(), path)
 	entity, err := tc.getRequestBody(body)
 	if err != nil {
@@ -251,6 +300,43 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 		return err
 	}
 	defer tc.response.Body.Close()
+
+	if method == http.MethodPost {
+		assetName, err := getAssetName(path)
+		if err != nil {
+			return err
+		}
+		switch assetName {
+		case "evaluations":
+			tc.lastId, err = extractId(tc.body)
+			if err != nil {
+				return err
+			}
+			if tc.lastId == "" {
+				resp, err := json.MarshalIndent(tc.body, "", "  ")
+				if err != nil {
+					return fmt.Errorf("failed to marshal response: %w", err)
+				}
+				return fmt.Errorf("response does not contain an ID in response %s", string(resp))
+			}
+			tc.addAsset(assetName, tc.lastId)
+		default:
+			// nothing to do here
+		}
+	}
+
+	if method == http.MethodDelete {
+		assetName, err := getAssetName(path)
+		if err != nil {
+			return err
+		}
+		switch assetName {
+		case "evaluations":
+			tc.removeAsset(assetName, tc.lastId)
+		default:
+			// nothing to do here
+		}
+	}
 
 	return nil
 }
@@ -333,11 +419,26 @@ func (tc *scenarioConfig) saveScenarioName(ctx context.Context, sc *godog.Scenar
 }
 
 func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
+	for assetName, ids := range tc.assets {
+		for _, id := range ids {
+			path := fmt.Sprintf("/api/v1/%s/%s?hard_delete=true", assetName, id)
+			err := tc.iSendARequestTo("DELETE", path)
+			if err != nil {
+				return ctx, fmt.Errorf("failed to delete asset %s %s: %w", assetName, id, err)
+			}
+			if tc.response.StatusCode != 204 {
+				return ctx, fmt.Errorf("expected status 204, got %d for path %s", tc.response.StatusCode, path)
+			}
+			logDebug("Deleted asset %s with status %d\n", path, tc.response.StatusCode)
+		}
+	}
+	tc.assets = nil
 	return ctx, nil
 }
 
 func createScenarioConfig(apiConfig *apiFeature) *scenarioConfig {
 	conf := new(scenarioConfig)
+	conf.assets = make(map[string][]string)
 
 	conf.apiFeature = apiConfig
 
@@ -356,7 +457,7 @@ func waitForService() {
 	tc := createScenarioConfig(api)
 	for range 10 {
 		if err := tc.checkHealthEndpoint(); err != nil {
-			fmt.Printf("Error checking health endpoint: %v\n", err.Error())
+			logDebug("Error checking health endpoint: %v\n", err.Error())
 			time.Sleep(1 * time.Second)
 		} else {
 			return
@@ -371,12 +472,35 @@ func tidyUpTests() {
 	}
 }
 
+// A bt of a havk to have some checks that the regexes are working as expected
+func checkRegexes() {
+	paths := [][]string{
+		{"/api/v1/evaluations", "evaluations"},
+		{"/api/v1/evaluations/jobs", "evaluations"},
+		{"/api/v1/evaluations/jobs/{id}", "evaluations"},
+		{"/api/v1/evaluations/jobs/{id}/update", "evaluations"},
+		{"/api/v1/collections", "collections"},
+		{"/api/v1/collections/{id}", "collections"},
+	}
+	for _, path := range paths {
+		name, err := getAssetName(path[0])
+		if err != nil {
+			panic(fmt.Errorf("failed to get asset name for path %s: %v", path, err))
+		}
+		if name != path[1] {
+			panic(fmt.Errorf("expected asset name %s for path %s, got %s", path[1], path[0], name))
+		}
+	}
+}
+
 func InitializeTestSuite(ctx *godog.TestSuiteContext) {
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		//nolint:gosec
 		InsecureSkipVerify: true,
 	}
+
+	ctx.BeforeSuite(checkRegexes)
 
 	ctx.BeforeSuite(setUpTestConf)
 	ctx.BeforeSuite(waitForService)

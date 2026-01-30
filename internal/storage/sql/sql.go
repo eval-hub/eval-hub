@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"strconv"
 	"time"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
+	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -176,7 +176,8 @@ func (s *SQLStorage) CreateEvaluationJob(executionContext *executioncontext.Exec
 func (s *SQLStorage) getEvaluationJobID(id string) (int64, error) {
 	// Parse the ID string to int64
 	if evaluationId, err := strconv.ParseInt(id, 10, 64); err != nil {
-		return 0, fmt.Errorf("Invalid evaluation job ID: %w", err)
+		// tret this as a user error
+		return 0, serviceerrors.NewStorageErrorWithCode(400, "Invalid evaluation job ID: %s", id)
 	} else {
 		return evaluationId, nil
 	}
@@ -203,10 +204,10 @@ func (s *SQLStorage) GetEvaluationJob(ctx *executioncontext.ExecutionContext, id
 	err = s.pool.QueryRowContext(ctx.Ctx, selectQuery, evaluationID).Scan(&dbID, &createdAt, &updatedAt, &statusStr, &entityJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("evaluation job with ID %s not found", id)
+			return nil, serviceerrors.NewStorageErrorWithCode(404, "evaluation job with id '%s' not found", id)
 		}
 		ctx.Logger.Error("Failed to get evaluation job", "error", err, "id", id)
-		return nil, fmt.Errorf("failed to get evaluation job: %w", err)
+		return nil, serviceerrors.NewStorageErrorWithError(err, "failed to get evaluation job")
 	}
 
 	// Unmarshal the entity JSON into EvaluationJobConfig
@@ -214,7 +215,7 @@ func (s *SQLStorage) GetEvaluationJob(ctx *executioncontext.ExecutionContext, id
 	err = json.Unmarshal([]byte(entityJSON), &evaluationConfig)
 	if err != nil {
 		ctx.Logger.Error("Failed to unmarshal evaluation job entity", "error", err, "id", id)
-		return nil, fmt.Errorf("failed to unmarshal evaluation job entity: %w", err)
+		return nil, serviceerrors.NewStorageErrorWithError(err, "failed to unmarshal evaluation job entity")
 	}
 
 	// Parse status from database
@@ -258,7 +259,7 @@ func (s *SQLStorage) GetEvaluationJobs(ctx *executioncontext.ExecutionContext, l
 	}
 	if err != nil {
 		ctx.Logger.Error("Failed to count evaluation jobs", "error", err)
-		return nil, fmt.Errorf("failed to count evaluation jobs: %w", err)
+		return nil, serviceerrors.NewStorageErrorWithError(err, "failed to count evaluation jobs")
 	}
 
 	// Build the list query with pagination and status filter
@@ -271,7 +272,7 @@ func (s *SQLStorage) GetEvaluationJobs(ctx *executioncontext.ExecutionContext, l
 	rows, err := s.pool.QueryContext(ctx.Ctx, listQuery, listArgs...)
 	if err != nil {
 		ctx.Logger.Error("Failed to list evaluation jobs", "error", err)
-		return nil, fmt.Errorf("failed to list evaluation jobs: %w", err)
+		return nil, serviceerrors.NewStorageErrorWithError(err, "failed to list evaluation jobs")
 	}
 	defer rows.Close()
 
@@ -286,7 +287,7 @@ func (s *SQLStorage) GetEvaluationJobs(ctx *executioncontext.ExecutionContext, l
 		err = rows.Scan(&dbID, &createdAt, &updatedAt, &statusStr, &entityJSON)
 		if err != nil {
 			ctx.Logger.Error("Failed to scan evaluation job row", "error", err)
-			return nil, fmt.Errorf("failed to scan evaluation job row: %w", err)
+			return nil, serviceerrors.NewStorageErrorWithError(err, "failed to scan evaluation job row")
 		}
 
 		// Unmarshal the entity JSON into EvaluationJobConfig
@@ -294,7 +295,7 @@ func (s *SQLStorage) GetEvaluationJobs(ctx *executioncontext.ExecutionContext, l
 		err = json.Unmarshal([]byte(entityJSON), &evaluationConfig)
 		if err != nil {
 			ctx.Logger.Error("Failed to unmarshal evaluation job entity", "error", err, "id", dbID)
-			return nil, fmt.Errorf("failed to unmarshal evaluation job entity: %w", err)
+			return nil, serviceerrors.NewStorageErrorWithError(err, "failed to unmarshal evaluation job entity")
 		}
 
 		// Parse status from database
@@ -324,7 +325,7 @@ func (s *SQLStorage) GetEvaluationJobs(ctx *executioncontext.ExecutionContext, l
 
 	if err = rows.Err(); err != nil {
 		ctx.Logger.Error("Error iterating evaluation job rows", "error", err)
-		return nil, fmt.Errorf("error iterating evaluation job rows: %w", err)
+		return nil, serviceerrors.NewStorageErrorWithError(err, "error iterating evaluation job rows")
 	}
 
 	// Calculate pagination info
@@ -371,18 +372,18 @@ func (s *SQLStorage) DeleteEvaluationJob(ctx *executioncontext.ExecutionContext,
 	result, err := s.exec(ctx.Ctx, deleteQuery, evaluationID)
 	if err != nil {
 		ctx.Logger.Error("Failed to delete evaluation job", "error", err, "id", id)
-		return fmt.Errorf("failed to delete evaluation job: %w", err)
+		return serviceerrors.NewStorageErrorWithError(err, "failed to delete evaluation job")
 	}
 
 	// Check if any rows were affected
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		ctx.Logger.Error("Failed to get rows affected", "error", err, "id", id)
-		return fmt.Errorf("failed to get rows affected: %w", err)
+		return serviceerrors.NewStorageErrorWithError(err, "failed to get rows affected")
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("evaluation job with ID %s not found", id)
+		return serviceerrors.NewStorageError("evaluation job with ID %s not found", id)
 	}
 
 	ctx.Logger.Info("Deleted evaluation job", "id", id, "hardDelete", hardDelete)
@@ -408,18 +409,18 @@ func (s *SQLStorage) UpdateEvaluationJobStatus(ctx *executioncontext.ExecutionCo
 	result, err := s.exec(ctx.Ctx, updateQuery, statusStr, evaluationID)
 	if err != nil {
 		ctx.Logger.Error("Failed to update evaluation job status", "error", err, "id", id, "status", statusStr)
-		return fmt.Errorf("failed to update evaluation job status: %w", err)
+		return serviceerrors.NewStorageErrorWithError(err, "failed to update evaluation job status")
 	}
 
 	// Check if any rows were affected
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		ctx.Logger.Error("Failed to get rows affected", "error", err, "id", id)
-		return fmt.Errorf("failed to get rows affected: %w", err)
+		return serviceerrors.NewStorageErrorWithError(err, "failed to get rows affected")
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("evaluation job with ID %s not found", id)
+		return serviceerrors.NewStorageError("evaluation job with ID %s not found", id)
 	}
 
 	ctx.Logger.Info("Updated evaluation job status", "id", id, "status", statusStr)
