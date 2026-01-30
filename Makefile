@@ -89,8 +89,7 @@ test-all: test test-fvt ## Run all tests (unit + FVT)
 SERVER_URL ?= http://localhost:8080
 
 test-fvt-server: start-service ## Run FVT tests using godog against a running server
-	@SERVER_URL="${SERVER_URL}" make test-fvt
-	@make stop-service
+	`@SERVER_URL`="${SERVER_URL}" make test-fvt; status=$$?; make stop-service; exit $$status
 
 test-coverage: ## Run unit tests with coverage
 	@echo "Running unit tests with coverage..."
