@@ -119,7 +119,6 @@ func (r RespWrapper) WriteJSON(v any, code int) {
 		}
 	}
 	logging.LogRequestSuccess(r.ctx, code, v)
-
 }
 
 func (r RespWrapper) SetStatusCode(code int) {

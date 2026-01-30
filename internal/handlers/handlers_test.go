@@ -89,6 +89,7 @@ func (w MockResponseWrapper) Error(err string, code int, requestId string) {
 func (w MockResponseWrapper) WriteJSON(v any, code int) {
 	w.recorder.Code = code
 	w.recorder.Header().Set("Content-Type", "application/json")
+	w.recorder.WriteHeader(code)
 	err := json.NewEncoder(w.recorder).Encode(v)
 	if err != nil {
 		fmt.Printf("Failed to encode JSON: %v\n", err)
