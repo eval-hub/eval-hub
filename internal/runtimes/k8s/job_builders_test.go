@@ -54,6 +54,9 @@ func TestBuildJobSecurityContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
+	if len(job.Spec.Template.Spec.Containers) == 0 {
+		t.Fatalf("expected at least one container in pod spec")
+	}
 	container := job.Spec.Template.Spec.Containers[0]
 	if container.SecurityContext == nil || container.SecurityContext.AllowPrivilegeEscalation == nil {
 		t.Fatalf("expected security context with allowPrivilegeEscalation")

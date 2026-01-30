@@ -141,18 +141,22 @@ func boolPtr(value bool) *bool {
 
 func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 	var env []corev1.EnvVar
+	seen := map[string]bool{}
 	env = append(env, corev1.EnvVar{
 		Name:  envJobIDName,
 		Value: cfg.jobID,
 	})
+	seen[envJobIDName] = true
 	env = append(env, corev1.EnvVar{
 		Name:  envServiceURLName,
 		Value: cfg.evalHubServiceURL,
 	})
+	seen[envServiceURLName] = true
 	for _, item := range cfg.defaultEnv {
-		if item.Name == "" {
+		if item.Name == "" || seen[item.Name] {
 			continue
 		}
+		seen[item.Name] = true
 		env = append(env, corev1.EnvVar{
 			Name:  item.Name,
 			Value: item.Value,

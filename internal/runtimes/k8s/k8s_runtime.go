@@ -8,6 +8,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 type K8sRuntime struct {
@@ -55,7 +56,16 @@ func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, sto
 	}
 
 	_, err = r.helper.CreateJob(ctx, job)
-	return err
+	if err != nil {
+		cleanupErr := r.helper.DeleteConfigMap(ctx, configMap.Namespace, configMap.Name)
+		if cleanupErr != nil && !apierrors.IsNotFound(cleanupErr) {
+			if r.logger != nil {
+				r.logger.Error("failed to delete configmap after job creation error", "error", cleanupErr)
+			}
+		}
+		return err
+	}
+	return nil
 }
 
 func resolveProviderFromEvaluation(providers map[string]api.ProviderResource, evaluation *api.EvaluationJobResource) (*api.ProviderResource, string, error) {
@@ -64,6 +74,9 @@ func resolveProviderFromEvaluation(providers map[string]api.ProviderResource, ev
 	}
 	if len(evaluation.Benchmarks) == 0 {
 		return nil, "", fmt.Errorf("evaluation contains no benchmarks")
+	}
+	if len(evaluation.Benchmarks) > 1 {
+		return nil, "", fmt.Errorf("multi-benchmark evaluations are not supported (count: %d)", len(evaluation.Benchmarks))
 	}
 
 	// TODO for now, picked the first benchmark from the list

@@ -1,7 +1,7 @@
 package k8s
 
 import (
-	"strings"
+	"encoding/json"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -51,8 +51,13 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 	if cfg.memoryLimit != defaultMemoryLimit {
 		t.Fatalf("expected memory limit %s, got %s", defaultMemoryLimit, cfg.memoryLimit)
 	}
-	if !strings.Contains(cfg.jobSpecJSON, "\"id\": \"job-123\"") {
-		t.Fatalf("expected job spec json to include job id")
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(cfg.jobSpecJSON), &decoded); err != nil {
+		t.Fatalf("unmarshal job spec json: %v", err)
+	}
+	idValue, ok := decoded["id"].(string)
+	if !ok || idValue != "job-123" {
+		t.Fatalf("expected job spec json id to be %q, got %v", "job-123", decoded["id"])
 	}
 }
 

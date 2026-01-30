@@ -83,6 +83,14 @@ func (h *KubernetesHelper) CreateJob(ctx context.Context, job *batchv1.Job) (*ba
 	return h.clientset.BatchV1().Jobs(job.Namespace).Create(ctx, job, metav1.CreateOptions{})
 }
 
+// DeleteConfigMap deletes a ConfigMap in the given namespace.
+func (h *KubernetesHelper) DeleteConfigMap(ctx context.Context, namespace, name string) error {
+	if namespace == "" || name == "" {
+		return fmt.Errorf("namespace and name are required")
+	}
+	return h.clientset.CoreV1().ConfigMaps(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+}
+
 // CreateConfigMapOptions holds optional metadata for CreateConfigMap.
 type CreateConfigMapOptions struct {
 	Labels      map[string]string

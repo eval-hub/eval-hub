@@ -62,6 +62,9 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 
 	retryAttempts := 0
 	if evaluation.RetryAttempts != nil {
+		if *evaluation.RetryAttempts < 0 {
+			return nil, fmt.Errorf("retry attempts cannot be negative")
+		}
 		retryAttempts = *evaluation.RetryAttempts
 	}
 	namespace := resolveNamespace("")

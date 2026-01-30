@@ -11,10 +11,9 @@ type ProviderResource struct {
 	Runtime      *ProviderRuntime    `mapstructure:"runtime" yaml:"runtime" json:"-"`
 }
 
-// TODO - define a structure for ProviderRuntime, just added this placeholder for now
 // ProviderRuntime contains runtime configuration for Kubernetes jobs.
 //
-// Placeholder YAML example for provider configs:
+// Example YAML for provider configs:
 //
 //	runtime:
 //	  adapter_image: "quay.io/eval-hub/adapter:latest"
