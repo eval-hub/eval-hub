@@ -327,13 +327,14 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	// Prometheus metrics endpoint
 	router.Handle("/metrics", promhttp.Handler())
 
-	// Wrap router with metrics middleware
-	handler := Middleware(router)
-
 	// Enable CORS in local mode only (for development/testing)
+	handler := http.Handler(router)
 	if s.serviceConfig.Service.LocalMode {
 		handler = CorsMiddleware(handler, s.serviceConfig)
 	}
+
+	// Wrap with metrics middleware (outermost for complete observability)
+	handler = Middleware(handler)
 
 	return handler, nil
 }
