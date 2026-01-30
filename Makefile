@@ -160,6 +160,79 @@ create-user:
 grant-permissions:
 	sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE eval_hub TO eval_hub;"
 
+# Cross-compilation with parameters - default to macOS ARM
+CROSS_GOOS ?= darwin
+CROSS_GOARCH ?= arm64
+CROSS_OUTPUT_SUFFIX = $(CROSS_GOOS)-$(CROSS_GOARCH)
+CROSS_OUTPUT = bin/eval-hub-$(CROSS_OUTPUT_SUFFIX)$(if $(filter windows,$(CROSS_GOOS)),.exe,)
+
+.PHONY: cross-compile
+cross-compile: ## Build for specific platform: make cross-compile CROSS_GOOS=linux CROSS_GOARCH=amd64
+	@echo "Cross-compiling for $(CROSS_GOOS)/$(CROSS_GOARCH)..."
+	@mkdir -p $(BIN_DIR)
+	GOOS=$(CROSS_GOOS) GOARCH=$(CROSS_GOARCH) CGO_ENABLED=0 go build -o $(CROSS_OUTPUT) -ldflags="-s -w" $(CMD_PATH)
+	@echo "Built: $(CROSS_OUTPUT)"
+
+.PHONY: build-all-platforms
+build-all-platforms: ## Build for all supported platforms
+	@$(MAKE) cross-compile CROSS_GOOS=linux CROSS_GOARCH=amd64
+	@$(MAKE) cross-compile CROSS_GOOS=linux CROSS_GOARCH=arm64
+	@$(MAKE) cross-compile CROSS_GOOS=darwin CROSS_GOARCH=amd64
+	@$(MAKE) cross-compile CROSS_GOOS=darwin CROSS_GOARCH=arm64
+	@$(MAKE) cross-compile CROSS_GOOS=windows CROSS_GOARCH=amd64
+
+# Python virtual environment
+VENV_DIR = .venv
+VENV_PYTHON = $(VENV_DIR)/bin/python
+VENV_PIP = $(VENV_DIR)/bin/pip
+
+.PHONY: venv
+venv: ## Create Python virtual environment
+	@if [ ! -d "$(VENV_DIR)" ]; then \
+		echo "Creating virtual environment..."; \
+		python3 -m venv --upgrade-deps $(VENV_DIR) || python3 -m venv $(VENV_DIR); \
+		echo "Ensuring pip is available..."; \
+		$(VENV_PYTHON) -m ensurepip --upgrade || true; \
+		$(VENV_PYTHON) -m pip install --upgrade pip || true; \
+		echo "Virtual environment created at $(VENV_DIR)"; \
+	else \
+		echo "Virtual environment already exists at $(VENV_DIR)"; \
+	fi
+
+# Python wheel building with parameters - default to macOS ARM
+WHEEL_PLATFORM ?= macosx_11_0_arm64
+WHEEL_BINARY ?= eval-hub-darwin-arm64
+
+.PHONY: install-wheel-tools
+install-wheel-tools: venv ## Install Python wheel build tools
+	@echo "Installing wheel build tools in virtual environment..."
+	$(VENV_PIP) install --upgrade pip build wheel setuptools
+
+.PHONY: clean-wheels
+clean-wheels: ## Clean Python wheel build artifacts
+	@echo "Cleaning wheel build artifacts..."
+	@rm -rf python-server/dist/
+	@rm -rf python-server/build/
+	@rm -rf python-server/*.egg-info
+	@find python-server/evalhub_server/binaries/ -type f ! -name '.gitkeep' -delete
+
+.PHONY: build-wheel
+build-wheel: ## Build Python wheel: make build-wheel WHEEL_PLATFORM=manylinux_2_17_x86_64 WHEEL_BINARY=eval-hub-linux-amd64
+	@echo "Building wheel for $(WHEEL_PLATFORM) with binary $(WHEEL_BINARY)..."
+	@rm -rf python-server/build/
+	@mkdir -p python-server/evalhub_server/binaries/
+	@find python-server/evalhub_server/binaries/ -type f ! -name '.gitkeep' -delete
+	@cp bin/$(WHEEL_BINARY)* python-server/evalhub_server/binaries/
+	WHEEL_PLATFORM=$(WHEEL_PLATFORM) $(VENV_PYTHON) -m build --wheel python-server
+
+.PHONY: build-all-wheels
+build-all-wheels: clean-wheels build-all-platforms install-wheel-tools ## Build all Python wheels for all platforms
+	@$(MAKE) build-wheel WHEEL_PLATFORM=manylinux_2_17_x86_64 WHEEL_BINARY=eval-hub-linux-amd64
+	@$(MAKE) build-wheel WHEEL_PLATFORM=manylinux_2_17_aarch64 WHEEL_BINARY=eval-hub-linux-arm64
+	@$(MAKE) build-wheel WHEEL_PLATFORM=macosx_10_9_x86_64 WHEEL_BINARY=eval-hub-darwin-amd64
+	@$(MAKE) build-wheel WHEEL_PLATFORM=macosx_11_0_arm64 WHEEL_BINARY=eval-hub-darwin-arm64
+	@$(MAKE) build-wheel WHEEL_PLATFORM=win_amd64 WHEEL_BINARY=eval-hub-windows-amd64
+
 .PHONY: cls
 cls:
 	printf "\33c\e[3J"
