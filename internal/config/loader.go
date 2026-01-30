@@ -266,9 +266,9 @@ func getSecret(secretsDir string, secretName string, optional bool) (string, err
 }
 
 func asJSON(v any) string {
-	json, err := json.Marshal(v)
+	data, err := json.Marshal(v)
 	if err != nil {
 		return ""
 	}
-	return string(json)
+	return string(data)
 }

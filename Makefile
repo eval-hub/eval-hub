@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build start-service stop-service lint test fmt vet update-deps
+.PHONY: help autoupdate-precommit pre-commit clean build start-service stop-service lint test test-fvt-server test-all test-coverage test-fvt-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps
 
 # Variables
 BINARY_NAME = eval-hub
