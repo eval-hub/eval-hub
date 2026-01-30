@@ -1,0 +1,19 @@
+service:
+  port: 8080
+  # These will be elsewhere on a cluster and coherent with the pod spec
+  ready_file: "/tmp/repo-ready"
+  termination_file: "/tmp/termination-log"
+# These are here so that the config can be loaded from the secrets directory when needed
+secrets:
+  dir: /tmp
+  mappings:
+    db_password: database.password
+# These are here so that the config can be loaded from the environment variables when needed
+env_mappings:
+  PORT: service.port
+  DB_URL: database.url
+# Database configuration
+database:
+  driver: sqlite
+  url: file::memory:?mode=memory&cache=shared
+  database_name: eval_hub

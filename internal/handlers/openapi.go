@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"fmt"
-
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,7 +57,8 @@ func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, w http_
 	}
 
 	if err != nil {
-		w.Error(fmt.Sprintf("Failed to read OpenAPI spec in paths %s : %s", strings.Join(paths, ", "), err.Error()), 500, ctx.RequestID)
+		ctx.Logger.Error("Failed to read OpenAPI spec", "paths", paths, "error", err.Error())
+		w.Error("Failed to read OpenAPI spec", 500, ctx.RequestID)
 		return
 	}
 
