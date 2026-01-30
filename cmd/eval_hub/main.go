@@ -41,8 +41,6 @@ func main() {
 		startUpFailed(nil, err, "Failed to create service config", logger)
 	}
 
-	logger.Info("Service in local mode ", "local", serviceConfig.Service.LocalMode)
-
 	// set up the validator
 	validate, err := validation.NewValidator()
 	if err != nil {
@@ -89,6 +87,7 @@ func main() {
 		"build_date", serviceConfig.Service.BuildDate,
 		"storage", storage.GetDatasourceName(),
 		"validator", validate != nil,
+		"local", serviceConfig.Service.LocalMode,
 	)
 
 	// Start server in a goroutine

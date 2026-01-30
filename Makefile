@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build start-service stop-service lint test fmt vet update-deps
+.PHONY: help autoupdate-precommit pre-commit clean build start-service stop-service lint test test-fvt-server test-all test-coverage test-fvt-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps
 
 # Variables
 BINARY_NAME = eval-hub
@@ -56,7 +56,6 @@ SERVICE_LOG ?= $(BIN_DIR)/service.log
 
 start-service: ${SERVER_PID_FILE} build ## Run the application in background
 	@echo "Running $(BINARY_NAME) on port $(PORT)..."
-	# @PORT=$(PORT) go run -ldflags "${LDFLAGS}" $(CMD_PATH)/main.go > ${SERVICE_LOG}
 	@./scripts/start_server.sh "${SERVER_PID_FILE}" "${BIN_DIR}/$(BINARY_NAME)" "${SERVICE_LOG}" ${PORT} ""
 
 stop-service:
@@ -86,6 +85,11 @@ test-fvt: ## Run FVT (Functional Verification Tests) using godog
 	@go test -v ./tests/features/...
 
 test-all: test test-fvt ## Run all tests (unit + FVT)
+
+SERVER_URL ?= http://localhost:8080
+
+test-fvt-server: start-service ## Run FVT tests using godog against a running server
+	`@SERVER_URL`="${SERVER_URL}" make test-fvt; status=$$?; make stop-service; exit $$status
 
 test-coverage: ## Run unit tests with coverage
 	@echo "Running unit tests with coverage..."

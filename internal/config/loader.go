@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -54,7 +55,7 @@ func localMode() bool {
 //   - *viper.Viper: Viper instance with the config loaded, or a new Viper if no file was read.
 //   - error: Non-nil if no config file was found in any dir or if reading failed.
 func readConfig(logger *slog.Logger, name string, ext string, dirs ...string) (*viper.Viper, error) {
-	logger.Info("Reading the configuration file", "file", fmt.Sprintf("%s.%s", name, ext), "dirs", fmt.Sprintf("%v", dirs))
+	logger.Debug("Reading the configuration file", "file", fmt.Sprintf("%s.%s", name, ext), "dirs", fmt.Sprintf("%v", dirs))
 
 	configValues := viper.New()
 
@@ -68,7 +69,7 @@ func readConfig(logger *slog.Logger, name string, ext string, dirs ...string) (*
 	if err != nil {
 		logger.Error("Failed to read the configuration file", "file", fmt.Sprintf("%s.%s", name, ext), "dirs", fmt.Sprintf("%v", dirs), "error", err.Error())
 	} else {
-		logger.Info("Read the configuration file", "file", configValues.ConfigFileUsed())
+		logger.Debug("Read the configuration file", "file", configValues.ConfigFileUsed())
 	}
 
 	return configValues, err
@@ -171,11 +172,14 @@ func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.Pr
 //   - *Config: The loaded configuration with all sources applied
 //   - error: An error if configuration cannot be loaded or is invalid
 func LoadConfig(logger *slog.Logger, version string, build string, buildDate string, dirs ...string) (*Config, error) {
+	logger.Info("Start reading configuration", "version", version, "build", build, "build_date", buildDate, "dirs", dirs)
+
 	if len(dirs) == 0 {
 		dirs = []string{"config", "./config", "../../config", "tests"} // tests is for running the service on a local machine (not local mode)
 	}
 	configValues, err := readConfig(logger, "config", "yaml", dirs...)
 	if err != nil {
+		logger.Error("Failed to read configuration file config.yaml", "error", err.Error(), "dirs", dirs)
 		return nil, err
 	}
 
@@ -183,6 +187,7 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 	// set up the secrets from the secrets directory
 	secrets := SecretMap{}
 	if err := configValues.Unmarshal(&secrets); err != nil {
+		logger.Error("Failed to unmarshal secret mappings", "error", err.Error())
 		return nil, err
 	}
 	if secrets.Dir != "" {
@@ -202,6 +207,8 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 				}
 				if secret != "" {
 					configValues.Set(fieldName, secret)
+					// don't log the secret here as it may contain sensitive information
+					logger.Info("Set secret", "field_name", fieldName)
 				}
 			}
 		}
@@ -209,6 +216,7 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 	// set up the environment variable mappings
 	envMappings := EnvMap{}
 	if err := configValues.Unmarshal(&envMappings); err != nil {
+		logger.Error("Failed to unmarshal environment variable mappings", "error", err.Error())
 		return nil, err
 	}
 	for envName, field := range envMappings.EnvMappings {
@@ -218,6 +226,7 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 
 	conf := Config{}
 	if err := configValues.Unmarshal(&conf); err != nil {
+		logger.Error("Failed to unmarshal configuration", "error", err.Error())
 		return nil, err
 	}
 
@@ -226,6 +235,9 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 	conf.Service.Build = build
 	conf.Service.BuildDate = buildDate
 	conf.Service.LocalMode = localMode()
+
+	// TODO make a safe version to ensure that secrets are not logged
+	logger.Info("End reading configuration", "config", asJSON(conf))
 	return &conf, nil
 }
 
@@ -252,4 +264,12 @@ func getSecret(secretsDir string, secretName string, optional bool) (string, err
 		return "", err
 	}
 	return string(secret), nil
+}
+
+func asJSON(v any) string {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }

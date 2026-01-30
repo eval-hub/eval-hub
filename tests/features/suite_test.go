@@ -9,6 +9,9 @@ import (
 )
 
 func TestFeatures(t *testing.T) {
+	if serverURL := os.Getenv("SERVER_URL"); serverURL != "" {
+		t.Logf("Running FVT tests against the server %s", serverURL)
+	}
 	// Get the absolute path to the features directory
 	// When running from project root, use "tests/features", when from features dir, use "."
 	workDir, _ := os.Getwd()
