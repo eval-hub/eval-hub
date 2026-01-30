@@ -1,5 +1,5 @@
 {
-  "dependencies": {
+  "devDependencies": {
     "@redocly/cli": "^2.15.0"
   },
   "scripts": {
