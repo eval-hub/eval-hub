@@ -236,6 +236,7 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 	conf.Service.BuildDate = buildDate
 	conf.Service.LocalMode = localMode()
 
+	// TODO make a safe version to ensure that secrets are not logged
 	logger.Info("End reading configuration", "config", asJSON(conf))
 	return &conf, nil
 }
