@@ -28,10 +28,18 @@ type BenchmarkSpec struct {
 }
 
 func getEvaluationJobID(ctx *executioncontext.ExecutionContext) string {
-	pathParts := strings.Split(ctx.Request.URI(), "/")
-	id := pathParts[len(pathParts)-1]
-	parts := strings.Split(id, "?")
-	return parts[0]
+	if _, after, found := strings.Cut(ctx.Request.URI(), "/api/v1/evaluations/jobs/"); found {
+		if after != "" {
+			if id, _, found := strings.Cut(after, "/"); found {
+				return id
+			}
+			if id, _, found := strings.Cut(after, "?"); found {
+				return id
+			}
+			return after
+		}
+	}
+	return ""
 }
 
 func getParam[T string | int | bool](ctx *executioncontext.ExecutionContext, name string, optional bool, defaultValue T) (T, error) {
@@ -135,6 +143,10 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, w
 
 	// Extract ID from path
 	evaluationJobID := getEvaluationJobID(ctx)
+	if evaluationJobID == "" {
+		handleError(ctx, w, fmt.Errorf("no evaluation job ID found in path"), 500)
+		return
+	}
 
 	response, err := h.storage.GetEvaluationJob(ctx, evaluationJobID)
 	if err != nil {
@@ -150,6 +162,10 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 
 	// Extract ID from path
 	evaluationJobID := getEvaluationJobID(ctx)
+	if evaluationJobID == "" {
+		handleError(ctx, w, fmt.Errorf("no evaluation job ID found in path"), 500)
+		return
+	}
 
 	// get the body bytes from the context
 	bodyBytes, err := ctx.Request.BodyAsBytes()
@@ -179,6 +195,10 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 
 	// Extract ID from path
 	evaluationJobID := getEvaluationJobID(ctx)
+	if evaluationJobID == "" {
+		handleError(ctx, w, fmt.Errorf("no evaluation job ID found in path"), 500)
+		return
+	}
 
 	hardDelete, err := getParam(ctx, "hard_delete", false, false)
 	if err != nil {

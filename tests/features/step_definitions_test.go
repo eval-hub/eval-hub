@@ -239,6 +239,7 @@ func (tc *scenarioConfig) getRequestBody(body string) (io.Reader, error) {
 
 func (sc *scenarioConfig) addAsset(assetName, id string) {
 	sc.assets[assetName] = append(sc.assets[assetName], id)
+	logDebug("Added asset id %s for id %s\n", id, assetName)
 }
 
 func (sc *scenarioConfig) removeAsset(assetName, id string) {
@@ -248,6 +249,7 @@ func (sc *scenarioConfig) removeAsset(assetName, id string) {
 			return s == id
 		})
 	}
+	logDebug("Removed asset id %s for id %s\n", id, assetName)
 }
 
 func extractId(body []byte) (string, error) {
@@ -260,6 +262,21 @@ func extractId(body []byte) (string, error) {
 		return id.(string), nil
 	}
 	return "", nil
+}
+
+func extractIdFromPath(path string) string {
+	if _, after, found := strings.Cut(path, "/api/v1/evaluations/jobs/"); found {
+		if after != "" {
+			if id, _, found := strings.Cut(after, "/"); found {
+				return id
+			}
+			if id, _, found := strings.Cut(after, "?"); found {
+				return id
+			}
+			return after
+		}
+	}
+	return ""
 }
 
 // firstPathSegment matches the first path segment after /api/v1/
@@ -330,9 +347,13 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 		if err != nil {
 			return err
 		}
+		id := extractIdFromPath(path)
+		if id == "" {
+			return fmt.Errorf("no ID found in path %s", path)
+		}
 		switch assetName {
 		case "evaluations":
-			tc.removeAsset(assetName, tc.lastId)
+			tc.removeAsset(assetName, id)
 		default:
 			// nothing to do here
 		}
@@ -420,14 +441,18 @@ func (tc *scenarioConfig) saveScenarioName(ctx context.Context, sc *godog.Scenar
 
 func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 	for assetName, ids := range tc.assets {
+		switch assetName {
+		case "evaluations":
+			assetName = "evaluation/jobs"
+		}
 		for _, id := range ids {
 			path := fmt.Sprintf("/api/v1/%s/%s?hard_delete=true", assetName, id)
 			err := tc.iSendARequestTo("DELETE", path)
 			if err != nil {
-				return ctx, fmt.Errorf("failed to delete asset %s %s: %w", assetName, id, err)
+				return ctx, fmt.Errorf("failed to delete asset with id '%s' %s: %w", assetName, id, err)
 			}
 			if tc.response.StatusCode != 204 {
-				return ctx, fmt.Errorf("expected status 204, got %d for path %s", tc.response.StatusCode, path)
+				return ctx, fmt.Errorf("expected status 204, got %d for asset id '%s' with path %s", tc.response.StatusCode, id, path)
 			}
 			logDebug("Deleted asset %s with status %d\n", path, tc.response.StatusCode)
 		}
