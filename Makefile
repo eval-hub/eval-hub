@@ -40,18 +40,17 @@ BUILD_PACKAGE ?= main
 FULL_BUILD_NUMBER ?= 0.0.1
 LDFLAGS_X = -X "${BUILD_PACKAGE}.Build=${FULL_BUILD_NUMBER}" -X "${BUILD_PACKAGE}.BuildDate=$(DATE)"
 LDFLAGS = -buildmode=exe ${LDFLAGS_X}
-COVERAGE_MODE ?= atomic
 
 build: ## Build the binary
 	@echo "Building $(BINARY_NAME) with ${LDFLAGS}"
 	@mkdir -p $(BIN_DIR)
-	@go build -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(BINARY_NAME) $(CMD_PATH)
+	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(BINARY_NAME) $(CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(BINARY_NAME)"
 
 build-coverage: ## Build the binary with coverage
-	@echo "Building $(BINARY_NAME)-cov with -cover -covermode=${COVERAGE_MODE} -ldflags ${LDFLAGS} "
+	@echo "Building $(BINARY_NAME)-cov with -cover -covermode=atomic -ldflags ${LDFLAGS} "
 	@mkdir -p $(BIN_DIR)
-	@go build -cover -covermode=${COVERAGE_MODE} -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(BINARY_NAME)-cov $(CMD_PATH)
+	@go build -race -cover -covermode=atomic -coverpkg=./... -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(BINARY_NAME)-cov $(CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(BINARY_NAME)-cov"
 
 SERVER_PID_FILE ?= $(BIN_DIR)/pid
@@ -94,7 +93,7 @@ test: ## Run unit tests
 
 test-fvt: ## Run FVT (Functional Verification Tests) using godog
 	@echo "Running FVT tests..."
-	@go test -v ./tests/features/...
+	@go test -v -race ./tests/features/...
 
 test-all: test test-fvt ## Run all tests (unit + FVT)
 
@@ -106,14 +105,14 @@ test-fvt-server: start-service ## Run FVT tests using godog against a running se
 test-coverage: ## Run unit tests with coverage
 	@echo "Running unit tests with coverage..."
 	@mkdir -p $(BIN_DIR)
-	@go test -v -race -coverprofile=$(BIN_DIR)/coverage.out -covermode=${COVERAGE_MODE} ./internal/... ./cmd/...
+	@go test -v -race -coverprofile=$(BIN_DIR)/coverage.out -covermode=atomic ./internal/... ./cmd/...
 	@go tool cover -html=$(BIN_DIR)/coverage.out -o $(BIN_DIR)/coverage.html
 	@echo "Coverage report generated: $(BIN_DIR)/coverage.html"
 
 test-fvt-coverage: ## Run integration (FVT) tests with coverage
 	@echo "Running integration (FVT) tests with coverage..."
 	@mkdir -p $(BIN_DIR)
-	@go test -v -race -coverprofile=$(BIN_DIR)/coverage-fvt.out -covermode=${COVERAGE_MODE} ./tests/features/...
+	@go test -v -race -coverprofile=$(BIN_DIR)/coverage-fvt.out -covermode=atomic ./tests/features/...
 	@go tool cover -html=$(BIN_DIR)/coverage-fvt.out -o $(BIN_DIR)/coverage-fvt.html
 	@echo "Coverage report generated: $(BIN_DIR)/coverage-fvt.html"
 
