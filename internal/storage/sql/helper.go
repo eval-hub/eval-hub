@@ -10,10 +10,10 @@ import (
 // TODO - do we want to pull out all the SQL statements like this or leave them in the functions?
 
 // SQLite: use ? placeholders
-const SQLITE_INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (tenant_id, status, entity) VALUES (?, ?, ?);`
+const SQLITE_INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (id, tenant_id, status, entity) VALUES (?, ?, ?, ?);`
 
 // PostgreSQL: use $1, $2 placeholders and RETURNING id clause
-const POSTGRES_INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (tenant_id, status, entity) VALUES ($1, $2, $3) RETURNING id;`
+const POSTGRES_INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (id, tenant_id, status, entity) VALUES ($1, $2, $3, $4) RETURNING id;`
 
 // TODO: Add collection insert statement
 const INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (entity) VALUES (?);`

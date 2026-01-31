@@ -85,7 +85,7 @@ func TestServerSetupRoutes(t *testing.T) {
 		// Evaluation endpoints
 		{http.MethodPost, "/api/v1/evaluations/jobs", http.StatusAccepted, `{"model": {"url": "http://test.com", "name": "test"}}`},
 		{http.MethodGet, "/api/v1/evaluations/jobs", http.StatusOK, ""},
-		{http.MethodGet, "/api/v1/evaluations/jobs/test-id", http.StatusBadRequest, ""},
+		{http.MethodGet, "/api/v1/evaluations/jobs/test-id", http.StatusNotFound, ""},
 		// we can not delete because we have no id
 		// Benchmarks
 		{http.MethodGet, "/api/v1/evaluations/benchmarks", http.StatusOK, ""},
@@ -129,6 +129,7 @@ func TestServerSetupRoutes(t *testing.T) {
 					t.Errorf("Failed to unmarshal body: %v", err)
 				}
 				if body["id"] != "" {
+					t.Logf("Found id %s in response body: %s", body["id"].(string), w.Body.String())
 					evaluationIds = append(evaluationIds, body["id"].(string))
 				} else {
 					t.Errorf("Failed to find id in response body: %s", w.Body.String())
@@ -201,7 +202,7 @@ func createServer(port int) (*server.Server, error) {
 		return nil, fmt.Errorf("failed to load service config: %w", err)
 	}
 	serviceConfig.Service.Port = port
-	storage, err := storage.NewStorage(serviceConfig, logger)
+	storage, err := storage.NewStorage(serviceConfig.Database, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create storage: %w", err)
 	}
