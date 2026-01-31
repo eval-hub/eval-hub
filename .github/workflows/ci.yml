@@ -36,7 +36,7 @@ jobs:
 
     - name: Run all tests (unit and integration) with coverage
       run: |
-        make test-all-coverage
+        make clean test-all-coverage
 
     - name: Upload coverage reports to Codecov
       continue-on-error: ${{ github.actor == 'dependabot[bot]' }}  # Don't fail CI on Dependabot PRs since they can't access secrets
