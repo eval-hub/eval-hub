@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build start-service stop-service lint test test-fvt-server test-all test-coverage test-fvt-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage start-service stop-service lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps
 
 # Variables
 BINARY_NAME = eval-hub
@@ -40,12 +40,19 @@ BUILD_PACKAGE ?= main
 FULL_BUILD_NUMBER ?= 0.0.1
 LDFLAGS_X = -X "${BUILD_PACKAGE}.Build=${FULL_BUILD_NUMBER}" -X "${BUILD_PACKAGE}.BuildDate=$(DATE)"
 LDFLAGS = -buildmode=exe ${LDFLAGS_X}
+COVERAGE_MODE ?= atomic
 
 build: ## Build the binary
 	@echo "Building $(BINARY_NAME) with ${LDFLAGS}"
 	@mkdir -p $(BIN_DIR)
 	@go build -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(BINARY_NAME) $(CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(BINARY_NAME)"
+
+build-coverage: ## Build the binary with coverage
+	@echo "Building $(BINARY_NAME)-cov with -cover -covermode=${COVERAGE_MODE} -ldflags ${LDFLAGS} "
+	@mkdir -p $(BIN_DIR)
+	@go build -cover -covermode=${COVERAGE_MODE} -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(BINARY_NAME)-cov $(CMD_PATH)
+	@echo "Build complete: $(BIN_DIR)/$(BINARY_NAME)-cov"
 
 SERVER_PID_FILE ?= $(BIN_DIR)/pid
 
@@ -58,8 +65,13 @@ start-service: ${SERVER_PID_FILE} build ## Run the application in background
 	@echo "Running $(BINARY_NAME) on port $(PORT)..."
 	@./scripts/start_server.sh "${SERVER_PID_FILE}" "${BIN_DIR}/$(BINARY_NAME)" "${SERVICE_LOG}" ${PORT} ""
 
+start-service-coverage: ${SERVER_PID_FILE} build-coverage ## Run the application in background
+	@echo "Running $(BINARY_NAME)-cov on port $(PORT)..."
+	@./scripts/start_server.sh "${SERVER_PID_FILE}" "${BIN_DIR}/$(BINARY_NAME)-cov" "${SERVICE_LOG}" ${PORT} "${BIN_DIR}"
+
 stop-service:
 	-./scripts/stop_server.sh "${SERVER_PID_FILE}"
+	! grep -i -F panic "${SERVICE_LOG}"
 
 lint: ## Lint the code (runs go vet)
 	@echo "Linting code..."
@@ -94,18 +106,23 @@ test-fvt-server: start-service ## Run FVT tests using godog against a running se
 test-coverage: ## Run unit tests with coverage
 	@echo "Running unit tests with coverage..."
 	@mkdir -p $(BIN_DIR)
-	@go test -v -race -coverprofile=$(BIN_DIR)/coverage.out -covermode=atomic ./internal/... ./cmd/...
+	@go test -v -race -coverprofile=$(BIN_DIR)/coverage.out -covermode=${COVERAGE_MODE} ./internal/... ./cmd/...
 	@go tool cover -html=$(BIN_DIR)/coverage.out -o $(BIN_DIR)/coverage.html
 	@echo "Coverage report generated: $(BIN_DIR)/coverage.html"
 
 test-fvt-coverage: ## Run integration (FVT) tests with coverage
 	@echo "Running integration (FVT) tests with coverage..."
 	@mkdir -p $(BIN_DIR)
-	@go test -v -race -coverprofile=$(BIN_DIR)/coverage-fvt.out -covermode=atomic ./tests/features/...
+	@go test -v -race -coverprofile=$(BIN_DIR)/coverage-fvt.out -covermode=${COVERAGE_MODE} ./tests/features/...
 	@go tool cover -html=$(BIN_DIR)/coverage-fvt.out -o $(BIN_DIR)/coverage-fvt.html
 	@echo "Coverage report generated: $(BIN_DIR)/coverage-fvt.html"
 
-test-all-coverage: test-coverage test-fvt-coverage ## Run all tests (unit + FVT) with coverage
+test-fvt-server-coverage: start-service-coverage ## Run FVT tests using godog against a running server with coverage
+	@echo "Running FVT tests with coverage against a running server..."
+	@GOCOVERDIR="${BIN_DIR}" SERVER_URL="${SERVER_URL}" make test-fvt; status=$$?; make stop-service; exit $$status
+	go tool covdata textfmt -i ${BIN_DIR} -o ${BIN_DIR}/coverage-fvt.out
+
+test-all-coverage: test-coverage test-fvt-server-coverage ## Run all tests (unit + FVT) with coverage
 
 install-deps: ## Install dependencies
 	@echo "Installing dependencies..."
