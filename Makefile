@@ -170,7 +170,7 @@ CROSS_OUTPUT = bin/eval-hub-$(CROSS_OUTPUT_SUFFIX)$(if $(filter windows,$(CROSS_
 cross-compile: ## Build for specific platform: make cross-compile CROSS_GOOS=linux CROSS_GOARCH=amd64
 	@echo "Cross-compiling for $(CROSS_GOOS)/$(CROSS_GOARCH)..."
 	@mkdir -p $(BIN_DIR)
-	GOOS=$(CROSS_GOOS) GOARCH=$(CROSS_GOARCH) CGO_ENABLED=0 go build -o $(CROSS_OUTPUT) -ldflags="-s -w" $(CMD_PATH)
+	GOOS=$(CROSS_GOOS) GOARCH=$(CROSS_GOARCH) CGO_ENABLED=0 go build -o $(CROSS_OUTPUT) -ldflags="-s -w ${LDFLAGS_X}" $(CMD_PATH)
 	@echo "Built: $(CROSS_OUTPUT)"
 
 .PHONY: build-all-platforms
