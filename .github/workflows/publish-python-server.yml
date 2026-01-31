@@ -7,33 +7,28 @@ on:
 jobs:
   build-binaries:
     name: Build Go binaries
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
           # Linux
-          - os: ubuntu-latest
-            goos: linux
+          - goos: linux
             goarch: amd64
             output: eval-hub-linux-amd64
-          - os: ubuntu-latest
-            goos: linux
+          - goos: linux
             goarch: arm64
             output: eval-hub-linux-arm64
 
           # macOS
-          - os: macos-latest
-            goos: darwin
+          - goos: darwin
             goarch: amd64
             output: eval-hub-darwin-amd64
-          - os: macos-latest
-            goos: darwin
+          - goos: darwin
             goarch: arm64
             output: eval-hub-darwin-arm64
 
           # Windows
-          - os: windows-latest
-            goos: windows
+          - goos: windows
             goarch: amd64
             output: eval-hub-windows-amd64.exe
 
@@ -47,12 +42,7 @@ jobs:
           go-version: "1.25"
 
       - name: Build binary
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
-        run: |
-          go build -o ${{ matrix.output }} -ldflags="-s -w" ./cmd/eval_hub
+        run: make cross-compile CROSS_GOOS=${{ matrix.goos }} CROSS_GOARCH=${{ matrix.goarch }}
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
@@ -64,30 +54,30 @@ jobs:
   build-wheels:
     name: Build Python wheels
     needs: build-binaries
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
-            platform: manylinux
+          - platform: manylinux
             arch: x86_64
             binary-pattern: "binary-linux-amd64"
-          - os: ubuntu-latest
-            platform: manylinux
+            binary-name: eval-hub-linux-amd64
+          - platform: manylinux
             arch: aarch64
             binary-pattern: "binary-linux-arm64"
-          - os: macos-latest
-            platform: macosx
+            binary-name: eval-hub-linux-arm64
+          - platform: macosx
             arch: x86_64
             binary-pattern: "binary-darwin-amd64"
-          - os: macos-latest
-            platform: macosx
+            binary-name: eval-hub-darwin-amd64
+          - platform: macosx
             arch: arm64
             binary-pattern: "binary-darwin-arm64"
-          - os: windows-latest
-            platform: win
+            binary-name: eval-hub-darwin-arm64
+          - platform: win
             arch: amd64
             binary-pattern: "binary-windows-amd64"
+            binary-name: eval-hub-windows-amd64
 
     steps:
       - name: Checkout
@@ -99,9 +89,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install build wheel setuptools
+        run: make install-wheel-tools
 
       - name: Download binary
         uses: actions/download-artifact@v4
@@ -132,11 +120,7 @@ jobs:
           fi
 
       - name: Build wheel
-        working-directory: python-server
-        env:
-          WHEEL_PLATFORM: ${{ steps.platform.outputs.tag }}
-        run: |
-          python -m build --wheel
+        run: make build-wheel WHEEL_PLATFORM=${{ steps.platform.outputs.tag }} WHEEL_BINARY=${{ matrix.binary-name }}
 
       - name: Upload wheel
         uses: actions/upload-artifact@v4
