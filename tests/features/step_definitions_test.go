@@ -116,7 +116,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 	}
 	serviceConfig.Service.Port = port
 
-	storage, err := storage.NewStorage(serviceConfig, logger)
+	storage, err := storage.NewStorage(serviceConfig.Database, logger)
 	if err != nil {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}

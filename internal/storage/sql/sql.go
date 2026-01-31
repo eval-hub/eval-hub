@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log/slog"
-	"strconv"
 	"time"
 
 	// import the postgres driver - "pgx"
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	// import the sqlite driver - "sqlite"
@@ -124,6 +124,10 @@ func (s *SQLStorage) getTenant(_ *executioncontext.ExecutionContext) (api.Tenant
 	return "TODO", nil
 }
 
+func (s *SQLStorage) generateID() string {
+	return uuid.New().String()
+}
+
 //#######################################################################
 // Evaluation job operations
 //#######################################################################
@@ -145,17 +149,15 @@ func (s *SQLStorage) CreateEvaluationJob(executionContext *executioncontext.Exec
 	if err != nil {
 		return nil, err
 	}
-	result, err := s.exec(executionContext.Ctx, addEntityStatement, tenant, api.StatePending, string(evaluationJSON))
-	if err != nil {
-		return nil, err
-	}
-	evaluationID, err := result.LastInsertId()
+	jobID := s.generateID()
+	executionContext.Logger.Info("Creating evaluation job", "id", jobID, "tenant", tenant, "status", api.StatePending)
+	_, err = s.exec(executionContext.Ctx, addEntityStatement, jobID, tenant, api.StatePending, string(evaluationJSON))
 	if err != nil {
 		return nil, err
 	}
 	evaluationResource := &api.EvaluationJobResource{
 		Resource: api.Resource{
-			ID:        strconv.FormatInt(evaluationID, 10),
+			ID:        jobID,
 			Tenant:    api.Tenant(tenant),
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
@@ -173,22 +175,7 @@ func (s *SQLStorage) CreateEvaluationJob(executionContext *executioncontext.Exec
 	return evaluationResource, nil
 }
 
-func (s *SQLStorage) getEvaluationJobID(id string) (int64, error) {
-	// Parse the ID string to int64
-	if evaluationId, err := strconv.ParseInt(id, 10, 64); err != nil {
-		// tret this as a user error
-		return 0, serviceerrors.NewStorageErrorWithCode(400, "Invalid evaluation job ID: %s", id)
-	} else {
-		return evaluationId, nil
-	}
-}
-
 func (s *SQLStorage) GetEvaluationJob(ctx *executioncontext.ExecutionContext, id string) (*api.EvaluationJobResource, error) {
-	evaluationID, err := s.getEvaluationJobID(id)
-	if err != nil {
-		return nil, err
-	}
-
 	// Build the SELECT query
 	selectQuery, err := createGetEntityStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS)
 	if err != nil {
@@ -196,12 +183,12 @@ func (s *SQLStorage) GetEvaluationJob(ctx *executioncontext.ExecutionContext, id
 	}
 
 	// Query the database
-	var dbID int64
+	var dbID string
 	var createdAt, updatedAt time.Time
 	var statusStr string
 	var entityJSON string
 
-	err = s.pool.QueryRowContext(ctx.Ctx, selectQuery, evaluationID).Scan(&dbID, &createdAt, &updatedAt, &statusStr, &entityJSON)
+	err = s.pool.QueryRowContext(ctx.Ctx, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &statusStr, &entityJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, serviceerrors.NewStorageErrorWithCode(404, "evaluation job with id '%s' not found", id)
@@ -225,7 +212,7 @@ func (s *SQLStorage) GetEvaluationJob(ctx *executioncontext.ExecutionContext, id
 	// Note: Results and Benchmarks are initialized with defaults since they're not stored in the entity column
 	evaluationResource := &api.EvaluationJobResource{
 		Resource: api.Resource{
-			ID:        strconv.FormatInt(dbID, 10),
+			ID:        dbID,
 			Tenant:    "TODO", // TODO: retrieve tenant from database or context
 			CreatedAt: createdAt,
 			UpdatedAt: updatedAt,
@@ -279,7 +266,7 @@ func (s *SQLStorage) GetEvaluationJobs(ctx *executioncontext.ExecutionContext, l
 	// Process rows
 	var items []api.EvaluationJobResource
 	for rows.Next() {
-		var dbID int64
+		var dbID string
 		var createdAt, updatedAt time.Time
 		var statusStr string
 		var entityJSON string
@@ -305,7 +292,7 @@ func (s *SQLStorage) GetEvaluationJobs(ctx *executioncontext.ExecutionContext, l
 		// Note: Results and Benchmarks are initialized with defaults since they're not stored in the entity column
 		resource := api.EvaluationJobResource{
 			Resource: api.Resource{
-				ID:        strconv.FormatInt(dbID, 10),
+				ID:        dbID,
 				Tenant:    "TODO", // TODO: retrieve tenant from database or context
 				CreatedAt: createdAt,
 				UpdatedAt: updatedAt,
@@ -357,11 +344,6 @@ func (s *SQLStorage) DeleteEvaluationJob(ctx *executioncontext.ExecutionContext,
 		})
 	}
 
-	evaluationID, err := s.getEvaluationJobID(id)
-	if err != nil {
-		return err
-	}
-
 	// Build the DELETE query
 	deleteQuery, err := createDeleteEntityStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS)
 	if err != nil {
@@ -369,7 +351,7 @@ func (s *SQLStorage) DeleteEvaluationJob(ctx *executioncontext.ExecutionContext,
 	}
 
 	// Execute the DELETE query
-	result, err := s.exec(ctx.Ctx, deleteQuery, evaluationID)
+	result, err := s.exec(ctx.Ctx, deleteQuery, id)
 	if err != nil {
 		ctx.Logger.Error("Failed to delete evaluation job", "error", err, "id", id)
 		return serviceerrors.NewStorageErrorWithError(err, "failed to delete evaluation job")
@@ -391,11 +373,6 @@ func (s *SQLStorage) DeleteEvaluationJob(ctx *executioncontext.ExecutionContext,
 }
 
 func (s *SQLStorage) UpdateEvaluationJobStatus(ctx *executioncontext.ExecutionContext, id string, status *api.EvaluationJobStatus) error {
-	evaluationID, err := s.getEvaluationJobID(id)
-	if err != nil {
-		return err
-	}
-
 	// Build the UPDATE query
 	updateQuery, err := createUpdateStatusStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS)
 	if err != nil {
@@ -406,7 +383,7 @@ func (s *SQLStorage) UpdateEvaluationJobStatus(ctx *executioncontext.ExecutionCo
 
 	// Execute the UPDATE query
 	statusStr := string(status.EvaluationJobState.State)
-	result, err := s.exec(ctx.Ctx, updateQuery, statusStr, evaluationID)
+	result, err := s.exec(ctx.Ctx, updateQuery, statusStr, id)
 	if err != nil {
 		ctx.Logger.Error("Failed to update evaluation job status", "error", err, "id", id, "status", statusStr)
 		return serviceerrors.NewStorageErrorWithError(err, "failed to update evaluation job status")

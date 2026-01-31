@@ -15,11 +15,11 @@ func (e *StorageError) Error() string {
 func NewStorageErrorWithError(err error, format string, a ...any) *StorageError {
 	msg := fmt.Sprintf(format, a...)
 	e := fmt.Errorf("%s: %w", msg, err)
-	return &StorageError{Message: e.Error()}
+	return &StorageError{Message: e.Error(), Code: 500}
 }
 
 func NewStorageError(format string, a ...any) *StorageError {
-	return &StorageError{Message: fmt.Sprintf(format, a...)}
+	return &StorageError{Message: fmt.Sprintf(format, a...), Code: 500}
 }
 
 func NewStorageErrorWithCode(code int, format string, a ...any) *StorageError {
