@@ -128,9 +128,9 @@ func TestServerSetupRoutes(t *testing.T) {
 				if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 					t.Errorf("Failed to unmarshal body: %v", err)
 				}
-				if body["id"] != "" {
-					t.Logf("Found id %s in response body: %s", body["id"].(string), w.Body.String())
-					evaluationIds = append(evaluationIds, body["id"].(string))
+				id := getKeyAsString(body, "id")
+				if id != "" {
+					evaluationIds = append(evaluationIds, id)
 				} else {
 					t.Errorf("Failed to find id in response body: %s", w.Body.String())
 				}
@@ -218,4 +218,15 @@ func createServer(port int) (*server.Server, error) {
 		return nil, fmt.Errorf("failed to create runtime: %w", err)
 	}
 	return server.NewServer(logger, serviceConfig, providerConfigs, storage, validate, runtime)
+}
+
+func getKeyAsString(obj map[string]interface{}, key string) string {
+	value, ok := obj[key]
+	if !ok {
+		return ""
+	}
+	if v, isString := value.(string); isString {
+		return v
+	}
+	return ""
 }
