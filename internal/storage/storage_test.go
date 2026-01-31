@@ -58,6 +58,8 @@ func createExecutionContext(method string, uri *url.URL, logger *slog.Logger) *e
 	return executioncontext.NewExecutionContext(context.Background(), uuid.New().String(), logger, 60*time.Second, nil, nil, request)
 }
 
+// TestStorage tests the storage implementation and provides
+// a simple way to debug the storage implementation.
 func TestStorage(t *testing.T) {
 	var logger = logging.FallbackLogger()
 	var store abstractions.Storage
