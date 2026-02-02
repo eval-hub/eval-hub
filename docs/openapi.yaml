@@ -331,34 +331,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-  /api/v1/evaluations/collections:
-    post:
-      tags:
-        - Collections
-      summary: Create Collection
-      description: Create a new collection.
-      operationId: create_collection_api_v1_evaluations_collections_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CollectionCreationRequest'
-        required: true
-      responses:
-        '201':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Collection'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
 components:
   responses:
     BadRequest:
@@ -459,33 +431,6 @@ components:
         - provider_id
       title: BenchmarkConfig
       description: New simplified benchmark specification.
-    BenchmarkReference:
-      properties:
-        provider_id:
-          type: string
-          title: Provider Id
-          description: Provider identifier
-        benchmark_id:
-          type: string
-          title: Benchmark Id
-          description: Benchmark identifier
-        weight:
-          type: number
-          title: Weight
-          description: Weight for this benchmark in collection scoring
-          default: 1
-        config:
-          additionalProperties: true
-          type: object
-          title: Config
-          description: Benchmark-specific configuration
-      additionalProperties: true
-      type: object
-      required:
-        - provider_id
-        - benchmark_id
-      title: BenchmarkReference
-      description: Reference to a benchmark within a collection.
     BenchmarkResultPayload:
       properties:
         name:
@@ -517,77 +462,6 @@ components:
         - name
       title: BenchmarkResultPayload
       description: Result payload for a single benchmark.
-    Collection:
-      properties:
-        resource:
-          $ref: '#/components/schemas/ResourceInfo'
-          description: Resource metadata
-        name:
-          type: string
-          title: Name
-          description: Human-readable collection name
-        description:
-          type: string
-          title: Description
-          description: Collection description
-        tags:
-          items:
-            type: string
-          type: array
-          title: Tags
-          description: Tags for categorizing the collection
-        custom:
-          additionalProperties: true
-          type: object
-          title: Metadata
-          description: Additional collection metadata
-        benchmarks:
-          items:
-            $ref: '#/components/schemas/BenchmarkReference'
-          type: array
-          title: Benchmarks
-          description: List of benchmark references in this collection
-      type: object
-      required:
-        - name
-        - description
-        - benchmarks
-      title: Collection
-      description: Collection of benchmarks for specific evaluation scenarios.
-    CollectionCreationRequest:
-      properties:
-        name:
-          type: string
-          title: Name
-          description: Human-readable collection name
-        description:
-          type: string
-          title: Description
-          description: Collection description
-        tags:
-          items:
-            type: string
-          type: array
-          title: Tags
-          description: Tags for categorizing the collection
-        custom:
-          additionalProperties: true
-          type: object
-          title: Metadata
-          description: Additional collection metadata
-        benchmarks:
-          items:
-            $ref: '#/components/schemas/BenchmarkReference'
-          type: array
-          title: Benchmarks
-          description: List of benchmark references in this collection
-      type: object
-      required:
-        - name
-        - description
-        - benchmarks
-      title: CollectionCreationRequest
-      description: Request for creating a new collection.
     EvaluationResponse:
       allOf:
         - $ref: '#/components/schemas/EvaluationResponseResults'

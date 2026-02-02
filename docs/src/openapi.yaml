@@ -498,6 +498,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     post:
+      x-internal: true
       tags:
       - Collections
       summary: Create Collection

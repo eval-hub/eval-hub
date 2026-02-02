@@ -732,6 +732,7 @@
         }
       },
       "post": {
+        "x-internal": true,
         "tags": [
           "Collections"
         ],
