@@ -288,7 +288,7 @@ generate-public-docs: ${REDOCLY_CLI}
 
 verify-api-docs: ${REDOCLY_CLI}
 	${REDOCLY_CLI} lint ./docs/openapi.yaml
-	@echo "See https://editor.swagger.io/?url=https://raw.githubusercontent.com/julpayne/eval-hub/refs/heads/api-updates/docs/openapi.yaml"
+	`@echo` "Tip: open docs/openapi.yaml in Swagger Editor to inspect the rendered spec."
 
 generate-ignore-file: ${REDOCLY_CLI}
 	${REDOCLY_CLI} lint --generate-ignore-file ./docs/openapi.yaml
