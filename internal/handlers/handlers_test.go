@@ -20,13 +20,15 @@ func TestNew(t *testing.T) {
 	}
 }
 
-func createExecutionContext(method string, uri string) *executioncontext.ExecutionContext {
-	return &executioncontext.ExecutionContext{
-		Request: &MockRequest{
-			TestMethod: method,
-			TestURI:    uri,
-			headers:    make(map[string]string),
-		},
+func createExecutionContext() *executioncontext.ExecutionContext {
+	return &executioncontext.ExecutionContext{}
+}
+
+func createMockRequest(method string, uri string) *MockRequest {
+	return &MockRequest{
+		TestMethod: method,
+		TestURI:    uri,
+		headers:    make(map[string]string),
 	}
 }
 

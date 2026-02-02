@@ -8,6 +8,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
+	"github.com/eval-hub/eval-hub/internal/http_wrappers"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -43,13 +44,18 @@ func (s *Server) newExecutionContext(r *http.Request) *executioncontext.Executio
 		3,
 		nil,
 		s.providerConfigs,
-		&ReqWrapper{Request: r},
 	)
 }
 
 // Abstract request objects to not depende on the underlying http framework.
 type ReqWrapper struct {
 	Request *http.Request
+}
+
+func NewRequestWrapper(req *http.Request) http_wrappers.RequestWrapper {
+	return &ReqWrapper{
+		Request: req,
+	}
 }
 
 func (r *ReqWrapper) Method() string {

@@ -7,7 +7,7 @@ import (
 )
 
 // HandleListBenchmarks handles GET /api/v1/evaluations/benchmarks
-func (h *Handlers) HandleListBenchmarks(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleListBenchmarks(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 
 	benchmarks := []api.BenchmarkResource{}
 	for _, provider := range ctx.ProviderConfigs {

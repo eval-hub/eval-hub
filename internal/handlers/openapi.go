@@ -9,10 +9,10 @@ import (
 	"github.com/eval-hub/eval-hub/internal/http_wrappers"
 )
 
-func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 
 	// Determine content type based on Accept header
-	accept := ctx.Request.Header("Accept")
+	accept := r.Header("Accept")
 	contentType := "application/yaml"
 	if strings.Contains(accept, "application/json") {
 		contentType = "application/json"
@@ -65,10 +65,10 @@ func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, w http_
 	w.Write(spec)
 }
 
-func (h *Handlers) HandleDocs(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleDocs(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 
 	// Get the base URL for the OpenAPI spec
-	baseURL := ctx.Request.URI()
+	baseURL := r.URI()
 
 	html := `<!DOCTYPE html>
 <html>

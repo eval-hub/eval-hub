@@ -17,7 +17,7 @@ func TestGetEvaluations(t *testing.T) {
 			{"/api/v1/evaluations/jobs/123/update", "123"},
 		}
 		for _, path := range paths {
-			id := handlers.GetEvaluationJobID(createExecutionContext("GET", path[0]))
+			id := handlers.GetEvaluationJobID(createMockRequest("GET", path[0]))
 			if id != path[1] {
 				t.Errorf("expected %s, got %s", path[1], id)
 			}

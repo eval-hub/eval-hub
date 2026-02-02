@@ -49,13 +49,8 @@ func (r *testRequestWrapper) BodyAsBytes() ([]byte, error) {
 	return nil, nil
 }
 
-func createExecutionContext(method string, uri *url.URL, logger *slog.Logger) *executioncontext.ExecutionContext {
-	var request = &testRequestWrapper{
-		method:  method,
-		uri:     uri,
-		headers: make(map[string]string),
-	}
-	return executioncontext.NewExecutionContext(context.Background(), uuid.New().String(), logger, 60*time.Second, nil, nil, request)
+func createExecutionContext(logger *slog.Logger) *executioncontext.ExecutionContext {
+	return executioncontext.NewExecutionContext(context.Background(), uuid.New().String(), logger, 60*time.Second, nil, nil)
 }
 
 // TestStorage tests the storage implementation and provides
@@ -78,7 +73,7 @@ func TestStorage(t *testing.T) {
 	})
 
 	t.Run("CreateEvaluationJob creates a new evaluation job", func(t *testing.T) {
-		ctx := createExecutionContext("POST", &url.URL{Path: "/api/v1/evaluations/jobs"}, logger)
+		ctx := createExecutionContext(logger)
 		job := &api.EvaluationJobConfig{
 			Model: api.ModelRef{
 				URL:  "http://test.com",
@@ -96,7 +91,7 @@ func TestStorage(t *testing.T) {
 	})
 
 	t.Run("GetEvaluationJob returns the evaluation job", func(t *testing.T) {
-		ctx := createExecutionContext("GET", &url.URL{Path: "/api/v1/evaluations/jobs/" + evaluationId}, logger)
+		ctx := createExecutionContext(logger)
 		resp, err := store.GetEvaluationJob(ctx, evaluationId)
 		if err != nil {
 			t.Fatalf("Failed to get evaluation job: %v", err)
@@ -107,7 +102,7 @@ func TestStorage(t *testing.T) {
 	})
 
 	t.Run("GetEvaluationJobs returns the evaluation jobs", func(t *testing.T) {
-		ctx := createExecutionContext("GET", &url.URL{Path: "/api/v1/evaluations/jobs"}, logger)
+		ctx := createExecutionContext(logger)
 		resp, err := store.GetEvaluationJobs(ctx, 10, 0, "")
 		if err != nil {
 			t.Fatalf("Failed to get evaluation jobs: %v", err)
@@ -118,7 +113,7 @@ func TestStorage(t *testing.T) {
 	})
 
 	t.Run("DeleteEvaluationJob deletes the evaluation job", func(t *testing.T) {
-		ctx := createExecutionContext("DELETE", &url.URL{Path: "/api/v1/evaluations/jobs/" + evaluationId}, logger)
+		ctx := createExecutionContext(logger)
 		err := store.DeleteEvaluationJob(ctx, evaluationId, false)
 		if err != nil {
 			t.Fatalf("Failed to delete evaluation job: %v", err)

@@ -27,8 +27,8 @@ type BenchmarkSpec struct {
 	Config      map[string]interface{} `json:"config,omitempty"`
 }
 
-func getEvaluationJobID(ctx *executioncontext.ExecutionContext) string {
-	if _, after, found := strings.Cut(ctx.Request.URI(), "/api/v1/evaluations/jobs/"); found {
+func getEvaluationJobID(r http_wrappers.RequestWrapper) string {
+	if _, after, found := strings.Cut(r.URI(), "/api/v1/evaluations/jobs/"); found {
 		if after != "" {
 			if id, _, found := strings.Cut(after, "/"); found {
 				return id
@@ -42,8 +42,8 @@ func getEvaluationJobID(ctx *executioncontext.ExecutionContext) string {
 	return ""
 }
 
-func getParam[T string | int | bool](ctx *executioncontext.ExecutionContext, name string, optional bool, defaultValue T) (T, error) {
-	values := ctx.Request.Query(name)
+func getParam[T string | int | bool](r http_wrappers.RequestWrapper, name string, optional bool, defaultValue T) (T, error) {
+	values := r.Query(name)
 	if (len(values) == 0) || (values[0] == "") {
 		if !optional {
 			return defaultValue, serviceerrors.NewServiceError(messages.QueryParameterRequired, "ParameterName", name)
@@ -72,11 +72,11 @@ func getParam[T string | int | bool](ctx *executioncontext.ExecutionContext, nam
 }
 
 // HandleCreateEvaluation handles POST /api/v1/evaluations/jobs
-func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	logging.LogRequestStarted(ctx)
 
 	// get the body bytes from the context
-	bodyBytes, err := ctx.Request.BodyAsBytes()
+	bodyBytes, err := req.BodyAsBytes()
 	if err != nil {
 		w.ErrorWithError(err, ctx.RequestID)
 		return
@@ -98,20 +98,20 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 }
 
 // HandleListEvaluations handles GET /api/v1/evaluations/jobs
-func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	logging.LogRequestStarted(ctx)
 
-	limit, err := getParam(ctx, "limit", true, 50)
+	limit, err := getParam(r, "limit", true, 50)
 	if err != nil {
 		w.ErrorWithError(err, ctx.RequestID)
 		return
 	}
-	offset, err := getParam(ctx, "offset", true, 0)
+	offset, err := getParam(r, "offset", true, 0)
 	if err != nil {
 		w.ErrorWithError(err, ctx.RequestID)
 		return
 	}
-	statusFilter, err := getParam(ctx, "status_filter", true, "")
+	statusFilter, err := getParam(r, "status_filter", true, "")
 	if err != nil {
 		w.ErrorWithError(err, ctx.RequestID)
 		return
@@ -123,17 +123,17 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 	}
 
 	// set the first href to the current request URL
-	response.Page.First = &api.HRef{Href: ctx.Request.URI()} // ctx.Request.URI() is the full request URL which should include the query parameters
+	response.Page.First = &api.HRef{Href: r.URI()} // ctx.Request.URI() is the full request URL which should include the query parameters
 
 	w.WriteJSON(response, 200)
 }
 
 // HandleGetEvaluation handles GET /api/v1/evaluations/jobs/{id}
-func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	logging.LogRequestStarted(ctx)
 
 	// Extract ID from path
-	evaluationJobID := getEvaluationJobID(ctx)
+	evaluationJobID := getEvaluationJobID(r)
 	if evaluationJobID == "" {
 		w.ErrorWithError(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", "id"), ctx.RequestID)
 		return
@@ -148,18 +148,18 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, w
 	w.WriteJSON(response, 200)
 }
 
-func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	logging.LogRequestStarted(ctx)
 
 	// Extract ID from path
-	evaluationJobID := getEvaluationJobID(ctx)
+	evaluationJobID := getEvaluationJobID(r)
 	if evaluationJobID == "" {
 		w.ErrorWithError(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", "id"), ctx.RequestID)
 		return
 	}
 
 	// get the body bytes from the context
-	bodyBytes, err := ctx.Request.BodyAsBytes()
+	bodyBytes, err := r.BodyAsBytes()
 	if err != nil {
 		w.ErrorWithError(err, ctx.RequestID)
 		return
@@ -181,17 +181,17 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 }
 
 // HandleCancelEvaluation handles DELETE /api/v1/evaluations/jobs/{id}
-func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	logging.LogRequestStarted(ctx)
 
 	// Extract ID from path
-	evaluationJobID := getEvaluationJobID(ctx)
+	evaluationJobID := getEvaluationJobID(r)
 	if evaluationJobID == "" {
 		w.ErrorWithError(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", "id"), ctx.RequestID)
 		return
 	}
 
-	hardDelete, err := getParam(ctx, "hard_delete", true, false)
+	hardDelete, err := getParam(r, "hard_delete", true, false)
 	if err != nil {
 		w.ErrorWithError(err, ctx.RequestID)
 		return
