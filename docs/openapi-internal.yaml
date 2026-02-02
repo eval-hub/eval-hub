@@ -21,6 +21,7 @@ tags:
     description: Benchmark management endpoints
   - name: Collections
     description: Benchmark collection management endpoints
+    x-internal: true
   - name: Providers
     description: Evaluation provider endpoints
   - name: Health
@@ -31,6 +32,7 @@ tags:
     description: Metrics and monitoring endpoints
   - name: Documentation
     description: API documentation endpoints
+    x-internal: true
 paths:
   /api/v1/health:
     get:
@@ -99,6 +101,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /openapi.yaml:
     get:
+      x-internal: true
       summary: OpenAPI specification
       description: Returns the OpenAPI 3.1.0 specification for this API
       operationId: openapi_yaml_get
@@ -124,6 +127,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /docs:
     get:
+      x-internal: true
       summary: API documentation
       description: Interactive API documentation (Swagger UI)
       operationId: getDocs
@@ -337,6 +341,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/metrics/system:
     get:
+      x-internal: true
       summary: Get System Metrics
       description: Get system metrics and statistics.
       operationId: get_system_metrics_api_v1_metrics_system_get
@@ -459,6 +464,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/evaluations/collections:
     get:
+      x-internal: true
       tags:
         - Collections
       summary: List Collections
@@ -508,6 +514,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/evaluations/collections/{id}:
     get:
+      x-internal: true
       tags:
         - Collections
       summary: Get Collection
@@ -536,6 +543,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     put:
+      x-internal: true
       tags:
         - Collections
       summary: Update Collection
@@ -570,6 +578,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     patch:
+      x-internal: true
       tags:
         - Collections
       summary: Patch Collection
@@ -604,6 +613,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     delete:
+      x-internal: true
       tags:
         - Collections
       summary: Delete Collection
@@ -895,55 +905,33 @@ components:
       title: CollectionUpdateRequest
       description: Request for updating an existing collection.
     EvaluationResponse:
-      properties:
-        resource:
-          allOf:
-            - $ref: '#/components/schemas/ResourceInfo'
-            - type: object
-              properties:
-                mlflow_experiment_id:
-                  type: string
-                  title: Mlflow Experiment Id
-                  description: MLFlow experiment ID
-        results:
-          $ref: '#/components/schemas/ResultsPayload'
-          description: Results payload available upon success
-        model:
-          $ref: '#/components/schemas/Model'
-          description: Model configuration provided by the user
-        benchmarks:
-          items:
-            $ref: '#/components/schemas/BenchmarkConfig'
-          type: array
-          title: Benchmarks
-          description: Benchmarks provided in the request
-        experiment:
-          $ref: '#/components/schemas/ExperimentConfig'
-          description: Experiment configuration provided by the user
-        timeout_minutes:
-          type: integer
-          title: Timeout Minutes
-          description: Timeout for the entire evaluation (user-provided)
-        retry_attempts:
-          type: integer
-          title: Retry Attempts
-          description: Number of retry attempts (user-provided)
-        custom:
-          additionalProperties: true
-          type: object
-          title: Custom
-          description: Custom fields supplied by the user in the request
-      additionalProperties: true
-      type: object
-      required:
-        - resource
-        - model
-        - benchmarks
-        - experiment
-        - timeout_minutes
-        - retry_attempts
+      allOf:
+        - $ref: '#/components/schemas/EvaluationResponseResults'
+        - $ref: '#/components/schemas/EvaluationRequest'
+      additionalProperties: false
       title: EvaluationResponse
       description: Response payload for evaluation requests.
+    EvaluationResponseResults:
+      type: object
+      properties:
+        resource:
+          $ref: '#/components/schemas/EvaluationResource'
+        results:
+          $ref: '#/components/schemas/ResultsPayload'
+      additionalProperties: false
+      title: EvaluationResponse
+      description: Response payload for evaluation requests.
+    EvaluationResource:
+      allOf:
+        - $ref: '#/components/schemas/ResourceInfo'
+        - type: object
+          properties:
+            mlflow_experiment_id:
+              $ref: '#/components/schemas/MLFlowExperimentId'
+          additionalProperties: false
+      additionalProperties: false
+      title: EvaluationResource
+      description: Resource information for an evaluation.
     EvaluationResult:
       properties:
         provider_id:
@@ -977,9 +965,7 @@ components:
           title: Artifacts
           description: Paths to result artifacts
         error_message:
-          type: string
-          title: Error Message
-          description: Error message if failed
+          $ref: '#/components/schemas/ErrorMessage'
         started_at:
           type: string
           format: date-time
@@ -1204,10 +1190,7 @@ components:
           title: State
           description: Run state (pending, running, success, failed)
         message:
-          type: string
-          title: Message
-          description: Optional status message
-          default: ''
+          $ref: '#/components/schemas/ErrorMessage'
         logs_path:
           type: string
           title: Logs Path
@@ -1243,11 +1226,6 @@ components:
           title: Retry Attempts
           description: Number of retry attempts on failure
           default: 3
-        created_at:
-          type: string
-          format: date-time
-          title: Created At
-          description: Request creation timestamp
         custom:
           additionalProperties: true
           type: object
@@ -1258,10 +1236,10 @@ components:
       required:
         - model
         - benchmarks
-        - experiment
       title: EvaluationRequest
       description: Simplified evaluation request using the new schema.
     ResourceInfo:
+      type: object
       properties:
         id:
           type: string
@@ -1281,7 +1259,6 @@ components:
           title: Completed At
           description: Completion timestamp
       additionalProperties: true
-      type: object
       required:
         - id
         - status
@@ -1294,11 +1271,15 @@ components:
           type: string
           title: State
           description: Overall state of the request
+          enum:
+            - pending
+            - running
+            - completed
+            - partially_failed
+            - failed
+            - cancelled
         message:
-          type: string
-          title: Message
-          description: Optional status message
-          default: ''
+          $ref: '#/components/schemas/ErrorMessage'
         logs_path:
           type: string
           title: Logs Path
@@ -1315,3 +1296,24 @@ components:
         - state
       title: Status
       description: Overall status for an evaluation request.
+    ErrorMessage:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Details of the error.
+          title: Message
+        message_code:
+          type: string
+          description: Code for the error
+          title: Message Code
+      additionalProperties: true
+      required:
+        - message
+        - message_code
+      title: ErrorMessage
+      description: Error message for a job.
+    MLFlowExperimentId:
+      type: string
+      description: MLFlow experiment ID
+      title: Mlflow Experiment Id

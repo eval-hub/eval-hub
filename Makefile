@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage start-service stop-service lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage start-service stop-service lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation
 
 # Variables
 BINARY_NAME = eval-hub
@@ -269,7 +269,15 @@ ${REDOCLY_CLI}:
 clean-docs:
 	rm -f docs/openapi.yaml docs/openapi.json docs/openapi-internal.yaml docs/openapi-internal.json docs/*.html
 
+# These targets are used to build the API documentation if the source file is changed
+docs/index.html: docs/src/openapi.yaml
+	@make --no-builtin-rules generate-public-docs
+	@make verify-api-docs
+
+documentation: docs/index.html ## Build the API documentation
+
 generate-public-docs: ${REDOCLY_CLI}
+	npm update @redocly/cli
 	cd docs && ${REDOCLY_CLI} bundle external@latest --output openapi.yaml --remove-unused-components
 	cd docs && ${REDOCLY_CLI} bundle external@latest --ext json --output openapi.json
 	cd docs && ${REDOCLY_CLI} bundle internal@latest --output openapi-internal.yaml --remove-unused-components
@@ -279,7 +287,7 @@ generate-public-docs: ${REDOCLY_CLI}
 
 verify-api-docs: ${REDOCLY_CLI}
 	${REDOCLY_CLI} lint ./docs/openapi.yaml
-	echo "See https://editor.swagger.io/?url=https://raw.githubusercontent.com/julpayne/eval-hub/refs/heads/api-updates/docs/openapi.yaml"
+	@echo "See https://editor.swagger.io/?url=https://raw.githubusercontent.com/julpayne/eval-hub/refs/heads/api-updates/docs/openapi.yaml"
 
 generate-ignore-file: ${REDOCLY_CLI}
 	${REDOCLY_CLI} lint --generate-ignore-file ./docs/openapi.yaml

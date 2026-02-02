@@ -19,8 +19,6 @@ tags:
     description: Evaluation job management endpoints
   - name: Benchmarks
     description: Benchmark management endpoints
-  - name: Collections
-    description: Benchmark collection management endpoints
   - name: Providers
     description: Evaluation provider endpoints
   - name: Health
@@ -29,8 +27,6 @@ tags:
     description: Service status endpoints
   - name: Metrics
     description: Metrics and monitoring endpoints
-  - name: Documentation
-    description: API documentation endpoints
 paths:
   /api/v1/health:
     get:
@@ -89,53 +85,6 @@ paths:
           content:
             application/json:
               schema: {}
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-  /openapi.yaml:
-    get:
-      summary: OpenAPI specification
-      description: Returns the OpenAPI 3.1.0 specification for this API
-      operationId: openapi_yaml_get
-      tags:
-        - Documentation
-      responses:
-        '200':
-          description: OpenAPI specification
-          content:
-            application/yaml:
-              schema:
-                type: string
-            application/json:
-              schema:
-                type: object
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-  /docs:
-    get:
-      summary: API documentation
-      description: Interactive API documentation (Swagger UI)
-      operationId: getDocs
-      tags:
-        - Documentation
-      responses:
-        '200':
-          description: Swagger UI HTML page
-          content:
-            text/html:
-              schema:
-                type: string
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -284,30 +233,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-  /api/v1/metrics/system:
-    get:
-      summary: Get System Metrics
-      description: Get system metrics and statistics.
-      operationId: get_system_metrics_api_v1_metrics_system_get
-      tags:
-        - Metrics
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                additionalProperties: true
-                type: object
-                title: Response Get System Metrics Api V1 Metrics System Get
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
   /api/v1/evaluations/providers:
     get:
       tags:
@@ -407,27 +332,6 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
   /api/v1/evaluations/collections:
-    get:
-      tags:
-        - Collections
-      summary: List Collections
-      description: List all benchmark collections.
-      operationId: list_collections_api_v1_evaluations_collections_get
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ListCollectionsResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
     post:
       tags:
         - Collections
@@ -447,130 +351,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Collection'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-  /api/v1/evaluations/collections/{id}:
-    get:
-      tags:
-        - Collections
-      summary: Get Collection
-      description: Get details of a specific collection.
-      operationId: get_collection_api_v1_evaluations_collections__collection_id__get
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            title: Collection Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Collection'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-    put:
-      tags:
-        - Collections
-      summary: Update Collection
-      description: Update an existing collection.
-      operationId: update_collection_api_v1_evaluations_collections__collection_id__put
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            title: Collection Id
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CollectionUpdateRequest'
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Collection'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-    patch:
-      tags:
-        - Collections
-      summary: Patch Collection
-      description: Partially update an existing collection.
-      operationId: patch_collection_api_v1_evaluations_collections__collection_id__patch
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            title: Collection Id
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CollectionUpdateRequest'
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Collection'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-    delete:
-      tags:
-        - Collections
-      summary: Delete Collection
-      description: Delete a collection.
-      operationId: delete_collection_api_v1_evaluations_collections__collection_id__delete
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            title: Collection Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -808,91 +588,34 @@ components:
         - benchmarks
       title: CollectionCreationRequest
       description: Request for creating a new collection.
-    CollectionUpdateRequest:
-      properties:
-        name:
-          type: string
-          title: Name
-          description: Human-readable collection name
-        description:
-          type: string
-          title: Description
-          description: Collection description
-        provider_id:
-          type: string
-          title: Provider Id
-          description: Primary provider for this collection
-        tags:
-          items:
-            type: string
-          type: array
-          title: Tags
-          description: Tags for categorizing the collection
-        metadata:
-          type: object
-          additionalProperties: true
-          title: Metadata
-          description: Additional collection metadata
-        benchmarks:
-          items:
-            $ref: '#/components/schemas/BenchmarkReference'
-          type: array
-          title: Benchmarks
-          description: List of benchmark references in this collection
-      additionalProperties: true
-      type: object
-      title: CollectionUpdateRequest
-      description: Request for updating an existing collection.
     EvaluationResponse:
-      properties:
-        resource:
-          allOf:
-            - $ref: '#/components/schemas/ResourceInfo'
-            - type: object
-              properties:
-                mlflow_experiment_id:
-                  type: string
-                  title: Mlflow Experiment Id
-                  description: MLFlow experiment ID
-        results:
-          $ref: '#/components/schemas/ResultsPayload'
-          description: Results payload available upon success
-        model:
-          $ref: '#/components/schemas/Model'
-          description: Model configuration provided by the user
-        benchmarks:
-          items:
-            $ref: '#/components/schemas/BenchmarkConfig'
-          type: array
-          title: Benchmarks
-          description: Benchmarks provided in the request
-        experiment:
-          $ref: '#/components/schemas/ExperimentConfig'
-          description: Experiment configuration provided by the user
-        timeout_minutes:
-          type: integer
-          title: Timeout Minutes
-          description: Timeout for the entire evaluation (user-provided)
-        retry_attempts:
-          type: integer
-          title: Retry Attempts
-          description: Number of retry attempts (user-provided)
-        custom:
-          additionalProperties: true
-          type: object
-          title: Custom
-          description: Custom fields supplied by the user in the request
-      additionalProperties: true
-      type: object
-      required:
-        - resource
-        - model
-        - benchmarks
-        - experiment
-        - timeout_minutes
-        - retry_attempts
+      allOf:
+        - $ref: '#/components/schemas/EvaluationResponseResults'
+        - $ref: '#/components/schemas/EvaluationRequest'
+      additionalProperties: false
       title: EvaluationResponse
       description: Response payload for evaluation requests.
+    EvaluationResponseResults:
+      type: object
+      properties:
+        resource:
+          $ref: '#/components/schemas/EvaluationResource'
+        results:
+          $ref: '#/components/schemas/ResultsPayload'
+      additionalProperties: false
+      title: EvaluationResponse
+      description: Response payload for evaluation requests.
+    EvaluationResource:
+      allOf:
+        - $ref: '#/components/schemas/ResourceInfo'
+        - type: object
+          properties:
+            mlflow_experiment_id:
+              $ref: '#/components/schemas/MLFlowExperimentId'
+          additionalProperties: false
+      additionalProperties: false
+      title: EvaluationResource
+      description: Resource information for an evaluation.
     ExperimentConfig:
       properties:
         name:
@@ -938,25 +661,6 @@ components:
         - providers_included
       title: ListBenchmarksResponse
       description: Response for listing all benchmarks (similar to Llama Stack format).
-    ListCollectionsResponse:
-      properties:
-        collections:
-          items:
-            $ref: '#/components/schemas/Collection'
-          type: array
-          title: Collections
-          description: List of available collections
-        total_collections:
-          type: integer
-          title: Total Collections
-          description: Total number of collections
-      additionalProperties: true
-      type: object
-      required:
-        - collections
-        - total_collections
-      title: ListCollectionsResponse
-      description: Response for listing all collections.
     ListProvidersResponse:
       properties:
         providers:
@@ -1082,10 +786,7 @@ components:
           title: State
           description: Run state (pending, running, success, failed)
         message:
-          type: string
-          title: Message
-          description: Optional status message
-          default: ''
+          $ref: '#/components/schemas/ErrorMessage'
         logs_path:
           type: string
           title: Logs Path
@@ -1121,11 +822,6 @@ components:
           title: Retry Attempts
           description: Number of retry attempts on failure
           default: 3
-        created_at:
-          type: string
-          format: date-time
-          title: Created At
-          description: Request creation timestamp
         custom:
           additionalProperties: true
           type: object
@@ -1136,10 +832,10 @@ components:
       required:
         - model
         - benchmarks
-        - experiment
       title: EvaluationRequest
       description: Simplified evaluation request using the new schema.
     ResourceInfo:
+      type: object
       properties:
         id:
           type: string
@@ -1159,7 +855,6 @@ components:
           title: Completed At
           description: Completion timestamp
       additionalProperties: true
-      type: object
       required:
         - id
         - status
@@ -1172,11 +867,15 @@ components:
           type: string
           title: State
           description: Overall state of the request
+          enum:
+            - pending
+            - running
+            - completed
+            - partially_failed
+            - failed
+            - cancelled
         message:
-          type: string
-          title: Message
-          description: Optional status message
-          default: ''
+          $ref: '#/components/schemas/ErrorMessage'
         logs_path:
           type: string
           title: Logs Path
@@ -1193,3 +892,24 @@ components:
         - state
       title: Status
       description: Overall status for an evaluation request.
+    ErrorMessage:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Details of the error.
+          title: Message
+        message_code:
+          type: string
+          description: Code for the error
+          title: Message Code
+      additionalProperties: true
+      required:
+        - message
+        - message_code
+      title: ErrorMessage
+      description: Error message for a job.
+    MLFlowExperimentId:
+      type: string
+      description: MLFlow experiment ID
+      title: Mlflow Experiment Id

@@ -34,7 +34,8 @@
     },
     {
       "name": "Collections",
-      "description": "Benchmark collection management endpoints"
+      "description": "Benchmark collection management endpoints",
+      "x-internal": true
     },
     {
       "name": "Providers",
@@ -54,7 +55,8 @@
     },
     {
       "name": "Documentation",
-      "description": "API documentation endpoints"
+      "description": "API documentation endpoints",
+      "x-internal": true
     }
   ],
   "paths": {
@@ -160,6 +162,7 @@
     },
     "/openapi.yaml": {
       "get": {
+        "x-internal": true,
         "summary": "OpenAPI specification",
         "description": "Returns the OpenAPI 3.1.0 specification for this API",
         "operationId": "openapi_yaml_get",
@@ -199,6 +202,7 @@
     },
     "/docs": {
       "get": {
+        "x-internal": true,
         "summary": "API documentation",
         "description": "Interactive API documentation (Swagger UI)",
         "operationId": "getDocs",
@@ -510,6 +514,7 @@
     },
     "/api/v1/metrics/system": {
       "get": {
+        "x-internal": true,
         "summary": "Get System Metrics",
         "description": "Get system metrics and statistics.",
         "operationId": "get_system_metrics_api_v1_metrics_system_get",
@@ -694,6 +699,7 @@
     },
     "/api/v1/evaluations/collections": {
       "get": {
+        "x-internal": true,
         "tags": [
           "Collections"
         ],
@@ -770,6 +776,7 @@
     },
     "/api/v1/evaluations/collections/{id}": {
       "get": {
+        "x-internal": true,
         "tags": [
           "Collections"
         ],
@@ -813,6 +820,7 @@
         }
       },
       "put": {
+        "x-internal": true,
         "tags": [
           "Collections"
         ],
@@ -866,6 +874,7 @@
         }
       },
       "patch": {
+        "x-internal": true,
         "tags": [
           "Collections"
         ],
@@ -919,6 +928,7 @@
         }
       },
       "delete": {
+        "x-internal": true,
         "tags": [
           "Collections"
         ],
@@ -1374,73 +1384,50 @@
         "description": "Request for updating an existing collection."
       },
       "EvaluationResponse": {
-        "properties": {
-          "resource": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ResourceInfo"
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "mlflow_experiment_id": {
-                    "type": "string",
-                    "title": "Mlflow Experiment Id",
-                    "description": "MLFlow experiment ID"
-                  }
-                }
-              }
-            ]
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/EvaluationResponseResults"
           },
-          "results": {
-            "$ref": "#/components/schemas/ResultsPayload",
-            "description": "Results payload available upon success"
-          },
-          "model": {
-            "$ref": "#/components/schemas/Model",
-            "description": "Model configuration provided by the user"
-          },
-          "benchmarks": {
-            "items": {
-              "$ref": "#/components/schemas/BenchmarkConfig"
-            },
-            "type": "array",
-            "title": "Benchmarks",
-            "description": "Benchmarks provided in the request"
-          },
-          "experiment": {
-            "$ref": "#/components/schemas/ExperimentConfig",
-            "description": "Experiment configuration provided by the user"
-          },
-          "timeout_minutes": {
-            "type": "integer",
-            "title": "Timeout Minutes",
-            "description": "Timeout for the entire evaluation (user-provided)"
-          },
-          "retry_attempts": {
-            "type": "integer",
-            "title": "Retry Attempts",
-            "description": "Number of retry attempts (user-provided)"
-          },
-          "custom": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Custom",
-            "description": "Custom fields supplied by the user in the request"
+          {
+            "$ref": "#/components/schemas/EvaluationRequest"
           }
-        },
-        "additionalProperties": true,
-        "type": "object",
-        "required": [
-          "resource",
-          "model",
-          "benchmarks",
-          "experiment",
-          "timeout_minutes",
-          "retry_attempts"
         ],
+        "additionalProperties": false,
         "title": "EvaluationResponse",
         "description": "Response payload for evaluation requests."
+      },
+      "EvaluationResponseResults": {
+        "type": "object",
+        "properties": {
+          "resource": {
+            "$ref": "#/components/schemas/EvaluationResource"
+          },
+          "results": {
+            "$ref": "#/components/schemas/ResultsPayload"
+          }
+        },
+        "additionalProperties": false,
+        "title": "EvaluationResponse",
+        "description": "Response payload for evaluation requests."
+      },
+      "EvaluationResource": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ResourceInfo"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "mlflow_experiment_id": {
+                "$ref": "#/components/schemas/MLFlowExperimentId"
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "additionalProperties": false,
+        "title": "EvaluationResource",
+        "description": "Resource information for an evaluation."
       },
       "EvaluationResult": {
         "properties": {
@@ -1490,9 +1477,7 @@
             "description": "Paths to result artifacts"
           },
           "error_message": {
-            "type": "string",
-            "title": "Error Message",
-            "description": "Error message if failed"
+            "$ref": "#/components/schemas/ErrorMessage"
           },
           "started_at": {
             "type": "string",
@@ -1790,10 +1775,7 @@
             "description": "Run state (pending, running, success, failed)"
           },
           "message": {
-            "type": "string",
-            "title": "Message",
-            "description": "Optional status message",
-            "default": ""
+            "$ref": "#/components/schemas/ErrorMessage"
           },
           "logs_path": {
             "type": "string",
@@ -1840,12 +1822,6 @@
             "description": "Number of retry attempts on failure",
             "default": 3
           },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At",
-            "description": "Request creation timestamp"
-          },
           "custom": {
             "additionalProperties": true,
             "type": "object",
@@ -1857,13 +1833,13 @@
         "type": "object",
         "required": [
           "model",
-          "benchmarks",
-          "experiment"
+          "benchmarks"
         ],
         "title": "EvaluationRequest",
         "description": "Simplified evaluation request using the new schema."
       },
       "ResourceInfo": {
+        "type": "object",
         "properties": {
           "id": {
             "type": "string",
@@ -1888,7 +1864,6 @@
           }
         },
         "additionalProperties": true,
-        "type": "object",
         "required": [
           "id",
           "status",
@@ -1902,13 +1877,18 @@
           "state": {
             "type": "string",
             "title": "State",
-            "description": "Overall state of the request"
+            "description": "Overall state of the request",
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "partially_failed",
+              "failed",
+              "cancelled"
+            ]
           },
           "message": {
-            "type": "string",
-            "title": "Message",
-            "description": "Optional status message",
-            "default": ""
+            "$ref": "#/components/schemas/ErrorMessage"
           },
           "logs_path": {
             "type": "string",
@@ -1931,6 +1911,33 @@
         ],
         "title": "Status",
         "description": "Overall status for an evaluation request."
+      },
+      "ErrorMessage": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Details of the error.",
+            "title": "Message"
+          },
+          "message_code": {
+            "type": "string",
+            "description": "Code for the error",
+            "title": "Message Code"
+          }
+        },
+        "additionalProperties": true,
+        "required": [
+          "message",
+          "message_code"
+        ],
+        "title": "ErrorMessage",
+        "description": "Error message for a job."
+      },
+      "MLFlowExperimentId": {
+        "type": "string",
+        "description": "MLFlow experiment ID",
+        "title": "Mlflow Experiment Id"
       }
     }
   }
