@@ -23,6 +23,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/runtimes"
 	"github.com/eval-hub/eval-hub/internal/storage"
 	"github.com/eval-hub/eval-hub/internal/validation"
+	"github.com/xeipuuv/gojsonschema"
 
 	"github.com/cucumber/godog"
 )
@@ -430,6 +431,50 @@ func (tc *scenarioConfig) theMetricsShouldShowRequestCountFor(path string) error
 	return nil
 }
 
+func asPrettyJson(s string) string {
+	js := make(map[string]interface{})
+	err := json.Unmarshal([]byte(s), &js)
+	if err != nil {
+		return s
+	}
+	ns, err := json.MarshalIndent(js, "", "  ")
+	if err != nil {
+		return s
+	}
+	return string(ns)
+}
+
+func compareJSONSchema(expectedSchema string, actualResponse string) error {
+	expectedSchemaLoader := gojsonschema.NewStringLoader(expectedSchema)
+	actualResultLoader := gojsonschema.NewStringLoader(actualResponse)
+	result, validateErr := gojsonschema.Validate(expectedSchemaLoader, actualResultLoader)
+	if validateErr != nil {
+		fmt.Printf("The actual response %s does not match expected schema with error:\n", asPrettyJson(actualResponse))
+		if result != nil {
+			for _, err := range result.Errors() {
+				fmt.Printf("- %s value = %s\n", err, err.Value())
+			}
+		}
+		fmt.Printf("- error %s\n", validateErr.Error())
+		return validateErr
+	}
+	if len(result.Errors()) > 0 {
+		fmt.Printf("The actual response %s does not match expected schema with error:\n", asPrettyJson(actualResponse))
+		for _, err := range result.Errors() {
+			fmt.Printf("- %s value = %s\n", err, err.Value())
+		}
+		return fmt.Errorf("the response %s does not match %s", asPrettyJson(actualResponse), expectedSchema)
+	}
+	if result.Valid() {
+		return nil
+	}
+	return fmt.Errorf("failed to validate the response %s but no error detected when expecting %s", asPrettyJson(actualResponse), expectedSchema)
+}
+
+func (tc *scenarioConfig) theResponseShouldHaveSchemaAs(body *godog.DocString) error {
+	return compareJSONSchema(body.Content, string(tc.body))
+}
+
 func (tc *scenarioConfig) saveScenarioName(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
 	tc.scenarioName = sc.Name
 	return ctx, nil
@@ -544,11 +589,6 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the response should contain Prometheus metrics$`, tc.theResponseShouldContainPrometheusMetrics)
 	ctx.Step(`^the metrics should include "([^"]*)"$`, tc.theMetricsShouldInclude)
 	ctx.Step(`^the metrics should show request count for "([^"]*)"$`, tc.theMetricsShouldShowRequestCountFor)
-	// steps for entities
-	//ctx.Step(`^the entity should be created with ID "([^"]*)"$`, tc.theEntityShouldBeCreatedWithID)
-	//ctx.Step(`^the entity should be deleted with ID "([^"]*)"$`, tc.theEntityShouldBeDeletedWithID)
-	//ctx.Step(`^the entity should be updated with ID "([^"]*)"$`, tc.theEntityShouldBeUpdatedWithID)
-	//ctx.Step(`^the entity should be retrieved with ID "([^"]*)"$`, tc.theEntityShouldBeRetrievedWithID)
-	//ctx.Step(`^the entity should be listed with ID "([^"]*)"$`, tc.theEntityShouldBeListedWithID)
-	//ctx.Step(`^the entity should be counted with ID "([^"]*)"$`, tc.theEntityShouldBeCountedWithID)
+	// Responses
+	ctx.Step(`^the response should have schema as:$`, tc.theResponseShouldHaveSchemaAs)
 }
