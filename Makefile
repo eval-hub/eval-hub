@@ -269,13 +269,6 @@ ${REDOCLY_CLI}:
 clean-docs:
 	rm -f docs/openapi.yaml docs/openapi.json docs/openapi-internal.yaml docs/openapi-internal.json docs/*.html
 
-# These targets are used to build the API documentation if the source file is changed
-docs/index.html: docs/src/openapi.yaml
-	@make --no-builtin-rules generate-public-docs
-	@make verify-api-docs
-
-documentation: docs/index.html ## Build the API documentation
-
 generate-public-docs: ${REDOCLY_CLI}
 	npm update @redocly/cli
 	cd docs && ${REDOCLY_CLI} bundle external@latest --output openapi.yaml --remove-unused-components
