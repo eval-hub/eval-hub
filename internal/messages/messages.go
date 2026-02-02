@@ -64,6 +64,7 @@ var (
 		"The request for the {{.Type}} failed: '{{.Error}}'.",
 	)
 
+	// InternalServerError An internal server error occurred: '{{.Error}}'.
 	InternalServerError = createMessage(
 		http.StatusInternalServerError,
 		"An internal server error occurred: '{{.Error}}'.",

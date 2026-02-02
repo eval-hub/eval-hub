@@ -3,6 +3,8 @@ package sql
 import (
 	"database/sql"
 	"encoding/json"
+	"net/url"
+	"strconv"
 	"time"
 
 	// import the postgres driver - "pgx"
@@ -16,6 +18,12 @@ import (
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
+)
+
+const (
+	MESSAGE_CODE_EVALUATION_JOB_CREATED   = "evaluation_job_created"
+	MESSAGE_CODE_EVALUATION_JOB_RETRIEVED = "evaluation_job_retrieved"
+	MESSAGE_CODE_EVALUATION_JOB_CANCELLED = "evaluation_job_cancelled"
 )
 
 //#######################################################################
@@ -58,8 +66,11 @@ func (s *SQLStorage) CreateEvaluationJob(executionContext *executioncontext.Exec
 		EvaluationJobConfig: *evaluation,
 		Status: api.EvaluationJobStatus{
 			EvaluationJobState: api.EvaluationJobState{
-				State:   api.StatePending,
-				Message: "Evaluation job created",
+				State: api.StatePending,
+				Message: &api.MessageInfo{
+					Message:     "Evaluation job created",
+					MessageCode: MESSAGE_CODE_EVALUATION_JOB_CREATED,
+				},
 			},
 			Benchmarks: nil,
 		},
@@ -117,8 +128,11 @@ func (s *SQLStorage) GetEvaluationJob(ctx *executioncontext.ExecutionContext, id
 		EvaluationJobConfig: evaluationConfig,
 		Status: api.EvaluationJobStatus{
 			EvaluationJobState: api.EvaluationJobState{
-				State:   status,
-				Message: "Evaluation job retrieved",
+				State: status,
+				Message: &api.MessageInfo{
+					Message:     "Evaluation job retrieved",
+					MessageCode: MESSAGE_CODE_EVALUATION_JOB_RETRIEVED,
+				},
 			},
 			Benchmarks: nil, // TODO: retrieve benchmarks status from database
 		},
@@ -200,8 +214,11 @@ func (s *SQLStorage) GetEvaluationJobs(ctx *executioncontext.ExecutionContext, l
 			EvaluationJobConfig: evaluationConfig,
 			Status: api.EvaluationJobStatus{
 				EvaluationJobState: api.EvaluationJobState{
-					State:   status,
-					Message: "Evaluation job retrieved",
+					State: status,
+					Message: &api.MessageInfo{
+						Message:     "Evaluation job retrieved",
+						MessageCode: MESSAGE_CODE_EVALUATION_JOB_RETRIEVED,
+					},
 				},
 				Benchmarks: nil, // TODO: retrieve benchmarks status from database
 			},
@@ -216,16 +233,27 @@ func (s *SQLStorage) GetEvaluationJobs(ctx *executioncontext.ExecutionContext, l
 	}
 
 	// Calculate pagination info
-	// Note: hrefs are left empty as they should be populated by the handler based on the request URL
 	hasNext := offset+limit < totalCount
 	var nextHref *api.HRef
 	if hasNext {
-		nextHref = &api.HRef{Href: ""} // Handler should populate this
+		href, err := url.Parse(ctx.Request.URI())
+		if err != nil {
+			ctx.Logger.Error("Failed to parse request URI", "uri", ctx.Request.URI(), "error", err)
+			return nil, serviceerrors.NewServiceError(messages.InternalServerError, "Error", err.Error())
+		}
+		q := href.Query()
+		if !q.Has("offset") {
+			q.Add("offset", strconv.Itoa(offset+limit))
+		} else {
+			q.Set("offset", strconv.Itoa(offset+limit))
+		}
+		href.RawQuery = q.Encode()
+		nextHref = &api.HRef{Href: href.String()}
 	}
 
 	return &api.EvaluationJobResourceList{
 		Page: api.Page{
-			First:      &api.HRef{Href: ""}, // Handler should populate this
+			First:      &api.HRef{Href: ctx.Request.URI()},
 			Next:       nextHref,
 			Limit:      limit,
 			TotalCount: totalCount,
@@ -238,8 +266,11 @@ func (s *SQLStorage) DeleteEvaluationJob(ctx *executioncontext.ExecutionContext,
 	if !hardDelete {
 		return s.UpdateEvaluationJobStatus(ctx, id, &api.EvaluationJobStatus{
 			EvaluationJobState: api.EvaluationJobState{
-				State:   api.StateCancelled,
-				Message: "Evaluation job cancelled",
+				State: api.StateCancelled,
+				Message: &api.MessageInfo{
+					Message:     "Evaluation job cancelled",
+					MessageCode: MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
+				},
 			},
 		})
 	}

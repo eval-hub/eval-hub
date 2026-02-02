@@ -122,9 +122,6 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 		return
 	}
 
-	// set the first href to the current request URL
-	response.Page.First = &api.HRef{Href: ctx.Request.URI()} // ctx.Request.URI() is the full request URL which should include the query parameters
-
 	w.WriteJSON(response, 200)
 }
 

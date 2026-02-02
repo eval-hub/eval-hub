@@ -6,17 +6,24 @@ import "time"
 type State string
 
 const (
-	StatePending   State = "pending"
-	StateRunning   State = "running"
-	StateCompleted State = "completed"
-	StateFailed    State = "failed"
-	StateCancelled State = "cancelled"
+	StatePending         State = "pending"
+	StateRunning         State = "running"
+	StateCompleted       State = "completed"
+	StateFailed          State = "failed"
+	StateCancelled       State = "cancelled"
+	StatePartiallyFailed State = "partially_failed"
 )
 
 // ModelRef represents model specification for evaluation requests
 type ModelRef struct {
 	URL  string `json:"url"`
 	Name string `json:"name"`
+}
+
+// MessageInfo represents a message from a downstream service
+type MessageInfo struct {
+	Message     string `json:"message"`
+	MessageCode string `json:"message_code"`
 }
 
 // BenchmarkConfig represents a reference to a benchmark
@@ -40,16 +47,16 @@ type BenchmarkStatusLogs struct {
 // BenchmarkStatus represents status of individual benchmark in evaluation
 type BenchmarkStatus struct {
 	Name        string               `json:"name"`
-	State       State                `json:"state"`
+	State       State                `json:"state" validate:"required,oneof=pending running completed failed cancelled"`
 	StartedAt   *time.Time           `json:"started_at,omitempty"`
 	CompletedAt *time.Time           `json:"completed_at,omitempty"`
-	Message     string               `json:"message,omitempty"`
+	Message     *MessageInfo         `json:"message,omitempty"`
 	Logs        *BenchmarkStatusLogs `json:"logs,omitempty"`
 }
 
 type EvaluationJobState struct {
-	State   State  `json:"state"`
-	Message string `json:"message"`
+	State   State        `json:"state" validate:"required,oneof=pending running completed failed cancelled partially_failed"`
+	Message *MessageInfo `json:"message" validate:"required"`
 }
 
 // EvaluationStatus represents evaluation status
@@ -66,7 +73,7 @@ type EvaluationJobBenchmarkResult struct {
 	StartedAt   *time.Time     `json:"started_at,omitempty"`
 	CompletedAt *time.Time     `json:"completed_at,omitempty"`
 	Metrics     map[string]any `json:"metrics,omitempty"`
-	Error       *string        `json:"error,omitempty"`
+	Error       *MessageInfo   `json:"error,omitempty"`
 }
 
 // EvaluationJobResults represents results section for EvaluationJobResource
