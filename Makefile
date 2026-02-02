@@ -283,7 +283,8 @@ generate-public-docs: ${REDOCLY_CLI}
 	cd docs && ${REDOCLY_CLI} bundle internal@latest --output openapi-internal.yaml --remove-unused-components
 	cd docs && ${REDOCLY_CLI} bundle internal@latest --ext json --output openapi-internal.json
 	cd docs && ${REDOCLY_CLI} build-docs openapi.json --output=index-public.html
-	cd docs && ${REDOCLY_CLI} build-docs openapi-internal.json --output=index.html
+	cd docs && ${REDOCLY_CLI} build-docs openapi-internal.json --output=index-private.html
+	cp docs/index-public.html docs/index.html
 
 verify-api-docs: ${REDOCLY_CLI}
 	${REDOCLY_CLI} lint ./docs/openapi.yaml
