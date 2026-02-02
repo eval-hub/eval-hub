@@ -200,10 +200,23 @@ build-all-platforms: ## Build for all supported platforms
 	@$(MAKE) cross-compile CROSS_GOOS=darwin CROSS_GOARCH=arm64
 	@$(MAKE) cross-compile CROSS_GOOS=windows CROSS_GOARCH=amd64
 
-# Python virtual environment
+# Python virtual environment - supports both traditional venv and uv
 VENV_DIR = .venv
 VENV_PYTHON = $(VENV_DIR)/bin/python
-VENV_PIP = $(VENV_DIR)/bin/pip
+
+# Detect venv type: traditional venv has bin/pip, uv venv does not
+ifneq (,$(wildcard $(VENV_DIR)/bin/pip))
+    # Traditional venv detected
+    VENV_PIP = $(VENV_DIR)/bin/pip
+    PIP_INSTALL = $(VENV_PIP) install
+    PYTHON_BUILD = $(VENV_PYTHON) -m build
+    HAS_VENV_PIP = yes
+else
+    # uv venv detected (no pip in bin/)
+    PIP_INSTALL = uv pip install
+    PYTHON_BUILD = uv run --no-project python -m build
+    HAS_VENV_PIP = no
+endif
 
 .PHONY: venv
 venv: ## Create Python virtual environment
@@ -224,8 +237,13 @@ WHEEL_BINARY ?= eval-hub-darwin-arm64
 
 .PHONY: install-wheel-tools
 install-wheel-tools: venv ## Install Python wheel build tools
-	@echo "Installing wheel build tools in virtual environment..."
-	$(VENV_PIP) install --upgrade pip build wheel setuptools
+ifeq ($(HAS_VENV_PIP),yes)
+	@echo "Installing wheel build tools in traditional venv..."
+	$(PIP_INSTALL) --upgrade pip build wheel setuptools
+else
+	@echo "Using uv venv - installing build tools via uv..."
+	$(PIP_INSTALL) build wheel setuptools
+endif
 
 .PHONY: clean-wheels
 clean-wheels: ## Clean Python wheel build artifacts
@@ -236,16 +254,16 @@ clean-wheels: ## Clean Python wheel build artifacts
 	@find python-server/evalhub_server/binaries/ -type f ! -name '.gitkeep' -delete
 
 .PHONY: build-wheel
-build-wheel: ## Build Python wheel: make build-wheel WHEEL_PLATFORM=manylinux_2_17_x86_64 WHEEL_BINARY=eval-hub-linux-amd64
+build-wheel: install-wheel-tools ## Build Python wheel: make build-wheel WHEEL_PLATFORM=manylinux_2_17_x86_64 WHEEL_BINARY=eval-hub-linux-amd64
 	@echo "Building wheel for $(WHEEL_PLATFORM) with binary $(WHEEL_BINARY)..."
 	@rm -rf python-server/build/
 	@mkdir -p python-server/evalhub_server/binaries/
 	@find python-server/evalhub_server/binaries/ -type f ! -name '.gitkeep' -delete
 	@cp bin/$(WHEEL_BINARY)* python-server/evalhub_server/binaries/
-	WHEEL_PLATFORM=$(WHEEL_PLATFORM) $(VENV_PYTHON) -m build --wheel python-server
+	WHEEL_PLATFORM=$(WHEEL_PLATFORM) $(PYTHON_BUILD) --wheel python-server
 
 .PHONY: build-all-wheels
-build-all-wheels: clean-wheels build-all-platforms install-wheel-tools ## Build all Python wheels for all platforms
+build-all-wheels: clean-wheels build-all-platforms ## Build all Python wheels for all platforms
 	@$(MAKE) build-wheel WHEEL_PLATFORM=manylinux_2_17_x86_64 WHEEL_BINARY=eval-hub-linux-amd64
 	@$(MAKE) build-wheel WHEEL_PLATFORM=manylinux_2_17_aarch64 WHEEL_BINARY=eval-hub-linux-arm64
 	@$(MAKE) build-wheel WHEEL_PLATFORM=macosx_10_9_x86_64 WHEEL_BINARY=eval-hub-darwin-amd64
