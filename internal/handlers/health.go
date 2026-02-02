@@ -8,10 +8,8 @@ import (
 )
 
 func (h *Handlers) HandleHealth(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
-
 	w.WriteJSON(map[string]interface{}{
 		"status":    "healthy",
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	}, 200)
-
 }

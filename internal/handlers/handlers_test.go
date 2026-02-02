@@ -6,8 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/handlers"
+	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -84,6 +86,18 @@ func (w MockResponseWrapper) Write(buf []byte) (int, error) {
 
 func (w MockResponseWrapper) Error(err string, code int, requestId string) {
 	w.WriteJSON(api.Error{Message: err, Code: code, Trace: requestId}, code)
+}
+
+func (w MockResponseWrapper) ErrorWithError(err error, requestId string) {
+	if e, ok := err.(abstractions.ServiceError); ok {
+		w.ErrorWithMessageCode(requestId, e.MessageCode(), e.MessageParams()...)
+		return
+	}
+	w.ErrorWithMessageCode(requestId, messages.UnknownError, err.Error())
+}
+
+func (w MockResponseWrapper) ErrorWithMessageCode(requestId string, messageCode *messages.MessageCode, messageParams ...any) {
+	w.WriteJSON(api.Error{Message: messages.GetErrorMesssage(messageCode, messageParams...), Code: messageCode.GetCode(), Trace: requestId}, messageCode.GetCode())
 }
 
 func (w MockResponseWrapper) WriteJSON(v any, code int) {

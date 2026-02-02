@@ -6,8 +6,10 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/logging"
+	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -125,6 +127,7 @@ func (r RespWrapper) SetStatusCode(code int) {
 	r.Response.WriteHeader(code)
 }
 
+// TODO this will be removed as soon as all errors are changed to use one of the methods below
 func (r RespWrapper) Error(errorMessage string, code int, requestId string) {
 	r.DeleteHeader("Content-Length")
 
@@ -132,4 +135,23 @@ func (r RespWrapper) Error(errorMessage string, code int, requestId string) {
 	r.WriteJSON(api.Error{Message: errorMessage, Code: code, Trace: requestId}, code)
 
 	logging.LogRequestFailed(r.ctx, code, errorMessage)
+}
+
+func (r RespWrapper) ErrorWithMessageCode(requestId string, messageCode *messages.MessageCode, messageParams ...any) {
+	msg := messages.GetErrorMesssage(messageCode, messageParams...)
+
+	r.DeleteHeader("Content-Length")
+
+	r.SetHeader("X-Content-Type-Options", "nosniff")
+	r.WriteJSON(api.Error{Message: msg, Code: messageCode.GetCode(), Trace: requestId}, messageCode.GetCode())
+
+	logging.LogRequestFailed(r.ctx, messageCode.GetCode(), msg)
+}
+
+func (r RespWrapper) ErrorWithError(err error, requestId string) {
+	if e, ok := err.(abstractions.ServiceError); ok {
+		r.ErrorWithMessageCode(requestId, e.MessageCode(), e.MessageParams()...)
+		return
+	}
+	r.ErrorWithMessageCode(requestId, messages.UnknownError, err.Error())
 }

@@ -360,7 +360,7 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 
 func (tc *scenarioConfig) theResponseStatusShouldBe(status int) error {
 	if tc.response.StatusCode != status {
-		return fmt.Errorf("expected status %d, got %d", status, tc.response.StatusCode)
+		return fmt.Errorf("expected status %d, got %d with response %s", status, tc.response.StatusCode, string(tc.body))
 	}
 	return nil
 }
