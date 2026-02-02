@@ -1392,7 +1392,7 @@
             "$ref": "#/components/schemas/EvaluationRequest"
           }
         ],
-        "additionalProperties": false,
+        "unevaluatedProperties": false,
         "title": "EvaluationResponse",
         "description": "Response payload for evaluation requests."
       },
@@ -1406,8 +1406,7 @@
             "$ref": "#/components/schemas/ResultsPayload"
           }
         },
-        "additionalProperties": false,
-        "title": "EvaluationResponse",
+        "title": "EvaluationResponseResults",
         "description": "Response payload for evaluation requests."
       },
       "EvaluationResource": {
@@ -1829,7 +1828,6 @@
             "description": "Custom fields for additional request data"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
           "model",

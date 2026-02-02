@@ -908,7 +908,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/EvaluationResponseResults'
         - $ref: '#/components/schemas/EvaluationRequest'
-      additionalProperties: false
+      unevaluatedProperties: false
       title: EvaluationResponse
       description: Response payload for evaluation requests.
     EvaluationResponseResults:
@@ -918,8 +918,7 @@ components:
           $ref: '#/components/schemas/EvaluationResource'
         results:
           $ref: '#/components/schemas/ResultsPayload'
-      additionalProperties: false
-      title: EvaluationResponse
+      title: EvaluationResponseResults
       description: Response payload for evaluation requests.
     EvaluationResource:
       allOf:
@@ -1231,7 +1230,6 @@ components:
           type: object
           title: Custom
           description: Custom fields for additional request data
-      additionalProperties: false
       type: object
       required:
         - model
