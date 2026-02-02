@@ -981,7 +981,7 @@ components:
         results:
           $ref: '#/components/schemas/ResultsPayload'
       additionalProperties: false
-      title: EvaluationResponse
+      title: EvaluationResponseResults
       description: Response payload for evaluation requests.
     EvaluationResource:
       allOf:
