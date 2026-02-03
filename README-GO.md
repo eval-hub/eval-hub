@@ -86,7 +86,6 @@ PORT=3000 go run cmd/eval_hub/main.go
 
 
 #### Metrics
-- `GET /api/v1/metrics/system` - Get System Metrics
 - `GET /metrics` - Prometheus metrics endpoint
 
 #### Documentation
