@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"strings"
@@ -156,9 +157,11 @@ func TestRunEvaluationJobReturnsErrorForInvalidConfig(t *testing.T) {
 
 	var storageNil = (*abstractions.Storage)(nil)
 	err := runtime.RunEvaluationJob(evaluation, storageNil)
+
 	if err == nil {
 		t.Fatalf("expected error but got nil")
 	}
+	fmt.Println("!!! error", err.Error())
 	if !strings.Contains(err.Error(), "runtime adapter image is required") {
 		t.Fatalf("expected runtime adapter image error, got %v", err)
 	}

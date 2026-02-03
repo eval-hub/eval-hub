@@ -222,7 +222,7 @@ func (tc *scenarioConfig) checkHealthEndpoint() error {
 		return fmt.Errorf("expected status 200, got %d", tc.response.StatusCode)
 	}
 
-	match := "\"status\":\"healthy\""
+	match := "\"status\":\"running\""
 	if !strings.Contains(string(tc.body), match) {
 		return fmt.Errorf("expected body to contain %s, got %s", match, string(tc.body))
 	}

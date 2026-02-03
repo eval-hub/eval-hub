@@ -181,18 +181,6 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 
 	})
 
-	router.HandleFunc("/api/v1/status", func(w http.ResponseWriter, r *http.Request) {
-		ctx := s.newExecutionContext(r)
-		resp := NewRespWrapper(w, ctx)
-		req := NewRequestWrapper(r)
-		switch r.Method {
-		case http.MethodGet:
-			h.HandleStatus(ctx, req, resp)
-		default:
-			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
-		}
-	})
-
 	// Evaluation jobs endpoints
 	router.HandleFunc("/api/v1/evaluations/jobs", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)

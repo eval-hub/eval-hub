@@ -13,7 +13,7 @@ import (
 func TestHandleHealth(t *testing.T) {
 	h := handlers.New(nil, nil, nil, nil, nil, nil)
 
-	t.Run("GET request returns healthy status", func(t *testing.T) {
+	t.Run("GET request returns running status", func(t *testing.T) {
 		r := createMockRequest("GET", "/health")
 		w := httptest.NewRecorder()
 		ctx := createExecutionContext()
@@ -33,8 +33,8 @@ func TestHandleHealth(t *testing.T) {
 			t.Fatalf("Failed to unmarshal response: %v", err)
 		}
 
-		if response["status"] != "healthy" {
-			t.Errorf("Expected status 'healthy', got %v", response["status"])
+		if response["status"] != "running" {
+			t.Errorf("Expected status 'running', got %v", response["status"])
 		}
 
 		if _, ok := response["timestamp"]; !ok {

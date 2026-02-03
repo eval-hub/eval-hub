@@ -68,12 +68,12 @@ curl -X GET "{{baseUrl}}/health"
 
 ```json
 {
-  "status": "healthy",
+  "status": "running",
   "version": "0.1.0",
   "timestamp": "2025-01-15T10:30:00Z",
   "components": {
     "mlflow": {
-      "status": "healthy",
+      "status": "running",
       "tracking_uri": "http://mlflow:5000"
     }
   },
@@ -961,7 +961,7 @@ curl -X GET "{{baseUrl}}/metrics/system"
   },
   "providers": {
     "lm_evaluation_harness": {
-      "status": "healthy",
+      "status": "running",
       "evaluations_24h": 35,
       "success_rate_24h": 0.9714,
       "avg_duration_seconds": 412.3,
@@ -974,7 +974,7 @@ curl -X GET "{{baseUrl}}/metrics/system"
       }
     },
     "ragas": {
-      "status": "healthy",
+      "status": "running",
       "evaluations_24h": 8,
       "success_rate_24h": 1.0000,
       "avg_duration_seconds": 298.7,
@@ -986,7 +986,7 @@ curl -X GET "{{baseUrl}}/metrics/system"
       }
     },
     "garak": {
-      "status": "healthy",
+      "status": "running",
       "evaluations_24h": 2,
       "success_rate_24h": 1.0000,
       "avg_duration_seconds": 187.4,
@@ -1002,13 +1002,13 @@ curl -X GET "{{baseUrl}}/metrics/system"
     "active": 12,
     "model_servers": {
       "vllm": {
-        "status": "healthy",
+        "status": "running",
         "models_served": 8,
         "requests_24h": 1247,
         "avg_response_time_ms": 342.5
       },
       "ollama": {
-        "status": "healthy",
+        "status": "running",
         "models_served": 4,
         "requests_24h": 847,
         "avg_response_time_ms": 567.2
@@ -1029,11 +1029,11 @@ curl -X GET "{{baseUrl}}/metrics/system"
     "avg_api_response_time_ms": 156.3
   },
   "health_checks": {
-    "database": "healthy",
-    "mlflow": "healthy",
-    "s3_storage": "healthy",
-    "redis_cache": "healthy",
-    "model_servers": "healthy"
+    "database": "running",
+    "mlflow": "running",
+    "s3_storage": "running",
+    "redis_cache": "running",
+    "model_servers": "running"
   }
 }
 ```

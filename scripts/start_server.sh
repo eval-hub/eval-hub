@@ -40,7 +40,7 @@ while [[ "${waiting}" == "true" ]];do
   echo "Trying heartbeat (curl ${CURL_OPTS} ${SERVER_URL}) ..."
   # this is not configurable
   response=$(curl ${CURL_OPTS} ${SERVER_URL})
-  if [[ "${response}" == *'"status":"healthy"'* ]]; then
+  if [[ "${response}" == *'"status":"running"'* ]]; then
     waiting=false
     echo "${response}"
   else

@@ -8,8 +8,15 @@ import (
 )
 
 func (h *Handlers) HandleHealth(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+
+	version := "unknown"
+	if h.serviceConfig != nil {
+		version = h.serviceConfig.Service.Version
+	}
+
 	w.WriteJSON(map[string]interface{}{
-		"status":    "healthy",
+		"status":    "running",
+		"version":   version,
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	}, 200)
 }

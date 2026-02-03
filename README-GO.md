@@ -84,8 +84,6 @@ PORT=3000 go run cmd/eval_hub/main.go
 #### Health
 - `GET /api/v1/health` - Health check endpoint
 
-#### Status
-- `GET /api/v1/status` - Service status endpoint
 
 #### Metrics
 - `GET /api/v1/metrics/system` - Get System Metrics
