@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jeffail/gabs/v2"
 	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/logging"
@@ -28,6 +29,10 @@ import (
 	"github.com/xeipuuv/gojsonschema"
 
 	"github.com/cucumber/godog"
+)
+
+const (
+	valuePrefix = "value:"
 )
 
 var (
@@ -58,6 +63,8 @@ type scenarioConfig struct {
 	lastId  string
 
 	assets map[string][]string
+
+	values map[string]string
 }
 
 func getLogger() *log.Logger {
@@ -321,22 +328,66 @@ func getAssetName(path string) (string, error) {
 	return "", fmt.Errorf("no first path segment found in path %s", path)
 }
 
-func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) error {
+func (tc *scenarioConfig) getId(id string) (string, error) {
+	if strings.HasPrefix(id, valuePrefix) {
+		n := strings.TrimPrefix(id, valuePrefix)
+		v := tc.values[n]
+		if v == "" {
+			return "", fmt.Errorf("failed to find value %s", n)
+		}
+		return v, nil
+	}
+	return id, nil
+}
+
+func (tc *scenarioConfig) getEndpoint(path string) (string, error) {
+	check := true
+	for check {
+		if strings.Contains(path, fmt.Sprintf("{{%s", valuePrefix)) {
+			re := regexp.MustCompile(`\{\{([^}]*)\}\}`)
+			match := re.FindStringSubmatch(path)
+			if len(match) > 1 {
+				v, err := tc.getId(match[1])
+				if err != nil {
+					return "", fmt.Errorf("failed to substitute value: %s", err.Error())
+				}
+				path = strings.ReplaceAll(path, fmt.Sprintf("{{%s}}", match[1]), v)
+			} else {
+				// no more matches found
+				check = false
+			}
+		} else {
+			check = false
+		}
+	}
+
 	if strings.Contains(path, "{id}") {
 		if tc.lastId == "" {
-			return fmt.Errorf("last ID is not set")
+			return "", fmt.Errorf("last ID is not set")
 		}
 		path = strings.Replace(path, "{id}", tc.lastId, 1)
 	}
 
-	url := fmt.Sprintf("%s%s", tc.apiFeature.baseURL.String(), path)
-	tc.lastURL = url
+	endpoint := path
+	if !strings.HasPrefix(endpoint, tc.apiFeature.baseURL.String()) {
+		endpoint = fmt.Sprintf("%s%s", tc.apiFeature.baseURL.String(), path)
+	}
+
+	return endpoint, nil
+}
+
+func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) error {
+	endpoint, err := tc.getEndpoint(path)
+	if err != nil {
+		return err
+	}
+	tc.lastURL = endpoint
 	entity, err := tc.getRequestBody(body)
 	if err != nil {
 		return err
 	}
-	logDebug("Sending %s request to %s\n", method, url)
-	req, err := http.NewRequest(method, url, entity)
+	logDebug("Sending %s request to %s\n", method, endpoint)
+	req, err := http.NewRequest(method, endpoint, entity)
 	if err != nil {
 		logDebug("Failed to create request: %v\n", err)
 		return err
@@ -354,7 +405,7 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 	}
 	defer tc.response.Body.Close()
 
-	logDebug("Response status %d for %s\n", tc.response.StatusCode, url)
+	logDebug("Response status %d for %s\n", tc.response.StatusCode, endpoint)
 
 	if method == http.MethodPost {
 		assetName, err := getAssetName(path)
@@ -512,6 +563,32 @@ func (tc *scenarioConfig) theResponseShouldHaveSchemaAs(body *godog.DocString) e
 	return compareJSONSchema(body.Content, string(tc.body))
 }
 
+func getJsonPointer(path string) string {
+	if !strings.HasPrefix(path, "/") {
+		return strings.ReplaceAll(fmt.Sprintf("/%s", path), ".", "/")
+	}
+	return strings.ReplaceAll(path, ".", "/")
+}
+
+func (tc *scenarioConfig) theFieldShouldBeSaved(path string, name string) error {
+	jsonParsed, _ := gabs.ParseJSON(tc.body)
+	// This directly uses a JSON pointer path
+	pathObj, err := jsonParsed.JSONPointer(getJsonPointer(path))
+	if err != nil {
+		return fmt.Errorf("path %v does not exist in \n%s", path, string(tc.body))
+	}
+	finalResult, ok := pathObj.Data().(string)
+	if !ok {
+		return fmt.Errorf("expected %s to be a string but got %T", path, pathObj.Data())
+	}
+	if strings.HasPrefix(name, valuePrefix) {
+		tc.values[strings.TrimPrefix(name, valuePrefix)] = finalResult
+	} else {
+		return fmt.Errorf("unexpected value %s, should start with '%s'", name, valuePrefix)
+	}
+	return nil
+}
+
 func (tc *scenarioConfig) saveScenarioName(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
 	tc.scenarioName = sc.Name
 	return ctx, nil
@@ -545,7 +622,7 @@ func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, 
 func createScenarioConfig(apiConfig *apiFeature) *scenarioConfig {
 	conf := new(scenarioConfig)
 	conf.assets = make(map[string][]string)
-
+	conf.values = make(map[string]string)
 	conf.apiFeature = apiConfig
 
 	return conf
@@ -637,4 +714,5 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the metrics should show request count for "([^"]*)"$`, tc.theMetricsShouldShowRequestCountFor)
 	// Responses
 	ctx.Step(`^the response should have schema as:$`, tc.theResponseShouldHaveSchemaAs)
+	ctx.Step(`^the "([^"]*)" field in the response should be saved as "([^"]*)"$`, tc.theFieldShouldBeSaved)
 }

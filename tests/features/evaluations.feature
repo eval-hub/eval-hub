@@ -25,6 +25,7 @@ Feature: Evaluations Endpoint
     Then the response code should be 202
     When I send a GET request to "/api/v1/evaluations/jobs?limit=2"
     Then the response code should be 200
+    And the "next.href" field in the response should be saved as "value:next_url"
     And the response should have schema as:
     """
       {
@@ -52,7 +53,7 @@ Feature: Evaluations Endpoint
         "required": ["limit", "first", "next", "total_count", "items"]
       }
     """
-    When I send a GET request to "/api/v1/evaluations/jobs?limit=2&offset=2"
+    When I send a GET request to "{{value:next_url}}"
     Then the response code should be 200
     And the response should have schema as:
     """
