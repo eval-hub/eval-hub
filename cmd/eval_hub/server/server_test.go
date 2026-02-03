@@ -78,7 +78,6 @@ func TestServerSetupRoutes(t *testing.T) {
 		body   string
 	}{
 		{http.MethodGet, "/api/v1/health", http.StatusOK, ""},
-		{http.MethodGet, "/api/v1/status", http.StatusOK, ""},
 		{http.MethodGet, "/metrics", http.StatusOK, ""},
 		{http.MethodGet, "/openapi.yaml", http.StatusOK, ""},
 		{http.MethodGet, "/docs", http.StatusOK, ""},
@@ -99,8 +98,6 @@ func TestServerSetupRoutes(t *testing.T) {
 		// Providers
 		{http.MethodGet, "/api/v1/evaluations/providers", http.StatusOK, ""},
 		{http.MethodGet, "/api/v1/evaluations/providers/garak", http.StatusOK, ""},
-		// System metrics
-		{http.MethodGet, "/api/v1/metrics/system", http.StatusNotImplemented, ""},
 		// Error cases
 		{http.MethodPost, "/api/v1/health", http.StatusMethodNotAllowed, ""},
 		{http.MethodGet, "/nonexistent", http.StatusNotFound, ""},
