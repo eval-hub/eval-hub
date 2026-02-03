@@ -14,17 +14,12 @@ import (
 	// import the sqlite driver - "sqlite"
 	_ "modernc.org/sqlite"
 
+	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/http_wrappers"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
-)
-
-const (
-	MESSAGE_CODE_EVALUATION_JOB_CREATED   = "evaluation_job_created"
-	MESSAGE_CODE_EVALUATION_JOB_RETRIEVED = "evaluation_job_retrieved"
-	MESSAGE_CODE_EVALUATION_JOB_CANCELLED = "evaluation_job_cancelled"
 )
 
 //#######################################################################
@@ -70,7 +65,7 @@ func (s *SQLStorage) CreateEvaluationJob(executionContext *executioncontext.Exec
 				State: api.StatePending,
 				Message: &api.MessageInfo{
 					Message:     "Evaluation job created",
-					MessageCode: MESSAGE_CODE_EVALUATION_JOB_CREATED,
+					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CREATED,
 				},
 			},
 			Benchmarks: nil,
@@ -132,7 +127,7 @@ func (s *SQLStorage) GetEvaluationJob(ctx *executioncontext.ExecutionContext, id
 				State: status,
 				Message: &api.MessageInfo{
 					Message:     "Evaluation job retrieved",
-					MessageCode: MESSAGE_CODE_EVALUATION_JOB_RETRIEVED,
+					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_RETRIEVED,
 				},
 			},
 			Benchmarks: nil, // TODO: retrieve benchmarks status from database
@@ -218,7 +213,7 @@ func (s *SQLStorage) GetEvaluationJobs(ctx *executioncontext.ExecutionContext, r
 					State: status,
 					Message: &api.MessageInfo{
 						Message:     "Evaluation job retrieved",
-						MessageCode: MESSAGE_CODE_EVALUATION_JOB_RETRIEVED,
+						MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_RETRIEVED,
 					},
 				},
 				Benchmarks: nil, // TODO: retrieve benchmarks status from database
@@ -270,7 +265,7 @@ func (s *SQLStorage) DeleteEvaluationJob(ctx *executioncontext.ExecutionContext,
 				State: api.StateCancelled,
 				Message: &api.MessageInfo{
 					Message:     "Evaluation job cancelled",
-					MessageCode: MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
+					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
 				},
 			},
 		})

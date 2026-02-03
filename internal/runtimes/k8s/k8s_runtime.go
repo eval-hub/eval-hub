@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
+	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -120,8 +121,11 @@ func (r *K8sRuntime) persistJobFailure(storage *abstractions.Storage, evaluation
 	}
 	status := &api.EvaluationJobStatus{
 		EvaluationJobState: api.EvaluationJobState{
-			State:   api.StateFailed,
-			Message: runErr.Error(),
+			State: api.StateFailed,
+			Message: &api.MessageInfo{
+				Message:     runErr.Error(),
+				MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED,
+			},
 		},
 	}
 	ctx := &executioncontext.ExecutionContext{
