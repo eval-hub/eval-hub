@@ -21,13 +21,14 @@ const (
 	jobPrefix                       = "eval-job-"
 	specSuffix                      = "-spec"
 	envJobIDName                    = "JOB_ID"
-	envServiceURLName               = "EVALHUB_SERVICE_URL"
 	defaultAllowPrivilegeEscalation = false
+	defaultRunAsUser                = int64(1000)
+	defaultRunAsGroup               = int64(1000)
 	labelAppKey                     = "app"
 	labelComponentKey               = "component"
-	labelJobIDKey                   = "job-id"
-	labelProviderIDKey              = "provider-id"
-	labelBenchmarkIDKey             = "benchmark-id"
+	labelJobIDKey                   = "job_id"
+	labelProviderIDKey              = "provider_id"
+	labelBenchmarkIDKey             = "benchmark_id"
 	labelAppValue                   = "evalhub"
 	labelComponentValue             = "evaluation-job"
 	capabilityDropAll               = "ALL"
@@ -35,7 +36,7 @@ const (
 
 func buildConfigMap(cfg *jobConfig) *corev1.ConfigMap {
 	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID)
-	name := configMapName(cfg.jobID)
+	name := configMapName(cfg.jobID, cfg.benchmarkID)
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -53,8 +54,8 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 		return nil, fmt.Errorf("adapter image is required")
 	}
 	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID)
-	jobName := jobName(cfg.jobID)
-	configMap := configMapName(cfg.jobID)
+	jobName := jobName(cfg.jobID, cfg.benchmarkID)
+	configMap := configMapName(cfg.jobID, cfg.benchmarkID)
 
 	ttl := defaultJobTTLSeconds
 	backoff := int32(cfg.retryAttempts)
@@ -85,6 +86,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 							Name:            adapterContainerName,
 							Image:           cfg.adapterImage,
 							ImagePullPolicy: corev1.PullIfNotPresent,
+							Command:         containerCommand(cfg.entrypoint),
 							Env:             envVars,
 							Resources:       resources,
 							SecurityContext: defaultSecurityContext(),
@@ -124,18 +126,35 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	}, nil
 }
 
+func containerCommand(entrypoint string) []string {
+	if entrypoint == "" {
+		return nil
+	}
+	return []string{entrypoint}
+}
+
 func defaultSecurityContext() *corev1.SecurityContext {
 	return &corev1.SecurityContext{
 		AllowPrivilegeEscalation: boolPtr(defaultAllowPrivilegeEscalation),
+		RunAsNonRoot:             boolPtr(true),
+		RunAsUser:                int64Ptr(defaultRunAsUser),
+		RunAsGroup:               int64Ptr(defaultRunAsGroup),
 		Capabilities: &corev1.Capabilities{
 			Drop: []corev1.Capability{
 				capabilityDropAll,
 			},
 		},
+		SeccompProfile: &corev1.SeccompProfile{
+			Type: corev1.SeccompProfileTypeRuntimeDefault,
+		},
 	}
 }
 
 func boolPtr(value bool) *bool {
+	return &value
+}
+
+func int64Ptr(value int64) *int64 {
 	return &value
 }
 
@@ -147,11 +166,6 @@ func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 		Value: cfg.jobID,
 	})
 	seen[envJobIDName] = true
-	env = append(env, corev1.EnvVar{
-		Name:  envServiceURLName,
-		Value: cfg.evalHubServiceURL,
-	})
-	seen[envServiceURLName] = true
 	for _, item := range cfg.defaultEnv {
 		if item.Name == "" || seen[item.Name] {
 			continue
@@ -207,12 +221,12 @@ func buildResources(cfg *jobConfig) (corev1.ResourceRequirements, error) {
 	return resources, nil
 }
 
-func jobName(jobID string) string {
-	return jobPrefix + jobID
+func jobName(jobID, benchmarkID string) string {
+	return jobPrefix + jobID + "-" + benchmarkID
 }
 
-func configMapName(jobID string) string {
-	return jobPrefix + jobID + specSuffix
+func configMapName(jobID, benchmarkID string) string {
+	return jobPrefix + jobID + "-" + benchmarkID + specSuffix
 }
 
 func jobLabels(jobID, providerID, benchmarkID string) map[string]string {

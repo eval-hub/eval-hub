@@ -29,7 +29,6 @@ import (
 // Parameters:
 //   - r: The HTTP request to extract context from
 //   - logger: The base logger to enhance with request fields
-//   - serviceConfig: The service configuration to include in the context
 //
 // Returns:
 //   - *ExecutionContext: A new execution context ready for use in handlers
@@ -41,10 +40,7 @@ func (s *Server) newExecutionContext(r *http.Request) *executioncontext.Executio
 		context.Background(),
 		requestID,
 		enhancedLogger,
-		3,
-		nil,
-		s.providerConfigs,
-	)
+		3)
 }
 
 // Abstract request objects to not depende on the underlying http framework.

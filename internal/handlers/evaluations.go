@@ -94,6 +94,13 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
+	if h.runtime != nil {
+		job := response
+		go func() {
+			_ = h.runtime.RunEvaluationJob(job, &h.storage)
+		}()
+	}
+
 	w.WriteJSON(response, 202)
 }
 

@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: eval-job-001
+  name: eval-job-001-mmlu
   namespace: evalhub
   labels:
     app: "evalhub"
@@ -26,6 +26,8 @@ spec:
         - name: adapter
           image: quay.io/eval-hub/adapter:latest
           imagePullPolicy: IfNotPresent
+          command:
+            - /path/to/program
           env:
             - name: JOB_ID
               value: "001"
@@ -56,6 +58,6 @@ spec:
       volumes:
         - name: job-spec
           configMap:
-            name: eval-job-001-spec
+            name: eval-job-001-mmlu-spec
         - name: data
           emptyDir: {}
