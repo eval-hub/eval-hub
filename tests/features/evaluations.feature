@@ -43,13 +43,13 @@ Feature: Evaluations Endpoint
               "minimum": 3,
               "maximum": 3
             },
-            "resources": {
+            "items": {
               "type": "array",
               "minItems": 2,
               "maxItems": 2
             }
         },
-        "required": ["limit", "first", "next", "total_count"]
+        "required": ["limit", "first", "next", "total_count", "items"]
       }
     """
     When I send a GET request to "/api/v1/evaluations/jobs?limit=2&offset=2"
@@ -72,12 +72,12 @@ Feature: Evaluations Endpoint
               "minimum": 3,
               "maximum": 3
             },
-            "resources": {
+            "items": {
               "type": "array",
               "minItems": 1,
               "maxItems": 1
             }
         },
-        "required": ["limit", "first", "total_count"]
+        "required": ["limit", "first", "total_count", "items"]
       }
     """
