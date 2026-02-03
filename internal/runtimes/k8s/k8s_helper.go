@@ -91,6 +91,20 @@ func (h *KubernetesHelper) DeleteConfigMap(ctx context.Context, namespace, name 
 	return h.clientset.CoreV1().ConfigMaps(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
+// SetConfigMapOwner sets a single owner reference on the ConfigMap.
+func (h *KubernetesHelper) SetConfigMapOwner(ctx context.Context, namespace, name string, owner metav1.OwnerReference) error {
+	if namespace == "" || name == "" {
+		return fmt.Errorf("namespace and name are required")
+	}
+	cm, err := h.clientset.CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	cm.OwnerReferences = []metav1.OwnerReference{owner}
+	_, err = h.clientset.CoreV1().ConfigMaps(namespace).Update(ctx, cm, metav1.UpdateOptions{})
+	return err
+}
+
 // CreateConfigMapOptions holds optional metadata for CreateConfigMap.
 type CreateConfigMapOptions struct {
 	Labels      map[string]string

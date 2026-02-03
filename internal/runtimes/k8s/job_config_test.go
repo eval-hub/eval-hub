@@ -220,3 +220,63 @@ func TestBuildJobConfigMissingBenchmarkConfig(t *testing.T) {
 		t.Fatalf("expected error for missing benchmark_config")
 	}
 }
+
+func TestNumExamplesFromParametersTypes(t *testing.T) {
+	tests := []struct {
+		name       string
+		parameters map[string]any
+		want       *int
+	}{
+		{"nil map", nil, nil},
+		{"missing", map[string]any{"other": 1}, nil},
+		{"int", map[string]any{"num_examples": 3}, intPtr(3)},
+		{"int32", map[string]any{"num_examples": int32(4)}, intPtr(4)},
+		{"int64", map[string]any{"num_examples": int64(5)}, intPtr(5)},
+		{"float64", map[string]any{"num_examples": float64(6)}, intPtr(6)},
+		{"invalid", map[string]any{"num_examples": "bad"}, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := numExamplesFromParameters(tt.parameters)
+			if tt.want == nil && got != nil {
+				t.Fatalf("expected nil, got %v", *got)
+			}
+			if tt.want != nil && (got == nil || *got != *tt.want) {
+				if got == nil {
+					t.Fatalf("expected %d, got nil", *tt.want)
+				}
+				t.Fatalf("expected %d, got %d", *tt.want, *got)
+			}
+		})
+	}
+}
+
+func TestCopyParamsCreatesCopy(t *testing.T) {
+	original := map[string]any{"num_examples": 1, "temp": 0.2}
+	copied := copyParams(original)
+	if len(copied) != len(original) {
+		t.Fatalf("expected copy size %d, got %d", len(original), len(copied))
+	}
+	copied["temp"] = 0.3
+	if original["temp"] == copied["temp"] {
+		t.Fatalf("expected copy to be independent of original")
+	}
+}
+
+func TestTimeoutSecondsFromMinutes(t *testing.T) {
+	if timeoutSecondsFromMinutes(nil) != nil {
+		t.Fatalf("expected nil for nil minutes")
+	}
+	minutes := 2
+	seconds := timeoutSecondsFromMinutes(&minutes)
+	if seconds == nil || *seconds != 120 {
+		if seconds == nil {
+			t.Fatalf("expected 120, got nil")
+		}
+		t.Fatalf("expected 120, got %d", *seconds)
+	}
+}
+
+func intPtr(value int) *int {
+	return &value
+}

@@ -3,6 +3,8 @@ package k8s
 // Contains the builder functions that construct Kubernetes objects
 import (
 	"fmt"
+	"regexp"
+	"strings"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -11,6 +13,7 @@ import (
 )
 
 const (
+	maxK8sNameLength                = 63
 	defaultJobTTLSeconds            = int32(3600)
 	adapterContainerName            = "adapter"
 	jobSpecVolumeName               = "job-spec"
@@ -33,6 +36,34 @@ const (
 	labelComponentValue             = "evaluation-job"
 	capabilityDropAll               = "ALL"
 )
+
+var dnsLabelSanitizer = regexp.MustCompile(`[^a-z0-9-]+`)
+
+func sanitizeDNS1123Label(value string) string {
+	safe := strings.ToLower(value)
+	safe = dnsLabelSanitizer.ReplaceAllString(safe, "-")
+	safe = strings.Trim(safe, "-")
+	if safe == "" {
+		return "x"
+	}
+	return safe
+}
+
+func buildK8sName(jobID, benchmarkID, suffix string) string {
+	base := jobPrefix + sanitizeDNS1123Label(jobID) + "-" + sanitizeDNS1123Label(benchmarkID)
+	maxBase := maxK8sNameLength - len(suffix)
+	if maxBase < 1 {
+		maxBase = 1
+	}
+	if len(base) > maxBase {
+		base = strings.Trim(base[:maxBase], "-")
+	}
+	name := base + suffix
+	if len(name) > maxK8sNameLength {
+		name = strings.Trim(name[:maxK8sNameLength], "-")
+	}
+	return name
+}
 
 func buildConfigMap(cfg *jobConfig) *corev1.ConfigMap {
 	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID)
@@ -222,11 +253,11 @@ func buildResources(cfg *jobConfig) (corev1.ResourceRequirements, error) {
 }
 
 func jobName(jobID, benchmarkID string) string {
-	return jobPrefix + jobID + "-" + benchmarkID
+	return buildK8sName(jobID, benchmarkID, "")
 }
 
 func configMapName(jobID, benchmarkID string) string {
-	return jobPrefix + jobID + "-" + benchmarkID + specSuffix
+	return buildK8sName(jobID, benchmarkID, specSuffix)
 }
 
 func jobLabels(jobID, providerID, benchmarkID string) map[string]string {

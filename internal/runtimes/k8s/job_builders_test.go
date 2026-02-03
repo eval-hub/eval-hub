@@ -16,12 +16,19 @@ func TestBuildConfigMap(t *testing.T) {
 	}
 
 	configMap := buildConfigMap(cfg)
-	expectedName := jobPrefix + cfg.jobID + "-" + cfg.benchmarkID + specSuffix
+	expectedName := configMapName(cfg.jobID, cfg.benchmarkID)
 	if configMap.Name != expectedName {
 		t.Fatalf("expected configmap name %s, got %s", expectedName, configMap.Name)
 	}
 	if configMap.Data[jobSpecFileName] != "{}" {
 		t.Fatalf("expected job spec data to be set")
+	}
+}
+
+func TestBuildK8sNameSanitizes(t *testing.T) {
+	name := buildK8sName("Job-123", "AraDiCE_boolq_lev", "")
+	if name != "eval-job-job-123-aradice-boolq-lev" {
+		t.Fatalf("expected sanitized name %q, got %q", "eval-job-job-123-aradice-boolq-lev", name)
 	}
 }
 

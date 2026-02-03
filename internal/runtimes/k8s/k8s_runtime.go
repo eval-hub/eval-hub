@@ -14,6 +14,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type K8sRuntime struct {
@@ -101,7 +102,7 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context, evaluation *a
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
 	}
 
-	_, err = r.helper.CreateJob(ctx, job)
+	createdJob, err := r.helper.CreateJob(ctx, job)
 	if err != nil {
 		r.logger.Error("kubernetes job create error", "namespace", job.Namespace, "name", job.Name, "error", err)
 		cleanupErr := r.helper.DeleteConfigMap(ctx, configMap.Namespace, configMap.Name)
@@ -111,6 +112,16 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context, evaluation *a
 			}
 		}
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
+	}
+	ownerRef := metav1.OwnerReference{
+		APIVersion: "batch/v1",
+		Kind:       "Job",
+		Name:       createdJob.Name,
+		UID:        createdJob.UID,
+		Controller: boolPtr(true),
+	}
+	if err := r.helper.SetConfigMapOwner(ctx, configMap.Namespace, configMap.Name, ownerRef); err != nil {
+		r.logger.Error("failed to set configmap owner reference", "namespace", configMap.Namespace, "name", configMap.Name, "error", err)
 	}
 	return nil
 }
