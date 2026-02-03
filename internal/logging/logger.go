@@ -54,5 +54,9 @@ func LogRequestFailed(ctx *executioncontext.ExecutionContext, code int, errorMes
 
 func LogRequestSuccess(ctx *executioncontext.ExecutionContext, code int, response any) {
 	// log the successful request, the request details and requestId have already been added to the logger
-	ctx.Logger.Info("Request successful", "response", response)
+	if response != nil {
+		ctx.Logger.Info("Request successful", "response", response)
+	} else {
+		ctx.Logger.Info("Request successful")
+	}
 }

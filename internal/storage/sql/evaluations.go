@@ -60,14 +60,12 @@ func (s *SQLStorage) CreateEvaluationJob(executionContext *executioncontext.Exec
 			MLFlowExperimentID: nil,
 		},
 		EvaluationJobConfig: *evaluation,
-		Status: api.EvaluationJobStatus{
-			StatusEvent: &api.StatusEvent{
-				EvaluationJobState: api.EvaluationJobState{
-					State: api.StatePending,
-					Message: &api.MessageInfo{
-						Message:     "Evaluation job created",
-						MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CREATED,
-					},
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{
+				State: api.StatePending,
+				Message: &api.MessageInfo{
+					Message:     "Evaluation job created",
+					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CREATED,
 				},
 			},
 		},
@@ -123,17 +121,15 @@ func (s *SQLStorage) GetEvaluationJob(ctx *executioncontext.ExecutionContext, id
 			MLFlowExperimentID: nil,
 		},
 		EvaluationJobConfig: evaluationConfig,
-		Status: api.EvaluationJobStatus{
-			StatusEvent: &api.StatusEvent{
-				EvaluationJobState: api.EvaluationJobState{
-					State: status,
-					Message: &api.MessageInfo{
-						Message:     "Evaluation job retrieved",
-						MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_RETRIEVED,
-					},
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{
+				State: status,
+				Message: &api.MessageInfo{
+					Message:     "Evaluation job retrieved",
+					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_RETRIEVED,
 				},
-				Benchmarks: nil, // TODO: retrieve benchmarks status from database
 			},
+			Benchmarks: nil, // TODO: retrieve benchmarks status from database
 		},
 		Results: nil, // TODO: retrieve results from database if needed
 	}
@@ -211,17 +207,15 @@ func (s *SQLStorage) GetEvaluationJobs(ctx *executioncontext.ExecutionContext, r
 				MLFlowExperimentID: nil,
 			},
 			EvaluationJobConfig: evaluationConfig,
-			Status: api.EvaluationJobStatus{
-				StatusEvent: &api.StatusEvent{
-					EvaluationJobState: api.EvaluationJobState{
-						State: status,
-						Message: &api.MessageInfo{
-							Message:     "Evaluation job retrieved",
-							MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_RETRIEVED,
-						},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{
+					State: status,
+					Message: &api.MessageInfo{
+						Message:     "Evaluation job retrieved",
+						MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_RETRIEVED,
 					},
-					Benchmarks: nil,
-				}, // TODO: retrieve benchmarks status from database
+				},
+				Benchmarks: nil,
 			},
 		}
 
@@ -265,8 +259,8 @@ func (s *SQLStorage) GetEvaluationJobs(ctx *executioncontext.ExecutionContext, r
 
 func (s *SQLStorage) DeleteEvaluationJob(ctx *executioncontext.ExecutionContext, id string, hardDelete bool) error {
 	if !hardDelete {
-		return s.UpdateEvaluationJobStatus(ctx, id, &api.EvaluationJobStatus{
-			StatusEvent: &api.StatusEvent{
+		statusEvent := &api.StatusEvent{
+			StatusEvent: &api.EvaluationJobStatus{
 				EvaluationJobState: api.EvaluationJobState{
 					State: api.StateCancelled,
 					Message: &api.MessageInfo{
@@ -275,7 +269,8 @@ func (s *SQLStorage) DeleteEvaluationJob(ctx *executioncontext.ExecutionContext,
 					},
 				},
 			},
-		})
+		}
+		return s.UpdateEvaluationJobStatus(ctx, id, statusEvent)
 	}
 
 	// Build the DELETE query
@@ -308,7 +303,7 @@ func (s *SQLStorage) DeleteEvaluationJob(ctx *executioncontext.ExecutionContext,
 	return nil
 }
 
-func (s *SQLStorage) UpdateEvaluationJobStatus(ctx *executioncontext.ExecutionContext, id string, status *api.EvaluationJobStatus) error {
+func (s *SQLStorage) UpdateEvaluationJobStatus(ctx *executioncontext.ExecutionContext, id string, status *api.StatusEvent) error {
 	// Build the UPDATE query
 	updateQuery, err := createUpdateStatusStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS)
 	if err != nil {

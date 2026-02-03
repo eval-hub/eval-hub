@@ -19,7 +19,7 @@ type Storage interface {
 	GetEvaluationJob(ctx *executioncontext.ExecutionContext, id string) (*api.EvaluationJobResource, error)
 	GetEvaluationJobs(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, limit int, offset int, statusFilter string) (*api.EvaluationJobResourceList, error)
 	DeleteEvaluationJob(ctx *executioncontext.ExecutionContext, id string, hardDelete bool) error
-	UpdateEvaluationJobStatus(ctx *executioncontext.ExecutionContext, id string, state *api.EvaluationJobStatus) error
+	UpdateEvaluationJobStatus(ctx *executioncontext.ExecutionContext, id string, state *api.StatusEvent) error
 
 	// Collection operations
 	CreateCollection(ctx *executioncontext.ExecutionContext, collection *api.CollectionResource) error

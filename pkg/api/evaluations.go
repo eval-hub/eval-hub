@@ -59,14 +59,14 @@ type EvaluationJobState struct {
 	Message *MessageInfo `json:"message" validate:"required"`
 }
 
-type StatusEvent struct {
+// EvaluationStatus represents evaluation status
+type EvaluationJobStatus struct {
 	EvaluationJobState
 	Benchmarks []BenchmarkStatus `json:"benchmarks,omitempty"`
 }
 
-// EvaluationStatus represents evaluation status
-type EvaluationJobStatus struct {
-	StatusEvent *StatusEvent `json:"status_event" validate:"required"` // required for now
+type StatusEvent struct {
+	StatusEvent *EvaluationJobStatus `json:"status_event" validate:"required"`
 }
 
 // EvaluationJobBenchmarkResult represents benchmark result in evaluation job
@@ -109,7 +109,7 @@ type EvaluationResource struct {
 type EvaluationJobResource struct {
 	Resource EvaluationResource `json:"resource"`
 	EvaluationJobConfig
-	Status  EvaluationJobStatus   `json:"status"`
+	Status  *EvaluationJobStatus  `json:"status"`
 	Results *EvaluationJobResults `json:"results,omitempty"`
 }
 

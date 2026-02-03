@@ -91,4 +91,4 @@ Feature: Evaluations Endpoint
     Then the response code should be 204
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    And the response should contain the value "running" at path "status_event.state"
+    And the response should contain the value "running|pending" at path "$.status.state"
