@@ -231,16 +231,16 @@ clean-wheels: ## Clean Python wheel build artifacts
 	@rm -rf python-server/*.egg-info
 	@find python-server/evalhub_server/binaries/ -type f ! -name '.gitkeep' -delete
 
-.PHONY: download-binary
-# GitHub Actions does this step outside of the Makefile with `actions/download-artifact@v4`
-download-binary: clean-wheels ## Download binary from the binary artifact
-	@echo "Downloading binary $(WHEEL_PLATFORM) $(WHEEL_BINARY)"
-	@mkdir -p python-server/evalhub_server/binaries/
-	@find python-server/evalhub_server/binaries/ -type f ! -name '.gitkeep' -delete
-	@cp bin/$(WHEEL_BINARY)* python-server/evalhub_server/binaries/
-
 .PHONY: build-wheel
 build-wheel: ## Build Python wheel: make build-wheel WHEEL_PLATFORM=manylinux_2_17_x86_64 WHEEL_BINARY=eval-hub-linux-amd64
+	@if [ "$${GITHUB_ACTIONS}" != "true" ]; then \
+		echo "Downloading binary $(WHEEL_PLATFORM) $(WHEEL_BINARY)"; \
+		mkdir -p python-server/evalhub_server/binaries/; \
+		find python-server/evalhub_server/binaries/ -type f ! -name '.gitkeep' -delete; \
+		cp bin/$(WHEEL_BINARY)* python-server/evalhub_server/binaries/; \
+	else \
+		echo "Skipping copy (GITHUB_ACTIONS): binary provided by actions/download-artifact"; \
+	fi
 	@echo "Building wheel for $(WHEEL_PLATFORM) with binary $(WHEEL_BINARY)..."
 	@rm -rf python-server/build/
 	WHEEL_PLATFORM=$(WHEEL_PLATFORM) uv build --wheel python-server
