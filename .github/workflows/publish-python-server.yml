@@ -14,23 +14,23 @@ jobs:
           # Linux
           - goos: linux
             goarch: amd64
-            output: eval-hub-linux-amd64
+            output: bin/eval-hub-linux-amd64
           - goos: linux
             goarch: arm64
-            output: eval-hub-linux-arm64
+            output: bin/eval-hub-linux-arm64
 
           # macOS
           - goos: darwin
             goarch: amd64
-            output: eval-hub-darwin-amd64
+            output: bin/eval-hub-darwin-amd64
           - goos: darwin
             goarch: arm64
-            output: eval-hub-darwin-arm64
+            output: bin/eval-hub-darwin-arm64
 
           # Windows
           - goos: windows
             goarch: amd64
-            output: eval-hub-windows-amd64.exe
+            output: bin/eval-hub-windows-amd64.exe
 
     steps:
       - name: Checkout
@@ -83,12 +83,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up uv python
+        uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.12"
 
-      - name: Install build tools
+      - name: Install wheel and setuptools
         run: make install-wheel-tools
 
       - name: Download binary

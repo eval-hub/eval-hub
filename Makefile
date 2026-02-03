@@ -200,32 +200,15 @@ build-all-platforms: ## Build for all supported platforms
 	@$(MAKE) cross-compile CROSS_GOOS=darwin CROSS_GOARCH=arm64
 	@$(MAKE) cross-compile CROSS_GOOS=windows CROSS_GOARCH=amd64
 
-# Python virtual environment - supports both traditional venv and uv
+# Python virtual environment - expects uv venv
 VENV_DIR = .venv
 VENV_PYTHON = $(VENV_DIR)/bin/python
 
-# Detect venv type: traditional venv has bin/pip, uv venv does not
-ifneq (,$(wildcard $(VENV_DIR)/bin/pip))
-    # Traditional venv detected
-    VENV_PIP = $(VENV_DIR)/bin/pip
-    PIP_INSTALL = $(VENV_PIP) install
-    PYTHON_BUILD = $(VENV_PYTHON) -m build
-    HAS_VENV_PIP = yes
-else
-    # uv venv detected (no pip in bin/)
-    PIP_INSTALL = uv pip install
-    PYTHON_BUILD = uv run --no-project python -m build
-    HAS_VENV_PIP = no
-endif
-
 .PHONY: venv
-venv: ## Create Python virtual environment
+venv: ## Create Python virtual environment using uv
 	@if [ ! -d "$(VENV_DIR)" ]; then \
-		echo "Creating virtual environment..."; \
-		python3 -m venv --upgrade-deps $(VENV_DIR) || python3 -m venv $(VENV_DIR); \
-		echo "Ensuring pip is available..."; \
-		$(VENV_PYTHON) -m ensurepip --upgrade || true; \
-		$(VENV_PYTHON) -m pip install --upgrade pip || true; \
+		echo "Creating uv virtual environment..."; \
+		uv venv $(VENV_DIR); \
 		echo "Virtual environment created at $(VENV_DIR)"; \
 	else \
 		echo "Virtual environment already exists at $(VENV_DIR)"; \
@@ -236,14 +219,9 @@ WHEEL_PLATFORM ?= macosx_11_0_arm64
 WHEEL_BINARY ?= eval-hub-darwin-arm64
 
 .PHONY: install-wheel-tools
-install-wheel-tools: venv ## Install Python wheel build tools
-ifeq ($(HAS_VENV_PIP),yes)
-	@echo "Installing wheel build tools in traditional venv..."
-	$(PIP_INSTALL) --upgrade pip build wheel setuptools
-else
-	@echo "Using uv venv - installing build tools via uv..."
-	$(PIP_INSTALL) build wheel setuptools
-endif
+install-wheel-tools: venv ## Install Python wheel build tools using uv
+	@echo "Installing wheel build tools via uv..."
+	@uv pip install build wheel setuptools
 
 .PHONY: clean-wheels
 clean-wheels: ## Clean Python wheel build artifacts
@@ -253,14 +231,19 @@ clean-wheels: ## Clean Python wheel build artifacts
 	@rm -rf python-server/*.egg-info
 	@find python-server/evalhub_server/binaries/ -type f ! -name '.gitkeep' -delete
 
-.PHONY: build-wheel
-build-wheel: install-wheel-tools ## Build Python wheel: make build-wheel WHEEL_PLATFORM=manylinux_2_17_x86_64 WHEEL_BINARY=eval-hub-linux-amd64
-	@echo "Building wheel for $(WHEEL_PLATFORM) with binary $(WHEEL_BINARY)..."
-	@rm -rf python-server/build/
+.PHONY: download-binary
+# GitHub Actions does this step outside of the Makefile with `actions/download-artifact@v4`
+download-binary: clean-wheels ## Download binary from the binary artifact
+	@echo "Downloading binary $(WHEEL_PLATFORM) $(WHEEL_BINARY)"
 	@mkdir -p python-server/evalhub_server/binaries/
 	@find python-server/evalhub_server/binaries/ -type f ! -name '.gitkeep' -delete
 	@cp bin/$(WHEEL_BINARY)* python-server/evalhub_server/binaries/
-	WHEEL_PLATFORM=$(WHEEL_PLATFORM) $(PYTHON_BUILD) --wheel python-server
+
+.PHONY: build-wheel
+build-wheel: ## Build Python wheel: make build-wheel WHEEL_PLATFORM=manylinux_2_17_x86_64 WHEEL_BINARY=eval-hub-linux-amd64
+	@echo "Building wheel for $(WHEEL_PLATFORM) with binary $(WHEEL_BINARY)..."
+	@rm -rf python-server/build/
+	WHEEL_PLATFORM=$(WHEEL_PLATFORM) uv build --wheel python-server
 
 .PHONY: build-all-wheels
 build-all-wheels: clean-wheels build-all-platforms ## Build all Python wheels for all platforms

@@ -91,7 +91,20 @@ This package is automatically built and published when a new release is created 
    ```
    See Makefile `build-all-platforms` target for other options.
 
-3. Build Python wheel
+3. Install wheel and setuptools
+   Install uv wheel and setuptools with the target `install-wheel-tools`
+   ```bash
+   make install-wheel-tools
+   ```
+
+4. Copy the Go-Binary
+
+   python wheel looks for compiled Go-Binaries is a different path from the compiled out path. Copy to the desired location.
+   ```bash
+   make download-binary
+   ```
+
+5. Build Python wheel
 
    Example for macOS arm64:
    ```bash
