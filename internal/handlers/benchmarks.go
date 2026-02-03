@@ -10,7 +10,7 @@ import (
 func (h *Handlers) HandleListBenchmarks(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 
 	benchmarks := []api.BenchmarkResource{}
-	for _, provider := range ctx.ProviderConfigs {
+	for _, provider := range h.providerConfigs {
 		for _, benchmark := range provider.Benchmarks {
 			benchmark.ProviderId = &provider.ProviderID
 			benchmarks = append(benchmarks, benchmark)

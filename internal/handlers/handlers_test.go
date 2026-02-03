@@ -14,7 +14,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	h := handlers.New(nil, nil, nil)
+	h := handlers.New(nil, nil, nil, nil, nil, nil)
 	if h == nil {
 		t.Error("New() returned nil")
 	}

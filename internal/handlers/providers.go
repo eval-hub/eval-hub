@@ -15,8 +15,8 @@ import (
 func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
 
 	list := api.ProviderResourceList{
-		TotalCount: len(ctx.ProviderConfigs),
-		Items:      slices.Collect(maps.Values(ctx.ProviderConfigs)),
+		TotalCount: len(h.providerConfigs),
+		Items:      slices.Collect(maps.Values(h.providerConfigs)),
 	}
 
 	w.WriteJSON(list, 200)
@@ -28,12 +28,12 @@ func (h *Handlers) HandleGetProvider(ctx *executioncontext.ExecutionContext, r h
 
 	id := strings.TrimPrefix(r.Path(), "/api/v1/evaluations/providers/")
 
-	p, found := ctx.ProviderConfigs[id]
+	p, found := h.providerConfigs[id]
 	if !found {
 		w.WriteJSON(map[string]interface{}{
 			"message":             "Provider not found",
 			"provider_id":         id,
-			"supported_providers": maps.Keys(ctx.ProviderConfigs),
+			"supported_providers": maps.Keys(h.providerConfigs),
 		}, 404)
 
 		return

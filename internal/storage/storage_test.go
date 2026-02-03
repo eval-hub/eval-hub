@@ -50,7 +50,7 @@ func (r *testRequestWrapper) BodyAsBytes() ([]byte, error) {
 }
 
 func createExecutionContext(logger *slog.Logger) *executioncontext.ExecutionContext {
-	return executioncontext.NewExecutionContext(context.Background(), uuid.New().String(), logger, 60*time.Second, nil, nil)
+	return executioncontext.NewExecutionContext(context.Background(), uuid.New().String(), logger, 60*time.Second)
 }
 
 // TestStorage tests the storage implementation and provides

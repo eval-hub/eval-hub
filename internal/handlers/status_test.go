@@ -11,7 +11,7 @@ import (
 )
 
 func TestHandleStatus(t *testing.T) {
-	h := handlers.New(nil, nil, nil)
+	h := handlers.New(nil, nil, nil, nil, nil, nil)
 
 	t.Run("GET request returns status information", func(t *testing.T) {
 		ctx := createExecutionContext()

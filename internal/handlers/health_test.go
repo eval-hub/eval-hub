@@ -11,7 +11,7 @@ import (
 )
 
 func TestHandleHealth(t *testing.T) {
-	h := handlers.New(nil, nil, nil)
+	h := handlers.New(nil, nil, nil, nil, nil, nil)
 
 	t.Run("GET request returns healthy status", func(t *testing.T) {
 		r := createMockRequest("GET", "/health")

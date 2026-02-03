@@ -11,7 +11,7 @@ import (
 )
 
 func TestHandleOpenAPI(t *testing.T) {
-	h := handlers.New(nil, nil, nil)
+	h := handlers.New(nil, nil, nil, nil, nil, nil)
 
 	// Ensure the OpenAPI file exists for testing
 	apiPath := filepath.Join("..", "..", "docs", "openapi.yaml")
@@ -65,7 +65,7 @@ func TestHandleOpenAPI(t *testing.T) {
 }
 
 func TestHandleDocs(t *testing.T) {
-	h := handlers.New(nil, nil, nil)
+	h := handlers.New(nil, nil, nil, nil, nil, nil)
 
 	t.Run("GET request returns HTML documentation", func(t *testing.T) {
 		ctx := createExecutionContext()
