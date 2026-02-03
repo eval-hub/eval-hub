@@ -275,7 +275,7 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-  /api/v1/evaluations/jobs/{id}/update:
+  /api/v1/evaluations/jobs/{id}/events:
     post:
       x-internal: true
       tags:
@@ -306,44 +306,20 @@ paths:
                 summary: "A request update with a running status."
                 description: "A simple request update with a running status."
                 value:
-                  provider_id: "garak"
-                  benchmark_id: "toxicity"
-                  status: "running"
-                  metrics:
-                    accuracy: 0.95
-                  artifacts:
-                    logs: "/data/logs/1234567890.log"
-                  started_at: "2026-01-12T10:45:32Z"
-                  completed_at: "2026-01-12T10:47:12Z"
-                  duration_seconds: 100
+                  status_event:
+                    provider_id: "garak"
+                    benchmark_id: "toxicity"
+                    status: "running"
+                    metrics:
+                      accuracy: 0.95
+                    artifacts:
+                      logs: "/data/logs/1234567890.log"
+                    started_at: "2026-01-12T10:45:32Z"
+                    completed_at: "2026-01-12T10:47:12Z"
+                    duration_seconds: 100
       responses:
         '204':
           description: Successful Update
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-  /api/v1/metrics/system:
-    get:
-      x-internal: true
-      summary: Get System Metrics
-      description: Get system metrics and statistics.
-      operationId: get_system_metrics_api_v1_metrics_system_get
-      tags:
-      - Metrics
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                additionalProperties: true
-                type: object
-                title: Response Get System Metrics Api V1 Metrics System Get
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -971,6 +947,17 @@ components:
       title: EvaluationResource
       description: Resource information for an evaluation.
     EvaluationResult:
+      type: object
+      description: A status event for an evaluation.
+      required:
+      - status_event
+      properties:
+        status_event:
+          $ref: '#/components/schemas/StatusEvent'
+      title: EvaluationResult
+    StatusEvent:
+      type: object
+      description: A status event for an evaluation.
       properties:
         provider_id:
           type: string
@@ -1023,12 +1010,10 @@ components:
           title: Mlflow Run Id
           description: MLFlow run ID
       additionalProperties: true
-      type: object
       required:
       - provider_id
       - benchmark_id
       - status
-      description: Result of a single evaluation.
     EvaluationStatus:
       type: string
       enum:

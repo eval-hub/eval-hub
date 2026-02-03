@@ -285,18 +285,6 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		}
 	})
 
-	// System metrics endpoint
-	router.HandleFunc("/api/v1/metrics/system", func(w http.ResponseWriter, r *http.Request) {
-		ctx := s.newExecutionContext(r)
-		resp := NewRespWrapper(w, ctx)
-		switch r.Method {
-		case http.MethodGet:
-			h.HandleGetSystemMetrics(ctx, resp)
-		default:
-			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
-		}
-	})
-
 	// OpenAPI documentation endpoints
 	router.HandleFunc("/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)

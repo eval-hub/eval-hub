@@ -9,6 +9,8 @@ This directory contains the OpenAPI specifications and related assets for the Ev
 
 ## Files
 
+These are the files in the `docs` directory.
+
 | File | Description |
 |------|-------------|
 | **src/openapi.yaml** | Single source of truth for the API. OpenAPI 3.1.0 spec with all paths, schemas, and (optionally) `x-internal`-marked content. Edit this file when changing the API contract. |
