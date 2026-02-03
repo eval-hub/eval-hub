@@ -30,6 +30,7 @@ func TestFeatures(t *testing.T) {
 			Format:   "pretty",
 			Paths:    []string{featuresPath},
 			TestingT: t,
+			Strict:   true,
 		},
 	}
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -15,6 +16,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
@@ -32,6 +34,9 @@ var (
 	// testConfig to be used throughout all the test suites
 	// for the global configuration
 	api *apiFeature
+
+	once   sync.Once
+	logger *log.Logger
 )
 
 type apiFeature struct {
@@ -49,13 +54,33 @@ type scenarioConfig struct {
 	response     *http.Response
 	body         []byte
 
-	lastId string
+	lastURL string
+	lastId  string
 
 	assets map[string][]string
 }
 
+func getLogger() *log.Logger {
+	once.Do(func() {
+		if logger == nil {
+			path := filepath.Join("..", "..", "bin", "tests.log")
+			path, err := filepath.Abs(path)
+			if err != nil {
+				panic(fmt.Errorf("Failed to get absolute path: %v", err))
+			}
+			logOutput, err := os.Create(path)
+			if err != nil {
+				panic(fmt.Errorf("Failed to create log file: %v", err))
+			}
+			logger = log.New(logOutput, "", log.LstdFlags)
+		}
+	})
+	return logger
+}
+
 func logDebug(format string, a ...any) {
 	fmt.Printf(format, a...)
+	getLogger().Printf(format, a...)
 }
 
 func checkBaseURL(uri *url.URL, from string) {
@@ -97,7 +122,10 @@ func createApiFeature() (*apiFeature, error) {
 	}
 	checkBaseURL(baseURL, uri)
 
-	api := &apiFeature{client: client, baseURL: baseURL}
+	api := &apiFeature{
+		client:  client,
+		baseURL: baseURL,
+	}
 	api.startLocalServer(port)
 	return api, nil
 }
@@ -240,17 +268,20 @@ func (tc *scenarioConfig) getRequestBody(body string) (io.Reader, error) {
 
 func (sc *scenarioConfig) addAsset(assetName, id string) {
 	sc.assets[assetName] = append(sc.assets[assetName], id)
-	logDebug("Added asset id %s for id %s\n", id, assetName)
+	logDebug("Added asset id %s for %s\n", id, assetName)
 }
 
 func (sc *scenarioConfig) removeAsset(assetName, id string) {
 	ids := sc.assets[assetName]
 	if slices.Contains(ids, id) {
 		sc.assets[assetName] = slices.DeleteFunc(ids, func(s string) bool {
-			return s == id
+			if s == id {
+				logDebug("Removed asset id %s for %s\n", id, assetName)
+				return true
+			}
+			return false
 		})
 	}
-	logDebug("Removed asset id %s for id %s\n", id, assetName)
 }
 
 func extractId(body []byte) (string, error) {
@@ -299,17 +330,21 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 	}
 
 	url := fmt.Sprintf("%s%s", tc.apiFeature.baseURL.String(), path)
+	tc.lastURL = url
 	entity, err := tc.getRequestBody(body)
 	if err != nil {
 		return err
 	}
+	logDebug("Sending %s request to %s\n", method, url)
 	req, err := http.NewRequest(method, url, entity)
 	if err != nil {
+		logDebug("Failed to create request: %v\n", err)
 		return err
 	}
 
 	tc.response, err = tc.apiFeature.client.Do(req)
 	if err != nil {
+		logDebug("Failed to send request: %v\n", err)
 		return err
 	}
 
@@ -318,6 +353,8 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 		return err
 	}
 	defer tc.response.Body.Close()
+
+	logDebug("Response status %d for %s\n", tc.response.StatusCode, url)
 
 	if method == http.MethodPost {
 		assetName, err := getAssetName(path)
@@ -482,18 +519,21 @@ func (tc *scenarioConfig) saveScenarioName(ctx context.Context, sc *godog.Scenar
 
 func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 	for assetName, ids := range tc.assets {
+		url := assetName
 		switch assetName {
 		case "evaluations":
-			assetName = "evaluation/jobs"
+			url = "evaluations/jobs"
 		}
+		ids := slices.Clone(ids)
 		for _, id := range ids {
-			path := fmt.Sprintf("/api/v1/%s/%s?hard_delete=true", assetName, id)
+			path := fmt.Sprintf("/api/v1/%s/%s?hard_delete=true", url, id)
 			err := tc.iSendARequestTo("DELETE", path)
 			if err != nil {
-				return ctx, fmt.Errorf("failed to delete asset with id '%s' %s: %w", assetName, id, err)
+				return ctx, fmt.Errorf("failed to delete asset %s with id '%s': %w", assetName, id, err)
 			}
-			if tc.response.StatusCode != 204 {
-				return ctx, fmt.Errorf("expected status 204, got %d for asset id '%s' with path %s", tc.response.StatusCode, id, path)
+			err = tc.theResponseStatusShouldBe(204)
+			if err != nil {
+				return ctx, fmt.Errorf("failed to delete asset %s expected status %d but got %d: %w", tc.lastURL, 204, tc.response.StatusCode, err)
 			}
 			logDebug("Deleted asset %s with status %d\n", path, tc.response.StatusCode)
 		}
@@ -535,6 +575,12 @@ func waitForService() {
 func tidyUpTests() {
 	if api != nil {
 		api.cleanup(context.Background(), nil, nil)
+	}
+	if s, ok := logger.Writer().(*os.File); ok {
+		err := s.Close()
+		if err != nil {
+			panic(fmt.Sprintf("Failed to close logger file: %v\n", err))
+		}
 	}
 }
 

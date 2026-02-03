@@ -15,6 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
+	"github.com/eval-hub/eval-hub/internal/http_wrappers"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -142,7 +143,7 @@ func (s *SQLStorage) GetEvaluationJob(ctx *executioncontext.ExecutionContext, id
 	return evaluationResource, nil
 }
 
-func (s *SQLStorage) GetEvaluationJobs(ctx *executioncontext.ExecutionContext, limit int, offset int, statusFilter string) (*api.EvaluationJobResourceList, error) {
+func (s *SQLStorage) GetEvaluationJobs(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, limit int, offset int, statusFilter string) (*api.EvaluationJobResourceList, error) {
 	// Get total count (with status filter if provided)
 	countQuery, countArgs, err := createCountEntitiesStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, statusFilter)
 	if err != nil {
@@ -236,9 +237,9 @@ func (s *SQLStorage) GetEvaluationJobs(ctx *executioncontext.ExecutionContext, l
 	hasNext := offset+limit < totalCount
 	var nextHref *api.HRef
 	if hasNext {
-		href, err := url.Parse(ctx.Request.URI())
+		href, err := url.Parse(r.URI())
 		if err != nil {
-			ctx.Logger.Error("Failed to parse request URI", "uri", ctx.Request.URI(), "error", err)
+			ctx.Logger.Error("Failed to parse request URI", "uri", r.URI(), "error", err)
 			return nil, serviceerrors.NewServiceError(messages.InternalServerError, "Error", err.Error())
 		}
 		q := href.Query()
@@ -253,7 +254,7 @@ func (s *SQLStorage) GetEvaluationJobs(ctx *executioncontext.ExecutionContext, l
 
 	return &api.EvaluationJobResourceList{
 		Page: api.Page{
-			First:      &api.HRef{Href: ctx.Request.URI()},
+			First:      &api.HRef{Href: r.URI()},
 			Next:       nextHref,
 			Limit:      limit,
 			TotalCount: totalCount,

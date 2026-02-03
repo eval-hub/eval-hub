@@ -24,10 +24,10 @@ func TestHandleOpenAPI(t *testing.T) {
 	}
 
 	t.Run("GET request returns OpenAPI spec", func(t *testing.T) {
-		ctx := createExecutionContext("GET", "/openapi.yaml")
+		ctx := createExecutionContext()
 		w := httptest.NewRecorder()
 
-		h.HandleOpenAPI(ctx, &MockResponseWrapper{w})
+		h.HandleOpenAPI(ctx, createMockRequest("GET", "/openapi.yaml"), &MockResponseWrapper{w})
 
 		if w.Code != 200 {
 			t.Errorf("Expected status code %d, got %d", 200, w.Code)
@@ -50,11 +50,12 @@ func TestHandleOpenAPI(t *testing.T) {
 	})
 
 	t.Run("JSON content type when Accept header is application/json", func(t *testing.T) {
-		ctx := createExecutionContext("GET", "/openapi.yaml")
-		ctx.Request.SetHeader("Accept", "application/json")
+		ctx := createExecutionContext()
+		req := createMockRequest("GET", "/openapi.yaml")
+		req.SetHeader("Accept", "application/json")
 		w := httptest.NewRecorder()
 
-		h.HandleOpenAPI(ctx, &MockResponseWrapper{w})
+		h.HandleOpenAPI(ctx, req, &MockResponseWrapper{w})
 
 		contentType := w.Header().Get("Content-Type")
 		if contentType != "application/json" {
@@ -67,10 +68,10 @@ func TestHandleDocs(t *testing.T) {
 	h := handlers.New(nil, nil)
 
 	t.Run("GET request returns HTML documentation", func(t *testing.T) {
-		ctx := createExecutionContext("GET", "/docs")
+		ctx := createExecutionContext()
 		w := httptest.NewRecorder()
 
-		h.HandleDocs(ctx, &MockResponseWrapper{w})
+		h.HandleDocs(ctx, createMockRequest("GET", "/docs"), &MockResponseWrapper{w})
 
 		if w.Code != 200 {
 			t.Errorf("Expected status code %d, got %d", 200, w.Code)

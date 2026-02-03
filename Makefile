@@ -36,20 +36,21 @@ clean: ## Remove build artifacts
 	@go clean ${CLEAN_OPTS}
 	@echo "Clean complete"
 
+$(BIN_DIR):
+	@mkdir -p $(BIN_DIR)
+
 BUILD_PACKAGE ?= main
 FULL_BUILD_NUMBER ?= 0.0.1
 LDFLAGS_X = -X "${BUILD_PACKAGE}.Build=${FULL_BUILD_NUMBER}" -X "${BUILD_PACKAGE}.BuildDate=$(DATE)"
 LDFLAGS = -buildmode=exe ${LDFLAGS_X}
 
-build: ## Build the binary
+build: $(BIN_DIR) ## Build the binary
 	@echo "Building $(BINARY_NAME) with ${LDFLAGS}"
-	@mkdir -p $(BIN_DIR)
 	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(BINARY_NAME) $(CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(BINARY_NAME)"
 
-build-coverage: ## Build the binary with coverage
+build-coverage: $(BIN_DIR) ## Build the binary with coverage
 	@echo "Building $(BINARY_NAME)-cov with -cover -covermode=atomic -ldflags ${LDFLAGS} "
-	@mkdir -p $(BIN_DIR)
 	@go build -race -cover -covermode=atomic -coverpkg=./... -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(BINARY_NAME)-cov $(CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(BINARY_NAME)-cov"
 
@@ -91,7 +92,7 @@ test: ## Run unit tests
 	@echo "Running unit tests..."
 	@go test -v ./internal/...
 
-test-fvt: ## Run FVT (Functional Verification Tests) using godog
+test-fvt: $(BIN_DIR) ## Run FVT (Functional Verification Tests) using godog
 	@echo "Running FVT tests..."
 	@go test -v -race ./tests/features/...
 
@@ -102,16 +103,14 @@ SERVER_URL ?= http://localhost:8080
 test-fvt-server: start-service ## Run FVT tests using godog against a running server
 	@SERVER_URL="${SERVER_URL}" make test-fvt; status=$$?; make stop-service; exit $$status
 
-test-coverage: ## Run unit tests with coverage
+test-coverage: $(BIN_DIR) ## Run unit tests with coverage
 	@echo "Running unit tests with coverage..."
-	@mkdir -p $(BIN_DIR)
 	@go test -v -race -coverprofile=$(BIN_DIR)/coverage.out -covermode=atomic ./internal/... ./cmd/...
 	@go tool cover -html=$(BIN_DIR)/coverage.out -o $(BIN_DIR)/coverage.html
 	@echo "Coverage report generated: $(BIN_DIR)/coverage.html"
 
-test-fvt-coverage: ## Run integration (FVT) tests with coverage
+test-fvt-coverage: $(BIN_DIR)## Run integration (FVT) tests with coverage
 	@echo "Running integration (FVT) tests with coverage..."
-	@mkdir -p $(BIN_DIR)
 	@go test -v -race -coverprofile=$(BIN_DIR)/coverage-fvt.out -covermode=atomic ./tests/features/...
 	@go tool cover -html=$(BIN_DIR)/coverage-fvt.out -o $(BIN_DIR)/coverage-fvt.html
 	@echo "Coverage report generated: $(BIN_DIR)/coverage-fvt.html"

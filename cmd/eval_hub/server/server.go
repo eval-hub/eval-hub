@@ -170,9 +170,10 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	router.HandleFunc("/api/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
-		switch r.Method {
+		req := NewRequestWrapper(r)
+		switch req.Method() {
 		case http.MethodGet:
-			h.HandleHealth(ctx, resp)
+			h.HandleHealth(ctx, req, resp)
 		default:
 			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
 		}
@@ -182,9 +183,10 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	router.HandleFunc("/api/v1/status", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
+		req := NewRequestWrapper(r)
 		switch r.Method {
 		case http.MethodGet:
-			h.HandleStatus(ctx, resp)
+			h.HandleStatus(ctx, req, resp)
 		default:
 			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
 		}
@@ -194,11 +196,12 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	router.HandleFunc("/api/v1/evaluations/jobs", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
+		req := &ReqWrapper{Request: r}
 		switch r.Method {
 		case http.MethodPost:
-			h.HandleCreateEvaluation(ctx, resp)
+			h.HandleCreateEvaluation(ctx, req, resp)
 		case http.MethodGet:
-			h.HandleListEvaluations(ctx, resp)
+			h.HandleListEvaluations(ctx, req, resp)
 		default:
 			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
 		}
@@ -209,16 +212,17 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		ctx := s.newExecutionContext(r)
 		path := r.URL.Path
 		resp := NewRespWrapper(w, ctx)
+		req := NewRequestWrapper(r)
 		if strings.HasSuffix(path, "/update") && r.Method == http.MethodPost {
-			h.HandleUpdateEvaluation(ctx, resp)
+			h.HandleUpdateEvaluation(ctx, req, resp)
 			return
 		}
 		// Handle individual job endpoints
 		switch r.Method {
 		case http.MethodGet:
-			h.HandleGetEvaluation(ctx, resp)
+			h.HandleGetEvaluation(ctx, req, resp)
 		case http.MethodDelete:
-			h.HandleCancelEvaluation(ctx, resp)
+			h.HandleCancelEvaluation(ctx, req, resp)
 		default:
 			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
 		}
@@ -228,9 +232,10 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	router.HandleFunc("/api/v1/evaluations/benchmarks", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
+		req := NewRequestWrapper(r)
 		switch r.Method {
 		case http.MethodGet:
-			h.HandleListBenchmarks(ctx, resp)
+			h.HandleListBenchmarks(ctx, req, resp)
 		default:
 			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
 		}
@@ -282,9 +287,10 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	router.HandleFunc("/api/v1/evaluations/providers/", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
+		req := NewRequestWrapper(r)
 		switch r.Method {
 		case http.MethodGet:
-			h.HandleGetProvider(ctx, resp)
+			h.HandleGetProvider(ctx, req, resp)
 		default:
 			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
 		}
@@ -306,9 +312,10 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	router.HandleFunc("/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
+		req := NewRequestWrapper(r)
 		switch r.Method {
 		case http.MethodGet:
-			h.HandleOpenAPI(ctx, resp)
+			h.HandleOpenAPI(ctx, req, resp)
 		default:
 			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
 		}
@@ -317,9 +324,10 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	router.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
+		req := NewRequestWrapper(r)
 		switch r.Method {
 		case http.MethodGet:
-			h.HandleDocs(ctx, resp)
+			h.HandleDocs(ctx, req, resp)
 		default:
 			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
 		}

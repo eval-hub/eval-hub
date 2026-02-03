@@ -14,10 +14,10 @@ func TestHandleHealth(t *testing.T) {
 	h := handlers.New(nil, nil)
 
 	t.Run("GET request returns healthy status", func(t *testing.T) {
-		ctx := createExecutionContext("GET", "/health")
+		r := createMockRequest("GET", "/health")
 		w := httptest.NewRecorder()
-
-		h.HandleHealth(ctx, &MockResponseWrapper{w})
+		ctx := createExecutionContext()
+		h.HandleHealth(ctx, r, &MockResponseWrapper{w})
 
 		if w.Code != 200 {
 			t.Errorf("Expected status code %d, got %d", 200, w.Code)

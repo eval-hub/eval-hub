@@ -38,13 +38,46 @@ Feature: Evaluations Endpoint
               "required": ["href"]
             },
             "limit": {"type": "integer"},
-            "total_count": {"type": "integer"},
+            "total_count": {
+              "type": "integer",
+              "minimum": 3,
+              "maximum": 3
+            },
             "resources": {
               "type": "array",
               "minItems": 2,
               "maxItems": 2
             }
         },
-        "required": ["limit", "first", "next"]
+        "required": ["limit", "first", "next", "total_count"]
+      }
+    """
+    When I send a GET request to "/api/v1/evaluations/jobs?limit=2&offset=2"
+    Then the response code should be 200
+    And the response should have schema as:
+    """
+      {
+        "properties": {
+            "first": {"type": "object"},
+            "next": {
+              "type": "object",
+              "properties": {
+                "href": {"type": "string"}
+              },
+              "required": ["href"]
+            },
+            "limit": {"type": "integer"},
+            "total_count": {
+              "type": "integer",
+              "minimum": 3,
+              "maximum": 3
+            },
+            "resources": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1
+            }
+        },
+        "required": ["limit", "first", "total_count"]
       }
     """

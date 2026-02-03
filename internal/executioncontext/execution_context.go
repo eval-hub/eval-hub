@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/eval-hub/eval-hub/internal/http_wrappers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -24,7 +23,6 @@ type ExecutionContext struct {
 	StartedAt       time.Time
 	MLflowClient    interface{}
 	ProviderConfigs map[string]api.ProviderResource
-	Request         http_wrappers.RequestWrapper
 }
 
 func NewExecutionContext(
@@ -34,7 +32,6 @@ func NewExecutionContext(
 	timeout time.Duration,
 	mlflowClient interface{},
 	providerConfigs map[string]api.ProviderResource,
-	request http_wrappers.RequestWrapper,
 ) *ExecutionContext {
 	return &ExecutionContext{
 		Ctx:             ctx,
@@ -42,7 +39,6 @@ func NewExecutionContext(
 		Logger:          logger,
 		StartedAt:       time.Now(),
 		MLflowClient:    mlflowClient,
-		Request:         request,
 		ProviderConfigs: providerConfigs,
 	}
 }

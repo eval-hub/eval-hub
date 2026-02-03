@@ -7,7 +7,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/http_wrappers"
 )
 
-func (h *Handlers) HandleStatus(ctx *executioncontext.ExecutionContext, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleStatus(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 
 	w.WriteJSON(map[string]interface{}{
 		"service":   "eval-hub",

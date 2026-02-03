@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
+	"github.com/eval-hub/eval-hub/internal/http_wrappers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -16,7 +17,7 @@ type Storage interface {
 	// Evaluation job operations
 	CreateEvaluationJob(ctx *executioncontext.ExecutionContext, evaluation *api.EvaluationJobConfig) (*api.EvaluationJobResource, error)
 	GetEvaluationJob(ctx *executioncontext.ExecutionContext, id string) (*api.EvaluationJobResource, error)
-	GetEvaluationJobs(ctx *executioncontext.ExecutionContext, limit int, offset int, statusFilter string) (*api.EvaluationJobResourceList, error)
+	GetEvaluationJobs(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, limit int, offset int, statusFilter string) (*api.EvaluationJobResourceList, error)
 	DeleteEvaluationJob(ctx *executioncontext.ExecutionContext, id string, hardDelete bool) error
 	UpdateEvaluationJobStatus(ctx *executioncontext.ExecutionContext, id string, state *api.EvaluationJobStatus) error
 
