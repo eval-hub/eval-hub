@@ -145,5 +145,5 @@ func (r RespWrapper) Error(err error, requestId string) {
 		r.ErrorWithMessageCode(requestId, e.MessageCode(), e.MessageParams()...)
 		return
 	}
-	r.ErrorWithMessageCode(requestId, messages.UnknownError, err.Error())
+	r.ErrorWithMessageCode(requestId, messages.UnknownError, "Error", err.Error())
 }

@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http/httptest"
 	"testing"
@@ -87,11 +88,12 @@ func (w MockResponseWrapper) Write(buf []byte) (int, error) {
 }
 
 func (w MockResponseWrapper) Error(err error, requestId string) {
-	if e, ok := err.(abstractions.ServiceError); ok {
+	var e abstractions.ServiceError
+	if errors.As(err, &e) {
 		w.ErrorWithMessageCode(requestId, e.MessageCode(), e.MessageParams()...)
 		return
 	}
-	w.ErrorWithMessageCode(requestId, messages.UnknownError, err.Error())
+	w.ErrorWithMessageCode(requestId, messages.UnknownError, "Error", err.Error())
 }
 
 func (w MockResponseWrapper) ErrorWithMessageCode(requestId string, messageCode *messages.MessageCode, messageParams ...any) {
