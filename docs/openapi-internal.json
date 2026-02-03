@@ -1689,7 +1689,6 @@
             "description": "Evaluations returned for this page"
           }
         },
-        "additionalProperties": true,
         "type": "object",
         "required": [
           "first",
