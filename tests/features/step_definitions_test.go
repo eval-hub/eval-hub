@@ -612,7 +612,10 @@ func getJsonPointer(path string) string {
 }
 
 func (tc *scenarioConfig) theFieldShouldBeSaved(path string, name string) error {
-	jsonParsed, _ := gabs.ParseJSON(tc.body)
+	jsonParsed, err := gabs.ParseJSON(tc.body)
+	if err != nil {
+		return logError(fmt.Errorf("failed to parse JSON response: %w", err))
+	}
 	// This directly uses a JSON pointer path
 	pathObj, err := jsonParsed.JSONPointer(getJsonPointer(path))
 	if err != nil {
