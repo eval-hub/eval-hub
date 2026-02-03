@@ -288,7 +288,7 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-  /api/v1/evaluations/jobs/{id}/update:
+  /api/v1/evaluations/jobs/{id}/events:
     post:
       x-internal: true
       tags:
@@ -933,6 +933,17 @@ components:
       title: EvaluationResource
       description: Resource information for an evaluation.
     EvaluationResult:
+      type: object
+      description: A status event for an evaluation.
+      required:
+        - status_event
+      properties:
+        status_event:
+          $ref: '#/components/schemas/StatusEvent'
+      title: EvaluationResult
+    StatusEvent:
+      type: object
+      description: A status event for an evaluation.
       properties:
         provider_id:
           type: string
@@ -985,12 +996,10 @@ components:
           title: Mlflow Run Id
           description: MLFlow run ID
       additionalProperties: true
-      type: object
       required:
         - provider_id
         - benchmark_id
         - status
-      description: Result of a single evaluation.
     EvaluationStatus:
       type: string
       enum:

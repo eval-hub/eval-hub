@@ -1,8 +1,11 @@
+extends:
+  - recommended
+
 apis:
   internal@latest:
-    root: ./src/openapi.yaml
+    root: ./docs/src/openapi.yaml
   external@latest:
-    root: ./src/openapi.yaml
+    root: ./docs/src/openapi.yaml
     decorators:
       remove-x-internal: on
 

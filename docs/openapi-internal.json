@@ -443,7 +443,7 @@
         }
       }
     },
-    "/api/v1/evaluations/jobs/{id}/update": {
+    "/api/v1/evaluations/jobs/{id}/events": {
       "post": {
         "x-internal": true,
         "tags": [
@@ -1430,6 +1430,21 @@
         "description": "Resource information for an evaluation."
       },
       "EvaluationResult": {
+        "type": "object",
+        "description": "A status event for an evaluation.",
+        "required": [
+          "status_event"
+        ],
+        "properties": {
+          "status_event": {
+            "$ref": "#/components/schemas/StatusEvent"
+          }
+        },
+        "title": "EvaluationResult"
+      },
+      "StatusEvent": {
+        "type": "object",
+        "description": "A status event for an evaluation.",
         "properties": {
           "provider_id": {
             "type": "string",
@@ -1503,13 +1518,11 @@
           }
         },
         "additionalProperties": true,
-        "type": "object",
         "required": [
           "provider_id",
           "benchmark_id",
           "status"
-        ],
-        "description": "Result of a single evaluation."
+        ]
       },
       "EvaluationStatus": {
         "type": "string",
