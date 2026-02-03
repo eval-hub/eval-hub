@@ -326,7 +326,7 @@ func extractIdFromPath(path string) string {
 }
 
 // firstPathSegment matches the first path segment after /api/v1/
-var firstPathSegment = regexp.MustCompile(`^/api/v1/([^/]+).*$`)
+var firstPathSegment = regexp.MustCompile(`^.*/api/v1/([^/]+).*$`)
 
 func getAssetName(path string) (string, error) {
 	if matches := firstPathSegment.FindStringSubmatch(path); len(matches) >= 2 {
