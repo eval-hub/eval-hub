@@ -7,6 +7,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/http_wrappers"
+	"github.com/eval-hub/eval-hub/internal/messages"
 )
 
 func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
@@ -58,7 +59,7 @@ func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_
 
 	if err != nil {
 		ctx.Logger.Error("Failed to read OpenAPI spec", "paths", paths, "error", err.Error())
-		w.Error("Failed to read OpenAPI spec", 500, ctx.RequestID)
+		w.ErrorWithMessageCode(ctx.RequestID, messages.InternalServerError, "Error", err.Error())
 		return
 	}
 

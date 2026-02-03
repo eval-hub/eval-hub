@@ -15,8 +15,7 @@ type RequestWrapper interface {
 
 // Response abstraction of underlying HTTP library
 type ResponseWrapper interface {
-	Error(errorMessage string, code int, requestId string) // TODO this will be removed as soon as all errors are changed to use one of the methods below
-	ErrorWithError(err error, requestId string)
+	Error(err error, requestId string)
 	ErrorWithMessageCode(requestId string, messageCode *messages.MessageCode, messageParams ...any)
 	SetHeader(key string, value string)
 	DeleteHeader(key string)

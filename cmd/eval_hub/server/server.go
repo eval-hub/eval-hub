@@ -11,6 +11,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/handlers"
+	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/go-playground/validator/v10"
 
@@ -175,7 +176,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		case http.MethodGet:
 			h.HandleHealth(ctx, req, resp)
 		default:
-			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 
 	})
@@ -191,7 +192,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		case http.MethodGet:
 			h.HandleListEvaluations(ctx, req, resp)
 		default:
-			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
 
@@ -204,7 +205,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		case http.MethodPost:
 			h.HandleUpdateEvaluation(ctx, req, resp)
 		default:
-			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
 
@@ -219,7 +220,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		case http.MethodDelete:
 			h.HandleCancelEvaluation(ctx, req, resp)
 		default:
-			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
 
@@ -232,7 +233,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		case http.MethodGet:
 			h.HandleListBenchmarks(ctx, req, resp)
 		default:
-			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
 
@@ -240,19 +241,21 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	router.HandleFunc("/api/v1/evaluations/collections", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
+		req := NewRequestWrapper(r)
 		switch r.Method {
 		case http.MethodPost:
 			h.HandleCreateCollection(ctx, resp)
 		case http.MethodGet:
 			h.HandleListCollections(ctx, resp)
 		default:
-			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
 
 	router.HandleFunc("/api/v1/evaluations/collections/", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
+		req := NewRequestWrapper(r)
 		switch r.Method {
 		case http.MethodGet:
 			h.HandleGetCollection(ctx, resp)
@@ -263,7 +266,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		case http.MethodDelete:
 			h.HandleDeleteCollection(ctx, resp)
 		default:
-			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
 
@@ -271,11 +274,12 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	router.HandleFunc("/api/v1/evaluations/providers", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
+		req := NewRequestWrapper(r)
 		switch r.Method {
 		case http.MethodGet:
 			h.HandleListProviders(ctx, resp)
 		default:
-			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
 
@@ -287,7 +291,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		case http.MethodGet:
 			h.HandleGetProvider(ctx, req, resp)
 		default:
-			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
 
@@ -300,7 +304,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		case http.MethodGet:
 			h.HandleOpenAPI(ctx, req, resp)
 		default:
-			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
 
@@ -312,7 +316,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		case http.MethodGet:
 			h.HandleDocs(ctx, req, resp)
 		default:
-			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
 

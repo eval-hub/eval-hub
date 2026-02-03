@@ -425,14 +425,14 @@ The service uses a consistent pattern for API errors so that clients receive sta
 
 ### How handlers report errors
 
-- Handlers receive a **`ResponseWrapper`** and call **`ErrorWithError(err, requestId)`** when something fails.
+- Handlers receive a **`ResponseWrapper`** and call **`Error(err, requestId)`** when something fails.
 - If `err` implements **`abstractions.ServiceError`**, the response uses that error’s message code and parameters: the template is filled with `MessageParams()` and the HTTP status is taken from the message code.
 - Any other `error` is treated as unknown and returned as **500** with **`messages.UnknownError`** (the raw error text is only used in the message, not exposed as a code).
 - The response body is always the **`api.Error`** shape: `{ "message": "...", "code": <status>, "trace": "<requestId>" }`.
 
 ### Guidelines for contributors
 
-1. **Handlers** – On failure, pass the error to `w.ErrorWithError(err, ctx.RequestID)` and return. Do not write response bodies or status codes yourself for errors.
+1. **Handlers** – On failure, pass the error to `w.Error(err, ctx.RequestID)` and return. Do not write response bodies or status codes yourself for errors.
 2. **Validation / bad request** – Use `serviceerrors.NewServiceError(messages.QueryParameterRequired, "ParameterName", "id")` (or the appropriate message) so the response is 400 with a clear message.
 3. **Not found** – Use `serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation", "ResourceId", id)` so the response is 404.
 4. **Storage / internal errors** – From storage or lower layers, return errors that implement `ServiceError` (e.g. wrapping a message code) where possible; otherwise they are surfaced as 500 with `UnknownError`.

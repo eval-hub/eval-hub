@@ -291,7 +291,7 @@ func (s *SQLStorage) DeleteEvaluationJob(ctx *executioncontext.ExecutionContext,
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		ctx.Logger.Error("Failed to get rows affected", "error", err, "id", id)
-		return NewStorageErrorWithError(err, "failed to get rows affected")
+		return NewStorageError(err, "failed to get rows affected")
 	}
 
 	if rowsAffected == 0 {
@@ -325,7 +325,7 @@ func (s *SQLStorage) UpdateEvaluationJobStatus(ctx *executioncontext.ExecutionCo
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		ctx.Logger.Error("Failed to get rows affected", "error", err, "id", id)
-		return NewStorageErrorWithError(err, "failed to get rows affected")
+		return NewStorageError(err, "failed to get rows affected")
 	}
 
 	if rowsAffected == 0 {

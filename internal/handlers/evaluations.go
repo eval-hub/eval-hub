@@ -79,19 +79,19 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 	// get the body bytes from the context
 	bodyBytes, err := req.BodyAsBytes()
 	if err != nil {
-		w.ErrorWithError(err, ctx.RequestID)
+		w.Error(err, ctx.RequestID)
 		return
 	}
 	evaluation := &api.EvaluationJobConfig{}
 	err = serialization.Unmarshal(h.validate, ctx, bodyBytes, evaluation)
 	if err != nil {
-		w.ErrorWithError(err, ctx.RequestID)
+		w.Error(err, ctx.RequestID)
 		return
 	}
 
 	response, err := h.storage.CreateEvaluationJob(ctx, evaluation)
 	if err != nil {
-		w.ErrorWithError(err, ctx.RequestID)
+		w.Error(err, ctx.RequestID)
 		return
 	}
 
@@ -118,22 +118,22 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 
 	limit, err := getParam(r, "limit", true, 50)
 	if err != nil {
-		w.ErrorWithError(err, ctx.RequestID)
+		w.Error(err, ctx.RequestID)
 		return
 	}
 	offset, err := getParam(r, "offset", true, 0)
 	if err != nil {
-		w.ErrorWithError(err, ctx.RequestID)
+		w.Error(err, ctx.RequestID)
 		return
 	}
 	statusFilter, err := getParam(r, "status_filter", true, "")
 	if err != nil {
-		w.ErrorWithError(err, ctx.RequestID)
+		w.Error(err, ctx.RequestID)
 		return
 	}
 	response, err := h.storage.GetEvaluationJobs(ctx, r, limit, offset, statusFilter)
 	if err != nil {
-		w.ErrorWithError(err, ctx.RequestID)
+		w.Error(err, ctx.RequestID)
 		return
 	}
 
@@ -147,13 +147,13 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 	// Extract ID from path
 	evaluationJobID := getEvaluationJobID(r)
 	if evaluationJobID == "" {
-		w.ErrorWithError(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", "id"), ctx.RequestID)
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", "id"), ctx.RequestID)
 		return
 	}
 
 	response, err := h.storage.GetEvaluationJob(ctx, evaluationJobID)
 	if err != nil {
-		w.ErrorWithError(err, ctx.RequestID)
+		w.Error(err, ctx.RequestID)
 		return
 	}
 
@@ -166,26 +166,26 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 	// Extract ID from path
 	evaluationJobID := getEvaluationJobID(r)
 	if evaluationJobID == "" {
-		w.ErrorWithError(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", "id"), ctx.RequestID)
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", "id"), ctx.RequestID)
 		return
 	}
 
 	// get the body bytes from the context
 	bodyBytes, err := r.BodyAsBytes()
 	if err != nil {
-		w.ErrorWithError(err, ctx.RequestID)
+		w.Error(err, ctx.RequestID)
 		return
 	}
 	status := &api.StatusEvent{}
 	err = serialization.Unmarshal(h.validate, ctx, bodyBytes, status)
 	if err != nil {
-		w.ErrorWithError(err, ctx.RequestID)
+		w.Error(err, ctx.RequestID)
 		return
 	}
 
 	err = h.storage.UpdateEvaluationJobStatus(ctx, evaluationJobID, status)
 	if err != nil {
-		w.ErrorWithError(err, ctx.RequestID)
+		w.Error(err, ctx.RequestID)
 		return
 	}
 
@@ -199,20 +199,20 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 	// Extract ID from path
 	evaluationJobID := getEvaluationJobID(r)
 	if evaluationJobID == "" {
-		w.ErrorWithError(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", "id"), ctx.RequestID)
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", "id"), ctx.RequestID)
 		return
 	}
 
 	hardDelete, err := getParam(r, "hard_delete", true, false)
 	if err != nil {
-		w.ErrorWithError(err, ctx.RequestID)
+		w.Error(err, ctx.RequestID)
 		return
 	}
 
 	err = h.storage.DeleteEvaluationJob(ctx, evaluationJobID, hardDelete)
 	if err != nil {
 		ctx.Logger.Info("Failed to delete evaluation job", "error", err.Error(), "id", evaluationJobID, "hardDelete", hardDelete)
-		w.ErrorWithError(err, ctx.RequestID)
+		w.Error(err, ctx.RequestID)
 		return
 	}
 	w.WriteJSON(nil, 204)

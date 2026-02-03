@@ -70,6 +70,18 @@ var (
 		"An internal server error occurred: '{{.Error}}'.",
 	)
 
+	// MethodNotAllowed The HTTP method {{.Method}} is not allowed for the API {{.Api}}.
+	MethodNotAllowed = createMessage(
+		http.StatusMethodNotAllowed,
+		"The HTTP method {{.Method}} is not allowed for the API {{.Api}}.",
+	)
+
+	// NotImplemented The API {{.Api}} is not yet implemented.
+	NotImplemented = createMessage(
+		http.StatusNotImplemented,
+		"The API {{.Api}} is not yet implemented.",
+	)
+
 	// UnknownError An unknown error occurred: '{{.Error}}'. This is a fallback error if the error is not a service error.
 	UnknownError = createMessage(
 		http.StatusInternalServerError,

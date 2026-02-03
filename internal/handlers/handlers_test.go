@@ -86,11 +86,7 @@ func (w MockResponseWrapper) Write(buf []byte) (int, error) {
 	return w.recorder.Write(buf)
 }
 
-func (w MockResponseWrapper) Error(err string, code int, requestId string) {
-	w.WriteJSON(api.Error{Message: err, Code: code, Trace: requestId}, code)
-}
-
-func (w MockResponseWrapper) ErrorWithError(err error, requestId string) {
+func (w MockResponseWrapper) Error(err error, requestId string) {
 	if e, ok := err.(abstractions.ServiceError); ok {
 		w.ErrorWithMessageCode(requestId, e.MessageCode(), e.MessageParams()...)
 		return
