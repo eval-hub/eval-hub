@@ -16,7 +16,8 @@ def main():
     binary_path = get_binary_path()
 
     # Pass all command-line arguments to the binary
-    subprocess.run([binary_path] + sys.argv[1:], check=True)
+    result = subprocess.run([binary_path] + sys.argv[1:])
+    sys.exit(result.returncode)
 
 
 if __name__ == "__main__":

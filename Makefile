@@ -241,6 +241,7 @@ build-wheel: ## Build Python wheel: make build-wheel WHEEL_PLATFORM=manylinux_2_
 	else \
 		echo "Skipping copy (GITHUB_ACTIONS): binary provided by actions/download-artifact"; \
 	fi
+	@find python-server/evalhub_server/binaries/ -type f ! -name '.gitkeep' -exec chmod +x {} +
 	@echo "Building wheel for $(WHEEL_PLATFORM) with binary $(WHEEL_BINARY)..."
 	@rm -rf python-server/build/
 	WHEEL_PLATFORM=$(WHEEL_PLATFORM) uv build --wheel python-server
