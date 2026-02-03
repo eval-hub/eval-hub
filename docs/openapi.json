@@ -41,10 +41,6 @@
       "description": "Health check endpoints"
     },
     {
-      "name": "Status",
-      "description": "Service status endpoints"
-    },
-    {
       "name": "Metrics",
       "description": "Metrics and monitoring endpoints"
     }
@@ -65,40 +61,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HealthResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      }
-    },
-    "/api/v1/status": {
-      "get": {
-        "summary": "Get service status",
-        "description": "Returns detailed status information about the service",
-        "operationId": "api_v1_status_get",
-        "tags": [
-          "Status"
-        ],
-        "responses": {
-          "200": {
-            "description": "Service status information",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StatusResponse"
                 }
               }
             }

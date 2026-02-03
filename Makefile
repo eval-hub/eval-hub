@@ -200,19 +200,15 @@ build-all-platforms: ## Build for all supported platforms
 	@$(MAKE) cross-compile CROSS_GOOS=darwin CROSS_GOARCH=arm64
 	@$(MAKE) cross-compile CROSS_GOOS=windows CROSS_GOARCH=amd64
 
-# Python virtual environment
+# Python virtual environment - expects uv venv
 VENV_DIR = .venv
 VENV_PYTHON = $(VENV_DIR)/bin/python
-VENV_PIP = $(VENV_DIR)/bin/pip
 
 .PHONY: venv
-venv: ## Create Python virtual environment
+venv: ## Create Python virtual environment using uv
 	@if [ ! -d "$(VENV_DIR)" ]; then \
-		echo "Creating virtual environment..."; \
-		python3 -m venv --upgrade-deps $(VENV_DIR) || python3 -m venv $(VENV_DIR); \
-		echo "Ensuring pip is available..."; \
-		$(VENV_PYTHON) -m ensurepip --upgrade || true; \
-		$(VENV_PYTHON) -m pip install --upgrade pip || true; \
+		echo "Creating uv virtual environment..."; \
+		uv venv $(VENV_DIR); \
 		echo "Virtual environment created at $(VENV_DIR)"; \
 	else \
 		echo "Virtual environment already exists at $(VENV_DIR)"; \
@@ -223,9 +219,9 @@ WHEEL_PLATFORM ?= macosx_11_0_arm64
 WHEEL_BINARY ?= eval-hub-darwin-arm64
 
 .PHONY: install-wheel-tools
-install-wheel-tools: venv ## Install Python wheel build tools
-	@echo "Installing wheel build tools in virtual environment..."
-	$(VENV_PIP) install --upgrade pip build wheel setuptools
+install-wheel-tools: venv ## Install Python wheel build tools using uv
+	@echo "Installing wheel build tools via uv..."
+	@uv pip install build wheel setuptools
 
 .PHONY: clean-wheels
 clean-wheels: ## Clean Python wheel build artifacts
@@ -237,15 +233,21 @@ clean-wheels: ## Clean Python wheel build artifacts
 
 .PHONY: build-wheel
 build-wheel: ## Build Python wheel: make build-wheel WHEEL_PLATFORM=manylinux_2_17_x86_64 WHEEL_BINARY=eval-hub-linux-amd64
+	@if [ "$${GITHUB_ACTIONS}" != "true" ]; then \
+		echo "Downloading binary $(WHEEL_PLATFORM) $(WHEEL_BINARY)"; \
+		mkdir -p python-server/evalhub_server/binaries/; \
+		find python-server/evalhub_server/binaries/ -type f ! -name '.gitkeep' -delete; \
+		cp bin/$(WHEEL_BINARY)* python-server/evalhub_server/binaries/; \
+	else \
+		echo "Skipping copy (GITHUB_ACTIONS): binary provided by actions/download-artifact"; \
+	fi
+	@find python-server/evalhub_server/binaries/ -type f ! -name '.gitkeep' -exec chmod +x {} +
 	@echo "Building wheel for $(WHEEL_PLATFORM) with binary $(WHEEL_BINARY)..."
 	@rm -rf python-server/build/
-	@mkdir -p python-server/evalhub_server/binaries/
-	@find python-server/evalhub_server/binaries/ -type f ! -name '.gitkeep' -delete
-	@cp bin/$(WHEEL_BINARY)* python-server/evalhub_server/binaries/
-	WHEEL_PLATFORM=$(WHEEL_PLATFORM) $(VENV_PYTHON) -m build --wheel python-server
+	WHEEL_PLATFORM=$(WHEEL_PLATFORM) uv build --wheel python-server
 
 .PHONY: build-all-wheels
-build-all-wheels: clean-wheels build-all-platforms install-wheel-tools ## Build all Python wheels for all platforms
+build-all-wheels: clean-wheels build-all-platforms ## Build all Python wheels for all platforms
 	@$(MAKE) build-wheel WHEEL_PLATFORM=manylinux_2_17_x86_64 WHEEL_BINARY=eval-hub-linux-amd64
 	@$(MAKE) build-wheel WHEEL_PLATFORM=manylinux_2_17_aarch64 WHEEL_BINARY=eval-hub-linux-arm64
 	@$(MAKE) build-wheel WHEEL_PLATFORM=macosx_10_9_x86_64 WHEEL_BINARY=eval-hub-darwin-amd64

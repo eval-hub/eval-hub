@@ -23,6 +23,9 @@ classifiers = [
 ]
 keywords = ["eval-hub", "binary", "server"]
 
+[project.scripts]
+eval-hub-server = "evalhub_server.main:main"
+
 [project.optional-dependencies]
 dev = [
     "ruff>=0.14.14",

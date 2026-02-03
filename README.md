@@ -82,32 +82,6 @@ flowchart TD
 - Kubernetes/OpenShift cluster access
 - kubectl or oc CLI tools
 
-### Local Development
-
-1. **Clone and setup**:
-   ```bash
-   git clone <repository>
-   cd eval-hub
-   uv venv
-   source .venv/bin/activate  # On Windows: .venv\\Scripts\\activate
-   uv pip install -e ".[dev]"
-   ```
-
-2. **Environment configuration**:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
-
-3. **Run the service**:
-   ```bash
-   python -m eval_hub.main
-   ```
-
-4. **Access the API**:
-   - API Documentation: http://localhost:8000/docs
-   - Health Check: http://localhost:8000/api/v1/health
-   - Metrics: http://localhost:8000/metrics
 
 ### Podman Deployment (Optional)
 
