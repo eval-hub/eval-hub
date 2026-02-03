@@ -416,7 +416,7 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 
 	// this is just for a create evaluation job request
 	if method == http.MethodPost && tc.response.StatusCode == http.StatusAccepted {
-		assetName, err := getAssetName(path)
+		assetName, err := getAssetName(endpoint)
 		if err != nil {
 			return err
 		}
@@ -436,15 +436,15 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 	}
 
 	if method == http.MethodDelete {
-		assetName, err := getAssetName(path)
+		assetName, err := getAssetName(endpoint)
 		if err != nil {
 			return err
 		}
 		switch assetName {
 		case "evaluations":
-			id := extractIdFromPath(path)
+			id := extractIdFromPath(endpoint)
 			if id == "" {
-				return logError(fmt.Errorf("no ID found in path %s", path))
+				return logError(fmt.Errorf("no ID found in path %s", endpoint))
 			}
 			tc.removeAsset(assetName, id)
 		default:
