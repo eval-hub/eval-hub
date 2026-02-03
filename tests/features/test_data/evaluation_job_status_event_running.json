@@ -1,0 +1,9 @@
+{
+    "status_event": {
+        "state": "running",
+        "message": {
+            "message": "Evaluation job is running",
+            "message_code": "evaluation_job_running"
+        }
+    }
+}

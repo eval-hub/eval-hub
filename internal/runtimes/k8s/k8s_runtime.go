@@ -120,11 +120,13 @@ func (r *K8sRuntime) persistJobFailure(storage *abstractions.Storage, evaluation
 		return
 	}
 	status := &api.EvaluationJobStatus{
-		EvaluationJobState: api.EvaluationJobState{
-			State: api.StateFailed,
-			Message: &api.MessageInfo{
-				Message:     runErr.Error(),
-				MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED,
+		StatusEvent: &api.StatusEvent{
+			EvaluationJobState: api.EvaluationJobState{
+				State: api.StateFailed,
+				Message: &api.MessageInfo{
+					Message:     runErr.Error(),
+					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED,
+				},
 			},
 		},
 	}

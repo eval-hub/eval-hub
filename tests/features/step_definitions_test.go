@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/gabs/v2"
+	"github.com/PaesslerAG/jsonpath"
 	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/logging"
@@ -563,6 +564,36 @@ func (tc *scenarioConfig) theResponseShouldHaveSchemaAs(body *godog.DocString) e
 	return compareJSONSchema(body.Content, string(tc.body))
 }
 
+func (tc *scenarioConfig) getJsonPath(jsonPath string) (string, error) {
+	var respMap map[string]interface{}
+	err := json.Unmarshal(tc.body, &respMap)
+	if err != nil {
+		return "", err
+	}
+
+	foundValue, err := jsonpath.Get(jsonPath, respMap)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%v", foundValue), nil
+}
+
+func (tc *scenarioConfig) theResponseShouldContainAtJSONPath(expectedValue string, jsonPath string) error {
+	foundValue, err := tc.getJsonPath(jsonPath)
+	if err != nil {
+		return err
+	}
+
+	// make this contains and not equals
+	// if foundValue == strings.TrimSpace(expectedValue) {
+	if strings.Contains(foundValue, expectedValue) {
+		return nil
+	}
+
+	return fmt.Errorf("expected %s to be %s but was %s", jsonPath, expectedValue, foundValue)
+}
+
 func getJsonPointer(path string) string {
 	if !strings.HasPrefix(path, "/") {
 		return strings.ReplaceAll(fmt.Sprintf("/%s", path), ".", "/")
@@ -713,6 +744,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the metrics should include "([^"]*)"$`, tc.theMetricsShouldInclude)
 	ctx.Step(`^the metrics should show request count for "([^"]*)"$`, tc.theMetricsShouldShowRequestCountFor)
 	// Responses
-	ctx.Step(`^the response should have schema as:$`, tc.theResponseShouldHaveSchemaAs)
-	ctx.Step(`^the "([^"]*)" field in the response should be saved as "([^"]*)"$`, tc.theFieldShouldBeSaved)
+	ctx.Step(`^the (response|job) should have schema as:$`, tc.theResponseShouldHaveSchemaAs)
+	ctx.Step(`^the "([^"]*)" field in the (response|job) should be saved as "([^"]*)"$`, tc.theFieldShouldBeSaved)
+	ctx.Step(`^the (response|job) should contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldContainAtJSONPath)
 }

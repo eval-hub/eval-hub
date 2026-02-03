@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
@@ -208,17 +207,24 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		}
 	})
 
-	// Handle update endpoint first (more specific)
-	router.HandleFunc("/api/v1/evaluations/jobs/", func(w http.ResponseWriter, r *http.Request) {
+	// Handle events endpoint
+	router.HandleFunc("/api/v1/evaluations/jobs/events", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
-		path := r.URL.Path
 		resp := NewRespWrapper(w, ctx)
 		req := NewRequestWrapper(r)
-		if strings.HasSuffix(path, "/update") && r.Method == http.MethodPost {
+		switch r.Method {
+		case http.MethodPost:
 			h.HandleUpdateEvaluation(ctx, req, resp)
-			return
+		default:
+			resp.Error("Method not allowed", http.StatusMethodNotAllowed, ctx.RequestID)
 		}
-		// Handle individual job endpoints
+	})
+
+	// Handle individual job endpoints
+	router.HandleFunc("/api/v1/evaluations/jobs/", func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := NewRequestWrapper(r)
 		switch r.Method {
 		case http.MethodGet:
 			h.HandleGetEvaluation(ctx, req, resp)
