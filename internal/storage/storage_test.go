@@ -104,9 +104,8 @@ func TestStorage(t *testing.T) {
 	t.Run("GetEvaluationJobs returns the evaluation jobs", func(t *testing.T) {
 		ctx := createExecutionContext(logger)
 		r := &testRequestWrapper{
-			uri: &url.URL{
-				Path: "/api/v1/evaluations/jobs",
-			},
+			uri:     &url.URL{Path: "/api/v1/evaluations/jobs"},
+			headers: make(map[string]string),
 		}
 		resp, err := store.GetEvaluationJobs(ctx, r, 10, 0, "")
 		if err != nil {

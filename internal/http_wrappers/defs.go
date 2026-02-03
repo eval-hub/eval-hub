@@ -2,7 +2,7 @@ package http_wrappers
 
 import "github.com/eval-hub/eval-hub/internal/messages"
 
-// Request sbstraction of undelying HTTP library
+// RequestWrapper abstracts the underlying HTTP request.
 type RequestWrapper interface {
 	Method() string
 	URI() string
