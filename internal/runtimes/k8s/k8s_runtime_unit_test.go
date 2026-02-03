@@ -37,7 +37,7 @@ func (f *fakeStorage) GetEvaluationJobs(_ *executioncontext.ExecutionContext, _ 
 func (f *fakeStorage) DeleteEvaluationJob(_ *executioncontext.ExecutionContext, _ string, _ bool) error {
 	return nil
 }
-func (f *fakeStorage) UpdateEvaluationJobStatus(_ *executioncontext.ExecutionContext, _ string, _ *api.EvaluationJobStatus) error {
+func (f *fakeStorage) UpdateEvaluationJobStatus(_ *executioncontext.ExecutionContext, _ string, _ *api.StatusEvent) error {
 	f.called = true
 	return nil
 }
