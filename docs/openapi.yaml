@@ -762,6 +762,12 @@ components:
         message: The user does not have access to the endpoint.
         message_code: endpoint_access_forbidden
         trace: b12692e1-8582-4628-88ca-7a13fefb73e2
+    NotFoundError:
+      summary: Bad request error with status code 404
+      value:
+        message: The resource was not found.
+        message_code: not_found
+        trace: b12692e1-8582-4628-88ca-7a13fefb73e2
   responses:
     BadRequest:
       description: Bad Request
@@ -798,4 +804,4 @@ components:
             $ref: '#/components/schemas/APIError'
           examples:
             BadRequestError:
-              $ref: '#/components/examples/AuthorizationError'
+              $ref: '#/components/examples/NotFoundError'
