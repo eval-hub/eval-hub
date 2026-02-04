@@ -17,7 +17,6 @@ properties:
     format: date-time
     title: Completed At
     description: Completion timestamp
-additionalProperties: true
 required:
   - id
   - status

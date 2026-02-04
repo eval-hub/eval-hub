@@ -1109,7 +1109,6 @@
             "description": "Completion timestamp"
           }
         },
-        "additionalProperties": true,
         "required": [
           "id",
           "status",
@@ -1134,11 +1133,9 @@
               "mlflow_experiment_id": {
                 "$ref": "#/components/schemas/MLFlowExperimentId"
               }
-            },
-            "additionalProperties": false
+            }
           }
         ],
-        "additionalProperties": false,
         "title": "EvaluationResource",
         "description": "Resource information for an evaluation."
       },

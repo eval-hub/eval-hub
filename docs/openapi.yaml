@@ -471,7 +471,6 @@ components:
           format: date-time
           title: Completed At
           description: Completion timestamp
-      additionalProperties: true
       required:
         - id
         - status
@@ -489,8 +488,6 @@ components:
           properties:
             mlflow_experiment_id:
               $ref: '#/components/schemas/MLFlowExperimentId'
-          additionalProperties: false
-      additionalProperties: false
       title: EvaluationResource
       description: Resource information for an evaluation.
     BenchmarkResultPayload:
