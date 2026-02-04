@@ -71,7 +71,7 @@ flowchart TD
 ### Prerequisites
 
 **All Deployments:**
-- Python 3.12+
+- Python 3.11+
 - uv (for dependency management)
 - MLFlow tracking server (local or remote)
 
