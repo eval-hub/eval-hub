@@ -28,6 +28,7 @@ tags:
     description: Health check endpoints
   - name: Metrics
     description: Metrics and monitoring endpoints
+    x-internal: true
   - name: Documentation
     description: API documentation endpoints
     x-internal: true
@@ -56,6 +57,7 @@ paths:
           $ref: '#/components/responses/NotFound'
   /metrics:
     get:
+      x-internal: true
       summary: Metrics
       description: Prometheus metrics endpoint with MLflow health check.
       operationId: metrics_metrics_get

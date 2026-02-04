@@ -23,8 +23,6 @@ tags:
     description: Evaluation provider endpoints
   - name: Health
     description: Health check endpoints
-  - name: Metrics
-    description: Metrics and monitoring endpoints
 paths:
   /api/v1/health:
     get:
@@ -40,27 +38,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-  /metrics:
-    get:
-      summary: Metrics
-      description: Prometheus metrics endpoint with MLflow health check.
-      operationId: metrics_metrics_get
-      tags:
-        - Metrics
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':

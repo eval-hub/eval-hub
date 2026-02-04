@@ -47,7 +47,8 @@
     },
     {
       "name": "Metrics",
-      "description": "Metrics and monitoring endpoints"
+      "description": "Metrics and monitoring endpoints",
+      "x-internal": true
     },
     {
       "name": "Documentation",
@@ -92,6 +93,7 @@
     },
     "/metrics": {
       "get": {
+        "x-internal": true,
         "summary": "Metrics",
         "description": "Prometheus metrics endpoint with MLflow health check.",
         "operationId": "metrics_metrics_get",
