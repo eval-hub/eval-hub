@@ -184,7 +184,7 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 	// Extract ID from path
 	evaluationJobID := r.PathValue(constants.PATH_PARAMETER_JOB_ID)
 	if evaluationJobID == "" {
-		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", "id"), ctx.RequestID)
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PATH_PARAMETER_JOB_ID), ctx.RequestID)
 		return
 	}
 
