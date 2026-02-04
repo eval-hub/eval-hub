@@ -67,6 +67,10 @@ func (r *MockRequest) SetHeader(key string, value string) {
 	r.headers[key] = value
 }
 
+func (r *MockRequest) PathValue(name string) string {
+	return ""
+}
+
 type MockResponseWrapper struct {
 	recorder *httptest.ResponseRecorder
 }

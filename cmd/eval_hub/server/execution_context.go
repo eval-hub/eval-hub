@@ -87,6 +87,10 @@ func (r *ReqWrapper) SetHeader(key string, value string) {
 	r.Request.Header.Set(key, value)
 }
 
+func (r *ReqWrapper) PathValue(name string) string {
+	return r.Request.PathValue(name)
+}
+
 type RespWrapper struct {
 	Response http.ResponseWriter
 	ctx      *executioncontext.ExecutionContext

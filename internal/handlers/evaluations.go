@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"runtime/debug"
 	"strconv"
-	"strings"
 
+	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/http_wrappers"
 	"github.com/eval-hub/eval-hub/internal/logging"
@@ -26,21 +26,6 @@ type BenchmarkSpec struct {
 	BenchmarkID string                 `json:"benchmark_id"`
 	ProviderID  string                 `json:"provider_id"`
 	Config      map[string]interface{} `json:"config,omitempty"`
-}
-
-func getEvaluationJobID(r http_wrappers.RequestWrapper) string {
-	if _, after, found := strings.Cut(r.URI(), "/api/v1/evaluations/jobs/"); found {
-		if after != "" {
-			if id, _, found := strings.Cut(after, "/"); found {
-				return id
-			}
-			if id, _, found := strings.Cut(after, "?"); found {
-				return id
-			}
-			return after
-		}
-	}
-	return ""
 }
 
 func getParam[T string | int | bool](r http_wrappers.RequestWrapper, name string, optional bool, defaultValue T) (T, error) {
@@ -145,9 +130,9 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 	logging.LogRequestStarted(ctx)
 
 	// Extract ID from path
-	evaluationJobID := getEvaluationJobID(r)
+	evaluationJobID := r.PathValue(constants.PATH_PARAMETER_JOB_ID)
 	if evaluationJobID == "" {
-		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", "id"), ctx.RequestID)
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PATH_PARAMETER_JOB_ID), ctx.RequestID)
 		return
 	}
 
@@ -164,9 +149,9 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 	logging.LogRequestStarted(ctx)
 
 	// Extract ID from path
-	evaluationJobID := getEvaluationJobID(r)
+	evaluationJobID := r.PathValue(constants.PATH_PARAMETER_JOB_ID)
 	if evaluationJobID == "" {
-		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", "id"), ctx.RequestID)
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PATH_PARAMETER_JOB_ID), ctx.RequestID)
 		return
 	}
 
@@ -197,7 +182,7 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 	logging.LogRequestStarted(ctx)
 
 	// Extract ID from path
-	evaluationJobID := getEvaluationJobID(r)
+	evaluationJobID := r.PathValue(constants.PATH_PARAMETER_JOB_ID)
 	if evaluationJobID == "" {
 		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", "id"), ctx.RequestID)
 		return

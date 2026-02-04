@@ -11,6 +11,7 @@ type RequestWrapper interface {
 	Path() string
 	Query(key string) []string
 	BodyAsBytes() ([]byte, error)
+	PathValue(name string) string
 }
 
 // Response abstraction of underlying HTTP library

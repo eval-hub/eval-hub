@@ -49,6 +49,10 @@ func (r *testRequestWrapper) BodyAsBytes() ([]byte, error) {
 	return nil, nil
 }
 
+func (r *testRequestWrapper) PathValue(name string) string {
+	return ""
+}
+
 func createExecutionContext(logger *slog.Logger) *executioncontext.ExecutionContext {
 	return executioncontext.NewExecutionContext(context.Background(), uuid.New().String(), logger, 60*time.Second)
 }

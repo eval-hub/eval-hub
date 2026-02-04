@@ -87,7 +87,7 @@ Feature: Evaluations Endpoint
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
-    When I send a POST request to "/api/v1/evaluations/jobs/events" with body "file:/evaluation_job_status_event_running.json"
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_running.json"
     Then the response code should be 204
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200

@@ -197,7 +197,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	})
 
 	// Handle events endpoint
-	router.HandleFunc("/api/v1/evaluations/jobs/events", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc(fmt.Sprintf("/api/v1/evaluations/jobs/{%s}/events", constants.PATH_PARAMETER_JOB_ID), func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
 		req := NewRequestWrapper(r)
@@ -210,7 +210,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	})
 
 	// Handle individual job endpoints
-	router.HandleFunc("/api/v1/evaluations/jobs/", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc(fmt.Sprintf("/api/v1/evaluations/jobs/{%s}", constants.PATH_PARAMETER_JOB_ID), func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
 		req := NewRequestWrapper(r)
@@ -252,7 +252,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		}
 	})
 
-	router.HandleFunc("/api/v1/evaluations/collections/", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc(fmt.Sprintf("/api/v1/evaluations/collections/{%s}", constants.PATH_PARAMETER_COLLECTION_ID), func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
 		req := NewRequestWrapper(r)
@@ -283,7 +283,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		}
 	})
 
-	router.HandleFunc("/api/v1/evaluations/providers/", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc(fmt.Sprintf("/api/v1/evaluations/providers/{%s}", constants.PATH_PARAMETER_PROVIDER_ID), func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
 		req := NewRequestWrapper(r)
