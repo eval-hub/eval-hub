@@ -309,7 +309,7 @@ paths:
                   benchmark_status_event:
                     provider_id: "garak"
                     benchmark_id: "toxicity"
-                    status: "running"
+                    status: "completed"
                     metrics:
                       accuracy: 0.95
                     artifacts:
