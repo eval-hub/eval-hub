@@ -23,8 +23,6 @@ tags:
     description: Evaluation provider endpoints
   - name: Health
     description: Health check endpoints
-  - name: Metrics
-    description: Metrics and monitoring endpoints
 paths:
   /api/v1/health:
     get:
@@ -40,27 +38,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-  /metrics:
-    get:
-      summary: Metrics
-      description: Prometheus metrics endpoint with MLflow health check.
-      operationId: metrics_metrics_get
-      tags:
-        - Metrics
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema: {}
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -315,36 +292,15 @@ components:
           type: string
           title: Status
           description: Overall health status
-        version:
-          type: string
-          title: Version
-          description: Service version
         timestamp:
           type: string
           format: date-time
           title: Timestamp
           description: Health check timestamp
-        components:
-          additionalProperties:
-            additionalProperties: true
-            type: object
-          type: object
-          title: Components
-          description: Health status of individual components
-        uptime_seconds:
-          type: number
-          title: Uptime Seconds
-          description: Service uptime in seconds
-        active_evaluations:
-          type: integer
-          title: Active Evaluations
-          description: Number of active evaluations
-          default: 0
       type: object
       required:
         - status
-        - version
-        - uptime_seconds
+        - timestamp
       title: HealthResponse
       description: Health check response.
     APIError:

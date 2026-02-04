@@ -47,7 +47,8 @@
     },
     {
       "name": "Metrics",
-      "description": "Metrics and monitoring endpoints"
+      "description": "Metrics and monitoring endpoints",
+      "x-internal": true
     },
     {
       "name": "Documentation",
@@ -92,6 +93,7 @@
     },
     "/metrics": {
       "get": {
+        "x-internal": true,
         "summary": "Metrics",
         "description": "Prometheus metrics endpoint with MLflow health check.",
         "operationId": "metrics_metrics_get",
@@ -908,43 +910,17 @@
             "title": "Status",
             "description": "Overall health status"
           },
-          "version": {
-            "type": "string",
-            "title": "Version",
-            "description": "Service version"
-          },
           "timestamp": {
             "type": "string",
             "format": "date-time",
             "title": "Timestamp",
             "description": "Health check timestamp"
-          },
-          "components": {
-            "additionalProperties": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "object",
-            "title": "Components",
-            "description": "Health status of individual components"
-          },
-          "uptime_seconds": {
-            "type": "number",
-            "title": "Uptime Seconds",
-            "description": "Service uptime in seconds"
-          },
-          "active_evaluations": {
-            "type": "integer",
-            "title": "Active Evaluations",
-            "description": "Number of active evaluations",
-            "default": 0
           }
         },
         "type": "object",
         "required": [
           "status",
-          "version",
-          "uptime_seconds"
+          "timestamp"
         ],
         "title": "HealthResponse",
         "description": "Health check response."

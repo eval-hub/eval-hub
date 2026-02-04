@@ -1,4 +1,5 @@
 get:
+  x-internal: true
   summary: Metrics
   description: Prometheus metrics endpoint with MLflow health check.
   operationId: metrics_metrics_get
