@@ -40,5 +40,5 @@ type Storage interface {
 	Close() error
 }
 
-// This intrerface must be decoupled from the service HTTP layer.
+// This interface must be decoupled from the service HTTP layer.
 // Do not pass ExecutionContext, Request or Response wrappers either.
