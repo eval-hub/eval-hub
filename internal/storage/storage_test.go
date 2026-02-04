@@ -92,7 +92,7 @@ func TestStorage(t *testing.T) {
 
 	t.Run("GetEvaluationJob returns the evaluation job", func(t *testing.T) {
 		ctx := createExecutionContext(logger)
-		resp, err := store.GetEvaluationJob(ctx, evaluationId)
+		resp, err := store.GetEvaluationJob(ctx, nil, evaluationId)
 		if err != nil {
 			t.Fatalf("Failed to get evaluation job: %v", err)
 		}
