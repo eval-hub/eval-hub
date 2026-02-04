@@ -288,13 +288,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/EvaluationResult'
+              $ref: '#/components/schemas/StatusEvent'
             examples:
               request:
                 summary: A request update with a running status.
                 description: A simple request update with a running status.
                 value:
-                  status_event:
+                  benchmark_status_event:
                     provider_id: garak
                     benchmark_id: toxicity
                     status: running
@@ -855,16 +855,16 @@ components:
       additionalProperties: false
       title: EvaluationResource
       description: Resource information for an evaluation.
-    EvaluationResult:
+    StatusEvent:
       type: object
       description: A status event for an evaluation.
       required:
-        - status_event
+        - benchmark_status_event
       properties:
-        status_event:
-          $ref: '#/components/schemas/StatusEvent'
-      title: EvaluationResult
-    StatusEvent:
+        benchmark_status_event:
+          $ref: '#/components/schemas/BenchmarkStatusEvent'
+      title: StatusEvent
+    BenchmarkStatusEvent:
       type: object
       description: A status event for an evaluation.
       properties:

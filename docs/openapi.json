@@ -926,20 +926,20 @@
         "title": "EvaluationResource",
         "description": "Resource information for an evaluation."
       },
-      "EvaluationResult": {
+      "StatusEvent": {
         "type": "object",
         "description": "A status event for an evaluation.",
         "required": [
-          "status_event"
+          "benchmark_status_event"
         ],
         "properties": {
-          "status_event": {
-            "$ref": "#/components/schemas/StatusEvent"
+          "benchmark_status_event": {
+            "$ref": "#/components/schemas/BenchmarkStatusEvent"
           }
         },
-        "title": "EvaluationResult"
+        "title": "StatusEvent"
       },
-      "StatusEvent": {
+      "BenchmarkStatusEvent": {
         "type": "object",
         "description": "A status event for an evaluation.",
         "properties": {
