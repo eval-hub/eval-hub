@@ -241,3 +241,8 @@ go.work.sum
 
 package-lock.json
 node_modules/
+
+# MLflow
+mlflow.db
+mlruns/
+mlflow.log
