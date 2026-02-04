@@ -91,7 +91,7 @@ func (c *Client) doRequest(method, endpoint string, body interface{}) ([]byte, e
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		apiErr := &APIError{
 			StatusCode:   resp.StatusCode,
-			ResponseBody: string(respBody),
+			ResponseBody: string(bytes.Clone(respBody)),
 		}
 		return nil, apiErr
 	}

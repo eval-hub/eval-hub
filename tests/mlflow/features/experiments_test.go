@@ -98,17 +98,6 @@ func (tc *testContext) multipleExperimentsExist() error {
 	return nil
 }
 
-func (tc *testContext) experimentNameShouldBe(name string) error {
-	exp, err := tc.client.GetExperiment(tc.experimentID)
-	if err != nil {
-		return err
-	}
-	if exp.Experiment.Name != name {
-		return fmt.Errorf("expected name %s, got %s", name, exp.Experiment.Name)
-	}
-	return nil
-}
-
 func (tc *testContext) deleteExperiment() error {
 	if tc.experimentID == "" {
 		return fmt.Errorf("no experiment ID set")

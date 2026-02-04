@@ -1,13 +1,13 @@
 package mlflowclient
 
 import (
+	"strconv"
 	"strings"
 )
 
 // APIError represents an error from the MLflow API
 type APIError struct {
 	StatusCode   int    `json:"status_code" validate:"required"`
-	Message      string `json:"message,omitempty"`
 	ResponseBody string `json:"response_body,omitempty"`
 }
 
@@ -15,15 +15,12 @@ type APIError struct {
 func (e *APIError) Error() string {
 	sb := strings.Builder{}
 	sb.WriteString("MLflow API error")
-	if e.Message != "" {
-		sb.WriteString(" '")
-		sb.WriteString(e.Message)
-		sb.WriteString("'")
-	}
 	if e.ResponseBody != "" {
 		sb.WriteString(" with response body: ")
 		sb.WriteString(e.ResponseBody)
 	}
+	sb.WriteString(" with status code: ")
+	sb.WriteString(strconv.Itoa(e.StatusCode))
 	return sb.String()
 }
 

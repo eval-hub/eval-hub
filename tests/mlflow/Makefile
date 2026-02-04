@@ -25,7 +25,7 @@ run-mlflow:
 	@echo "" #@echo "   You can use 'make test-godog-server' to run BDD tests with the server automatically."
 	@echo ""
 	@echo "   To use the server in your tests:"
-	@echo "   - Set MLFLOW_TRACKING_URI=http://localhost:5000 in your test environment"
+	@echo "   - Set MLFLOW_TRACKING_URI=http://127.0.0.1:5000 in your test environment"
 	@echo "" # @echo "   - Run tests with 'make test-godog'"
 	@echo ""
 	@echo "   To stop the server:"
@@ -35,7 +35,7 @@ run-mlflow:
 stop-mlflow:
 	./scripts/stop_mlflow.sh
 
-MLFLOW_TRACKING_URI ?= http://localhost:5000
+MLFLOW_TRACKING_URI ?= http://127.0.0.1:5000
 
 ## test-godog-server: Run godog tests with automatic server management
 test-godog-server: run-mlflow ; $(info The MLflow server was successfully started)
