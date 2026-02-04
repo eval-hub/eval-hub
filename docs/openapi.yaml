@@ -794,7 +794,7 @@ components:
           schema:
             $ref: '#/components/schemas/APIError'
           examples:
-            BadRequestError:
+            AuthorizationError:
               $ref: '#/components/examples/AuthorizationError'
     NotFound:
       description: Not Found
@@ -803,5 +803,5 @@ components:
           schema:
             $ref: '#/components/schemas/APIError'
           examples:
-            BadRequestError:
+            NotFoundError:
               $ref: '#/components/examples/NotFoundError'

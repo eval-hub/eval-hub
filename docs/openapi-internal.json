@@ -1862,7 +1862,7 @@
               "$ref": "#/components/schemas/APIError"
             },
             "examples": {
-              "BadRequestError": {
+              "AuthorizationError": {
                 "$ref": "#/components/examples/AuthorizationError"
               }
             }
@@ -1877,7 +1877,7 @@
               "$ref": "#/components/schemas/APIError"
             },
             "examples": {
-              "BadRequestError": {
+              "NotFoundError": {
                 "$ref": "#/components/examples/NotFoundError"
               }
             }

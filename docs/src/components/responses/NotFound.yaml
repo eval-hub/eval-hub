@@ -4,5 +4,5 @@ content:
     schema:
       $ref: ../../components/schemas/APIError.yaml
     examples:
-      BadRequestError:
+      NotFoundError:
         $ref: ../../components/examples/NotFoundError.yaml

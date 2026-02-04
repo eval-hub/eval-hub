@@ -4,5 +4,5 @@ content:
     schema:
       $ref: ../../components/schemas/APIError.yaml
     examples:
-      BadRequestError:
+      AuthorizationError:
         $ref: ../../components/examples/AuthorizationError.yaml
