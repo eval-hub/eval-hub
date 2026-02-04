@@ -2,7 +2,6 @@ package k8s
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"io"
 	"log/slog"
@@ -29,7 +28,7 @@ func (f *fakeStorage) Ping(_ time.Duration) error { return nil }
 func (f *fakeStorage) CreateEvaluationJob(_ *executioncontext.ExecutionContext, _ *api.EvaluationJobConfig) (*api.EvaluationJobResource, error) {
 	return nil, nil
 }
-func (f *fakeStorage) GetEvaluationJob(_ *executioncontext.ExecutionContext, _ *sql.Tx, _ string) (*api.EvaluationJobResource, error) {
+func (f *fakeStorage) GetEvaluationJob(_ *executioncontext.ExecutionContext, _ string) (*api.EvaluationJobResource, error) {
 	return nil, nil
 }
 func (f *fakeStorage) GetEvaluationJobs(_ *executioncontext.ExecutionContext, _ http_wrappers.RequestWrapper, _ int, _ int, _ string) (*api.EvaluationJobResourceList, error) {

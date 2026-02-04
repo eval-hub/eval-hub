@@ -151,7 +151,7 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 		return
 	}
 
-	response, err := h.storage.GetEvaluationJob(ctx, nil, evaluationJobID)
+	response, err := h.storage.GetEvaluationJob(ctx, evaluationJobID)
 	if err != nil {
 		w.ErrorWithError(err, ctx.RequestID)
 		return

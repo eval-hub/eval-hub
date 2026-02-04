@@ -74,7 +74,7 @@ func (s *SQLStorage) CreateEvaluationJob(executionContext *executioncontext.Exec
 	return evaluationResource, nil
 }
 
-func (s *SQLStorage) GetEvaluationJob(ctx *executioncontext.ExecutionContext, txn *sql.Tx, id string) (*api.EvaluationJobResource, error) {
+func (s *SQLStorage) GetEvaluationJob(ctx *executioncontext.ExecutionContext, id string) (*api.EvaluationJobResource, error) {
 	// Build the SELECT query
 	selectQuery, err := createGetEntityStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS)
 	if err != nil {
@@ -87,11 +87,70 @@ func (s *SQLStorage) GetEvaluationJob(ctx *executioncontext.ExecutionContext, tx
 	var statusStr string
 	var entityJSON string
 
-	if txn != nil {
-		err = txn.QueryRowContext(ctx.Ctx, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &statusStr, &entityJSON)
-	} else {
-		err = s.pool.QueryRowContext(ctx.Ctx, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &statusStr, &entityJSON)
+	err = s.pool.QueryRowContext(ctx.Ctx, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &statusStr, &entityJSON)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
+		}
+		// For now we differentiate between no rows found and other errors but this might be confusing
+		ctx.Logger.Error("Failed to get evaluation job", "error", err, "id", id)
+		return nil, serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
 	}
+
+	// Unmarshal the entity JSON into EvaluationJobConfig
+	var evaluationConfig api.EvaluationJobConfig
+	err = json.Unmarshal([]byte(entityJSON), &evaluationConfig)
+	if err != nil {
+		ctx.Logger.Error("Failed to unmarshal evaluation job entity", "error", err, "id", id)
+		return nil, serviceerrors.NewServiceError(messages.JSONUnmarshalFailed, "Type", "evaluation job", "Error", err.Error())
+	}
+
+	// Parse status from database
+	status := api.State(statusStr)
+
+	// Construct the EvaluationJobResource
+	// Note: Results and Benchmarks are initialized with defaults since they're not stored in the entity column
+	evaluationResource := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{
+				ID:        dbID,
+				Tenant:    "TODO", // TODO: retrieve tenant from database or context
+				CreatedAt: createdAt,
+				UpdatedAt: updatedAt,
+			},
+			MLFlowExperimentID: nil,
+		},
+		EvaluationJobConfig: evaluationConfig,
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{
+				State: status,
+				Message: &api.MessageInfo{
+					Message:     "Evaluation job retrieved",
+					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_RETRIEVED,
+				},
+			},
+			Benchmarks: nil, // TODO: retrieve benchmarks status from database
+		},
+		Results: nil, // TODO: retrieve results from database if needed
+	}
+
+	return evaluationResource, nil
+}
+
+func (s *SQLStorage) getEvaluationJobTransactional(ctx *executioncontext.ExecutionContext, txn *sql.Tx, id string) (*api.EvaluationJobResource, error) {
+	// Build the SELECT query
+	selectQuery, err := createGetEntityStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS)
+	if err != nil {
+		return nil, err
+	}
+
+	// Query the database
+	var dbID string
+	var createdAt, updatedAt time.Time
+	var statusStr string
+	var entityJSON string
+
+	err = txn.QueryRowContext(ctx.Ctx, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &statusStr, &entityJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
@@ -341,7 +400,7 @@ func (s *SQLStorage) UpdateEvaluationJobStatus(ctx *executioncontext.ExecutionCo
 	return nil
 }
 
-func (s *SQLStorage) UpdateEvaluationJob(ctx *executioncontext.ExecutionContext, txn *sql.Tx, id string, status *api.EvaluationJobStatus, entityJSON string) error {
+func (s *SQLStorage) updateEvaluationJobTransactional(ctx *executioncontext.ExecutionContext, txn *sql.Tx, id string, status *api.EvaluationJobStatus, entityJSON string) error {
 	statusStr := string(status.EvaluationJobState.State)
 	updateQuery, args, err := CreateUpdateEvaluationStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, id, statusStr, entityJSON)
 	if err != nil {
@@ -360,7 +419,7 @@ func (s *SQLStorage) UpdateEvaluationJob(ctx *executioncontext.ExecutionContext,
 }
 
 // UpdateEvaluationJobWithRunStatus runs in a transaction: fetches the job, merges RunStatusInternal into the entity, and persists.
-func (s *SQLStorage) UpdateEvaluationJobTransactional(ctx *executioncontext.ExecutionContext, id string, runStatus *api.RunStatusInternal) error {
+func (s *SQLStorage) UpdateEvaluationJob(ctx *executioncontext.ExecutionContext, id string, runStatus *api.RunStatusInternal) error {
 	txn, err := s.pool.BeginTx(ctx.Ctx, nil)
 	if err != nil {
 		ctx.Logger.Error("Failed to begin transaction", "error", err, "id", id)
@@ -368,7 +427,7 @@ func (s *SQLStorage) UpdateEvaluationJobTransactional(ctx *executioncontext.Exec
 	}
 	defer func() { _ = txn.Rollback() }()
 
-	job, err := s.GetEvaluationJob(ctx, txn, id)
+	job, err := s.getEvaluationJobTransactional(ctx, txn, id)
 	if err != nil {
 		return err
 	}
@@ -382,7 +441,7 @@ func (s *SQLStorage) UpdateEvaluationJobTransactional(ctx *executioncontext.Exec
 		ctx.Logger.Error("Failed to marshal updated job resource", "error", err, "id", id)
 		return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
 	}
-	if err := s.UpdateEvaluationJob(ctx, txn, id, job.Status, string(updatedEntityJSON)); err != nil {
+	if err := s.updateEvaluationJobTransactional(ctx, txn, id, job.Status, string(updatedEntityJSON)); err != nil {
 		return err
 	}
 
