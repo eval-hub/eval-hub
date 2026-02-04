@@ -1,0 +1,9 @@
+type: string
+enum:
+  - pending
+  - running
+  - completed
+  - failed
+  - cancelled
+title: EvaluationStatus
+description: Status of an evaluation.

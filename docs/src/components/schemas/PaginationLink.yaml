@@ -1,0 +1,11 @@
+properties:
+  href:
+    type: string
+    title: Href
+    description: Link URL
+additionalProperties: true
+type: object
+required:
+  - href
+title: PaginationLink
+description: Hypermedia link used for pagination.

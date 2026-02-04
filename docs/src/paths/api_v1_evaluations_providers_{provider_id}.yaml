@@ -1,0 +1,28 @@
+get:
+  tags:
+    - Providers
+  summary: Get Provider
+  description: Get details of a specific provider.
+  operationId: get_provider_api_v1_evaluations_providers__provider_id__get
+  parameters:
+    - name: provider_id
+      in: path
+      required: true
+      schema:
+        type: string
+        title: Provider Id
+  responses:
+    '200':
+      description: Successful Response
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Provider.yaml
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml

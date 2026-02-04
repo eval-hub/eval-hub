@@ -1,0 +1,28 @@
+properties:
+  first:
+    $ref: ./PaginationLink.yaml
+    description: Link to the first page
+  next:
+    $ref: ./PaginationLink.yaml
+    description: Link to the next page, if available
+  limit:
+    type: integer
+    title: Limit
+    description: Page size used for this response
+  total_count:
+    type: integer
+    title: Total Count
+    description: Total number of evaluations
+  items:
+    items:
+      $ref: ./EvaluationResponse.yaml
+    type: array
+    title: Items
+    description: Evaluations returned for this page
+type: object
+required:
+  - first
+  - limit
+  - total_count
+title: PaginatedEvaluations
+description: Paginated list response for evaluation resources.

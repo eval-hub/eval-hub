@@ -1,0 +1,50 @@
+get:
+  x-internal: true
+  tags:
+    - Collections
+  summary: List Collections
+  description: List all benchmark collections.
+  operationId: list_collections_api_v1_evaluations_collections_get
+  responses:
+    '200':
+      description: Successful Response
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ListCollectionsResponse.yaml
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml
+post:
+  x-internal: true
+  tags:
+    - Collections
+  summary: Create Collection
+  description: Create a new collection.
+  operationId: create_collection_api_v1_evaluations_collections_post
+  requestBody:
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/CollectionCreationRequest.yaml
+    required: true
+  responses:
+    '201':
+      description: Successful Response
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Collection.yaml
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml

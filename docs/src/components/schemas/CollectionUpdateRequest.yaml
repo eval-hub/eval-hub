@@ -1,0 +1,34 @@
+properties:
+  name:
+    type: string
+    title: Name
+    description: Human-readable collection name
+  description:
+    type: string
+    title: Description
+    description: Collection description
+  provider_id:
+    type: string
+    title: Provider Id
+    description: Primary provider for this collection
+  tags:
+    items:
+      type: string
+    type: array
+    title: Tags
+    description: Tags for categorizing the collection
+  metadata:
+    type: object
+    additionalProperties: true
+    title: Metadata
+    description: Additional collection metadata
+  benchmarks:
+    items:
+      $ref: ./BenchmarkReference.yaml
+    type: array
+    title: Benchmarks
+    description: List of benchmark references in this collection
+additionalProperties: true
+type: object
+title: CollectionUpdateRequest
+description: Request for updating an existing collection.

@@ -1,0 +1,23 @@
+properties:
+  providers:
+    items:
+      $ref: ./ProviderSummary.yaml
+    type: array
+    title: Providers
+    description: List of available providers
+  total_providers:
+    type: integer
+    title: Total Providers
+    description: Total number of providers
+  total_benchmarks:
+    type: integer
+    title: Total Benchmarks
+    description: Total number of benchmarks across all providers
+additionalProperties: true
+type: object
+required:
+  - providers
+  - total_providers
+  - total_benchmarks
+title: ListProvidersResponse
+description: Response for listing all providers.

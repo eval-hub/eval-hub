@@ -1,0 +1,30 @@
+properties:
+  name:
+    type: string
+    title: Name
+    description: Benchmark name
+  metrics:
+    additionalProperties:
+      anyOf:
+        - type: number
+        - type: integer
+        - type: string
+    type: object
+    title: Metrics
+    description: Benchmark metrics
+  artifacts:
+    additionalProperties:
+      type: string
+    type: object
+    title: Artifacts
+    description: Benchmark artifacts
+  mlflow_run_id:
+    type: string
+    title: Mlflow Run Id
+    description: MLFlow run ID
+additionalProperties: true
+type: object
+required:
+  - name
+title: BenchmarkResultPayload
+description: Result payload for a single benchmark.

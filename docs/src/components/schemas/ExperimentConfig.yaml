@@ -1,0 +1,17 @@
+properties:
+  name:
+    type: string
+    title: Name
+    description: Experiment name for MLFlow tracking
+  tags:
+    additionalProperties:
+      type: string
+    type: object
+    title: Tags
+    description: Tags for the evaluation experiment
+additionalProperties: false
+type: object
+required:
+  - name
+title: ExperimentConfig
+description: Configuration for MLFlow experiment tracking.

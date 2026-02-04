@@ -1,0 +1,22 @@
+get:
+  x-internal: true
+  summary: API documentation
+  description: Interactive API documentation (Swagger UI)
+  operationId: getDocs
+  tags:
+    - Documentation
+  responses:
+    '200':
+      description: Swagger UI HTML page
+      content:
+        text/html:
+          schema:
+            type: string
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml

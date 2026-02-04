@@ -1,0 +1,22 @@
+properties:
+  name:
+    type: string
+    title: Name
+    description: User-provided benchmark name
+  state:
+    type: string
+    title: State
+    description: Run state (pending, running, success, failed)
+  message:
+    $ref: ./ErrorMessage.yaml
+  logs_path:
+    type: string
+    title: Logs Path
+    description: Optional path to run-specific logs
+additionalProperties: true
+type: object
+required:
+  - name
+  - state
+title: RunStatus
+description: Status information for an individual benchmark run.

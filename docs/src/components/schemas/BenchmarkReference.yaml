@@ -1,0 +1,26 @@
+properties:
+  provider_id:
+    type: string
+    title: Provider Id
+    description: Provider identifier
+  benchmark_id:
+    type: string
+    title: Benchmark Id
+    description: Benchmark identifier
+  weight:
+    type: number
+    title: Weight
+    description: Weight for this benchmark in collection scoring
+    default: 1
+  config:
+    additionalProperties: true
+    type: object
+    title: Config
+    description: Benchmark-specific configuration
+additionalProperties: true
+type: object
+required:
+  - provider_id
+  - benchmark_id
+title: BenchmarkReference
+description: Reference to a benchmark within a collection.

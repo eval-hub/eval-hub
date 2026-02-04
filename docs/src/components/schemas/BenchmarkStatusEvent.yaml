@@ -1,0 +1,58 @@
+type: object
+description: A status event for an evaluation.
+properties:
+  provider_id:
+    type: string
+    title: Provider Id
+    description: Provider that ran the evaluation
+  benchmark_id:
+    type: string
+    title: Benchmark Id
+    description: Benchmark identifier
+  benchmark_name:
+    type: string
+    title: Benchmark Name
+    description: Benchmark display name
+  status:
+    $ref: ./EvaluationStatus.yaml
+    description: Evaluation status
+  metrics:
+    additionalProperties:
+      anyOf:
+        - type: number
+        - type: integer
+        - type: string
+    type: object
+    title: Metrics
+    description: Evaluation metrics
+  artifacts:
+    additionalProperties:
+      type: string
+    type: object
+    title: Artifacts
+    description: Paths to result artifacts
+  error_message:
+    $ref: ./ErrorMessage.yaml
+  started_at:
+    type: string
+    format: date-time
+    title: Started At
+    description: Start timestamp
+  completed_at:
+    type: string
+    format: date-time
+    title: Completed At
+    description: Completion timestamp
+  duration_seconds:
+    type: number
+    title: Duration Seconds
+    description: Evaluation duration
+  mlflow_run_id:
+    type: string
+    title: Mlflow Run Id
+    description: MLFlow run ID
+additionalProperties: true
+required:
+  - provider_id
+  - benchmark_id
+  - status

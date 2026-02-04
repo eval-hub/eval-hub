@@ -1,0 +1,8 @@
+type: object
+properties:
+  resource:
+    $ref: ./EvaluationResource.yaml
+  results:
+    $ref: ./ResultsPayload.yaml
+title: EvaluationResponseResults
+description: Response payload for evaluation requests.

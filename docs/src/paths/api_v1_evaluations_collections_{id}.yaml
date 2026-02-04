@@ -1,0 +1,127 @@
+get:
+  x-internal: true
+  tags:
+    - Collections
+  summary: Get Collection
+  description: Get details of a specific collection.
+  operationId: get_collection_api_v1_evaluations_collections__collection_id__get
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        title: Collection Id
+  responses:
+    '200':
+      description: Successful Response
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Collection.yaml
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml
+put:
+  x-internal: true
+  tags:
+    - Collections
+  summary: Update Collection
+  description: Update an existing collection.
+  operationId: update_collection_api_v1_evaluations_collections__collection_id__put
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        title: Collection Id
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/CollectionUpdateRequest.yaml
+  responses:
+    '200':
+      description: Successful Response
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Collection.yaml
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml
+patch:
+  x-internal: true
+  tags:
+    - Collections
+  summary: Patch Collection
+  description: Partially update an existing collection.
+  operationId: patch_collection_api_v1_evaluations_collections__collection_id__patch
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        title: Collection Id
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/CollectionUpdateRequest.yaml
+  responses:
+    '200':
+      description: Successful Response
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Collection.yaml
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml
+delete:
+  x-internal: true
+  tags:
+    - Collections
+  summary: Delete Collection
+  description: Delete a collection.
+  operationId: delete_collection_api_v1_evaluations_collections__collection_id__delete
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        title: Collection Id
+  responses:
+    '200':
+      description: Successful Response
+      content:
+        application/json:
+          schema: {}
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml

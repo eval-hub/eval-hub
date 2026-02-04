@@ -1,0 +1,16 @@
+type: object
+properties:
+  message:
+    type: string
+    description: Details of the error.
+    title: Message
+  message_code:
+    type: string
+    description: Code for the error
+    title: Message Code
+additionalProperties: true
+required:
+  - message
+  - message_code
+title: ErrorMessage
+description: Error message for a job.

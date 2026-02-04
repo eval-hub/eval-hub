@@ -1,0 +1,48 @@
+properties:
+  benchmark_id:
+    type: string
+    title: Benchmark Id
+    description: Unique benchmark identifier
+  name:
+    type: string
+    title: Name
+    description: Human-readable benchmark name
+  description:
+    type: string
+    title: Description
+    description: Benchmark description
+  category:
+    type: string
+    title: Category
+    description: Benchmark category
+  metrics:
+    items:
+      type: string
+    type: array
+    title: Metrics
+    description: List of metrics provided by this benchmark
+  num_few_shot:
+    type: integer
+    title: Num Few Shot
+    description: Number of few-shot examples
+  dataset_size:
+    type: integer
+    title: Dataset Size
+    description: Size of the evaluation dataset
+  tags:
+    items:
+      type: string
+    type: array
+    title: Tags
+    description: Tags for categorization
+additionalProperties: true
+type: object
+required:
+  - benchmark_id
+  - name
+  - description
+  - category
+  - metrics
+  - num_few_shot
+title: Benchmark
+description: Benchmark specification.

@@ -1,0 +1,36 @@
+properties:
+  resource:
+    $ref: ./ResourceInfo.yaml
+    description: Resource metadata
+  name:
+    type: string
+    title: Name
+    description: Human-readable collection name
+  description:
+    type: string
+    title: Description
+    description: Collection description
+  tags:
+    items:
+      type: string
+    type: array
+    title: Tags
+    description: Tags for categorizing the collection
+  custom:
+    additionalProperties: true
+    type: object
+    title: Metadata
+    description: Additional collection metadata
+  benchmarks:
+    items:
+      $ref: ./BenchmarkReference.yaml
+    type: array
+    title: Benchmarks
+    description: List of benchmark references in this collection
+type: object
+required:
+  - name
+  - description
+  - benchmarks
+title: Collection
+description: Collection of benchmarks for specific evaluation scenarios.

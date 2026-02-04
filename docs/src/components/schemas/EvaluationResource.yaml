@@ -1,0 +1,10 @@
+allOf:
+  - $ref: ./ResourceInfo.yaml
+  - type: object
+    properties:
+      mlflow_experiment_id:
+        $ref: ./MLFlowExperimentId.yaml
+    additionalProperties: false
+additionalProperties: false
+title: EvaluationResource
+description: Resource information for an evaluation.

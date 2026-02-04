@@ -1,0 +1,78 @@
+post:
+  tags:
+    - Evaluations
+  summary: Create Evaluation
+  description: Create and execute evaluation request using the simplified benchmark schema.
+  operationId: create_evaluation_api_v1_evaluations_jobs_post
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/EvaluationRequest.yaml
+  responses:
+    '202':
+      description: Successful Response
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/EvaluationResponse.yaml
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml
+get:
+  tags:
+    - Evaluations
+  summary: List Evaluations
+  description: List all evaluation requests.
+  operationId: list_evaluations_api_v1_evaluations_jobs_get
+  parameters:
+    - name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        maximum: 100
+        minimum: 1
+        description: Maximum number of evaluations to return
+        default: 50
+        title: Limit
+      description: Maximum number of evaluations to return
+    - name: offset
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        description: Offset for pagination
+        default: 0
+        title: Offset
+      description: Offset for pagination
+    - name: status_filter
+      in: query
+      required: false
+      schema:
+        type: string
+        description: Filter by status
+        title: Status Filter
+      description: Filter by status
+  responses:
+    '200':
+      description: Successful Response
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/PaginatedEvaluations.yaml
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml

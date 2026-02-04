@@ -1,0 +1,20 @@
+get:
+  summary: Metrics
+  description: Prometheus metrics endpoint with MLflow health check.
+  operationId: metrics_metrics_get
+  tags:
+    - Metrics
+  responses:
+    '200':
+      description: Successful Response
+      content:
+        application/json:
+          schema: {}
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml

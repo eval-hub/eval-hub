@@ -1,0 +1,8 @@
+type: object
+description: A status event for an evaluation.
+required:
+  - benchmark_status_event
+properties:
+  benchmark_status_event:
+    $ref: ./BenchmarkStatusEvent.yaml
+title: StatusEvent

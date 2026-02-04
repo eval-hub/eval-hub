@@ -1,0 +1,34 @@
+properties:
+  model:
+    $ref: ./Model.yaml
+    description: Model specification for evaluation
+  benchmarks:
+    items:
+      $ref: ./BenchmarkConfig.yaml
+    type: array
+    title: Benchmarks
+    description: List of benchmarks to evaluate
+  experiment:
+    $ref: ./ExperimentConfig.yaml
+    description: Experiment configuration for MLFlow tracking
+  timeout_minutes:
+    type: integer
+    title: Timeout Minutes
+    description: Timeout for the entire evaluation
+    default: 60
+  retry_attempts:
+    type: integer
+    title: Retry Attempts
+    description: Number of retry attempts on failure
+    default: 3
+  custom:
+    additionalProperties: true
+    type: object
+    title: Custom
+    description: Custom fields for additional request data
+type: object
+required:
+  - model
+  - benchmarks
+title: EvaluationRequest
+description: Simplified evaluation request using the new schema.

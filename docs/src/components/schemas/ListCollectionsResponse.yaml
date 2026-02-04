@@ -1,0 +1,18 @@
+properties:
+  collections:
+    items:
+      $ref: ./Collection.yaml
+    type: array
+    title: Collections
+    description: List of available collections
+  total_collections:
+    type: integer
+    title: Total Collections
+    description: Total number of collections
+additionalProperties: true
+type: object
+required:
+  - collections
+  - total_collections
+title: ListCollectionsResponse
+description: Response for listing all collections.

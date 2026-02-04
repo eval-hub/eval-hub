@@ -1,0 +1,6 @@
+allOf:
+  - $ref: ./EvaluationResponseResults.yaml
+  - $ref: ./EvaluationRequest.yaml
+unevaluatedProperties: false
+title: EvaluationResponse
+description: Response payload for evaluation requests.

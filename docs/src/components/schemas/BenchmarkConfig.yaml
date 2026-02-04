@@ -1,0 +1,21 @@
+properties:
+  benchmark_id:
+    type: string
+    title: Benchmark Id
+    description: Benchmark identifier
+  provider_id:
+    type: string
+    title: Provider Id
+    description: Provider identifier
+  config:
+    additionalProperties: true
+    type: object
+    title: Config
+    description: Benchmark configuration including num_fewshot, limit, batch_size, etc.
+additionalProperties: false
+type: object
+required:
+  - benchmark_id
+  - provider_id
+title: BenchmarkConfig
+description: New simplified benchmark specification.

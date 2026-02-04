@@ -1,0 +1,25 @@
+get:
+  x-internal: true
+  summary: OpenAPI specification
+  description: Returns the OpenAPI 3.1.0 specification for this API
+  operationId: openapi_yaml_get
+  tags:
+    - Documentation
+  responses:
+    '200':
+      description: OpenAPI specification
+      content:
+        application/yaml:
+          schema:
+            type: string
+        application/json:
+          schema:
+            type: object
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml

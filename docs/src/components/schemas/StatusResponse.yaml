@@ -1,0 +1,28 @@
+type: object
+required:
+  - service
+  - version
+  - status
+  - timestamp
+properties:
+  service:
+    type: string
+    examples:
+      - eval-hub
+    description: Name of the service
+  version:
+    type: string
+    examples:
+      - 1.0.0
+    description: Version of the service
+  status:
+    type: string
+    examples:
+      - running
+    description: Current status of the service
+  timestamp:
+    type: string
+    format: date-time
+    examples:
+      - '2024-01-13T10:23:48Z'
+    description: Timestamp of the status check in RFC3339 format

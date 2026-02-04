@@ -1,0 +1,21 @@
+get:
+  tags:
+    - Providers
+  summary: List Providers
+  description: List all registered evaluation providers.
+  operationId: list_providers_api_v1_evaluations_providers_get
+  responses:
+    '200':
+      description: Successful Response
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ListProvidersResponse.yaml
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml

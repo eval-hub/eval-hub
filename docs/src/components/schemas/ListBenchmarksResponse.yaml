@@ -1,0 +1,26 @@
+properties:
+  benchmarks:
+    items:
+      additionalProperties: true
+      type: object
+    type: array
+    title: Benchmarks
+    description: List of all available benchmarks
+  total_count:
+    type: integer
+    title: Total Count
+    description: Total number of benchmarks
+  providers_included:
+    items:
+      type: string
+    type: array
+    title: Providers Included
+    description: List of provider IDs included in the response
+additionalProperties: true
+type: object
+required:
+  - benchmarks
+  - total_count
+  - providers_included
+title: ListBenchmarksResponse
+description: Response for listing all benchmarks (similar to Llama Stack format).

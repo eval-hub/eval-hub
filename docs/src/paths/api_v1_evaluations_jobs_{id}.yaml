@@ -1,0 +1,62 @@
+get:
+  tags:
+    - Evaluations
+  summary: Get Evaluation Status
+  description: Get the status of an evaluation request.
+  operationId: get_evaluation_status_api_v1_evaluations_jobs__id__get
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        title: Id
+  responses:
+    '200':
+      description: Successful Response
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/EvaluationResponse.yaml
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml
+delete:
+  tags:
+    - Evaluations
+  summary: Cancel Evaluation
+  description: Cancel a running evaluation.
+  operationId: cancel_evaluation_api_v1_evaluations_jobs__id__delete
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        title: Id
+    - name: hard_delete
+      in: query
+      required: false
+      schema:
+        type: boolean
+        description: >-
+          If `true`, delete the evaluation job permanently so that `GET
+          /api/v1/evaluations/jobs/{id}` will return a 404.
+        default: false
+        title: Hard Delete
+  responses:
+    '204':
+      description: Successful Response
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml

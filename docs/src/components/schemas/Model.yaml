@@ -1,0 +1,16 @@
+properties:
+  url:
+    type: string
+    title: Url
+    description: Model endpoint URL
+  name:
+    type: string
+    title: Name
+    description: Model name/identifier
+additionalProperties: false
+type: object
+required:
+  - url
+  - name
+title: Model
+description: Model specification for evaluation requests.

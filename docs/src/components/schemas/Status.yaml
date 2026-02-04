@@ -1,0 +1,30 @@
+properties:
+  state:
+    type: string
+    title: State
+    description: Overall state of the request
+    enum:
+      - pending
+      - running
+      - completed
+      - partially_failed
+      - failed
+      - cancelled
+  message:
+    $ref: ./ErrorMessage.yaml
+  logs_path:
+    type: string
+    title: Logs Path
+    description: Optional path to system logs
+  runs:
+    items:
+      $ref: ./RunStatus.yaml
+    type: array
+    title: Runs
+    description: Status for each benchmark run
+additionalProperties: true
+type: object
+required:
+  - state
+title: Status
+description: Overall status for an evaluation request.
