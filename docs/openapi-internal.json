@@ -949,6 +949,33 @@
         "title": "HealthResponse",
         "description": "Health check response."
       },
+      "APIError": {
+        "type": "object",
+        "description": "Error response for the API.",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "The error message.",
+            "title": "Message"
+          },
+          "message_code": {
+            "type": "string",
+            "description": "A message code for the error.",
+            "title": "Message Code"
+          },
+          "trace": {
+            "type": "string",
+            "description": "The trace id of the request.",
+            "title": "Trace"
+          }
+        },
+        "title": "API Error",
+        "required": [
+          "message",
+          "message_code",
+          "trace"
+        ]
+      },
       "PaginationLink": {
         "properties": {
           "href": {
@@ -1762,18 +1789,92 @@
         "description": "Request for updating an existing collection."
       }
     },
+    "examples": {
+      "BadRequestError": {
+        "summary": "Bad request error with status code 400",
+        "value": {
+          "message": "The field 'state' is not valid.",
+          "message_code": "invalid_value",
+          "trace": "b12692e1-8582-4628-88ca-7a13fefb73e2"
+        }
+      },
+      "AuthenticationError": {
+        "summary": "Authentication error with status code 401",
+        "value": {
+          "message": "The bearer token is not valid.",
+          "message_code": "invalid_auth_token",
+          "trace": "b12692e1-8582-4628-88ca-7a13fefb73e2"
+        }
+      },
+      "AuthorizationError": {
+        "summary": "Authorization error with status code 403",
+        "value": {
+          "message": "The user does not have access to the endpoint.",
+          "message_code": "endpoint_access_forbidden",
+          "trace": "b12692e1-8582-4628-88ca-7a13fefb73e2"
+        }
+      }
+    },
     "responses": {
       "BadRequest": {
-        "description": "Bad Request"
+        "description": "Bad Request",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/APIError"
+            },
+            "examples": {
+              "BadRequestError": {
+                "$ref": "#/components/examples/BadRequestError"
+              }
+            }
+          }
+        }
       },
       "Unauthorized": {
-        "description": "Unauthorized"
+        "description": "Unauthorized",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/APIError"
+            },
+            "examples": {
+              "AuthenticationError": {
+                "$ref": "#/components/examples/AuthenticationError"
+              }
+            }
+          }
+        }
       },
       "Forbidden": {
-        "description": "Forbidden"
+        "description": "Forbidden",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/APIError"
+            },
+            "examples": {
+              "BadRequestError": {
+                "$ref": "#/components/examples/AuthorizationError"
+              }
+            }
+          }
+        }
       },
       "NotFound": {
-        "description": "Not Found"
+        "description": "Not Found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/APIError"
+            },
+            "examples": {
+              "BadRequestError": {
+                "$ref": "#/components/examples/AuthorizationError"
+              }
+            }
+          }
+        }
       }
     }
   }

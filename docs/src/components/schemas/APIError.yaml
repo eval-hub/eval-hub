@@ -1,0 +1,20 @@
+type: object
+description: Error response for the API.
+properties:
+  message:
+    type: string
+    description: The error message.
+    title: Message
+  message_code:
+    type: string
+    description: A message code for the error.
+    title: Message Code
+  trace:
+    type: string
+    description: The trace id of the request.
+    title: Trace
+title: API Error
+required:
+  - message
+  - message_code
+  - trace

@@ -1,1 +1,8 @@
 description: Not Found
+content:
+  application/json:
+    schema:
+      $ref: ../../components/schemas/APIError.yaml
+    examples:
+      BadRequestError:
+        $ref: ../../components/examples/NotFoundError.yaml

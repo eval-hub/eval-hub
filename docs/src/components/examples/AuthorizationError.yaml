@@ -1,0 +1,5 @@
+summary: Authorization error with status code 403
+value:
+  message: "The user does not have access to the endpoint."
+  message_code: "endpoint_access_forbidden"
+  trace: "b12692e1-8582-4628-88ca-7a13fefb73e2"

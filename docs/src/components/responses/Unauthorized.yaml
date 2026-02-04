@@ -1,1 +1,8 @@
 description: Unauthorized
+content:
+  application/json:
+    schema:
+      $ref: ../../components/schemas/APIError.yaml
+    examples:
+      AuthenticationError:
+        $ref: ../../components/examples/AuthenticationError.yaml

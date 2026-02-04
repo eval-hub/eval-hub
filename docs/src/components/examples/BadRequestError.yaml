@@ -1,0 +1,5 @@
+summary: Bad request error with status code 400
+value:
+  message: "The field 'state' is not valid."
+  message_code: "invalid_value"
+  trace: "b12692e1-8582-4628-88ca-7a13fefb73e2"

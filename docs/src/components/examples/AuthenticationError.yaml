@@ -1,0 +1,5 @@
+summary: Authentication error with status code 401
+value:
+  message: "The bearer token is not valid."
+  message_code: "invalid_auth_token"
+  trace: "b12692e1-8582-4628-88ca-7a13fefb73e2"
