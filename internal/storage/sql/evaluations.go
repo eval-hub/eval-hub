@@ -22,6 +22,12 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+type EvaluationJobEntity struct {
+	Config  *api.EvaluationJobConfig  `json:"config"`
+	Status  *api.EvaluationJobStatus  `json:"status"`
+	Results *api.EvaluationJobResults `json:"results,omitempty"`
+}
+
 //#######################################################################
 // Evaluation job operations
 //#######################################################################
@@ -35,7 +41,20 @@ func (s *SQLStorage) CreateEvaluationJob(executionContext *executioncontext.Exec
 	if err != nil {
 		return nil, err
 	}
-	evaluationJSON, err := json.Marshal(evaluation)
+
+	evaluationEntity := &EvaluationJobEntity{
+		Config: evaluation,
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{
+				State: api.StatePending,
+				Message: &api.MessageInfo{
+					Message:     "Evaluation job created",
+					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CREATED,
+				},
+			},
+		},
+	}
+	evaluationJSON, err := json.Marshal(evaluationEntity)
 	if err != nil {
 		return nil, err
 	}
@@ -60,16 +79,8 @@ func (s *SQLStorage) CreateEvaluationJob(executionContext *executioncontext.Exec
 			MLFlowExperimentID: nil,
 		},
 		EvaluationJobConfig: *evaluation,
-		Status: &api.EvaluationJobStatus{
-			EvaluationJobState: api.EvaluationJobState{
-				State: api.StatePending,
-				Message: &api.MessageInfo{
-					Message:     "Evaluation job created",
-					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CREATED,
-				},
-			},
-		},
-		Results: nil,
+		Status:              evaluationEntity.Status,
+		Results:             nil,
 	}
 	return evaluationResource, nil
 }
