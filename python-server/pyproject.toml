@@ -10,12 +10,13 @@ authors = [
     {name = "Rui Vieira", email = "rui@redhat.com"},
 ]
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 license = "Apache-2.0"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
@@ -44,7 +45,7 @@ include = ["evalhub_server*"]
 evalhub_server = ["binaries/*"]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py311"
 line-length = 88
 
 [tool.ruff.lint]

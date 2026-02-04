@@ -111,7 +111,7 @@ body:
         - Any other relevant system details
       placeholder: |
         OS: Ubuntu 22.04
-        Python: 3.12.0
+        Python: 3.11.0
         Podman: 4.7.0 (if applicable)
         Kubernetes: 1.28 (if applicable)
     validations:
