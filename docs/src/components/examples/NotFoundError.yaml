@@ -1,4 +1,4 @@
-summary: Bad request error with status code 404
+summary: Not found error with status code 404
 value:
   message: "The resource was not found."
   message_code: "not_found"
