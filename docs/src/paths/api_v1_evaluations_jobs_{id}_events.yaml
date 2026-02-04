@@ -9,7 +9,7 @@ post:
 
     Note that this endpoint is internal and should not be used by clients,
 
-    eventually it will not possible to call this endpoint without a special
+    eventually it will not be possible to call this endpoint without a special
     token.
   operationId: update_evaluation_api_v1_evaluations_jobs_id_update_post
   parameters:
