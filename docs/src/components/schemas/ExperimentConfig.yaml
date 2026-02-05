@@ -6,20 +6,17 @@ properties:
     description: >
       Experiment name for MLFlow tracking.
 
-      Either `name` or `experiment_id` must be provided, and only one of them can be provided.
+      Either `name` or `id` must be provided, and only one of them can be provided.
       If `name` is provided, a new experiment will be created.
-      If `experiment_id` is provided, the experiment will be reused.
+      If `id` is provided, the experiment will be reused.
     title: Name
   tags:
-    additionalProperties:
-      type: string
-    type: object
+    type: array
     description: >
       Tags for the evaluation experiment.
-
-      Tags are key-value pairs that can be used to filter and group experiments.
-      Keys can be up to 250 bytes in size and tag values can be up to 5000 bytes in size.
-      Requests will support up to 20 tags per request.
+    items:
+      $ref: ./ExperimentTag.yaml
+    maxItems: 20
     title: Tags
   artifact_location:
     type: string
@@ -27,14 +24,14 @@ properties:
       Artifact location is the directory where the evaluation artifacts will be stored.
       If not provided, the default artifact location will be used by the MLFlow server.
     title: Artifact Location
-  experiment_id:
+  id:
     type: string
     description: >
       Experiment ID for MLFlow tracking.
 
-      Either `name` or `experiment_id` must be provided, and only one of them can be provided.
+      Either `name` or `id` must be provided, and only one of them can be provided.
       If `name` is provided, a new experiment will be created.
-      If `experiment_id` is provided, the experiment will be reused.
+      If `id` is provided, the experiment will be reused.
     title: Experiment Id
 additionalProperties: false
 title: Experiment Config

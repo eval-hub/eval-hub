@@ -1,0 +1,19 @@
+type: object
+description: A tag for an experiment.
+properties:
+  key:
+    type: string
+    description: >
+      The key of the tag.
+
+      Keys can be up to 250 bytes in size.
+    title: Key
+  value:
+    type: string
+    description: >
+      The value of the tag.
+
+      Values can be up to 5000 bytes in size.
+    title: Value
+additionalProperties: false
+title: Experiment Tag
