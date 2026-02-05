@@ -101,7 +101,6 @@ func TestStorage(t *testing.T) {
 	})
 
 	t.Run("GetEvaluationJobs returns the evaluation jobs", func(t *testing.T) {
-
 		resp, err := store.GetEvaluationJobs(10, 0, "")
 		if err != nil {
 			t.Fatalf("Failed to get evaluation jobs: %v", err)
@@ -112,7 +111,6 @@ func TestStorage(t *testing.T) {
 	})
 
 	t.Run("DeleteEvaluationJob deletes the evaluation job", func(t *testing.T) {
-
 		err := store.DeleteEvaluationJob(evaluationId, false)
 		if err != nil {
 			t.Fatalf("Failed to delete evaluation job: %v", err)
