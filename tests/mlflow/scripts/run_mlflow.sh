@@ -58,8 +58,6 @@ echo -e "${BLUE}📍 Server will be available at: http://$HOST:$PORT${NC}"
 echo -e "${YELLOW}💡 Press Ctrl+C to stop the server${NC}"
 echo ""
 
-mkdir -p bin
-
 # Start MLflow server in background
 mlflow server \
     --host "$HOST" \
