@@ -360,12 +360,23 @@ func (s *Server) Start() error {
 	}
 
 	s.logger.Info("Server starting", "port", s.port)
-	return s.httpServer.ListenAndServe()
+	err = s.httpServer.ListenAndServe()
+
+	if err == http.ErrServerClosed {
+		s.logger.Info("Server closed gracefully")
+		return &ServerClosedError{}
+	}
+	return err
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.logger.Info("Shutting down server gracefully...")
-	// do we need to flush the logs?
-
 	return s.httpServer.Shutdown(ctx)
+}
+
+type ServerClosedError struct {
+}
+
+func (e *ServerClosedError) Error() string {
+	return "Server closed"
 }

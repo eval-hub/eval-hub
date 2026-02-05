@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
-	"net/http"
 
 	"os"
 	"os/signal"
@@ -95,7 +95,7 @@ func main() {
 	go func() {
 		if err := srv.Start(); err != nil {
 			// we do this as no point trying to continue
-			if err == http.ErrServerClosed {
+			if errors.Is(err, &server.ServerClosedError{}) {
 				logger.Info("Server closed gracefully")
 				return
 			}
