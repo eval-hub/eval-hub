@@ -20,7 +20,6 @@ import (
 	"github.com/eval-hub/eval-hub/internal/runtimes"
 	"github.com/eval-hub/eval-hub/internal/storage"
 	"github.com/eval-hub/eval-hub/internal/validation"
-	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 )
 
 func TestNewServer(t *testing.T) {
@@ -217,7 +216,7 @@ func createServer(port int) (*server.Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create runtime: %w", err)
 	}
-	var mlflowClient *mlflowclient.Client = mlflow.NewMLFlowClient()
+	mlflowClient := mlflow.NewMLFlowClient()
 	return server.NewServer(logger, serviceConfig, providerConfigs, storage, validate, runtime, mlflowClient)
 }
 
