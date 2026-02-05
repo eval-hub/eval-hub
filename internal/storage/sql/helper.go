@@ -10,10 +10,10 @@ import (
 // TODO - do we want to pull out all the SQL statements like this or leave them in the functions?
 
 // SQLite: use ? placeholders
-const SQLITE_INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (id, tenant_id, status, entity) VALUES (?, ?, ?, ?);`
+const SQLITE_INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (id, tenant_id, status, experiment_id, entity) VALUES (?, ?, ?, ?, ?);`
 
 // PostgreSQL: use $1, $2 placeholders and RETURNING id clause
-const POSTGRES_INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (id, tenant_id, status, entity) VALUES ($1, $2, $3, $4) RETURNING id;`
+const POSTGRES_INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (id, tenant_id, status, experiment_id, entity) VALUES ($1, $2, $3, $4, $5) RETURNING id;`
 
 // TODO: Add collection insert statement
 const INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (entity) VALUES (?);`
@@ -63,10 +63,10 @@ func createGetEntityStatement(driver, tableName string) (string, error) {
 
 	switch driver {
 	case POSTGRES_DRIVER:
-		return fmt.Sprintf(`SELECT id, created_at, updated_at, status, entity FROM %s WHERE id = $1;`, quotedTable), nil
+		return fmt.Sprintf(`SELECT id, created_at, updated_at, status, experiment_id, entity FROM %s WHERE id = $1;`, quotedTable), nil
 	case SQLITE_DRIVER:
 		// SQLite: use ? placeholder
-		return fmt.Sprintf(`SELECT id, created_at, updated_at, status, entity FROM %s WHERE id = ?;`, quotedTable), nil
+		return fmt.Sprintf(`SELECT id, created_at, updated_at, status, experiment_id, entity FROM %s WHERE id = ?;`, quotedTable), nil
 	default:
 		return "", getUnsupportedDriverError(driver)
 	}

@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     tenant_id VARCHAR(255) NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    experiment_id VARCHAR(255) NOT NULL,
     entity TEXT NOT NULL,
     PRIMARY KEY (id)
 );
@@ -38,6 +39,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     tenant_id VARCHAR(255) NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    experiment_id VARCHAR(255) NOT NULL,
     entity JSONB NOT NULL,
     PRIMARY KEY (id)
 );

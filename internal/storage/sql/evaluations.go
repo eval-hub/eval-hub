@@ -60,8 +60,9 @@ func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobConfig, ml
 		return nil, err
 	}
 	jobID := s.generateID()
-	s.logger.Info("Creating evaluation job", "id", jobID, "tenant", tenant, "status", api.StatePending)
-	_, err = s.exec(nil, addEntityStatement, jobID, tenant, api.StatePending, string(evaluationJSON))
+	s.logger.Info("Creating evaluation job", "id", jobID, "tenant", tenant, "status", api.StatePending, "experiment_id", mlflowExperimentID)
+	// (id, tenant_id, status, experiment_id, entity)
+	_, err = s.exec(nil, addEntityStatement, jobID, tenant, api.StatePending, mlflowExperimentID, string(evaluationJSON))
 	if err != nil {
 		return nil, err
 	}
@@ -93,9 +94,10 @@ func (s *SQLStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, er
 	var dbID string
 	var createdAt, updatedAt time.Time
 	var statusStr string
+	var experimentID string
 	var entityJSON string
 
-	err = s.pool.QueryRowContext(s.ctx, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &statusStr, &entityJSON)
+	err = s.pool.QueryRowContext(s.ctx, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &statusStr, &experimentID, &entityJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
@@ -113,12 +115,12 @@ func (s *SQLStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, er
 		return nil, serviceerrors.NewServiceError(messages.JSONUnmarshalFailed, "Type", "evaluation job", "Error", err.Error())
 	}
 
-	evaluationResource := constructEvaluationResource(statusStr, dbID, createdAt, updatedAt, evaluationEntity)
+	evaluationResource := constructEvaluationResource(statusStr, dbID, createdAt, updatedAt, experimentID, evaluationEntity)
 
 	return evaluationResource, nil
 }
 
-func constructEvaluationResource(statusStr string, dbID string, createdAt time.Time, updatedAt time.Time, evaluationEntity EvaluationJobEntity) *api.EvaluationJobResource {
+func constructEvaluationResource(statusStr string, dbID string, createdAt time.Time, updatedAt time.Time, experimentID string, evaluationEntity EvaluationJobEntity) *api.EvaluationJobResource {
 	evaluationResource := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{
@@ -127,7 +129,7 @@ func constructEvaluationResource(statusStr string, dbID string, createdAt time.T
 				CreatedAt: createdAt,
 				UpdatedAt: updatedAt,
 			},
-			MLFlowExperimentID: "", // TODO: retrieve mlflow experiment ID from database
+			MLFlowExperimentID: experimentID,
 		},
 		EvaluationJobConfig: *evaluationEntity.Config,
 		Status:              evaluationEntity.Status,
@@ -147,9 +149,10 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 	var dbID string
 	var createdAt, updatedAt time.Time
 	var statusStr string
+	var experimentID string
 	var entityJSON string
 
-	err = txn.QueryRowContext(s.ctx, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &statusStr, &entityJSON)
+	err = txn.QueryRowContext(s.ctx, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &statusStr, &experimentID, &entityJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
@@ -167,7 +170,7 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 		return nil, serviceerrors.NewServiceError(messages.JSONUnmarshalFailed, "Type", "evaluation job", "Error", err.Error())
 	}
 
-	evaluationResource := constructEvaluationResource(statusStr, dbID, createdAt, updatedAt, evaluationEntity)
+	evaluationResource := constructEvaluationResource(statusStr, dbID, createdAt, updatedAt, experimentID, evaluationEntity)
 
 	return evaluationResource, nil
 }
@@ -210,9 +213,10 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter strin
 		var dbID string
 		var createdAt, updatedAt time.Time
 		var statusStr string
+		var experimentID string
 		var entityJSON string
 
-		err = rows.Scan(&dbID, &createdAt, &updatedAt, &statusStr, &entityJSON)
+		err = rows.Scan(&dbID, &createdAt, &updatedAt, &statusStr, &experimentID, &entityJSON)
 		if err != nil {
 			s.logger.Error("Failed to scan evaluation job row", "error", err)
 			return nil, serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", dbID, "Error", err.Error())
@@ -236,7 +240,7 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter strin
 					CreatedAt: createdAt,
 					UpdatedAt: updatedAt,
 				},
-				MLFlowExperimentID: "", // TODO: retrieve mlflow experiment ID from database
+				MLFlowExperimentID: experimentID,
 			},
 			EvaluationJobConfig: *evaluationJobEntity.Config,
 			Status:              evaluationJobEntity.Status,
