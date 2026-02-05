@@ -65,9 +65,9 @@ echo "✅ Python version check passed (>= ${REQUESTED_PYTHON_MAJOR_VERSION}.${RE
 # Install MLflow
 echo "📥 Installing MLflow..."
 if [[ "${REQUESTED_VERSION}" != "" ]]; then
-    pip3 install mlflow==${REQUESTED_VERSION}
+    python3 -m pip install mlflow==${REQUESTED_VERSION}
 else
-    pip3 install mlflow
+    python3 -m pip install mlflow
 fi
 
 # Verify installation

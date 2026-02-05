@@ -38,7 +38,12 @@ func (ctx *testContext) cleanup() {
 		resource := ctx.createdResources[i]
 		switch resource.Type {
 		case "experiment":
-			_ = ctx.client.DeleteExperiment(resource.ID)
+			err := ctx.client.DeleteExperiment(resource.ID)
+			if err != nil {
+				// we just report this, as this is just an attempt
+				// to clean up the resource we don't fail the tests for an error here
+				debugLog("Error deleting experiment %s: %s", resource.ID, err.Error())
+			}
 		}
 	}
 	ctx.createdResources = nil
@@ -91,7 +96,7 @@ func (tc *testContext) serverIsRunning() error {
 	// For testing, we'll use an existing server if MLFLOW_TRACKING_URI
 	testURL := os.Getenv("MLFLOW_TRACKING_URI")
 	if testURL != "" {
-		client := mlflowclient.NewClient(testURL)
+		client := mlflowclient.NewClient(context.Background(), testURL)
 		tc.client = client
 		return nil
 	}
