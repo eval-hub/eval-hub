@@ -13,6 +13,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/handlers"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 	"github.com/go-playground/validator/v10"
 
 	"github.com/google/uuid"
@@ -28,7 +29,7 @@ type Server struct {
 	storage         abstractions.Storage
 	validate        *validator.Validate
 	runtime         abstractions.Runtime
-	mlflowClient    interface{}
+	mlflowClient    *mlflowclient.Client
 }
 
 // NewServer creates a new HTTP server instance with the provided logger and configuration.

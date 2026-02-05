@@ -41,10 +41,9 @@ type ExperimentTag struct {
 
 // ExperimentConfig represents configuration for MLFlow experiment tracking
 type ExperimentConfig struct {
-	Name             string          `json:"name" validate:"omitempty,required_without_all=ExperimentID"`
+	Name             string          `json:"name" validate:"required"`
 	Tags             []ExperimentTag `json:"tags,omitempty" validate:"omitempty,max=20,dive"`
 	ArtifactLocation string          `json:"artifact_location,omitempty"`
-	ExperimentID     string          `json:"experiment_id,omitempty" validate:"omitempty,required_without_all=Name"`
 }
 
 // BenchmarkStatusLogs represents logs information for benchmark status
@@ -104,14 +103,14 @@ type EvaluationJobConfig struct {
 	Model          ModelRef          `json:"model" validate:"required"`
 	Benchmarks     []BenchmarkConfig `json:"benchmarks" validate:"required,min=1,dive"`
 	Collection     Ref               `json:"collection"`
-	Experiment     ExperimentConfig  `json:"experiment"`
+	Experiment     *ExperimentConfig `json:"experiment,omitempty"`
 	TimeoutMinutes *int              `json:"timeout_minutes,omitempty"`
 	RetryAttempts  *int              `json:"retry_attempts,omitempty"`
 }
 
 type EvaluationResource struct {
 	Resource
-	MLFlowExperimentID *string `json:"mlflow_experiment_id,omitempty"`
+	MLFlowExperimentID string `json:"mlflow_experiment_id,omitempty"`
 }
 
 // EvaluationJobResource represents evaluation job resource response

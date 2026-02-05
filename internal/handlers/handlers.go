@@ -4,6 +4,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -12,12 +13,12 @@ type Handlers struct {
 	storage         abstractions.Storage
 	validate        *validator.Validate
 	runtime         abstractions.Runtime
-	mlflowClient    interface{} // TODO: replace this placeholder with the actual mlflow client
+	mlflowClient    *mlflowclient.Client
 	providerConfigs map[string]api.ProviderResource
 	serviceConfig   *config.Config
 }
 
-func New(storage abstractions.Storage, validate *validator.Validate, runtime abstractions.Runtime, mlflowClient interface{}, providerConfigs map[string]api.ProviderResource, serviceConfig *config.Config) *Handlers {
+func New(storage abstractions.Storage, validate *validator.Validate, runtime abstractions.Runtime, mlflowClient *mlflowclient.Client, providerConfigs map[string]api.ProviderResource, serviceConfig *config.Config) *Handlers {
 	return &Handlers{
 		storage:         storage,
 		validate:        validate,

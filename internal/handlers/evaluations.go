@@ -11,6 +11,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/http_wrappers"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/messages"
+	"github.com/eval-hub/eval-hub/internal/mlflow"
 	"github.com/eval-hub/eval-hub/internal/serialization"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -76,7 +77,14 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		w.Error(err, ctx.RequestID)
 		return
 	}
-	response, err := storage.CreateEvaluationJob(evaluation)
+
+	mlflowExperimentID, err := mlflow.GetExperimentID(ctx, h.mlflowClient, evaluation.Experiment)
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+
+	response, err := storage.CreateEvaluationJob(evaluation, mlflowExperimentID)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return

@@ -114,7 +114,7 @@ func unmarshalResponse[T any](respBody []byte) (*T, error) {
 // Experiments API
 
 // CreateExperiment creates a new experiment
-func (c *Client) CreateExperiment(req CreateExperimentRequest) (*CreateExperimentResponse, error) {
+func (c *Client) CreateExperiment(req *CreateExperimentRequest) (*CreateExperimentResponse, error) {
 	respBody, err := c.doRequest(c.Ctx, http.MethodPost, endpointExperimentsCreate, req)
 	if err != nil {
 		return nil, err

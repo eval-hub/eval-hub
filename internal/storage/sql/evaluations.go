@@ -33,7 +33,7 @@ type EvaluationJobEntity struct {
 // the evaluation job is stored in the evaluations table as a JSON string
 // the evaluation job is returned as a EvaluationJobResource
 // This should use transactions etc and requires cleaning up
-func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobConfig) (*api.EvaluationJobResource, error) {
+func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobConfig, mlflowExperimentID string) (*api.EvaluationJobResource, error) {
 	tenant, err := s.getTenant()
 	if err != nil {
 		return nil, err
@@ -73,7 +73,7 @@ func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobConfig) (*
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
 			},
-			MLFlowExperimentID: nil,
+			MLFlowExperimentID: mlflowExperimentID,
 		},
 		EvaluationJobConfig: *evaluation,
 		Status:              evaluationEntity.Status,
@@ -127,7 +127,7 @@ func constructEvaluationResource(statusStr string, dbID string, createdAt time.T
 				CreatedAt: createdAt,
 				UpdatedAt: updatedAt,
 			},
-			MLFlowExperimentID: nil,
+			MLFlowExperimentID: "", // TODO: retrieve mlflow experiment ID from database
 		},
 		EvaluationJobConfig: *evaluationEntity.Config,
 		Status:              evaluationEntity.Status,
@@ -239,7 +239,7 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter strin
 					CreatedAt: createdAt,
 					UpdatedAt: updatedAt,
 				},
-				MLFlowExperimentID: nil,
+				MLFlowExperimentID: "", // TODO: retrieve mlflow experiment ID from database
 			},
 			EvaluationJobConfig: evaluationConfig,
 			Status: &api.EvaluationJobStatus{

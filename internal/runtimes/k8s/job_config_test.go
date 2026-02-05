@@ -14,7 +14,7 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource:           api.Resource{ID: "job-123"},
-			MLFlowExperimentID: nil,
+			MLFlowExperimentID: "",
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Model: api.ModelRef{
@@ -109,7 +109,7 @@ func TestBuildJobConfigMissingRuntime(t *testing.T) {
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource:           api.Resource{ID: "job-123"},
-			MLFlowExperimentID: nil,
+			MLFlowExperimentID: "",
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Model: api.ModelRef{
@@ -133,7 +133,7 @@ func TestBuildJobConfigMissingAdapterImage(t *testing.T) {
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource:           api.Resource{ID: "job-123"},
-			MLFlowExperimentID: nil,
+			MLFlowExperimentID: "",
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Model: api.ModelRef{
@@ -157,7 +157,7 @@ func TestBuildJobConfigMissingServiceURL(t *testing.T) {
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource:           api.Resource{ID: "job-123"},
-			MLFlowExperimentID: nil,
+			MLFlowExperimentID: "",
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Model: api.ModelRef{
@@ -192,7 +192,7 @@ func TestBuildJobConfigMissingBenchmarkConfig(t *testing.T) {
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource:           api.Resource{ID: "job-123"},
-			MLFlowExperimentID: nil,
+			MLFlowExperimentID: "",
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Model: api.ModelRef{

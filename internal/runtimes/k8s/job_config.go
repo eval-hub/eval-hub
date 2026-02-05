@@ -96,11 +96,13 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		Model:           evaluation.Model,
 		NumExamples:     numExamples,
 		BenchmarkConfig: benchmarkParams,
-		ExperimentName:  evaluation.Experiment.Name,
-		Tags:            evaluation.Experiment.Tags,
 		TimeoutSeconds:  timeoutSeconds,
 		RetryAttempts:   evaluation.RetryAttempts,
 		CallbackURL:     &serviceURL,
+	}
+	if evaluation.Experiment != nil {
+		spec.ExperimentName = evaluation.Experiment.Name
+		spec.Tags = evaluation.Experiment.Tags
 	}
 	specJSON, err := json.MarshalIndent(spec, "", "  ")
 	if err != nil {

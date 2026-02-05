@@ -1,18 +1,13 @@
 package storage_test
 
 import (
-	"context"
-	"log/slog"
 	"net/url"
 	"testing"
-	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
-	"github.com/eval-hub/eval-hub/internal/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/storage"
 	"github.com/eval-hub/eval-hub/pkg/api"
-	"github.com/google/uuid"
 )
 
 type testRequestWrapper struct {
@@ -53,10 +48,6 @@ func (r *testRequestWrapper) PathValue(name string) string {
 	return ""
 }
 
-func createExecutionContext(logger *slog.Logger) *executioncontext.ExecutionContext {
-	return executioncontext.NewExecutionContext(context.Background(), uuid.New().String(), logger, 60*time.Second)
-}
-
 // TestStorage tests the storage implementation and provides
 // a simple way to debug the storage implementation.
 func TestStorage(t *testing.T) {
@@ -89,7 +80,7 @@ func TestStorage(t *testing.T) {
 				},
 			},
 		}
-		resp, err := store.CreateEvaluationJob(job)
+		resp, err := store.CreateEvaluationJob(job, "")
 		if err != nil {
 			t.Fatalf("Failed to create evaluation job: %v", err)
 		}

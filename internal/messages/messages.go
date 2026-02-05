@@ -34,6 +34,31 @@ var (
 		http.StatusBadRequest,
 		"The query parameter '{{.ParameterName}}' is not a valid {{.Type}}: '{{.Value}}'.",
 	)
+
+	// InvalidJSONRequest The request JSON is invalid: '{{.Error}}'. Please check the request and try again.
+	InvalidJSONRequest = createMessage(
+		http.StatusBadRequest,
+		"The request JSON is invalid: '{{.Error}}'. Please check the request and try again.",
+	)
+
+	// RequestValidationFailed The request validation failed: '{{.Error}}'. Please check the request and try again.
+	RequestValidationFailed = createMessage(
+		http.StatusBadRequest,
+		"The request validation failed: '{{.Error}}'. Please check the request and try again.",
+	)
+
+	// MLFlowRequiredForExperiment MLflow is required for experiment tracking. Please configure MLflow in the service configuration and try again.
+	MLFlowRequiredForExperiment = createMessage(
+		http.StatusBadRequest,
+		"MLflow is required for experiment tracking. Please configure MLflow in the service configuration and try again.",
+	)
+
+	// MLFlowRequestFailed The MLflow request failed: '{{.Error}}'. Please check the MLflow configuration and try again.
+	MLFlowRequestFailed = createMessage(
+		http.StatusInternalServerError, // this could be a user errir if the MLFlow service details are incorrect
+		"The MLflow request failed: '{{.Error}}'. Please check the MLflow configuration and try again.",
+	)
+
 	// Configurastion related errors
 
 	// ConfigurationFailed The service startup failed: '{{.Error}}'.

@@ -3,6 +3,8 @@ package mlflowclient
 import (
 	"strconv"
 	"strings"
+
+	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 // APIError represents an error from the MLflow API
@@ -26,26 +28,20 @@ func (e *APIError) Error() string {
 
 // Experiment represents an MLflow experiment
 type Experiment struct {
-	ExperimentID     string          `json:"experiment_id"`
-	Name             string          `json:"name"`
-	ArtifactLocation string          `json:"artifact_location"`
-	LifecycleStage   string          `json:"lifecycle_stage"`
-	LastUpdateTime   int64           `json:"last_update_time"`
-	CreationTime     int64           `json:"creation_time"`
-	Tags             []ExperimentTag `json:"tags"`
-}
-
-// ExperimentTag represents a tag on an experiment
-type ExperimentTag struct {
-	Key   string `json:"key" validate:"required"`
-	Value string `json:"value" validate:"required"`
+	ExperimentID     string              `json:"experiment_id"`
+	Name             string              `json:"name"`
+	ArtifactLocation string              `json:"artifact_location"`
+	LifecycleStage   string              `json:"lifecycle_stage"`
+	LastUpdateTime   int64               `json:"last_update_time"`
+	CreationTime     int64               `json:"creation_time"`
+	Tags             []api.ExperimentTag `json:"tags"`
 }
 
 // CreateExperimentRequest represents a request to create an experiment
 type CreateExperimentRequest struct {
-	Name             string          `json:"name" validate:"required"`
-	ArtifactLocation string          `json:"artifact_location,omitempty" validate:"omitempty"`
-	Tags             []ExperimentTag `json:"tags,omitempty" validate:"omitempty,dive"`
+	Name             string              `json:"name" validate:"required"`
+	ArtifactLocation string              `json:"artifact_location,omitempty" validate:"omitempty"`
+	Tags             []api.ExperimentTag `json:"tags,omitempty" validate:"omitempty,dive"`
 }
 
 // CreateExperimentResponse represents the response from creating an experiment

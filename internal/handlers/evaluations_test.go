@@ -41,7 +41,7 @@ func (f *fakeStorage) WithContext(_ context.Context) abstractions.Storage {
 }
 func (f *fakeStorage) GetDatasourceName() string  { return "fake" }
 func (f *fakeStorage) Ping(_ time.Duration) error { return nil }
-func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobConfig) (*api.EvaluationJobResource, error) {
+func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobConfig, _ string) (*api.EvaluationJobResource, error) {
 	return &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{ID: "job-1"},

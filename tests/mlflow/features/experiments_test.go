@@ -15,7 +15,7 @@ func (tc *testContext) createExperiment(name string) error {
 	req := mlflowclient.CreateExperimentRequest{
 		Name: name,
 	}
-	resp, err := tc.client.CreateExperiment(req)
+	resp, err := tc.client.CreateExperiment(&req)
 	if err != nil {
 		tc.lastError = err
 		return err
