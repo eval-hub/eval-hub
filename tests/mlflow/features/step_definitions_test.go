@@ -84,7 +84,7 @@ func debugLog(format string, a ...any) {
 
 // Server setup steps
 func (tc *testContext) serverIsRunning() error {
-	// If the cliebnt is already connected then no need to check again
+	// If the client is already connected then no need to check again
 	if tc.clientConnected() == nil {
 		return nil
 	}
