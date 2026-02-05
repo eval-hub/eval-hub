@@ -125,6 +125,6 @@ if wait_for_server; then
     # exit 0
 else
     # Server didn't start properly - try to clean up
-    ./scriprs/stop_mlflow.sh || true
+    ./scripts/stop_mlflow.sh || true
     exit 1
 fi
