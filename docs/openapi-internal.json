@@ -1264,34 +1264,51 @@
         "title": "BenchmarkConfig",
         "description": "New simplified benchmark specification."
       },
+      "ExperimentTag": {
+        "type": "object",
+        "description": "A tag for an experiment.",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "The key of the tag.\nKeys can be up to 250 bytes in size.\n",
+            "title": "Key"
+          },
+          "value": {
+            "type": "string",
+            "description": "The value of the tag.\nValues can be up to 5000 bytes in size.\n",
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "title": "Experiment Tag"
+      },
       "ExperimentConfig": {
         "type": "object",
         "description": "Configuration for MLFlow experiment tracking.",
         "properties": {
           "name": {
             "type": "string",
-            "description": "Experiment name for MLFlow tracking.\nEither `name` or `experiment_id` must be provided, and only one of them can be provided. If `name` is provided, a new experiment will be created. If `experiment_id` is provided, the experiment will be reused.\n",
+            "description": "Experiment name for MLFlow tracking.\nIf there is an `active` experiment with the same name, it will be reused. If there is no `active` experiment with the same name, a new experiment will be created.\n",
             "title": "Name"
           },
           "tags": {
-            "additionalProperties": {
-              "type": "string"
+            "type": "array",
+            "description": "Tags for the evaluation experiment.\n",
+            "items": {
+              "$ref": "#/components/schemas/ExperimentTag"
             },
-            "type": "object",
-            "description": "Tags for the evaluation experiment.\nTags are key-value pairs that can be used to filter and group experiments. Keys can be up to 250 bytes in size and tag values can be up to 5000 bytes in size. Requests will support up to 20 tags per request.\n",
+            "maxItems": 20,
             "title": "Tags"
           },
           "artifact_location": {
             "type": "string",
             "description": "Artifact location is the directory where the evaluation artifacts will be stored. If not provided, the default artifact location will be used by the MLFlow server.\n",
             "title": "Artifact Location"
-          },
-          "experiment_id": {
-            "type": "string",
-            "description": "Experiment ID for MLFlow tracking.\nEither `name` or `experiment_id` must be provided, and only one of them can be provided. If `name` is provided, a new experiment will be created. If `experiment_id` is provided, the experiment will be reused.\n",
-            "title": "Experiment Id"
           }
         },
+        "required": [
+          "name"
+        ],
         "additionalProperties": false,
         "title": "Experiment Config"
       },
