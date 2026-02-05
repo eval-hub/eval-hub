@@ -3,6 +3,8 @@ package messages
 import (
 	"fmt"
 	"strings"
+
+	"github.com/eval-hub/eval-hub/internal/constants"
 )
 
 // This package provides all the error messages that should be reported to the user.
@@ -13,31 +15,31 @@ var (
 
 	// MissingPathParameter The path parameter '{{.ParameterName}}' is required.
 	MissingPathParameter = createMessage(
-		404,
+		constants.HTTPCodeBadRequest,
 		"The path parameter '{{.ParameterName}}' is required.",
 	)
 
 	// ResourceNotFound The {{.Type}} resource {{.ResourceId}} was not found.
 	ResourceNotFound = createMessage(
-		404,
+		constants.HTTPCodeNotFound,
 		"The {{.Type}} resource {{.ResourceId}} was not found.",
 	)
 
 	// QueryParameterRequired The query parameter '{{.ParameterName}}' is required.
 	QueryParameterRequired = createMessage(
-		400,
+		constants.HTTPCodeBadRequest,
 		"The query parameter '{{.ParameterName}}' is required.",
 	)
 	// QueryParameterInvalid The query parameter '{{.ParameterName}}' is not a valid {{.Type}}: '{{.Value}}'.
 	QueryParameterInvalid = createMessage(
-		400,
+		constants.HTTPCodeBadRequest,
 		"The query parameter '{{.ParameterName}}' is not a valid {{.Type}}: '{{.Value}}'.",
 	)
 	// Configurastion related errors
 
 	// ConfigurationFailed The service startup failed: '{{.Error}}'.
 	ConfigurationFailed = createMessage(
-		500,
+		constants.HTTPCodeInternalServerError,
 		"The service startup failed: '{{.Error}}'.",
 	)
 
@@ -45,7 +47,7 @@ var (
 
 	// JSONUnmarshalFailed The JSON unmarshalling failed for the {{.Type}}: '{{.Error}}'.
 	JSONUnmarshalFailed = createMessage(
-		500,
+		constants.HTTPCodeInternalServerError,
 		"The JSON unmarshalling failed for the {{.Type}}: '{{.Error}}'.",
 	)
 
@@ -53,36 +55,36 @@ var (
 
 	// DatabaseOperationFailed The request for the {{.Type}} resource {{.ResourceId}} failed: '{{.Error}}'.
 	DatabaseOperationFailed = createMessage(
-		500,
+		constants.HTTPCodeInternalServerError,
 		"The request for the {{.Type}} resource {{.ResourceId}} failed: '{{.Error}}'.",
 	)
 	// QueryFailed The request for the {{.Type}} failed: '{{.Error}}'.
 	QueryFailed = createMessage(
-		500,
+		constants.HTTPCodeInternalServerError,
 		"The request for the {{.Type}} failed: '{{.Error}}'.",
 	)
 
 	// InternalServerError An internal server error occurred: '{{.Error}}'.
 	InternalServerError = createMessage(
-		500,
+		constants.HTTPCodeInternalServerError,
 		"An internal server error occurred: '{{.Error}}'.",
 	)
 
 	// MethodNotAllowed The HTTP method {{.Method}} is not allowed for the API {{.Api}}.
 	MethodNotAllowed = createMessage(
-		405,
+		constants.HTTPCodeMethodNotAllowed,
 		"The HTTP method {{.Method}} is not allowed for the API {{.Api}}.",
 	)
 
 	// NotImplemented The API {{.Api}} is not yet implemented.
 	NotImplemented = createMessage(
-		501,
+		constants.HTTPCodeNotImplemented,
 		"The API {{.Api}} is not yet implemented.",
 	)
 
 	// UnknownError An unknown error occurred: '{{.Error}}'. This is a fallback error if the error is not a service error.
 	UnknownError = createMessage(
-		500,
+		constants.HTTPCodeInternalServerError,
 		"An unknown error occurred: {{.Error}}.",
 	)
 )
