@@ -206,14 +206,14 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 		w.Error(err, ctx.RequestID)
 		return
 	}
-	status := &api.StatusEvent{}
+	status := &api.RunStatusInternal{}
 	err = serialization.Unmarshal(h.validate, ctx, bodyBytes, status)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
 
-	err = storage.UpdateEvaluationJobStatus(evaluationJobID, status)
+	err = storage.UpdateEvaluationJob(evaluationJobID, status)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return

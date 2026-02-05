@@ -1,17 +1,29 @@
+type: object
+description: Configuration for MLFlow experiment tracking.
 properties:
   name:
     type: string
+    description: >
+      Experiment name for MLFlow tracking.
+
+      If there is an `active` experiment with the same name, it will be reused.
+      If there is no `active` experiment with the same name, a new experiment will be created.
     title: Name
-    description: Experiment name for MLFlow tracking
   tags:
-    additionalProperties:
-      type: string
-    type: object
+    type: array
+    description: >
+      Tags for the evaluation experiment.
+    items:
+      $ref: ./ExperimentTag.yaml
+    maxItems: 20
     title: Tags
-    description: Tags for the evaluation experiment
-additionalProperties: false
-type: object
+  artifact_location:
+    type: string
+    description: >
+      Artifact location is the directory where the evaluation artifacts will be stored.
+      If not provided, the default artifact location will be used by the MLFlow server.
+    title: Artifact Location
 required:
   - name
-title: ExperimentConfig
-description: Configuration for MLFlow experiment tracking.
+additionalProperties: false
+title: Experiment Config

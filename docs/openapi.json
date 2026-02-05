@@ -796,29 +796,53 @@
         "title": "BenchmarkConfig",
         "description": "New simplified benchmark specification."
       },
-      "ExperimentConfig": {
+      "ExperimentTag": {
+        "type": "object",
+        "description": "A tag for an experiment.",
         "properties": {
-          "name": {
+          "key": {
             "type": "string",
-            "title": "Name",
-            "description": "Experiment name for MLFlow tracking"
+            "description": "The key of the tag.\nKeys can be up to 250 bytes in size.\n",
+            "title": "Key"
           },
-          "tags": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object",
-            "title": "Tags",
-            "description": "Tags for the evaluation experiment"
+          "value": {
+            "type": "string",
+            "description": "The value of the tag.\nValues can be up to 5000 bytes in size.\n",
+            "title": "Value"
           }
         },
         "additionalProperties": false,
+        "title": "Experiment Tag"
+      },
+      "ExperimentConfig": {
         "type": "object",
+        "description": "Configuration for MLFlow experiment tracking.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Experiment name for MLFlow tracking.\nIf there is an `active` experiment with the same name, it will be reused. If there is no `active` experiment with the same name, a new experiment will be created.\n",
+            "title": "Name"
+          },
+          "tags": {
+            "type": "array",
+            "description": "Tags for the evaluation experiment.\n",
+            "items": {
+              "$ref": "#/components/schemas/ExperimentTag"
+            },
+            "maxItems": 20,
+            "title": "Tags"
+          },
+          "artifact_location": {
+            "type": "string",
+            "description": "Artifact location is the directory where the evaluation artifacts will be stored. If not provided, the default artifact location will be used by the MLFlow server.\n",
+            "title": "Artifact Location"
+          }
+        },
         "required": [
           "name"
         ],
-        "title": "ExperimentConfig",
-        "description": "Configuration for MLFlow experiment tracking."
+        "additionalProperties": false,
+        "title": "Experiment Config"
       },
       "EvaluationRequest": {
         "properties": {

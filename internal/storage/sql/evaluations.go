@@ -219,15 +219,12 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter strin
 		}
 
 		// Unmarshal the entity JSON into EvaluationJobConfig
-		var evaluationConfig api.EvaluationJobConfig
-		err = json.Unmarshal([]byte(entityJSON), &evaluationConfig)
+		var evaluationJobEntity EvaluationJobEntity
+		err = json.Unmarshal([]byte(entityJSON), &evaluationJobEntity)
 		if err != nil {
 			s.logger.Error("Failed to unmarshal evaluation job entity", "error", err, "id", dbID)
 			return nil, serviceerrors.NewServiceError(messages.JSONUnmarshalFailed, "Type", "evaluation job", "Error", err.Error())
 		}
-
-		// Parse status from database
-		status := api.State(statusStr)
 
 		// Construct the EvaluationJobResource
 		// Note: Results and Benchmarks are initialized with defaults since they're not stored in the entity column
@@ -241,17 +238,9 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter strin
 				},
 				MLFlowExperimentID: "", // TODO: retrieve mlflow experiment ID from database
 			},
-			EvaluationJobConfig: evaluationConfig,
-			Status: &api.EvaluationJobStatus{
-				EvaluationJobState: api.EvaluationJobState{
-					State: status,
-					Message: &api.MessageInfo{
-						Message:     "Evaluation job retrieved",
-						MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_RETRIEVED,
-					},
-				},
-				Benchmarks: nil,
-			},
+			EvaluationJobConfig: *evaluationJobEntity.Config,
+			Status:              evaluationJobEntity.Status,
+			Results:             evaluationJobEntity.Results,
 		}
 
 		items = append(items, resource)
@@ -379,11 +368,20 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.RunStatusInte
 		return err
 	}
 
+	err = validateBenchmarkExists(job, runStatus)
+	if err != nil {
+		return err
+	}
+
 	updateBenchMarkProgress(job, runStatus)
 
 	updateOverallJobStatus(job)
 
-	updatedEntityJSON, err := json.Marshal(job)
+	updatedEntityJSON, err := json.Marshal(&EvaluationJobEntity{
+		Config:  &job.EvaluationJobConfig,
+		Status:  job.Status,
+		Results: job.Results,
+	})
 	if err != nil {
 		s.logger.Error("Failed to marshal updated job resource", "error", err, "id", id)
 		return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
@@ -395,6 +393,20 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.RunStatusInte
 	if err := txn.Commit(); err != nil {
 		s.logger.Error("Failed to commit transaction", "error", err, "id", id)
 		return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
+	}
+	return nil
+}
+
+func validateBenchmarkExists(job *api.EvaluationJobResource, runStatus *api.RunStatusInternal) error {
+	found := false
+	for _, benchmark := range job.Benchmarks {
+		if benchmark.ID == runStatus.StatusEvent.BenchmarkID || benchmark.ID == runStatus.StatusEvent.BenchmarkName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "benchmark", "ResourceId", runStatus.StatusEvent.BenchmarkID, "Error", "Invalid Benchmark for the evaluation job")
 	}
 	return nil
 }
