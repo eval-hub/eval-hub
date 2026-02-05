@@ -67,7 +67,7 @@ func NewServer(logger *slog.Logger,
 		return nil, fmt.Errorf("service config is required for the server")
 	}
 	if storage == nil {
-		return nil, fmt.Errorf("executioncontext is required for the server")
+		return nil, fmt.Errorf("storage is required for the server")
 	}
 	if validate == nil {
 		return nil, fmt.Errorf("validator is required for the server")
