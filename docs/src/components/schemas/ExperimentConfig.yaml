@@ -6,9 +6,8 @@ properties:
     description: >
       Experiment name for MLFlow tracking.
 
-      Either `name` or `id` must be provided, and only one of them can be provided.
-      If `name` is provided, a new experiment will be created.
-      If `id` is provided, the experiment will be reused.
+      If there is an `active` experiment with the same name, it will be reused.
+      If there is no `active` experiment with the same name, a new experiment will be created.
     title: Name
   tags:
     type: array
@@ -24,14 +23,7 @@ properties:
       Artifact location is the directory where the evaluation artifacts will be stored.
       If not provided, the default artifact location will be used by the MLFlow server.
     title: Artifact Location
-  id:
-    type: string
-    description: >
-      Experiment ID for MLFlow tracking.
-
-      Either `name` or `id` must be provided, and only one of them can be provided.
-      If `name` is provided, a new experiment will be created.
-      If `id` is provided, the experiment will be reused.
-    title: Experiment Id
+required:
+  - name
 additionalProperties: false
 title: Experiment Config
