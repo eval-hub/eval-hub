@@ -2,9 +2,11 @@ package features
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/cucumber/godog"
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
@@ -15,7 +17,7 @@ type testContext struct {
 	experimentID     string
 	experimentName   string
 	lastError        error
-	lastResponse     interface{}
+	lastResponse     string
 	createdResources []resource
 }
 
@@ -29,7 +31,7 @@ func (ctx *testContext) reset() {
 	ctx.experimentID = ""
 	ctx.experimentName = ""
 	ctx.lastError = nil
-	ctx.lastResponse = nil
+	ctx.lastResponse = ""
 }
 
 func (ctx *testContext) cleanup() {
@@ -78,6 +80,10 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^multiple experiments exist$`, tc.multipleExperimentsExist)
 	ctx.Step(`^I delete the experiment$`, tc.deleteExperiment)
 
+	// response steps
+	ctx.Step(`^the response code should be (\d+)$`, tc.theResponseCodeShouldBe)
+	ctx.Step(`^the response should contain "([^"]*)"$`, tc.theResponseShouldContain)
+
 	// Other steps
 	ctx.Step(`^fix this step$`, tc.fixThisStep)
 }
@@ -108,6 +114,30 @@ func (tc *testContext) clientConnected() error {
 		return fmt.Errorf("client not initialized")
 	}
 	return nil
+}
+
+func (tc *testContext) theResponseCodeShouldBe(code int) error {
+	apiError := &mlflowclient.APIError{}
+	if errors.As(tc.lastError, &apiError) {
+		if apiError.StatusCode == code {
+			return nil
+		}
+		return fmt.Errorf("expected response code to be %d, but actual is: %d.\nResponse:%s", code, apiError.StatusCode, apiError.ResponseBody)
+	}
+	return fmt.Errorf("expected the error to be an APIError")
+}
+
+func (tc *testContext) theResponseShouldContain(text string) error {
+	apiError := &mlflowclient.APIError{}
+	if errors.As(tc.lastError, &apiError) {
+		if strings.Contains(apiError.ResponseBody, text) {
+			return nil
+		}
+	}
+	if strings.Contains(tc.lastError.Error(), text) {
+		return nil
+	}
+	return fmt.Errorf("expected the response to contain %s", text)
 }
 
 func (tc *testContext) fixThisStep() error {

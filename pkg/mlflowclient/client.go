@@ -92,9 +92,19 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		mlflowError := MLFlowError{}
+		if err := json.Unmarshal(respBody, &mlflowError); err == nil {
+			apiErr := &APIError{
+				StatusCode:   resp.StatusCode,
+				ResponseBody: string(respBody),
+				MLFlowError:  &mlflowError,
+			}
+			return nil, apiErr
+		}
 		apiErr := &APIError{
 			StatusCode:   resp.StatusCode,
 			ResponseBody: string(respBody),
+			MLFlowError:  nil,
 		}
 		return nil, apiErr
 	}

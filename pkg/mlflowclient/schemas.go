@@ -1,6 +1,7 @@
 package mlflowclient
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
@@ -9,8 +10,14 @@ import (
 
 // APIError represents an error from the MLflow API
 type APIError struct {
-	StatusCode   int    `json:"status_code" validate:"required"`
-	ResponseBody string `json:"response_body,omitempty"`
+	StatusCode   int          `json:"status_code" validate:"required"`
+	ResponseBody string       `json:"response_body,omitempty"`
+	MLFlowError  *MLFlowError `json:"error,omitempty"`
+}
+
+type MLFlowError struct {
+	ErrorCode string `json:"error_code"`
+	Message   string `json:"message"`
 }
 
 // Error implements the error interface
@@ -24,6 +31,32 @@ func (e *APIError) Error() string {
 	sb.WriteString(" with status code: ")
 	sb.WriteString(strconv.Itoa(e.StatusCode))
 	return sb.String()
+}
+
+func IsResourceAlreadyExistsError(err error) bool {
+	apiError := &APIError{}
+	if errors.As(err, &apiError) && (apiError.StatusCode == 400) {
+		if apiError.MLFlowError != nil && apiError.MLFlowError.ErrorCode == "RESOURCE_ALREADY_EXISTS" {
+			return true
+		}
+		if strings.Contains(apiError.ResponseBody, "RESOURCE_ALREADY_EXISTS") {
+			return true
+		}
+	}
+	return false
+}
+
+func IsResourceDoesNotExistError(err error) bool {
+	apiError := &APIError{}
+	if errors.As(err, &apiError) && (apiError.StatusCode == 404) {
+		if apiError.MLFlowError != nil && apiError.MLFlowError.ErrorCode == "RESOURCE_DOES_NOT_EXIST" {
+			return true
+		}
+		if strings.Contains(apiError.ResponseBody, "RESOURCE_DOES_NOT_EXIST") {
+			return true
+		}
+	}
+	return false
 }
 
 // Experiment represents an MLflow experiment

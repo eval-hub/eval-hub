@@ -13,6 +13,9 @@ Feature: MLflow Experiments API
     When I create an experiment named "test-experiments"
     Then the experiment should be created successfully
     And the experiment should have the name "test-experiments"
+    Then I create an experiment named "test-experiments"
+    And the response code should be 400
+    And the response should contain "RESOURCE_ALREADY_EXISTS"
 
   Scenario: Get an experiment by ID
     When I create an experiment named "get-experiment"
