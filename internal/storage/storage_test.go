@@ -82,6 +82,12 @@ func TestStorage(t *testing.T) {
 				URL:  "http://test.com",
 				Name: "test",
 			},
+			Benchmarks: []api.BenchmarkConfig{
+				{
+					Ref:        api.Ref{ID: "bench-1"},
+					ProviderID: "garak",
+				},
+			},
 		}
 		resp, err := store.CreateEvaluationJob(job)
 		if err != nil {

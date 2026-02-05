@@ -82,7 +82,7 @@ func TestServerSetupRoutes(t *testing.T) {
 		{http.MethodGet, "/openapi.yaml", http.StatusOK, ""},
 		{http.MethodGet, "/docs", http.StatusOK, ""},
 		// Evaluation endpoints
-		{http.MethodPost, "/api/v1/evaluations/jobs", http.StatusAccepted, `{"model": {"url": "http://test.com", "name": "test"}}`},
+		{http.MethodPost, "/api/v1/evaluations/jobs", http.StatusAccepted, `{"model": {"url": "http://test.com", "name": "test"}, "benchmarks": [{"id": "bench-1", "provider_id": "garak"}]}`},
 		{http.MethodGet, "/api/v1/evaluations/jobs", http.StatusOK, ""},
 		{http.MethodGet, "/api/v1/evaluations/jobs/test-id", http.StatusNotFound, ""},
 		// we can not delete because we have no id

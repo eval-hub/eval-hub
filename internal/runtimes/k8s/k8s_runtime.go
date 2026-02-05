@@ -50,14 +50,6 @@ func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 }
 
 func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, storage *abstractions.Storage) error {
-	if evaluation == nil {
-		return fmt.Errorf("evaluation is required")
-	}
-
-	if len(evaluation.Benchmarks) == 0 {
-		return nil
-	}
-
 	benchmarks := make(chan api.BenchmarkConfig, len(evaluation.Benchmarks))
 	for _, bench := range evaluation.Benchmarks {
 		benchmarks <- bench
@@ -90,8 +82,17 @@ func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, sto
 						"benchmark_id", bench.ID,
 					)
 
-					// TODO update the benchmark status to failed
-					//r.persistJobFailure(logger, storage, evaluation, err)
+					if storage != nil && *storage != nil {
+						runStatus := buildBenchmarkFailureStatus(&bench, err)
+						if updateErr := (*storage).UpdateEvaluationJob(evaluation.Resource.ID, runStatus); updateErr != nil {
+							r.logger.Error(
+								"failed to update benchmark status",
+								"error", updateErr,
+								"job_id", evaluation.Resource.ID,
+								"benchmark_id", bench.ID,
+							)
+						}
+					}
 				}
 			}
 		}()
@@ -152,25 +153,14 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context, logger *slog.
 	return nil
 }
 
-func (r *K8sRuntime) persistJobFailure(storage *abstractions.Storage, evaluation *api.EvaluationJobResource, runErr error) {
-	if storage == nil || *storage == nil || evaluation == nil {
-		return
-	}
-
-	status := &api.StatusEvent{
-		StatusEvent: &api.EvaluationJobStatus{
-			EvaluationJobState: api.EvaluationJobState{
-				State: api.StateFailed,
-				Message: &api.MessageInfo{
-					Message:     runErr.Error(),
-					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED,
-				},
-			},
+func buildBenchmarkFailureStatus(benchmark *api.BenchmarkConfig, runErr error) *api.RunStatusInternal {
+	return &api.RunStatusInternal{
+		StatusEvent: api.RunStatusEvent{
+			ProviderID:   benchmark.ProviderID,
+			BenchmarkID:  benchmark.ID,
+			Status:       api.StateFailed,
+			ErrorMessage: &api.MessageInfo{Message: runErr.Error(), MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED},
 		},
-	}
-
-	if err := (*storage).UpdateEvaluationJobStatus(evaluation.Resource.ID, status); err != nil {
-		r.logger.Error("failed to update evaluation status", "error", err, "job_id", evaluation.Resource.ID)
 	}
 }
 

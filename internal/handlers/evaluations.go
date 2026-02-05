@@ -5,6 +5,7 @@ import (
 	"runtime/debug"
 	"strconv"
 
+	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/http_wrappers"
@@ -75,7 +76,6 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		w.Error(err, ctx.RequestID)
 		return
 	}
-
 	response, err := storage.CreateEvaluationJob(evaluation)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
@@ -84,19 +84,43 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 
 	if h.runtime != nil {
 		job := response
-		go func() {
-			defer func() {
-				if recovered := recover(); recovered != nil {
-					ctx.Logger.Error("panic in RunEvaluationJob goroutine", "panic", recovered, "stack", string(debug.Stack()), "job_id", job.Resource.ID)
-				}
-			}()
-			if err := h.runtime.WithContext(ctx.Ctx).RunEvaluationJob(job, &storage); err != nil {
-				ctx.Logger.Error("RunEvaluationJob failed", "error", err, "job_id", job.Resource.ID)
+		runErr := executeEvaluationJob(ctx, h.runtime, job, &storage)
+		if runErr != nil {
+			ctx.Logger.Error("RunEvaluationJob failed", "error", runErr, "job_id", job.Resource.ID)
+			status := buildJobFailureStatus(runErr)
+			if err := storage.UpdateEvaluationJobStatus(job.Resource.ID, status); err != nil {
+				ctx.Logger.Error("failed to update evaluation status", "error", err, "job_id", job.Resource.ID)
 			}
-		}()
+			w.Error(runErr, ctx.RequestID)
+			return
+		}
 	}
 
 	w.WriteJSON(response, 202)
+}
+
+func executeEvaluationJob(ctx *executioncontext.ExecutionContext, runtime abstractions.Runtime, job *api.EvaluationJobResource, storage *abstractions.Storage) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			ctx.Logger.Error("panic in RunEvaluationJob", "panic", recovered, "stack", string(debug.Stack()), "job_id", job.Resource.ID)
+			err = serviceerrors.NewServiceError(messages.InternalServerError, "Error", fmt.Sprint(recovered))
+		}
+	}()
+	return runtime.WithLogger(ctx.Logger).WithContext(ctx.Ctx).RunEvaluationJob(job, storage)
+}
+
+func buildJobFailureStatus(runErr error) *api.StatusEvent {
+	return &api.StatusEvent{
+		StatusEvent: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{
+				State: api.StateFailed,
+				Message: &api.MessageInfo{
+					Message:     runErr.Error(),
+					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED,
+				},
+			},
+		},
+	}
 }
 
 // HandleListEvaluations handles GET /api/v1/evaluations/jobs

@@ -34,7 +34,6 @@ var (
 		http.StatusBadRequest,
 		"The query parameter '{{.ParameterName}}' is not a valid {{.Type}}: '{{.Value}}'.",
 	)
-
 	// Configurastion related errors
 
 	// ConfigurationFailed The service startup failed: '{{.Error}}'.

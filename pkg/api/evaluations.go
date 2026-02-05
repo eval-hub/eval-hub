@@ -16,8 +16,8 @@ const (
 
 // ModelRef represents model specification for evaluation requests
 type ModelRef struct {
-	URL  string `json:"url"`
-	Name string `json:"name"`
+	URL  string `json:"url" validate:"required"`
+	Name string `json:"name" validate:"required"`
 }
 
 // MessageInfo represents a message from a downstream service
@@ -94,7 +94,7 @@ type EvaluationJobResults struct {
 // EvaluationJobConfig represents evaluation job request schema
 type EvaluationJobConfig struct {
 	Model          ModelRef          `json:"model" validate:"required"`
-	Benchmarks     []BenchmarkConfig `json:"benchmarks"`
+	Benchmarks     []BenchmarkConfig `json:"benchmarks" validate:"required,min=1,dive"`
 	Collection     Ref               `json:"collection"`
 	Experiment     ExperimentConfig  `json:"experiment"`
 	TimeoutMinutes *int              `json:"timeout_minutes,omitempty"`

@@ -18,15 +18,25 @@ import (
 )
 
 type fakeStorage struct {
-	logger *slog.Logger
-	called bool
-	ctx    context.Context
+	logger        *slog.Logger
+	called        bool
+	ctx           context.Context
+	runStatus     *api.RunStatusInternal
+	runStatusChan chan *api.RunStatusInternal
+	updateErr     error
 }
 
 // UpdateEvaluationJob implements [abstractions.Storage].
 func (f *fakeStorage) UpdateEvaluationJob(id string, runStatus *api.RunStatusInternal) error {
 	f.called = true
-	return nil
+	f.runStatus = runStatus
+	if f.runStatusChan != nil {
+		select {
+		case f.runStatusChan <- runStatus:
+		default:
+		}
+	}
+	return f.updateErr
 }
 
 func (f *fakeStorage) GetDatasourceName() string  { return "fake" }
@@ -65,30 +75,19 @@ func (f *fakeStorage) DeleteCollection(_ string) error {
 func (f *fakeStorage) Close() error { return nil }
 
 func (f *fakeStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
-	return &fakeStorage{logger: logger, ctx: f.ctx}
+	return &fakeStorage{
+		logger:        logger,
+		ctx:           f.ctx,
+		runStatusChan: f.runStatusChan,
+		updateErr:     f.updateErr,
+	}
 }
 func (f *fakeStorage) WithContext(ctx context.Context) abstractions.Storage {
-	return &fakeStorage{logger: f.logger, ctx: ctx}
-}
-
-func TestPersistJobFailureNoStorage(t *testing.T) {
-	runtime := &K8sRuntime{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
-	runtime.persistJobFailure(nil, nil, context.Canceled)
-}
-
-func TestPersistJobFailureUpdatesStatus(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	storage := &fakeStorage{logger: logger, ctx: context.Background()}
-	var store abstractions.Storage = storage
-	runtime := &K8sRuntime{logger: logger, ctx: context.Background()}
-	evaluation := &api.EvaluationJobResource{
-		Resource: api.EvaluationResource{
-			Resource: api.Resource{ID: "job-1"},
-		},
-	}
-	runtime.persistJobFailure(&store, evaluation, context.Canceled)
-	if !storage.called {
-		t.Fatalf("expected UpdateEvaluationJobStatus to be called")
+	return &fakeStorage{
+		logger:        f.logger,
+		ctx:           ctx,
+		runStatusChan: f.runStatusChan,
+		updateErr:     f.updateErr,
 	}
 }
 
@@ -161,6 +160,92 @@ func TestCreateBenchmarkResourcesDeletesConfigMapOnJobFailure(t *testing.T) {
 	_, err = clientset.CoreV1().ConfigMaps(defaultNamespace).Get(context.Background(), cmName, metav1.GetOptions{})
 	if err == nil || !apierrors.IsNotFound(err) {
 		t.Fatalf("expected configmap to be deleted, got %v", err)
+	}
+}
+
+func TestRunEvaluationJobMarksBenchmarkFailedOnCreateError(t *testing.T) {
+	t.Setenv("SERVICE_URL", "http://service.example")
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+
+	clientset := fake.NewSimpleClientset()
+	clientset.PrependReactor("create", "configmaps", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+		return true, nil, fmt.Errorf("configmap create failed")
+	})
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	runtime := &K8sRuntime{
+		logger:    logger,
+		helper:    &KubernetesHelper{clientset: clientset},
+		providers: sampleProviders(providerID),
+		ctx:       context.Background(),
+	}
+
+	statusCh := make(chan *api.RunStatusInternal, 1)
+	storage := &fakeStorage{logger: logger, ctx: context.Background(), runStatusChan: statusCh}
+	var store abstractions.Storage = storage
+
+	if err := runtime.RunEvaluationJob(evaluation, &store); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	select {
+	case runStatus := <-statusCh:
+		if runStatus == nil {
+			t.Fatalf("expected run status, got nil")
+		}
+		if runStatus.StatusEvent.Status != api.StateFailed {
+			t.Fatalf("expected status failed, got %s", runStatus.StatusEvent.Status)
+		}
+		if runStatus.StatusEvent.BenchmarkID != evaluation.Benchmarks[0].ID {
+			t.Fatalf("expected benchmark ID %q, got %q", evaluation.Benchmarks[0].ID, runStatus.StatusEvent.BenchmarkID)
+		}
+		if runStatus.StatusEvent.ProviderID != evaluation.Benchmarks[0].ProviderID {
+			t.Fatalf("expected provider ID %q, got %q", evaluation.Benchmarks[0].ProviderID, runStatus.StatusEvent.ProviderID)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("expected UpdateEvaluationJob to be called")
+	}
+}
+
+func TestRunEvaluationJobHandlesUpdateFailure(t *testing.T) {
+	t.Setenv("SERVICE_URL", "http://service.example")
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+
+	clientset := fake.NewSimpleClientset()
+	clientset.PrependReactor("create", "configmaps", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+		return true, nil, fmt.Errorf("configmap create failed")
+	})
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	runtime := &K8sRuntime{
+		logger:    logger,
+		helper:    &KubernetesHelper{clientset: clientset},
+		providers: sampleProviders(providerID),
+		ctx:       context.Background(),
+	}
+
+	statusCh := make(chan *api.RunStatusInternal, 1)
+	storage := &fakeStorage{
+		logger:        logger,
+		ctx:           context.Background(),
+		runStatusChan: statusCh,
+		updateErr:     fmt.Errorf("update failed"),
+	}
+	var store abstractions.Storage = storage
+
+	if err := runtime.RunEvaluationJob(evaluation, &store); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	select {
+	case runStatus := <-statusCh:
+		if runStatus == nil {
+			t.Fatalf("expected run status, got nil")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("expected UpdateEvaluationJob to be called")
 	}
 }
 
