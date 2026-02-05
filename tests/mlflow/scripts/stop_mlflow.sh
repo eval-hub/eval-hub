@@ -16,8 +16,5 @@ while [ $iterations -lt $timeout ]; do
     iterations=$((iterations + 1))
 done
 # If we get here, the server is still running after timeout
-if pgrep -f "mlflow.server" > /dev/null; then
-    echo "MLflow server is still running after 5 seconds"
-    exit 1
-fi
-echo "🛑 MLflow server stopped"
+echo "❌ MLflow server is still running after 5 seconds"
+exit 1
