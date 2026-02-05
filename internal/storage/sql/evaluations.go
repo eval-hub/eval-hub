@@ -219,15 +219,12 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter strin
 		}
 
 		// Unmarshal the entity JSON into EvaluationJobConfig
-		var evaluationConfig api.EvaluationJobConfig
-		err = json.Unmarshal([]byte(entityJSON), &evaluationConfig)
+		var evaluationJobEntity EvaluationJobEntity
+		err = json.Unmarshal([]byte(entityJSON), &evaluationJobEntity)
 		if err != nil {
 			s.logger.Error("Failed to unmarshal evaluation job entity", "error", err, "id", dbID)
 			return nil, serviceerrors.NewServiceError(messages.JSONUnmarshalFailed, "Type", "evaluation job", "Error", err.Error())
 		}
-
-		// Parse status from database
-		status := api.State(statusStr)
 
 		// Construct the EvaluationJobResource
 		// Note: Results and Benchmarks are initialized with defaults since they're not stored in the entity column
@@ -241,17 +238,9 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter strin
 				},
 				MLFlowExperimentID: nil,
 			},
-			EvaluationJobConfig: evaluationConfig,
-			Status: &api.EvaluationJobStatus{
-				EvaluationJobState: api.EvaluationJobState{
-					State: status,
-					Message: &api.MessageInfo{
-						Message:     "Evaluation job retrieved",
-						MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_RETRIEVED,
-					},
-				},
-				Benchmarks: nil,
-			},
+			EvaluationJobConfig: *evaluationJobEntity.Config,
+			Status:              evaluationJobEntity.Status,
+			Results:             evaluationJobEntity.Results,
 		}
 
 		items = append(items, resource)
