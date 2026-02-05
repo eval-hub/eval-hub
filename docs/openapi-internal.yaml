@@ -340,7 +340,7 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-  /api/v1/evaluations/providers/{provider_id}:
+  /api/v1/evaluations/providers/{id}:
     get:
       tags:
         - Providers
@@ -348,7 +348,7 @@ paths:
       description: Get details of a specific provider.
       operationId: get_provider_api_v1_evaluations_providers__provider_id__get
       parameters:
-        - name: provider_id
+        - name: id
           in: path
           required: true
           schema:

@@ -5,7 +5,7 @@ get:
   description: Get details of a specific provider.
   operationId: get_provider_api_v1_evaluations_providers__provider_id__get
   parameters:
-    - name: provider_id
+    - name: id
       in: path
       required: true
       schema:

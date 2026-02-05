@@ -49,8 +49,8 @@ paths:
     $ref: paths/api_v1_evaluations_jobs_{id}_events.yaml
   /api/v1/evaluations/providers:
     $ref: paths/api_v1_evaluations_providers.yaml
-  /api/v1/evaluations/providers/{provider_id}:
-    $ref: paths/api_v1_evaluations_providers_{provider_id}.yaml
+  /api/v1/evaluations/providers/{id}:
+    $ref: paths/api_v1_evaluations_providers_{id}.yaml
   /api/v1/evaluations/benchmarks:
     $ref: paths/api_v1_evaluations_benchmarks.yaml
   /api/v1/evaluations/collections:
