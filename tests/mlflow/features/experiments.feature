@@ -6,7 +6,7 @@ Feature: MLflow Experiments API
   new one with the same name because it may not yet be completely deleted
 
   Background:
-    Given an MLflow server is running at "http://localhost:5000"
+    Given an MLflow server is running
     And I have an MLflow client connected to the server
 
   Scenario: Create a new experiment

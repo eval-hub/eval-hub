@@ -58,7 +58,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	})
 
 	// Server setup steps
-	ctx.Step(`^an MLflow server is running at "([^"]*)"$`, tc.serverIsRunning)
+	ctx.Step(`^an MLflow server is running$`, tc.serverIsRunning)
 	ctx.Step(`^I have an MLflow client connected to the server$`, tc.clientConnected)
 
 	// Experiment steps
@@ -83,7 +83,7 @@ func debugLog(format string, a ...any) {
 }
 
 // Server setup steps
-func (tc *testContext) serverIsRunning(url string) error {
+func (tc *testContext) serverIsRunning() error {
 	// If the cliebnt is already connected then no need to check again
 	if tc.clientConnected() == nil {
 		return nil
