@@ -1,8 +1,10 @@
 name: Build and Publish eval-hub-server
 
 on:
-  release:
-    types: [published]
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   build-binaries:
@@ -18,7 +20,6 @@ jobs:
           - goos: linux
             goarch: arm64
             output: bin/eval-hub-linux-arm64
-
           # macOS
           - goos: darwin
             goarch: amd64
@@ -26,7 +27,6 @@ jobs:
           - goos: darwin
             goarch: arm64
             output: bin/eval-hub-darwin-arm64
-
           # Windows
           - goos: windows
             goarch: amd64
@@ -127,11 +127,12 @@ jobs:
         with:
           name: wheel-${{ matrix.platform }}-${{ matrix.arch }}
           path: python-server/dist/*.whl
-          retention-days: 7
+          retention-days: 1
 
   publish:
     name: Publish to PyPI
     needs: build-wheels
+    if: startsWith(github.ref, 'refs/tags/')  # only publish to PyPI on tag pushes
     runs-on: ubuntu-latest
     environment:
       name: pypi
