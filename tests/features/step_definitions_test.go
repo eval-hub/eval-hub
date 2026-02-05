@@ -25,6 +25,7 @@ import (
 	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/logging"
+	"github.com/eval-hub/eval-hub/internal/mlflow"
 	"github.com/eval-hub/eval-hub/internal/runtimes"
 	"github.com/eval-hub/eval-hub/internal/storage"
 	"github.com/eval-hub/eval-hub/internal/validation"
@@ -34,7 +35,8 @@ import (
 )
 
 const (
-	valuePrefix = "value:"
+	valuePrefix  = "value:"
+	mlflowPrefix = "mlfow:"
 )
 
 var (
@@ -180,7 +182,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 		return logError(fmt.Errorf("failed to create runtime: %w", err))
 	}
 
-	a.server, err = server.NewServer(logger, serviceConfig, providerConfigs, storage, validate, runtime)
+	a.server, err = server.NewServer(logger, serviceConfig, providerConfigs, storage, validate, runtime, mlflow.NewMLFlowClient())
 	if err != nil {
 		return err
 	}
@@ -257,25 +259,58 @@ func (tc *scenarioConfig) findFile(fileName string) (string, error) {
 	return file, nil
 }
 
-func (tc *scenarioConfig) getFile(fileName string) (io.ReadCloser, error) {
+func (tc *scenarioConfig) getFile(fileName string) (string, error) {
 	filePath, err := tc.findFile(fileName)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	file, err := os.Open(filePath)
+	contents, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return file, nil
+	return string(contents), nil
+}
+
+func (tc *scenarioConfig) isMLFlow() bool {
+	return os.Getenv("MLFLOW_TRACKING_URI") != ""
+}
+
+func (tc *scenarioConfig) substituteValues(body string) (string, error) {
+	re := regexp.MustCompile(`\{\{([^}]*)\}\}`)
+	for strings.Contains(body, "{{") {
+		match := re.FindStringSubmatch(body)
+		if len(match) > 1 {
+			if strings.HasPrefix(match[1], mlflowPrefix) {
+				v := ""
+				if tc.isMLFlow() {
+					v = strings.TrimPrefix(match[1], mlflowPrefix)
+				}
+				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), v)
+			} else {
+				return "", logError(fmt.Errorf("unknown substitutionvalue: %s", match[1]))
+			}
+		}
+	}
+	return body, nil
 }
 
 func (tc *scenarioConfig) getRequestBody(body string) (io.Reader, error) {
+	var err error
 	if body == "" {
 		return nil, nil
 	}
 	// this can be an inline body or a test file
 	if strings.HasPrefix(body, "file:/") {
-		return tc.getFile(strings.TrimPrefix(body, "file:/"))
+		// this returns the contents of the file as a string
+		body, err = tc.getFile(strings.TrimPrefix(body, "file:/"))
+		if err != nil {
+			return nil, err
+		}
+	}
+	// now do any subsitution
+	body, err = tc.substituteValues(body)
+	if err != nil {
+		return nil, err
 	}
 	return strings.NewReader(body), nil
 }

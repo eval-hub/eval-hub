@@ -1,6 +1,8 @@
 package mlflow
 
 import (
+	"os"
+
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
@@ -8,14 +10,27 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 )
 
+func NewMLFlowClient() *mlflowclient.Client {
+	// for now we just use the environment variable to get the tracking URI
+	if os.Getenv("MLFLOW_TRACKING_URI") != "" {
+		return mlflowclient.NewClient(os.Getenv("MLFLOW_TRACKING_URI"))
+	}
+	return nil
+}
+
 func GetExperimentID(ctx *executioncontext.ExecutionContext, mlflowClient *mlflowclient.Client, experiment *api.ExperimentConfig) (string, error) {
-	if experiment == nil {
+	if experiment == nil || experiment.Name == "" {
 		return "", nil
 	}
+
+	// if we get here then we have an experiment name so we need an MLFlow client
 
 	if mlflowClient == nil {
 		return "", serviceerrors.NewServiceError(messages.MLFlowRequiredForExperiment)
 	}
+
+	// use the context from the execution context
+	mlflowClient = mlflowClient.WithContext(ctx.Ctx).WithLogger(ctx.Logger)
 
 	mlflowExperiment, err := mlflowClient.GetExperimentByName(experiment.Name)
 	if err != nil {
@@ -26,6 +41,7 @@ func GetExperimentID(ctx *executioncontext.ExecutionContext, mlflowClient *mlflo
 	}
 
 	if mlflowExperiment != nil && mlflowExperiment.Experiment.LifecycleStage == "active" && mlflowExperiment.Experiment.ExperimentID != "" {
+		ctx.Logger.Info("Found active experiment", "experiment_name", experiment.Name, "experiment_id", mlflowExperiment.Experiment.ExperimentID)
 		// we found an active experiment with the given name so return the ID
 		return mlflowExperiment.Experiment.ExperimentID, nil
 	}
@@ -44,5 +60,6 @@ func GetExperimentID(ctx *executioncontext.ExecutionContext, mlflowClient *mlflo
 		return "", serviceerrors.NewServiceError(messages.MLFlowRequestFailed, "Error", err.Error())
 	}
 
+	ctx.Logger.Info("Created new experiment", "experiment_name", experiment.Name, "experiment_id", resp.ExperimentID)
 	return resp.ExperimentID, nil
 }

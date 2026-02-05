@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -31,21 +32,48 @@ type Client struct {
 	BaseURL    string
 	HTTPClient *http.Client
 	AuthToken  string
+	Logger     *slog.Logger
 }
 
 // NewClient creates a new MLflow client
-func NewClient(ctx context.Context, baseURL string) *Client {
+func NewClient(baseURL string) *Client {
 	// Ensure baseURL doesn't end with a slash
 	if len(baseURL) > 0 && baseURL[len(baseURL)-1] == '/' {
 		baseURL = baseURL[:len(baseURL)-1]
 	}
 
 	return &Client{
-		Ctx:     ctx,
+		Ctx:     context.Background(),
 		BaseURL: baseURL,
 		HTTPClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+	}
+}
+
+func (c *Client) WithContext(ctx context.Context) *Client {
+	if c == nil {
+		return nil
+	}
+	return &Client{
+		Ctx:        ctx,
+		BaseURL:    c.BaseURL,
+		HTTPClient: c.HTTPClient,
+		AuthToken:  c.AuthToken,
+		Logger:     c.Logger,
+	}
+}
+
+func (c *Client) WithLogger(logger *slog.Logger) *Client {
+	if c == nil {
+		return nil
+	}
+	return &Client{
+		Ctx:        c.Ctx,
+		BaseURL:    c.BaseURL,
+		HTTPClient: c.HTTPClient,
+		AuthToken:  c.AuthToken,
+		Logger:     logger,
 	}
 }
 
@@ -61,10 +89,16 @@ func (c *Client) SetTimeout(timeout time.Duration) {
 
 // doRequest performs an HTTP request to the MLflow API
 func (c *Client) doRequest(ctx context.Context, method, endpoint string, body interface{}) ([]byte, error) {
+	if c.Logger != nil {
+		c.Logger.Info("MLFlow request started", "method", method, "endpoint", endpoint)
+	}
 	var reqBody io.Reader
 	if body != nil {
 		jsonData, err := json.Marshal(body)
 		if err != nil {
+			if c.Logger != nil {
+				c.Logger.Info("MLFlow request errored", "method", method, "endpoint", endpoint, "stage", "failed to marshal request body", "error", err.Error())
+			}
 			return nil, fmt.Errorf("failed to marshal request body: %w", err)
 		}
 		reqBody = bytes.NewBuffer(jsonData)
@@ -72,6 +106,9 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 
 	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+endpoint, reqBody)
 	if err != nil {
+		if c.Logger != nil {
+			c.Logger.Info("MLFlow request errored", "method", method, "endpoint", endpoint, "stage", "failed to create request", "error", err.Error())
+		}
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
@@ -82,12 +119,18 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
+		if c.Logger != nil {
+			c.Logger.Info("MLFlow request errored", "method", method, "endpoint", endpoint, "stage", "failed to execute request", "error", err.Error())
+		}
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
+		if c.Logger != nil {
+			c.Logger.Info("MLFlow request errored", "method", method, "endpoint", endpoint, "stage", "failed to read response body", "error", err.Error())
+		}
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
@@ -99,6 +142,9 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 				ResponseBody: string(respBody),
 				MLFlowError:  &mlflowError,
 			}
+			if c.Logger != nil {
+				c.Logger.Info("MLFlow request failed", "method", method, "endpoint", endpoint, "status", resp.StatusCode, "error_code", mlflowError.ErrorCode, "message", mlflowError.Message)
+			}
 			return nil, apiErr
 		}
 		apiErr := &APIError{
@@ -106,9 +152,15 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 			ResponseBody: string(respBody),
 			MLFlowError:  nil,
 		}
+		if c.Logger != nil {
+			c.Logger.Info("MLFlow request failed", "method", method, "endpoint", endpoint, "status", apiErr.StatusCode, "response", apiErr.ResponseBody)
+		}
 		return nil, apiErr
 	}
 
+	if c.Logger != nil {
+		c.Logger.Info("MLFlow request successful", "method", method, "endpoint", endpoint, "status", resp.StatusCode, "response", string(respBody))
+	}
 	return respBody, nil
 }
 

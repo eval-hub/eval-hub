@@ -5,11 +5,13 @@
 
 set -euo pipefail
 
+mkdir -p bin
+
 # Default values
 HOST=${MLFLOW_HOST:-"127.0.0.1"}
 PORT=${MLFLOW_PORT:-"5000"}
-BACKEND_URI=${MLFLOW_BACKEND_STORE_URI:-"sqlite:///mlflow.db"}
-DEFAULT_ARTIFACT_ROOT=${MLFLOW_DEFAULT_ARTIFACT_ROOT:-"./mlruns"}
+BACKEND_URI=${MLFLOW_BACKEND_STORE_URI:-"sqlite:///bin/mlflow.db"}
+DEFAULT_ARTIFACT_ROOT=${MLFLOW_DEFAULT_ARTIFACT_ROOT:-"./bin/mlruns"}
 
 # Colors for output
 GREEN='\033[0;32m'

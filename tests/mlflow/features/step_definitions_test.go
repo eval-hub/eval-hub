@@ -102,7 +102,7 @@ func (tc *testContext) serverIsRunning() error {
 	// For testing, we'll use an existing server if MLFLOW_TRACKING_URI
 	testURL := os.Getenv("MLFLOW_TRACKING_URI")
 	if testURL != "" {
-		client := mlflowclient.NewClient(context.Background(), testURL)
+		client := mlflowclient.NewClient(testURL)
 		tc.client = client
 		return nil
 	}

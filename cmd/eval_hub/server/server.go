@@ -56,7 +56,9 @@ func NewServer(logger *slog.Logger,
 	providerConfigs map[string]api.ProviderResource,
 	storage abstractions.Storage,
 	validate *validator.Validate,
-	runtime abstractions.Runtime) (*Server, error) {
+	runtime abstractions.Runtime,
+	mlflowClient *mlflowclient.Client,
+) (*Server, error) {
 
 	if logger == nil {
 		return nil, fmt.Errorf("logger is required for the server")
@@ -79,6 +81,7 @@ func NewServer(logger *slog.Logger,
 		storage:         storage,
 		validate:        validate,
 		runtime:         runtime,
+		mlflowClient:    mlflowClient,
 	}, nil
 }
 

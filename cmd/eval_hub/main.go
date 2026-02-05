@@ -15,6 +15,7 @@ import (
 	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/logging"
+	"github.com/eval-hub/eval-hub/internal/mlflow"
 	"github.com/eval-hub/eval-hub/internal/runtimes"
 	"github.com/eval-hub/eval-hub/internal/storage"
 	"github.com/eval-hub/eval-hub/internal/validation"
@@ -48,7 +49,6 @@ func main() {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create validator", logger)
 	}
-	// serviceConfig.Validator = validator
 
 	// set up the storage
 	storage, err := storage.NewStorage(serviceConfig.Database, logger)
@@ -56,7 +56,6 @@ func main() {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create storage", logger)
 	}
-	// serviceConfig.Storage = storage
 
 	// set up the provider configs
 	providerConfigs, err := config.LoadProviderConfigs(logger)
@@ -71,10 +70,11 @@ func main() {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create runtime", logger)
 	}
-
 	logger.Info("Runtime created", "runtime", runtime.Name())
 
-	srv, err := server.NewServer(logger, serviceConfig, providerConfigs, storage, validate, runtime)
+	mlflowClient := mlflow.NewMLFlowClient()
+
+	srv, err := server.NewServer(logger, serviceConfig, providerConfigs, storage, validate, runtime, mlflowClient)
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create server", logger)
@@ -89,6 +89,7 @@ func main() {
 		"storage", storage.GetDatasourceName(),
 		"validator", validate != nil,
 		"local", serviceConfig.Service.LocalMode,
+		"mlflow_tracking", mlflowClient != nil,
 	)
 
 	// Start server in a goroutine

@@ -1,8 +1,11 @@
 package logging
 
 import (
+	"context"
 	"log/slog"
 	"os"
+	"runtime"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
 	"go.uber.org/zap"
@@ -42,21 +45,38 @@ func newShutdownFunc(core zapcore.Core) ShutdownFunc {
 	}
 }
 
+// skipCallersForInfo logs a message at the given level with the given args, skipping the given number of callers
+// the caller is the function that called this function plus one, i.e the function that called one of the Log* functions
+// the skip is the number of callers to skip
+// the msg is the message to log
+// the args are the arguments to add to the message
+// the logger is the logger to use
+// the level is the level to log at
+func SkipCallersForInfo(ctx context.Context, logger *slog.Logger, level slog.Level, skip int, msg string, args ...any) {
+	if !logger.Enabled(ctx, level) {
+		return
+	}
+	var pcs [1]uintptr
+	runtime.Callers(skip, pcs[:])
+	r := slog.NewRecord(time.Now(), level, msg, pcs[0])
+	r.Add(args...)
+	_ = logger.Handler().Handle(ctx, r)
+}
+
 func LogRequestStarted(ctx *executioncontext.ExecutionContext) {
-	// log the successful request, the request details and requestId have already been added to the logger
-	ctx.Logger.Info("Request started")
+	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request started")
 }
 
 func LogRequestFailed(ctx *executioncontext.ExecutionContext, code int, errorMessage string) {
 	// log the failed request, the request details and requestId have already been added to the logger
-	ctx.Logger.Info("Request failed", "error", errorMessage, "code", code)
+	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request failed", "error", errorMessage, "code", code)
 }
 
 func LogRequestSuccess(ctx *executioncontext.ExecutionContext, code int, response any) {
 	// log the successful request, the request details and requestId have already been added to the logger
 	if response != nil {
-		ctx.Logger.Info("Request successful", "response", response)
+		SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request successful", "response", response)
 	} else {
-		ctx.Logger.Info("Request successful")
+		SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request successful")
 	}
 }

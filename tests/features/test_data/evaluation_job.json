@@ -1,12 +1,21 @@
 {
-    "model": {
-        "url": "http://test.com", "name": "test"
-    },
-    "benchmarks": [
+  "model": {
+    "url": "http://test.com", "name": "test"
+  },
+  "benchmarks": [
     {
-      "id": "abc",
+      "benchmark_id": "arc_easy",
       "provider_id": "garak",
       "config": {}
     }
-  ]
+  ],
+  "experiment": {
+    "name": "{{mlfow:my-test-experiment}}",
+    "tags": [
+      {
+        "key": "environment",
+        "value": "test"
+      }
+    ]
+  }
 }
