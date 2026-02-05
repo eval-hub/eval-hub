@@ -45,7 +45,7 @@ func newShutdownFunc(core zapcore.Core) ShutdownFunc {
 	}
 }
 
-// skipCallersForInfo logs a message at the given level with the given args, skipping the given number of callers
+// SkipCallersForInfo logs a message at the given level with the given args, skipping the given number of callers
 // the caller is the function that called this function plus one, i.e the function that called one of the Log* functions
 // the skip is the number of callers to skip
 // the msg is the message to log
