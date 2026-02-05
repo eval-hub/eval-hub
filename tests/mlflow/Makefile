@@ -7,7 +7,7 @@ install-mlflow:
 
 ## run-mlflow: Run MLflow server locally in the background
 run-mlflow:
-	`@echo` "🛑 Stopping MLflow server..."
+	@echo "🛑 Stopping MLflow server..."
 	-@make stop-mlflow
 	-@rm -f mlflow.db tests/features/test_mlflow_${MLFLOW_PORT}.db
 	@echo "🚀 Starting MLflow server..."
