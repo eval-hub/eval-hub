@@ -2,7 +2,6 @@ package messages
 
 import (
 	"fmt"
-	"net/http"
 	"strings"
 )
 
@@ -14,31 +13,31 @@ var (
 
 	// MissingPathParameter The path parameter '{{.ParameterName}}' is required.
 	MissingPathParameter = createMessage(
-		http.StatusNotFound,
+		404,
 		"The path parameter '{{.ParameterName}}' is required.",
 	)
 
 	// ResourceNotFound The {{.Type}} resource {{.ResourceId}} was not found.
 	ResourceNotFound = createMessage(
-		http.StatusNotFound,
+		404,
 		"The {{.Type}} resource {{.ResourceId}} was not found.",
 	)
 
 	// QueryParameterRequired The query parameter '{{.ParameterName}}' is required.
 	QueryParameterRequired = createMessage(
-		http.StatusBadRequest,
+		400,
 		"The query parameter '{{.ParameterName}}' is required.",
 	)
 	// QueryParameterInvalid The query parameter '{{.ParameterName}}' is not a valid {{.Type}}: '{{.Value}}'.
 	QueryParameterInvalid = createMessage(
-		http.StatusBadRequest,
+		400,
 		"The query parameter '{{.ParameterName}}' is not a valid {{.Type}}: '{{.Value}}'.",
 	)
 	// Configurastion related errors
 
 	// ConfigurationFailed The service startup failed: '{{.Error}}'.
 	ConfigurationFailed = createMessage(
-		http.StatusInternalServerError,
+		500,
 		"The service startup failed: '{{.Error}}'.",
 	)
 
@@ -46,7 +45,7 @@ var (
 
 	// JSONUnmarshalFailed The JSON unmarshalling failed for the {{.Type}}: '{{.Error}}'.
 	JSONUnmarshalFailed = createMessage(
-		http.StatusInternalServerError,
+		500,
 		"The JSON unmarshalling failed for the {{.Type}}: '{{.Error}}'.",
 	)
 
@@ -54,36 +53,36 @@ var (
 
 	// DatabaseOperationFailed The request for the {{.Type}} resource {{.ResourceId}} failed: '{{.Error}}'.
 	DatabaseOperationFailed = createMessage(
-		http.StatusInternalServerError,
+		500,
 		"The request for the {{.Type}} resource {{.ResourceId}} failed: '{{.Error}}'.",
 	)
 	// QueryFailed The request for the {{.Type}} failed: '{{.Error}}'.
 	QueryFailed = createMessage(
-		http.StatusInternalServerError,
+		500,
 		"The request for the {{.Type}} failed: '{{.Error}}'.",
 	)
 
 	// InternalServerError An internal server error occurred: '{{.Error}}'.
 	InternalServerError = createMessage(
-		http.StatusInternalServerError,
+		500,
 		"An internal server error occurred: '{{.Error}}'.",
 	)
 
 	// MethodNotAllowed The HTTP method {{.Method}} is not allowed for the API {{.Api}}.
 	MethodNotAllowed = createMessage(
-		http.StatusMethodNotAllowed,
+		405,
 		"The HTTP method {{.Method}} is not allowed for the API {{.Api}}.",
 	)
 
 	// NotImplemented The API {{.Api}} is not yet implemented.
 	NotImplemented = createMessage(
-		http.StatusNotImplemented,
+		501,
 		"The API {{.Api}} is not yet implemented.",
 	)
 
 	// UnknownError An unknown error occurred: '{{.Error}}'. This is a fallback error if the error is not a service error.
 	UnknownError = createMessage(
-		http.StatusInternalServerError,
+		500,
 		"An unknown error occurred: {{.Error}}.",
 	)
 )
