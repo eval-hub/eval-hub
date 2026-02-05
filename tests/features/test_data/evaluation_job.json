@@ -10,7 +10,7 @@
     }
   ],
   "experiment": {
-    "name": "{{mlfow:my-test-experiment}}",
+    "name": "{{mlflow:my-test-experiment}}",
     "tags": [
       {
         "key": "environment",

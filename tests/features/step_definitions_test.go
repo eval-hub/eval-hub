@@ -36,7 +36,7 @@ import (
 
 const (
 	valuePrefix  = "value:"
-	mlflowPrefix = "mlfow:"
+	mlflowPrefix = "mlflow:"
 )
 
 var (
