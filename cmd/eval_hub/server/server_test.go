@@ -3,6 +3,7 @@ package server_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -176,7 +177,7 @@ func TestServerShutdown(t *testing.T) {
 		// Wait for server to stop
 		select {
 		case err := <-errChan:
-			if err != nil && err != http.ErrServerClosed {
+			if err != nil && !errors.Is(err, &server.ServerClosedError{}) {
 				t.Errorf("Server error: %v", err)
 			}
 		case <-time.After(3 * time.Second):
