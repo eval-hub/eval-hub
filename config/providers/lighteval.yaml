@@ -2,7 +2,6 @@ provider_id: lighteval
 provider_name: Lighteval
 description: Lightweight LLM evaluation framework from Hugging Face
 provider_type: builtin
-base_url: null
 runtime:
   k8s:
     image: quay.io/eval-hub/lighteval:latest

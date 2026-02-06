@@ -1,12 +1,12 @@
 properties:
+  id:
+    type: string
+    title: Benchmark Id
+    description: Benchmark identifier
   provider_id:
     type: string
     title: Provider Id
     description: Provider identifier
-  benchmark_id:
-    type: string
-    title: Benchmark Id
-    description: Benchmark identifier
   weight:
     type: number
     title: Weight
@@ -21,6 +21,6 @@ additionalProperties: true
 type: object
 required:
   - provider_id
-  - benchmark_id
+  - id
 title: BenchmarkReference
 description: Reference to a benchmark within a collection.

@@ -2,7 +2,6 @@ provider_id: lm_evaluation_harness
 provider_name: LM Evaluation Harness
 description: Comprehensive evaluation framework for language models with 167 benchmarks
 provider_type: builtin
-base_url: null
 runtime:
   k8s:
     image: quay.io/opendatahub/ta-lmes-job:odh-3.4

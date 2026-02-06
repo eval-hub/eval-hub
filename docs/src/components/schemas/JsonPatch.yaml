@@ -1,0 +1,12 @@
+properties:
+  op:
+    type: string
+    enum:
+      - replace
+      - add
+      - remove
+  path:
+    type: string
+  value:
+    type: object
+    description: Value to be used in the patch operation

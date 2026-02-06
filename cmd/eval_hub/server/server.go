@@ -281,19 +281,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		req := NewRequestWrapper(r)
 		switch r.Method {
 		case http.MethodGet:
-			h.HandleListProviders(ctx, resp)
-		default:
-			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
-		}
-	})
-
-	router.HandleFunc(fmt.Sprintf("/api/v1/evaluations/providers/{%s}", constants.PATH_PARAMETER_PROVIDER_ID), func(w http.ResponseWriter, r *http.Request) {
-		ctx := s.newExecutionContext(r)
-		resp := NewRespWrapper(w, ctx)
-		req := NewRequestWrapper(r)
-		switch r.Method {
-		case http.MethodGet:
-			h.HandleGetProvider(ctx, req, resp)
+			h.HandleListProviders(ctx, req, resp)
 		default:
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}

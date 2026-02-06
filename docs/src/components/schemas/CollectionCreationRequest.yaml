@@ -20,7 +20,7 @@ properties:
     description: Additional collection metadata
   benchmarks:
     items:
-      $ref: ./BenchmarkReference.yaml
+      $ref: ./CollectionBenchmarkReference.yaml
     type: array
     title: Benchmarks
     description: List of benchmark references in this collection
