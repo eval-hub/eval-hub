@@ -115,7 +115,7 @@ type EvaluationJobResults struct {
 	TotalEvaluations     int               `json:"total_evaluations"`
 	CompletedEvaluations int               `json:"completed_evaluations,omitempty"`
 	FailedEvaluations    int               `json:"failed_evaluations,omitempty"`
-	Benchmarks           []BenchmarkStatus `json:"benchmarks,omitempty" validate:"omitempy,dive"`
+	Benchmarks           []BenchmarkStatus `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 	AggregatedMetrics    map[string]any    `json:"aggregated_metrics,omitempty"`
 	MLFlowExperimentURL  *string           `json:"mlflow_experiment_url,omitempty"`
 }
