@@ -780,7 +780,7 @@
             "title": "Provider Id",
             "description": "Provider identifier"
           },
-          "config": {
+          "parameters": {
             "additionalProperties": true,
             "type": "object",
             "title": "Config",
@@ -793,7 +793,7 @@
           "benchmark_id",
           "provider_id"
         ],
-        "title": "BenchmarkConfig",
+        "title": "Benchmark Config",
         "description": "New simplified benchmark specification."
       },
       "ExperimentTag": {

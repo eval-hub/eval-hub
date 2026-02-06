@@ -849,7 +849,7 @@ components:
           type: string
           title: Provider Id
           description: Provider identifier
-        config:
+        parameters:
           additionalProperties: true
           type: object
           title: Config
@@ -859,7 +859,7 @@ components:
       required:
         - benchmark_id
         - provider_id
-      title: BenchmarkConfig
+      title: Benchmark Config
       description: New simplified benchmark specification.
     ExperimentTag:
       type: object
@@ -999,10 +999,6 @@ components:
           type: string
           title: Benchmark Id
           description: Benchmark identifier
-        benchmark_name:
-          type: string
-          title: Benchmark Name
-          description: Benchmark display name
         status:
           $ref: '#/components/schemas/EvaluationStatus'
           description: Evaluation status

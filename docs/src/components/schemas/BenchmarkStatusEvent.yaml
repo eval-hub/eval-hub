@@ -9,10 +9,6 @@ properties:
     type: string
     title: Benchmark Id
     description: Benchmark identifier
-  benchmark_name:
-    type: string
-    title: Benchmark Name
-    description: Benchmark display name
   status:
     $ref: ./EvaluationStatus.yaml
     description: Evaluation status
