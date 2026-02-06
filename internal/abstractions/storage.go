@@ -27,8 +27,9 @@ type Storage interface {
 	GetEvaluationJob(id string) (*api.EvaluationJobResource, error)
 	GetEvaluationJobs(limit int, offset int, statusFilter string) (*QueryResults[api.EvaluationJobResource], error)
 	DeleteEvaluationJob(id string, hardDelete bool) error
-	UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error
 	UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error
+	// UpdateEvaluationJobStatus is used to update the status of an evaluation job and is internal - do we need it here?
+	UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error
 
 	// Collection operations
 	CreateCollection(collection *api.CollectionResource) error
