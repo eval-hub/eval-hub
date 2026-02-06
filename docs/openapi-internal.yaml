@@ -1314,7 +1314,6 @@ components:
       title: CollectionUpdateRequest
       description: Request for updating an existing collection.
     JsonPatch:
-      type: object
       properties:
         op:
           type: string
@@ -1325,6 +1324,7 @@ components:
         path:
           type: string
         value:
+          description: Value to be used in the patch operation
           type:
             - object
             - array
@@ -1333,7 +1333,6 @@ components:
             - integer
             - boolean
             - 'null'
-          description: Value to be used in the patch operation
       required:
         - op
         - path

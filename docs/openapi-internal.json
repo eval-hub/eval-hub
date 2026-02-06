@@ -817,13 +817,13 @@
           "required": true,
           "content": {
             "application/json": {
+              "schema": {
                 "type": "array",
                 "title": "Json Patch",
                 "description": "JSON Patch operation",
                 "items": {
                   "$ref": "#/components/schemas/JsonPatch"
-                },
-                "minItems": 1
+                }
               }
             }
           }
@@ -1867,6 +1867,7 @@
             "type": "string"
           },
           "value": {
+            "description": "Value to be used in the patch operation",
             "type": [
               "object",
               "array",
@@ -1875,10 +1876,13 @@
               "integer",
               "boolean",
               "null"
-            ],
-            "description": "Value to be used in the patch operation"
+            ]
           }
-        }
+        },
+        "required": [
+          "op",
+          "path"
+        ]
       }
     },
     "examples": {

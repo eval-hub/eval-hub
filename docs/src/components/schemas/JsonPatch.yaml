@@ -5,13 +5,6 @@ properties:
       - replace
       - add
       - remove
-properties:
-  op:
-    type: string
-    enum:
-      - replace
-      - add
-      - remove
   path:
     type: string
   value:
