@@ -21,8 +21,14 @@ import (
 
 type EvaluationJobEntity struct {
 	Config  *api.EvaluationJobConfig  `json:"config"`
-	Status  *api.EvaluationJobStatus  `json:"status"`
+	Status  *EvaluationJobStatus      `json:"status"`
 	Results *api.EvaluationJobResults `json:"results,omitempty"`
+}
+
+// EvaluationStatus represents evaluation status
+type EvaluationJobStatus struct {
+	api.EvaluationJobState
+	Benchmarks []api.BenchmarkStatus `json:"benchmarks,omitempty"`
 }
 
 //#######################################################################
@@ -41,7 +47,7 @@ func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobConfig, ml
 
 	evaluationEntity := &EvaluationJobEntity{
 		Config: evaluation,
-		Status: &api.EvaluationJobStatus{
+		Status: &EvaluationJobStatus{
 			EvaluationJobState: api.EvaluationJobState{
 				State: api.OverallStatePending,
 				Message: &api.MessageInfo{
@@ -75,9 +81,10 @@ func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobConfig, ml
 				UpdatedAt: time.Now(),
 			},
 			MLFlowExperimentID: mlflowExperimentID,
+			Status:             evaluationEntity.Status.State,
+			Message:            evaluationEntity.Status.Message,
 		},
 		EvaluationJobConfig: *evaluation,
-		Status:              evaluationEntity.Status,
 		Results:             nil,
 	}
 	return evaluationResource, nil
@@ -115,12 +122,22 @@ func (s *SQLStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, er
 		return nil, serviceerrors.NewServiceError(messages.JSONUnmarshalFailed, "Type", "evaluation job", "Error", err.Error())
 	}
 
-	evaluationResource := constructEvaluationResource(statusStr, dbID, createdAt, updatedAt, experimentID, evaluationEntity)
+	evaluationResource := constructEvaluationResource(statusStr, nil, dbID, createdAt, updatedAt, experimentID, evaluationEntity)
 
 	return evaluationResource, nil
 }
 
-func constructEvaluationResource(statusStr string, dbID string, createdAt time.Time, updatedAt time.Time, experimentID string, evaluationEntity EvaluationJobEntity) *api.EvaluationJobResource {
+func constructEvaluationResource(statusStr string, message *api.MessageInfo, dbID string, createdAt time.Time, updatedAt time.Time, experimentID string, evaluationEntity EvaluationJobEntity) *api.EvaluationJobResource {
+	if message == nil {
+		message = evaluationEntity.Status.Message
+	}
+	status := evaluationEntity.Status.State
+
+	if statusStr == "" {
+		if s, err := api.GetOverallState(statusStr); err == nil {
+			status = s
+		}
+	}
 	evaluationResource := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{
@@ -130,9 +147,10 @@ func constructEvaluationResource(statusStr string, dbID string, createdAt time.T
 				UpdatedAt: updatedAt,
 			},
 			MLFlowExperimentID: experimentID,
+			Status:             status,
+			Message:            message,
 		},
 		EvaluationJobConfig: *evaluationEntity.Config,
-		Status:              evaluationEntity.Status,
 		Results:             evaluationEntity.Results,
 	}
 	return evaluationResource
@@ -170,7 +188,7 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 		return nil, serviceerrors.NewServiceError(messages.JSONUnmarshalFailed, "Type", "evaluation job", "Error", err.Error())
 	}
 
-	evaluationResource := constructEvaluationResource(statusStr, dbID, createdAt, updatedAt, experimentID, evaluationEntity)
+	evaluationResource := constructEvaluationResource(statusStr, nil, dbID, createdAt, updatedAt, experimentID, evaluationEntity)
 
 	return evaluationResource, nil
 }
@@ -241,9 +259,10 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter strin
 					UpdatedAt: updatedAt,
 				},
 				MLFlowExperimentID: experimentID,
+				Status:             evaluationJobEntity.Status.State,
+				Message:            evaluationJobEntity.Status.Message,
 			},
 			EvaluationJobConfig: *evaluationJobEntity.Config,
-			Status:              evaluationJobEntity.Status,
 			Results:             evaluationJobEntity.Results,
 		}
 
@@ -329,20 +348,19 @@ func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.State, messa
 	return nil
 }
 
-func (s *SQLStorage) updateEvaluationJobTransactional(txn *sql.Tx, id string, status *api.EvaluationJobStatus, entityJSON string) error {
-	statusStr := string(status.EvaluationJobState.State)
-	updateQuery, args, err := CreateUpdateEvaluationStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, id, statusStr, entityJSON)
+func (s *SQLStorage) updateEvaluationJobTransactional(txn *sql.Tx, id string, status api.OverallState, entityJSON string) error {
+	updateQuery, args, err := CreateUpdateEvaluationStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, id, status, entityJSON)
 	if err != nil {
 		return err
 	}
 
 	_, err = s.exec(txn, updateQuery, args...)
 	if err != nil {
-		s.logger.Error("Failed to update evaluation job", "error", err, "id", id, "status", statusStr)
+		s.logger.Error("Failed to update evaluation job", "error", err, "id", id, "status", status)
 		return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
 	}
 
-	s.logger.Info("Updated evaluation job", "id", id, "status", statusStr)
+	s.logger.Info("Updated evaluation job", "id", id, "status", status)
 	return nil
 }
 
@@ -368,19 +386,23 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 	updateBenchMarkProgress(job, runStatus)
 
 	overallState, message := getOverallJobStatus(job)
-	job.Status.EvaluationJobState.State = overallState
-	job.Status.EvaluationJobState.Message = message
 
 	updatedEntityJSON, err := json.Marshal(&EvaluationJobEntity{
-		Config:  &job.EvaluationJobConfig,
-		Status:  job.Status,
+		Config: &job.EvaluationJobConfig,
+		Status: &EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{
+				State:   overallState,
+				Message: message,
+			},
+			Benchmarks: job.Results.Benchmarks,
+		},
 		Results: job.Results,
 	})
 	if err != nil {
 		s.logger.Error("Failed to marshal updated job resource", "error", err, "id", id)
 		return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
 	}
-	if err := s.updateEvaluationJobTransactional(txn, id, job.Status, string(updatedEntityJSON)); err != nil {
+	if err := s.updateEvaluationJobTransactional(txn, id, overallState, string(updatedEntityJSON)); err != nil {
 		return err
 	}
 
@@ -394,13 +416,13 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 func validateBenchmarkExists(job *api.EvaluationJobResource, runStatus *api.StatusEvent) error {
 	found := false
 	for _, benchmark := range job.Benchmarks {
-		if benchmark.ID == runStatus.BenchmarkStatusEvent.BenchmarkID {
+		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID {
 			found = true
 			break
 		}
 	}
 	if !found {
-		return serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "benchmark", "ResourceId", runStatus.BenchmarkStatusEvent.BenchmarkID, "Error", "Invalid Benchmark for the evaluation job")
+		return serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "benchmark", "ResourceId", runStatus.BenchmarkStatusEvent.ID, "Error", "Invalid Benchmark for the evaluation job")
 	}
 	return nil
 }
@@ -409,10 +431,10 @@ func getOverallJobStatus(job *api.EvaluationJobResource) (api.OverallState, *api
 	// group all benchmarks by state
 	benchmarkStates := make(map[api.State]int)
 	failureMessage := ""
-	for _, benchmark := range job.Status.Benchmarks {
+	for _, benchmark := range job.Results.Benchmarks {
 		benchmarkStates[benchmark.Status]++
 		if benchmark.Status == api.StateFailed && benchmark.ErrorMessage != nil {
-			failureMessage += "Benchmark " + benchmark.BenchmarkID + " failed with message: " + benchmark.ErrorMessage.Message + "\n"
+			failureMessage += "Benchmark " + benchmark.ID + " failed with message: " + benchmark.ErrorMessage.Message + "\n"
 		}
 	}
 
@@ -442,7 +464,7 @@ func getOverallJobStatus(job *api.EvaluationJobResource) (api.OverallState, *api
 }
 
 func updateBenchMarkProgress(jobResource *api.EvaluationJobResource, runStatus *api.StatusEvent) {
-	jobResource.Status.Benchmarks = findAndUpdateBenchmarkStatus(jobResource.Status.Benchmarks, runStatus)
+	jobResource.Results.Benchmarks = findAndUpdateBenchmarkStatus(jobResource.Results.Benchmarks, runStatus)
 	if jobResource.Results == nil {
 		jobResource.Results = &api.EvaluationJobResults{}
 	}
@@ -453,7 +475,7 @@ func findAndUpdateBenchmarkStatus(benchmarkStatus []api.BenchmarkStatus, runStat
 	found := false
 	for i := range benchmarkStatus {
 		status := &benchmarkStatus[i]
-		if status.BenchmarkID == runStatus.BenchmarkStatusEvent.BenchmarkID {
+		if status.ID == runStatus.BenchmarkStatusEvent.ID {
 			prevStatus := status.Status
 			status.Status = runStatus.BenchmarkStatusEvent.Status
 			if prevStatus == api.StatePending && runStatus.BenchmarkStatusEvent.Status == api.StateRunning {
@@ -475,8 +497,8 @@ func findAndUpdateBenchmarkStatus(benchmarkStatus []api.BenchmarkStatus, runStat
 	if !found {
 		// if the benchmark is not found, create a new benchmark status
 		newBenchmarkStatus := api.BenchmarkStatus{
-			BenchmarkID: runStatus.BenchmarkStatusEvent.BenchmarkID,
-			Status:      runStatus.BenchmarkStatusEvent.Status,
+			ID:     runStatus.BenchmarkStatusEvent.ID,
+			Status: runStatus.BenchmarkStatusEvent.Status,
 		}
 		if runStatus.BenchmarkStatusEvent.Status == api.StateFailed && runStatus.BenchmarkStatusEvent.ErrorMessage != nil {
 			newBenchmarkStatus.ErrorMessage = &api.MessageInfo{
@@ -496,7 +518,7 @@ func findAndUpdateBenchmarkResults(benchmarkResults *api.EvaluationJobResults, r
 	found := false
 	for i := range benchmarkResults.Benchmarks {
 		result := &benchmarkResults.Benchmarks[i]
-		if result.ID == runStatus.BenchmarkStatusEvent.BenchmarkID {
+		if result.ID == runStatus.BenchmarkStatusEvent.ID {
 			if runStatus.BenchmarkStatusEvent.Status == api.StateCompleted {
 				result.Metrics = runStatus.BenchmarkStatusEvent.Metrics
 				result.Artifacts = runStatus.BenchmarkStatusEvent.Artifacts
@@ -507,9 +529,9 @@ func findAndUpdateBenchmarkResults(benchmarkResults *api.EvaluationJobResults, r
 	}
 	if !found {
 		if runStatus.BenchmarkStatusEvent.Status == api.StateCompleted {
-			newBenchmarkResult := api.EvaluationJobBenchmarkResult{
-				ID:        runStatus.BenchmarkStatusEvent.BenchmarkID,
-				State:     runStatus.BenchmarkStatusEvent.Status,
+			newBenchmarkResult := api.BenchmarkStatus{
+				ID:        runStatus.BenchmarkStatusEvent.ID,
+				Status:    runStatus.BenchmarkStatusEvent.Status,
 				Metrics:   runStatus.BenchmarkStatusEvent.Metrics,
 				Artifacts: runStatus.BenchmarkStatusEvent.Artifacts,
 			}

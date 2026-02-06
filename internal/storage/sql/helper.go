@@ -172,7 +172,7 @@ func createUpdateStatusStatement(driver, tableName string) (string, error) {
 // setting only the non-empty fields (status, entity) and updated_at, filtered by id.
 // If status is empty, the query does not set status; if entityJSON is empty, the query does not set entity.
 // Returns the query, args in SET order then id, and an optional error.
-func CreateUpdateEvaluationStatement(driver, tableName, id, status, entityJSON string) (query string, args []any, err error) {
+func CreateUpdateEvaluationStatement(driver, tableName, id string, status api.OverallState, entityJSON string) (query string, args []any, err error) {
 	quotedTable := quoteIdentifier(driver, tableName)
 	quotedStatus := quoteIdentifier(driver, "status")
 	quotedEntity := quoteIdentifier(driver, "entity")

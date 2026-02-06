@@ -1,6 +1,9 @@
 package api
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // State represents the evaluation state enum
 type State string
@@ -23,6 +26,29 @@ const (
 	OverallStateCancelled       OverallState = OverallState(StateCancelled)
 	OverallStatePartiallyFailed OverallState = "partially_failed"
 )
+
+func (o OverallState) String() string {
+	return string(o)
+}
+
+func GetOverallState(s string) (OverallState, error) {
+	switch s {
+	case string(OverallStatePending):
+		return OverallStatePending, nil
+	case string(OverallStateRunning):
+		return OverallStateRunning, nil
+	case string(OverallStateCompleted):
+		return OverallStateCompleted, nil
+	case string(OverallStateFailed):
+		return OverallStateFailed, nil
+	case string(OverallStateCancelled):
+		return OverallStateCancelled, nil
+	case string(OverallStatePartiallyFailed):
+		return OverallStatePartiallyFailed, nil
+	default:
+		return OverallState(s), fmt.Errorf("invalid overall state: %s", s)
+	}
+}
 
 // ModelRef represents model specification for evaluation requests
 type ModelRef struct {
@@ -64,7 +90,7 @@ type BenchmarkStatusLogs struct {
 // BenchmarkStatus represents status of individual benchmark in evaluation
 type BenchmarkStatus struct {
 	ProviderID      string         `json:"provider_id"`
-	BenchmarkID     string         `json:"id"`
+	ID              string         `json:"id"`
 	Status          State          `json:"status,omitempty"`
 	Metrics         map[string]any `json:"metrics,omitempty"`
 	Artifacts       map[string]any `json:"artifacts,omitempty"`
@@ -80,35 +106,18 @@ type EvaluationJobState struct {
 	Message *MessageInfo `json:"message" validate:"required"`
 }
 
-// EvaluationStatus represents evaluation status
-type EvaluationJobStatus struct {
-	EvaluationJobState
-	Benchmarks []BenchmarkStatus `json:"benchmarks,omitempty"`
-}
-
 type StatusEvent struct {
 	BenchmarkStatusEvent *BenchmarkStatus `json:"benchmark_status_event" validate:"required"`
 }
 
-// EvaluationJobBenchmarkResult represents benchmark result in evaluation job
-type EvaluationJobBenchmarkResult struct {
-	ID          string         `json:"id"`
-	State       State          `json:"state"`
-	StartedAt   *time.Time     `json:"started_at,omitempty"`
-	CompletedAt *time.Time     `json:"completed_at,omitempty"`
-	Metrics     map[string]any `json:"metrics,omitempty"`
-	Error       *MessageInfo   `json:"error,omitempty"`
-	Artifacts   map[string]any `json:"artifacts,omitempty"`
-}
-
 // EvaluationJobResults represents results section for EvaluationJobResource
 type EvaluationJobResults struct {
-	TotalEvaluations     int                            `json:"total_evaluations"`
-	CompletedEvaluations int                            `json:"completed_evaluations,omitempty"`
-	FailedEvaluations    int                            `json:"failed_evaluations,omitempty"`
-	Benchmarks           []EvaluationJobBenchmarkResult `json:"benchmarks,omitempty"`
-	AggregatedMetrics    map[string]any                 `json:"aggregated_metrics,omitempty"`
-	MLFlowExperimentURL  *string                        `json:"mlflow_experiment_url,omitempty"`
+	TotalEvaluations     int               `json:"total_evaluations"`
+	CompletedEvaluations int               `json:"completed_evaluations,omitempty"`
+	FailedEvaluations    int               `json:"failed_evaluations,omitempty"`
+	Benchmarks           []BenchmarkStatus `json:"benchmarks,omitempty" validate:"omitempy,dive"`
+	AggregatedMetrics    map[string]any    `json:"aggregated_metrics,omitempty"`
+	MLFlowExperimentURL  *string           `json:"mlflow_experiment_url,omitempty"`
 }
 
 // EvaluationJobConfig represents evaluation job request schema
@@ -123,14 +132,15 @@ type EvaluationJobConfig struct {
 
 type EvaluationResource struct {
 	Resource
-	MLFlowExperimentID string `json:"mlflow_experiment_id,omitempty"`
+	MLFlowExperimentID string       `json:"mlflow_experiment_id,omitempty"`
+	Status             OverallState `json:"status"`
+	Message            *MessageInfo `json:"message,omitempty"`
 }
 
 // EvaluationJobResource represents evaluation job resource response
 type EvaluationJobResource struct {
 	Resource EvaluationResource `json:"resource"`
 	EvaluationJobConfig
-	Status  *EvaluationJobStatus  `json:"status"`
 	Results *EvaluationJobResults `json:"results,omitempty"`
 }
 

@@ -157,7 +157,7 @@ func buildBenchmarkFailureStatus(benchmark *api.BenchmarkConfig, runErr error) *
 	return &api.StatusEvent{
 		BenchmarkStatusEvent: &api.BenchmarkStatus{
 			ProviderID:   benchmark.ProviderID,
-			BenchmarkID:  benchmark.ID,
+			ID:           benchmark.ID,
 			Status:       api.StateFailed,
 			ErrorMessage: &api.MessageInfo{Message: runErr.Error(), MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED},
 		},

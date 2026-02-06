@@ -197,8 +197,8 @@ func TestRunEvaluationJobMarksBenchmarkFailedOnCreateError(t *testing.T) {
 		if runStatus.BenchmarkStatusEvent.Status != api.StateFailed {
 			t.Fatalf("expected status failed, got %s", runStatus.BenchmarkStatusEvent.Status)
 		}
-		if runStatus.BenchmarkStatusEvent.BenchmarkID != evaluation.Benchmarks[0].ID {
-			t.Fatalf("expected benchmark ID %q, got %q", evaluation.Benchmarks[0].ID, runStatus.BenchmarkStatusEvent.BenchmarkID)
+		if runStatus.BenchmarkStatusEvent.ID != evaluation.Benchmarks[0].ID {
+			t.Fatalf("expected benchmark ID %q, got %q", evaluation.Benchmarks[0].ID, runStatus.BenchmarkStatusEvent.ID)
 		}
 		if runStatus.BenchmarkStatusEvent.ProviderID != evaluation.Benchmarks[0].ProviderID {
 			t.Fatalf("expected provider ID %q, got %q", evaluation.Benchmarks[0].ProviderID, runStatus.BenchmarkStatusEvent.ProviderID)
