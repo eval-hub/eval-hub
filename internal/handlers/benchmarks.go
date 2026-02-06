@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"slices"
 
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
@@ -43,13 +42,11 @@ func (h *Handlers) HandleListBenchmarks(ctx *executioncontext.ExecutionContext, 
 			if category != "" && benchmark.Category != category {
 				continue
 			}
-			fmt.Printf("tags: %s, %d\n", tags, len(tags))
-			fmt.Printf("benchmark.Tags: %s, %d\n", benchmark.Tags, len(benchmark.Tags))
 
 			contains := slices.ContainsFunc(tags, func(t string) bool {
 				return slices.Contains(benchmark.Tags, t)
 			})
-			fmt.Println("contains: ", contains)
+
 			if len(tags) > 0 && !contains {
 				continue
 			}
