@@ -31,8 +31,8 @@ post:
             description: A simple request update with a completed status.
             value:
               benchmark_status_event:
+                id: toxicity
                 provider_id: garak
-                benchmark_id: toxicity
                 status: completed
                 metrics:
                   accuracy: 0.95

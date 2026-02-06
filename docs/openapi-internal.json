@@ -440,8 +440,8 @@
                   "description": "A simple request update with a completed status.",
                   "value": {
                     "benchmark_status_event": {
+                      "id": "toxicity",
                       "provider_id": "garak",
-                      "benchmark_id": "toxicity",
                       "status": "completed",
                       "metrics": {
                         "accuracy": 0.95
@@ -1238,7 +1238,7 @@
       },
       "BenchmarkConfig": {
         "properties": {
-          "benchmark_id": {
+          "id": {
             "type": "string",
             "title": "Benchmark Id",
             "description": "Benchmark identifier"
@@ -1258,7 +1258,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "benchmark_id",
+          "id",
           "provider_id"
         ],
         "title": "Benchmark Config",
@@ -1429,7 +1429,7 @@
             "title": "Provider Id",
             "description": "Provider that ran the evaluation"
           },
-          "benchmark_id": {
+          "id": {
             "type": "string",
             "title": "Benchmark Id",
             "description": "Benchmark identifier"
@@ -1493,7 +1493,7 @@
         "additionalProperties": true,
         "required": [
           "provider_id",
-          "benchmark_id",
+          "id",
           "status"
         ]
       },

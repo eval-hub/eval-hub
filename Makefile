@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage start-service stop-service lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage start-service stop-service lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components
 
 # Variables
 BINARY_NAME = eval-hub
@@ -286,3 +286,8 @@ verify-api-docs: ${REDOCLY_CLI}
 
 generate-ignore-file: ${REDOCLY_CLI}
 	${REDOCLY_CLI} lint --generate-ignore-file ./docs/src/openapi.yaml
+
+check-unused-components:
+	./docs/scripts/check_unused_components.sh
+
+documentation: check-unused-components generate-public-docs verify-api-docs

@@ -770,7 +770,7 @@
       },
       "BenchmarkConfig": {
         "properties": {
-          "benchmark_id": {
+          "id": {
             "type": "string",
             "title": "Benchmark Id",
             "description": "Benchmark identifier"
@@ -790,7 +790,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "benchmark_id",
+          "id",
           "provider_id"
         ],
         "title": "Benchmark Config",
