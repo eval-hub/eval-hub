@@ -86,7 +86,6 @@ patch:
           description: JSON Patch operation
           items:
             $ref: ../components/schemas/JsonPatch.yaml
-          required: true
   responses:
     '200':
       description: Successful Response

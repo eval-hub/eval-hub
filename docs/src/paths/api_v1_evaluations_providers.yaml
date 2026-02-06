@@ -16,9 +16,9 @@ get:
     - name: benchmarks
       in: query
       required: false
-      default: true
       schema:
         type: boolean
+        default: true
         description: Set to false to not include benchmarks supported by this provider in the response
         title: Benchmarks
       description: Include or exclude benchmarks supported by this provider in the response

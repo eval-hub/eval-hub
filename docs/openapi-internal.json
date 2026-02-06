@@ -502,9 +502,9 @@
             "name": "benchmarks",
             "in": "query",
             "required": false,
-            "default": true,
             "schema": {
               "type": "boolean",
+              "default": true,
               "description": "Set to false to not include benchmarks supported by this provider in the response",
               "title": "Benchmarks"
             },
@@ -823,8 +823,7 @@
                 "description": "JSON Patch operation",
                 "items": {
                   "$ref": "#/components/schemas/JsonPatch"
-                },
-                "required": true
+                }
               }
             }
           }
@@ -1745,7 +1744,7 @@
           "total_count": {
             "type": "integer",
             "title": "Total Count",
-            "description": "Total number of evaluations"
+            "description": "Total number of collections"
           },
           "items": {
             "items": {
@@ -1753,7 +1752,7 @@
             },
             "type": "array",
             "title": "Items",
-            "description": "Evaluations returned for this page"
+            "description": "Collections returned for this page"
           }
         },
         "type": "object",
@@ -1762,8 +1761,8 @@
           "limit",
           "total_count"
         ],
-        "title": "PaginatedEvaluations",
-        "description": "Paginated list response for evaluation resources."
+        "title": "PaginatedCollections",
+        "description": "Paginated list response for collection resources."
       },
       "CollectionCreationRequest": {
         "properties": {
@@ -1868,7 +1867,15 @@
             "type": "string"
           },
           "value": {
-            "type": "object",
+            "type": [
+              "object",
+              "array",
+              "string",
+              "number",
+              "integer",
+              "boolean",
+              "null"
+            ],
             "description": "Value to be used in the patch operation"
           }
         }

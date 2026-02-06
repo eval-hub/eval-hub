@@ -8,5 +8,12 @@ properties:
   path:
     type: string
   value:
-    type: object
+    type:
+      - object
+      - array
+      - string
+      - number
+      - integer
+      - boolean
+      - "null"
     description: Value to be used in the patch operation

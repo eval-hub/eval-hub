@@ -12,17 +12,17 @@ properties:
   total_count:
     type: integer
     title: Total Count
-    description: Total number of evaluations
+    description: Total number of collections
   items:
     items:
       $ref: ./Collection.yaml
     type: array
     title: Items
-    description: Evaluations returned for this page
+    description: Collections returned for this page
 type: object
 required:
   - first
   - limit
   - total_count
-title: PaginatedEvaluations
-description: Paginated list response for evaluation resources.
+title: PaginatedCollections
+description: Paginated list response for collection resources.

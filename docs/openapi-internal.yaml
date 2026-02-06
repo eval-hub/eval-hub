@@ -337,9 +337,9 @@ paths:
         - name: benchmarks
           in: query
           required: false
-          default: true
           schema:
             type: boolean
+            default: true
             description: Set to false to not include benchmarks supported by this provider in the response
             title: Benchmarks
           description: Include or exclude benchmarks supported by this provider in the response
@@ -553,7 +553,6 @@ paths:
               description: JSON Patch operation
               items:
                 $ref: '#/components/schemas/JsonPatch'
-              required: true
       responses:
         '200':
           description: Successful Response
@@ -1231,20 +1230,20 @@ components:
         total_count:
           type: integer
           title: Total Count
-          description: Total number of evaluations
+          description: Total number of collections
         items:
           items:
             $ref: '#/components/schemas/Collection'
           type: array
           title: Items
-          description: Evaluations returned for this page
+          description: Collections returned for this page
       type: object
       required:
         - first
         - limit
         - total_count
-      title: PaginatedEvaluations
-      description: Paginated list response for evaluation resources.
+      title: PaginatedCollections
+      description: Paginated list response for collection resources.
     CollectionCreationRequest:
       properties:
         name:
@@ -1325,7 +1324,14 @@ components:
         path:
           type: string
         value:
-          type: object
+          type:
+            - object
+            - array
+            - string
+            - number
+            - integer
+            - boolean
+            - 'null'
           description: Value to be used in the patch operation
   examples:
     BadRequestError:
