@@ -1314,6 +1314,7 @@ components:
       title: CollectionUpdateRequest
       description: Request for updating an existing collection.
     JsonPatch:
+      type: object
       properties:
         op:
           type: string
@@ -1333,6 +1334,9 @@ components:
             - boolean
             - 'null'
           description: Value to be used in the patch operation
+      required:
+        - op
+        - path
   examples:
     BadRequestError:
       summary: Bad request error with status code 400
