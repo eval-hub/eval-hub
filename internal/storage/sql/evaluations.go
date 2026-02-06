@@ -43,7 +43,7 @@ func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobConfig, ml
 		Config: evaluation,
 		Status: &api.EvaluationJobStatus{
 			EvaluationJobState: api.EvaluationJobState{
-				State: api.StatePending,
+				State: api.OverallStatePending,
 				Message: &api.MessageInfo{
 					Message:     "Evaluation job created",
 					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CREATED,
@@ -367,7 +367,9 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 
 	updateBenchMarkProgress(job, runStatus)
 
-	updateOverallJobStatus(job)
+	overallState, message := getOverallJobStatus(job)
+	job.Status.EvaluationJobState.State = overallState
+	job.Status.EvaluationJobState.Message = message
 
 	updatedEntityJSON, err := json.Marshal(&EvaluationJobEntity{
 		Config:  &job.EvaluationJobConfig,
@@ -403,7 +405,7 @@ func validateBenchmarkExists(job *api.EvaluationJobResource, runStatus *api.Stat
 	return nil
 }
 
-func updateOverallJobStatus(job *api.EvaluationJobResource) {
+func getOverallJobStatus(job *api.EvaluationJobResource) (api.OverallState, *api.MessageInfo) {
 	// group all benchmarks by state
 	benchmarkStates := make(map[api.State]int)
 	failureMessage := ""
@@ -418,33 +420,25 @@ func updateOverallJobStatus(job *api.EvaluationJobResource) {
 	total := len(job.Benchmarks)
 	completed, failed, running := benchmarkStates[api.StateCompleted], benchmarkStates[api.StateFailed], benchmarkStates[api.StateRunning]
 
-	var overallState api.State
+	var overallState api.OverallState
 	var stateMessage string
 	switch {
 	case completed == total:
-		overallState, stateMessage = api.StateCompleted, "Evaluation job is completed"
+		overallState, stateMessage = api.OverallStateCompleted, "Evaluation job is completed"
 	case failed == total:
-		overallState, stateMessage = api.StateFailed, "Evaluation job is failed. \n"+failureMessage
+		overallState, stateMessage = api.OverallStateFailed, "Evaluation job is failed. \n"+failureMessage
 	case completed+failed == total:
-		overallState, stateMessage = api.StatePartiallyFailed, "Some of the benchmarks failed. \n"+failureMessage
+		overallState, stateMessage = api.OverallStatePartiallyFailed, "Some of the benchmarks failed. \n"+failureMessage
 	case running > 0:
-		overallState, stateMessage = api.StateRunning, "Evaluation job is running"
+		overallState, stateMessage = api.OverallStateRunning, "Evaluation job is running"
 	default:
-		overallState, stateMessage = api.StatePending, "Evaluation job is pending"
+		overallState, stateMessage = api.OverallStatePending, "Evaluation job is pending"
 	}
 
-	newStatus := overallState
-	statusUpdate := &api.EvaluationJobStatus{
-		EvaluationJobState: api.EvaluationJobState{
-			State: newStatus,
-			Message: &api.MessageInfo{
-				Message: stateMessage,
-			},
-		},
-		Benchmarks: job.Status.Benchmarks,
+	return overallState, &api.MessageInfo{
+		Message:     stateMessage,
+		MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
 	}
-
-	job.Status = statusUpdate
 }
 
 func updateBenchMarkProgress(jobResource *api.EvaluationJobResource, runStatus *api.StatusEvent) {

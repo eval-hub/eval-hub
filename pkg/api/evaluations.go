@@ -6,12 +6,22 @@ import "time"
 type State string
 
 const (
-	StatePending         State = "pending"
-	StateRunning         State = "running"
-	StateCompleted       State = "completed"
-	StateFailed          State = "failed"
-	StateCancelled       State = "cancelled"
-	StatePartiallyFailed State = "partially_failed"
+	StatePending   State = "pending"
+	StateRunning   State = "running"
+	StateCompleted State = "completed"
+	StateFailed    State = "failed"
+	StateCancelled State = "cancelled"
+)
+
+type OverallState string
+
+const (
+	OverallStatePending         OverallState = OverallState(StatePending)
+	OverallStateRunning         OverallState = OverallState(StateRunning)
+	OverallStateCompleted       OverallState = OverallState(StateCompleted)
+	OverallStateFailed          OverallState = OverallState(StateFailed)
+	OverallStateCancelled       OverallState = OverallState(StateCancelled)
+	OverallStatePartiallyFailed OverallState = "partially_failed"
 )
 
 // ModelRef represents model specification for evaluation requests
@@ -66,7 +76,7 @@ type BenchmarkStatus struct {
 }
 
 type EvaluationJobState struct {
-	State   State        `json:"state" validate:"required,oneof=pending running completed failed cancelled partially_failed"`
+	State   OverallState `json:"state" validate:"required,oneof=pending running completed failed cancelled partially_failed"`
 	Message *MessageInfo `json:"message" validate:"required"`
 }
 
