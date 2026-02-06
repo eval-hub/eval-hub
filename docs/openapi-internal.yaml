@@ -852,7 +852,7 @@ components:
         parameters:
           additionalProperties: true
           type: object
-          title: Config
+          title: Parameters
           description: Benchmark configuration including num_fewshot, limit, batch_size, etc.
       additionalProperties: false
       type: object
