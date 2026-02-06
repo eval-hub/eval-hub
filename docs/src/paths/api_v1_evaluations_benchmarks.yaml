@@ -22,7 +22,7 @@ get:
         type: string
         description: Filter by benchmark ID
         title: Benchmark Id
-      description: Filter by provider ID
+      description: Filter by benchmark ID
     - name: category
       in: query
       required: false

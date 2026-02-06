@@ -385,6 +385,14 @@ paths:
             description: Filter by provider ID
             title: Provider Id
           description: Filter by provider ID
+        - name: benchmark_id
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Filter by benchmark ID
+            title: Benchmark Id
+          description: Filter by benchmark ID
         - name: category
           in: query
           required: false
