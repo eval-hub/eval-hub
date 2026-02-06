@@ -41,7 +41,7 @@ type ExperimentTag struct {
 
 // ExperimentConfig represents configuration for MLFlow experiment tracking
 type ExperimentConfig struct {
-	Name             string          `json:"name" validate:"required"`
+	Name             string          `json:"name,omitempty"`
 	Tags             []ExperimentTag `json:"tags,omitempty" validate:"omitempty,max=20,dive"`
 	ArtifactLocation string          `json:"artifact_location,omitempty"`
 }

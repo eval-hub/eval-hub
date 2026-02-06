@@ -122,6 +122,7 @@ if wait_for_server; then
     # Server is ready - if running in background mode, exit successfully
     # The server will continue running in the background
     echo "Server is ready"
+    echo "export MLFLOW_TRACKING_URI=http://$HOST:$PORT"
     # exit 0
 else
     # Server didn't start properly - try to clean up
