@@ -5,9 +5,17 @@ properties:
       - replace
       - add
       - remove
+properties:
+  op:
+    type: string
+    enum:
+      - replace
+      - add
+      - remove
   path:
     type: string
   value:
+    description: Value to be used in the patch operation
     type:
       - object
       - array
@@ -16,4 +24,6 @@ properties:
       - integer
       - boolean
       - "null"
-    description: Value to be used in the patch operation
+required:
+  - op
+  - path
