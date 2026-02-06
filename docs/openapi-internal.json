@@ -817,13 +817,13 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
                 "type": "array",
                 "title": "Json Patch",
                 "description": "JSON Patch operation",
                 "items": {
                   "$ref": "#/components/schemas/JsonPatch"
-                }
+                },
+                "minItems": 1
               }
             }
           }
