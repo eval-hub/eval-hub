@@ -1,4 +1,4 @@
-Feature: Evaluations Endpoint
+Feature: Benchmarks Endpoint
   As a user
   I want to query the supported benchmarks
   So that I discover the service capabilities
