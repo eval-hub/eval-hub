@@ -95,8 +95,12 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		runErr := executeEvaluationJob(ctx, h.runtime, job, &storage)
 		if runErr != nil {
 			ctx.Logger.Error("RunEvaluationJob failed", "error", runErr, "job_id", job.Resource.ID)
-			status := buildJobFailureStatus(runErr)
-			if err := storage.UpdateEvaluationJobStatus(job.Resource.ID, status); err != nil {
+			state := api.StateFailed
+			message := &api.MessageInfo{
+				Message:     runErr.Error(),
+				MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED,
+			}
+			if err := storage.UpdateEvaluationJobStatus(job.Resource.ID, state, message); err != nil {
 				ctx.Logger.Error("failed to update evaluation status", "error", err, "job_id", job.Resource.ID)
 			}
 			w.Error(runErr, ctx.RequestID)
@@ -115,20 +119,6 @@ func executeEvaluationJob(ctx *executioncontext.ExecutionContext, runtime abstra
 		}
 	}()
 	return runtime.WithLogger(ctx.Logger).WithContext(ctx.Ctx).RunEvaluationJob(job, storage)
-}
-
-func buildJobFailureStatus(runErr error) *api.StatusEvent {
-	return &api.StatusEvent{
-		StatusEvent: &api.EvaluationJobStatus{
-			EvaluationJobState: api.EvaluationJobState{
-				State: api.StateFailed,
-				Message: &api.MessageInfo{
-					Message:     runErr.Error(),
-					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED,
-				},
-			},
-		},
-	}
 }
 
 // HandleListEvaluations handles GET /api/v1/evaluations/jobs
@@ -206,7 +196,7 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 		w.Error(err, ctx.RequestID)
 		return
 	}
-	status := &api.RunStatusInternal{}
+	status := &api.StatusEvent{}
 	err = serialization.Unmarshal(h.validate, ctx, bodyBytes, status)
 	if err != nil {
 		w.Error(err, ctx.RequestID)

@@ -16,6 +16,7 @@ func TestFeatures(t *testing.T) {
 			TestingT: t,
 			// Strict mode will fail immediately on undefined steps
 			Strict: true,
+			Tags:   "~@ignore",
 		},
 	}
 

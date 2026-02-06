@@ -21,13 +21,13 @@ type fakeStorage struct {
 	logger        *slog.Logger
 	called        bool
 	ctx           context.Context
-	runStatus     *api.RunStatusInternal
-	runStatusChan chan *api.RunStatusInternal
+	runStatus     *api.StatusEvent
+	runStatusChan chan *api.StatusEvent
 	updateErr     error
 }
 
 // UpdateEvaluationJob implements [abstractions.Storage].
-func (f *fakeStorage) UpdateEvaluationJob(id string, runStatus *api.RunStatusInternal) error {
+func (f *fakeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
 	f.called = true
 	f.runStatus = runStatus
 	if f.runStatusChan != nil {
@@ -53,7 +53,7 @@ func (f *fakeStorage) GetEvaluationJobs(int, _ int, _ string) (*abstractions.Que
 func (f *fakeStorage) DeleteEvaluationJob(_ string, _ bool) error {
 	return nil
 }
-func (f *fakeStorage) UpdateEvaluationJobStatus(_ string, _ *api.StatusEvent) error {
+func (f *fakeStorage) UpdateEvaluationJobStatus(_ string, _ api.State, _ *api.MessageInfo) error {
 	f.called = true
 	return nil
 }
@@ -181,7 +181,7 @@ func TestRunEvaluationJobMarksBenchmarkFailedOnCreateError(t *testing.T) {
 		ctx:       context.Background(),
 	}
 
-	statusCh := make(chan *api.RunStatusInternal, 1)
+	statusCh := make(chan *api.StatusEvent, 1)
 	storage := &fakeStorage{logger: logger, ctx: context.Background(), runStatusChan: statusCh}
 	var store abstractions.Storage = storage
 
@@ -194,14 +194,14 @@ func TestRunEvaluationJobMarksBenchmarkFailedOnCreateError(t *testing.T) {
 		if runStatus == nil {
 			t.Fatalf("expected run status, got nil")
 		}
-		if runStatus.StatusEvent.Status != api.StateFailed {
-			t.Fatalf("expected status failed, got %s", runStatus.StatusEvent.Status)
+		if runStatus.BenchmarkStatusEvent.Status != api.StateFailed {
+			t.Fatalf("expected status failed, got %s", runStatus.BenchmarkStatusEvent.Status)
 		}
-		if runStatus.StatusEvent.BenchmarkID != evaluation.Benchmarks[0].ID {
-			t.Fatalf("expected benchmark ID %q, got %q", evaluation.Benchmarks[0].ID, runStatus.StatusEvent.BenchmarkID)
+		if runStatus.BenchmarkStatusEvent.BenchmarkID != evaluation.Benchmarks[0].ID {
+			t.Fatalf("expected benchmark ID %q, got %q", evaluation.Benchmarks[0].ID, runStatus.BenchmarkStatusEvent.BenchmarkID)
 		}
-		if runStatus.StatusEvent.ProviderID != evaluation.Benchmarks[0].ProviderID {
-			t.Fatalf("expected provider ID %q, got %q", evaluation.Benchmarks[0].ProviderID, runStatus.StatusEvent.ProviderID)
+		if runStatus.BenchmarkStatusEvent.ProviderID != evaluation.Benchmarks[0].ProviderID {
+			t.Fatalf("expected provider ID %q, got %q", evaluation.Benchmarks[0].ProviderID, runStatus.BenchmarkStatusEvent.ProviderID)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("expected UpdateEvaluationJob to be called")
@@ -226,7 +226,7 @@ func TestRunEvaluationJobHandlesUpdateFailure(t *testing.T) {
 		ctx:       context.Background(),
 	}
 
-	statusCh := make(chan *api.RunStatusInternal, 1)
+	statusCh := make(chan *api.StatusEvent, 1)
 	storage := &fakeStorage{
 		logger:        logger,
 		ctx:           context.Background(),

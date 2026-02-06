@@ -53,12 +53,16 @@ type BenchmarkStatusLogs struct {
 
 // BenchmarkStatus represents status of individual benchmark in evaluation
 type BenchmarkStatus struct {
-	ID          string               `json:"id"`
-	State       State                `json:"state" validate:"required,oneof=pending running completed failed cancelled"`
-	StartedAt   *time.Time           `json:"started_at,omitempty"`
-	CompletedAt *time.Time           `json:"completed_at,omitempty"`
-	Message     *MessageInfo         `json:"message,omitempty"`
-	Logs        *BenchmarkStatusLogs `json:"logs,omitempty"`
+	ProviderID      string         `json:"provider_id"`
+	BenchmarkID     string         `json:"id"`
+	Status          State          `json:"status,omitempty"`
+	Metrics         map[string]any `json:"metrics,omitempty"`
+	Artifacts       map[string]any `json:"artifacts,omitempty"`
+	ErrorMessage    *MessageInfo   `json:"error_message,omitempty"`
+	StartedAt       *time.Time     `json:"started_at,omitempty"`
+	CompletedAt     *time.Time     `json:"completed_at,omitempty"`
+	DurationSeconds int64          `json:"duration_seconds,omitempty"`
+	MLFlowRunID     string         `json:"mlflow_run_id,omitempty"`
 }
 
 type EvaluationJobState struct {
@@ -73,7 +77,7 @@ type EvaluationJobStatus struct {
 }
 
 type StatusEvent struct {
-	StatusEvent *EvaluationJobStatus `json:"status_event" validate:"required"`
+	BenchmarkStatusEvent *BenchmarkStatus `json:"benchmark_status_event" validate:"required"`
 }
 
 // EvaluationJobBenchmarkResult represents benchmark result in evaluation job

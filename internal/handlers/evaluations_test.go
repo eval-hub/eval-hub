@@ -32,7 +32,7 @@ func (r *bodyRequest) BodyAsBytes() ([]byte, error) {
 type fakeStorage struct {
 	abstractions.Storage
 	lastStatusID string
-	lastStatus   *api.StatusEvent
+	lastStatus   api.State
 }
 
 func (f *fakeStorage) WithLogger(_ *slog.Logger) abstractions.Storage { return f }
@@ -53,13 +53,13 @@ func (f *fakeStorage) GetEvaluationJobs(_ int, _ int, _ string) (*abstractions.Q
 	return nil, nil
 }
 func (f *fakeStorage) DeleteEvaluationJob(_ string, _ bool) error { return nil }
-func (f *fakeStorage) UpdateEvaluationJobStatus(id string, status *api.StatusEvent) error {
+func (f *fakeStorage) UpdateEvaluationJobStatus(id string, state api.State, message *api.MessageInfo) error {
 	f.lastStatusID = id
-	f.lastStatus = status
+	f.lastStatus = state
 	return nil
 }
-func (f *fakeStorage) UpdateEvaluationJob(_ string, _ *api.RunStatusInternal) error { return nil }
-func (f *fakeStorage) CreateCollection(_ *api.CollectionResource) error             { return nil }
+func (f *fakeStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error { return nil }
+func (f *fakeStorage) CreateCollection(_ *api.CollectionResource) error       { return nil }
 func (f *fakeStorage) GetCollection(_ string, _ bool) (*api.CollectionResource, error) {
 	return nil, nil
 }
@@ -105,10 +105,10 @@ func TestHandleCreateEvaluationMarksFailedWhenRuntimeErrors(t *testing.T) {
 	if !runtime.called {
 		t.Fatalf("expected runtime to be invoked")
 	}
-	if storage.lastStatus == nil || storage.lastStatusID == "" {
+	if storage.lastStatus == "" || storage.lastStatusID == "" {
 		t.Fatalf("expected evaluation status update to be recorded")
 	}
-	if storage.lastStatus.StatusEvent == nil || storage.lastStatus.StatusEvent.State != api.StateFailed {
+	if storage.lastStatus != api.StateFailed {
 		t.Fatalf("expected failed status update, got %+v", storage.lastStatus)
 	}
 	if recorder.Code == 202 {
@@ -139,7 +139,7 @@ func TestHandleCreateEvaluationSucceedsWhenRuntimeOk(t *testing.T) {
 	if !runtime.called {
 		t.Fatalf("expected runtime to be invoked")
 	}
-	if storage.lastStatus != nil {
+	if storage.lastStatus != "" {
 		t.Fatalf("did not expect evaluation status update on success")
 	}
 	if recorder.Code != 202 {

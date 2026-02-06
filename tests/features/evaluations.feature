@@ -84,6 +84,7 @@ Feature: Evaluations Endpoint
     """
 
   Scenario: Update evaluation job status with running status
+    Given fix this step
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202

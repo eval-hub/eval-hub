@@ -153,9 +153,9 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context, logger *slog.
 	return nil
 }
 
-func buildBenchmarkFailureStatus(benchmark *api.BenchmarkConfig, runErr error) *api.RunStatusInternal {
-	return &api.RunStatusInternal{
-		StatusEvent: api.RunStatusEvent{
+func buildBenchmarkFailureStatus(benchmark *api.BenchmarkConfig, runErr error) *api.StatusEvent {
+	return &api.StatusEvent{
+		BenchmarkStatusEvent: &api.BenchmarkStatus{
 			ProviderID:   benchmark.ProviderID,
 			BenchmarkID:  benchmark.ID,
 			Status:       api.StateFailed,
