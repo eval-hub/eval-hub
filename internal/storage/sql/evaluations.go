@@ -404,7 +404,7 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.RunStatusInte
 func validateBenchmarkExists(job *api.EvaluationJobResource, runStatus *api.RunStatusInternal) error {
 	found := false
 	for _, benchmark := range job.Benchmarks {
-		if benchmark.ID == runStatus.StatusEvent.BenchmarkID || benchmark.ID == runStatus.StatusEvent.BenchmarkName {
+		if benchmark.ID == runStatus.StatusEvent.BenchmarkID {
 			found = true
 			break
 		}
@@ -422,7 +422,7 @@ func updateOverallJobStatus(job *api.EvaluationJobResource) {
 	for _, benchmark := range job.Status.Benchmarks {
 		benchmarkStates[benchmark.State]++
 		if benchmark.State == api.StateFailed && benchmark.Message != nil {
-			failureMessage += "Benchmark " + benchmark.Name + " failed with message: " + benchmark.Message.Message + "\n"
+			failureMessage += "Benchmark " + benchmark.ID + " failed with message: " + benchmark.Message.Message + "\n"
 		}
 	}
 
@@ -471,7 +471,7 @@ func findAndUpdateBenchmarkStatus(benchmarkStatus []api.BenchmarkStatus, runStat
 	found := false
 	for i := range benchmarkStatus {
 		status := &benchmarkStatus[i]
-		if status.Name == runStatus.StatusEvent.BenchmarkID || status.Name == runStatus.StatusEvent.BenchmarkName {
+		if status.ID == runStatus.StatusEvent.BenchmarkID {
 			prevState := status.State
 			status.State = runStatus.StatusEvent.Status
 			if runStatus.StatusEvent.Artifacts != nil {
@@ -498,7 +498,7 @@ func findAndUpdateBenchmarkStatus(benchmarkStatus []api.BenchmarkStatus, runStat
 	if !found {
 		// if the benchmark is not found, create a new benchmark status
 		newBenchmarkStatus := api.BenchmarkStatus{
-			Name:  runStatus.StatusEvent.BenchmarkName,
+			ID:    runStatus.StatusEvent.BenchmarkID,
 			State: runStatus.StatusEvent.Status,
 		}
 		if runStatus.StatusEvent.Artifacts != nil {
@@ -530,7 +530,7 @@ func findAndUpdateBenchmarkResults(benchmarkResults *api.EvaluationJobResults, r
 	found := false
 	for i := range benchmarkResults.Benchmarks {
 		result := &benchmarkResults.Benchmarks[i]
-		if result.ID == runStatus.StatusEvent.BenchmarkID || result.Name == runStatus.StatusEvent.BenchmarkName {
+		if result.ID == runStatus.StatusEvent.BenchmarkID {
 			if runStatus.StatusEvent.Status == api.StateCompleted {
 				result.Metrics = runStatus.StatusEvent.Metrics
 				result.Artifacts = runStatus.StatusEvent.Artifacts
@@ -543,7 +543,6 @@ func findAndUpdateBenchmarkResults(benchmarkResults *api.EvaluationJobResults, r
 		if runStatus.StatusEvent.Status == api.StateCompleted {
 			newBenchmarkResult := api.EvaluationJobBenchmarkResult{
 				ID:        runStatus.StatusEvent.BenchmarkID,
-				Name:      runStatus.StatusEvent.BenchmarkName,
 				State:     runStatus.StatusEvent.Status,
 				Metrics:   runStatus.StatusEvent.Metrics,
 				Artifacts: runStatus.StatusEvent.Artifacts,

@@ -538,7 +538,7 @@ components:
       description: Model specification for evaluation requests.
     BenchmarkConfig:
       properties:
-        benchmark_id:
+        id:
           type: string
           title: Benchmark Id
           description: Benchmark identifier
@@ -554,7 +554,7 @@ components:
       additionalProperties: false
       type: object
       required:
-        - benchmark_id
+        - id
         - provider_id
       title: Benchmark Config
       description: New simplified benchmark specification.

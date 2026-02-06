@@ -5,7 +5,7 @@ properties:
     type: string
     title: Provider Id
     description: Provider that ran the evaluation
-  benchmark_id:
+  id:
     type: string
     title: Benchmark Id
     description: Benchmark identifier
@@ -50,5 +50,5 @@ properties:
 additionalProperties: true
 required:
   - provider_id
-  - benchmark_id
+  - id
   - status

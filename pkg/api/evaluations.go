@@ -53,7 +53,7 @@ type BenchmarkStatusLogs struct {
 
 // BenchmarkStatus represents status of individual benchmark in evaluation
 type BenchmarkStatus struct {
-	Name        string               `json:"name"`
+	ID          string               `json:"id"`
 	State       State                `json:"state" validate:"required,oneof=pending running completed failed cancelled"`
 	StartedAt   *time.Time           `json:"started_at,omitempty"`
 	CompletedAt *time.Time           `json:"completed_at,omitempty"`
@@ -79,7 +79,6 @@ type StatusEvent struct {
 // EvaluationJobBenchmarkResult represents benchmark result in evaluation job
 type EvaluationJobBenchmarkResult struct {
 	ID          string         `json:"id"`
-	Name        string         `json:"name"`
 	State       State          `json:"state"`
 	StartedAt   *time.Time     `json:"started_at,omitempty"`
 	CompletedAt *time.Time     `json:"completed_at,omitempty"`

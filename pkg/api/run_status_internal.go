@@ -9,7 +9,6 @@ type RunStatusInternal struct {
 type RunStatusEvent struct {
 	ProviderID      string         `json:"provider_id"`
 	BenchmarkID     string         `json:"benchmark_id"`
-	BenchmarkName   string         `json:"benchmark_name,omitempty"`
 	Status          State          `json:"status,omitempty"`
 	Metrics         map[string]any `json:"metrics,omitempty"`
 	Artifacts       map[string]any `json:"artifacts,omitempty"`
