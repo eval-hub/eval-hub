@@ -307,7 +307,7 @@ func (tc *scenarioConfig) getRequestBody(body string) (io.Reader, error) {
 			return nil, err
 		}
 	}
-	// now do any subsitution
+	// now do any substitution
 	body, err = tc.substituteValues(body)
 	if err != nil {
 		return nil, err
