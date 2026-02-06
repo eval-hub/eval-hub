@@ -439,10 +439,10 @@ func getOverallJobStatus(job *api.EvaluationJobResource) (api.OverallState, *api
 }
 
 func updateBenchMarkProgress(jobResource *api.EvaluationJobResource, runStatus *api.StatusEvent) {
-	jobResource.Results.Benchmarks = findAndUpdateBenchmarkStatus(jobResource.Results.Benchmarks, runStatus)
 	if jobResource.Results == nil {
 		jobResource.Results = &api.EvaluationJobResults{}
 	}
+	jobResource.Results.Benchmarks = findAndUpdateBenchmarkStatus(jobResource.Results.Benchmarks, runStatus)
 	findAndUpdateBenchmarkResults(jobResource.Results, runStatus)
 }
 
