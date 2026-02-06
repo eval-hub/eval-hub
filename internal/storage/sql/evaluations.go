@@ -133,7 +133,7 @@ func constructEvaluationResource(statusStr string, message *api.MessageInfo, dbI
 	}
 	status := evaluationEntity.Status.State
 
-	if statusStr == "" {
+	if statusStr != "" {
 		if s, err := api.GetOverallState(statusStr); err == nil {
 			status = s
 		}
