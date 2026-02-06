@@ -271,7 +271,7 @@ clean-docs:
 	rm -f docs/openapi.yaml docs/openapi.json docs/openapi-internal.yaml docs/openapi-internal.json docs/*.html
 
 generate-public-docs: ${REDOCLY_CLI}
-	npm update @redocly/cli
+	npm update --save @redocly/cli
 	${REDOCLY_CLI} bundle external@latest --output docs/openapi.yaml --remove-unused-components
 	${REDOCLY_CLI} bundle external@latest --ext json --output docs/openapi.json
 	${REDOCLY_CLI} bundle internal@latest --output docs/openapi-internal.yaml --remove-unused-components
