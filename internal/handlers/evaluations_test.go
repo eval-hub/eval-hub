@@ -32,7 +32,7 @@ func (r *bodyRequest) BodyAsBytes() ([]byte, error) {
 type fakeStorage struct {
 	abstractions.Storage
 	lastStatusID string
-	lastStatus   api.State
+	lastStatus   api.OverallState
 }
 
 func (f *fakeStorage) WithLogger(_ *slog.Logger) abstractions.Storage { return f }
@@ -53,7 +53,7 @@ func (f *fakeStorage) GetEvaluationJobs(_ int, _ int, _ string) (*abstractions.Q
 	return nil, nil
 }
 func (f *fakeStorage) DeleteEvaluationJob(_ string, _ bool) error { return nil }
-func (f *fakeStorage) UpdateEvaluationJobStatus(id string, state api.State, message *api.MessageInfo) error {
+func (f *fakeStorage) UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error {
 	f.lastStatusID = id
 	f.lastStatus = state
 	return nil
@@ -108,7 +108,7 @@ func TestHandleCreateEvaluationMarksFailedWhenRuntimeErrors(t *testing.T) {
 	if storage.lastStatus == "" || storage.lastStatusID == "" {
 		t.Fatalf("expected evaluation status update to be recorded")
 	}
-	if storage.lastStatus != api.StateFailed {
+	if storage.lastStatus != api.OverallStateFailed {
 		t.Fatalf("expected failed status update, got %+v", storage.lastStatus)
 	}
 	if recorder.Code == 202 {

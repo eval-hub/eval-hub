@@ -282,20 +282,10 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter strin
 
 func (s *SQLStorage) DeleteEvaluationJob(id string, hardDelete bool) error {
 	if !hardDelete {
-		/* TODO
-		statusEvent := &api.StatusEvent{
-			StatusEvent: &api.EvaluationJobStatus{
-				EvaluationJobState: api.EvaluationJobState{
-					State: api.StateCancelled,
-					Message: &api.MessageInfo{
-						Message:     "Evaluation job cancelled",
-						MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
-					},
-				},
-			},
-		}
-		return s.UpdateEvaluationJobStatus(id, statusEvent)
-		*/
+		return s.UpdateEvaluationJobStatus(id, api.OverallStateCancelled, &api.MessageInfo{
+			Message:     "Evaluation job cancelled",
+			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
+		})
 	}
 
 	// Build the DELETE query
@@ -311,31 +301,16 @@ func (s *SQLStorage) DeleteEvaluationJob(id string, hardDelete bool) error {
 		return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
 	}
 
-	/* TODO: remove this code? For now we don't do this because not all drivers support RowsAffected()
-	// Check if any rows were affected
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		ctx.Logger.Error("Failed to get rows affected", "error", err, "id", id)
-		return NewStorageError(err, "failed to get rows affected")
-	}
-
-	if rowsAffected == 0 {
-		return NewStorageError("evaluation job with ID %s not found", id)
-	}
-	*/
-
 	s.logger.Info("Deleted evaluation job", "id", id, "hardDelete", hardDelete)
 	return nil
 }
 
-func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.State, message *api.MessageInfo) error {
+func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error {
 	// Build the UPDATE query
 	updateQuery, err := createUpdateStatusStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS)
 	if err != nil {
 		return err
 	}
-
-	// TODO: For now this only handles the status update
 
 	// Execute the UPDATE query
 	_, err = s.exec(nil, updateQuery, state, id)

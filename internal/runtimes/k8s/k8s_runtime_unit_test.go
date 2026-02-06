@@ -53,7 +53,7 @@ func (f *fakeStorage) GetEvaluationJobs(int, _ int, _ string) (*abstractions.Que
 func (f *fakeStorage) DeleteEvaluationJob(_ string, _ bool) error {
 	return nil
 }
-func (f *fakeStorage) UpdateEvaluationJobStatus(_ string, _ api.State, _ *api.MessageInfo) error {
+func (f *fakeStorage) UpdateEvaluationJobStatus(_ string, _ api.OverallState, _ *api.MessageInfo) error {
 	f.called = true
 	return nil
 }

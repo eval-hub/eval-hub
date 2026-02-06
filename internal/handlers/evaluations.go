@@ -95,7 +95,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		runErr := executeEvaluationJob(ctx, h.runtime, job, &storage)
 		if runErr != nil {
 			ctx.Logger.Error("RunEvaluationJob failed", "error", runErr, "job_id", job.Resource.ID)
-			state := api.StateFailed
+			state := api.OverallStateFailed
 			message := &api.MessageInfo{
 				Message:     runErr.Error(),
 				MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED,
