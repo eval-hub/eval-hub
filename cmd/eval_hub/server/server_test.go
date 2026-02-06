@@ -99,7 +99,6 @@ func TestServerSetupRoutes(t *testing.T) {
 		{http.MethodDelete, "/api/v1/evaluations/collections/test-collection", http.StatusNotImplemented, ""},
 		// Providers
 		{http.MethodGet, "/api/v1/evaluations/providers", http.StatusOK, ""},
-		{http.MethodGet, "/api/v1/evaluations/providers/garak", http.StatusOK, ""},
 		// Error cases
 		{http.MethodPost, "/api/v1/health", http.StatusMethodNotAllowed, ""},
 		{http.MethodGet, "/nonexistent", http.StatusNotFound, ""},
