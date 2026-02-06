@@ -18,12 +18,15 @@ const (
 	adapterContainerName            = "adapter"
 	jobSpecVolumeName               = "job-spec"
 	dataVolumeName                  = "data"
+	serviceCAVolumeName             = "evalhub-service-ca"
 	jobSpecFileName                 = "job.json"
 	jobSpecMountPath                = "/meta/job.json"
 	dataMountPath                   = "/data"
+	serviceCAMountPath              = "/etc/pki/ca-trust/source/anchors"
 	jobPrefix                       = "eval-job-"
 	specSuffix                      = "-spec"
 	envJobIDName                    = "JOB_ID"
+	envEvalHubURLName               = "EVALHUB_URL"
 	defaultAllowPrivilegeEscalation = false
 	defaultRunAsUser                = int64(1000)
 	defaultRunAsGroup               = int64(1000)
@@ -97,6 +100,48 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 		return nil, err
 	}
 
+	// Build volumes list
+	volumes := []corev1.Volume{
+		{
+			Name: jobSpecVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: configMap},
+				},
+			},
+		},
+		{
+			Name: dataVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
+	}
+
+	// Build volume mounts list
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:      jobSpecVolumeName,
+			MountPath: jobSpecMountPath,
+			SubPath:   jobSpecFileName,
+			ReadOnly:  true,
+		},
+		{
+			Name:      dataVolumeName,
+			MountPath: dataMountPath,
+		},
+	}
+
+	serviceCAConfigMap := cfg.serviceCAConfigMap
+	// Ensure service CA volume/mount when configured.
+	if serviceCAConfigMap != "" {
+		volumes = ensureServiceCAVolume(volumes, serviceCAConfigMap)
+		volumeMounts = ensureServiceCAMount(volumeMounts)
+	}
+
+	// Set ServiceAccount if configured
+	// applied below in template spec
+
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -116,45 +161,49 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 						{
 							Name:            adapterContainerName,
 							Image:           cfg.adapterImage,
-							ImagePullPolicy: corev1.PullIfNotPresent,
+							ImagePullPolicy: corev1.PullAlways,
 							Command:         buildContainerCommand(cfg.entrypoint),
 							Env:             envVars,
 							Resources:       resources,
 							SecurityContext: defaultSecurityContext(),
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      jobSpecVolumeName,
-									MountPath: jobSpecMountPath,
-									SubPath:   jobSpecFileName,
-									ReadOnly:  true,
-								},
-								{
-									Name:      dataVolumeName,
-									MountPath: dataMountPath,
-								},
-							},
+							VolumeMounts:    volumeMounts,
 						},
 					},
-					Volumes: []corev1.Volume{
-						{
-							Name: jobSpecVolumeName,
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{Name: configMap},
-								},
-							},
-						},
-						{
-							Name: dataVolumeName,
-							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
-							},
-						},
-					},
+					Volumes:            volumes,
+					ServiceAccountName: cfg.serviceAccountName,
 				},
 			},
 		},
 	}, nil
+}
+
+func ensureServiceCAVolume(volumes []corev1.Volume, configMapName string) []corev1.Volume {
+	for _, volume := range volumes {
+		if volume.Name == serviceCAVolumeName {
+			return volumes
+		}
+	}
+	return append(volumes, corev1.Volume{
+		Name: serviceCAVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{Name: configMapName},
+			},
+		},
+	})
+}
+
+func ensureServiceCAMount(mounts []corev1.VolumeMount) []corev1.VolumeMount {
+	for _, mount := range mounts {
+		if mount.Name == serviceCAVolumeName {
+			return mounts
+		}
+	}
+	return append(mounts, corev1.VolumeMount{
+		Name:      serviceCAVolumeName,
+		MountPath: serviceCAMountPath,
+		ReadOnly:  true,
+	})
 }
 
 func buildContainerCommand(entrypoint []string) []string {
@@ -179,8 +228,7 @@ func defaultSecurityContext() *corev1.SecurityContext {
 	return &corev1.SecurityContext{
 		AllowPrivilegeEscalation: boolPtr(defaultAllowPrivilegeEscalation),
 		RunAsNonRoot:             boolPtr(true),
-		RunAsUser:                int64Ptr(defaultRunAsUser),
-		RunAsGroup:               int64Ptr(defaultRunAsGroup),
+		// RunAsUser and RunAsGroup omitted to let OpenShift assign from allowed range
 		Capabilities: &corev1.Capabilities{
 			Drop: []corev1.Capability{
 				capabilityDropAll,
@@ -203,11 +251,24 @@ func int64Ptr(value int64) *int64 {
 func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 	var env []corev1.EnvVar
 	seen := map[string]bool{}
+
+	// Add JOB_ID
 	env = append(env, corev1.EnvVar{
 		Name:  envJobIDName,
 		Value: cfg.jobID,
 	})
 	seen[envJobIDName] = true
+
+	// Add EVALHUB_URL if configured
+	if cfg.evalHubURL != "" {
+		env = append(env, corev1.EnvVar{
+			Name:  envEvalHubURLName,
+			Value: cfg.evalHubURL,
+		})
+		seen[envEvalHubURLName] = true
+	}
+
+	// Add provider-specific environment variables
 	for _, item := range cfg.defaultEnv {
 		if item.Name == "" || seen[item.Name] {
 			continue

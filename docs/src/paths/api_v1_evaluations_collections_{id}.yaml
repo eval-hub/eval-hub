@@ -81,7 +81,11 @@ patch:
     content:
       application/json:
         schema:
-          $ref: ../components/schemas/CollectionUpdateRequest.yaml
+          type: array
+          title: Json Patch
+          description: JSON Patch operation
+          items:
+            $ref: ../components/schemas/JsonPatch.yaml
   responses:
     '200':
       description: Successful Response

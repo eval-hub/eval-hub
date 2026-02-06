@@ -193,6 +193,24 @@ paths:
       summary: List Providers
       description: List all registered evaluation providers.
       operationId: list_providers_api_v1_evaluations_providers_get
+      parameters:
+        - name: provider_id
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Filter by provider ID
+            title: Provider Id
+          description: Filter by provider ID
+        - name: benchmarks
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+            description: Set to false to not include benchmarks supported by this provider in the response
+            title: Benchmarks
+          description: Include or exclude benchmarks supported by this provider in the response
       responses:
         '200':
           description: Successful Response
@@ -200,35 +218,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListProvidersResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-  /api/v1/evaluations/providers/{id}:
-    get:
-      tags:
-        - Providers
-      summary: Get Provider
-      description: Get details of a specific provider.
-      operationId: get_provider_api_v1_evaluations_providers__provider_id__get
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            title: Provider Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Provider'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -674,61 +663,104 @@ components:
         - total_count
       title: PaginatedEvaluations
       description: Paginated list response for evaluation resources.
-    ProviderSummary:
-      additionalProperties: true
-      type: object
+    BenchmarkDefinition:
+      properties:
+        benchmark_id:
+          type: string
+          title: Benchmark Id
+          description: Benchmark identifier
+        name:
+          type: string
+          title: Name
+          description: Benchmark name
+        description:
+          type: string
+          title: Description
+          description: Benchmark description
+        category:
+          type: string
+          title: Category
+          description: Benchmark category
+        metrics:
+          type: array
+          items:
+            type: string
+          title: Metrics
+          description: Benchmark metrics
+        num_few_shot:
+          type: integer
+          title: Num Few Shot
+          description: Number of few-shot examples
+        dataset_size:
+          type: integer
+          title: Dataset Size
+          description: Size of the evaluation dataset
+        tags:
+          type: array
+          items:
+            type: string
+          title: Tags
+          description: Benchmark tags
+    ProviderDefinition:
+      properties:
+        provider_id:
+          type: string
+          title: Provider Id
+          description: Provider identifier
+        provider_name:
+          type: string
+          title: Provider Name
+          description: Provider display name
+        description:
+          type: string
+          title: Description
+          description: Provider description
+        provider_type:
+          type: string
+          title: Provider Type
+          description: Provider type
+        benchmarks:
+          type: array
+          items:
+            $ref: '#/components/schemas/BenchmarkDefinition'
+          title: Benchmarks
+          description: List of benchmarks supported by this provider
     ListProvidersResponse:
       properties:
-        providers:
-          items:
-            $ref: '#/components/schemas/ProviderSummary'
-          type: array
-          title: Providers
-          description: List of available providers
-        total_providers:
+        total_count:
           type: integer
-          title: Total Providers
+          title: Total Count
           description: Total number of providers
-        total_benchmarks:
-          type: integer
-          title: Total Benchmarks
-          description: Total number of benchmarks across all providers
-      additionalProperties: true
-      type: object
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderDefinition'
+          title: Providers
+          description: List of registered providers
       required:
-        - providers
-        - total_providers
-        - total_benchmarks
+        - total_count
       title: ListProvidersResponse
-      description: Response for listing all providers.
-    Provider:
-      additionalProperties: true
-      type: object
+      description: Response for listing all providers
     ListBenchmarksResponse:
       properties:
-        benchmarks:
-          items:
-            additionalProperties: true
-            type: object
-          type: array
-          title: Benchmarks
-          description: List of all available benchmarks
         total_count:
           type: integer
           title: Total Count
           description: Total number of benchmarks
-        providers_included:
-          items:
-            type: string
+        items:
           type: array
-          title: Providers Included
-          description: List of provider IDs included in the response
-      additionalProperties: true
-      type: object
+          items:
+            allOf:
+              - properties:
+                  provider_id:
+                    type: string
+                    title: Provider Id
+                    description: Provider identifier
+              - $ref: '#/components/schemas/BenchmarkDefinition'
+          title: Benchmarks
+          description: List of benchmarks
       required:
-        - benchmarks
         - total_count
-        - providers_included
       title: ListBenchmarksResponse
       description: Response for listing all benchmarks (similar to Llama Stack format).
   examples:

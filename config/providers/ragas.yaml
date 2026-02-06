@@ -2,7 +2,6 @@ provider_id: ragas
 provider_name: RAGAS
 description: Retrieval Augmented Generation Assessment framework
 provider_type: builtin
-base_url: null
 runtime:
   k8s:
     image: quay.io/eval-hub/ragas:latest

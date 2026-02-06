@@ -11,29 +11,37 @@ import (
 )
 
 const (
-	defaultCPURequest      = "250m"
-	defaultMemoryRequest   = "512Mi"
-	defaultCPULimit        = "1"
-	defaultMemoryLimit     = "2Gi"
-	defaultNamespace       = "default"
-	serviceURLEnv          = "SERVICE_URL"
-	inClusterNamespaceFile = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	defaultCPURequest        = "250m"
+	defaultMemoryRequest     = "512Mi"
+	defaultCPULimit          = "1"
+	defaultMemoryLimit       = "2Gi"
+	defaultNamespace         = "default"
+	serviceURLEnv            = "SERVICE_URL"
+	evalHubInstanceNameEnv   = "EVALHUB_INSTANCE_NAME"
+	inClusterNamespaceFile   = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	serviceAccountNameSuffix = "-jobs"
+	serviceCAConfigMapSuffix = "-service-ca"
+	defaultEvalHubPort       = "8443"
 )
 
 type jobConfig struct {
-	jobID         string
-	namespace     string
-	providerID    string
-	benchmarkID   string
-	retryAttempts int
-	adapterImage  string
-	entrypoint    []string
-	defaultEnv    []api.EnvVar
-	cpuRequest    string
-	memoryRequest string
-	cpuLimit      string
-	memoryLimit   string
-	jobSpecJSON   string
+	jobID               string
+	namespace           string
+	providerID          string
+	benchmarkID         string
+	retryAttempts       int
+	adapterImage        string
+	entrypoint          []string
+	defaultEnv          []api.EnvVar
+	cpuRequest          string
+	memoryRequest       string
+	cpuLimit            string
+	memoryLimit         string
+	jobSpecJSON         string
+	serviceAccountName  string
+	serviceCAConfigMap  string
+	evalHubURL          string
+	evalHubInstanceName string
 }
 
 type jobSpec struct {
@@ -109,20 +117,37 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		return nil, fmt.Errorf("marshal job spec: %w", err)
 	}
 
+	// Get EvalHub instance name from environment (set by operator in deployment)
+	evalHubInstanceName := strings.TrimSpace(os.Getenv(evalHubInstanceNameEnv))
+
+	// Build ServiceAccount name, ConfigMap name, and EvalHub URL if instance name is set
+	var serviceAccountName, serviceCAConfigMap, evalHubURL string
+	if evalHubInstanceName != "" {
+		serviceAccountName = evalHubInstanceName + serviceAccountNameSuffix
+		serviceCAConfigMap = evalHubInstanceName + serviceCAConfigMapSuffix
+		// EvalHub URL points to the kube-rbac-proxy HTTPS endpoint
+		evalHubURL = fmt.Sprintf("https://%s.%s.svc.cluster.local:%s",
+			evalHubInstanceName, namespace, defaultEvalHubPort)
+	}
+
 	return &jobConfig{
-		jobID:         evaluation.Resource.ID,
-		namespace:     namespace,
-		providerID:    provider.ProviderID,
-		benchmarkID:   benchmarkID,
-		retryAttempts: retryAttempts,
-		adapterImage:  runtime.K8s.Image,
-		entrypoint:    runtime.K8s.Entrypoint,
-		defaultEnv:    runtime.K8s.Env,
-		cpuRequest:    cpuRequest,
-		memoryRequest: memoryRequest,
-		cpuLimit:      cpuLimit,
-		memoryLimit:   memoryLimit,
-		jobSpecJSON:   string(specJSON),
+		jobID:               evaluation.Resource.ID,
+		namespace:           namespace,
+		providerID:          provider.ProviderID,
+		benchmarkID:         benchmarkID,
+		retryAttempts:       retryAttempts,
+		adapterImage:        runtime.K8s.Image,
+		entrypoint:          runtime.K8s.Entrypoint,
+		defaultEnv:          runtime.K8s.Env,
+		cpuRequest:          cpuRequest,
+		memoryRequest:       memoryRequest,
+		cpuLimit:            cpuLimit,
+		memoryLimit:         memoryLimit,
+		jobSpecJSON:         string(specJSON),
+		serviceAccountName:  serviceAccountName,
+		serviceCAConfigMap:  serviceCAConfigMap,
+		evalHubURL:          evalHubURL,
+		evalHubInstanceName: evalHubInstanceName,
 	}, nil
 }
 

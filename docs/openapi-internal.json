@@ -486,6 +486,31 @@
         "summary": "List Providers",
         "description": "List all registered evaluation providers.",
         "operationId": "list_providers_api_v1_evaluations_providers_get",
+        "parameters": [
+          {
+            "name": "provider_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Filter by provider ID",
+              "title": "Provider Id"
+            },
+            "description": "Filter by provider ID"
+          },
+          {
+            "name": "benchmarks",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "description": "Set to false to not include benchmarks supported by this provider in the response",
+              "title": "Benchmarks"
+            },
+            "description": "Include or exclude benchmarks supported by this provider in the response"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -493,51 +518,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ListProvidersResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      }
-    },
-    "/api/v1/evaluations/providers/{id}": {
-      "get": {
-        "tags": [
-          "Providers"
-        ],
-        "summary": "Get Provider",
-        "description": "Get details of a specific provider.",
-        "operationId": "get_provider_api_v1_evaluations_providers__provider_id__get",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Provider Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Provider"
                 }
               }
             }
@@ -652,7 +632,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ListCollectionsResponse"
+                  "$ref": "#/components/schemas/PaginatedCollections"
                 }
               }
             }
@@ -838,7 +818,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CollectionUpdateRequest"
+                "type": "array",
+                "title": "Json Patch",
+                "description": "JSON Patch operation",
+                "items": {
+                  "$ref": "#/components/schemas/JsonPatch"
+                }
               }
             }
           }
@@ -1521,91 +1506,156 @@
         },
         "title": "StatusEvent"
       },
-      "ProviderSummary": {
-        "additionalProperties": true,
-        "type": "object"
-      },
-      "ListProvidersResponse": {
+      "BenchmarkDefinition": {
         "properties": {
-          "providers": {
-            "items": {
-              "$ref": "#/components/schemas/ProviderSummary"
-            },
+          "benchmark_id": {
+            "type": "string",
+            "title": "Benchmark Id",
+            "description": "Benchmark identifier"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Benchmark name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Benchmark description"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "description": "Benchmark category"
+          },
+          "metrics": {
             "type": "array",
-            "title": "Providers",
-            "description": "List of available providers"
-          },
-          "total_providers": {
-            "type": "integer",
-            "title": "Total Providers",
-            "description": "Total number of providers"
-          },
-          "total_benchmarks": {
-            "type": "integer",
-            "title": "Total Benchmarks",
-            "description": "Total number of benchmarks across all providers"
-          }
-        },
-        "additionalProperties": true,
-        "type": "object",
-        "required": [
-          "providers",
-          "total_providers",
-          "total_benchmarks"
-        ],
-        "title": "ListProvidersResponse",
-        "description": "Response for listing all providers."
-      },
-      "Provider": {
-        "additionalProperties": true,
-        "type": "object"
-      },
-      "ListBenchmarksResponse": {
-        "properties": {
-          "benchmarks": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array",
-            "title": "Benchmarks",
-            "description": "List of all available benchmarks"
-          },
-          "total_count": {
-            "type": "integer",
-            "title": "Total Count",
-            "description": "Total number of benchmarks"
-          },
-          "providers_included": {
             "items": {
               "type": "string"
             },
+            "title": "Metrics",
+            "description": "Benchmark metrics"
+          },
+          "num_few_shot": {
+            "type": "integer",
+            "title": "Num Few Shot",
+            "description": "Number of few-shot examples"
+          },
+          "dataset_size": {
+            "type": "integer",
+            "title": "Dataset Size",
+            "description": "Size of the evaluation dataset"
+          },
+          "tags": {
             "type": "array",
-            "title": "Providers Included",
-            "description": "List of provider IDs included in the response"
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "description": "Benchmark tags"
           }
-        },
-        "additionalProperties": true,
-        "type": "object",
-        "required": [
-          "benchmarks",
-          "total_count",
-          "providers_included"
-        ],
-        "title": "ListBenchmarksResponse",
-        "description": "Response for listing all benchmarks (similar to Llama Stack format)."
+        }
       },
-      "BenchmarkReference": {
+      "ProviderDefinition": {
         "properties": {
           "provider_id": {
             "type": "string",
             "title": "Provider Id",
             "description": "Provider identifier"
           },
-          "benchmark_id": {
+          "provider_name": {
+            "type": "string",
+            "title": "Provider Name",
+            "description": "Provider display name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Provider description"
+          },
+          "provider_type": {
+            "type": "string",
+            "title": "Provider Type",
+            "description": "Provider type"
+          },
+          "benchmarks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BenchmarkDefinition"
+            },
+            "title": "Benchmarks",
+            "description": "List of benchmarks supported by this provider"
+          }
+        }
+      },
+      "ListProvidersResponse": {
+        "properties": {
+          "total_count": {
+            "type": "integer",
+            "title": "Total Count",
+            "description": "Total number of providers"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProviderDefinition"
+            },
+            "title": "Providers",
+            "description": "List of registered providers"
+          }
+        },
+        "required": [
+          "total_count"
+        ],
+        "title": "ListProvidersResponse",
+        "description": "Response for listing all providers"
+      },
+      "ListBenchmarksResponse": {
+        "properties": {
+          "total_count": {
+            "type": "integer",
+            "title": "Total Count",
+            "description": "Total number of benchmarks"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "allOf": [
+                {
+                  "properties": {
+                    "provider_id": {
+                      "type": "string",
+                      "title": "Provider Id",
+                      "description": "Provider identifier"
+                    }
+                  }
+                },
+                {
+                  "$ref": "#/components/schemas/BenchmarkDefinition"
+                }
+              ]
+            },
+            "title": "Benchmarks",
+            "description": "List of benchmarks"
+          }
+        },
+        "required": [
+          "total_count"
+        ],
+        "title": "ListBenchmarksResponse",
+        "description": "Response for listing all benchmarks (similar to Llama Stack format)."
+      },
+      "CollectionBenchmarkReference": {
+        "properties": {
+          "id": {
             "type": "string",
             "title": "Benchmark Id",
             "description": "Benchmark identifier"
+          },
+          "provider_id": {
+            "type": "string",
+            "title": "Provider Id",
+            "description": "Provider identifier"
           },
           "weight": {
             "type": "number",
@@ -1624,7 +1674,7 @@
         "type": "object",
         "required": [
           "provider_id",
-          "benchmark_id"
+          "id"
         ],
         "title": "BenchmarkReference",
         "description": "Reference to a benchmark within a collection."
@@ -1661,7 +1711,7 @@
           },
           "benchmarks": {
             "items": {
-              "$ref": "#/components/schemas/BenchmarkReference"
+              "$ref": "#/components/schemas/CollectionBenchmarkReference"
             },
             "type": "array",
             "title": "Benchmarks",
@@ -1671,36 +1721,48 @@
         "type": "object",
         "required": [
           "name",
-          "description",
           "benchmarks"
         ],
         "title": "Collection",
         "description": "Collection of benchmarks for specific evaluation scenarios."
       },
-      "ListCollectionsResponse": {
+      "PaginatedCollections": {
         "properties": {
-          "collections": {
+          "first": {
+            "$ref": "#/components/schemas/PaginationLink",
+            "description": "Link to the first page"
+          },
+          "next": {
+            "$ref": "#/components/schemas/PaginationLink",
+            "description": "Link to the next page, if available"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit",
+            "description": "Page size used for this response"
+          },
+          "total_count": {
+            "type": "integer",
+            "title": "Total Count",
+            "description": "Total number of collections"
+          },
+          "items": {
             "items": {
               "$ref": "#/components/schemas/Collection"
             },
             "type": "array",
-            "title": "Collections",
-            "description": "List of available collections"
-          },
-          "total_collections": {
-            "type": "integer",
-            "title": "Total Collections",
-            "description": "Total number of collections"
+            "title": "Items",
+            "description": "Collections returned for this page"
           }
         },
-        "additionalProperties": true,
         "type": "object",
         "required": [
-          "collections",
-          "total_collections"
+          "first",
+          "limit",
+          "total_count"
         ],
-        "title": "ListCollectionsResponse",
-        "description": "Response for listing all collections."
+        "title": "PaginatedCollections",
+        "description": "Paginated list response for collection resources."
       },
       "CollectionCreationRequest": {
         "properties": {
@@ -1730,7 +1792,7 @@
           },
           "benchmarks": {
             "items": {
-              "$ref": "#/components/schemas/BenchmarkReference"
+              "$ref": "#/components/schemas/CollectionBenchmarkReference"
             },
             "type": "array",
             "title": "Benchmarks",
@@ -1779,7 +1841,7 @@
           },
           "benchmarks": {
             "items": {
-              "$ref": "#/components/schemas/BenchmarkReference"
+              "$ref": "#/components/schemas/CollectionBenchmarkReference"
             },
             "type": "array",
             "title": "Benchmarks",
@@ -1790,6 +1852,37 @@
         "type": "object",
         "title": "CollectionUpdateRequest",
         "description": "Request for updating an existing collection."
+      },
+      "JsonPatch": {
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "replace",
+              "add",
+              "remove"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "value": {
+            "description": "Value to be used in the patch operation",
+            "type": [
+              "object",
+              "array",
+              "string",
+              "number",
+              "integer",
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "op",
+          "path"
+        ]
       }
     },
     "examples": {

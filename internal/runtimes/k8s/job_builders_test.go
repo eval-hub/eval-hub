@@ -73,11 +73,13 @@ func TestBuildJobSecurityContext(t *testing.T) {
 	if container.SecurityContext.RunAsNonRoot == nil || !*container.SecurityContext.RunAsNonRoot {
 		t.Fatalf("expected runAsNonRoot to be true")
 	}
-	if container.SecurityContext.RunAsUser == nil || *container.SecurityContext.RunAsUser == 0 {
-		t.Fatalf("expected non-zero runAsUser")
+	// RunAsUser and RunAsGroup are intentionally not set to allow OpenShift SCC to assign them
+	// from the allowed range based on the namespace's security constraints
+	if container.SecurityContext.RunAsUser != nil {
+		t.Fatalf("expected runAsUser to be nil (let OpenShift SCC assign it)")
 	}
-	if container.SecurityContext.RunAsGroup == nil || *container.SecurityContext.RunAsGroup == 0 {
-		t.Fatalf("expected non-zero runAsGroup")
+	if container.SecurityContext.RunAsGroup != nil {
+		t.Fatalf("expected runAsGroup to be nil (let OpenShift SCC assign it)")
 	}
 	if container.SecurityContext.Capabilities == nil || len(container.SecurityContext.Capabilities.Drop) == 0 {
 		t.Fatalf("expected dropped capabilities")

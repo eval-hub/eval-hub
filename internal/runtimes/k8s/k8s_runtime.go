@@ -110,12 +110,44 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context, logger *slog.
 		logger.Error("kubernetes job config error", "benchmark_id", benchmarkID, "error", err)
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
 	}
+	logger.Info(
+		"kubernetes job config",
+		"job_id", evaluation.Resource.ID,
+		"benchmark_id", benchmarkID,
+		"service_account", jobConfig.serviceAccountName,
+		"service_ca_configmap", jobConfig.serviceCAConfigMap,
+		"evalhub_url", jobConfig.evalHubURL,
+	)
 	configMap := buildConfigMap(jobConfig)
 	job, err := buildJob(jobConfig)
 	if err != nil {
 		logger.Error("kubernetes job build error", "benchmark_id", benchmarkID, "error", err)
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
 	}
+	hasServiceCAVolume := false
+	for _, volume := range job.Spec.Template.Spec.Volumes {
+		if volume.Name == serviceCAVolumeName {
+			hasServiceCAVolume = true
+			break
+		}
+	}
+	hasServiceCAMount := false
+	if len(job.Spec.Template.Spec.Containers) > 0 {
+		for _, mount := range job.Spec.Template.Spec.Containers[0].VolumeMounts {
+			if mount.Name == serviceCAVolumeName {
+				hasServiceCAMount = true
+				break
+			}
+		}
+	}
+	logger.Info(
+		"kubernetes job service-ca mount",
+		"job_id", evaluation.Resource.ID,
+		"benchmark_id", benchmarkID,
+		"has_volume", hasServiceCAVolume,
+		"has_mount", hasServiceCAMount,
+		"mount_path", serviceCAMountPath,
+	)
 
 	logger.Info("kubernetes resource", "kind", "ConfigMap", "object", configMap)
 	logger.Info("kubernetes resource", "kind", "Job", "object", job)

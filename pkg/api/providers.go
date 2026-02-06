@@ -6,7 +6,6 @@ type ProviderResource struct {
 	ProviderName string              `mapstructure:"provider_name" yaml:"provider_name" json:"provider_name"`
 	Description  string              `mapstructure:"description" yaml:"description" json:"description"`
 	ProviderType string              `mapstructure:"provider_type" yaml:"provider_type" json:"provider_type"`
-	BaseURL      *string             `mapstructure:"base_url" yaml:"base_url" json:"base_url"`
 	Benchmarks   []BenchmarkResource `mapstructure:"benchmarks" yaml:"benchmarks" json:"benchmarks"`
 	Runtime      *Runtime            `mapstructure:"runtime" yaml:"runtime" json:"-"`
 }

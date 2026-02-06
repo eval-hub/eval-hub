@@ -1,0 +1,37 @@
+properties:
+  benchmark_id:
+    type: string
+    title: Benchmark Id
+    description: Benchmark identifier
+  name:
+    type: string
+    title: Name
+    description: Benchmark name
+  description:
+    type: string
+    title: Description
+    description: Benchmark description
+  category:
+    type: string
+    title: Category
+    description: Benchmark category
+  metrics:
+    type: array
+    items:
+      type: string
+    title: Metrics
+    description: Benchmark metrics
+  num_few_shot:
+    type: integer
+    title: Num Few Shot
+    description: Number of few-shot examples
+  dataset_size:
+    type: integer
+    title: Dataset Size
+    description: Size of the evaluation dataset
+  tags:
+    type: array
+    items:
+      type: string
+    title: Tags
+    description: Benchmark tags  

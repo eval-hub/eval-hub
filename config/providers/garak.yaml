@@ -2,7 +2,6 @@ provider_id: garak
 provider_name: Garak
 description: LLM vulnerability scanner and red-teaming framework
 provider_type: builtin
-base_url: null
 runtime:
   k8s:
     image: quay.io/eval-hub/garak:latest

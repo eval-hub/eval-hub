@@ -4,6 +4,24 @@ get:
   summary: List Providers
   description: List all registered evaluation providers.
   operationId: list_providers_api_v1_evaluations_providers_get
+  parameters:
+    - name: provider_id
+      in: query
+      required: false
+      schema:
+        type: string
+        description: Filter by provider ID
+        title: Provider Id
+      description: Filter by provider ID
+    - name: benchmarks
+      in: query
+      required: false
+      schema:
+        type: boolean
+        default: true
+        description: Set to false to not include benchmarks supported by this provider in the response
+        title: Benchmarks
+      description: Include or exclude benchmarks supported by this provider in the response
   responses:
     '200':
       description: Successful Response

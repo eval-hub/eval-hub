@@ -11,6 +11,11 @@ PORT ?= 8080
 
 UNAME := $(shell uname)
 
+# Auto-detect platform for cross-compilation and wheel building
+# Uses Go's native platform detection - override by setting CROSS_GOOS/CROSS_GOARCH env vars if needed.
+CROSS_GOOS ?= $(shell go env GOOS)
+CROSS_GOARCH ?= $(shell go env GOARCH)
+
 DATE ?= $(shell date +%FT%T%z)
 
 help: ## Display this help message
@@ -179,9 +184,7 @@ create-user:
 grant-permissions:
 	sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE eval_hub TO eval_hub;"
 
-# Cross-compilation with parameters - default to macOS ARM
-CROSS_GOOS ?= darwin
-CROSS_GOARCH ?= arm64
+# Cross-compilation variables
 CROSS_OUTPUT_SUFFIX = $(CROSS_GOOS)-$(CROSS_GOARCH)
 CROSS_OUTPUT = bin/eval-hub-$(CROSS_OUTPUT_SUFFIX)$(if $(filter windows,$(CROSS_GOOS)),.exe,)
 
@@ -214,9 +217,28 @@ venv: ## Create Python virtual environment using uv
 		echo "Virtual environment already exists at $(VENV_DIR)"; \
 	fi
 
-# Python wheel building with parameters - default to macOS ARM
-WHEEL_PLATFORM ?= macosx_11_0_arm64
-WHEEL_BINARY ?= eval-hub-darwin-arm64
+# Python wheel building - auto-detect platform based on CROSS_GOOS/CROSS_GOARCH (we re-use CROSS_OUTPUT_SUFFIX)
+# Platform mappings as defined also in .github/workflows/publish-python-server.yml
+ifeq ($(CROSS_OUTPUT_SUFFIX),linux-amd64)
+    WHEEL_PLATFORM ?= manylinux_2_17_x86_64
+    WHEEL_BINARY ?= eval-hub-linux-amd64
+else ifeq ($(CROSS_OUTPUT_SUFFIX),linux-arm64)
+    WHEEL_PLATFORM ?= manylinux_2_17_aarch64
+    WHEEL_BINARY ?= eval-hub-linux-arm64
+else ifeq ($(CROSS_OUTPUT_SUFFIX),darwin-amd64)
+    WHEEL_PLATFORM ?= macosx_10_9_x86_64
+    WHEEL_BINARY ?= eval-hub-darwin-amd64
+else ifeq ($(CROSS_OUTPUT_SUFFIX),darwin-arm64)
+    WHEEL_PLATFORM ?= macosx_11_0_arm64
+    WHEEL_BINARY ?= eval-hub-darwin-arm64
+else ifeq ($(CROSS_OUTPUT_SUFFIX),windows-amd64)
+    WHEEL_PLATFORM ?= win_amd64
+    WHEEL_BINARY ?= eval-hub-windows-amd64
+else
+    # Fallback to macOS ARM (M-chips) if platform not recognized
+    WHEEL_PLATFORM ?= macosx_11_0_arm64
+    WHEEL_BINARY ?= eval-hub-darwin-arm64
+endif
 
 .PHONY: install-wheel-tools
 install-wheel-tools: venv ## Install Python wheel build tools using uv
