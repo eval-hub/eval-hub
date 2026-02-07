@@ -1175,8 +1175,8 @@
           "id",
           "provider_id"
         ],
-        "title": "RunStatus",
-        "description": "Status information for an individual benchmark run."
+        "title": "BenchmarkResult",
+        "description": "The result information for an individual benchmark run."
       },
       "EvaluationResults": {
         "properties": {
