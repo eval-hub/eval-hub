@@ -1154,58 +1154,26 @@
         "title": "Status",
         "description": "Overall status for an evaluation request."
       },
-      "BenchmarkResultPayload": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Benchmark name"
-          },
-          "metrics": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "string"
-                }
-              ]
-            },
-            "type": "object",
-            "title": "Metrics",
-            "description": "Benchmark metrics"
-          },
-          "artifacts": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object",
-            "title": "Artifacts",
-            "description": "Benchmark artifacts"
-          },
-          "mlflow_run_id": {
-            "type": "string",
-            "title": "Mlflow Run Id",
-            "description": "MLFlow run ID"
-          }
-        },
-        "additionalProperties": true,
-        "type": "object",
-        "required": [
-          "name"
-        ],
-        "title": "BenchmarkResultPayload",
-        "description": "Result payload for a single benchmark."
-      },
       "ResultsPayload": {
         "properties": {
+          "total_evaluations": {
+            "type": "integer",
+            "title": "Total Evaluations",
+            "description": "Total number of evaluations"
+          },
+          "completed_evaluations": {
+            "type": "integer",
+            "title": "Completed Evaluations",
+            "description": "Number of completed evaluations"
+          },
+          "failed_evaluations": {
+            "type": "integer",
+            "title": "Failed Evaluations",
+            "description": "Number of failed evaluations"
+          },
           "benchmarks": {
             "items": {
-              "$ref": "#/components/schemas/BenchmarkResultPayload"
+              "$ref": "#/components/schemas/BenchmarkRunStatus"
             },
             "type": "array",
             "title": "Benchmarks",
