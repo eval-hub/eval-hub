@@ -10,8 +10,15 @@ properties:
     title: Benchmark Id
     description: Benchmark identifier
   status:
-    $ref: ./EvaluationStatus.yaml
-    description: Evaluation status
+    type: string
+    enum:
+      - pending
+      - running
+      - completed
+      - failed
+      - cancelled
+    title: EvaluationStatus
+    description: Status of an evaluation.
   metrics:
     additionalProperties:
       anyOf:

@@ -563,7 +563,7 @@
         "title": "ErrorMessage",
         "description": "Error message for a job."
       },
-      "RunStatus": {
+      "BenchmarkRunStatus": {
         "properties": {
           "id": {
             "type": "string",
@@ -648,7 +648,7 @@
         "title": "RunStatus",
         "description": "Status information for an individual benchmark run."
       },
-      "Status": {
+      "EvaluationJobStatus": {
         "properties": {
           "state": {
             "type": "string",
@@ -668,7 +668,7 @@
           },
           "benchmarks": {
             "items": {
-              "$ref": "#/components/schemas/RunStatus"
+              "$ref": "#/components/schemas/BenchmarkRunStatus"
             },
             "type": "array",
             "title": "Benchmark run statuses",
@@ -776,7 +776,7 @@
             "$ref": "#/components/schemas/EvaluationResource"
           },
           "status": {
-            "$ref": "#/components/schemas/Status",
+            "$ref": "#/components/schemas/EvaluationJobStatus",
             "description": "Current status of the request"
           },
           "results": {

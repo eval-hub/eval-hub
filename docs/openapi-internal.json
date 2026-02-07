@@ -1036,7 +1036,7 @@
         "title": "ErrorMessage",
         "description": "Error message for a job."
       },
-      "RunStatus": {
+      "BenchmarkRunStatus": {
         "properties": {
           "id": {
             "type": "string",
@@ -1121,7 +1121,7 @@
         "title": "RunStatus",
         "description": "Status information for an individual benchmark run."
       },
-      "Status": {
+      "EvaluationJobStatus": {
         "properties": {
           "state": {
             "type": "string",
@@ -1141,7 +1141,7 @@
           },
           "benchmarks": {
             "items": {
-              "$ref": "#/components/schemas/RunStatus"
+              "$ref": "#/components/schemas/BenchmarkRunStatus"
             },
             "type": "array",
             "title": "Benchmark run statuses",
@@ -1249,7 +1249,7 @@
             "$ref": "#/components/schemas/EvaluationResource"
           },
           "status": {
-            "$ref": "#/components/schemas/Status",
+            "$ref": "#/components/schemas/EvaluationJobStatus",
             "description": "Current status of the request"
           },
           "results": {
@@ -1453,18 +1453,6 @@
         "title": "PaginatedEvaluations",
         "description": "Paginated list response for evaluation resources."
       },
-      "EvaluationStatus": {
-        "type": "string",
-        "enum": [
-          "pending",
-          "running",
-          "completed",
-          "failed",
-          "cancelled"
-        ],
-        "title": "EvaluationStatus",
-        "description": "Status of an evaluation."
-      },
       "BenchmarkStatusEvent": {
         "type": "object",
         "description": "A status event for an evaluation.",
@@ -1480,8 +1468,16 @@
             "description": "Benchmark identifier"
           },
           "status": {
-            "$ref": "#/components/schemas/EvaluationStatus",
-            "description": "Evaluation status"
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "title": "EvaluationStatus",
+            "description": "Status of an evaluation."
           },
           "metrics": {
             "additionalProperties": {

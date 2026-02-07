@@ -385,7 +385,7 @@ components:
         - message_code
       title: ErrorMessage
       description: Error message for a job.
-    RunStatus:
+    BenchmarkRunStatus:
       properties:
         id:
           type: string
@@ -447,7 +447,7 @@ components:
         - started_at
       title: RunStatus
       description: Status information for an individual benchmark run.
-    Status:
+    EvaluationJobStatus:
       properties:
         state:
           type: string
@@ -464,7 +464,7 @@ components:
           $ref: '#/components/schemas/ErrorMessage'
         benchmarks:
           items:
-            $ref: '#/components/schemas/RunStatus'
+            $ref: '#/components/schemas/BenchmarkRunStatus'
           type: array
           title: Benchmark run statuses
           description: Status for each benchmark run
@@ -536,7 +536,7 @@ components:
         resource:
           $ref: '#/components/schemas/EvaluationResource'
         status:
-          $ref: '#/components/schemas/Status'
+          $ref: '#/components/schemas/EvaluationJobStatus'
           description: Current status of the request
         results:
           $ref: '#/components/schemas/ResultsPayload'

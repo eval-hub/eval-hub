@@ -3,7 +3,7 @@ properties:
   resource:
     $ref: ./EvaluationResource.yaml
   status:
-    $ref: ./Status.yaml
+    $ref: ./EvaluationJobStatus.yaml
     description: Current status of the request
   results:
     $ref: ./ResultsPayload.yaml
