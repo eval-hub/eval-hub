@@ -133,15 +133,20 @@ type EvaluationJobConfig struct {
 type EvaluationResource struct {
 	Resource
 	MLFlowExperimentID string       `json:"mlflow_experiment_id,omitempty"`
-	Status             OverallState `json:"status"`
 	Message            *MessageInfo `json:"message,omitempty"`
+}
+
+type EvaluationJobStatus struct {
+	EvaluationJobState
+	Benchmarks []BenchmarkStatus `json:"benchmarks,omitempty"`
 }
 
 // EvaluationJobResource represents evaluation job resource response
 type EvaluationJobResource struct {
-	Resource EvaluationResource `json:"resource"`
+	Resource EvaluationResource    `json:"resource"`
+	Status   *EvaluationJobStatus  `json:"status,omitempty"`
+	Results  *EvaluationJobResults `json:"results,omitempty"`
 	EvaluationJobConfig
-	Results *EvaluationJobResults `json:"results,omitempty"`
 }
 
 // EvaluationJobResourceList represents list of evaluation job resources with pagination

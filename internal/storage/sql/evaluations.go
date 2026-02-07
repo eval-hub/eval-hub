@@ -21,14 +21,8 @@ import (
 
 type EvaluationJobEntity struct {
 	Config  *api.EvaluationJobConfig  `json:"config"`
-	Status  *EvaluationJobStatus      `json:"status"`
+	Status  *api.EvaluationJobStatus  `json:"status"`
 	Results *api.EvaluationJobResults `json:"results,omitempty"`
-}
-
-// EvaluationStatus represents evaluation status
-type EvaluationJobStatus struct {
-	api.EvaluationJobState
-	Benchmarks []api.BenchmarkStatus `json:"benchmarks,omitempty"`
 }
 
 //#######################################################################
@@ -47,7 +41,7 @@ func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobConfig, ml
 
 	evaluationEntity := &EvaluationJobEntity{
 		Config: evaluation,
-		Status: &EvaluationJobStatus{
+		Status: &api.EvaluationJobStatus{
 			EvaluationJobState: api.EvaluationJobState{
 				State: api.OverallStatePending,
 				Message: &api.MessageInfo{
@@ -81,7 +75,6 @@ func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobConfig, ml
 				UpdatedAt: time.Now(),
 			},
 			MLFlowExperimentID: mlflowExperimentID,
-			Status:             evaluationEntity.Status.State,
 			Message:            evaluationEntity.Status.Message,
 		},
 		EvaluationJobConfig: *evaluation,
@@ -131,13 +124,16 @@ func constructEvaluationResource(statusStr string, message *api.MessageInfo, dbI
 	if message == nil {
 		message = evaluationEntity.Status.Message
 	}
-	status := evaluationEntity.Status.State
+	overAllState := evaluationEntity.Status.State
 
 	if statusStr != "" {
 		if s, err := api.GetOverallState(statusStr); err == nil {
-			status = s
+			overAllState = s
 		}
 	}
+	status := evaluationEntity.Status
+	status.State = overAllState
+
 	evaluationResource := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{
@@ -147,9 +143,9 @@ func constructEvaluationResource(statusStr string, message *api.MessageInfo, dbI
 				UpdatedAt: updatedAt,
 			},
 			MLFlowExperimentID: experimentID,
-			Status:             status,
 			Message:            message,
 		},
+		Status:              status,
 		EvaluationJobConfig: *evaluationEntity.Config,
 		Results:             evaluationEntity.Results,
 	}
@@ -259,11 +255,11 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter strin
 					UpdatedAt: updatedAt,
 				},
 				MLFlowExperimentID: experimentID,
-				Status:             evaluationJobEntity.Status.State,
 				Message:            evaluationJobEntity.Status.Message,
 			},
-			EvaluationJobConfig: *evaluationJobEntity.Config,
+			Status:              evaluationJobEntity.Status,
 			Results:             evaluationJobEntity.Results,
+			EvaluationJobConfig: *evaluationJobEntity.Config,
 		}
 
 		items = append(items, resource)
@@ -364,7 +360,7 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 
 	updatedEntityJSON, err := json.Marshal(&EvaluationJobEntity{
 		Config: &job.EvaluationJobConfig,
-		Status: &EvaluationJobStatus{
+		Status: &api.EvaluationJobStatus{
 			EvaluationJobState: api.EvaluationJobState{
 				State:   overallState,
 				Message: message,
