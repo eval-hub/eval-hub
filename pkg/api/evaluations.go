@@ -82,23 +82,25 @@ type ExperimentConfig struct {
 	ArtifactLocation string          `json:"artifact_location,omitempty"`
 }
 
-// BenchmarkStatusLogs represents logs information for benchmark status
-type BenchmarkStatusLogs struct {
-	Path string `json:"path,omitempty"`
-}
-
 // BenchmarkStatus represents status of individual benchmark in evaluation
 type BenchmarkStatus struct {
-	ProviderID      string         `json:"provider_id"`
-	ID              string         `json:"id"`
-	Status          State          `json:"status,omitempty"`
-	Metrics         map[string]any `json:"metrics,omitempty"`
-	Artifacts       map[string]any `json:"artifacts,omitempty"`
-	ErrorMessage    *MessageInfo   `json:"error_message,omitempty"`
-	StartedAt       *time.Time     `json:"started_at,omitempty"`
-	CompletedAt     *time.Time     `json:"completed_at,omitempty"`
-	DurationSeconds int64          `json:"duration_seconds,omitempty"`
-	MLFlowRunID     string         `json:"mlflow_run_id,omitempty"`
+	ProviderID   string         `json:"provider_id" validate:"required"`
+	ID           string         `json:"id" validate:"required"`
+	Status       State          `json:"status,omitempty"`
+	Metrics      map[string]any `json:"metrics,omitempty"`
+	Artifacts    map[string]any `json:"artifacts,omitempty"`
+	ErrorMessage *MessageInfo   `json:"error_message,omitempty" validate:"omitempty"`
+	StartedAt    string         `json:"started_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
+	CompletedAt  string         `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
+	MLFlowRunID  string         `json:"mlflow_run_id,omitempty"`
+}
+
+func DateTimeToString(date time.Time) string {
+	return date.Format("2006-01-02T15:04:05Z07:00")
+}
+
+func DateTimeFromString(date string) (time.Time, error) {
+	return time.Parse("2006-01-02T15:04:05Z07:00", date)
 }
 
 type EvaluationJobState struct {
@@ -117,7 +119,7 @@ type EvaluationJobResults struct {
 	FailedEvaluations    int               `json:"failed_evaluations,omitempty"`
 	Benchmarks           []BenchmarkStatus `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 	AggregatedMetrics    map[string]any    `json:"aggregated_metrics,omitempty"`
-	MLFlowExperimentURL  *string           `json:"mlflow_experiment_url,omitempty"`
+	MLFlowExperimentURL  string            `json:"mlflow_experiment_url,omitempty"`
 }
 
 // EvaluationJobConfig represents evaluation job request schema

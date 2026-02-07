@@ -28,7 +28,6 @@ type EvaluationJobEntity struct {
 // EvaluationStatus represents evaluation status
 type EvaluationJobStatus struct {
 	api.EvaluationJobState
-	Benchmarks []api.BenchmarkStatus `json:"benchmarks,omitempty"`
 }
 
 //#######################################################################
@@ -353,6 +352,9 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 		return err
 	}
 
+	// TODO FIX ME
+	// ???
+
 	err = validateBenchmarkExists(job, runStatus)
 	if err != nil {
 		return err
@@ -369,7 +371,6 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 				State:   overallState,
 				Message: message,
 			},
-			Benchmarks: job.Results.Benchmarks,
 		},
 		Results: job.Results,
 	})

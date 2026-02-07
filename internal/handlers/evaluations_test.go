@@ -2,10 +2,12 @@ package handlers_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 
@@ -144,5 +146,43 @@ func TestHandleCreateEvaluationSucceedsWhenRuntimeOk(t *testing.T) {
 	}
 	if recorder.Code != 202 {
 		t.Fatalf("expected status 202, got %d", recorder.Code)
+	}
+}
+
+func TestStatusSerialization(t *testing.T) {
+	now := time.Now()
+	status := &api.StatusEvent{
+		BenchmarkStatusEvent: &api.BenchmarkStatus{
+			ID:          "bench-1",
+			ProviderID:  "garak",
+			Status:      api.StateCompleted,
+			CompletedAt: api.DateTimeToString(now),
+			Metrics: map[string]any{
+				"metric-1": 1.0,
+				"metric-2": 2.0,
+			},
+			Artifacts: map[string]any{
+				"artifact-1": "artifact-1.txt",
+			},
+		},
+	}
+	js, err := json.MarshalIndent(status, "", "  ")
+	if err != nil {
+		t.Fatalf("failed to marshal status: %v", err)
+	}
+	newStatus := api.StatusEvent{}
+	err = json.Unmarshal(js, &newStatus)
+	if err != nil {
+		t.Fatalf("failed to unmarshal status: %v", err)
+	}
+	completedAt, err := api.DateTimeFromString(newStatus.BenchmarkStatusEvent.CompletedAt)
+	if err != nil {
+		t.Fatalf("Failed to convert CompletedAt to time: %v", err)
+	}
+	if completedAt.Unix() != now.Unix() {
+		t.Fatalf("completed at mismatch: %v != %v", completedAt.Unix(), now.Unix())
+	}
+	if !reflect.DeepEqual(status.BenchmarkStatusEvent, newStatus.BenchmarkStatusEvent) {
+		t.Fatalf("status mismatch: %+v != %+v", status.BenchmarkStatusEvent, newStatus.BenchmarkStatusEvent)
 	}
 }

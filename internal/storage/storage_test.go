@@ -1,13 +1,17 @@
 package storage_test
 
 import (
+	"encoding/json"
+	"maps"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/storage"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	"github.com/go-playground/validator/v10"
 )
 
 type testRequestWrapper struct {
@@ -55,6 +59,11 @@ func TestStorage(t *testing.T) {
 	var store abstractions.Storage
 	var evaluationId string
 
+	var benchmarkConfig = api.BenchmarkConfig{
+		Ref:        api.Ref{ID: "bench-1"},
+		ProviderID: "garak",
+	}
+
 	t.Run("NewStorage creates a new storage instance", func(t *testing.T) {
 		databaseConfig := map[string]any{}
 		databaseConfig["driver"] = "sqlite"
@@ -73,12 +82,7 @@ func TestStorage(t *testing.T) {
 				URL:  "http://test.com",
 				Name: "test",
 			},
-			Benchmarks: []api.BenchmarkConfig{
-				{
-					Ref:        api.Ref{ID: "bench-1"},
-					ProviderID: "garak",
-				},
-			},
+			Benchmarks: []api.BenchmarkConfig{benchmarkConfig},
 		}
 		resp, err := store.CreateEvaluationJob(job, "")
 		if err != nil {
@@ -108,6 +112,72 @@ func TestStorage(t *testing.T) {
 		if len(resp.Items) == 0 {
 			t.Fatalf("No evaluation jobs found")
 		}
+	})
+
+	t.Run("UpdateEvaluationJob updates the evaluation job", func(t *testing.T) {
+		metrics := map[string]any{
+			"metric-1": 1.0,
+			"metric-2": 2.0,
+		}
+		now := time.Now()
+		status := &api.StatusEvent{
+			BenchmarkStatusEvent: &api.BenchmarkStatus{
+				ID:         benchmarkConfig.ID,
+				ProviderID: benchmarkConfig.ProviderID,
+				// the job status needs to be completed to update the metrics and artifacts
+				Status:      api.StateCompleted,
+				CompletedAt: api.DateTimeToString(now),
+				Metrics:     metrics,
+				Artifacts:   map[string]any{},
+				ErrorMessage: &api.MessageInfo{
+					Message:     "Test error message",
+					MessageCode: "TEST_ERROR_MESSAGE",
+				},
+			},
+		}
+		completedAtStr := status.BenchmarkStatusEvent.CompletedAt
+		if completedAtStr == "" {
+			t.Fatalf("CompletedAt is empty")
+		}
+		val := validator.New()
+		err := val.Struct(status)
+		if err != nil {
+			t.Fatalf("Failed to validate status: %v", err)
+		}
+		err = store.UpdateEvaluationJob(evaluationId, status)
+		if err != nil {
+			t.Fatalf("Failed to update evaluation job: %v", err)
+		}
+
+		// now get the evaluation job and check the updated values
+		job, err := store.GetEvaluationJob(evaluationId)
+		if err != nil {
+			t.Fatalf("Failed to get evaluation job: %v", err)
+		}
+		js, err := json.MarshalIndent(job, "", "  ")
+		if err != nil {
+			t.Fatalf("Failed to marshal job: %v", err)
+		}
+		t.Logf("Job: %s\n", string(js))
+		if len(job.Results.Benchmarks) == 0 {
+			t.Fatalf("No benchmarks found")
+		}
+		if !maps.Equal(job.Results.Benchmarks[0].Metrics, metrics) {
+			t.Fatalf("Metrics mismatch: %v != %v", job.Results.Benchmarks[0].Metrics, metrics)
+		}
+
+		/* TODO later when the status updates are correct
+		if job.Results.Benchmarks[0].CompletedAt == "" {
+			t.Fatalf("CompletedAt is nil")
+		}
+		completedAt, err := api.DateTimeFromString(job.Results.Benchmarks[0].CompletedAt)
+		if err != nil {
+			t.Fatalf("Failed to convert CompletedAt to time: %v", err)
+		}
+		if completedAt.UnixMilli() != now.UnixMilli() {
+			t.Fatalf("CompletedAt mismatch: %v != %v", job.Results.Benchmarks[0].CompletedAt, now)
+		}
+		*/
 	})
 
 	t.Run("DeleteEvaluationJob deletes the evaluation job", func(t *testing.T) {
