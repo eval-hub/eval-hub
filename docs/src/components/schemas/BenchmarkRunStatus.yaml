@@ -17,13 +17,11 @@ properties:
         - type: number
         - type: integer
         - type: string
-      type: object
     title: Metrics
     description: Benchmark metrics
   artifacts:
     additionalProperties:
       type: string
-    type: object
     title: Artifacts
     description: Benchmark artifacts
   started_at:

@@ -1065,8 +1065,7 @@
                 {
                   "type": "string"
                 }
-              ],
-              "type": "object"
+              ]
             },
             "title": "Metrics",
             "description": "Benchmark metrics"
@@ -1075,7 +1074,6 @@
             "additionalProperties": {
               "type": "string"
             },
-            "type": "object",
             "title": "Artifacts",
             "description": "Benchmark artifacts"
           },
