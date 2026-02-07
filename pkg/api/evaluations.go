@@ -119,7 +119,6 @@ type EvaluationJobResults struct {
 	Benchmarks           []BenchmarkStatus `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 	AggregatedMetrics    map[string]any    `json:"aggregated_metrics,omitempty"`
 	MLFlowExperimentURL  *string           `json:"mlflow_experiment_url,omitempty"`
-	LogsPath             string            `json:"logs_path,omitempty"`
 }
 
 // EvaluationJobConfig represents evaluation job request schema
