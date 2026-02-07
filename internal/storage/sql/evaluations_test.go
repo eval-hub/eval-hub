@@ -140,6 +140,11 @@ func TestEvaluationsStorage(t *testing.T) {
 	var store abstractions.Storage
 	var evaluationId string
 
+	var benchmarkConfig = api.BenchmarkConfig{
+		Ref:        api.Ref{ID: "bench-1"},
+		ProviderID: "garak",
+	}
+
 	t.Run("NewStorage creates a new storage instance", func(t *testing.T) {
 		databaseConfig := map[string]any{}
 		databaseConfig["driver"] = "sqlite"
@@ -247,18 +252,16 @@ func TestEvaluationsStorage(t *testing.T) {
 			t.Fatalf("Metrics mismatch: %v != %v", job.Results.Benchmarks[0].Metrics, metrics)
 		}
 
-		/* TODO later when the status updates are correct
-		if job.Results.Benchmarks[0].CompletedAt == "" {
+		if job.Status.Benchmarks[0].CompletedAt == "" {
 			t.Fatalf("CompletedAt is nil")
 		}
-		completedAt, err := api.DateTimeFromString(job.Results.Benchmarks[0].CompletedAt)
+		completedAt, err := api.DateTimeFromString(job.Status.Benchmarks[0].CompletedAt)
 		if err != nil {
 			t.Fatalf("Failed to convert CompletedAt to time: %v", err)
 		}
 		if completedAt.UnixMilli() != now.UnixMilli() {
-			t.Fatalf("CompletedAt mismatch: %v != %v", job.Results.Benchmarks[0].CompletedAt, now)
+			t.Fatalf("CompletedAt mismatch: %v != %v", job.Status.Benchmarks[0].CompletedAt, now)
 		}
-		*/
 	})
 
 	t.Run("DeleteEvaluationJob deletes the evaluation job", func(t *testing.T) {
