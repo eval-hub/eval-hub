@@ -1051,7 +1051,14 @@
           "status": {
             "type": "string",
             "title": "State",
-            "description": "Run state (pending, running, success, failed)"
+            "description": "Run state",
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ]
           },
           "metrics": {
             "additionalProperties": {
