@@ -13,19 +13,10 @@ properties:
     description: Number of failed evaluations
   benchmarks:
     items:
-      $ref: ./BenchmarkRunStatus.yaml
+      $ref: ./BenchmarkResult.yaml
     type: array
     title: Benchmarks
     description: List of benchmark results
-  aggregated_metrics:
-    additionalProperties:
-      anyOf:
-        - type: number
-        - type: integer
-        - type: string
-    type: object
-    title: Aggregated Metrics
-    description: Aggregated metrics across benchmarks
   mlflow_experiment_url:
     type: string
     title: Mlflow Experiment Url

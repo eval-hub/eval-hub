@@ -6,6 +6,6 @@ properties:
     $ref: ./EvaluationJobStatus.yaml
     description: Current status of the request
   results:
-    $ref: ./ResultsPayload.yaml
+    $ref: ./EvaluationResults.yaml
 title: EvaluationResponseResults
 description: Response payload for evaluation requests.

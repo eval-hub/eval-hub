@@ -89,6 +89,17 @@ type BenchmarkStatusLogs struct {
 
 // BenchmarkStatus represents status of individual benchmark in evaluation
 type BenchmarkStatus struct {
+	ProviderID      string       `json:"provider_id"`
+	ID              string       `json:"id"`
+	Status          State        `json:"status,omitempty"`
+	ErrorMessage    *MessageInfo `json:"error_message,omitempty"`
+	StartedAt       *time.Time   `json:"started_at,omitempty"`
+	CompletedAt     *time.Time   `json:"completed_at,omitempty"`
+	DurationSeconds int64        `json:"duration_seconds,omitempty"`
+}
+
+// BenchmarkStatusEvent is used when the job runtime needs to updated the status of a benchmark
+type BenchmarkStatusEvent struct {
 	ProviderID      string         `json:"provider_id"`
 	ID              string         `json:"id"`
 	Status          State          `json:"status,omitempty"`
@@ -108,7 +119,16 @@ type EvaluationJobState struct {
 }
 
 type StatusEvent struct {
-	BenchmarkStatusEvent *BenchmarkStatus `json:"benchmark_status_event" validate:"required"`
+	BenchmarkStatusEvent *BenchmarkStatusEvent `json:"benchmark_status_event" validate:"required"`
+}
+
+type BenchmarkResult struct {
+	ID          string         `json:"id"`
+	ProviderID  string         `json:"provider_id"`
+	Metrics     map[string]any `json:"metrics,omitempty"`
+	Artifacts   map[string]any `json:"artifacts,omitempty"`
+	MLFlowRunID string         `json:"mlflow_run_id,omitempty"`
+	LogsPath    string         `json:"logs_path,omitempty"`
 }
 
 // EvaluationJobResults represents results section for EvaluationJobResource
@@ -116,8 +136,7 @@ type EvaluationJobResults struct {
 	TotalEvaluations     int               `json:"total_evaluations"`
 	CompletedEvaluations int               `json:"completed_evaluations,omitempty"`
 	FailedEvaluations    int               `json:"failed_evaluations,omitempty"`
-	Benchmarks           []BenchmarkStatus `json:"benchmarks,omitempty" validate:"omitempty,dive"`
-	AggregatedMetrics    map[string]any    `json:"aggregated_metrics,omitempty"`
+	Benchmarks           []BenchmarkResult `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 	MLFlowExperimentURL  *string           `json:"mlflow_experiment_url,omitempty"`
 }
 

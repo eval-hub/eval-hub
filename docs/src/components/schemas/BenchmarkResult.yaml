@@ -1,0 +1,37 @@
+properties:
+  id:
+    type: string
+    title: Benchmark Id
+    description: Benchmark id
+  provider_id:
+    type: string
+    title: Provider Id
+    description: Provider id
+  metrics:
+    additionalProperties:
+      anyOf:
+        - type: number
+        - type: integer
+        - type: string
+    title: Metrics
+    description: Benchmark metrics
+  artifacts:
+    additionalProperties:
+      type: string
+    title: Artifacts
+    description: Benchmark artifacts
+  mlflow_run_id:
+    type: string
+    title: Mlflow Run Id
+    description: MLFlow run ID
+  logs_path:
+    type: string
+    title: Logs Path
+    description: Optional path to run-specific logs
+additionalProperties: true
+type: object
+required:
+  - id
+  - provider_id
+title: RunStatus
+description: Status information for an individual benchmark run.

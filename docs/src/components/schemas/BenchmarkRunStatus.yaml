@@ -17,19 +17,6 @@ properties:
       - completed
       - failed
       - cancelled
-  metrics:
-    additionalProperties:
-      anyOf:
-        - type: number
-        - type: integer
-        - type: string
-    title: Metrics
-    description: Benchmark metrics
-  artifacts:
-    additionalProperties:
-      type: string
-    title: Artifacts
-    description: Benchmark artifacts
   started_at:
     type: string
     format: date-time
@@ -40,20 +27,8 @@ properties:
     format: date-time
     title: Completed At
     description: Completion timestamp
-  duration_seconds:
-    type: number
-    title: Duration Seconds
-    description: Evaluation duration
-  mlflow_run_id:
-    type: string
-    title: Mlflow Run Id
-    description: MLFlow run ID
   error_message:
     $ref: ./ErrorMessage.yaml
-  logs_path:
-    type: string
-    title: Logs Path
-    description: Optional path to run-specific logs
 additionalProperties: true
 type: object
 required:

@@ -365,7 +365,7 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 				State:   overallState,
 				Message: message,
 			},
-			Benchmarks: job.Results.Benchmarks,
+			Benchmarks: job.Status.Benchmarks,
 		},
 		Results: job.Results,
 	})
@@ -402,7 +402,7 @@ func getOverallJobStatus(job *api.EvaluationJobResource) (api.OverallState, *api
 	// group all benchmarks by state
 	benchmarkStates := make(map[api.State]int)
 	failureMessage := ""
-	for _, benchmark := range job.Results.Benchmarks {
+	for _, benchmark := range job.Status.Benchmarks {
 		benchmarkStates[benchmark.Status]++
 		if benchmark.Status == api.StateFailed && benchmark.ErrorMessage != nil {
 			failureMessage += "Benchmark " + benchmark.ID + " failed with message: " + benchmark.ErrorMessage.Message + "\n"
@@ -438,7 +438,7 @@ func updateBenchMarkProgress(jobResource *api.EvaluationJobResource, runStatus *
 	if jobResource.Results == nil {
 		jobResource.Results = &api.EvaluationJobResults{}
 	}
-	jobResource.Results.Benchmarks = findAndUpdateBenchmarkStatus(jobResource.Results.Benchmarks, runStatus)
+	jobResource.Status.Benchmarks = findAndUpdateBenchmarkStatus(jobResource.Status.Benchmarks, runStatus)
 	findAndUpdateBenchmarkResults(jobResource.Results, runStatus)
 }
 
@@ -500,15 +500,14 @@ func findAndUpdateBenchmarkResults(benchmarkResults *api.EvaluationJobResults, r
 		}
 	}
 	if !found {
-		if runStatus.BenchmarkStatusEvent.Status == api.StateCompleted {
-			newBenchmarkResult := api.BenchmarkStatus{
-				ProviderID: runStatus.BenchmarkStatusEvent.ProviderID,
-				ID:         runStatus.BenchmarkStatusEvent.ID,
-				Status:     runStatus.BenchmarkStatusEvent.Status,
-				Metrics:    runStatus.BenchmarkStatusEvent.Metrics,
-				Artifacts:  runStatus.BenchmarkStatusEvent.Artifacts,
-			}
-			benchmarkResults.Benchmarks = append(benchmarkResults.Benchmarks, newBenchmarkResult)
+		newBenchmarkResult := api.BenchmarkResult{
+			ProviderID:  runStatus.BenchmarkStatusEvent.ProviderID,
+			ID:          runStatus.BenchmarkStatusEvent.ID,
+			Metrics:     runStatus.BenchmarkStatusEvent.Metrics,
+			Artifacts:   runStatus.BenchmarkStatusEvent.Artifacts,
+			MLFlowRunID: runStatus.BenchmarkStatusEvent.MLFlowRunID,
+			LogsPath:    runStatus.BenchmarkStatusEvent.LogsPath,
 		}
+		benchmarkResults.Benchmarks = append(benchmarkResults.Benchmarks, newBenchmarkResult)
 	}
 }

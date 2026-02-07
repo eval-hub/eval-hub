@@ -2,6 +2,7 @@ package sql_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/storage"
@@ -48,12 +49,18 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 		t.Fatalf("Failed to create job: %v", err)
 	}
 
+	now := time.Now()
 	// Send status update with provider_id (simulating SDK behavior)
 	statusUpdate := &api.StatusEvent{
-		BenchmarkStatusEvent: &api.BenchmarkStatus{
+		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 			ProviderID: "lm_evaluation_harness",
 			ID:         "arc_easy",
 			Status:     api.StateRunning,
+			StartedAt:  &now,
+			Metrics: map[string]any{
+				"acc":      0.85,
+				"acc_norm": 0.87,
+			},
 		},
 	}
 
@@ -68,7 +75,7 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 		t.Fatalf("Failed to get updated job: %v", err)
 	}
 
-	if len(updatedJob.Results.Benchmarks) != 1 {
+	if len(updatedJob.Status.Benchmarks) != 1 {
 		t.Fatalf("Expected 1 benchmark, got %d", len(updatedJob.Results.Benchmarks))
 	}
 
@@ -80,7 +87,7 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 
 	// Send completion update with results
 	completionUpdate := &api.StatusEvent{
-		BenchmarkStatusEvent: &api.BenchmarkStatus{
+		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 			ProviderID: "lm_evaluation_harness",
 			ID:         "arc_easy",
 			Status:     api.StateCompleted,
