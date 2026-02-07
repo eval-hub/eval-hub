@@ -102,8 +102,9 @@ type BenchmarkStatus struct {
 }
 
 type EvaluationJobState struct {
-	State   OverallState `json:"state" validate:"required,oneof=pending running completed failed cancelled partially_failed"`
-	Message *MessageInfo `json:"message" validate:"required"`
+	State    OverallState `json:"state" validate:"required,oneof=pending running completed failed cancelled partially_failed"`
+	Message  *MessageInfo `json:"message" validate:"required"`
+	LogsPath string       `json:"logs_path,omitempty"`
 }
 
 type StatusEvent struct {
