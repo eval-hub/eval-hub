@@ -12,15 +12,11 @@ properties:
       - cancelled
   message:
     $ref: ./ErrorMessage.yaml
-  logs_path:
-    type: string
-    title: Logs Path
-    description: Optional path to system logs
-  runs:
+  benchmarks:
     items:
       $ref: ./RunStatus.yaml
     type: array
-    title: Runs
+    title: Benchmark run statuses
     description: Status for each benchmark run
 additionalProperties: true
 type: object

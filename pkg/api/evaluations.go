@@ -99,12 +99,12 @@ type BenchmarkStatus struct {
 	CompletedAt     *time.Time     `json:"completed_at,omitempty"`
 	DurationSeconds int64          `json:"duration_seconds,omitempty"`
 	MLFlowRunID     string         `json:"mlflow_run_id,omitempty"`
+	LogsPath        string         `json:"logs_path,omitempty"`
 }
 
 type EvaluationJobState struct {
-	State    OverallState `json:"state" validate:"required,oneof=pending running completed failed cancelled partially_failed"`
-	Message  *MessageInfo `json:"message" validate:"required"`
-	LogsPath string       `json:"logs_path,omitempty"`
+	State   OverallState `json:"state" validate:"required,oneof=pending running completed failed cancelled partially_failed"`
+	Message *MessageInfo `json:"message" validate:"required"`
 }
 
 type StatusEvent struct {
@@ -119,6 +119,7 @@ type EvaluationJobResults struct {
 	Benchmarks           []BenchmarkStatus `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 	AggregatedMetrics    map[string]any    `json:"aggregated_metrics,omitempty"`
 	MLFlowExperimentURL  *string           `json:"mlflow_experiment_url,omitempty"`
+	LogsPath             string            `json:"logs_path,omitempty"`
 }
 
 // EvaluationJobConfig represents evaluation job request schema
