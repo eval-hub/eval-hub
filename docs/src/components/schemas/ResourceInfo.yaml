@@ -4,9 +4,6 @@ properties:
     type: string
     title: Id
     description: Unique evaluation request ID
-  status:
-    $ref: ./Status.yaml
-    description: Current status of the request
   created_at:
     type: string
     format: date-time
@@ -19,7 +16,6 @@ properties:
     description: Completion timestamp
 required:
   - id
-  - status
   - created_at
 title: ResourceInfo
 description: Metadata about the evaluation resource.

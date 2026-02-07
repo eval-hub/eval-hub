@@ -2,6 +2,9 @@ type: object
 properties:
   resource:
     $ref: ./EvaluationResource.yaml
+  status:
+    $ref: ./Status.yaml
+    description: Current status of the request
   results:
     $ref: ./ResultsPayload.yaml
 title: EvaluationResponseResults

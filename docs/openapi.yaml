@@ -333,6 +333,41 @@ components:
         - href
       title: PaginationLink
       description: Hypermedia link used for pagination.
+    ResourceInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Unique evaluation request ID
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+          description: Creation timestamp
+        completed_at:
+          type: string
+          format: date-time
+          title: Completed At
+          description: Completion timestamp
+      required:
+        - id
+        - created_at
+      title: ResourceInfo
+      description: Metadata about the evaluation resource.
+    MLFlowExperimentId:
+      type: string
+      description: MLFlow experiment ID
+      title: Mlflow Experiment Id
+    EvaluationResource:
+      allOf:
+        - $ref: '#/components/schemas/ResourceInfo'
+        - type: object
+          properties:
+            mlflow_experiment_id:
+              $ref: '#/components/schemas/MLFlowExperimentId'
+      title: EvaluationResource
+      description: Resource information for an evaluation.
     ErrorMessage:
       type: object
       properties:
@@ -404,45 +439,6 @@ components:
         - state
       title: Status
       description: Overall status for an evaluation request.
-    ResourceInfo:
-      type: object
-      properties:
-        id:
-          type: string
-          title: Id
-          description: Unique evaluation request ID
-        status:
-          $ref: '#/components/schemas/Status'
-          description: Current status of the request
-        created_at:
-          type: string
-          format: date-time
-          title: Created At
-          description: Creation timestamp
-        completed_at:
-          type: string
-          format: date-time
-          title: Completed At
-          description: Completion timestamp
-      required:
-        - id
-        - status
-        - created_at
-      title: ResourceInfo
-      description: Metadata about the evaluation resource.
-    MLFlowExperimentId:
-      type: string
-      description: MLFlow experiment ID
-      title: Mlflow Experiment Id
-    EvaluationResource:
-      allOf:
-        - $ref: '#/components/schemas/ResourceInfo'
-        - type: object
-          properties:
-            mlflow_experiment_id:
-              $ref: '#/components/schemas/MLFlowExperimentId'
-      title: EvaluationResource
-      description: Resource information for an evaluation.
     BenchmarkResultPayload:
       properties:
         name:
@@ -504,6 +500,9 @@ components:
       properties:
         resource:
           $ref: '#/components/schemas/EvaluationResource'
+        status:
+          $ref: '#/components/schemas/Status'
+          description: Current status of the request
         results:
           $ref: '#/components/schemas/ResultsPayload'
       title: EvaluationResponseResults
