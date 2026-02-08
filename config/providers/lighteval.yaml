@@ -1,7 +1,7 @@
-provider_id: lighteval
-provider_name: Lighteval
+id: lighteval
+name: Lighteval
 description: Lightweight LLM evaluation framework from Hugging Face
-provider_type: builtin
+type: builtin
 runtime:
   k8s:
     image: quay.io/eval-hub/lighteval:latest
@@ -19,7 +19,7 @@ runtime:
     # reserved for local runtime
 
 benchmarks:
-  - benchmark_id: mmlu
+  - id: mmlu
     name: MMLU
     description: Massive Multitask Language Understanding - 57 subjects
     category: knowledge
@@ -32,7 +32,7 @@ benchmarks:
       - knowledge
       - multitask
       - lighteval
-  - benchmark_id: hellaswag
+  - id: hellaswag
     name: HellaSwag
     description: Commonsense reasoning around everyday activities
     category: reasoning
@@ -45,7 +45,7 @@ benchmarks:
       - reasoning
       - commonsense
       - lighteval
-  - benchmark_id: arc
+  - id: arc
     name: ARC
     description: AI2 Reasoning Challenge
     category: reasoning
@@ -58,7 +58,7 @@ benchmarks:
       - reasoning
       - science
       - lighteval
-  - benchmark_id: truthfulqa
+  - id: truthfulqa
     name: TruthfulQA
     description: Measures truthfulness and model hallucinations
     category: safety
@@ -71,7 +71,7 @@ benchmarks:
       - safety
       - truthfulness
       - lighteval
-  - benchmark_id: winogrande
+  - id: winogrande
     name: Winogrande
     description: Commonsense reasoning with pronoun resolution
     category: reasoning
@@ -83,7 +83,7 @@ benchmarks:
       - reasoning
       - commonsense
       - lighteval
-  - benchmark_id: gsm8k
+  - id: gsm8k
     name: GSM8K
     description: Grade School Math 8K - arithmetic reasoning
     category: math
@@ -96,7 +96,7 @@ benchmarks:
       - math
       - reasoning
       - lighteval
-  - benchmark_id: humaneval
+  - id: humaneval
     name: HumanEval
     description: Code generation benchmark with 164 programming problems
     category: code
@@ -109,7 +109,7 @@ benchmarks:
       - code
       - generation
       - lighteval
-  - benchmark_id: boolq
+  - id: boolq
     name: BoolQ
     description: Boolean questions for reading comprehension
     category: reading_comprehension
@@ -121,7 +121,7 @@ benchmarks:
       - reading_comprehension
       - boolean
       - lighteval
-  - benchmark_id: piqa
+  - id: piqa
     name: PIQA
     description: Physical Interaction QA - physical commonsense reasoning
     category: reasoning
@@ -133,7 +133,7 @@ benchmarks:
       - reasoning
       - physical
       - lighteval
-  - benchmark_id: openbookqa
+  - id: openbookqa
     name: OpenBookQA
     description: Question answering with open book knowledge
     category: knowledge
