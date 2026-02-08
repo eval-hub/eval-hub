@@ -12,7 +12,7 @@ import (
 func (h *Handlers) HandleListBenchmarks(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 
 	providerIdParam := r.Query("provider_id")
-	benchmarkIdParam := r.Query("benchmark_id")
+	benchmarkIdParam := r.Query("id")
 	categoryParam := r.Query("category")
 	tags := r.Query("tags")
 

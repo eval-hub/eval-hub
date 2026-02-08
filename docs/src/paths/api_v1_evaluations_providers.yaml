@@ -5,7 +5,7 @@ get:
   description: List all registered evaluation providers.
   operationId: list_providers_api_v1_evaluations_providers_get
   parameters:
-    - name: provider_id
+    - name: id
       in: query
       required: false
       schema:

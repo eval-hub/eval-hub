@@ -488,7 +488,7 @@
         "operationId": "list_providers_api_v1_evaluations_providers_get",
         "parameters": [
           {
-            "name": "provider_id",
+            "name": "id",
             "in": "query",
             "required": false,
             "schema": {
@@ -558,7 +558,7 @@
             "description": "Filter by provider ID"
           },
           {
-            "name": "benchmark_id",
+            "name": "id",
             "in": "query",
             "required": false,
             "schema": {

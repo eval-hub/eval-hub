@@ -8,14 +8,14 @@ Feature: Benchmarks Endpoint
     When I send a GET request to "/api/v1/evaluations/benchmarks"
     Then the response code should be 200
 
-  Scenario: Get benchmark for benchmark_id
+  Scenario: Get benchmark for benchmark id
     Given the service is running
-    When I send a GET request to "/api/v1/evaluations/benchmarks?benchmark_id=oops"
+    When I send a GET request to "/api/v1/evaluations/benchmarks?id=oops"
     Then the response should contain the value "0" at path "total_count"
 
-  Scenario: Get benchmark for benchmark_id and provider_id
+  Scenario: Get benchmark for id and provider_id
     Given the service is running
-    When I send a GET request to "/api/v1/evaluations/benchmarks?benchmark_id=toxicity&provider_id=garak"
+    When I send a GET request to "/api/v1/evaluations/benchmarks?id=toxicity&provider_id=garak"
     Then the response should contain the value "1" at path "total_count"
 
   Scenario: Get benchmarks for provider_id
