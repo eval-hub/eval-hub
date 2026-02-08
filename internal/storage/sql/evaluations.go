@@ -20,8 +20,8 @@ import (
 )
 
 type EvaluationJobEntity struct {
-	Config  *api.EvaluationJobConfig  `json:"config"`
-	Status  *api.EvaluationJobStatus  `json:"status"`
+	Config  *api.EvaluationJobConfig  `json:"config" validate:"required"`
+	Status  *api.EvaluationJobStatus  `json:"status,omitempty"`
 	Results *api.EvaluationJobResults `json:"results,omitempty"`
 }
 
@@ -32,26 +32,39 @@ type EvaluationJobEntity struct {
 // CreateEvaluationJob creates a new evaluation job in the database
 // the evaluation job is stored in the evaluations table as a JSON string
 // the evaluation job is returned as a EvaluationJobResource
-// This should use transactions etc and requires cleaning up
-func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobConfig, mlflowExperimentID string) (*api.EvaluationJobResource, error) {
+func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobConfig, mlflowExperimentID string) (*api.EvaluationJobResource, error) { // we have to get the evaluation job and update the status so we need a transaction
+	txn, err := s.pool.BeginTx(s.ctx, nil)
+	if err != nil {
+		s.logger.Error("Failed to begin create evaluation job transaction", "error", err)
+		return nil, serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", "<creation>", "Error", err.Error())
+	}
+	jobID := s.generateID()
+	committed := false
+	defer func() {
+		if !committed {
+			err := txn.Rollback()
+			if err != nil {
+				s.logger.Error("Failed to rollback create evaluation job transaction", "error", err, "id", jobID)
+			}
+		}
+	}()
+
 	tenant, err := s.getTenant()
 	if err != nil {
 		return nil, err
 	}
 
-	evaluationEntity := &EvaluationJobEntity{
-		Config: evaluation,
-		Status: &api.EvaluationJobStatus{
-			EvaluationJobState: api.EvaluationJobState{
-				State: api.OverallStatePending,
-				Message: &api.MessageInfo{
-					Message:     "Evaluation job created",
-					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CREATED,
-				},
+	status := &api.EvaluationJobStatus{
+		EvaluationJobState: api.EvaluationJobState{
+			State: api.OverallStatePending,
+			Message: &api.MessageInfo{
+				Message:     "Evaluation job created",
+				MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CREATED,
 			},
 		},
 	}
-	evaluationJSON, err := json.Marshal(evaluationEntity)
+
+	evaluationJSON, err := s.createEvaluationJobEntity(evaluation, status, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -59,68 +72,58 @@ func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobConfig, ml
 	if err != nil {
 		return nil, err
 	}
-	jobID := s.generateID()
 	s.logger.Info("Creating evaluation job", "id", jobID, "tenant", tenant, "status", api.StatePending, "experiment_id", mlflowExperimentID)
 	// (id, tenant_id, status, experiment_id, entity)
-	_, err = s.exec(nil, addEntityStatement, jobID, tenant, api.StatePending, mlflowExperimentID, string(evaluationJSON))
+	_, err = s.exec(txn, addEntityStatement, jobID, tenant, api.StatePending, mlflowExperimentID, string(evaluationJSON))
 	if err != nil {
 		return nil, err
 	}
-	evaluationResource := &api.EvaluationJobResource{
-		Resource: api.EvaluationResource{
-			Resource: api.Resource{
-				ID:        jobID,
-				Tenant:    api.Tenant(tenant),
-				CreatedAt: time.Now(),
-				UpdatedAt: time.Now(),
-			},
-			MLFlowExperimentID: mlflowExperimentID,
-			Message:            evaluationEntity.Status.Message,
-		},
-		EvaluationJobConfig: *evaluation,
-		Results:             nil,
+
+	// now get the evaluation job so that we don't have to recreate it by hand
+	evaluationJob, err := s.getEvaluationJobTransactional(txn, jobID)
+	if err != nil {
+		return nil, err
 	}
-	return evaluationResource, nil
+
+	if err := txn.Commit(); err != nil {
+		s.logger.Error("Failed to commit create evaluation transaction", "error", err, "id", jobID)
+		return nil, serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", jobID, "Error", err.Error())
+	}
+	committed = true
+
+	return evaluationJob, nil
+}
+
+func (s *SQLStorage) createEvaluationJobEntity(evaluation *api.EvaluationJobConfig, status *api.EvaluationJobStatus, results *api.EvaluationJobResults) ([]byte, error) {
+	evaluationEntity := &EvaluationJobEntity{
+		Config:  evaluation,
+		Status:  status,
+		Results: results,
+	}
+	evaluationJSON, err := json.Marshal(evaluationEntity)
+	if err != nil {
+		return nil, serviceerrors.NewServiceError(messages.InternalServerError, "Error", err.Error())
+	}
+	return evaluationJSON, nil
 }
 
 func (s *SQLStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, error) {
-	// Build the SELECT query
-	selectQuery, err := createGetEntityStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS)
-	if err != nil {
-		return nil, err
-	}
-
-	// Query the database
-	var dbID string
-	var createdAt, updatedAt time.Time
-	var statusStr string
-	var experimentID string
-	var entityJSON string
-
-	err = s.pool.QueryRowContext(s.ctx, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &statusStr, &experimentID, &entityJSON)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
-		}
-		// For now we differentiate between no rows found and other errors but this might be confusing
-		s.logger.Error("Failed to get evaluation job", "error", err, "id", id)
-		return nil, serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
-	}
-
-	// Unmarshal the entity JSON into EvaluationJobConfig
-	var evaluationEntity EvaluationJobEntity
-	err = json.Unmarshal([]byte(entityJSON), &evaluationEntity)
-	if err != nil {
-		s.logger.Error("Failed to unmarshal evaluation job entity", "error", err, "id", id)
-		return nil, serviceerrors.NewServiceError(messages.JSONUnmarshalFailed, "Type", "evaluation job", "Error", err.Error())
-	}
-
-	evaluationResource := constructEvaluationResource(statusStr, nil, dbID, createdAt, updatedAt, experimentID, evaluationEntity)
-
-	return evaluationResource, nil
+	return s.getEvaluationJobTransactional(nil, id)
 }
 
-func constructEvaluationResource(statusStr string, message *api.MessageInfo, dbID string, createdAt time.Time, updatedAt time.Time, experimentID string, evaluationEntity EvaluationJobEntity) *api.EvaluationJobResource {
+func (s *SQLStorage) constructEvaluationResource(statusStr string, message *api.MessageInfo, dbID string, createdAt time.Time, updatedAt time.Time, experimentID string, evaluationEntity *EvaluationJobEntity) (*api.EvaluationJobResource, error) {
+	if evaluationEntity == nil {
+		s.logger.Error("Failed to construct evaluation job resource", "error", "Evaluation entity does not exist", "id", dbID)
+		return nil, serviceerrors.NewServiceError(messages.InternalServerError, "Error", "Evaluation entity does not exist")
+	}
+	if evaluationEntity.Config == nil {
+		s.logger.Error("Failed to construct evaluation job resource", "error", "Evaluation config does not exist", "id", dbID)
+		return nil, serviceerrors.NewServiceError(messages.InternalServerError, "Error", "Evaluation config does not exist")
+	}
+	if evaluationEntity.Status == nil {
+		evaluationEntity.Status = &api.EvaluationJobStatus{}
+	}
+
 	if message == nil {
 		message = evaluationEntity.Status.Message
 	}
@@ -149,7 +152,7 @@ func constructEvaluationResource(statusStr string, message *api.MessageInfo, dbI
 		EvaluationJobConfig: *evaluationEntity.Config,
 		Results:             evaluationEntity.Results,
 	}
-	return evaluationResource
+	return evaluationResource, nil
 }
 
 func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api.EvaluationJobResource, error) {
@@ -166,7 +169,11 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 	var experimentID string
 	var entityJSON string
 
-	err = txn.QueryRowContext(s.ctx, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &statusStr, &experimentID, &entityJSON)
+	if txn != nil {
+		err = txn.QueryRowContext(s.ctx, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &statusStr, &experimentID, &entityJSON)
+	} else {
+		err = s.pool.QueryRowContext(s.ctx, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &statusStr, &experimentID, &entityJSON)
+	}
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
@@ -177,16 +184,14 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 	}
 
 	// Unmarshal the entity JSON into EvaluationJobConfig
-	var evaluationEntity EvaluationJobEntity
-	err = json.Unmarshal([]byte(entityJSON), &evaluationEntity)
+	var evaluationJobEntity EvaluationJobEntity
+	err = json.Unmarshal([]byte(entityJSON), &evaluationJobEntity)
 	if err != nil {
 		s.logger.Error("Failed to unmarshal evaluation job entity", "error", err, "id", id)
 		return nil, serviceerrors.NewServiceError(messages.JSONUnmarshalFailed, "Type", "evaluation job", "Error", err.Error())
 	}
 
-	evaluationResource := constructEvaluationResource(statusStr, nil, dbID, createdAt, updatedAt, experimentID, evaluationEntity)
-
-	return evaluationResource, nil
+	return s.constructEvaluationResource(statusStr, nil, dbID, createdAt, updatedAt, experimentID, &evaluationJobEntity)
 }
 
 func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter string) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
@@ -245,24 +250,13 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter strin
 		}
 
 		// Construct the EvaluationJobResource
-		// Note: Results and Benchmarks are initialized with defaults since they're not stored in the entity column
-		resource := api.EvaluationJobResource{
-			Resource: api.EvaluationResource{
-				Resource: api.Resource{
-					ID:        dbID,
-					Tenant:    "TODO", // TODO: 	retrieve tenant from database or context
-					CreatedAt: createdAt,
-					UpdatedAt: updatedAt,
-				},
-				MLFlowExperimentID: experimentID,
-				Message:            evaluationJobEntity.Status.Message,
-			},
-			Status:              evaluationJobEntity.Status,
-			Results:             evaluationJobEntity.Results,
-			EvaluationJobConfig: *evaluationJobEntity.Config,
+		resource, err := s.constructEvaluationResource(statusStr, nil, dbID, createdAt, updatedAt, experimentID, &evaluationJobEntity)
+		if err != nil {
+			s.logger.Error("Failed to construct evaluation job resource", "error", err, "id", dbID)
+			return nil, serviceerrors.NewServiceError(messages.InternalServerError, "Error", err.Error())
 		}
 
-		items = append(items, resource)
+		items = append(items, *resource)
 	}
 
 	if err = rows.Err(); err != nil {
@@ -302,25 +296,57 @@ func (s *SQLStorage) DeleteEvaluationJob(id string, hardDelete bool) error {
 }
 
 func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error {
-	// Build the UPDATE query
-	updateQuery, err := createUpdateStatusStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS)
+	// we have to get the evaluation job and update the status so we need a transaction
+	txn, err := s.pool.BeginTx(s.ctx, nil)
+	if err != nil {
+		s.logger.Error("Failed to begin update evaluation job status transaction", "error", err, "id", id)
+		return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			err := txn.Rollback()
+			if err != nil {
+				s.logger.Error("Failed to rollback update evaluation job status transaction", "error", err, "id", id)
+			}
+		}
+	}()
+
+	evaluationJob, err := s.getEvaluationJobTransactional(txn, id)
+	if err != nil {
+		return err
+	}
+	evaluationJob.Status.State = state
+	evaluationJob.Status.Message = message
+
+	entity := EvaluationJobEntity{
+		Config:  &evaluationJob.EvaluationJobConfig,
+		Status:  evaluationJob.Status,
+		Results: evaluationJob.Results,
+	}
+
+	err = s.updateEvaluationJobTransactional(txn, id, state, &entity)
 	if err != nil {
 		return err
 	}
 
-	// Execute the UPDATE query
-	_, err = s.exec(nil, updateQuery, state, id)
-	if err != nil {
-		s.logger.Error("Failed to update evaluation job status", "error", err, "id", id, "status", state)
+	if err := txn.Commit(); err != nil {
+		s.logger.Error("Failed to commit update evaluation job status transaction", "error", err, "id", id)
 		return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
 	}
+	committed = true
 
-	s.logger.Info("Updated evaluation job status", "id", id, "status", state)
+	s.logger.Info("Committed update evaluation job status transaction", "id", id)
 	return nil
 }
 
-func (s *SQLStorage) updateEvaluationJobTransactional(txn *sql.Tx, id string, status api.OverallState, entityJSON string) error {
-	updateQuery, args, err := CreateUpdateEvaluationStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, id, status, entityJSON)
+func (s *SQLStorage) updateEvaluationJobTransactional(txn *sql.Tx, id string, status api.OverallState, evaluationJob *EvaluationJobEntity) error {
+	entityJSON, err := json.Marshal(evaluationJob)
+	if err != nil {
+		// we should never get here
+		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err.Error())
+	}
+	updateQuery, args, err := CreateUpdateEvaluationStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, id, status, string(entityJSON))
 	if err != nil {
 		return err
 	}
@@ -335,14 +361,58 @@ func (s *SQLStorage) updateEvaluationJobTransactional(txn *sql.Tx, id string, st
 	return nil
 }
 
+func updateBenchmarkStatus(job *api.EvaluationJobResource, runStatus *api.StatusEvent, benchmarkStatus *api.BenchmarkStatus) {
+	if job.Status == nil {
+		job.Status = &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{
+				State: api.OverallStatePending,
+			},
+		}
+	}
+	if job.Status.Benchmarks == nil {
+		job.Status.Benchmarks = make([]*api.BenchmarkStatus, 0)
+	}
+	for index, benchmark := range job.Status.Benchmarks {
+		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID {
+			job.Status.Benchmarks[index] = benchmarkStatus
+			return
+		}
+	}
+	job.Status.Benchmarks = append(job.Status.Benchmarks, benchmarkStatus)
+}
+
+func updateBenchmarkResults(job *api.EvaluationJobResource, runStatus *api.StatusEvent, result *api.BenchmarkResult) {
+	if job.Results == nil {
+		job.Results = &api.EvaluationJobResults{}
+	}
+	if job.Results.Benchmarks == nil {
+		job.Results.Benchmarks = make([]*api.BenchmarkResult, 0)
+	}
+	for index, benchmark := range job.Results.Benchmarks {
+		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID {
+			job.Results.Benchmarks[index] = result
+			return
+		}
+	}
+	job.Results.Benchmarks = append(job.Results.Benchmarks, result)
+}
+
 // UpdateEvaluationJobWithRunStatus runs in a transaction: fetches the job, merges RunStatusInternal into the entity, and persists.
 func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
 	txn, err := s.pool.BeginTx(s.ctx, nil)
 	if err != nil {
-		s.logger.Error("Failed to begin transaction", "error", err, "id", id)
+		s.logger.Error("Failed to begin update evaluation job transaction", "error", err, "id", id)
 		return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
 	}
-	defer func() { _ = txn.Rollback() }()
+	committed := false
+	defer func() {
+		if !committed {
+			err := txn.Rollback()
+			if err != nil {
+				s.logger.Error("Failed to rollback update evaluation job transaction", "error", err, "id", id)
+			}
+		}
+	}()
 
 	job, err := s.getEvaluationJobTransactional(txn, id)
 	if err != nil {
@@ -354,33 +424,50 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 		return err
 	}
 
-	updateBenchMarkProgress(job, runStatus)
-
-	overallState, message := getOverallJobStatus(job)
-
-	updatedEntityJSON, err := json.Marshal(&EvaluationJobEntity{
-		Config: &job.EvaluationJobConfig,
-		Status: &api.EvaluationJobStatus{
-			EvaluationJobState: api.EvaluationJobState{
-				State:   overallState,
-				Message: message,
-			},
-			Benchmarks: job.Status.Benchmarks,
-		},
-		Results: job.Results,
-	})
-	if err != nil {
-		s.logger.Error("Failed to marshal updated job resource", "error", err, "id", id)
-		return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
+	// first we store the benchmark status
+	benchmark := api.BenchmarkStatus{
+		ProviderID:   runStatus.BenchmarkStatusEvent.ProviderID,
+		ID:           runStatus.BenchmarkStatusEvent.ID,
+		Status:       runStatus.BenchmarkStatusEvent.Status,
+		ErrorMessage: runStatus.BenchmarkStatusEvent.ErrorMessage,
+		StartedAt:    runStatus.BenchmarkStatusEvent.StartedAt,
+		CompletedAt:  runStatus.BenchmarkStatusEvent.CompletedAt,
 	}
-	if err := s.updateEvaluationJobTransactional(txn, id, overallState, string(updatedEntityJSON)); err != nil {
+	updateBenchmarkStatus(job, runStatus, &benchmark)
+
+	// if the run status is completed, failed, or cancelled, we need to update the results
+	if runStatus.BenchmarkStatusEvent.Status == api.StateCompleted || runStatus.BenchmarkStatusEvent.Status == api.StateFailed || runStatus.BenchmarkStatusEvent.Status == api.StateCancelled {
+		result := api.BenchmarkResult{
+			ID:          runStatus.BenchmarkStatusEvent.ID,
+			ProviderID:  runStatus.BenchmarkStatusEvent.ProviderID,
+			Metrics:     runStatus.BenchmarkStatusEvent.Metrics,
+			Artifacts:   runStatus.BenchmarkStatusEvent.Artifacts,
+			MLFlowRunID: runStatus.BenchmarkStatusEvent.MLFlowRunID,
+			LogsPath:    runStatus.BenchmarkStatusEvent.LogsPath,
+		}
+		updateBenchmarkResults(job, runStatus, &result)
+	}
+
+	// get the overall job status
+	overallState, message := getOverallJobStatus(job)
+	job.Status.State = overallState
+	job.Status.Message = message
+
+	entity := EvaluationJobEntity{
+		Config:  &job.EvaluationJobConfig,
+		Status:  job.Status,
+		Results: job.Results,
+	}
+
+	if err := s.updateEvaluationJobTransactional(txn, id, overallState, &entity); err != nil {
 		return err
 	}
 
 	if err := txn.Commit(); err != nil {
-		s.logger.Error("Failed to commit transaction", "error", err, "id", id)
+		s.logger.Error("Failed to commit update evaluation job transaction", "error", err, "id", id)
 		return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
 	}
+	committed = true
 	return nil
 }
 
@@ -431,83 +518,5 @@ func getOverallJobStatus(job *api.EvaluationJobResource) (api.OverallState, *api
 	return overallState, &api.MessageInfo{
 		Message:     stateMessage,
 		MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
-	}
-}
-
-func updateBenchMarkProgress(jobResource *api.EvaluationJobResource, runStatus *api.StatusEvent) {
-	if jobResource.Results == nil {
-		jobResource.Results = &api.EvaluationJobResults{}
-	}
-	jobResource.Status.Benchmarks = findAndUpdateBenchmarkStatus(jobResource.Status.Benchmarks, runStatus)
-	findAndUpdateBenchmarkResults(jobResource.Results, runStatus)
-}
-
-func findAndUpdateBenchmarkStatus(benchmarkStatus []api.BenchmarkStatus, runStatus *api.StatusEvent) []api.BenchmarkStatus {
-	found := false
-	for i := range benchmarkStatus {
-		status := &benchmarkStatus[i]
-		if status.ID == runStatus.BenchmarkStatusEvent.ID {
-			prevStatus := status.Status
-			status.Status = runStatus.BenchmarkStatusEvent.Status
-			if prevStatus == api.StatePending && runStatus.BenchmarkStatusEvent.Status == api.StateRunning {
-				status.StartedAt = runStatus.BenchmarkStatusEvent.StartedAt
-			}
-			if runStatus.BenchmarkStatusEvent.Status == api.StateCompleted {
-				status.CompletedAt = runStatus.BenchmarkStatusEvent.CompletedAt
-			}
-			if runStatus.BenchmarkStatusEvent.Status == api.StateFailed && runStatus.BenchmarkStatusEvent.ErrorMessage != nil {
-				status.ErrorMessage = &api.MessageInfo{
-					Message:     runStatus.BenchmarkStatusEvent.ErrorMessage.Message,
-					MessageCode: runStatus.BenchmarkStatusEvent.ErrorMessage.MessageCode,
-				}
-			}
-			found = true
-			break
-		}
-	}
-	if !found {
-		// if the benchmark is not found, create a new benchmark status
-		newBenchmarkStatus := api.BenchmarkStatus{
-			ProviderID: runStatus.BenchmarkStatusEvent.ProviderID,
-			ID:         runStatus.BenchmarkStatusEvent.ID,
-			Status:     runStatus.BenchmarkStatusEvent.Status,
-		}
-		if runStatus.BenchmarkStatusEvent.Status == api.StateFailed && runStatus.BenchmarkStatusEvent.ErrorMessage != nil {
-			newBenchmarkStatus.ErrorMessage = &api.MessageInfo{
-				Message:     runStatus.BenchmarkStatusEvent.ErrorMessage.Message,
-				MessageCode: runStatus.BenchmarkStatusEvent.ErrorMessage.MessageCode,
-			}
-		}
-		benchmarkStatus = append(benchmarkStatus, newBenchmarkStatus)
-	}
-	return benchmarkStatus
-}
-
-func findAndUpdateBenchmarkResults(benchmarkResults *api.EvaluationJobResults, runStatus *api.StatusEvent) {
-	if benchmarkResults == nil {
-		return
-	}
-	found := false
-	for i := range benchmarkResults.Benchmarks {
-		result := &benchmarkResults.Benchmarks[i]
-		if result.ID == runStatus.BenchmarkStatusEvent.ID {
-			if runStatus.BenchmarkStatusEvent.Status == api.StateCompleted {
-				result.Metrics = runStatus.BenchmarkStatusEvent.Metrics
-				result.Artifacts = runStatus.BenchmarkStatusEvent.Artifacts
-			}
-			found = true
-			break
-		}
-	}
-	if !found {
-		newBenchmarkResult := api.BenchmarkResult{
-			ProviderID:  runStatus.BenchmarkStatusEvent.ProviderID,
-			ID:          runStatus.BenchmarkStatusEvent.ID,
-			Metrics:     runStatus.BenchmarkStatusEvent.Metrics,
-			Artifacts:   runStatus.BenchmarkStatusEvent.Artifacts,
-			MLFlowRunID: runStatus.BenchmarkStatusEvent.MLFlowRunID,
-			LogsPath:    runStatus.BenchmarkStatusEvent.LogsPath,
-		}
-		benchmarkResults.Benchmarks = append(benchmarkResults.Benchmarks, newBenchmarkResult)
 	}
 }

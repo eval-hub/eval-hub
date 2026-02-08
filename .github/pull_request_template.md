@@ -33,6 +33,7 @@ Please mark the relevant component(s):
 - [ ] Kubernetes/OpenShift deployment
 - [ ] Configuration system
 - [ ] Monitoring/metrics
+- [ ] Storage
 - [ ] Documentation
 - [ ] Tests
 - [ ] CI/CD

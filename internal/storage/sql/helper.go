@@ -151,23 +151,6 @@ func createListEntitiesStatement(driver, tableName string, limit, offset int, st
 	return query, args, nil
 }
 
-// createUpdateStatusStatement returns a driver-specific UPDATE statement
-// to update the status of an entity by ID
-func createUpdateStatusStatement(driver, tableName string) (string, error) {
-	quotedTable := quoteIdentifier(driver, tableName)
-
-	switch driver {
-	case POSTGRES_DRIVER:
-		// PostgreSQL: use $1, $2 placeholders
-		return fmt.Sprintf(`UPDATE %s SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2;`, quotedTable), nil
-	case SQLITE_DRIVER:
-		// SQLite: use ? placeholders
-		return fmt.Sprintf(`UPDATE %s SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;`, quotedTable), nil
-	default:
-		return "", getUnsupportedDriverError(driver)
-	}
-}
-
 // CreateUpdateEvaluationStatement returns a driver-specific UPDATE statement for the evaluations table,
 // setting only the non-empty fields (status, entity) and updated_at, filtered by id.
 // If status is empty, the query does not set status; if entityJSON is empty, the query does not set entity.

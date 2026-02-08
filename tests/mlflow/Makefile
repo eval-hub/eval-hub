@@ -1,4 +1,8 @@
-.PHONY: install-mlflow run-mlflow stop-mlflow cls test-godog-server
+.PHONY: clean install-mlflow run-mlflow stop-mlflow cls test-godog-server
+
+clean:
+	@echo "🧹 Cleaning up MLflow server..."
+	@rm -fr bin
 
 ## install-mlflow: Download and install MLflow server
 install-mlflow:

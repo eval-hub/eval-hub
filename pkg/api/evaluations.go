@@ -87,30 +87,39 @@ type BenchmarkStatusLogs struct {
 	Path string `json:"path,omitempty"`
 }
 
+// for marshalling and unmarshalling
+type DateTime string
+
+func DateTimeToString(date time.Time) DateTime {
+	return DateTime(date.Format("2006-01-02T15:04:05Z07:00"))
+}
+
+func DateTimeFromString(date DateTime) (time.Time, error) {
+	return time.Parse("2006-01-02T15:04:05Z07:00", string(date))
+}
+
 // BenchmarkStatus represents status of individual benchmark in evaluation
 type BenchmarkStatus struct {
-	ProviderID      string       `json:"provider_id"`
-	ID              string       `json:"id"`
-	Status          State        `json:"status,omitempty"`
-	ErrorMessage    *MessageInfo `json:"error_message,omitempty"`
-	StartedAt       *time.Time   `json:"started_at,omitempty"`
-	CompletedAt     *time.Time   `json:"completed_at,omitempty"`
-	DurationSeconds int64        `json:"duration_seconds,omitempty"`
+	ProviderID   string       `json:"provider_id"`
+	ID           string       `json:"id"`
+	Status       State        `json:"status,omitempty"`
+	ErrorMessage *MessageInfo `json:"error_message,omitempty"`
+	StartedAt    DateTime     `json:"started_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
+	CompletedAt  DateTime     `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
 }
 
 // BenchmarkStatusEvent is used when the job runtime needs to updated the status of a benchmark
 type BenchmarkStatusEvent struct {
-	ProviderID      string         `json:"provider_id"`
-	ID              string         `json:"id"`
-	Status          State          `json:"status,omitempty"`
-	Metrics         map[string]any `json:"metrics,omitempty"`
-	Artifacts       map[string]any `json:"artifacts,omitempty"`
-	ErrorMessage    *MessageInfo   `json:"error_message,omitempty"`
-	StartedAt       *time.Time     `json:"started_at,omitempty"`
-	CompletedAt     *time.Time     `json:"completed_at,omitempty"`
-	DurationSeconds int64          `json:"duration_seconds,omitempty"`
-	MLFlowRunID     string         `json:"mlflow_run_id,omitempty"`
-	LogsPath        string         `json:"logs_path,omitempty"`
+	ProviderID   string         `json:"provider_id"`
+	ID           string         `json:"id"`
+	Status       State          `json:"status,omitempty"`
+	Metrics      map[string]any `json:"metrics,omitempty"`
+	Artifacts    map[string]any `json:"artifacts,omitempty"`
+	ErrorMessage *MessageInfo   `json:"error_message,omitempty"`
+	StartedAt    DateTime       `json:"started_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
+	CompletedAt  DateTime       `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
+	MLFlowRunID  string         `json:"mlflow_run_id,omitempty"`
+	LogsPath     string         `json:"logs_path,omitempty"`
 }
 
 type EvaluationJobState struct {
@@ -133,11 +142,11 @@ type BenchmarkResult struct {
 
 // EvaluationJobResults represents results section for EvaluationJobResource
 type EvaluationJobResults struct {
-	TotalEvaluations     int               `json:"total_evaluations"`
-	CompletedEvaluations int               `json:"completed_evaluations,omitempty"`
-	FailedEvaluations    int               `json:"failed_evaluations,omitempty"`
-	Benchmarks           []BenchmarkResult `json:"benchmarks,omitempty" validate:"omitempty,dive"`
-	MLFlowExperimentURL  *string           `json:"mlflow_experiment_url,omitempty"`
+	TotalEvaluations     int                `json:"total_evaluations"`
+	CompletedEvaluations int                `json:"completed_evaluations,omitempty"`
+	FailedEvaluations    int                `json:"failed_evaluations,omitempty"`
+	Benchmarks           []*BenchmarkResult `json:"benchmarks,omitempty" validate:"omitempty,dive"`
+	MLFlowExperimentURL  *string            `json:"mlflow_experiment_url,omitempty"`
 }
 
 // EvaluationJobConfig represents evaluation job request schema
@@ -148,6 +157,7 @@ type EvaluationJobConfig struct {
 	Experiment     *ExperimentConfig `json:"experiment,omitempty"`
 	TimeoutMinutes *int              `json:"timeout_minutes,omitempty"`
 	RetryAttempts  *int              `json:"retry_attempts,omitempty"`
+	Custom         map[string]any    `json:"custom,omitempty"`
 }
 
 type EvaluationResource struct {
@@ -158,7 +168,7 @@ type EvaluationResource struct {
 
 type EvaluationJobStatus struct {
 	EvaluationJobState
-	Benchmarks []BenchmarkStatus `json:"benchmarks,omitempty"`
+	Benchmarks []*BenchmarkStatus `json:"benchmarks,omitempty"`
 }
 
 // EvaluationJobResource represents evaluation job resource response
