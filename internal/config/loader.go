@@ -126,13 +126,13 @@ func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.Pr
 			return nil, err
 		}
 
-		if providerConfig.Id == "" {
+		if providerConfig.ID == "" {
 			logger.Warn("Provider config missing id, skipping", "file", file.Name())
 			continue
 		}
 
-		providerConfigs[providerConfig.Id] = providerConfig
-		logger.Info("Provider loaded", "provider_id", providerConfig.Id)
+		providerConfigs[providerConfig.ID] = providerConfig
+		logger.Info("Provider loaded", "provider_id", providerConfig.ID)
 	}
 
 	return providerConfigs, nil

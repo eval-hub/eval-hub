@@ -2,7 +2,7 @@ package api
 
 // Provider contains the configuration details for an evaluation provider.
 type ProviderResource struct {
-	Id          string              `mapstructure:"id" yaml:"id" json:"id"`
+	ID          string              `mapstructure:"id" yaml:"id" json:"id"`
 	Name        string              `mapstructure:"name" yaml:"name" json:"name"`
 	Description string              `mapstructure:"description" yaml:"description" json:"description"`
 	Type        string              `mapstructure:"type" yaml:"type" json:"type"`
