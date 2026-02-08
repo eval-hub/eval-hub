@@ -4,34 +4,110 @@ description: Lightweight LLM evaluation framework from Hugging Face
 type: builtin
 runtime:
   k8s:
-    image: quay.io/eval-hub/lighteval:latest
+    image: quay.io/evalhub/community-lighteval:latest
     entrypoint:
       - python
-      - /opt/app-root/src/main.py
+      - main.py
     cpu_request: 100m
     memory_request: 128Mi
     cpu_limit: 500m
     memory_limit: 1Gi
-    env:
-      - name: VAR_NAME
-        value: VALUE
   local:
     # reserved for local runtime
 
 benchmarks:
-  - id: mmlu
-    name: MMLU
-    description: Massive Multitask Language Understanding - 57 subjects
+  # Category benchmarks (these expand to multiple tasks)
+  - id: commonsense_reasoning
+    name: Commonsense Reasoning Suite
+    description: Suite of commonsense reasoning benchmarks (hellaswag, winogrande, openbookqa, arc:easy)
+    category: reasoning
+    metrics:
+      - accuracy
+      - acc_norm
+    tags:
+      - reasoning
+      - commonsense
+      - lighteval
+      - suite
+
+  - id: scientific_reasoning
+    name: Scientific Reasoning Suite
+    description: Scientific reasoning benchmarks (arc:easy, arc:challenge)
+    category: reasoning
+    metrics:
+      - accuracy
+      - acc_norm
+    tags:
+      - reasoning
+      - science
+      - lighteval
+      - suite
+
+  - id: physical_commonsense
+    name: Physical Commonsense Suite
+    description: Physical commonsense reasoning (piqa)
+    category: reasoning
+    metrics:
+      - accuracy
+    tags:
+      - reasoning
+      - physical
+      - lighteval
+      - suite
+
+  - id: truthfulness
+    name: Truthfulness Suite
+    description: Truthfulness and hallucination benchmarks (truthfulqa:mc, truthfulqa:generation)
+    category: safety
+    metrics:
+      - mc1
+      - mc2
+    tags:
+      - safety
+      - truthfulness
+      - lighteval
+      - suite
+
+  - id: math
+    name: Math Suite
+    description: Mathematical reasoning benchmarks (gsm8k, math:algebra, math:counting_and_probability)
+    category: math
+    metrics:
+      - exact_match
+      - accuracy
+    tags:
+      - math
+      - reasoning
+      - lighteval
+      - suite
+
+  - id: knowledge
+    name: Knowledge Suite
+    description: Knowledge benchmarks (mmlu, triviaqa)
     category: knowledge
     metrics:
       - accuracy
       - acc_norm
-    num_few_shot: 5
-    dataset_size: 15908
     tags:
       - knowledge
-      - multitask
       - lighteval
+      - suite
+
+  - id: language_understanding
+    name: Language Understanding Suite
+    description: GLUE language understanding tasks (glue:cola, glue:sst2, glue:mrpc)
+    category: language_understanding
+    metrics:
+      - accuracy
+      - matthews_correlation
+      - f1
+    tags:
+      - language_understanding
+      - glue
+      - lighteval
+      - suite
+
+  # Individual benchmarks
   - id: hellaswag
     name: HellaSwag
     description: Commonsense reasoning around everyday activities
@@ -45,32 +121,7 @@ benchmarks:
       - reasoning
       - commonsense
       - lighteval
-  - id: arc
-    name: ARC
-    description: AI2 Reasoning Challenge
-    category: reasoning
-    metrics:
-      - accuracy
-      - acc_norm
-    num_few_shot: 0
-    dataset_size: 3548
-    tags:
-      - reasoning
-      - science
-      - lighteval
-  - id: truthfulqa
-    name: TruthfulQA
-    description: Measures truthfulness and model hallucinations
-    category: safety
-    metrics:
-      - mc1
-      - mc2
-    num_few_shot: 0
-    dataset_size: 817
-    tags:
-      - safety
-      - truthfulness
-      - lighteval
+
   - id: winogrande
     name: Winogrande
     description: Commonsense reasoning with pronoun resolution
@@ -83,6 +134,90 @@ benchmarks:
       - reasoning
       - commonsense
       - lighteval
+
+  - id: openbookqa
+    name: OpenBookQA
+    description: Question answering with open book knowledge
+    category: knowledge
+    metrics:
+      - accuracy
+      - acc_norm
+    num_few_shot: 0
+    dataset_size: 500
+    tags:
+      - knowledge
+      - qa
+      - lighteval
+
+  - id: arc:easy
+    name: ARC Easy
+    description: AI2 Reasoning Challenge - Easy subset
+    category: reasoning
+    metrics:
+      - accuracy
+      - acc_norm
+    num_few_shot: 0
+    dataset_size: 2376
+    tags:
+      - reasoning
+      - science
+      - lighteval
+
+  - id: arc:challenge
+    name: ARC Challenge
+    description: AI2 Reasoning Challenge - Challenge subset
+    category: reasoning
+    metrics:
+      - accuracy
+      - acc_norm
+    num_few_shot: 0
+    dataset_size: 1172
+    tags:
+      - reasoning
+      - science
+      - lighteval
+
+  - id: piqa
+    name: PIQA
+    description: Physical Interaction QA - physical commonsense reasoning
+    category: reasoning
+    metrics:
+      - accuracy
+    num_few_shot: 0
+    dataset_size: 1838
+    tags:
+      - reasoning
+      - physical
+      - lighteval
+
+  - id: truthfulqa:mc
+    name: TruthfulQA MC
+    description: Measures truthfulness with multiple choice format
+    category: safety
+    metrics:
+      - mc1
+      - mc2
+    num_few_shot: 0
+    dataset_size: 817
+    tags:
+      - safety
+      - truthfulness
+      - lighteval
+
+  - id: truthfulqa:generation
+    name: TruthfulQA Generation
+    description: Measures truthfulness with generation format
+    category: safety
+    metrics:
+      - bleu
+      - rouge
+    num_few_shot: 0
+    dataset_size: 817
+    tags:
+      - safety
+      - truthfulness
+      - lighteval
+
   - id: gsm8k
     name: GSM8K
     description: Grade School Math 8K - arithmetic reasoning
@@ -96,53 +231,93 @@ benchmarks:
       - math
       - reasoning
       - lighteval
-  - id: humaneval
-    name: HumanEval
-    description: Code generation benchmark with 164 programming problems
-    category: code
-    metrics:
-      - pass_at_1
-      - pass_at_10
-    num_few_shot: 0
-    dataset_size: 164
-    tags:
-      - code
-      - generation
-      - lighteval
-  - id: boolq
-    name: BoolQ
-    description: Boolean questions for reading comprehension
-    category: reading_comprehension
+
+  - id: math:algebra
+    name: MATH Algebra
+    description: Mathematical reasoning - Algebra subset
+    category: math
     metrics:
       - accuracy
     num_few_shot: 0
-    dataset_size: 3270
     tags:
-      - reading_comprehension
-      - boolean
+      - math
+      - algebra
       - lighteval
-  - id: piqa
-    name: PIQA
-    description: Physical Interaction QA - physical commonsense reasoning
-    category: reasoning
+
+  - id: math:counting_and_probability
+    name: MATH Counting & Probability
+    description: Mathematical reasoning - Counting and Probability subset
+    category: math
     metrics:
       - accuracy
     num_few_shot: 0
-    dataset_size: 1838
     tags:
-      - reasoning
-      - physical
+      - math
+      - probability
       - lighteval
-  - id: openbookqa
-    name: OpenBookQA
-    description: Question answering with open book knowledge
+
+  - id: mmlu
+    name: MMLU
+    description: Massive Multitask Language Understanding - 57 subjects
     category: knowledge
     metrics:
       - accuracy
       - acc_norm
+    num_few_shot: 5
+    dataset_size: 15908
+    tags:
+      - knowledge
+      - multitask
+      - lighteval
+
+  - id: triviaqa
+    name: TriviaQA
+    description: Large-scale question answering dataset
+    category: knowledge
+    metrics:
+      - accuracy
+      - exact_match
     num_few_shot: 0
-    dataset_size: 500
     tags:
       - knowledge
       - qa
+      - lighteval
+
+  - id: glue:cola
+    name: GLUE CoLA
+    description: Corpus of Linguistic Acceptability
+    category: language_understanding
+    metrics:
+      - matthews_correlation
+    num_few_shot: 0
+    tags:
+      - language_understanding
+      - glue
+      - lighteval
+
+  - id: glue:sst2
+    name: GLUE SST-2
+    description: Stanford Sentiment Treebank
+    category: language_understanding
+    metrics:
+      - accuracy
+    num_few_shot: 0
+    tags:
+      - language_understanding
+      - glue
+      - sentiment
+      - lighteval
+
+  - id: glue:mrpc
+    name: GLUE MRPC
+    description: Microsoft Research Paraphrase Corpus
+    category: language_understanding
+    metrics:
+      - accuracy
+      - f1
+    num_few_shot: 0
+    tags:
+      - language_understanding
+      - glue
+      - paraphrase
       - lighteval

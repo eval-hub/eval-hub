@@ -1,7 +1,7 @@
-provider_id: guidellm
-provider_name: GuideLLM
+id: guidellm
+name: GuideLLM
 description: Performance benchmarking framework for LLM inference servers
-provider_type: builtin
+type: builtin
 runtime:
   k8s:
     image: quay.io/evalhub/community-guidellm:latest
@@ -17,7 +17,7 @@ runtime:
 
 benchmarks:
   # Execution profiles - comprehensive performance testing
-  - benchmark_id: sweep
+  - id: sweep
     name: Sweep Profile
     description: Automatically finds optimal request rate by sweeping from low to high concurrency
     category: performance
@@ -34,7 +34,7 @@ benchmarks:
       - guidellm
       - auto
 
-  - benchmark_id: throughput
+  - id: throughput
     name: Throughput Profile
     description: Measures maximum throughput by gradually increasing request rate until saturation
     category: performance
@@ -50,7 +50,7 @@ benchmarks:
       - guidellm
       - saturation
 
-  - benchmark_id: concurrent
+  - id: concurrent
     name: Concurrent Profile
     description: Tests performance with fixed number of concurrent requests
     category: performance
@@ -65,7 +65,7 @@ benchmarks:
       - concurrency
       - guidellm
 
-  - benchmark_id: constant
+  - id: constant
     name: Constant Rate Profile
     description: Maintains constant request rate throughout benchmark duration
     category: performance
@@ -80,7 +80,7 @@ benchmarks:
       - constant_rate
       - guidellm
 
-  - benchmark_id: poisson
+  - id: poisson
     name: Poisson Profile
     description: Sends requests following Poisson distribution for realistic production simulation
     category: performance
@@ -97,7 +97,7 @@ benchmarks:
       - guidellm
 
   # Pre-configured benchmark suites
-  - benchmark_id: quick_perf_test
+  - id: quick_perf_test
     name: Quick Performance Test
     description: Fast performance evaluation with sweep profile and limited samples
     category: performance
@@ -111,7 +111,7 @@ benchmarks:
       - guidellm
       - suite
 
-  - benchmark_id: comprehensive_perf_test
+  - id: comprehensive_perf_test
     name: Comprehensive Performance Test
     description: Thorough performance evaluation across all profiles
     category: performance

@@ -4,7 +4,7 @@ description: LLM vulnerability scanner and red-teaming framework
 type: builtin
 runtime:
   k8s:
-    image: quay.io/eval-hub/garak:latest
+    image: quay.io/evalhub/garak:latest
     entrypoint:
       - python
       - /opt/app-root/src/main.py

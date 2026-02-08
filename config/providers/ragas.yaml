@@ -4,7 +4,7 @@ description: Retrieval Augmented Generation Assessment framework
 type: builtin
 runtime:
   k8s:
-    image: quay.io/eval-hub/ragas:latest
+    image: quay.io/evalhub/ragas:latest
     entrypoint:
       - python
       - /opt/app-root/src/main.py
