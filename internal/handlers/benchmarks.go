@@ -36,7 +36,7 @@ func (h *Handlers) HandleListBenchmarks(ctx *executioncontext.ExecutionContext, 
 			if providerId != "" && provider.ID != providerId {
 				continue
 			}
-			if benchmarkId != "" && benchmark.Id != benchmarkId {
+			if benchmarkId != "" && benchmark.ID != benchmarkId {
 				continue
 			}
 			if category != "" && benchmark.Category != category {
