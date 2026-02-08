@@ -12,7 +12,7 @@ import (
 func (h *Handlers) HandleListBenchmarks(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 
 	providerIdParam := r.Query("provider_id")
-	benchmarkIdParam := r.Query("benchmark_id")
+	benchmarkIdParam := r.Query("id")
 	categoryParam := r.Query("category")
 	tags := r.Query("tags")
 
@@ -33,10 +33,10 @@ func (h *Handlers) HandleListBenchmarks(ctx *executioncontext.ExecutionContext, 
 	benchmarks := []api.BenchmarkResource{}
 	for _, provider := range h.providerConfigs {
 		for _, benchmark := range provider.Benchmarks {
-			if providerId != "" && provider.ProviderID != providerId {
+			if providerId != "" && provider.ID != providerId {
 				continue
 			}
-			if benchmarkId != "" && benchmark.BenchmarkId != benchmarkId {
+			if benchmarkId != "" && benchmark.ID != benchmarkId {
 				continue
 			}
 			if category != "" && benchmark.Category != category {
@@ -50,7 +50,7 @@ func (h *Handlers) HandleListBenchmarks(ctx *executioncontext.ExecutionContext, 
 			if len(tags) > 0 && !contains {
 				continue
 			}
-			benchmark.ProviderId = &provider.ProviderID
+			benchmark.ProviderId = &provider.ID
 			benchmarks = append(benchmarks, benchmark)
 		}
 	}
