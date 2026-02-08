@@ -39,19 +39,17 @@ func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobConfig, ml
 		return nil, err
 	}
 
-	evaluationEntity := &EvaluationJobEntity{
-		Config: evaluation,
-		Status: &api.EvaluationJobStatus{
-			EvaluationJobState: api.EvaluationJobState{
-				State: api.OverallStatePending,
-				Message: &api.MessageInfo{
-					Message:     "Evaluation job created",
-					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CREATED,
-				},
+	status := &api.EvaluationJobStatus{
+		EvaluationJobState: api.EvaluationJobState{
+			State: api.OverallStatePending,
+			Message: &api.MessageInfo{
+				Message:     "Evaluation job created",
+				MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CREATED,
 			},
 		},
 	}
-	evaluationJSON, err := json.Marshal(evaluationEntity)
+
+	evaluationJSON, err := s.createEvaluationJobEntity(evaluation, status, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -75,12 +73,26 @@ func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobConfig, ml
 				UpdatedAt: time.Now(),
 			},
 			MLFlowExperimentID: mlflowExperimentID,
-			Message:            evaluationEntity.Status.Message,
+			Message:            status.Message,
 		},
 		EvaluationJobConfig: *evaluation,
+		Status:              status,
 		Results:             nil,
 	}
 	return evaluationResource, nil
+}
+
+func (s *SQLStorage) createEvaluationJobEntity(evaluation *api.EvaluationJobConfig, status *api.EvaluationJobStatus, results *api.EvaluationJobResults) ([]byte, error) {
+	evaluationEntity := &EvaluationJobEntity{
+		Config:  evaluation,
+		Status:  status,
+		Results: results,
+	}
+	evaluationJSON, err := json.Marshal(evaluationEntity)
+	if err != nil {
+		return nil, serviceerrors.NewServiceError(messages.InternalServerError, "Error", err.Error())
+	}
+	return evaluationJSON, nil
 }
 
 func (s *SQLStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, error) {
@@ -334,7 +346,7 @@ func (s *SQLStorage) updateEvaluationJobTransactional(txn *sql.Tx, id string, st
 	return nil
 }
 
-func updateBenchmarkStatus(job *api.EvaluationJobResource, runStatus *api.StatusEvent, benchmark *api.BenchmarkStatus) {
+func updateBenchmarkStatus(job *api.EvaluationJobResource, runStatus *api.StatusEvent, benchmarkStatus *api.BenchmarkStatus) {
 	if job.Status == nil {
 		job.Status = &api.EvaluationJobStatus{
 			EvaluationJobState: api.EvaluationJobState{
@@ -351,7 +363,7 @@ func updateBenchmarkStatus(job *api.EvaluationJobResource, runStatus *api.Status
 			return
 		}
 	}
-	job.Status.Benchmarks = append(job.Status.Benchmarks, benchmark)
+	job.Status.Benchmarks = append(job.Status.Benchmarks, benchmarkStatus)
 }
 
 func updateBenchmarkResults(job *api.EvaluationJobResource, runStatus *api.StatusEvent, result *api.BenchmarkResult) {

@@ -80,7 +80,7 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 	}
 
 	if len(updatedJob.Status.Benchmarks) != 1 {
-		t.Fatalf("Expected 1 benchmark, got %d", len(updatedJob.Results.Benchmarks))
+		t.Fatalf("Expected 1 benchmark, got %d", len(updatedJob.Status.Benchmarks))
 	}
 
 	// Send completion update with results
