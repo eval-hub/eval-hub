@@ -20,7 +20,7 @@ type Runtime struct {
 // Example YAML for provider configs:
 //
 //	runtime:
-//	  image: "quay.io/eval-hub/adapter:latest"
+//	  image: "quay.io/evalhub/adapter:latest"
 //	  entrypoint:
 //	    - "/path/to/program"
 //	  cpu_request: "250m"

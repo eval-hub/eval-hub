@@ -282,7 +282,7 @@ func sampleProviders(providerID string) map[string]api.ProviderResource {
 			ProviderID: providerID,
 			Runtime: &api.Runtime{
 				K8s: &api.K8sRuntime{
-					Image: "quay.io/eval-hub/adapter:latest",
+					Image: "quay.io/evalhub/adapter:latest",
 				},
 			},
 		},

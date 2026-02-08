@@ -1,0 +1,128 @@
+provider_id: guidellm
+provider_name: GuideLLM
+description: Performance benchmarking framework for LLM inference servers
+provider_type: builtin
+runtime:
+  k8s:
+    image: quay.io/evalhub/community-guidellm:latest
+    entrypoint:
+      - python
+      - main.py
+    cpu_request: 100m
+    memory_request: 128Mi
+    cpu_limit: 1000m
+    memory_limit: 2Gi
+  local:
+    # reserved for local runtime
+
+benchmarks:
+  # Execution profiles - comprehensive performance testing
+  - benchmark_id: sweep
+    name: Sweep Profile
+    description: Automatically finds optimal request rate by sweeping from low to high concurrency
+    category: performance
+    metrics:
+      - requests_per_second
+      - prompt_tokens_per_second
+      - output_tokens_per_second
+      - mean_ttft_ms
+      - mean_itl_ms
+    tags:
+      - performance
+      - throughput
+      - latency
+      - guidellm
+      - auto
+
+  - benchmark_id: throughput
+    name: Throughput Profile
+    description: Measures maximum throughput by gradually increasing request rate until saturation
+    category: performance
+    metrics:
+      - requests_per_second
+      - prompt_tokens_per_second
+      - output_tokens_per_second
+      - mean_ttft_ms
+      - mean_itl_ms
+    tags:
+      - performance
+      - throughput
+      - guidellm
+      - saturation
+
+  - benchmark_id: concurrent
+    name: Concurrent Profile
+    description: Tests performance with fixed number of concurrent requests
+    category: performance
+    metrics:
+      - requests_per_second
+      - prompt_tokens_per_second
+      - output_tokens_per_second
+      - mean_ttft_ms
+      - mean_itl_ms
+    tags:
+      - performance
+      - concurrency
+      - guidellm
+
+  - benchmark_id: constant
+    name: Constant Rate Profile
+    description: Maintains constant request rate throughout benchmark duration
+    category: performance
+    metrics:
+      - requests_per_second
+      - prompt_tokens_per_second
+      - output_tokens_per_second
+      - mean_ttft_ms
+      - mean_itl_ms
+    tags:
+      - performance
+      - constant_rate
+      - guidellm
+
+  - benchmark_id: poisson
+    name: Poisson Profile
+    description: Sends requests following Poisson distribution for realistic production simulation
+    category: performance
+    metrics:
+      - requests_per_second
+      - prompt_tokens_per_second
+      - output_tokens_per_second
+      - mean_ttft_ms
+      - mean_itl_ms
+    tags:
+      - performance
+      - poisson
+      - realistic
+      - guidellm
+
+  # Pre-configured benchmark suites
+  - benchmark_id: quick_perf_test
+    name: Quick Performance Test
+    description: Fast performance evaluation with sweep profile and limited samples
+    category: performance
+    metrics:
+      - requests_per_second
+      - mean_ttft_ms
+      - mean_itl_ms
+    tags:
+      - performance
+      - quick
+      - guidellm
+      - suite
+
+  - benchmark_id: comprehensive_perf_test
+    name: Comprehensive Performance Test
+    description: Thorough performance evaluation across all profiles
+    category: performance
+    metrics:
+      - requests_per_second
+      - prompt_tokens_per_second
+      - output_tokens_per_second
+      - mean_ttft_ms
+      - mean_itl_ms
+    tags:
+      - performance
+      - comprehensive
+      - guidellm
+      - suite
