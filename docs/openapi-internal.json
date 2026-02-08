@@ -488,7 +488,7 @@
         "operationId": "list_providers_api_v1_evaluations_providers_get",
         "parameters": [
           {
-            "name": "provider_id",
+            "name": "id",
             "in": "query",
             "required": false,
             "schema": {
@@ -558,7 +558,7 @@
             "description": "Filter by provider ID"
           },
           {
-            "name": "benchmark_id",
+            "name": "id",
             "in": "query",
             "required": false,
             "schema": {
@@ -1525,7 +1525,7 @@
       },
       "BenchmarkDefinition": {
         "properties": {
-          "benchmark_id": {
+          "id": {
             "type": "string",
             "title": "Benchmark Id",
             "description": "Benchmark identifier"
@@ -1575,12 +1575,12 @@
       },
       "ProviderDefinition": {
         "properties": {
-          "provider_id": {
+          "id": {
             "type": "string",
             "title": "Provider Id",
             "description": "Provider identifier"
           },
-          "provider_name": {
+          "name": {
             "type": "string",
             "title": "Provider Name",
             "description": "Provider display name"
@@ -1590,7 +1590,7 @@
             "title": "Description",
             "description": "Provider description"
           },
-          "provider_type": {
+          "type": {
             "type": "string",
             "title": "Provider Type",
             "description": "Provider type"

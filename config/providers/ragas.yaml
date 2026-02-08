@@ -1,7 +1,7 @@
-provider_id: ragas
-provider_name: RAGAS
+id: ragas
+name: RAGAS
 description: Retrieval Augmented Generation Assessment framework
-provider_type: builtin
+type: builtin
 runtime:
   k8s:
     image: quay.io/eval-hub/ragas:latest
@@ -19,7 +19,7 @@ runtime:
     # reserved for local runtime
 
 benchmarks:
-  - benchmark_id: faithfulness
+  - id: faithfulness
     name: Faithfulness
     description: Measures factual consistency of generated answer against given context
     category: rag_quality
@@ -31,7 +31,7 @@ benchmarks:
       - rag
       - faithfulness
       - factuality
-  - benchmark_id: answer_relevancy
+  - id: answer_relevancy
     name: Answer Relevancy
     description: Measures how relevant generated answer is to the question
     category: rag_quality
@@ -43,7 +43,7 @@ benchmarks:
       - rag
       - relevancy
       - quality
-  - benchmark_id: context_precision
+  - id: context_precision
     name: Context Precision
     description: Measures precision of retrieved context
     category: rag_retrieval
@@ -55,7 +55,7 @@ benchmarks:
       - rag
       - retrieval
       - precision
-  - benchmark_id: context_recall
+  - id: context_recall
     name: Context Recall
     description: Measures recall of retrieved context
     category: rag_retrieval

@@ -35,7 +35,7 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ProviderID: "provider-1",
+		ID: "provider-1",
 		Runtime: &api.Runtime{
 			K8s: &api.K8sRuntime{
 				Image: "adapter:latest",
@@ -75,9 +75,9 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 	if err := json.Unmarshal([]byte(cfg.jobSpecJSON), &decoded); err != nil {
 		t.Fatalf("unmarshal job spec json: %v", err)
 	}
-	jobID, ok := decoded["job_id"].(string)
+	jobID, ok := decoded["id"].(string)
 	if !ok || jobID != "job-123" {
-		t.Fatalf("expected job spec json job_id to be %q, got %v", "job-123", decoded["job_id"])
+		t.Fatalf("expected job spec json id to be %q, got %v", "job-123", decoded["id"])
 	}
 	benchmarkID, ok := decoded["benchmark_id"].(string)
 	if !ok || benchmarkID != "bench-1" {
@@ -119,7 +119,7 @@ func TestBuildJobConfigMissingRuntime(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ProviderID: "provider-1",
+		ID: "provider-1",
 	}
 
 	_, err := buildJobConfig(evaluation, provider, "bench-1")
@@ -143,8 +143,8 @@ func TestBuildJobConfigMissingAdapterImage(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ProviderID: "provider-1",
-		Runtime:    &api.Runtime{},
+		ID:      "provider-1",
+		Runtime: &api.Runtime{},
 	}
 
 	_, err := buildJobConfig(evaluation, provider, "bench-1")
@@ -173,7 +173,7 @@ func TestBuildJobConfigMissingServiceURL(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ProviderID: "provider-1",
+		ID: "provider-1",
 		Runtime: &api.Runtime{
 			K8s: &api.K8sRuntime{
 				Image: "adapter:latest",
@@ -207,7 +207,7 @@ func TestBuildJobConfigMissingBenchmarkConfig(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ProviderID: "provider-1",
+		ID: "provider-1",
 		Runtime: &api.Runtime{
 			K8s: &api.K8sRuntime{
 				Image: "adapter:latest",

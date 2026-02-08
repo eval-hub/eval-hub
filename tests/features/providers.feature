@@ -10,12 +10,12 @@ Feature: Providers Endpoint
 
   Scenario: Get providers for non existent provider_id
     Given the service is running
-    When I send a GET request to "/api/v1/evaluations/providers?provider_id=oops"
+    When I send a GET request to "/api/v1/evaluations/providers?id=oops"
     Then the response should contain the value "0" at path "total_count"
 
-  Scenario: Get provider for existent provider_id
+  Scenario: Get provider for existent provider id
     Given the service is running
-    When I send a GET request to "/api/v1/evaluations/providers?provider_id=garak"
+    When I send a GET request to "/api/v1/evaluations/providers?id=garak"
     Then the response should contain the value "1" at path "total_count"
 
   Scenario: Get provider without benchmarks

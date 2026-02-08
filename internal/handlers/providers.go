@@ -9,7 +9,7 @@ import (
 // HandleListProviders handles GET /api/v1/evaluations/providers
 func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 
-	providerIdParam := r.Query("provider_id")
+	providerIdParam := r.Query("id")
 	benchmarksParam := r.Query("benchmarks")
 	providerId := ""
 	benchmarks := true
@@ -24,7 +24,7 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 	providers := []api.ProviderResource{}
 
 	for _, p := range h.providerConfigs {
-		if providerId != "" && p.ProviderID != providerId {
+		if providerId != "" && p.ID != providerId {
 			continue
 		}
 		if !benchmarks {

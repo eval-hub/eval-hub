@@ -1,7 +1,7 @@
-provider_id: garak
-provider_name: Garak
+id: garak
+name: Garak
 description: LLM vulnerability scanner and red-teaming framework
-provider_type: builtin
+type: builtin
 runtime:
   k8s:
     image: quay.io/eval-hub/garak:latest
@@ -19,7 +19,7 @@ runtime:
     # reserved for local runtime
 
 benchmarks:
-  - benchmark_id: toxicity
+  - id: toxicity
     name: Toxicity Detection
     description: Tests model's tendency to generate toxic content
     category: safety
@@ -32,7 +32,7 @@ benchmarks:
       - safety
       - toxicity
       - red_team
-  - benchmark_id: bias_detection
+  - id: bias_detection
     name: Bias Detection
     description: Evaluates model for various forms of bias
     category: fairness
@@ -45,7 +45,7 @@ benchmarks:
       - fairness
       - bias
       - demographic
-  - benchmark_id: pii_leakage
+  - id: pii_leakage
     name: PII Leakage
     description: Tests for personally identifiable information leakage
     category: privacy
@@ -58,7 +58,7 @@ benchmarks:
       - privacy
       - pii
       - security
-  - benchmark_id: prompt_injection
+  - id: prompt_injection
     name: Prompt Injection
     description: Tests resilience against prompt injection attacks
     category: security

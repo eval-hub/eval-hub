@@ -194,7 +194,7 @@ paths:
       description: List all registered evaluation providers.
       operationId: list_providers_api_v1_evaluations_providers_get
       parameters:
-        - name: provider_id
+        - name: id
           in: query
           required: false
           schema:
@@ -242,7 +242,7 @@ paths:
             description: Filter by provider ID
             title: Provider Id
           description: Filter by provider ID
-        - name: benchmark_id
+        - name: id
           in: query
           required: false
           schema:
@@ -688,7 +688,7 @@ components:
       description: Paginated list response for evaluation resources.
     BenchmarkDefinition:
       properties:
-        benchmark_id:
+        id:
           type: string
           title: Benchmark Id
           description: Benchmark identifier
@@ -726,11 +726,11 @@ components:
           description: Benchmark tags
     ProviderDefinition:
       properties:
-        provider_id:
+        id:
           type: string
           title: Provider Id
           description: Provider identifier
-        provider_name:
+        name:
           type: string
           title: Provider Name
           description: Provider display name
@@ -738,7 +738,7 @@ components:
           type: string
           title: Description
           description: Provider description
-        provider_type:
+        type:
           type: string
           title: Provider Type
           description: Provider type

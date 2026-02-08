@@ -24,7 +24,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: adapter
-          image: quay.io/eval-hub/adapter:latest
+          image: quay.io/evalhub/adapter:latest
           imagePullPolicy: IfNotPresent
           command:
             - /path/to/program

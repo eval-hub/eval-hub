@@ -2,12 +2,12 @@ package api
 
 // Provider contains the configuration details for an evaluation provider.
 type ProviderResource struct {
-	ProviderID   string              `mapstructure:"provider_id" yaml:"provider_id" json:"provider_id"`
-	ProviderName string              `mapstructure:"provider_name" yaml:"provider_name" json:"provider_name"`
-	Description  string              `mapstructure:"description" yaml:"description" json:"description"`
-	ProviderType string              `mapstructure:"provider_type" yaml:"provider_type" json:"provider_type"`
-	Benchmarks   []BenchmarkResource `mapstructure:"benchmarks" yaml:"benchmarks" json:"benchmarks"`
-	Runtime      *Runtime            `mapstructure:"runtime" yaml:"runtime" json:"-"`
+	ID          string              `mapstructure:"id" yaml:"id" json:"id"`
+	Name        string              `mapstructure:"name" yaml:"name" json:"name"`
+	Description string              `mapstructure:"description" yaml:"description" json:"description"`
+	Type        string              `mapstructure:"type" yaml:"type" json:"type"`
+	Benchmarks  []BenchmarkResource `mapstructure:"benchmarks" yaml:"benchmarks" json:"benchmarks"`
+	Runtime     *Runtime            `mapstructure:"runtime" yaml:"runtime" json:"-"`
 }
 
 type Runtime struct {
@@ -20,7 +20,7 @@ type Runtime struct {
 // Example YAML for provider configs:
 //
 //	runtime:
-//	  image: "quay.io/eval-hub/adapter:latest"
+//	  image: "quay.io/evalhub/adapter:latest"
 //	  entrypoint:
 //	    - "/path/to/program"
 //	  cpu_request: "250m"
