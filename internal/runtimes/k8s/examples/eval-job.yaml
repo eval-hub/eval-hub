@@ -25,12 +25,14 @@ spec:
       containers:
         - name: adapter
           image: quay.io/evalhub/adapter:latest
-          imagePullPolicy: IfNotPresent
-          command:
-            - /path/to/program
+          imagePullPolicy: Always
+          command: []
           env:
             - name: JOB_ID
               value: "001"
+            # Optional when EVALHUB_INSTANCE_NAME is set
+            # - name: EVALHUB_URL
+            #   value: "https://<instance>.<namespace>.svc.cluster.local:8443"
           resources:
             requests:
               cpu: "250m"
@@ -41,8 +43,6 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
-            runAsUser: 1000
-            runAsGroup: 1000
             capabilities:
               drop:
                 - "ALL"
@@ -55,9 +55,16 @@ spec:
               readOnly: true
             - name: data
               mountPath: /data
+            # Optional when EVALHUB_INSTANCE_NAME is set
+            # - name: evalhub-service-ca
+            #   mountPath: /etc/pki/ca-trust/source/anchors
       volumes:
         - name: job-spec
           configMap:
             name: eval-job-001-mmlu-spec
         - name: data
           emptyDir: {}
+        # Optional when EVALHUB_INSTANCE_NAME is set
+        # - name: evalhub-service-ca
+        #   configMap:
+        #     name: <instance>-service-ca
