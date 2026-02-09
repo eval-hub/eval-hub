@@ -4,7 +4,9 @@ This directory contains the OpenAPI specifications and related assets for the Ev
 
 ## Swagger UI
 
-- Public documentation: [index.html](https://raw.githubusercontent.com/julpayne/eval-hub/refs/heads/api-updates/docs/index.html)
+- Public documentation:
+  - [Redocly website](https://eval-hub.github.io/eval-hub/)
+  - [Swagger editor](https://editor.swagger.io/?url=https://raw.githubusercontent.com/eval-hub/eval-hub/refs/heads/main/docs/openapi.yaml) - **Note:** When testing locally with the Swagger editor, ensure the server is started with `--local` to enable CORS headers middleware ([cors_middleware.go](../cmd/eval_hub/server/cors_middleware.go))
 - Internal documentation: [index-internal.html](index-internal.html)
 
 ## Files
