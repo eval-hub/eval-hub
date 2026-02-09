@@ -287,7 +287,7 @@ cls:
 REDOCLY_CLI ?= ${PWD}/node_modules/.bin/redocly
 
 ${REDOCLY_CLI}:
-	npm i @redocly/cli@latest
+	npm i @redocly/cli
 
 clean-docs:
 	rm -f docs/openapi.yaml docs/openapi.json docs/openapi-internal.yaml docs/openapi-internal.json docs/*.html
