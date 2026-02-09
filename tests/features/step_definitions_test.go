@@ -192,9 +192,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 		storage,
 		validate,
 		runtime,
-		mlflow.NewMLFlowClient(serviceConfig).
-			WithContext(context.Background()).
-			WithLogger(logger))
+		mlflow.NewMLFlowClient(serviceConfig, logger))
 	if err != nil {
 		return err
 	}

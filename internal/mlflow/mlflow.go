@@ -1,7 +1,8 @@
 package mlflow
 
 import (
-	"os"
+	"context"
+	"log/slog"
 
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/messages"
@@ -10,15 +11,20 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 )
 
-func NewMLFlowClient(config *config.Config) *mlflowclient.Client {
+func NewMLFlowClient(config *config.Config, logger *slog.Logger) *mlflowclient.Client {
 
-	if os.Getenv("MLFLOW_TRACKING_URI") != "" {
-		return mlflowclient.NewClient(os.Getenv("MLFLOW_TRACKING_URI"))
-	}
+	url := ""
 	if config.MLFlow != nil && config.MLFlow.TrackingURI != "" {
-		return mlflowclient.NewClient(config.MLFlow.TrackingURI)
+		url = config.MLFlow.TrackingURI
 	}
-	return nil
+
+	if url == "" {
+		logger.Warn("MLFlow tracking URI is not set, skipping MLFlow client creation")
+		return nil
+	}
+
+	return mlflowclient.NewClient(url).WithContext(context.Background()).WithLogger(logger)
+
 }
 
 func GetExperimentID(mlflowClient *mlflowclient.Client, experiment *api.ExperimentConfig) (string, error) {

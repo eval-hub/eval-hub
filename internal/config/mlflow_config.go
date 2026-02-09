@@ -1,5 +1,5 @@
 package config
 
 type MLFlowConfig struct {
-	TrackingURI string `mapstructure:"tracking_uri"`
+	TrackingURI string `mapstructure:"tracking_uri" yaml:"tracking_uri"`
 }
