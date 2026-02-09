@@ -95,8 +95,12 @@ func (s *SQLStorage) Ping(timeout time.Duration) error {
 	return s.pool.PingContext(ctx)
 }
 
-func (s *SQLStorage) GetDatasourceName() string {
+func (s *SQLStorage) GetDriverName() string {
 	return s.sqlConfig.Driver
+}
+
+func (s *SQLStorage) GetConnectionURL() string {
+	return s.sqlConfig.URL
 }
 
 func (s *SQLStorage) exec(txn *sql.Tx, query string, args ...any) (sql.Result, error) {

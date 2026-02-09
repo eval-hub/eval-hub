@@ -86,7 +86,8 @@ func main() {
 		"version", serviceConfig.Service.Version,
 		"build", serviceConfig.Service.Build,
 		"build_date", serviceConfig.Service.BuildDate,
-		"storage", storage.GetDatasourceName(),
+		"storage", storage.GetDriverName(),
+		"storage_url", storage.GetConnectionURL(),
 		"validator", validate != nil,
 		"local", serviceConfig.Service.LocalMode,
 		"mlflow_tracking", mlflowClient != nil,
@@ -113,7 +114,7 @@ func main() {
 
 	// shutdown the storage
 	if err := storage.Close(); err != nil {
-		logger.Error("Failed to close storage", "error", err.Error(), "storage", storage.GetDatasourceName())
+		logger.Error("Failed to close storage", "error", err.Error(), "storage", storage.GetDriverName(), "storage_url", storage.GetConnectionURL())
 	}
 
 	// Create a context with timeout for graceful shutdown

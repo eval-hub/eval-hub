@@ -32,7 +32,8 @@ type EvaluationJobEntity struct {
 // CreateEvaluationJob creates a new evaluation job in the database
 // the evaluation job is stored in the evaluations table as a JSON string
 // the evaluation job is returned as a EvaluationJobResource
-func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobConfig, mlflowExperimentID string) (*api.EvaluationJobResource, error) { // we have to get the evaluation job and update the status so we need a transaction
+func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobConfig, mlflowExperimentID string) (*api.EvaluationJobResource, error) {
+	// we have to get the evaluation job and update the status so we need a transaction
 	txn, err := s.pool.BeginTx(s.ctx, nil)
 	if err != nil {
 		s.logger.Error("Failed to begin create evaluation job transaction", "error", err)

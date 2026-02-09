@@ -16,7 +16,6 @@ type SQLDatabaseConfig struct {
 	MaxIdleConns    *int           `mapstructure:"max_idle_conns,omitempty"`
 	MaxOpenConns    *int           `mapstructure:"max_open_conns,omitempty"`
 	Fallback        bool           `mapstructure:"fallback,omitempty"`
-	DatabaseName    string         `mapstructure:"database_name,omitempty"`
 
 	// Other map[string]any `mapstructure:",remain"`
 }
