@@ -65,7 +65,7 @@ type MessageInfo struct {
 // BenchmarkConfig represents a reference to a benchmark
 type BenchmarkConfig struct {
 	Ref
-	ProviderID string         `json:"provider_id"`
+	ProviderID string         `json:"provider_id" validate:"required"`
 	Parameters map[string]any `json:"parameters,omitempty"`
 }
 
@@ -153,7 +153,7 @@ type EvaluationJobResults struct {
 type EvaluationJobConfig struct {
 	Model          ModelRef          `json:"model" validate:"required"`
 	Benchmarks     []BenchmarkConfig `json:"benchmarks" validate:"required,min=1,dive"`
-	Collection     Ref               `json:"collection"`
+	Collection     Ref               `json:"collection" validate:"omitempty"`
 	Experiment     *ExperimentConfig `json:"experiment,omitempty"`
 	TimeoutMinutes *int              `json:"timeout_minutes,omitempty"`
 	RetryAttempts  *int              `json:"retry_attempts,omitempty"`
