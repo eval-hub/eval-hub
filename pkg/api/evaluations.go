@@ -146,7 +146,7 @@ type EvaluationJobResults struct {
 	CompletedEvaluations int               `json:"completed_evaluations,omitempty"`
 	FailedEvaluations    int               `json:"failed_evaluations,omitempty"`
 	Benchmarks           []BenchmarkResult `json:"benchmarks,omitempty" validate:"omitempty,dive"`
-	MLFlowExperimentURL  *string           `json:"mlflow_experiment_url,omitempty"`
+	MLFlowExperimentURL  string            `json:"mlflow_experiment_url,omitempty"`
 }
 
 // EvaluationJobConfig represents evaluation job request schema

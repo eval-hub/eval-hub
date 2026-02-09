@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -28,11 +29,11 @@ const (
 
 // Client represents an MLflow API client
 type Client struct {
-	Ctx        context.Context
-	BaseURL    string
-	HTTPClient *http.Client
-	AuthToken  string
-	Logger     *slog.Logger
+	ctx        context.Context
+	baseURL    string
+	httpClient *http.Client
+	authToken  string
+	logger     *slog.Logger
 }
 
 // NewClient creates a new MLflow client
@@ -43,11 +44,25 @@ func NewClient(baseURL string) *Client {
 	}
 
 	return &Client{
-		Ctx:     context.Background(),
-		BaseURL: baseURL,
-		HTTPClient: &http.Client{
+		ctx:     context.Background(),
+		baseURL: baseURL,
+		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		logger: slog.New(slog.DiscardHandler),
+	}
+}
+
+func (c *Client) WithHTTPClient(httpClient *http.Client) *Client {
+	if c == nil {
+		return nil
+	}
+	return &Client{
+		ctx:        c.ctx,
+		baseURL:    c.baseURL,
+		httpClient: httpClient,
+		authToken:  c.authToken,
+		logger:     c.logger,
 	}
 }
 
@@ -56,11 +71,11 @@ func (c *Client) WithContext(ctx context.Context) *Client {
 		return nil
 	}
 	return &Client{
-		Ctx:        ctx,
-		BaseURL:    c.BaseURL,
-		HTTPClient: c.HTTPClient,
-		AuthToken:  c.AuthToken,
-		Logger:     c.Logger,
+		ctx:        ctx,
+		baseURL:    c.baseURL,
+		httpClient: c.httpClient,
+		authToken:  c.authToken,
+		logger:     c.logger,
 	}
 }
 
@@ -69,68 +84,78 @@ func (c *Client) WithLogger(logger *slog.Logger) *Client {
 		return nil
 	}
 	return &Client{
-		Ctx:        c.Ctx,
-		BaseURL:    c.BaseURL,
-		HTTPClient: c.HTTPClient,
-		AuthToken:  c.AuthToken,
-		Logger:     logger,
+		ctx:        c.ctx,
+		baseURL:    c.baseURL,
+		httpClient: c.httpClient,
+		authToken:  c.authToken,
+		logger:     logger,
 	}
 }
 
-// SetAuthToken sets the authentication token for the client
-func (c *Client) SetAuthToken(token string) {
-	c.AuthToken = token
+func (c *Client) WithToken(authToken string) *Client {
+	if c == nil {
+		return nil
+	}
+	return &Client{
+		ctx:        c.ctx,
+		baseURL:    c.baseURL,
+		httpClient: c.httpClient,
+		authToken:  authToken,
+		logger:     c.logger,
+	}
 }
 
-// SetTimeout sets the HTTP client timeout
-func (c *Client) SetTimeout(timeout time.Duration) {
-	c.HTTPClient.Timeout = timeout
+func (c *Client) GetLogger() *slog.Logger {
+	return c.logger
+}
+
+func (c *Client) GetBaseURL() string {
+	return c.baseURL
+}
+
+func (c *Client) GetExperimentsURL() string {
+	return c.baseURL + experimentsBaseURL
 }
 
 // doRequest performs an HTTP request to the MLflow API
-func (c *Client) doRequest(ctx context.Context, method, endpoint string, body interface{}) ([]byte, error) {
-	if c.Logger != nil {
-		c.Logger.Info("MLFlow request started", "method", method, "endpoint", endpoint)
-	}
+func (c *Client) doRequest(method, endpoint string, body interface{}) ([]byte, error) {
+	c.logger.Info("MLFlow request started", "method", method, "endpoint", endpoint)
+
 	var reqBody io.Reader
 	if body != nil {
 		jsonData, err := json.Marshal(body)
 		if err != nil {
-			if c.Logger != nil {
-				c.Logger.Info("MLFlow request errored", "method", method, "endpoint", endpoint, "stage", "failed to marshal request body", "error", err.Error())
-			}
+			c.logger.Info("MLFlow request errored", "method", method, "endpoint", endpoint, "stage", "failed to marshal request body", "error", err.Error())
 			return nil, fmt.Errorf("failed to marshal request body: %w", err)
 		}
 		reqBody = bytes.NewBuffer(jsonData)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+endpoint, reqBody)
+	req, err := http.NewRequestWithContext(c.ctx, method, c.baseURL+endpoint, reqBody)
 	if err != nil {
-		if c.Logger != nil {
-			c.Logger.Info("MLFlow request errored", "method", method, "endpoint", endpoint, "stage", "failed to create request", "error", err.Error())
-		}
+		c.logger.Info("MLFlow request errored", "method", method, "endpoint", endpoint, "stage", "failed to create request", "error", err.Error())
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	if c.AuthToken != "" {
-		req.Header.Set("Authorization", "Bearer "+c.AuthToken)
+	if c.authToken != "" {
+		if strings.HasPrefix(c.authToken, "Bearer ") || strings.HasPrefix(c.authToken, "Basic ") {
+			req.Header.Set("Authorization", c.authToken)
+		} else {
+			req.Header.Set("Authorization", "Bearer "+c.authToken)
+		}
 	}
 
-	resp, err := c.HTTPClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		if c.Logger != nil {
-			c.Logger.Info("MLFlow request errored", "method", method, "endpoint", endpoint, "stage", "failed to execute request", "error", err.Error())
-		}
+		c.logger.Info("MLFlow request errored", "method", method, "endpoint", endpoint, "stage", "failed to execute request", "error", err.Error())
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		if c.Logger != nil {
-			c.Logger.Info("MLFlow request errored", "method", method, "endpoint", endpoint, "stage", "failed to read response body", "error", err.Error())
-		}
+		c.logger.Info("MLFlow request errored", "method", method, "endpoint", endpoint, "stage", "failed to read response body", "error", err.Error())
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
@@ -142,9 +167,7 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 				ResponseBody: string(respBody),
 				MLFlowError:  &mlflowError,
 			}
-			if c.Logger != nil {
-				c.Logger.Info("MLFlow request failed", "method", method, "endpoint", endpoint, "status", resp.StatusCode, "error_code", mlflowError.ErrorCode, "message", mlflowError.Message)
-			}
+			c.logger.Info("MLFlow request failed", "method", method, "endpoint", endpoint, "status", resp.StatusCode, "error_code", mlflowError.ErrorCode, "message", mlflowError.Message)
 			return nil, apiErr
 		}
 		apiErr := &APIError{
@@ -152,15 +175,11 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body in
 			ResponseBody: string(respBody),
 			MLFlowError:  nil,
 		}
-		if c.Logger != nil {
-			c.Logger.Info("MLFlow request failed", "method", method, "endpoint", endpoint, "status", apiErr.StatusCode, "response", apiErr.ResponseBody)
-		}
+		c.logger.Info("MLFlow request failed", "method", method, "endpoint", endpoint, "status", apiErr.StatusCode, "response", apiErr.ResponseBody)
 		return nil, apiErr
 	}
 
-	if c.Logger != nil {
-		c.Logger.Info("MLFlow request successful", "method", method, "endpoint", endpoint, "status", resp.StatusCode, "response", string(respBody))
-	}
+	c.logger.Info("MLFlow request successful", "method", method, "endpoint", endpoint, "status", resp.StatusCode, "response", string(respBody))
 	return respBody, nil
 }
 
@@ -180,7 +199,7 @@ func (c *Client) CreateExperiment(req *CreateExperimentRequest) (*CreateExperime
 	if req == nil {
 		return nil, fmt.Errorf("Create experiment request is nil")
 	}
-	respBody, err := c.doRequest(c.Ctx, http.MethodPost, endpointExperimentsCreate, req)
+	respBody, err := c.doRequest(http.MethodPost, endpointExperimentsCreate, req)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +212,7 @@ func (c *Client) GetExperiment(experimentID string) (*GetExperimentResponse, err
 	req := GetExperimentRequest{
 		ExperimentID: experimentID,
 	}
-	respBody, err := c.doRequest(c.Ctx, http.MethodGet, endpointExperimentsGetBase, req)
+	respBody, err := c.doRequest(http.MethodGet, endpointExperimentsGetBase, req)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +225,7 @@ func (c *Client) GetExperimentByName(experimentName string) (*GetExperimentRespo
 	req := GetExperimentByNameRequest{
 		ExperimentName: experimentName,
 	}
-	respBody, err := c.doRequest(c.Ctx, http.MethodGet, endpointExperimentsGetByNameBase, req)
+	respBody, err := c.doRequest(http.MethodGet, endpointExperimentsGetByNameBase, req)
 	if err != nil {
 		return nil, err
 	}
@@ -219,6 +238,6 @@ func (c *Client) DeleteExperiment(experimentID string) error {
 	req := map[string]string{
 		"experiment_id": experimentID,
 	}
-	_, err := c.doRequest(c.Ctx, http.MethodPost, endpointExperimentsDeleteBase, req)
+	_, err := c.doRequest(http.MethodPost, endpointExperimentsDeleteBase, req)
 	return err
 }

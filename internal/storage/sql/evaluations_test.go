@@ -48,7 +48,7 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 		},
 	}
 
-	job, err := store.CreateEvaluationJob(config, "")
+	job, err := store.CreateEvaluationJob(config, "", "")
 	if err != nil {
 		t.Fatalf("Failed to create job: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestEvaluationsStorage(t *testing.T) {
 				},
 			},
 		}
-		resp, err := store.CreateEvaluationJob(job, "")
+		resp, err := store.CreateEvaluationJob(job, "", "")
 		if err != nil {
 			t.Fatalf("Failed to create evaluation job: %v", err)
 		}

@@ -40,7 +40,7 @@ func (f *fakeStorage) WithContext(_ context.Context) abstractions.Storage {
 	return f
 }
 
-func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobConfig, _ string) (*api.EvaluationJobResource, error) {
+func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobConfig, _ string, _ string) (*api.EvaluationJobResource, error) {
 	return &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{ID: "job-1"},
