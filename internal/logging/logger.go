@@ -73,10 +73,12 @@ func LogRequestFailed(ctx *executioncontext.ExecutionContext, code int, errorMes
 }
 
 func LogRequestSuccess(ctx *executioncontext.ExecutionContext, code int, response any) {
+	// TODO: we should only log the response if we are in debug mode?
 	// log the successful request, the request details and requestId have already been added to the logger
-	if response != nil {
-		SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request successful", "response", response)
-	} else {
-		SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request successful")
-	}
+	// if response != nil {
+	//	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request successful", "response", response)
+	//} else {
+	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request successful")
+	//}
+	//}
 }

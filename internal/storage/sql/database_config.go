@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"net/url"
 	"time"
 )
 
@@ -16,7 +17,23 @@ type SQLDatabaseConfig struct {
 	MaxIdleConns    *int           `mapstructure:"max_idle_conns,omitempty"`
 	MaxOpenConns    *int           `mapstructure:"max_open_conns,omitempty"`
 	Fallback        bool           `mapstructure:"fallback,omitempty"`
-	DatabaseName    string         `mapstructure:"database_name,omitempty"`
 
 	// Other map[string]any `mapstructure:",remain"`
+}
+
+func (s *SQLDatabaseConfig) getDriverName() string {
+	return s.Driver
+}
+
+func (s *SQLDatabaseConfig) getConnectionURL() string {
+	// Sanitize URL to avoid exposing credentials
+	parsed, err := url.Parse(s.URL)
+	if err != nil {
+		return s.Driver + "://<parse-error>"
+	}
+	// Remove password from userinfo
+	if parsed.User != nil {
+		parsed.User = url.User(parsed.User.Username())
+	}
+	return parsed.String()
 }

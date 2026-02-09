@@ -46,7 +46,9 @@ func NewStorage(config map[string]any, logger *slog.Logger) (abstractions.Storag
 		return nil, getUnsupportedDriverError(sqlConfig.Driver)
 	}
 
-	logger.Info("Creating SQL storage", "driver", sqlConfig.Driver, "url", sqlConfig.URL)
+	logger = logger.With("driver", sqlConfig.getDriverName(), "url", sqlConfig.getConnectionURL())
+
+	logger.Info("Creating SQL storage")
 
 	pool, err := sql.Open(sqlConfig.Driver, sqlConfig.URL)
 	if err != nil {
@@ -71,14 +73,14 @@ func NewStorage(config map[string]any, logger *slog.Logger) (abstractions.Storag
 	}
 
 	// ping the database to verify the DSN provided by the user is valid and the server is accessible
-	logger.Info("Pinging SQL storage", "driver", sqlConfig.Driver, "url", sqlConfig.URL)
+	logger.Info("Pinging SQL storage")
 	err = s.Ping(1 * time.Second)
 	if err != nil {
 		return nil, err
 	}
 
 	// ensure the schemas are created
-	logger.Info("Ensuring schemas are created", "driver", sqlConfig.Driver, "url", sqlConfig.URL)
+	logger.Info("Ensuring schemas are created")
 	if err := s.ensureSchema(); err != nil {
 		return nil, err
 	}
@@ -93,10 +95,6 @@ func (s *SQLStorage) Ping(timeout time.Duration) error {
 	defer cancel()
 
 	return s.pool.PingContext(ctx)
-}
-
-func (s *SQLStorage) GetDatasourceName() string {
-	return s.sqlConfig.Driver
 }
 
 func (s *SQLStorage) exec(txn *sql.Tx, query string, args ...any) (sql.Result, error) {

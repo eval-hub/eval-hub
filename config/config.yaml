@@ -15,8 +15,9 @@ env_mappings:
 # Database configuration
 database:
   driver: sqlite
-  url: file::memory:?mode=memory&cache=shared
-  database_name: eval_hub
+  url: file::eval_hub:?mode=memory&cache=shared
+  # driver: pgx
+  # url: postgres://user@localhost:5432/eval_hub
 # MLFlow configuration
 mlflow:
   #tracking_uri: http://localhost:5000

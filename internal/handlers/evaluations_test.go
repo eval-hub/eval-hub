@@ -39,8 +39,7 @@ func (f *fakeStorage) WithLogger(_ *slog.Logger) abstractions.Storage { return f
 func (f *fakeStorage) WithContext(_ context.Context) abstractions.Storage {
 	return f
 }
-func (f *fakeStorage) GetDatasourceName() string  { return "fake" }
-func (f *fakeStorage) Ping(_ time.Duration) error { return nil }
+
 func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobConfig, _ string) (*api.EvaluationJobResource, error) {
 	return &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
@@ -48,27 +47,12 @@ func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobConfig, _ string) 
 		},
 	}, nil
 }
-func (f *fakeStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) { return nil, nil }
-func (f *fakeStorage) GetEvaluationJobs(_ int, _ int, _ string) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
-	return nil, nil
-}
-func (f *fakeStorage) DeleteEvaluationJob(_ string, _ bool) error { return nil }
+
 func (f *fakeStorage) UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error {
 	f.lastStatusID = id
 	f.lastStatus = state
 	return nil
 }
-func (f *fakeStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error { return nil }
-func (f *fakeStorage) CreateCollection(_ *api.CollectionResource) error       { return nil }
-func (f *fakeStorage) GetCollection(_ string, _ bool) (*api.CollectionResource, error) {
-	return nil, nil
-}
-func (f *fakeStorage) GetCollections(_ int, _ int) (*abstractions.QueryResults[api.CollectionResource], error) {
-	return nil, nil
-}
-func (f *fakeStorage) UpdateCollection(_ *api.CollectionResource) error { return nil }
-func (f *fakeStorage) DeleteCollection(_ string) error                  { return nil }
-func (f *fakeStorage) Close() error                                     { return nil }
 
 type fakeRuntime struct {
 	err    error
@@ -87,6 +71,7 @@ func (r *fakeRuntime) RunEvaluationJob(_ *api.EvaluationJobResource, _ *abstract
 
 func TestHandleCreateEvaluationMarksFailedWhenRuntimeErrors(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	// note that the fake storage only implements the functions that are used in this test
 	storage := &fakeStorage{}
 	runtime := &fakeRuntime{err: errors.New("runtime failed")}
 	validate := validator.New()

@@ -39,7 +39,6 @@ func (f *fakeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent)
 	return f.updateErr
 }
 
-func (f *fakeStorage) GetDatasourceName() string  { return "fake" }
 func (f *fakeStorage) Ping(_ time.Duration) error { return nil }
 func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobConfig, _ string) (*api.EvaluationJobResource, error) {
 	return nil, nil
