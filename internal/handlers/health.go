@@ -24,7 +24,7 @@ type StorageInfo struct {
 
 func (h *Handlers) HandleHealth(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	// for now we serialize on each call but we could add
-	// a astruct to store the health information and only
+	// a struct to store the health information and only
 	// serialize it when something changes
 	healthInfo := HealthResponse{
 		Status:    STATUS_HEALTHY,
