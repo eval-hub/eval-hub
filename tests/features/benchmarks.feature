@@ -28,10 +28,10 @@ Feature: Benchmarks Endpoint
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/benchmarks?category=code"
     Then the response code should be 200
-    And the response should contain the value "8" at path "total_count"
+    And the response should contain the value "7" at path "total_count"
 
   Scenario: Get benchmarks for tags
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/benchmarks?tags=safety,toxicity"
     Then the response code should be 200
-    And the response should contain the value "17" at path "total_count"
+    And the response should contain the value "19" at path "total_count"

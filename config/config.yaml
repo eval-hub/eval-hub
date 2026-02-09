@@ -17,3 +17,6 @@ database:
   driver: sqlite
   url: file::memory:?mode=memory&cache=shared
   database_name: eval_hub
+# MLFlow configuration
+mlflow:
+  tracking_uri: http://localhost:5000

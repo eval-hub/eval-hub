@@ -72,7 +72,7 @@ func main() {
 	}
 	logger.Info("Runtime created", "runtime", runtime.Name())
 
-	mlflowClient := mlflow.NewMLFlowClient()
+	mlflowClient := mlflow.NewMLFlowClient(serviceConfig)
 
 	srv, err := server.NewServer(logger, serviceConfig, providerConfigs, storage, validate, runtime, mlflowClient)
 	if err != nil {
