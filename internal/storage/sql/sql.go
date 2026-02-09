@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"net/url"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
@@ -100,7 +101,16 @@ func (s *SQLStorage) GetDriverName() string {
 }
 
 func (s *SQLStorage) GetConnectionURL() string {
-	return s.sqlConfig.URL
+	// Sanitize URL to avoid exposing credentials
+	parsed, err := url.Parse(s.sqlConfig.URL)
+	if err != nil {
+		return s.sqlConfig.Driver + "://<parse-error>"
+	}
+	// Remove password from userinfo
+	if parsed.User != nil {
+		parsed.User = url.User(parsed.User.Username())
+	}
+	return parsed.String()
 }
 
 func (s *SQLStorage) exec(txn *sql.Tx, query string, args ...any) (sql.Result, error) {
