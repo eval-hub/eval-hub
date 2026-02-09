@@ -50,7 +50,7 @@ jobs:
     - name: Build and verify the API documentation
       run: |
         make documentation
-        git diff --stat --exit-code || (echo "API documentation is not generated. Run 'make documentation' locally." && exit 1)
+        git diff --exit-code || (echo "API documentation is not generated. Run 'make documentation' locally." && exit 1)
 
   security-scan:
     name: Gosec Security Scanner
