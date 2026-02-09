@@ -19,4 +19,4 @@ database:
   database_name: eval_hub
 # MLFlow configuration
 mlflow:
-  tracking_uri: http://localhost:5000
+  #tracking_uri: http://localhost:5000
