@@ -14,12 +14,12 @@ const (
 type HealthResponse struct {
 	Status    string       `json:"status"`
 	Timestamp time.Time    `json:"timestamp"`
-	Storage   *StorageInfo `json:"storage"`
+	Storage   *StorageInfo `json:"storage,omitempty"`
 }
 
 type StorageInfo struct {
 	Driver string `json:"driver"`
-	URL    string `json:"url"`
+	URL    string `json:"url,omitempty"`
 }
 
 func (h *Handlers) HandleHealth(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
