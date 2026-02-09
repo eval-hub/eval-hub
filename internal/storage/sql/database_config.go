@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"net/url"
 	"time"
 )
 
@@ -18,4 +19,21 @@ type SQLDatabaseConfig struct {
 	Fallback        bool           `mapstructure:"fallback,omitempty"`
 
 	// Other map[string]any `mapstructure:",remain"`
+}
+
+func (s *SQLDatabaseConfig) getDriverName() string {
+	return s.Driver
+}
+
+func (s *SQLDatabaseConfig) getConnectionURL() string {
+	// Sanitize URL to avoid exposing credentials
+	parsed, err := url.Parse(s.URL)
+	if err != nil {
+		return s.Driver + "://<parse-error>"
+	}
+	// Remove password from userinfo
+	if parsed.User != nil {
+		parsed.User = url.User(parsed.User.Username())
+	}
+	return parsed.String()
 }

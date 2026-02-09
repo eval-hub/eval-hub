@@ -12,14 +12,8 @@ const (
 )
 
 type HealthResponse struct {
-	Status    string       `json:"status"`
-	Timestamp time.Time    `json:"timestamp"`
-	Storage   *StorageInfo `json:"storage,omitempty"`
-}
-
-type StorageInfo struct {
-	Driver string `json:"driver"`
-	URL    string `json:"url,omitempty"`
+	Status    string    `json:"status"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 func (h *Handlers) HandleHealth(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
@@ -29,12 +23,6 @@ func (h *Handlers) HandleHealth(ctx *executioncontext.ExecutionContext, r http_w
 	healthInfo := HealthResponse{
 		Status:    STATUS_HEALTHY,
 		Timestamp: time.Now().UTC(),
-	}
-	if h.storage != nil {
-		healthInfo.Storage = &StorageInfo{
-			Driver: h.storage.GetDriverName(),
-			URL:    h.storage.GetConnectionURL(),
-		}
 	}
 	w.WriteJSON(healthInfo, 200)
 }
