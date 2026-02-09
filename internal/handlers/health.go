@@ -26,12 +26,15 @@ func (h *Handlers) HandleHealth(ctx *executioncontext.ExecutionContext, r http_w
 	// for now we sreilize on ecah call but we could add
 	// a astruct to store the health information and only
 	// serialize it when something changes
-	w.WriteJSON(HealthResponse{
+	healthInfo := HealthResponse{
 		Status:    STATUS_HEALTHY,
 		Timestamp: time.Now().UTC(),
-		Storage: &StorageInfo{
+	}
+	if h.storage != nil {
+		healthInfo.Storage = &StorageInfo{
 			Driver: h.storage.GetDriverName(),
 			URL:    h.storage.GetConnectionURL(),
-		},
-	}, 200)
+		}
+	}
+	w.WriteJSON(healthInfo, 200)
 }
