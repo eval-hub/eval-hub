@@ -15,7 +15,7 @@ func NewMLFlowClient(config *config.Config) *mlflowclient.Client {
 	if os.Getenv("MLFLOW_TRACKING_URI") != "" {
 		return mlflowclient.NewClient(os.Getenv("MLFLOW_TRACKING_URI"))
 	}
-	if config.MLFlow.TrackingURI != "" {
+	if config.MLFlow != nil && config.MLFlow.TrackingURI != "" {
 		return mlflowclient.NewClient(config.MLFlow.TrackingURI)
 	}
 	return nil
