@@ -1,4 +1,0 @@
-
-.PHONY: check-unused-components
-check-unused-components:
-	./scripts/check_unused_components.sh
