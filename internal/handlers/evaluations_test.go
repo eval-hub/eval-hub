@@ -146,3 +146,53 @@ func TestHandleCreateEvaluationSucceedsWhenRuntimeOk(t *testing.T) {
 		t.Fatalf("expected status 202, got %d", recorder.Code)
 	}
 }
+
+func TestHandleCreateEvaluationRejectsMissingBenchmarkID(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	storage := &fakeStorage{}
+	runtime := &fakeRuntime{}
+	validate := validator.New()
+	h := handlers.New(storage, validate, runtime, nil, nil, nil)
+
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+		body:        []byte(`{"model":{"url":"http://test.com","name":"test"},"benchmarks":[{"provider_id":"garak"}]}`),
+	}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-3", logger, time.Second)
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCreateEvaluation(ctx, req, resp)
+
+	if runtime.called {
+		t.Fatalf("did not expect runtime to be invoked")
+	}
+	if recorder.Code != 400 {
+		t.Fatalf("expected status 400, got %d", recorder.Code)
+	}
+}
+
+func TestHandleCreateEvaluationRejectsMissingProviderID(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	storage := &fakeStorage{}
+	runtime := &fakeRuntime{}
+	validate := validator.New()
+	h := handlers.New(storage, validate, runtime, nil, nil, nil)
+
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+		body:        []byte(`{"model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1"}]}`),
+	}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-4", logger, time.Second)
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCreateEvaluation(ctx, req, resp)
+
+	if runtime.called {
+		t.Fatalf("did not expect runtime to be invoked")
+	}
+	if recorder.Code != 400 {
+		t.Fatalf("expected status 400, got %d", recorder.Code)
+	}
+}

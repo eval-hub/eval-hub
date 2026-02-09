@@ -94,9 +94,6 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	benchmarkParams := copyParams(benchmarkConfig.Parameters)
 	numExamples := numExamplesFromParameters(benchmarkParams)
 	delete(benchmarkParams, "num_examples")
-	if len(benchmarkParams) == 0 {
-		return nil, fmt.Errorf("benchmark_config is required")
-	}
 	timeoutSeconds := timeoutSecondsFromMinutes(evaluation.TimeoutMinutes)
 	spec := jobSpec{
 		JobID:           evaluation.Resource.ID,

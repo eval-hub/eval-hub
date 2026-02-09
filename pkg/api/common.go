@@ -25,7 +25,7 @@ const (
 )
 
 type Ref struct {
-	ID string `json:"id"`
+	ID string `json:"id" validate:"required"`
 }
 
 type HRef struct {
