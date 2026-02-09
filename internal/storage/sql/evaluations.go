@@ -370,15 +370,15 @@ func updateBenchmarkStatus(job *api.EvaluationJobResource, runStatus *api.Status
 		}
 	}
 	if job.Status.Benchmarks == nil {
-		job.Status.Benchmarks = make([]*api.BenchmarkStatus, 0)
+		job.Status.Benchmarks = make([]api.BenchmarkStatus, 0)
 	}
 	for index, benchmark := range job.Status.Benchmarks {
 		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID {
-			job.Status.Benchmarks[index] = benchmarkStatus
+			job.Status.Benchmarks[index] = *benchmarkStatus
 			return
 		}
 	}
-	job.Status.Benchmarks = append(job.Status.Benchmarks, benchmarkStatus)
+	job.Status.Benchmarks = append(job.Status.Benchmarks, *benchmarkStatus)
 }
 
 func updateBenchmarkResults(job *api.EvaluationJobResource, runStatus *api.StatusEvent, result *api.BenchmarkResult) {
@@ -386,15 +386,15 @@ func updateBenchmarkResults(job *api.EvaluationJobResource, runStatus *api.Statu
 		job.Results = &api.EvaluationJobResults{}
 	}
 	if job.Results.Benchmarks == nil {
-		job.Results.Benchmarks = make([]*api.BenchmarkResult, 0)
+		job.Results.Benchmarks = make([]api.BenchmarkResult, 0)
 	}
 	for index, benchmark := range job.Results.Benchmarks {
 		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID {
-			job.Results.Benchmarks[index] = result
+			job.Results.Benchmarks[index] = *result
 			return
 		}
 	}
-	job.Results.Benchmarks = append(job.Results.Benchmarks, result)
+	job.Results.Benchmarks = append(job.Results.Benchmarks, *result)
 }
 
 // UpdateEvaluationJobWithRunStatus runs in a transaction: fetches the job, merges RunStatusInternal into the entity, and persists.
