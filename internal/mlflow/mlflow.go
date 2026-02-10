@@ -22,7 +22,11 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) *mlflowclient.C
 		return nil
 	}
 
-	return mlflowclient.NewClient(url).WithContext(context.Background()).WithLogger(logger)
+	client := mlflowclient.NewClient(url).WithContext(context.Background()).WithLogger(logger)
+
+	logger.Info("MLFlow tracking enabled", "mlflow_experiment_url", client.GetExperimentsURL())
+
+	return client
 }
 
 func GetExperimentID(mlflowClient *mlflowclient.Client, experiment *api.ExperimentConfig) (experimentID string, experimentURL string, err error) {

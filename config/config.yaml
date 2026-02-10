@@ -12,6 +12,7 @@ secrets:
 env_mappings:
   PORT: service.port
   DB_URL: database.url
+  MLFLOW_TRACKING_URI: mlflow.tracking_uri
 # Database configuration
 database:
   driver: sqlite
