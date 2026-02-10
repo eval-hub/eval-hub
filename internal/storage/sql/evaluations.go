@@ -320,6 +320,8 @@ func (s *SQLStorage) DeleteEvaluationJob(id string, hardDelete bool) error {
 			return err
 		}
 
+		// TODO cancel the job in the runtime
+
 		if err := txn.Commit(); err != nil {
 			s.logger.Error("Failed to commit delete evaluation transaction", "error", err, "id", id)
 			return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
