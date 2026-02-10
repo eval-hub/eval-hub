@@ -12,7 +12,7 @@ metadata:
 data:
   job.json: |
     {
-      "job_id": "001",
+      "id": "001",
       "benchmark_id": "mmlu",
       "model": {
         "url": "http://model-server.models.svc.cluster.local:8000/v1",
@@ -24,10 +24,16 @@ data:
         "temperature": 0.2
       },
       "experiment_name": "eval-experiment",
-      "tags": {
-        "team": "evals",
-        "env": "dev"
-      },
+      "tags": [
+        {
+          "key": "team",
+          "value": "evals"
+        },
+        {
+          "key": "env",
+          "value": "dev"
+        }
+      ],
       "timeout_seconds": 1800,
       "retry_attempts": 2,
       "callback_url": "http://eval-hub"
