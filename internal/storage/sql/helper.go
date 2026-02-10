@@ -72,8 +72,8 @@ func createGetEntityStatement(driver, tableName string) (string, error) {
 	}
 }
 
-// createGetEntityStatement returns a driver-specific SELECT statement
-// to retrieve an entity by ID
+// createCheckEntityExistsStatement returns a driver-specific SELECT statement
+// to check if an entity exists by ID and retrieve its status
 func createCheckEntityExistsStatement(driver, tableName string) (string, error) {
 	quotedTable := quoteIdentifier(driver, tableName)
 
