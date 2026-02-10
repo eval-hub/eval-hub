@@ -312,17 +312,21 @@ func (s *SQLStorage) DeleteEvaluationJob(id string, hardDelete bool) error {
 			return serviceerrors.NewServiceError(messages.JobCanNotBeCancelled, "Id", id, "Status", statusStr)
 		}
 
-		// commit here because the update will create a new transaction
+		err = s.updateEvaluationJobStatusTxn(txn, id, api.OverallStateCancelled, &api.MessageInfo{
+			Message:     "Evaluation job cancelled",
+			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
+		})
+		if err != nil {
+			return err
+		}
+
 		if err := txn.Commit(); err != nil {
 			s.logger.Error("Failed to commit delete evaluation transaction", "error", err, "id", id)
 			return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
 		}
 		committed = true
 
-		return s.UpdateEvaluationJobStatus(id, api.OverallStateCancelled, &api.MessageInfo{
-			Message:     "Evaluation job cancelled",
-			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
-		})
+		return nil
 	}
 
 	// TODO delete the runtime and pod etc
@@ -366,7 +370,20 @@ func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState
 			}
 		}
 	}()
+	err = s.updateEvaluationJobStatusTxn(txn, id, state, message)
+	if err != nil {
+		return err
+	}
+	if err := txn.Commit(); err != nil {
+		s.logger.Error("Failed to commit update evaluation job status transaction", "error", err, "id", id)
+		return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
+	}
+	committed = true
+	s.logger.Info("Committed update evaluation job status transaction", "id", id)
+	return nil
+}
 
+func (s *SQLStorage) updateEvaluationJobStatusTxn(txn *sql.Tx, id string, state api.OverallState, message *api.MessageInfo) error {
 	evaluationJob, err := s.getEvaluationJobTransactional(txn, id)
 	if err != nil {
 		return err
@@ -380,22 +397,10 @@ func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState
 		Results: evaluationJob.Results,
 	}
 
-	err = s.updateEvaluationJobTransactional(txn, id, state, &entity)
-	if err != nil {
-		return err
-	}
-
-	if err := txn.Commit(); err != nil {
-		s.logger.Error("Failed to commit update evaluation job status transaction", "error", err, "id", id)
-		return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
-	}
-	committed = true
-
-	s.logger.Info("Committed update evaluation job status transaction", "id", id)
-	return nil
+	return s.updateEvaluationJobTxn(txn, id, state, &entity)
 }
 
-func (s *SQLStorage) updateEvaluationJobTransactional(txn *sql.Tx, id string, status api.OverallState, evaluationJob *EvaluationJobEntity) error {
+func (s *SQLStorage) updateEvaluationJobTxn(txn *sql.Tx, id string, status api.OverallState, evaluationJob *EvaluationJobEntity) error {
 	entityJSON, err := json.Marshal(evaluationJob)
 	if err != nil {
 		// we should never get here
@@ -534,7 +539,7 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 		Results: job.Results,
 	}
 
-	if err := s.updateEvaluationJobTransactional(txn, id, overallState, &entity); err != nil {
+	if err := s.updateEvaluationJobTxn(txn, id, overallState, &entity); err != nil {
 		return err
 	}
 
