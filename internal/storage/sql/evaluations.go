@@ -307,7 +307,14 @@ func (s *SQLStorage) DeleteEvaluationJob(id string, hardDelete bool) error {
 	if !hardDelete {
 		switch statusStr {
 		case string(api.StateCancelled):
+			// for now we just return if the job is already cancelled and don't try to cancel it again
 			s.logger.Info("Evaluation job already cancelled", "id", id)
+			if err := txn.Commit(); err != nil {
+				s.logger.Error("Failed to commit delete evaluation transaction", "error", err, "id", id)
+				return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
+			}
+			committed = true
+			return nil
 		case string(api.StateCompleted), string(api.StateFailed):
 			return serviceerrors.NewServiceError(messages.JobCanNotBeCancelled, "Id", id, "Status", statusStr)
 		}
