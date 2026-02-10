@@ -172,6 +172,9 @@ func TestEvaluationsStorage(t *testing.T) {
 		if evaluationId == "" {
 			t.Fatalf("Evaluation ID is empty")
 		}
+		if resp.EvaluationJobConfig.Collection != nil {
+			t.Fatalf("Collection is not nil")
+		}
 	})
 
 	t.Run("GetEvaluationJob returns the evaluation job", func(t *testing.T) {
