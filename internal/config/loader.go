@@ -72,6 +72,25 @@ func readConfig(logger *slog.Logger, name string, ext string, dirs ...string) (*
 		logger.Debug("Read the configuration file", "file", configValues.ConfigFileUsed())
 	}
 
+	// set up the environment variable mappings
+	envMappings := EnvMap{}
+	if err := configValues.Unmarshal(&envMappings); err != nil {
+		logger.Error("Failed to unmarshal environment variable mappings", "error", err.Error())
+		return nil, err
+	}
+	if len(envMappings.EnvMappings) > 0 {
+		for envName, field := range envMappings.EnvMappings {
+			configValues.BindEnv(field, strings.ToUpper(envName))
+			logger.Info("Mapped environment variable", "field_name", field, "env_name", envName)
+		}
+		// now we need to reload the config file
+		err = configValues.ReadInConfig()
+		if err != nil {
+			logger.Error("Failed to reload the configuration file", "error", err.Error())
+			return nil, err
+		}
+	}
+
 	return configValues, err
 }
 
@@ -212,16 +231,6 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 				}
 			}
 		}
-	}
-	// set up the environment variable mappings
-	envMappings := EnvMap{}
-	if err := configValues.Unmarshal(&envMappings); err != nil {
-		logger.Error("Failed to unmarshal environment variable mappings", "error", err.Error())
-		return nil, err
-	}
-	for envName, field := range envMappings.EnvMappings {
-		configValues.BindEnv(field, envName)
-		logger.Info("Mapped environment variable", "field_name", field, "env_name", envName)
 	}
 
 	conf := Config{}

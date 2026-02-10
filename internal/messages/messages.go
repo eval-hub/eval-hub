@@ -56,7 +56,7 @@ var (
 
 	// MLFlowRequestFailed The MLflow request failed: '{{.Error}}'. Please check the MLflow configuration and try again.
 	MLFlowRequestFailed = createMessage(
-		constants.HTTPCodeInternalServerError, // this could be a user errir if the MLFlow service details are incorrect
+		constants.HTTPCodeBadRequest, // this could be a user error if the MLFlow service details are incorrect
 		"The MLflow request failed: '{{.Error}}'. Please check the MLflow configuration and try again.",
 	)
 
