@@ -220,7 +220,7 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 		return nil, err
 	}
 	for envName, field := range envMappings.EnvMappings {
-		configValues.BindEnv(field, strings.ToUpper(envName))
+		configValues.BindEnv(field, envName)
 		logger.Info("Mapped environment variable", "field_name", field, "env_name", envName)
 	}
 
