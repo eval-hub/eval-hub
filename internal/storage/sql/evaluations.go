@@ -334,7 +334,7 @@ func (s *SQLStorage) DeleteEvaluationJob(id string, hardDelete bool) error {
 	}
 
 	// Execute the DELETE query
-	_, err = s.exec(nil, deleteQuery, id)
+	_, err = s.exec(txn, deleteQuery, id)
 	if err != nil {
 		s.logger.Error("Failed to delete evaluation job", "error", err, "id", id)
 		return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
