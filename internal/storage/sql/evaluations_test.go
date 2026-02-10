@@ -3,6 +3,7 @@ package sql_test
 import (
 	"encoding/json"
 	"maps"
+	"strings"
 	"testing"
 	"time"
 
@@ -257,6 +258,13 @@ func TestEvaluationsStorage(t *testing.T) {
 
 	t.Run("DeleteEvaluationJob deletes the evaluation job", func(t *testing.T) {
 		err := store.DeleteEvaluationJob(evaluationId, false)
+		if err == nil {
+			t.Fatalf("Failed to get error when cancelling a deleted evaluation job")
+		}
+		if !strings.Contains(err.Error(), "can not be cancelled because") {
+			t.Fatalf("Failed to get correct error when cancelling a deleted evaluation job: %v", err)
+		}
+		err = store.DeleteEvaluationJob(evaluationId, true)
 		if err != nil {
 			t.Fatalf("Failed to delete evaluation job: %v", err)
 		}

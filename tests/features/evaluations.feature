@@ -14,6 +14,8 @@ Feature: Evaluations Endpoint
     Then the response code should be 204
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 404
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 404
 
   Scenario: List evaluation jobs
     Given the service is running
