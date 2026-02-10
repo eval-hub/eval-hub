@@ -299,7 +299,7 @@ func (s *SQLStorage) DeleteEvaluationJob(id string, hardDelete bool) error {
 	}
 	var dbID string
 	var statusStr string
-	err = s.pool.QueryRowContext(s.ctx, selectQuery, id).Scan(&dbID, &statusStr)
+	err = txn.QueryRowContext(s.ctx, selectQuery, id).Scan(&dbID, &statusStr)
 	if err != nil {
 		return serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
 	}
@@ -311,19 +311,18 @@ func (s *SQLStorage) DeleteEvaluationJob(id string, hardDelete bool) error {
 		case string(api.StateCompleted), string(api.StateFailed):
 			return serviceerrors.NewServiceError(messages.JobCanNotBeCancelled, "Id", id, "Status", statusStr)
 		}
-		if err := s.UpdateEvaluationJobStatus(id, api.OverallStateCancelled, &api.MessageInfo{
-			Message:     "Evaluation job cancelled",
-			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
-		}); err != nil {
-			return err
-		}
 
+		// commit here because the update will create a new transaction
 		if err := txn.Commit(); err != nil {
 			s.logger.Error("Failed to commit delete evaluation transaction", "error", err, "id", id)
 			return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
 		}
 		committed = true
-		return nil
+
+		return s.UpdateEvaluationJobStatus(id, api.OverallStateCancelled, &api.MessageInfo{
+			Message:     "Evaluation job cancelled",
+			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
+		})
 	}
 
 	// TODO delete the runtime and pod etc
