@@ -3,6 +3,7 @@ package sql
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	// import the postgres driver - "pgx"
@@ -385,13 +386,23 @@ func (s *SQLStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runSt
 	job.Status.Benchmarks = append(job.Status.Benchmarks, *benchmarkStatus)
 }
 
-func (s *SQLStorage) updateBenchmarkResults(job *api.EvaluationJobResource, runStatus *api.StatusEvent, result *api.BenchmarkResult) {
+func (s *SQLStorage) updateBenchmarkResults(job *api.EvaluationJobResource, runStatus *api.StatusEvent, result *api.BenchmarkResult) error {
 	if job.Results == nil {
 		job.Results = &api.EvaluationJobResults{}
 	}
 	if job.Results.Benchmarks == nil {
 		job.Results.Benchmarks = make([]api.BenchmarkResult, 0)
 	}
+
+	for _, benchmark := range job.Results.Benchmarks {
+		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID {
+			// we should never get here because the final result
+			// can not change, hence we treat this as an error for now
+			s.logger.Error("Failed to update benchmark results", "error", "Benchmark result already exists", "benchmark_id", runStatus.BenchmarkStatusEvent.ID, "job_id", job.Resource.ID)
+			return serviceerrors.NewServiceError(messages.InternalServerError, "Error", fmt.Sprintf("Benchmark result already exists for benchmark %s in job %s", runStatus.BenchmarkStatusEvent.ID, job.Resource.ID))
+		}
+	}
+	job.Results.Benchmarks = append(job.Results.Benchmarks, *result)
 
 	// update the number of evaluations
 	job.Results.TotalEvaluations++
@@ -405,13 +416,7 @@ func (s *SQLStorage) updateBenchmarkResults(job *api.EvaluationJobResource, runS
 		job.Results.FailedEvaluations++
 	}
 
-	for index, benchmark := range job.Results.Benchmarks {
-		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID {
-			job.Results.Benchmarks[index] = *result
-			return
-		}
-	}
-	job.Results.Benchmarks = append(job.Results.Benchmarks, *result)
+	return nil
 }
 
 // UpdateEvaluationJobWithRunStatus runs in a transaction: fetches the job, merges RunStatusInternal into the entity, and persists.
@@ -462,7 +467,10 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 			MLFlowRunID: runStatus.BenchmarkStatusEvent.MLFlowRunID,
 			LogsPath:    runStatus.BenchmarkStatusEvent.LogsPath,
 		}
-		s.updateBenchmarkResults(job, runStatus, &result)
+		err := s.updateBenchmarkResults(job, runStatus, &result)
+		if err != nil {
+			return err
+		}
 	}
 
 	// get the overall job status
