@@ -276,12 +276,48 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter strin
 }
 
 func (s *SQLStorage) DeleteEvaluationJob(id string, hardDelete bool) error {
+	// we have to get the evaluation job and then update or delete the job so we need a transaction
+	txn, err := s.pool.BeginTx(s.ctx, nil)
+	if err != nil {
+		s.logger.Error("Failed to begin delete evaluation job transaction", "error", err)
+		return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			err := txn.Rollback()
+			if err != nil {
+				s.logger.Error("Failed to rollback delete evaluation job transaction", "error", err, "id", id)
+			}
+		}
+	}()
+
+	// check if the evaluation job exists, we do this otherwise we always return 204
+	selectQuery, err := createCheckEntityExistsStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS)
+	if err != nil {
+		return err
+	}
+	var dbID string
+	var statusStr string
+	err = s.pool.QueryRowContext(s.ctx, selectQuery, id).Scan(&dbID, &statusStr)
+	if err != nil {
+		return serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
+	}
+
 	if !hardDelete {
+		switch statusStr {
+		case string(api.StateCancelled):
+			s.logger.Info("Evaluation job already cancelled", "id", id)
+		case string(api.StateCompleted), string(api.StateFailed):
+			return serviceerrors.NewServiceError(messages.JobCanNotBeCancelled, "Id", id, "Status", statusStr)
+		}
 		return s.UpdateEvaluationJobStatus(id, api.OverallStateCancelled, &api.MessageInfo{
 			Message:     "Evaluation job cancelled",
 			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
 		})
 	}
+
+	// TODO delete the runtime and pod etc
 
 	// Build the DELETE query
 	deleteQuery, err := createDeleteEntityStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS)

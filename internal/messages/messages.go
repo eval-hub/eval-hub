@@ -36,6 +36,12 @@ var (
 		"The query parameter '{{.ParameterName}}' is not a valid {{.Type}}: '{{.Value}}'.",
 	)
 
+	// JobCanNotBeCancelled The job {{.Id}} can not be cancelled because it is '{{.Status}}'.
+	JobCanNotBeCancelled = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The job {{.Id}} can not be cancelled because it is '{{.Status}}'.",
+	)
+
 	// InvalidJSONRequest The request JSON is invalid: '{{.Error}}'. Please check the request and try again.
 	InvalidJSONRequest = createMessage(
 		constants.HTTPCodeBadRequest,
