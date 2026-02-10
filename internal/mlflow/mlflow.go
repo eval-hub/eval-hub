@@ -24,7 +24,7 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) *mlflowclient.C
 
 	client := mlflowclient.NewClient(url).WithContext(context.Background()).WithLogger(logger)
 
-	logger.Info("MLFlow tracking enabled", "tracking_uri", client.GetExperimentsURL())
+	logger.Info("MLFlow tracking enabled", "mlflow_experiment_url", client.GetExperimentsURL())
 
 	return client
 }
