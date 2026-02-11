@@ -476,7 +476,7 @@ func (s *SQLStorage) updateBenchmarkResults(job *api.EvaluationJobResource, runS
 	case api.StateFailed:
 		job.Results.FailedEvaluations++
 	case api.StateCancelled:
-		// cancelled is amrked as failed for now
+		// cancelled is marked as failed for now
 		job.Results.FailedEvaluations++
 	}
 

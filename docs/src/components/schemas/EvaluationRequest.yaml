@@ -11,16 +11,6 @@ properties:
   experiment:
     $ref: ./ExperimentConfig.yaml
     description: Experiment configuration for MLFlow tracking
-  timeout_minutes:
-    type: integer
-    title: Timeout Minutes
-    description: Timeout for the entire evaluation
-    default: 60
-  retry_attempts:
-    type: integer
-    title: Retry Attempts
-    description: Number of retry attempts on failure
-    default: 3
   custom:
     additionalProperties: true
     type: object

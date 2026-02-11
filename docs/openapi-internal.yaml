@@ -266,6 +266,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /api/v1/evaluations/jobs/{id}/events:
     post:
       x-internal: true
@@ -944,16 +946,6 @@ components:
         experiment:
           $ref: '#/components/schemas/ExperimentConfig'
           description: Experiment configuration for MLFlow tracking
-        timeout_minutes:
-          type: integer
-          title: Timeout Minutes
-          description: Timeout for the entire evaluation
-          default: 60
-        retry_attempts:
-          type: integer
-          title: Retry Attempts
-          description: Number of retry attempts on failure
-          default: 3
         custom:
           additionalProperties: true
           type: object
@@ -1381,6 +1373,12 @@ components:
         message: The resource was not found.
         message_code: not_found
         trace: b12692e1-8582-4628-88ca-7a13fefb73e2
+    ConflictError:
+      summary: Conflict error with status code 409
+      value:
+        message: The job 'f02b16a2-1990-4626-b24d-1cff3febdbfb' can not be cancelled because it is 'completed'.
+        message_code: conflict
+        trace: b12692e1-8582-4628-88ca-7a13fefb73e2
   responses:
     BadRequest:
       description: Bad Request
@@ -1418,3 +1416,12 @@ components:
           examples:
             NotFoundError:
               $ref: '#/components/examples/NotFoundError'
+    Conflict:
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/APIError'
+          examples:
+            ConflictError:
+              $ref: '#/components/examples/ConflictError'

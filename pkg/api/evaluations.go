@@ -151,13 +151,11 @@ type EvaluationJobResults struct {
 
 // EvaluationJobConfig represents evaluation job request schema
 type EvaluationJobConfig struct {
-	Model          ModelRef          `json:"model" validate:"required"`
-	Benchmarks     []BenchmarkConfig `json:"benchmarks" validate:"required,min=1,dive"`
-	Collection     *Ref              `json:"collection,omitempty"`
-	Experiment     *ExperimentConfig `json:"experiment,omitempty"`
-	TimeoutMinutes *int              `json:"timeout_minutes,omitempty"`
-	RetryAttempts  *int              `json:"retry_attempts,omitempty"`
-	Custom         map[string]any    `json:"custom,omitempty"`
+	Model      ModelRef          `json:"model" validate:"required"`
+	Benchmarks []BenchmarkConfig `json:"benchmarks" validate:"required,min=1,dive"`
+	Collection *Ref              `json:"collection,omitempty"`
+	Experiment *ExperimentConfig `json:"experiment,omitempty"`
+	Custom     map[string]any    `json:"custom,omitempty"`
 }
 
 type EvaluationResource struct {

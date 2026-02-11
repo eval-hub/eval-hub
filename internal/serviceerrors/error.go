@@ -10,7 +10,7 @@ type ServiceError struct {
 }
 
 func (e *ServiceError) Error() string {
-	return messages.GetErrorMesssage(e.messageCode, e.messageParams...)
+	return messages.GetErrorMessage(e.messageCode, e.messageParams...)
 }
 
 func (e *ServiceError) MessageCode() *messages.MessageCode {

@@ -101,7 +101,7 @@ func (w MockResponseWrapper) Error(err error, requestId string) {
 }
 
 func (w MockResponseWrapper) ErrorWithMessageCode(requestId string, messageCode *messages.MessageCode, messageParams ...any) {
-	w.WriteJSON(api.Error{Message: messages.GetErrorMesssage(messageCode, messageParams...), Code: messageCode.GetCode(), Trace: requestId}, messageCode.GetCode())
+	w.WriteJSON(api.Error{Message: messages.GetErrorMessage(messageCode, messageParams...), Code: messageCode.GetCode(), Trace: requestId}, messageCode.GetCode())
 }
 
 func (w MockResponseWrapper) WriteJSON(v any, code int) {

@@ -44,7 +44,7 @@ func (s *Server) newExecutionContext(r *http.Request) *executioncontext.Executio
 		3)
 }
 
-// Abstract request objects to not depende on the underlying http framework.
+// Abstract request objects to not depend on the underlying HTTP framework.
 type ReqWrapper struct {
 	Request *http.Request
 }
@@ -139,7 +139,7 @@ func (r RespWrapper) SetStatusCode(code int) {
 }
 
 func (r RespWrapper) ErrorWithMessageCode(requestId string, messageCode *messages.MessageCode, messageParams ...any) {
-	msg := messages.GetErrorMesssage(messageCode, messageParams...)
+	msg := messages.GetErrorMessage(messageCode, messageParams...)
 
 	r.DeleteHeader("Content-Length")
 

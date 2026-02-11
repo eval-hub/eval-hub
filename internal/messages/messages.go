@@ -38,7 +38,7 @@ var (
 
 	// JobCanNotBeCancelled The job {{.Id}} can not be cancelled because it is '{{.Status}}'.
 	JobCanNotBeCancelled = createMessage(
-		constants.HTTPCodeBadRequest,
+		constants.HTTPCodeConflict,
 		"The job {{.Id}} can not be cancelled because it is '{{.Status}}'.",
 	)
 
@@ -66,7 +66,7 @@ var (
 		"The MLflow request failed: '{{.Error}}'. Please check the MLflow configuration and try again.",
 	)
 
-	// Configurastion related errors
+	// Configuration related errors
 
 	// ConfigurationFailed The service startup failed: '{{.Error}}'.
 	ConfigurationFailed = createMessage(
@@ -76,10 +76,10 @@ var (
 
 	// JSON errors that are not coming from user input
 
-	// JSONUnmarshalFailed The JSON unmarshalling failed for the {{.Type}}: '{{.Error}}'.
+	// JSONUnmarshalFailed The JSON un-marshalling failed for the {{.Type}}: '{{.Error}}'.
 	JSONUnmarshalFailed = createMessage(
 		constants.HTTPCodeInternalServerError,
-		"The JSON unmarshalling failed for the {{.Type}}: '{{.Error}}'.",
+		"The JSON un-marshalling failed for the {{.Type}}: '{{.Error}}'.",
 	)
 
 	// Storage related errors
@@ -140,7 +140,7 @@ func createMessage(status int, one string) *MessageCode {
 	}
 }
 
-func GetErrorMesssage(messageCode *MessageCode, messageParams ...any) string {
+func GetErrorMessage(messageCode *MessageCode, messageParams ...any) string {
 	msg := messageCode.GetMessage()
 	for i := 0; i < len(messageParams); i += 2 {
 		param := messageParams[i]

@@ -8,7 +8,6 @@ import (
 )
 
 func TestBuildJobConfigDefaults(t *testing.T) {
-	retry := 2
 	serviceURL := "http://eval-hub"
 	t.Setenv(serviceURLEnv, serviceURL)
 	evaluation := &api.EvaluationJobResource{
@@ -21,7 +20,6 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 				URL:  "http://model",
 				Name: "model",
 			},
-			RetryAttempts: &retry,
 			Benchmarks: []api.BenchmarkConfig{
 				{
 					Ref: api.Ref{ID: "bench-1"},
@@ -52,9 +50,6 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 	}
 	if cfg.adapterImage != "adapter:latest" {
 		t.Fatalf("expected adapter image to be set")
-	}
-	if cfg.retryAttempts != retry {
-		t.Fatalf("expected retry attempts %d, got %d", retry, cfg.retryAttempts)
 	}
 	if cfg.namespace == "" {
 		t.Fatalf("expected namespace to be set")
@@ -320,20 +315,6 @@ func TestCopyParamsCreatesCopy(t *testing.T) {
 	copied["temp"] = 0.3
 	if original["temp"] == copied["temp"] {
 		t.Fatalf("expected copy to be independent of original")
-	}
-}
-
-func TestTimeoutSecondsFromMinutes(t *testing.T) {
-	if timeoutSecondsFromMinutes(nil) != nil {
-		t.Fatalf("expected nil for nil minutes")
-	}
-	minutes := 2
-	seconds := timeoutSecondsFromMinutes(&minutes)
-	if seconds == nil || *seconds != 120 {
-		if seconds == nil {
-			t.Fatalf("expected 120, got nil")
-		}
-		t.Fatalf("expected 120, got %d", *seconds)
 	}
 }
 

@@ -10,6 +10,7 @@ const (
 	HTTPCodeForbidden           = 403
 	HTTPCodeNotFound            = 404
 	HTTPCodeMethodNotAllowed    = 405
+	HTTPCodeConflict            = 409
 	HTTPCodeInternalServerError = 500
 	HTTPCodeNotImplemented      = 501
 )

@@ -52,8 +52,6 @@ type jobSpec struct {
 	BenchmarkConfig map[string]any      `json:"benchmark_config"`
 	ExperimentName  string              `json:"experiment_name,omitempty"`
 	Tags            []api.ExperimentTag `json:"tags,omitempty"`
-	TimeoutSeconds  *int                `json:"timeout_seconds,omitempty"`
-	RetryAttempts   *int                `json:"retry_attempts,omitempty"`
 	CallbackURL     *string             `json:"callback_url"`
 }
 
@@ -79,13 +77,6 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		return nil, fmt.Errorf("%s is required", serviceURLEnv)
 	}
 
-	retryAttempts := 0
-	if evaluation.RetryAttempts != nil {
-		if *evaluation.RetryAttempts < 0 {
-			return nil, fmt.Errorf("retry attempts cannot be negative")
-		}
-		retryAttempts = *evaluation.RetryAttempts
-	}
 	namespace := resolveNamespace("")
 	benchmarkConfig, err := findBenchmarkConfig(evaluation, benchmarkID)
 	if err != nil {
@@ -94,15 +85,12 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	benchmarkParams := copyParams(benchmarkConfig.Parameters)
 	numExamples := numExamplesFromParameters(benchmarkParams)
 	delete(benchmarkParams, "num_examples")
-	timeoutSeconds := timeoutSecondsFromMinutes(evaluation.TimeoutMinutes)
 	spec := jobSpec{
 		JobID:           evaluation.Resource.ID,
 		BenchmarkID:     benchmarkID,
 		Model:           evaluation.Model,
 		NumExamples:     numExamples,
 		BenchmarkConfig: benchmarkParams,
-		TimeoutSeconds:  timeoutSeconds,
-		RetryAttempts:   evaluation.RetryAttempts,
 		CallbackURL:     &serviceURL,
 	}
 	if evaluation.Experiment != nil {
@@ -132,7 +120,6 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		namespace:           namespace,
 		providerID:          provider.ID,
 		benchmarkID:         benchmarkID,
-		retryAttempts:       retryAttempts,
 		adapterImage:        runtime.K8s.Image,
 		entrypoint:          runtime.K8s.Entrypoint,
 		defaultEnv:          runtime.K8s.Env,
@@ -182,14 +169,6 @@ func findBenchmarkConfig(evaluation *api.EvaluationJobResource, benchmarkID stri
 		}
 	}
 	return nil, fmt.Errorf("benchmark config not found for %q", benchmarkID)
-}
-
-func timeoutSecondsFromMinutes(minutes *int) *int {
-	if minutes == nil {
-		return nil
-	}
-	seconds := *minutes * 60
-	return &seconds
 }
 
 func copyParams(source map[string]any) map[string]any {

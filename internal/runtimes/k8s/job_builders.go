@@ -28,16 +28,16 @@ const (
 	envJobIDName                    = "JOB_ID"
 	envEvalHubURLName               = "EVALHUB_URL"
 	defaultAllowPrivilegeEscalation = false
-	defaultRunAsUser                = int64(1000)
-	defaultRunAsGroup               = int64(1000)
-	labelAppKey                     = "app"
-	labelComponentKey               = "component"
-	labelJobIDKey                   = "job_id"
-	labelProviderIDKey              = "provider_id"
-	labelBenchmarkIDKey             = "benchmark_id"
-	labelAppValue                   = "evalhub"
-	labelComponentValue             = "evaluation-job"
-	capabilityDropAll               = "ALL"
+	//defaultRunAsUser                = int64(1000)
+	//defaultRunAsGroup               = int64(1000)
+	labelAppKey         = "app"
+	labelComponentKey   = "component"
+	labelJobIDKey       = "job_id"
+	labelProviderIDKey  = "provider_id"
+	labelBenchmarkIDKey = "benchmark_id"
+	labelAppValue       = "evalhub"
+	labelComponentValue = "evaluation-job"
+	capabilityDropAll   = "ALL"
 )
 
 var dnsLabelSanitizer = regexp.MustCompile(`[^a-z0-9-]+`)
@@ -241,10 +241,6 @@ func defaultSecurityContext() *corev1.SecurityContext {
 }
 
 func boolPtr(value bool) *bool {
-	return &value
-}
-
-func int64Ptr(value int64) *int64 {
 	return &value
 }
 

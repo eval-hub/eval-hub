@@ -1,0 +1,5 @@
+summary: Conflict error with status code 409
+value:
+  message: "The job 'f02b16a2-1990-4626-b24d-1cff3febdbfb' can not be cancelled because it is 'completed'."
+  message_code: "conflict"
+  trace: "b12692e1-8582-4628-88ca-7a13fefb73e2"
