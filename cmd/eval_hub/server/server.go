@@ -178,7 +178,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		req := NewRequestWrapper(r)
 		switch req.Method() {
 		case http.MethodGet:
-			h.HandleHealth(ctx, req, resp)
+			h.HandleHealth(ctx, req, resp, s.serviceConfig.Service.Build, s.serviceConfig.Service.BuildDate)
 		default:
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
