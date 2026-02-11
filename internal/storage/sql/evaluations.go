@@ -300,7 +300,7 @@ func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState
 		switch evaluationJob.Status.State {
 		case api.OverallStateCancelled:
 			// if the job is already cancelled then we don't need to update the status
-			// we don't treat this as an error for now, we jsut return 204
+			// we don't treat this as an error for now, we just return 204
 			return nil
 		case api.OverallStateCompleted, api.OverallStateFailed:
 			return se.NewServiceError(messages.JobCanNotBeCancelled, "Id", id, "Status", evaluationJob.Status.State)
