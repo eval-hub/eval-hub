@@ -12,4 +12,5 @@ type ServiceError interface {
 	Error() string                      // This allows this to be used with the error interface
 	MessageCode() *messages.MessageCode // The message code to return to the caller
 	MessageParams() []any               // The parameters to the message code
+	ShouldRollback() bool               // Whether the transaction should be rolled back due to this error
 }

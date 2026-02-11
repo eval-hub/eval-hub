@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 )
@@ -19,7 +20,7 @@ func (s *SQLStorage) withTransaction(name string, resourceID string, fn Transact
 	servicerError := fn(txn)
 	commit := true
 	if servicerError != nil {
-		if se, ok := servicerError.(*serviceerrors.ServiceError); ok {
+		if se, ok := servicerError.(abstractions.ServiceError); ok {
 			if se.ShouldRollback() {
 				commit = false
 			}

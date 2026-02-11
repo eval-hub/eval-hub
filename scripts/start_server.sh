@@ -21,6 +21,11 @@ if [[ ! -f "${EXE}" ]]; then
   exit 2
 fi
 
+# This is just for the tests
+cat > /tmp/db_password <<EOF
+my-secret
+EOF
+
 # This assumes that the service has already been built
 # Always run in local mode (CORS enabled)
 ${EXE} --local > ${LOGFILE} 2>&1 &
