@@ -345,8 +345,9 @@ func redactField(m map[string]any, path []string) {
 	}
 }
 
-// sanitiseValue strips credentials from URL strings. If the value is not a
-// parseable URL it falls back to "[redacted]".
+// sanitiseValue strips credentials from URL strings that contain embedded
+// userinfo. URLs without credentials and non-URL values are replaced with
+// "[redacted]".
 func sanitiseValue(v any) string {
 	s, ok := v.(string)
 	if !ok {
@@ -356,8 +357,9 @@ func sanitiseValue(v any) string {
 	if err != nil || parsed.Scheme == "" {
 		return "[redacted]"
 	}
-	if parsed.User != nil {
-		parsed.User = url.User(parsed.User.Username())
+	if parsed.User == nil {
+		return "[redacted]"
 	}
+	parsed.User = url.User(parsed.User.Username())
 	return parsed.String()
 }
