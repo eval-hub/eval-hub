@@ -8,14 +8,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 )
 
-type TransactionFunction func(*sql.Tx) (TransactionState, error)
-
-type TransactionState int
-
-const (
-	TransactionStateCommit TransactionState = iota
-	TransactionStateRollback
-)
+type TransactionFunction func(*sql.Tx) error
 
 func (s *SQLStorage) withTransaction(name string, resourceID string, fn TransactionFunction) error {
 	txn, err := s.pool.BeginTx(s.ctx, nil)
@@ -23,14 +16,25 @@ func (s *SQLStorage) withTransaction(name string, resourceID string, fn Transact
 		s.logger.Error("Failed to begin transaction", "name", fmt.Sprintf("begin transaction %s", name), "resource_id", resourceID, "error", err.Error())
 		return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", fmt.Sprintf("begin transaction %s", name), "ResourceId", resourceID, "Error", err.Error())
 	}
-	state, servicerError := fn(txn)
-	switch state {
-	case TransactionStateCommit:
+	servicerError := fn(txn)
+	commit := true
+	if servicerError != nil {
+		if se, ok := servicerError.(*serviceerrors.ServiceError); ok {
+			if se.ShouldRollback() {
+				commit = false
+			}
+		} else {
+			// This is not a service error, so we rollback the transaction
+			// we could decide to fail here if we don't get a service error
+			commit = false
+		}
+	}
+	if commit {
 		if txnErr := txn.Commit(); txnErr != nil {
 			s.logger.Error("Failed to commit transaction", "name", fmt.Sprintf("commit transaction %s", name), "resource_id", resourceID, "error", txnErr.Error())
 			return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", fmt.Sprintf("commit transaction %s", name), "ResourceId", resourceID, "Error", txnErr.Error())
 		}
-	case TransactionStateRollback:
+	} else {
 		if txnErr := txn.Rollback(); txnErr != nil {
 			s.logger.Error("Failed to rollback transaction", "name", fmt.Sprintf("rollback transaction %s", name), "resource_id", resourceID, "error", txnErr.Error())
 			return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", fmt.Sprintf("rollback transaction %s", name), "ResourceId", resourceID, "Error", txnErr.Error())
@@ -39,10 +43,3 @@ func (s *SQLStorage) withTransaction(name string, resourceID string, fn Transact
 	// this is the error from the code function
 	return servicerError
 }
-
-/*
-func (s *SQLStorage) withoutTransaction(_ string, _ string, fn TransactionFunction) error {
-	_, servicerError := fn(nil)
-	return servicerError
-}
-*/

@@ -249,11 +249,23 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 		}
 	}
 
-	err = storage.DeleteEvaluationJob(evaluationJobID, hardDelete)
-	if err != nil {
-		ctx.Logger.Info("Failed to delete evaluation job", "error", err.Error(), "id", evaluationJobID, "hardDelete", hardDelete)
-		w.Error(err, ctx.RequestID)
-		return
+	if !hardDelete {
+		err = storage.UpdateEvaluationJobStatus(evaluationJobID, api.OverallStateCancelled, &api.MessageInfo{
+			Message:     "Evaluation job cancelled",
+			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
+		})
+		if err != nil {
+			ctx.Logger.Error("Failed to cancel evaluation job", "error", err.Error(), "id", evaluationJobID)
+			w.Error(err, ctx.RequestID)
+			return
+		}
+	} else {
+		err = storage.DeleteEvaluationJob(evaluationJobID, hardDelete)
+		if err != nil {
+			ctx.Logger.Info("Failed to delete evaluation job", "error", err.Error(), "id", evaluationJobID, "hardDelete", hardDelete)
+			w.Error(err, ctx.RequestID)
+			return
+		}
 	}
 	w.WriteJSON(nil, 204)
 }
