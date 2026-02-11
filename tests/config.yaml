@@ -7,7 +7,7 @@ service:
 secrets:
   dir: /tmp
   mappings:
-    db_password: database.password
+    # db_password: database.password
 # These are here so that the config can be loaded from the environment variables when needed
 env_mappings:
   PORT: service.port

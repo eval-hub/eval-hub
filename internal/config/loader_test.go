@@ -13,15 +13,6 @@ func TestLoadConfig(t *testing.T) {
 	logger := logging.FallbackLogger()
 
 	t.Run("loading config from tests directory", func(t *testing.T) {
-		secret := "mysecret"
-		secretPath := "/tmp/db_password"
-		err := os.WriteFile(secretPath, []byte(secret), 0600)
-		if err != nil {
-			t.Fatalf("Failed to create secret: %v", err)
-		}
-		t.Cleanup(func() {
-			os.Remove(secretPath)
-		})
 		serviceConfig, err := config.LoadConfig(logger, "0.0.1", "local", time.Now().Format(time.RFC3339), "../../tests")
 		if err != nil {
 			t.Fatalf("Failed to load config: %v", err)
@@ -38,15 +29,6 @@ func TestLoadConfig(t *testing.T) {
 	})
 
 	t.Run("setting environment variables", func(t *testing.T) {
-		secret := "mysecret"
-		secretPath := "/tmp/db_password"
-		err := os.WriteFile(secretPath, []byte(secret), 0600)
-		if err != nil {
-			t.Fatalf("Failed to create secret: %v", err)
-		}
-		t.Cleanup(func() {
-			os.Remove(secretPath)
-		})
 		os.Setenv("MLFLOW_TRACKING_URI", "http://localhost:9999")
 		t.Cleanup(func() {
 			os.Unsetenv("MLFLOW_TRACKING_URI")
@@ -74,7 +56,7 @@ func TestLoadConfig(t *testing.T) {
 		t.Cleanup(func() {
 			os.Remove(secretPath)
 		})
-		serviceConfig, err := config.LoadConfig(logger, "0.0.1", "local", time.Now().Format(time.RFC3339), "../../tests")
+		serviceConfig, err := config.LoadConfig(logger, "0.0.1", "local", time.Now().Format(time.RFC3339), "../../tests/secrets")
 		if err != nil {
 			t.Fatalf("Failed to load config: %v", err)
 		}
