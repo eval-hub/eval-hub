@@ -105,6 +105,22 @@ func (s *SQLStorage) exec(txn *sql.Tx, query string, args ...any) (sql.Result, e
 	}
 }
 
+func (s *SQLStorage) query(txn *sql.Tx, query string, args ...any) (*sql.Rows, error) {
+	if txn != nil {
+		return txn.QueryContext(s.ctx, query, args...)
+	} else {
+		return s.pool.QueryContext(s.ctx, query, args...)
+	}
+}
+
+func (s *SQLStorage) queryRow(txn *sql.Tx, query string, args ...any) *sql.Row {
+	if txn != nil {
+		return txn.QueryRowContext(s.ctx, query, args...)
+	} else {
+		return s.pool.QueryRowContext(s.ctx, query, args...)
+	}
+}
+
 func (s *SQLStorage) ensureSchema() error {
 	schemas, err := schemasForDriver(s.sqlConfig.Driver)
 	if err != nil {
