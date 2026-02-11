@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
+	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/handlers"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -33,6 +34,9 @@ type fakeStorage struct {
 	abstractions.Storage
 	lastStatusID string
 	lastStatus   api.OverallState
+	job          *api.EvaluationJobResource
+	deleteID     string
+	deleteHard   bool
 }
 
 func (f *fakeStorage) WithLogger(_ *slog.Logger) abstractions.Storage { return f }
@@ -54,6 +58,16 @@ func (f *fakeStorage) UpdateEvaluationJobStatus(id string, state api.OverallStat
 	return nil
 }
 
+func (f *fakeStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) {
+	return f.job, nil
+}
+
+func (f *fakeStorage) DeleteEvaluationJob(id string, hardDelete bool) error {
+	f.deleteID = id
+	f.deleteHard = hardDelete
+	return nil
+}
+
 type fakeRuntime struct {
 	err    error
 	called bool
@@ -67,6 +81,27 @@ func (r *fakeRuntime) Name() string { return "fake" }
 func (r *fakeRuntime) RunEvaluationJob(_ *api.EvaluationJobResource, _ *abstractions.Storage) error {
 	r.called = true
 	return r.err
+}
+func (r *fakeRuntime) DeleteEvaluationJobResources(_ *api.EvaluationJobResource) error {
+	r.called = true
+	return r.err
+}
+
+type deleteRequest struct {
+	*MockRequest
+	queryValues map[string][]string
+	pathValues  map[string]string
+}
+
+func (r *deleteRequest) Query(key string) []string {
+	if values, ok := r.queryValues[key]; ok {
+		return values
+	}
+	return []string{}
+}
+
+func (r *deleteRequest) PathValue(name string) string {
+	return r.pathValues[name]
 }
 
 func TestHandleCreateEvaluationMarksFailedWhenRuntimeErrors(t *testing.T) {
@@ -129,6 +164,84 @@ func TestHandleCreateEvaluationSucceedsWhenRuntimeOk(t *testing.T) {
 	}
 	if recorder.Code != 202 {
 		t.Fatalf("expected status 202, got %d", recorder.Code)
+	}
+}
+
+func TestHandleCancelEvaluationWithSoftDeleteDoesNotCleanupResources(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	jobID := "job-1"
+	storage := &fakeStorage{
+		job: &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{ID: jobID},
+			},
+		},
+	}
+	runtime := &fakeRuntime{}
+	validate := validator.New()
+	h := handlers.New(storage, validate, runtime, nil, nil, nil)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-3", logger, time.Second)
+
+	req := &deleteRequest{
+		MockRequest: createMockRequest("DELETE", "/api/v1/evaluations/jobs/"+jobID),
+		queryValues: map[string][]string{"hard_delete": {"false"}},
+		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCancelEvaluation(ctx, req, resp)
+
+	if runtime.called {
+		t.Fatalf("expected runtime cleanup not to be invoked for soft delete")
+	}
+	if storage.deleteID != jobID {
+		t.Fatalf("expected delete to be invoked for %s, got %s", jobID, storage.deleteID)
+	}
+	if storage.deleteHard {
+		t.Fatalf("expected hard delete to be false")
+	}
+	if recorder.Code != 204 {
+		t.Fatalf("expected 204 response, got %d", recorder.Code)
+	}
+}
+
+func TestHandleCancelEvaluationWithHardDeleteCleansUpResources(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	jobID := "job-2"
+	storage := &fakeStorage{
+		job: &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{ID: jobID},
+			},
+		},
+	}
+	runtime := &fakeRuntime{}
+	validate := validator.New()
+	h := handlers.New(storage, validate, runtime, nil, nil, nil)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-4", logger, time.Second)
+
+	req := &deleteRequest{
+		MockRequest: createMockRequest("DELETE", "/api/v1/evaluations/jobs/"+jobID),
+		queryValues: map[string][]string{"hard_delete": {"true"}},
+		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCancelEvaluation(ctx, req, resp)
+
+	if !runtime.called {
+		t.Fatalf("expected runtime cleanup to be invoked for hard delete")
+	}
+	if storage.deleteID != jobID {
+		t.Fatalf("expected delete to be invoked for %s, got %s", jobID, storage.deleteID)
+	}
+	if !storage.deleteHard {
+		t.Fatalf("expected hard delete to be true")
+	}
+	if recorder.Code != 204 {
+		t.Fatalf("expected 204 response, got %d", recorder.Code)
 	}
 }
 

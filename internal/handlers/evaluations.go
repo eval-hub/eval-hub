@@ -235,6 +235,20 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
+	if hardDelete && h.runtime != nil {
+		job, err := storage.GetEvaluationJob(evaluationJobID)
+		if err != nil {
+			w.Error(err, ctx.RequestID)
+			return
+		}
+		if job != nil {
+			if err := h.runtime.WithLogger(ctx.Logger).WithContext(ctx.Ctx).DeleteEvaluationJobResources(job); err != nil {
+				// Cleanup failures shouldn't block deleting the storage record.
+				ctx.Logger.Error("Failed to delete evaluation runtime resources", "error", err, "id", evaluationJobID)
+			}
+		}
+	}
+
 	err = storage.DeleteEvaluationJob(evaluationJobID, hardDelete)
 	if err != nil {
 		ctx.Logger.Info("Failed to delete evaluation job", "error", err.Error(), "id", evaluationJobID, "hardDelete", hardDelete)

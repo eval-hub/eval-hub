@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,6 +38,7 @@ func TestRunEvaluationJobCreatesResources(t *testing.T) {
 	runtime := &K8sRuntime{
 		logger: logger,
 		helper: helper,
+		ctx:    context.Background(),
 		providers: map[string]api.ProviderResource{
 			"lm_evaluation_harness": {
 				ID: "lm_evaluation_harness",
@@ -92,20 +95,11 @@ func TestRunEvaluationJobCreatesResources(t *testing.T) {
 		t.Fatalf("RunEvaluationJob returned error: %v", err)
 	}
 
-	namespace := "default"
 	benchmarkIDs := []string{benchmarkID, benchmarkIDTwo}
 	t.Cleanup(func() {
-		propagationPolicy := metav1.DeletePropagationBackground
-		deleteOptions := metav1.DeleteOptions{PropagationPolicy: &propagationPolicy}
-		for _, id := range benchmarkIDs {
-			jobName := jobName(jobID, id)
-			configMapName := configMapName(jobID, id)
-			ctx, cancel := context.WithTimeout(context.Background(), apiTimeout)
-			_ = helper.clientset.BatchV1().Jobs(namespace).Delete(ctx, jobName, deleteOptions)
-			_ = helper.clientset.CoreV1().ConfigMaps(namespace).Delete(ctx, configMapName, metav1.DeleteOptions{})
-			cancel()
-		}
+		_ = runtime.DeleteEvaluationJobResources(evaluation)
 	})
+	namespace := "default"
 	for _, id := range benchmarkIDs {
 		configMapName := configMapName(jobID, id)
 		jobName := jobName(jobID, id)
@@ -248,5 +242,105 @@ func TestRunEvaluationJobReturnsNilOnCreateFailure(t *testing.T) {
 
 	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[0]); err == nil {
 		t.Fatalf("expected create error but got nil")
+	}
+}
+
+func TestDeleteEvaluationJobResourcesDeletesJobsAndConfigMaps(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	clientset := fake.NewSimpleClientset()
+	runtime := &K8sRuntime{
+		logger: logger,
+		ctx:    context.Background(),
+		helper: &KubernetesHelper{clientset: clientset},
+	}
+
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-delete"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Benchmarks: []api.BenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}},
+				{Ref: api.Ref{ID: "bench-2"}},
+			},
+		},
+	}
+
+	for _, bench := range evaluation.Benchmarks {
+		job := &batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      jobName(evaluation.Resource.ID, bench.ID),
+				Namespace: defaultNamespace,
+			},
+		}
+		if _, err := clientset.BatchV1().Jobs(defaultNamespace).Create(context.Background(), job, metav1.CreateOptions{}); err != nil {
+			t.Fatalf("failed to seed job: %v", err)
+		}
+
+		configMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configMapName(evaluation.Resource.ID, bench.ID),
+				Namespace: defaultNamespace,
+			},
+		}
+		if _, err := clientset.CoreV1().ConfigMaps(defaultNamespace).Create(context.Background(), configMap, metav1.CreateOptions{}); err != nil {
+			t.Fatalf("failed to seed configmap: %v", err)
+		}
+	}
+
+	if err := runtime.DeleteEvaluationJobResources(evaluation); err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+
+	for _, bench := range evaluation.Benchmarks {
+		if _, err := clientset.BatchV1().Jobs(defaultNamespace).Get(context.Background(), jobName(evaluation.Resource.ID, bench.ID), metav1.GetOptions{}); err == nil || !apierrors.IsNotFound(err) {
+			t.Fatalf("expected job to be deleted for %s", bench.ID)
+		}
+		if _, err := clientset.CoreV1().ConfigMaps(defaultNamespace).Get(context.Background(), configMapName(evaluation.Resource.ID, bench.ID), metav1.GetOptions{}); err == nil || !apierrors.IsNotFound(err) {
+			t.Fatalf("expected configmap to be deleted for %s", bench.ID)
+		}
+	}
+}
+
+func TestDeleteEvaluationJobResourcesReturnsJoinedErrors(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	clientset := fake.NewSimpleClientset()
+	errJob := errors.New("job delete failed")
+	errConfig := errors.New("configmap delete failed")
+
+	clientset.PrependReactor("delete", "jobs", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errJob
+	})
+	clientset.PrependReactor("delete", "configmaps", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errConfig
+	})
+
+	runtime := &K8sRuntime{
+		logger: logger,
+		ctx:    context.Background(),
+		helper: &KubernetesHelper{clientset: clientset},
+	}
+
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-delete-errors"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Benchmarks: []api.BenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}},
+				{Ref: api.Ref{ID: "bench-2"}},
+			},
+		},
+	}
+
+	err := runtime.DeleteEvaluationJobResources(evaluation)
+	if err == nil {
+		t.Fatalf("expected error but got nil")
+	}
+	if !errors.Is(err, errJob) {
+		t.Fatalf("expected job delete error to be joined")
+	}
+	if !errors.Is(err, errConfig) {
+		t.Fatalf("expected configmap delete error to be joined")
 	}
 }

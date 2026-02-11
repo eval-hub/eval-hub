@@ -3,6 +3,7 @@ package k8s
 // Runtime entrypoints for Kubernetes job creation.
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -99,6 +100,42 @@ func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, sto
 	}
 
 	return nil
+}
+
+func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobResource) error {
+	namespace := resolveNamespace("")
+	propagationPolicy := metav1.DeletePropagationBackground
+	deleteOptions := metav1.DeleteOptions{PropagationPolicy: &propagationPolicy}
+
+	r.logger.Info(
+		"deleting evaluation runtime resources",
+		"job_id", evaluation.Resource.ID,
+		"benchmark_count", len(evaluation.Benchmarks),
+		"namespace", namespace,
+	)
+
+	var deleteErr error
+	for _, bench := range evaluation.Benchmarks {
+		jobName := jobName(evaluation.Resource.ID, bench.ID)
+		configMapName := configMapName(evaluation.Resource.ID, bench.ID)
+		r.logger.Info(
+			"deleting evaluation runtime resources for benchmark",
+			"job_id", evaluation.Resource.ID,
+			"benchmark_id", bench.ID,
+			"job_name", jobName,
+			"configmap_name", configMapName,
+			"namespace", namespace,
+		)
+		if err := r.helper.DeleteJob(r.ctx, namespace, jobName, deleteOptions); err != nil && !apierrors.IsNotFound(err) {
+			deleteErr = errors.Join(deleteErr, err)
+		}
+		// OwnerReferences should GC ConfigMaps when Jobs are deleted, but we delete explicitly
+		// to avoid orphans if the owner ref was never set or the job delete is delayed.
+		if err := r.helper.DeleteConfigMap(r.ctx, namespace, configMapName); err != nil && !apierrors.IsNotFound(err) {
+			deleteErr = errors.Join(deleteErr, err)
+		}
+	}
+	return deleteErr
 }
 
 func (r *K8sRuntime) createBenchmarkResources(ctx context.Context, logger *slog.Logger, evaluation *api.EvaluationJobResource, benchmark *api.BenchmarkConfig) error {

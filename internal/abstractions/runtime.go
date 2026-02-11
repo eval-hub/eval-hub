@@ -16,6 +16,7 @@ type Runtime interface {
 	WithContext(ctx context.Context) Runtime
 	Name() string
 	RunEvaluationJob(evaluation *api.EvaluationJobResource, storage *Storage) error
+	DeleteEvaluationJobResources(evaluation *api.EvaluationJobResource) error
 }
 
 // This intrerface must be decoupled from the service HTTP layer

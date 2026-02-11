@@ -35,6 +35,10 @@ func (r *LocalRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, s
 	return nil
 }
 
+func (r *LocalRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobResource) error {
+	return nil
+}
+
 func (r *LocalRuntime) Name() string {
 	return "local"
 }
