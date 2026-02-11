@@ -3,6 +3,7 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -241,4 +242,71 @@ secrets:
 			t.Fatalf("Database password is not set")
 		}
 	})
+}
+
+func TestRedactedJSON(t *testing.T) {
+	type inner struct {
+		URL      string `json:"url"`
+		Driver   string `json:"driver"`
+		Password string `json:"password"`
+	}
+	type outer struct {
+		Database inner  `json:"database"`
+		Name     string `json:"name"`
+	}
+
+	t.Run("redacts password with *****", func(t *testing.T) {
+		v := outer{
+			Database: inner{Password: "s3cret", Driver: "pgx"},
+			Name:     "test",
+		}
+		result := config.RedactedJSON(v, []string{"database.password"})
+		if !contains(result, `"password":"[redacted]"`) {
+			t.Fatalf("Expected password to be [redacted], got %s", result)
+		}
+		if !contains(result, `"name":"test"`) {
+			t.Fatalf("Expected name to be preserved, got %s", result)
+		}
+	})
+
+	t.Run("sanitises URL by stripping password", func(t *testing.T) {
+		v := outer{
+			Database: inner{
+				URL:    "postgres://user:p4ss@db-host:5432/evalhub",
+				Driver: "pgx",
+			},
+		}
+		result := config.RedactedJSON(v, []string{"database.url"})
+		if contains(result, "p4ss") {
+			t.Fatalf("Password should be stripped from URL, got %s", result)
+		}
+		if !contains(result, "user@db-host:5432") {
+			t.Fatalf("Expected sanitised URL with user and host, got %s", result)
+		}
+	})
+
+	t.Run("no redacted fields returns full JSON", func(t *testing.T) {
+		v := outer{
+			Database: inner{Password: "s3cret"},
+			Name:     "test",
+		}
+		result := config.RedactedJSON(v, nil)
+		if !contains(result, "s3cret") {
+			t.Fatalf("Expected unredacted output, got %s", result)
+		}
+	})
+
+	t.Run("non-existent field path is a no-op", func(t *testing.T) {
+		v := outer{
+			Database: inner{Password: "s3cret"},
+		}
+		result := config.RedactedJSON(v, []string{"database.missing"})
+		if !contains(result, "s3cret") {
+			t.Fatalf("Expected password to be untouched, got %s", result)
+		}
+	})
+}
+
+func contains(s, substr string) bool {
+	return strings.Contains(s, substr)
 }

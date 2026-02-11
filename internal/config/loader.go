@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -222,6 +223,7 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 	}
 
 	// set up the secrets from the secrets directory
+	var redactedFields []string
 	secrets := SecretMap{}
 	if secretsSub := configValues.Sub("secrets"); secretsSub != nil {
 		if err := secretsSub.Unmarshal(&secrets); err != nil {
@@ -246,7 +248,7 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 				}
 				if secret != "" {
 					configValues.Set(fieldName, secret)
-					// don't log the secret here as it may contain sensitive information
+					redactedFields = append(redactedFields, fieldName)
 					logger.Info("Set secret", "field_name", fieldName)
 				}
 			}
@@ -265,8 +267,7 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 	conf.Service.BuildDate = buildDate
 	conf.Service.LocalMode = localMode()
 
-	// TODO make a safe version to ensure that secrets are not logged
-	logger.Info("End reading configuration", "config", asJSON(conf))
+	logger.Info("End reading configuration", "config", RedactedJSON(conf, redactedFields))
 	return &conf, nil
 }
 
@@ -295,10 +296,68 @@ func getSecret(secretsDir string, secretName string, optional bool) (string, err
 	return string(secret), nil
 }
 
-func asJSON(v any) string {
+// RedactedJSON serialises v to JSON, then replaces any values whose dotted
+// field path matches a redacted field with "[redacted]". Field paths use dots
+// to denote nesting (e.g. "database.url" redacts the "url" key inside "database").
+func RedactedJSON(v any, fields []string) string {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return ""
 	}
-	return string(data)
+	if len(fields) == 0 {
+		return string(data)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return string(data)
+	}
+	for _, field := range fields {
+		redactField(raw, strings.Split(field, "."))
+	}
+	out, err := json.Marshal(raw)
+	if err != nil {
+		return string(data)
+	}
+	return string(out)
+}
+
+func redactField(m map[string]any, path []string) {
+	if len(path) == 0 {
+		return
+	}
+	// case-insensitive key lookup
+	var matchedKey string
+	for k := range m {
+		if strings.EqualFold(k, path[0]) {
+			matchedKey = k
+			break
+		}
+	}
+	if matchedKey == "" {
+		return
+	}
+	if len(path) == 1 {
+		m[matchedKey] = sanitiseValue(m[matchedKey])
+		return
+	}
+	if sub, ok := m[matchedKey].(map[string]any); ok {
+		redactField(sub, path[1:])
+	}
+}
+
+// sanitiseValue strips credentials from URL strings. If the value is not a
+// parseable URL it falls back to "[redacted]".
+func sanitiseValue(v any) string {
+	s, ok := v.(string)
+	if !ok {
+		return "[redacted]"
+	}
+	parsed, err := url.Parse(s)
+	if err != nil || parsed.Scheme == "" {
+		return "[redacted]"
+	}
+	if parsed.User != nil {
+		parsed.User = url.User(parsed.User.Username())
+	}
+	return parsed.String()
 }
