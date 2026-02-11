@@ -255,7 +255,7 @@ func TestRedactedJSON(t *testing.T) {
 		Name     string `json:"name"`
 	}
 
-	t.Run("redacts password with *****", func(t *testing.T) {
+	t.Run("redacts password with [redacted]", func(t *testing.T) {
 		v := outer{
 			Database: inner{Password: "s3cret", Driver: "pgx"},
 			Name:     "test",
