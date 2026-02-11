@@ -42,10 +42,14 @@ func TestLoadConfig(t *testing.T) {
 	t.Run("loading config from secrets directory", func(t *testing.T) {
 		// create a secret and store in /tmp/db_password
 		secret := "mysecret"
-		err := os.WriteFile("/tmp/db_password", []byte(secret), 0600)
+		secretPath := "/tmp/db_password"
+		err := os.WriteFile(secretPath, []byte(secret), 0600)
 		if err != nil {
 			t.Fatalf("Failed to create secret: %v", err)
 		}
+		t.Cleanup(func() {
+			os.Remove(secretPath)
+		})
 		serviceConfig, err := config.LoadConfig(logger, "0.0.1", "local", time.Now().Format(time.RFC3339), "../../tests")
 		if err != nil {
 			t.Fatalf("Failed to load config: %v", err)
@@ -57,9 +61,9 @@ func TestLoadConfig(t *testing.T) {
 			t.Fatalf("Database config is nil")
 		}
 		db := *serviceConfig.Database
-		if db, ok := db["password"]; ok {
-			if db.(string) != secret {
-				t.Fatalf("Database password is not %s, got %s", secret, db.(string))
+		if password, ok := db["password"]; ok {
+			if password.(string) != secret {
+				t.Fatalf("Database password is not %s, got %s", secret, password.(string))
 			}
 		} else {
 			t.Fatalf("Database password is not set")
