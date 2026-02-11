@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
+	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/storage"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -260,14 +261,17 @@ func TestEvaluationsStorage(t *testing.T) {
 	})
 
 	t.Run("DeleteEvaluationJob deletes the evaluation job", func(t *testing.T) {
-		err := store.DeleteEvaluationJob(evaluationId, false)
+		err := store.UpdateEvaluationJobStatus(evaluationId, api.OverallStateCancelled, &api.MessageInfo{
+			Message:     "Evaluation job cancelled",
+			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
+		})
 		if err == nil {
 			t.Fatalf("Failed to get error when cancelling a deleted evaluation job")
 		}
 		if !strings.Contains(err.Error(), "can not be cancelled because") {
 			t.Fatalf("Failed to get correct error when cancelling a deleted evaluation job: %v", err)
 		}
-		err = store.DeleteEvaluationJob(evaluationId, true)
+		err = store.DeleteEvaluationJob(evaluationId)
 		if err != nil {
 			t.Fatalf("Failed to delete evaluation job: %v", err)
 		}

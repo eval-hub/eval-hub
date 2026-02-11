@@ -34,9 +34,9 @@ type HRef struct {
 
 // Error represents an error response
 type Error struct {
-	Message string `json:"message"`
-	Code    int    `json:"code"`
-	Trace   string `json:"trace"`
+	MessageCode string `json:"message_code"`
+	Message     string `json:"message"`
+	Trace       string `json:"trace"`
 }
 
 // PatchOperation represents a single patch operation

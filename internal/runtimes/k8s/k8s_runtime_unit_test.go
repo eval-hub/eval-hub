@@ -49,7 +49,7 @@ func (f *fakeStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, er
 func (f *fakeStorage) GetEvaluationJobs(int, _ int, _ string) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
 	return nil, nil
 }
-func (f *fakeStorage) DeleteEvaluationJob(_ string, _ bool) error {
+func (f *fakeStorage) DeleteEvaluationJob(_ string) error {
 	return nil
 }
 func (f *fakeStorage) UpdateEvaluationJobStatus(_ string, _ api.OverallState, _ *api.MessageInfo) error {

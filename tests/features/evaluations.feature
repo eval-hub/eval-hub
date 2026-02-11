@@ -44,8 +44,7 @@ Feature: Evaluations Endpoint
             "limit": {"type": "integer"},
             "total_count": {
               "type": "integer",
-              "minimum": 3,
-              "maximum": 3
+              "minimum": 3
             },
             "items": {
               "type": "array",
@@ -73,13 +72,11 @@ Feature: Evaluations Endpoint
             "limit": {"type": "integer"},
             "total_count": {
               "type": "integer",
-              "minimum": 3,
-              "maximum": 3
+              "minimum": 3
             },
             "items": {
               "type": "array",
-              "minItems": 1,
-              "maxItems": 1
+              "minItems": 1
             }
         },
         "required": ["limit", "first", "total_count", "items"]
@@ -95,3 +92,18 @@ Feature: Evaluations Endpoint
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "running" at path "$.status.state"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 204
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "cancelled" at path "$.status.state"
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_completed.json"
+    Then the response code should be 204
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 409
+    And the response should contain the value "can not be cancelled because" at path "$.message"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204

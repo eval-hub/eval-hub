@@ -1,0 +1,7 @@
+{
+    "benchmark_status_event": {
+        "id": "arc_easy",
+        "provider_id": "lm_evaluation_harness",
+        "status": "completed"
+    }
+}

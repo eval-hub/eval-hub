@@ -36,7 +36,6 @@ type fakeStorage struct {
 	lastStatus   api.OverallState
 	job          *api.EvaluationJobResource
 	deleteID     string
-	deleteHard   bool
 }
 
 func (f *fakeStorage) WithLogger(_ *slog.Logger) abstractions.Storage { return f }
@@ -62,9 +61,8 @@ func (f *fakeStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, er
 	return f.job, nil
 }
 
-func (f *fakeStorage) DeleteEvaluationJob(id string, hardDelete bool) error {
+func (f *fakeStorage) DeleteEvaluationJob(id string) error {
 	f.deleteID = id
-	f.deleteHard = hardDelete
 	return nil
 }
 
@@ -195,18 +193,12 @@ func TestHandleCancelEvaluationWithSoftDeleteDoesNotCleanupResources(t *testing.
 	if runtime.called {
 		t.Fatalf("expected runtime cleanup not to be invoked for soft delete")
 	}
-	if storage.deleteID != jobID {
-		t.Fatalf("expected delete to be invoked for %s, got %s", jobID, storage.deleteID)
-	}
-	if storage.deleteHard {
-		t.Fatalf("expected hard delete to be false")
-	}
 	if recorder.Code != 204 {
 		t.Fatalf("expected 204 response, got %d", recorder.Code)
 	}
 }
 
-func TestHandleCancelEvaluationWithHardDeleteCleansUpResources(t *testing.T) {
+func TestHandleDeleteEvaluationCleansUpResources(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	jobID := "job-2"
 	storage := &fakeStorage{
@@ -236,9 +228,6 @@ func TestHandleCancelEvaluationWithHardDeleteCleansUpResources(t *testing.T) {
 	}
 	if storage.deleteID != jobID {
 		t.Fatalf("expected delete to be invoked for %s, got %s", jobID, storage.deleteID)
-	}
-	if !storage.deleteHard {
-		t.Fatalf("expected hard delete to be true")
 	}
 	if recorder.Code != 204 {
 		t.Fatalf("expected 204 response, got %d", recorder.Code)

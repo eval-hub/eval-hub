@@ -144,9 +144,9 @@ func (r RespWrapper) ErrorWithMessageCode(requestId string, messageCode *message
 	r.DeleteHeader("Content-Length")
 
 	r.SetHeader("X-Content-Type-Options", "nosniff")
-	r.WriteJSON(api.Error{Message: msg, Code: messageCode.GetCode(), Trace: requestId}, messageCode.GetCode())
+	r.WriteJSON(api.Error{Message: msg, MessageCode: messageCode.GetCode(), Trace: requestId}, messageCode.GetStatusCode())
 
-	logging.LogRequestFailed(r.ctx, messageCode.GetCode(), msg)
+	logging.LogRequestFailed(r.ctx, messageCode.GetStatusCode(), msg)
 }
 
 func (r RespWrapper) Error(err error, requestId string) {

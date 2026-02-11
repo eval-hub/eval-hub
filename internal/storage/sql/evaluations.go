@@ -251,7 +251,7 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter strin
 	}, nil
 }
 
-func (s *SQLStorage) DeleteEvaluationJob(id string, hardDelete bool) error {
+func (s *SQLStorage) DeleteEvaluationJob(id string) error {
 	// we have to get the evaluation job and then update or delete the job so we need a transaction
 	err := s.withTransaction("delete evaluation job", id, func(txn *sql.Tx) error {
 		// check if the evaluation job exists, we do this otherwise we always return 204
@@ -269,22 +269,6 @@ func (s *SQLStorage) DeleteEvaluationJob(id string, hardDelete bool) error {
 			return se.WithRollback(se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error()))
 		}
 
-		if !hardDelete {
-			switch statusStr {
-			case string(api.StateCancelled):
-				// for now we just return if the job is already cancelled and don't try to cancel it again
-				s.logger.Info("Evaluation job already cancelled", "id", id)
-				return nil // returning nil so the API will return 204
-			case string(api.StateCompleted), string(api.StateFailed):
-				return se.NewServiceError(messages.JobCanNotBeCancelled, "Id", id, "Status", statusStr)
-			}
-
-			return s.updateEvaluationJobStatusTxn(txn, id, api.OverallStateCancelled, &api.MessageInfo{
-				Message:     "Evaluation job cancelled",
-				MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
-			})
-		}
-
 		// Build the DELETE query
 		deleteQuery, err := createDeleteEntityStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS)
 		if err != nil {
@@ -298,7 +282,7 @@ func (s *SQLStorage) DeleteEvaluationJob(id string, hardDelete bool) error {
 			return se.WithRollback(se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error()))
 		}
 
-		s.logger.Info("Deleted evaluation job", "id", id, "hardDelete", hardDelete)
+		s.logger.Info("Deleted evaluation job", "id", id)
 
 		return nil
 	})
@@ -308,6 +292,19 @@ func (s *SQLStorage) DeleteEvaluationJob(id string, hardDelete bool) error {
 func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error {
 	// we have to get the evaluation job and update the status so we need a transaction
 	err := s.withTransaction("update evaluation job status", id, func(txn *sql.Tx) error {
+		// get the evaluation job
+		evaluationJob, err := s.getEvaluationJobTransactional(txn, id)
+		if err != nil {
+			return err
+		}
+		switch evaluationJob.Status.State {
+		case api.OverallStateCancelled:
+			// if the job is already cancelled then we don't need to update the status
+			// we don't treat this as an error for now, we jsut return 204
+			return nil
+		case api.OverallStateCompleted, api.OverallStateFailed:
+			return se.NewServiceError(messages.JobCanNotBeCancelled, "Id", id, "Status", evaluationJob.Status.State)
+		}
 		if err := s.updateEvaluationJobStatusTxn(txn, id, state, message); err != nil {
 			return err
 		}

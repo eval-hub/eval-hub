@@ -457,7 +457,11 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 	}
 	defer tc.response.Body.Close()
 
-	logDebug("Response status %d for %s\n", tc.response.StatusCode, endpoint)
+	if len(tc.body) > 0 && len(tc.body) < 512 {
+		logDebug("Response status %d for %s with body %s\n", tc.response.StatusCode, endpoint, string(tc.body))
+	} else {
+		logDebug("Response status %d for %s\n", tc.response.StatusCode, endpoint)
+	}
 
 	// this is just for a create evaluation job request
 	if method == http.MethodPost && tc.response.StatusCode == http.StatusAccepted {
