@@ -24,6 +24,16 @@ import (
 
 func TestNewServer(t *testing.T) {
 	t.Run("creates server with default port", func(t *testing.T) {
+		secret := "mysecret"
+		secretPath := "/tmp/db_password"
+		err := os.WriteFile(secretPath, []byte(secret), 0600)
+		if err != nil {
+			t.Fatalf("Failed to create secret: %v", err)
+		}
+		t.Cleanup(func() {
+			os.Remove(secretPath)
+		})
+
 		os.Unsetenv("PORT")
 		srv, err := createServer(8080)
 		if err != nil {
@@ -40,6 +50,16 @@ func TestNewServer(t *testing.T) {
 	})
 
 	t.Run("creates server with custom port from environment", func(t *testing.T) {
+		secret := "mysecret"
+		secretPath := "/tmp/db_password"
+		err := os.WriteFile(secretPath, []byte(secret), 0600)
+		if err != nil {
+			t.Fatalf("Failed to create secret: %v", err)
+		}
+		t.Cleanup(func() {
+			os.Remove(secretPath)
+		})
+
 		//os.Setenv("PORT", "9000")
 		//defer os.Unsetenv("PORT")
 
@@ -55,6 +75,16 @@ func TestNewServer(t *testing.T) {
 }
 
 func TestServerSetupRoutes(t *testing.T) {
+	secret := "mysecret"
+	secretPath := "/tmp/db_password"
+	err := os.WriteFile(secretPath, []byte(secret), 0600)
+	if err != nil {
+		t.Fatalf("Failed to create secret: %v", err)
+	}
+	t.Cleanup(func() {
+		os.Remove(secretPath)
+	})
+
 	srv, err := createServer(8080)
 	if err != nil {
 		t.Fatalf("NewServer() returned error: %v", err)
@@ -151,6 +181,16 @@ func TestServerSetupRoutes(t *testing.T) {
 
 func TestServerShutdown(t *testing.T) {
 	t.Run("shutdown works with running server", func(t *testing.T) {
+		secret := "mysecret"
+		secretPath := "/tmp/db_password"
+		err := os.WriteFile(secretPath, []byte(secret), 0600)
+		if err != nil {
+			t.Fatalf("Failed to create secret: %v", err)
+		}
+		t.Cleanup(func() {
+			os.Remove(secretPath)
+		})
+
 		srv, err := createServer(0) // Use random port for testing
 		if err != nil {
 			t.Fatalf("NewServer() returned error: %v", err)
