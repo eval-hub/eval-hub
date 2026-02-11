@@ -17,7 +17,7 @@ func TestHandleHealth(t *testing.T) {
 		r := createMockRequest("GET", "/health")
 		w := httptest.NewRecorder()
 		ctx := createExecutionContext()
-		h.HandleHealth(ctx, r, &MockResponseWrapper{w})
+		h.HandleHealth(ctx, r, &MockResponseWrapper{w}, "0.0.1", time.Now().Format(time.RFC3339))
 
 		if w.Code != 200 {
 			t.Errorf("Expected status code %d, got %d", 200, w.Code)
