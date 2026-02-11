@@ -25,6 +25,7 @@ fi
 cat > /tmp/db_password <<EOF
 my-secret
 EOF
+chmod 600 /tmp/db_password
 
 # This assumes that the service has already been built
 # Always run in local mode (CORS enabled)
