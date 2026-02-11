@@ -205,9 +205,11 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 	// now load the cluster config if found
 	// set up the secrets from the secrets directory
 	secrets := SecretMap{}
-	if err := configValues.Unmarshal(&secrets); err != nil {
-		logger.Error("Failed to unmarshal secret mappings", "error", err.Error())
-		return nil, err
+	if secretsSub := configValues.Sub("secrets"); secretsSub != nil {
+		if err := secretsSub.Unmarshal(&secrets); err != nil {
+			logger.Error("Failed to unmarshal secret mappings", "error", err.Error())
+			return nil, err
+		}
 	}
 	if secrets.Dir != "" {
 		// check that the secrets directory exists
