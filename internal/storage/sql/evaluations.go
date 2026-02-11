@@ -310,9 +310,9 @@ func (s *SQLStorage) DeleteEvaluationJob(id string, hardDelete bool) error {
 func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error {
 	// we have to get the evaluation job and update the status so we need a transaction
 	err := s.withTransaction("update evaluation job status", id, func(txn *sql.Tx) (TransactionState, error) {
-		state, err := s.updateEvaluationJobStatusTxn(txn, id, state, message)
+		txnState, err := s.updateEvaluationJobStatusTxn(txn, id, state, message)
 		if err != nil {
-			return state, err
+			return txnState, err
 		}
 
 		s.logger.Info("Updated evaluation job status", "id", id, "overall_state", state, "message", message)
