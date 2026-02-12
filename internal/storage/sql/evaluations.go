@@ -391,18 +391,6 @@ func (s *SQLStorage) updateBenchmarkResults(job *api.EvaluationJobResource, runS
 	}
 	job.Results.Benchmarks = append(job.Results.Benchmarks, *result)
 
-	// update the number of evaluations
-	job.Results.TotalEvaluations++
-	switch runStatus.BenchmarkStatusEvent.Status {
-	case api.StateCompleted:
-		job.Results.CompletedEvaluations++
-	case api.StateFailed:
-		job.Results.FailedEvaluations++
-	case api.StateCancelled:
-		// cancelled is marked as failed for now
-		job.Results.FailedEvaluations++
-	}
-
 	return nil
 }
 
