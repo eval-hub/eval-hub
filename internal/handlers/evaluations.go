@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime/debug"
 	"strconv"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/common"
@@ -93,7 +94,8 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 	job := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{
-				ID: common.GUID(),
+				ID:        common.GUID(),
+				CreatedAt: time.Now(),
 			},
 			MLFlowExperimentID: mlflowExperimentID,
 		},
