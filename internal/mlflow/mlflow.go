@@ -41,16 +41,17 @@ func NewMLFlowClient(mlflowConfig *config.MLFlowConfig, logger *slog.Logger) *ml
 		}
 	}
 
-	var transport *http.Transport
-	if mlflowConfig.TLSConfig != nil {
-		transport = &http.Transport{
-			TLSClientConfig: mlflowConfig.TLSConfig,
-		}
+	httpClient := &http.Client{
+		Timeout: mlflowConfig.HTTPTimeout,
 	}
 
-	httpClient := &http.Client{
-		Timeout:   mlflowConfig.HTTPTimeout,
-		Transport: transport,
+	if mlflowConfig.TLSConfig != nil {
+		httpClient = &http.Client{
+			Timeout: mlflowConfig.HTTPTimeout,
+			Transport: &http.Transport{
+				TLSClientConfig: mlflowConfig.TLSConfig,
+			},
+		}
 	}
 
 	client := mlflowclient.NewClient(url).
