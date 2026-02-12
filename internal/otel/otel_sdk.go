@@ -10,6 +10,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/config"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/exporters/stdout/stdoutlog"
@@ -20,7 +21,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.39.0"
 	"google.golang.org/grpc/credentials"
 )
 
@@ -173,13 +174,14 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 		if err != nil {
 			return nil, err
 		}
+		resource, err := createResource(ctx, config)
+		if err != nil {
+			return nil, err
+		}
 		tracerProvider := trace.NewTracerProvider(
 			trace.WithBatcher(traceExporter, trace.WithBatchTimeout(config.TracerBatchInterval)),
 			trace.WithSampler(newSampler(samplingRatio)),
-			trace.WithResource(resource.NewWithAttributes(
-				semconv.SchemaURL,
-				semconv.ServiceNameKey.String(ServiceName),
-			)),
+			trace.WithResource(resource),
 		)
 		return tracerProvider, nil
 	case ExporterTypeStdout:
@@ -194,6 +196,26 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 	default:
 		return nil, fmt.Errorf("Invalid OTEL exporter type: %s", config.ExporterType)
 	}
+}
+
+func createResource(ctx context.Context, config *config.OTELConfig) (*resource.Resource, error) {
+	attrs := []attribute.KeyValue{
+		semconv.ServiceName(ServiceName),
+		// semconv.ServiceVersion(config.ServiceVersion),
+	}
+
+	// Add custom attributes
+	for key, value := range config.AdditionalAttributes {
+		attrs = append(attrs, attribute.String(key, value))
+	}
+
+	return resource.New(ctx,
+		resource.WithAttributes(attrs...),
+		resource.WithProcess(),
+		resource.WithOS(),
+		resource.WithContainer(),
+		resource.WithHost(),
+	)
 }
 
 func newMeterProvider(_ context.Context, _ *config.OTELConfig) (*metric.MeterProvider, error) {
