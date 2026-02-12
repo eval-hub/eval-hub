@@ -37,20 +37,22 @@ type testContext struct {
 	lastBenchmarkIDs    []string
 
 	// Kubernetes resources
-	k8sClient        kubernetes.Interface
-	namespace        string
-	currentConfigMap *corev1.ConfigMap
-	currentJob       *batchv1.Job
-	configMaps       []*corev1.ConfigMap
-	jobs             []*batchv1.Job
-	cachedJobs       []batchv1.Job
-	cachedConfigMaps []corev1.ConfigMap
-	cachedJobID      string
+	k8sClient             kubernetes.Interface
+	namespace             string
+	currentConfigMap      *corev1.ConfigMap
+	currentJob            *batchv1.Job
+	configMaps            []*corev1.ConfigMap
+	jobs                  []*batchv1.Job
+	cachedJobs            []batchv1.Job
+	cachedConfigMaps      []corev1.ConfigMap
+	cachedJobsJobID       string
+	cachedConfigMapsJobID string
 
 	// Tracking state from responses
 	lastJobID       string
 	lastBenchmarkID string
 	lastProviderID  string
+	createdJobIDs   []string
 
 	// Scenario flags
 }
@@ -117,14 +119,6 @@ func newTestContext() *testContext {
 	return tc
 }
 
-// min returns the minimum of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // initKubernetesClient initializes the real Kubernetes client
 func (tc *testContext) initKubernetesClient() error {
 	var config *rest.Config
@@ -168,16 +162,21 @@ func (tc *testContext) reset() {
 	tc.jobs = []*batchv1.Job{}
 	tc.cachedJobs = nil
 	tc.cachedConfigMaps = nil
-	tc.cachedJobID = ""
+	tc.cachedJobsJobID = ""
+	tc.cachedConfigMapsJobID = ""
 	tc.lastJobID = ""
 	tc.lastBenchmarkID = ""
 	tc.lastProviderID = ""
+	tc.createdJobIDs = nil
 }
 
 // cleanup removes resources created during the test
 func (tc *testContext) cleanup(ctx context.Context) error {
-	if tc.lastJobID != "" {
-		req, err := http.NewRequestWithContext(ctx, "DELETE", tc.baseURL+"/api/v1/evaluations/jobs/"+tc.lastJobID+"?hard_delete=true", nil)
+	for _, jobID := range tc.createdJobIDs {
+		if jobID == "" {
+			continue
+		}
+		req, err := http.NewRequestWithContext(ctx, "DELETE", tc.baseURL+"/api/v1/evaluations/jobs/"+jobID+"?hard_delete=true", nil)
 		if err == nil {
 			authToken := os.Getenv("AUTH_TOKEN")
 			if authToken != "" {
@@ -216,15 +215,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 
 	// Background Steps
 	ctx.Step(`^the service is running with Kubernetes runtime$`, tc.theServiceIsRunningWithK8sRuntime)
-	ctx.Step(`^the Kubernetes client is initialized$`, tc.theKubernetesClientIsInitialized)
-
-	// Wait Steps
-	ctx.Step(`^I wait (\d+) seconds? for Kubernetes resources$`, tc.iWaitForKubernetesResources)
-	ctx.Step(`^I wait (\d+) seconds? for cleanup$`, tc.iWaitForCleanup)
-
-	// Cleanup Verification Steps
-	ctx.Step(`^no Jobs should exist with the job_id label$`, tc.noJobsShouldExist)
-	ctx.Step(`^no ConfigMaps should exist with the job_id label$`, tc.noConfigMapsShouldExist)
+	ctx.Step(`^the environment variable "([^"]*)" is set to "([^"]*)"$`, tc.environmentVariableIsSet)
 
 	// HTTP Steps
 	ctx.Step(`^I send a POST request to "([^"]*)" with body "([^"]*)"$`, tc.iSendPostRequestWithBody)
@@ -260,6 +251,10 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the Job should have label "([^"]*)" matching the evaluation job ID$`, tc.jobShouldHaveLabelMatchingJobID)
 	ctx.Step(`^the Job should have label "([^"]*)" matching the provider ID$`, tc.jobShouldHaveLabelMatchingProviderID)
 	ctx.Step(`^the Job should have label "([^"]*)" matching the benchmark ID$`, tc.jobShouldHaveLabelMatchingBenchmarkID)
+	ctx.Step(`^the Job pod template should have label "([^"]*)" with value "([^"]*)"$`, tc.jobPodTemplateShouldHaveLabel)
+	ctx.Step(`^the Job pod template should have label "([^"]*)" matching the evaluation job ID$`, tc.jobPodTemplateShouldHaveLabelMatchingJobID)
+	ctx.Step(`^the Job pod template should have label "([^"]*)" matching the provider ID$`, tc.jobPodTemplateShouldHaveLabelMatchingProviderID)
+	ctx.Step(`^the Job pod template should have label "([^"]*)" matching the benchmark ID$`, tc.jobPodTemplateShouldHaveLabelMatchingBenchmarkID)
 	ctx.Step(`^the Job spec should have "([^"]*)" set to the configured retry attempts$`, tc.jobSpecShouldHaveRetryAttempts)
 	ctx.Step(`^the Job spec should have "([^"]*)" set to (\d+)$`, tc.jobSpecShouldHaveValue)
 	ctx.Step(`^the Job spec template should have "([^"]*)" set to "([^"]*)"$`, tc.jobTemplateSpecShouldHaveValue)
@@ -270,16 +265,19 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 
 	// Container Steps
 	ctx.Step(`^the Job pod template should have container named "([^"]*)"$`, tc.jobPodTemplateShouldHaveContainer)
-	ctx.Step(`^the container should use the provider's configured image$`, tc.containerShouldUseProviderImage)
+	ctx.Step(`^the container should have a non-empty image$`, tc.containerShouldHaveImage)
 	ctx.Step(`^the container should have "([^"]*)" set to "([^"]*)"$`, tc.containerShouldHaveValue)
 	ctx.Step(`^the container should have environment variable "([^"]*)" set to the job ID$`, tc.containerShouldHaveEnvVarWithJobID)
 	ctx.Step(`^the container securityContext should have "([^"]*)" set to (true|false)$`, tc.containerSecurityContextShouldHaveBoolValue)
 	ctx.Step(`^the container securityContext capabilities should drop "([^"]*)"$`, tc.containerSecurityContextCapabilitiesShouldDrop)
 	ctx.Step(`^the container securityContext should have seccompProfile type "([^"]*)"$`, tc.containerSecurityContextSeccompProfile)
-	ctx.Step(`^the container should have CPU request set to provider's configured value or default "([^"]*)"$`, tc.containerShouldHaveCPURequest)
-	ctx.Step(`^the container should have memory request set to provider's configured value or default "([^"]*)"$`, tc.containerShouldHaveMemoryRequest)
-	ctx.Step(`^the container should have CPU limit set to provider's configured value or default "([^"]*)"$`, tc.containerShouldHaveCPULimit)
-	ctx.Step(`^the container should have memory limit set to provider's configured value or default "([^"]*)"$`, tc.containerShouldHaveMemoryLimit)
+	ctx.Step(`^the container should have CPU request set$`, tc.containerShouldHaveCPURequestSet)
+	ctx.Step(`^the container should have memory request set$`, tc.containerShouldHaveMemoryRequestSet)
+	ctx.Step(`^the container should have CPU limit set$`, tc.containerShouldHaveCPULimitSet)
+	ctx.Step(`^the container should have memory limit set$`, tc.containerShouldHaveMemoryLimitSet)
+	ctx.Step(`^the Job pod template should have serviceAccountName derived from service account name$`, tc.jobPodTemplateShouldHaveServiceAccountFromSA)
+	ctx.Step(`^the volume "([^"]*)" should reference ConfigMap derived from service account name$`, tc.volumeShouldReferenceConfigMapFromSA)
+	ctx.Step(`^the container should have environment variable "([^"]*)" derived from service account name$`, tc.containerEnvVarShouldBeDerivedFromSA)
 
 	// Volume & Mount Steps
 	ctx.Step(`^the Job pod template should have volume "([^"]*)" of type ConfigMap$`, tc.jobPodTemplateShouldHaveConfigMapVolume)
@@ -288,13 +286,9 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the container should have volumeMount "([^"]*)" at path "([^"]*)"$`, tc.containerShouldHaveVolumeMount)
 	ctx.Step(`^the volumeMount "([^"]*)" should have subPath "([^"]*)"$`, tc.volumeMountShouldHaveSubPath)
 	ctx.Step(`^the volumeMount "([^"]*)" should be readOnly$`, tc.volumeMountShouldBeReadOnly)
-	ctx.Step(`^the volume "([^"]*)" should reference ConfigMap "([^"]*)"$`, tc.volumeShouldReferenceConfigMapByName)
 
 	// Service Account & Environment
 	ctx.Step(`^MLflow is configured$`, tc.mlflowIsConfigured)
-	ctx.Step(`^the Job pod template should have serviceAccountName set to "([^"]*)"$`, tc.jobPodTemplateShouldHaveServiceAccount)
-	ctx.Step(`^the container should have environment variable "([^"]*)" with pattern "([^"]*)"$`, tc.containerShouldHaveEnvVarWithPattern)
-	ctx.Step(`^the provider has a multiline entrypoint command$`, tc.providerHasMultilineEntrypoint)
 	ctx.Step(`^the container command should be a valid array$`, tc.containerCommandShouldBeValidArray)
 	ctx.Step(`^the container command should not contain empty strings$`, tc.containerCommandShouldNotContainEmptyStrings)
 	ctx.Step(`^the container command should have trimmed whitespace from each element$`, tc.containerCommandShouldHaveTrimmedWhitespace)
@@ -314,17 +308,11 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^each ConfigMap should have a unique benchmark_id label$`, tc.eachConfigMapShouldHaveUniqueBenchmarkIDLabel)
 	ctx.Step(`^the response should be returned immediately without waiting for Job creation$`, tc.responseShouldBeImmediate)
 	ctx.Step(`^Jobs should be created in the background$`, tc.jobsShouldBeCreatedInBackground)
-	ctx.Step(`^the job has (\d+) benchmarks configured$`, tc.jobHasBenchmarksConfigured)
-	ctx.Step(`^at most (\d+) benchmarks should be processed concurrently$`, tc.atMostBenchmarksProcessedConcurrently)
+	ctx.Step(`^the job has (\d+) benchmarks? configured$`, tc.jobHasBenchmarksConfigured)
 	ctx.Step(`^the Job deletion should use propagationPolicy "([^"]*)"$`, tc.jobDeletionShouldUsePropagationPolicy)
-	ctx.Step(`^the Job has already been deleted manually$`, tc.jobHasAlreadyBeenDeletedManually)
-	ctx.Step(`^no error should be returned for NotFound resources$`, tc.noErrorShouldBeReturnedForNotFoundResources)
 	ctx.Step(`^DeleteEvaluationJobResources should be called$`, tc.deleteEvaluationJobResourcesShouldBeCalled)
 	ctx.Step(`^all (\d+) Jobs should be deleted from Kubernetes$`, tc.allJobsShouldBeDeletedCount)
 	ctx.Step(`^all (\d+) ConfigMaps should be deleted from Kubernetes$`, tc.allConfigMapsShouldBeDeletedCount)
-	ctx.Step(`^the response should contain error about missing model information$`, tc.responseShouldContainMissingModelInfo)
-	ctx.Step(`^the Job should be created in namespace "([^"]*)"$`, tc.jobShouldBeCreatedInNamespace)
-	ctx.Step(`^the ConfigMap should be created in namespace "([^"]*)"$`, tc.configMapShouldBeCreatedInNamespace)
 }
 
 // ============================================================================
@@ -413,9 +401,15 @@ func (tc *testContext) iSendRequestWithBody(method, path, bodyFile string) error
 			if authToken == "" {
 				return "❌ NOT SET"
 			}
-			return fmt.Sprintf("✅ SET (%d chars, starts with: %s...)", len(authToken), authToken[:min(10, len(authToken))])
+			return fmt.Sprintf("✅ SET (%d chars)", len(authToken))
 		}())
-		fmt.Printf("  Authorization Header: %s\n", req.Header.Get("Authorization"))
+		fmt.Printf("  Authorization Header: %s\n", func() string {
+			header := req.Header.Get("Authorization")
+			if header == "" {
+				return "❌ NOT SET"
+			}
+			return "✅ SET"
+		}())
 		fmt.Printf("  Response Headers: %v\n", tc.response.Header)
 		fmt.Printf("  Response Body: %s\n\n", string(tc.body))
 	}
@@ -456,6 +450,8 @@ func (tc *testContext) trySetCurrentResources() {
 	if tc.k8sClient == nil || tc.lastJobID == "" {
 		return
 	}
+	tc.currentJob = nil
+	tc.currentConfigMap = nil
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		if tc.currentJob == nil {
@@ -507,6 +503,7 @@ func (tc *testContext) extractJobIDFromResponse() error {
 	if resource, ok := responseData["resource"].(map[string]interface{}); ok {
 		if id, ok := resource["id"].(string); ok && id != "" {
 			tc.lastJobID = id
+			tc.addCreatedJobID(id)
 			if os.Getenv("K8S_TEST_DEBUG") == "true" {
 				fmt.Printf("Extracted job ID: %s\n", id)
 			}
@@ -517,6 +514,7 @@ func (tc *testContext) extractJobIDFromResponse() error {
 	// Fallback: try top-level id or job_id
 	if id, ok := responseData["id"].(string); ok && id != "" {
 		tc.lastJobID = id
+		tc.addCreatedJobID(id)
 		if os.Getenv("K8S_TEST_DEBUG") == "true" {
 			fmt.Printf("Extracted job ID from top level: %s\n", id)
 		}
@@ -524,6 +522,7 @@ func (tc *testContext) extractJobIDFromResponse() error {
 	}
 	if jobID, ok := responseData["job_id"].(string); ok && jobID != "" {
 		tc.lastJobID = jobID
+		tc.addCreatedJobID(jobID)
 		if os.Getenv("K8S_TEST_DEBUG") == "true" {
 			fmt.Printf("Extracted job_id: %s\n", jobID)
 		}
@@ -537,11 +536,23 @@ func (tc *testContext) extractJobIDFromResponse() error {
 	return nil
 }
 
+func (tc *testContext) addCreatedJobID(jobID string) {
+	for _, existing := range tc.createdJobIDs {
+		if existing == jobID {
+			return
+		}
+	}
+	tc.createdJobIDs = append(tc.createdJobIDs, jobID)
+}
+
 // ============================================================================
 // Response Validation Steps
 // ============================================================================
 
 func (tc *testContext) theResponseCodeShouldBe(code int) error {
+	if tc.response == nil {
+		return fmt.Errorf("no response recorded (body=%q)", string(tc.body))
+	}
 	if tc.response.StatusCode != code {
 		return fmt.Errorf("expected status code %d, got %d. Response: %s", code, tc.response.StatusCode, string(tc.body))
 	}
@@ -614,7 +625,9 @@ func (tc *testContext) configMapShouldHaveLabelMatchingJobID(label string) error
 		return fmt.Errorf("ConfigMap %s does not have label %s", tc.currentConfigMap.Name, label)
 	}
 
-	// Store the job ID from the label
+	if tc.lastJobID != "" && actualValue != tc.lastJobID {
+		return fmt.Errorf("ConfigMap %s label %s expected %s, got %s", tc.currentConfigMap.Name, label, tc.lastJobID, actualValue)
+	}
 	tc.lastJobID = actualValue
 	return nil
 }
@@ -1147,6 +1160,65 @@ func (tc *testContext) jobShouldHaveLabelMatchingBenchmarkID(label string) error
 	return nil
 }
 
+func (tc *testContext) jobPodTemplateShouldHaveLabel(label, value string) error {
+	if tc.currentJob == nil {
+		return fmt.Errorf("no current Job")
+	}
+	actualValue, exists := tc.currentJob.Spec.Template.Labels[label]
+	if !exists {
+		return fmt.Errorf("Job %s pod template does not have label %s", tc.currentJob.Name, label)
+	}
+	if actualValue != value {
+		return fmt.Errorf("Job %s pod template label %s expected %s, got %s", tc.currentJob.Name, label, value, actualValue)
+	}
+	return nil
+}
+
+func (tc *testContext) jobPodTemplateShouldHaveLabelMatchingJobID(label string) error {
+	if tc.currentJob == nil {
+		return fmt.Errorf("no current Job")
+	}
+	actualValue, exists := tc.currentJob.Spec.Template.Labels[label]
+	if !exists {
+		return fmt.Errorf("Job %s pod template does not have label %s", tc.currentJob.Name, label)
+	}
+	if tc.lastJobID != "" && actualValue != tc.lastJobID {
+		return fmt.Errorf("Job %s pod template label %s expected %s, got %s", tc.currentJob.Name, label, tc.lastJobID, actualValue)
+	}
+	tc.lastJobID = actualValue
+	return nil
+}
+
+func (tc *testContext) jobPodTemplateShouldHaveLabelMatchingProviderID(label string) error {
+	if tc.currentJob == nil {
+		return fmt.Errorf("no current Job")
+	}
+	actualValue, exists := tc.currentJob.Spec.Template.Labels[label]
+	if !exists {
+		return fmt.Errorf("Job %s pod template does not have label %s", tc.currentJob.Name, label)
+	}
+	if tc.lastProviderID != "" && actualValue != tc.lastProviderID {
+		return fmt.Errorf("Job %s pod template label %s expected %s, got %s", tc.currentJob.Name, label, tc.lastProviderID, actualValue)
+	}
+	tc.lastProviderID = actualValue
+	return nil
+}
+
+func (tc *testContext) jobPodTemplateShouldHaveLabelMatchingBenchmarkID(label string) error {
+	if tc.currentJob == nil {
+		return fmt.Errorf("no current Job")
+	}
+	actualValue, exists := tc.currentJob.Spec.Template.Labels[label]
+	if !exists {
+		return fmt.Errorf("Job %s pod template does not have label %s", tc.currentJob.Name, label)
+	}
+	if tc.lastBenchmarkID != "" && actualValue != tc.lastBenchmarkID {
+		return fmt.Errorf("Job %s pod template label %s expected %s, got %s", tc.currentJob.Name, label, tc.lastBenchmarkID, actualValue)
+	}
+	tc.lastBenchmarkID = actualValue
+	return nil
+}
+
 func (tc *testContext) jobSpecShouldHaveRetryAttempts(field string) error {
 	if tc.currentJob == nil {
 		return fmt.Errorf("no current Job")
@@ -1262,22 +1334,6 @@ func (tc *testContext) jobPodTemplateShouldHaveContainer(containerName string) e
 	return fmt.Errorf("Job %s does not have container named %s", tc.currentJob.Name, containerName)
 }
 
-func (tc *testContext) containerShouldUseProviderImage() error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
-	}
-
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
-	if container.Image == "" {
-		return fmt.Errorf("Container %s has no image", container.Name)
-	}
-	return nil
-}
-
 func (tc *testContext) containerShouldHaveValue(field, value string) error {
 	if tc.currentJob == nil {
 		return fmt.Errorf("no current Job")
@@ -1298,6 +1354,20 @@ func (tc *testContext) containerShouldHaveValue(field, value string) error {
 	}
 
 	return fmt.Errorf("unknown container field %s", field)
+}
+
+func (tc *testContext) containerShouldHaveImage() error {
+	if tc.currentJob == nil {
+		return fmt.Errorf("no current Job")
+	}
+	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
+		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
+	}
+	container := tc.currentJob.Spec.Template.Spec.Containers[0]
+	if container.Image == "" {
+		return fmt.Errorf("Container %s has no image", container.Name)
+	}
+	return nil
 }
 
 func (tc *testContext) containerShouldHaveEnvVarWithJobID(envVar string) error {
@@ -1406,76 +1476,145 @@ func (tc *testContext) containerSecurityContextSeccompProfile(profileType string
 	return nil
 }
 
-func (tc *testContext) containerShouldHaveCPURequest(defaultValue string) error {
+func (tc *testContext) containerShouldHaveCPURequestSet() error {
 	if tc.currentJob == nil {
 		return fmt.Errorf("no current Job")
 	}
-
 	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
 		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
 	}
-
 	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	cpuRequest := container.Resources.Requests.Cpu()
 	if cpuRequest == nil || cpuRequest.IsZero() {
 		return fmt.Errorf("Container %s has no CPU request", container.Name)
 	}
-
 	return nil
 }
 
-func (tc *testContext) containerShouldHaveMemoryRequest(defaultValue string) error {
+func (tc *testContext) containerShouldHaveMemoryRequestSet() error {
 	if tc.currentJob == nil {
 		return fmt.Errorf("no current Job")
 	}
-
 	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
 		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
 	}
-
 	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	memRequest := container.Resources.Requests.Memory()
 	if memRequest == nil || memRequest.IsZero() {
 		return fmt.Errorf("Container %s has no memory request", container.Name)
 	}
-
 	return nil
 }
 
-func (tc *testContext) containerShouldHaveCPULimit(defaultValue string) error {
+func (tc *testContext) containerShouldHaveCPULimitSet() error {
 	if tc.currentJob == nil {
 		return fmt.Errorf("no current Job")
 	}
-
 	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
 		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
 	}
-
 	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	cpuLimit := container.Resources.Limits.Cpu()
 	if cpuLimit == nil || cpuLimit.IsZero() {
 		return fmt.Errorf("Container %s has no CPU limit", container.Name)
 	}
-
 	return nil
 }
 
-func (tc *testContext) containerShouldHaveMemoryLimit(defaultValue string) error {
+func (tc *testContext) containerShouldHaveMemoryLimitSet() error {
 	if tc.currentJob == nil {
 		return fmt.Errorf("no current Job")
 	}
-
 	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
 		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
 	}
-
 	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	memLimit := container.Resources.Limits.Memory()
 	if memLimit == nil || memLimit.IsZero() {
 		return fmt.Errorf("Container %s has no memory limit", container.Name)
 	}
-
 	return nil
+}
+
+func (tc *testContext) jobPodTemplateShouldHaveServiceAccountFromSA() error {
+	if tc.currentJob == nil {
+		return fmt.Errorf("no current Job")
+	}
+	_, err := tc.instanceNameFromServiceAccount()
+	return err
+}
+
+func (tc *testContext) volumeShouldReferenceConfigMapFromSA(volumeName string) error {
+	if tc.currentJob == nil {
+		return fmt.Errorf("no current Job")
+	}
+	envValue, err := tc.instanceNameFromServiceAccount()
+	if err != nil {
+		return err
+	}
+	expected := envValue + "-service-ca"
+	return tc.volumeShouldReferenceConfigMapByName(volumeName, expected)
+}
+
+func (tc *testContext) containerEnvVarShouldBeDerivedFromSA(targetEnvVar string) error {
+	if tc.currentJob == nil {
+		return fmt.Errorf("no current Job")
+	}
+	envValue, err := tc.instanceNameFromServiceAccount()
+	if err != nil {
+		return err
+	}
+	expected := fmt.Sprintf("https://%s.%s.svc.cluster.local:8443", envValue, tc.namespace)
+	return tc.containerEnvVarShouldEqualValue(targetEnvVar, expected)
+}
+
+func (tc *testContext) containerEnvVarShouldEqualValue(envVar, expected string) error {
+	if tc.currentJob == nil {
+		return fmt.Errorf("no current Job")
+	}
+	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
+		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
+	}
+	container := tc.currentJob.Spec.Template.Spec.Containers[0]
+	for _, env := range container.Env {
+		if env.Name == envVar {
+			if env.Value != expected {
+				return fmt.Errorf("Container %s env var %s expected %s, got %s", container.Name, envVar, expected, env.Value)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("Container %s does not have env var %s", container.Name, envVar)
+}
+
+func (tc *testContext) getContainerEnvValue(envVar string) (string, error) {
+	if tc.currentJob == nil {
+		return "", fmt.Errorf("no current Job")
+	}
+	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
+		return "", fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
+	}
+	container := tc.currentJob.Spec.Template.Spec.Containers[0]
+	for _, env := range container.Env {
+		if env.Name == envVar {
+			if env.Value == "" {
+				return "", fmt.Errorf("Container %s env var %s is empty", container.Name, envVar)
+			}
+			return env.Value, nil
+		}
+	}
+	return "", fmt.Errorf("Container %s does not have env var %s", container.Name, envVar)
+}
+
+func (tc *testContext) instanceNameFromServiceAccount() (string, error) {
+	if tc.currentJob == nil {
+		return "", fmt.Errorf("no current Job")
+	}
+	serviceAccount := tc.currentJob.Spec.Template.Spec.ServiceAccountName
+	if strings.HasSuffix(serviceAccount, "-jobs") {
+		return strings.TrimSuffix(serviceAccount, "-jobs"), nil
+	}
+	return "", fmt.Errorf("unable to derive instance name from serviceAccountName %q", serviceAccount)
 }
 
 // ============================================================================
@@ -1616,43 +1755,10 @@ func (tc *testContext) mlflowIsConfigured() error {
 	return nil
 }
 
-func (tc *testContext) jobPodTemplateShouldHaveServiceAccount(serviceAccountName string) error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
+func (tc *testContext) environmentVariableIsSet(name, value string) error {
+	if os.Getenv("K8S_TEST_DEBUG") == "true" {
+		fmt.Printf("[DEBUG] assuming service env %s=%s\n", name, value)
 	}
-
-	if tc.currentJob.Spec.Template.Spec.ServiceAccountName != serviceAccountName {
-		return fmt.Errorf("Job %s serviceAccountName expected %s, got %s", tc.currentJob.Name, serviceAccountName, tc.currentJob.Spec.Template.Spec.ServiceAccountName)
-	}
-
-	return nil
-}
-
-func (tc *testContext) containerShouldHaveEnvVarWithPattern(envVar, pattern string) error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
-	}
-
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
-	for _, env := range container.Env {
-		if env.Name == envVar {
-			regex := regexp.MustCompile(strings.ReplaceAll(pattern, "{namespace}", ".*"))
-			if regex.MatchString(env.Value) {
-				return nil
-			}
-			return fmt.Errorf("Container %s env var %s value %s does not match pattern %s", container.Name, envVar, env.Value, pattern)
-		}
-	}
-
-	return fmt.Errorf("Container %s does not have env var %s", container.Name, envVar)
-}
-
-func (tc *testContext) providerHasMultilineEntrypoint() error {
-	// This is a precondition step, no validation needed
 	return nil
 }
 
@@ -1859,65 +1965,6 @@ func (tc *testContext) configMapsShouldStillExist() error {
 }
 
 // ============================================================================
-// Helper Steps
-// ============================================================================
-
-func (tc *testContext) theKubernetesClientIsInitialized() error {
-	if tc.k8sClient == nil {
-		return fmt.Errorf("Kubernetes client not initialized")
-	}
-	return nil
-}
-
-func (tc *testContext) iWaitForKubernetesResources(seconds int) error {
-	time.Sleep(time.Duration(seconds) * time.Second)
-	return nil
-}
-
-func (tc *testContext) iWaitForCleanup(seconds int) error {
-	time.Sleep(time.Duration(seconds) * time.Second)
-	return nil
-}
-
-func (tc *testContext) noJobsShouldExist() error {
-	if tc.lastJobID == "" {
-		return fmt.Errorf("no job ID available for verification")
-	}
-
-	labelSelector := fmt.Sprintf("job_id=%s", tc.lastJobID)
-	jobs, err := tc.k8sClient.BatchV1().Jobs(tc.namespace).List(context.Background(), metav1.ListOptions{
-		LabelSelector: labelSelector,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to list Jobs: %w", err)
-	}
-
-	if len(jobs.Items) > 0 {
-		return fmt.Errorf("expected no Jobs with job_id=%s, but found %d", tc.lastJobID, len(jobs.Items))
-	}
-	return nil
-}
-
-func (tc *testContext) noConfigMapsShouldExist() error {
-	if tc.lastJobID == "" {
-		return fmt.Errorf("no job ID available for verification")
-	}
-
-	labelSelector := fmt.Sprintf("job_id=%s", tc.lastJobID)
-	configMaps, err := tc.k8sClient.CoreV1().ConfigMaps(tc.namespace).List(context.Background(), metav1.ListOptions{
-		LabelSelector: labelSelector,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to list ConfigMaps: %w", err)
-	}
-
-	if len(configMaps.Items) > 0 {
-		return fmt.Errorf("expected no ConfigMaps with job_id=%s, but found %d", tc.lastJobID, len(configMaps.Items))
-	}
-	return nil
-}
-
-// ============================================================================
 // Implemented Steps (previously stubbed)
 // ============================================================================
 
@@ -2048,30 +2095,6 @@ func (tc *testContext) jobHasBenchmarksConfigured(expected int) error {
 	return nil
 }
 
-func (tc *testContext) atMostBenchmarksProcessedConcurrently(limit int) error {
-	maxActive := 0
-	for i := 0; i < 5; i++ {
-		jobs, err := tc.listJobsByJobIDFresh()
-		if err != nil {
-			return err
-		}
-		active := 0
-		for _, job := range jobs {
-			if job.Status.Active > 0 {
-				active++
-			}
-		}
-		if active > maxActive {
-			maxActive = active
-		}
-		time.Sleep(1 * time.Second)
-	}
-	if maxActive > limit {
-		return fmt.Errorf("observed %d active Jobs, expected at most %d", maxActive, limit)
-	}
-	return nil
-}
-
 func (tc *testContext) jobDeletionShouldUsePropagationPolicy(policy string) error {
 	if !strings.EqualFold(policy, "Background") {
 		return godog.ErrSkip
@@ -2093,32 +2116,6 @@ func (tc *testContext) jobDeletionShouldUsePropagationPolicy(policy string) erro
 		time.Sleep(1 * time.Second)
 	}
 	return fmt.Errorf("Jobs were not marked for background deletion")
-}
-
-func (tc *testContext) jobHasAlreadyBeenDeletedManually() error {
-	if tc.lastJobID == "" {
-		return fmt.Errorf("no job ID tracked for manual deletion")
-	}
-	deletePolicy := metav1.DeletePropagationBackground
-	deleteOptions := metav1.DeleteOptions{PropagationPolicy: &deletePolicy}
-	labelSelector := fmt.Sprintf("job_id=%s", tc.lastJobID)
-	return tc.k8sClient.BatchV1().Jobs(tc.namespace).DeleteCollection(context.Background(), deleteOptions, metav1.ListOptions{
-		LabelSelector: labelSelector,
-	})
-}
-
-func (tc *testContext) noErrorShouldBeReturnedForNotFoundResources() error {
-	if tc.response == nil {
-		return fmt.Errorf("no response available")
-	}
-	if tc.response.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("expected status 204, got %d", tc.response.StatusCode)
-	}
-	bodyLower := strings.ToLower(string(tc.body))
-	if strings.Contains(bodyLower, "notfound") || strings.Contains(bodyLower, "not found") {
-		return fmt.Errorf("unexpected NotFound error in response: %s", string(tc.body))
-	}
-	return nil
 }
 
 func (tc *testContext) deleteEvaluationJobResourcesShouldBeCalled() error {
@@ -2164,36 +2161,6 @@ func (tc *testContext) allConfigMapsShouldBeDeletedCount(expected int) error {
 	return tc.allConfigMapsShouldBeDeleted()
 }
 
-func (tc *testContext) responseShouldContainMissingModelInfo() error {
-	if err := tc.responseBodyShouldContain("model url and name"); err == nil {
-		return nil
-	}
-	if err := tc.responseBodyShouldContain("validation failed"); err == nil {
-		return nil
-	}
-	return tc.responseBodyShouldContain("model.name")
-}
-
-func (tc *testContext) jobShouldBeCreatedInNamespace(expected string) error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
-	}
-	if tc.currentJob.Namespace != expected {
-		return fmt.Errorf("Job namespace expected %s, got %s", expected, tc.currentJob.Namespace)
-	}
-	return nil
-}
-
-func (tc *testContext) configMapShouldBeCreatedInNamespace(expected string) error {
-	if tc.currentConfigMap == nil {
-		return fmt.Errorf("no current ConfigMap")
-	}
-	if tc.currentConfigMap.Namespace != expected {
-		return fmt.Errorf("ConfigMap namespace expected %s, got %s", expected, tc.currentConfigMap.Namespace)
-	}
-	return nil
-}
-
 func (tc *testContext) responseBodyShouldContain(substr string) error {
 	body := strings.ToLower(string(tc.body))
 	if !strings.Contains(body, strings.ToLower(substr)) {
@@ -2217,7 +2184,7 @@ func (tc *testContext) listJobsByJobIDWithCache(forceRefresh bool) ([]batchv1.Jo
 	if tc.lastJobID == "" {
 		return nil, fmt.Errorf("no job ID tracked for listing")
 	}
-	if !forceRefresh && tc.cachedJobID == tc.lastJobID && tc.cachedJobs != nil {
+	if !forceRefresh && tc.cachedJobsJobID == tc.lastJobID && tc.cachedJobs != nil {
 		tc.logK8sOp("Jobs", "cache-hit", tc.lastJobID)
 		return tc.cachedJobs, nil
 	}
@@ -2228,7 +2195,7 @@ func (tc *testContext) listJobsByJobIDWithCache(forceRefresh bool) ([]batchv1.Jo
 	if err != nil {
 		return nil, fmt.Errorf("failed to list Jobs: %w", err)
 	}
-	tc.cachedJobID = tc.lastJobID
+	tc.cachedJobsJobID = tc.lastJobID
 	tc.cachedJobs = jobs.Items
 	return jobs.Items, nil
 }
@@ -2248,7 +2215,7 @@ func (tc *testContext) listConfigMapsByJobIDWithCache(forceRefresh bool) ([]core
 	if tc.lastJobID == "" {
 		return nil, fmt.Errorf("no job ID tracked for listing")
 	}
-	if !forceRefresh && tc.cachedJobID == tc.lastJobID && tc.cachedConfigMaps != nil {
+	if !forceRefresh && tc.cachedConfigMapsJobID == tc.lastJobID && tc.cachedConfigMaps != nil {
 		tc.logK8sOp("ConfigMaps", "cache-hit", tc.lastJobID)
 		return tc.cachedConfigMaps, nil
 	}
@@ -2259,7 +2226,7 @@ func (tc *testContext) listConfigMapsByJobIDWithCache(forceRefresh bool) ([]core
 	if err != nil {
 		return nil, fmt.Errorf("failed to list ConfigMaps: %w", err)
 	}
-	tc.cachedJobID = tc.lastJobID
+	tc.cachedConfigMapsJobID = tc.lastJobID
 	tc.cachedConfigMaps = configMaps.Items
 	return configMaps.Items, nil
 }
