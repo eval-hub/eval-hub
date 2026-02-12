@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/eval-hub/eval-hub/internal/logging"
 )
 
 func TestMiddleware(t *testing.T) {
@@ -13,7 +15,7 @@ func TestMiddleware(t *testing.T) {
 			w.Write([]byte("OK"))
 		})
 
-		wrapped := Middleware(handler, true, false)
+		wrapped := Middleware(handler, true, false, logging.FallbackLogger())
 
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		w := httptest.NewRecorder()
@@ -35,7 +37,7 @@ func TestMiddleware(t *testing.T) {
 			w.Write([]byte("Not Found"))
 		})
 
-		wrapped := Middleware(handler, true, false)
+		wrapped := Middleware(handler, true, false, logging.FallbackLogger())
 
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		w := httptest.NewRecorder()
@@ -52,7 +54,7 @@ func TestMiddleware(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		wrapped := Middleware(handler, true, false)
+		wrapped := Middleware(handler, true, false, logging.FallbackLogger())
 
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		w := httptest.NewRecorder()

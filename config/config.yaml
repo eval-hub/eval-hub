@@ -24,14 +24,13 @@ mlflow:
   #tracking_uri: http://localhost:5000
 # This is an example of how to enable instrumentation in a cluster
 otel:
-  enabled: false
-#   exporter_type: "otlp-grpc"
-#   exporter_endpoint: "127.0.0.1:4317"
-#   exporter_insecure: true
-#   sampling_ratio: "1.0"
-#   tracer_name: "github.com/eval-hub/eval-hub"
-#   enable_tracing: true
-#   enable_metrics: true
-#   enable_logs: true
+  enabled: true
+  exporter_type: "otlp-grpc"
+  exporter_endpoint: "localhost:4317"
+  exporter_insecure: true
+  # sampling_ratio: "1.0"
+  enable_tracing: true
+  # enable_metrics: true
+  # enable_logs: true
 prometheus:
   enabled: true

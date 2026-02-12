@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/config"
@@ -17,7 +18,9 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"google.golang.org/grpc/credentials"
 )
 
@@ -25,6 +28,9 @@ const (
 	ExporterTypeOTLPGRPC = "otlp-grpc"
 	ExporterTypeOTLPHTTP = "otlp-http"
 	ExporterTypeStdout   = "stdout"
+
+	ServiceName = "github.com/eval-hub/eval-hub"
+	Compressor  = "gzip"
 )
 
 // setupOTelSDK bootstraps the OpenTelemetry pipeline.
@@ -43,9 +49,6 @@ func SetupOTEL(ctx context.Context, config *config.OTELConfig, logger *slog.Logg
 	}
 	if config.SamplingRatio == "" {
 		config.SamplingRatio = "1.0"
-	}
-	if config.TracerName == "" {
-		config.TracerName = "eval-hub"
 	}
 
 	var shutdownFuncs []func(context.Context) error
@@ -116,6 +119,11 @@ func newPropagator() propagation.TextMapPropagator {
 }
 
 func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.TracerProvider, error) {
+	samplingRatio, err := strconv.ParseFloat(config.SamplingRatio, 64)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid sampling ratio: %s: %s", config.SamplingRatio, err.Error())
+	}
+
 	switch config.ExporterType {
 	case ExporterTypeOTLPGRPC:
 		if config.ExporterEndpoint == "" {
@@ -124,6 +132,7 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 		opts := []otlptracegrpc.Option{
 			otlptracegrpc.WithEndpoint(config.ExporterEndpoint),
 			otlptracegrpc.WithTimeout(config.TracerTimeout),
+			otlptracegrpc.WithCompressor(Compressor),
 		}
 		if config.ExporterInsecure {
 			opts = append(opts, otlptracegrpc.WithInsecure())
@@ -138,6 +147,11 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 		}
 		tracerProvider := trace.NewTracerProvider(
 			trace.WithBatcher(traceExporter, trace.WithBatchTimeout(config.TracerBatchInterval)),
+			trace.WithSampler(newSampler(samplingRatio)),
+			trace.WithResource(resource.NewWithAttributes(
+				semconv.SchemaURL,
+				semconv.ServiceNameKey.String(ServiceName),
+			)),
 		)
 		return tracerProvider, nil
 	case ExporterTypeOTLPHTTP:
@@ -161,6 +175,11 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 		}
 		tracerProvider := trace.NewTracerProvider(
 			trace.WithBatcher(traceExporter, trace.WithBatchTimeout(config.TracerBatchInterval)),
+			trace.WithSampler(newSampler(samplingRatio)),
+			trace.WithResource(resource.NewWithAttributes(
+				semconv.SchemaURL,
+				semconv.ServiceNameKey.String(ServiceName),
+			)),
 		)
 		return tracerProvider, nil
 	case ExporterTypeStdout:
@@ -205,4 +224,15 @@ func newLoggerProvider(_ context.Context, _ *config.OTELConfig) (*log.LoggerProv
 		log.WithProcessor(log.NewBatchProcessor(logExporter)),
 	)
 	return loggerProvider, nil
+}
+
+// newSampler creates a sampler based on the sampling ratio
+func newSampler(ratio float64) trace.Sampler {
+	if ratio >= 1.0 {
+		return trace.AlwaysSample()
+	}
+	if ratio <= 0.0 {
+		return trace.NeverSample()
+	}
+	return trace.TraceIDRatioBased(ratio)
 }

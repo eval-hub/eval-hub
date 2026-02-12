@@ -108,6 +108,8 @@ func main() {
 		"validator", validate != nil,
 		"local", serviceConfig.Service.LocalMode,
 		"mlflow_tracking", mlflowClient != nil,
+		"otel", (serviceConfig.OTEL != nil) && serviceConfig.OTEL.Enabled,
+		"prometheus", (serviceConfig.Prometheus != nil) && serviceConfig.Prometheus.Enabled,
 	)
 
 	// Start server in a goroutine

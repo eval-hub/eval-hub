@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -10,7 +11,7 @@ import (
 )
 
 // Middleware wraps an http.Handler to collect Prometheus metrics
-func Middleware(next http.Handler, prometheusMetrics bool, otelEnabled bool) http.Handler {
+func Middleware(next http.Handler, prometheusMetrics bool, otelEnabled bool, logger *slog.Logger) http.Handler {
 	handler := next
 	if prometheusMetrics {
 		// this should really be in a prometheus package but it uses the http.Handler interface
@@ -39,10 +40,12 @@ func Middleware(next http.Handler, prometheusMetrics bool, otelEnabled bool) htt
 			metrics.HTTPRequestDuration.WithLabelValues(method, endpoint, status).Observe(duration)
 			metrics.HTTPRequestTotal.WithLabelValues(method, endpoint, status).Inc()
 		})
+		logger.Info("Enabled Prometheus metrics middleware")
 	}
 
 	if otelEnabled {
 		handler = otelhttp.NewHandler(handler, "/")
+		logger.Info("Enabled OTEL middleware")
 	}
 
 	return handler
