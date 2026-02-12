@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
+	"github.com/eval-hub/eval-hub/internal/common"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/http_wrappers"
@@ -89,14 +90,34 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		}
 	}
 
-	response, err := storage.CreateEvaluationJob(evaluation, mlflowExperimentID, mlflowExperimentURL)
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{
+				ID: common.GUID(),
+			},
+			MLFlowExperimentID: mlflowExperimentID,
+		},
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{
+				State: api.OverallStatePending,
+				Message: &api.MessageInfo{
+					Message:     "Evaluation job created",
+					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CREATED,
+				},
+			},
+		},
+		Results: &api.EvaluationJobResults{
+			MLFlowExperimentURL: mlflowExperimentURL,
+		},
+		EvaluationJobConfig: *evaluation,
+	}
+	err = storage.CreateEvaluationJob(job)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
 
 	if h.runtime != nil {
-		job := response
 		runErr := executeEvaluationJob(ctx, h.runtime, job, &storage)
 		if runErr != nil {
 			ctx.Logger.Error("RunEvaluationJob failed", "error", runErr, "job_id", job.Resource.ID)
@@ -113,7 +134,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		}
 	}
 
-	w.WriteJSON(response, 202)
+	w.WriteJSON(job, 202)
 }
 
 func executeEvaluationJob(ctx *executioncontext.ExecutionContext, runtime abstractions.Runtime, job *api.EvaluationJobResource, storage *abstractions.Storage) (err error) {

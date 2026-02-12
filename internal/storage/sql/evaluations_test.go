@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
+	"github.com/eval-hub/eval-hub/internal/common"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/storage"
@@ -50,7 +51,16 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 		},
 	}
 
-	job, err := store.CreateEvaluationJob(config, "", "")
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{
+				ID: "job-1",
+			},
+		},
+		EvaluationJobConfig: *config,
+	}
+
+	err = store.CreateEvaluationJob(job)
 	if err != nil {
 		t.Fatalf("Failed to create job: %v", err)
 	}
@@ -154,7 +164,7 @@ func TestEvaluationsStorage(t *testing.T) {
 	})
 
 	t.Run("CreateEvaluationJob creates a new evaluation job", func(t *testing.T) {
-		job := &api.EvaluationJobConfig{
+		config := &api.EvaluationJobConfig{
 			Model: api.ModelRef{
 				URL:  "http://test.com",
 				Name: "test",
@@ -166,15 +176,24 @@ func TestEvaluationsStorage(t *testing.T) {
 				},
 			},
 		}
-		resp, err := store.CreateEvaluationJob(job, "", "")
+		job := &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{
+					ID: common.GUID(),
+				},
+			},
+			EvaluationJobConfig: *config,
+		}
+
+		err := store.CreateEvaluationJob(job)
 		if err != nil {
 			t.Fatalf("Failed to create evaluation job: %v", err)
 		}
-		evaluationId = resp.Resource.ID
+		evaluationId = job.Resource.ID
 		if evaluationId == "" {
 			t.Fatalf("Evaluation ID is empty")
 		}
-		if resp.EvaluationJobConfig.Collection != nil {
+		if job.EvaluationJobConfig.Collection != nil {
 			t.Fatalf("Collection is not nil")
 		}
 	})

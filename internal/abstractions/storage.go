@@ -20,7 +20,7 @@ type Storage interface {
 	Ping(timeout time.Duration) error
 
 	// Evaluation job operations
-	CreateEvaluationJob(evaluation *api.EvaluationJobConfig, mlflowExperimentID string, mlflowExperimentURL string) (*api.EvaluationJobResource, error)
+	CreateEvaluationJob(evaluation *api.EvaluationJobResource) error
 	GetEvaluationJob(id string) (*api.EvaluationJobResource, error)
 	GetEvaluationJobs(limit int, offset int, statusFilter string) (*QueryResults[api.EvaluationJobResource], error)
 	DeleteEvaluationJob(id string) error
