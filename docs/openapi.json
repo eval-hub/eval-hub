@@ -710,21 +710,6 @@
       },
       "EvaluationResults": {
         "properties": {
-          "total_evaluations": {
-            "type": "integer",
-            "title": "Total Evaluations",
-            "description": "Total number of evaluations"
-          },
-          "completed_evaluations": {
-            "type": "integer",
-            "title": "Completed Evaluations",
-            "description": "Number of completed evaluations"
-          },
-          "failed_evaluations": {
-            "type": "integer",
-            "title": "Failed Evaluations",
-            "description": "Number of failed evaluations"
-          },
           "benchmarks": {
             "items": {
               "$ref": "#/components/schemas/BenchmarkResult"
