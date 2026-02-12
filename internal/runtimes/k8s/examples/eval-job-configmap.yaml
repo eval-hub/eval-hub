@@ -34,7 +34,5 @@ data:
           "value": "dev"
         }
       ],
-      "timeout_seconds": 1800,
-      "retry_attempts": 2,
       "callback_url": "http://eval-hub"
     }

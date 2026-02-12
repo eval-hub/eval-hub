@@ -1,0 +1,15 @@
+{
+  "model": {
+    "url": "http://model-server.test.svc.cluster.local:8000/v1",
+    "name": "test-model"
+  },
+  "benchmarks": [
+    {
+      "id": "mmlu",
+      "provider_id": "lm_evaluation_harness",
+      "parameters": {
+        "max_tokens": 128
+      }
+    }
+  ]
+}

@@ -15,6 +15,7 @@ import (
 const (
 	maxK8sNameLength                = 63
 	defaultJobTTLSeconds            = int32(3600)
+	defaultJobBackoffLimit          = int32(3)
 	adapterContainerName            = "adapter"
 	jobSpecVolumeName               = "job-spec"
 	dataVolumeName                  = "data"
@@ -92,7 +93,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	configMap := configMapName(cfg.jobID, cfg.benchmarkID)
 
 	ttl := defaultJobTTLSeconds
-	backoff := int32(cfg.retryAttempts)
+	backoff := defaultJobBackoffLimit
 
 	envVars := buildEnvVars(cfg)
 	resources, err := buildResources(cfg)

@@ -10,7 +10,7 @@ metadata:
     provider_id: "lm_evaluation_harness"
     benchmark_id: "mmlu"
 spec:
-  backoffLimit: 2
+  backoffLimit: 3
   ttlSecondsAfterFinished: 3600
   template:
     metadata:
@@ -21,6 +21,7 @@ spec:
         provider_id: "lm_evaluation_harness"
         benchmark_id: "mmlu"
     spec:
+      serviceAccountName: evalhub-jobs
       restartPolicy: Never
       containers:
         - name: adapter
@@ -30,9 +31,8 @@ spec:
           env:
             - name: JOB_ID
               value: "001"
-            # Optional when EVALHUB_INSTANCE_NAME is set
-            # - name: EVALHUB_URL
-            #   value: "https://<instance>.<namespace>.svc.cluster.local:8443"
+            - name: EVALHUB_URL
+              value: "https://evalhub.evalhub.svc.cluster.local:8443"
           resources:
             requests:
               cpu: "250m"
@@ -55,16 +55,15 @@ spec:
               readOnly: true
             - name: data
               mountPath: /data
-            # Optional when EVALHUB_INSTANCE_NAME is set
-            # - name: evalhub-service-ca
-            #   mountPath: /etc/pki/ca-trust/source/anchors
+            - name: evalhub-service-ca
+              mountPath: /etc/pki/ca-trust/source/anchors
+              readOnly: true
       volumes:
         - name: job-spec
           configMap:
             name: eval-job-001-mmlu-spec
         - name: data
           emptyDir: {}
-        # Optional when EVALHUB_INSTANCE_NAME is set
-        # - name: evalhub-service-ca
-        #   configMap:
-        #     name: <instance>-service-ca
+        - name: evalhub-service-ca
+          configMap:
+            name: evalhub-service-ca
