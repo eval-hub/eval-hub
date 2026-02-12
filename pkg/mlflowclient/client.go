@@ -44,7 +44,7 @@ func NewClient(baseURL string) *Client {
 	}
 
 	return &Client{
-		ctx:     context.Background(),
+		ctx:     context.Background(), // this is the default - it should be overridden for each API call using the WithContext method
 		baseURL: baseURL,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,

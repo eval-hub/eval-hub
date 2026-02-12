@@ -16,6 +16,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/mlflow"
+	"github.com/eval-hub/eval-hub/internal/otel"
 	"github.com/eval-hub/eval-hub/internal/runtimes"
 	"github.com/eval-hub/eval-hub/internal/storage"
 	"github.com/eval-hub/eval-hub/internal/validation"
@@ -72,8 +73,26 @@ func main() {
 	}
 	logger.Info("Runtime created", "runtime", runtime.Name())
 
+	// create the mlflow client
 	mlflowClient := mlflow.NewMLFlowClient(serviceConfig, logger)
 
+	// Create a context with timeout for graceful shutdown
+	waitForShutdown := 30 * time.Second
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), waitForShutdown)
+	defer cancel()
+
+	// setup OTEL
+	var otelShutdown func(context.Context) error
+	if serviceConfig.OTEL != nil && serviceConfig.OTEL.Enabled {
+		shutdown, err := otel.SetupOTEL(shutdownCtx, serviceConfig.OTEL, logger)
+		if err != nil {
+			// we do this as no point trying to continue
+			startUpFailed(serviceConfig, err, "Failed to setup OTEL", logger)
+		}
+		otelShutdown = shutdown
+	}
+
+	// create the server
 	srv, err := server.NewServer(logger, serviceConfig, providerConfigs, storage, validate, runtime, mlflowClient)
 	if err != nil {
 		// we do this as no point trying to continue
@@ -115,13 +134,15 @@ func main() {
 		logger.Error("Failed to close storage", "error", err.Error())
 	}
 
-	// Create a context with timeout for graceful shutdown
-	waitForShutdown := 30 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), waitForShutdown)
-	defer cancel()
+	// shutdown the otel tracing
+	if otelShutdown != nil {
+		if err := otelShutdown(shutdownCtx); err != nil {
+			logger.Error("Failed to shutdown OTEL", "error", err.Error())
+		}
+	}
 
 	// shutdown the logger
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("Server forced to shutdown", "error", err.Error(), "timeout", waitForShutdown)
 		_ = logShutdown() // ignore the error
 	} else {
