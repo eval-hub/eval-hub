@@ -215,7 +215,7 @@ func createServer(port int) (*server.Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create runtime: %w", err)
 	}
-	mlflowClient := mlflow.NewMLFlowClient(serviceConfig.MLFlow, logger)
+	mlflowClient := mlflow.NewMLFlowClient(serviceConfig, logger)
 	return server.NewServer(logger, serviceConfig, providerConfigs, storage, validate, runtime, mlflowClient)
 }
 

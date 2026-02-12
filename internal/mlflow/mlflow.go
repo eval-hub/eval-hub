@@ -14,10 +14,10 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 )
 
-func NewMLFlowClient(mlflowConfig *config.MLFlowConfig, logger *slog.Logger) *mlflowclient.Client {
+func NewMLFlowClient(config *config.Config, logger *slog.Logger) *mlflowclient.Client {
 	url := ""
-	if mlflowConfig != nil && mlflowConfig.TrackingURI != "" {
-		url = mlflowConfig.TrackingURI
+	if config.MLFlow != nil && config.MLFlow.TrackingURI != "" {
+		url = config.MLFlow.TrackingURI
 	}
 
 	if url == "" {
@@ -25,13 +25,13 @@ func NewMLFlowClient(mlflowConfig *config.MLFlowConfig, logger *slog.Logger) *ml
 		return nil
 	}
 
-	if mlflowConfig.HTTPTimeout == 0 {
-		mlflowConfig.HTTPTimeout = 30 * time.Second
+	if config.MLFlow.HTTPTimeout == 0 {
+		config.MLFlow.HTTPTimeout = 30 * time.Second
 	}
 
 	// for now we create a default TLS config if the secure flag is set and no TLS config is provided
-	if mlflowConfig.Secure && (mlflowConfig.TLSConfig == nil) {
-		mlflowConfig.TLSConfig = &tls.Config{
+	if config.MLFlow.Secure && (config.MLFlow.TLSConfig == nil) {
+		config.MLFlow.TLSConfig = &tls.Config{
 			InsecureSkipVerify: false,
 			RootCAs:            nil, // we might need to load certificates
 			ClientCAs:          nil, // we might need to load certificates
@@ -42,14 +42,14 @@ func NewMLFlowClient(mlflowConfig *config.MLFlowConfig, logger *slog.Logger) *ml
 	}
 
 	httpClient := &http.Client{
-		Timeout: mlflowConfig.HTTPTimeout,
+		Timeout: config.MLFlow.HTTPTimeout,
 	}
 
-	if mlflowConfig.TLSConfig != nil {
+	if config.MLFlow.TLSConfig != nil {
 		httpClient = &http.Client{
-			Timeout: mlflowConfig.HTTPTimeout,
+			Timeout: config.MLFlow.HTTPTimeout,
 			Transport: &http.Transport{
-				TLSClientConfig: mlflowConfig.TLSConfig,
+				TLSClientConfig: config.MLFlow.TLSConfig,
 			},
 		}
 	}
