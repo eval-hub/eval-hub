@@ -322,7 +322,9 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	}
 
 	// Wrap with metrics middleware (outermost for complete observability)
-	handler = Middleware(handler)
+	prometheusEnabled := (s.serviceConfig.Prometheus != nil) && s.serviceConfig.Prometheus.Enabled
+	otelEnabled := (s.serviceConfig.OTEL != nil) && s.serviceConfig.OTEL.Enabled
+	handler = Middleware(handler, prometheusEnabled, otelEnabled)
 
 	return handler, nil
 }

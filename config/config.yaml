@@ -33,3 +33,5 @@ otel:
 #   enable_tracing: true
 #   enable_metrics: true
 #   enable_logs: true
+prometheus:
+  enabled: true

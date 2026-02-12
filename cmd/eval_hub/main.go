@@ -127,21 +127,22 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	logger.Info("Shutting down server...")
-
 	// shutdown the storage
+	logger.Info("Shutting down storage...")
 	if err := storage.Close(); err != nil {
 		logger.Error("Failed to close storage", "error", err.Error())
 	}
 
 	// shutdown the otel tracing
 	if otelShutdown != nil {
+		logger.Info("Shutting down OTEL...")
 		if err := otelShutdown(shutdownCtx); err != nil {
 			logger.Error("Failed to shutdown OTEL", "error", err.Error())
 		}
 	}
 
 	// shutdown the logger
+	logger.Info("Shutting down server...")
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("Server forced to shutdown", "error", err.Error(), "timeout", waitForShutdown)
 		_ = logShutdown() // ignore the error
