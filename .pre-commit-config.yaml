@@ -1,56 +1,36 @@
-# Pre-commit configuration for eval-hub
 repos:
-  # Ruff linting and formatting (replaces black)
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.6
-    hooks:
-      - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
-        exclude: ^examples/api_examples\.ipynb$
-      - id: ruff-format
-        exclude: ^examples/api_examples\.ipynb$
-
-  # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
+    rev: v4.5.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
-        args: [--allow-multiple-documents]
-      - id: check-json
-        exclude: ^examples/api_examples\.ipynb$
-      - id: check-toml
-      - id: check-merge-conflict
       - id: check-added-large-files
-        args: [--maxkb=1000]
-      - id: debug-statements
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-json
+      - id: detect-private-key
 
-  # Local checks
-  - repo: local
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
     hooks:
-      - id: mypy-check
-        name: mypy type checking
-        #  run with uv
-        entry: uv
-        args: [run, mypy, src/]
-        language: system
-        types: [python]
-        pass_filenames: false
+      - id: go-fmt
+      - id: go-imports
 
-      - id: pytest-unit
-        name: unit tests
-        #  run with uv
-        entry: uv
-        args: [run, pytest, tests/, -m, "unit", --tb=short, -q]
-        language: system
-        types: [python]
-        pass_filenames: false
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.55.2
+    hooks:
+      - id: golangci-lint
+        args: ['--fix']
 
-      - id: go-test
-        name: go unit and FVT tests
-        entry: make
-        args: [clean, build, test-all]
-        language: system
-        types: [go]
-        pass_filenames: false
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      - id: go-vet
+      - id: go-unit-tests
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.0.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]

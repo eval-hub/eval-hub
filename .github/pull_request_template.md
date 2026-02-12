@@ -1,16 +1,8 @@
-# Pull Request
-
 ## Description
 
-Please provide a clear and concise description of the changes in this PR.
-
-**Related Issue(s)**:
-- Fixes #(issue number)
-- Relates to #(issue number)
+<!-- Provide a brief description of the changes in this PR -->
 
 ## Type of Change
-
-Please mark the relevant option(s):
 
 - [ ] Bug fix (non-breaking change which fixes an issue)
 - [ ] New feature (non-breaking change which adds functionality)
@@ -18,158 +10,47 @@ Please mark the relevant option(s):
 - [ ] Documentation update
 - [ ] Refactoring (no functional changes)
 - [ ] Performance improvement
-- [ ] Test improvements
-- [ ] CI/CD improvements
-- [ ] Other (please describe):
+- [ ] Test coverage improvement
 
-## Component(s) Affected
+## Related Issues
 
-Please mark the relevant component(s):
+<!-- Link related issues here using #issue_number -->
 
-- [ ] API endpoints
-- [ ] Evaluation executors
-- [ ] MLFlow integration
-- [ ] Collection management
-- [ ] Kubernetes/OpenShift deployment
-- [ ] Configuration system
-- [ ] Monitoring/metrics
-- [ ] Storage
-- [ ] Documentation
-- [ ] Tests
-- [ ] CI/CD
-- [ ] Other:
+Fixes #
+Relates to #
 
 ## Changes Made
 
-Please describe the specific changes made:
+<!-- Detailed list of changes made in this PR -->
 
-### Added
 -
-
-### Changed
 -
-
-### Removed
--
-
-### Fixed
 -
 
 ## Testing
 
-Please describe how you tested your changes:
+<!-- Describe the tests you ran to verify your changes -->
 
-### Test Coverage
-- [ ] Unit tests added/updated
-- [ ] Integration tests added/updated
+- [ ] Unit tests pass (`pytest`)
+- [ ] Integration tests pass
 - [ ] Manual testing performed
-- [ ] No tests needed (documentation/minor changes)
-
-### Test Results
-- [ ] All existing tests pass
-- [ ] New tests pass
-- [ ] Manual testing successful
-
-**Manual Testing Details** (if applicable):
-```
-Describe manual testing steps and results:
-1.
-2.
-3.
-```
-
-### Performance Impact
-- [ ] No performance impact
-- [ ] Performance improvement
-- [ ] Performance regression (justified and documented)
-- [ ] Performance impact unknown
-
-## Documentation
-
-- [ ] Code comments added/updated
-- [ ] API documentation updated
-- [ ] README updated
-- [ ] CONTRIBUTING guide updated
-- [ ] Examples/tutorials added/updated
-- [ ] No documentation changes needed
-
-## Breaking Changes
-
-If this PR introduces breaking changes, please describe them and the migration path:
-
-```
-Describe breaking changes:
--
--
-
-Migration path:
-1.
-2.
-```
-
-## Security Considerations
-
-- [ ] No security implications
-- [ ] Security review needed
-- [ ] Authentication/authorization changes
-- [ ] Sensitive data handling changes
-- [ ] Network security changes
-
-Please describe any security implications:
-
-## Deployment Considerations
-
-- [ ] No deployment changes needed
-- [ ] Environment variables added/changed
-- [ ] Configuration changes required
-- [ ] Database migrations needed
-- [ ] Kubernetes manifests updated
-- [ ] New dependencies added
-
-**Deployment Notes**:
-
-## Screenshots/Evidence
-
-If applicable, add screenshots or other evidence of the changes:
+- [ ] No new warnings or errors
 
 ## Checklist
 
-Please confirm the following before submitting:
+- [ ] My code follows the project's code style
+- [ ] I have performed a self-review of my own code
+- [ ] I have commented my code, particularly in hard-to-understand areas
+- [ ] I have made corresponding changes to the documentation
+- [ ] My changes generate no new warnings
+- [ ] I have added tests that prove my fix is effective or that my feature works
+- [ ] New and existing unit tests pass locally with my changes
+- [ ] Any dependent changes have been merged and published
 
-### Code Quality
-- [ ] Code follows the project's style guidelines
-- [ ] Self-review of code has been performed
-- [ ] Code is properly commented
-- [ ] No new linting warnings introduced
+## Screenshots (if applicable)
 
-### Testing
-- [ ] Tests have been added for new functionality
-- [ ] All tests pass locally
-- [ ] Test coverage is adequate
-- [ ] No regression in existing functionality
-
-### Documentation
-- [ ] Documentation has been updated as needed
-- [ ] API documentation reflects changes
-- [ ] Examples updated if needed
-- [ ] Breaking changes documented
-
-### Review Readiness
-- [ ] PR title is clear and descriptive
-- [ ] PR description is complete
-- [ ] Commit messages follow conventional commits format
-- [ ] Branch is up to date with main
-- [ ] Ready for review
+<!-- Add screenshots to help explain your changes -->
 
 ## Additional Notes
 
-Add any additional notes, context, or questions for reviewers:
-
----
-
-**For Reviewers**: Please check that all automated checks pass before approving. Pay special attention to:
-- Test coverage and quality
-- API contract compatibility
-- Security implications
-- Performance impact
-- Documentation completeness
+<!-- Any additional information that reviewers should know -->
