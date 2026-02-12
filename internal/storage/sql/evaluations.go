@@ -26,37 +26,20 @@ type EvaluationJobEntity struct {
 	Results *api.EvaluationJobResults `json:"results,omitempty"`
 }
 
-//#######################################################################
+// #######################################################################
 // Evaluation job operations
-//#######################################################################
+// #######################################################################
+func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobResource) error {
+	jobID := evaluation.Resource.ID
+	mlflowExperimentID := evaluation.Resource.MLFlowExperimentID
 
-// CreateEvaluationJob creates a new evaluation job in the database
-// the evaluation job is stored in the evaluations table as a JSON string
-// the evaluation job is returned as a EvaluationJobResource
-func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobConfig, mlflowExperimentID string, mlflowExperimentURL string) (*api.EvaluationJobResource, error) {
-	jobID := s.generateID()
-	var evaluationJob *api.EvaluationJobResource
-	// we have to get the evaluation job and update the status so we need a transaction
 	err := s.withTransaction("create evaluation job", jobID, func(txn *sql.Tx) error {
 		tenant, err := s.getTenant()
 		if err != nil {
 			return se.WithRollback(err)
 		}
 
-		status := &api.EvaluationJobStatus{
-			EvaluationJobState: api.EvaluationJobState{
-				State: api.OverallStatePending,
-				Message: &api.MessageInfo{
-					Message:     "Evaluation job created",
-					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CREATED,
-				},
-			},
-		}
-		results := &api.EvaluationJobResults{
-			MLFlowExperimentURL: mlflowExperimentURL,
-		}
-
-		evaluationJSON, err := s.createEvaluationJobEntity(evaluation, status, results)
+		evaluationJSON, err := s.createEvaluationJobEntity(evaluation)
 		if err != nil {
 			return se.WithRollback(err)
 		}
@@ -71,19 +54,16 @@ func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobConfig, ml
 			return se.WithRollback(err)
 		}
 
-		// now get the evaluation job so that we don't have to recreate it by hand
-		evaluationJob, err = s.getEvaluationJobTransactional(txn, jobID)
 		return err
 	})
-
-	return evaluationJob, err
+	return err
 }
 
-func (s *SQLStorage) createEvaluationJobEntity(evaluation *api.EvaluationJobConfig, status *api.EvaluationJobStatus, results *api.EvaluationJobResults) ([]byte, error) {
+func (s *SQLStorage) createEvaluationJobEntity(evaluation *api.EvaluationJobResource) ([]byte, error) {
 	evaluationEntity := &EvaluationJobEntity{
-		Config:  evaluation,
-		Status:  status,
-		Results: results,
+		Config:  &evaluation.EvaluationJobConfig,
+		Status:  evaluation.Status,
+		Results: evaluation.Results,
 	}
 	evaluationJSON, err := json.Marshal(evaluationEntity)
 	if err != nil {

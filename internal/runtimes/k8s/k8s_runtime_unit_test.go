@@ -40,8 +40,8 @@ func (f *fakeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent)
 }
 
 func (f *fakeStorage) Ping(_ time.Duration) error { return nil }
-func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobConfig, _ string, _ string) (*api.EvaluationJobResource, error) {
-	return nil, nil
+func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobResource) error {
+	return nil
 }
 func (f *fakeStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) {
 	return nil, nil
