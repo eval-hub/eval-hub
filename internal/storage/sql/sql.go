@@ -9,7 +9,6 @@ import (
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/google/uuid"
 )
 
 const (
@@ -135,10 +134,6 @@ func (s *SQLStorage) ensureSchema() error {
 
 func (s *SQLStorage) getTenant() (api.Tenant, error) {
 	return "TODO", nil
-}
-
-func (s *SQLStorage) generateID() string {
-	return uuid.New().String()
 }
 
 func (s *SQLStorage) Close() error {
