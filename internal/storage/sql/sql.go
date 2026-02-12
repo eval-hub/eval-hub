@@ -9,6 +9,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/uptrace/opentelemetry-go-extra/otelsql"
 )
 
 const (
@@ -28,11 +29,11 @@ type SQLStorage struct {
 	ctx       context.Context
 }
 
-func NewStorage(config map[string]any, logger *slog.Logger) (abstractions.Storage, error) {
+func NewStorage(config map[string]any, otelEnabled bool, logger *slog.Logger) (abstractions.Storage, error) {
 	var sqlConfig SQLDatabaseConfig
-	err := mapstructure.Decode(config, &sqlConfig)
-	if err != nil {
-		return nil, err
+	merr := mapstructure.Decode(config, &sqlConfig)
+	if merr != nil {
+		return nil, merr
 	}
 
 	// check that the driver is supported
@@ -49,7 +50,13 @@ func NewStorage(config map[string]any, logger *slog.Logger) (abstractions.Storag
 
 	logger.Info("Creating SQL storage")
 
-	pool, err := sql.Open(sqlConfig.Driver, sqlConfig.URL)
+	var pool *sql.DB
+	var err error
+	if otelEnabled {
+		pool, err = otelsql.Open(sqlConfig.Driver, sqlConfig.URL)
+	} else {
+		pool, err = sql.Open(sqlConfig.Driver, sqlConfig.URL)
+	}
 	if err != nil {
 		return nil, err
 	}

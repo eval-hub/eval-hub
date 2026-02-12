@@ -52,7 +52,7 @@ func main() {
 	}
 
 	// set up the storage
-	storage, err := storage.NewStorage(serviceConfig.Database, logger)
+	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), logger)
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create storage", logger)
@@ -83,7 +83,7 @@ func main() {
 
 	// setup OTEL
 	var otelShutdown func(context.Context) error
-	if serviceConfig.OTEL != nil && serviceConfig.OTEL.Enabled {
+	if serviceConfig.IsOTELEnabled() {
 		shutdown, err := otel.SetupOTEL(shutdownCtx, serviceConfig.OTEL, logger)
 		if err != nil {
 			// we do this as no point trying to continue
@@ -108,8 +108,8 @@ func main() {
 		"validator", validate != nil,
 		"local", serviceConfig.Service.LocalMode,
 		"mlflow_tracking", mlflowClient != nil,
-		"otel", (serviceConfig.OTEL != nil) && serviceConfig.OTEL.Enabled,
-		"prometheus", (serviceConfig.Prometheus != nil) && serviceConfig.Prometheus.Enabled,
+		"otel", serviceConfig.IsOTELEnabled(),
+		"prometheus", serviceConfig.IsPrometheusEnabled(),
 	)
 
 	// Start server in a goroutine

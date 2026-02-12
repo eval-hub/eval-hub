@@ -322,7 +322,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	})
 
 	// Prometheus metrics endpoint
-	prometheusEnabled := (s.serviceConfig.Prometheus != nil) && s.serviceConfig.Prometheus.Enabled
+	prometheusEnabled := s.serviceConfig.IsPrometheusEnabled()
 	if prometheusEnabled {
 		s.handle(router, "/metrics", promhttp.Handler())
 	}
