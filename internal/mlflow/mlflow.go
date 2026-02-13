@@ -96,6 +96,15 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.
 		logger.Info("MLflow workspace configured", "workspace", config.MLFlow.Workspace)
 	}
 
+	if config.IsOTELEnabled() {
+		currentHTTPClient := client.GetHTTPClient()
+		client = client.WithHTTPClient(&http.Client{
+			Transport: otelhttp.NewTransport(currentHTTPClient.Transport),
+			Timeout:   currentHTTPClient.Timeout,
+		})
+		logger.Info("Enabled OTEL transport for MLFlow client")
+	}
+
 	logger.Info("MLFlow tracking enabled", "mlflow_experiment_url", client.GetExperimentsURL())
 
 	return client, nil
