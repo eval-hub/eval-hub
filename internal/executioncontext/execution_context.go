@@ -34,3 +34,12 @@ func NewExecutionContext(
 		StartedAt: time.Now(),
 	}
 }
+
+func (e *ExecutionContext) WithContext(ctx context.Context) *ExecutionContext {
+	return &ExecutionContext{
+		Ctx:       ctx,
+		RequestID: e.RequestID,
+		Logger:    e.Logger,
+		StartedAt: e.StartedAt,
+	}
+}

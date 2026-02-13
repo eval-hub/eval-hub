@@ -69,14 +69,29 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 
 	logging.LogRequestStarted(ctx)
 
-	// get the body bytes from the context
-	bodyBytes, err := req.BodyAsBytes()
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
 	evaluation := &api.EvaluationJobConfig{}
-	err = serialization.Unmarshal(h.validate, ctx, bodyBytes, evaluation)
+
+	err := otel.WithSpan(
+		ctx.Ctx,
+		h.serviceConfig,
+		ctx.Logger,
+		"validation",
+		"validate-evaluation-job",
+		map[string]string{},
+		func(runtimeCtx context.Context) error {
+			// get the body bytes from the context
+			bodyBytes, err := req.BodyAsBytes()
+			if err != nil {
+				return err
+			}
+			err = serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, evaluation)
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+	)
+
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
@@ -93,29 +108,47 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		}
 	}
 
-	job := &api.EvaluationJobResource{
-		Resource: api.EvaluationResource{
-			Resource: api.Resource{
-				ID:        common.GUID(),
-				CreatedAt: time.Now(),
-			},
-			MLFlowExperimentID: mlflowExperimentID,
+	job := &api.EvaluationJobResource{}
+	id := common.GUID()
+
+	err = otel.WithSpan(
+		ctx.Ctx,
+		h.serviceConfig,
+		ctx.Logger,
+		"storage",
+		"store-evaluation-job",
+		map[string]string{
+			"job.id":             id,
+			"job.experiment_id":  mlflowExperimentURL,
+			"job.experiment_url": mlflowExperimentURL,
 		},
-		Status: &api.EvaluationJobStatus{
-			EvaluationJobState: api.EvaluationJobState{
-				State: api.OverallStatePending,
-				Message: &api.MessageInfo{
-					Message:     "Evaluation job created",
-					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CREATED,
+		func(runtimeCtx context.Context) error {
+			job = &api.EvaluationJobResource{
+				Resource: api.EvaluationResource{
+					Resource: api.Resource{
+						ID:        id,
+						CreatedAt: time.Now(),
+					},
+					MLFlowExperimentID: mlflowExperimentID,
 				},
-			},
+				Status: &api.EvaluationJobStatus{
+					EvaluationJobState: api.EvaluationJobState{
+						State: api.OverallStatePending,
+						Message: &api.MessageInfo{
+							Message:     "Evaluation job created",
+							MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CREATED,
+						},
+					},
+				},
+				Results: &api.EvaluationJobResults{
+					MLFlowExperimentURL: mlflowExperimentURL,
+				},
+				EvaluationJobConfig: *evaluation,
+			}
+			return storage.WithContext(runtimeCtx).CreateEvaluationJob(job)
 		},
-		Results: &api.EvaluationJobResults{
-			MLFlowExperimentURL: mlflowExperimentURL,
-		},
-		EvaluationJobConfig: *evaluation,
-	}
-	err = storage.CreateEvaluationJob(job)
+	)
+
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
@@ -131,7 +164,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED,
 			}
 			if err := storage.UpdateEvaluationJobStatus(job.Resource.ID, state, message); err != nil {
-				ctx.Logger.Error("failed to update evaluation status", "error", err, "job_id", job.Resource.ID)
+				ctx.Logger.Error("Failed to update evaluation status", "error", err, "job_id", job.Resource.ID)
 			}
 			w.Error(runErr, ctx.RequestID)
 			return
