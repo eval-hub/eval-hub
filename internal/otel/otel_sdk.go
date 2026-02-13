@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/exporters/stdout/stdoutlog"
@@ -24,6 +25,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.39.0"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/credentials"
 )
 
@@ -263,4 +265,42 @@ func newSampler(ratio float64) trace.Sampler {
 
 func NewRoundTripper(base http.RoundTripper) http.RoundTripper {
 	return otelhttp.NewTransport(base)
+}
+
+type SpanFunction func(context.Context) error
+
+func WithSpan(ctx context.Context, serviceConfig *config.Config, logger *slog.Logger, component string, operation string, attributes map[string]string, fn SpanFunction) error {
+	runtimeCtx := ctx
+	var runtimeSpan oteltrace.Span
+
+	if serviceConfig != nil && serviceConfig.IsOTELEnabled() {
+		// Create child span for validation
+		runtimeCtx, runtimeSpan = otel.Tracer(component).Start(
+			ctx,
+			operation,
+		)
+
+		var atts []attribute.KeyValue
+		for key, value := range attributes {
+			if value != "" {
+				atts = append(atts, attribute.String(key, value))
+			}
+		}
+		runtimeSpan.SetAttributes(atts...)
+	}
+
+	err := fn(runtimeCtx)
+
+	if runtimeSpan != nil {
+		if err != nil {
+			// Set failed status on root span
+			runtimeSpan.SetStatus(codes.Error, fmt.Sprintf("%s failed", operation))
+		} else {
+			// Set success status on root span
+			runtimeSpan.SetStatus(codes.Ok, fmt.Sprintf("%s successful", operation))
+		}
+		runtimeSpan.End()
+	}
+
+	return err
 }

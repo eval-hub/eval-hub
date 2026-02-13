@@ -15,13 +15,10 @@ import (
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/mlflow"
+	"github.com/eval-hub/eval-hub/internal/otel"
 	"github.com/eval-hub/eval-hub/internal/serialization"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 )
 
 // BackendSpec represents the backend specification
@@ -145,52 +142,26 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 }
 
 func (h *Handlers) executeEvaluationJob(ctx *executioncontext.ExecutionContext, runtime abstractions.Runtime, job *api.EvaluationJobResource, storage *abstractions.Storage) (err error) {
-	var runtimeCtx context.Context
-	var runtimeSpan trace.Span
-
-	if h.serviceConfig.IsOTELEnabled() {
-		// Create child span for validation
-		runtimeCtx, runtimeSpan = otel.Tracer("runtime").Start(
-			ctx.Ctx,
-			"start-evaluation-job",
-		)
-
-		var attributes []attribute.KeyValue
-		attributes = append(attributes, attribute.String("job.id", job.Resource.ID))
-		if job.Resource.MLFlowExperimentID != "" {
-			attributes = append(attributes, attribute.String("job.experiment_id", job.Resource.MLFlowExperimentID))
-		}
-		runtimeSpan.SetAttributes(attributes...)
-	}
-
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			ctx.Logger.Error("panic in RunEvaluationJob", "panic", recovered, "stack", string(debug.Stack()), "job_id", job.Resource.ID)
-			err = serviceerrors.NewServiceError(messages.InternalServerError, "Error", fmt.Sprint(recovered))
-		}
-	}()
-	if runtimeCtx == nil {
-		runtimeCtx = ctx.Ctx
-	}
-	err = runtime.WithLogger(ctx.Logger).WithContext(runtimeCtx).RunEvaluationJob(job, storage)
-
-	if err != nil {
-		if runtimeSpan != nil {
-			// Set success status on root span
-			runtimeSpan.SetStatus(codes.Error, "start evaluation job failed")
-			runtimeSpan.End()
-		}
-		ctx.Logger.Error("RunEvaluationJob failed", "error", err, "job_id", job.Resource.ID)
-		return err
-	}
-
-	if runtimeSpan != nil {
-		// Set success status on root span
-		runtimeSpan.SetStatus(codes.Ok, "start evaluation job successful")
-		runtimeSpan.End()
-	}
-
-	return nil
+	return otel.WithSpan(
+		ctx.Ctx,
+		h.serviceConfig,
+		ctx.Logger,
+		"runtime",
+		"start-evaluation-job",
+		map[string]string{
+			"job.id":            job.Resource.ID,
+			"job.experiment_id": job.Resource.MLFlowExperimentID,
+		},
+		func(runtimeCtx context.Context) error {
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					ctx.Logger.Error("panic in RunEvaluationJob", "panic", recovered, "stack", string(debug.Stack()), "job_id", job.Resource.ID)
+					err = serviceerrors.NewServiceError(messages.InternalServerError, "Error", fmt.Sprint(recovered))
+				}
+			}()
+			return runtime.WithLogger(ctx.Logger).WithContext(runtimeCtx).RunEvaluationJob(job, storage)
+		},
+	)
 }
 
 // HandleListEvaluations handles GET /api/v1/evaluations/jobs
