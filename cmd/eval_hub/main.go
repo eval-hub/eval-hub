@@ -79,7 +79,7 @@ func main() {
 	// setup OTEL
 	var otelShutdown func(context.Context) error
 	if serviceConfig.IsOTELEnabled() {
-		// TODO CHEKC TO SEE WHY WE HAVE TO PASS IN A CONTEXT HERE
+		// TODO CHECK TO SEE WHY WE HAVE TO PASS IN A CONTEXT HERE
 		shutdown, err := otel.SetupOTEL(context.Background(), serviceConfig.OTEL, logger)
 		if err != nil {
 			// we do this as no point trying to continue
