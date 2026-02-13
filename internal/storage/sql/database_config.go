@@ -38,3 +38,15 @@ func (s *SQLDatabaseConfig) getConnectionURL() (string, error) {
 	}
 	return parsed.String(), nil
 }
+
+func (s *SQLDatabaseConfig) getDatabaseName() string {
+	connectionURL, err := s.getConnectionURL()
+	if err != nil {
+		return ""
+	}
+	parsed, err := url.Parse(connectionURL)
+	if err != nil {
+		return ""
+	}
+	return parsed.Path
+}

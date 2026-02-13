@@ -48,8 +48,8 @@ func NewStorage(config map[string]any, otelEnabled bool, logger *slog.Logger) (a
 		return nil, getUnsupportedDriverError(sqlConfig.Driver)
 	}
 
-	connectionURL, _ := sqlConfig.getConnectionURL()
-	logger = logger.With("driver", sqlConfig.getDriverName(), "url", connectionURL)
+	databaseName := sqlConfig.getDatabaseName()
+	logger = logger.With("driver", sqlConfig.getDriverName(), "database", databaseName)
 
 	logger.Info("Creating SQL storage")
 
@@ -63,8 +63,8 @@ func NewStorage(config map[string]any, otelEnabled bool, logger *slog.Logger) (a
 		case POSTGRES_DRIVER:
 			attrs = append(attrs, semconv.DBSystemPostgreSQL)
 		}
-		if connectionURL != "" {
-			attrs = append(attrs, semconv.DBNameKey.String(connectionURL))
+		if databaseName != "" {
+			attrs = append(attrs, semconv.DBNameKey.String(databaseName))
 		}
 		pool, err = otelsql.Open(sqlConfig.Driver, sqlConfig.URL, otelsql.WithAttributes(attrs...))
 	} else {
