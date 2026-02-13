@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -37,8 +36,11 @@ func (s *Server) newExecutionContext(r *http.Request) *executioncontext.Executio
 	// Enhance logger with request-specific fields
 	requestID, enhancedLogger := s.loggerWithRequest(r)
 
+	// Use r.Context() so OTEL trace context (and the HTTP span from otelhttp) propagates
+	// to handlers and downstream calls (storage, runtime, mlflow). Using context.Background()
+	// would break parent-span linkage and create orphan traces.
 	return executioncontext.NewExecutionContext(
-		context.Background(),
+		r.Context(),
 		requestID,
 		enhancedLogger,
 		3)
