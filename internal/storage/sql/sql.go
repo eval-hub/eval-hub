@@ -3,7 +3,10 @@ package sql
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
@@ -48,6 +51,12 @@ func NewStorage(config map[string]any, logger *slog.Logger) (abstractions.Storag
 	logger = logger.With("driver", sqlConfig.getDriverName(), "url", sqlConfig.getConnectionURL())
 
 	logger.Info("Creating SQL storage")
+
+	if sqlConfig.Driver == POSTGRES_DRIVER {
+		if err := ensurePostgresDatabaseExists(context.Background(), logger, sqlConfig.URL); err != nil {
+			return nil, err
+		}
+	}
 
 	pool, err := sql.Open(sqlConfig.Driver, sqlConfig.URL)
 	if err != nil {
@@ -156,4 +165,107 @@ func (s *SQLStorage) WithContext(ctx context.Context) abstractions.Storage {
 		logger:    s.logger,
 		ctx:       ctx,
 	}
+}
+
+func ensurePostgresDatabaseExists(ctx context.Context, logger *slog.Logger, connURL string) error {
+	if !strings.Contains(connURL, "://") {
+		logger.Warn("Postgres URL is not in URL form; skipping auto-create")
+		return nil
+	}
+
+	parsed, err := url.Parse(connURL)
+	if err != nil {
+		return fmt.Errorf("parse postgres url: %w", err)
+	}
+
+	dbName := strings.TrimPrefix(parsed.Path, "/")
+	if dbName == "" || dbName == "postgres" {
+		return nil
+	}
+
+	adminURL := *parsed
+	adminURL.Path = "/postgres"
+
+	adminDB, err := sql.Open(POSTGRES_DRIVER, adminURL.String())
+	if err != nil {
+		return fmt.Errorf("open postgres admin connection: %w", err)
+	}
+	defer adminDB.Close()
+
+	if err := adminDB.PingContext(ctx); err != nil {
+		return fmt.Errorf("ping postgres admin database: %w", err)
+	}
+
+	var exists bool
+	row := adminDB.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)", dbName)
+	if err := row.Scan(&exists); err != nil {
+		return fmt.Errorf("check postgres database existence: %w", err)
+	}
+	if exists {
+		return nil
+	}
+
+	logger.Info("Postgres database does not exist; creating", "database", dbName)
+
+	owner := ""
+	password := ""
+	if parsed.User != nil {
+		owner = parsed.User.Username()
+		if pass, ok := parsed.User.Password(); ok {
+			password = pass
+		}
+	}
+
+	if err := ensurePostgresRoleExists(ctx, logger, adminDB, owner, password); err != nil {
+		return err
+	}
+
+	var createSQL string
+	if owner != "" {
+		createSQL = fmt.Sprintf("CREATE DATABASE %s OWNER %s", quoteIdentifier(POSTGRES_DRIVER, dbName), quoteIdentifier(POSTGRES_DRIVER, owner))
+	} else {
+		createSQL = fmt.Sprintf("CREATE DATABASE %s", quoteIdentifier(POSTGRES_DRIVER, dbName))
+	}
+
+	if _, err := adminDB.ExecContext(ctx, createSQL); err != nil {
+		return fmt.Errorf("create postgres database: %w", err)
+	}
+
+	return nil
+}
+
+func ensurePostgresRoleExists(ctx context.Context, logger *slog.Logger, adminDB *sql.DB, owner string, password string) error {
+	if owner == "" {
+		return nil
+	}
+
+	var exists bool
+	row := adminDB.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname = $1)", owner)
+	if err := row.Scan(&exists); err != nil {
+		return fmt.Errorf("check postgres role existence: %w", err)
+	}
+	if exists {
+		return nil
+	}
+
+	if password == "" {
+		logger.Warn("Postgres role does not exist and no password provided; skipping role creation", "role", owner)
+		return nil
+	}
+
+	logger.Info("Postgres role does not exist; creating", "role", owner)
+	createSQL := fmt.Sprintf(
+		"CREATE USER %s WITH PASSWORD %s",
+		quoteIdentifier(POSTGRES_DRIVER, owner),
+		quoteLiteral(password),
+	)
+	if _, err := adminDB.ExecContext(ctx, createSQL); err != nil {
+		return fmt.Errorf("create postgres role: %w", err)
+	}
+
+	return nil
+}
+
+func quoteLiteral(value string) string {
+	return `'` + strings.ReplaceAll(value, `'`, `''`) + `'`
 }
