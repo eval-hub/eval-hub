@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/metrics"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // Middleware wraps an http.Handler to collect Prometheus metrics
@@ -41,11 +40,6 @@ func Middleware(next http.Handler, prometheusMetrics bool, otelEnabled bool, log
 			metrics.HTTPRequestTotal.WithLabelValues(method, endpoint, status).Inc()
 		})
 		logger.Info("Enabled Prometheus metrics middleware")
-	}
-
-	if otelEnabled {
-		handler = otelhttp.NewHandler(handler, "/")
-		logger.Info("Enabled OTEL middleware")
 	}
 
 	return handler

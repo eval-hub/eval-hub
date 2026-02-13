@@ -15,6 +15,7 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 	"github.com/go-playground/validator/v10"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -30,6 +31,10 @@ type Server struct {
 	validate        *validator.Validate
 	runtime         abstractions.Runtime
 	mlflowClient    *mlflowclient.Client
+}
+
+func (s *Server) isOTELEnabled() bool {
+	return (s.serviceConfig != nil) && s.serviceConfig.IsOTELEnabled()
 }
 
 // NewServer creates a new HTTP server instance with the provided logger and configuration.
@@ -168,11 +173,14 @@ func (s *Server) loggerWithRequest(r *http.Request) (string, *slog.Logger) {
 }
 
 func (s *Server) handleFunc(router *http.ServeMux, pattern string, handler func(http.ResponseWriter, *http.Request)) {
-	router.HandleFunc(pattern, handler)
-	s.logger.Info("Registered API", "pattern", pattern)
+	s.handle(router, pattern, http.HandlerFunc(handler))
 }
 
 func (s *Server) handle(router *http.ServeMux, pattern string, handler http.Handler) {
+	if s.isOTELEnabled() {
+		handler = otelhttp.NewHandler(handler, pattern)
+		s.logger.Info("Enabled OTEL handler", "pattern", pattern)
+	}
 	router.Handle(pattern, handler)
 	s.logger.Info("Registered API", "pattern", pattern)
 }
