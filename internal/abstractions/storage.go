@@ -11,6 +11,7 @@ import (
 type QueryResults[T any] struct {
 	Items       []T
 	TotalStored int
+	Errors      []string
 }
 
 type Storage interface {

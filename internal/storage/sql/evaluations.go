@@ -195,6 +195,7 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter strin
 	defer rows.Close()
 
 	// Process rows
+	var constructErrs []string
 	var items []api.EvaluationJobResource
 	for rows.Next() {
 		var dbID string
@@ -221,7 +222,8 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter strin
 		resource, err := s.constructEvaluationResource(statusStr, nil, dbID, createdAt, updatedAt, experimentID, &evaluationJobEntity)
 		if err != nil {
 			s.logger.Error("Failed to construct evaluation job resource", "error", err, "id", dbID)
-			return nil, err
+			constructErrs = append(constructErrs, err.Error())
+			continue
 		}
 
 		items = append(items, *resource)
@@ -235,6 +237,7 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter strin
 	return &abstractions.QueryResults[api.EvaluationJobResource]{
 		Items:       items,
 		TotalStored: totalCount,
+		Errors:      constructErrs,
 	}, nil
 }
 
