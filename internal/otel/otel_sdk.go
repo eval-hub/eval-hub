@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/config"
@@ -49,9 +48,6 @@ func SetupOTEL(ctx context.Context, config *config.OTELConfig, logger *slog.Logg
 	}
 	if config.TracerBatchInterval == 0 {
 		config.TracerBatchInterval = 5 * time.Second
-	}
-	if config.SamplingRatio == "" {
-		config.SamplingRatio = "1.0"
 	}
 
 	var shutdownFuncs []func(context.Context) error
@@ -122,11 +118,6 @@ func newPropagator() propagation.TextMapPropagator {
 }
 
 func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.TracerProvider, error) {
-	samplingRatio, err := strconv.ParseFloat(config.SamplingRatio, 64)
-	if err != nil {
-		return nil, fmt.Errorf("Invalid sampling ratio: %s: %s", config.SamplingRatio, err.Error())
-	}
-
 	switch config.ExporterType {
 	case ExporterTypeOTLPGRPC:
 		if config.ExporterEndpoint == "" {
@@ -154,7 +145,7 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 		}
 		tracerProvider := trace.NewTracerProvider(
 			trace.WithBatcher(traceExporter, trace.WithBatchTimeout(config.TracerBatchInterval)),
-			trace.WithSampler(newSampler(samplingRatio)),
+			trace.WithSampler(newSampler(config.SamplingRatio)),
 			trace.WithResource(res),
 		)
 		return tracerProvider, nil
@@ -183,7 +174,7 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 		}
 		tracerProvider := trace.NewTracerProvider(
 			trace.WithBatcher(traceExporter, trace.WithBatchTimeout(config.TracerBatchInterval)),
-			trace.WithSampler(newSampler(samplingRatio)),
+			trace.WithSampler(newSampler(config.SamplingRatio)),
 			trace.WithResource(res),
 		)
 		return tracerProvider, nil

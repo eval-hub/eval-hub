@@ -32,7 +32,7 @@ otel:
   exporter_type: "otlp-grpc"
   exporter_endpoint: "localhost:4317"
   exporter_insecure: true
-  # sampling_ratio: "1.0"
+  sampling_ratio: 1.0
   enable_tracing: true
   # enable_metrics: true
   # enable_logs: true
