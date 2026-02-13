@@ -119,7 +119,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		"store-evaluation-job",
 		map[string]string{
 			"job.id":             id,
-			"job.experiment_id":  mlflowExperimentURL,
+			"job.experiment_id":  mlflowExperimentID,
 			"job.experiment_url": mlflowExperimentURL,
 		},
 		func(runtimeCtx context.Context) error {
