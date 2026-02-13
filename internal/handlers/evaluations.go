@@ -159,16 +159,16 @@ func (h *Handlers) validateBenchmarkReferences(evaluation *api.EvaluationJobConf
 		provider, ok := h.providerConfigs[benchmark.ProviderID]
 		if !ok {
 			return serviceerrors.NewServiceError(
-				messages.RequestValidationFailed,
-				"Error",
-				fmt.Sprintf("unknown provider_id %q", benchmark.ProviderID),
+				messages.RequestFieldInvalid,
+				"ParameterName", "provider_id",
+				"Value", benchmark.ProviderID,
 			)
 		}
 		if !benchmarkExists(provider.Benchmarks, benchmark.ID) {
 			return serviceerrors.NewServiceError(
-				messages.RequestValidationFailed,
-				"Error",
-				fmt.Sprintf("unknown benchmark_id %q for provider_id %q", benchmark.ID, benchmark.ProviderID),
+				messages.RequestFieldInvalid,
+				"ParameterName", "id",
+				"Value", benchmark.ID,
 			)
 		}
 	}
