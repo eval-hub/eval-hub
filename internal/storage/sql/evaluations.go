@@ -79,11 +79,13 @@ func (s *SQLStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, er
 func (s *SQLStorage) constructEvaluationResource(statusStr string, message *api.MessageInfo, dbID string, createdAt time.Time, updatedAt time.Time, experimentID string, evaluationEntity *EvaluationJobEntity) (*api.EvaluationJobResource, error) {
 	if evaluationEntity == nil {
 		s.logger.Error("Failed to construct evaluation job resource", "error", "Evaluation entity does not exist", "id", dbID)
-		return nil, se.WithRollback(se.NewServiceError(messages.InternalServerError, "Error", "Evaluation entity does not exist"))
+		// Post-read validation: no writes done, so do not request rollback.
+		return nil, se.NewServiceError(messages.InternalServerError, "Error", "Evaluation entity does not exist")
 	}
 	if evaluationEntity.Config == nil {
 		s.logger.Error("Failed to construct evaluation job resource", "error", "Evaluation config does not exist", "id", dbID)
-		return nil, se.WithRollback(se.NewServiceError(messages.InternalServerError, "Error", "Evaluation config does not exist"))
+		// Post-read validation: no writes done, so do not request rollback.
+		return nil, se.NewServiceError(messages.InternalServerError, "Error", "Evaluation config does not exist")
 	}
 	if evaluationEntity.Status == nil {
 		evaluationEntity.Status = &api.EvaluationJobStatus{}
