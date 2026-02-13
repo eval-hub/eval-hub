@@ -63,9 +63,8 @@ func NewStorage(config map[string]any, otelEnabled bool, logger *slog.Logger) (a
 		case POSTGRES_DRIVER:
 			attrs = append(attrs, semconv.DBSystemPostgreSQL)
 		}
-		dbName := sqlConfig.getDatabaseName()
-		if dbName != "" {
-			attrs = append(attrs, semconv.DBNameKey.String(dbName))
+		if connectionURL != "" {
+			attrs = append(attrs, semconv.DBNameKey.String(connectionURL))
 		}
 		pool, err = otelsql.Open(sqlConfig.Driver, sqlConfig.URL, otelsql.WithAttributes(attrs...))
 	} else {

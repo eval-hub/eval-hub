@@ -3,7 +3,6 @@ package sql
 import (
 	"fmt"
 	"net/url"
-	"path"
 	"time"
 )
 
@@ -38,12 +37,4 @@ func (s *SQLDatabaseConfig) getConnectionURL() (string, error) {
 		parsed.User = url.User(parsed.User.Username())
 	}
 	return parsed.String(), nil
-}
-
-func (s *SQLDatabaseConfig) getDatabaseName() string {
-	connectionURL, err := s.getConnectionURL()
-	if err != nil {
-		return ""
-	}
-	return path.Base(path.Clean(connectionURL))
 }
