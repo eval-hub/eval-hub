@@ -11,7 +11,8 @@ Feature: Providers Endpoint
   Scenario: Get providers for non existent provider_id
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/providers?id=oops"
-    Then the response should contain the value "0" at path "total_count"
+    Then the response code should be 400
+    And the response should contain the value "query_parameter_invalid" at path "message_code"
 
   Scenario: Get provider for existent provider id
     Given the service is running

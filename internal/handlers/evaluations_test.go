@@ -104,7 +104,15 @@ func TestHandleCreateEvaluationMarksFailedWhenRuntimeErrors(t *testing.T) {
 	storage := &fakeStorage{}
 	runtime := &fakeRuntime{err: errors.New("runtime failed")}
 	validate := validator.New()
-	h := handlers.New(storage, validate, runtime, nil, nil, nil)
+	providerConfigs := map[string]api.ProviderResource{
+		"garak": {
+			ID: "garak",
+			Benchmarks: []api.BenchmarkResource{
+				{ID: "bench-1"},
+			},
+		},
+	}
+	h := handlers.New(storage, validate, runtime, nil, providerConfigs, nil)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second)
 
 	req := &bodyRequest{
@@ -138,7 +146,15 @@ func TestHandleCreateEvaluationSucceedsWhenRuntimeOk(t *testing.T) {
 	storage := &fakeStorage{}
 	runtime := &fakeRuntime{}
 	validate := validator.New()
-	h := handlers.New(storage, validate, runtime, nil, nil, nil)
+	providerConfigs := map[string]api.ProviderResource{
+		"garak": {
+			ID: "garak",
+			Benchmarks: []api.BenchmarkResource{
+				{ID: "bench-1"},
+			},
+		},
+	}
+	h := handlers.New(storage, validate, runtime, nil, providerConfigs, nil)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-2", logger, time.Second)
 
 	req := &bodyRequest{
@@ -275,6 +291,66 @@ func TestHandleCreateEvaluationRejectsMissingProviderID(t *testing.T) {
 	if runtime.called {
 		t.Fatalf("did not expect runtime to be invoked")
 	}
+	if recorder.Code != 400 {
+		t.Fatalf("expected status 400, got %d", recorder.Code)
+	}
+}
+
+func TestHandleCreateEvaluationRejectsInvalidProviderID(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	storage := &fakeStorage{}
+	runtime := &fakeRuntime{}
+	validate := validator.New()
+	providerConfigs := map[string]api.ProviderResource{
+		"garak": {
+			ID: "garak",
+			Benchmarks: []api.BenchmarkResource{
+				{ID: "bench-1"},
+			},
+		},
+	}
+	h := handlers.New(storage, validate, runtime, nil, providerConfigs, nil)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-invalid-provider", logger, time.Second)
+
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+		body:        []byte(`{"model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1","provider_id":"unknown"}]}`),
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCreateEvaluation(ctx, req, resp)
+
+	if recorder.Code != 400 {
+		t.Fatalf("expected status 400, got %d", recorder.Code)
+	}
+}
+
+func TestHandleCreateEvaluationRejectsInvalidBenchmarkID(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	storage := &fakeStorage{}
+	runtime := &fakeRuntime{}
+	validate := validator.New()
+	providerConfigs := map[string]api.ProviderResource{
+		"garak": {
+			ID: "garak",
+			Benchmarks: []api.BenchmarkResource{
+				{ID: "bench-1"},
+			},
+		},
+	}
+	h := handlers.New(storage, validate, runtime, nil, providerConfigs, nil)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-invalid-benchmark", logger, time.Second)
+
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+		body:        []byte(`{"model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"unknown","provider_id":"garak"}]}`),
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCreateEvaluation(ctx, req, resp)
+
 	if recorder.Code != 400 {
 		t.Fatalf("expected status 400, got %d", recorder.Code)
 	}
