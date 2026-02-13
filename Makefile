@@ -312,3 +312,6 @@ check-unused-components:
 	./docs/scripts/check_unused_components.sh
 
 documentation: check-unused-components generate-public-docs verify-api-docs
+
+update-redocly-cli:
+	npm i @redocly/cli@latest
