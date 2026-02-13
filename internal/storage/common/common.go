@@ -69,7 +69,8 @@ func UpdateBenchmarkResults(job *api.EvaluationJobResource, runStatus *api.Statu
 	}
 
 	for _, benchmark := range job.Results.Benchmarks {
-		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID {
+		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID &&
+			benchmark.ProviderID == runStatus.BenchmarkStatusEvent.ProviderID {
 			// we should never get here because the final result
 			// can not change, hence we treat this as an error for now
 			return serviceerrors.NewServiceError(messages.InternalServerError, "Error", fmt.Sprintf("Benchmark result already exists for benchmark %s in job %s", runStatus.BenchmarkStatusEvent.ID, job.Resource.ID))
