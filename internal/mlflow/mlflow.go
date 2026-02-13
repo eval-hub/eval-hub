@@ -1,8 +1,15 @@
 package mlflow
 
 import (
+	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/messages"
@@ -12,7 +19,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-func NewMLFlowClient(config *config.Config, logger *slog.Logger) *mlflowclient.Client {
+func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.Client, error) {
 	url := ""
 	if config.MLFlow != nil && config.MLFlow.TrackingURI != "" {
 		url = config.MLFlow.TrackingURI
@@ -20,23 +27,78 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) *mlflowclient.C
 
 	if url == "" {
 		logger.Warn("MLFlow tracking URI is not set, skipping MLFlow client creation")
-		return nil
+		return nil, nil
 	}
 
-	client := mlflowclient.NewClient(url).WithLogger(logger)
+	if config.MLFlow.HTTPTimeout == 0 {
+		config.MLFlow.HTTPTimeout = 30 * time.Second
+	}
 
-	if config.IsOTELEnabled() {
-		currentHTTPClient := client.GetHTTPClient()
-		client = client.WithHTTPClient(&http.Client{
-			Transport: otelhttp.NewTransport(currentHTTPClient.Transport),
-			Timeout:   currentHTTPClient.Timeout,
-		})
-		logger.Info("Enabled OTEL transport for MLFlow client")
+	// Build TLS config if not already provided
+	if config.MLFlow.TLSConfig == nil {
+		tlsConfig := &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			MaxVersion: tls.VersionTLS13,
+		}
+
+		// Load custom CA certificate if specified
+		if config.MLFlow.CACertPath != "" {
+			caCert, err := os.ReadFile(config.MLFlow.CACertPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read MLflow CA certificate at %s: %w", config.MLFlow.CACertPath, err)
+			}
+			caCertPool := x509.NewCertPool()
+			if !caCertPool.AppendCertsFromPEM(caCert) {
+				return nil, fmt.Errorf("failed to parse MLflow CA certificate at %s: file contains no valid PEM certificates", config.MLFlow.CACertPath)
+			}
+			tlsConfig.RootCAs = caCertPool
+			logger.Info("Loaded MLflow CA certificate", "path", config.MLFlow.CACertPath)
+		}
+
+		if config.MLFlow.InsecureSkipVerify {
+			tlsConfig.InsecureSkipVerify = true
+			logger.Warn("MLflow TLS certificate verification is disabled")
+		}
+
+		config.MLFlow.TLSConfig = tlsConfig
+	}
+
+	httpClient := &http.Client{
+		Timeout: config.MLFlow.HTTPTimeout,
+		Transport: &http.Transport{
+			TLSClientConfig: config.MLFlow.TLSConfig,
+		},
+	}
+
+	client := mlflowclient.NewClient(url).
+		WithContext(context.Background()).
+		WithLogger(logger).
+		WithHTTPClient(httpClient)
+
+	// Load auth token from file if configured, falling back to the Kubernetes SA token
+	tokenPath := config.MLFlow.TokenPath
+	if tokenPath == "" {
+		tokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	}
+	if tokenData, err := os.ReadFile(tokenPath); err == nil {
+		token := strings.TrimSpace(string(tokenData))
+		if token != "" {
+			client = client.WithToken(token)
+			logger.Info("MLflow auth token loaded", "path", tokenPath)
+		}
+	} else {
+		logger.Warn("No MLflow auth token found", "path", tokenPath, "error", err)
+	}
+
+	// Set workspace if configured
+	if config.MLFlow.Workspace != "" {
+		client = client.WithWorkspace(config.MLFlow.Workspace)
+		logger.Info("MLflow workspace configured", "workspace", config.MLFlow.Workspace)
 	}
 
 	logger.Info("MLFlow tracking enabled", "mlflow_experiment_url", client.GetExperimentsURL())
 
-	return client
+	return client, nil
 }
 
 func GetExperimentID(mlflowClient *mlflowclient.Client, experiment *api.ExperimentConfig) (experimentID string, experimentURL string, err error) {

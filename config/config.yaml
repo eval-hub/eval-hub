@@ -13,6 +13,10 @@ env_mappings:
   PORT: service.port
   DB_URL: database.url
   MLFLOW_TRACKING_URI: mlflow.tracking_uri
+  MLFLOW_CA_CERT_PATH: mlflow.ca_cert_path
+  MLFLOW_INSECURE_SKIP_VERIFY: mlflow.insecure_skip_verify
+  MLFLOW_TOKEN_PATH: mlflow.token_path
+  MLFLOW_WORKSPACE: mlflow.workspace
 # Database configuration
 database:
   driver: sqlite

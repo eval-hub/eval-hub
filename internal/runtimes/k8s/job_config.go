@@ -18,6 +18,8 @@ const (
 	defaultNamespace         = "default"
 	serviceURLEnv            = "SERVICE_URL"
 	evalHubInstanceNameEnv   = "EVALHUB_INSTANCE_NAME"
+	mlflowTrackingURIEnv     = "MLFLOW_TRACKING_URI"
+	mlflowWorkspaceEnv       = "MLFLOW_WORKSPACE"
 	inClusterNamespaceFile   = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 	serviceAccountNameSuffix = "-jobs"
 	serviceCAConfigMapSuffix = "-service-ca"
@@ -41,6 +43,8 @@ type jobConfig struct {
 	serviceCAConfigMap  string
 	evalHubURL          string
 	evalHubInstanceName string
+	mlflowTrackingURI   string
+	mlflowWorkspace     string
 }
 
 type jobSpec struct {
@@ -104,6 +108,10 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	// Get EvalHub instance name from environment (set by operator in deployment)
 	evalHubInstanceName := strings.TrimSpace(os.Getenv(evalHubInstanceNameEnv))
 
+	// Get MLFlow configuration from environment (set by operator in deployment)
+	mlflowTrackingURI := strings.TrimSpace(os.Getenv(mlflowTrackingURIEnv))
+	mlflowWorkspace := strings.TrimSpace(os.Getenv(mlflowWorkspaceEnv))
+
 	// Build ServiceAccount name, ConfigMap name, and EvalHub URL if instance name is set
 	var serviceAccountName, serviceCAConfigMap, evalHubURL string
 	if evalHubInstanceName != "" {
@@ -131,6 +139,8 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		serviceCAConfigMap:  serviceCAConfigMap,
 		evalHubURL:          evalHubURL,
 		evalHubInstanceName: evalHubInstanceName,
+		mlflowTrackingURI:   mlflowTrackingURI,
+		mlflowWorkspace:     mlflowWorkspace,
 	}, nil
 }
 

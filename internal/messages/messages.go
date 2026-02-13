@@ -61,6 +61,13 @@ var (
 		"request_validation_failed",
 	)
 
+	// RequestFieldInvalid The request field '{{.ParameterName}}' is not valid: '{{.Value}}'.
+	RequestFieldInvalid = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The request field '{{.ParameterName}}' is not valid: '{{.Value}}'.",
+		"request_field_invalid",
+	)
+
 	// MLFlowRequiredForExperiment MLflow is required for experiment tracking. Please configure MLflow in the service configuration and try again.
 	MLFlowRequiredForExperiment = createMessage(
 		constants.HTTPCodeBadRequest,

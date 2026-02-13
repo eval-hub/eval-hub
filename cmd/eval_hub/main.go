@@ -73,8 +73,10 @@ func main() {
 	}
 	logger.Info("Runtime created", "runtime", runtime.Name())
 
-	// create the mlflow client
-	mlflowClient := mlflow.NewMLFlowClient(serviceConfig, logger)
+	mlflowClient, err := mlflow.NewMLFlowClient(serviceConfig, logger)
+	if err != nil {
+		startUpFailed(serviceConfig, err, "Failed to create MLFlow client", logger)
+	}
 
 	// setup OTEL
 	var otelShutdown func(context.Context) error

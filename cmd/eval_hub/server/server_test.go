@@ -83,7 +83,7 @@ func TestServerSetupRoutes(t *testing.T) {
 		{http.MethodGet, "/openapi.yaml", http.StatusOK, ""},
 		{http.MethodGet, "/docs", http.StatusOK, ""},
 		// Evaluation endpoints
-		{http.MethodPost, "/api/v1/evaluations/jobs", http.StatusAccepted, `{"model": {"url": "http://test.com", "name": "test"}, "benchmarks": [{"id": "bench-1", "provider_id": "garak"}]}`},
+		{http.MethodPost, "/api/v1/evaluations/jobs", http.StatusAccepted, `{"model": {"url": "http://test.com", "name": "test"}, "benchmarks": [{"id": "toxicity", "provider_id": "garak"}]}`},
 		{http.MethodGet, "/api/v1/evaluations/jobs", http.StatusOK, ""},
 		{http.MethodGet, "/api/v1/evaluations/jobs/test-id", http.StatusNotFound, ""},
 		// we can not delete because we have no id
@@ -223,7 +223,10 @@ func createServer(port int) (*server.Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create runtime: %w", err)
 	}
-	mlflowClient := mlflow.NewMLFlowClient(serviceConfig, logger)
+	mlflowClient, err := mlflow.NewMLFlowClient(serviceConfig, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create MLFlow client: %w", err)
+	}
 	return server.NewServer(logger, serviceConfig, providerConfigs, storage, validate, runtime, mlflowClient)
 }
 

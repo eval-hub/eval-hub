@@ -97,6 +97,11 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
+	if err := h.validateBenchmarkReferences(evaluation); err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+
 	mlflowExperimentID := ""
 	mlflowExperimentURL := ""
 	if h.mlflowClient != nil {
@@ -195,6 +200,36 @@ func (h *Handlers) executeEvaluationJob(ctx *executioncontext.ExecutionContext, 
 			return runtime.WithLogger(ctx.Logger).WithContext(runtimeCtx).RunEvaluationJob(job, storage)
 		},
 	)
+}
+
+func (h *Handlers) validateBenchmarkReferences(evaluation *api.EvaluationJobConfig) error {
+	for _, benchmark := range evaluation.Benchmarks {
+		provider, ok := h.providerConfigs[benchmark.ProviderID]
+		if !ok {
+			return serviceerrors.NewServiceError(
+				messages.RequestFieldInvalid,
+				"ParameterName", "provider_id",
+				"Value", benchmark.ProviderID,
+			)
+		}
+		if !benchmarkExists(provider.Benchmarks, benchmark.ID) {
+			return serviceerrors.NewServiceError(
+				messages.RequestFieldInvalid,
+				"ParameterName", "id",
+				"Value", benchmark.ID,
+			)
+		}
+	}
+	return nil
+}
+
+func benchmarkExists(benchmarks []api.BenchmarkResource, id string) bool {
+	for _, benchmark := range benchmarks {
+		if benchmark.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 // HandleListEvaluations handles GET /api/v1/evaluations/jobs

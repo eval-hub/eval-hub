@@ -33,6 +33,7 @@ type Client struct {
 	baseURL    string
 	httpClient *http.Client
 	authToken  string
+	workspace  string
 	logger     *slog.Logger
 }
 
@@ -62,6 +63,7 @@ func (c *Client) WithHTTPClient(httpClient *http.Client) *Client {
 		baseURL:    c.baseURL,
 		httpClient: httpClient,
 		authToken:  c.authToken,
+		workspace:  c.workspace,
 		logger:     c.logger,
 	}
 }
@@ -75,6 +77,7 @@ func (c *Client) WithContext(ctx context.Context) *Client {
 		baseURL:    c.baseURL,
 		httpClient: c.httpClient,
 		authToken:  c.authToken,
+		workspace:  c.workspace,
 		logger:     c.logger,
 	}
 }
@@ -88,6 +91,7 @@ func (c *Client) WithLogger(logger *slog.Logger) *Client {
 		baseURL:    c.baseURL,
 		httpClient: c.httpClient,
 		authToken:  c.authToken,
+		workspace:  c.workspace,
 		logger:     logger,
 	}
 }
@@ -101,6 +105,21 @@ func (c *Client) WithToken(authToken string) *Client {
 		baseURL:    c.baseURL,
 		httpClient: c.httpClient,
 		authToken:  authToken,
+		workspace:  c.workspace,
+		logger:     c.logger,
+	}
+}
+
+func (c *Client) WithWorkspace(workspace string) *Client {
+	if c == nil {
+		return nil
+	}
+	return &Client{
+		ctx:        c.ctx,
+		baseURL:    c.baseURL,
+		httpClient: c.httpClient,
+		authToken:  c.authToken,
+		workspace:  workspace,
 		logger:     c.logger,
 	}
 }
@@ -154,6 +173,13 @@ func (c *Client) doRequest(method, endpoint string, body any) ([]byte, error) {
 		} else {
 			req.Header.Set("Authorization", "Bearer "+c.authToken)
 		}
+	}
+	// ODH-specific: the X-MLFLOW-WORKSPACE header is a non-standard extension
+	// used by Open Data Hub MLFlow to scope API requests to a Kubernetes
+	// namespace. This header is only set when workspace is explicitly configured
+	// (via MLFLOW_WORKSPACE env var). It has no effect on upstream MLFlow.
+	if c.workspace != "" {
+		req.Header.Set("X-MLFLOW-WORKSPACE", c.workspace)
 	}
 
 	resp, err := c.httpClient.Do(req)

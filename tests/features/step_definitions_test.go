@@ -186,13 +186,18 @@ func (a *apiFeature) startLocalServer(port int) error {
 		return logError(fmt.Errorf("failed to create runtime: %w", err))
 	}
 
+	mlflowClient, err := mlflow.NewMLFlowClient(serviceConfig, logger)
+	if err != nil {
+		return logError(fmt.Errorf("failed to create MLFlow client: %w", err))
+	}
+
 	a.server, err = server.NewServer(logger,
 		serviceConfig,
 		providerConfigs,
 		storage,
 		validate,
 		runtime,
-		mlflow.NewMLFlowClient(serviceConfig, logger))
+		mlflowClient)
 	if err != nil {
 		return err
 	}

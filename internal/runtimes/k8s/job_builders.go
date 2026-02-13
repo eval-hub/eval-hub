@@ -28,6 +28,14 @@ const (
 	specSuffix                      = "-spec"
 	envJobIDName                    = "JOB_ID"
 	envEvalHubURLName               = "EVALHUB_URL"
+	envMLFlowTrackingURIName        = "MLFLOW_TRACKING_URI"
+	envMLFlowWorkspaceName          = "MLFLOW_WORKSPACE"
+	envMLFlowTokenPathName          = "MLFLOW_TRACKING_TOKEN_PATH"
+	mlflowTokenVolumeName           = "mlflow-token"
+	mlflowTokenMountPath            = "/var/run/secrets/mlflow"
+	mlflowTokenFile                 = "token"
+	serviceCABundleFile             = "service-ca.crt"
+	envRequestsCABundleName         = "REQUESTS_CA_BUNDLE"
 	defaultAllowPrivilegeEscalation = false
 	//defaultRunAsUser                = int64(1000)
 	//defaultRunAsGroup               = int64(1000)
@@ -138,6 +146,34 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	if serviceCAConfigMap != "" {
 		volumes = ensureServiceCAVolume(volumes, serviceCAConfigMap)
 		volumeMounts = ensureServiceCAMount(volumeMounts)
+	}
+
+	// Add projected ServiceAccountToken volume for MLFlow authentication.
+	// On ROSA/STS clusters, the auto-mounted SA token has the wrong audience
+	// (AWS OIDC instead of Kubernetes API), so we mint a token with the default
+	// audience that MLFlow's kubernetes-auth plugin can use for SelfSubjectAccessReview.
+	if cfg.mlflowTrackingURI != "" {
+		expSeconds := int64(3600)
+		volumes = append(volumes, corev1.Volume{
+			Name: mlflowTokenVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					Sources: []corev1.VolumeProjection{
+						{
+							ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+								Path:              mlflowTokenFile,
+								ExpirationSeconds: &expSeconds,
+							},
+						},
+					},
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      mlflowTokenVolumeName,
+			MountPath: mlflowTokenMountPath,
+			ReadOnly:  true,
+		})
 	}
 
 	// Set ServiceAccount if configured
@@ -263,6 +299,39 @@ func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 			Value: cfg.evalHubURL,
 		})
 		seen[envEvalHubURLName] = true
+	}
+
+	// Add MLFlow environment variables if tracking is configured
+	if cfg.mlflowTrackingURI != "" {
+		env = append(env, corev1.EnvVar{
+			Name:  envMLFlowTrackingURIName,
+			Value: cfg.mlflowTrackingURI,
+		})
+		seen[envMLFlowTrackingURIName] = true
+
+		// Token path points to the projected ServiceAccountToken volume
+		env = append(env, corev1.EnvVar{
+			Name:  envMLFlowTokenPathName,
+			Value: mlflowTokenMountPath + "/" + mlflowTokenFile,
+		})
+		seen[envMLFlowTokenPathName] = true
+	}
+	if cfg.mlflowWorkspace != "" {
+		env = append(env, corev1.EnvVar{
+			Name:  envMLFlowWorkspaceName,
+			Value: cfg.mlflowWorkspace,
+		})
+		seen[envMLFlowWorkspaceName] = true
+	}
+
+	// Set REQUESTS_CA_BUNDLE so Python's requests library (used by mlflow)
+	// trusts the OpenShift service-serving CA certificate.
+	if cfg.serviceCAConfigMap != "" {
+		env = append(env, corev1.EnvVar{
+			Name:  envRequestsCABundleName,
+			Value: serviceCAMountPath + "/" + serviceCABundleFile,
+		})
+		seen[envRequestsCABundleName] = true
 	}
 
 	// Add provider-specific environment variables

@@ -110,9 +110,9 @@ type BenchmarkStatus struct {
 
 // BenchmarkStatusEvent is used when the job runtime needs to updated the status of a benchmark
 type BenchmarkStatusEvent struct {
-	ProviderID   string         `json:"provider_id"`
-	ID           string         `json:"id"`
-	Status       State          `json:"status,omitempty"`
+	ProviderID   string         `json:"provider_id" validate:"required"`
+	ID           string         `json:"id" validate:"required"`
+	Status       State          `json:"status" validate:"required,oneof=pending running completed failed cancelled"`
 	Metrics      map[string]any `json:"metrics,omitempty"`
 	Artifacts    map[string]any `json:"artifacts,omitempty"`
 	ErrorMessage *MessageInfo   `json:"error_message,omitempty"`
