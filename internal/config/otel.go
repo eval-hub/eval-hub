@@ -14,7 +14,7 @@ type OTELConfig struct {
 	// ExporterInsecure determines whether to use insecure connection for OTLP exporter
 	ExporterInsecure bool `mapstructure:"exporter_insecure,omitempty"`
 	// SamplingRatio is the ratio of traces to sample (0.0 to 1.0)
-	SamplingRatio string `mapstructure:"sampling_ratio,omitempty"`
+	SamplingRatio float64 `mapstructure:"sampling_ratio,omitempty"`
 	// Used to enable tracing
 	EnableTracing bool `mapstructure:"enable_tracing,omitempty"`
 	// TracerTimeout is the timeout for the tracer - defaults to 30 seconds if not set
