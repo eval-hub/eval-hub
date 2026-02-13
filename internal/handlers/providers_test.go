@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/handlers"
-	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -22,7 +21,7 @@ func (r *providersRequest) Query(key string) []string {
 	return []string{}
 }
 
-func TestHandleListProvidersRejectsInvalidProviderID(t *testing.T) {
+func TestHandleListProvidersReturnsEmptyForInvalidProviderID(t *testing.T) {
 	providerConfigs := map[string]api.ProviderResource{
 		"garak": {
 			ID: "garak",
@@ -43,16 +42,16 @@ func TestHandleListProvidersRejectsInvalidProviderID(t *testing.T) {
 
 	h.HandleListProviders(ctx, req, resp)
 
-	if recorder.Code != 400 {
-		t.Fatalf("expected status 400, got %d", recorder.Code)
+	if recorder.Code != 200 {
+		t.Fatalf("expected status 200, got %d", recorder.Code)
 	}
 
-	var body api.Error
+	var body api.ProviderResourceList
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
-		t.Fatalf("failed to unmarshal error response: %v", err)
+		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
-	if body.MessageCode != messages.QueryParameterInvalid.GetCode() {
-		t.Fatalf("expected message code %q, got %q", messages.QueryParameterInvalid.GetCode(), body.MessageCode)
+	if body.TotalCount != 0 {
+		t.Fatalf("expected total_count 0, got %d", body.TotalCount)
 	}
 }
