@@ -177,7 +177,7 @@ func (s *Server) handleFunc(router *http.ServeMux, pattern string, handler func(
 }
 
 func spanNameFormatter(operation string, r *http.Request) string {
-	return fmt.Sprintf("%s %s", r.Method, r.URL.Path)
+	return fmt.Sprintf("%s %s", r.Method, operation)
 }
 
 func (s *Server) handle(router *http.ServeMux, pattern string, handler http.Handler) {
