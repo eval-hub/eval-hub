@@ -24,7 +24,7 @@ mlflow:
   # tracking_uri: http://localhost:5000
 # This is an example of how to enable instrumentation in a cluster
 otel:
-  enabled: false
+  enabled: true
   exporter_type: "otlp-grpc"
   exporter_endpoint: "localhost:4317"
   exporter_insecure: true

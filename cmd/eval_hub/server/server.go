@@ -176,9 +176,13 @@ func (s *Server) handleFunc(router *http.ServeMux, pattern string, handler func(
 	s.handle(router, pattern, http.HandlerFunc(handler))
 }
 
+func spanNameFormatter(operation string, r *http.Request) string {
+	return fmt.Sprintf("%s %s", r.Method, r.URL.Path)
+}
+
 func (s *Server) handle(router *http.ServeMux, pattern string, handler http.Handler) {
 	if s.isOTELEnabled() {
-		handler = otelhttp.NewHandler(handler, pattern)
+		handler = otelhttp.NewHandler(handler, pattern, otelhttp.WithSpanNameFormatter(spanNameFormatter))
 		s.logger.Info("Enabled OTEL handler", "pattern", pattern)
 	}
 	router.Handle(pattern, handler)

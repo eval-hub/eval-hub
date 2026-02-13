@@ -148,13 +148,14 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 		if err != nil {
 			return nil, err
 		}
+		res, err := createResource(config)
+		if err != nil {
+			return nil, err
+		}
 		tracerProvider := trace.NewTracerProvider(
 			trace.WithBatcher(traceExporter, trace.WithBatchTimeout(config.TracerBatchInterval)),
 			trace.WithSampler(newSampler(samplingRatio)),
-			trace.WithResource(resource.NewWithAttributes(
-				semconv.SchemaURL,
-				semconv.ServiceNameKey.String(ServiceName),
-			)),
+			trace.WithResource(res),
 		)
 		return tracerProvider, nil
 	case ExporterTypeOTLPHTTP:
@@ -176,14 +177,14 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 		if err != nil {
 			return nil, err
 		}
-		resource, err := createResource(ctx, config)
+		res, err := createResource(config)
 		if err != nil {
 			return nil, err
 		}
 		tracerProvider := trace.NewTracerProvider(
 			trace.WithBatcher(traceExporter, trace.WithBatchTimeout(config.TracerBatchInterval)),
 			trace.WithSampler(newSampler(samplingRatio)),
-			trace.WithResource(resource),
+			trace.WithResource(res),
 		)
 		return tracerProvider, nil
 	case ExporterTypeStdout:
@@ -200,7 +201,7 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 	}
 }
 
-func createResource(ctx context.Context, config *config.OTELConfig) (*resource.Resource, error) {
+func createResource(config *config.OTELConfig) (*resource.Resource, error) {
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(ServiceName),
 		// semconv.ServiceVersion(config.ServiceVersion),
@@ -211,8 +212,11 @@ func createResource(ctx context.Context, config *config.OTELConfig) (*resource.R
 		attrs = append(attrs, attribute.String(key, value))
 	}
 
+	return resource.NewWithAttributes(semconv.SchemaURL, attrs...), nil
+}
+
+func CreateProcessResource(ctx context.Context) (*resource.Resource, error) {
 	return resource.New(ctx,
-		resource.WithAttributes(attrs...),
 		resource.WithProcess(),
 		resource.WithOS(),
 		resource.WithContainer(),

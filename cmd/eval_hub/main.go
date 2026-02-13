@@ -76,15 +76,11 @@ func main() {
 	// create the mlflow client
 	mlflowClient := mlflow.NewMLFlowClient(serviceConfig, logger)
 
-	// Create a context with timeout for graceful shutdown
-	waitForShutdown := 30 * time.Second
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), waitForShutdown)
-	defer cancel()
-
 	// setup OTEL
 	var otelShutdown func(context.Context) error
 	if serviceConfig.IsOTELEnabled() {
-		shutdown, err := otel.SetupOTEL(shutdownCtx, serviceConfig.OTEL, logger)
+		// TODO CHEKC TO SEE WHY WE HAVE TO PASS IN A CONTEXT HERE
+		shutdown, err := otel.SetupOTEL(context.Background(), serviceConfig.OTEL, logger)
 		if err != nil {
 			// we do this as no point trying to continue
 			startUpFailed(serviceConfig, err, "Failed to setup OTEL", logger)
@@ -128,6 +124,11 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
+
+	// Create a context with timeout for graceful shutdown
+	waitForShutdown := 30 * time.Second
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), waitForShutdown)
+	defer cancel()
 
 	// shutdown the storage
 	logger.Info("Shutting down storage...")
