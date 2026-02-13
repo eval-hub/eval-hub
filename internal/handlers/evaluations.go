@@ -181,8 +181,9 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 		return
 	}
 	w.WriteJSON(api.EvaluationJobResourceList{
-		Page:  *page,
-		Items: res.Items,
+		Page:   *page,
+		Items:  res.Items,
+		Errors: res.Errors,
 	}, 200)
 }
 

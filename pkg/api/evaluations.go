@@ -177,5 +177,6 @@ type EvaluationJobResource struct {
 // EvaluationJobResourceList represents list of evaluation job resources with pagination
 type EvaluationJobResourceList struct {
 	Page
-	Items []EvaluationJobResource `json:"items"`
+	Items  []EvaluationJobResource `json:"items"`
+	Errors []string                `json:"errors,omitempty"`
 }

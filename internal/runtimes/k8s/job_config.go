@@ -29,7 +29,6 @@ type jobConfig struct {
 	namespace           string
 	providerID          string
 	benchmarkID         string
-	retryAttempts       int
 	adapterImage        string
 	entrypoint          []string
 	defaultEnv          []api.EnvVar
