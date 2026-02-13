@@ -15,7 +15,7 @@ func TestMiddleware(t *testing.T) {
 			w.Write([]byte("OK"))
 		})
 
-		wrapped := Middleware(handler, true, false, logging.FallbackLogger())
+		wrapped := Middleware(handler, true, logging.FallbackLogger())
 
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		w := httptest.NewRecorder()
@@ -37,7 +37,7 @@ func TestMiddleware(t *testing.T) {
 			w.Write([]byte("Not Found"))
 		})
 
-		wrapped := Middleware(handler, true, false, logging.FallbackLogger())
+		wrapped := Middleware(handler, true, logging.FallbackLogger())
 
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		w := httptest.NewRecorder()
@@ -54,7 +54,7 @@ func TestMiddleware(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		wrapped := Middleware(handler, true, false, logging.FallbackLogger())
+		wrapped := Middleware(handler, true, logging.FallbackLogger())
 
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		w := httptest.NewRecorder()

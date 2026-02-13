@@ -10,7 +10,7 @@ import (
 )
 
 // Middleware wraps an http.Handler to collect Prometheus metrics
-func Middleware(next http.Handler, prometheusMetrics bool, otelEnabled bool, logger *slog.Logger) http.Handler {
+func Middleware(next http.Handler, prometheusMetrics bool, logger *slog.Logger) http.Handler {
 	handler := next
 	if prometheusMetrics {
 		// this should really be in a prometheus package but it uses the http.Handler interface
