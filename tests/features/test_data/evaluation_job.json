@@ -5,7 +5,7 @@
   "benchmarks": [
     {
       "id": "arc_easy",
-      "provider_id": "garak",
+      "provider_id": "lm_evaluation_harness",
       "config": {}
     }
   ],
