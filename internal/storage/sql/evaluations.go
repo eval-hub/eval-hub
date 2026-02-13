@@ -156,7 +156,6 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 
 	job, err := s.constructEvaluationResource(statusStr, nil, dbID, createdAt, updatedAt, experimentID, &evaluationJobEntity)
 	if err != nil {
-		s.logger.Error("Failed to construct evaluation job resource", "error", err, "id", dbID)
 		return nil, se.WithRollback(err)
 	}
 	return job, nil
@@ -221,7 +220,6 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter strin
 		// Construct the EvaluationJobResource
 		resource, err := s.constructEvaluationResource(statusStr, nil, dbID, createdAt, updatedAt, experimentID, &evaluationJobEntity)
 		if err != nil {
-			s.logger.Error("Failed to construct evaluation job resource", "error", err, "id", dbID)
 			constructErrs = append(constructErrs, err.Error())
 			continue
 		}
