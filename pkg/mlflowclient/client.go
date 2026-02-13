@@ -164,6 +164,10 @@ func (c *Client) doRequest(method, endpoint string, body interface{}) ([]byte, e
 			req.Header.Set("Authorization", "Bearer "+c.authToken)
 		}
 	}
+	// ODH-specific: the X-MLFLOW-WORKSPACE header is a non-standard extension
+	// used by Open Data Hub MLFlow to scope API requests to a Kubernetes
+	// namespace. This header is only set when workspace is explicitly configured
+	// (via MLFLOW_WORKSPACE env var). It has no effect on upstream MLFlow.
 	if c.workspace != "" {
 		req.Header.Set("X-MLFLOW-WORKSPACE", c.workspace)
 	}
