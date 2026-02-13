@@ -3,6 +3,7 @@ package features
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/cucumber/godog"
@@ -23,12 +24,17 @@ func TestFeatures(t *testing.T) {
 		featuresPath = filepath.Join(workDir, "tests", "features")
 	}
 
+	paths := []string{featuresPath}
+	if envPaths := os.Getenv("GODOG_PATHS"); envPaths != "" {
+		paths = normalizePaths(splitPaths(envPaths), workDir)
+	}
+
 	suite := godog.TestSuite{
 		TestSuiteInitializer: InitializeTestSuite,
 		ScenarioInitializer:  InitializeScenario,
 		Options: &godog.Options{
 			Format:   "pretty",
-			Paths:    []string{featuresPath},
+			Paths:    paths,
 			TestingT: t,
 			Strict:   true,
 		},
@@ -37,4 +43,51 @@ func TestFeatures(t *testing.T) {
 	if suite.Run() != 0 {
 		t.Fatal("non-zero status returned, failed to run feature tests")
 	}
+}
+
+func splitPaths(raw string) []string {
+	parts := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == ';' || r == ':'
+	})
+	paths := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			paths = append(paths, trimmed)
+		}
+	}
+	return paths
+}
+
+func normalizePaths(paths []string, workDir string) []string {
+	normalized := make([]string, 0, len(paths))
+	for _, path := range paths {
+		trimmed := strings.TrimSpace(path)
+		if trimmed == "" {
+			continue
+		}
+		normalized = append(normalized, normalizePath(trimmed, workDir))
+	}
+	return normalized
+}
+
+func normalizePath(path string, workDir string) string {
+	if filepath.IsAbs(path) {
+		return path
+	}
+	if _, err := os.Stat(path); err == nil {
+		return path
+	}
+	// If running from tests/features, allow "tests/features/..." input.
+	if filepath.Base(workDir) == "features" && strings.HasPrefix(path, "tests/features/") {
+		trimmed := strings.TrimPrefix(path, "tests/features/")
+		if _, err := os.Stat(trimmed); err == nil {
+			return trimmed
+		}
+	}
+	joined := filepath.Join(workDir, path)
+	if _, err := os.Stat(joined); err == nil {
+		return joined
+	}
+	return path
 }

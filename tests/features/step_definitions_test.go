@@ -37,6 +37,7 @@ import (
 const (
 	valuePrefix  = "value:"
 	mlflowPrefix = "mlflow:"
+	envPrefix    = "env:"
 )
 
 var (
@@ -265,6 +266,35 @@ func (tc *scenarioConfig) iSendARequestTo(method, path string) error {
 	return tc.iSendARequestToWithBody(method, path, "")
 }
 
+func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) error {
+	deadline := time.Now().Add(2 * time.Minute)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		if err := tc.iSendARequestTo(http.MethodGet, "/api/v1/evaluations/jobs/{id}"); err != nil {
+			lastErr = err
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		if tc.response != nil && tc.response.StatusCode == http.StatusOK {
+			status, err := tc.getJsonPath("$.status.state")
+			if err != nil {
+				lastErr = err
+			} else if status == expectedStatus {
+				return nil
+			} else {
+				lastErr = fmt.Errorf("expected status %q but got %q", expectedStatus, status)
+			}
+		} else if tc.response != nil {
+			lastErr = fmt.Errorf("unexpected response status %d", tc.response.StatusCode)
+		}
+		time.Sleep(1 * time.Second)
+	}
+	if lastErr != nil {
+		return logError(lastErr)
+	}
+	return logError(fmt.Errorf("timed out waiting for status %q", expectedStatus))
+}
+
 func (tc *scenarioConfig) findFile(fileName string) (string, error) {
 	file := filepath.Join("test_data", fileName)
 	if _, err := os.Stat(file); os.IsNotExist(err) {
@@ -301,6 +331,18 @@ func (tc *scenarioConfig) substituteValues(body string) (string, error) {
 					v = strings.TrimPrefix(match[1], mlflowPrefix)
 				}
 				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), v)
+			} else if strings.HasPrefix(match[1], envPrefix) {
+				raw := strings.TrimPrefix(match[1], envPrefix)
+				envName, fallback, hasFallback := strings.Cut(raw, "|")
+				value, ok := os.LookupEnv(envName)
+				if !ok {
+					if hasFallback {
+						value = fallback
+					} else {
+						value = ""
+					}
+				}
+				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), value)
 			} else {
 				return "", logError(fmt.Errorf("unknown substitutionvalue: %s", match[1]))
 			}
@@ -448,6 +490,9 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 	if err != nil {
 		logDebug("Failed to create request: %v\n", err)
 		return err
+	}
+	if authToken := os.Getenv("AUTH_TOKEN"); authToken != "" {
+		req.Header.Set("Authorization", "Bearer "+authToken)
 	}
 
 	tc.response, err = tc.apiFeature.client.Do(req)
@@ -641,6 +686,13 @@ func (tc *scenarioConfig) getJsonPath(jsonPath string) (string, error) {
 }
 
 func (tc *scenarioConfig) theResponseShouldContainAtJSONPath(expectedValue string, jsonPath string) error {
+	if strings.Contains(expectedValue, "{{") {
+		expanded, err := tc.substituteValues(expectedValue)
+		if err != nil {
+			return err
+		}
+		expectedValue = expanded
+	}
 	foundValue, err := tc.getJsonPath(jsonPath)
 	if err != nil {
 		return logError(err)
@@ -659,6 +711,13 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPath(expectedValue strin
 }
 
 func (tc *scenarioConfig) theResponseShouldNotContainAtJSONPath(expectedValue string, jsonPath string) error {
+	if strings.Contains(expectedValue, "{{") {
+		expanded, err := tc.substituteValues(expectedValue)
+		if err != nil {
+			return err
+		}
+		expectedValue = expanded
+	}
 	if tc.theResponseShouldContainAtJSONPath(expectedValue, jsonPath) == nil {
 		return logError(fmt.Errorf("expected %s to not contain %s but it did", jsonPath, expectedValue))
 	}
@@ -827,6 +886,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the "([^"]*)" field in the response should be saved as "([^"]*)"$`, tc.theFieldShouldBeSaved)
 	ctx.Step(`^the response should contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldContainAtJSONPath)
 	ctx.Step(`^the response should not contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldNotContainAtJSONPath)
+	ctx.Step(`^I wait for the evaluation job status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatus)
 	// Other steps
 	ctx.Step(`^fix this step$`, tc.fixThisStep)
 }

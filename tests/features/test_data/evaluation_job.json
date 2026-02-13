@@ -1,12 +1,17 @@
 {
   "model": {
-    "url": "http://test.com", "name": "test"
+    "url": "{{env:MODEL_URL|http://test.com}}",
+    "name": "{{env:MODEL_NAME|test}}"
   },
   "benchmarks": [
     {
       "id": "arc_easy",
       "provider_id": "lm_evaluation_harness",
-      "config": {}
+      "parameters": {
+        "num_fewshot": 3,
+        "limit": 5,
+        "tokenizer": "google/flan-t5-small"
+      }
     }
   ],
   "experiment": {

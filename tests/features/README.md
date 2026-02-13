@@ -17,6 +17,20 @@ go test ./tests/features/...
 
 The `SERVER_URL` should be a fully qualified URL (e.g., `http://localhost:8080` or `https://api.example.com`).
 
+### Optional Model Overrides
+
+You can override the model fields in the test payloads using environment variables:
+
+- `MODEL_URL` (defaults to `http://test.com`)
+- `MODEL_NAME` (defaults to `test`)
+
+Example:
+
+```bash
+export MODEL_URL="http://granite-llm-metrics.prabhu.svc.cluster.local:8080/v1"
+export MODEL_NAME="granite-llm"
+```
+
 ### Local Server Mode (Default)
 
 If `SERVER_URL` is not set, the tests will automatically start the server in a separate goroutine before running the test suite. The server will be started on:
@@ -73,5 +87,11 @@ go test -v ./tests/features/...
 Run a specific feature:
 
 ```bash
-go test -v ./tests/features/... -godog.paths=health.feature
+GODOG_PATHS=tests/features/health.feature go test -v ./tests/features/...
+```
+
+You can also pass multiple paths (comma, semicolon, or colon separated):
+
+```bash
+GODOG_PATHS=tests/features/health.feature,tests/features/evaluations.feature go test -v ./tests/features/...
 ```
