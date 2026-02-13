@@ -1,14 +1,15 @@
 package mlflow
 
 import (
-	"context"
 	"log/slog"
+	"net/http"
 
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 func NewMLFlowClient(config *config.Config, logger *slog.Logger) *mlflowclient.Client {
@@ -22,7 +23,16 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) *mlflowclient.C
 		return nil
 	}
 
-	client := mlflowclient.NewClient(url).WithContext(context.Background()).WithLogger(logger)
+	client := mlflowclient.NewClient(url).WithLogger(logger)
+
+	if config.IsOTELEnabled() {
+		currentHTTPClient := client.GetHTTPClient()
+		client = client.WithHTTPClient(&http.Client{
+			Transport: otelhttp.NewTransport(currentHTTPClient.Transport),
+			Timeout:   currentHTTPClient.Timeout,
+		})
+		logger.Info("Enabled OTEL transport for MLFlow client")
+	}
 
 	logger.Info("MLFlow tracking enabled", "mlflow_experiment_url", client.GetExperimentsURL())
 

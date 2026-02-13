@@ -21,7 +21,7 @@ database:
   # url: postgres://user@localhost:5432/eval_hub
 # MLFlow configuration
 mlflow:
-  #tracking_uri: http://localhost:5000
+  tracking_uri: http://localhost:5000
 # This is an example of how to enable instrumentation in a cluster
 otel:
   enabled: true

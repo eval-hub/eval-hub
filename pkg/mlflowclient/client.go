@@ -105,6 +105,10 @@ func (c *Client) WithToken(authToken string) *Client {
 	}
 }
 
+func (c *Client) GetHTTPClient() *http.Client {
+	return c.httpClient
+}
+
 func (c *Client) GetLogger() *slog.Logger {
 	return c.logger
 }
@@ -129,6 +133,12 @@ func (c *Client) doRequest(method, endpoint string, body interface{}) ([]byte, e
 			return nil, fmt.Errorf("failed to marshal request body: %w", err)
 		}
 		reqBody = bytes.NewBuffer(jsonData)
+	}
+
+	if c.ctx == nil {
+		// this should never happen - the context should be set for each API call using the WithContext method
+		c.logger.Error("context is nil for MLFlow request")
+		return nil, fmt.Errorf("context is nil for MLFlow request")
 	}
 
 	req, err := http.NewRequestWithContext(c.ctx, method, c.baseURL+endpoint, reqBody)
