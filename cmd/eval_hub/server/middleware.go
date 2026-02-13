@@ -32,7 +32,11 @@ func Middleware(next http.Handler, prometheusMetrics bool, logger *slog.Logger) 
 
 			// Extract method and endpoint
 			method := r.Method
-			endpoint := r.URL.Path
+			// Use route pattern to avoid high-cardinality labels from path params
+			endpoint := r.Pattern
+			if endpoint == "" {
+				endpoint = r.URL.Path
+			}
 			status := strconv.Itoa(rw.statusCode)
 
 			// Record metrics
