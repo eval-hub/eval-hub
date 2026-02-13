@@ -122,7 +122,7 @@ func (c *Client) GetExperimentsURL() string {
 }
 
 // doRequest performs an HTTP request to the MLflow API
-func (c *Client) doRequest(method, endpoint string, body interface{}) ([]byte, error) {
+func (c *Client) doRequest(method, endpoint string, body any) ([]byte, error) {
 	c.logger.Info("MLFlow request started", "method", method, "endpoint", endpoint)
 
 	var reqBody io.Reader
