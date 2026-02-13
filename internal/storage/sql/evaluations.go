@@ -221,6 +221,7 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter strin
 		resource, err := s.constructEvaluationResource(statusStr, nil, dbID, createdAt, updatedAt, experimentID, &evaluationJobEntity)
 		if err != nil {
 			constructErrs = append(constructErrs, err.Error())
+			totalCount--
 			continue
 		}
 
