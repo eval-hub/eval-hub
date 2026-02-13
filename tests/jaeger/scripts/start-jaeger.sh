@@ -210,7 +210,7 @@ if lsof -i :16686 >/dev/null 2>&1; then
     read -r response
     if [[ "$response" == "y" || "$response" == "Y" ]]; then
         echo "Killing existing Jaeger processes..."
-        pkill -f "jaeger.*--collector" || true  # v2 jaeger binary
+        pkill -f "jaeger" || true
         sleep 2
     else
         echo "Exiting..."
