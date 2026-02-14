@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage start-service stop-service lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage start-service stop-service lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report
 
 # Variables
 BINARY_NAME = eval-hub
@@ -100,6 +100,16 @@ test: ## Run unit tests
 test-fvt: $(BIN_DIR) ## Run FVT (Functional Verification Tests) using godog
 	@echo "Running FVT tests..."
 	@go test -v -race ./tests/features/...
+
+fvt-report: ## Generate HTML report for FVT tests
+	@echo "Generating FVT JSON report..."
+	@set -o pipefail; GODOG_FORMAT=cucumber GODOG_OUTPUT="$${PWD}/cucumber-fvt.json" go test -v -race ./tests/features/...; status=$$?; \
+	echo "Converting JSON report to HTML..."; \
+	node -e "require('cucumber-html-reporter').generate({theme:'bootstrap',jsonFile:'cucumber-fvt.json',output:'cucumber-report.html'})" 2>&1; \
+	report_status=$$?; \
+	if [ $$report_status -ne 0 ]; then echo "Report generation failed (see output above)."; fi; \
+	if [ -f cucumber-report.html ]; then echo "Report generated: cucumber-report.html"; else echo "Report not generated: cucumber-report.html"; fi; \
+	exit $$status
 
 test-all: test test-fvt ## Run all tests (unit + FVT)
 

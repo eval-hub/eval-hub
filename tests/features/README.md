@@ -84,14 +84,4 @@ Run with verbose output:
 go test -v ./tests/features/...
 ```
 
-Run a specific feature:
-
-```bash
-GODOG_PATHS=tests/features/health.feature go test -v ./tests/features/...
-```
-
-You can also pass multiple paths (comma, semicolon, or colon separated):
-
-```bash
-GODOG_PATHS=tests/features/health.feature,tests/features/evaluations.feature go test -v ./tests/features/...
-```
+Run a specific feature.

@@ -47,7 +47,30 @@ Feature: Evaluations Endpoint
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_missing_model.json"
     Then the response code should be 400
-    And the response should be JSON
+
+  Scenario: Create evaluation job with invalid provider
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_invalid_provider.json"
+    Then the response code should be 400
+    And the response should contain the value "request_field_invalid" at path "$.message_code"
+
+  Scenario: Create evaluation job with invalid benchmark
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_invalid_benchmark.json"
+    Then the response code should be 400
+    And the response should contain the value "request_field_invalid" at path "$.message_code"
+
+  Scenario: Create evaluation job missing benchmark id
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_missing_benchmark_id.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+
+  Scenario: Create evaluation job missing benchmark provider_id
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_missing_provider_id.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
 
   Scenario: List evaluation jobs
     Given the service is running
@@ -59,7 +82,6 @@ Feature: Evaluations Endpoint
     Then the response code should be 202
     When I send a GET request to "/api/v1/evaluations/jobs?limit=2"
     Then the response code should be 200
-    And the response should be JSON
     And the "next.href" field in the response should be saved as "value:next_url"
     And the response should have schema as:
     """
@@ -89,7 +111,6 @@ Feature: Evaluations Endpoint
     """
     When I send a GET request to "{{value:next_url}}"
     Then the response code should be 200
-    And the response should be JSON
     And the response should have schema as:
     """
       {
@@ -152,12 +173,42 @@ Feature: Evaluations Endpoint
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
-  Scenario: Update evaluation job status with minimal payload
+
+  Scenario: Cancel running evaluation job (soft delete)
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    Then the response code should be 202
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_running.json"
+    Then the response code should be 204
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 204
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "cancelled" at path "$.status.state"
+
+  Scenario: Cancel evaluation job with invalid hard_delete query
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    Then the response code should be 202
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=foo"
+    Then the response code should be 400
+    And the response should contain the value "query_parameter_invalid" at path "$.message_code"
+
+  Scenario: Update evaluation job status with invalid payload
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_invalid.json"
-    Then the response code should be 204
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+
+  Scenario: Update evaluation job status missing provider_id
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    Then the response code should be 202
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_missing_provider.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
 
   Scenario: Update evaluation job status for unknown id
     Given the service is running

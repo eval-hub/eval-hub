@@ -335,41 +335,14 @@ func TestCreateBenchmarkResourcesSetsAnnotationsIntegration(t *testing.T) {
 		t.Fatalf("unexpected error creating benchmark resources: %v", err)
 	}
 
-	cm, err := helper.clientset.CoreV1().ConfigMaps(defaultNamespace).Get(context.Background(), configMapName, metav1.GetOptions{})
+	_, err = helper.clientset.CoreV1().ConfigMaps(defaultNamespace).Get(context.Background(), configMapName, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("expected configmap to exist, got %v", err)
 	}
-	if cm.Annotations[annotationJobIDKey] != evaluation.Resource.ID {
-		t.Fatalf("expected configmap job_id annotation %q, got %q", evaluation.Resource.ID, cm.Annotations[annotationJobIDKey])
-	}
-	if cm.Annotations[annotationProviderIDKey] != evaluation.Benchmarks[0].ProviderID {
-		t.Fatalf("expected configmap provider_id annotation %q, got %q", evaluation.Benchmarks[0].ProviderID, cm.Annotations[annotationProviderIDKey])
-	}
-	if cm.Annotations[annotationBenchmarkIDKey] != evaluation.Benchmarks[0].ID {
-		t.Fatalf("expected configmap benchmark_id annotation %q, got %q", evaluation.Benchmarks[0].ID, cm.Annotations[annotationBenchmarkIDKey])
-	}
 
-	job, err := helper.clientset.BatchV1().Jobs(defaultNamespace).Get(context.Background(), jobName, metav1.GetOptions{})
+	_, err = helper.clientset.BatchV1().Jobs(defaultNamespace).Get(context.Background(), jobName, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("expected job to exist, got %v", err)
-	}
-	if job.Annotations[annotationJobIDKey] != evaluation.Resource.ID {
-		t.Fatalf("expected job job_id annotation %q, got %q", evaluation.Resource.ID, job.Annotations[annotationJobIDKey])
-	}
-	if job.Annotations[annotationProviderIDKey] != evaluation.Benchmarks[0].ProviderID {
-		t.Fatalf("expected job provider_id annotation %q, got %q", evaluation.Benchmarks[0].ProviderID, job.Annotations[annotationProviderIDKey])
-	}
-	if job.Annotations[annotationBenchmarkIDKey] != evaluation.Benchmarks[0].ID {
-		t.Fatalf("expected job benchmark_id annotation %q, got %q", evaluation.Benchmarks[0].ID, job.Annotations[annotationBenchmarkIDKey])
-	}
-	if job.Spec.Template.Annotations[annotationJobIDKey] != evaluation.Resource.ID {
-		t.Fatalf("expected pod job_id annotation %q, got %q", evaluation.Resource.ID, job.Spec.Template.Annotations[annotationJobIDKey])
-	}
-	if job.Spec.Template.Annotations[annotationProviderIDKey] != evaluation.Benchmarks[0].ProviderID {
-		t.Fatalf("expected pod provider_id annotation %q, got %q", evaluation.Benchmarks[0].ProviderID, job.Spec.Template.Annotations[annotationProviderIDKey])
-	}
-	if job.Spec.Template.Annotations[annotationBenchmarkIDKey] != evaluation.Benchmarks[0].ID {
-		t.Fatalf("expected pod benchmark_id annotation %q, got %q", evaluation.Benchmarks[0].ID, job.Spec.Template.Annotations[annotationBenchmarkIDKey])
 	}
 }
 

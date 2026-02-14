@@ -29,11 +29,33 @@ func TestFeatures(t *testing.T) {
 		paths = normalizePaths(splitPaths(envPaths), workDir)
 	}
 
+	format := os.Getenv("GODOG_FORMAT")
+	if format == "" {
+		format = "pretty"
+	}
+
+	var outputFile *os.File
+	output := os.Stdout
+	if outputPath := os.Getenv("GODOG_OUTPUT"); outputPath != "" {
+		file, err := os.Create(outputPath)
+		if err != nil {
+			t.Fatalf("failed to create GODOG_OUTPUT file: %v", err)
+		}
+		outputFile = file
+		output = file
+	}
+	if outputFile != nil {
+		defer func() {
+			_ = outputFile.Close()
+		}()
+	}
+
 	suite := godog.TestSuite{
 		TestSuiteInitializer: InitializeTestSuite,
 		ScenarioInitializer:  InitializeScenario,
 		Options: &godog.Options{
-			Format:   "pretty",
+			Format:   format,
+			Output:   output,
 			Paths:    paths,
 			TestingT: t,
 			Strict:   true,
