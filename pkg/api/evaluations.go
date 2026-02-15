@@ -155,13 +155,24 @@ type OCICoordinates struct {
 	Annotations   map[string]string `json:"annotations,omitempty"`
 }
 
+// EvaluationOutputsOCI represents OCI output configuration
+type EvaluationOutputsOCI struct {
+	Coordinates OCICoordinates `json:"coordinates" validate:"required"`
+}
+
+// EvaluationOutputs represents optional outputs configuration for an evaluation job
+type EvaluationOutputs struct {
+	OCI *EvaluationOutputsOCI `json:"oci,omitempty"`
+}
+
 // EvaluationJobConfig represents evaluation job request schema
 type EvaluationJobConfig struct {
-	Model      ModelRef          `json:"model" validate:"required"`
-	Benchmarks []BenchmarkConfig `json:"benchmarks" validate:"required,min=1,dive"`
-	Collection *Ref              `json:"collection,omitempty"`
-	Experiment *ExperimentConfig `json:"experiment,omitempty"`
-	Custom     map[string]any    `json:"custom,omitempty"`
+	Model      ModelRef           `json:"model" validate:"required"`
+	Benchmarks []BenchmarkConfig  `json:"benchmarks" validate:"required,min=1,dive"`
+	Collection *Ref               `json:"collection,omitempty"`
+	Experiment *ExperimentConfig  `json:"experiment,omitempty"`
+	Custom     map[string]any     `json:"custom,omitempty"`
+	Outputs    *EvaluationOutputs `json:"outputs,omitempty"`
 }
 
 type EvaluationResource struct {

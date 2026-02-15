@@ -56,16 +56,8 @@ type jobSpec struct {
 	BenchmarkConfig map[string]any      `json:"benchmark_config"`
 	ExperimentName  string              `json:"experiment_name,omitempty"`
 	Tags            []api.ExperimentTag `json:"tags,omitempty"`
-	CallbackURL     *string             `json:"callback_url"`
-	Outputs         *jobSpecOutputs     `json:"outputs,omitempty"`
-}
-
-type jobSpecOutputs struct {
-	OCI *jobSpecOutputsOCI `json:"oci,omitempty"`
-}
-
-type jobSpecOutputsOCI struct {
-	Coordinates api.OCICoordinates `json:"coordinates"`
+	CallbackURL     *string                `json:"callback_url"`
+	Outputs         *api.EvaluationOutputs `json:"outputs,omitempty"`
 }
 
 func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkID string) (*jobConfig, error) {
@@ -110,6 +102,9 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	if evaluation.Experiment != nil {
 		spec.ExperimentName = evaluation.Experiment.Name
 		spec.Tags = evaluation.Experiment.Tags
+	}
+	if evaluation.Outputs != nil {
+		spec.Outputs = evaluation.Outputs
 	}
 	specJSON, err := json.MarshalIndent(spec, "", "  ")
 	if err != nil {
