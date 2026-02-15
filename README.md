@@ -121,7 +121,7 @@ Provider configurations live in `config/providers/` as YAML files. The default s
 
 ## API overview
 
-All endpoints are versioned under `/api/v1`. Full specification at `/openapi.yaml`.
+All endpoints are versioned under `/api/v1`. Full specification at [eval-hub.github.io/eval-hub](https://eval-hub.github.io/eval-hub/).
 
 | Endpoint | Methods | Description |
 |---|---|---|
@@ -133,7 +133,7 @@ All endpoints are versioned under `/api/v1`. Full specification at `/openapi.yam
 | `/api/v1/health` | GET | Health check |
 | `/metrics` | GET | Prometheus metrics |
 
-Detailed API documentation: [API.md](./API.md)
+Detailed API documentation: [eval-hub.github.io/eval-hub](https://eval-hub.github.io/eval-hub/)
 
 ## Custom backends
 
@@ -183,7 +183,7 @@ eval-hub/
 
 ## Further reading
 
-- [API.md](./API.md) -- full endpoint reference
+- [API documentation](https://eval-hub.github.io/eval-hub/) -- full endpoint reference
 - [CONTRIBUTING.md](./CONTRIBUTING.md) -- contribution guidelines
 - [OpenAPI spec](./api/openapi.yaml) -- machine-readable API definition
 
