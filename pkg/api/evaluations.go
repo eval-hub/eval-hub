@@ -146,6 +146,15 @@ type EvaluationJobResults struct {
 	MLFlowExperimentURL string            `json:"mlflow_experiment_url,omitempty"`
 }
 
+// OCICoordinates represents OCI artifact coordinates for persistence
+type OCICoordinates struct {
+	OCIHost       string            `json:"oci_host" validate:"required"`
+	OCIRepository string            `json:"oci_repository" validate:"required"`
+	OCITag        string            `json:"oci_tag,omitempty"`
+	OCISubject    string            `json:"oci_subject,omitempty"`
+	Annotations   map[string]string `json:"annotations,omitempty"`
+}
+
 // EvaluationJobConfig represents evaluation job request schema
 type EvaluationJobConfig struct {
 	Model      ModelRef          `json:"model" validate:"required"`
