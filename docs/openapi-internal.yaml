@@ -920,6 +920,74 @@ components:
         - name
       additionalProperties: false
       title: Experiment Config
+    OCICoordinates:
+      type: object
+      description: OCI artifact coordinates for persistence.
+      properties:
+        oci_host:
+          type: string
+          title: OCI Host
+          description: OCI registry host (e.g. 'quay.io')
+        oci_repository:
+          type: string
+          title: OCI Repository
+          description: OCI repository path (e.g. 'my-org/my-repo')
+        oci_tag:
+          type: string
+          title: OCI Tag
+          description: OCI tag (e.g. 'eval-123')
+        oci_subject:
+          type: string
+          title: OCI Subject
+          description: Optional OCI subject identifier (in same registry and repo)
+        annotations:
+          type: object
+          additionalProperties:
+            type: string
+          title: Annotations
+          description: Custom annotations for the OCI artifact
+      required:
+        - oci_host
+        - oci_repository
+      additionalProperties: false
+      title: OCICoordinates
+    OCIConnectionConfig:
+      type: object
+      description: |
+        Kubernetes connection configuration for OCI registry authentication. References a Kubernetes Secret of type `kubernetes.io/dockerconfigjson` containing a `.dockerconfigjson` entry with standard Docker registry credentials.
+      properties:
+        connection:
+          type: string
+          title: Connection
+          description: |
+            Name of a Kubernetes Secret (type kubernetes.io/dockerconfigjson) with a ".dockerconfigjson" entry used for OCI registry authentication.
+      required:
+        - connection
+      additionalProperties: false
+      title: OCIConnectionConfig
+    EvaluationOutputsOCI:
+      type: object
+      description: OCI output configuration for an evaluation job.
+      properties:
+        coordinates:
+          $ref: '#/components/schemas/OCICoordinates'
+          description: Coordinates where the OCI artifact should be stored
+        k8s:
+          $ref: '#/components/schemas/OCIConnectionConfig'
+          description: Optional Kubernetes connection for OCI registry authentication
+      required:
+        - coordinates
+      additionalProperties: false
+      title: EvaluationOutputsOCI
+    EvaluationOutputs:
+      type: object
+      description: Optional outputs configuration for an evaluation job.
+      properties:
+        oci:
+          $ref: '#/components/schemas/EvaluationOutputsOCI'
+          description: OCI artifact output configuration
+      additionalProperties: false
+      title: EvaluationOutputs
     EvaluationRequest:
       properties:
         model:
@@ -939,6 +1007,9 @@ components:
           type: object
           title: Custom
           description: Custom fields for additional request data
+        outputs:
+          $ref: '#/components/schemas/EvaluationOutputs'
+          description: Optional outputs configuration for the evaluation job
       type: object
       required:
         - model

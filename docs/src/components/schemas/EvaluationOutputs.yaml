@@ -1,0 +1,8 @@
+type: object
+description: Optional outputs configuration for an evaluation job.
+properties:
+  oci:
+    $ref: ./EvaluationOutputsOCI.yaml
+    description: OCI artifact output configuration
+additionalProperties: false
+title: EvaluationOutputs
