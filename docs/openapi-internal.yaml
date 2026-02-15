@@ -634,7 +634,10 @@ components:
           description: Human-readable message
         trace:
           type: string
-          description: Stack trace or debug info
+          description: Request trace or debug info
+      required:
+        - message_code
+        - message
     HRef:
       type: object
       description: Hypermedia reference
