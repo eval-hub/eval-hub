@@ -43,8 +43,9 @@ type jobConfig struct {
 	serviceCAConfigMap  string
 	evalHubURL          string
 	evalHubInstanceName string
-	mlflowTrackingURI   string
-	mlflowWorkspace     string
+	mlflowTrackingURI      string
+	mlflowWorkspace        string
+	ociCredentialsSecret   string
 }
 
 type jobSpec struct {
@@ -141,25 +142,32 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 			evalHubInstanceName, namespace, defaultEvalHubPort)
 	}
 
+	// Extract OCI credentials secret name from outputs config (not forwarded to jobSpec)
+	var ociCredentialsSecret string
+	if evaluation.Outputs != nil && evaluation.Outputs.OCI != nil && evaluation.Outputs.OCI.K8s != nil {
+		ociCredentialsSecret = evaluation.Outputs.OCI.K8s.Connection
+	}
+
 	return &jobConfig{
-		jobID:               evaluation.Resource.ID,
-		namespace:           namespace,
-		providerID:          provider.ID,
-		benchmarkID:         benchmarkID,
-		adapterImage:        runtime.K8s.Image,
-		entrypoint:          runtime.K8s.Entrypoint,
-		defaultEnv:          runtime.K8s.Env,
-		cpuRequest:          cpuRequest,
-		memoryRequest:       memoryRequest,
-		cpuLimit:            cpuLimit,
-		memoryLimit:         memoryLimit,
-		jobSpecJSON:         string(specJSON),
-		serviceAccountName:  serviceAccountName,
-		serviceCAConfigMap:  serviceCAConfigMap,
-		evalHubURL:          evalHubURL,
-		evalHubInstanceName: evalHubInstanceName,
-		mlflowTrackingURI:   mlflowTrackingURI,
-		mlflowWorkspace:     mlflowWorkspace,
+		jobID:                evaluation.Resource.ID,
+		namespace:            namespace,
+		providerID:           provider.ID,
+		benchmarkID:          benchmarkID,
+		adapterImage:         runtime.K8s.Image,
+		entrypoint:           runtime.K8s.Entrypoint,
+		defaultEnv:           runtime.K8s.Env,
+		cpuRequest:           cpuRequest,
+		memoryRequest:        memoryRequest,
+		cpuLimit:             cpuLimit,
+		memoryLimit:          memoryLimit,
+		jobSpecJSON:          string(specJSON),
+		serviceAccountName:   serviceAccountName,
+		serviceCAConfigMap:   serviceCAConfigMap,
+		evalHubURL:           evalHubURL,
+		evalHubInstanceName:  evalHubInstanceName,
+		mlflowTrackingURI:    mlflowTrackingURI,
+		mlflowWorkspace:      mlflowWorkspace,
+		ociCredentialsSecret: ociCredentialsSecret,
 	}, nil
 }
 

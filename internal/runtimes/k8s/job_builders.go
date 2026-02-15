@@ -34,6 +34,10 @@ const (
 	mlflowTokenVolumeName           = "mlflow-token"
 	mlflowTokenMountPath            = "/var/run/secrets/mlflow"
 	mlflowTokenFile                 = "token"
+	ociCredentialsVolumeName        = "oci-credentials"
+	ociCredentialsMountPath         = "/etc/evalhub/.docker/config.json"
+	ociCredentialsSubPath           = ".dockerconfigjson"
+	envOCIAuthConfigPathName        = "OCI_AUTH_CONFIG_PATH"
 	serviceCABundleFile             = "service-ca.crt"
 	envRequestsCABundleName         = "REQUESTS_CA_BUNDLE"
 	defaultAllowPrivilegeEscalation = false
@@ -172,6 +176,24 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      mlflowTokenVolumeName,
 			MountPath: mlflowTokenMountPath,
+			ReadOnly:  true,
+		})
+	}
+
+	// Add OCI credentials volume/mount when a K8s secret connection is configured.
+	if cfg.ociCredentialsSecret != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name: ociCredentialsVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: cfg.ociCredentialsSecret,
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      ociCredentialsVolumeName,
+			MountPath: ociCredentialsMountPath,
+			SubPath:   ociCredentialsSubPath,
 			ReadOnly:  true,
 		})
 	}
@@ -322,6 +344,15 @@ func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 			Value: cfg.mlflowWorkspace,
 		})
 		seen[envMLFlowWorkspaceName] = true
+	}
+
+	// Add OCI auth config path when credentials secret is configured
+	if cfg.ociCredentialsSecret != "" {
+		env = append(env, corev1.EnvVar{
+			Name:  envOCIAuthConfigPathName,
+			Value: ociCredentialsMountPath,
+		})
+		seen[envOCIAuthConfigPathName] = true
 	}
 
 	// Set REQUESTS_CA_BUNDLE so Python's requests library (used by mlflow)
