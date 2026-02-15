@@ -1,0 +1,13 @@
+type: object
+description: OCI export configuration for an evaluation job.
+properties:
+  coordinates:
+    $ref: ./OCICoordinates.yaml
+    description: Coordinates where the OCI artifact should be stored
+  k8s:
+    $ref: ./OCIConnectionConfig.yaml
+    description: Optional Kubernetes connection for OCI registry authentication
+required:
+  - coordinates
+additionalProperties: false
+title: EvaluationExportsOCI

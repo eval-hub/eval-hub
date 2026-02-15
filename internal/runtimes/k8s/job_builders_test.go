@@ -111,6 +111,103 @@ func TestBuildJobSecurityContext(t *testing.T) {
 	}
 }
 
+func TestBuildJobWithOCICredentials(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:                "job-oci",
+		namespace:            "default",
+		providerID:           "provider-1",
+		benchmarkID:          "bench-1",
+		adapterImage:         "adapter:latest",
+		defaultEnv:           []api.EnvVar{},
+		ociCredentialsSecret: "my-pull-secret",
+	}
+
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	// Check volume exists with correct secret name
+	var foundVolume bool
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == ociCredentialsVolumeName {
+			foundVolume = true
+			if v.VolumeSource.Secret == nil {
+				t.Fatalf("expected secret volume source for %s", ociCredentialsVolumeName)
+			}
+			if v.VolumeSource.Secret.SecretName != "my-pull-secret" {
+				t.Fatalf("expected secret name %q, got %q", "my-pull-secret", v.VolumeSource.Secret.SecretName)
+			}
+		}
+	}
+	if !foundVolume {
+		t.Fatalf("expected volume %s to be present", ociCredentialsVolumeName)
+	}
+
+	// Check volume mount exists with correct path and subPath
+	container := job.Spec.Template.Spec.Containers[0]
+	var foundMount bool
+	for _, m := range container.VolumeMounts {
+		if m.Name == ociCredentialsVolumeName {
+			foundMount = true
+			if m.MountPath != ociCredentialsMountPath {
+				t.Fatalf("expected mount path %q, got %q", ociCredentialsMountPath, m.MountPath)
+			}
+			if m.SubPath != ociCredentialsSubPath {
+				t.Fatalf("expected sub path %q, got %q", ociCredentialsSubPath, m.SubPath)
+			}
+			if !m.ReadOnly {
+				t.Fatalf("expected mount to be read-only")
+			}
+		}
+	}
+	if !foundMount {
+		t.Fatalf("expected volume mount %s to be present", ociCredentialsVolumeName)
+	}
+
+	// Check env var exists
+	var foundEnv bool
+	for _, e := range container.Env {
+		if e.Name == envOCIAuthConfigPathName {
+			foundEnv = true
+			if e.Value != ociCredentialsMountPath {
+				t.Fatalf("expected env value %q, got %q", ociCredentialsMountPath, e.Value)
+			}
+		}
+	}
+	if !foundEnv {
+		t.Fatalf("expected env var %s to be present", envOCIAuthConfigPathName)
+	}
+}
+
+func TestBuildJobWithoutOCICredentials(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:        "job-no-oci",
+		namespace:    "default",
+		providerID:   "provider-1",
+		benchmarkID:  "bench-1",
+		adapterImage: "adapter:latest",
+		defaultEnv:   []api.EnvVar{},
+	}
+
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == ociCredentialsVolumeName {
+			t.Fatalf("expected no %s volume when ociCredentialsSecret is empty", ociCredentialsVolumeName)
+		}
+	}
+	container := job.Spec.Template.Spec.Containers[0]
+	for _, e := range container.Env {
+		if e.Name == envOCIAuthConfigPathName {
+			t.Fatalf("expected no %s env var when ociCredentialsSecret is empty", envOCIAuthConfigPathName)
+		}
+	}
+}
+
 func TestContainerCommandList(t *testing.T) {
 	command := buildContainerCommand([]string{"/bin/sh", "-c", "echo hello"})
 	if len(command) != 3 {
