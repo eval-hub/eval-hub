@@ -155,9 +155,15 @@ type OCICoordinates struct {
 	Annotations   map[string]string `json:"annotations,omitempty"`
 }
 
+// OCIConnectionConfig represents K8s connection configuration for OCI operations
+type OCIConnectionConfig struct {
+	Connection string `json:"connection" validate:"required"`
+}
+
 // EvaluationOutputsOCI represents OCI output configuration
 type EvaluationOutputsOCI struct {
-	Coordinates OCICoordinates `json:"coordinates" validate:"required"`
+	Coordinates OCICoordinates        `json:"coordinates" validate:"required"`
+	K8s         *OCIConnectionConfig  `json:"k8s,omitempty"`
 }
 
 // EvaluationOutputs represents optional outputs configuration for an evaluation job

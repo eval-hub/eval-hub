@@ -56,8 +56,17 @@ type jobSpec struct {
 	BenchmarkConfig map[string]any      `json:"benchmark_config"`
 	ExperimentName  string              `json:"experiment_name,omitempty"`
 	Tags            []api.ExperimentTag `json:"tags,omitempty"`
-	CallbackURL     *string                `json:"callback_url"`
-	Outputs         *api.EvaluationOutputs `json:"outputs,omitempty"`
+	CallbackURL     *string         `json:"callback_url"`
+	Outputs         *jobSpecOutputs `json:"outputs,omitempty"`
+}
+
+// jobSpecOutputs is the subset of EvaluationOutputs serialized into the job ConfigMap (excludes k8s connection config).
+type jobSpecOutputs struct {
+	OCI *jobSpecOutputsOCI `json:"oci,omitempty"`
+}
+
+type jobSpecOutputsOCI struct {
+	Coordinates api.OCICoordinates `json:"coordinates"`
 }
 
 func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkID string) (*jobConfig, error) {
@@ -103,8 +112,12 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		spec.ExperimentName = evaluation.Experiment.Name
 		spec.Tags = evaluation.Experiment.Tags
 	}
-	if evaluation.Outputs != nil {
-		spec.Outputs = evaluation.Outputs
+	if evaluation.Outputs != nil && evaluation.Outputs.OCI != nil {
+		spec.Outputs = &jobSpecOutputs{
+			OCI: &jobSpecOutputsOCI{
+				Coordinates: evaluation.Outputs.OCI.Coordinates,
+			},
+		}
 	}
 	specJSON, err := json.MarshalIndent(spec, "", "  ")
 	if err != nil {
