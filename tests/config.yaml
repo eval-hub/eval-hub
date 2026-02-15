@@ -23,3 +23,12 @@ database:
 # MLFlow configuration
 mlflow:
   #tracking_uri: http://localhost:5000
+prometheus:
+  enabled: false
+otel:
+  enabled: true
+  exporter_type: "stdout"
+  enable_tracing: true
+  additional_attributes:
+    environment: "development"
+    service: "eval-hub"
