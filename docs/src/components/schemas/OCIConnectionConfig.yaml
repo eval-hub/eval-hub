@@ -1,0 +1,16 @@
+type: object
+description: >
+  Kubernetes connection configuration for OCI registry authentication.
+  References a Kubernetes Secret of type `kubernetes.io/dockerconfigjson`
+  containing a `.dockerconfigjson` entry with standard Docker registry credentials.
+properties:
+  connection:
+    type: string
+    title: Connection
+    description: >
+      Name of a Kubernetes Secret (type kubernetes.io/dockerconfigjson)
+      with a ".dockerconfigjson" entry used for OCI registry authentication.
+required:
+  - connection
+additionalProperties: false
+title: OCIConnectionConfig
