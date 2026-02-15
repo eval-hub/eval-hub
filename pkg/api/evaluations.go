@@ -166,8 +166,8 @@ type OCIConnectionConfig struct {
 
 // EvaluationOutputsOCI represents OCI output configuration
 type EvaluationOutputsOCI struct {
-	Coordinates OCICoordinates        `json:"coordinates" validate:"required"`
-	K8s         *OCIConnectionConfig  `json:"k8s,omitempty"`
+	Coordinates OCICoordinates       `json:"coordinates" validate:"required"`
+	K8s         *OCIConnectionConfig `json:"k8s,omitempty"`
 }
 
 // EvaluationOutputs represents optional outputs configuration for an evaluation job

@@ -27,25 +27,25 @@ const (
 )
 
 type jobConfig struct {
-	jobID               string
-	namespace           string
-	providerID          string
-	benchmarkID         string
-	adapterImage        string
-	entrypoint          []string
-	defaultEnv          []api.EnvVar
-	cpuRequest          string
-	memoryRequest       string
-	cpuLimit            string
-	memoryLimit         string
-	jobSpecJSON         string
-	serviceAccountName  string
-	serviceCAConfigMap  string
-	evalHubURL          string
-	evalHubInstanceName string
-	mlflowTrackingURI      string
-	mlflowWorkspace        string
-	ociCredentialsSecret   string
+	jobID                string
+	namespace            string
+	providerID           string
+	benchmarkID          string
+	adapterImage         string
+	entrypoint           []string
+	defaultEnv           []api.EnvVar
+	cpuRequest           string
+	memoryRequest        string
+	cpuLimit             string
+	memoryLimit          string
+	jobSpecJSON          string
+	serviceAccountName   string
+	serviceCAConfigMap   string
+	evalHubURL           string
+	evalHubInstanceName  string
+	mlflowTrackingURI    string
+	mlflowWorkspace      string
+	ociCredentialsSecret string
 }
 
 type jobSpec struct {
@@ -57,8 +57,8 @@ type jobSpec struct {
 	BenchmarkConfig map[string]any      `json:"benchmark_config"`
 	ExperimentName  string              `json:"experiment_name,omitempty"`
 	Tags            []api.ExperimentTag `json:"tags,omitempty"`
-	CallbackURL     *string         `json:"callback_url"`
-	Outputs         *jobSpecOutputs `json:"outputs,omitempty"`
+	CallbackURL     *string             `json:"callback_url"`
+	Outputs         *jobSpecOutputs     `json:"outputs,omitempty"`
 }
 
 // jobSpecOutputs is the subset of EvaluationOutputs serialized into the job ConfigMap (excludes k8s connection config).
