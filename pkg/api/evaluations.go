@@ -64,11 +64,11 @@ type MessageInfo struct {
 
 type PrimaryScore struct {
 	Metric        string `json:"metric"`
-	LowerIsBetter bool   `json:"lower_is_better,omitempty" validate:"omitempty,boolean,default=false"`
+	LowerIsBetter bool   `json:"lower_is_better,omitempty" validate:"omitempty,boolean"`
 }
 
 type PassCriteria struct {
-	Threshold float32 `json:"threshold,omitempty" validate:"omitempty,number,default=0"`
+	Threshold float32 `json:"threshold,omitempty" validate:"omitempty,number"`
 }
 
 // BenchmarkConfig represents a reference to a benchmark
