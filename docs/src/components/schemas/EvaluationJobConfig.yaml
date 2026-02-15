@@ -1,0 +1,28 @@
+type: object
+description: Evaluation job request configuration
+required:
+  - model
+  - benchmarks
+properties:
+  model:
+    $ref: ./ModelRef.yaml
+    description: Model to evaluate
+  pass_criteria:
+    $ref: ./PassCriteria.yaml
+    description: Overall pass criteria
+  benchmarks:
+    type: array
+    items:
+      $ref: ./BenchmarkConfig.yaml
+    minItems: 1
+    description: Benchmarks to run
+  collection:
+    $ref: ./Ref.yaml
+    description: Optional collection reference
+  experiment:
+    $ref: ./ExperimentConfig.yaml
+    description: MLFlow experiment config
+  custom:
+    type: object
+    additionalProperties: true
+    description: Custom request data

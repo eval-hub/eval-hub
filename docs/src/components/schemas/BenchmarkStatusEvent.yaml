@@ -1,61 +1,37 @@
 type: object
-description: A status event for an evaluation.
-properties:
-  provider_id:
-    type: string
-    title: Provider Id
-    description: Provider that ran the evaluation
-  id:
-    type: string
-    title: Benchmark Id
-    description: Benchmark identifier
-  status:
-    type: string
-    enum:
-      - pending
-      - running
-      - completed
-      - failed
-      - cancelled
-    title: EvaluationStatus
-    description: Status of an evaluation.
-  metrics:
-    additionalProperties:
-      anyOf:
-        - type: number
-        - type: integer
-        - type: string
-    type: object
-    title: Metrics
-    description: Evaluation metrics
-  artifacts:
-    additionalProperties:
-      type: string
-    type: object
-    title: Artifacts
-    description: Paths to result artifacts
-  error_message:
-    $ref: ./ErrorMessage.yaml
-  started_at:
-    type: string
-    format: date-time
-    title: Started At
-    description: Start timestamp
-  completed_at:
-    type: string
-    format: date-time
-    title: Completed At
-    description: Completion timestamp
-  duration_seconds:
-    type: number
-    title: Duration Seconds
-    description: Evaluation duration
-  mlflow_run_id:
-    type: string
-    title: Mlflow Run Id
-    description: MLFlow run ID
-additionalProperties: true
+description: Event payload to update benchmark status at runtime
 required:
   - provider_id
   - id
   - status
+properties:
+  provider_id:
+    type: string
+    description: Provider ID
+  id:
+    type: string
+    description: Benchmark ID
+  status:
+    $ref: ./State.yaml
+  metrics:
+    type: object
+    additionalProperties: true
+    description: Benchmark metrics
+  artifacts:
+    type: object
+    additionalProperties: true
+    description: Artifacts
+  error_message:
+    $ref: ./MessageInfo.yaml
+  started_at:
+    type: string
+    format: date-time
+  completed_at:
+    type: string
+    format: date-time
+  mlflow_run_id:
+    type: string
+    description: MLFlow run ID
+  logs_path:
+    type: string
+    description: Path to logs

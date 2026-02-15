@@ -1,0 +1,9 @@
+type: object
+description: Message from a downstream service
+properties:
+  message:
+    type: string
+    description: Human-readable message
+  message_code:
+    type: string
+    description: Machine-readable code

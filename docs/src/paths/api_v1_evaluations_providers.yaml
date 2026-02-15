@@ -28,7 +28,7 @@ get:
       content:
         application/json:
           schema:
-            $ref: ../components/schemas/ListProvidersResponse.yaml
+            $ref: ../components/schemas/ProviderResourceList.yaml
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':

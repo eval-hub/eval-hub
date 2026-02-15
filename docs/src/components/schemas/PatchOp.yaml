@@ -1,0 +1,7 @@
+# PatchOp represents the patch operation enum
+type: string
+enum:
+  - replace
+  - add
+  - remove
+description: Patch operation type

@@ -1,0 +1,28 @@
+type: object
+description: Request to create or update a collection
+properties:
+  name:
+    type: string
+    description: Collection name
+  description:
+    type: string
+    description: Optional description
+  tags:
+    type: array
+    items:
+      type: string
+    description: Tags
+  custom:
+    type: object
+    additionalProperties: true
+    description: Custom key-value data
+  pass_criteria:
+    $ref: ./PassCriteria.yaml
+    description: Pass criteria for the collection
+  benchmarks:
+    type: array
+    items:
+      $ref: ./BenchmarkConfig.yaml
+    description: Benchmarks in the collection
+required:
+  - benchmarks

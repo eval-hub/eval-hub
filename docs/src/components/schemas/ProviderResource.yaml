@@ -1,0 +1,20 @@
+type: object
+description: Evaluation provider (configuration and available benchmarks)
+properties:
+  id:
+    type: string
+    description: Provider ID
+  name:
+    type: string
+    description: Provider name
+  description:
+    type: string
+    description: Provider description
+  type:
+    type: string
+    description: Provider type
+  benchmarks:
+    type: array
+    items:
+      $ref: ./BenchmarkResource.yaml
+    description: Benchmarks offered by this provider

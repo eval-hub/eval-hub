@@ -1,0 +1,16 @@
+type: object
+description: List of evaluation job resources with pagination
+allOf:
+  - $ref: ./Page.yaml
+  - type: object
+    properties:
+      items:
+        type: array
+        items:
+          $ref: ./EvaluationJobResource.yaml
+        description: Evaluation job resources
+      errors:
+        type: array
+        items:
+          type: string
+        description: Non-fatal errors (e.g. partial list)

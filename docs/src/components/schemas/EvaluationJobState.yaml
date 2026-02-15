@@ -1,0 +1,10 @@
+type: object
+description: Overall evaluation job state and message
+required:
+  - state
+  - message
+properties:
+  state:
+    $ref: ./OverallState.yaml
+  message:
+    $ref: ./MessageInfo.yaml

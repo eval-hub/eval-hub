@@ -45,7 +45,7 @@ get:
       content:
         application/json:
           schema:
-            $ref: ../components/schemas/ListBenchmarksResponse.yaml
+            $ref: ../components/schemas/BenchmarkResourceList.yaml
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':

@@ -40,7 +40,6 @@ post:
                   logs: /data/logs/1234567890.log
                 started_at: '2026-01-12T10:45:32Z'
                 completed_at: '2026-01-12T10:47:12Z'
-                duration_seconds: 100
   responses:
     '204':
       description: Successful Update

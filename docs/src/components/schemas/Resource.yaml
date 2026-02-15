@@ -1,0 +1,17 @@
+type: object
+description: Base resource fields
+properties:
+  id:
+    type: string
+    description: Unique identifier
+  tenant:
+    type: string
+    description: Tenant for scoping
+  created_at:
+    type: string
+    format: date-time
+    description: Creation timestamp
+  updated_at:
+    type: string
+    format: date-time
+    description: Last update timestamp

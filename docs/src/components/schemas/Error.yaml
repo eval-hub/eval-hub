@@ -1,0 +1,12 @@
+type: object
+description: Error response
+properties:
+  message_code:
+    type: string
+    description: Machine-readable error code
+  message:
+    type: string
+    description: Human-readable message
+  trace:
+    type: string
+    description: Stack trace or debug info
