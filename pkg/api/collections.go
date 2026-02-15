@@ -5,7 +5,7 @@ type CollectionConfig struct {
 	Name         string            `json:"name"`
 	Description  *string           `json:"description,omitempty"`
 	Tags         []string          `json:"tags,omitempty"`
-	Custom       map[string]any    `json:"custom,omitempty"`
+	Custom       *map[string]any   `json:"custom,omitempty"`
 	PassCriteria PassCriteria      `json:"pass_criteria,omitempty"`
 	Benchmarks   []BenchmarkConfig `json:"benchmarks"`
 }

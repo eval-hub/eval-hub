@@ -76,8 +76,8 @@ type BenchmarkConfig struct {
 	Ref
 	ProviderID   string         `json:"provider_id" validate:"required"`
 	Weight       float32        `json:"weight,omitempty" validate:"omitempty,min=0,max=1"`
-	PrimaryScore PrimaryScore   `json:"primary_score,omitempty"`
-	PassCriteria PassCriteria   `json:"pass_criteria,omitempty"`
+	PrimaryScore *PrimaryScore  `json:"primary_score,omitempty"`
+	PassCriteria *PassCriteria  `json:"pass_criteria,omitempty"`
 	Parameters   map[string]any `json:"parameters,omitempty"`
 }
 
@@ -156,11 +156,11 @@ type EvaluationJobResults struct {
 // EvaluationJobConfig represents evaluation job request schema
 type EvaluationJobConfig struct {
 	Model        ModelRef          `json:"model" validate:"required"`
-	PassCriteria PassCriteria      `json:"pass_criteria,omitempty"`
+	PassCriteria *PassCriteria     `json:"pass_criteria,omitempty"`
 	Benchmarks   []BenchmarkConfig `json:"benchmarks" validate:"required,min=1,dive"`
 	Collection   *Ref              `json:"collection,omitempty"`
 	Experiment   *ExperimentConfig `json:"experiment,omitempty"`
-	Custom       map[string]any    `json:"custom,omitempty"`
+	Custom       *map[string]any   `json:"custom,omitempty"`
 }
 
 type EvaluationResource struct {
