@@ -1696,7 +1696,11 @@
           "value": {
             "description": "Value for add/replace (omit for remove)"
           }
-        }
+        },
+        "required": [
+          "op",
+          "path"
+        ]
       }
     },
     "examples": {

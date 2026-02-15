@@ -8,3 +8,6 @@ properties:
     description: JSON Pointer path
   value:
     description: Value for add/replace (omit for remove)
+required:
+  - op
+  - path
