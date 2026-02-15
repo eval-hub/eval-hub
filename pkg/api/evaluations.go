@@ -155,8 +155,12 @@ type OCICoordinates struct {
 	Annotations   map[string]string `json:"annotations,omitempty"`
 }
 
-// OCIConnectionConfig represents K8s connection configuration for OCI operations
+// OCIConnectionConfig represents K8s connection configuration for OCI operations.
+// Connection must reference a Kubernetes Secret containing a ".dockerconfigjson" entry,
+// which provides standard Docker registry credentials for authenticating to the OCI registry.
 type OCIConnectionConfig struct {
+	// Connection is the name of a Kubernetes Secret (type kubernetes.io/dockerconfigjson)
+	// with a ".dockerconfigjson" entry used for OCI registry authentication.
 	Connection string `json:"connection" validate:"required"`
 }
 

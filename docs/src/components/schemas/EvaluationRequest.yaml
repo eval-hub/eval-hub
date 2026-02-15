@@ -16,6 +16,9 @@ properties:
     type: object
     title: Custom
     description: Custom fields for additional request data
+  outputs:
+    $ref: ./EvaluationOutputs.yaml
+    description: Optional outputs configuration for the evaluation job
 type: object
 required:
   - model
