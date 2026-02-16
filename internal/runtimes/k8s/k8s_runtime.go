@@ -18,14 +18,14 @@ const maxBenchmarkWorkers = 5
 
 type K8sRuntime struct {
 	logger    *slog.Logger
-	helper    *KubernetesHelper
+	helper    KubernetesHelperInterface
 	providers map[string]api.ProviderResource
 	ctx       context.Context
 }
 
 // NewK8sRuntime creates a Kubernetes runtime.
 func NewK8sRuntime(logger *slog.Logger, providerConfigs map[string]api.ProviderResource) (abstractions.Runtime, error) {
-	helper, err := NewKubernetesHelper()
+	helper, err := NewKubernetesHelper(logger)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +156,7 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context, logger *slog.
 		"evalhub_url", jobConfig.evalHubURL,
 	)
 	configMap := buildConfigMap(jobConfig)
-	job, err := buildJob(jobConfig)
+	job, err := buildJob(jobConfig, evaluation.Custom)
 	if err != nil {
 		logger.Error("kubernetes job build error", "benchmark_id", benchmarkID, "error", err)
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)

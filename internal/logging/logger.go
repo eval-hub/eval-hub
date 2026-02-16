@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
@@ -12,6 +13,9 @@ import (
 	"go.uber.org/zap/exp/zapslog"
 	"go.uber.org/zap/zapcore"
 )
+
+// Log level env: LOG_LEVEL=debug|info|warn|error (default: info).
+const envLogLevel = "LOG_LEVEL"
 
 type ShutdownFunc func() error
 
@@ -23,9 +27,11 @@ type ShutdownFunc func() error
 //   - *slog.Logger: A structured logger instance that can be used throughout the application
 //   - error: An error if the logger could not be initialized
 func NewLogger() (*slog.Logger, ShutdownFunc, error) {
-	var logConfig zap.Config
-	logConfig = zap.NewProductionConfig()
+	logConfig := zap.NewProductionConfig()
 	logConfig.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	if level := parseLogLevel(os.Getenv(envLogLevel)); level != nil {
+		logConfig.Level = zap.NewAtomicLevelAt(*level)
+	}
 	zapLog, err := logConfig.Build()
 	if err != nil {
 		return nil, nil, err
@@ -42,6 +48,24 @@ func FallbackLogger() *slog.Logger {
 func newShutdownFunc(core zapcore.Core) ShutdownFunc {
 	return func() error {
 		return core.Sync()
+	}
+}
+
+func parseLogLevel(s string) *zapcore.Level {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "debug":
+		l := zapcore.DebugLevel
+		return &l
+	case "info", "":
+		return nil
+	case "warn":
+		l := zapcore.WarnLevel
+		return &l
+	case "error":
+		l := zapcore.ErrorLevel
+		return &l
+	default:
+		return nil
 	}
 }
 

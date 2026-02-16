@@ -21,9 +21,14 @@ if [[ ! -f "${EXE}" ]]; then
   exit 2
 fi
 
-# This assumes that the service has already been built
-# Always run in local mode (CORS enabled)
-${EXE} --local > ${LOGFILE} 2>&1 &
+# This assumes that the service has already been built.
+# If KUBE_MOCK_ENABLED is true, run without --local (K8s runtime with mock helper).
+# Otherwise run with --local (local mode, CORS enabled).
+EXTRA_ARGS=""
+if [[ "${KUBE_MOCK_ENABLED}" != "true" && "${KUBE_MOCK_ENABLED}" != "1" ]]; then
+  EXTRA_ARGS="--local"
+fi
+${EXE} ${EXTRA_ARGS} > ${LOGFILE} 2>&1 &
 
 SERVICE_PID=$!
 

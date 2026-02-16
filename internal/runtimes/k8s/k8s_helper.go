@@ -4,6 +4,9 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"os"
+	"strconv"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -13,6 +16,16 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// KubernetesHelperInterface defines operations for creating and managing Kubernetes resources
+// (ConfigMaps, Jobs). *KubernetesHelper implements it; MockKubernetesHelper is for local/testing.
+type KubernetesHelperInterface interface {
+	CreateConfigMap(ctx context.Context, namespace, name string, data map[string]string, opts *CreateConfigMapOptions) (*corev1.ConfigMap, error)
+	CreateJob(ctx context.Context, job *batchv1.Job) (*batchv1.Job, error)
+	DeleteJob(ctx context.Context, namespace, name string, opts metav1.DeleteOptions) error
+	DeleteConfigMap(ctx context.Context, namespace, name string) error
+	SetConfigMapOwner(ctx context.Context, namespace, name string, owner metav1.OwnerReference) error
+}
+
 // KubernetesHelper wraps the Kubernetes client-go client and exposes methods to interact with the cluster.
 // Keeping this abstraction in one place allows all call sites to stay unchanged if we switch
 // to a different underlying Kubernetes client implementation.
@@ -20,9 +33,18 @@ type KubernetesHelper struct {
 	clientset kubernetes.Interface
 }
 
-// NewKubernetesHelper builds a Kubernetes client (in-cluster config, then default kubeconfig)
-// and returns a KubernetesHelper. Call this when LocalMode is false.
-func NewKubernetesHelper() (*KubernetesHelper, error) {
+var _ KubernetesHelperInterface = (*KubernetesHelper)(nil)
+
+// NewKubernetesHelper is a factory that returns KubernetesHelperInterface.
+// If KUBE_MOCK_ENABLED is set to true (or "1"), it returns the mock implementation that posts
+// events to localhost and does not call the cluster. Otherwise it returns the real
+// Kubernetes client (in-cluster config, then default kubeconfig).
+func NewKubernetesHelper(logger *slog.Logger) (KubernetesHelperInterface, error) {
+	if useLocalMock() {
+		logger.Info("Using mock Kubernetes helper (KUBE_MOCK_ENABLED=true); no cluster calls, events POST to localhost")
+		return NewMockKubernetesHelper(), nil
+	}
+	logger.Debug("using real kubernetes helper")
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -39,10 +61,14 @@ func NewKubernetesHelper() (*KubernetesHelper, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return &KubernetesHelper{
 		clientset: clientset,
 	}, nil
+}
+
+func useLocalMock() bool {
+	v, _ := strconv.ParseBool(os.Getenv("KUBE_MOCK_ENABLED"))
+	return v
 }
 
 // CreateConfigMap creates a ConfigMap in the given namespace.
