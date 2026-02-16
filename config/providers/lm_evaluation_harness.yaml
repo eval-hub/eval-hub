@@ -4,7 +4,7 @@ description: Comprehensive evaluation framework for language models with 167 ben
 type: builtin
 runtime:
   k8s:
-    image: quay.io/opendatahub/ta-lmes-job:odh-3.5
+    image: quay.io/opendatahub/ta-lmes-job:odh-3.4-ea2
     entrypoint:
       - /opt/app-root/bin/python
       - /opt/app-root/src/main.py
