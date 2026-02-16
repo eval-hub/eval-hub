@@ -94,6 +94,14 @@ Run a single test:
 go test -v ./internal/handlers -run TestHandleName
 ```
 
+
+To create a Python wheel distribution of the server for local development and testing:
+
+```sh
+make crosss-compile 
+make build-wheel
+```
+
 ### Database
 
 SQLite in-memory is the default. For PostgreSQL:
