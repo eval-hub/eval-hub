@@ -16,6 +16,7 @@ import (
 
 const (
 	maxK8sNameLength                = 63
+	maxK8sLabelValueLength          = 63
 	defaultJobTTLSeconds            = int32(3600)
 	defaultJobBackoffLimit          = int32(3)
 	adapterContainerName            = "adapter"
@@ -69,6 +70,9 @@ func sanitizeDNS1123Label(value string) string {
 func sanitizeLabelValue(value string) string {
 	safe := strings.ToLower(value)
 	safe = k8sLabelValueSanitizer.ReplaceAllString(safe, "-")
+	if len(safe) > maxK8sLabelValueLength {
+		safe = safe[:maxK8sLabelValueLength]
+	}
 	safe = strings.Trim(safe, "-_.")
 	if safe == "" {
 		return "x"
@@ -446,7 +450,7 @@ func jobLabels(jobID, providerID, benchmarkID string) map[string]string {
 	return map[string]string{
 		labelAppKey:         labelAppValue,
 		labelComponentKey:   labelComponentValue,
-		labelJobIDKey:       jobID,
+		labelJobIDKey:       sanitizeLabelValue(jobID),
 		labelProviderIDKey:  sanitizeLabelValue(providerID),
 		labelBenchmarkIDKey: sanitizeLabelValue(benchmarkID),
 	}
