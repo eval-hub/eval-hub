@@ -485,7 +485,15 @@ func jobLabels(jobID, providerID, benchmarkID string) map[string]string {
 	return map[string]string{
 		labelAppKey:         labelAppValue,
 		labelComponentKey:   labelComponentValue,
+<<<<<<< HEAD
+<<<<<<< HEAD
 		labelJobIDKey:       sanitizeLabelValue(jobID),
+=======
+		labelJobIDKey:       jobID,
+>>>>>>> 85e402b (fix: collision in Job naming)
+=======
+		labelJobIDKey:       sanitizeLabelValue(jobID),
+>>>>>>> c5223ef (Review comments)
 		labelProviderIDKey:  sanitizeLabelValue(providerID),
 		labelBenchmarkIDKey: sanitizeLabelValue(benchmarkID),
 	}
