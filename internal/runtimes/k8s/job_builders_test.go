@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -16,7 +17,7 @@ func TestBuildConfigMap(t *testing.T) {
 	}
 
 	configMap := buildConfigMap(cfg)
-	expectedName := configMapName(cfg.jobID, cfg.benchmarkID)
+	expectedName := configMapName(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	if configMap.Name != expectedName {
 		t.Fatalf("expected configmap name %s, got %s", expectedName, configMap.Name)
 	}
@@ -26,9 +27,27 @@ func TestBuildConfigMap(t *testing.T) {
 }
 
 func TestBuildK8sNameSanitizes(t *testing.T) {
-	name := buildK8sName("Job-123", "AraDiCE_boolq_lev", "")
-	if name != "eval-job-job-123-aradice-boolq-lev" {
-		t.Fatalf("expected sanitized name %q, got %q", "eval-job-job-123-aradice-boolq-lev", name)
+	name := buildK8sName("Job-123", "Provider-1", "AraDiCE_boolq_lev", "")
+	prefix := "eval-job-provider-1-aradice-boolq-lev-job-123-"
+	if !strings.HasPrefix(name, prefix) {
+		t.Fatalf("expected sanitized name to start with %q, got %q", prefix, name)
+	}
+}
+
+func TestBuildK8sNameDiffersAcrossProviders(t *testing.T) {
+	jobID := "job-123"
+	benchmarkID := "arc_easy"
+	name1 := buildK8sName(jobID, "lmeval", benchmarkID, "")
+	name2 := buildK8sName(jobID, "lighteval", benchmarkID, "")
+	if name1 == name2 {
+		t.Fatalf("expected different names for different providers, got %q", name1)
+	}
+}
+
+func TestJobLabelsSanitizeBenchmarkID(t *testing.T) {
+	labels := jobLabels("job-123", "lighteval", "arc:easy")
+	if labels[labelBenchmarkIDKey] != "arc-easy" {
+		t.Fatalf("expected benchmark label to be sanitized, got %q", labels[labelBenchmarkIDKey])
 	}
 }
 
