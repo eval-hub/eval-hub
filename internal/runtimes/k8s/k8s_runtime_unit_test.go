@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
+	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -127,7 +128,7 @@ func TestCreateBenchmarkResourcesSetsConfigMapOwner(t *testing.T) {
 	if owner.Kind != "Job" || owner.APIVersion != "batch/v1" {
 		t.Fatalf("expected owner to be batch/v1 Job, got %s %s", owner.APIVersion, owner.Kind)
 	}
-	if owner.Name != jobName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID) {
+	if owner.Name != shared.JobName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID) {
 		t.Fatalf("expected owner name to match job name, got %q", owner.Name)
 	}
 	if owner.Controller == nil || !*owner.Controller {
@@ -167,7 +168,7 @@ func TestCreateBenchmarkResourcesSetsAnnotations(t *testing.T) {
 		t.Fatalf("expected configmap benchmark_id annotation %q, got %q", evaluation.Benchmarks[0].ID, cm.Annotations[annotationBenchmarkIDKey])
 	}
 
-	jobName := jobName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID)
+	jobName := shared.JobName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID)
 	job, err := clientset.BatchV1().Jobs(defaultNamespace).Get(context.Background(), jobName, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("expected job to exist, got %v", err)

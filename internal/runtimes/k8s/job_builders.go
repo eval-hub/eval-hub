@@ -2,8 +2,6 @@ package k8s
 
 // Contains the builder functions that construct Kubernetes objects
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"fmt"
 	"regexp"
 	"strings"
@@ -12,10 +10,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 )
 
 const (
-	maxK8sNameLength                = 63
 	maxK8sLabelValueLength          = 63
 	defaultJobTTLSeconds            = int32(3600)
 	defaultJobBackoffLimit          = int32(3)
@@ -27,7 +26,6 @@ const (
 	jobSpecMountPath                = "/meta/job.json"
 	dataMountPath                   = "/data"
 	serviceCAMountPath              = "/etc/pki/ca-trust/source/anchors"
-	jobPrefix                       = "eval-job-"
 	specSuffix                      = "-spec"
 	envJobIDName                    = "JOB_ID"
 	envEvalHubURLName               = "EVALHUB_URL"
@@ -59,20 +57,7 @@ const (
 	annotationBenchmarkIDKey = "eval-hub.github.io/benchmark_id"
 )
 
-var (
-	k8sResourceNameSanitizer = regexp.MustCompile(`[^a-z0-9-]+`)
-	k8sLabelValueSanitizer   = regexp.MustCompile(`[^a-z0-9-_.]+`)
-)
-
-func sanitizeDNS1123Label(value string) string {
-	safe := strings.ToLower(value)
-	safe = k8sResourceNameSanitizer.ReplaceAllString(safe, "-")
-	safe = strings.Trim(safe, "-")
-	if safe == "" {
-		return "x"
-	}
-	return safe
-}
+var k8sLabelValueSanitizer = regexp.MustCompile(`[^a-z0-9-_.]+`)
 
 func sanitizeLabelValue(value string) string {
 	safe := strings.ToLower(value)
@@ -85,51 +70,6 @@ func sanitizeLabelValue(value string) string {
 		return "x"
 	}
 	return safe
-}
-
-// buildK8sName returns a DNS-1123-safe name for Jobs and ConfigMaps:
-// base = "eval-job-<provider>-<benchmark>-<jobID8>", then "-<hash>" for uniqueness,
-// and optional suffix (e.g. "-spec" for ConfigMaps), all kept within 63 chars.
-func buildK8sName(jobID, providerID, benchmarkID, suffix string) string {
-	shortJobID := shortenJobID(jobID, 8)
-	base := jobPrefix +
-		sanitizeDNS1123Label(providerID) + "-" +
-		sanitizeDNS1123Label(benchmarkID) + "-" +
-		shortJobID
-
-	hash := shortHash(jobID+"|"+providerID+"|"+benchmarkID, 8)
-	maxBase := maxK8sNameLength - len(suffix) - len(hash) - 1
-	if maxBase < 1 {
-		maxBase = 1
-	}
-	if len(base) > maxBase {
-		base = strings.Trim(base[:maxBase], "-")
-	}
-	name := base + "-" + hash + suffix
-	if len(name) > maxK8sNameLength {
-		name = strings.Trim(name[:maxK8sNameLength], "-")
-	}
-	return name
-}
-
-func shortHash(value string, length int) string {
-	sum := sha1.Sum([]byte(value))
-	hexValue := hex.EncodeToString(sum[:])
-	if length <= 0 || length > len(hexValue) {
-		return hexValue
-	}
-	return hexValue[:length]
-}
-
-func shortenJobID(jobID string, length int) string {
-	safe := sanitizeDNS1123Label(jobID)
-	if safe == "" {
-		return "x"
-	}
-	if length <= 0 || len(safe) <= length {
-		return safe
-	}
-	return strings.Trim(safe[:length], "-")
 }
 
 func buildConfigMap(cfg *jobConfig) *corev1.ConfigMap {
@@ -155,7 +95,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	}
 	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	annotations := jobAnnotations(cfg.jobID, cfg.providerID, cfg.benchmarkID)
-	jobName := jobName(cfg.jobID, cfg.providerID, cfg.benchmarkID)
+	jobName := shared.JobName(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	configMap := configMapName(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 
 	ttl := defaultJobTTLSeconds
@@ -481,12 +421,8 @@ func buildResources(cfg *jobConfig) (corev1.ResourceRequirements, error) {
 	return resources, nil
 }
 
-func jobName(jobID, providerID, benchmarkID string) string {
-	return buildK8sName(jobID, providerID, benchmarkID, "")
-}
-
 func configMapName(jobID, providerID, benchmarkID string) string {
-	return buildK8sName(jobID, providerID, benchmarkID, specSuffix)
+	return shared.BuildK8sName(jobID, providerID, benchmarkID, specSuffix)
 }
 
 func jobLabels(jobID, providerID, benchmarkID string) map[string]string {

@@ -1,7 +1,6 @@
 package k8s
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -33,24 +32,6 @@ func TestBuildConfigMap(t *testing.T) {
 	}
 	if annotations[annotationBenchmarkIDKey] != cfg.benchmarkID {
 		t.Fatalf("expected benchmark_id annotation %q, got %q", cfg.benchmarkID, annotations[annotationBenchmarkIDKey])
-	}
-}
-
-func TestBuildK8sNameSanitizes(t *testing.T) {
-	name := buildK8sName("Job-123", "Provider-1", "AraDiCE_boolq_lev", "")
-	prefix := "eval-job-provider-1-aradice-boolq-lev-job-123-"
-	if !strings.HasPrefix(name, prefix) {
-		t.Fatalf("expected sanitized name to start with %q, got %q", prefix, name)
-	}
-}
-
-func TestBuildK8sNameDiffersAcrossProviders(t *testing.T) {
-	jobID := "job-123"
-	benchmarkID := "arc_easy"
-	name1 := buildK8sName(jobID, "lmeval", benchmarkID, "")
-	name2 := buildK8sName(jobID, "lighteval", benchmarkID, "")
-	if name1 == name2 {
-		t.Fatalf("expected different names for different providers, got %q", name1)
 	}
 }
 

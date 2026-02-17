@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
+	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/google/uuid"
 	batchv1 "k8s.io/api/batch/v1"
@@ -104,7 +105,7 @@ func TestRunEvaluationJobCreatesResources(t *testing.T) {
 	namespace := "default"
 	for _, id := range benchmarkIDs {
 		configMapName := configMapName(jobID, providerID, id)
-		jobName := jobName(jobID, providerID, id)
+		jobName := shared.JobName(jobID, providerID, id)
 		found := false
 		deadline := time.Now().Add(apiTimeout)
 		for time.Now().Before(deadline) {
@@ -246,9 +247,9 @@ func TestCreateBenchmarkResourcesDuplicateBenchmarkIDCollides(t *testing.T) {
 		},
 	}
 
-	firstJobName := jobName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID)
+	firstJobName := shared.JobName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID)
 	firstConfigMapName := configMapName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID)
-	secondJobName := jobName(evaluation.Resource.ID, evaluation.Benchmarks[1].ProviderID, evaluation.Benchmarks[1].ID)
+	secondJobName := shared.JobName(evaluation.Resource.ID, evaluation.Benchmarks[1].ProviderID, evaluation.Benchmarks[1].ID)
 	secondConfigMapName := configMapName(evaluation.Resource.ID, evaluation.Benchmarks[1].ProviderID, evaluation.Benchmarks[1].ID)
 	t.Cleanup(func() {
 		_ = runtime.helper.DeleteJob(context.Background(), defaultNamespace, firstJobName, metav1.DeleteOptions{})
@@ -324,7 +325,7 @@ func TestCreateBenchmarkResourcesSetsAnnotationsIntegration(t *testing.T) {
 		},
 	}
 
-	jobName := jobName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID)
+	jobName := shared.JobName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID)
 	configMapName := configMapName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID)
 	t.Cleanup(func() {
 		_ = runtime.helper.DeleteJob(context.Background(), defaultNamespace, jobName, metav1.DeleteOptions{})
@@ -454,7 +455,7 @@ func TestDeleteEvaluationJobResourcesDeletesJobsAndConfigMaps(t *testing.T) {
 	for _, bench := range evaluation.Benchmarks {
 		job := &batchv1.Job{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      jobName(evaluation.Resource.ID, bench.ProviderID, bench.ID),
+				Name:      shared.JobName(evaluation.Resource.ID, bench.ProviderID, bench.ID),
 				Namespace: defaultNamespace,
 			},
 		}
@@ -478,7 +479,7 @@ func TestDeleteEvaluationJobResourcesDeletesJobsAndConfigMaps(t *testing.T) {
 	}
 
 	for _, bench := range evaluation.Benchmarks {
-		if _, err := clientset.BatchV1().Jobs(defaultNamespace).Get(context.Background(), jobName(evaluation.Resource.ID, bench.ProviderID, bench.ID), metav1.GetOptions{}); err == nil || !apierrors.IsNotFound(err) {
+		if _, err := clientset.BatchV1().Jobs(defaultNamespace).Get(context.Background(), shared.JobName(evaluation.Resource.ID, bench.ProviderID, bench.ID), metav1.GetOptions{}); err == nil || !apierrors.IsNotFound(err) {
 			t.Fatalf("expected job to be deleted for %s", bench.ID)
 		}
 		if _, err := clientset.CoreV1().ConfigMaps(defaultNamespace).Get(context.Background(), configMapName(evaluation.Resource.ID, bench.ProviderID, bench.ID), metav1.GetOptions{}); err == nil || !apierrors.IsNotFound(err) {

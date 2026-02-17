@@ -9,6 +9,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/constants"
+	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -116,7 +117,7 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 
 	var deleteErr error
 	for _, bench := range evaluation.Benchmarks {
-		jobName := jobName(evaluation.Resource.ID, bench.ProviderID, bench.ID)
+		jobName := shared.JobName(evaluation.Resource.ID, bench.ProviderID, bench.ID)
 		configMapName := configMapName(evaluation.Resource.ID, bench.ProviderID, bench.ID)
 		r.logger.Info(
 			"deleting evaluation runtime resources for benchmark",

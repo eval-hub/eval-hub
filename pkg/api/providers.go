@@ -41,6 +41,8 @@ type K8sRuntime struct {
 }
 
 type LocalRuntime struct {
+	Command string   `mapstructure:"command" yaml:"command" json:"command"`
+	Env     []EnvVar `mapstructure:"env" yaml:"env" json:"env,omitempty"`
 }
 
 // ProviderResourceList represents response for listing providers
