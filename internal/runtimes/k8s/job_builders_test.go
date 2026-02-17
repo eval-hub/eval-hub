@@ -40,7 +40,7 @@ func TestBuildJobRequiresAdapterImage(t *testing.T) {
 		benchmarkID: "bench-1",
 	}
 
-	_, err := buildJob(cfg)
+	_, err := buildJob(cfg, nil)
 	if err == nil {
 		t.Fatalf("expected error for missing adapter image")
 	}
@@ -56,7 +56,7 @@ func TestBuildJobSecurityContext(t *testing.T) {
 		defaultEnv:   []api.EnvVar{},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}

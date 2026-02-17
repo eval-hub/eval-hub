@@ -1,0 +1,9 @@
+{
+  "delay_seconds": 1,
+  "simulate_kube_error": {
+    "error_message": {
+      "message": "Kubernetes error",
+      "message_code": "kubernetes_error"
+    }
+  }
+}

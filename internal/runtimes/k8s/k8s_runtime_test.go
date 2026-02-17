@@ -27,8 +27,9 @@ func TestRunEvaluationJobCreatesResources(t *testing.T) {
 	}
 	const apiTimeout = 15 * time.Second
 	t.Setenv("SERVICE_URL", "http://eval-hub")
+	t.Setenv("KUBE_MOCK_ENABLED", "false") // force real client for integration test
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	helper, err := NewKubernetesHelper()
+	helper, err := NewKubernetesHelper(logger)
 	if err != nil {
 		t.Fatalf("failed to create kubernetes helper: %v", err)
 	}
@@ -105,11 +106,14 @@ func TestRunEvaluationJobCreatesResources(t *testing.T) {
 		jobName := jobName(jobID, id)
 		found := false
 		deadline := time.Now().Add(apiTimeout)
+		realHelper, hasClientset := helper.(*KubernetesHelper)
 		for time.Now().Before(deadline) {
-			if _, err := helper.clientset.CoreV1().ConfigMaps(namespace).Get(context.Background(), configMapName, metav1.GetOptions{}); err == nil {
-				if _, err := helper.clientset.BatchV1().Jobs(namespace).Get(context.Background(), jobName, metav1.GetOptions{}); err == nil {
-					found = true
-					break
+			if hasClientset {
+				if _, err := realHelper.clientset.CoreV1().ConfigMaps(namespace).Get(context.Background(), configMapName, metav1.GetOptions{}); err == nil {
+					if _, err := realHelper.clientset.BatchV1().Jobs(namespace).Get(context.Background(), jobName, metav1.GetOptions{}); err == nil {
+						found = true
+						break
+					}
 				}
 			}
 			time.Sleep(200 * time.Millisecond)
