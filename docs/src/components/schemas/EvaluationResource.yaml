@@ -1,8 +1,12 @@
+type: object
+description: Evaluation resource (base fields for an evaluation)
 allOf:
-  - $ref: ./ResourceInfo.yaml
+  - $ref: ./Resource.yaml
   - type: object
     properties:
       mlflow_experiment_id:
-        $ref: ./MLFlowExperimentId.yaml
-title: EvaluationResource
-description: Resource information for an evaluation.
+        type: string
+        description: MLFlow experiment ID
+      message:
+        $ref: ./MessageInfo.yaml
+        description: Status or error message

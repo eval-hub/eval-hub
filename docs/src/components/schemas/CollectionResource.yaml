@@ -1,0 +1,15 @@
+type: object
+description: Collection resource (stored entity)
+allOf:
+  - type: object
+    properties:
+      resource:
+        $ref: ./Resource.yaml
+        description: Resource metadata
+      type:
+        type: string
+        enum:
+          - system
+          - owned
+        description: Type of collection. 'system' collections are created by the system and are not editable, 'owned' collections are created by the user and are editable.
+  - $ref: ./CollectionConfig.yaml

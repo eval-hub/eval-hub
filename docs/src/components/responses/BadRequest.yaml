@@ -2,7 +2,7 @@ description: Bad Request
 content:
   application/json:
     schema:
-      $ref: ../../components/schemas/APIError.yaml
+      $ref: ../../components/schemas/Error.yaml
     examples:
       BadRequestError:
         $ref: ../../components/examples/BadRequestError.yaml

@@ -2,7 +2,7 @@ description: Forbidden
 content:
   application/json:
     schema:
-      $ref: ../../components/schemas/APIError.yaml
+      $ref: ../../components/schemas/Error.yaml
     examples:
       AuthorizationError:
         $ref: ../../components/examples/AuthorizationError.yaml

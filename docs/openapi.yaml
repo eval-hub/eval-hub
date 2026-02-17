@@ -58,14 +58,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/EvaluationRequest'
+              $ref: '#/components/schemas/EvaluationJobConfig'
       responses:
         '202':
           description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EvaluationResponse'
+                $ref: '#/components/schemas/EvaluationJobResource'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -116,7 +116,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedEvaluations'
+                $ref: '#/components/schemas/EvaluationJobResourceList'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -145,7 +145,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EvaluationResponse'
+                $ref: '#/components/schemas/EvaluationJobResource'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -219,7 +219,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ListProvidersResponse'
+                $ref: '#/components/schemas/ProviderResourceList'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -274,7 +274,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ListBenchmarksResponse'
+                $ref: '#/components/schemas/BenchmarkResourceList'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -286,486 +286,452 @@ paths:
 components:
   schemas:
     HealthResponse:
+      type: object
+      description: Health check response
       properties:
         status:
           type: string
-          title: Status
-          description: Overall health status
+          description: Overall status (e.g. healthy, degraded)
+        version:
+          type: string
+          description: Service version
         timestamp:
           type: string
           format: date-time
-          title: Timestamp
-          description: Health check timestamp
+          description: Server timestamp
+        components:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties: true
+          description: Per-component health
+        uptime:
+          type: integer
+          description: Uptime in nanoseconds (or use string for duration)
+        active_evaluations:
+          type: integer
+          description: Number of active evaluations
+    Error:
       type: object
-      required:
-        - status
-        - timestamp
-      title: HealthResponse
-      description: Health check response.
-    APIError:
-      type: object
-      description: Error response for the API.
+      description: Error response
       properties:
-        message:
-          type: string
-          description: The error message.
-          title: Message
         message_code:
           type: string
-          description: A message code for the error.
-          title: Message Code
+          description: Machine-readable error code
+        message:
+          type: string
+          description: Human-readable message
         trace:
           type: string
-          description: The trace id of the request.
-          title: Trace
-      title: API Error
+          description: Request trace or debug info
       required:
-        - message
         - message_code
-        - trace
-    PaginationLink:
+        - message
+    HRef:
+      type: object
+      description: Hypermedia reference
       properties:
         href:
           type: string
-          title: Href
-          description: Link URL
-      additionalProperties: true
+          description: URI reference
+    Page:
       type: object
-      required:
-        - href
-      title: PaginationLink
-      description: Hypermedia link used for pagination.
-    ResourceInfo:
+      description: Generic pagination schema
+      properties:
+        first:
+          $ref: '#/components/schemas/HRef'
+          description: Link to first page
+        next:
+          $ref: '#/components/schemas/HRef'
+          description: Link to next page (omit if none)
+        limit:
+          type: integer
+          description: Page size
+        total_count:
+          type: integer
+          description: Total number of items
+    Resource:
       type: object
+      description: Base resource fields
       properties:
         id:
           type: string
-          title: Id
-          description: Unique evaluation request ID
+          description: Unique identifier
+        tenant:
+          type: string
+          description: Tenant for scoping
         created_at:
           type: string
           format: date-time
-          title: Created At
           description: Creation timestamp
-        completed_at:
+        updated_at:
           type: string
           format: date-time
-          title: Completed At
-          description: Completion timestamp
-      required:
-        - id
-        - created_at
-      title: ResourceInfo
-      description: Metadata about the evaluation resource.
-    MLFlowExperimentId:
-      type: string
-      description: MLFlow experiment ID
-      title: Mlflow Experiment Id
+          description: Last update timestamp
+    MessageInfo:
+      type: object
+      description: Message from a downstream service
+      properties:
+        message:
+          type: string
+          description: Human-readable message
+        message_code:
+          type: string
+          description: Machine-readable code
     EvaluationResource:
+      type: object
+      description: Evaluation resource (base fields for an evaluation)
       allOf:
-        - $ref: '#/components/schemas/ResourceInfo'
+        - $ref: '#/components/schemas/Resource'
         - type: object
           properties:
             mlflow_experiment_id:
-              $ref: '#/components/schemas/MLFlowExperimentId'
-      title: EvaluationResource
-      description: Resource information for an evaluation.
-    ErrorMessage:
+              type: string
+              description: MLFlow experiment ID
+            message:
+              $ref: '#/components/schemas/MessageInfo'
+              description: Status or error message
+    OverallState:
+      type: string
+      enum:
+        - pending
+        - running
+        - completed
+        - failed
+        - cancelled
+        - partially_failed
+      description: Overall evaluation job state
+    EvaluationJobState:
       type: object
-      properties:
-        message:
-          type: string
-          description: Details of the error.
-          title: Message
-        message_code:
-          type: string
-          description: Code for the error
-          title: Message Code
-      additionalProperties: true
+      description: Overall evaluation job state and message
       required:
+        - state
         - message
-        - message_code
-      title: ErrorMessage
-      description: Error message for a job.
-    BenchmarkRunStatus:
       properties:
-        id:
-          type: string
-          title: Benchmark Id
-          description: Benchmark id
+        state:
+          $ref: '#/components/schemas/OverallState'
+        message:
+          $ref: '#/components/schemas/MessageInfo'
+    State:
+      type: string
+      enum:
+        - pending
+        - running
+        - completed
+        - failed
+        - cancelled
+      description: Evaluation or benchmark state
+    BenchmarkStatus:
+      type: object
+      description: Status of an individual benchmark in an evaluation
+      properties:
         provider_id:
           type: string
-          title: Provider Id
-          description: Provider id
-        status:
+          description: Provider ID
+        id:
           type: string
-          title: State
-          description: Run state
-          enum:
-            - pending
-            - running
-            - completed
-            - failed
-            - cancelled
+          description: Benchmark ID
+        status:
+          $ref: '#/components/schemas/State'
+        error_message:
+          $ref: '#/components/schemas/MessageInfo'
         started_at:
           type: string
           format: date-time
-          title: Started At
-          description: Start timestamp
+          description: RFC3339 start time
         completed_at:
           type: string
           format: date-time
-          title: Completed At
-          description: Completion timestamp
-        error_message:
-          $ref: '#/components/schemas/ErrorMessage'
-      additionalProperties: true
-      type: object
-      required:
-        - id
-        - provider_id
-        - status
-        - started_at
-      title: RunStatus
-      description: Status information for an individual benchmark run.
+          description: RFC3339 completion time
     EvaluationJobStatus:
-      properties:
-        state:
-          type: string
-          title: State
-          description: Overall state of the request
-          enum:
-            - pending
-            - running
-            - completed
-            - partially_failed
-            - failed
-            - cancelled
-        message:
-          $ref: '#/components/schemas/ErrorMessage'
-        benchmarks:
-          items:
-            $ref: '#/components/schemas/BenchmarkRunStatus'
-          type: array
-          title: Benchmark run statuses
-          description: Status for each benchmark run
-      additionalProperties: true
       type: object
-      required:
-        - state
-      title: Status
-      description: Overall status for an evaluation request.
+      description: Current status of an evaluation job
+      allOf:
+        - $ref: '#/components/schemas/EvaluationJobState'
+        - type: object
+          properties:
+            benchmarks:
+              type: array
+              items:
+                $ref: '#/components/schemas/BenchmarkStatus'
+              description: Per-benchmark status
     BenchmarkResult:
+      type: object
+      description: Result of a single benchmark run
       properties:
         id:
           type: string
-          title: Benchmark Id
-          description: Benchmark id
+          description: Benchmark ID
         provider_id:
           type: string
-          title: Provider Id
-          description: Provider id
+          description: Provider ID
         metrics:
-          additionalProperties:
-            anyOf:
-              - type: number
-              - type: integer
-              - type: string
-          title: Metrics
-          description: Benchmark metrics
+          type: object
+          additionalProperties: true
+          description: Metric name to value
         artifacts:
-          additionalProperties:
-            type: string
-          title: Artifacts
-          description: Benchmark artifacts
+          type: object
+          additionalProperties: true
+          description: Artifact key to location/info
         mlflow_run_id:
           type: string
-          title: Mlflow Run Id
           description: MLFlow run ID
         logs_path:
           type: string
-          title: Logs Path
-          description: Optional path to run-specific logs
-      additionalProperties: true
+          description: Path to logs
+    EvaluationJobResults:
       type: object
-      required:
-        - id
-        - provider_id
-      title: BenchmarkResult
-      description: The result information for an individual benchmark run.
-    EvaluationResults:
+      description: Results section for an evaluation job
       properties:
         benchmarks:
+          type: array
           items:
             $ref: '#/components/schemas/BenchmarkResult'
-          type: array
-          title: Benchmarks
-          description: List of benchmark results
+          description: Per-benchmark results
         mlflow_experiment_url:
           type: string
-          title: Mlflow Experiment Url
-          description: Link to the MLFlow experiment
-      additionalProperties: true
+          description: URL to MLFlow experiment
+    ModelRef:
       type: object
-      title: ResultsPayload
-      description: Container for evaluation results.
-    EvaluationResponseResults:
-      type: object
-      properties:
-        resource:
-          $ref: '#/components/schemas/EvaluationResource'
-        status:
-          $ref: '#/components/schemas/EvaluationJobStatus'
-          description: Current status of the request
-        results:
-          $ref: '#/components/schemas/EvaluationResults'
-      title: EvaluationResponseResults
-      description: Response payload for evaluation requests.
-    Model:
-      properties:
-        url:
-          type: string
-          title: Url
-          description: Model endpoint URL
-        name:
-          type: string
-          title: Name
-          description: Model name/identifier
-      additionalProperties: false
-      type: object
+      description: Model specification for evaluation requests
       required:
         - url
         - name
-      title: Model
-      description: Model specification for evaluation requests.
-    BenchmarkConfig:
+      properties:
+        url:
+          type: string
+          description: Model URL
+        name:
+          type: string
+          description: Model name
+    PassCriteria:
+      type: object
+      description: Pass/fail threshold criteria
+      properties:
+        threshold:
+          type: number
+          format: float
+          default: 0
+          description: Threshold value
+    Ref:
+      type: object
+      description: Reference by ID
+      required:
+        - id
       properties:
         id:
           type: string
-          title: Benchmark Id
-          description: Benchmark identifier
-        provider_id:
-          type: string
-          title: Provider Id
-          description: Provider identifier
-        parameters:
-          additionalProperties: true
-          type: object
-          title: Parameters
-          description: Benchmark configuration including num_fewshot, limit, batch_size, etc.
-      additionalProperties: false
+          description: Unique identifier
+    PrimaryScore:
       type: object
-      required:
-        - id
-        - provider_id
-      title: Benchmark Config
-      description: New simplified benchmark specification.
+      description: Primary score metric configuration
+      properties:
+        metric:
+          type: string
+          description: Metric name
+        lower_is_better:
+          type: boolean
+          default: false
+          description: Whether lower values indicate better performance
+    BenchmarkConfig:
+      type: object
+      description: Reference to a benchmark in a collection or evaluation
+      allOf:
+        - $ref: '#/components/schemas/Ref'
+        - type: object
+          required:
+            - provider_id
+          properties:
+            provider_id:
+              type: string
+              description: Evaluation provider ID
+            weight:
+              type: number
+              format: float
+              minimum: 0
+              maximum: 1
+              description: Weight of this benchmark
+            primary_score:
+              $ref: '#/components/schemas/PrimaryScore'
+            pass_criteria:
+              $ref: '#/components/schemas/PassCriteria'
+            parameters:
+              type: object
+              additionalProperties: true
+              description: Benchmark-specific parameters
     ExperimentTag:
       type: object
-      description: A tag for an experiment.
+      description: Tag on an experiment (e.g. MLFlow)
+      required:
+        - key
+        - value
       properties:
         key:
           type: string
-          description: |
-            The key of the tag.
-            Keys can be up to 250 bytes in size.
-          title: Key
+          maxLength: 250
+          description: Tag key
         value:
           type: string
-          description: |
-            The value of the tag.
-            Values can be up to 5000 bytes in size.
-          title: Value
-      additionalProperties: false
-      title: Experiment Tag
+          maxLength: 5000
+          description: Tag value
     ExperimentConfig:
       type: object
-      description: Configuration for MLFlow experiment tracking.
+      description: Configuration for MLFlow experiment tracking
       properties:
         name:
           type: string
-          description: |
-            Experiment name for MLFlow tracking.
-            If there is an `active` experiment with the same name, it will be reused. If there is no `active` experiment with the same name, a new experiment will be created.
-          title: Name
+          description: Experiment name
         tags:
           type: array
-          description: |
-            Tags for the evaluation experiment.
           items:
             $ref: '#/components/schemas/ExperimentTag'
           maxItems: 20
-          title: Tags
+          description: Experiment tags
         artifact_location:
           type: string
-          description: |
-            Artifact location is the directory where the evaluation artifacts will be stored. If not provided, the default artifact location will be used by the MLFlow server.
-          title: Artifact Location
-      required:
-        - name
-      additionalProperties: false
-      title: Experiment Config
-    EvaluationRequest:
-      properties:
-        model:
-          $ref: '#/components/schemas/Model'
-          description: Model specification for evaluation
-        benchmarks:
-          items:
-            $ref: '#/components/schemas/BenchmarkConfig'
-          type: array
-          title: Benchmarks
-          description: List of benchmarks to evaluate
-        experiment:
-          $ref: '#/components/schemas/ExperimentConfig'
-          description: Experiment configuration for MLFlow tracking
-        custom:
-          additionalProperties: true
-          type: object
-          title: Custom
-          description: Custom fields for additional request data
+          description: Artifact storage location
+    EvaluationJobConfig:
       type: object
+      description: Evaluation job request configuration
       required:
         - model
         - benchmarks
-      title: EvaluationRequest
-      description: Simplified evaluation request using the new schema.
-    EvaluationResponse:
-      allOf:
-        - $ref: '#/components/schemas/EvaluationResponseResults'
-        - $ref: '#/components/schemas/EvaluationRequest'
-      unevaluatedProperties: false
-      title: EvaluationResponse
-      description: Response payload for evaluation requests.
-    PaginatedEvaluations:
       properties:
-        first:
-          $ref: '#/components/schemas/PaginationLink'
-          description: Link to the first page
-        next:
-          $ref: '#/components/schemas/PaginationLink'
-          description: Link to the next page, if available
-        limit:
-          type: integer
-          title: Limit
-          description: Page size used for this response
-        total_count:
-          type: integer
-          title: Total Count
-          description: Total number of evaluations
-        items:
-          items:
-            $ref: '#/components/schemas/EvaluationResponse'
+        model:
+          $ref: '#/components/schemas/ModelRef'
+          description: Model to evaluate
+        pass_criteria:
+          $ref: '#/components/schemas/PassCriteria'
+          description: Overall pass criteria
+        benchmarks:
           type: array
-          title: Items
-          description: Evaluations returned for this page
+          items:
+            $ref: '#/components/schemas/BenchmarkConfig'
+          minItems: 1
+          description: Benchmarks to run
+        collection:
+          $ref: '#/components/schemas/Ref'
+          description: Optional collection reference
+        experiment:
+          $ref: '#/components/schemas/ExperimentConfig'
+          description: MLFlow experiment config
+        custom:
+          type: object
+          additionalProperties: true
+          description: Custom request data
+    EvaluationJobResource:
       type: object
-      required:
-        - first
-        - limit
-        - total_count
-      title: PaginatedEvaluations
-      description: Paginated list response for evaluation resources.
-    BenchmarkDefinition:
+      description: Full evaluation job resource (response)
+      allOf:
+        - type: object
+          properties:
+            resource:
+              $ref: '#/components/schemas/EvaluationResource'
+              description: Resource and evaluation metadata
+            status:
+              $ref: '#/components/schemas/EvaluationJobStatus'
+              description: Current status
+            results:
+              $ref: '#/components/schemas/EvaluationJobResults'
+              description: Results when completed
+        - $ref: '#/components/schemas/EvaluationJobConfig'
+    EvaluationJobResourceList:
+      type: object
+      description: List of evaluation job resources with pagination
+      allOf:
+        - $ref: '#/components/schemas/Page'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/EvaluationJobResource'
+              description: Evaluation job resources
+            errors:
+              type: array
+              items:
+                type: string
+              description: Non-fatal errors (e.g. partial list)
+    BenchmarkResource:
+      type: object
+      description: Benchmark specification (from a provider)
       properties:
         id:
           type: string
-          title: Benchmark Id
-          description: Benchmark identifier
+          description: Benchmark ID
+        provider_id:
+          type: string
+          description: Provider ID
         name:
           type: string
-          title: Name
           description: Benchmark name
         description:
           type: string
-          title: Description
           description: Benchmark description
         category:
           type: string
-          title: Category
-          description: Benchmark category
+          description: Category
         metrics:
           type: array
           items:
             type: string
-          title: Metrics
-          description: Benchmark metrics
+          description: Metric names
         num_few_shot:
           type: integer
-          title: Num Few Shot
           description: Number of few-shot examples
         dataset_size:
           type: integer
-          title: Dataset Size
-          description: Size of the evaluation dataset
+          description: Dataset size
         tags:
           type: array
           items:
             type: string
-          title: Tags
-          description: Benchmark tags
-    ProviderDefinition:
+          description: Tags
+    ProviderResource:
+      type: object
+      description: Evaluation provider (configuration and available benchmarks)
       properties:
         id:
           type: string
-          title: Provider Id
-          description: Provider identifier
+          description: Provider ID
         name:
           type: string
-          title: Provider Name
-          description: Provider display name
+          description: Provider name
         description:
           type: string
-          title: Description
           description: Provider description
         type:
           type: string
-          title: Provider Type
           description: Provider type
         benchmarks:
           type: array
           items:
-            $ref: '#/components/schemas/BenchmarkDefinition'
-          title: Benchmarks
-          description: List of benchmarks supported by this provider
-    ListProvidersResponse:
+            $ref: '#/components/schemas/BenchmarkResource'
+          description: Benchmarks offered by this provider
+    ProviderResourceList:
+      type: object
+      description: List of providers (no pagination links)
       properties:
         total_count:
           type: integer
-          title: Total Count
           description: Total number of providers
         items:
           type: array
           items:
-            $ref: '#/components/schemas/ProviderDefinition'
-          title: Providers
-          description: List of registered providers
-      required:
-        - total_count
-      title: ListProvidersResponse
-      description: Response for listing all providers
-    ListBenchmarksResponse:
+            $ref: '#/components/schemas/ProviderResource'
+          description: Provider resources
+    BenchmarkResourceList:
+      type: object
+      description: List of benchmarks
       properties:
         total_count:
           type: integer
-          title: Total Count
           description: Total number of benchmarks
         items:
           type: array
           items:
-            allOf:
-              - properties:
-                  provider_id:
-                    type: string
-                    title: Provider Id
-                    description: Provider identifier
-              - $ref: '#/components/schemas/BenchmarkDefinition'
-          title: Benchmarks
-          description: List of benchmarks
-      required:
-        - total_count
-      title: ListBenchmarksResponse
-      description: Response for listing all benchmarks (similar to Llama Stack format).
+            $ref: '#/components/schemas/BenchmarkResource'
+          description: Benchmark resources
   examples:
     BadRequestError:
       summary: Bad request error with status code 400
@@ -803,7 +769,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/APIError'
+            $ref: '#/components/schemas/Error'
           examples:
             BadRequestError:
               $ref: '#/components/examples/BadRequestError'
@@ -812,7 +778,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/APIError'
+            $ref: '#/components/schemas/Error'
           examples:
             AuthenticationError:
               $ref: '#/components/examples/AuthenticationError'
@@ -821,7 +787,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/APIError'
+            $ref: '#/components/schemas/Error'
           examples:
             AuthorizationError:
               $ref: '#/components/examples/AuthorizationError'
@@ -830,7 +796,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/APIError'
+            $ref: '#/components/schemas/Error'
           examples:
             NotFoundError:
               $ref: '#/components/examples/NotFoundError'
@@ -839,7 +805,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/APIError'
+            $ref: '#/components/schemas/Error'
           examples:
             ConflictError:
               $ref: '#/components/examples/ConflictError'

@@ -62,11 +62,23 @@ type MessageInfo struct {
 	MessageCode string `json:"message_code"`
 }
 
+type PrimaryScore struct {
+	Metric        string `json:"metric"`
+	LowerIsBetter bool   `json:"lower_is_better,omitempty" validate:"omitempty,boolean"`
+}
+
+type PassCriteria struct {
+	Threshold float32 `json:"threshold,omitempty" validate:"omitempty,number"`
+}
+
 // BenchmarkConfig represents a reference to a benchmark
 type BenchmarkConfig struct {
 	Ref
-	ProviderID string         `json:"provider_id" validate:"required"`
-	Parameters map[string]any `json:"parameters,omitempty"`
+	ProviderID   string         `json:"provider_id" validate:"required"`
+	Weight       float32        `json:"weight,omitempty" validate:"omitempty,min=0,max=1"`
+	PrimaryScore *PrimaryScore  `json:"primary_score,omitempty"`
+	PassCriteria *PassCriteria  `json:"pass_criteria,omitempty"`
+	Parameters   map[string]any `json:"parameters,omitempty"`
 }
 
 // ExperimentTag represents a tag on an experiment
@@ -80,11 +92,6 @@ type ExperimentConfig struct {
 	Name             string          `json:"name,omitempty"`
 	Tags             []ExperimentTag `json:"tags,omitempty" validate:"omitempty,max=20,dive"`
 	ArtifactLocation string          `json:"artifact_location,omitempty"`
-}
-
-// BenchmarkStatusLogs represents logs information for benchmark status
-type BenchmarkStatusLogs struct {
-	Path string `json:"path,omitempty"`
 }
 
 // for marshalling and unmarshalling
@@ -148,11 +155,12 @@ type EvaluationJobResults struct {
 
 // EvaluationJobConfig represents evaluation job request schema
 type EvaluationJobConfig struct {
-	Model      ModelRef          `json:"model" validate:"required"`
-	Benchmarks []BenchmarkConfig `json:"benchmarks" validate:"required,min=1,dive"`
-	Collection *Ref              `json:"collection,omitempty"`
-	Experiment *ExperimentConfig `json:"experiment,omitempty"`
-	Custom     *map[string]any   `json:"custom,omitempty"`
+	Model        ModelRef          `json:"model" validate:"required"`
+	PassCriteria *PassCriteria     `json:"pass_criteria,omitempty"`
+	Benchmarks   []BenchmarkConfig `json:"benchmarks" validate:"required,min=1,dive"`
+	Collection   *Ref              `json:"collection,omitempty"`
+	Experiment   *ExperimentConfig `json:"experiment,omitempty"`
+	Custom       *map[string]any   `json:"custom,omitempty"`
 }
 
 type EvaluationResource struct {

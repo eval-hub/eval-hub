@@ -1,37 +1,34 @@
+type: object
+description: Benchmark specification (from a provider)
 properties:
   id:
     type: string
-    title: Benchmark Id
-    description: Benchmark identifier
+    description: Benchmark ID
+  provider_id:
+    type: string
+    description: Provider ID
   name:
     type: string
-    title: Name
     description: Benchmark name
   description:
     type: string
-    title: Description
     description: Benchmark description
   category:
     type: string
-    title: Category
-    description: Benchmark category
+    description: Category
   metrics:
     type: array
     items:
       type: string
-    title: Metrics
-    description: Benchmark metrics
+    description: Metric names
   num_few_shot:
     type: integer
-    title: Num Few Shot
     description: Number of few-shot examples
   dataset_size:
     type: integer
-    title: Dataset Size
-    description: Size of the evaluation dataset
+    description: Dataset size
   tags:
     type: array
     items:
       type: string
-    title: Tags
-    description: Benchmark tags  
+    description: Tags

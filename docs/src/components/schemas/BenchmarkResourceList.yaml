@@ -1,0 +1,11 @@
+type: object
+description: List of benchmarks
+properties:
+  total_count:
+    type: integer
+    description: Total number of benchmarks
+  items:
+    type: array
+    items:
+      $ref: ./BenchmarkResource.yaml
+    description: Benchmark resources

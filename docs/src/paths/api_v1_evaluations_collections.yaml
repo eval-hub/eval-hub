@@ -11,7 +11,7 @@ get:
       content:
         application/json:
           schema:
-            $ref: ../components/schemas/PaginatedCollections.yaml
+            $ref: ../components/schemas/CollectionResourceList.yaml
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':
@@ -31,7 +31,7 @@ post:
     content:
       application/json:
         schema:
-          $ref: ../components/schemas/CollectionCreationRequest.yaml
+          $ref: ../components/schemas/CollectionConfig.yaml
     required: true
   responses:
     '201':
@@ -39,7 +39,7 @@ post:
       content:
         application/json:
           schema:
-            $ref: ../components/schemas/Collection.yaml
+            $ref: ../components/schemas/CollectionResource.yaml
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':

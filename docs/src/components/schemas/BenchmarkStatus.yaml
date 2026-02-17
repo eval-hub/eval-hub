@@ -1,0 +1,21 @@
+type: object
+description: Status of an individual benchmark in an evaluation
+properties:
+  provider_id:
+    type: string
+    description: Provider ID
+  id:
+    type: string
+    description: Benchmark ID
+  status:
+    $ref: ./State.yaml
+  error_message:
+    $ref: ./MessageInfo.yaml
+  started_at:
+    type: string
+    format: date-time
+    description: RFC3339 start time
+  completed_at:
+    type: string
+    format: date-time
+    description: RFC3339 completion time

@@ -212,7 +212,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/EvaluationRequest"
+                "$ref": "#/components/schemas/EvaluationJobConfig"
               }
             }
           }
@@ -223,7 +223,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EvaluationResponse"
+                  "$ref": "#/components/schemas/EvaluationJobResource"
                 }
               }
             }
@@ -295,7 +295,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedEvaluations"
+                  "$ref": "#/components/schemas/EvaluationJobResourceList"
                 }
               }
             }
@@ -340,7 +340,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EvaluationResponse"
+                  "$ref": "#/components/schemas/EvaluationJobResource"
                 }
               }
             }
@@ -453,8 +453,7 @@
                         "logs": "/data/logs/1234567890.log"
                       },
                       "started_at": "2026-01-12T10:45:32Z",
-                      "completed_at": "2026-01-12T10:47:12Z",
-                      "duration_seconds": 100
+                      "completed_at": "2026-01-12T10:47:12Z"
                     }
                   }
                 }
@@ -520,7 +519,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ListProvidersResponse"
+                  "$ref": "#/components/schemas/ProviderResourceList"
                 }
               }
             }
@@ -600,7 +599,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ListBenchmarksResponse"
+                  "$ref": "#/components/schemas/BenchmarkResourceList"
                 }
               }
             }
@@ -635,7 +634,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedCollections"
+                  "$ref": "#/components/schemas/CollectionResourceList"
                 }
               }
             }
@@ -666,7 +665,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CollectionCreationRequest"
+                "$ref": "#/components/schemas/CollectionConfig"
               }
             }
           },
@@ -678,7 +677,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Collection"
+                  "$ref": "#/components/schemas/CollectionResource"
                 }
               }
             }
@@ -724,7 +723,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Collection"
+                  "$ref": "#/components/schemas/CollectionResource"
                 }
               }
             }
@@ -767,7 +766,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CollectionUpdateRequest"
+                "$ref": "#/components/schemas/CollectionConfig"
               }
             }
           }
@@ -778,7 +777,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Collection"
+                  "$ref": "#/components/schemas/CollectionResource"
                 }
               }
             }
@@ -825,7 +824,7 @@
                 "title": "Json Patch",
                 "description": "JSON Patch operation",
                 "items": {
-                  "$ref": "#/components/schemas/JsonPatch"
+                  "$ref": "#/components/schemas/PatchOperation"
                 }
               }
             }
@@ -837,7 +836,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Collection"
+                  "$ref": "#/components/schemas/CollectionResource"
                 }
               }
             }
@@ -876,13 +875,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Success"
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -903,592 +897,579 @@
   "components": {
     "schemas": {
       "HealthResponse": {
+        "type": "object",
+        "description": "Health check response",
         "properties": {
           "status": {
             "type": "string",
-            "title": "Status",
-            "description": "Overall health status"
+            "description": "Overall status (e.g. healthy, degraded)"
+          },
+          "version": {
+            "type": "string",
+            "description": "Service version"
           },
           "timestamp": {
             "type": "string",
             "format": "date-time",
-            "title": "Timestamp",
-            "description": "Health check timestamp"
-          }
-        },
-        "type": "object",
-        "required": [
-          "status",
-          "timestamp"
-        ],
-        "title": "HealthResponse",
-        "description": "Health check response."
-      },
-      "APIError": {
-        "type": "object",
-        "description": "Error response for the API.",
-        "properties": {
-          "message": {
-            "type": "string",
-            "description": "The error message.",
-            "title": "Message"
+            "description": "Server timestamp"
           },
+          "components": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "description": "Per-component health"
+          },
+          "uptime": {
+            "type": "integer",
+            "description": "Uptime in nanoseconds (or use string for duration)"
+          },
+          "active_evaluations": {
+            "type": "integer",
+            "description": "Number of active evaluations"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "description": "Error response",
+        "properties": {
           "message_code": {
             "type": "string",
-            "description": "A message code for the error.",
-            "title": "Message Code"
+            "description": "Machine-readable error code"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable message"
           },
           "trace": {
             "type": "string",
-            "description": "The trace id of the request.",
-            "title": "Trace"
+            "description": "Request trace or debug info"
           }
         },
-        "title": "API Error",
         "required": [
-          "message",
           "message_code",
-          "trace"
+          "message"
         ]
       },
-      "PaginationLink": {
+      "HRef": {
+        "type": "object",
+        "description": "Hypermedia reference",
         "properties": {
           "href": {
             "type": "string",
-            "title": "Href",
-            "description": "Link URL"
+            "description": "URI reference"
           }
-        },
-        "additionalProperties": true,
-        "type": "object",
-        "required": [
-          "href"
-        ],
-        "title": "PaginationLink",
-        "description": "Hypermedia link used for pagination."
+        }
       },
-      "ResourceInfo": {
+      "Page": {
         "type": "object",
+        "description": "Generic pagination schema",
+        "properties": {
+          "first": {
+            "$ref": "#/components/schemas/HRef",
+            "description": "Link to first page"
+          },
+          "next": {
+            "$ref": "#/components/schemas/HRef",
+            "description": "Link to next page (omit if none)"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Page size"
+          },
+          "total_count": {
+            "type": "integer",
+            "description": "Total number of items"
+          }
+        }
+      },
+      "Resource": {
+        "type": "object",
+        "description": "Base resource fields",
         "properties": {
           "id": {
             "type": "string",
-            "title": "Id",
-            "description": "Unique evaluation request ID"
+            "description": "Unique identifier"
+          },
+          "tenant": {
+            "type": "string",
+            "description": "Tenant for scoping"
           },
           "created_at": {
             "type": "string",
             "format": "date-time",
-            "title": "Created At",
             "description": "Creation timestamp"
           },
-          "completed_at": {
+          "updated_at": {
             "type": "string",
             "format": "date-time",
-            "title": "Completed At",
-            "description": "Completion timestamp"
+            "description": "Last update timestamp"
           }
-        },
-        "required": [
-          "id",
-          "created_at"
-        ],
-        "title": "ResourceInfo",
-        "description": "Metadata about the evaluation resource."
+        }
       },
-      "MLFlowExperimentId": {
-        "type": "string",
-        "description": "MLFlow experiment ID",
-        "title": "Mlflow Experiment Id"
+      "MessageInfo": {
+        "type": "object",
+        "description": "Message from a downstream service",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Human-readable message"
+          },
+          "message_code": {
+            "type": "string",
+            "description": "Machine-readable code"
+          }
+        }
       },
       "EvaluationResource": {
+        "type": "object",
+        "description": "Evaluation resource (base fields for an evaluation)",
         "allOf": [
           {
-            "$ref": "#/components/schemas/ResourceInfo"
+            "$ref": "#/components/schemas/Resource"
           },
           {
             "type": "object",
             "properties": {
               "mlflow_experiment_id": {
-                "$ref": "#/components/schemas/MLFlowExperimentId"
+                "type": "string",
+                "description": "MLFlow experiment ID"
+              },
+              "message": {
+                "$ref": "#/components/schemas/MessageInfo",
+                "description": "Status or error message"
               }
             }
           }
-        ],
-        "title": "EvaluationResource",
-        "description": "Resource information for an evaluation."
+        ]
       },
-      "ErrorMessage": {
+      "OverallState": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "completed",
+          "failed",
+          "cancelled",
+          "partially_failed"
+        ],
+        "description": "Overall evaluation job state"
+      },
+      "EvaluationJobState": {
         "type": "object",
-        "properties": {
-          "message": {
-            "type": "string",
-            "description": "Details of the error.",
-            "title": "Message"
-          },
-          "message_code": {
-            "type": "string",
-            "description": "Code for the error",
-            "title": "Message Code"
-          }
-        },
-        "additionalProperties": true,
+        "description": "Overall evaluation job state and message",
         "required": [
-          "message",
-          "message_code"
+          "state",
+          "message"
         ],
-        "title": "ErrorMessage",
-        "description": "Error message for a job."
-      },
-      "BenchmarkRunStatus": {
         "properties": {
-          "id": {
-            "type": "string",
-            "title": "Benchmark Id",
-            "description": "Benchmark id"
+          "state": {
+            "$ref": "#/components/schemas/OverallState"
           },
+          "message": {
+            "$ref": "#/components/schemas/MessageInfo"
+          }
+        }
+      },
+      "State": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "completed",
+          "failed",
+          "cancelled"
+        ],
+        "description": "Evaluation or benchmark state"
+      },
+      "BenchmarkStatus": {
+        "type": "object",
+        "description": "Status of an individual benchmark in an evaluation",
+        "properties": {
           "provider_id": {
             "type": "string",
-            "title": "Provider Id",
-            "description": "Provider id"
+            "description": "Provider ID"
+          },
+          "id": {
+            "type": "string",
+            "description": "Benchmark ID"
           },
           "status": {
-            "type": "string",
-            "title": "State",
-            "description": "Run state",
-            "enum": [
-              "pending",
-              "running",
-              "completed",
-              "failed",
-              "cancelled"
-            ]
+            "$ref": "#/components/schemas/State"
+          },
+          "error_message": {
+            "$ref": "#/components/schemas/MessageInfo"
           },
           "started_at": {
             "type": "string",
             "format": "date-time",
-            "title": "Started At",
-            "description": "Start timestamp"
+            "description": "RFC3339 start time"
           },
           "completed_at": {
             "type": "string",
             "format": "date-time",
-            "title": "Completed At",
-            "description": "Completion timestamp"
-          },
-          "error_message": {
-            "$ref": "#/components/schemas/ErrorMessage"
+            "description": "RFC3339 completion time"
           }
-        },
-        "additionalProperties": true,
-        "type": "object",
-        "required": [
-          "id",
-          "provider_id",
-          "status",
-          "started_at"
-        ],
-        "title": "RunStatus",
-        "description": "Status information for an individual benchmark run."
+        }
       },
       "EvaluationJobStatus": {
-        "properties": {
-          "state": {
-            "type": "string",
-            "title": "State",
-            "description": "Overall state of the request",
-            "enum": [
-              "pending",
-              "running",
-              "completed",
-              "partially_failed",
-              "failed",
-              "cancelled"
-            ]
-          },
-          "message": {
-            "$ref": "#/components/schemas/ErrorMessage"
-          },
-          "benchmarks": {
-            "items": {
-              "$ref": "#/components/schemas/BenchmarkRunStatus"
-            },
-            "type": "array",
-            "title": "Benchmark run statuses",
-            "description": "Status for each benchmark run"
-          }
-        },
-        "additionalProperties": true,
         "type": "object",
-        "required": [
-          "state"
-        ],
-        "title": "Status",
-        "description": "Overall status for an evaluation request."
+        "description": "Current status of an evaluation job",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/EvaluationJobState"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "benchmarks": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BenchmarkStatus"
+                },
+                "description": "Per-benchmark status"
+              }
+            }
+          }
+        ]
       },
       "BenchmarkResult": {
+        "type": "object",
+        "description": "Result of a single benchmark run",
         "properties": {
           "id": {
             "type": "string",
-            "title": "Benchmark Id",
-            "description": "Benchmark id"
+            "description": "Benchmark ID"
           },
           "provider_id": {
             "type": "string",
-            "title": "Provider Id",
-            "description": "Provider id"
+            "description": "Provider ID"
           },
           "metrics": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "string"
-                }
-              ]
-            },
-            "title": "Metrics",
-            "description": "Benchmark metrics"
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Metric name to value"
           },
           "artifacts": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "title": "Artifacts",
-            "description": "Benchmark artifacts"
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Artifact key to location/info"
           },
           "mlflow_run_id": {
             "type": "string",
-            "title": "Mlflow Run Id",
             "description": "MLFlow run ID"
           },
           "logs_path": {
             "type": "string",
-            "title": "Logs Path",
-            "description": "Optional path to run-specific logs"
+            "description": "Path to logs"
           }
-        },
-        "additionalProperties": true,
-        "type": "object",
-        "required": [
-          "id",
-          "provider_id"
-        ],
-        "title": "BenchmarkResult",
-        "description": "The result information for an individual benchmark run."
+        }
       },
-      "EvaluationResults": {
+      "EvaluationJobResults": {
+        "type": "object",
+        "description": "Results section for an evaluation job",
         "properties": {
           "benchmarks": {
+            "type": "array",
             "items": {
               "$ref": "#/components/schemas/BenchmarkResult"
             },
-            "type": "array",
-            "title": "Benchmarks",
-            "description": "List of benchmark results"
+            "description": "Per-benchmark results"
           },
           "mlflow_experiment_url": {
             "type": "string",
-            "title": "Mlflow Experiment Url",
-            "description": "Link to the MLFlow experiment"
+            "description": "URL to MLFlow experiment"
           }
-        },
-        "additionalProperties": true,
-        "type": "object",
-        "title": "ResultsPayload",
-        "description": "Container for evaluation results."
+        }
       },
-      "EvaluationResponseResults": {
+      "ModelRef": {
         "type": "object",
-        "properties": {
-          "resource": {
-            "$ref": "#/components/schemas/EvaluationResource"
-          },
-          "status": {
-            "$ref": "#/components/schemas/EvaluationJobStatus",
-            "description": "Current status of the request"
-          },
-          "results": {
-            "$ref": "#/components/schemas/EvaluationResults"
-          }
-        },
-        "title": "EvaluationResponseResults",
-        "description": "Response payload for evaluation requests."
-      },
-      "Model": {
-        "properties": {
-          "url": {
-            "type": "string",
-            "title": "Url",
-            "description": "Model endpoint URL"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Model name/identifier"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
+        "description": "Model specification for evaluation requests",
         "required": [
           "url",
           "name"
         ],
-        "title": "Model",
-        "description": "Model specification for evaluation requests."
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Model URL"
+          },
+          "name": {
+            "type": "string",
+            "description": "Model name"
+          }
+        }
       },
-      "BenchmarkConfig": {
+      "PassCriteria": {
+        "type": "object",
+        "description": "Pass/fail threshold criteria",
+        "properties": {
+          "threshold": {
+            "type": "number",
+            "format": "float",
+            "default": 0,
+            "description": "Threshold value"
+          }
+        }
+      },
+      "Ref": {
+        "type": "object",
+        "description": "Reference by ID",
+        "required": [
+          "id"
+        ],
         "properties": {
           "id": {
             "type": "string",
-            "title": "Benchmark Id",
-            "description": "Benchmark identifier"
-          },
-          "provider_id": {
-            "type": "string",
-            "title": "Provider Id",
-            "description": "Provider identifier"
-          },
-          "parameters": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Parameters",
-            "description": "Benchmark configuration including num_fewshot, limit, batch_size, etc."
+            "description": "Unique identifier"
           }
-        },
-        "additionalProperties": false,
+        }
+      },
+      "PrimaryScore": {
         "type": "object",
-        "required": [
-          "id",
-          "provider_id"
-        ],
-        "title": "Benchmark Config",
-        "description": "New simplified benchmark specification."
+        "description": "Primary score metric configuration",
+        "properties": {
+          "metric": {
+            "type": "string",
+            "description": "Metric name"
+          },
+          "lower_is_better": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether lower values indicate better performance"
+          }
+        }
+      },
+      "BenchmarkConfig": {
+        "type": "object",
+        "description": "Reference to a benchmark in a collection or evaluation",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Ref"
+          },
+          {
+            "type": "object",
+            "required": [
+              "provider_id"
+            ],
+            "properties": {
+              "provider_id": {
+                "type": "string",
+                "description": "Evaluation provider ID"
+              },
+              "weight": {
+                "type": "number",
+                "format": "float",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "Weight of this benchmark"
+              },
+              "primary_score": {
+                "$ref": "#/components/schemas/PrimaryScore"
+              },
+              "pass_criteria": {
+                "$ref": "#/components/schemas/PassCriteria"
+              },
+              "parameters": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Benchmark-specific parameters"
+              }
+            }
+          }
+        ]
       },
       "ExperimentTag": {
         "type": "object",
-        "description": "A tag for an experiment.",
+        "description": "Tag on an experiment (e.g. MLFlow)",
+        "required": [
+          "key",
+          "value"
+        ],
         "properties": {
           "key": {
             "type": "string",
-            "description": "The key of the tag.\nKeys can be up to 250 bytes in size.\n",
-            "title": "Key"
+            "maxLength": 250,
+            "description": "Tag key"
           },
           "value": {
             "type": "string",
-            "description": "The value of the tag.\nValues can be up to 5000 bytes in size.\n",
-            "title": "Value"
+            "maxLength": 5000,
+            "description": "Tag value"
           }
-        },
-        "additionalProperties": false,
-        "title": "Experiment Tag"
+        }
       },
       "ExperimentConfig": {
         "type": "object",
-        "description": "Configuration for MLFlow experiment tracking.",
+        "description": "Configuration for MLFlow experiment tracking",
         "properties": {
           "name": {
             "type": "string",
-            "description": "Experiment name for MLFlow tracking.\nIf there is an `active` experiment with the same name, it will be reused. If there is no `active` experiment with the same name, a new experiment will be created.\n",
-            "title": "Name"
+            "description": "Experiment name"
           },
           "tags": {
             "type": "array",
-            "description": "Tags for the evaluation experiment.\n",
             "items": {
               "$ref": "#/components/schemas/ExperimentTag"
             },
             "maxItems": 20,
-            "title": "Tags"
+            "description": "Experiment tags"
           },
           "artifact_location": {
             "type": "string",
-            "description": "Artifact location is the directory where the evaluation artifacts will be stored. If not provided, the default artifact location will be used by the MLFlow server.\n",
-            "title": "Artifact Location"
+            "description": "Artifact storage location"
           }
-        },
-        "required": [
-          "name"
-        ],
-        "additionalProperties": false,
-        "title": "Experiment Config"
+        }
       },
-      "EvaluationRequest": {
-        "properties": {
-          "model": {
-            "$ref": "#/components/schemas/Model",
-            "description": "Model specification for evaluation"
-          },
-          "benchmarks": {
-            "items": {
-              "$ref": "#/components/schemas/BenchmarkConfig"
-            },
-            "type": "array",
-            "title": "Benchmarks",
-            "description": "List of benchmarks to evaluate"
-          },
-          "experiment": {
-            "$ref": "#/components/schemas/ExperimentConfig",
-            "description": "Experiment configuration for MLFlow tracking"
-          },
-          "custom": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Custom",
-            "description": "Custom fields for additional request data"
-          }
-        },
+      "EvaluationJobConfig": {
         "type": "object",
+        "description": "Evaluation job request configuration",
         "required": [
           "model",
           "benchmarks"
         ],
-        "title": "EvaluationRequest",
-        "description": "Simplified evaluation request using the new schema."
+        "properties": {
+          "model": {
+            "$ref": "#/components/schemas/ModelRef",
+            "description": "Model to evaluate"
+          },
+          "pass_criteria": {
+            "$ref": "#/components/schemas/PassCriteria",
+            "description": "Overall pass criteria"
+          },
+          "benchmarks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BenchmarkConfig"
+            },
+            "minItems": 1,
+            "description": "Benchmarks to run"
+          },
+          "collection": {
+            "$ref": "#/components/schemas/Ref",
+            "description": "Optional collection reference"
+          },
+          "experiment": {
+            "$ref": "#/components/schemas/ExperimentConfig",
+            "description": "MLFlow experiment config"
+          },
+          "custom": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Custom request data"
+          }
+        }
       },
-      "EvaluationResponse": {
+      "EvaluationJobResource": {
+        "type": "object",
+        "description": "Full evaluation job resource (response)",
         "allOf": [
           {
-            "$ref": "#/components/schemas/EvaluationResponseResults"
+            "type": "object",
+            "properties": {
+              "resource": {
+                "$ref": "#/components/schemas/EvaluationResource",
+                "description": "Resource and evaluation metadata"
+              },
+              "status": {
+                "$ref": "#/components/schemas/EvaluationJobStatus",
+                "description": "Current status"
+              },
+              "results": {
+                "$ref": "#/components/schemas/EvaluationJobResults",
+                "description": "Results when completed"
+              }
+            }
           },
           {
-            "$ref": "#/components/schemas/EvaluationRequest"
+            "$ref": "#/components/schemas/EvaluationJobConfig"
           }
-        ],
-        "unevaluatedProperties": false,
-        "title": "EvaluationResponse",
-        "description": "Response payload for evaluation requests."
+        ]
       },
-      "PaginatedEvaluations": {
-        "properties": {
-          "first": {
-            "$ref": "#/components/schemas/PaginationLink",
-            "description": "Link to the first page"
-          },
-          "next": {
-            "$ref": "#/components/schemas/PaginationLink",
-            "description": "Link to the next page, if available"
-          },
-          "limit": {
-            "type": "integer",
-            "title": "Limit",
-            "description": "Page size used for this response"
-          },
-          "total_count": {
-            "type": "integer",
-            "title": "Total Count",
-            "description": "Total number of evaluations"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/EvaluationResponse"
-            },
-            "type": "array",
-            "title": "Items",
-            "description": "Evaluations returned for this page"
-          }
-        },
+      "EvaluationJobResourceList": {
         "type": "object",
-        "required": [
-          "first",
-          "limit",
-          "total_count"
-        ],
-        "title": "PaginatedEvaluations",
-        "description": "Paginated list response for evaluation resources."
+        "description": "List of evaluation job resources with pagination",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Page"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EvaluationJobResource"
+                },
+                "description": "Evaluation job resources"
+              },
+              "errors": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Non-fatal errors (e.g. partial list)"
+              }
+            }
+          }
+        ]
       },
       "BenchmarkStatusEvent": {
         "type": "object",
-        "description": "A status event for an evaluation.",
-        "properties": {
-          "provider_id": {
-            "type": "string",
-            "title": "Provider Id",
-            "description": "Provider that ran the evaluation"
-          },
-          "id": {
-            "type": "string",
-            "title": "Benchmark Id",
-            "description": "Benchmark identifier"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "pending",
-              "running",
-              "completed",
-              "failed",
-              "cancelled"
-            ],
-            "title": "EvaluationStatus",
-            "description": "Status of an evaluation."
-          },
-          "metrics": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "string"
-                }
-              ]
-            },
-            "type": "object",
-            "title": "Metrics",
-            "description": "Evaluation metrics"
-          },
-          "artifacts": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object",
-            "title": "Artifacts",
-            "description": "Paths to result artifacts"
-          },
-          "error_message": {
-            "$ref": "#/components/schemas/ErrorMessage"
-          },
-          "started_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Started At",
-            "description": "Start timestamp"
-          },
-          "completed_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Completed At",
-            "description": "Completion timestamp"
-          },
-          "duration_seconds": {
-            "type": "number",
-            "title": "Duration Seconds",
-            "description": "Evaluation duration"
-          },
-          "mlflow_run_id": {
-            "type": "string",
-            "title": "Mlflow Run Id",
-            "description": "MLFlow run ID"
-          }
-        },
-        "additionalProperties": true,
+        "description": "Event payload to update benchmark status at runtime",
         "required": [
           "provider_id",
           "id",
           "status"
-        ]
+        ],
+        "properties": {
+          "provider_id": {
+            "type": "string",
+            "description": "Provider ID"
+          },
+          "id": {
+            "type": "string",
+            "description": "Benchmark ID"
+          },
+          "status": {
+            "$ref": "#/components/schemas/State"
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Benchmark metrics"
+          },
+          "artifacts": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Artifacts"
+          },
+          "error_message": {
+            "$ref": "#/components/schemas/MessageInfo"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "mlflow_run_id": {
+            "type": "string",
+            "description": "MLFlow run ID"
+          },
+          "logs_path": {
+            "type": "string",
+            "description": "Path to logs"
+          }
+        }
       },
       "StatusEvent": {
         "type": "object",
-        "description": "A status event for an evaluation.",
+        "description": "Status update event (e.g. for SSE)",
         "required": [
           "benchmark_status_event"
         ],
@@ -1496,380 +1477,228 @@
           "benchmark_status_event": {
             "$ref": "#/components/schemas/BenchmarkStatusEvent"
           }
-        },
-        "title": "StatusEvent"
+        }
       },
-      "BenchmarkDefinition": {
+      "BenchmarkResource": {
+        "type": "object",
+        "description": "Benchmark specification (from a provider)",
         "properties": {
           "id": {
             "type": "string",
-            "title": "Benchmark Id",
-            "description": "Benchmark identifier"
+            "description": "Benchmark ID"
+          },
+          "provider_id": {
+            "type": "string",
+            "description": "Provider ID"
           },
           "name": {
             "type": "string",
-            "title": "Name",
             "description": "Benchmark name"
           },
           "description": {
             "type": "string",
-            "title": "Description",
             "description": "Benchmark description"
           },
           "category": {
             "type": "string",
-            "title": "Category",
-            "description": "Benchmark category"
+            "description": "Category"
           },
           "metrics": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "title": "Metrics",
-            "description": "Benchmark metrics"
+            "description": "Metric names"
           },
           "num_few_shot": {
             "type": "integer",
-            "title": "Num Few Shot",
             "description": "Number of few-shot examples"
           },
           "dataset_size": {
             "type": "integer",
-            "title": "Dataset Size",
-            "description": "Size of the evaluation dataset"
+            "description": "Dataset size"
           },
           "tags": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "title": "Tags",
-            "description": "Benchmark tags"
+            "description": "Tags"
           }
         }
       },
-      "ProviderDefinition": {
+      "ProviderResource": {
+        "type": "object",
+        "description": "Evaluation provider (configuration and available benchmarks)",
         "properties": {
           "id": {
             "type": "string",
-            "title": "Provider Id",
-            "description": "Provider identifier"
+            "description": "Provider ID"
           },
           "name": {
             "type": "string",
-            "title": "Provider Name",
-            "description": "Provider display name"
+            "description": "Provider name"
           },
           "description": {
             "type": "string",
-            "title": "Description",
             "description": "Provider description"
           },
           "type": {
             "type": "string",
-            "title": "Provider Type",
             "description": "Provider type"
           },
           "benchmarks": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/BenchmarkDefinition"
+              "$ref": "#/components/schemas/BenchmarkResource"
             },
-            "title": "Benchmarks",
-            "description": "List of benchmarks supported by this provider"
+            "description": "Benchmarks offered by this provider"
           }
         }
       },
-      "ListProvidersResponse": {
+      "ProviderResourceList": {
+        "type": "object",
+        "description": "List of providers (no pagination links)",
         "properties": {
           "total_count": {
             "type": "integer",
-            "title": "Total Count",
             "description": "Total number of providers"
           },
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ProviderDefinition"
+              "$ref": "#/components/schemas/ProviderResource"
             },
-            "title": "Providers",
-            "description": "List of registered providers"
+            "description": "Provider resources"
           }
-        },
-        "required": [
-          "total_count"
-        ],
-        "title": "ListProvidersResponse",
-        "description": "Response for listing all providers"
+        }
       },
-      "ListBenchmarksResponse": {
+      "BenchmarkResourceList": {
+        "type": "object",
+        "description": "List of benchmarks",
         "properties": {
           "total_count": {
             "type": "integer",
-            "title": "Total Count",
             "description": "Total number of benchmarks"
           },
           "items": {
             "type": "array",
             "items": {
-              "allOf": [
-                {
-                  "properties": {
-                    "provider_id": {
-                      "type": "string",
-                      "title": "Provider Id",
-                      "description": "Provider identifier"
-                    }
-                  }
+              "$ref": "#/components/schemas/BenchmarkResource"
+            },
+            "description": "Benchmark resources"
+          }
+        }
+      },
+      "CollectionConfig": {
+        "type": "object",
+        "description": "Request to create or update a collection",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Collection name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Optional description"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tags"
+          },
+          "custom": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Custom key-value data"
+          },
+          "pass_criteria": {
+            "$ref": "#/components/schemas/PassCriteria",
+            "description": "Pass criteria for the collection"
+          },
+          "benchmarks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BenchmarkConfig"
+            },
+            "description": "Benchmarks in the collection"
+          }
+        },
+        "required": [
+          "benchmarks"
+        ]
+      },
+      "CollectionResource": {
+        "type": "object",
+        "description": "Collection resource (stored entity)",
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "resource": {
+                "$ref": "#/components/schemas/Resource",
+                "description": "Resource metadata"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "system",
+                  "owned"
+                ],
+                "description": "Type of collection. 'system' collections are created by the system and are not editable, 'owned' collections are created by the user and are editable."
+              }
+            }
+          },
+          {
+            "$ref": "#/components/schemas/CollectionConfig"
+          }
+        ]
+      },
+      "CollectionResourceList": {
+        "type": "object",
+        "description": "List of collection resources with pagination",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Page"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CollectionResource"
                 },
-                {
-                  "$ref": "#/components/schemas/BenchmarkDefinition"
-                }
-              ]
-            },
-            "title": "Benchmarks",
-            "description": "List of benchmarks"
+                "description": "Collection resources"
+              }
+            }
           }
-        },
-        "required": [
-          "total_count"
+        ]
+      },
+      "PatchOp": {
+        "type": "string",
+        "enum": [
+          "replace",
+          "add",
+          "remove"
         ],
-        "title": "ListBenchmarksResponse",
-        "description": "Response for listing all benchmarks (similar to Llama Stack format)."
+        "description": "Patch operation type"
       },
-      "CollectionBenchmarkReference": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Benchmark Id",
-            "description": "Benchmark identifier"
-          },
-          "provider_id": {
-            "type": "string",
-            "title": "Provider Id",
-            "description": "Provider identifier"
-          },
-          "weight": {
-            "type": "number",
-            "title": "Weight",
-            "description": "Weight for this benchmark in collection scoring",
-            "default": 1
-          },
-          "config": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Config",
-            "description": "Benchmark-specific configuration"
-          }
-        },
-        "additionalProperties": true,
+      "PatchOperation": {
         "type": "object",
-        "required": [
-          "provider_id",
-          "id"
-        ],
-        "title": "BenchmarkReference",
-        "description": "Reference to a benchmark within a collection."
-      },
-      "Collection": {
-        "properties": {
-          "resource": {
-            "$ref": "#/components/schemas/ResourceInfo",
-            "description": "Resource metadata"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Human-readable collection name"
-          },
-          "description": {
-            "type": "string",
-            "title": "Description",
-            "description": "Collection description"
-          },
-          "tags": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Tags",
-            "description": "Tags for categorizing the collection"
-          },
-          "custom": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Metadata",
-            "description": "Additional collection metadata"
-          },
-          "benchmarks": {
-            "items": {
-              "$ref": "#/components/schemas/CollectionBenchmarkReference"
-            },
-            "type": "array",
-            "title": "Benchmarks",
-            "description": "List of benchmark references in this collection"
-          }
-        },
-        "type": "object",
-        "required": [
-          "name",
-          "benchmarks"
-        ],
-        "title": "Collection",
-        "description": "Collection of benchmarks for specific evaluation scenarios."
-      },
-      "PaginatedCollections": {
-        "properties": {
-          "first": {
-            "$ref": "#/components/schemas/PaginationLink",
-            "description": "Link to the first page"
-          },
-          "next": {
-            "$ref": "#/components/schemas/PaginationLink",
-            "description": "Link to the next page, if available"
-          },
-          "limit": {
-            "type": "integer",
-            "title": "Limit",
-            "description": "Page size used for this response"
-          },
-          "total_count": {
-            "type": "integer",
-            "title": "Total Count",
-            "description": "Total number of collections"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/Collection"
-            },
-            "type": "array",
-            "title": "Items",
-            "description": "Collections returned for this page"
-          }
-        },
-        "type": "object",
-        "required": [
-          "first",
-          "limit",
-          "total_count"
-        ],
-        "title": "PaginatedCollections",
-        "description": "Paginated list response for collection resources."
-      },
-      "CollectionCreationRequest": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Human-readable collection name"
-          },
-          "description": {
-            "type": "string",
-            "title": "Description",
-            "description": "Collection description"
-          },
-          "tags": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Tags",
-            "description": "Tags for categorizing the collection"
-          },
-          "custom": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Metadata",
-            "description": "Additional collection metadata"
-          },
-          "benchmarks": {
-            "items": {
-              "$ref": "#/components/schemas/CollectionBenchmarkReference"
-            },
-            "type": "array",
-            "title": "Benchmarks",
-            "description": "List of benchmark references in this collection"
-          }
-        },
-        "type": "object",
-        "required": [
-          "name",
-          "description",
-          "benchmarks"
-        ],
-        "title": "CollectionCreationRequest",
-        "description": "Request for creating a new collection."
-      },
-      "CollectionUpdateRequest": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "Human-readable collection name"
-          },
-          "description": {
-            "type": "string",
-            "title": "Description",
-            "description": "Collection description"
-          },
-          "provider_id": {
-            "type": "string",
-            "title": "Provider Id",
-            "description": "Primary provider for this collection"
-          },
-          "tags": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Tags",
-            "description": "Tags for categorizing the collection"
-          },
-          "metadata": {
-            "type": "object",
-            "additionalProperties": true,
-            "title": "Metadata",
-            "description": "Additional collection metadata"
-          },
-          "benchmarks": {
-            "items": {
-              "$ref": "#/components/schemas/CollectionBenchmarkReference"
-            },
-            "type": "array",
-            "title": "Benchmarks",
-            "description": "List of benchmark references in this collection"
-          }
-        },
-        "additionalProperties": true,
-        "type": "object",
-        "title": "CollectionUpdateRequest",
-        "description": "Request for updating an existing collection."
-      },
-      "JsonPatch": {
+        "description": "Single JSON patch operation",
         "properties": {
           "op": {
-            "type": "string",
-            "enum": [
-              "replace",
-              "add",
-              "remove"
-            ]
+            "$ref": "#/components/schemas/PatchOp"
           },
           "path": {
-            "type": "string"
+            "type": "string",
+            "description": "JSON Pointer path"
           },
           "value": {
-            "description": "Value to be used in the patch operation",
-            "type": [
-              "object",
-              "array",
-              "string",
-              "number",
-              "integer",
-              "boolean",
-              "null"
-            ]
+            "description": "Value for add/replace (omit for remove)"
           }
         },
         "required": [
@@ -1926,7 +1755,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/APIError"
+              "$ref": "#/components/schemas/Error"
             },
             "examples": {
               "BadRequestError": {
@@ -1941,7 +1770,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/APIError"
+              "$ref": "#/components/schemas/Error"
             },
             "examples": {
               "AuthenticationError": {
@@ -1956,7 +1785,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/APIError"
+              "$ref": "#/components/schemas/Error"
             },
             "examples": {
               "AuthorizationError": {
@@ -1971,7 +1800,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/APIError"
+              "$ref": "#/components/schemas/Error"
             },
             "examples": {
               "NotFoundError": {
@@ -1986,7 +1815,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/APIError"
+              "$ref": "#/components/schemas/Error"
             },
             "examples": {
               "ConflictError": {

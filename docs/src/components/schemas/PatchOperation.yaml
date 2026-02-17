@@ -1,0 +1,13 @@
+type: object
+description: Single JSON patch operation
+properties:
+  op:
+    $ref: ./PatchOp.yaml
+  path:
+    type: string
+    description: JSON Pointer path
+  value:
+    description: Value for add/replace (omit for remove)
+required:
+  - op
+  - path

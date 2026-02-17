@@ -17,7 +17,7 @@ get:
       content:
         application/json:
           schema:
-            $ref: ../components/schemas/EvaluationResponse.yaml
+            $ref: ../components/schemas/EvaluationJobResource.yaml
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':

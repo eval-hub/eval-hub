@@ -1,0 +1,11 @@
+type: object
+description: Results section for an evaluation job
+properties:
+  benchmarks:
+    type: array
+    items:
+      $ref: ./BenchmarkResult.yaml
+    description: Per-benchmark results
+  mlflow_experiment_url:
+    type: string
+    description: URL to MLFlow experiment
