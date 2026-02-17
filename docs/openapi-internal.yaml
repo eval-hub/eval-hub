@@ -359,6 +359,33 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+    post:
+      tags:
+        - Providers
+      summary: Create a new provider (Bring Your Own Provider)
+      description: Create a new provider.
+      operationId: create_providers_api_v1_evaluations_providers_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderConfig'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/evaluations/benchmarks:
     get:
       tags:
@@ -1044,7 +1071,7 @@ components:
           items:
             type: string
           description: Tags
-    ProviderResource:
+    ProviderConfig:
       type: object
       description: Evaluation provider (configuration and available benchmarks)
       properties:
@@ -1065,6 +1092,22 @@ components:
           items:
             $ref: '#/components/schemas/BenchmarkResource'
           description: Benchmarks offered by this provider
+    ProviderResource:
+      type: object
+      description: Provider resource
+      allOf:
+        - type: object
+          properties:
+            resource:
+              $ref: '#/components/schemas/Resource'
+              description: Resource metadata
+            type:
+              type: string
+              enum:
+                - system
+                - owned
+              description: Type of collection. 'system' collections are created by the system and are not editable, 'owned' collections are created by the user and are editable.
+        - $ref: '#/components/schemas/ProviderConfig'
     ProviderResourceList:
       type: object
       description: List of providers (no pagination links)
@@ -1120,7 +1163,7 @@ components:
         - benchmarks
     CollectionResource:
       type: object
-      description: Collection resource (stored entity)
+      description: Collection resource
       allOf:
         - type: object
           properties:
