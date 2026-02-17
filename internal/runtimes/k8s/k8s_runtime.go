@@ -156,7 +156,7 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context, logger *slog.
 		"evalhub_url", jobConfig.evalHubURL,
 	)
 	configMap := buildConfigMap(jobConfig)
-	job, err := buildJob(jobConfig, evaluation.Custom)
+	job, err := buildJob(jobConfig, &evaluation.Custom)
 	if err != nil {
 		logger.Error("kubernetes job build error", "benchmark_id", benchmarkID, "error", err)
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
