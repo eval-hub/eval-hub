@@ -82,14 +82,13 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.
 	if tokenPath == "" {
 		tokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	}
-	if _, err := os.Stat(tokenPath); err == nil {
-		client = client.WithTokenPath(tokenPath)
-		logger.Info("MLflow auth token path configured (per-request reading)", "path", tokenPath)
-	} else if config.MLFlow.Token != "" {
+	// Always configure the token path; resolveAuthToken handles transient
+	// absence at request time (e.g. projected volume not yet mounted).
+	client = client.WithTokenPath(tokenPath)
+	logger.Info("MLflow auth token path configured (per-request reading)", "path", tokenPath)
+	if config.MLFlow.Token != "" {
 		client = client.WithToken(config.MLFlow.Token)
-		logger.Info("MLflow static auth token configured")
-	} else {
-		logger.Warn("No MLflow auth token configured (no token file or static token)", "token_path", tokenPath)
+		logger.Info("MLflow static auth token configured (fallback)")
 	}
 
 	// Set workspace if configured
