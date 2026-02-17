@@ -1,0 +1,30 @@
+type: object
+description: OCI artifact coordinates for persistence.
+properties:
+  oci_host:
+    type: string
+    title: OCI Host
+    description: OCI registry host (e.g. 'quay.io')
+  oci_repository:
+    type: string
+    title: OCI Repository
+    description: OCI repository path (e.g. 'my-org/my-repo')
+  oci_tag:
+    type: string
+    title: OCI Tag
+    description: OCI tag (e.g. 'eval-123')
+  oci_subject:
+    type: string
+    title: OCI Subject
+    description: Optional OCI subject identifier (in same registry and repo)
+  annotations:
+    type: object
+    additionalProperties:
+      type: string
+    title: Annotations
+    description: Custom annotations for the OCI artifact
+required:
+  - oci_host
+  - oci_repository
+additionalProperties: false
+title: OCICoordinates

@@ -26,3 +26,6 @@ properties:
     type: object
     additionalProperties: true
     description: Custom request data
+  exports:
+    $ref: ./EvaluationExports.yaml
+    description: Optional exports configuration for the evaluation job
