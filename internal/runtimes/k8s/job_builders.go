@@ -63,9 +63,14 @@ var (
 	k8sResourceNameSanitizer = regexp.MustCompile(`[^a-z0-9-]+`)
 	k8sLabelValueSanitizer   = regexp.MustCompile(`[^a-z0-9-_.]+`)
 )
+var (
+	k8sResourceNameSanitizer = regexp.MustCompile(`[^a-z0-9-]+`)
+	k8sLabelValueSanitizer   = regexp.MustCompile(`[^a-z0-9-_.]+`)
+)
 
 func sanitizeDNS1123Label(value string) string {
 	safe := strings.ToLower(value)
+	safe = k8sResourceNameSanitizer.ReplaceAllString(safe, "-")
 	safe = k8sResourceNameSanitizer.ReplaceAllString(safe, "-")
 	safe = strings.Trim(safe, "-")
 	if safe == "" {
@@ -99,12 +104,38 @@ func buildK8sName(jobID, providerID, benchmarkID, suffix string) string {
 
 	hash := shortHash(jobID+"|"+providerID+"|"+benchmarkID, 8)
 	maxBase := maxK8sNameLength - len(suffix) - len(hash) - 1
+func sanitizeLabelValue(value string) string {
+	safe := strings.ToLower(value)
+	safe = k8sLabelValueSanitizer.ReplaceAllString(safe, "-")
+	if len(safe) > maxK8sLabelValueLength {
+		safe = safe[:maxK8sLabelValueLength]
+	}
+	safe = strings.Trim(safe, "-_.")
+	if safe == "" {
+		return "x"
+	}
+	return safe
+}
+
+// buildK8sName returns a DNS-1123-safe name for Jobs and ConfigMaps:
+// base = "eval-job-<provider>-<benchmark>-<jobID8>", then "-<hash>" for uniqueness,
+// and optional suffix (e.g. "-spec" for ConfigMaps), all kept within 63 chars.
+func buildK8sName(jobID, providerID, benchmarkID, suffix string) string {
+	shortJobID := shortenJobID(jobID, 8)
+	base := jobPrefix +
+		sanitizeDNS1123Label(providerID) + "-" +
+		sanitizeDNS1123Label(benchmarkID) + "-" +
+		shortJobID
+
+	hash := shortHash(jobID+"|"+providerID+"|"+benchmarkID, 8)
+	maxBase := maxK8sNameLength - len(suffix) - len(hash) - 1
 	if maxBase < 1 {
 		maxBase = 1
 	}
 	if len(base) > maxBase {
 		base = strings.Trim(base[:maxBase], "-")
 	}
+	name := base + "-" + hash + suffix
 	name := base + "-" + hash + suffix
 	if len(name) > maxK8sNameLength {
 		name = strings.Trim(name[:maxK8sNameLength], "-")
@@ -132,8 +163,29 @@ func shortenJobID(jobID string, length int) string {
 	return strings.Trim(safe[:length], "-")
 }
 
+func shortHash(value string, length int) string {
+	sum := sha1.Sum([]byte(value))
+	hexValue := hex.EncodeToString(sum[:])
+	if length <= 0 || length > len(hexValue) {
+		return hexValue
+	}
+	return hexValue[:length]
+}
+
+func shortenJobID(jobID string, length int) string {
+	safe := sanitizeDNS1123Label(jobID)
+	if safe == "" {
+		return "x"
+	}
+	if length <= 0 || len(safe) <= length {
+		return safe
+	}
+	return strings.Trim(safe[:length], "-")
+}
+
 func buildConfigMap(cfg *jobConfig) *corev1.ConfigMap {
 	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID)
+	name := configMapName(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	annotations := jobAnnotations(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	name := configMapName(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	return &corev1.ConfigMap{
