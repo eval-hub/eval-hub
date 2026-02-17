@@ -115,7 +115,7 @@ func TestCreateBenchmarkResourcesSetsConfigMapOwner(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	cmName := configMapName(evaluation.Resource.ID, evaluation.Benchmarks[0].ID)
+	cmName := configMapName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID)
 	cm, err := clientset.CoreV1().ConfigMaps(defaultNamespace).Get(context.Background(), cmName, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("expected configmap to exist, got %v", err)
@@ -127,7 +127,7 @@ func TestCreateBenchmarkResourcesSetsConfigMapOwner(t *testing.T) {
 	if owner.Kind != "Job" || owner.APIVersion != "batch/v1" {
 		t.Fatalf("expected owner to be batch/v1 Job, got %s %s", owner.APIVersion, owner.Kind)
 	}
-	if owner.Name != jobName(evaluation.Resource.ID, evaluation.Benchmarks[0].ID) {
+	if owner.Name != jobName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID) {
 		t.Fatalf("expected owner name to match job name, got %q", owner.Name)
 	}
 	if owner.Controller == nil || !*owner.Controller {
@@ -156,7 +156,7 @@ func TestCreateBenchmarkResourcesDeletesConfigMapOnJobFailure(t *testing.T) {
 		t.Fatalf("expected error, got nil")
 	}
 
-	cmName := configMapName(evaluation.Resource.ID, evaluation.Benchmarks[0].ID)
+	cmName := configMapName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID)
 	_, err = clientset.CoreV1().ConfigMaps(defaultNamespace).Get(context.Background(), cmName, metav1.GetOptions{})
 	if err == nil || !apierrors.IsNotFound(err) {
 		t.Fatalf("expected configmap to be deleted, got %v", err)

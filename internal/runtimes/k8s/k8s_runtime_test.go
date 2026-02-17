@@ -11,6 +11,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	"github.com/google/uuid"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -32,7 +33,8 @@ func TestRunEvaluationJobCreatesResources(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create kubernetes helper: %v", err)
 	}
-	jobID := "1936da05-2f27-4fd4-b000-ebcb71af1fbe"
+	jobID := uuid.NewString()
+	providerID := "lm_evaluation_harness"
 	benchmarkID := "arc_easy"
 	benchmarkIDTwo := "arc"
 	runtime := &K8sRuntime{
@@ -101,8 +103,8 @@ func TestRunEvaluationJobCreatesResources(t *testing.T) {
 	})
 	namespace := "default"
 	for _, id := range benchmarkIDs {
-		configMapName := configMapName(jobID, id)
-		jobName := jobName(jobID, id)
+		configMapName := configMapName(jobID, providerID, id)
+		jobName := jobName(jobID, providerID, id)
 		found := false
 		deadline := time.Now().Add(apiTimeout)
 		for time.Now().Before(deadline) {
@@ -170,7 +172,7 @@ func TestCreateBenchmarkResourcesReturnsErrorWhenConfigMapExists(t *testing.T) {
 		},
 	}
 
-	cmName := configMapName(evaluation.Resource.ID, evaluation.Benchmarks[0].ID)
+	cmName := configMapName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID)
 	_, err := clientset.CoreV1().ConfigMaps(defaultNamespace).Create(context.Background(), &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cmName,
@@ -185,6 +187,96 @@ func TestCreateBenchmarkResourcesReturnsErrorWhenConfigMapExists(t *testing.T) {
 		t.Fatalf("expected error but got nil")
 	} else if !apierrors.IsAlreadyExists(err) {
 		t.Fatalf("expected already exists error, got %v", err)
+	}
+}
+
+func TestCreateBenchmarkResourcesDuplicateBenchmarkIDCollides(t *testing.T) {
+	// Integration test: repro name collision in a real cluster.
+	if os.Getenv("K8S_INTEGRATION_TEST") != "1" {
+		t.Skip("set K8S_INTEGRATION_TEST=1 to run against a real cluster")
+	}
+	t.Setenv("SERVICE_URL", "http://eval-hub")
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	helper, err := NewKubernetesHelper()
+	if err != nil {
+		t.Fatalf("failed to create kubernetes helper: %v", err)
+	}
+	runtime := &K8sRuntime{
+		logger: logger,
+		helper: helper,
+		providers: map[string]api.ProviderResource{
+			"lm_evaluation_harness": {
+				ID: "lm_evaluation_harness",
+				Runtime: &api.Runtime{
+					K8s: &api.K8sRuntime{
+						Image: "docker.io/library/busybox:1.36",
+					},
+				},
+			},
+			"lighteval": {
+				ID: "lighteval",
+				Runtime: &api.Runtime{
+					K8s: &api.K8sRuntime{
+						Image: "docker.io/library/busybox:1.36",
+					},
+				},
+			},
+		},
+	}
+
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: uuid.NewString()},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.BenchmarkConfig{
+				{
+					Ref:        api.Ref{ID: "arc_easy"},
+					ProviderID: "lm_evaluation_harness",
+				},
+				{
+					Ref:        api.Ref{ID: "arc:easy"},
+					ProviderID: "lighteval",
+				},
+			},
+		},
+	}
+
+	firstJobName := jobName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID)
+	firstConfigMapName := configMapName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID)
+	secondJobName := jobName(evaluation.Resource.ID, evaluation.Benchmarks[1].ProviderID, evaluation.Benchmarks[1].ID)
+	secondConfigMapName := configMapName(evaluation.Resource.ID, evaluation.Benchmarks[1].ProviderID, evaluation.Benchmarks[1].ID)
+	t.Cleanup(func() {
+		_ = runtime.helper.DeleteJob(context.Background(), defaultNamespace, firstJobName, metav1.DeleteOptions{})
+		_ = runtime.helper.DeleteConfigMap(context.Background(), defaultNamespace, firstConfigMapName)
+		_ = runtime.helper.DeleteJob(context.Background(), defaultNamespace, secondJobName, metav1.DeleteOptions{})
+		_ = runtime.helper.DeleteConfigMap(context.Background(), defaultNamespace, secondConfigMapName)
+	})
+
+	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[0]); err != nil {
+		t.Logf("first createBenchmarkResources error: %v", err)
+		t.Fatalf("unexpected error creating first benchmark resources: %v", err)
+	}
+
+	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[1]); err != nil {
+		t.Fatalf("unexpected error creating second benchmark resources: %v", err)
+	}
+
+	if _, err := helper.clientset.BatchV1().Jobs(defaultNamespace).Get(context.Background(), firstJobName, metav1.GetOptions{}); err != nil {
+		t.Fatalf("expected first job to exist, got %v", err)
+	}
+	if _, err := helper.clientset.BatchV1().Jobs(defaultNamespace).Get(context.Background(), secondJobName, metav1.GetOptions{}); err != nil {
+		t.Fatalf("expected second job to exist, got %v", err)
+	}
+	if _, err := helper.clientset.CoreV1().ConfigMaps(defaultNamespace).Get(context.Background(), firstConfigMapName, metav1.GetOptions{}); err != nil {
+		t.Fatalf("expected first configmap to exist, got %v", err)
+	}
+	if _, err := helper.clientset.CoreV1().ConfigMaps(defaultNamespace).Get(context.Background(), secondConfigMapName, metav1.GetOptions{}); err != nil {
+		t.Fatalf("expected second configmap to exist, got %v", err)
 	}
 }
 
@@ -260,8 +352,8 @@ func TestDeleteEvaluationJobResourcesDeletesJobsAndConfigMaps(t *testing.T) {
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Benchmarks: []api.BenchmarkConfig{
-				{Ref: api.Ref{ID: "bench-1"}},
-				{Ref: api.Ref{ID: "bench-2"}},
+				{Ref: api.Ref{ID: "bench-1"}, ProviderID: "provider-1"},
+				{Ref: api.Ref{ID: "bench-2"}, ProviderID: "provider-2"},
 			},
 		},
 	}
@@ -269,7 +361,7 @@ func TestDeleteEvaluationJobResourcesDeletesJobsAndConfigMaps(t *testing.T) {
 	for _, bench := range evaluation.Benchmarks {
 		job := &batchv1.Job{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      jobName(evaluation.Resource.ID, bench.ID),
+				Name:      jobName(evaluation.Resource.ID, bench.ProviderID, bench.ID),
 				Namespace: defaultNamespace,
 			},
 		}
@@ -279,7 +371,7 @@ func TestDeleteEvaluationJobResourcesDeletesJobsAndConfigMaps(t *testing.T) {
 
 		configMap := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      configMapName(evaluation.Resource.ID, bench.ID),
+				Name:      configMapName(evaluation.Resource.ID, bench.ProviderID, bench.ID),
 				Namespace: defaultNamespace,
 			},
 		}
@@ -293,10 +385,10 @@ func TestDeleteEvaluationJobResourcesDeletesJobsAndConfigMaps(t *testing.T) {
 	}
 
 	for _, bench := range evaluation.Benchmarks {
-		if _, err := clientset.BatchV1().Jobs(defaultNamespace).Get(context.Background(), jobName(evaluation.Resource.ID, bench.ID), metav1.GetOptions{}); err == nil || !apierrors.IsNotFound(err) {
+		if _, err := clientset.BatchV1().Jobs(defaultNamespace).Get(context.Background(), jobName(evaluation.Resource.ID, bench.ProviderID, bench.ID), metav1.GetOptions{}); err == nil || !apierrors.IsNotFound(err) {
 			t.Fatalf("expected job to be deleted for %s", bench.ID)
 		}
-		if _, err := clientset.CoreV1().ConfigMaps(defaultNamespace).Get(context.Background(), configMapName(evaluation.Resource.ID, bench.ID), metav1.GetOptions{}); err == nil || !apierrors.IsNotFound(err) {
+		if _, err := clientset.CoreV1().ConfigMaps(defaultNamespace).Get(context.Background(), configMapName(evaluation.Resource.ID, bench.ProviderID, bench.ID), metav1.GetOptions{}); err == nil || !apierrors.IsNotFound(err) {
 			t.Fatalf("expected configmap to be deleted for %s", bench.ID)
 		}
 	}
@@ -327,8 +419,8 @@ func TestDeleteEvaluationJobResourcesReturnsJoinedErrors(t *testing.T) {
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Benchmarks: []api.BenchmarkConfig{
-				{Ref: api.Ref{ID: "bench-1"}},
-				{Ref: api.Ref{ID: "bench-2"}},
+				{Ref: api.Ref{ID: "bench-1"}, ProviderID: "provider-1"},
+				{Ref: api.Ref{ID: "bench-2"}, ProviderID: "provider-2"},
 			},
 		},
 	}
