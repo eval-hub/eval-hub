@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -32,11 +33,13 @@ const (
 // to the events API with the configured delay between each.
 var _ KubernetesHelperInterface = (*MockKubernetesHelper)(nil)
 
-type MockKubernetesHelper struct{}
+type MockKubernetesHelper struct {
+	logger *slog.Logger
+}
 
 // NewMockKubernetesHelper returns a mock helper that does not call the cluster.
-func NewMockKubernetesHelper() *MockKubernetesHelper {
-	return &MockKubernetesHelper{}
+func NewMockKubernetesHelper(logger *slog.Logger) *MockKubernetesHelper {
+	return &MockKubernetesHelper{logger: logger}
 }
 
 func (h *MockKubernetesHelper) CreateConfigMap(
@@ -61,9 +64,13 @@ func (h *MockKubernetesHelper) DeleteJob(_ context.Context, _, _ string, _ metav
 }
 
 func (h *MockKubernetesHelper) CreateJob(ctx context.Context, job *batchv1.Job) (*batchv1.Job, error) {
-	if job == nil || job.Spec.Template.Labels == nil {
+	if job == nil {
+		return nil, fmt.Errorf("mock CreateJob: job must not be nil")
+	}
+	if job.Spec.Template.Labels == nil {
 		return job, nil
 	}
+	h.logger.Debug("In Mock create job for job", "job", job.Spec.Template.Labels[jobIDLabel])
 	templatePath, _ := job.Spec.Template.Labels[mockTemplateLabel]
 	if strings.TrimSpace(templatePath) == "" {
 		templatePath = defaultMockTemplate
@@ -137,6 +144,8 @@ func extractSimulateErrorMessage(simulateKubeError map[string]any) string {
 }
 
 func readMockTemplateFile(name string) ([]byte, error) {
+	// Prevent directory traversal from user-supplied label values.
+	name = filepath.Base(name)
 	tries := []string{filepath.Join(mockTemplatesDir, name), name}
 	if !strings.HasSuffix(strings.ToLower(name), ".json") {
 		withJSON := name + ".json"

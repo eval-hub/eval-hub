@@ -106,6 +106,11 @@ func (h *KubernetesHelper) CreateJob(ctx context.Context, job *batchv1.Job) (*ba
 	if job == nil || job.Namespace == "" || job.Name == "" {
 		return nil, fmt.Errorf("job, namespace, and name are required")
 	}
+	if !useLocalMock() {
+		//remove the label __MOCK_TEMPLATE from the job. We don't want this label set on the real job in the cluster.
+		delete(job.Spec.Template.Labels, mockTemplateLabel)
+		delete(job.Labels, mockTemplateLabel)
+	}
 	return h.clientset.BatchV1().Jobs(job.Namespace).Create(ctx, job, metav1.CreateOptions{})
 }
 
