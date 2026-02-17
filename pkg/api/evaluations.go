@@ -152,7 +152,7 @@ type EvaluationJobConfig struct {
 	Benchmarks []BenchmarkConfig `json:"benchmarks" validate:"required,min=1,dive"`
 	Collection *Ref              `json:"collection,omitempty"`
 	Experiment *ExperimentConfig `json:"experiment,omitempty"`
-	Custom     map[string]any    `json:"custom,omitempty"`
+	Custom     *map[string]any   `json:"custom,omitempty"`
 }
 
 type EvaluationResource struct {
