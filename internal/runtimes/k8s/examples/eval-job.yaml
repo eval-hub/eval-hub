@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: eval-job-001-mmlu
+  name: eval-job-lm-evaluation-harness-mmlu-001-405ef22a
   namespace: evalhub
   labels:
     app: "evalhub"
@@ -9,6 +9,10 @@ metadata:
     job_id: "001"
     provider_id: "lm_evaluation_harness"
     benchmark_id: "mmlu"
+  annotations:
+    io.github.eval-hub.job_id: "001"
+    io.github.eval-hub.provider_id: "lm_evaluation_harness"
+    io.github.eval-hub.benchmark_id: "mmlu"
 spec:
   backoffLimit: 3
   ttlSecondsAfterFinished: 3600
@@ -20,6 +24,10 @@ spec:
         job_id: "001"
         provider_id: "lm_evaluation_harness"
         benchmark_id: "mmlu"
+      annotations:
+        io.github.eval-hub.job_id: "001"
+        io.github.eval-hub.provider_id: "lm_evaluation_harness"
+        io.github.eval-hub.benchmark_id: "mmlu"
     spec:
       serviceAccountName: evalhub-jobs
       restartPolicy: Never
@@ -61,7 +69,7 @@ spec:
       volumes:
         - name: job-spec
           configMap:
-            name: eval-job-001-mmlu-spec
+            name: eval-job-lm-evaluation-harness-mmlu-001-405ef22a-spec
         - name: data
           emptyDir: {}
         - name: evalhub-service-ca
