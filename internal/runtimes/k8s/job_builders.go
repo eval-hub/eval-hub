@@ -92,11 +92,11 @@ func buildConfigMap(cfg *jobConfig) *corev1.ConfigMap {
 	}
 }
 
-func buildJob(cfg *jobConfig, custom *map[string]any) (*batchv1.Job, error) {
+func buildJob(cfg *jobConfig, custom map[string]any) (*batchv1.Job, error) {
 	if cfg.adapterImage == "" {
 		return nil, fmt.Errorf("adapter image is required")
 	}
-	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID, *custom)
+	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID, custom)
 	jobName := jobName(cfg.jobID, cfg.benchmarkID)
 	configMap := configMapName(cfg.jobID, cfg.benchmarkID)
 
