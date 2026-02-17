@@ -24,12 +24,16 @@ func (r *providersRequest) Query(key string) []string {
 func TestHandleListProvidersReturnsEmptyForInvalidProviderID(t *testing.T) {
 	providerConfigs := map[string]api.ProviderResource{
 		"garak": {
-			ID: "garak",
-			Benchmarks: []api.BenchmarkResource{
-				{ID: "bench-1"},
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				ID: "garak",
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-1"},
+				},
 			},
 		},
 	}
+
 	h := handlers.New(nil, nil, nil, nil, providerConfigs, nil)
 
 	req := &providersRequest{

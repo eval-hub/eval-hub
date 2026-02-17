@@ -106,12 +106,16 @@ func TestHandleCreateEvaluationMarksFailedWhenRuntimeErrors(t *testing.T) {
 	validate := validator.New()
 	providerConfigs := map[string]api.ProviderResource{
 		"garak": {
-			ID: "garak",
-			Benchmarks: []api.BenchmarkResource{
-				{ID: "bench-1"},
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				ID: "garak",
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-1"},
+				},
 			},
 		},
 	}
+
 	h := handlers.New(storage, validate, runtime, nil, providerConfigs, nil)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second)
 
@@ -148,9 +152,12 @@ func TestHandleCreateEvaluationSucceedsWhenRuntimeOk(t *testing.T) {
 	validate := validator.New()
 	providerConfigs := map[string]api.ProviderResource{
 		"garak": {
-			ID: "garak",
-			Benchmarks: []api.BenchmarkResource{
-				{ID: "bench-1"},
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				ID: "garak",
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-1"},
+				},
 			},
 		},
 	}
@@ -303,9 +310,12 @@ func TestHandleCreateEvaluationRejectsInvalidProviderID(t *testing.T) {
 	validate := validator.New()
 	providerConfigs := map[string]api.ProviderResource{
 		"garak": {
-			ID: "garak",
-			Benchmarks: []api.BenchmarkResource{
-				{ID: "bench-1"},
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				ID: "garak",
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-1"},
+				},
 			},
 		},
 	}
@@ -333,9 +343,12 @@ func TestHandleCreateEvaluationRejectsInvalidBenchmarkID(t *testing.T) {
 	validate := validator.New()
 	providerConfigs := map[string]api.ProviderResource{
 		"garak": {
-			ID: "garak",
-			Benchmarks: []api.BenchmarkResource{
-				{ID: "bench-1"},
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				ID: "garak",
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-1"},
+				},
 			},
 		},
 	}

@@ -1,13 +1,18 @@
 package api
 
 // Provider contains the configuration details for an evaluation provider.
-type ProviderResource struct {
+type ProviderConfig struct {
 	ID          string              `mapstructure:"id" yaml:"id" json:"id"`
 	Name        string              `mapstructure:"name" yaml:"name" json:"name"`
 	Description string              `mapstructure:"description" yaml:"description" json:"description"`
 	Type        string              `mapstructure:"type" yaml:"type" json:"type"`
 	Benchmarks  []BenchmarkResource `mapstructure:"benchmarks" yaml:"benchmarks" json:"benchmarks"`
-	Runtime     *Runtime            `mapstructure:"runtime" yaml:"runtime" json:"-"`
+	Runtime     *Runtime            `mapstructure:"runtime" yaml:"runtime" json:"runtime,omitempty"`
+}
+
+type ProviderResource struct {
+	Resource Resource `json:"resource"`
+	ProviderConfig
 }
 
 type Runtime struct {

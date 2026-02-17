@@ -107,9 +107,8 @@ func (s *SQLStorage) constructEvaluationResource(statusStr string, message *api.
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{
 				ID:        dbID,
-				Tenant:    "TODO", // TODO: retrieve tenant from database or context
-				CreatedAt: createdAt,
-				UpdatedAt: updatedAt,
+				CreatedAt: &createdAt,
+				UpdatedAt: &updatedAt,
 			},
 			MLFlowExperimentID: experimentID,
 			Message:            message,

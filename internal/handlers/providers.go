@@ -31,6 +31,7 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 			p.Benchmarks = []api.BenchmarkResource{}
 		}
 		providers = append(providers, p)
+
 	}
 
 	w.WriteJSON(api.ProviderResourceList{

@@ -1,0 +1,23 @@
+post:
+  tags:
+    - Providers
+  summary: Import a new provider scoped to the current tenant (Bring Your Own Provider)
+  description: Import provider
+  operationId: import_providers_api_v1_evaluations_providers_config_post
+  requestBody:
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/ProviderResource.yaml
+    required: true
+  responses:
+    '204':
+      description: Successful Response
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml

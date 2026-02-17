@@ -41,15 +41,18 @@ func TestRunEvaluationJobCreatesResources(t *testing.T) {
 		ctx:    context.Background(),
 		providers: map[string]api.ProviderResource{
 			"lm_evaluation_harness": {
-				ID: "lm_evaluation_harness",
-				Runtime: &api.Runtime{
-					K8s: &api.K8sRuntime{
-						Image:       "docker.io/library/busybox:1.36",
-						Entrypoint:  []string{"/bin/sh", "-c", "echo hello"},
-						CPULimit:    "500m",
-						MemoryLimit: "1Gi",
-						Env: []api.EnvVar{
-							{Name: "VAR_NAME", Value: "VALUE"},
+				Resource: api.Resource{ID: "lm_evaluation_harness"},
+				ProviderConfig: api.ProviderConfig{
+					ID: "lm_evaluation_harness",
+					Runtime: &api.Runtime{
+						K8s: &api.K8sRuntime{
+							Image:       "docker.io/library/busybox:1.36",
+							Entrypoint:  []string{"/bin/sh", "-c", "echo hello"},
+							CPULimit:    "500m",
+							MemoryLimit: "1Gi",
+							Env: []api.EnvVar{
+								{Name: "VAR_NAME", Value: "VALUE"},
+							},
 						},
 					},
 				},
@@ -130,10 +133,13 @@ func TestCreateBenchmarkResourcesReturnsErrorWhenConfigMapExists(t *testing.T) {
 		helper: &KubernetesHelper{clientset: clientset},
 		providers: map[string]api.ProviderResource{
 			"lm_evaluation_harness": {
-				ID: "lm_evaluation_harness",
-				Runtime: &api.Runtime{
-					K8s: &api.K8sRuntime{
-						Image: "docker.io/library/busybox:1.36",
+				Resource: api.Resource{ID: "lm_evaluation_harness"},
+				ProviderConfig: api.ProviderConfig{
+					ID: "lm_evaluation_harness",
+					Runtime: &api.Runtime{
+						K8s: &api.K8sRuntime{
+							Image: "docker.io/library/busybox:1.36",
+						},
 					},
 				},
 			},
@@ -203,10 +209,13 @@ func TestRunEvaluationJobReturnsNilOnCreateFailure(t *testing.T) {
 		helper: &KubernetesHelper{clientset: clientset},
 		providers: map[string]api.ProviderResource{
 			"lm_evaluation_harness": {
-				ID: "lm_evaluation_harness",
-				Runtime: &api.Runtime{
-					K8s: &api.K8sRuntime{
-						Image: "docker.io/library/busybox:1.36",
+				Resource: api.Resource{ID: "lm_evaluation_harness"},
+				ProviderConfig: api.ProviderConfig{
+					ID: "lm_evaluation_harness",
+					Runtime: &api.Runtime{
+						K8s: &api.K8sRuntime{
+							Image: "docker.io/library/busybox:1.36",
+						},
 					},
 				},
 			},

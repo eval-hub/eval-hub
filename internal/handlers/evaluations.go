@@ -96,11 +96,12 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		}
 	}
 
+	now := time.Now()
 	job := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{
 				ID:        common.GUID(),
-				CreatedAt: time.Now(),
+				CreatedAt: &now,
 			},
 			MLFlowExperimentID: mlflowExperimentID,
 		},
