@@ -42,7 +42,7 @@ var _ KubernetesHelperInterface = (*KubernetesHelper)(nil)
 func NewKubernetesHelper(logger *slog.Logger) (KubernetesHelperInterface, error) {
 	if useLocalMock() {
 		logger.Info("Using mock Kubernetes helper (KUBE_MOCK_ENABLED=true); no cluster calls, events POST to localhost")
-		return NewMockKubernetesHelper(), nil
+		return NewMockKubernetesHelper(logger), nil
 	}
 	logger.Debug("using real kubernetes helper")
 	config, err := rest.InClusterConfig()
