@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/config"
@@ -74,19 +73,23 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.
 		WithLogger(logger).
 		WithHTTPClient(httpClient)
 
-	// Load auth token from file if configured, falling back to the Kubernetes SA token
+	// Configure auth token. Two modes are supported:
+	//   1. Token file path (WithTokenPath) — re-read on each request, supports
+	//      Kubernetes projected SA tokens that are rotated on disk by the kubelet.
+	//   2. Static token (WithToken) — for local development without a token file.
+	// At runtime, the token file takes precedence over the static token.
 	tokenPath := config.MLFlow.TokenPath
 	if tokenPath == "" {
 		tokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	}
-	if tokenData, err := os.ReadFile(tokenPath); err == nil {
-		token := strings.TrimSpace(string(tokenData))
-		if token != "" {
-			client = client.WithToken(token)
-			logger.Info("MLflow auth token loaded", "path", tokenPath)
-		}
+	if _, err := os.Stat(tokenPath); err == nil {
+		client = client.WithTokenPath(tokenPath)
+		logger.Info("MLflow auth token path configured (per-request reading)", "path", tokenPath)
+	} else if config.MLFlow.Token != "" {
+		client = client.WithToken(config.MLFlow.Token)
+		logger.Info("MLflow static auth token configured")
 	} else {
-		logger.Warn("No MLflow auth token found", "path", tokenPath, "error", err)
+		logger.Warn("No MLflow auth token configured (no token file or static token)", "token_path", tokenPath)
 	}
 
 	// Set workspace if configured
