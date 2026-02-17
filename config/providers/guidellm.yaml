@@ -1,7 +1,7 @@
 id: guidellm
 name: GuideLLM
 description: Performance benchmarking framework for LLM inference servers
-type: builtin
+type: system
 runtime:
   k8s:
     image: quay.io/evalhub/community-guidellm:latest

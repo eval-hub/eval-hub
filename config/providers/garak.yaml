@@ -1,7 +1,7 @@
 id: garak
 name: Garak
 description: LLM vulnerability scanner and red-teaming framework
-type: builtin
+type: system
 runtime:
   k8s:
     image: quay.io/evalhub/garak:latest
