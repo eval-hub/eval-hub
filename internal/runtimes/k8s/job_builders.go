@@ -54,9 +54,9 @@ const (
 	labelAppValue            = "evalhub"
 	labelComponentValue      = "evaluation-job"
 	capabilityDropAll        = "ALL"
-	annotationJobIDKey       = "io.github.eval-hub.job_id"
-	annotationProviderIDKey  = "io.github.eval-hub.provider_id"
-	annotationBenchmarkIDKey = "io.github.eval-hub.benchmark_id"
+	annotationJobIDKey       = "eval-hub.github.io/job_id"
+	annotationProviderIDKey  = "eval-hub.github.io/provider_id"
+	annotationBenchmarkIDKey = "eval-hub.github.io/benchmark_id"
 )
 
 var (

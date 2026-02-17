@@ -10,9 +10,9 @@ metadata:
     provider_id: "lm_evaluation_harness"
     benchmark_id: "mmlu"
   annotations:
-    io.github.eval-hub.job_id: "001"
-    io.github.eval-hub.provider_id: "lm_evaluation_harness"
-    io.github.eval-hub.benchmark_id: "mmlu"
+    eval-hub.github.io/job_id: "001"
+    eval-hub.github.io/provider_id: "lm_evaluation_harness"
+    eval-hub.github.io/benchmark_id: "mmlu"
 spec:
   backoffLimit: 3
   ttlSecondsAfterFinished: 3600
@@ -25,9 +25,9 @@ spec:
         provider_id: "lm_evaluation_harness"
         benchmark_id: "mmlu"
       annotations:
-        io.github.eval-hub.job_id: "001"
-        io.github.eval-hub.provider_id: "lm_evaluation_harness"
-        io.github.eval-hub.benchmark_id: "mmlu"
+        eval-hub.github.io/job_id: "001"
+        eval-hub.github.io/provider_id: "lm_evaluation_harness"
+        eval-hub.github.io/benchmark_id: "mmlu"
     spec:
       serviceAccountName: evalhub-jobs
       restartPolicy: Never
