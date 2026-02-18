@@ -58,11 +58,8 @@ type testContext struct {
 }
 
 func newTestContext() *testContext {
-	// Get SERVICE_URL from environment, default to localhost
-	serviceURL := os.Getenv("SERVICE_URL")
-	if serviceURL == "" {
-		serviceURL = "http://localhost:8080"
-	}
+	// Get SERVER_URL/SERVICE_URL from environment (no default fallback)
+	serviceURL, envName := serverURLFromEnv()
 
 	// Get namespace from environment, default to "default"
 	namespace := os.Getenv("KUBERNETES_NAMESPACE")
@@ -101,8 +98,16 @@ func newTestContext() *testContext {
 	if !configPrinted {
 		authToken := os.Getenv("AUTH_TOKEN")
 		fmt.Printf("\n[CONFIG] Test Environment:\n")
-		fmt.Printf("  SERVICE_URL: %s\n", serviceURL)
-		fmt.Printf("  KUBERNETES_NAMESPACE: %s\n", namespace)
+		if serviceURL == "" {
+			fmt.Printf("  SERVER_URL: ❌ NOT SET\n")
+		} else {
+			fmt.Printf("  %s: %s\n", envName, serviceURL)
+		}
+		if namespace == "" {
+			fmt.Printf("  KUBERNETES_NAMESPACE: ❌ NOT SET\n")
+		} else {
+			fmt.Printf("  KUBERNETES_NAMESPACE: %s\n", namespace)
+		}
 		fmt.Printf("  AUTH_TOKEN: %s\n", func() string {
 			if authToken == "" {
 				return "❌ NOT SET"
@@ -117,6 +122,13 @@ func newTestContext() *testContext {
 	}
 
 	return tc
+}
+
+func serverURLFromEnv() (string, string) {
+	if serverURL := os.Getenv("SERVER_URL"); serverURL != "" {
+		return serverURL, "SERVER_URL"
+	}
+	return "", ""
 }
 
 // initKubernetesClient initializes the real Kubernetes client
@@ -567,6 +579,8 @@ func (tc *testContext) configMapShouldBeCreatedWithNamePattern(pattern string) e
 	// Convert pattern to regex
 	regexPattern := strings.ReplaceAll(pattern, "{id}", ".*")
 	regexPattern = strings.ReplaceAll(regexPattern, "{benchmark_id}", ".*")
+	regexPattern = strings.ReplaceAll(regexPattern, "{provider_id}", ".*")
+	regexPattern = strings.ReplaceAll(regexPattern, "{hash}", ".*")
 	regex := regexp.MustCompile(regexPattern)
 
 	// List ConfigMaps with job_id label if we have it
@@ -1058,6 +1072,8 @@ func (tc *testContext) jobShouldBeCreatedWithNamePattern(pattern string) error {
 	// Convert pattern to regex
 	regexPattern := strings.ReplaceAll(pattern, "{id}", ".*")
 	regexPattern = strings.ReplaceAll(regexPattern, "{benchmark_id}", ".*")
+	regexPattern = strings.ReplaceAll(regexPattern, "{provider_id}", ".*")
+	regexPattern = strings.ReplaceAll(regexPattern, "{hash}", ".*")
 	regex := regexp.MustCompile(regexPattern)
 
 	// List Jobs with job_id label if we have it

@@ -217,14 +217,49 @@ FVT tests use [godog](https://github.com/cucumber/godog) for BDD-style testing:
 - Feature files in `tests/features/*.feature`
 - Step definitions in `tests/features/step_definitions_test.go`
 
+Env vars for running against a cluster:
+- `SERVER_URL`
+- `AUTH_TOKEN`
+
+Model overrides (optional):
+- `MODEL_URL` (defaults to `http://test.com` if unset)
+- `MODEL_NAME` (defaults to `test` if unset)
+
 Run FVT tests:
 ```bash
 make test-fvt
 ```
 
+Generate the FVT HTML report:
+```bash
+npm install
+make fvt-report
+```
+
 Run all tests:
 ```bash
 make test-all
+```
+
+### Kubernetes FVT
+
+Kubernetes tests validate Jobs/ConfigMaps in a real cluster:
+- Feature files in `tests/kubernetes/features/*.feature`
+- Step definitions in `tests/kubernetes/features/step_definitions_test.go`
+
+Required env vars (tests are skipped if missing):
+- `SERVER_URL`
+- `KUBERNETES_NAMESPACE`
+- `AUTH_TOKEN`
+- `KUBECONFIG`
+
+Optional:
+- `SKIP_TLS_VERIFY=true`
+- `K8S_TEST_DEBUG=true`
+
+Run Kubernetes FVT:
+```bash
+go test -v ./tests/kubernetes/features
 ```
 
 ## Features

@@ -1,6 +1,7 @@
 {
   "devDependencies": {
-    "@redocly/cli": "^2.19.0"
+    "@redocly/cli": "^2.18.2",
+    "cucumber-html-reporter": "^7.2.0"
   },
   "scripts": {
     "lint-openapi": "redocly lint docs/src/openapi.yaml",

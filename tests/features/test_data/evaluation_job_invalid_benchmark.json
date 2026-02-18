@@ -1,0 +1,12 @@
+{
+  "model": {
+    "url": "{{env:MODEL_URL|http://test.com}}",
+    "name": "{{env:MODEL_NAME|test}}"
+  },
+  "benchmarks": [
+    {
+      "id": "unknown_benchmark",
+      "provider_id": "lm_evaluation_harness"
+    }
+  ]
+}

@@ -14,7 +14,7 @@ Feature: Kubernetes Resources Validation
     And Jobs should be created in the background
     And the number of Jobs created should equal the number of benchmarks
     And the number of ConfigMaps created should equal the number of benchmarks
-    And a ConfigMap should be created with name pattern "eval-job-{id}-{benchmark_id}-spec"
+    And a ConfigMap should be created with name pattern "eval-job-{provider_id}-{benchmark_id}-{id}-{hash}-spec"
     And the ConfigMap should have label "app" with value "evalhub"
     And the ConfigMap should have label "component" with value "evaluation-job"
     And the ConfigMap should have label "job_id" matching the evaluation job ID
@@ -31,7 +31,7 @@ Feature: Kubernetes Resources Validation
     And the ConfigMap should have an ownerReference of kind "Job"
     And the ConfigMap ownerReference should have controller set to true
     And the ConfigMap ownerReference should reference the created Job
-    And a Kubernetes Job should be created with name pattern "eval-job-{id}-{benchmark_id}"
+    And a Kubernetes Job should be created with name pattern "eval-job-{provider_id}-{benchmark_id}-{id}-{hash}"
     And the Job should have label "app" with value "evalhub"
     And the Job should have label "component" with value "evaluation-job"
     And the Job should have label "job_id" matching the evaluation job ID
@@ -90,7 +90,7 @@ Feature: Kubernetes Resources Validation
     And the number of ConfigMaps created should equal the number of benchmarks
     And each Job should have a unique benchmark_id label
     And each ConfigMap should have a unique benchmark_id label
-    And for benchmark "mmlu" the ConfigMap data "job.json" should contain field "num_examples" with value from parameters
+    And for benchmark "arc_easy" the ConfigMap data "job.json" should contain field "num_examples" with value from parameters
     And for benchmark "hellaswag" the ConfigMap data "job.json" field "benchmark_config" should not contain "num_examples"
     And for benchmark "hellaswag" the ConfigMap data "job.json" should contain field "benchmark_config" as empty object
 
@@ -117,6 +117,7 @@ Feature: Kubernetes Resources Validation
     And all 3 ConfigMaps should be deleted from Kubernetes
     
   Scenario: MLflow fields are included in job spec
+    Given MLflow is configured
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_experiment.json"
     Then the response code should be 202
     And the ConfigMap data "job.json" should contain field "experiment_name"
