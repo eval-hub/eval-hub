@@ -17,9 +17,9 @@ go test ./tests/features/...
 
 The `SERVER_URL` should be a fully qualified URL (e.g., `http://localhost:8080` or `https://api.example.com`).
 
-### Optional Model Overrides
+### Model Overrides (Required)
 
-You can override the model fields in the test payloads using environment variables:
+Set the model fields in the test payloads using environment variables:
 
 - `MODEL_URL` (defaults to `http://test.com`)
 - `MODEL_NAME` (defaults to `test`)
@@ -70,6 +70,13 @@ make test-fvt
 
 This runs the tests with verbose output enabled.
 
+Generate the FVT HTML report (requires Node dev deps):
+
+```bash
+npm install
+make fvt-report
+```
+
 ### Using Go Test Directly
 
 Run all feature tests:
@@ -84,4 +91,8 @@ Run with verbose output:
 go test -v ./tests/features/...
 ```
 
-Run a specific feature.
+Run a specific feature:
+
+```bash
+go test -v ./tests/features/... -run TestFeatures -godog.paths=tests/features/evaluations.feature
+```

@@ -228,7 +228,7 @@ Env vars for running against a cluster:
 - `SERVER_URL`
 - `AUTH_TOKEN`
 
-Optional model overrides:
+Model overrides (required):
 - `MODEL_URL` (defaults to `http://test.com`)
 - `MODEL_NAME` (defaults to `test`)
 
@@ -239,6 +239,7 @@ make test-fvt
 
 Generate the FVT HTML report:
 ```bash
+npm install
 make fvt-report
 ```
 
@@ -257,9 +258,7 @@ Required env vars (tests are skipped if missing):
 - `SERVER_URL`
 - `KUBERNETES_NAMESPACE`
 - `AUTH_TOKEN`
-
-Kubernetes access:
-- `KUBECONFIG` (required)
+- `KUBECONFIG`
 
 Optional:
 - `SKIP_TLS_VERIFY=true`

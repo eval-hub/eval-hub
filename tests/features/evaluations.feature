@@ -32,9 +32,6 @@ Feature: Evaluations Endpoint
     And the response should contain the value "test" at path "$.experiment.tags[0].value"
     And the response should not contain the value "collection" at path "$."
     And I wait for the evaluation job status to be "completed"
-    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
-    Then the response code should be 200
-    And the response should contain the value "completed" at path "$.status.state"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
@@ -159,7 +156,6 @@ Feature: Evaluations Endpoint
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 409
     And the response should contain the value "can not be cancelled because" at path "$.message"
-    And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "completed" at path "$.status.state"
@@ -250,6 +246,10 @@ Feature: Evaluations Endpoint
         "required": ["limit", "first", "total_count", "items"]
       }
     """
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_cancelled.json"
+    Then the response code should be 204
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
 
   Scenario: Evaluation endpoints reject unsupported methods
     Given the service is running

@@ -103,7 +103,7 @@ test-fvt: $(BIN_DIR) ## Run FVT (Functional Verification Tests) using godog
 
 fvt-report: ## Generate HTML report for FVT tests
 	@echo "Generating FVT JSON report..."
-	@set -o pipefail; GODOG_FORMAT=cucumber GODOG_OUTPUT="$${PWD}/cucumber-fvt.json" go test -v -race ./tests/features/...; status=$$?; \
+	@GODOG_FORMAT=cucumber GODOG_OUTPUT="$${PWD}/cucumber-fvt.json" go test -v -race ./tests/features/...; status=$$?; \
 	echo "Converting JSON report to HTML..."; \
 	node -e "require('cucumber-html-reporter').generate({theme:'bootstrap',jsonFile:'cucumber-fvt.json',output:'cucumber-report.html'})" 2>&1; \
 	report_status=$$?; \

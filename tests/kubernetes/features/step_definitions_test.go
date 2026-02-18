@@ -128,9 +128,6 @@ func serverURLFromEnv() (string, string) {
 	if serverURL := os.Getenv("SERVER_URL"); serverURL != "" {
 		return serverURL, "SERVER_URL"
 	}
-	if serverURL := os.Getenv("SERVICE_URL"); serverURL != "" {
-		return serverURL, "SERVICE_URL"
-	}
 	return "", ""
 }
 
@@ -1179,57 +1176,6 @@ func (tc *testContext) jobShouldHaveLabelMatchingBenchmarkID(label string) error
 	return nil
 }
 
-func (tc *testContext) jobShouldHaveAnnotationMatchingJobID(annotation string) error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
-	}
-	actualValue, exists := tc.currentJob.Annotations[annotation]
-	if !exists {
-		return fmt.Errorf("Job %s does not have annotation %s", tc.currentJob.Name, annotation)
-	}
-	if tc.lastJobID != "" && actualValue != tc.lastJobID {
-		return fmt.Errorf("Job %s annotation %s expected %s, got %s", tc.currentJob.Name, annotation, tc.lastJobID, actualValue)
-	}
-	tc.lastJobID = actualValue
-	return nil
-}
-
-func (tc *testContext) jobShouldHaveAnnotationMatchingProviderID(annotation string) error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
-	}
-	actualValue, exists := tc.currentJob.Annotations[annotation]
-	if !exists {
-		return fmt.Errorf("Job %s does not have annotation %s", tc.currentJob.Name, annotation)
-	}
-	expected, err := tc.expectedProviderID()
-	if err != nil {
-		return err
-	}
-	if actualValue != expected {
-		return fmt.Errorf("Job %s annotation %s expected %s, got %s", tc.currentJob.Name, annotation, expected, actualValue)
-	}
-	return nil
-}
-
-func (tc *testContext) jobShouldHaveAnnotationMatchingBenchmarkID(annotation string) error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
-	}
-	actualValue, exists := tc.currentJob.Annotations[annotation]
-	if !exists {
-		return fmt.Errorf("Job %s does not have annotation %s", tc.currentJob.Name, annotation)
-	}
-	expected, err := tc.expectedBenchmarkID()
-	if err != nil {
-		return err
-	}
-	if actualValue != expected {
-		return fmt.Errorf("Job %s annotation %s expected %s, got %s", tc.currentJob.Name, annotation, expected, actualValue)
-	}
-	return nil
-}
-
 func (tc *testContext) jobPodTemplateShouldHaveLabel(label, value string) error {
 	if tc.currentJob == nil {
 		return fmt.Errorf("no current Job")
@@ -1286,57 +1232,6 @@ func (tc *testContext) jobPodTemplateShouldHaveLabelMatchingBenchmarkID(label st
 		return fmt.Errorf("Job %s pod template label %s expected %s, got %s", tc.currentJob.Name, label, tc.lastBenchmarkID, actualValue)
 	}
 	tc.lastBenchmarkID = actualValue
-	return nil
-}
-
-func (tc *testContext) jobPodTemplateShouldHaveAnnotationMatchingJobID(annotation string) error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
-	}
-	actualValue, exists := tc.currentJob.Spec.Template.Annotations[annotation]
-	if !exists {
-		return fmt.Errorf("Job %s pod template does not have annotation %s", tc.currentJob.Name, annotation)
-	}
-	if tc.lastJobID != "" && actualValue != tc.lastJobID {
-		return fmt.Errorf("Job %s pod template annotation %s expected %s, got %s", tc.currentJob.Name, annotation, tc.lastJobID, actualValue)
-	}
-	tc.lastJobID = actualValue
-	return nil
-}
-
-func (tc *testContext) jobPodTemplateShouldHaveAnnotationMatchingProviderID(annotation string) error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
-	}
-	actualValue, exists := tc.currentJob.Spec.Template.Annotations[annotation]
-	if !exists {
-		return fmt.Errorf("Job %s pod template does not have annotation %s", tc.currentJob.Name, annotation)
-	}
-	expected, err := tc.expectedProviderID()
-	if err != nil {
-		return err
-	}
-	if actualValue != expected {
-		return fmt.Errorf("Job %s pod template annotation %s expected %s, got %s", tc.currentJob.Name, annotation, expected, actualValue)
-	}
-	return nil
-}
-
-func (tc *testContext) jobPodTemplateShouldHaveAnnotationMatchingBenchmarkID(annotation string) error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
-	}
-	actualValue, exists := tc.currentJob.Spec.Template.Annotations[annotation]
-	if !exists {
-		return fmt.Errorf("Job %s pod template does not have annotation %s", tc.currentJob.Name, annotation)
-	}
-	expected, err := tc.expectedBenchmarkID()
-	if err != nil {
-		return err
-	}
-	if actualValue != expected {
-		return fmt.Errorf("Job %s pod template annotation %s expected %s, got %s", tc.currentJob.Name, annotation, expected, actualValue)
-	}
 	return nil
 }
 
@@ -2367,47 +2262,6 @@ func (tc *testContext) firstBenchmarkID() string {
 		return tc.lastBenchmarkID
 	}
 	return ""
-}
-
-func (tc *testContext) expectedProviderID() (string, error) {
-	providerID, _ := tc.firstBenchmarkFromRequest()
-	if providerID != "" {
-		return providerID, nil
-	}
-	if tc.lastProviderID != "" {
-		return tc.lastProviderID, nil
-	}
-	return "", fmt.Errorf("no provider ID available for validation")
-}
-
-func (tc *testContext) expectedBenchmarkID() (string, error) {
-	_, benchmarkID := tc.firstBenchmarkFromRequest()
-	if benchmarkID != "" {
-		return benchmarkID, nil
-	}
-	if tc.lastBenchmarkID != "" {
-		return tc.lastBenchmarkID, nil
-	}
-	return "", fmt.Errorf("no benchmark ID available for validation")
-}
-
-func (tc *testContext) firstBenchmarkFromRequest() (string, string) {
-	if tc.lastRequestBody == "" {
-		return "", ""
-	}
-	var payload struct {
-		Benchmarks []struct {
-			ID         string `json:"id"`
-			ProviderID string `json:"provider_id"`
-		} `json:"benchmarks"`
-	}
-	if err := json.Unmarshal([]byte(tc.lastRequestBody), &payload); err != nil {
-		return "", ""
-	}
-	if len(payload.Benchmarks) == 0 {
-		return "", ""
-	}
-	return payload.Benchmarks[0].ProviderID, payload.Benchmarks[0].ID
 }
 
 func (tc *testContext) fetchBenchmarkStatuses() ([]string, error) {

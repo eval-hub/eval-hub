@@ -69,7 +69,7 @@ func TestFeatures(t *testing.T) {
 
 func splitPaths(raw string) []string {
 	parts := strings.FieldsFunc(raw, func(r rune) bool {
-		return r == ',' || r == ';' || r == ':'
+		return r == ',' || r == ';'
 	})
 	paths := make([]string, 0, len(parts))
 	for _, part := range parts {

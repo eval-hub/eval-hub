@@ -7,7 +7,22 @@ Feature: Benchmarks Endpoint
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/benchmarks"
     Then the response code should be 200
-    And the response should contain the value "0|1|2|3|4|5|6|7|8|9" at path "total_count"
+    And the response should have schema as:
+    """
+      {
+        "properties": {
+          "total_count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1
+          }
+        },
+        "required": ["total_count", "items"]
+      }
+    """
 
   Scenario: Get benchmark for benchmark id
     Given the service is running

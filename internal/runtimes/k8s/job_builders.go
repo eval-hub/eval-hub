@@ -46,14 +46,17 @@ const (
 	defaultAllowPrivilegeEscalation = false
 	//defaultRunAsUser                = int64(1000)
 	//defaultRunAsGroup               = int64(1000)
-	labelAppKey         = "app"
-	labelComponentKey   = "component"
-	labelJobIDKey       = "job_id"
-	labelProviderIDKey  = "provider_id"
-	labelBenchmarkIDKey = "benchmark_id"
-	labelAppValue       = "evalhub"
-	labelComponentValue = "evaluation-job"
-	capabilityDropAll   = "ALL"
+	labelAppKey              = "app"
+	labelComponentKey        = "component"
+	labelJobIDKey            = "job_id"
+	labelProviderIDKey       = "provider_id"
+	labelBenchmarkIDKey      = "benchmark_id"
+	labelAppValue            = "evalhub"
+	labelComponentValue      = "evaluation-job"
+	capabilityDropAll        = "ALL"
+	annotationJobIDKey       = "eval-hub.github.io/job_id"
+	annotationProviderIDKey  = "eval-hub.github.io/provider_id"
+	annotationBenchmarkIDKey = "eval-hub.github.io/benchmark_id"
 )
 
 var (
@@ -131,12 +134,14 @@ func shortenJobID(jobID string, length int) string {
 
 func buildConfigMap(cfg *jobConfig) *corev1.ConfigMap {
 	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID)
+	annotations := jobAnnotations(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	name := configMapName(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: cfg.namespace,
-			Labels:    labels,
+			Name:        name,
+			Namespace:   cfg.namespace,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Data: map[string]string{
 			jobSpecFileName: cfg.jobSpecJSON,
@@ -149,6 +154,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 		return nil, fmt.Errorf("adapter image is required")
 	}
 	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID)
+	annotations := jobAnnotations(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	jobName := jobName(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	configMap := configMapName(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 
@@ -251,16 +257,18 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      jobName,
-			Namespace: cfg.namespace,
-			Labels:    labels,
+			Name:        jobName,
+			Namespace:   cfg.namespace,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit:            &backoff,
 			TTLSecondsAfterFinished: &ttl,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
+					Labels:      labels,
+					Annotations: annotations,
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy: corev1.RestartPolicyNever,
@@ -488,5 +496,13 @@ func jobLabels(jobID, providerID, benchmarkID string) map[string]string {
 		labelJobIDKey:       sanitizeLabelValue(jobID),
 		labelProviderIDKey:  sanitizeLabelValue(providerID),
 		labelBenchmarkIDKey: sanitizeLabelValue(benchmarkID),
+	}
+}
+
+func jobAnnotations(jobID, providerID, benchmarkID string) map[string]string {
+	return map[string]string{
+		annotationJobIDKey:       jobID,
+		annotationProviderIDKey:  providerID,
+		annotationBenchmarkIDKey: benchmarkID,
 	}
 }

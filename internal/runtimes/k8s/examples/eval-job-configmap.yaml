@@ -24,10 +24,10 @@ data:
         "name": "example-model"
       },
       "num_examples": 50,
-    "benchmark_config": {
-      "max_tokens": 128,
-      "temperature": 0.2
-    },
+      "benchmark_config": {
+        "max_tokens": 128,
+        "temperature": 0.2
+      },
       "experiment_name": "eval-experiment",
       "tags": [
         {
