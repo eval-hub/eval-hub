@@ -12,10 +12,15 @@ When the `SERVER_URL` environment variable is set, the tests will run against a 
 
 ```bash
 export SERVER_URL="https://api.example.com"
-go test ./tests/features/...
 ```
 
 The `SERVER_URL` should be a fully qualified URL (e.g., `http://localhost:8080` or `https://api.example.com`).
+
+If the remote server requires authentication, set:
+
+```bash
+export AUTH_TOKEN="your-token"
+```
 
 ### Model Overrides (Required)
 
@@ -29,6 +34,12 @@ Example:
 ```bash
 export MODEL_URL="http://granite-llm-metrics.prabhu.svc.cluster.local:8080/v1"
 export MODEL_NAME="granite-llm"
+```
+
+Run all feature tests:
+
+```bash
+go test ./tests/features/...
 ```
 
 ### Local Server Mode (Default)

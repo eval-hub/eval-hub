@@ -228,9 +228,9 @@ Env vars for running against a cluster:
 - `SERVER_URL`
 - `AUTH_TOKEN`
 
-Model overrides (required):
-- `MODEL_URL` (defaults to `http://test.com`)
-- `MODEL_NAME` (defaults to `test`)
+Model overrides (optional):
+- `MODEL_URL` (defaults to `http://test.com` if unset)
+- `MODEL_NAME` (defaults to `test` if unset)
 
 Run FVT tests:
 ```bash

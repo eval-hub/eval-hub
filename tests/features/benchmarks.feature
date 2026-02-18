@@ -4,6 +4,7 @@ Feature: Benchmarks Endpoint
   So that I discover the service capabilities
 
   Scenario: Get all benchmarks
+    # Precondition: test environment has at least one benchmark.
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/benchmarks"
     Then the response code should be 200
