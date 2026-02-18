@@ -14,7 +14,7 @@
   },
   "benchmarks": [
     {
-      "id": "mmlu",
+      "id": "arc_easy",
       "provider_id": "lm_evaluation_harness",
       "parameters": {
         "max_tokens": 128

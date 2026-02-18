@@ -13,9 +13,12 @@ These tests validate Kubernetes resources created by eval-hub in a real cluster.
 - Access to the Kubernetes cluster where resources are created (read-only is sufficient)
 
 Required env vars:
-- `SERVICE_URL` (API base URL)
+- `SERVER_URL` (API base URL)
 - `KUBERNETES_NAMESPACE`
 - `AUTH_TOKEN`
+- `KUBECONFIG` (required for cluster access)
+
+If any required env var is missing, the tests are skipped.
 
 Optional:
 - `SKIP_TLS_VERIFY=true` for self-signed TLS

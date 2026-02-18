@@ -1,0 +1,14 @@
+{
+  "model": {
+    "url": "http://test.com",
+    "name": "test"
+  },
+  "benchmarks": [
+    {
+      "id": "arc_easy",
+      "parameters": {
+        "num_examples": 10
+      }
+    }
+  ]
+}

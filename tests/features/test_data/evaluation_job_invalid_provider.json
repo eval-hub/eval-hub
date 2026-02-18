@@ -1,0 +1,12 @@
+{
+  "model": {
+    "url": "{{env:MODEL_URL|http://test.com}}",
+    "name": "{{env:MODEL_NAME|test}}"
+  },
+  "benchmarks": [
+    {
+      "id": "arc_easy",
+      "provider_id": "unknown_provider"
+    }
+  ]
+}

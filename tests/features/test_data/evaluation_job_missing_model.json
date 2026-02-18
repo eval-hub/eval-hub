@@ -1,0 +1,13 @@
+{
+  "benchmarks": [
+    {
+      "id": "arc_easy",
+      "provider_id": "garak",
+      "parameters": {
+        "num_fewshot": 3,
+        "limit": 5,
+        "tokenizer": "google/flan-t5-small"
+      }
+    }
+  ]
+}
