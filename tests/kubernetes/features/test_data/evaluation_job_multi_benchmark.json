@@ -5,7 +5,7 @@
   },
   "benchmarks": [
     {
-      "id": "mmlu",
+      "id": "arc_easy",
       "provider_id": "lm_evaluation_harness",
       "parameters": {
         "num_examples": 50,
@@ -14,12 +14,12 @@
     },
     {
       "id": "hellaswag",
-      "provider_id": "lm_evaluation_harness",
+      "provider_id": "lighteval",
       "parameters": {}
     },
     {
-      "id": "gsm8k",
-      "provider_id": "lm_evaluation_harness"
+      "id": "toxicity",
+      "provider_id": "garak"
     }
   ]
 }

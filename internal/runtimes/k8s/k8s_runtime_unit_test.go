@@ -115,7 +115,7 @@ func TestCreateBenchmarkResourcesSetsConfigMapOwner(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	cmName := configMapName(evaluation.Resource.ID, evaluation.Benchmarks[0].ID)
+	cmName := configMapName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID)
 	cm, err := clientset.CoreV1().ConfigMaps(defaultNamespace).Get(context.Background(), cmName, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("expected configmap to exist, got %v", err)
@@ -127,11 +127,68 @@ func TestCreateBenchmarkResourcesSetsConfigMapOwner(t *testing.T) {
 	if owner.Kind != "Job" || owner.APIVersion != "batch/v1" {
 		t.Fatalf("expected owner to be batch/v1 Job, got %s %s", owner.APIVersion, owner.Kind)
 	}
-	if owner.Name != jobName(evaluation.Resource.ID, evaluation.Benchmarks[0].ID) {
+	if owner.Name != jobName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID) {
 		t.Fatalf("expected owner name to match job name, got %q", owner.Name)
 	}
 	if owner.Controller == nil || !*owner.Controller {
 		t.Fatalf("expected owner reference to be controller")
+	}
+}
+
+func TestCreateBenchmarkResourcesSetsAnnotations(t *testing.T) {
+	t.Setenv("SERVICE_URL", "http://service.example")
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+
+	clientset := fake.NewSimpleClientset()
+	runtime := &K8sRuntime{
+		logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper:    &KubernetesHelper{clientset: clientset},
+		providers: sampleProviders(providerID),
+	}
+
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0])
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	cmName := configMapName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID)
+	cm, err := clientset.CoreV1().ConfigMaps(defaultNamespace).Get(context.Background(), cmName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("expected configmap to exist, got %v", err)
+	}
+	if cm.Annotations[annotationJobIDKey] != evaluation.Resource.ID {
+		t.Fatalf("expected configmap job_id annotation %q, got %q", evaluation.Resource.ID, cm.Annotations[annotationJobIDKey])
+	}
+	if cm.Annotations[annotationProviderIDKey] != evaluation.Benchmarks[0].ProviderID {
+		t.Fatalf("expected configmap provider_id annotation %q, got %q", evaluation.Benchmarks[0].ProviderID, cm.Annotations[annotationProviderIDKey])
+	}
+	if cm.Annotations[annotationBenchmarkIDKey] != evaluation.Benchmarks[0].ID {
+		t.Fatalf("expected configmap benchmark_id annotation %q, got %q", evaluation.Benchmarks[0].ID, cm.Annotations[annotationBenchmarkIDKey])
+	}
+
+	jobName := jobName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID)
+	job, err := clientset.BatchV1().Jobs(defaultNamespace).Get(context.Background(), jobName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("expected job to exist, got %v", err)
+	}
+	if job.Annotations[annotationJobIDKey] != evaluation.Resource.ID {
+		t.Fatalf("expected job job_id annotation %q, got %q", evaluation.Resource.ID, job.Annotations[annotationJobIDKey])
+	}
+	if job.Annotations[annotationProviderIDKey] != evaluation.Benchmarks[0].ProviderID {
+		t.Fatalf("expected job provider_id annotation %q, got %q", evaluation.Benchmarks[0].ProviderID, job.Annotations[annotationProviderIDKey])
+	}
+	if job.Annotations[annotationBenchmarkIDKey] != evaluation.Benchmarks[0].ID {
+		t.Fatalf("expected job benchmark_id annotation %q, got %q", evaluation.Benchmarks[0].ID, job.Annotations[annotationBenchmarkIDKey])
+	}
+	if job.Spec.Template.Annotations[annotationJobIDKey] != evaluation.Resource.ID {
+		t.Fatalf("expected pod job_id annotation %q, got %q", evaluation.Resource.ID, job.Spec.Template.Annotations[annotationJobIDKey])
+	}
+	if job.Spec.Template.Annotations[annotationProviderIDKey] != evaluation.Benchmarks[0].ProviderID {
+		t.Fatalf("expected pod provider_id annotation %q, got %q", evaluation.Benchmarks[0].ProviderID, job.Spec.Template.Annotations[annotationProviderIDKey])
+	}
+	if job.Spec.Template.Annotations[annotationBenchmarkIDKey] != evaluation.Benchmarks[0].ID {
+		t.Fatalf("expected pod benchmark_id annotation %q, got %q", evaluation.Benchmarks[0].ID, job.Spec.Template.Annotations[annotationBenchmarkIDKey])
 	}
 }
 
@@ -156,7 +213,7 @@ func TestCreateBenchmarkResourcesDeletesConfigMapOnJobFailure(t *testing.T) {
 		t.Fatalf("expected error, got nil")
 	}
 
-	cmName := configMapName(evaluation.Resource.ID, evaluation.Benchmarks[0].ID)
+	cmName := configMapName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID)
 	_, err = clientset.CoreV1().ConfigMaps(defaultNamespace).Get(context.Background(), cmName, metav1.GetOptions{})
 	if err == nil || !apierrors.IsNotFound(err) {
 		t.Fatalf("expected configmap to be deleted, got %v", err)

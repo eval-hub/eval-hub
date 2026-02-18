@@ -1,0 +1,14 @@
+{
+  "model": {
+    "url": "http://test.com",
+    "name": "test"
+  },
+  "benchmarks": [
+    {
+      "provider_id": "lm_evaluation_harness",
+      "parameters": {
+        "num_examples": 10
+      }
+    }
+  ]
+}
