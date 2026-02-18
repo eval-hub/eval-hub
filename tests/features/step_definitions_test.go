@@ -561,19 +561,15 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 			if id == "" {
 				return logError(fmt.Errorf("no ID found in path %s", endpoint))
 			}
-<<<<<<< HEAD
-			tc.removeAsset(assetName, id)
-=======
 			parsedURL, err := url.Parse(endpoint)
 			if err != nil {
 				return logError(fmt.Errorf("failed to parse endpoint %s: %w", endpoint, err))
 			}
-			if parsedURL.Query().Get("hard_delete") == "true" {
+			if assetName == "evaluations" && parsedURL.Query().Get("hard_delete") == "true" {
+				tc.removeAsset(assetName, id)
+			} else {
 				tc.removeAsset(assetName, id)
 			}
-		default:
-			// nothing to do here
->>>>>>> 65b9af30a3f913eaf840cc82e945f77bc61266b0
 		}
 	}
 

@@ -186,6 +186,10 @@ func createListEntitiesStatement(driver, tableName string, limit, offset int, st
 	return query, args, nil
 }
 
+// CreateUpdateEvaluationStatement returns a driver-specific UPDATE statement for the evaluations table,
+// setting only the non-empty fields (status, entity) and updated_at, filtered by id.
+// If status is empty, the query does not set status; if entityJSON is empty, the query does not set entity.
+// Returns the query, args in SET order then id, and an optional error.
 func CreateUpdateEvaluationStatement(driver, tableName, id string, status api.OverallState, entityJSON string) (query string, args []any, err error) {
 	quotedTable, quotedID, setParts, argsList := tableAndArgsList(driver, tableName, status, entityJSON, id)
 	return createUpdateStatement(driver, quotedTable, quotedID, setParts, argsList)
@@ -196,12 +200,7 @@ func CreateUpdateCollectionStatement(driver, tableName, id string, entityJSON st
 	return createUpdateStatement(driver, quotedTable, quotedID, setParts, argsList)
 }
 
-// CreateUpdateEvaluationStatement returns a driver-specific UPDATE statement for the evaluations table,
-// setting only the non-empty fields (status, entity) and updated_at, filtered by id.
-// If status is empty, the query does not set status; if entityJSON is empty, the query does not set entity.
-// Returns the query, args in SET order then id, and an optional error.
 func createUpdateStatement(driver, quotedTable, quotedID string, setParts []string, argsList []any) (query string, args []any, err error) {
-
 	switch driver {
 	case POSTGRES_DRIVER:
 		return createUpdateStatementForPostgres(setParts, argsList, query, quotedTable, quotedID, args)
