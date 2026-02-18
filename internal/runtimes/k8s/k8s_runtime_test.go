@@ -288,6 +288,99 @@ func TestCreateBenchmarkResourcesDuplicateBenchmarkIDCollides(t *testing.T) {
 	}
 }
 
+func TestCreateBenchmarkResourcesSetsAnnotationsIntegration(t *testing.T) {
+	// Integration test: verify annotations on Job/ConfigMap/Pod.
+	if os.Getenv("K8S_INTEGRATION_TEST") != "1" {
+		t.Skip("set K8S_INTEGRATION_TEST=1 to run against a real cluster")
+	}
+	t.Setenv("SERVICE_URL", "http://eval-hub")
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	helper, err := NewKubernetesHelper()
+	if err != nil {
+		t.Fatalf("failed to create kubernetes helper: %v", err)
+	}
+	runtime := &K8sRuntime{
+		logger: logger,
+		helper: helper,
+		providers: map[string]api.ProviderResource{
+			"lm_evaluation_harness": {
+				ID: "lm_evaluation_harness",
+				Runtime: &api.Runtime{
+					K8s: &api.K8sRuntime{
+						Image: "docker.io/library/busybox:1.36",
+					},
+				},
+			},
+		},
+	}
+
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: uuid.NewString()},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.BenchmarkConfig{
+				{
+					Ref:        api.Ref{ID: "arc_easy"},
+					ProviderID: "lm_evaluation_harness",
+				},
+			},
+		},
+	}
+
+	jobName := jobName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID)
+	configMapName := configMapName(evaluation.Resource.ID, evaluation.Benchmarks[0].ProviderID, evaluation.Benchmarks[0].ID)
+	t.Cleanup(func() {
+		_ = runtime.helper.DeleteJob(context.Background(), defaultNamespace, jobName, metav1.DeleteOptions{})
+		_ = runtime.helper.DeleteConfigMap(context.Background(), defaultNamespace, configMapName)
+	})
+
+	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[0]); err != nil {
+		t.Fatalf("unexpected error creating benchmark resources: %v", err)
+	}
+
+	cm, err := helper.clientset.CoreV1().ConfigMaps(defaultNamespace).Get(context.Background(), configMapName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("expected configmap to exist, got %v", err)
+	}
+	if cm.Annotations[annotationJobIDKey] != evaluation.Resource.ID {
+		t.Fatalf("expected configmap job_id annotation %q, got %q", evaluation.Resource.ID, cm.Annotations[annotationJobIDKey])
+	}
+	if cm.Annotations[annotationProviderIDKey] != evaluation.Benchmarks[0].ProviderID {
+		t.Fatalf("expected configmap provider_id annotation %q, got %q", evaluation.Benchmarks[0].ProviderID, cm.Annotations[annotationProviderIDKey])
+	}
+	if cm.Annotations[annotationBenchmarkIDKey] != evaluation.Benchmarks[0].ID {
+		t.Fatalf("expected configmap benchmark_id annotation %q, got %q", evaluation.Benchmarks[0].ID, cm.Annotations[annotationBenchmarkIDKey])
+	}
+
+	job, err := helper.clientset.BatchV1().Jobs(defaultNamespace).Get(context.Background(), jobName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("expected job to exist, got %v", err)
+	}
+	if job.Annotations[annotationJobIDKey] != evaluation.Resource.ID {
+		t.Fatalf("expected job job_id annotation %q, got %q", evaluation.Resource.ID, job.Annotations[annotationJobIDKey])
+	}
+	if job.Annotations[annotationProviderIDKey] != evaluation.Benchmarks[0].ProviderID {
+		t.Fatalf("expected job provider_id annotation %q, got %q", evaluation.Benchmarks[0].ProviderID, job.Annotations[annotationProviderIDKey])
+	}
+	if job.Annotations[annotationBenchmarkIDKey] != evaluation.Benchmarks[0].ID {
+		t.Fatalf("expected job benchmark_id annotation %q, got %q", evaluation.Benchmarks[0].ID, job.Annotations[annotationBenchmarkIDKey])
+	}
+	if job.Spec.Template.Annotations[annotationJobIDKey] != evaluation.Resource.ID {
+		t.Fatalf("expected pod job_id annotation %q, got %q", evaluation.Resource.ID, job.Spec.Template.Annotations[annotationJobIDKey])
+	}
+	if job.Spec.Template.Annotations[annotationProviderIDKey] != evaluation.Benchmarks[0].ProviderID {
+		t.Fatalf("expected pod provider_id annotation %q, got %q", evaluation.Benchmarks[0].ProviderID, job.Spec.Template.Annotations[annotationProviderIDKey])
+	}
+	if job.Spec.Template.Annotations[annotationBenchmarkIDKey] != evaluation.Benchmarks[0].ID {
+		t.Fatalf("expected pod benchmark_id annotation %q, got %q", evaluation.Benchmarks[0].ID, job.Spec.Template.Annotations[annotationBenchmarkIDKey])
+	}
+}
+
 func TestRunEvaluationJobReturnsNilOnCreateFailure(t *testing.T) {
 	// Unit test: RunEvaluationJob returns immediately; create failures happen in goroutines.
 	t.Setenv("SERVICE_URL", "http://eval-hub")

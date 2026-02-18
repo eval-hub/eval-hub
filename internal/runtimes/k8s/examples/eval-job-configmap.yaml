@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: eval-job-001-mmlu-spec
+  name: eval-job-lm-evaluation-harness-mmlu-001-405ef22a-spec
   namespace: evalhub
   labels:
     app: "evalhub"
@@ -9,10 +9,15 @@ metadata:
     job_id: "001"
     provider_id: "lm_evaluation_harness"
     benchmark_id: "mmlu"
+  annotations:
+    eval-hub.github.io/job_id: "001"
+    eval-hub.github.io/provider_id: "lm_evaluation_harness"
+    eval-hub.github.io/benchmark_id: "mmlu"
 data:
   job.json: |
     {
       "id": "001",
+      "provider_id": "lm_evaluation_harness",
       "benchmark_id": "mmlu",
       "model": {
         "url": "http://model-server.models.svc.cluster.local:8000/v1",

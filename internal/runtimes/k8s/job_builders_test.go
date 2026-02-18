@@ -24,6 +24,16 @@ func TestBuildConfigMap(t *testing.T) {
 	if configMap.Data[jobSpecFileName] != "{}" {
 		t.Fatalf("expected job spec data to be set")
 	}
+	annotations := configMap.Annotations
+	if annotations[annotationJobIDKey] != cfg.jobID {
+		t.Fatalf("expected job_id annotation %q, got %q", cfg.jobID, annotations[annotationJobIDKey])
+	}
+	if annotations[annotationProviderIDKey] != cfg.providerID {
+		t.Fatalf("expected provider_id annotation %q, got %q", cfg.providerID, annotations[annotationProviderIDKey])
+	}
+	if annotations[annotationBenchmarkIDKey] != cfg.benchmarkID {
+		t.Fatalf("expected benchmark_id annotation %q, got %q", cfg.benchmarkID, annotations[annotationBenchmarkIDKey])
+	}
 }
 
 func TestBuildK8sNameSanitizes(t *testing.T) {
@@ -108,6 +118,43 @@ func TestBuildJobSecurityContext(t *testing.T) {
 	}
 	if container.SecurityContext.SeccompProfile == nil || container.SecurityContext.SeccompProfile.Type == "" {
 		t.Fatalf("expected seccomp profile to be set")
+	}
+}
+
+func TestBuildJobAnnotations(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:        "job-123",
+		namespace:    "default",
+		providerID:   "provider-1",
+		benchmarkID:  "bench-1",
+		adapterImage: "adapter:latest",
+		defaultEnv:   []api.EnvVar{},
+	}
+
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	if job.Annotations[annotationJobIDKey] != cfg.jobID {
+		t.Fatalf("expected job_id annotation %q, got %q", cfg.jobID, job.Annotations[annotationJobIDKey])
+	}
+	if job.Annotations[annotationProviderIDKey] != cfg.providerID {
+		t.Fatalf("expected provider_id annotation %q, got %q", cfg.providerID, job.Annotations[annotationProviderIDKey])
+	}
+	if job.Annotations[annotationBenchmarkIDKey] != cfg.benchmarkID {
+		t.Fatalf("expected benchmark_id annotation %q, got %q", cfg.benchmarkID, job.Annotations[annotationBenchmarkIDKey])
+	}
+
+	podAnnotations := job.Spec.Template.Annotations
+	if podAnnotations[annotationJobIDKey] != cfg.jobID {
+		t.Fatalf("expected pod job_id annotation %q, got %q", cfg.jobID, podAnnotations[annotationJobIDKey])
+	}
+	if podAnnotations[annotationProviderIDKey] != cfg.providerID {
+		t.Fatalf("expected pod provider_id annotation %q, got %q", cfg.providerID, podAnnotations[annotationProviderIDKey])
+	}
+	if podAnnotations[annotationBenchmarkIDKey] != cfg.benchmarkID {
+		t.Fatalf("expected pod benchmark_id annotation %q, got %q", cfg.benchmarkID, podAnnotations[annotationBenchmarkIDKey])
 	}
 }
 
