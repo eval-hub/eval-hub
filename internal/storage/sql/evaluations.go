@@ -33,7 +33,7 @@ func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobResource) 
 	mlflowExperimentID := evaluation.Resource.MLFlowExperimentID
 
 	err := s.withTransaction("create evaluation job", jobID, func(txn *sql.Tx) error {
-		tenant := evaluation.Resource.Tenant
+		tenant := s.tenant
 
 		evaluationJSON, err := s.createEvaluationJobEntity(evaluation)
 		if err != nil {
