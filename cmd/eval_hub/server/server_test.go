@@ -91,12 +91,9 @@ func TestServerSetupRoutes(t *testing.T) {
 		// Benchmarks
 		{http.MethodGet, "/api/v1/evaluations/benchmarks", http.StatusOK, ""},
 		// Collections
-		{http.MethodGet, "/api/v1/evaluations/collections", http.StatusNotImplemented, ""},
-		{http.MethodPost, "/api/v1/evaluations/collections", http.StatusNotImplemented, ""},
-		{http.MethodGet, "/api/v1/evaluations/collections/test-collection", http.StatusNotImplemented, ""},
-		{http.MethodPut, "/api/v1/evaluations/collections/test-collection", http.StatusNotImplemented, ""},
-		{http.MethodPatch, "/api/v1/evaluations/collections/test-collection", http.StatusNotImplemented, ""},
-		{http.MethodDelete, "/api/v1/evaluations/collections/test-collection", http.StatusNotImplemented, ""},
+		{http.MethodPost, "/api/v1/evaluations/collections", http.StatusAccepted, `{"name": "test-benchmarks-collection", "description": "Collection of benchmarks for FVT", "benchmarks": [{"id": "arc_easy", "provider_id": "lm_evaluation_harness"}]}`},
+		{http.MethodGet, "/api/v1/evaluations/collections", http.StatusOK, ""},
+		{http.MethodGet, "/api/v1/evaluations/collections/test-collection", http.StatusNotFound, ""},
 		// Providers
 		{http.MethodGet, "/api/v1/evaluations/providers", http.StatusOK, ""},
 		// Error cases

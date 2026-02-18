@@ -159,18 +159,18 @@ func createListEntitiesStatement(driver, tableName string, limit, offset int, st
 	switch driver + tableName {
 	case POSTGRES_DRIVER + TABLE_EVALUATIONS:
 		if statusFilter != "" {
-			query = fmt.Sprintf(`SELECT id, created_at, updated_at, status, experiment_id, entity FROM %s WHERE status = $1 ORDER BY id DESC LIMIT $2 OFFSET $3;`, quotedTable)
+			query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s WHERE status = $1 ORDER BY id DESC LIMIT $2 OFFSET $3;`, quotedTable)
 			args = []any{statusFilter, limit, offset}
 		} else {
-			query = fmt.Sprintf(`SELECT id, created_at, updated_at, status, experiment_id, entity FROM %s ORDER BY id DESC LIMIT $1 OFFSET $2;`, quotedTable)
+			query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s ORDER BY id DESC LIMIT $1 OFFSET $2;`, quotedTable)
 			args = []any{limit, offset}
 		}
 	case SQLITE_DRIVER + TABLE_EVALUATIONS:
 		if statusFilter != "" {
-			query = fmt.Sprintf(`SELECT id, created_at, updated_at, status, experiment_id, entity FROM %s WHERE status = ? ORDER BY id DESC LIMIT ? OFFSET ?;`, quotedTable)
+			query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s WHERE status = ? ORDER BY id DESC LIMIT ? OFFSET ?;`, quotedTable)
 			args = []any{statusFilter, limit, offset}
 		} else {
-			query = fmt.Sprintf(`SELECT id, created_at, updated_at, status, experiment_id, entity FROM %s ORDER BY id DESC LIMIT ? OFFSET ?;`, quotedTable)
+			query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s ORDER BY id DESC LIMIT ? OFFSET ?;`, quotedTable)
 			args = []any{limit, offset}
 		}
 	case POSTGRES_DRIVER + TABLE_COLLECTIONS:
