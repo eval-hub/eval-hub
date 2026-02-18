@@ -152,7 +152,11 @@ func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.Pr
 		}
 
 		providerConfigs[providerConfig.ID] = api.ProviderResource{
-			Resource:               api.Resource{ID: providerConfig.ID},
+			Resource: api.Resource{
+				ID:       providerConfig.ID,
+				ReadOnly: true,
+				Owner:    "system",
+			},
 			ProviderConfigInternal: providerConfig.ProviderConfigInternal,
 		}
 		logger.Info("Provider loaded", "provider_id", providerConfig.ID)

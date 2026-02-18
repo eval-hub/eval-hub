@@ -836,6 +836,12 @@ components:
           type: string
           format: date-time
           description: Last update timestamp
+        read_only:
+          type: boolean
+          description: Whether the resource is read-only
+        owner:
+          type: string
+          description: Owner of the resource
     MessageInfo:
       type: object
       description: Message from a downstream service

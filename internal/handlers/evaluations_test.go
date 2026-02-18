@@ -116,7 +116,7 @@ func TestHandleCreateEvaluationMarksFailedWhenRuntimeErrors(t *testing.T) {
 	}
 
 	h := handlers.New(storage, validate, runtime, nil, providerConfigs, nil)
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
 
 	req := &bodyRequest{
 		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
@@ -160,7 +160,7 @@ func TestHandleCreateEvaluationSucceedsWhenRuntimeOk(t *testing.T) {
 		},
 	}
 	h := handlers.New(storage, validate, runtime, nil, providerConfigs, nil)
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-2", logger, time.Second)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-2", logger, time.Second, "test-user", "test-tenant")
 
 	req := &bodyRequest{
 		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
@@ -195,7 +195,7 @@ func TestHandleCancelEvaluationWithSoftDeleteDoesNotCleanupResources(t *testing.
 	runtime := &fakeRuntime{}
 	validate := validator.New()
 	h := handlers.New(storage, validate, runtime, nil, nil, nil)
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-3", logger, time.Second)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-3", logger, time.Second, "test-user", "test-tenant")
 
 	req := &deleteRequest{
 		MockRequest: createMockRequest("DELETE", "/api/v1/evaluations/jobs/"+jobID),
@@ -228,7 +228,7 @@ func TestHandleDeleteEvaluationCleansUpResources(t *testing.T) {
 	runtime := &fakeRuntime{}
 	validate := validator.New()
 	h := handlers.New(storage, validate, runtime, nil, nil, nil)
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-4", logger, time.Second)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-4", logger, time.Second, "test-user", "test-tenant")
 
 	req := &deleteRequest{
 		MockRequest: createMockRequest("DELETE", "/api/v1/evaluations/jobs/"+jobID),
@@ -262,7 +262,7 @@ func TestHandleCreateEvaluationRejectsMissingBenchmarkID(t *testing.T) {
 		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
 		body:        []byte(`{"model":{"url":"http://test.com","name":"test"},"benchmarks":[{"provider_id":"garak"}]}`),
 	}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-3", logger, time.Second)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-3", logger, time.Second, "test-user", "test-tenant")
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
 
@@ -287,7 +287,7 @@ func TestHandleCreateEvaluationRejectsMissingProviderID(t *testing.T) {
 		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
 		body:        []byte(`{"model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1"}]}`),
 	}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-4", logger, time.Second)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-4", logger, time.Second, "test-user", "test-tenant")
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
 
@@ -317,7 +317,7 @@ func TestHandleCreateEvaluationRejectsInvalidProviderID(t *testing.T) {
 		},
 	}
 	h := handlers.New(storage, validate, runtime, nil, providerConfigs, nil)
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-invalid-provider", logger, time.Second)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-invalid-provider", logger, time.Second, "test-user", "test-tenant")
 
 	req := &bodyRequest{
 		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
@@ -349,7 +349,7 @@ func TestHandleCreateEvaluationRejectsInvalidBenchmarkID(t *testing.T) {
 		},
 	}
 	h := handlers.New(storage, validate, runtime, nil, providerConfigs, nil)
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-invalid-benchmark", logger, time.Second)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-invalid-benchmark", logger, time.Second, "test-user", "test-tenant")
 
 	req := &bodyRequest{
 		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),

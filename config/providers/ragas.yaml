@@ -1,7 +1,6 @@
 id: ragas
 name: RAGAS
 description: Retrieval Augmented Generation Assessment framework
-type: system
 runtime:
   k8s:
     image: quay.io/evalhub/ragas:latest

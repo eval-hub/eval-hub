@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
-	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/go-viper/mapstructure/v2"
 )
 
@@ -130,10 +129,6 @@ func (s *SQLStorage) ensureSchema() error {
 	}
 
 	return nil
-}
-
-func (s *SQLStorage) getTenant() (api.Tenant, error) {
-	return "TODO", nil
 }
 
 func (s *SQLStorage) Close() error {
