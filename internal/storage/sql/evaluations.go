@@ -131,11 +131,12 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 	// Query the database
 	var dbID string
 	var createdAt, updatedAt time.Time
+	var tenantID string
 	var statusStr string
 	var experimentID string
 	var entityJSON string
 
-	err = s.queryRow(txn, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &statusStr, &experimentID, &entityJSON)
+	err = s.queryRow(txn, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &tenantID, &statusStr, &experimentID, &entityJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
@@ -198,11 +199,12 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter strin
 	for rows.Next() {
 		var dbID string
 		var createdAt, updatedAt time.Time
+		var tenantID string
 		var statusStr string
 		var experimentID string
 		var entityJSON string
 
-		err = rows.Scan(&dbID, &createdAt, &updatedAt, &statusStr, &experimentID, &entityJSON)
+		err = rows.Scan(&dbID, &createdAt, &updatedAt, &tenantID, &statusStr, &experimentID, &entityJSON)
 		if err != nil {
 			s.logger.Error("Failed to scan evaluation job row", "error", err)
 			return nil, se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", dbID, "Error", err.Error())
