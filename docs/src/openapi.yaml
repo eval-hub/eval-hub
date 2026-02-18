@@ -17,8 +17,6 @@ security: []
 tags:
   - name: Evaluations
     description: Evaluation job management endpoints
-  - name: Benchmarks
-    description: Benchmark management endpoints
   - name: Collections
     description: Benchmark collection management endpoints
     x-internal: true
@@ -51,8 +49,6 @@ paths:
     $ref: paths/api_v1_evaluations_providers.yaml
   /api/v1/evaluations/providers/{id}:
     $ref: paths/api_v1_evaluations_providers_{id}.yaml
-  /api/v1/evaluations/benchmarks:
-    $ref: paths/api_v1_evaluations_benchmarks.yaml
   /api/v1/evaluations/collections:
     $ref: paths/api_v1_evaluations_collections.yaml
   /api/v1/evaluations/collections/{id}:

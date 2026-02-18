@@ -209,7 +209,12 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 		w.Error(err, ctx.RequestID)
 		return
 	}
-	res, err := storage.GetEvaluationJobs(limit, offset, statusFilter)
+
+	res, err := storage.GetEvaluationJobs(limit, offset, abstractions.QueryFilter{
+		Params: map[string]string{
+			"status_filter": statusFilter,
+		},
+	})
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return

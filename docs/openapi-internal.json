@@ -29,10 +29,6 @@
       "description": "Evaluation job management endpoints"
     },
     {
-      "name": "Benchmarks",
-      "description": "Benchmark management endpoints"
-    },
-    {
       "name": "Collections",
       "description": "Benchmark collection management endpoints",
       "x-internal": true
@@ -763,86 +759,6 @@
         "responses": {
           "204": {
             "description": "Successful Response"
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      }
-    },
-    "/api/v1/evaluations/benchmarks": {
-      "get": {
-        "tags": [
-          "Benchmarks"
-        ],
-        "summary": "List All Benchmarks",
-        "description": "List all available benchmarks across providers (similar to Llama Stack format).",
-        "operationId": "get_benchmarks",
-        "parameters": [
-          {
-            "name": "provider_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "Filter by provider ID",
-              "title": "Provider Id"
-            },
-            "description": "Filter by provider ID"
-          },
-          {
-            "name": "id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "Filter by benchmark ID",
-              "title": "Benchmark Id"
-            },
-            "description": "Filter by benchmark ID"
-          },
-          {
-            "name": "category",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "Filter by benchmark category",
-              "title": "Category"
-            },
-            "description": "Filter by benchmark category"
-          },
-          {
-            "name": "tags",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "Filter by tags (comma-separated)",
-              "title": "Tags"
-            },
-            "description": "Filter by tags (comma-separated)"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BenchmarkResourceList"
-                }
-              }
-            }
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -1735,10 +1651,6 @@
             "type": "string",
             "description": "Benchmark ID"
           },
-          "provider_id": {
-            "type": "string",
-            "description": "Provider ID"
-          },
           "name": {
             "type": "string",
             "description": "Benchmark name"
@@ -1772,6 +1684,12 @@
               "type": "string"
             },
             "description": "Tags"
+          },
+          "primary_score": {
+            "$ref": "#/components/schemas/PrimaryScore"
+          },
+          "pass_criteria": {
+            "$ref": "#/components/schemas/PassCriteria"
           }
         }
       },
@@ -1889,23 +1807,6 @@
           "op",
           "path"
         ]
-      },
-      "BenchmarkResourceList": {
-        "type": "object",
-        "description": "List of benchmarks",
-        "properties": {
-          "total_count": {
-            "type": "integer",
-            "description": "Total number of benchmarks"
-          },
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BenchmarkResource"
-            },
-            "description": "Benchmark resources"
-          }
-        }
       },
       "CollectionConfig": {
         "type": "object",

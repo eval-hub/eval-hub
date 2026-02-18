@@ -6,12 +6,25 @@ type ProviderConfig struct {
 	ProviderConfigInternal `mapstructure:",squash"`
 }
 
+type BenchmarkResource struct {
+	ID          string   `mapstructure:"id" yaml:"id" json:"id"`
+	Name        string   `mapstructure:"name" yaml:"name" json:"name"`
+	Description string   `mapstructure:"description" yaml:"description" json:"description"`
+	Category    string   `mapstructure:"category" yaml:"category" json:"category"`
+	Metrics     []string `mapstructure:"metrics" yaml:"metrics" json:"metrics"`
+	NumFewShot  int      `mapstructure:"num_few_shot" yaml:"num_few_shot" json:"num_few_shot"`
+	DatasetSize int      `mapstructure:"dataset_size" yaml:"dataset_size" json:"dataset_size"`
+	Tags        []string `mapstructure:"tags" yaml:"tags" json:"tags"`
+}
+
 type ProviderConfigInternal struct {
-	Name        string              `mapstructure:"name" yaml:"name" json:"name"`
-	Description string              `mapstructure:"description" yaml:"description" json:"description"`
-	Type        string              `mapstructure:"type" yaml:"type" json:"type"`
-	Benchmarks  []BenchmarkResource `mapstructure:"benchmarks" yaml:"benchmarks" json:"benchmarks"`
-	Runtime     *Runtime            `mapstructure:"runtime" yaml:"runtime" json:"runtime,omitempty"`
+	Name         string              `mapstructure:"name" yaml:"name" json:"name"`
+	Description  string              `mapstructure:"description" yaml:"description" json:"description"`
+	Type         string              `mapstructure:"type" yaml:"type" json:"type"`
+	Benchmarks   []BenchmarkResource `mapstructure:"benchmarks" yaml:"benchmarks" json:"benchmarks"`
+	Runtime      *Runtime            `mapstructure:"runtime" yaml:"runtime" json:"runtime,omitempty"`
+	PrimaryScore *PrimaryScore       `json:"primary_score,omitempty"`
+	PassCriteria *PassCriteria       `json:"pass_criteria,omitempty"`
 }
 
 type ProviderResource struct {

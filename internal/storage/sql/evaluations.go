@@ -156,7 +156,12 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 	return job, nil
 }
 
-func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter string) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
+func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, filter abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
+
+	statusFilter, ok := filter.Params["status_filter"]
+	if !ok {
+		statusFilter = ""
+	}
 	// Get total count (with status filter if provided)
 	countQuery, countArgs, err := createCountEntitiesStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, statusFilter)
 	if err != nil {
