@@ -185,6 +185,7 @@ func shortenJobID(jobID string, length int) string {
 
 func buildConfigMap(cfg *jobConfig) *corev1.ConfigMap {
 	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID)
+	annotations := jobAnnotations(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	name := configMapName(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	annotations := jobAnnotations(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	name := configMapName(cfg.jobID, cfg.providerID, cfg.benchmarkID)
