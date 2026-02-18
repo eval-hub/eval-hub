@@ -24,18 +24,6 @@ func TestBuildConfigMap(t *testing.T) {
 	if configMap.Data[jobSpecFileName] != "{}" {
 		t.Fatalf("expected job spec data to be set")
 	}
-}
-
-func TestBuildConfigMapAnnotations(t *testing.T) {
-	cfg := &jobConfig{
-		jobID:       "job-123",
-		namespace:   "default",
-		providerID:  "provider-1",
-		benchmarkID: "bench-1",
-		jobSpecJSON: "{}",
-	}
-
-	configMap := buildConfigMap(cfg)
 	annotations := configMap.Annotations
 	if annotations[annotationJobIDKey] != cfg.jobID {
 		t.Fatalf("expected job_id annotation %q, got %q", cfg.jobID, annotations[annotationJobIDKey])
