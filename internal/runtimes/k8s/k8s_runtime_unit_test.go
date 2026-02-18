@@ -59,7 +59,7 @@ func (f *fakeStorage) UpdateEvaluationJobStatus(_ string, _ api.OverallState, _ 
 func (f *fakeStorage) CreateCollection(_ *api.CollectionResource) error {
 	return nil
 }
-func (f *fakeStorage) GetCollection(_ string, _ bool) (*api.CollectionResource, error) {
+func (f *fakeStorage) GetCollection(_ string) (*api.CollectionResource, error) {
 	return nil, nil
 }
 func (f *fakeStorage) GetCollections(_ int, _ int) (*abstractions.QueryResults[api.CollectionResource], error) {

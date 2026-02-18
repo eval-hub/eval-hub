@@ -31,7 +31,7 @@ type Storage interface {
 
 	// Collection operations
 	CreateCollection(collection *api.CollectionResource) error
-	GetCollection(id string, summary bool) (*api.CollectionResource, error)
+	GetCollection(id string) (*api.CollectionResource, error)
 	GetCollections(limit int, offset int) (*QueryResults[api.CollectionResource], error)
 	UpdateCollection(collection *api.CollectionResource) error
 	DeleteCollection(id string) error

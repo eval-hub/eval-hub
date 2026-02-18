@@ -15,8 +15,11 @@ const SQLITE_INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (id, tenant_
 // PostgreSQL: use $1, $2 placeholders and RETURNING id clause
 const POSTGRES_INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (id, tenant_id, status, experiment_id, entity) VALUES ($1, $2, $3, $4, $5) RETURNING id;`
 
-// TODO: Add collection insert statement
-const INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (entity) VALUES (?);`
+// SQLite: use ? placeholders
+const SQLITE_INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (id, tenant_id, scope, entity) VALUES (?, ?, ?, ?);`
+
+// PostgreSQL: use $1, $2 placeholders and RETURNING id clause
+const POSTGRES_INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (id, tenant_id, scope, entity) VALUES ($1, $2, $3, $4) RETURNING id;`
 
 func getUnsupportedDriverError(driver string) error {
 	return fmt.Errorf("unsupported driver: %s", driver)
@@ -44,6 +47,11 @@ func createAddEntityStatement(driver, tableName string) (string, error) {
 	case SQLITE_DRIVER + TABLE_EVALUATIONS:
 		// SQLite: use ? placeholders
 		return SQLITE_INSERT_EVALUATION_STATEMENT, nil
+	case POSTGRES_DRIVER + TABLE_COLLECTIONS:
+		return POSTGRES_INSERT_COLLECTION_STATEMENT, nil
+	case SQLITE_DRIVER + TABLE_COLLECTIONS:
+		// SQLite: use ? placeholders
+		return SQLITE_INSERT_COLLECTION_STATEMENT, nil
 	default:
 		return "", getUnsupportedDriverError(driver)
 	}
@@ -61,12 +69,17 @@ func quoteIdentifier(_ /*driver*/ string, identifier string) string {
 func createGetEntityStatement(driver, tableName string) (string, error) {
 	quotedTable := quoteIdentifier(driver, tableName)
 
-	switch driver {
-	case POSTGRES_DRIVER:
-		return fmt.Sprintf(`SELECT id, created_at, updated_at, status, experiment_id, entity FROM %s WHERE id = $1;`, quotedTable), nil
-	case SQLITE_DRIVER:
+	switch driver + tableName {
+	case POSTGRES_DRIVER + TABLE_EVALUATIONS:
+		return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s WHERE id = $1;`, quotedTable), nil
+	case SQLITE_DRIVER + TABLE_EVALUATIONS:
 		// SQLite: use ? placeholder
-		return fmt.Sprintf(`SELECT id, created_at, updated_at, status, experiment_id, entity FROM %s WHERE id = ?;`, quotedTable), nil
+		return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s WHERE id = ?;`, quotedTable), nil
+	case POSTGRES_DRIVER + TABLE_COLLECTIONS:
+		return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, scope, entity FROM %s WHERE id = $1;`, quotedTable), nil
+	case SQLITE_DRIVER + TABLE_COLLECTIONS:
+		// SQLite: use ? placeholder
+		return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, scope, entity FROM %s WHERE id = ?;`, quotedTable), nil
 	default:
 		return "", getUnsupportedDriverError(driver)
 	}
@@ -143,8 +156,8 @@ func createListEntitiesStatement(driver, tableName string, limit, offset int, st
 	var query string
 	var args []any
 
-	switch driver {
-	case POSTGRES_DRIVER:
+	switch driver + tableName {
+	case POSTGRES_DRIVER + TABLE_EVALUATIONS:
 		if statusFilter != "" {
 			query = fmt.Sprintf(`SELECT id, created_at, updated_at, status, experiment_id, entity FROM %s WHERE status = $1 ORDER BY id DESC LIMIT $2 OFFSET $3;`, quotedTable)
 			args = []any{statusFilter, limit, offset}
@@ -152,7 +165,7 @@ func createListEntitiesStatement(driver, tableName string, limit, offset int, st
 			query = fmt.Sprintf(`SELECT id, created_at, updated_at, status, experiment_id, entity FROM %s ORDER BY id DESC LIMIT $1 OFFSET $2;`, quotedTable)
 			args = []any{limit, offset}
 		}
-	case SQLITE_DRIVER:
+	case SQLITE_DRIVER + TABLE_EVALUATIONS:
 		if statusFilter != "" {
 			query = fmt.Sprintf(`SELECT id, created_at, updated_at, status, experiment_id, entity FROM %s WHERE status = ? ORDER BY id DESC LIMIT ? OFFSET ?;`, quotedTable)
 			args = []any{statusFilter, limit, offset}
@@ -160,6 +173,12 @@ func createListEntitiesStatement(driver, tableName string, limit, offset int, st
 			query = fmt.Sprintf(`SELECT id, created_at, updated_at, status, experiment_id, entity FROM %s ORDER BY id DESC LIMIT ? OFFSET ?;`, quotedTable)
 			args = []any{limit, offset}
 		}
+	case POSTGRES_DRIVER + TABLE_COLLECTIONS:
+		query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, scope, entity FROM %s ORDER BY id DESC LIMIT $1 OFFSET $2;`, quotedTable)
+		args = []any{limit, offset}
+	case SQLITE_DRIVER + TABLE_COLLECTIONS:
+		query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, scope, entity FROM %s ORDER BY id DESC LIMIT ? OFFSET ?;`, quotedTable)
+		args = []any{limit, offset}
 	default:
 		return "", nil, getUnsupportedDriverError(driver)
 	}
@@ -167,11 +186,33 @@ func createListEntitiesStatement(driver, tableName string, limit, offset int, st
 	return query, args, nil
 }
 
+func CreateUpdateEvaluationStatement(driver, tableName, id string, status api.OverallState, entityJSON string) (query string, args []any, err error) {
+	quotedTable, quotedID, setParts, argsList := tableAndArgsList(driver, tableName, status, entityJSON, id)
+	return createUpdateStatement(driver, quotedTable, quotedID, setParts, argsList)
+}
+
+func CreateUpdateCollectionStatement(driver, tableName, id string, entityJSON string) (query string, args []any, err error) {
+	quotedTable, quotedID, setParts, argsList := tableAndArgsList(driver, tableName, "", entityJSON, id)
+	return createUpdateStatement(driver, quotedTable, quotedID, setParts, argsList)
+}
+
 // CreateUpdateEvaluationStatement returns a driver-specific UPDATE statement for the evaluations table,
 // setting only the non-empty fields (status, entity) and updated_at, filtered by id.
 // If status is empty, the query does not set status; if entityJSON is empty, the query does not set entity.
 // Returns the query, args in SET order then id, and an optional error.
-func CreateUpdateEvaluationStatement(driver, tableName, id string, status api.OverallState, entityJSON string) (query string, args []any, err error) {
+func createUpdateStatement(driver, quotedTable, quotedID string, setParts []string, argsList []any) (query string, args []any, err error) {
+
+	switch driver {
+	case POSTGRES_DRIVER:
+		return createUpdateStatementForPostgres(setParts, argsList, query, quotedTable, quotedID, args)
+	case SQLITE_DRIVER:
+		return createUpdateStatementForSQLite(setParts, argsList, query, quotedTable, quotedID, args)
+	default:
+		return "", nil, getUnsupportedDriverError(driver)
+	}
+}
+
+func tableAndArgsList(driver string, tableName string, status api.OverallState, entityJSON string, id string) (string, string, []string, []any) {
 	quotedTable := quoteIdentifier(driver, tableName)
 	quotedStatus := quoteIdentifier(driver, "status")
 	quotedEntity := quoteIdentifier(driver, "entity")
@@ -190,18 +231,10 @@ func CreateUpdateEvaluationStatement(driver, tableName, id string, status api.Ov
 	}
 	setParts = append(setParts, fmt.Sprintf("%s = CURRENT_TIMESTAMP", quotedUpdatedAt))
 	argsList = append(argsList, id)
-
-	switch driver {
-	case POSTGRES_DRIVER:
-		return createUpdateEvaluationStatementForPostgres(setParts, argsList, query, quotedTable, quotedID, args)
-	case SQLITE_DRIVER:
-		return createUpdateEvaluationStatementForSQLite(setParts, query, quotedTable, quotedID, args, argsList)
-	default:
-		return "", nil, getUnsupportedDriverError(driver)
-	}
+	return quotedTable, quotedID, setParts, argsList
 }
 
-func createUpdateEvaluationStatementForSQLite(setParts []string, query string, quotedTable string, quotedID string, args []any, argsList []any) (string, []any, error) {
+func createUpdateStatementForSQLite(setParts []string, argsList []any, query string, quotedTable string, quotedID string, args []any) (string, []any, error) {
 	placeholders := make([]string, 0, len(setParts))
 	for i, part := range setParts {
 		if i < len(setParts)-1 {
@@ -216,7 +249,7 @@ func createUpdateEvaluationStatementForSQLite(setParts []string, query string, q
 	return query, args, nil
 }
 
-func createUpdateEvaluationStatementForPostgres(setParts []string, argsList []any, query string, quotedTable string, quotedID string, args []any) (string, []any, error) {
+func createUpdateStatementForPostgres(setParts []string, argsList []any, query string, quotedTable string, quotedID string, args []any) (string, []any, error) {
 	placeholders := make([]string, 0, len(setParts))
 	for i := range setParts {
 		if i < len(setParts)-1 {

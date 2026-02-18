@@ -361,12 +361,12 @@ func extractId(body []byte) (string, error) {
 }
 
 func extractIdFromPath(path string) string {
-	if _, after, found := strings.Cut(path, "/api/v1/evaluations/jobs/"); found {
-		if after != "" {
-			if id, _, found := strings.Cut(after, "/"); found {
+	for _, prefix := range []string{"/api/v1/evaluations/collections/", "/api/v1/evaluations/jobs/"} {
+		if _, after, found := strings.Cut(path, prefix); found && after != "" {
+			if id, _, ok := strings.Cut(after, "/"); ok {
 				return id
 			}
-			if id, _, found := strings.Cut(after, "?"); found {
+			if id, _, ok := strings.Cut(after, "?"); ok {
 				return id
 			}
 			return after
@@ -468,14 +468,18 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 		logDebug("Response status %d for %s\n", tc.response.StatusCode, endpoint)
 	}
 
-	// this is just for a create evaluation job request
+	// capture resource id for create (evaluation job or collection)
 	if method == http.MethodPost && tc.response.StatusCode == http.StatusAccepted {
-		assetName, err := getAssetName(endpoint)
-		if err != nil {
-			return err
+		var assetName string
+		switch {
+		case strings.Contains(endpoint, "/evaluations/collections") && !strings.Contains(endpoint, "/evaluations/collections/"):
+			assetName = "collections"
+		case strings.Contains(endpoint, "/evaluations/jobs") && !strings.Contains(endpoint, "/evaluations/jobs/"):
+			assetName = "evaluations"
+		default:
+			assetName = ""
 		}
-		switch assetName {
-		case "evaluations":
+		if assetName != "" {
 			tc.lastId, err = extractId(tc.body)
 			if err != nil {
 				return err
@@ -484,25 +488,25 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 				return logError(fmt.Errorf("response does not contain an ID in response %s", string(tc.body)))
 			}
 			tc.addAsset(assetName, tc.lastId)
-		default:
-			// nothing to do here
 		}
 	}
 
 	if method == http.MethodDelete {
-		assetName, err := getAssetName(endpoint)
-		if err != nil {
-			return err
+		var assetName string
+		switch {
+		case strings.Contains(endpoint, "/evaluations/collections/"):
+			assetName = "collections"
+		case strings.Contains(endpoint, "/evaluations/jobs/"):
+			assetName = "evaluations"
+		default:
+			assetName = ""
 		}
-		switch assetName {
-		case "evaluations":
+		if assetName != "" {
 			id := extractIdFromPath(endpoint)
 			if id == "" {
 				return logError(fmt.Errorf("no ID found in path %s", endpoint))
 			}
 			tc.removeAsset(assetName, id)
-		default:
-			// nothing to do here
 		}
 	}
 
@@ -626,18 +630,28 @@ func (tc *scenarioConfig) theResponseShouldHaveSchemaAs(body *godog.DocString) e
 }
 
 func (tc *scenarioConfig) getJsonPath(jsonPath string) (string, error) {
+	raw, err := tc.getJsonPathValue(jsonPath)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%v", raw), nil
+}
+
+func (tc *scenarioConfig) getJsonPathValue(jsonPath string) (interface{}, error) {
 	var respMap map[string]interface{}
 	err := json.Unmarshal(tc.body, &respMap)
 	if err != nil {
-		return "", logError(err)
+		return nil, logError(err)
 	}
-
-	foundValue, err := jsonpath.Get(jsonPath, respMap)
+	path := jsonPath
+	if !strings.HasPrefix(path, "$") {
+		path = "$." + path
+	}
+	foundValue, err := jsonpath.Get(path, respMap)
 	if err != nil {
-		return "", logError(fmt.Errorf("failed to get JSON path %s in %s: %w", jsonPath, string(tc.body), err))
+		return nil, logError(fmt.Errorf("failed to get JSON path %s in %s: %w", path, string(tc.body), err))
 	}
-
-	return fmt.Sprintf("%v", foundValue), nil
+	return foundValue, nil
 }
 
 func (tc *scenarioConfig) theResponseShouldContainAtJSONPath(expectedValue string, jsonPath string) error {
@@ -661,6 +675,25 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPath(expectedValue strin
 func (tc *scenarioConfig) theResponseShouldNotContainAtJSONPath(expectedValue string, jsonPath string) error {
 	if tc.theResponseShouldContainAtJSONPath(expectedValue, jsonPath) == nil {
 		return logError(fmt.Errorf("expected %s to not contain %s but it did", jsonPath, expectedValue))
+	}
+	return nil
+}
+
+func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLength(jsonPath string, lengthStr string) error {
+	length, err := strconv.Atoi(lengthStr)
+	if err != nil {
+		return logError(fmt.Errorf("expected integer length, got %q: %w", lengthStr, err))
+	}
+	raw, err := tc.getJsonPathValue(jsonPath)
+	if err != nil {
+		return err
+	}
+	arr, ok := raw.([]interface{})
+	if !ok {
+		return logError(fmt.Errorf("value at path %s is not an array, got %T", jsonPath, raw))
+	}
+	if len(arr) != length {
+		return logError(fmt.Errorf("expected array at path %s to have length %d, got %d", jsonPath, length, len(arr)))
 	}
 	return nil
 }
@@ -710,6 +743,8 @@ func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, 
 		switch assetName {
 		case "evaluations":
 			url = "evaluations/jobs"
+		case "collections":
+			url = "evaluations/collections"
 		}
 		ids := slices.Clone(ids)
 		for _, id := range ids {
@@ -827,6 +862,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the "([^"]*)" field in the response should be saved as "([^"]*)"$`, tc.theFieldShouldBeSaved)
 	ctx.Step(`^the response should contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldContainAtJSONPath)
 	ctx.Step(`^the response should not contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldNotContainAtJSONPath)
+	ctx.Step(`^the array at path "([^"]*)" in the response should have length (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLength)
 	// Other steps
 	ctx.Step(`^fix this step$`, tc.fixThisStep)
 }
