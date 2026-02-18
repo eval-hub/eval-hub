@@ -3,7 +3,7 @@ post:
     - Evaluations
   summary: Create Evaluation
   description: Create and execute evaluation request using the simplified benchmark schema.
-  operationId: create_evaluation_api_v1_evaluations_jobs_post
+  operationId: post_evaluations_jobs
   requestBody:
     required: true
     content:
@@ -30,7 +30,7 @@ get:
     - Evaluations
   summary: List Evaluations
   description: List all evaluation requests.
-  operationId: list_evaluations_api_v1_evaluations_jobs_get
+  operationId: get_evaluations_jobs
   parameters:
     - name: limit
       in: query

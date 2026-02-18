@@ -33,7 +33,7 @@ func (h *Handlers) HandleListBenchmarks(ctx *executioncontext.ExecutionContext, 
 	benchmarks := []api.BenchmarkResource{}
 	for _, provider := range h.providerConfigs {
 		for _, benchmark := range provider.Benchmarks {
-			if providerId != "" && provider.ID != providerId {
+			if providerId != "" && provider.Resource.ID != providerId {
 				continue
 			}
 			if benchmarkId != "" && benchmark.ID != benchmarkId {
@@ -50,7 +50,7 @@ func (h *Handlers) HandleListBenchmarks(ctx *executioncontext.ExecutionContext, 
 			if len(tags) > 0 && !contains {
 				continue
 			}
-			benchmark.ProviderId = &provider.ID
+			benchmark.ProviderId = &provider.Resource.ID
 			benchmarks = append(benchmarks, benchmark)
 		}
 	}

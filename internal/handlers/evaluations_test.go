@@ -107,8 +107,7 @@ func TestHandleCreateEvaluationMarksFailedWhenRuntimeErrors(t *testing.T) {
 	providerConfigs := map[string]api.ProviderResource{
 		"garak": {
 			Resource: api.Resource{ID: "garak"},
-			ProviderConfig: api.ProviderConfig{
-				ID: "garak",
+			ProviderConfigInternal: api.ProviderConfigInternal{
 				Benchmarks: []api.BenchmarkResource{
 					{ID: "bench-1"},
 				},
@@ -153,8 +152,7 @@ func TestHandleCreateEvaluationSucceedsWhenRuntimeOk(t *testing.T) {
 	providerConfigs := map[string]api.ProviderResource{
 		"garak": {
 			Resource: api.Resource{ID: "garak"},
-			ProviderConfig: api.ProviderConfig{
-				ID: "garak",
+			ProviderConfigInternal: api.ProviderConfigInternal{
 				Benchmarks: []api.BenchmarkResource{
 					{ID: "bench-1"},
 				},
@@ -311,8 +309,7 @@ func TestHandleCreateEvaluationRejectsInvalidProviderID(t *testing.T) {
 	providerConfigs := map[string]api.ProviderResource{
 		"garak": {
 			Resource: api.Resource{ID: "garak"},
-			ProviderConfig: api.ProviderConfig{
-				ID: "garak",
+			ProviderConfigInternal: api.ProviderConfigInternal{
 				Benchmarks: []api.BenchmarkResource{
 					{ID: "bench-1"},
 				},
@@ -344,8 +341,7 @@ func TestHandleCreateEvaluationRejectsInvalidBenchmarkID(t *testing.T) {
 	providerConfigs := map[string]api.ProviderResource{
 		"garak": {
 			Resource: api.Resource{ID: "garak"},
-			ProviderConfig: api.ProviderConfig{
-				ID: "garak",
+			ProviderConfigInternal: api.ProviderConfigInternal{
 				Benchmarks: []api.BenchmarkResource{
 					{ID: "bench-1"},
 				},

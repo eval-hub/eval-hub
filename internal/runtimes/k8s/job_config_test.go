@@ -34,8 +34,7 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 	}
 	provider := &api.ProviderResource{
 		Resource: api.Resource{ID: "provider-1"},
-		ProviderConfig: api.ProviderConfig{
-			ID: "provider-1",
+		ProviderConfigInternal: api.ProviderConfigInternal{
 			Runtime: &api.Runtime{
 				K8s: &api.K8sRuntime{
 					Image: "adapter:latest",
@@ -124,7 +123,7 @@ func TestBuildJobConfigAllowsNumExamplesOnly(t *testing.T) {
 	}
 	provider := &api.ProviderResource{
 		Resource: api.Resource{ID: "provider-1"},
-		ProviderConfig: api.ProviderConfig{
+		ProviderConfigInternal: api.ProviderConfigInternal{
 			Runtime: &api.Runtime{
 				K8s: &api.K8sRuntime{
 					Image: "adapter:latest",
@@ -169,8 +168,7 @@ func TestBuildJobConfigMissingRuntime(t *testing.T) {
 	}
 	provider := &api.ProviderResource{
 		Resource: api.Resource{ID: "provider-1"},
-		ProviderConfig: api.ProviderConfig{
-			ID:      "provider-1",
+		ProviderConfigInternal: api.ProviderConfigInternal{
 			Runtime: &api.Runtime{},
 		},
 	}
@@ -197,8 +195,7 @@ func TestBuildJobConfigMissingAdapterImage(t *testing.T) {
 	}
 	provider := &api.ProviderResource{
 		Resource: api.Resource{ID: "provider-1"},
-		ProviderConfig: api.ProviderConfig{
-			ID:      "provider-1",
+		ProviderConfigInternal: api.ProviderConfigInternal{
 			Runtime: &api.Runtime{},
 		},
 	}
@@ -230,8 +227,7 @@ func TestBuildJobConfigMissingServiceURL(t *testing.T) {
 	}
 	provider := &api.ProviderResource{
 		Resource: api.Resource{ID: "provider-1"},
-		ProviderConfig: api.ProviderConfig{
-			ID: "provider-1",
+		ProviderConfigInternal: api.ProviderConfigInternal{
 			Runtime: &api.Runtime{
 				K8s: &api.K8sRuntime{
 					Image: "adapter:latest",
@@ -267,8 +263,7 @@ func TestBuildJobConfigAllowsEmptyBenchmarkConfig(t *testing.T) {
 	}
 	provider := &api.ProviderResource{
 		Resource: api.Resource{ID: "provider-1"},
-		ProviderConfig: api.ProviderConfig{
-			ID: "provider-1",
+		ProviderConfigInternal: api.ProviderConfigInternal{
 			Runtime: &api.Runtime{
 				K8s: &api.K8sRuntime{
 					Image: "adapter:latest",

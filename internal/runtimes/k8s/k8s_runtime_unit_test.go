@@ -280,8 +280,7 @@ func sampleProviders(providerID string) map[string]api.ProviderResource {
 	return map[string]api.ProviderResource{
 		providerID: {
 			Resource: api.Resource{ID: providerID},
-			ProviderConfig: api.ProviderConfig{
-				ID: providerID,
+			ProviderConfigInternal: api.ProviderConfigInternal{
 				Runtime: &api.Runtime{
 					K8s: &api.K8sRuntime{
 						Image: "quay.io/evalhub/adapter:latest",

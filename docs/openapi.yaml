@@ -28,7 +28,7 @@ paths:
     get:
       summary: Health Check
       description: Health check endpoint.
-      operationId: health_check_api_v1_health_get
+      operationId: get_health
       tags:
         - Health
       responses:
@@ -52,7 +52,7 @@ paths:
         - Evaluations
       summary: Create Evaluation
       description: Create and execute evaluation request using the simplified benchmark schema.
-      operationId: create_evaluation_api_v1_evaluations_jobs_post
+      operationId: post_evaluations_jobs
       requestBody:
         required: true
         content:
@@ -79,7 +79,7 @@ paths:
         - Evaluations
       summary: List Evaluations
       description: List all evaluation requests.
-      operationId: list_evaluations_api_v1_evaluations_jobs_get
+      operationId: get_evaluations_jobs
       parameters:
         - name: limit
           in: query
@@ -131,7 +131,7 @@ paths:
         - Evaluations
       summary: Get Evaluation Status
       description: Get the status of an evaluation request.
-      operationId: get_evaluation_status_api_v1_evaluations_jobs__id__get
+      operationId: get_evaluations_jobs_id
       parameters:
         - name: id
           in: path
@@ -159,7 +159,7 @@ paths:
         - Evaluations
       summary: Cancel Evaluation
       description: Cancel a running evaluation.
-      operationId: cancel_evaluation_api_v1_evaluations_jobs__id__delete
+      operationId: delete_evaluations_jobs_id
       parameters:
         - name: id
           in: path
@@ -194,7 +194,7 @@ paths:
         - Providers
       summary: List Providers
       description: List all registered evaluation providers.
-      operationId: list_providers_api_v1_evaluations_providers_get
+      operationId: get_providers
       parameters:
         - name: id
           in: query
@@ -228,24 +228,25 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-    delete:
+    post:
       tags:
         - Providers
-      summary: Delete a provider by provider ID
-      description: Delete a provider. Only custom providers within this tenant can be deleted if required permissions are granted.
-      operationId: delete_providers_api_v1_evaluations_providers_delete
-      parameters:
-        - name: id
-          in: query
-          required: true
-          schema:
-            type: string
-            description: Filter by provider ID
-            title: Provider Id
-          description: Filter by provider ID
+      summary: Create a new provider scoped to the current tenant (Bring Your Own Provider)
+      description: Create a new provider scoped to the current tenant (Bring Your Own Provider)
+      operationId: post_providers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderConfig'
+        required: true
       responses:
-        '204':
+        '200':
           description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderResource'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -254,19 +255,126 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-  /api/v1/evaluations/providers/imports:
-    post:
+  /api/v1/evaluations/providers/{id}:
+    get:
       tags:
         - Providers
-      summary: Import a new provider scoped to the current tenant (Bring Your Own Provider)
-      description: Import provider
-      operationId: import_providers_api_v1_evaluations_providers_config_post
+      summary: Get Provider
+      description: Get a provider by ID.
+      operationId: get_providers_id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            description: Provider ID
+            title: Provider Id
+          description: Provider ID
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - Providers
+      summary: Update Provider
+      description: Update an existing provider.
+      operationId: put_providers_id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            description: Provider ID
+            title: Provider Id
+          description: Provider ID
       requestBody:
+        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ProviderResource'
+              $ref: '#/components/schemas/ProviderConfigInternal'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Providers
+      summary: Patch Provider
+      description: Partially update an existing provider.
+      operationId: patch_providers_id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Provider Id
+      requestBody:
         required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              title: Json Patch
+              description: JSON Patch operation
+              items:
+                $ref: '#/components/schemas/PatchOperation'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Providers
+      summary: Delete Provider
+      description: Delete provider by ID.
+      operationId: delete_providers_id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            description: Provider ID
+            title: Provider Id
+          description: Provider ID
       responses:
         '204':
           description: Successful Response
@@ -284,7 +392,7 @@ paths:
         - Benchmarks
       summary: List All Benchmarks
       description: List all available benchmarks across providers (similar to Llama Stack format).
-      operationId: list_all_benchmarks_api_v1_evaluations_benchmarks_get
+      operationId: get_benchmarks
       parameters:
         - name: provider_id
           in: query
@@ -737,13 +845,10 @@ components:
           items:
             type: string
           description: Tags
-    ProviderResource:
+    ProviderConfigInternal:
       type: object
       description: Evaluation provider (configuration and available benchmarks)
       properties:
-        id:
-          type: string
-          description: Provider ID
         name:
           type: string
           description: Provider name
@@ -758,6 +863,22 @@ components:
           items:
             $ref: '#/components/schemas/BenchmarkResource'
           description: Benchmarks offered by this provider
+    ProviderResource:
+      type: object
+      description: Provider resource
+      allOf:
+        - type: object
+          properties:
+            resource:
+              $ref: '#/components/schemas/Resource'
+              description: Resource metadata
+            type:
+              type: string
+              enum:
+                - system
+                - owned
+              description: Type of collection. 'system' collections are created by the system and are not editable, 'owned' collections are created by the user and are editable.
+        - $ref: '#/components/schemas/ProviderConfigInternal'
     ProviderResourceList:
       type: object
       description: List of providers (no pagination links)
@@ -770,6 +891,37 @@ components:
           items:
             $ref: '#/components/schemas/ProviderResource'
           description: Provider resources
+    ProviderConfig:
+      type: object
+      description: Evaluation provider (configuration and available benchmarks)
+      allOf:
+        - type: object
+          properties:
+            id:
+              type: string
+              description: Provider ID
+        - $ref: '#/components/schemas/ProviderConfigInternal'
+    PatchOp:
+      type: string
+      enum:
+        - replace
+        - add
+        - remove
+      description: Patch operation type
+    PatchOperation:
+      type: object
+      description: Single JSON patch operation
+      properties:
+        op:
+          $ref: '#/components/schemas/PatchOp'
+        path:
+          type: string
+          description: JSON Pointer path
+        value:
+          description: Value for add/replace (omit for remove)
+      required:
+        - op
+        - path
     BenchmarkResourceList:
       type: object
       description: List of benchmarks

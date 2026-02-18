@@ -24,7 +24,7 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 	providers := []api.ProviderResource{}
 
 	for _, p := range h.providerConfigs {
-		if providerId != "" && p.ID != providerId {
+		if providerId != "" && p.Resource.ID != providerId {
 			continue
 		}
 		if !benchmarks {

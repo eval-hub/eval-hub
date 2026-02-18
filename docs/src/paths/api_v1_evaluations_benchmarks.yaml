@@ -5,7 +5,7 @@ get:
   description: >-
     List all available benchmarks across providers (similar to Llama Stack
     format).
-  operationId: list_all_benchmarks_api_v1_evaluations_benchmarks_get
+  operationId: get_benchmarks
   parameters:
     - name: provider_id
       in: query

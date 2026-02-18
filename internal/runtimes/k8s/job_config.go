@@ -62,7 +62,7 @@ type jobSpec struct {
 func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkID string) (*jobConfig, error) {
 	runtime := provider.Runtime
 	if runtime == nil || runtime.K8s == nil {
-		return nil, fmt.Errorf("provider %q missing runtime configuration", provider.ID)
+		return nil, fmt.Errorf("provider %q missing runtime configuration", provider.Resource.ID)
 	}
 
 	cpuRequest := defaultIfEmpty(runtime.K8s.CPURequest, defaultCPURequest)
@@ -91,7 +91,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	delete(benchmarkParams, "num_examples")
 	spec := jobSpec{
 		JobID:           evaluation.Resource.ID,
-		ProviderID:      provider.ID,
+		ProviderID:      provider.Resource.ID,
 		BenchmarkID:     benchmarkID,
 		Model:           evaluation.Model,
 		NumExamples:     numExamples,
@@ -127,7 +127,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	return &jobConfig{
 		jobID:               evaluation.Resource.ID,
 		namespace:           namespace,
-		providerID:          provider.ID,
+		providerID:          provider.Resource.ID,
 		benchmarkID:         benchmarkID,
 		adapterImage:        runtime.K8s.Image,
 		entrypoint:          runtime.K8s.Entrypoint,

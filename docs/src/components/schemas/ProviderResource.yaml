@@ -12,4 +12,4 @@ allOf:
           - system
           - owned
         description: Type of collection. 'system' collections are created by the system and are not editable, 'owned' collections are created by the user and are editable.
-  - $ref: ./ProviderConfig.yaml
+  - $ref: ./ProviderConfigInternal.yaml

@@ -42,8 +42,7 @@ func TestRunEvaluationJobCreatesResources(t *testing.T) {
 		providers: map[string]api.ProviderResource{
 			"lm_evaluation_harness": {
 				Resource: api.Resource{ID: "lm_evaluation_harness"},
-				ProviderConfig: api.ProviderConfig{
-					ID: "lm_evaluation_harness",
+				ProviderConfigInternal: api.ProviderConfigInternal{
 					Runtime: &api.Runtime{
 						K8s: &api.K8sRuntime{
 							Image:       "docker.io/library/busybox:1.36",
@@ -134,8 +133,7 @@ func TestCreateBenchmarkResourcesReturnsErrorWhenConfigMapExists(t *testing.T) {
 		providers: map[string]api.ProviderResource{
 			"lm_evaluation_harness": {
 				Resource: api.Resource{ID: "lm_evaluation_harness"},
-				ProviderConfig: api.ProviderConfig{
-					ID: "lm_evaluation_harness",
+				ProviderConfigInternal: api.ProviderConfigInternal{
 					Runtime: &api.Runtime{
 						K8s: &api.K8sRuntime{
 							Image: "docker.io/library/busybox:1.36",
@@ -210,8 +208,7 @@ func TestRunEvaluationJobReturnsNilOnCreateFailure(t *testing.T) {
 		providers: map[string]api.ProviderResource{
 			"lm_evaluation_harness": {
 				Resource: api.Resource{ID: "lm_evaluation_harness"},
-				ProviderConfig: api.ProviderConfig{
-					ID: "lm_evaluation_harness",
+				ProviderConfigInternal: api.ProviderConfigInternal{
 					Runtime: &api.Runtime{
 						K8s: &api.K8sRuntime{
 							Image: "docker.io/library/busybox:1.36",
