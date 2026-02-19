@@ -369,7 +369,7 @@ paths:
               $ref: '#/components/schemas/ProviderConfig'
         required: true
       responses:
-        '200':
+        '201':
           description: Successful Response
           content:
             application/json:
