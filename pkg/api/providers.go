@@ -23,8 +23,8 @@ type ProviderConfigInternal struct {
 	Type         string              `mapstructure:"type" yaml:"type" json:"type"`
 	Benchmarks   []BenchmarkResource `mapstructure:"benchmarks" yaml:"benchmarks" json:"benchmarks"`
 	Runtime      *Runtime            `mapstructure:"runtime" yaml:"runtime" json:"runtime,omitempty"`
-	PrimaryScore *PrimaryScore       `json:"primary_score,omitempty"`
-	PassCriteria *PassCriteria       `json:"pass_criteria,omitempty"`
+	PrimaryScore *PrimaryScore       `mapstructure:"primary_score" yaml:"primary_score" json:"primary_score,omitempty"`
+	PassCriteria *PassCriteria       `mapstructure:"pass_criteria" yaml:"pass_criteria" json:"pass_criteria,omitempty"`
 }
 
 type ProviderResource struct {
