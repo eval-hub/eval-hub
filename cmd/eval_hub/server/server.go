@@ -228,19 +228,6 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		}
 	})
 
-	// Benchmarks endpoint
-	router.HandleFunc("/api/v1/evaluations/benchmarks", func(w http.ResponseWriter, r *http.Request) {
-		ctx := s.newExecutionContext(r)
-		resp := NewRespWrapper(w, ctx)
-		req := NewRequestWrapper(r)
-		switch r.Method {
-		case http.MethodGet:
-			h.HandleListBenchmarks(ctx, req, resp)
-		default:
-			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
-		}
-	})
-
 	// Collections endpoints
 	router.HandleFunc("/api/v1/evaluations/collections", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)

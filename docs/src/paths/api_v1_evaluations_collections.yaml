@@ -4,7 +4,7 @@ get:
     - Collections
   summary: List Collections
   description: List all benchmark collections.
-  operationId: list_collections_api_v1_evaluations_collections_get
+  operationId: get_collections
   responses:
     '200':
       description: Successful Response
@@ -26,7 +26,7 @@ post:
     - Collections
   summary: Create Collection
   description: Create a new collection.
-  operationId: create_collection_api_v1_evaluations_collections_post
+  operationId: post_collections
   requestBody:
     content:
       application/json:

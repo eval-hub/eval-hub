@@ -87,9 +87,6 @@ func TestServerSetupRoutes(t *testing.T) {
 		{http.MethodPost, "/api/v1/evaluations/jobs", http.StatusAccepted, `{"model": {"url": "http://test.com", "name": "test"}, "benchmarks": [{"id": "toxicity", "provider_id": "garak"}]}`},
 		{http.MethodGet, "/api/v1/evaluations/jobs", http.StatusOK, ""},
 		{http.MethodGet, "/api/v1/evaluations/jobs/test-id", http.StatusNotFound, ""},
-		// we can not delete because we have no id
-		// Benchmarks
-		{http.MethodGet, "/api/v1/evaluations/benchmarks", http.StatusOK, ""},
 		// Collections
 		{http.MethodGet, "/api/v1/evaluations/collections", http.StatusNotImplemented, ""},
 		{http.MethodPost, "/api/v1/evaluations/collections", http.StatusNotImplemented, ""},

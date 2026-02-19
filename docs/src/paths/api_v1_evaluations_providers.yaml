@@ -3,7 +3,7 @@ get:
     - Providers
   summary: List Providers
   description: List all registered evaluation providers.
-  operationId: list_providers_api_v1_evaluations_providers_get
+  operationId: get_providers
   parameters:
     - name: id
       in: query
@@ -29,6 +29,33 @@ get:
         application/json:
           schema:
             $ref: ../components/schemas/ProviderResourceList.yaml
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml
+post:
+  tags:
+    - Providers
+  summary: Create a new provider scoped to the current tenant (Bring Your Own Provider)
+  description: Create a new provider scoped to the current tenant (Bring Your Own Provider)
+  operationId: post_providers
+  requestBody:
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/ProviderConfig.yaml
+    required: true
+  responses:
+    '201':
+      description: Successful Response
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ProviderResource.yaml
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':

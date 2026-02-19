@@ -95,8 +95,8 @@ func readConfig(logger *slog.Logger, name string, ext string, dirs ...string) (*
 	return configValues, err
 }
 
-func loadProvider(logger *slog.Logger, file string) (api.ProviderResource, error) {
-	providerConfig := api.ProviderResource{}
+func loadProvider(logger *slog.Logger, file string) (api.ProviderConfig, error) {
+	providerConfig := api.ProviderConfig{}
 	configValues, err := readConfig(logger, file, "yaml", configLookup...)
 	if err != nil {
 		return providerConfig, err
@@ -151,7 +151,14 @@ func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.Pr
 			continue
 		}
 
-		providerConfigs[providerConfig.ID] = providerConfig
+		providerConfigs[providerConfig.ID] = api.ProviderResource{
+			Resource: api.Resource{
+				ID:       providerConfig.ID,
+				ReadOnly: true,
+				Owner:    "system",
+			},
+			ProviderConfigInternal: providerConfig.ProviderConfigInternal,
+		}
 		logger.Info("Provider loaded", "provider_id", providerConfig.ID)
 	}
 

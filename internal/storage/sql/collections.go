@@ -13,11 +13,11 @@ func (s *SQLStorage) CreateCollection(collection *api.CollectionResource) error 
 	return nil
 }
 
-func (s *SQLStorage) GetCollection(id string, summary bool) (*api.CollectionResource, error) {
+func (s *SQLStorage) GetCollection(id string) (*api.CollectionResource, error) {
 	return nil, nil
 }
 
-func (s *SQLStorage) GetCollections(limit int, offset int) (*abstractions.QueryResults[api.CollectionResource], error) {
+func (s *SQLStorage) GetCollections(limit int, offset int, filter abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
 	return nil, nil
 }
 

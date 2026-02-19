@@ -4,9 +4,6 @@ properties:
   id:
     type: string
     description: Benchmark ID
-  provider_id:
-    type: string
-    description: Provider ID
   name:
     type: string
     description: Benchmark name
@@ -32,3 +29,7 @@ properties:
     items:
       type: string
     description: Tags
+  primary_score:
+    $ref: ./PrimaryScore.yaml
+  pass_criteria:
+    $ref: ./PassCriteria.yaml

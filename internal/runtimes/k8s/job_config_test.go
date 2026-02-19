@@ -33,10 +33,12 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ID: "provider-1",
-		Runtime: &api.Runtime{
-			K8s: &api.K8sRuntime{
-				Image: "adapter:latest",
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
 			},
 		},
 	}
@@ -120,10 +122,12 @@ func TestBuildJobConfigAllowsNumExamplesOnly(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ID: "provider-1",
-		Runtime: &api.Runtime{
-			K8s: &api.K8sRuntime{
-				Image: "adapter:latest",
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
 			},
 		},
 	}
@@ -163,7 +167,10 @@ func TestBuildJobConfigMissingRuntime(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ID: "provider-1",
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{},
+		},
 	}
 
 	_, err := buildJobConfig(evaluation, provider, "bench-1")
@@ -187,8 +194,10 @@ func TestBuildJobConfigMissingAdapterImage(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ID:      "provider-1",
-		Runtime: &api.Runtime{},
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{},
+		},
 	}
 
 	_, err := buildJobConfig(evaluation, provider, "bench-1")
@@ -217,10 +226,12 @@ func TestBuildJobConfigMissingServiceURL(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ID: "provider-1",
-		Runtime: &api.Runtime{
-			K8s: &api.K8sRuntime{
-				Image: "adapter:latest",
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
 			},
 		},
 	}
@@ -251,10 +262,12 @@ func TestBuildJobConfigAllowsEmptyBenchmarkConfig(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ID: "provider-1",
-		Runtime: &api.Runtime{
-			K8s: &api.K8sRuntime{
-				Image: "adapter:latest",
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
 			},
 		},
 	}
@@ -308,10 +321,12 @@ func TestBuildJobConfigWithOCIExports(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ID: "provider-1",
-		Runtime: &api.Runtime{
-			K8s: &api.K8sRuntime{
-				Image: "adapter:latest",
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
 			},
 		},
 	}

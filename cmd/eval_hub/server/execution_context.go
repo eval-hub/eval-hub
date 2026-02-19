@@ -37,11 +37,15 @@ func (s *Server) newExecutionContext(r *http.Request) *executioncontext.Executio
 	// Enhance logger with request-specific fields
 	requestID, enhancedLogger := s.loggerWithRequest(r)
 
+	user := r.Header.Get("X-User")
+	tenant := r.Header.Get("X-Tenant")
 	return executioncontext.NewExecutionContext(
 		context.Background(),
 		requestID,
 		enhancedLogger,
-		3)
+		3,
+		api.User(user),
+		api.Tenant(tenant))
 }
 
 // Abstract request objects to not depend on the underlying HTTP framework.

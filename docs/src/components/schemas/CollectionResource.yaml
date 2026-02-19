@@ -1,5 +1,5 @@
 type: object
-description: Collection resource (stored entity)
+description: Collection resource 
 allOf:
   - type: object
     properties:

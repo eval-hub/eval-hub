@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"time"
+
+	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 // ExecutionContext contains execution context for API operations. This pattern enables
@@ -18,6 +20,8 @@ type ExecutionContext struct {
 	RequestID string
 	Logger    *slog.Logger
 	StartedAt time.Time
+	User      api.User
+	Tenant    api.Tenant
 }
 
 // This struct contains per request context information
@@ -26,11 +30,15 @@ func NewExecutionContext(
 	requestID string,
 	logger *slog.Logger,
 	timeout time.Duration,
+	user api.User,
+	tenant api.Tenant,
 ) *ExecutionContext {
 	return &ExecutionContext{
 		Ctx:       ctx,
 		RequestID: requestID,
 		Logger:    logger,
 		StartedAt: time.Now(),
+		User:      user,
+		Tenant:    tenant,
 	}
 }

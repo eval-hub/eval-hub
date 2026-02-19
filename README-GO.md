@@ -66,9 +66,6 @@ PORT=3000 go run cmd/eval_hub/main.go
 - `DELETE /api/v1/evaluations/jobs/{id}` - Cancel Evaluation
 - `GET /api/v1/evaluations/jobs/{id}/summary` - Get Evaluation Summary
 
-#### Benchmarks
-- `GET /api/v1/evaluations/benchmarks` - List All Benchmarks
-
 #### Collections
 - `GET /api/v1/evaluations/collections` - List Collections
 - `POST /api/v1/evaluations/collections` - Create Collection
@@ -84,11 +81,7 @@ PORT=3000 go run cmd/eval_hub/main.go
 #### Health
 - `GET /api/v1/health` - Health check endpoint
 
-#### Status
-- `GET /api/v1/status` - Service status endpoint
-
 #### Metrics
-- `GET /api/v1/metrics/system` - Get System Metrics
 - `GET /metrics` - Prometheus metrics endpoint
 
 #### Documentation
