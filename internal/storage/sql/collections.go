@@ -21,7 +21,7 @@ func (s *SQLStorage) CreateCollection(collection *api.CollectionResource) error 
 	scope := collection.Type
 	tenant, err := s.getTenant()
 	if err != nil {
-		return se.WithRollback(err)
+		return se.NewServiceError(messages.InternalServerError, "Error", err)
 	}
 	collectionJSON, err := s.createCollectionEntity(collection)
 	if err != nil {
