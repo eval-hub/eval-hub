@@ -31,19 +31,28 @@ var (
 	BuildDate string
 )
 
-func configDir() string {
+type Args struct {
+	ConfigDir string
+	LocalMode bool
+}
+
+func args() Args {
 	configDir := "./config"
 	dir := flag.String("configdir", configDir, "Directory to search for configuration files.")
+	local := flag.Bool("local", false, "Server operates in local mode or not.")
 	flag.Parse()
 	configDir = *dir
 	if configDir == "" {
 		configDir = os.Getenv("EVAL_HUB_CONFIG_DIR")
 	}
-	return configDir
+	return Args{
+		ConfigDir: configDir,
+		LocalMode: *local,
+	}
 }
 
 func main() {
-	cfgDir := configDir()
+	args := args()
 
 	logger, logShutdown, err := logging.NewLogger()
 	if err != nil {
@@ -51,11 +60,12 @@ func main() {
 		startUpFailed(nil, err, "Failed to create service logger", logging.FallbackLogger())
 	}
 
-	serviceConfig, err := config.LoadConfig(logger, Version, Build, BuildDate, cfgDir)
+	serviceConfig, err := config.LoadConfig(logger, Version, Build, BuildDate, args.ConfigDir)
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(nil, err, "Failed to create service config", logger)
 	}
+	serviceConfig.Service.LocalMode = args.LocalMode
 
 	// set up the validator
 	validate, err := validation.NewValidator()

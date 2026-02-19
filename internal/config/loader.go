@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -31,15 +30,6 @@ type EnvMap struct {
 type SecretMap struct {
 	Dir      string            `mapstructure:"dir,omitempty"`
 	Mappings map[string]string `mapstructure:"mappings,omitempty"`
-}
-
-func localMode() bool {
-	once.Do(func() {
-		localMode := flag.Bool("local", false, "Server operates in local mode or not.")
-		flag.Parse()
-		isLocalMode = *localMode
-	})
-	return isLocalMode
 }
 
 // readConfig locates and reads a configuration file using Viper. It searches for
@@ -266,7 +256,6 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 	conf.Service.Version = version
 	conf.Service.Build = build
 	conf.Service.BuildDate = buildDate
-	conf.Service.LocalMode = localMode()
 
 	logger.Info("End reading configuration", "config", RedactedJSON(conf, redactedFields))
 	return &conf, nil
