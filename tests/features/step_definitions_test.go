@@ -275,10 +275,10 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) err
 	isLocalhost := false
 	if serverURL != "" {
 		host := serverURL
-		if parsed, err := url.Parse(serverURL); err == nil && parsed.Host != "" {
-			host = parsed.Host
+		if parsed, err := url.Parse(serverURL); err == nil && parsed.Hostname() != "" {
+			host = parsed.Hostname()
 		}
-		isLocalhost = strings.Contains(host, "localhost") || strings.HasPrefix(host, "127.0.0.1")
+		isLocalhost = host == "localhost" || host == "127.0.0.1" || host == "::1"
 	}
 	isLocalMode := serverURL == "" || (tc.apiFeature != nil && tc.apiFeature.server != nil)
 	// Skip wait in GitHub Actions or local runs (SERVER_URL empty/localhost or in-process server).
@@ -712,7 +712,7 @@ func isCompletionAssertionPath(jsonPath string) bool {
 
 func (tc *scenarioConfig) theResponseShouldContainAtJSONPath(expectedValue string, jsonPath string) error {
 	if tc.skipCompletionAssertions && isCompletionAssertionPath(jsonPath) {
-		logDebug("Skipping completion assertion for path %s in CI\n", jsonPath)
+		logDebug("Skipping completion assertion for path %s (CI or local-mode)\n", jsonPath)
 		return nil
 	}
 	if strings.Contains(expectedValue, "{{") {
