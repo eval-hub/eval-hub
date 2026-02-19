@@ -9,18 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/spf13/viper"
 )
 
 var (
-	configLookup = []string{"config/providers", "./config/providers", "../../config/providers", "../../../config/providers"}
-
-	once        = sync.Once{}
-	isLocalMode = false
-	configPath  = ""
+	providersLookup = []string{"config/providers", "./config/providers", "../../config/providers", "../../../config/providers"}
 )
 
 type EnvMap struct {
@@ -88,7 +83,7 @@ func readConfig(logger *slog.Logger, name string, ext string, dirs ...string) (*
 
 func loadProvider(logger *slog.Logger, file string) (api.ProviderResource, error) {
 	providerConfig := api.ProviderResource{}
-	configValues, err := readConfig(logger, file, "yaml", configLookup...)
+	configValues, err := readConfig(logger, file, "yaml", providersLookup...)
 	if err != nil {
 		return providerConfig, err
 	}
@@ -120,7 +115,7 @@ func scanFolders(logger *slog.Logger, dirs ...string) ([]os.DirEntry, error) {
 
 func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.ProviderResource, error) {
 	if len(dirs) == 0 {
-		dirs = configLookup
+		dirs = providersLookup
 	}
 	providerConfigs := make(map[string]api.ProviderResource)
 	files, err := scanFolders(logger, dirs...)
