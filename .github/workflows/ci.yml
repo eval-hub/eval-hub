@@ -49,6 +49,7 @@ jobs:
 
     - name: Build and verify the API documentation
       run: |
+        npm ci
         make documentation
         git diff --exit-code || (echo "API documentation is not generated. Run 'make documentation' locally." && exit 1)
 
