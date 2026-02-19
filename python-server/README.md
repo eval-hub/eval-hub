@@ -21,6 +21,11 @@ eval-hub-server
 # Run in local mode
 eval-hub-server --local
 
+# Run with a specfifc configdir
+eval-hub-server --configdir="my/dir"
+
+Alternatively you can set up EVAL_HUB_CONFIG_DIR env-var, but the program argument takes precedence.
+
 # Run with custom port 5000
 PORT=5000 eval-hub-server --local
 ```
