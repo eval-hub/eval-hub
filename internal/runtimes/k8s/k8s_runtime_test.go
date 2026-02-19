@@ -210,18 +210,22 @@ func TestCreateBenchmarkResourcesDuplicateBenchmarkIDCollides(t *testing.T) {
 		helper: helper,
 		providers: map[string]api.ProviderResource{
 			"lm_evaluation_harness": {
-				ID: "lm_evaluation_harness",
-				Runtime: &api.Runtime{
-					K8s: &api.K8sRuntime{
-						Image: "docker.io/library/busybox:1.36",
+				Resource: api.Resource{ID: "lm_evaluation_harness"},
+				ProviderConfigInternal: api.ProviderConfigInternal{
+					Runtime: &api.Runtime{
+						K8s: &api.K8sRuntime{
+							Image: "docker.io/library/busybox:1.36",
+						},
 					},
 				},
 			},
 			"lighteval": {
-				ID: "lighteval",
-				Runtime: &api.Runtime{
-					K8s: &api.K8sRuntime{
-						Image: "docker.io/library/busybox:1.36",
+				Resource: api.Resource{ID: "lighteval"},
+				ProviderConfigInternal: api.ProviderConfigInternal{
+					Runtime: &api.Runtime{
+						K8s: &api.K8sRuntime{
+							Image: "docker.io/library/busybox:1.36",
+						},
 					},
 				},
 			},
