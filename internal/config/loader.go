@@ -21,6 +21,7 @@ var (
 
 	once        = sync.Once{}
 	isLocalMode = false
+	configPath  = ""
 )
 
 type EnvMap struct {

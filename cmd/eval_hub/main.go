@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"log/slog"
@@ -30,14 +31,27 @@ var (
 	BuildDate string
 )
 
+func configDir() string {
+	configDir := "./config"
+	dir := flag.String("configdir", configDir, "Directory to search for configuration files.")
+	flag.Parse()
+	configDir = *dir
+	if configDir == "" {
+		configDir = os.Getenv("EVAL_HUB_CONFIG_DIR")
+	}
+	return configDir
+}
+
 func main() {
+	cfgDir := configDir()
+
 	logger, logShutdown, err := logging.NewLogger()
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(nil, err, "Failed to create service logger", logging.FallbackLogger())
 	}
 
-	serviceConfig, err := config.LoadConfig(logger, Version, Build, BuildDate)
+	serviceConfig, err := config.LoadConfig(logger, Version, Build, BuildDate, cfgDir)
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(nil, err, "Failed to create service config", logger)
