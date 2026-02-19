@@ -16,10 +16,10 @@ Feature: Providers Endpoint
 
   Scenario: Get provider for existent provider id
     Given the service is running
-    When I send a GET request to "/api/v1/evaluations/providers?id=garak"
+    When I send a GET request to "/api/v1/evaluations/providers?id=lm_evaluation_harness"
     Then the response code should be 200
     Then the response should contain the value "1" at path "total_count"
-    And the response should contain the value "garak" at path "items[0].id"
+    And the response should contain the value "lm_evaluation_harness" at path "items[0].id"
 
   Scenario: Get provider without benchmarks
     Given the service is running
@@ -29,8 +29,8 @@ Feature: Providers Endpoint
 
   Scenario: Get provider with benchmarks
     Given the service is running
-    When I send a GET request to "/api/v1/evaluations/providers?id=garak&benchmarks=true"
+    When I send a GET request to "/api/v1/evaluations/providers?id=lm_evaluation_harness&benchmarks=true"
     Then the response code should be 200
-    Then the response should contain the value "garak" at path "items[0].id"
-    And the response should contain the value "toxicity" at path "items[0].benchmarks[0].id"
+    Then the response should contain the value "lm_evaluation_harness" at path "items[0].id"
+    And the response should contain the value "arc_easy" at path "items[0].benchmarks[0].id"
 
