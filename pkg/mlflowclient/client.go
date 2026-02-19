@@ -47,7 +47,7 @@ func NewClient(baseURL string) *Client {
 	}
 
 	return &Client{
-		ctx:     context.Background(),
+		ctx:     context.Background(), // this is the default - it should be overridden for each API call using the WithContext method
 		baseURL: baseURL,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
@@ -150,6 +150,10 @@ func (c *Client) WithWorkspace(workspace string) *Client {
 	}
 }
 
+func (c *Client) GetHTTPClient() *http.Client {
+	return c.httpClient
+}
+
 func (c *Client) GetLogger() *slog.Logger {
 	return c.logger
 }
@@ -179,7 +183,7 @@ func (c *Client) resolveAuthToken() string {
 }
 
 // doRequest performs an HTTP request to the MLflow API
-func (c *Client) doRequest(method, endpoint string, body interface{}) ([]byte, error) {
+func (c *Client) doRequest(method, endpoint string, body any) ([]byte, error) {
 	c.logger.Info("MLFlow request started", "method", method, "endpoint", endpoint)
 
 	var reqBody io.Reader
@@ -190,6 +194,12 @@ func (c *Client) doRequest(method, endpoint string, body interface{}) ([]byte, e
 			return nil, fmt.Errorf("failed to marshal request body: %w", err)
 		}
 		reqBody = bytes.NewBuffer(jsonData)
+	}
+
+	if c.ctx == nil {
+		// this should never happen - the context should be set for each API call using the WithContext method
+		c.logger.Error("context is nil for MLFlow request")
+		return nil, fmt.Errorf("context is nil for MLFlow request")
 	}
 
 	req, err := http.NewRequestWithContext(c.ctx, method, c.baseURL+endpoint, reqBody)
