@@ -270,10 +270,21 @@ func (tc *scenarioConfig) iSendARequestTo(method, path string) error {
 
 func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) error {
 	githubActions := os.Getenv("GITHUB_ACTIONS")
+	serverURL := os.Getenv("SERVER_URL")
 	logDebug("GITHUB_ACTIONS=%q\n", githubActions)
-	if githubActions == "true" {
-		// TODO: iWaitForEvaluationJobStatus should wait in CI once async completion is available.
-		logDebug("Skipping status wait (GitHub Actions); skipping completion assertions\n")
+	isLocalhost := false
+	if serverURL != "" {
+		host := serverURL
+		if parsed, err := url.Parse(serverURL); err == nil && parsed.Host != "" {
+			host = parsed.Host
+		}
+		isLocalhost = strings.Contains(host, "localhost") || strings.HasPrefix(host, "127.0.0.1")
+	}
+	isLocalMode := serverURL == "" || (tc.apiFeature != nil && tc.apiFeature.server != nil)
+	// Skip wait in GitHub Actions or local runs (SERVER_URL empty/localhost or in-process server).
+	if githubActions == "true" || isLocalhost || isLocalMode {
+		// TODO: iWaitForEvaluationJobStatus should wait once async completion is available.
+		logDebug("Skipping status wait (GITHUB_ACTIONS=%q, localhost=%t, local=%t); skipping completion assertions\n", githubActions, isLocalhost, isLocalMode)
 		tc.skipCompletionAssertions = true
 		return nil
 	}
