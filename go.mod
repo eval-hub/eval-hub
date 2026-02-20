@@ -11,7 +11,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/xeipuuv/gojsonschema v1.2.0
 	go.uber.org/zap v1.27.1
-	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
+	gopkg.in/evanphx/json-patch.v4 v4.13.0
 	k8s.io/api v0.35.0
 	k8s.io/apimachinery v0.35.0
 	k8s.io/client-go v0.35.0
