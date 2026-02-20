@@ -788,6 +788,25 @@ func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLength(jsonPath stri
 	return nil
 }
 
+func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLengthAtLeast(jsonPath string, minLengthStr string) error {
+	minLength, err := strconv.Atoi(minLengthStr)
+	if err != nil {
+		return logError(fmt.Errorf("expected integer min length, got %q: %w", minLengthStr, err))
+	}
+	raw, err := tc.getJsonPathValue(jsonPath)
+	if err != nil {
+		return err
+	}
+	arr, ok := raw.([]interface{})
+	if !ok {
+		return logError(fmt.Errorf("value at path %s is not an array, got %T", jsonPath, raw))
+	}
+	if len(arr) < minLength {
+		return logError(fmt.Errorf("expected array at path %s to have length >= %d, got %d", jsonPath, minLength, len(arr)))
+	}
+	return nil
+}
+
 func getJsonPointer(path string) string {
 	if !strings.HasPrefix(path, "/") {
 		return strings.ReplaceAll(fmt.Sprintf("/%s", path), ".", "/")
@@ -953,6 +972,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the response should contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldContainAtJSONPath)
 	ctx.Step(`^the response should not contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldNotContainAtJSONPath)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLength)
+	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^I wait for the evaluation job status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatus)
 	// Other steps
 	ctx.Step(`^fix this step$`, tc.fixThisStep)

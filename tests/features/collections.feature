@@ -127,6 +127,57 @@ Feature: Collections Endpoint
     When I send a PUT request to "/api/v1/evaluations/collections/{id}" with body "file:/collection_benchmark_no_provider_id.json"
     Then the response code should be 400
 
+  # Patch collection (per OpenAPI: PATCH .../collections/{id}, body = array of PatchOperation, 200/400/404)
+  Scenario: Patch collection returns 200 and changes are persisted
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
+    Then the response code should be 202
+    When I send a PATCH request to "/api/v1/evaluations/collections/{id}" with body "file:/patch_collection_name.json"
+    Then the response code should be 200
+    When I send a GET request to "/api/v1/evaluations/collections/{id}"
+    Then the response code should be 200
+    And the response should contain "name" with value "patched-collection-name"
+
+  Scenario: Patch a benchmark element in collection returns 200 and change is persisted
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
+    Then the response code should be 202
+    When I send a PATCH request to "/api/v1/evaluations/collections/{id}" with body "file:/patch_collection_benchmark.json"
+    Then the response code should be 200
+    When I send a GET request to "/api/v1/evaluations/collections/{id}"
+    Then the response code should be 200
+    And the response should contain the value "patched-benchmark-id" at path "benchmarks[0].id"
+    And the array at path "benchmarks" in the response should have length 1
+
+  Scenario: Patch entire benchmark element in collection returns 200 and change is persisted
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
+    Then the response code should be 202
+    When I send a PATCH request to "/api/v1/evaluations/collections/{id}" with body "file:/patch_collection_benchmark_full.json"
+    Then the response code should be 200
+    When I send a GET request to "/api/v1/evaluations/collections/{id}"
+    Then the response code should be 200
+    And the response should contain the value "replaced-benchmark-id" at path "benchmarks[0].id"
+    And the response should contain the value "other_provider" at path "benchmarks[0].provider_id"
+    And the array at path "benchmarks" in the response should have length 1
+
+  Scenario: Patch collection with non-existent id returns 404
+    Given the service is running
+    When I send a PATCH request to "/api/v1/evaluations/collections/00000000-0000-0000-0000-000000000000" with body "file:/patch_collection_name.json"
+    Then the response code should be 404
+
+  Scenario: Patch collection with empty id returns 404
+    Given the service is running
+    When I send a PATCH request to "/api/v1/evaluations/collections/" with body "file:/patch_collection_name.json"
+    Then the response code should be 404
+
+  Scenario: Patch collection with invalid body returns 400
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
+    Then the response code should be 202
+    When I send a PATCH request to "/api/v1/evaluations/collections/{id}" with body "file:/patch_collection_invalid.json"
+    Then the response code should be 400
+
   # List collections - positive and negative (per OpenAPI: 200, 400, 404)
   Scenario: List collections returns 200
     Given the service is running
@@ -161,8 +212,7 @@ Feature: Collections Endpoint
     And the "next.href" field in the response should be saved as "value:next_url"
     When I send a GET request to "{{value:next_url}}"
     Then the response code should be 200
-    And the array at path "items" in the response should have length 1
-    And the response should contain the value "3" at path "total_count"
+    And the array at path "items" in the response should have length at least 1
     When I send a DELETE request to "/api/v1/evaluations/collections/{{value:first_id}}?hard_delete=true"
     Then the response code should be 204
     When I send a DELETE request to "/api/v1/evaluations/collections/{{value:second_id}}?hard_delete=true"

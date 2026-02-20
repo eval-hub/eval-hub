@@ -10,6 +10,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	se "github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	jsonpatch "gopkg.in/evanphx/json-patch.v4"
 )
 
 //#######################################################################
@@ -205,7 +206,7 @@ func (s *SQLStorage) updateCollectionTransactional(txn *sql.Tx, collectionID str
 	}
 	_, err = s.exec(txn, updateCollectionStatement, args...)
 	if err != nil {
-		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
+		return serviceerrors.WithRollback(err)
 	}
 	return nil
 }
@@ -227,4 +228,56 @@ func (s *SQLStorage) DeleteCollection(id string) error {
 	s.logger.Info("Deleted collection", "id", id)
 
 	return nil
+}
+
+func (s *SQLStorage) PatchCollection(id string, patches *api.Patch) error {
+	err := s.withTransaction("patch collection", id, func(txn *sql.Tx) error {
+		persistedCollection, err := s.getCollectionTransactional(txn, id)
+		if err != nil {
+			return err
+		}
+		//conevert persistedCollection to json
+		persistedCollectionJSON, err := s.createCollectionEntity(persistedCollection)
+		if err != nil {
+			return err
+		}
+		//apply the patches to the persistedCollectionJSON
+		patchedCollectionJSON, err := applyPatches(string(persistedCollectionJSON), patches)
+		if err != nil {
+			return err
+		}
+		//convert the patchedCollectionJSON back to a CollectionConfig
+		var patchedCollectionConfig api.CollectionConfig
+		err = json.Unmarshal([]byte(patchedCollectionJSON), &patchedCollectionConfig)
+		if err != nil {
+			return err
+		}
+		//convert the patched config back to a CollectionResource
+		persistedCollection, err = s.constructCollectionResource(id,
+			persistedCollection.Resource.CreatedAt,
+			persistedCollection.Resource.UpdatedAt,
+			string(persistedCollection.Resource.Tenant),
+			persistedCollection.Type,
+			&patchedCollectionConfig)
+		if err != nil {
+			return err
+		}
+		return s.updateCollectionTransactional(txn, id, persistedCollection)
+	})
+	return err
+}
+
+func applyPatches(s string, patches *api.Patch) ([]byte, error) {
+	if patches == nil || len(*patches) == 0 {
+		return []byte(s), nil
+	}
+	patchesJSON, err := json.Marshal(patches)
+	if err != nil {
+		return nil, err
+	}
+	patch, err := jsonpatch.DecodePatch(patchesJSON)
+	if err != nil {
+		return nil, err
+	}
+	return patch.Apply([]byte(s))
 }
