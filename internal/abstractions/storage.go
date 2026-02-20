@@ -34,6 +34,7 @@ type Storage interface {
 	GetCollection(id string) (*api.CollectionResource, error)
 	GetCollections(limit int, offset int) (*QueryResults[api.CollectionResource], error)
 	UpdateCollection(collection *api.CollectionResource) error
+	PatchCollection(id string, patches *api.Patch) error
 	DeleteCollection(id string) error
 
 	// Close the storage connection

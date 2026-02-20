@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/common"
@@ -145,7 +146,51 @@ func (h *Handlers) HandleUpdateCollection(ctx *executioncontext.ExecutionContext
 
 // HandlePatchCollection handles PATCH /api/v1/evaluations/collections/{collection_id}
 func (h *Handlers) HandlePatchCollection(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	w.ErrorWithMessageCode(ctx.RequestID, messages.NotImplemented, "Api", "patch collection")
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx)
+
+	logging.LogRequestStarted(ctx)
+
+	// Extract ID from path
+	collectionID := req.PathValue(constants.PATH_PARAMETER_COLLECTION_ID)
+	if collectionID == "" {
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PATH_PARAMETER_COLLECTION_ID), ctx.RequestID)
+		return
+	}
+
+	// get the body bytes from the context
+	bodyBytes, err := req.BodyAsBytes()
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+	var patches api.Patch
+	if err = json.Unmarshal(bodyBytes, &patches); err != nil {
+		w.Error(serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", err.Error()), ctx.RequestID)
+		return
+	}
+	for i := range patches {
+		if err = h.validate.StructCtx(ctx.Ctx, &patches[i]); err != nil {
+			w.Error(serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error", err.Error()), ctx.RequestID)
+			return
+		}
+		//validate that the op is valid as per RFC 6902
+		if patches[i].Op != api.PatchOpReplace && patches[i].Op != api.PatchOpAdd && patches[i].Op != api.PatchOpRemove {
+			w.Error(serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", "Invalid patch operation"), ctx.RequestID)
+			return
+		}
+		//validate that the path is valid as per RFC 6902
+		if patches[i].Path == "" {
+			w.Error(serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", "Invalid patch path"), ctx.RequestID)
+			return
+		}
+	}
+
+	err = storage.PatchCollection(collectionID, &patches)
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+	w.WriteJSON(nil, 200)
 }
 
 // HandleDeleteCollection handles DELETE /api/v1/evaluations/collections/{collection_id}

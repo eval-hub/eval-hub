@@ -68,6 +68,9 @@ func (f *fakeStorage) GetCollections(_ int, _ int) (*abstractions.QueryResults[a
 func (f *fakeStorage) UpdateCollection(_ *api.CollectionResource) error {
 	return nil
 }
+func (f *fakeStorage) PatchCollection(_ string, _ *[]api.Patch) error {
+	return nil
+}
 func (f *fakeStorage) DeleteCollection(_ string) error {
 	return nil
 }
