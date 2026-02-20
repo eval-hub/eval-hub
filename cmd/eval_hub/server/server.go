@@ -248,9 +248,9 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		req := NewRequestWrapper(r)
 		switch r.Method {
 		case http.MethodPost:
-			h.HandleCreateCollection(ctx, resp)
+			h.HandleCreateCollection(ctx, req, resp)
 		case http.MethodGet:
-			h.HandleListCollections(ctx, resp)
+			h.HandleListCollections(ctx, req, resp)
 		default:
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
@@ -262,13 +262,13 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		req := NewRequestWrapper(r)
 		switch r.Method {
 		case http.MethodGet:
-			h.HandleGetCollection(ctx, resp)
+			h.HandleGetCollection(ctx, req, resp)
 		case http.MethodPut:
-			h.HandleUpdateCollection(ctx, resp)
+			h.HandleUpdateCollection(ctx, req, resp)
 		case http.MethodPatch:
-			h.HandlePatchCollection(ctx, resp)
+			h.HandlePatchCollection(ctx, req, resp)
 		case http.MethodDelete:
-			h.HandleDeleteCollection(ctx, resp)
+			h.HandleDeleteCollection(ctx, req, resp)
 		default:
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
