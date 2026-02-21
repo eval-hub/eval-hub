@@ -16,10 +16,21 @@ pip install eval-hub-server
 
 ```bash
 # Run with default settings (port 8080)
+```bash
 eval-hub-server
+```
 
-# Run in local mode
-eval-hub-server --local
+#### Supported program arguments
+
+
+```
+  -configdir string
+        Directory to search for configuration files. (default "./config")
+  -local
+        Server operates in local mode or not.
+```
+
+Alternatively you can set up `EVAL_HUB_CONFIG_DIR` env-var to point to a config directory, but the program argument takes precedence.
 
 # Run with custom port 5000
 PORT=5000 eval-hub-server --local

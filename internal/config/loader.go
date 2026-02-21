@@ -3,24 +3,19 @@ package config
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/spf13/viper"
 )
 
 var (
-	configLookup = []string{"config/providers", "./config/providers", "../../config/providers", "../../../config/providers"}
-
-	once        = sync.Once{}
-	isLocalMode = false
+	providersLookup = []string{"config/providers", "./config/providers", "../../config/providers", "../../../config/providers"}
 )
 
 type EnvMap struct {
@@ -30,15 +25,6 @@ type EnvMap struct {
 type SecretMap struct {
 	Dir      string            `mapstructure:"dir,omitempty"`
 	Mappings map[string]string `mapstructure:"mappings,omitempty"`
-}
-
-func localMode() bool {
-	once.Do(func() {
-		localMode := flag.Bool("local", false, "Server operates in local mode or not.")
-		flag.Parse()
-		isLocalMode = *localMode
-	})
-	return isLocalMode
 }
 
 // readConfig locates and reads a configuration file using Viper. It searches for
@@ -97,7 +83,7 @@ func readConfig(logger *slog.Logger, name string, ext string, dirs ...string) (*
 
 func loadProvider(logger *slog.Logger, file string) (api.ProviderResource, error) {
 	providerConfig := api.ProviderResource{}
-	configValues, err := readConfig(logger, file, "yaml", configLookup...)
+	configValues, err := readConfig(logger, file, "yaml", providersLookup...)
 	if err != nil {
 		return providerConfig, err
 	}
@@ -129,7 +115,7 @@ func scanFolders(logger *slog.Logger, dirs ...string) ([]os.DirEntry, error) {
 
 func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.ProviderResource, error) {
 	if len(dirs) == 0 {
-		dirs = configLookup
+		dirs = providersLookup
 	}
 	providerConfigs := make(map[string]api.ProviderResource)
 	files, err := scanFolders(logger, dirs...)
@@ -265,7 +251,6 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 	conf.Service.Version = version
 	conf.Service.Build = build
 	conf.Service.BuildDate = buildDate
-	conf.Service.LocalMode = localMode()
 
 	logger.Info("End reading configuration", "config", RedactedJSON(conf, redactedFields))
 	return &conf, nil
