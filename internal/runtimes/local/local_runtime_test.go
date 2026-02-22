@@ -1,4 +1,5 @@
 package local
+
 // Assisted-by: claude code
 
 import (
@@ -40,7 +41,7 @@ func (f *fakeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent)
 	return f.updateErr
 }
 
-func (f *fakeStorage) Ping(_ time.Duration) error                          { return nil }
+func (f *fakeStorage) Ping(_ time.Duration) error                             { return nil }
 func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobResource) error { return nil }
 func (f *fakeStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) {
 	return nil, nil
@@ -334,8 +335,8 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !containsSubstring(err.Error(), "missing local runtime command") {
-		t.Fatalf("expected error to contain %q, got %q", "missing local runtime command", err.Error())
+	if !containsSubstring(err.Error(), "Local runtime is not enabled") {
+		t.Fatalf("expected error to contain %q, got %q", "Local runtime is not enabled", err.Error())
 	}
 
 	// Also test with empty command
@@ -350,8 +351,8 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for empty command, got nil")
 	}
-	if !containsSubstring(err.Error(), "missing local runtime command") {
-		t.Fatalf("expected error to contain %q, got %q", "missing local runtime command", err.Error())
+	if !containsSubstring(err.Error(), "Local runtime is not enabled") {
+		t.Fatalf("expected error to contain %q, got %q", "Local runtime is not enabled", err.Error())
 	}
 }
 

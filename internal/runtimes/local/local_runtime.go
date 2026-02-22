@@ -1,4 +1,5 @@
 package local
+
 // Assisted-by: claude code
 
 import (
@@ -11,7 +12,9 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/constants"
+	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
+	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -69,7 +72,7 @@ func (r *LocalRuntime) RunEvaluationJob(
 		return fmt.Errorf("provider %q not found", bench.ProviderID)
 	}
 	if provider.Runtime == nil || provider.Runtime.Local == nil || provider.Runtime.Local.Command == "" {
-		return fmt.Errorf("provider %q missing local runtime command", bench.ProviderID)
+		return serviceerrors.NewServiceError(messages.LocalRuntimeNotEnabled, "ProviderID", bench.ProviderID)
 	}
 
 	// Build job spec JSON using shared logic
@@ -171,11 +174,11 @@ func (r *LocalRuntime) RunEvaluationJob(
 			if storage != nil && *storage != nil {
 				runStatus := &api.StatusEvent{
 					BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
-						ProviderID:   bench.ProviderID,
-						ID:           bench.ID,
-						Status:       api.StateFailed,
+						ProviderID: bench.ProviderID,
+						ID:         bench.ID,
+						Status:     api.StateFailed,
 						ErrorMessage: &api.MessageInfo{
-							Message: err.Error(),
+							Message:     err.Error(),
 							MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED},
 					},
 				}

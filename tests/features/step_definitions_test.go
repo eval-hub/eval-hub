@@ -184,6 +184,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 	logger.Info("Providers loaded.")
 
 	serviceConfig.Service.LocalMode = true // set local mode for testing
+
 	runtime, err := runtimes.NewRuntime(logger, serviceConfig, providerConfigs)
 	if err != nil {
 		return logError(fmt.Errorf("failed to create runtime: %w", err))

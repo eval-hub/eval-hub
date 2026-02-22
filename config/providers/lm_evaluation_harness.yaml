@@ -17,6 +17,7 @@ runtime:
         value: VALUE
   local:
     # reserved for local runtime
+    command: "python main.py"
 
 benchmarks:
   - id: arc_easy

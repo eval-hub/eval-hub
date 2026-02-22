@@ -98,7 +98,7 @@ go test -v ./internal/handlers -run TestHandleName
 To create a Python wheel distribution of the server for local development and testing:
 
 ```sh
-make crosss-compile 
+make crosss-compile
 make build-wheel
 ```
 
