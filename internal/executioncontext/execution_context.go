@@ -49,5 +49,8 @@ func (e *ExecutionContext) WithContext(ctx context.Context) *ExecutionContext {
 		RequestID: e.RequestID,
 		Logger:    e.Logger,
 		StartedAt: e.StartedAt,
+		User:      e.User,
+		Tenant:    e.Tenant,
 	}
+}
 }
