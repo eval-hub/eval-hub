@@ -323,7 +323,8 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	// Prometheus metrics endpoint
 	prometheusEnabled := s.serviceConfig.IsPrometheusEnabled()
 	if prometheusEnabled {
-		s.handle(router, "/metrics", promhttp.Handler())
+		router.Handle("/metrics", promhttp.Handler())
+		s.logger.Info("Registered API", "pattern", "/metrics")
 	}
 
 	// Enable CORS in local mode only (for development/testing)
