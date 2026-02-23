@@ -42,14 +42,6 @@ func SetupOTEL(ctx context.Context, config *config.OTELConfig, logger *slog.Logg
 		return nil, nil
 	}
 
-	// set any default values
-	if config.TracerTimeout == 0 {
-		config.TracerTimeout = 30 * time.Second
-	}
-	if config.TracerBatchInterval == 0 {
-		config.TracerBatchInterval = 5 * time.Second
-	}
-
 	var shutdownFuncs []func(context.Context) error
 	var err error
 
@@ -118,6 +110,16 @@ func newPropagator() propagation.TextMapPropagator {
 }
 
 func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.TracerProvider, error) {
+	// set default values for tracer timeout and batch interval
+	tracerTimeout := config.TracerTimeout
+	if tracerTimeout == 0 {
+		tracerTimeout = 30 * time.Second
+	}
+	tracerBatchInterval := config.TracerBatchInterval
+	if tracerBatchInterval == 0 {
+		tracerBatchInterval = 5 * time.Second
+	}
+
 	switch config.ExporterType {
 	case ExporterTypeOTLPGRPC:
 		if config.ExporterEndpoint == "" {
@@ -125,7 +127,7 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 		}
 		opts := []otlptracegrpc.Option{
 			otlptracegrpc.WithEndpoint(config.ExporterEndpoint),
-			otlptracegrpc.WithTimeout(config.TracerTimeout),
+			otlptracegrpc.WithTimeout(tracerTimeout),
 			otlptracegrpc.WithCompressor(Compressor),
 		}
 		if config.ExporterInsecure {
@@ -144,7 +146,7 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 			return nil, err
 		}
 		tracerProvider := trace.NewTracerProvider(
-			trace.WithBatcher(traceExporter, trace.WithBatchTimeout(config.TracerBatchInterval)),
+			trace.WithBatcher(traceExporter, trace.WithBatchTimeout(tracerBatchInterval)),
 			trace.WithSampler(newSampler(config.SamplingRatio)),
 			trace.WithResource(res),
 		)
@@ -155,7 +157,7 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 		}
 		opts := []otlptracehttp.Option{
 			otlptracehttp.WithEndpoint(config.ExporterEndpoint),
-			otlptracehttp.WithTimeout(config.TracerTimeout),
+			otlptracehttp.WithTimeout(tracerTimeout),
 		}
 		if config.ExporterInsecure {
 			opts = append(opts, otlptracehttp.WithInsecure())
@@ -173,7 +175,7 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 			return nil, err
 		}
 		tracerProvider := trace.NewTracerProvider(
-			trace.WithBatcher(traceExporter, trace.WithBatchTimeout(config.TracerBatchInterval)),
+			trace.WithBatcher(traceExporter, trace.WithBatchTimeout(tracerBatchInterval)),
 			trace.WithSampler(newSampler(config.SamplingRatio)),
 			trace.WithResource(res),
 		)
@@ -184,7 +186,7 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 			return nil, err
 		}
 		tracerProvider := trace.NewTracerProvider(
-			trace.WithBatcher(traceExporter, trace.WithBatchTimeout(config.TracerBatchInterval)),
+			trace.WithBatcher(traceExporter, trace.WithBatchTimeout(tracerBatchInterval)),
 		)
 		return tracerProvider, nil
 	default:
