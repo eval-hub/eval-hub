@@ -109,7 +109,7 @@ func DateTimeFromString(date DateTime) (time.Time, error) {
 type BenchmarkStatus struct {
 	ProviderID     string       `json:"provider_id"`
 	ID             string       `json:"id"`
-	BenchmarkIndex int          `json:"benchmark_index,omitempty"`
+	BenchmarkIndex int          `json:"benchmark_index"`
 	Status         State        `json:"status,omitempty"`
 	ErrorMessage   *MessageInfo `json:"error_message,omitempty"`
 	StartedAt      DateTime     `json:"started_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
@@ -120,7 +120,7 @@ type BenchmarkStatus struct {
 type BenchmarkStatusEvent struct {
 	ProviderID     string         `json:"provider_id" validate:"required"`
 	ID             string         `json:"id" validate:"required"`
-	BenchmarkIndex int            `json:"benchmark_index,omitempty"`
+	BenchmarkIndex int            `json:"benchmark_index"`
 	Status         State          `json:"status" validate:"required,oneof=pending running completed failed cancelled"`
 	Metrics        map[string]any `json:"metrics,omitempty"`
 	Artifacts      map[string]any `json:"artifacts,omitempty"`
