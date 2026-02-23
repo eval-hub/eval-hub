@@ -1,0 +1,10 @@
+{
+  "name": "updated-collection-name",
+  "description": "Updated description for FVT",
+  "benchmarks": [
+    {
+      "id": "arc_easy",
+      "provider_id": "lm_evaluation_harness"
+    }
+  ]
+}
