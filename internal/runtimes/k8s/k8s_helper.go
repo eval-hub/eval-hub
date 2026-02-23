@@ -24,6 +24,8 @@ type KubernetesHelperInterface interface {
 	DeleteJob(ctx context.Context, namespace, name string, opts metav1.DeleteOptions) error
 	DeleteConfigMap(ctx context.Context, namespace, name string) error
 	SetConfigMapOwner(ctx context.Context, namespace, name string, owner metav1.OwnerReference) error
+	ListJobs(ctx context.Context, namespace, labelSelector string) ([]batchv1.Job, error)
+	ListConfigMaps(ctx context.Context, namespace, labelSelector string) ([]corev1.ConfigMap, error)
 }
 
 // KubernetesHelper wraps the Kubernetes client-go client and exposes methods to interact with the cluster.
@@ -126,6 +128,30 @@ func (h *KubernetesHelper) DeleteConfigMap(ctx context.Context, namespace, name 
 		return fmt.Errorf("namespace and name are required")
 	}
 	return h.clientset.CoreV1().ConfigMaps(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+}
+
+// ListJobs returns Jobs matching the label selector.
+func (h *KubernetesHelper) ListJobs(ctx context.Context, namespace, labelSelector string) ([]batchv1.Job, error) {
+	if namespace == "" {
+		return nil, fmt.Errorf("namespace is required")
+	}
+	list, err := h.clientset.BatchV1().Jobs(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+	if err != nil {
+		return nil, err
+	}
+	return list.Items, nil
+}
+
+// ListConfigMaps returns ConfigMaps matching the label selector.
+func (h *KubernetesHelper) ListConfigMaps(ctx context.Context, namespace, labelSelector string) ([]corev1.ConfigMap, error) {
+	if namespace == "" {
+		return nil, fmt.Errorf("namespace is required")
+	}
+	list, err := h.clientset.CoreV1().ConfigMaps(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+	if err != nil {
+		return nil, err
+	}
+	return list.Items, nil
 }
 
 // SetConfigMapOwner sets a single owner reference on the ConfigMap.

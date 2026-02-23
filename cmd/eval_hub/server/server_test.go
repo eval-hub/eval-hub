@@ -80,28 +80,23 @@ func TestServerSetupRoutes(t *testing.T) {
 		body   string
 	}{
 		{http.MethodGet, "/api/v1/health", http.StatusOK, ""},
-		{http.MethodGet, "/metrics", http.StatusOK, ""},
 		{http.MethodGet, "/openapi.yaml", http.StatusOK, ""},
 		{http.MethodGet, "/docs", http.StatusOK, ""},
 		// Evaluation endpoints
-		{http.MethodPost, "/api/v1/evaluations/jobs", http.StatusAccepted, `{"model": {"url": "http://test.com", "name": "test"}, "benchmarks": [{"id": "toxicity", "provider_id": "garak"}]}`},
+		{http.MethodPost, "/api/v1/evaluations/jobs", http.StatusAccepted, `{"model": {"url": "http://test.com", "name": "test"}, "benchmarks": [{"id": "arc_easy", "provider_id": "lm_evaluation_harness"}]}`},
 		{http.MethodGet, "/api/v1/evaluations/jobs", http.StatusOK, ""},
 		{http.MethodGet, "/api/v1/evaluations/jobs/test-id", http.StatusNotFound, ""},
-		// we can not delete because we have no id
-		// Benchmarks
-		{http.MethodGet, "/api/v1/evaluations/benchmarks", http.StatusOK, ""},
 		// Collections
-		{http.MethodGet, "/api/v1/evaluations/collections", http.StatusNotImplemented, ""},
-		{http.MethodPost, "/api/v1/evaluations/collections", http.StatusNotImplemented, ""},
-		{http.MethodGet, "/api/v1/evaluations/collections/test-collection", http.StatusNotImplemented, ""},
-		{http.MethodPut, "/api/v1/evaluations/collections/test-collection", http.StatusNotImplemented, ""},
-		{http.MethodPatch, "/api/v1/evaluations/collections/test-collection", http.StatusNotImplemented, ""},
-		{http.MethodDelete, "/api/v1/evaluations/collections/test-collection", http.StatusNotImplemented, ""},
+		{http.MethodPost, "/api/v1/evaluations/collections", http.StatusAccepted, `{"name": "test-benchmarks-collection", "description": "Collection of benchmarks for FVT", "benchmarks": [{"id": "arc_easy", "provider_id": "lm_evaluation_harness"}]}`},
+		{http.MethodGet, "/api/v1/evaluations/collections", http.StatusOK, ""},
+		{http.MethodGet, "/api/v1/evaluations/collections/test-collection", http.StatusNotFound, ""},
 		// Providers
 		{http.MethodGet, "/api/v1/evaluations/providers", http.StatusOK, ""},
 		// Error cases
 		{http.MethodPost, "/api/v1/health", http.StatusMethodNotAllowed, ""},
 		{http.MethodGet, "/nonexistent", http.StatusNotFound, ""},
+
+		{http.MethodGet, "/metrics", http.StatusOK, ""},
 	}
 
 	var evaluationIds []string
@@ -195,17 +190,24 @@ func createServer(port int) (*server.Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create validator: %w", err)
 	}
-	serviceConfig, err := config.LoadConfig(logger, "0.0.1", "local", time.Now().Format(time.RFC3339), "../../../tests")
+	serviceConfig, err := config.LoadConfig(logger, "0.0.1", "local", time.Now().Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load service config: %w", err)
 	}
 	serviceConfig.Service.Port = port
-	storage, err := storage.NewStorage(serviceConfig.Database, logger)
+	if serviceConfig.Prometheus == nil {
+		serviceConfig.Prometheus = &config.PrometheusConfig{
+			Enabled: true,
+		}
+	} else {
+		serviceConfig.Prometheus.Enabled = true
+	}
+	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create storage: %w", err)
 	}
 	// set up the provider configs
-	providerConfigs, err := config.LoadProviderConfigs(logger, "../../../config/providers", "../../../../config/providers", "../../../../../config/providers")
+	providerConfigs, err := config.LoadProviderConfigs(logger)
 	if err != nil {
 		// we do this as no point trying to continue
 		return nil, fmt.Errorf("failed to load provider configs: %w", err)

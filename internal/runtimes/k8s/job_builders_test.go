@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -8,36 +9,66 @@ import (
 
 func TestBuildConfigMap(t *testing.T) {
 	cfg := &jobConfig{
-		jobID:       "job-123",
-		namespace:   "default",
-		providerID:  "provider-1",
-		benchmarkID: "bench-1",
-		jobSpecJSON: "{}",
+		jobID:          "job-123",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		jobSpecJSON:    "{}",
+		resourceGUID:   "guid-123",
 	}
 
 	configMap := buildConfigMap(cfg)
-	expectedName := configMapName(cfg.jobID, cfg.benchmarkID)
+	expectedName := configMapName(cfg.jobID, cfg.resourceGUID)
 	if configMap.Name != expectedName {
 		t.Fatalf("expected configmap name %s, got %s", expectedName, configMap.Name)
 	}
 	if configMap.Data[jobSpecFileName] != "{}" {
 		t.Fatalf("expected job spec data to be set")
 	}
+	annotations := configMap.Annotations
+	if annotations[annotationJobIDKey] != cfg.jobID {
+		t.Fatalf("expected job_id annotation %q, got %q", cfg.jobID, annotations[annotationJobIDKey])
+	}
+	if annotations[annotationProviderIDKey] != cfg.providerID {
+		t.Fatalf("expected provider_id annotation %q, got %q", cfg.providerID, annotations[annotationProviderIDKey])
+	}
+	if annotations[annotationBenchmarkIDKey] != cfg.benchmarkID {
+		t.Fatalf("expected benchmark_id annotation %q, got %q", cfg.benchmarkID, annotations[annotationBenchmarkIDKey])
+	}
 }
 
 func TestBuildK8sNameSanitizes(t *testing.T) {
-	name := buildK8sName("Job-123", "AraDiCE_boolq_lev", "")
-	if name != "eval-job-job-123-aradice-boolq-lev" {
-		t.Fatalf("expected sanitized name %q, got %q", "eval-job-job-123-aradice-boolq-lev", name)
+	name := buildK8sName("Job-123", "Guid-ABC", "")
+	if !strings.HasPrefix(name, "job-123-") {
+		t.Fatalf("expected sanitized name to start with %q, got %q", "job-123-", name)
+	}
+}
+
+func TestBuildK8sNameDiffersAcrossGUIDs(t *testing.T) {
+	jobID := "job-123"
+	name1 := buildK8sName(jobID, "guid-1", "")
+	name2 := buildK8sName(jobID, "guid-2", "")
+	if name1 == name2 {
+		t.Fatalf("expected different names for different GUIDs, got %q", name1)
+	}
+}
+
+func TestJobLabelsSanitizeBenchmarkID(t *testing.T) {
+	labels := jobLabels("job-123", "lighteval", "arc:easy")
+	if labels[labelBenchmarkIDKey] != "arc-easy" {
+		t.Fatalf("expected benchmark label to be sanitized, got %q", labels[labelBenchmarkIDKey])
 	}
 }
 
 func TestBuildJobRequiresAdapterImage(t *testing.T) {
 	cfg := &jobConfig{
-		jobID:       "job-123",
-		namespace:   "default",
-		providerID:  "provider-1",
-		benchmarkID: "bench-1",
+		jobID:          "job-123",
+		resourceGUID:   "guid-123",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
 	}
 
 	_, err := buildJob(cfg, nil)
@@ -48,12 +79,14 @@ func TestBuildJobRequiresAdapterImage(t *testing.T) {
 
 func TestBuildJobSecurityContext(t *testing.T) {
 	cfg := &jobConfig{
-		jobID:        "job-123",
-		namespace:    "default",
-		providerID:   "provider-1",
-		benchmarkID:  "bench-1",
-		adapterImage: "adapter:latest",
-		defaultEnv:   []api.EnvVar{},
+		jobID:          "job-123",
+		resourceGUID:   "guid-123",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
 	}
 
 	job, err := buildJob(cfg, nil)
@@ -89,6 +122,146 @@ func TestBuildJobSecurityContext(t *testing.T) {
 	}
 	if container.SecurityContext.SeccompProfile == nil || container.SecurityContext.SeccompProfile.Type == "" {
 		t.Fatalf("expected seccomp profile to be set")
+	}
+}
+
+func TestBuildJobAnnotations(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "job-123",
+		resourceGUID:   "guid-123",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
+	}
+
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	if job.Annotations[annotationJobIDKey] != cfg.jobID {
+		t.Fatalf("expected job_id annotation %q, got %q", cfg.jobID, job.Annotations[annotationJobIDKey])
+	}
+	if job.Annotations[annotationProviderIDKey] != cfg.providerID {
+		t.Fatalf("expected provider_id annotation %q, got %q", cfg.providerID, job.Annotations[annotationProviderIDKey])
+	}
+	if job.Annotations[annotationBenchmarkIDKey] != cfg.benchmarkID {
+		t.Fatalf("expected benchmark_id annotation %q, got %q", cfg.benchmarkID, job.Annotations[annotationBenchmarkIDKey])
+	}
+
+	podAnnotations := job.Spec.Template.Annotations
+	if podAnnotations[annotationJobIDKey] != cfg.jobID {
+		t.Fatalf("expected pod job_id annotation %q, got %q", cfg.jobID, podAnnotations[annotationJobIDKey])
+	}
+	if podAnnotations[annotationProviderIDKey] != cfg.providerID {
+		t.Fatalf("expected pod provider_id annotation %q, got %q", cfg.providerID, podAnnotations[annotationProviderIDKey])
+	}
+	if podAnnotations[annotationBenchmarkIDKey] != cfg.benchmarkID {
+		t.Fatalf("expected pod benchmark_id annotation %q, got %q", cfg.benchmarkID, podAnnotations[annotationBenchmarkIDKey])
+	}
+}
+
+func TestBuildJobWithOCICredentials(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:                "job-oci",
+		benchmarkIndex:       0,
+		resourceGUID:         "guid-oci",
+		namespace:            "default",
+		providerID:           "provider-1",
+		benchmarkID:          "bench-1",
+		adapterImage:         "adapter:latest",
+		defaultEnv:           []api.EnvVar{},
+		ociCredentialsSecret: "my-pull-secret",
+	}
+
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	// Check volume exists with correct secret name
+	var foundVolume bool
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == ociCredentialsVolumeName {
+			foundVolume = true
+			if v.VolumeSource.Secret == nil {
+				t.Fatalf("expected secret volume source for %s", ociCredentialsVolumeName)
+			}
+			if v.VolumeSource.Secret.SecretName != "my-pull-secret" {
+				t.Fatalf("expected secret name %q, got %q", "my-pull-secret", v.VolumeSource.Secret.SecretName)
+			}
+		}
+	}
+	if !foundVolume {
+		t.Fatalf("expected volume %s to be present", ociCredentialsVolumeName)
+	}
+
+	// Check volume mount exists with correct path and subPath
+	container := job.Spec.Template.Spec.Containers[0]
+	var foundMount bool
+	for _, m := range container.VolumeMounts {
+		if m.Name == ociCredentialsVolumeName {
+			foundMount = true
+			if m.MountPath != ociCredentialsMountPath {
+				t.Fatalf("expected mount path %q, got %q", ociCredentialsMountPath, m.MountPath)
+			}
+			if m.SubPath != ociCredentialsSubPath {
+				t.Fatalf("expected sub path %q, got %q", ociCredentialsSubPath, m.SubPath)
+			}
+			if !m.ReadOnly {
+				t.Fatalf("expected mount to be read-only")
+			}
+		}
+	}
+	if !foundMount {
+		t.Fatalf("expected volume mount %s to be present", ociCredentialsVolumeName)
+	}
+
+	// Check env var exists
+	var foundEnv bool
+	for _, e := range container.Env {
+		if e.Name == envOCIAuthConfigPathName {
+			foundEnv = true
+			if e.Value != ociCredentialsMountPath {
+				t.Fatalf("expected env value %q, got %q", ociCredentialsMountPath, e.Value)
+			}
+		}
+	}
+	if !foundEnv {
+		t.Fatalf("expected env var %s to be present", envOCIAuthConfigPathName)
+	}
+}
+
+func TestBuildJobWithoutOCICredentials(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "job-no-oci",
+		resourceGUID:   "guid-no-oci",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
+	}
+
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == ociCredentialsVolumeName {
+			t.Fatalf("expected no %s volume when ociCredentialsSecret is empty", ociCredentialsVolumeName)
+		}
+	}
+	container := job.Spec.Template.Spec.Containers[0]
+	for _, e := range container.Env {
+		if e.Name == envOCIAuthConfigPathName {
+			t.Fatalf("expected no %s env var when ociCredentialsSecret is empty", envOCIAuthConfigPathName)
+		}
 	}
 }
 

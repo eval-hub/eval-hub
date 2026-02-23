@@ -29,7 +29,7 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 		"url":           "file::memory:?mode=memory&cache=shared",
 		"database_name": "eval_hub",
 	}
-	store, err := storage.NewStorage(&databaseConfig, logger)
+	store, err := storage.NewStorage(&databaseConfig, false, logger)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestEvaluationsStorage(t *testing.T) {
 		databaseConfig["driver"] = "sqlite"
 		databaseConfig["url"] = "file::memory:?mode=memory&cache=shared"
 		databaseConfig["database_name"] = "eval_hub"
-		s, err := storage.NewStorage(&databaseConfig, logger)
+		s, err := storage.NewStorage(&databaseConfig, false, logger)
 		if err != nil {
 			t.Fatalf("Failed to create storage: %v", err)
 		}
@@ -209,7 +209,11 @@ func TestEvaluationsStorage(t *testing.T) {
 	})
 
 	t.Run("GetEvaluationJobs returns the evaluation jobs", func(t *testing.T) {
-		resp, err := store.GetEvaluationJobs(10, 0, "")
+		resp, err := store.GetEvaluationJobs(10, 0, abstractions.QueryFilter{
+			Params: map[string]string{
+				"status_filter": "",
+			},
+		})
 		if err != nil {
 			t.Fatalf("Failed to get evaluation jobs: %v", err)
 		}

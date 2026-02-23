@@ -93,7 +93,7 @@ func LogRequestStarted(ctx *executioncontext.ExecutionContext) {
 
 func LogRequestFailed(ctx *executioncontext.ExecutionContext, code int, errorMessage string) {
 	// log the failed request, the request details and requestId have already been added to the logger
-	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request failed", "error", errorMessage, "code", code)
+	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request failed", "error", errorMessage, "code", code, "duration", time.Since(ctx.StartedAt))
 }
 
 func LogRequestSuccess(ctx *executioncontext.ExecutionContext, code int, response any) {
@@ -102,7 +102,7 @@ func LogRequestSuccess(ctx *executioncontext.ExecutionContext, code int, respons
 	// if response != nil {
 	//	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request successful", "response", response)
 	//} else {
-	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request successful")
+	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request successful", "duration", time.Since(ctx.StartedAt))
 	//}
 	//}
 }

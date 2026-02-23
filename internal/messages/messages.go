@@ -143,6 +143,13 @@ var (
 		"An unknown error occurred: {{.Error}}.",
 		"unknown_error",
 	)
+
+	// BadRequest The request is invalid: '{{.Error}}'. Please check the request and try again.
+	BadRequest = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The request is invalid: '{{.Error}}'. Please check the request and try again.",
+		"bad_request",
+	)
 )
 
 type MessageCode struct {

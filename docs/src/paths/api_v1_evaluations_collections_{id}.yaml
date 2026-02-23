@@ -4,7 +4,7 @@ get:
     - Collections
   summary: Get Collection
   description: Get details of a specific collection.
-  operationId: get_collection_api_v1_evaluations_collections__collection_id__get
+  operationId: get_collections_id
   parameters:
     - name: id
       in: path
@@ -33,7 +33,7 @@ put:
     - Collections
   summary: Update Collection
   description: Update an existing collection.
-  operationId: update_collection_api_v1_evaluations_collections__collection_id__put
+  operationId: put_collections_id
   parameters:
     - name: id
       in: path
@@ -68,7 +68,7 @@ patch:
     - Collections
   summary: Patch Collection
   description: Partially update an existing collection.
-  operationId: patch_collection_api_v1_evaluations_collections__collection_id__patch
+  operationId: patch_collections_id
   parameters:
     - name: id
       in: path
@@ -107,7 +107,7 @@ delete:
     - Collections
   summary: Delete Collection
   description: Delete a collection.
-  operationId: delete_collection_api_v1_evaluations_collections__collection_id__delete
+  operationId: delete_collections_id
   parameters:
     - name: id
       in: path

@@ -10,8 +10,6 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/pkg/api"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
@@ -24,6 +22,7 @@ type fakeStorage struct {
 	runStatus     *api.StatusEvent
 	runStatusChan chan *api.StatusEvent
 	updateErr     error
+	tenant        api.Tenant
 }
 
 // UpdateEvaluationJob implements [abstractions.Storage].
@@ -46,7 +45,7 @@ func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobResource) error {
 func (f *fakeStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) {
 	return nil, nil
 }
-func (f *fakeStorage) GetEvaluationJobs(int, _ int, _ string) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
+func (f *fakeStorage) GetEvaluationJobs(int, _ int, _ abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
 	return nil, nil
 }
 func (f *fakeStorage) DeleteEvaluationJob(_ string) error {
@@ -59,13 +58,16 @@ func (f *fakeStorage) UpdateEvaluationJobStatus(_ string, _ api.OverallState, _ 
 func (f *fakeStorage) CreateCollection(_ *api.CollectionResource) error {
 	return nil
 }
-func (f *fakeStorage) GetCollection(_ string, _ bool) (*api.CollectionResource, error) {
+func (f *fakeStorage) GetCollection(_ string) (*api.CollectionResource, error) {
 	return nil, nil
 }
 func (f *fakeStorage) GetCollections(_ int, _ int) (*abstractions.QueryResults[api.CollectionResource], error) {
 	return nil, nil
 }
 func (f *fakeStorage) UpdateCollection(_ *api.CollectionResource) error {
+	return nil
+}
+func (f *fakeStorage) PatchCollection(_ string, _ *api.Patch) error {
 	return nil
 }
 func (f *fakeStorage) DeleteCollection(_ string) error {
@@ -79,6 +81,7 @@ func (f *fakeStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 		ctx:           f.ctx,
 		runStatusChan: f.runStatusChan,
 		updateErr:     f.updateErr,
+		tenant:        f.tenant,
 	}
 }
 
@@ -88,6 +91,17 @@ func (f *fakeStorage) WithContext(ctx context.Context) abstractions.Storage {
 		ctx:           ctx,
 		runStatusChan: f.runStatusChan,
 		updateErr:     f.updateErr,
+		tenant:        f.tenant,
+	}
+}
+
+func (f *fakeStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
+	return &fakeStorage{
+		logger:        f.logger,
+		ctx:           f.ctx,
+		runStatusChan: f.runStatusChan,
+		updateErr:     f.updateErr,
+		tenant:        tenant,
 	}
 }
 
@@ -110,16 +124,16 @@ func TestCreateBenchmarkResourcesSetsConfigMapOwner(t *testing.T) {
 		providers: sampleProviders(providerID),
 	}
 
-	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0])
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	cmName := configMapName(evaluation.Resource.ID, evaluation.Benchmarks[0].ID)
-	cm, err := clientset.CoreV1().ConfigMaps(defaultNamespace).Get(context.Background(), cmName, metav1.GetOptions{})
-	if err != nil {
-		t.Fatalf("expected configmap to exist, got %v", err)
+	configMaps := listConfigMapsByJobID(t, clientset, evaluation.Resource.ID)
+	if len(configMaps) != 1 {
+		t.Fatalf("expected 1 configmap, got %d", len(configMaps))
 	}
+	cm := configMaps[0]
 	if len(cm.OwnerReferences) != 1 {
 		t.Fatalf("expected 1 owner reference, got %d", len(cm.OwnerReferences))
 	}
@@ -127,11 +141,72 @@ func TestCreateBenchmarkResourcesSetsConfigMapOwner(t *testing.T) {
 	if owner.Kind != "Job" || owner.APIVersion != "batch/v1" {
 		t.Fatalf("expected owner to be batch/v1 Job, got %s %s", owner.APIVersion, owner.Kind)
 	}
-	if owner.Name != jobName(evaluation.Resource.ID, evaluation.Benchmarks[0].ID) {
+	jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(jobs))
+	}
+	if owner.Name != jobs[0].Name {
 		t.Fatalf("expected owner name to match job name, got %q", owner.Name)
 	}
 	if owner.Controller == nil || !*owner.Controller {
 		t.Fatalf("expected owner reference to be controller")
+	}
+}
+
+func TestCreateBenchmarkResourcesSetsAnnotations(t *testing.T) {
+	t.Setenv("SERVICE_URL", "http://service.example")
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+
+	clientset := fake.NewSimpleClientset()
+	runtime := &K8sRuntime{
+		logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper:    &KubernetesHelper{clientset: clientset},
+		providers: sampleProviders(providerID),
+	}
+
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	configMaps := listConfigMapsByJobID(t, clientset, evaluation.Resource.ID)
+	if len(configMaps) != 1 {
+		t.Fatalf("expected 1 configmap, got %d", len(configMaps))
+	}
+	cm := configMaps[0]
+	if cm.Annotations[annotationJobIDKey] != evaluation.Resource.ID {
+		t.Fatalf("expected configmap job_id annotation %q, got %q", evaluation.Resource.ID, cm.Annotations[annotationJobIDKey])
+	}
+	if cm.Annotations[annotationProviderIDKey] != evaluation.Benchmarks[0].ProviderID {
+		t.Fatalf("expected configmap provider_id annotation %q, got %q", evaluation.Benchmarks[0].ProviderID, cm.Annotations[annotationProviderIDKey])
+	}
+	if cm.Annotations[annotationBenchmarkIDKey] != evaluation.Benchmarks[0].ID {
+		t.Fatalf("expected configmap benchmark_id annotation %q, got %q", evaluation.Benchmarks[0].ID, cm.Annotations[annotationBenchmarkIDKey])
+	}
+
+	jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(jobs))
+	}
+	job := jobs[0]
+	if job.Annotations[annotationJobIDKey] != evaluation.Resource.ID {
+		t.Fatalf("expected job job_id annotation %q, got %q", evaluation.Resource.ID, job.Annotations[annotationJobIDKey])
+	}
+	if job.Annotations[annotationProviderIDKey] != evaluation.Benchmarks[0].ProviderID {
+		t.Fatalf("expected job provider_id annotation %q, got %q", evaluation.Benchmarks[0].ProviderID, job.Annotations[annotationProviderIDKey])
+	}
+	if job.Annotations[annotationBenchmarkIDKey] != evaluation.Benchmarks[0].ID {
+		t.Fatalf("expected job benchmark_id annotation %q, got %q", evaluation.Benchmarks[0].ID, job.Annotations[annotationBenchmarkIDKey])
+	}
+	if job.Spec.Template.Annotations[annotationJobIDKey] != evaluation.Resource.ID {
+		t.Fatalf("expected pod job_id annotation %q, got %q", evaluation.Resource.ID, job.Spec.Template.Annotations[annotationJobIDKey])
+	}
+	if job.Spec.Template.Annotations[annotationProviderIDKey] != evaluation.Benchmarks[0].ProviderID {
+		t.Fatalf("expected pod provider_id annotation %q, got %q", evaluation.Benchmarks[0].ProviderID, job.Spec.Template.Annotations[annotationProviderIDKey])
+	}
+	if job.Spec.Template.Annotations[annotationBenchmarkIDKey] != evaluation.Benchmarks[0].ID {
+		t.Fatalf("expected pod benchmark_id annotation %q, got %q", evaluation.Benchmarks[0].ID, job.Spec.Template.Annotations[annotationBenchmarkIDKey])
 	}
 }
 
@@ -151,15 +226,14 @@ func TestCreateBenchmarkResourcesDeletesConfigMapOnJobFailure(t *testing.T) {
 		providers: sampleProviders(providerID),
 	}
 
-	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0])
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
 
-	cmName := configMapName(evaluation.Resource.ID, evaluation.Benchmarks[0].ID)
-	_, err = clientset.CoreV1().ConfigMaps(defaultNamespace).Get(context.Background(), cmName, metav1.GetOptions{})
-	if err == nil || !apierrors.IsNotFound(err) {
-		t.Fatalf("expected configmap to be deleted, got %v", err)
+	configMaps := listConfigMapsByJobID(t, clientset, evaluation.Resource.ID)
+	if len(configMaps) != 0 {
+		t.Fatalf("expected configmap to be deleted, got %d", len(configMaps))
 	}
 }
 
@@ -279,10 +353,12 @@ func sampleEvaluation(providerID string) *api.EvaluationJobResource {
 func sampleProviders(providerID string) map[string]api.ProviderResource {
 	return map[string]api.ProviderResource{
 		providerID: {
-			ID: providerID,
-			Runtime: &api.Runtime{
-				K8s: &api.K8sRuntime{
-					Image: "quay.io/evalhub/adapter:latest",
+			Resource: api.Resource{ID: providerID},
+			ProviderConfigInternal: api.ProviderConfigInternal{
+				Runtime: &api.Runtime{
+					K8s: &api.K8sRuntime{
+						Image: "quay.io/evalhub/adapter:latest",
+					},
 				},
 			},
 		},

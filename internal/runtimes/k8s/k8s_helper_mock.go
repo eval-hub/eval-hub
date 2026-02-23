@@ -37,6 +37,18 @@ type MockKubernetesHelper struct {
 	logger *slog.Logger
 }
 
+// ListConfigMaps implements [KubernetesHelperInterface].
+func (h *MockKubernetesHelper) ListConfigMaps(ctx context.Context, namespace string, labelSelector string) ([]corev1.ConfigMap, error) {
+	//return an empty list of configmaps
+	return []corev1.ConfigMap{}, nil
+}
+
+// ListJobs implements [KubernetesHelperInterface].
+func (h *MockKubernetesHelper) ListJobs(ctx context.Context, namespace string, labelSelector string) ([]batchv1.Job, error) {
+	//return an empty list of jobs
+	return []batchv1.Job{}, nil
+}
+
 // NewMockKubernetesHelper returns a mock helper that does not call the cluster.
 func NewMockKubernetesHelper(logger *slog.Logger) *MockKubernetesHelper {
 	return &MockKubernetesHelper{logger: logger}

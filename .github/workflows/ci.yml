@@ -26,7 +26,7 @@ jobs:
     - name: Format check
       run: |
         make fmt
-        git diff --exit-code || (echo "Code is not formatted. Run 'make fmt' locally." && exit 1)
+        git diff --exit-code -- '*.go' || (echo "Code is not formatted. Run 'make fmt' locally." && exit 1)
 
     - name: Run linter
       run: make lint
@@ -49,6 +49,7 @@ jobs:
 
     - name: Build and verify the API documentation
       run: |
+        npm ci
         make documentation
         git diff --exit-code || (echo "API documentation is not generated. Run 'make documentation' locally." && exit 1)
 

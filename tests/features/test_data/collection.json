@@ -1,0 +1,10 @@
+{
+  "name": "test-benchmarks-collection",
+  "description": "Collection of benchmarks for FVT",
+  "benchmarks": [
+    {
+      "id": "arc_easy",
+      "provider_id": "lm_evaluation_harness"
+    }
+  ]
+}

@@ -107,26 +107,28 @@ func DateTimeFromString(date DateTime) (time.Time, error) {
 
 // BenchmarkStatus represents status of individual benchmark in evaluation
 type BenchmarkStatus struct {
-	ProviderID   string       `json:"provider_id"`
-	ID           string       `json:"id"`
-	Status       State        `json:"status,omitempty"`
-	ErrorMessage *MessageInfo `json:"error_message,omitempty"`
-	StartedAt    DateTime     `json:"started_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
-	CompletedAt  DateTime     `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
+	ProviderID     string       `json:"provider_id"`
+	ID             string       `json:"id"`
+	BenchmarkIndex int          `json:"benchmark_index"`
+	Status         State        `json:"status,omitempty"`
+	ErrorMessage   *MessageInfo `json:"error_message,omitempty"`
+	StartedAt      DateTime     `json:"started_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
+	CompletedAt    DateTime     `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
 }
 
 // BenchmarkStatusEvent is used when the job runtime needs to updated the status of a benchmark
 type BenchmarkStatusEvent struct {
-	ProviderID   string         `json:"provider_id" validate:"required"`
-	ID           string         `json:"id" validate:"required"`
-	Status       State          `json:"status" validate:"required,oneof=pending running completed failed cancelled"`
-	Metrics      map[string]any `json:"metrics,omitempty"`
-	Artifacts    map[string]any `json:"artifacts,omitempty"`
-	ErrorMessage *MessageInfo   `json:"error_message,omitempty"`
-	StartedAt    DateTime       `json:"started_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
-	CompletedAt  DateTime       `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
-	MLFlowRunID  string         `json:"mlflow_run_id,omitempty"`
-	LogsPath     string         `json:"logs_path,omitempty"`
+	ProviderID     string         `json:"provider_id" validate:"required"`
+	ID             string         `json:"id" validate:"required"`
+	BenchmarkIndex int            `json:"benchmark_index"`
+	Status         State          `json:"status" validate:"required,oneof=pending running completed failed cancelled"`
+	Metrics        map[string]any `json:"metrics,omitempty"`
+	Artifacts      map[string]any `json:"artifacts,omitempty"`
+	ErrorMessage   *MessageInfo   `json:"error_message,omitempty"`
+	StartedAt      DateTime       `json:"started_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
+	CompletedAt    DateTime       `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
+	MLFlowRunID    string         `json:"mlflow_run_id,omitempty"`
+	LogsPath       string         `json:"logs_path,omitempty"`
 }
 
 type EvaluationJobState struct {
@@ -139,12 +141,13 @@ type StatusEvent struct {
 }
 
 type BenchmarkResult struct {
-	ID          string         `json:"id"`
-	ProviderID  string         `json:"provider_id"`
-	Metrics     map[string]any `json:"metrics,omitempty"`
-	Artifacts   map[string]any `json:"artifacts,omitempty"`
-	MLFlowRunID string         `json:"mlflow_run_id,omitempty"`
-	LogsPath    string         `json:"logs_path,omitempty"`
+	ID             string         `json:"id"`
+	ProviderID     string         `json:"provider_id"`
+	BenchmarkIndex int            `json:"benchmark_index"`
+	Metrics        map[string]any `json:"metrics,omitempty"`
+	Artifacts      map[string]any `json:"artifacts,omitempty"`
+	MLFlowRunID    string         `json:"mlflow_run_id,omitempty"`
+	LogsPath       string         `json:"logs_path,omitempty"`
 }
 
 // EvaluationJobResults represents results section for EvaluationJobResource
@@ -153,14 +156,44 @@ type EvaluationJobResults struct {
 	MLFlowExperimentURL string            `json:"mlflow_experiment_url,omitempty"`
 }
 
+// OCICoordinates represents OCI artifact coordinates for persistence
+type OCICoordinates struct {
+	OCIHost       string            `json:"oci_host" validate:"required"`
+	OCIRepository string            `json:"oci_repository" validate:"required"`
+	OCITag        string            `json:"oci_tag,omitempty"`
+	OCISubject    string            `json:"oci_subject,omitempty"`
+	Annotations   map[string]string `json:"annotations,omitempty"`
+}
+
+// OCIConnectionConfig represents K8s connection configuration for OCI operations.
+// Connection must reference a Kubernetes Secret containing a ".dockerconfigjson" entry,
+// which provides standard Docker registry credentials for authenticating to the OCI registry.
+type OCIConnectionConfig struct {
+	// Connection is the name of a Kubernetes Secret (type kubernetes.io/dockerconfigjson)
+	// with a ".dockerconfigjson" entry used for OCI registry authentication.
+	Connection string `json:"connection" validate:"required"`
+}
+
+// EvaluationExportsOCI represents OCI export configuration
+type EvaluationExportsOCI struct {
+	Coordinates OCICoordinates       `json:"coordinates" validate:"required"`
+	K8s         *OCIConnectionConfig `json:"k8s,omitempty"`
+}
+
+// EvaluationExports represents optional exports configuration for an evaluation job
+type EvaluationExports struct {
+	OCI *EvaluationExportsOCI `json:"oci,omitempty"`
+}
+
 // EvaluationJobConfig represents evaluation job request schema
 type EvaluationJobConfig struct {
-	Model        ModelRef          `json:"model" validate:"required"`
-	PassCriteria *PassCriteria     `json:"pass_criteria,omitempty"`
-	Benchmarks   []BenchmarkConfig `json:"benchmarks" validate:"required,min=1,dive"`
-	Collection   *Ref              `json:"collection,omitempty"`
-	Experiment   *ExperimentConfig `json:"experiment,omitempty"`
-	Custom       *map[string]any   `json:"custom,omitempty"`
+	Model        ModelRef           `json:"model" validate:"required"`
+	PassCriteria *PassCriteria      `json:"pass_criteria,omitempty"`
+	Benchmarks   []BenchmarkConfig  `json:"benchmarks" validate:"required,min=1,dive"`
+	Collection   *Ref               `json:"collection,omitempty"`
+	Experiment   *ExperimentConfig  `json:"experiment,omitempty"`
+	Custom       *map[string]any    `json:"custom,omitempty"`
+	Exports      *EvaluationExports `json:"exports,omitempty"`
 }
 
 type EvaluationResource struct {
