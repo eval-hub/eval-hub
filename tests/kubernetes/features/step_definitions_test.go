@@ -578,6 +578,8 @@ func (tc *testContext) theResponseCodeShouldBe(code int) error {
 func (tc *testContext) configMapShouldBeCreatedWithNamePattern(pattern string) error {
 	// Convert pattern to regex
 	regexPattern := strings.ReplaceAll(pattern, "{id}", ".*")
+	regexPattern = strings.ReplaceAll(regexPattern, "{guid}", ".*")
+	regexPattern = strings.ReplaceAll(regexPattern, "{resource_guid}", ".*")
 	regexPattern = strings.ReplaceAll(regexPattern, "{benchmark_id}", ".*")
 	regexPattern = strings.ReplaceAll(regexPattern, "{provider_id}", ".*")
 	regexPattern = strings.ReplaceAll(regexPattern, "{hash}", ".*")
@@ -1071,6 +1073,8 @@ func (tc *testContext) configMapDataShouldContainFieldAsArray(dataKey, field str
 func (tc *testContext) jobShouldBeCreatedWithNamePattern(pattern string) error {
 	// Convert pattern to regex
 	regexPattern := strings.ReplaceAll(pattern, "{id}", ".*")
+	regexPattern = strings.ReplaceAll(regexPattern, "{guid}", ".*")
+	regexPattern = strings.ReplaceAll(regexPattern, "{resource_guid}", ".*")
 	regexPattern = strings.ReplaceAll(regexPattern, "{benchmark_id}", ".*")
 	regexPattern = strings.ReplaceAll(regexPattern, "{provider_id}", ".*")
 	regexPattern = strings.ReplaceAll(regexPattern, "{hash}", ".*")
