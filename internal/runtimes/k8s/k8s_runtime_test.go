@@ -187,7 +187,7 @@ func TestCreateBenchmarkResourcesReturnsErrorWhenConfigMapExists(t *testing.T) {
 		t.Fatalf("failed to seed configmap: %v", err)
 	}
 
-	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[0]); err == nil {
+	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[0], 0); err == nil {
 		t.Fatalf("expected error but got nil")
 	} else if !apierrors.IsAlreadyExists(err) {
 		t.Fatalf("expected already exists error, got %v", err)
@@ -265,12 +265,12 @@ func TestCreateBenchmarkResourcesDuplicateBenchmarkIDCollides(t *testing.T) {
 		_ = runtime.helper.DeleteConfigMap(context.Background(), defaultNamespace, secondConfigMapName)
 	})
 
-	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[0]); err != nil {
+	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[0], 0); err != nil {
 		t.Logf("first createBenchmarkResources error: %v", err)
 		t.Fatalf("unexpected error creating first benchmark resources: %v", err)
 	}
 
-	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[1]); err != nil {
+	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[1], 1); err != nil {
 		t.Fatalf("unexpected error creating second benchmark resources: %v", err)
 	}
 
@@ -341,7 +341,7 @@ func TestCreateBenchmarkResourcesSetsAnnotationsIntegration(t *testing.T) {
 		_ = runtime.helper.DeleteConfigMap(context.Background(), defaultNamespace, configMapName)
 	})
 
-	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[0]); err != nil {
+	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[0], 0); err != nil {
 		t.Fatalf("unexpected error creating benchmark resources: %v", err)
 	}
 
@@ -437,7 +437,7 @@ func TestRunEvaluationJobReturnsNilOnCreateFailure(t *testing.T) {
 		t.Fatalf("expected nil error, got %v", err)
 	}
 
-	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[0]); err == nil {
+	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[0], 0); err == nil {
 		t.Fatalf("expected create error but got nil")
 	}
 }

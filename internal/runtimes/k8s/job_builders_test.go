@@ -9,11 +9,12 @@ import (
 
 func TestBuildConfigMap(t *testing.T) {
 	cfg := &jobConfig{
-		jobID:       "job-123",
-		namespace:   "default",
-		providerID:  "provider-1",
-		benchmarkID: "bench-1",
-		jobSpecJSON: "{}",
+		jobID:          "job-123",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		jobSpecJSON:    "{}",
 	}
 
 	configMap := buildConfigMap(cfg)
@@ -63,10 +64,11 @@ func TestJobLabelsSanitizeBenchmarkID(t *testing.T) {
 
 func TestBuildJobRequiresAdapterImage(t *testing.T) {
 	cfg := &jobConfig{
-		jobID:       "job-123",
-		namespace:   "default",
-		providerID:  "provider-1",
-		benchmarkID: "bench-1",
+		jobID:          "job-123",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
 	}
 
 	_, err := buildJob(cfg)
@@ -77,12 +79,13 @@ func TestBuildJobRequiresAdapterImage(t *testing.T) {
 
 func TestBuildJobSecurityContext(t *testing.T) {
 	cfg := &jobConfig{
-		jobID:        "job-123",
-		namespace:    "default",
-		providerID:   "provider-1",
-		benchmarkID:  "bench-1",
-		adapterImage: "adapter:latest",
-		defaultEnv:   []api.EnvVar{},
+		jobID:          "job-123",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
 	}
 
 	job, err := buildJob(cfg)
@@ -123,12 +126,13 @@ func TestBuildJobSecurityContext(t *testing.T) {
 
 func TestBuildJobAnnotations(t *testing.T) {
 	cfg := &jobConfig{
-		jobID:        "job-123",
-		namespace:    "default",
-		providerID:   "provider-1",
-		benchmarkID:  "bench-1",
-		adapterImage: "adapter:latest",
-		defaultEnv:   []api.EnvVar{},
+		jobID:          "job-123",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
 	}
 
 	job, err := buildJob(cfg)
@@ -161,6 +165,7 @@ func TestBuildJobAnnotations(t *testing.T) {
 func TestBuildJobWithOCICredentials(t *testing.T) {
 	cfg := &jobConfig{
 		jobID:                "job-oci",
+		benchmarkIndex:       0,
 		namespace:            "default",
 		providerID:           "provider-1",
 		benchmarkID:          "bench-1",
@@ -229,12 +234,13 @@ func TestBuildJobWithOCICredentials(t *testing.T) {
 
 func TestBuildJobWithoutOCICredentials(t *testing.T) {
 	cfg := &jobConfig{
-		jobID:        "job-no-oci",
-		namespace:    "default",
-		providerID:   "provider-1",
-		benchmarkID:  "bench-1",
-		adapterImage: "adapter:latest",
-		defaultEnv:   []api.EnvVar{},
+		jobID:          "job-no-oci",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
 	}
 
 	job, err := buildJob(cfg)

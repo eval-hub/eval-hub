@@ -31,6 +31,7 @@ type jobConfig struct {
 	namespace            string
 	providerID           string
 	benchmarkID          string
+	benchmarkIndex       int
 	adapterImage         string
 	entrypoint           []string
 	defaultEnv           []api.EnvVar
@@ -52,6 +53,7 @@ type jobSpec struct {
 	JobID           string              `json:"id"`
 	ProviderID      string              `json:"provider_id"`
 	BenchmarkID     string              `json:"benchmark_id"`
+	BenchmarkIndex  int                 `json:"benchmark_index"`
 	Model           api.ModelRef        `json:"model"`
 	NumExamples     *int                `json:"num_examples,omitempty"`
 	BenchmarkConfig map[string]any      `json:"benchmark_config"`
@@ -70,7 +72,7 @@ type jobSpecExportsOCI struct {
 	Coordinates api.OCICoordinates `json:"coordinates"`
 }
 
-func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkID string) (*jobConfig, error) {
+func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkID string, benchmarkIndex int) (*jobConfig, error) {
 	runtime := provider.Runtime
 	if runtime == nil || runtime.K8s == nil {
 		return nil, fmt.Errorf("provider %q missing runtime configuration", provider.Resource.ID)
@@ -102,6 +104,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	delete(benchmarkParams, "num_examples")
 	spec := jobSpec{
 		JobID:           evaluation.Resource.ID,
+		BenchmarkIndex:  benchmarkIndex,
 		ProviderID:      provider.Resource.ID,
 		BenchmarkID:     benchmarkID,
 		Model:           evaluation.Model,
