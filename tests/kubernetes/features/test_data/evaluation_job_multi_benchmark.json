@@ -18,8 +18,8 @@
       "parameters": {}
     },
     {
-      "id": "toxicity",
-      "provider_id": "garak"
+      "id": "blimp",
+      "provider_id": "lm_evaluation_harness"
     }
   ]
 }

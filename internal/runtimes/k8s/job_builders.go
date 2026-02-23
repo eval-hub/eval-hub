@@ -2,8 +2,6 @@ package k8s
 
 // Contains the builder functions that construct Kubernetes objects
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"fmt"
 	"regexp"
 	"strings"
@@ -27,7 +25,6 @@ const (
 	jobSpecMountPath                = "/meta/job.json"
 	dataMountPath                   = "/data"
 	serviceCAMountPath              = "/etc/pki/ca-trust/source/anchors"
-	jobPrefix                       = "eval-job-"
 	specSuffix                      = "-spec"
 	envJobIDName                    = "JOB_ID"
 	envEvalHubURLName               = "EVALHUB_URL"
@@ -88,54 +85,29 @@ func sanitizeLabelValue(value string) string {
 }
 
 // buildK8sName returns a DNS-1123-safe name for Jobs and ConfigMaps:
-// base = "eval-job-<provider>-<benchmark>-<jobID8>", then "-<hash>" for uniqueness,
-// and optional suffix (e.g. "-spec" for ConfigMaps), all kept within 63 chars.
-func buildK8sName(jobID, providerID, benchmarkID, suffix string) string {
-	shortJobID := shortenJobID(jobID, 8)
-	base := jobPrefix +
-		sanitizeDNS1123Label(providerID) + "-" +
-		sanitizeDNS1123Label(benchmarkID) + "-" +
-		shortJobID
-
-	hash := shortHash(jobID+"|"+providerID+"|"+benchmarkID, 8)
-	maxBase := maxK8sNameLength - len(suffix) - len(hash) - 1
-	if maxBase < 1 {
-		maxBase = 1
+// base = "<jobID>-<guid>", plus optional suffix (e.g. "-spec" for ConfigMaps),
+// all kept within 63 chars.
+func buildK8sName(jobID, resourceGUID, suffix string) string {
+	safeJobID := sanitizeDNS1123Label(jobID)
+	safeGUID := sanitizeDNS1123Label(resourceGUID)
+	maxJobID := maxK8sNameLength - len(suffix) - len(safeGUID) - 1
+	if maxJobID < 1 {
+		maxJobID = 1
 	}
-	if len(base) > maxBase {
-		base = strings.Trim(base[:maxBase], "-")
+	if len(safeJobID) > maxJobID {
+		safeJobID = strings.Trim(safeJobID[:maxJobID], "-")
 	}
-	name := base + "-" + hash + suffix
+	name := safeJobID + "-" + safeGUID + suffix
 	if len(name) > maxK8sNameLength {
 		name = strings.Trim(name[:maxK8sNameLength], "-")
 	}
 	return name
 }
 
-func shortHash(value string, length int) string {
-	sum := sha1.Sum([]byte(value))
-	hexValue := hex.EncodeToString(sum[:])
-	if length <= 0 || length > len(hexValue) {
-		return hexValue
-	}
-	return hexValue[:length]
-}
-
-func shortenJobID(jobID string, length int) string {
-	safe := sanitizeDNS1123Label(jobID)
-	if safe == "" {
-		return "x"
-	}
-	if length <= 0 || len(safe) <= length {
-		return safe
-	}
-	return strings.Trim(safe[:length], "-")
-}
-
 func buildConfigMap(cfg *jobConfig) *corev1.ConfigMap {
 	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	annotations := jobAnnotations(cfg.jobID, cfg.providerID, cfg.benchmarkID)
-	name := configMapName(cfg.jobID, cfg.providerID, cfg.benchmarkID)
+	name := configMapName(cfg.jobID, cfg.resourceGUID)
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
@@ -155,8 +127,8 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	}
 	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	annotations := jobAnnotations(cfg.jobID, cfg.providerID, cfg.benchmarkID)
-	jobName := jobName(cfg.jobID, cfg.providerID, cfg.benchmarkID)
-	configMap := configMapName(cfg.jobID, cfg.providerID, cfg.benchmarkID)
+	jobName := jobName(cfg.jobID, cfg.resourceGUID)
+	configMap := configMapName(cfg.jobID, cfg.resourceGUID)
 
 	ttl := defaultJobTTLSeconds
 	backoff := defaultJobBackoffLimit
@@ -481,12 +453,12 @@ func buildResources(cfg *jobConfig) (corev1.ResourceRequirements, error) {
 	return resources, nil
 }
 
-func jobName(jobID, providerID, benchmarkID string) string {
-	return buildK8sName(jobID, providerID, benchmarkID, "")
+func jobName(jobID, resourceGUID string) string {
+	return buildK8sName(jobID, resourceGUID, "")
 }
 
-func configMapName(jobID, providerID, benchmarkID string) string {
-	return buildK8sName(jobID, providerID, benchmarkID, specSuffix)
+func configMapName(jobID, resourceGUID string) string {
+	return buildK8sName(jobID, resourceGUID, specSuffix)
 }
 
 func jobLabels(jobID, providerID, benchmarkID string) map[string]string {

@@ -33,10 +33,7 @@ func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobResource) 
 	mlflowExperimentID := evaluation.Resource.MLFlowExperimentID
 
 	err := s.withTransaction("create evaluation job", jobID, func(txn *sql.Tx) error {
-		tenant, err := s.getTenant()
-		if err != nil {
-			return se.WithRollback(err)
-		}
+		tenant := s.tenant
 
 		evaluationJSON, err := s.createEvaluationJobEntity(evaluation)
 		if err != nil {
@@ -103,13 +100,14 @@ func (s *SQLStorage) constructEvaluationResource(tenantID string, statusStr stri
 	status := evaluationEntity.Status
 	status.State = overAllState
 
+	tenant := api.Tenant(tenantID)
 	evaluationResource := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{
 				ID:        dbID,
-				Tenant:    api.Tenant(tenantID),
-				CreatedAt: createdAt,
-				UpdatedAt: updatedAt,
+				Tenant:    &tenant,
+				CreatedAt: &createdAt,
+				UpdatedAt: &updatedAt,
 			},
 			MLFlowExperimentID: experimentID,
 			Message:            message,
@@ -161,7 +159,12 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 	return job, nil
 }
 
-func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, statusFilter string) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
+func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, filter abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
+
+	statusFilter, ok := filter.Params["status_filter"]
+	if !ok {
+		statusFilter = ""
+	}
 	// Get total count (with status filter if provided)
 	countQuery, countArgs, err := createCountEntitiesStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, statusFilter)
 	if err != nil {

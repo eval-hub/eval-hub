@@ -67,10 +67,11 @@ func (h *Handlers) HandleCreateCollection(ctx *executioncontext.ExecutionContext
 		return
 	}
 
+	now := time.Now()
 	collectionResource := &api.CollectionResource{
 		Resource: api.Resource{
 			ID:        common.GUID(),
-			CreatedAt: time.Now(),
+			CreatedAt: &now,
 		},
 		Type:             "owned", //Assumption: system collections are not created through the API
 		CollectionConfig: *collection,

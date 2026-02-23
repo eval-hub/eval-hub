@@ -11,6 +11,9 @@ properties:
   id:
     type: string
     description: Benchmark ID
+  benchmark_index:
+    type: integer
+    description: Benchmark index in the evaluation job request
   status:
     $ref: ./State.yaml
   metrics:

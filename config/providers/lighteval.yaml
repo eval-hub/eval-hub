@@ -1,7 +1,6 @@
 id: lighteval
 name: Lighteval
 description: Lightweight LLM evaluation framework from Hugging Face
-type: builtin
 runtime:
   k8s:
     image: quay.io/evalhub/community-lighteval:latest

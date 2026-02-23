@@ -17,8 +17,6 @@ security: []
 tags:
   - name: Evaluations
     description: Evaluation job management endpoints
-  - name: Benchmarks
-    description: Benchmark management endpoints
   - name: Collections
     description: Benchmark collection management endpoints
     x-internal: true
@@ -37,7 +35,7 @@ paths:
     get:
       summary: Health Check
       description: Health check endpoint.
-      operationId: health_check_api_v1_health_get
+      operationId: get_health
       tags:
         - Health
       responses:
@@ -60,7 +58,7 @@ paths:
       x-internal: true
       summary: Metrics
       description: Prometheus metrics endpoint with MLflow health check.
-      operationId: metrics_metrics_get
+      operationId: get_metrics
       tags:
         - Metrics
       responses:
@@ -82,7 +80,7 @@ paths:
       x-internal: true
       summary: OpenAPI specification
       description: Returns the OpenAPI 3.1.0 specification for this API
-      operationId: openapi_yaml_get
+      operationId: get_openapi
       tags:
         - Documentation
       responses:
@@ -108,7 +106,7 @@ paths:
       x-internal: true
       summary: API documentation
       description: Interactive API documentation (Swagger UI)
-      operationId: getDocs
+      operationId: get_docs
       tags:
         - Documentation
       responses:
@@ -132,7 +130,7 @@ paths:
         - Evaluations
       summary: Create Evaluation
       description: Create and execute evaluation request using the simplified benchmark schema.
-      operationId: create_evaluation_api_v1_evaluations_jobs_post
+      operationId: post_evaluations_jobs
       requestBody:
         required: true
         content:
@@ -159,7 +157,7 @@ paths:
         - Evaluations
       summary: List Evaluations
       description: List all evaluation requests.
-      operationId: list_evaluations_api_v1_evaluations_jobs_get
+      operationId: get_evaluations_jobs
       parameters:
         - name: limit
           in: query
@@ -211,7 +209,7 @@ paths:
         - Evaluations
       summary: Get Evaluation Status
       description: Get the status of an evaluation request.
-      operationId: get_evaluation_status_api_v1_evaluations_jobs__id__get
+      operationId: get_evaluations_jobs_id
       parameters:
         - name: id
           in: path
@@ -239,7 +237,7 @@ paths:
         - Evaluations
       summary: Cancel Evaluation
       description: Cancel a running evaluation.
-      operationId: cancel_evaluation_api_v1_evaluations_jobs__id__delete
+      operationId: delete_evaluations_jobs_id
       parameters:
         - name: id
           in: path
@@ -273,13 +271,12 @@ paths:
       x-internal: true
       tags:
         - Evaluations
-      summary: Update Evaluation
+      summary: Send a new evaluation status event
       description: |
-        Update the evaluation job status or results.
-
+        Send an evaluation job status or results.
         Note that this endpoint is internal and should not be used by clients,
         eventually it will not be possible to call this endpoint without a special token.
-      operationId: update_evaluation_api_v1_evaluations_jobs_id_update_post
+      operationId: post_events_id
       parameters:
         - name: id
           in: path
@@ -325,7 +322,7 @@ paths:
         - Providers
       summary: List Providers
       description: List all registered evaluation providers.
-      operationId: list_providers_api_v1_evaluations_providers_get
+      operationId: list_providers
       parameters:
         - name: id
           in: query
@@ -359,53 +356,156 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-  /api/v1/evaluations/benchmarks:
+    post:
+      tags:
+        - Providers
+      summary: Create a new provider scoped to the current tenant (Bring Your Own Provider)
+      description: Create a new provider scoped to the current tenant (Bring Your Own Provider)
+      operationId: post_providers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderConfig'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/evaluations/providers/{id}:
     get:
       tags:
-        - Benchmarks
-      summary: List All Benchmarks
-      description: List all available benchmarks across providers (similar to Llama Stack format).
-      operationId: list_all_benchmarks_api_v1_evaluations_benchmarks_get
+        - Providers
+      summary: Get Provider
+      description: Get a provider by ID.
+      operationId: get_providers_id
       parameters:
-        - name: provider_id
-          in: query
-          required: false
-          schema:
-            type: string
-            description: Filter by provider ID
-            title: Provider Id
-          description: Filter by provider ID
         - name: id
-          in: query
-          required: false
+          in: path
+          required: true
           schema:
             type: string
-            description: Filter by benchmark ID
-            title: Benchmark Id
-          description: Filter by benchmark ID
-        - name: category
-          in: query
-          required: false
-          schema:
-            type: string
-            description: Filter by benchmark category
-            title: Category
-          description: Filter by benchmark category
-        - name: tags
-          in: query
-          required: false
-          schema:
-            type: string
-            description: Filter by tags (comma-separated)
-            title: Tags
-          description: Filter by tags (comma-separated)
+            description: Provider ID
+            title: Provider Id
+          description: Provider ID
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BenchmarkResourceList'
+                $ref: '#/components/schemas/ProviderResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - Providers
+      summary: Update Provider
+      description: Update an existing provider.
+      operationId: put_providers_id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            description: Provider ID
+            title: Provider Id
+          description: Provider ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderConfigInternal'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Providers
+      summary: Patch Provider
+      description: Partially update an existing provider.
+      operationId: patch_providers_id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Provider Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              title: Json Patch
+              description: JSON Patch operation
+              items:
+                $ref: '#/components/schemas/PatchOperation'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Providers
+      summary: Delete Provider
+      description: Delete provider by ID.
+      operationId: delete_providers_id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            description: Provider ID
+            title: Provider Id
+          description: Provider ID
+      responses:
+        '204':
+          description: Successful Response
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -421,7 +521,7 @@ paths:
         - Collections
       summary: List Collections
       description: List all benchmark collections.
-      operationId: list_collections_api_v1_evaluations_collections_get
+      operationId: get_collections
       responses:
         '200':
           description: Successful Response
@@ -443,7 +543,7 @@ paths:
         - Collections
       summary: Create Collection
       description: Create a new collection.
-      operationId: create_collection_api_v1_evaluations_collections_post
+      operationId: post_collections
       requestBody:
         content:
           application/json:
@@ -472,7 +572,7 @@ paths:
         - Collections
       summary: Get Collection
       description: Get details of a specific collection.
-      operationId: get_collection_api_v1_evaluations_collections__collection_id__get
+      operationId: get_collections_id
       parameters:
         - name: id
           in: path
@@ -501,7 +601,7 @@ paths:
         - Collections
       summary: Update Collection
       description: Update an existing collection.
-      operationId: update_collection_api_v1_evaluations_collections__collection_id__put
+      operationId: put_collections_id
       parameters:
         - name: id
           in: path
@@ -536,7 +636,7 @@ paths:
         - Collections
       summary: Patch Collection
       description: Partially update an existing collection.
-      operationId: patch_collection_api_v1_evaluations_collections__collection_id__patch
+      operationId: patch_collections_id
       parameters:
         - name: id
           in: path
@@ -575,7 +675,7 @@ paths:
         - Collections
       summary: Delete Collection
       description: Delete a collection.
-      operationId: delete_collection_api_v1_evaluations_collections__collection_id__delete
+      operationId: delete_collections_id
       parameters:
         - name: id
           in: path
@@ -679,6 +779,12 @@ components:
           type: string
           format: date-time
           description: Last update timestamp
+        read_only:
+          type: boolean
+          description: Whether the resource is read-only
+        owner:
+          type: string
+          description: Owner of the resource
     MessageInfo:
       type: object
       description: Message from a downstream service
@@ -742,6 +848,9 @@ components:
         id:
           type: string
           description: Benchmark ID
+        benchmark_index:
+          type: integer
+          description: Benchmark index in the evaluation job request
         status:
           $ref: '#/components/schemas/State'
         error_message:
@@ -776,6 +885,9 @@ components:
         provider_id:
           type: string
           description: Provider ID
+        benchmark_index:
+          type: integer
+          description: Benchmark index in the evaluation job request
         metrics:
           type: object
           additionalProperties: true
@@ -1048,6 +1160,9 @@ components:
         id:
           type: string
           description: Benchmark ID
+        benchmark_index:
+          type: integer
+          description: Benchmark index in the evaluation job request
         status:
           $ref: '#/components/schemas/State'
         metrics:
@@ -1087,9 +1202,6 @@ components:
         id:
           type: string
           description: Benchmark ID
-        provider_id:
-          type: string
-          description: Provider ID
         name:
           type: string
           description: Benchmark name
@@ -1115,13 +1227,14 @@ components:
           items:
             type: string
           description: Tags
-    ProviderResource:
+        primary_score:
+          $ref: '#/components/schemas/PrimaryScore'
+        pass_criteria:
+          $ref: '#/components/schemas/PassCriteria'
+    ProviderConfigInternal:
       type: object
       description: Evaluation provider (configuration and available benchmarks)
       properties:
-        id:
-          type: string
-          description: Provider ID
         name:
           type: string
           description: Provider name
@@ -1136,6 +1249,22 @@ components:
           items:
             $ref: '#/components/schemas/BenchmarkResource'
           description: Benchmarks offered by this provider
+    ProviderResource:
+      type: object
+      description: Provider resource
+      allOf:
+        - type: object
+          properties:
+            resource:
+              $ref: '#/components/schemas/Resource'
+              description: Resource metadata
+            type:
+              type: string
+              enum:
+                - system
+                - owned
+              description: Type of collection. 'system' collections are created by the system and are not editable, 'owned' collections are created by the user and are editable.
+        - $ref: '#/components/schemas/ProviderConfigInternal'
     ProviderResourceList:
       type: object
       description: List of providers (no pagination links)
@@ -1148,18 +1277,37 @@ components:
           items:
             $ref: '#/components/schemas/ProviderResource'
           description: Provider resources
-    BenchmarkResourceList:
+    ProviderConfig:
       type: object
-      description: List of benchmarks
+      description: Evaluation provider (configuration and available benchmarks)
+      allOf:
+        - type: object
+          properties:
+            id:
+              type: string
+              description: Provider ID
+        - $ref: '#/components/schemas/ProviderConfigInternal'
+    PatchOp:
+      type: string
+      enum:
+        - replace
+        - add
+        - remove
+      description: Patch operation type
+    PatchOperation:
+      type: object
+      description: Single JSON patch operation
       properties:
-        total_count:
-          type: integer
-          description: Total number of benchmarks
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/BenchmarkResource'
-          description: Benchmark resources
+        op:
+          $ref: '#/components/schemas/PatchOp'
+        path:
+          type: string
+          description: JSON Pointer path
+        value:
+          description: Value for add/replace (omit for remove)
+      required:
+        - op
+        - path
     CollectionConfig:
       type: object
       description: Request to create or update a collection
@@ -1191,7 +1339,7 @@ components:
         - benchmarks
     CollectionResource:
       type: object
-      description: Collection resource (stored entity)
+      description: Collection resource
       allOf:
         - type: object
           properties:
@@ -1217,27 +1365,6 @@ components:
               items:
                 $ref: '#/components/schemas/CollectionResource'
               description: Collection resources
-    PatchOp:
-      type: string
-      enum:
-        - replace
-        - add
-        - remove
-      description: Patch operation type
-    PatchOperation:
-      type: object
-      description: Single JSON patch operation
-      properties:
-        op:
-          $ref: '#/components/schemas/PatchOp'
-        path:
-          type: string
-          description: JSON Pointer path
-        value:
-          description: Value for add/replace (omit for remove)
-      required:
-        - op
-        - path
   examples:
     BadRequestError:
       summary: Bad request error with status code 400

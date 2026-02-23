@@ -33,15 +33,17 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ID: "provider-1",
-		Runtime: &api.Runtime{
-			K8s: &api.K8sRuntime{
-				Image: "adapter:latest",
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
 			},
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, "bench-1")
+	cfg, err := buildJobConfig(evaluation, provider, "bench-1", 0)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
@@ -120,15 +122,17 @@ func TestBuildJobConfigAllowsNumExamplesOnly(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ID: "provider-1",
-		Runtime: &api.Runtime{
-			K8s: &api.K8sRuntime{
-				Image: "adapter:latest",
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
 			},
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, "bench-1")
+	cfg, err := buildJobConfig(evaluation, provider, "bench-1", 0)
 	if err != nil {
 		t.Fatalf("expected no error for num_examples-only benchmark_config, got %v", err)
 	}
@@ -163,10 +167,13 @@ func TestBuildJobConfigMissingRuntime(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ID: "provider-1",
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{},
+		},
 	}
 
-	_, err := buildJobConfig(evaluation, provider, "bench-1")
+	_, err := buildJobConfig(evaluation, provider, "bench-1", 0)
 	if err == nil {
 		t.Fatalf("expected error for missing runtime")
 	}
@@ -187,11 +194,13 @@ func TestBuildJobConfigMissingAdapterImage(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ID:      "provider-1",
-		Runtime: &api.Runtime{},
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{},
+		},
 	}
 
-	_, err := buildJobConfig(evaluation, provider, "bench-1")
+	_, err := buildJobConfig(evaluation, provider, "bench-1", 0)
 	if err == nil {
 		t.Fatalf("expected error for missing adapter image")
 	}
@@ -217,15 +226,17 @@ func TestBuildJobConfigMissingServiceURL(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ID: "provider-1",
-		Runtime: &api.Runtime{
-			K8s: &api.K8sRuntime{
-				Image: "adapter:latest",
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
 			},
 		},
 	}
 
-	_, err := buildJobConfig(evaluation, provider, "bench-1")
+	_, err := buildJobConfig(evaluation, provider, "bench-1", 0)
 	if err == nil {
 		t.Fatalf("expected error for missing %s", serviceURLEnv)
 	}
@@ -251,15 +262,17 @@ func TestBuildJobConfigAllowsEmptyBenchmarkConfig(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ID: "provider-1",
-		Runtime: &api.Runtime{
-			K8s: &api.K8sRuntime{
-				Image: "adapter:latest",
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
 			},
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, "bench-1")
+	cfg, err := buildJobConfig(evaluation, provider, "bench-1", 0)
 	if err != nil {
 		t.Fatalf("expected no error for empty benchmark_config, got %v", err)
 	}
@@ -308,15 +321,17 @@ func TestBuildJobConfigWithOCIExports(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ID: "provider-1",
-		Runtime: &api.Runtime{
-			K8s: &api.K8sRuntime{
-				Image: "adapter:latest",
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
 			},
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, "bench-1")
+	cfg, err := buildJobConfig(evaluation, provider, "bench-1", 0)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}

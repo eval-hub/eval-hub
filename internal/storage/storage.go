@@ -11,9 +11,9 @@ import (
 
 // NewStorage creates a new storage instance based on the configuration.
 // It currently uses the SQL storage implementation.
-func NewStorage(databaseConfig *map[string]any, logger *slog.Logger) (abstractions.Storage, error) {
+func NewStorage(databaseConfig *map[string]any, otelEnabled bool, logger *slog.Logger) (abstractions.Storage, error) {
 	if databaseConfig == nil {
 		return nil, serviceerrors.NewServiceError(messages.ConfigurationFailed, "Error", "database configuration")
 	}
-	return sql.NewStorage(*databaseConfig, logger)
+	return sql.NewStorage(*databaseConfig, otelEnabled, logger)
 }

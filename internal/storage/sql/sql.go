@@ -9,6 +9,9 @@ import (
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/uptrace/opentelemetry-go-extra/otelsql"
+	"go.opentelemetry.io/otel/attribute"
+	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 )
 
 const (
@@ -26,13 +29,14 @@ type SQLStorage struct {
 	pool      *sql.DB
 	logger    *slog.Logger
 	ctx       context.Context
+	tenant    api.Tenant
 }
 
-func NewStorage(config map[string]any, logger *slog.Logger) (abstractions.Storage, error) {
+func NewStorage(config map[string]any, otelEnabled bool, logger *slog.Logger) (abstractions.Storage, error) {
 	var sqlConfig SQLDatabaseConfig
-	err := mapstructure.Decode(config, &sqlConfig)
-	if err != nil {
-		return nil, err
+	merr := mapstructure.Decode(config, &sqlConfig)
+	if merr != nil {
+		return nil, merr
 	}
 
 	// check that the driver is supported
@@ -45,11 +49,28 @@ func NewStorage(config map[string]any, logger *slog.Logger) (abstractions.Storag
 		return nil, getUnsupportedDriverError(sqlConfig.Driver)
 	}
 
-	logger = logger.With("driver", sqlConfig.getDriverName(), "url", sqlConfig.getConnectionURL())
+	databaseName := sqlConfig.getDatabaseName()
+	logger = logger.With("driver", sqlConfig.getDriverName(), "database", databaseName)
 
 	logger.Info("Creating SQL storage")
 
-	pool, err := sql.Open(sqlConfig.Driver, sqlConfig.URL)
+	var pool *sql.DB
+	var err error
+	if otelEnabled {
+		var attrs []attribute.KeyValue
+		switch sqlConfig.Driver {
+		case SQLITE_DRIVER:
+			attrs = append(attrs, semconv.DBSystemSqlite)
+		case POSTGRES_DRIVER:
+			attrs = append(attrs, semconv.DBSystemPostgreSQL)
+		}
+		if databaseName != "" {
+			attrs = append(attrs, semconv.DBNameKey.String(databaseName))
+		}
+		pool, err = otelsql.Open(sqlConfig.Driver, sqlConfig.URL, otelsql.WithAttributes(attrs...))
+	} else {
+		pool, err = sql.Open(sqlConfig.Driver, sqlConfig.URL)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -132,10 +153,6 @@ func (s *SQLStorage) ensureSchema() error {
 	return nil
 }
 
-func (s *SQLStorage) getTenant() (api.Tenant, error) {
-	return "TODO", nil
-}
-
 func (s *SQLStorage) Close() error {
 	return s.pool.Close()
 }
@@ -146,6 +163,7 @@ func (s *SQLStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 		pool:      s.pool,
 		logger:    logger,
 		ctx:       s.ctx,
+		tenant:    s.tenant,
 	}
 }
 
@@ -155,5 +173,16 @@ func (s *SQLStorage) WithContext(ctx context.Context) abstractions.Storage {
 		pool:      s.pool,
 		logger:    s.logger,
 		ctx:       ctx,
+		tenant:    s.tenant,
+	}
+}
+
+func (s *SQLStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
+	return &SQLStorage{
+		sqlConfig: s.sqlConfig,
+		pool:      s.pool,
+		logger:    s.logger,
+		ctx:       s.ctx,
+		tenant:    tenant,
 	}
 }

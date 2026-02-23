@@ -20,10 +20,7 @@ import (
 func (s *SQLStorage) CreateCollection(collection *api.CollectionResource) error {
 	collectionId := collection.Resource.ID
 	scope := collection.Type
-	tenant, err := s.getTenant()
-	if err != nil {
-		return se.NewServiceError(messages.InternalServerError, "Error", err)
-	}
+	tenant := s.tenant
 	collectionJSON, err := s.createCollectionEntity(collection)
 	if err != nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
@@ -96,12 +93,13 @@ func (s *SQLStorage) constructCollectionResource(dbID string, createdAt time.Tim
 		s.logger.Error("Failed to construct collection resource", "error", "Collection config does not exist", "id", dbID)
 		return nil, se.NewServiceError(messages.InternalServerError, "Error", "Collection config does not exist")
 	}
+	tenant := api.Tenant(tenantID)
 	return &api.CollectionResource{
 		Resource: api.Resource{
 			ID:        dbID,
-			Tenant:    api.Tenant(tenantID),
-			CreatedAt: createdAt,
-			UpdatedAt: updatedAt,
+			Tenant:    &tenant,
+			CreatedAt: &createdAt,
+			UpdatedAt: &updatedAt,
 		},
 		Type:             scope,
 		CollectionConfig: *collectionConfig,
@@ -189,6 +187,9 @@ func (s *SQLStorage) UpdateCollection(collection *api.CollectionResource) error 
 		if err != nil {
 			return err
 		}
+		if persistedCollection.Type == "system" {
+			return se.NewServiceError(messages.BadRequest, "Type", "collection", "ResourceId", collection.Resource.ID, "Error", "System collections cannot be updated")
+		}
 		persistedCollection.CollectionConfig = collection.CollectionConfig
 		return s.updateCollectionTransactional(txn, collection.Resource.ID, persistedCollection)
 	})
@@ -236,6 +237,9 @@ func (s *SQLStorage) PatchCollection(id string, patches *api.Patch) error {
 		if err != nil {
 			return err
 		}
+		if persistedCollection.Type == "system" {
+			return se.NewServiceError(messages.BadRequest, "Type", "collection", "ResourceId", id, "Error", "System collections cannot be patched")
+		}
 		//conevert persistedCollection to json
 		persistedCollectionJSON, err := s.createCollectionEntity(persistedCollection)
 		if err != nil {
@@ -253,10 +257,21 @@ func (s *SQLStorage) PatchCollection(id string, patches *api.Patch) error {
 			return err
 		}
 		//convert the patched config back to a CollectionResource
+		var createdAt, updatedAt time.Time
+		if persistedCollection.Resource.CreatedAt != nil {
+			createdAt = *persistedCollection.Resource.CreatedAt
+		}
+		if persistedCollection.Resource.UpdatedAt != nil {
+			updatedAt = *persistedCollection.Resource.UpdatedAt
+		}
+		tenantID := ""
+		if persistedCollection.Resource.Tenant != nil {
+			tenantID = string(*persistedCollection.Resource.Tenant)
+		}
 		persistedCollection, err = s.constructCollectionResource(id,
-			persistedCollection.Resource.CreatedAt,
-			persistedCollection.Resource.UpdatedAt,
-			string(persistedCollection.Resource.Tenant),
+			createdAt,
+			updatedAt,
+			tenantID,
 			persistedCollection.Type,
 			&patchedCollectionConfig)
 		if err != nil {

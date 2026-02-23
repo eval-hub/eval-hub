@@ -164,14 +164,14 @@ func (a *apiFeature) startLocalServer(port int) error {
 	}
 	serviceConfig.Service.Port = port
 
-	storage, err := storage.NewStorage(serviceConfig.Database, logger)
+	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), logger)
 	if err != nil {
 		return logError(fmt.Errorf("failed to create storage: %w", err))
 	}
 	logger.Info("Storage created.")
 
 	// set up the provider configs
-	providerConfigs, err := config.LoadProviderConfigs(logger, "../config/providers", "../../config/providers", "../../../config/providers")
+	providerConfigs, err := config.LoadProviderConfigs(logger)
 	if err != nil {
 		// we do this as no point trying to continue
 		return logError(fmt.Errorf("failed to load provider configs: %w", err))

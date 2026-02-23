@@ -1,24 +1,25 @@
 get:
-  x-internal: true
   tags:
-    - Collections
-  summary: Get Collection
-  description: Get details of a specific collection.
-  operationId: get_collections_id
+    - Providers
+  summary: Get Provider
+  description: Get a provider by ID.
+  operationId: get_providers_id
   parameters:
     - name: id
       in: path
       required: true
       schema:
         type: string
-        title: Collection Id
+        description: Provider ID
+        title: Provider Id
+      description: Provider ID
   responses:
     '200':
       description: Successful Response
       content:
         application/json:
           schema:
-            $ref: ../components/schemas/CollectionResource.yaml
+            $ref: ../components/schemas/ProviderResource.yaml
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':
@@ -28,32 +29,33 @@ get:
     '404':
       $ref: ../components/responses/NotFound.yaml
 put:
-  x-internal: true
   tags:
-    - Collections
-  summary: Update Collection
-  description: Update an existing collection.
-  operationId: put_collections_id
+    - Providers
+  summary: Update Provider
+  description: Update an existing provider. 
+  operationId: put_providers_id
   parameters:
     - name: id
       in: path
       required: true
       schema:
         type: string
-        title: Collection Id
+        description: Provider ID
+        title: Provider Id
+      description: Provider ID
   requestBody:
     required: true
     content:
       application/json:
         schema:
-          $ref: ../components/schemas/CollectionConfig.yaml
+          $ref: ../components/schemas/ProviderConfigInternal.yaml
   responses:
     '200':
       description: Successful Response
       content:
         application/json:
           schema:
-            $ref: ../components/schemas/CollectionResource.yaml
+            $ref: ../components/schemas/ProviderResource.yaml
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':
@@ -63,19 +65,18 @@ put:
     '404':
       $ref: ../components/responses/NotFound.yaml
 patch:
-  x-internal: true
   tags:
-    - Collections
-  summary: Patch Collection
-  description: Partially update an existing collection.
-  operationId: patch_collections_id
+    - Providers
+  summary: Patch Provider
+  description: Partially update an existing provider.
+  operationId: patch_providers_id
   parameters:
     - name: id
       in: path
       required: true
       schema:
         type: string
-        title: Collection Id
+        title: Provider Id
   requestBody:
     required: true
     content:
@@ -92,7 +93,7 @@ patch:
       content:
         application/json:
           schema:
-            $ref: ../components/schemas/CollectionResource.yaml
+            $ref: ../components/schemas/ProviderResource.yaml
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':
@@ -101,23 +102,25 @@ patch:
       $ref: ../components/responses/Forbidden.yaml
     '404':
       $ref: ../components/responses/NotFound.yaml
+
 delete:
-  x-internal: true
   tags:
-    - Collections
-  summary: Delete Collection
-  description: Delete a collection.
-  operationId: delete_collections_id
+    - Providers
+  summary: Delete Provider
+  description: Delete provider by ID.
+  operationId: delete_providers_id
   parameters:
     - name: id
       in: path
       required: true
       schema:
         type: string
-        title: Collection Id
+        description: Provider ID
+        title: Provider Id
+      description: Provider ID
   responses:
     '204':
-      description: Success
+      description: Successful Response
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':
