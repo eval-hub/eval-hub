@@ -186,14 +186,16 @@ func (a *apiFeature) startLocalServer(port int) error {
 	serviceConfig.Service.LocalMode = true // set local mode for testing
 	// Override local runtime commands for testing so subprocesses
 	// Exit cleanly instead of failing with "command not found".
-	for i := range providerConfigs {
-		if providerConfigs[i].Runtime == nil {
-			return logError(fmt.Errorf("provider %q has no runtime configuration", providerConfigs[i].ID))
+	for key := range providerConfigs {
+		config := providerConfigs[key]
+		if config.Runtime == nil {
+			return logError(fmt.Errorf("provider %q has no runtime configuration", config.ID))
 		}
-		if providerConfigs[i].Runtime.Local == nil {
-			providerConfigs[i].Runtime.Local = &pkgapi.LocalRuntime{}
+		if config.Runtime.Local == nil {
+			config.Runtime.Local = &pkgapi.LocalRuntime{}
 		}
-		providerConfigs[i].Runtime.Local.Command = "true"
+		config.Runtime.Local.Command = "true"
+		providerConfigs[key] = config
 	}
 
 	runtime, err := runtimes.NewRuntime(logger, serviceConfig, providerConfigs)
