@@ -3,6 +3,7 @@ package sql
 import (
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -48,5 +49,5 @@ func (s *SQLDatabaseConfig) getDatabaseName() string {
 	if err != nil {
 		return ""
 	}
-	return parsed.Path
+	return strings.TrimPrefix(parsed.Path, "/")
 }
