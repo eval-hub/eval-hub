@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
+	"github.com/google/uuid"
 )
 
 const (
@@ -28,6 +29,7 @@ const (
 
 type jobConfig struct {
 	jobID                string
+	resourceGUID         string
 	namespace            string
 	providerID           string
 	benchmarkID          string
@@ -150,6 +152,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 
 	return &jobConfig{
 		jobID:                evaluation.Resource.ID,
+		resourceGUID:         uuid.NewString(),
 		namespace:            namespace,
 		providerID:           provider.Resource.ID,
 		benchmarkID:          benchmarkID,
