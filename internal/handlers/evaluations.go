@@ -187,7 +187,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 	w.WriteJSON(job, 202)
 }
 
-func (h *Handlers) executeEvaluationJob(ctx *executioncontext.ExecutionContext, runtime abstractions.Runtime, job *api.EvaluationJobResource, storage *abstractions.Storage) (err error) {
+func (h *Handlers) executeEvaluationJob(ctx *executioncontext.ExecutionContext, runtime abstractions.Runtime, job *api.EvaluationJobResource, storage *abstractions.Storage) error {
 	return otel.WithSpan(
 		ctx.Ctx,
 		h.serviceConfig,
@@ -198,11 +198,11 @@ func (h *Handlers) executeEvaluationJob(ctx *executioncontext.ExecutionContext, 
 			"job.id":            job.Resource.ID,
 			"job.experiment_id": job.Resource.MLFlowExperimentID,
 		},
-		func(runtimeCtx context.Context) error {
+		func(runtimeCtx context.Context) (fnErr error) {
 			defer func() {
 				if recovered := recover(); recovered != nil {
 					ctx.Logger.Error("panic in RunEvaluationJob", "panic", recovered, "stack", string(debug.Stack()), "job_id", job.Resource.ID)
-					err = serviceerrors.NewServiceError(messages.InternalServerError, "Error", fmt.Sprint(recovered))
+					fnErr = serviceerrors.NewServiceError(messages.InternalServerError, "Error", fmt.Sprint(recovered))
 				}
 			}()
 			return runtime.WithLogger(ctx.Logger).WithContext(runtimeCtx).RunEvaluationJob(job, storage)
