@@ -3,7 +3,7 @@ get:
     - Providers
   summary: List Providers
   description: List all registered evaluation providers.
-  operationId: get_providers
+  operationId: list_providers
   parameters:
     - name: id
       in: query
