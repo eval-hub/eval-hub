@@ -49,10 +49,14 @@ func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 }
 
 func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, storage *abstractions.Storage) error {
+	localCtx := r.ctx
+	if localCtx == nil {
+		localCtx = context.Background()
+	}
 	go func() {
 		for idx, bench := range evaluation.Benchmarks {
 			select {
-			case <-r.ctx.Done():
+			case <-localCtx.Done():
 				r.logger.Warn(
 					"benchmark processing canceled",
 					"job_id", evaluation.Resource.ID,
@@ -61,7 +65,7 @@ func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, sto
 				return
 			default:
 			}
-			if err := r.createBenchmarkResources(r.ctx, r.logger, evaluation, &bench, idx); err != nil {
+			if err := r.createBenchmarkResources(localCtx, r.logger, evaluation, &bench, idx); err != nil {
 				r.logger.Error(
 					"kubernetes job creation failed",
 					"error", err,
