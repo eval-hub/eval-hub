@@ -196,6 +196,7 @@ func (h *Handlers) executeEvaluationJob(ctx *executioncontext.ExecutionContext, 
 					fnErr = serviceerrors.NewServiceError(messages.InternalServerError, "Error", fmt.Sprint(recovered))
 				}
 			}()
+			runtimeCtx = context.WithoutCancel(runtimeCtx)
 			return runtime.WithLogger(ctx.Logger).WithContext(runtimeCtx).RunEvaluationJob(job, storage)
 		},
 	)
