@@ -55,7 +55,7 @@ func (r *LocalRuntime) RunEvaluationJob(
 ) error {
 	if r.ctx == nil {
 		r.logger.Error("RunEvaluationJob called with nil context; WithContext must be called before RunEvaluationJob")
-		panic("local runtime: nil context in RunEvaluationJob — WithContext was not called")
+		return fmt.Errorf("local runtime: nil context — WithContext must be called before RunEvaluationJob")
 	}
 
 	if len(evaluation.Benchmarks) == 0 {
