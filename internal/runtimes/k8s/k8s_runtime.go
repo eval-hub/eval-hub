@@ -51,14 +51,14 @@ func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 }
 
 func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, storage *abstractions.Storage) error {
-	type Tuple struct {
+	type Msg struct {
 		Index     int
 		Benchmark api.BenchmarkConfig
 	}
 
-	benchmarks := make(chan Tuple, len(evaluation.Benchmarks))
+	benchmarks := make(chan Msg, len(evaluation.Benchmarks))
 	for idx, bench := range evaluation.Benchmarks {
-		benchmarks <- Tuple{
+		benchmarks <- Msg{
 			Index:     idx,
 			Benchmark: bench,
 		}
@@ -72,33 +72,33 @@ func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, sto
 
 	for i := 0; i < workerCount; i++ {
 		go func() {
-			for bench := range benchmarks {
+			for msg := range benchmarks {
 				select {
 				case <-r.ctx.Done():
 					r.logger.Warn(
 						"benchmark processing canceled",
 						"job_id", evaluation.Resource.ID,
-						"benchmark_id", bench.Benchmark.ID,
+						"benchmark_id", msg.Benchmark.ID,
 					)
 					return
 				default:
 				}
-				if err := r.createBenchmarkResources(r.ctx, r.logger, evaluation, &bench.Benchmark, bench.Index); err != nil {
+				if err := r.createBenchmarkResources(r.ctx, r.logger, evaluation, &msg.Benchmark, msg.Index); err != nil {
 					r.logger.Error(
 						"kubernetes job creation failed",
 						"error", err,
 						"job_id", evaluation.Resource.ID,
-						"benchmark_id", bench.Benchmark.ID,
+						"benchmark_id", msg.Benchmark.ID,
 					)
 
 					if storage != nil && *storage != nil {
-						runStatus := buildBenchmarkFailureStatus(&bench.Benchmark, err)
+						runStatus := buildBenchmarkFailureStatus(&msg.Benchmark, err)
 						if updateErr := (*storage).UpdateEvaluationJob(evaluation.Resource.ID, runStatus); updateErr != nil {
 							r.logger.Error(
 								"failed to update benchmark status",
 								"error", updateErr,
 								"job_id", evaluation.Resource.ID,
-								"benchmark_id", bench.Benchmark.ID,
+								"benchmark_id", msg.Benchmark.ID,
 							)
 						}
 					}
