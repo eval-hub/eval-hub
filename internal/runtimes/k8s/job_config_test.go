@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -385,7 +386,7 @@ func TestNumExamplesFromParametersTypes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := numExamplesFromParameters(tt.parameters)
+			got := shared.NumExamplesFromParameters(tt.parameters)
 			if tt.want == nil && got != nil {
 				t.Fatalf("expected nil, got %v", *got)
 			}
@@ -401,7 +402,7 @@ func TestNumExamplesFromParametersTypes(t *testing.T) {
 
 func TestCopyParamsCreatesCopy(t *testing.T) {
 	original := map[string]any{"num_examples": 1, "temp": 0.2}
-	copied := copyParams(original)
+	copied := shared.CopyParams(original)
 	if len(copied) != len(original) {
 		t.Fatalf("expected copy size %d, got %d", len(original), len(copied))
 	}
