@@ -62,11 +62,23 @@ type MessageInfo struct {
 	MessageCode string `json:"message_code"`
 }
 
+type PrimaryScore struct {
+	Metric        string `json:"metric"`
+	LowerIsBetter bool   `json:"lower_is_better,omitempty" validate:"omitempty,boolean"`
+}
+
+type PassCriteria struct {
+	Threshold float32 `json:"threshold,omitempty" validate:"omitempty,number"`
+}
+
 // BenchmarkConfig represents a reference to a benchmark
 type BenchmarkConfig struct {
 	Ref
-	ProviderID string         `json:"provider_id" validate:"required"`
-	Parameters map[string]any `json:"parameters,omitempty"`
+	ProviderID   string         `json:"provider_id" validate:"required"`
+	Weight       float32        `json:"weight,omitempty" validate:"omitempty,min=0,max=1"`
+	PrimaryScore *PrimaryScore  `json:"primary_score,omitempty"`
+	PassCriteria *PassCriteria  `json:"pass_criteria,omitempty"`
+	Parameters   map[string]any `json:"parameters,omitempty"`
 }
 
 // ExperimentTag represents a tag on an experiment
@@ -80,11 +92,6 @@ type ExperimentConfig struct {
 	Name             string          `json:"name,omitempty"`
 	Tags             []ExperimentTag `json:"tags,omitempty" validate:"omitempty,max=20,dive"`
 	ArtifactLocation string          `json:"artifact_location,omitempty"`
-}
-
-// BenchmarkStatusLogs represents logs information for benchmark status
-type BenchmarkStatusLogs struct {
-	Path string `json:"path,omitempty"`
 }
 
 // for marshalling and unmarshalling
@@ -146,13 +153,44 @@ type EvaluationJobResults struct {
 	MLFlowExperimentURL string            `json:"mlflow_experiment_url,omitempty"`
 }
 
+// OCICoordinates represents OCI artifact coordinates for persistence
+type OCICoordinates struct {
+	OCIHost       string            `json:"oci_host" validate:"required"`
+	OCIRepository string            `json:"oci_repository" validate:"required"`
+	OCITag        string            `json:"oci_tag,omitempty"`
+	OCISubject    string            `json:"oci_subject,omitempty"`
+	Annotations   map[string]string `json:"annotations,omitempty"`
+}
+
+// OCIConnectionConfig represents K8s connection configuration for OCI operations.
+// Connection must reference a Kubernetes Secret containing a ".dockerconfigjson" entry,
+// which provides standard Docker registry credentials for authenticating to the OCI registry.
+type OCIConnectionConfig struct {
+	// Connection is the name of a Kubernetes Secret (type kubernetes.io/dockerconfigjson)
+	// with a ".dockerconfigjson" entry used for OCI registry authentication.
+	Connection string `json:"connection" validate:"required"`
+}
+
+// EvaluationExportsOCI represents OCI export configuration
+type EvaluationExportsOCI struct {
+	Coordinates OCICoordinates       `json:"coordinates" validate:"required"`
+	K8s         *OCIConnectionConfig `json:"k8s,omitempty"`
+}
+
+// EvaluationExports represents optional exports configuration for an evaluation job
+type EvaluationExports struct {
+	OCI *EvaluationExportsOCI `json:"oci,omitempty"`
+}
+
 // EvaluationJobConfig represents evaluation job request schema
 type EvaluationJobConfig struct {
-	Model      ModelRef          `json:"model" validate:"required"`
-	Benchmarks []BenchmarkConfig `json:"benchmarks" validate:"required,min=1,dive"`
-	Collection *Ref              `json:"collection,omitempty"`
-	Experiment *ExperimentConfig `json:"experiment,omitempty"`
-	Custom     map[string]any    `json:"custom,omitempty"`
+	Model        ModelRef           `json:"model" validate:"required"`
+	PassCriteria *PassCriteria      `json:"pass_criteria,omitempty"`
+	Benchmarks   []BenchmarkConfig  `json:"benchmarks" validate:"required,min=1,dive"`
+	Collection   *Ref               `json:"collection,omitempty"`
+	Experiment   *ExperimentConfig  `json:"experiment,omitempty"`
+	Custom       *map[string]any    `json:"custom,omitempty"`
+	Exports      *EvaluationExports `json:"exports,omitempty"`
 }
 
 type EvaluationResource struct {

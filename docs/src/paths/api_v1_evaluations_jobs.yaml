@@ -3,20 +3,20 @@ post:
     - Evaluations
   summary: Create Evaluation
   description: Create and execute evaluation request using the simplified benchmark schema.
-  operationId: create_evaluation_api_v1_evaluations_jobs_post
+  operationId: post_evaluations_jobs
   requestBody:
     required: true
     content:
       application/json:
         schema:
-          $ref: ../components/schemas/EvaluationRequest.yaml
+          $ref: ../components/schemas/EvaluationJobConfig.yaml
   responses:
     '202':
       description: Successful Response
       content:
         application/json:
           schema:
-            $ref: ../components/schemas/EvaluationResponse.yaml
+            $ref: ../components/schemas/EvaluationJobResource.yaml
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':
@@ -30,7 +30,7 @@ get:
     - Evaluations
   summary: List Evaluations
   description: List all evaluation requests.
-  operationId: list_evaluations_api_v1_evaluations_jobs_get
+  operationId: get_evaluations_jobs
   parameters:
     - name: limit
       in: query
@@ -67,7 +67,7 @@ get:
       content:
         application/json:
           schema:
-            $ref: ../components/schemas/PaginatedEvaluations.yaml
+            $ref: ../components/schemas/EvaluationJobResourceList.yaml
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':

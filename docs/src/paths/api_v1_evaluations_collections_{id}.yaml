@@ -4,7 +4,7 @@ get:
     - Collections
   summary: Get Collection
   description: Get details of a specific collection.
-  operationId: get_collection_api_v1_evaluations_collections__collection_id__get
+  operationId: get_collections_id
   parameters:
     - name: id
       in: path
@@ -18,7 +18,7 @@ get:
       content:
         application/json:
           schema:
-            $ref: ../components/schemas/Collection.yaml
+            $ref: ../components/schemas/CollectionResource.yaml
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':
@@ -33,7 +33,7 @@ put:
     - Collections
   summary: Update Collection
   description: Update an existing collection.
-  operationId: update_collection_api_v1_evaluations_collections__collection_id__put
+  operationId: put_collections_id
   parameters:
     - name: id
       in: path
@@ -46,14 +46,14 @@ put:
     content:
       application/json:
         schema:
-          $ref: ../components/schemas/CollectionUpdateRequest.yaml
+          $ref: ../components/schemas/CollectionConfig.yaml
   responses:
     '200':
       description: Successful Response
       content:
         application/json:
           schema:
-            $ref: ../components/schemas/Collection.yaml
+            $ref: ../components/schemas/CollectionResource.yaml
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':
@@ -68,7 +68,7 @@ patch:
     - Collections
   summary: Patch Collection
   description: Partially update an existing collection.
-  operationId: patch_collection_api_v1_evaluations_collections__collection_id__patch
+  operationId: patch_collections_id
   parameters:
     - name: id
       in: path
@@ -85,14 +85,14 @@ patch:
           title: Json Patch
           description: JSON Patch operation
           items:
-            $ref: ../components/schemas/JsonPatch.yaml
+            $ref: ../components/schemas/PatchOperation.yaml
   responses:
     '200':
       description: Successful Response
       content:
         application/json:
           schema:
-            $ref: ../components/schemas/Collection.yaml
+            $ref: ../components/schemas/CollectionResource.yaml
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':
@@ -107,7 +107,7 @@ delete:
     - Collections
   summary: Delete Collection
   description: Delete a collection.
-  operationId: delete_collection_api_v1_evaluations_collections__collection_id__delete
+  operationId: delete_collections_id
   parameters:
     - name: id
       in: path
@@ -116,11 +116,8 @@ delete:
         type: string
         title: Collection Id
   responses:
-    '200':
-      description: Successful Response
-      content:
-        application/json:
-          schema: {}
+    '204':
+      description: Success
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':

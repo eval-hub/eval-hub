@@ -27,28 +27,30 @@ const (
 )
 
 type jobConfig struct {
-	jobID               string
-	namespace           string
-	providerID          string
-	benchmarkID         string
-	adapterImage        string
-	entrypoint          []string
-	defaultEnv          []api.EnvVar
-	cpuRequest          string
-	memoryRequest       string
-	cpuLimit            string
-	memoryLimit         string
-	jobSpecJSON         string
-	serviceAccountName  string
-	serviceCAConfigMap  string
-	evalHubURL          string
-	evalHubInstanceName string
-	mlflowTrackingURI   string
-	mlflowWorkspace     string
+	jobID                string
+	namespace            string
+	providerID           string
+	benchmarkID          string
+	adapterImage         string
+	entrypoint           []string
+	defaultEnv           []api.EnvVar
+	cpuRequest           string
+	memoryRequest        string
+	cpuLimit             string
+	memoryLimit          string
+	jobSpecJSON          string
+	serviceAccountName   string
+	serviceCAConfigMap   string
+	evalHubURL           string
+	evalHubInstanceName  string
+	mlflowTrackingURI    string
+	mlflowWorkspace      string
+	ociCredentialsSecret string
 }
 
 type jobSpec struct {
 	JobID           string              `json:"id"`
+	ProviderID      string              `json:"provider_id"`
 	BenchmarkID     string              `json:"benchmark_id"`
 	Model           api.ModelRef        `json:"model"`
 	NumExamples     *int                `json:"num_examples,omitempty"`
@@ -56,12 +58,22 @@ type jobSpec struct {
 	ExperimentName  string              `json:"experiment_name,omitempty"`
 	Tags            []api.ExperimentTag `json:"tags,omitempty"`
 	CallbackURL     *string             `json:"callback_url"`
+	Exports         *jobSpecExports     `json:"exports,omitempty"`
+}
+
+// jobSpecExports is the subset of EvaluationExports serialized into the job ConfigMap (excludes k8s connection config).
+type jobSpecExports struct {
+	OCI *jobSpecExportsOCI `json:"oci,omitempty"`
+}
+
+type jobSpecExportsOCI struct {
+	Coordinates api.OCICoordinates `json:"coordinates"`
 }
 
 func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkID string) (*jobConfig, error) {
 	runtime := provider.Runtime
 	if runtime == nil || runtime.K8s == nil {
-		return nil, fmt.Errorf("provider %q missing runtime configuration", provider.ID)
+		return nil, fmt.Errorf("provider %q missing runtime configuration", provider.Resource.ID)
 	}
 
 	cpuRequest := defaultIfEmpty(runtime.K8s.CPURequest, defaultCPURequest)
@@ -90,6 +102,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	delete(benchmarkParams, "num_examples")
 	spec := jobSpec{
 		JobID:           evaluation.Resource.ID,
+		ProviderID:      provider.Resource.ID,
 		BenchmarkID:     benchmarkID,
 		Model:           evaluation.Model,
 		NumExamples:     numExamples,
@@ -99,6 +112,13 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	if evaluation.Experiment != nil {
 		spec.ExperimentName = evaluation.Experiment.Name
 		spec.Tags = evaluation.Experiment.Tags
+	}
+	if evaluation.Exports != nil && evaluation.Exports.OCI != nil {
+		spec.Exports = &jobSpecExports{
+			OCI: &jobSpecExportsOCI{
+				Coordinates: evaluation.Exports.OCI.Coordinates,
+			},
+		}
 	}
 	specJSON, err := json.MarshalIndent(spec, "", "  ")
 	if err != nil {
@@ -122,25 +142,32 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 			evalHubInstanceName, namespace, defaultEvalHubPort)
 	}
 
+	// Extract OCI credentials secret name from exports config (not forwarded to jobSpec)
+	var ociCredentialsSecret string
+	if evaluation.Exports != nil && evaluation.Exports.OCI != nil && evaluation.Exports.OCI.K8s != nil {
+		ociCredentialsSecret = evaluation.Exports.OCI.K8s.Connection
+	}
+
 	return &jobConfig{
-		jobID:               evaluation.Resource.ID,
-		namespace:           namespace,
-		providerID:          provider.ID,
-		benchmarkID:         benchmarkID,
-		adapterImage:        runtime.K8s.Image,
-		entrypoint:          runtime.K8s.Entrypoint,
-		defaultEnv:          runtime.K8s.Env,
-		cpuRequest:          cpuRequest,
-		memoryRequest:       memoryRequest,
-		cpuLimit:            cpuLimit,
-		memoryLimit:         memoryLimit,
-		jobSpecJSON:         string(specJSON),
-		serviceAccountName:  serviceAccountName,
-		serviceCAConfigMap:  serviceCAConfigMap,
-		evalHubURL:          evalHubURL,
-		evalHubInstanceName: evalHubInstanceName,
-		mlflowTrackingURI:   mlflowTrackingURI,
-		mlflowWorkspace:     mlflowWorkspace,
+		jobID:                evaluation.Resource.ID,
+		namespace:            namespace,
+		providerID:           provider.Resource.ID,
+		benchmarkID:          benchmarkID,
+		adapterImage:         runtime.K8s.Image,
+		entrypoint:           runtime.K8s.Entrypoint,
+		defaultEnv:           runtime.K8s.Env,
+		cpuRequest:           cpuRequest,
+		memoryRequest:        memoryRequest,
+		cpuLimit:             cpuLimit,
+		memoryLimit:          memoryLimit,
+		jobSpecJSON:          string(specJSON),
+		serviceAccountName:   serviceAccountName,
+		serviceCAConfigMap:   serviceCAConfigMap,
+		evalHubURL:           evalHubURL,
+		evalHubInstanceName:  evalHubInstanceName,
+		mlflowTrackingURI:    mlflowTrackingURI,
+		mlflowWorkspace:      mlflowWorkspace,
+		ociCredentialsSecret: ociCredentialsSecret,
 	}, nil
 }
 

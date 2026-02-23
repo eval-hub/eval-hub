@@ -10,6 +10,7 @@ type MLFlowConfig struct {
 	HTTPTimeout        time.Duration `mapstructure:"http_timeout"`
 	CACertPath         string        `mapstructure:"ca_cert_path"`
 	InsecureSkipVerify bool          `mapstructure:"insecure_skip_verify"`
+	Token              string        `mapstructure:"token"`
 	TokenPath          string        `mapstructure:"token_path"`
 	Workspace          string        `mapstructure:"workspace"`
 	TLSConfig          *tls.Config   // not serialized

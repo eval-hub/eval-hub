@@ -2,7 +2,7 @@ get:
   x-internal: true
   summary: API documentation
   description: Interactive API documentation (Swagger UI)
-  operationId: getDocs
+  operationId: get_docs
   tags:
     - Documentation
   responses:

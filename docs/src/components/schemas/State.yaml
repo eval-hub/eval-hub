@@ -1,0 +1,9 @@
+# State represents the evaluation state enum
+type: string
+enum:
+  - pending
+  - running
+  - completed
+  - failed
+  - cancelled
+description: Evaluation or benchmark state

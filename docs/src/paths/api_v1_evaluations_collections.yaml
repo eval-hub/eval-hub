@@ -4,14 +4,14 @@ get:
     - Collections
   summary: List Collections
   description: List all benchmark collections.
-  operationId: list_collections_api_v1_evaluations_collections_get
+  operationId: get_collections
   responses:
     '200':
       description: Successful Response
       content:
         application/json:
           schema:
-            $ref: ../components/schemas/PaginatedCollections.yaml
+            $ref: ../components/schemas/CollectionResourceList.yaml
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':
@@ -26,12 +26,12 @@ post:
     - Collections
   summary: Create Collection
   description: Create a new collection.
-  operationId: create_collection_api_v1_evaluations_collections_post
+  operationId: post_collections
   requestBody:
     content:
       application/json:
         schema:
-          $ref: ../components/schemas/CollectionCreationRequest.yaml
+          $ref: ../components/schemas/CollectionConfig.yaml
     required: true
   responses:
     '201':
@@ -39,7 +39,7 @@ post:
       content:
         application/json:
           schema:
-            $ref: ../components/schemas/Collection.yaml
+            $ref: ../components/schemas/CollectionResource.yaml
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':

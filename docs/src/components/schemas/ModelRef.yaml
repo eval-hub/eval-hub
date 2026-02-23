@@ -1,0 +1,12 @@
+type: object
+description: Model specification for evaluation requests
+required:
+  - url
+  - name
+properties:
+  url:
+    type: string
+    description: Model URL
+  name:
+    type: string
+    description: Model name

@@ -1,0 +1,11 @@
+type: object
+description: List of providers (no pagination links)
+properties:
+  total_count:
+    type: integer
+    description: Total number of providers
+  items:
+    type: array
+    items:
+      $ref: ./ProviderResource.yaml
+    description: Provider resources

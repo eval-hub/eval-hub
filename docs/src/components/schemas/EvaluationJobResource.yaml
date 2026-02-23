@@ -1,0 +1,15 @@
+type: object
+description: Full evaluation job resource (response)
+allOf:
+  - type: object
+    properties:
+      resource:
+        $ref: ./EvaluationResource.yaml
+        description: Resource and evaluation metadata
+      status:
+        $ref: ./EvaluationJobStatus.yaml
+        description: Current status
+      results:
+        $ref: ./EvaluationJobResults.yaml
+        description: Results when completed
+  - $ref: ./EvaluationJobConfig.yaml

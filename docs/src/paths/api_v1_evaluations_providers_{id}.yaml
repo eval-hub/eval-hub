@@ -1,0 +1,131 @@
+get:
+  tags:
+    - Providers
+  summary: Get Provider
+  description: Get a provider by ID.
+  operationId: get_providers_id
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        description: Provider ID
+        title: Provider Id
+      description: Provider ID
+  responses:
+    '200':
+      description: Successful Response
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ProviderResource.yaml
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml
+put:
+  tags:
+    - Providers
+  summary: Update Provider
+  description: Update an existing provider. 
+  operationId: put_providers_id
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        description: Provider ID
+        title: Provider Id
+      description: Provider ID
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/ProviderConfigInternal.yaml
+  responses:
+    '200':
+      description: Successful Response
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ProviderResource.yaml
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml
+patch:
+  tags:
+    - Providers
+  summary: Patch Provider
+  description: Partially update an existing provider.
+  operationId: patch_providers_id
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        title: Provider Id
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: array
+          title: Json Patch
+          description: JSON Patch operation
+          items:
+            $ref: ../components/schemas/PatchOperation.yaml
+  responses:
+    '200':
+      description: Successful Response
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/ProviderResource.yaml
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml
+
+delete:
+  tags:
+    - Providers
+  summary: Delete Provider
+  description: Delete provider by ID.
+  operationId: delete_providers_id
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        description: Provider ID
+        title: Provider Id
+      description: Provider ID
+  responses:
+    '204':
+      description: Successful Response
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml

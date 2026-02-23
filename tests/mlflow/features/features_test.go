@@ -8,6 +8,9 @@ import (
 )
 
 func TestFeatures(t *testing.T) {
+	if os.Getenv("MLFLOW_TRACKING_URI") == "" {
+		t.Skip("skipping mlflow tests; MLFLOW_TRACKING_URI is not set")
+	}
 	suite := godog.TestSuite{
 		ScenarioInitializer: InitializeScenario,
 		Options: &godog.Options{

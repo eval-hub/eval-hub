@@ -33,10 +33,12 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ID: "provider-1",
-		Runtime: &api.Runtime{
-			K8s: &api.K8sRuntime{
-				Image: "adapter:latest",
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
 			},
 		},
 	}
@@ -120,10 +122,12 @@ func TestBuildJobConfigAllowsNumExamplesOnly(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ID: "provider-1",
-		Runtime: &api.Runtime{
-			K8s: &api.K8sRuntime{
-				Image: "adapter:latest",
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
 			},
 		},
 	}
@@ -163,7 +167,10 @@ func TestBuildJobConfigMissingRuntime(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ID: "provider-1",
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{},
+		},
 	}
 
 	_, err := buildJobConfig(evaluation, provider, "bench-1")
@@ -187,8 +194,10 @@ func TestBuildJobConfigMissingAdapterImage(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ID:      "provider-1",
-		Runtime: &api.Runtime{},
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{},
+		},
 	}
 
 	_, err := buildJobConfig(evaluation, provider, "bench-1")
@@ -217,10 +226,12 @@ func TestBuildJobConfigMissingServiceURL(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ID: "provider-1",
-		Runtime: &api.Runtime{
-			K8s: &api.K8sRuntime{
-				Image: "adapter:latest",
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
 			},
 		},
 	}
@@ -251,10 +262,12 @@ func TestBuildJobConfigAllowsEmptyBenchmarkConfig(t *testing.T) {
 		},
 	}
 	provider := &api.ProviderResource{
-		ID: "provider-1",
-		Runtime: &api.Runtime{
-			K8s: &api.K8sRuntime{
-				Image: "adapter:latest",
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
 			},
 		},
 	}
@@ -273,6 +286,86 @@ func TestBuildJobConfigAllowsEmptyBenchmarkConfig(t *testing.T) {
 	}
 	if len(benchmarkConfig) != 0 {
 		t.Fatalf("expected empty benchmark_config, got %v", benchmarkConfig)
+	}
+}
+
+func TestBuildJobConfigWithOCIExports(t *testing.T) {
+	t.Setenv(serviceURLEnv, "http://eval-hub")
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-oci"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.BenchmarkConfig{
+				{
+					Ref:        api.Ref{ID: "bench-1"},
+					Parameters: map[string]any{},
+				},
+			},
+			Exports: &api.EvaluationExports{
+				OCI: &api.EvaluationExportsOCI{
+					Coordinates: api.OCICoordinates{
+						OCIHost:       "quay.io",
+						OCIRepository: "my-org/my-repo",
+						OCITag:        "eval-123",
+					},
+					K8s: &api.OCIConnectionConfig{
+						Connection: "my-pull-secret",
+					},
+				},
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfigInternal: api.ProviderConfigInternal{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
+			},
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, "bench-1")
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+
+	// ociCredentialsSecret should be extracted from k8s.connection
+	if cfg.ociCredentialsSecret != "my-pull-secret" {
+		t.Fatalf("expected ociCredentialsSecret %q, got %q", "my-pull-secret", cfg.ociCredentialsSecret)
+	}
+
+	// jobSpecJSON should contain coordinates but NOT k8s connection
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(cfg.jobSpecJSON), &decoded); err != nil {
+		t.Fatalf("unmarshal job spec json: %v", err)
+	}
+	exports, ok := decoded["exports"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected exports in job spec json, got %v", decoded["exports"])
+	}
+	oci, ok := exports["oci"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected exports.oci in job spec json, got %v", exports["oci"])
+	}
+	coords, ok := oci["coordinates"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected exports.oci.coordinates in job spec json, got %v", oci["coordinates"])
+	}
+	if coords["oci_host"] != "quay.io" {
+		t.Fatalf("expected oci_host %q, got %v", "quay.io", coords["oci_host"])
+	}
+	if coords["oci_repository"] != "my-org/my-repo" {
+		t.Fatalf("expected oci_repository %q, got %v", "my-org/my-repo", coords["oci_repository"])
+	}
+	if _, exists := oci["k8s"]; exists {
+		t.Fatalf("expected k8s connection config to NOT be in job spec json, but found %v", oci["k8s"])
 	}
 }
 

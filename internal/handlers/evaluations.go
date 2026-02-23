@@ -65,7 +65,7 @@ func getParam[T string | int | bool](r http_wrappers.RequestWrapper, name string
 
 // HandleCreateEvaluation handles POST /api/v1/evaluations/jobs
 func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
 
 	logging.LogRequestStarted(ctx)
 
@@ -113,8 +113,21 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		}
 	}
 
-	job := &api.EvaluationJobResource{}
+	now := time.Now()
 	id := common.GUID()
+  
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{
+				ID:        id,
+				CreatedAt: &now,
+				Owner:     ctx.User,
+				Tenant:    &ctx.Tenant,
+				ReadOnly:  false,
+			},
+			MLFlowExperimentID: mlflowExperimentID,
+    },
+  }
 
 	err = otel.WithSpan(
 		ctx.Ctx,
@@ -234,7 +247,7 @@ func benchmarkExists(benchmarks []api.BenchmarkResource, id string) bool {
 
 // HandleListEvaluations handles GET /api/v1/evaluations/jobs
 func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
 
 	logging.LogRequestStarted(ctx)
 
@@ -253,7 +266,12 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 		w.Error(err, ctx.RequestID)
 		return
 	}
-	res, err := storage.GetEvaluationJobs(limit, offset, statusFilter)
+
+	res, err := storage.GetEvaluationJobs(limit, offset, abstractions.QueryFilter{
+		Params: map[string]string{
+			"status_filter": statusFilter,
+		},
+	})
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
@@ -272,7 +290,7 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 
 // HandleGetEvaluation handles GET /api/v1/evaluations/jobs/{id}
 func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
 	logging.LogRequestStarted(ctx)
 
 	// Extract ID from path
@@ -292,7 +310,7 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 }
 
 func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
 	logging.LogRequestStarted(ctx)
 
 	// Extract ID from path
@@ -326,7 +344,7 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 
 // HandleCancelEvaluation handles DELETE /api/v1/evaluations/jobs/{id}
 func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
 	logging.LogRequestStarted(ctx)
 
 	// Extract ID from path

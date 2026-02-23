@@ -14,16 +14,21 @@ type QueryResults[T any] struct {
 	Errors      []string
 }
 
+type QueryFilter struct {
+	Params map[string]string
+}
+
 type Storage interface {
 	WithLogger(logger *slog.Logger) Storage
 	WithContext(ctx context.Context) Storage
+	WithTenant(tenant api.Tenant) Storage
 
 	Ping(timeout time.Duration) error
 
 	// Evaluation job operations
 	CreateEvaluationJob(evaluation *api.EvaluationJobResource) error
 	GetEvaluationJob(id string) (*api.EvaluationJobResource, error)
-	GetEvaluationJobs(limit int, offset int, statusFilter string) (*QueryResults[api.EvaluationJobResource], error)
+	GetEvaluationJobs(limit int, offset int, filter QueryFilter) (*QueryResults[api.EvaluationJobResource], error)
 	DeleteEvaluationJob(id string) error
 	UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error
 	// UpdateEvaluationJobStatus is used to update the status of an evaluation job and is internal - do we need it here?
@@ -31,8 +36,8 @@ type Storage interface {
 
 	// Collection operations
 	CreateCollection(collection *api.CollectionResource) error
-	GetCollection(id string, summary bool) (*api.CollectionResource, error)
-	GetCollections(limit int, offset int) (*QueryResults[api.CollectionResource], error)
+	GetCollection(id string) (*api.CollectionResource, error)
+	GetCollections(limit int, offset int, filter QueryFilter) (*QueryResults[api.CollectionResource], error)
 	UpdateCollection(collection *api.CollectionResource) error
 	DeleteCollection(id string) error
 

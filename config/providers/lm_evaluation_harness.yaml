@@ -1,10 +1,9 @@
 id: lm_evaluation_harness
 name: LM Evaluation Harness
 description: Comprehensive evaluation framework for language models with 167 benchmarks
-type: builtin
 runtime:
   k8s:
-    image: quay.io/opendatahub/ta-lmes-job:odh-3.4
+    image: quay.io/opendatahub/ta-lmes-job:odh-3.4-ea2
     entrypoint:
       - /opt/app-root/bin/python
       - /opt/app-root/src/main.py

@@ -1,0 +1,15 @@
+type: object
+description: Generic pagination schema
+properties:
+  first:
+    $ref: ./HRef.yaml
+    description: Link to first page
+  next:
+    $ref: ./HRef.yaml
+    description: Link to next page (omit if none)
+  limit:
+    type: integer
+    description: Page size
+  total_count:
+    type: integer
+    description: Total number of items

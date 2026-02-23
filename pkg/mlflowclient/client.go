@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -29,12 +30,13 @@ const (
 
 // Client represents an MLflow API client
 type Client struct {
-	ctx        context.Context
-	baseURL    string
-	httpClient *http.Client
-	authToken  string
-	workspace  string
-	logger     *slog.Logger
+	ctx           context.Context
+	baseURL       string
+	httpClient    *http.Client
+	authToken     string
+	authTokenPath string
+	workspace     string
+	logger        *slog.Logger
 }
 
 // NewClient creates a new MLflow client
@@ -59,12 +61,13 @@ func (c *Client) WithHTTPClient(httpClient *http.Client) *Client {
 		return nil
 	}
 	return &Client{
-		ctx:        c.ctx,
-		baseURL:    c.baseURL,
-		httpClient: httpClient,
-		authToken:  c.authToken,
-		workspace:  c.workspace,
-		logger:     c.logger,
+		ctx:           c.ctx,
+		baseURL:       c.baseURL,
+		httpClient:    httpClient,
+		authToken:     c.authToken,
+		authTokenPath: c.authTokenPath,
+		workspace:     c.workspace,
+		logger:        c.logger,
 	}
 }
 
@@ -73,12 +76,13 @@ func (c *Client) WithContext(ctx context.Context) *Client {
 		return nil
 	}
 	return &Client{
-		ctx:        ctx,
-		baseURL:    c.baseURL,
-		httpClient: c.httpClient,
-		authToken:  c.authToken,
-		workspace:  c.workspace,
-		logger:     c.logger,
+		ctx:           ctx,
+		baseURL:       c.baseURL,
+		httpClient:    c.httpClient,
+		authToken:     c.authToken,
+		authTokenPath: c.authTokenPath,
+		workspace:     c.workspace,
+		logger:        c.logger,
 	}
 }
 
@@ -87,26 +91,47 @@ func (c *Client) WithLogger(logger *slog.Logger) *Client {
 		return nil
 	}
 	return &Client{
-		ctx:        c.ctx,
-		baseURL:    c.baseURL,
-		httpClient: c.httpClient,
-		authToken:  c.authToken,
-		workspace:  c.workspace,
-		logger:     logger,
+		ctx:           c.ctx,
+		baseURL:       c.baseURL,
+		httpClient:    c.httpClient,
+		authToken:     c.authToken,
+		authTokenPath: c.authTokenPath,
+		workspace:     c.workspace,
+		logger:        logger,
 	}
 }
 
+// WithToken sets a static auth token (for local development without a token file).
 func (c *Client) WithToken(authToken string) *Client {
 	if c == nil {
 		return nil
 	}
 	return &Client{
-		ctx:        c.ctx,
-		baseURL:    c.baseURL,
-		httpClient: c.httpClient,
-		authToken:  authToken,
-		workspace:  c.workspace,
-		logger:     c.logger,
+		ctx:           c.ctx,
+		baseURL:       c.baseURL,
+		httpClient:    c.httpClient,
+		authToken:     authToken,
+		authTokenPath: c.authTokenPath,
+		workspace:     c.workspace,
+		logger:        c.logger,
+	}
+}
+
+// WithTokenPath sets a file path from which the auth token is read on each request.
+// This supports Kubernetes projected ServiceAccount tokens that are rotated on disk.
+// When set, takes precedence over a static token from WithToken.
+func (c *Client) WithTokenPath(authTokenPath string) *Client {
+	if c == nil {
+		return nil
+	}
+	return &Client{
+		ctx:           c.ctx,
+		baseURL:       c.baseURL,
+		httpClient:    c.httpClient,
+		authToken:     c.authToken,
+		authTokenPath: authTokenPath,
+		workspace:     c.workspace,
+		logger:        c.logger,
 	}
 }
 
@@ -115,12 +140,13 @@ func (c *Client) WithWorkspace(workspace string) *Client {
 		return nil
 	}
 	return &Client{
-		ctx:        c.ctx,
-		baseURL:    c.baseURL,
-		httpClient: c.httpClient,
-		authToken:  c.authToken,
-		workspace:  workspace,
-		logger:     c.logger,
+		ctx:           c.ctx,
+		baseURL:       c.baseURL,
+		httpClient:    c.httpClient,
+		authToken:     c.authToken,
+		authTokenPath: c.authTokenPath,
+		workspace:     workspace,
+		logger:        c.logger,
 	}
 }
 
@@ -138,6 +164,22 @@ func (c *Client) GetBaseURL() string {
 
 func (c *Client) GetExperimentsURL() string {
 	return c.baseURL + experimentsBaseURL
+}
+
+// resolveAuthToken returns the auth token to use for a request.
+// Token file (authTokenPath) takes precedence over a static token, supporting
+// Kubernetes projected SA tokens that are rotated on disk by the kubelet.
+// Falls back to the static authToken for local development.
+func (c *Client) resolveAuthToken() string {
+	if c.authTokenPath != "" {
+		tokenData, err := os.ReadFile(c.authTokenPath)
+		if err != nil {
+			c.logger.Warn("Failed to read auth token file, falling back to static token", "path", c.authTokenPath, "error", err)
+		} else if token := strings.TrimSpace(string(tokenData)); token != "" {
+			return token
+		}
+	}
+	return c.authToken
 }
 
 // doRequest performs an HTTP request to the MLflow API
@@ -167,11 +209,11 @@ func (c *Client) doRequest(method, endpoint string, body any) ([]byte, error) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	if c.authToken != "" {
-		if strings.HasPrefix(c.authToken, "Bearer ") || strings.HasPrefix(c.authToken, "Basic ") {
-			req.Header.Set("Authorization", c.authToken)
+	if token := c.resolveAuthToken(); token != "" {
+		if strings.HasPrefix(token, "Bearer ") || strings.HasPrefix(token, "Basic ") {
+			req.Header.Set("Authorization", token)
 		} else {
-			req.Header.Set("Authorization", "Bearer "+c.authToken)
+			req.Header.Set("Authorization", "Bearer "+token)
 		}
 	}
 	// ODH-specific: the X-MLFLOW-WORKSPACE header is a non-standard extension

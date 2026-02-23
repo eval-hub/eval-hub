@@ -36,6 +36,9 @@ func (s *Server) newExecutionContext(r *http.Request) *executioncontext.Executio
 	// Enhance logger with request-specific fields
 	requestID, enhancedLogger := s.loggerWithRequest(r)
 
+	user := r.Header.Get("X-User")
+	tenant := r.Header.Get("X-Tenant")
+
 	// Use r.Context() so OTEL trace context (and the HTTP span from otelhttp) propagates
 	// to handlers and downstream calls (storage, runtime, mlflow). Using context.Background()
 	// would break parent-span linkage and create orphan traces.
@@ -43,7 +46,9 @@ func (s *Server) newExecutionContext(r *http.Request) *executioncontext.Executio
 		r.Context(),
 		requestID,
 		enhancedLogger,
-		3)
+		3,
+		api.User(user),
+		api.Tenant(tenant))
 }
 
 // Abstract request objects to not depend on the underlying HTTP framework.

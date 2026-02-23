@@ -1,21 +1,25 @@
-properties:
-  id:
-    type: string
-    title: Benchmark Id
-    description: Benchmark identifier
-  provider_id:
-    type: string
-    title: Provider Id
-    description: Provider identifier
-  parameters:
-    additionalProperties: true
-    type: object
-    title: Parameters
-    description: Benchmark configuration including num_fewshot, limit, batch_size, etc.
-additionalProperties: false
 type: object
-required:
-  - id
-  - provider_id
-title: Benchmark Config
-description: New simplified benchmark specification.
+description: Reference to a benchmark in a collection or evaluation
+allOf:
+  - $ref: ./Ref.yaml
+  - type: object
+    required:
+      - provider_id
+    properties:
+      provider_id:
+        type: string
+        description: Evaluation provider ID
+      weight:
+        type: number
+        format: float
+        minimum: 0
+        maximum: 1
+        description: Weight of this benchmark
+      primary_score:
+        $ref: ./PrimaryScore.yaml
+      pass_criteria:
+        $ref: ./PassCriteria.yaml
+      parameters:
+        type: object
+        additionalProperties: true
+        description: Benchmark-specific parameters

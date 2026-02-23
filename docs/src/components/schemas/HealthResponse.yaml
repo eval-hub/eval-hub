@@ -1,26 +1,25 @@
+type: object
+description: Health check response
 properties:
   status:
     type: string
-    title: Status
-    description: Overall health status
+    description: Overall status (e.g. healthy, degraded)
+  version:
+    type: string
+    description: Service version
   timestamp:
     type: string
     format: date-time
-    title: Timestamp
-    description: Health check timestamp
-  #version:
-  #  type: string
-  #  title: Version
-  #  description: Service version
-  #uptime_seconds:
-  #  type: number
-  #  title: Uptime Seconds
-  #  description: Service uptime in seconds
-type: object
-required:
-  - status
-  - timestamp
-  # - version
-  # - uptime_seconds
-title: HealthResponse
-description: Health check response.
+    description: Server timestamp
+  components:
+    type: object
+    additionalProperties:
+      type: object
+      additionalProperties: true
+    description: Per-component health
+  uptime:
+    type: integer
+    description: Uptime in nanoseconds (or use string for duration)
+  active_evaluations:
+    type: integer
+    description: Number of active evaluations

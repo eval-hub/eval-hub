@@ -3,7 +3,7 @@ get:
     - Evaluations
   summary: Get Evaluation Status
   description: Get the status of an evaluation request.
-  operationId: get_evaluation_status_api_v1_evaluations_jobs__id__get
+  operationId: get_evaluations_jobs_id
   parameters:
     - name: id
       in: path
@@ -17,7 +17,7 @@ get:
       content:
         application/json:
           schema:
-            $ref: ../components/schemas/EvaluationResponse.yaml
+            $ref: ../components/schemas/EvaluationJobResource.yaml
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':
@@ -31,7 +31,7 @@ delete:
     - Evaluations
   summary: Cancel Evaluation
   description: Cancel a running evaluation.
-  operationId: cancel_evaluation_api_v1_evaluations_jobs__id__delete
+  operationId: delete_evaluations_jobs_id
   parameters:
     - name: id
       in: path
