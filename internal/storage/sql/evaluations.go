@@ -370,6 +370,8 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 		}
 		commonStorage.UpdateBenchmarkStatus(job, runStatus, &benchmark)
 
+		outcome := computeBenchmarkOutcome(job, runStatus.BenchmarkStatusEvent)
+
 		// if the run status is completed, failed, or cancelled, we need to update the results
 		if runStatus.BenchmarkStatusEvent.Status == api.StateCompleted || runStatus.BenchmarkStatusEvent.Status == api.StateFailed || runStatus.BenchmarkStatusEvent.Status == api.StateCancelled {
 			result := api.BenchmarkResult{
@@ -379,6 +381,7 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 				Artifacts:   runStatus.BenchmarkStatusEvent.Artifacts,
 				MLFlowRunID: runStatus.BenchmarkStatusEvent.MLFlowRunID,
 				LogsPath:    runStatus.BenchmarkStatusEvent.LogsPath,
+				Outcome:     outcome,
 			}
 			err := commonStorage.UpdateBenchmarkResults(job, runStatus, &result)
 			if err != nil {
@@ -388,6 +391,7 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 
 		// get the overall job status
 		overallState, message := commonStorage.GetOverallJobStatus(job)
+		computeJobOutcome(job)
 		job.Status.State = overallState
 		job.Status.Message = message
 
@@ -401,4 +405,45 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 	})
 
 	return err
+}
+
+func computeJobOutcome(job *api.EvaluationJobResource) {
+	var sumOfWeightedScores float32 = 0.0
+	var sumOfWeights float32 = 0.0
+	for _, benchmark := range job.Results.Benchmarks {
+		benchmarkWeight := job.Benchmarks[benchmark.BenchmarkIndex].Weight
+		weightedScore := benchmarkWeight * benchmark.Outcome.Score
+		if job.Benchmarks[benchmark.BenchmarkIndex].PrimaryScore.LowerIsBetter {
+			weightedScore = benchmarkWeight * (1 - benchmark.Outcome.Score)
+		}
+		sumOfWeightedScores += weightedScore
+		sumOfWeights += benchmarkWeight
+	}
+	weightedAvgJobScore := sumOfWeightedScores / sumOfWeights
+	jobOutcome := api.Outcome{
+		Score:     weightedAvgJobScore,
+		Threshold: job.EvaluationJobConfig.PassCriteria.Threshold,
+		Pass:      weightedAvgJobScore >= job.EvaluationJobConfig.PassCriteria.Threshold,
+	}
+	job.Results.Outcome = &jobOutcome
+}
+
+func computeBenchmarkOutcome(job *api.EvaluationJobResource, benchmarkStatusEvent *api.BenchmarkStatusEvent) *api.Outcome {
+	for _, benchmark := range job.Benchmarks {
+		if benchmark.ID == benchmarkStatusEvent.ID && benchmark.ProviderID == benchmarkStatusEvent.ProviderID {
+			primaryMetric := benchmark.PrimaryScore.Metric
+			primaryMetricValue := benchmarkStatusEvent.Metrics[primaryMetric].(float32)
+			passCriteria := benchmark.PassCriteria.Threshold
+			pass := primaryMetricValue <= passCriteria
+			if benchmark.PrimaryScore.LowerIsBetter {
+				pass = primaryMetricValue <= passCriteria
+			}
+			return &api.Outcome{
+				Score:     primaryMetricValue,
+				Threshold: benchmark.PassCriteria.Threshold,
+				Pass:      pass,
+			}
+		}
+	}
+	return nil
 }

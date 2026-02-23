@@ -73,3 +73,9 @@ type EnvVar struct {
 	Name  string `mapstructure:"name" yaml:"name"`
 	Value string `mapstructure:"value" yaml:"value"`
 }
+
+type Outcome struct {
+	Score     float32 `json:"score"`
+	Threshold float32 `json:"threshold"`
+	Pass      bool    `json:"pass"`
+}

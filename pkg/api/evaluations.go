@@ -148,10 +148,12 @@ type BenchmarkResult struct {
 	Artifacts      map[string]any `json:"artifacts,omitempty"`
 	MLFlowRunID    string         `json:"mlflow_run_id,omitempty"`
 	LogsPath       string         `json:"logs_path,omitempty"`
+	Outcome        *Outcome       `json:"outcome,omitempty"`
 }
 
 // EvaluationJobResults represents results section for EvaluationJobResource
 type EvaluationJobResults struct {
+	Outcome             *Outcome          `json:"outcome,omitempty"`
 	Benchmarks          []BenchmarkResult `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 	MLFlowExperimentURL string            `json:"mlflow_experiment_url,omitempty"`
 }
