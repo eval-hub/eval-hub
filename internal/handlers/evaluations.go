@@ -108,21 +108,9 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		}
 	}
 
+	var job *api.EvaluationJobResource
 	now := time.Now()
 	id := common.GUID()
-
-	job := &api.EvaluationJobResource{
-		Resource: api.EvaluationResource{
-			Resource: api.Resource{
-				ID:        id,
-				CreatedAt: &now,
-				Owner:     ctx.User,
-				Tenant:    &ctx.Tenant,
-				ReadOnly:  false,
-			},
-			MLFlowExperimentID: mlflowExperimentID,
-		},
-	}
 
 	err = otel.WithSpan(
 		ctx.Ctx,
@@ -141,6 +129,9 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 					Resource: api.Resource{
 						ID:        id,
 						CreatedAt: &now,
+						Owner:     ctx.User,
+						Tenant:    &ctx.Tenant,
+						ReadOnly:  false,
 					},
 					MLFlowExperimentID: mlflowExperimentID,
 				},
