@@ -88,16 +88,11 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 			if err != nil {
 				return err
 			}
-			return nil
+			return h.validateBenchmarkReferences(evaluation)
 		},
 	)
 
 	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-
-	if err := h.validateBenchmarkReferences(evaluation); err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
