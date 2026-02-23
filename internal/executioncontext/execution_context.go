@@ -42,3 +42,14 @@ func NewExecutionContext(
 		Tenant:    tenant,
 	}
 }
+
+func (e *ExecutionContext) WithContext(ctx context.Context) *ExecutionContext {
+	return &ExecutionContext{
+		Ctx:       ctx,
+		RequestID: e.RequestID,
+		Logger:    e.Logger,
+		StartedAt: e.StartedAt,
+		User:      e.User,
+		Tenant:    e.Tenant,
+	}
+}

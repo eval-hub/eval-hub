@@ -1,7 +1,9 @@
 package sql
 
 import (
+	"fmt"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -25,15 +27,27 @@ func (s *SQLDatabaseConfig) getDriverName() string {
 	return s.Driver
 }
 
-func (s *SQLDatabaseConfig) getConnectionURL() string {
+func (s *SQLDatabaseConfig) getConnectionURL() (string, error) {
 	// Sanitize URL to avoid exposing credentials
 	parsed, err := url.Parse(s.URL)
 	if err != nil {
-		return s.Driver + "://<parse-error>"
+		return "", fmt.Errorf("failed to parse connection URL: %w", err)
 	}
 	// Remove password from userinfo
 	if parsed.User != nil {
 		parsed.User = url.User(parsed.User.Username())
 	}
-	return parsed.String()
+	return parsed.String(), nil
+}
+
+func (s *SQLDatabaseConfig) getDatabaseName() string {
+	connectionURL, err := s.getConnectionURL()
+	if err != nil {
+		return ""
+	}
+	parsed, err := url.Parse(connectionURL)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimPrefix(parsed.Path, "/")
 }

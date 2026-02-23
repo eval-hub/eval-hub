@@ -15,10 +15,11 @@ func TestBuildConfigMap(t *testing.T) {
 		providerID:     "provider-1",
 		benchmarkID:    "bench-1",
 		jobSpecJSON:    "{}",
+    resourceGUID:   "guid-123",
 	}
 
 	configMap := buildConfigMap(cfg)
-	expectedName := configMapName(cfg.jobID, cfg.providerID, cfg.benchmarkID)
+	expectedName := configMapName(cfg.jobID, cfg.resourceGUID)
 	if configMap.Name != expectedName {
 		t.Fatalf("expected configmap name %s, got %s", expectedName, configMap.Name)
 	}
@@ -38,20 +39,18 @@ func TestBuildConfigMap(t *testing.T) {
 }
 
 func TestBuildK8sNameSanitizes(t *testing.T) {
-	name := buildK8sName("Job-123", "Provider-1", "AraDiCE_boolq_lev", "")
-	prefix := "eval-job-provider-1-aradice-boolq-lev-job-123-"
-	if !strings.HasPrefix(name, prefix) {
-		t.Fatalf("expected sanitized name to start with %q, got %q", prefix, name)
+	name := buildK8sName("Job-123", "Guid-ABC", "")
+	if !strings.HasPrefix(name, "job-123-") {
+		t.Fatalf("expected sanitized name to start with %q, got %q", "job-123-", name)
 	}
 }
 
-func TestBuildK8sNameDiffersAcrossProviders(t *testing.T) {
+func TestBuildK8sNameDiffersAcrossGUIDs(t *testing.T) {
 	jobID := "job-123"
-	benchmarkID := "arc_easy"
-	name1 := buildK8sName(jobID, "lmeval", benchmarkID, "")
-	name2 := buildK8sName(jobID, "lighteval", benchmarkID, "")
+	name1 := buildK8sName(jobID, "guid-1", "")
+	name2 := buildK8sName(jobID, "guid-2", "")
 	if name1 == name2 {
-		t.Fatalf("expected different names for different providers, got %q", name1)
+		t.Fatalf("expected different names for different GUIDs, got %q", name1)
 	}
 }
 
@@ -65,6 +64,7 @@ func TestJobLabelsSanitizeBenchmarkID(t *testing.T) {
 func TestBuildJobRequiresAdapterImage(t *testing.T) {
 	cfg := &jobConfig{
 		jobID:          "job-123",
+    resourceGUID:   "guid-123",
 		benchmarkIndex: 0,
 		namespace:      "default",
 		providerID:     "provider-1",
@@ -80,6 +80,7 @@ func TestBuildJobRequiresAdapterImage(t *testing.T) {
 func TestBuildJobSecurityContext(t *testing.T) {
 	cfg := &jobConfig{
 		jobID:          "job-123",
+    resourceGUID:   "guid-123",
 		benchmarkIndex: 0,
 		namespace:      "default",
 		providerID:     "provider-1",
@@ -127,6 +128,7 @@ func TestBuildJobSecurityContext(t *testing.T) {
 func TestBuildJobAnnotations(t *testing.T) {
 	cfg := &jobConfig{
 		jobID:          "job-123",
+    resourceGUID:   "guid-123",
 		benchmarkIndex: 0,
 		namespace:      "default",
 		providerID:     "provider-1",
@@ -166,6 +168,7 @@ func TestBuildJobWithOCICredentials(t *testing.T) {
 	cfg := &jobConfig{
 		jobID:                "job-oci",
 		benchmarkIndex:       0,
+    resourceGUID:         "guid-oci",
 		namespace:            "default",
 		providerID:           "provider-1",
 		benchmarkID:          "bench-1",
@@ -235,6 +238,7 @@ func TestBuildJobWithOCICredentials(t *testing.T) {
 func TestBuildJobWithoutOCICredentials(t *testing.T) {
 	cfg := &jobConfig{
 		jobID:          "job-no-oci",
+    resourceGUID:   "guid-no-oci",
 		benchmarkIndex: 0,
 		namespace:      "default",
 		providerID:     "provider-1",

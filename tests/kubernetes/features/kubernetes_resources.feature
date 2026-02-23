@@ -14,7 +14,7 @@ Feature: Kubernetes Resources Validation
     And Jobs should be created in the background
     And the number of Jobs created should equal the number of benchmarks
     And the number of ConfigMaps created should equal the number of benchmarks
-    And a ConfigMap should be created with name pattern "eval-job-{provider_id}-{benchmark_id}-{id}-{hash}-spec"
+    And a ConfigMap should be created with name pattern "{id}-{guid}-spec"
     And the ConfigMap should have label "app" with value "evalhub"
     And the ConfigMap should have label "component" with value "evaluation-job"
     And the ConfigMap should have label "job_id" matching the evaluation job ID
@@ -31,7 +31,7 @@ Feature: Kubernetes Resources Validation
     And the ConfigMap should have an ownerReference of kind "Job"
     And the ConfigMap ownerReference should have controller set to true
     And the ConfigMap ownerReference should reference the created Job
-    And a Kubernetes Job should be created with name pattern "eval-job-{provider_id}-{benchmark_id}-{id}-{hash}"
+    And a Kubernetes Job should be created with name pattern "{id}-{guid}"
     And the Job should have label "app" with value "evalhub"
     And the Job should have label "component" with value "evaluation-job"
     And the Job should have label "job_id" matching the evaluation job ID

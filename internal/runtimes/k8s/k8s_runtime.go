@@ -122,24 +122,38 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 		"namespace", namespace,
 	)
 
+	labelSelector := fmt.Sprintf("%s=%s", labelJobIDKey, sanitizeLabelValue(evaluation.Resource.ID))
+	jobs, err := r.helper.ListJobs(r.ctx, namespace, labelSelector)
+	if err != nil {
+		return err
+	}
+	configMaps, err := r.helper.ListConfigMaps(r.ctx, namespace, labelSelector)
+	if err != nil {
+		return err
+	}
+
 	var deleteErr error
-	for _, bench := range evaluation.Benchmarks {
-		jobName := jobName(evaluation.Resource.ID, bench.ProviderID, bench.ID)
-		configMapName := configMapName(evaluation.Resource.ID, bench.ProviderID, bench.ID)
+	for _, job := range jobs {
 		r.logger.Info(
-			"deleting evaluation runtime resources for benchmark",
+			"deleting evaluation runtime job",
 			"job_id", evaluation.Resource.ID,
-			"benchmark_id", bench.ID,
-			"job_name", jobName,
-			"configmap_name", configMapName,
+			"job_name", job.Name,
 			"namespace", namespace,
 		)
-		if err := r.helper.DeleteJob(r.ctx, namespace, jobName, deleteOptions); err != nil && !apierrors.IsNotFound(err) {
+		if err := r.helper.DeleteJob(r.ctx, namespace, job.Name, deleteOptions); err != nil && !apierrors.IsNotFound(err) {
 			deleteErr = errors.Join(deleteErr, err)
 		}
-		// OwnerReferences should GC ConfigMaps when Jobs are deleted, but we delete explicitly
-		// to avoid orphans if the owner ref was never set or the job delete is delayed.
-		if err := r.helper.DeleteConfigMap(r.ctx, namespace, configMapName); err != nil && !apierrors.IsNotFound(err) {
+	}
+	// OwnerReferences should GC ConfigMaps when Jobs are deleted, but we delete explicitly
+	// to avoid orphans if the owner ref was never set or the job delete is delayed.
+	for _, configMap := range configMaps {
+		r.logger.Info(
+			"deleting evaluation runtime configmap",
+			"job_id", evaluation.Resource.ID,
+			"configmap_name", configMap.Name,
+			"namespace", namespace,
+		)
+		if err := r.helper.DeleteConfigMap(r.ctx, namespace, configMap.Name); err != nil && !apierrors.IsNotFound(err) {
 			deleteErr = errors.Join(deleteErr, err)
 		}
 	}
