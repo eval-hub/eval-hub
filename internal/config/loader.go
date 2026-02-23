@@ -3,24 +3,19 @@ package config
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/spf13/viper"
 )
 
 var (
-	configLookup = []string{"config/providers", "./config/providers", "../../config/providers", "../../../config/providers"}
-
-	once        = sync.Once{}
-	isLocalMode = false
+	providersLookup = []string{"config/providers", "./config/providers", "../../config/providers", "../../../config/providers"}
 )
 
 type EnvMap struct {
@@ -30,15 +25,6 @@ type EnvMap struct {
 type SecretMap struct {
 	Dir      string            `mapstructure:"dir,omitempty"`
 	Mappings map[string]string `mapstructure:"mappings,omitempty"`
-}
-
-func localMode() bool {
-	once.Do(func() {
-		localMode := flag.Bool("local", false, "Server operates in local mode or not.")
-		flag.Parse()
-		isLocalMode = *localMode
-	})
-	return isLocalMode
 }
 
 // readConfig locates and reads a configuration file using Viper. It searches for
@@ -95,17 +81,24 @@ func readConfig(logger *slog.Logger, name string, ext string, dirs ...string) (*
 	return configValues, err
 }
 
-func loadProvider(logger *slog.Logger, file string) (api.ProviderConfig, error) {
+func loadProvider(logger *slog.Logger, file string) (*api.ProviderResource, error) {
 	providerConfig := api.ProviderConfig{}
-	configValues, err := readConfig(logger, file, "yaml", configLookup...)
+	configValues, err := readConfig(logger, file, "yaml", providersLookup...)
 	if err != nil {
-		return providerConfig, err
+		return nil, err
 	}
 
 	if err := configValues.Unmarshal(&providerConfig); err != nil {
-		return providerConfig, err
+		return nil, err
 	}
-	return providerConfig, nil
+	return &api.ProviderResource{
+		Resource: api.Resource{
+			ID:       providerConfig.ID,
+			ReadOnly: true,
+			Owner:    "system",
+		},
+		ProviderConfigInternal: providerConfig.ProviderConfigInternal,
+	}, nil
 }
 
 func scanFolders(logger *slog.Logger, dirs ...string) ([]os.DirEntry, error) {
@@ -127,11 +120,19 @@ func scanFolders(logger *slog.Logger, dirs ...string) ([]os.DirEntry, error) {
 	return []os.DirEntry{}, nil
 }
 
+func hasExplicitConfigDir(dirs []string) bool {
+	return len(dirs) > 0 && dirs[0] != ""
+}
+
 func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.ProviderResource, error) {
-	if len(dirs) == 0 {
-		dirs = configLookup
+	if !hasExplicitConfigDir(dirs) {
+		dirs = providersLookup
+	} else {
+		dirs = []string{dirs[0] + "/providers"}
 	}
+
 	providerConfigs := make(map[string]api.ProviderResource)
+
 	files, err := scanFolders(logger, dirs...)
 	if err != nil {
 		return providerConfigs, err
@@ -146,20 +147,13 @@ func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.Pr
 			return nil, err
 		}
 
-		if providerConfig.ID == "" {
+		if providerConfig.Resource.ID == "" {
 			logger.Warn("Provider config missing id, skipping", "file", file.Name())
 			continue
 		}
 
-		providerConfigs[providerConfig.ID] = api.ProviderResource{
-			Resource: api.Resource{
-				ID:       providerConfig.ID,
-				ReadOnly: true,
-				Owner:    "system",
-			},
-			ProviderConfigInternal: providerConfig.ProviderConfigInternal,
-		}
-		logger.Info("Provider loaded", "provider_id", providerConfig.ID)
+		providerConfigs[providerConfig.Resource.ID] = *providerConfig
+		logger.Info("Provider loaded", "provider_id", providerConfig.Resource.ID)
 	}
 
 	return providerConfigs, nil
@@ -201,8 +195,8 @@ func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.Pr
 func LoadConfig(logger *slog.Logger, version string, build string, buildDate string, dirs ...string) (*Config, error) {
 	logger.Info("Start reading configuration", "version", version, "build", build, "build_date", buildDate, "dirs", dirs)
 
-	if len(dirs) == 0 {
-		dirs = []string{"config", "./config", "../../config", "tests"} // tests is for running the service on a local machine (not local mode)
+	if !hasExplicitConfigDir(dirs) {
+		dirs = []string{"config", "./config", "../../config", "../../../config"} // tests is for running the service on a local machine (not local mode)
 	}
 
 	configValues, err := readConfig(logger, "config", "yaml", dirs...)
@@ -272,7 +266,6 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 	conf.Service.Version = version
 	conf.Service.Build = build
 	conf.Service.BuildDate = buildDate
-	conf.Service.LocalMode = localMode()
 
 	logger.Info("End reading configuration", "config", RedactedJSON(conf, redactedFields))
 	return &conf, nil

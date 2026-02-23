@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"log/slog"
@@ -30,18 +31,43 @@ var (
 	BuildDate string
 )
 
+type Args struct {
+	ConfigDir string
+	LocalMode bool
+}
+
+func args() Args {
+	configDir := ""
+	dir := flag.String("configdir", configDir, "Directory to search for configuration files.")
+	local := flag.Bool("local", false, "Server operates in local mode or not.")
+	flag.Parse()
+	configDir = *dir
+	if configDir == "" {
+		configDir = os.Getenv("EVAL_HUB_CONFIG_DIR")
+	}
+
+	return Args{
+		ConfigDir: configDir,
+		LocalMode: *local,
+	}
+}
+
 func main() {
+	args := args()
+
 	logger, logShutdown, err := logging.NewLogger()
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(nil, err, "Failed to create service logger", logging.FallbackLogger())
 	}
 
-	serviceConfig, err := config.LoadConfig(logger, Version, Build, BuildDate)
+	serviceConfig, err := config.LoadConfig(logger, Version, Build, BuildDate, args.ConfigDir)
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(nil, err, "Failed to create service config", logger)
 	}
+
+	serviceConfig.Service.LocalMode = args.LocalMode
 
 	// set up the validator
 	validate, err := validation.NewValidator()
@@ -58,7 +84,7 @@ func main() {
 	}
 
 	// set up the provider configs
-	providerConfigs, err := config.LoadProviderConfigs(logger)
+	providerConfigs, err := config.LoadProviderConfigs(logger, args.ConfigDir)
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create provider configs", logger)
