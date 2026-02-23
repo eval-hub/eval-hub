@@ -120,11 +120,19 @@ func scanFolders(logger *slog.Logger, dirs ...string) ([]os.DirEntry, error) {
 	return []os.DirEntry{}, nil
 }
 
+func hasExplicitConfigDir(dirs []string) bool {
+	return len(dirs) > 0 && dirs[0] != ""
+}
+
 func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.ProviderResource, error) {
-	if len(dirs) == 0 {
+	if !hasExplicitConfigDir(dirs) {
 		dirs = providersLookup
+	} else {
+		dirs = []string{dirs[0] + "/providers"}
 	}
+
 	providerConfigs := make(map[string]api.ProviderResource)
+
 	files, err := scanFolders(logger, dirs...)
 	if err != nil {
 		return providerConfigs, err
@@ -187,8 +195,8 @@ func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.Pr
 func LoadConfig(logger *slog.Logger, version string, build string, buildDate string, dirs ...string) (*Config, error) {
 	logger.Info("Start reading configuration", "version", version, "build", build, "build_date", buildDate, "dirs", dirs)
 
-	if len(dirs) == 0 {
-		dirs = []string{"config", "./config", "../../config", "tests"} // tests is for running the service on a local machine (not local mode)
+	if !hasExplicitConfigDir(dirs) {
+		dirs = []string{"config", "./config", "../../config", "../../../config"} // tests is for running the service on a local machine (not local mode)
 	}
 
 	configValues, err := readConfig(logger, "config", "yaml", dirs...)

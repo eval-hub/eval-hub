@@ -37,7 +37,7 @@ type Args struct {
 }
 
 func args() Args {
-	configDir := "./config"
+	configDir := ""
 	dir := flag.String("configdir", configDir, "Directory to search for configuration files.")
 	local := flag.Bool("local", false, "Server operates in local mode or not.")
 	flag.Parse()
@@ -45,6 +45,7 @@ func args() Args {
 	if configDir == "" {
 		configDir = os.Getenv("EVAL_HUB_CONFIG_DIR")
 	}
+
 	return Args{
 		ConfigDir: configDir,
 		LocalMode: *local,
@@ -83,7 +84,7 @@ func main() {
 	}
 
 	// set up the provider configs
-	providerConfigs, err := config.LoadProviderConfigs(logger)
+	providerConfigs, err := config.LoadProviderConfigs(logger, args.ConfigDir)
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create provider configs", logger)

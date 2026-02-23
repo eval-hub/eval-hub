@@ -192,7 +192,7 @@ func createServer(port int) (*server.Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create validator: %w", err)
 	}
-	serviceConfig, err := config.LoadConfig(logger, "0.0.1", "local", time.Now().Format(time.RFC3339), "../../../tests")
+	serviceConfig, err := config.LoadConfig(logger, "0.0.1", "local", time.Now().Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load service config: %w", err)
 	}
@@ -202,7 +202,7 @@ func createServer(port int) (*server.Server, error) {
 		return nil, fmt.Errorf("failed to create storage: %w", err)
 	}
 	// set up the provider configs
-	providerConfigs, err := config.LoadProviderConfigs(logger, "../../../config/providers", "../../../../config/providers", "../../../../../config/providers")
+	providerConfigs, err := config.LoadProviderConfigs(logger)
 	if err != nil {
 		// we do this as no point trying to continue
 		return nil, fmt.Errorf("failed to load provider configs: %w", err)
