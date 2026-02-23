@@ -1,9 +1,8 @@
 package shared
 
-// Assisted-by: claude code
-
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -166,7 +165,7 @@ func TestFindBenchmarkConfigNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !contains(err.Error(), "benchmark config not found") {
+	if !strings.Contains(err.Error(), "benchmark config not found") {
 		t.Fatalf("expected 'benchmark config not found', got %q", err.Error())
 	}
 }
@@ -296,7 +295,7 @@ func TestBuildJobSpecJSONBenchmarkNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !contains(err.Error(), "benchmark config not found") {
+	if !strings.Contains(err.Error(), "benchmark config not found") {
 		t.Fatalf("expected 'benchmark config not found', got %q", err.Error())
 	}
 }
@@ -314,13 +313,4 @@ func TestBuildJobSpecJSONDoesNotMutateOriginalParams(t *testing.T) {
 	if _, exists := originalParams["num_examples"]; !exists {
 		t.Fatal("BuildJobSpecJSON mutated the original parameters map")
 	}
-}
-
-func contains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

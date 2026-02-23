@@ -1,9 +1,8 @@
 package local
 
-// Assisted-by: claude code
-
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -60,10 +59,36 @@ func (r *LocalRuntime) RunEvaluationJob(
 	// TODO: Support multiple benchmarks per job
 	if len(evaluation.Benchmarks) > 1 {
 		r.logger.Warn(
-			"local runtime only supports 1 benchmark per job, additional benchmarks will be skipped",
+			"local runtime only supports 1 benchmark per job, additional benchmarks will be marked as failed",
 			"job_id", evaluation.Resource.ID,
 			"total_benchmarks", len(evaluation.Benchmarks),
 		)
+
+		// FIXME: Fail the other benchmark jobs till further enhancement is implemented.
+		if storage != nil && *storage != nil {
+			for _, skipped := range evaluation.Benchmarks[1:] {
+				skipStatus := &api.StatusEvent{
+					BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+						ProviderID: skipped.ProviderID,
+						ID:         skipped.ID,
+						Status:     api.StateFailed,
+						ErrorMessage: &api.MessageInfo{
+							Message:     "skipped: local runtime only supports 1 benchmark per job",
+							MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED,
+						},
+					},
+				}
+				if updateErr := (*storage).UpdateEvaluationJob(evaluation.Resource.ID, skipStatus); updateErr != nil {
+					r.logger.Error(
+						"failed to mark skipped benchmark as failed",
+						"error", updateErr,
+						"job_id", evaluation.Resource.ID,
+						"benchmark_id", skipped.ID,
+						"provider_id", skipped.ProviderID,
+					)
+				}
+			}
+		}
 	}
 
 	bench := evaluation.Benchmarks[0]
@@ -80,7 +105,7 @@ func (r *LocalRuntime) RunEvaluationJob(
 	if serviceURL := os.Getenv("SERVICE_URL"); serviceURL != "" {
 		callbackURL = &serviceURL
 	}
-	specJSON, err := shared.BuildJobSpecJSON(evaluation, provider.ID, bench.ID, callbackURL)
+	specJSON, err := shared.BuildJobSpecJSON(evaluation, bench.ProviderID, bench.ID, callbackURL)
 	if err != nil {
 		return fmt.Errorf("build job spec: %w", err)
 	}
@@ -113,11 +138,7 @@ func (r *LocalRuntime) RunEvaluationJob(
 
 	// Build command using shell interpretation
 	command := provider.Runtime.Local.Command
-	ctx := r.ctx
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	cmd := exec.CommandContext(r.ctx, "sh", "-c", command)
 
 	// Set environment variables
 	cmd.Env = append(os.Environ(),
@@ -159,6 +180,10 @@ func (r *LocalRuntime) RunEvaluationJob(
 		"command", command,
 	)
 
+	// Capture job ID before launching goroutine to avoid a data race
+	// on the shared evaluation pointer.
+	jobID := evaluation.Resource.ID
+
 	// Wait for completion in background goroutine
 	go func() {
 		defer logFile.Close()
@@ -166,7 +191,7 @@ func (r *LocalRuntime) RunEvaluationJob(
 			r.logger.Error(
 				"local runtime process failed",
 				"error", err,
-				"job_id", evaluation.Resource.ID,
+				"job_id", jobID,
 				"benchmark_id", bench.ID,
 				"provider_id", bench.ProviderID,
 			)
@@ -182,11 +207,11 @@ func (r *LocalRuntime) RunEvaluationJob(
 							MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED},
 					},
 				}
-				if updateErr := (*storage).UpdateEvaluationJob(evaluation.Resource.ID, runStatus); updateErr != nil {
+				if updateErr := (*storage).UpdateEvaluationJob(jobID, runStatus); updateErr != nil {
 					r.logger.Error(
 						"failed to update benchmark status",
 						"error", updateErr,
-						"job_id", evaluation.Resource.ID,
+						"job_id", jobID,
 						"benchmark_id", bench.ID,
 					)
 				}
@@ -194,7 +219,7 @@ func (r *LocalRuntime) RunEvaluationJob(
 		} else {
 			r.logger.Info(
 				"local runtime process completed",
-				"job_id", evaluation.Resource.ID,
+				"job_id", jobID,
 				"benchmark_id", bench.ID,
 				"provider_id", bench.ProviderID,
 			)
@@ -205,10 +230,12 @@ func (r *LocalRuntime) RunEvaluationJob(
 }
 
 func (r *LocalRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobResource) error {
+	var deleteErr error
 	for _, bench := range evaluation.Benchmarks {
 		dirName := shared.JobName(evaluation.Resource.ID, bench.ProviderID, bench.ID)
 		metaDir := filepath.Join(localRunDir, dirName)
 		if err := os.RemoveAll(metaDir); err != nil {
+			deleteErr = errors.Join(deleteErr, err)
 			r.logger.Error(
 				"failed to remove local runtime directory",
 				"error", err,
@@ -225,7 +252,7 @@ func (r *LocalRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJo
 			)
 		}
 	}
-	return nil
+	return deleteErr
 }
 
 func (r *LocalRuntime) Name() string {

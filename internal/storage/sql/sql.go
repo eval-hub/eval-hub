@@ -3,6 +3,7 @@ package sql
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -52,6 +53,18 @@ func NewStorage(config map[string]any, logger *slog.Logger) (abstractions.Storag
 	pool, err := sql.Open(sqlConfig.Driver, sqlConfig.URL)
 	if err != nil {
 		return nil, err
+	}
+
+	if sqlConfig.Driver == SQLITE_DRIVER {
+		// SQLite only supports one writer at a time; serializing access through
+		// a single connection eliminates lock contention and deadlocks.
+		pool.SetMaxOpenConns(1)
+		if _, err := pool.Exec("PRAGMA busy_timeout = 5000"); err != nil {
+			return nil, fmt.Errorf("failed to set busy_timeout: %w", err)
+		}
+		if _, err := pool.Exec("PRAGMA journal_mode = WAL"); err != nil {
+			return nil, fmt.Errorf("failed to set journal_mode: %w", err)
+		}
 	}
 
 	if sqlConfig.ConnMaxLifetime != nil {

@@ -1,7 +1,5 @@
 package local
 
-// Assisted-by: claude code
-
 import (
 	"context"
 	"encoding/json"
@@ -10,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -87,6 +86,15 @@ func discardLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
+// testContext returns a context with a 10-second deadline tied to t.Cleanup.
+// All process-spawning tests should use this to prevent hangs.
+func testContext(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+	return ctx
+}
+
 func sampleEvaluation(providerID string) *api.EvaluationJobResource {
 	return &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
@@ -138,6 +146,21 @@ func cleanupDir(t *testing.T, jobID, providerID, benchmarkID string) {
 	})
 }
 
+func waitForFile(t *testing.T, path string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.After(timeout)
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("timed out waiting for file %s", path)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
 func TestLocalRuntimeName(t *testing.T) {
 	rt := &LocalRuntime{}
 	if rt.Name() != "local" {
@@ -158,11 +181,14 @@ func TestNewLocalRuntime(t *testing.T) {
 func TestRunEvaluationJobWritesJobSpec(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
-	providers := sampleLocalProviders(providerID, "true")
+	dirName := shared.JobName("job-1", providerID, "bench-1")
+	sentinelPath := filepath.Join(localRunDir, dirName, "done")
+	providers := sampleLocalProviders(providerID, fmt.Sprintf("touch %s", sentinelPath))
 	cleanupDir(t, "job-1", providerID, "bench-1")
 
 	rt := &LocalRuntime{
 		logger:    discardLogger(),
+		ctx:       testContext(t),
 		providers: providers,
 	}
 
@@ -171,10 +197,7 @@ func TestRunEvaluationJobWritesJobSpec(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	// Wait for the async process to finish
-	time.Sleep(500 * time.Millisecond)
-
-	dirName := shared.JobName("job-1", providerID, "bench-1")
+	waitForFile(t, sentinelPath, 5*time.Second)
 	metaDir := filepath.Join(localRunDir, dirName, "meta")
 
 	// Verify directory exists
@@ -215,13 +238,15 @@ func TestRunEvaluationJobPassesEnvVar(t *testing.T) {
 
 	dirName := shared.JobName("job-1", providerID, "bench-1")
 	outputFile := filepath.Join(localRunDir, dirName, "env_output.txt")
+	sentinelPath := filepath.Join(localRunDir, dirName, "done")
 
 	// Command writes EVALHUB_JOB_SPEC_PATH and TEST_VAR to output file
-	command := fmt.Sprintf("sh -c 'echo $EVALHUB_JOB_SPEC_PATH > %s && echo $TEST_VAR >> %s'", outputFile, outputFile)
+	command := fmt.Sprintf("sh -c 'echo $EVALHUB_JOB_SPEC_PATH > %s && echo $TEST_VAR >> %s && touch %s'", outputFile, outputFile, sentinelPath)
 	providers := sampleLocalProviders(providerID, command)
 
 	rt := &LocalRuntime{
 		logger:    discardLogger(),
+		ctx:       testContext(t),
 		providers: providers,
 	}
 
@@ -230,8 +255,7 @@ func TestRunEvaluationJobPassesEnvVar(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	// Wait for the async process to finish
-	time.Sleep(1 * time.Second)
+	waitForFile(t, sentinelPath, 5*time.Second)
 
 	data, err := os.ReadFile(outputFile)
 	if err != nil {
@@ -247,7 +271,7 @@ func TestRunEvaluationJobPassesEnvVar(t *testing.T) {
 	}
 
 	// Parse the two lines
-	lines := splitLines(output)
+	lines := strings.Split(output, "\n")
 	if len(lines) < 2 {
 		t.Fatalf("expected at least 2 lines in env output, got %d: %q", len(lines), output)
 	}
@@ -257,23 +281,6 @@ func TestRunEvaluationJobPassesEnvVar(t *testing.T) {
 	if lines[1] != "test_value" {
 		t.Fatalf("expected TEST_VAR=%q, got %q", "test_value", lines[1])
 	}
-}
-
-func splitLines(s string) []string {
-	var lines []string
-	current := ""
-	for _, c := range s {
-		if c == '\n' {
-			lines = append(lines, current)
-			current = ""
-		} else {
-			current += string(c)
-		}
-	}
-	if current != "" {
-		lines = append(lines, current)
-	}
-	return lines
 }
 
 func TestRunEvaluationJobNoBenchmarks(t *testing.T) {
@@ -290,7 +297,7 @@ func TestRunEvaluationJobNoBenchmarks(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !containsSubstring(err.Error(), "no benchmarks configured") {
+	if !strings.Contains(err.Error(), "no benchmarks configured") {
 		t.Fatalf("expected error to contain %q, got %q", "no benchmarks configured", err.Error())
 	}
 }
@@ -309,7 +316,7 @@ func TestRunEvaluationJobProviderNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !containsSubstring(err.Error(), "not found") {
+	if !strings.Contains(err.Error(), "not found") {
 		t.Fatalf("expected error to contain %q, got %q", "not found", err.Error())
 	}
 }
@@ -335,7 +342,7 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !containsSubstring(err.Error(), "Local runtime is not enabled") {
+	if !strings.Contains(err.Error(), "Local runtime is not enabled") {
 		t.Fatalf("expected error to contain %q, got %q", "Local runtime is not enabled", err.Error())
 	}
 
@@ -351,7 +358,7 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for empty command, got nil")
 	}
-	if !containsSubstring(err.Error(), "Local runtime is not enabled") {
+	if !strings.Contains(err.Error(), "Local runtime is not enabled") {
 		t.Fatalf("expected error to contain %q, got %q", "Local runtime is not enabled", err.Error())
 	}
 }
@@ -362,13 +369,15 @@ func TestRunEvaluationJobProcessFailureUpdatesStorage(t *testing.T) {
 	providers := sampleLocalProviders(providerID, "exit 1")
 	cleanupDir(t, "job-1", providerID, "bench-1")
 
+	tctx := testContext(t)
 	logger := discardLogger()
 	statusCh := make(chan *api.StatusEvent, 1)
-	storage := &fakeStorage{logger: logger, ctx: context.Background(), runStatusChan: statusCh}
+	storage := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh}
 	var store abstractions.Storage = storage
 
 	rt := &LocalRuntime{
 		logger:    logger,
+		ctx:       tctx,
 		providers: providers,
 	}
 
@@ -413,13 +422,15 @@ func TestRunEvaluationJobProcessSuccess(t *testing.T) {
 	providers := sampleLocalProviders(providerID, "true")
 	cleanupDir(t, "job-1", providerID, "bench-1")
 
+	tctx := testContext(t)
 	logger := discardLogger()
 	statusCh := make(chan *api.StatusEvent, 1)
-	storage := &fakeStorage{logger: logger, ctx: context.Background(), runStatusChan: statusCh}
+	storage := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh}
 	var store abstractions.Storage = storage
 
 	rt := &LocalRuntime{
 		logger:    logger,
+		ctx:       tctx,
 		providers: providers,
 	}
 
@@ -443,12 +454,13 @@ func TestRunEvaluationJobContextCancellation(t *testing.T) {
 	providers := sampleLocalProviders(providerID, "sleep 10")
 	cleanupDir(t, "job-1", providerID, "bench-1")
 
+	tctx := testContext(t)
 	logger := discardLogger()
 	statusCh := make(chan *api.StatusEvent, 1)
-	storage := &fakeStorage{logger: logger, ctx: context.Background(), runStatusChan: statusCh}
+	storage := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh}
 	var store abstractions.Storage = storage
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(tctx)
 
 	rt := &LocalRuntime{
 		logger:    logger,
@@ -486,11 +498,14 @@ func TestRunEvaluationJobMultipleBenchmarksWarning(t *testing.T) {
 		ProviderID: providerID,
 		Parameters: map[string]any{"baz": "qux"},
 	})
-	providers := sampleLocalProviders(providerID, "true")
+	dirName := shared.JobName("job-1", providerID, "bench-1")
+	sentinelPath := filepath.Join(localRunDir, dirName, "done")
+	providers := sampleLocalProviders(providerID, fmt.Sprintf("touch %s", sentinelPath))
 	cleanupDir(t, "job-1", providerID, "bench-1")
 
 	rt := &LocalRuntime{
 		logger:    discardLogger(),
+		ctx:       testContext(t),
 		providers: providers,
 	}
 
@@ -499,8 +514,7 @@ func TestRunEvaluationJobMultipleBenchmarksWarning(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	// Wait for process
-	time.Sleep(500 * time.Millisecond)
+	waitForFile(t, sentinelPath, 5*time.Second)
 
 	// Only the first benchmark directory should exist
 	dir1 := filepath.Join(localRunDir, shared.JobName("job-1", providerID, "bench-1"))
@@ -510,22 +524,24 @@ func TestRunEvaluationJobMultipleBenchmarksWarning(t *testing.T) {
 
 	dir2 := filepath.Join(localRunDir, shared.JobName("job-1", providerID, "bench-2"))
 	if _, err := os.Stat(dir2); !os.IsNotExist(err) {
+		os.RemoveAll(dir2) // Clean up before failing
 		t.Fatal("expected directory for second benchmark to NOT exist")
-		// Clean up if it was created
-		os.RemoveAll(dir2)
 	}
 }
 
 func TestRunEvaluationJobCallbackURL(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
-	providers := sampleLocalProviders(providerID, "true")
+	dirName := shared.JobName("job-1", providerID, "bench-1")
+	sentinelPath := filepath.Join(localRunDir, dirName, "done")
+	providers := sampleLocalProviders(providerID, fmt.Sprintf("touch %s", sentinelPath))
 	cleanupDir(t, "job-1", providerID, "bench-1")
 
 	t.Setenv("SERVICE_URL", "http://localhost:8080")
 
 	rt := &LocalRuntime{
 		logger:    discardLogger(),
+		ctx:       testContext(t),
 		providers: providers,
 	}
 
@@ -534,9 +550,7 @@ func TestRunEvaluationJobCallbackURL(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	time.Sleep(500 * time.Millisecond)
-
-	dirName := shared.JobName("job-1", providerID, "bench-1")
+	waitForFile(t, sentinelPath, 5*time.Second)
 	jobSpecPath := filepath.Join(localRunDir, dirName, "meta", "job.json")
 	data, err := os.ReadFile(jobSpecPath)
 	if err != nil {
@@ -559,7 +573,9 @@ func TestRunEvaluationJobCallbackURL(t *testing.T) {
 func TestRunEvaluationJobCallbackURLNotSet(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
-	providers := sampleLocalProviders(providerID, "true")
+	dirName := shared.JobName("job-1", providerID, "bench-1")
+	sentinelPath := filepath.Join(localRunDir, dirName, "done")
+	providers := sampleLocalProviders(providerID, fmt.Sprintf("touch %s", sentinelPath))
 	cleanupDir(t, "job-1", providerID, "bench-1")
 
 	// Ensure SERVICE_URL is not set
@@ -567,6 +583,7 @@ func TestRunEvaluationJobCallbackURLNotSet(t *testing.T) {
 
 	rt := &LocalRuntime{
 		logger:    discardLogger(),
+		ctx:       testContext(t),
 		providers: providers,
 	}
 
@@ -575,9 +592,7 @@ func TestRunEvaluationJobCallbackURLNotSet(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	time.Sleep(500 * time.Millisecond)
-
-	dirName := shared.JobName("job-1", providerID, "bench-1")
+	waitForFile(t, sentinelPath, 5*time.Second)
 	jobSpecPath := filepath.Join(localRunDir, dirName, "meta", "job.json")
 	data, err := os.ReadFile(jobSpecPath)
 	if err != nil {
@@ -597,11 +612,14 @@ func TestRunEvaluationJobCallbackURLNotSet(t *testing.T) {
 func TestRunEvaluationJobCreatesLogFile(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
-	providers := sampleLocalProviders(providerID, "echo hello-stdout && echo hello-stderr >&2")
+	dirName := shared.JobName("job-1", providerID, "bench-1")
+	sentinelPath := filepath.Join(localRunDir, dirName, "done")
+	providers := sampleLocalProviders(providerID, fmt.Sprintf("echo hello-stdout && echo hello-stderr >&2 && touch %s", sentinelPath))
 	cleanupDir(t, "job-1", providerID, "bench-1")
 
 	rt := &LocalRuntime{
 		logger:    discardLogger(),
+		ctx:       testContext(t),
 		providers: providers,
 	}
 
@@ -610,10 +628,7 @@ func TestRunEvaluationJobCreatesLogFile(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	// Wait for the async process to finish
-	time.Sleep(1 * time.Second)
-
-	dirName := shared.JobName("job-1", providerID, "bench-1")
+	waitForFile(t, sentinelPath, 5*time.Second)
 	logFilePath := filepath.Join(localRunDir, dirName, "jobrun.log")
 
 	data, err := os.ReadFile(logFilePath)
@@ -622,10 +637,10 @@ func TestRunEvaluationJobCreatesLogFile(t *testing.T) {
 	}
 
 	content := string(data)
-	if !containsSubstring(content, "hello-stdout") {
+	if !strings.Contains(content, "hello-stdout") {
 		t.Fatalf("expected log file to contain stdout output, got %q", content)
 	}
-	if !containsSubstring(content, "hello-stderr") {
+	if !strings.Contains(content, "hello-stderr") {
 		t.Fatalf("expected log file to contain stderr output, got %q", content)
 	}
 }
@@ -657,8 +672,8 @@ func TestDeleteEvaluationJobResources(t *testing.T) {
 	// Verify directory was removed
 	fullDir := filepath.Join(localRunDir, dirName)
 	if _, err := os.Stat(fullDir); !os.IsNotExist(err) {
+		os.RemoveAll(fullDir) // Clean up before failing
 		t.Fatalf("expected directory %s to be removed", fullDir)
-		os.RemoveAll(fullDir)
 	}
 }
 
@@ -686,17 +701,4 @@ func TestDeleteEvaluationJobResourcesNonExistent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error for non-existent directory, got %v", err)
 	}
-}
-
-func containsSubstring(s, substr string) bool {
-	return len(s) >= len(substr) && searchSubstring(s, substr)
-}
-
-func searchSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

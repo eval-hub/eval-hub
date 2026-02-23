@@ -14,7 +14,7 @@ runtime:
     memory_limit: 2Gi
   local:
     # reserved for local runtime
-    command: "python main.py"
+    command: "true"
 
 benchmarks:
   # Execution profiles - comprehensive performance testing

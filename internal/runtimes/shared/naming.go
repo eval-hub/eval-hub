@@ -35,9 +35,6 @@ func shortHash(value string, length int) string {
 
 func shortenJobID(jobID string, length int) string {
 	safe := sanitizeDNS1123Label(jobID)
-	if safe == "" {
-		return "x"
-	}
 	if length <= 0 || len(safe) <= length {
 		return safe
 	}

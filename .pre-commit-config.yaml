@@ -44,7 +44,7 @@ repos:
       - id: pytest-unit
         name: unit tests
         entry: bash
-        args: [-c, 'test -d python-server/tests && uv run pytest python-server/tests/ -m "unit" --tb=short -q || echo "Skipping: python-server/tests/ not found"']
+        args: [-c, 'if [ -d python-server/tests ]; then uv run pytest python-server/tests/ -m "unit" --tb=short -q; else echo "Skipping: python-server/tests/ not found"; fi']
         language: system
         types: [python]
         pass_filenames: false

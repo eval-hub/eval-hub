@@ -1,7 +1,5 @@
 package shared
 
-// Assisted-by: claude code
-
 import (
 	"encoding/json"
 	"fmt"

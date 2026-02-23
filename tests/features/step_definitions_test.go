@@ -177,6 +177,14 @@ func (a *apiFeature) startLocalServer(port int) error {
 		return logError(fmt.Errorf("failed to load provider configs: %w", err))
 	}
 
+	// Override local runtime commands for testing so subprocesses
+	// exit cleanly instead of failing with "command not found".
+	for i := range providerConfigs {
+		if providerConfigs[i].Runtime != nil && providerConfigs[i].Runtime.Local != nil {
+			providerConfigs[i].Runtime.Local.Command = "true"
+		}
+	}
+
 	if len(providerConfigs) == 0 {
 		return logError(fmt.Errorf("no provider configs loaded"))
 	}
