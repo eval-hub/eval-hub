@@ -793,6 +793,10 @@
             "type": "string",
             "description": "Benchmark ID"
           },
+          "benchmark_index": {
+            "type": "integer",
+            "description": "Benchmark index in the evaluation job request"
+          },
           "status": {
             "$ref": "#/components/schemas/State"
           },
@@ -843,6 +847,10 @@
           "provider_id": {
             "type": "string",
             "description": "Provider ID"
+          },
+          "benchmark_index": {
+            "type": "integer",
+            "description": "Benchmark index in the evaluation job request"
           },
           "metrics": {
             "type": "object",

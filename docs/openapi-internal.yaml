@@ -848,6 +848,9 @@ components:
         id:
           type: string
           description: Benchmark ID
+        benchmark_index:
+          type: integer
+          description: Benchmark index in the evaluation job request
         status:
           $ref: '#/components/schemas/State'
         error_message:
@@ -882,6 +885,9 @@ components:
         provider_id:
           type: string
           description: Provider ID
+        benchmark_index:
+          type: integer
+          description: Benchmark index in the evaluation job request
         metrics:
           type: object
           additionalProperties: true
@@ -1154,6 +1160,9 @@ components:
         id:
           type: string
           description: Benchmark ID
+        benchmark_index:
+          type: integer
+          description: Benchmark index in the evaluation job request
         status:
           $ref: '#/components/schemas/State'
         metrics:

@@ -51,9 +51,17 @@ func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 }
 
 func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, storage *abstractions.Storage) error {
-	benchmarks := make(chan api.BenchmarkConfig, len(evaluation.Benchmarks))
-	for _, bench := range evaluation.Benchmarks {
-		benchmarks <- bench
+	type Msg struct {
+		Index     int
+		Benchmark api.BenchmarkConfig
+	}
+
+	benchmarks := make(chan Msg, len(evaluation.Benchmarks))
+	for idx, bench := range evaluation.Benchmarks {
+		benchmarks <- Msg{
+			Index:     idx,
+			Benchmark: bench,
+		}
 	}
 	close(benchmarks)
 
@@ -64,33 +72,33 @@ func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, sto
 
 	for i := 0; i < workerCount; i++ {
 		go func() {
-			for bench := range benchmarks {
+			for msg := range benchmarks {
 				select {
 				case <-r.ctx.Done():
 					r.logger.Warn(
 						"benchmark processing canceled",
 						"job_id", evaluation.Resource.ID,
-						"benchmark_id", bench.ID,
+						"benchmark_id", msg.Benchmark.ID,
 					)
 					return
 				default:
 				}
-				if err := r.createBenchmarkResources(r.ctx, r.logger, evaluation, &bench); err != nil {
+				if err := r.createBenchmarkResources(r.ctx, r.logger, evaluation, &msg.Benchmark, msg.Index); err != nil {
 					r.logger.Error(
 						"kubernetes job creation failed",
 						"error", err,
 						"job_id", evaluation.Resource.ID,
-						"benchmark_id", bench.ID,
+						"benchmark_id", msg.Benchmark.ID,
 					)
 
 					if storage != nil && *storage != nil {
-						runStatus := buildBenchmarkFailureStatus(&bench, err)
+						runStatus := buildBenchmarkFailureStatus(&msg.Benchmark, err)
 						if updateErr := (*storage).UpdateEvaluationJob(evaluation.Resource.ID, runStatus); updateErr != nil {
 							r.logger.Error(
 								"failed to update benchmark status",
 								"error", updateErr,
 								"job_id", evaluation.Resource.ID,
-								"benchmark_id", bench.ID,
+								"benchmark_id", msg.Benchmark.ID,
 							)
 						}
 					}
@@ -152,11 +160,16 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 	return deleteErr
 }
 
-func (r *K8sRuntime) createBenchmarkResources(ctx context.Context, logger *slog.Logger, evaluation *api.EvaluationJobResource, benchmark *api.BenchmarkConfig) error {
+func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
+	logger *slog.Logger,
+	evaluation *api.EvaluationJobResource,
+	benchmark *api.BenchmarkConfig,
+	benchmarkIndex int) error {
+
 	benchmarkID := benchmark.ID
 	// Provider/benchmark validation should be handled during creation.
 	provider := r.providers[benchmark.ProviderID]
-	jobConfig, err := buildJobConfig(evaluation, &provider, benchmarkID)
+	jobConfig, err := buildJobConfig(evaluation, &provider, benchmarkID, benchmarkIndex)
 	if err != nil {
 		logger.Error("kubernetes job config error", "benchmark_id", benchmarkID, "error", err)
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)

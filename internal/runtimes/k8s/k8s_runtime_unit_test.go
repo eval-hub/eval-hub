@@ -121,7 +121,7 @@ func TestCreateBenchmarkResourcesSetsConfigMapOwner(t *testing.T) {
 		providers: sampleProviders(providerID),
 	}
 
-	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0])
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -162,7 +162,7 @@ func TestCreateBenchmarkResourcesSetsAnnotations(t *testing.T) {
 		providers: sampleProviders(providerID),
 	}
 
-	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0])
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -223,7 +223,7 @@ func TestCreateBenchmarkResourcesDeletesConfigMapOnJobFailure(t *testing.T) {
 		providers: sampleProviders(providerID),
 	}
 
-	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0])
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
