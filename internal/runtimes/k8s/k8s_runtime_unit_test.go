@@ -24,6 +24,7 @@ type fakeStorage struct {
 	runStatus     *api.StatusEvent
 	runStatusChan chan *api.StatusEvent
 	updateErr     error
+	tenant        api.Tenant
 }
 
 // UpdateEvaluationJob implements [abstractions.Storage].
@@ -46,7 +47,7 @@ func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobResource) error {
 func (f *fakeStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) {
 	return nil, nil
 }
-func (f *fakeStorage) GetEvaluationJobs(int, _ int, _ string) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
+func (f *fakeStorage) GetEvaluationJobs(int, _ int, _ abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
 	return nil, nil
 }
 func (f *fakeStorage) DeleteEvaluationJob(_ string) error {
@@ -59,10 +60,10 @@ func (f *fakeStorage) UpdateEvaluationJobStatus(_ string, _ api.OverallState, _ 
 func (f *fakeStorage) CreateCollection(_ *api.CollectionResource) error {
 	return nil
 }
-func (f *fakeStorage) GetCollection(_ string, _ bool) (*api.CollectionResource, error) {
+func (f *fakeStorage) GetCollection(_ string) (*api.CollectionResource, error) {
 	return nil, nil
 }
-func (f *fakeStorage) GetCollections(_ int, _ int) (*abstractions.QueryResults[api.CollectionResource], error) {
+func (f *fakeStorage) GetCollections(_ int, _ int, _ abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
 	return nil, nil
 }
 func (f *fakeStorage) UpdateCollection(_ *api.CollectionResource) error {
@@ -79,6 +80,7 @@ func (f *fakeStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 		ctx:           f.ctx,
 		runStatusChan: f.runStatusChan,
 		updateErr:     f.updateErr,
+		tenant:        f.tenant,
 	}
 }
 
@@ -88,6 +90,17 @@ func (f *fakeStorage) WithContext(ctx context.Context) abstractions.Storage {
 		ctx:           ctx,
 		runStatusChan: f.runStatusChan,
 		updateErr:     f.updateErr,
+		tenant:        f.tenant,
+	}
+}
+
+func (f *fakeStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
+	return &fakeStorage{
+		logger:        f.logger,
+		ctx:           f.ctx,
+		runStatusChan: f.runStatusChan,
+		updateErr:     f.updateErr,
+		tenant:        tenant,
 	}
 }
 
@@ -336,10 +349,12 @@ func sampleEvaluation(providerID string) *api.EvaluationJobResource {
 func sampleProviders(providerID string) map[string]api.ProviderResource {
 	return map[string]api.ProviderResource{
 		providerID: {
-			ID: providerID,
-			Runtime: &api.Runtime{
-				K8s: &api.K8sRuntime{
-					Image: "quay.io/evalhub/adapter:latest",
+			Resource: api.Resource{ID: providerID},
+			ProviderConfigInternal: api.ProviderConfigInternal{
+				Runtime: &api.Runtime{
+					K8s: &api.K8sRuntime{
+						Image: "quay.io/evalhub/adapter:latest",
+					},
 				},
 			},
 		},

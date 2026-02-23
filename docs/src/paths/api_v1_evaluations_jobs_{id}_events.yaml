@@ -2,16 +2,15 @@ post:
   x-internal: true
   tags:
     - Evaluations
-  summary: Update Evaluation
+  summary: Send a new evaluation status event
   description: >
-    Update the evaluation job status or results.
-
+    Send an evaluation job status or results.
 
     Note that this endpoint is internal and should not be used by clients,
 
     eventually it will not be possible to call this endpoint without a special
     token.
-  operationId: update_evaluation_api_v1_evaluations_jobs_id_update_post
+  operationId: post_events_id
   parameters:
     - name: id
       in: path

@@ -1,7 +1,7 @@
 get:
   summary: Health Check
   description: Health check endpoint.
-  operationId: health_check_api_v1_health_get
+  operationId: get_health
   tags:
     - Health
   responses:
