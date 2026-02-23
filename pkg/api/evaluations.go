@@ -143,7 +143,7 @@ type StatusEvent struct {
 type BenchmarkResult struct {
 	ID             string         `json:"id"`
 	ProviderID     string         `json:"provider_id"`
-	BenchmarkIndex int            `json:"benchmark_index,omitempty"`
+	BenchmarkIndex int            `json:"benchmark_index"`
 	Metrics        map[string]any `json:"metrics,omitempty"`
 	Artifacts      map[string]any `json:"artifacts,omitempty"`
 	MLFlowRunID    string         `json:"mlflow_run_id,omitempty"`
