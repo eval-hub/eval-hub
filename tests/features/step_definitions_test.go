@@ -29,6 +29,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/runtimes"
 	"github.com/eval-hub/eval-hub/internal/storage"
 	"github.com/eval-hub/eval-hub/internal/validation"
+	pkgapi "github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/xeipuuv/gojsonschema"
 
 	"github.com/cucumber/godog"
@@ -177,21 +178,23 @@ func (a *apiFeature) startLocalServer(port int) error {
 		return logError(fmt.Errorf("failed to load provider configs: %w", err))
 	}
 
-	// Override local runtime commands for testing so subprocesses
-	// exit cleanly instead of failing with "command not found".
-	for i := range providerConfigs {
-		if providerConfigs[i].Runtime != nil && providerConfigs[i].Runtime.Local != nil {
-			providerConfigs[i].Runtime.Local.Command = "true"
-		}
-	}
-
 	if len(providerConfigs) == 0 {
 		return logError(fmt.Errorf("no provider configs loaded"))
 	}
 
 	logger.Info("Providers loaded.")
-
 	serviceConfig.Service.LocalMode = true // set local mode for testing
+	// Override local runtime commands for testing so subprocesses
+	// Exit cleanly instead of failing with "command not found".
+	for i := range providerConfigs {
+		if providerConfigs[i].Runtime == nil {
+			return logError(fmt.Errorf("provider %q has no runtime configuration", providerConfigs[i].ID))
+		}
+		if providerConfigs[i].Runtime.Local == nil {
+			providerConfigs[i].Runtime.Local = &pkgapi.LocalRuntime{}
+		}
+		providerConfigs[i].Runtime.Local.Command = "true"
+	}
 
 	runtime, err := runtimes.NewRuntime(logger, serviceConfig, providerConfigs)
 	if err != nil {
