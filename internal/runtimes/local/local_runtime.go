@@ -44,7 +44,7 @@ func (r *LocalRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
 func (r *LocalRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 	return &LocalRuntime{
 		logger:    r.logger,
-		ctx:       ctx,
+		ctx:       context.WithoutCancel(ctx), // FIXME: address job cancellation logic
 		providers: r.providers,
 	}
 }

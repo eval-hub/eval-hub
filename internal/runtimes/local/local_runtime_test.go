@@ -57,9 +57,10 @@ func (f *fakeStorage) CreateCollection(_ *api.CollectionResource) error { return
 func (f *fakeStorage) GetCollection(_ string) (*api.CollectionResource, error) {
 	return nil, nil
 }
-func (f *fakeStorage) GetCollections(_ int, _ int, _ abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
+func (f *fakeStorage) GetCollections(_ int, _ int) (*abstractions.QueryResults[api.CollectionResource], error) {
 	return nil, nil
 }
+func (f *fakeStorage) PatchCollection(_ string, _ *api.Patch) error     { return nil }
 func (f *fakeStorage) UpdateCollection(_ *api.CollectionResource) error { return nil }
 func (f *fakeStorage) DeleteCollection(_ string) error                  { return nil }
 func (f *fakeStorage) Close() error                                     { return nil }
