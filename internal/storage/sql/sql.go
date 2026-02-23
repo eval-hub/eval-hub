@@ -9,6 +9,9 @@ import (
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/uptrace/opentelemetry-go-extra/otelsql"
+	"go.opentelemetry.io/otel/attribute"
+	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 )
 
 const (
@@ -29,11 +32,11 @@ type SQLStorage struct {
 	tenant    api.Tenant
 }
 
-func NewStorage(config map[string]any, logger *slog.Logger) (abstractions.Storage, error) {
+func NewStorage(config map[string]any, otelEnabled bool, logger *slog.Logger) (abstractions.Storage, error) {
 	var sqlConfig SQLDatabaseConfig
-	err := mapstructure.Decode(config, &sqlConfig)
-	if err != nil {
-		return nil, err
+	merr := mapstructure.Decode(config, &sqlConfig)
+	if merr != nil {
+		return nil, merr
 	}
 
 	// check that the driver is supported
@@ -46,11 +49,28 @@ func NewStorage(config map[string]any, logger *slog.Logger) (abstractions.Storag
 		return nil, getUnsupportedDriverError(sqlConfig.Driver)
 	}
 
-	logger = logger.With("driver", sqlConfig.getDriverName(), "url", sqlConfig.getConnectionURL())
+	databaseName := sqlConfig.getDatabaseName()
+	logger = logger.With("driver", sqlConfig.getDriverName(), "database", databaseName)
 
 	logger.Info("Creating SQL storage")
 
-	pool, err := sql.Open(sqlConfig.Driver, sqlConfig.URL)
+	var pool *sql.DB
+	var err error
+	if otelEnabled {
+		var attrs []attribute.KeyValue
+		switch sqlConfig.Driver {
+		case SQLITE_DRIVER:
+			attrs = append(attrs, semconv.DBSystemSqlite)
+		case POSTGRES_DRIVER:
+			attrs = append(attrs, semconv.DBSystemPostgreSQL)
+		}
+		if databaseName != "" {
+			attrs = append(attrs, semconv.DBNameKey.String(databaseName))
+		}
+		pool, err = otelsql.Open(sqlConfig.Driver, sqlConfig.URL, otelsql.WithAttributes(attrs...))
+	} else {
+		pool, err = sql.Open(sqlConfig.Driver, sqlConfig.URL)
+	}
 	if err != nil {
 		return nil, err
 	}
