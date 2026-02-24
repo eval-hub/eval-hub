@@ -145,8 +145,8 @@ func sampleLocalProviders(providerID, command string) map[string]api.ProviderRes
 	}
 }
 
-func localJobDir(jobID, providerID, benchmarkID string) string {
-	return filepath.Join(localJobsBaseDir, jobID, providerID, benchmarkID)
+func localJobDir(jobID string, benchmarkIndex int, providerID, benchmarkID string) string {
+	return filepath.Join(localJobsBaseDir, jobID, fmt.Sprintf("%d", benchmarkIndex), providerID, benchmarkID)
 }
 
 func cleanupDir(t *testing.T, jobID, providerID, benchmarkID string) {
@@ -191,7 +191,7 @@ func TestNewLocalRuntime(t *testing.T) {
 func TestRunEvaluationJobWritesJobSpec(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
-	dirName := localJobDir("job-1", providerID, "bench-1")
+	dirName := localJobDir("job-1", 0, providerID, "bench-1")
 	sentinelPath := filepath.Join(dirName, "done")
 	providers := sampleLocalProviders(providerID, fmt.Sprintf("touch %s", sentinelPath))
 	cleanupDir(t, "job-1", providerID, "bench-1")
@@ -246,7 +246,7 @@ func TestRunEvaluationJobPassesEnvVar(t *testing.T) {
 	evaluation := sampleEvaluation(providerID)
 	cleanupDir(t, "job-1", providerID, "bench-1")
 
-	dirName := localJobDir("job-1", providerID, "bench-1")
+	dirName := localJobDir("job-1", 0, providerID, "bench-1")
 	outputFile := filepath.Join(dirName, "env_output.txt")
 	sentinelPath := filepath.Join(dirName, "done")
 
@@ -540,7 +540,7 @@ func TestRunEvaluationJobContextCancellation(t *testing.T) {
 	}
 
 	// Wait for the process to actually start before cancelling
-	logFilePath := filepath.Join(localJobsBaseDir, "job-1", providerID, "bench-1", "jobrun.log")
+	logFilePath := filepath.Join(localJobsBaseDir, "job-1", "0", providerID, "bench-1", "jobrun.log")
 	waitForFile(t, logFilePath, 5*time.Second)
 
 	// Cancel after process has started
@@ -569,8 +569,8 @@ func TestRunEvaluationJobMultipleBenchmarks(t *testing.T) {
 		Parameters: map[string]any{"baz": "qux"},
 	})
 
-	dir1 := localJobDir("job-1", providerID, "bench-1")
-	dir2 := localJobDir("job-1", providerID, "bench-2")
+	dir1 := localJobDir("job-1", 0, providerID, "bench-1")
+	dir2 := localJobDir("job-1", 1, providerID, "bench-2")
 	sentinel1 := filepath.Join(dir1, "done")
 	sentinel2 := filepath.Join(dir2, "done")
 
@@ -639,7 +639,7 @@ func TestRunEvaluationJobMultipleBenchmarksPartialFailure(t *testing.T) {
 		ProviderID: "no-such-provider",
 	})
 
-	dir1 := localJobDir("job-1", providerID, "bench-1")
+	dir1 := localJobDir("job-1", 0, providerID, "bench-1")
 	sentinel1 := filepath.Join(dir1, "done")
 	providers := sampleLocalProviders(providerID, fmt.Sprintf("touch %s", sentinel1))
 	cleanupDir(t, "job-1", providerID, "bench-1")
@@ -681,7 +681,7 @@ func TestRunEvaluationJobMultipleBenchmarksPartialFailure(t *testing.T) {
 func TestRunEvaluationJobCallbackURL(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
-	dirName := localJobDir("job-1", providerID, "bench-1")
+	dirName := localJobDir("job-1", 0, providerID, "bench-1")
 	sentinelPath := filepath.Join(dirName, "done")
 	providers := sampleLocalProviders(providerID, fmt.Sprintf("touch %s", sentinelPath))
 	cleanupDir(t, "job-1", providerID, "bench-1")
@@ -722,7 +722,7 @@ func TestRunEvaluationJobCallbackURL(t *testing.T) {
 func TestRunEvaluationJobCallbackURLNotSet(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
-	dirName := localJobDir("job-1", providerID, "bench-1")
+	dirName := localJobDir("job-1", 0, providerID, "bench-1")
 	sentinelPath := filepath.Join(dirName, "done")
 	providers := sampleLocalProviders(providerID, fmt.Sprintf("touch %s", sentinelPath))
 	cleanupDir(t, "job-1", providerID, "bench-1")
@@ -761,7 +761,7 @@ func TestRunEvaluationJobCallbackURLNotSet(t *testing.T) {
 func TestRunEvaluationJobCreatesLogFile(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
-	dirName := localJobDir("job-1", providerID, "bench-1")
+	dirName := localJobDir("job-1", 0, providerID, "bench-1")
 	sentinelPath := filepath.Join(dirName, "done")
 	providers := sampleLocalProviders(providerID, fmt.Sprintf("echo hello-stdout && echo hello-stderr >&2 && touch %s", sentinelPath))
 	cleanupDir(t, "job-1", providerID, "bench-1")
@@ -799,7 +799,7 @@ func TestDeleteEvaluationJobResources(t *testing.T) {
 	evaluation := sampleEvaluation(providerID)
 
 	// Pre-create the directory structure
-	dirName := localJobDir("job-1", providerID, "bench-1")
+	dirName := localJobDir("job-1", 0, providerID, "bench-1")
 	metaDir := filepath.Join(dirName, "meta")
 	if err := os.MkdirAll(metaDir, 0755); err != nil {
 		t.Fatalf("failed to create test directory: %v", err)
