@@ -115,7 +115,7 @@ Feature: Kubernetes Resources Validation
     And DeleteEvaluationJobResources should be called
     And all 3 Jobs should be deleted from Kubernetes
     And all 3 ConfigMaps should be deleted from Kubernetes
-    
+
   Scenario: MLflow fields are included in job spec
     Given MLflow is configured
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_experiment.json"

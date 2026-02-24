@@ -32,7 +32,7 @@ put:
   tags:
     - Providers
   summary: Update Provider
-  description: Update an existing provider. 
+  description: Update an existing provider.
   operationId: put_providers_id
   parameters:
     - name: id

@@ -10,15 +10,13 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
-func NewRuntime(logger *slog.Logger, serviceConfig *config.Config, providerConfigs map[string]api.ProviderResource) (abstractions.Runtime, error) {
-	var runtime abstractions.Runtime
-	var err error
-
+func NewRuntime(
+	logger *slog.Logger,
+	serviceConfig *config.Config,
+	providerConfigs map[string]api.ProviderResource,
+) (abstractions.Runtime, error) {
 	if serviceConfig.Service.LocalMode {
-		runtime, err = local.NewLocalRuntime(logger)
-	} else {
-		runtime, err = k8s.NewK8sRuntime(logger, providerConfigs)
+		return local.NewLocalRuntime(logger, providerConfigs)
 	}
-
-	return runtime, err
+	return k8s.NewK8sRuntime(logger, providerConfigs)
 }

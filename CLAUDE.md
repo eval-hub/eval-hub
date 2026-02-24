@@ -65,7 +65,7 @@ make clean              # Remove build artifacts and coverage files
 ### Project Structure
 This project follows the standard Go project layout with a clear separation between public entry points (`cmd/`) and private application code (`internal/`).
 
-- **cmd/eval_hub/** - Main application entry point 
+- **cmd/eval_hub/** - Main application entry point
 - **internal/config/** - Configuration loading with Viper
 - **internal/constants/** - Shared constants (log field names, etc.)
 - **internal/executioncontext/** - ExecutionContext pattern implementation

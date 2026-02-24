@@ -3,7 +3,9 @@ package sql
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
@@ -75,6 +77,33 @@ func NewStorage(config map[string]any, otelEnabled bool, logger *slog.Logger) (a
 		return nil, err
 	}
 
+	success := false
+	defer func() {
+		if !success {
+			pool.Close()
+		}
+	}()
+
+	if sqlConfig.Driver == SQLITE_DRIVER {
+		// SQLite only supports one writer at a time; serializing access through
+		// a single connection eliminates lock contention and deadlocks.
+		pool.SetMaxOpenConns(1)
+		if _, err := pool.Exec("PRAGMA busy_timeout = 5000"); err != nil {
+			return nil, fmt.Errorf("failed to set busy_timeout: %w", err)
+		}
+		// Enable WAL mode for file-based databases (in-memory databases don't
+		// support WAL and always return journal_mode="memory").
+		if !strings.Contains(sqlConfig.URL, "mode=memory") {
+			var mode string
+			if err := pool.QueryRow("PRAGMA journal_mode = WAL").Scan(&mode); err != nil {
+				return nil, fmt.Errorf("failed to set journal_mode: %w", err)
+			}
+			if mode != "wal" {
+				return nil, fmt.Errorf("failed to enable WAL mode: database returned journal_mode=%q", mode)
+			}
+		}
+	}
+
 	if sqlConfig.ConnMaxLifetime != nil {
 		pool.SetConnMaxLifetime(*sqlConfig.ConnMaxLifetime)
 	}
@@ -105,6 +134,7 @@ func NewStorage(config map[string]any, otelEnabled bool, logger *slog.Logger) (a
 		return nil, err
 	}
 
+	success = true
 	return s, nil
 }
 
