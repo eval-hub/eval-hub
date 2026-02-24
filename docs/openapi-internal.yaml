@@ -877,7 +877,7 @@ components:
               description: Per-benchmark status
     BenchmarkTest:
       type: object
-      description: Result of a single benchmark run
+      description: The test result of a single benchmark run
       properties:
         primary_score:
           type: number
@@ -922,7 +922,7 @@ components:
           description: Test result
     EvaluationTest:
       type: object
-      description: Test result for an evaluation
+      description: The test result for an evaluation
       properties:
         score:
           type: number

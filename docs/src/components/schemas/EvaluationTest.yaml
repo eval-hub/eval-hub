@@ -1,5 +1,5 @@
 type: object
-description: Test result for an evaluation
+description: The test result for an evaluation
 properties:
   score:
     type: number
