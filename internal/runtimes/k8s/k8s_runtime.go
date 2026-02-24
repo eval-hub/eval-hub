@@ -163,7 +163,11 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		"service_ca_configmap", jobConfig.serviceCAConfigMap,
 		"evalhub_url", jobConfig.evalHubURL,
 	)
-	configMap := buildConfigMap(jobConfig)
+	configMap, err := buildConfigMap(jobConfig)
+	if err != nil {
+		logger.Error("kubernetes configmap build error", "benchmark_id", benchmarkID, "error", err)
+		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
+	}
 	job, err := buildJob(jobConfig)
 	if err != nil {
 		logger.Error("kubernetes job build error", "benchmark_id", benchmarkID, "error", err)

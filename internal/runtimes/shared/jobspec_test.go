@@ -1,7 +1,6 @@
 package shared
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 
@@ -185,14 +184,9 @@ func TestBuildJobSpecJSONHappyPath(t *testing.T) {
 	eval := baseEvaluation()
 	callbackURL := "http://callback.example/status"
 
-	result, err := BuildJobSpecJSON(eval, "provider-1", "bench-1", 0, &callbackURL)
+	spec, err := BuildJobSpec(eval, "provider-1", "bench-1", 0, &callbackURL)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
-	}
-
-	var spec JobSpec
-	if err := json.Unmarshal([]byte(result), &spec); err != nil {
-		t.Fatalf("expected valid JSON, got %v", err)
 	}
 
 	if spec.JobID != "job-1" {
@@ -234,14 +228,9 @@ func TestBuildJobSpecJSONHappyPath(t *testing.T) {
 func TestBuildJobSpecJSONNilCallbackURL(t *testing.T) {
 	eval := baseEvaluation()
 
-	result, err := BuildJobSpecJSON(eval, "provider-1", "bench-1", 0, nil)
+	spec, err := BuildJobSpec(eval, "provider-1", "bench-1", 0, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
-	}
-
-	var spec JobSpec
-	if err := json.Unmarshal([]byte(result), &spec); err != nil {
-		t.Fatalf("expected valid JSON, got %v", err)
 	}
 
 	if spec.CallbackURL != nil {
@@ -253,14 +242,9 @@ func TestBuildJobSpecJSONNilExperiment(t *testing.T) {
 	eval := baseEvaluation()
 	eval.Experiment = nil
 
-	result, err := BuildJobSpecJSON(eval, "provider-1", "bench-1", 0, nil)
+	spec, err := BuildJobSpec(eval, "provider-1", "bench-1", 0, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
-	}
-
-	var spec JobSpec
-	if err := json.Unmarshal([]byte(result), &spec); err != nil {
-		t.Fatalf("expected valid JSON, got %v", err)
 	}
 
 	if spec.ExperimentName != "" {
@@ -274,14 +258,9 @@ func TestBuildJobSpecJSONNilExperiment(t *testing.T) {
 func TestBuildJobSpecJSONNoNumExamples(t *testing.T) {
 	eval := baseEvaluation()
 	// Use bench-2 which has no num_examples
-	result, err := BuildJobSpecJSON(eval, "provider-2", "bench-2", 0, nil)
+	spec, err := BuildJobSpec(eval, "provider-2", "bench-2", 0, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
-	}
-
-	var spec JobSpec
-	if err := json.Unmarshal([]byte(result), &spec); err != nil {
-		t.Fatalf("expected valid JSON, got %v", err)
 	}
 
 	if spec.NumExamples != nil {
@@ -291,7 +270,7 @@ func TestBuildJobSpecJSONNoNumExamples(t *testing.T) {
 
 func TestBuildJobSpecJSONBenchmarkNotFound(t *testing.T) {
 	eval := baseEvaluation()
-	_, err := BuildJobSpecJSON(eval, "provider-1", "nonexistent", 0, nil)
+	_, err := BuildJobSpec(eval, "provider-1", "nonexistent", 0, nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -304,7 +283,7 @@ func TestBuildJobSpecJSONDoesNotMutateOriginalParams(t *testing.T) {
 	eval := baseEvaluation()
 	originalParams := eval.Benchmarks[0].Parameters
 
-	_, err := BuildJobSpecJSON(eval, "provider-1", "bench-1", 0, nil)
+	_, err := BuildJobSpec(eval, "provider-1", "bench-1", 0, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
