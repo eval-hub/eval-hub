@@ -1365,12 +1365,12 @@
       },
       "EvaluationTest": {
         "type": "object",
-        "description": "Result of a single benchmark run",
+        "description": "Test result for an evaluation",
         "properties": {
           "score": {
             "type": "number",
             "format": "float",
-            "description": "Primary score value"
+            "description": "Evaluation score value"
           },
           "threshold": {
             "type": "number",
@@ -1379,7 +1379,7 @@
           },
           "pass": {
             "type": "boolean",
-            "description": "Whether the benchmark passed"
+            "description": "Whether the entire evaluation passed"
           }
         }
       },
