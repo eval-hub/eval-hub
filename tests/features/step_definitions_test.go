@@ -98,7 +98,7 @@ func logDebug(format string, a ...any) {
 }
 
 func logError(err error) error {
-	getLogger().Printf("Error:%s\n%s\n", err.Error(), string(debug.Stack()))
+	getLogger().Printf("Error: %v\n%s\n", err, string(debug.Stack()))
 	return err
 }
 
@@ -692,15 +692,21 @@ func (tc *scenarioConfig) theResponseShouldHaveSchemaAs(body *godog.DocString) e
 }
 
 func (tc *scenarioConfig) getJsonPath(jsonPath string) (string, error) {
-	var respMap map[string]interface{}
-	err := json.Unmarshal(tc.body, &respMap)
+	// first check the jsonpath is valid
+	_, err := jsonpath.New(jsonPath)
 	if err != nil {
-		return "", logError(err)
+		return "", fmt.Errorf("failed to validate JSON path %s: %w", jsonPath, err) // logging of the error is done by the caller
+	}
+
+	var respMap map[string]interface{}
+	err = json.Unmarshal(tc.body, &respMap)
+	if err != nil {
+		return "", err // logging of the error is done by the caller
 	}
 
 	foundValue, err := jsonpath.Get(jsonPath, respMap)
 	if err != nil {
-		return "", logError(fmt.Errorf("failed to get JSON path %s in %s: %w", jsonPath, string(tc.body), err))
+		return "", fmt.Errorf("failed to get JSON path %s in %s: %w", jsonPath, string(tc.body), err) // logging of the error is done by the caller
 	}
 
 	return fmt.Sprintf("%v", foundValue), nil
