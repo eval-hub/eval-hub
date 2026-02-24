@@ -1430,6 +1430,11 @@
             "type": "string",
             "description": "Model name"
           },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Model specific parameters"
+          },
           "auth": {
             "$ref": "#/components/schemas/ModelAuth",
             "description": "The model authentication configuration"
@@ -1509,7 +1514,7 @@
               "parameters": {
                 "type": "object",
                 "additionalProperties": true,
-                "description": "Benchmark-specific parameters"
+                "description": "Benchmark specific parameters"
               }
             }
           }

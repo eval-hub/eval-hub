@@ -10,6 +10,10 @@ properties:
   name:
     type: string
     description: Model name
+  parameters:
+    type: object
+    additionalProperties: true
+    description: Model specific parameters
   auth:
     $ref: ./ModelAuth.yaml
     description: The model authentication configuration

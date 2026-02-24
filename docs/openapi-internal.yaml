@@ -970,6 +970,10 @@ components:
         name:
           type: string
           description: Model name
+        parameters:
+          type: object
+          additionalProperties: true
+          description: Model specific parameters
         auth:
           $ref: '#/components/schemas/ModelAuth'
           description: The model authentication configuration
@@ -1027,7 +1031,7 @@ components:
             parameters:
               type: object
               additionalProperties: true
-              description: Benchmark-specific parameters
+              description: Benchmark specific parameters
     ExperimentTag:
       type: object
       description: Tag on an experiment (e.g. MLFlow)
