@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"runtime/debug"
 	"strconv"
 	"time"
@@ -69,15 +70,13 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 
 	logging.LogRequestStarted(ctx)
 
+	now := time.Now()
+	id := common.GUID()
+
 	evaluation := &api.EvaluationJobConfig{}
 
-	err := otel.WithSpan(
-		ctx.Ctx,
-		h.serviceConfig,
-		ctx.Logger,
-		"validation",
-		"validate-evaluation-job",
-		map[string]string{},
+	err := h.withSpan(
+		ctx,
 		func(runtimeCtx context.Context) error {
 			// get the body bytes from the context
 			bodyBytes, err := req.BodyAsBytes()
@@ -90,6 +89,9 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 			}
 			return h.validateBenchmarkReferences(evaluation)
 		},
+		"validation",
+		"validate-evaluation-job",
+		"job.id", id,
 	)
 
 	if err != nil {
@@ -109,20 +111,9 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 	}
 
 	var job *api.EvaluationJobResource
-	now := time.Now()
-	id := common.GUID()
 
-	err = otel.WithSpan(
-		ctx.Ctx,
-		h.serviceConfig,
-		ctx.Logger,
-		"storage",
-		"store-evaluation-job",
-		map[string]string{
-			"job.id":             id,
-			"job.experiment_id":  mlflowExperimentID,
-			"job.experiment_url": mlflowExperimentURL,
-		},
+	err = h.withSpan(
+		ctx,
 		func(runtimeCtx context.Context) error {
 			job = &api.EvaluationJobResource{
 				Resource: api.EvaluationResource{
@@ -151,6 +142,11 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 			}
 			return storage.WithContext(runtimeCtx).CreateEvaluationJob(job)
 		},
+		"storage",
+		"store-evaluation-job",
+		"job.id", id,
+		"job.experiment_id", mlflowExperimentID,
+		"job.experiment_url", mlflowExperimentURL,
 	)
 
 	if err != nil {
@@ -158,47 +154,51 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	if h.runtime != nil {
-		runErr := h.executeEvaluationJob(ctx, h.runtime, job, &storage)
-		if runErr != nil {
-			ctx.Logger.Error("RunEvaluationJob failed", "error", runErr, "job_id", job.Resource.ID)
-			state := api.OverallStateFailed
-			message := &api.MessageInfo{
-				Message:     runErr.Error(),
-				MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED,
+	_ = h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) (fnErr error) {
+			if h.runtime != nil {
+				runErr := h.executeEvaluationJob(runtimeCtx, ctx.Logger, h.runtime, job, &storage)
+				if runErr != nil {
+					ctx.Logger.Error("RunEvaluationJob failed", "error", runErr, "job_id", job.Resource.ID)
+					state := api.OverallStateFailed
+					message := &api.MessageInfo{
+						Message:     runErr.Error(),
+						MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED,
+					}
+					if err := storage.UpdateEvaluationJobStatus(job.Resource.ID, state, message); err != nil {
+						ctx.Logger.Error("Failed to update evaluation status", "error", err, "job_id", job.Resource.ID)
+					}
+					// return the first error encountered
+					w.Error(runErr, ctx.RequestID)
+					return runErr
+				}
 			}
-			if err := storage.UpdateEvaluationJobStatus(job.Resource.ID, state, message); err != nil {
-				ctx.Logger.Error("Failed to update evaluation status", "error", err, "job_id", job.Resource.ID)
-			}
-			w.Error(runErr, ctx.RequestID)
-			return
-		}
-	}
-
-	w.WriteJSON(job, 202)
-}
-
-func (h *Handlers) executeEvaluationJob(ctx *executioncontext.ExecutionContext, runtime abstractions.Runtime, job *api.EvaluationJobResource, storage *abstractions.Storage) error {
-	return otel.WithSpan(
-		ctx.Ctx,
-		h.serviceConfig,
-		ctx.Logger,
+			w.WriteJSON(job, 202)
+			return nil
+		},
 		"runtime",
 		"start-evaluation-job",
-		map[string]string{
-			"job.id":            job.Resource.ID,
-			"job.experiment_id": job.Resource.MLFlowExperimentID,
-		},
-		func(runtimeCtx context.Context) (fnErr error) {
-			defer func() {
-				if recovered := recover(); recovered != nil {
-					ctx.Logger.Error("panic in RunEvaluationJob", "panic", recovered, "stack", string(debug.Stack()), "job_id", job.Resource.ID)
-					fnErr = serviceerrors.NewServiceError(messages.InternalServerError, "Error", fmt.Sprint(recovered))
-				}
-			}()
-			return runtime.WithLogger(ctx.Logger).WithContext(runtimeCtx).RunEvaluationJob(job, storage)
-		},
+		"job.id", id,
+		"job.experiment_id", mlflowExperimentID,
+		"job.experiment_url", mlflowExperimentURL,
 	)
+}
+
+func (h *Handlers) executeEvaluationJob(ctx context.Context, logger *slog.Logger, runtime abstractions.Runtime, job *api.EvaluationJobResource, storage *abstractions.Storage) error {
+	var err error
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			logger.Error("panic in RunEvaluationJob", "panic", recovered, "stack", string(debug.Stack()), "job_id", job.Resource.ID)
+			runtimeErr := serviceerrors.NewServiceError(messages.InternalServerError, "Error", fmt.Sprint(recovered))
+			// return the runtime error if not already set
+			if err == nil {
+				err = runtimeErr
+			}
+		}
+	}()
+	err = runtime.WithLogger(logger).WithContext(ctx).RunEvaluationJob(job, storage)
+	return err
 }
 
 func (h *Handlers) validateBenchmarkReferences(evaluation *api.EvaluationJobConfig) error {
@@ -379,4 +379,24 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 		}
 	}
 	w.WriteJSON(nil, 204)
+}
+
+func (h *Handlers) withSpan(ctx *executioncontext.ExecutionContext, fn otel.SpanFunction, component string, operation string, atts ...string) error {
+	attributes := make(map[string]string)
+	for i := 0; i < len(atts); i += 2 {
+		if i+1 >= len(atts) {
+			attributes[atts[i]] = ""
+		} else {
+			attributes[atts[i]] = atts[i+1]
+		}
+	}
+	return otel.WithSpan(
+		ctx.Ctx,
+		h.serviceConfig,
+		ctx.Logger,
+		component,
+		operation,
+		attributes,
+		fn,
+	)
 }
