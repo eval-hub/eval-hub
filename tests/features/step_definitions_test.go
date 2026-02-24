@@ -712,7 +712,7 @@ func (tc *scenarioConfig) theResponseShouldHaveSchemaAs(body *godog.DocString) e
 }
 
 func (tc *scenarioConfig) getJsonPath(jsonPath string) (string, error) {
-  // first check the jsonpath is valid
+	// first check the jsonpath is valid
 	_, err := jsonpath.New(jsonPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to validate JSON path %s: %w", jsonPath, err) // logging of the error is done by the caller
@@ -727,7 +727,7 @@ func (tc *scenarioConfig) getJsonPath(jsonPath string) (string, error) {
 
 func (tc *scenarioConfig) getJsonPathValue(jsonPath string) (interface{}, error) {
 	var respMap map[string]interface{}
-	err = json.Unmarshal(tc.body, &respMap)
+	err := json.Unmarshal(tc.body, &respMap)
 	if err != nil {
 		return "", err // logging of the error is done by the caller
 	}
