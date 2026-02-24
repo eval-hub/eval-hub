@@ -1,7 +1,6 @@
 package shared
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -33,16 +32,16 @@ type JobSpecExportsOCI struct {
 }
 
 // BuildJobSpecJSON builds a JobSpec from evaluation data and returns it as indented JSON.
-func BuildJobSpecJSON(
+func BuildJobSpec(
 	evaluation *api.EvaluationJobResource,
 	providerID string,
 	benchmarkID string,
 	benchmarkIndex int,
 	callbackURL *string,
-) (string, error) {
+) (*JobSpec, error) {
 	benchmarkConfig, err := FindBenchmarkConfig(evaluation, benchmarkID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	benchmarkParams := CopyParams(benchmarkConfig.Parameters)
 	numExamples := NumExamplesFromParameters(benchmarkParams)
@@ -69,11 +68,8 @@ func BuildJobSpecJSON(
 			},
 		}
 	}
-	specJSON, err := json.MarshalIndent(spec, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("marshal job spec: %w", err)
-	}
-	return string(specJSON), nil
+
+	return &spec, nil
 }
 
 // FindBenchmarkConfig finds a benchmark config by ID within an evaluation.

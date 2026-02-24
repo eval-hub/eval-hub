@@ -41,7 +41,7 @@ type jobConfig struct {
 	memoryRequest        string
 	cpuLimit             string
 	memoryLimit          string
-	jobSpecJSON          string
+	jobSpec              shared.JobSpec
 	serviceAccountName   string
 	serviceCAConfigMap   string
 	evalHubURL           string
@@ -74,7 +74,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	}
 
 	namespace := resolveNamespace("")
-	specJSON, err := shared.BuildJobSpecJSON(evaluation, provider.Resource.ID, benchmarkID, benchmarkIndex, &serviceURL)
+	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, benchmarkID, benchmarkIndex, &serviceURL)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		memoryRequest:        memoryRequest,
 		cpuLimit:             cpuLimit,
 		memoryLimit:          memoryLimit,
-		jobSpecJSON:          specJSON,
+		jobSpec:              *spec,
 		serviceAccountName:   serviceAccountName,
 		serviceCAConfigMap:   serviceCAConfigMap,
 		evalHubURL:           evalHubURL,

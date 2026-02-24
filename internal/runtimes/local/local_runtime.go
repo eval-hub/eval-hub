@@ -2,6 +2,7 @@ package local
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -137,7 +138,7 @@ func (r *LocalRuntime) runBenchmark(
 	}
 
 	// Build job spec JSON using shared logic
-	specJSON, err := shared.BuildJobSpecJSON(evaluation, bench.ProviderID, bench.ID, benchmarkIndex, callbackURL)
+	spec, err := shared.BuildJobSpec(evaluation, bench.ProviderID, bench.ID, benchmarkIndex, callbackURL)
 	if err != nil {
 		r.failBenchmark(jobID, bench, storage, fmt.Sprintf("build job spec: %s", err))
 		return fmt.Errorf("build job spec: %w", err)
@@ -148,6 +149,11 @@ func (r *LocalRuntime) runBenchmark(
 	metaDir := filepath.Join(jobDir, "meta")
 	if err := os.MkdirAll(metaDir, 0755); err != nil {
 		return fmt.Errorf("create meta directory: %w", err)
+	}
+
+	specJSON, err := json.MarshalIndent(spec, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal job spec: %w", err)
 	}
 
 	// Write job.json

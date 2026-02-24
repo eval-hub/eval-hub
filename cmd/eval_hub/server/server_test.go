@@ -58,16 +58,11 @@ func (r *stubRuntime) RunEvaluationJob(
 		return fmt.Errorf("provider %q not found", bench.ProviderID)
 	}
 
-	specJSON, err := shared.BuildJobSpecJSON(evaluation, provider.Resource.ID, bench.ID, 0, nil)
+	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, bench.ID, 0, nil)
 	if err != nil {
 		return fmt.Errorf("build job spec: %w", err)
 	}
 
-	// Validate the spec is valid JSON with expected fields
-	var spec shared.JobSpec
-	if err := json.Unmarshal([]byte(specJSON), &spec); err != nil {
-		return fmt.Errorf("invalid job spec JSON: %w", err)
-	}
 	if spec.JobID == "" {
 		return fmt.Errorf("job spec missing job ID")
 	}

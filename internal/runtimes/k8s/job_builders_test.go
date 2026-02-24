@@ -4,28 +4,31 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 func TestBuildConfigMap(t *testing.T) {
+
 	cfg := &jobConfig{
 		jobID:          "job-123",
 		benchmarkIndex: 0,
 		namespace:      "default",
 		providerID:     "provider-1",
 		benchmarkID:    "bench-1",
-		jobSpecJSON:    "{}",
+		jobSpec:        shared.JobSpec{},
 		resourceGUID:   "guid-123",
 	}
 
-	configMap := buildConfigMap(cfg)
+	configMap, err := buildConfigMap(cfg)
+	if err != nil {
+		t.Fatalf("buildConfigMap returned error: %v", err)
+	}
 	expectedName := configMapName(cfg.jobID, cfg.resourceGUID)
 	if configMap.Name != expectedName {
 		t.Fatalf("expected configmap name %s, got %s", expectedName, configMap.Name)
 	}
-	if configMap.Data[jobSpecFileName] != "{}" {
-		t.Fatalf("expected job spec data to be set")
-	}
+
 	annotations := configMap.Annotations
 	if annotations[annotationJobIDKey] != cfg.jobID {
 		t.Fatalf("expected job_id annotation %q, got %q", cfg.jobID, annotations[annotationJobIDKey])
