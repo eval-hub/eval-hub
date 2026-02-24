@@ -706,20 +706,6 @@
           }
         }
       },
-      "MessageInfo": {
-        "type": "object",
-        "description": "Message from a downstream service",
-        "properties": {
-          "message": {
-            "type": "string",
-            "description": "Human-readable message"
-          },
-          "message_code": {
-            "type": "string",
-            "description": "Machine-readable code"
-          }
-        }
-      },
       "EvaluationResource": {
         "type": "object",
         "description": "Evaluation resource (base fields for an evaluation)",
@@ -733,10 +719,6 @@
               "mlflow_experiment_id": {
                 "type": "string",
                 "description": "MLFlow experiment ID"
-              },
-              "message": {
-                "$ref": "#/components/schemas/MessageInfo",
-                "description": "Status or error message"
               }
             }
           }
@@ -753,6 +735,20 @@
           "partially_failed"
         ],
         "description": "Overall evaluation job state"
+      },
+      "MessageInfo": {
+        "type": "object",
+        "description": "Message from a downstream service",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Human-readable message"
+          },
+          "message_code": {
+            "type": "string",
+            "description": "Machine-readable code"
+          }
+        }
       },
       "EvaluationJobState": {
         "type": "object",
