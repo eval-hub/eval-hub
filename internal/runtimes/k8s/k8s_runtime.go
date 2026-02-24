@@ -14,8 +14,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const maxBenchmarkWorkers = 5
-
 type K8sRuntime struct {
 	logger    *slog.Logger
 	helper    *KubernetesHelper
@@ -51,53 +49,31 @@ func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 }
 
 func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, storage *abstractions.Storage) error {
-	benchmarks := make(chan api.BenchmarkConfig, len(evaluation.Benchmarks))
-	for _, bench := range evaluation.Benchmarks {
-		benchmarks <- bench
-	}
-	close(benchmarks)
+	go func() {
+		for idx, bench := range evaluation.Benchmarks {
+			benchCtx := context.Background()
+			if err := r.createBenchmarkResources(benchCtx, r.logger, evaluation, &bench, idx); err != nil {
+				r.logger.Error(
+					"kubernetes job creation failed",
+					"error", err,
+					"job_id", evaluation.Resource.ID,
+					"benchmark_id", bench.ID,
+				)
 
-	workerCount := maxBenchmarkWorkers
-	if len(evaluation.Benchmarks) < workerCount {
-		workerCount = len(evaluation.Benchmarks)
-	}
-
-	for i := 0; i < workerCount; i++ {
-		go func() {
-			for bench := range benchmarks {
-				select {
-				case <-r.ctx.Done():
-					r.logger.Warn(
-						"benchmark processing canceled",
-						"job_id", evaluation.Resource.ID,
-						"benchmark_id", bench.ID,
-					)
-					return
-				default:
-				}
-				if err := r.createBenchmarkResources(r.ctx, r.logger, evaluation, &bench); err != nil {
-					r.logger.Error(
-						"kubernetes job creation failed",
-						"error", err,
-						"job_id", evaluation.Resource.ID,
-						"benchmark_id", bench.ID,
-					)
-
-					if storage != nil && *storage != nil {
-						runStatus := buildBenchmarkFailureStatus(&bench, err)
-						if updateErr := (*storage).UpdateEvaluationJob(evaluation.Resource.ID, runStatus); updateErr != nil {
-							r.logger.Error(
-								"failed to update benchmark status",
-								"error", updateErr,
-								"job_id", evaluation.Resource.ID,
-								"benchmark_id", bench.ID,
-							)
-						}
+				if storage != nil && *storage != nil {
+					runStatus := buildBenchmarkFailureStatus(&bench, err)
+					if updateErr := (*storage).UpdateEvaluationJob(evaluation.Resource.ID, runStatus); updateErr != nil {
+						r.logger.Error(
+							"failed to update benchmark status",
+							"error", updateErr,
+							"job_id", evaluation.Resource.ID,
+							"benchmark_id", bench.ID,
+						)
 					}
 				}
 			}
-		}()
-	}
+		}
+	}()
 
 	return nil
 }
@@ -114,35 +90,54 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 		"namespace", namespace,
 	)
 
+	labelSelector := fmt.Sprintf("%s=%s", labelJobIDKey, sanitizeLabelValue(evaluation.Resource.ID))
+	jobs, err := r.helper.ListJobs(r.ctx, namespace, labelSelector)
+	if err != nil {
+		return err
+	}
+	configMaps, err := r.helper.ListConfigMaps(r.ctx, namespace, labelSelector)
+	if err != nil {
+		return err
+	}
+
 	var deleteErr error
-	for _, bench := range evaluation.Benchmarks {
-		jobName := jobName(evaluation.Resource.ID, bench.ProviderID, bench.ID)
-		configMapName := configMapName(evaluation.Resource.ID, bench.ProviderID, bench.ID)
+	for _, job := range jobs {
 		r.logger.Info(
-			"deleting evaluation runtime resources for benchmark",
+			"deleting evaluation runtime job",
 			"job_id", evaluation.Resource.ID,
-			"benchmark_id", bench.ID,
-			"job_name", jobName,
-			"configmap_name", configMapName,
+			"job_name", job.Name,
 			"namespace", namespace,
 		)
-		if err := r.helper.DeleteJob(r.ctx, namespace, jobName, deleteOptions); err != nil && !apierrors.IsNotFound(err) {
+		if err := r.helper.DeleteJob(r.ctx, namespace, job.Name, deleteOptions); err != nil && !apierrors.IsNotFound(err) {
 			deleteErr = errors.Join(deleteErr, err)
 		}
-		// OwnerReferences should GC ConfigMaps when Jobs are deleted, but we delete explicitly
-		// to avoid orphans if the owner ref was never set or the job delete is delayed.
-		if err := r.helper.DeleteConfigMap(r.ctx, namespace, configMapName); err != nil && !apierrors.IsNotFound(err) {
+	}
+	// OwnerReferences should GC ConfigMaps when Jobs are deleted, but we delete explicitly
+	// to avoid orphans if the owner ref was never set or the job delete is delayed.
+	for _, configMap := range configMaps {
+		r.logger.Info(
+			"deleting evaluation runtime configmap",
+			"job_id", evaluation.Resource.ID,
+			"configmap_name", configMap.Name,
+			"namespace", namespace,
+		)
+		if err := r.helper.DeleteConfigMap(r.ctx, namespace, configMap.Name); err != nil && !apierrors.IsNotFound(err) {
 			deleteErr = errors.Join(deleteErr, err)
 		}
 	}
 	return deleteErr
 }
 
-func (r *K8sRuntime) createBenchmarkResources(ctx context.Context, logger *slog.Logger, evaluation *api.EvaluationJobResource, benchmark *api.BenchmarkConfig) error {
+func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
+	logger *slog.Logger,
+	evaluation *api.EvaluationJobResource,
+	benchmark *api.BenchmarkConfig,
+	benchmarkIndex int) error {
+
 	benchmarkID := benchmark.ID
 	// Provider/benchmark validation should be handled during creation.
 	provider := r.providers[benchmark.ProviderID]
-	jobConfig, err := buildJobConfig(evaluation, &provider, benchmarkID)
+	jobConfig, err := buildJobConfig(evaluation, &provider, benchmarkID, benchmarkIndex)
 	if err != nil {
 		logger.Error("kubernetes job config error", "benchmark_id", benchmarkID, "error", err)
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
@@ -155,7 +150,11 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context, logger *slog.
 		"service_ca_configmap", jobConfig.serviceCAConfigMap,
 		"evalhub_url", jobConfig.evalHubURL,
 	)
-	configMap := buildConfigMap(jobConfig)
+	configMap, err := buildConfigMap(jobConfig)
+	if err != nil {
+		logger.Error("kubernetes configmap build error", "benchmark_id", benchmarkID, "error", err)
+		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
+	}
 	job, err := buildJob(jobConfig)
 	if err != nil {
 		logger.Error("kubernetes job build error", "benchmark_id", benchmarkID, "error", err)

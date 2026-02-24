@@ -2,12 +2,13 @@ package k8s
 
 // Contains the configuration logic that prepares the data needed by the builders
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	"github.com/google/uuid"
 )
 
 const (
@@ -28,9 +29,11 @@ const (
 
 type jobConfig struct {
 	jobID                string
+	resourceGUID         string
 	namespace            string
 	providerID           string
 	benchmarkID          string
+	benchmarkIndex       int
 	adapterImage         string
 	entrypoint           []string
 	defaultEnv           []api.EnvVar
@@ -38,7 +41,7 @@ type jobConfig struct {
 	memoryRequest        string
 	cpuLimit             string
 	memoryLimit          string
-	jobSpecJSON          string
+	jobSpec              shared.JobSpec
 	serviceAccountName   string
 	serviceCAConfigMap   string
 	evalHubURL           string
@@ -48,29 +51,7 @@ type jobConfig struct {
 	ociCredentialsSecret string
 }
 
-type jobSpec struct {
-	JobID           string              `json:"id"`
-	ProviderID      string              `json:"provider_id"`
-	BenchmarkID     string              `json:"benchmark_id"`
-	Model           api.ModelRef        `json:"model"`
-	NumExamples     *int                `json:"num_examples,omitempty"`
-	BenchmarkConfig map[string]any      `json:"benchmark_config"`
-	ExperimentName  string              `json:"experiment_name,omitempty"`
-	Tags            []api.ExperimentTag `json:"tags,omitempty"`
-	CallbackURL     *string             `json:"callback_url"`
-	Exports         *jobSpecExports     `json:"exports,omitempty"`
-}
-
-// jobSpecExports is the subset of EvaluationExports serialized into the job ConfigMap (excludes k8s connection config).
-type jobSpecExports struct {
-	OCI *jobSpecExportsOCI `json:"oci,omitempty"`
-}
-
-type jobSpecExportsOCI struct {
-	Coordinates api.OCICoordinates `json:"coordinates"`
-}
-
-func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkID string) (*jobConfig, error) {
+func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkID string, benchmarkIndex int) (*jobConfig, error) {
 	runtime := provider.Runtime
 	if runtime == nil || runtime.K8s == nil {
 		return nil, fmt.Errorf("provider %q missing runtime configuration", provider.Resource.ID)
@@ -93,36 +74,9 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	}
 
 	namespace := resolveNamespace("")
-	benchmarkConfig, err := findBenchmarkConfig(evaluation, benchmarkID)
+	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, benchmarkID, benchmarkIndex, &serviceURL)
 	if err != nil {
 		return nil, err
-	}
-	benchmarkParams := copyParams(benchmarkConfig.Parameters)
-	numExamples := numExamplesFromParameters(benchmarkParams)
-	delete(benchmarkParams, "num_examples")
-	spec := jobSpec{
-		JobID:           evaluation.Resource.ID,
-		ProviderID:      provider.Resource.ID,
-		BenchmarkID:     benchmarkID,
-		Model:           evaluation.Model,
-		NumExamples:     numExamples,
-		BenchmarkConfig: benchmarkParams,
-		CallbackURL:     &serviceURL,
-	}
-	if evaluation.Experiment != nil {
-		spec.ExperimentName = evaluation.Experiment.Name
-		spec.Tags = evaluation.Experiment.Tags
-	}
-	if evaluation.Exports != nil && evaluation.Exports.OCI != nil {
-		spec.Exports = &jobSpecExports{
-			OCI: &jobSpecExportsOCI{
-				Coordinates: evaluation.Exports.OCI.Coordinates,
-			},
-		}
-	}
-	specJSON, err := json.MarshalIndent(spec, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("marshal job spec: %w", err)
 	}
 
 	// Get EvalHub instance name from environment (set by operator in deployment)
@@ -150,6 +104,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 
 	return &jobConfig{
 		jobID:                evaluation.Resource.ID,
+		resourceGUID:         uuid.NewString(),
 		namespace:            namespace,
 		providerID:           provider.Resource.ID,
 		benchmarkID:          benchmarkID,
@@ -160,7 +115,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		memoryRequest:        memoryRequest,
 		cpuLimit:             cpuLimit,
 		memoryLimit:          memoryLimit,
-		jobSpecJSON:          string(specJSON),
+		jobSpec:              *spec,
 		serviceAccountName:   serviceAccountName,
 		serviceCAConfigMap:   serviceCAConfigMap,
 		evalHubURL:           evalHubURL,
@@ -195,50 +150,4 @@ func readInClusterNamespace() string {
 		return ""
 	}
 	return strings.TrimSpace(string(content))
-}
-
-func findBenchmarkConfig(evaluation *api.EvaluationJobResource, benchmarkID string) (*api.BenchmarkConfig, error) {
-	for i := range evaluation.Benchmarks {
-		benchmark := &evaluation.Benchmarks[i]
-		if benchmark.ID == benchmarkID {
-			return benchmark, nil
-		}
-	}
-	return nil, fmt.Errorf("benchmark config not found for %q", benchmarkID)
-}
-
-func copyParams(source map[string]any) map[string]any {
-	if len(source) == 0 {
-		return map[string]any{}
-	}
-	clone := make(map[string]any, len(source))
-	for key, value := range source {
-		clone[key] = value
-	}
-	return clone
-}
-
-func numExamplesFromParameters(parameters map[string]any) *int {
-	if parameters == nil {
-		return nil
-	}
-	value, ok := parameters["num_examples"]
-	if !ok {
-		return nil
-	}
-	switch typed := value.(type) {
-	case int:
-		return &typed
-	case int32:
-		converted := int(typed)
-		return &converted
-	case int64:
-		converted := int(typed)
-		return &converted
-	case float64:
-		converted := int(typed)
-		return &converted
-	default:
-		return nil
-	}
 }

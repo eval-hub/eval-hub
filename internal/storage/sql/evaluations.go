@@ -72,7 +72,7 @@ func (s *SQLStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, er
 	return s.getEvaluationJobTransactional(nil, id)
 }
 
-func (s *SQLStorage) constructEvaluationResource(statusStr string, message *api.MessageInfo, dbID string, createdAt time.Time, updatedAt time.Time, experimentID string, evaluationEntity *EvaluationJobEntity) (*api.EvaluationJobResource, error) {
+func (s *SQLStorage) constructEvaluationResource(tenantID string, statusStr string, message *api.MessageInfo, dbID string, createdAt time.Time, updatedAt time.Time, experimentID string, evaluationEntity *EvaluationJobEntity) (*api.EvaluationJobResource, error) {
 	if evaluationEntity == nil {
 		s.logger.Error("Failed to construct evaluation job resource", "error", "Evaluation entity does not exist", "id", dbID)
 		// Post-read validation: no writes done, so do not request rollback.
@@ -100,10 +100,12 @@ func (s *SQLStorage) constructEvaluationResource(statusStr string, message *api.
 	status := evaluationEntity.Status
 	status.State = overAllState
 
+	tenant := api.Tenant(tenantID)
 	evaluationResource := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{
 				ID:        dbID,
+				Tenant:    &tenant,
 				CreatedAt: &createdAt,
 				UpdatedAt: &updatedAt,
 			},
@@ -127,11 +129,12 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 	// Query the database
 	var dbID string
 	var createdAt, updatedAt time.Time
+	var tenantID string
 	var statusStr string
 	var experimentID string
 	var entityJSON string
 
-	err = s.queryRow(txn, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &statusStr, &experimentID, &entityJSON)
+	err = s.queryRow(txn, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &tenantID, &statusStr, &experimentID, &entityJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
@@ -149,7 +152,7 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 		return nil, se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "evaluation job", "Error", err.Error())
 	}
 
-	job, err := s.constructEvaluationResource(statusStr, nil, dbID, createdAt, updatedAt, experimentID, &evaluationJobEntity)
+	job, err := s.constructEvaluationResource(tenantID, statusStr, nil, dbID, createdAt, updatedAt, experimentID, &evaluationJobEntity)
 	if err != nil {
 		return nil, se.WithRollback(err)
 	}
@@ -199,11 +202,12 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, filter abstraction
 	for rows.Next() {
 		var dbID string
 		var createdAt, updatedAt time.Time
+		var tenantID string
 		var statusStr string
 		var experimentID string
 		var entityJSON string
 
-		err = rows.Scan(&dbID, &createdAt, &updatedAt, &statusStr, &experimentID, &entityJSON)
+		err = rows.Scan(&dbID, &createdAt, &updatedAt, &tenantID, &statusStr, &experimentID, &entityJSON)
 		if err != nil {
 			s.logger.Error("Failed to scan evaluation job row", "error", err)
 			return nil, se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", dbID, "Error", err.Error())
@@ -218,7 +222,7 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, filter abstraction
 		}
 
 		// Construct the EvaluationJobResource
-		resource, err := s.constructEvaluationResource(statusStr, nil, dbID, createdAt, updatedAt, experimentID, &evaluationJobEntity)
+		resource, err := s.constructEvaluationResource(tenantID, statusStr, nil, dbID, createdAt, updatedAt, experimentID, &evaluationJobEntity)
 		if err != nil {
 			constructErrs = append(constructErrs, err.Error())
 			totalCount--

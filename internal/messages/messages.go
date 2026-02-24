@@ -68,6 +68,13 @@ var (
 		"request_field_invalid",
 	)
 
+	// LocalRuntimeNotEnabled Local runtime is not enabled for provider '{{.ProviderID}}'. Please configure a local runtime command for this provider and try again.
+	LocalRuntimeNotEnabled = createMessage(
+		constants.HTTPCodeBadRequest,
+		"Local runtime is not enabled for provider '{{.ProviderID}}'. Please configure a local runtime command for this provider and try again.",
+		"local_runtime_not_enabled",
+	)
+
 	// MLFlowRequiredForExperiment MLflow is required for experiment tracking. Please configure MLflow in the service configuration and try again.
 	MLFlowRequiredForExperiment = createMessage(
 		constants.HTTPCodeBadRequest,
@@ -142,6 +149,13 @@ var (
 		constants.HTTPCodeInternalServerError,
 		"An unknown error occurred: {{.Error}}.",
 		"unknown_error",
+	)
+
+	// BadRequest The request is invalid: '{{.Error}}'. Please check the request and try again.
+	BadRequest = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The request is invalid: '{{.Error}}'. Please check the request and try again.",
+		"bad_request",
 	)
 )
 

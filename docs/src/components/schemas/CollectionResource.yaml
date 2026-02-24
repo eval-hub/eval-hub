@@ -1,5 +1,5 @@
 type: object
-description: Collection resource 
+description: Collection resource
 allOf:
   - type: object
     properties:

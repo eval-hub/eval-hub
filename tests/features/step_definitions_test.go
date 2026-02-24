@@ -29,6 +29,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/runtimes"
 	"github.com/eval-hub/eval-hub/internal/storage"
 	"github.com/eval-hub/eval-hub/internal/validation"
+	pkgapi "github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/xeipuuv/gojsonschema"
 
 	"github.com/cucumber/godog"
@@ -182,8 +183,21 @@ func (a *apiFeature) startLocalServer(port int) error {
 	}
 
 	logger.Info("Providers loaded.")
-
 	serviceConfig.Service.LocalMode = true // set local mode for testing
+	// Override local runtime commands for testing so subprocesses
+	// Exit cleanly instead of failing with "command not found".
+	for key := range providerConfigs {
+		providerCfg := providerConfigs[key]
+		if providerCfg.Runtime == nil {
+			return logError(fmt.Errorf("provider %q has no runtime configuration", providerCfg.Resource.ID))
+		}
+		if providerCfg.Runtime.Local == nil {
+			providerCfg.Runtime.Local = &pkgapi.LocalRuntime{}
+		}
+		providerCfg.Runtime.Local.Command = "true"
+		providerConfigs[key] = providerCfg
+	}
+
 	runtime, err := runtimes.NewRuntime(logger, serviceConfig, providerConfigs)
 	if err != nil {
 		return logError(fmt.Errorf("failed to create runtime: %w", err))
@@ -424,12 +438,12 @@ func extractId(body []byte) (string, error) {
 }
 
 func extractIdFromPath(path string) string {
-	if _, after, found := strings.Cut(path, "/api/v1/evaluations/jobs/"); found {
-		if after != "" {
-			if id, _, found := strings.Cut(after, "/"); found {
+	for _, prefix := range []string{"/api/v1/evaluations/collections/", "/api/v1/evaluations/jobs/"} {
+		if _, after, found := strings.Cut(path, prefix); found && after != "" {
+			if id, _, ok := strings.Cut(after, "/"); ok {
 				return id
 			}
-			if id, _, found := strings.Cut(after, "?"); found {
+			if id, _, ok := strings.Cut(after, "?"); ok {
 				return id
 			}
 			return after
@@ -534,14 +548,18 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 		logDebug("Response status %d for %s\n", tc.response.StatusCode, endpoint)
 	}
 
-	// this is just for a create evaluation job request
+	// capture resource id for create (evaluation job or collection)
 	if method == http.MethodPost && tc.response.StatusCode == http.StatusAccepted {
-		assetName, err := getAssetName(endpoint)
-		if err != nil {
-			return err
+		var assetName string
+		switch {
+		case strings.Contains(endpoint, "/evaluations/collections") && !strings.Contains(endpoint, "/evaluations/collections/"):
+			assetName = "collections"
+		case strings.Contains(endpoint, "/evaluations/jobs") && !strings.Contains(endpoint, "/evaluations/jobs/"):
+			assetName = "evaluations"
+		default:
+			assetName = ""
 		}
-		switch assetName {
-		case "evaluations":
+		if assetName != "" {
 			tc.lastId, err = extractId(tc.body)
 			if err != nil {
 				return err
@@ -550,18 +568,20 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 				return logError(fmt.Errorf("response does not contain an ID in response %s", string(tc.body)))
 			}
 			tc.addAsset(assetName, tc.lastId)
-		default:
-			// nothing to do here
 		}
 	}
 
 	if method == http.MethodDelete {
-		assetName, err := getAssetName(endpoint)
-		if err != nil {
-			return err
+		var assetName string
+		switch {
+		case strings.Contains(endpoint, "/evaluations/collections/"):
+			assetName = "collections"
+		case strings.Contains(endpoint, "/evaluations/jobs/"):
+			assetName = "evaluations"
+		default:
+			assetName = ""
 		}
-		switch assetName {
-		case "evaluations":
+		if assetName != "" {
 			id := extractIdFromPath(endpoint)
 			if id == "" {
 				return logError(fmt.Errorf("no ID found in path %s", endpoint))
@@ -570,11 +590,11 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 			if err != nil {
 				return logError(fmt.Errorf("failed to parse endpoint %s: %w", endpoint, err))
 			}
-			if parsedURL.Query().Get("hard_delete") == "true" {
+			if assetName == "evaluations" && parsedURL.Query().Get("hard_delete") == "true" {
+				tc.removeAsset(assetName, id)
+			} else {
 				tc.removeAsset(assetName, id)
 			}
-		default:
-			// nothing to do here
 		}
 	}
 
@@ -692,24 +712,34 @@ func (tc *scenarioConfig) theResponseShouldHaveSchemaAs(body *godog.DocString) e
 }
 
 func (tc *scenarioConfig) getJsonPath(jsonPath string) (string, error) {
-	// first check the jsonpath is valid
+  // first check the jsonpath is valid
 	_, err := jsonpath.New(jsonPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to validate JSON path %s: %w", jsonPath, err) // logging of the error is done by the caller
 	}
 
+	raw, err := tc.getJsonPathValue(jsonPath)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%v", raw), nil
+}
+
+func (tc *scenarioConfig) getJsonPathValue(jsonPath string) (interface{}, error) {
 	var respMap map[string]interface{}
 	err = json.Unmarshal(tc.body, &respMap)
 	if err != nil {
 		return "", err // logging of the error is done by the caller
 	}
-
-	foundValue, err := jsonpath.Get(jsonPath, respMap)
+	path := jsonPath
+	if !strings.HasPrefix(path, "$") {
+		path = "$." + path
+	}
+	foundValue, err := jsonpath.Get(path, respMap)
 	if err != nil {
 		return "", fmt.Errorf("failed to get JSON path %s in %s: %w", jsonPath, string(tc.body), err) // logging of the error is done by the caller
 	}
-
-	return fmt.Sprintf("%v", foundValue), nil
+	return foundValue, nil
 }
 
 func isCompletionAssertionPath(jsonPath string) bool {
@@ -759,6 +789,44 @@ func (tc *scenarioConfig) theResponseShouldNotContainAtJSONPath(expectedValue st
 	return nil
 }
 
+func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLength(jsonPath string, lengthStr string) error {
+	length, err := strconv.Atoi(lengthStr)
+	if err != nil {
+		return logError(fmt.Errorf("expected integer length, got %q: %w", lengthStr, err))
+	}
+	raw, err := tc.getJsonPathValue(jsonPath)
+	if err != nil {
+		return err
+	}
+	arr, ok := raw.([]interface{})
+	if !ok {
+		return logError(fmt.Errorf("value at path %s is not an array, got %T", jsonPath, raw))
+	}
+	if len(arr) != length {
+		return logError(fmt.Errorf("expected array at path %s to have length %d, got %d", jsonPath, length, len(arr)))
+	}
+	return nil
+}
+
+func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLengthAtLeast(jsonPath string, minLengthStr string) error {
+	minLength, err := strconv.Atoi(minLengthStr)
+	if err != nil {
+		return logError(fmt.Errorf("expected integer min length, got %q: %w", minLengthStr, err))
+	}
+	raw, err := tc.getJsonPathValue(jsonPath)
+	if err != nil {
+		return err
+	}
+	arr, ok := raw.([]interface{})
+	if !ok {
+		return logError(fmt.Errorf("value at path %s is not an array, got %T", jsonPath, raw))
+	}
+	if len(arr) < minLength {
+		return logError(fmt.Errorf("expected array at path %s to have length >= %d, got %d", jsonPath, minLength, len(arr)))
+	}
+	return nil
+}
+
 func getJsonPointer(path string) string {
 	if !strings.HasPrefix(path, "/") {
 		return strings.ReplaceAll(fmt.Sprintf("/%s", path), ".", "/")
@@ -804,6 +872,8 @@ func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, 
 		switch assetName {
 		case "evaluations":
 			url = "evaluations/jobs"
+		case "collections":
+			url = "evaluations/collections"
 		}
 		ids := slices.Clone(ids)
 		for _, id := range ids {
@@ -921,6 +991,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the "([^"]*)" field in the response should be saved as "([^"]*)"$`, tc.theFieldShouldBeSaved)
 	ctx.Step(`^the response should contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldContainAtJSONPath)
 	ctx.Step(`^the response should not contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldNotContainAtJSONPath)
+	ctx.Step(`^the array at path "([^"]*)" in the response should have length (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLength)
+	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^I wait for the evaluation job status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatus)
 	// Other steps
 	ctx.Step(`^fix this step$`, tc.fixThisStep)
