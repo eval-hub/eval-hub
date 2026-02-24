@@ -22,4 +22,4 @@ allOf:
       parameters:
         type: object
         additionalProperties: true
-        description: Benchmark-specific parameters
+        description: Benchmark specific parameters

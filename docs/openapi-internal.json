@@ -316,8 +316,8 @@
         "tags": [
           "Evaluations"
         ],
-        "summary": "Get Evaluation Status",
-        "description": "Get the status of an evaluation request.",
+        "summary": "Get Evaluation",
+        "description": "Returns the evaluation job resource with the current status and results.",
         "operationId": "get_evaluations_jobs_id",
         "parameters": [
           {
@@ -1173,20 +1173,6 @@
           }
         }
       },
-      "MessageInfo": {
-        "type": "object",
-        "description": "Message from a downstream service",
-        "properties": {
-          "message": {
-            "type": "string",
-            "description": "Human-readable message"
-          },
-          "message_code": {
-            "type": "string",
-            "description": "Machine-readable code"
-          }
-        }
-      },
       "EvaluationResource": {
         "type": "object",
         "description": "Evaluation resource (base fields for an evaluation)",
@@ -1200,10 +1186,6 @@
               "mlflow_experiment_id": {
                 "type": "string",
                 "description": "MLFlow experiment ID"
-              },
-              "message": {
-                "$ref": "#/components/schemas/MessageInfo",
-                "description": "Status or error message"
               }
             }
           }
@@ -1220,6 +1202,20 @@
           "partially_failed"
         ],
         "description": "Overall evaluation job state"
+      },
+      "MessageInfo": {
+        "type": "object",
+        "description": "Message from a downstream service",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Human-readable message"
+          },
+          "message_code": {
+            "type": "string",
+            "description": "Machine-readable code"
+          }
+        }
       },
       "EvaluationJobState": {
         "type": "object",
@@ -1303,6 +1299,26 @@
           }
         ]
       },
+      "BenchmarkTest": {
+        "type": "object",
+        "description": "The test result of a single benchmark run",
+        "properties": {
+          "primary_score": {
+            "type": "number",
+            "format": "float",
+            "description": "Primary score value"
+          },
+          "threshold": {
+            "type": "number",
+            "format": "float",
+            "description": "Threshold value"
+          },
+          "pass": {
+            "type": "boolean",
+            "description": "Whether the benchmark passed"
+          }
+        }
+      },
       "BenchmarkResult": {
         "type": "object",
         "description": "Result of a single benchmark run",
@@ -1336,6 +1352,30 @@
           "logs_path": {
             "type": "string",
             "description": "Path to logs"
+          },
+          "test": {
+            "$ref": "#/components/schemas/BenchmarkTest",
+            "description": "Test result"
+          }
+        }
+      },
+      "EvaluationTest": {
+        "type": "object",
+        "description": "The test result for an evaluation",
+        "properties": {
+          "score": {
+            "type": "number",
+            "format": "float",
+            "description": "Evaluation score value"
+          },
+          "threshold": {
+            "type": "number",
+            "format": "float",
+            "description": "Threshold value"
+          },
+          "pass": {
+            "type": "boolean",
+            "description": "Whether the entire evaluation passed"
           }
         }
       },
@@ -1353,6 +1393,20 @@
           "mlflow_experiment_url": {
             "type": "string",
             "description": "URL to MLFlow experiment"
+          },
+          "test": {
+            "$ref": "#/components/schemas/EvaluationTest",
+            "description": "Test result"
+          }
+        }
+      },
+      "ModelAuth": {
+        "type": "object",
+        "description": "The model authentication configuration",
+        "properties": {
+          "secret_ref": {
+            "type": "string",
+            "description": "The reference to the secret containing the model authentication credentials"
           }
         }
       },
@@ -1371,6 +1425,15 @@
           "name": {
             "type": "string",
             "description": "Model name"
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Model specific parameters"
+          },
+          "auth": {
+            "$ref": "#/components/schemas/ModelAuth",
+            "description": "The model authentication configuration"
           }
         }
       },
@@ -1447,7 +1510,7 @@
               "parameters": {
                 "type": "object",
                 "additionalProperties": true,
-                "description": "Benchmark-specific parameters"
+                "description": "Benchmark specific parameters"
               }
             }
           }
@@ -1590,6 +1653,21 @@
           "benchmarks"
         ],
         "properties": {
+          "name": {
+            "type": "string",
+            "description": "Evaluation job name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Evaluation job description"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Evaluation job tags"
+          },
           "model": {
             "$ref": "#/components/schemas/ModelRef",
             "description": "Model to evaluate"

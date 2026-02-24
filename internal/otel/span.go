@@ -18,7 +18,8 @@ func WithSpan(ctx context.Context, serviceConfig *config.Config, logger *slog.Lo
 	runtimeCtx := ctx
 	var runtimeSpan trace.Span
 
-	if serviceConfig != nil && serviceConfig.IsOTELEnabled() {
+	if serviceConfig.IsOTELEnabled() {
+		logger.Debug("Starting OTEL span", "component", component, "operation", operation)
 		// Create child span for validation
 		runtimeCtx, runtimeSpan = otel.Tracer(component).Start(
 			ctx,
@@ -45,6 +46,7 @@ func WithSpan(ctx context.Context, serviceConfig *config.Config, logger *slog.Lo
 			runtimeSpan.SetStatus(codes.Ok, fmt.Sprintf("%s successful", operation))
 		}
 		runtimeSpan.End()
+		logger.Debug("OTEL span ended", "component", component, "operation", operation)
 	}
 
 	return err

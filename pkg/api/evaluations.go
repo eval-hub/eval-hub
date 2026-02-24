@@ -52,8 +52,14 @@ func GetOverallState(s string) (OverallState, error) {
 
 // ModelRef represents model specification for evaluation requests
 type ModelRef struct {
-	URL  string `json:"url" validate:"required"`
-	Name string `json:"name" validate:"required"`
+	URL        string         `json:"url" validate:"required"`
+	Name       string         `json:"name" validate:"required"`
+	Auth       *ModelAuth     `json:"auth,omitempty"`
+	Parameters map[string]any `json:"parameters,omitempty"`
+}
+
+type ModelAuth struct {
+	SecretRef string `json:"secret_ref"`
 }
 
 // MessageInfo represents a message from a downstream service
@@ -187,6 +193,9 @@ type EvaluationExports struct {
 
 // EvaluationJobConfig represents evaluation job request schema
 type EvaluationJobConfig struct {
+	Name         *string            `json:"name,omitempty"`
+	Description  *string            `json:"description,omitempty"`
+	Tags         []string           `json:"tags,omitempty"`
 	Model        ModelRef           `json:"model" validate:"required"`
 	PassCriteria *PassCriteria      `json:"pass_criteria,omitempty"`
 	Benchmarks   []BenchmarkConfig  `json:"benchmarks" validate:"required,min=1,dive"`
@@ -198,8 +207,7 @@ type EvaluationJobConfig struct {
 
 type EvaluationResource struct {
 	Resource
-	MLFlowExperimentID string       `json:"mlflow_experiment_id,omitempty"`
-	Message            *MessageInfo `json:"message,omitempty"`
+	MLFlowExperimentID string `json:"mlflow_experiment_id,omitempty"`
 }
 
 type EvaluationJobStatus struct {

@@ -99,6 +99,7 @@ func (s *SQLStorage) constructEvaluationResource(tenantID string, statusStr stri
 	}
 	status := evaluationEntity.Status
 	status.State = overAllState
+	status.Message = message
 
 	tenant := api.Tenant(tenantID)
 	evaluationResource := &api.EvaluationJobResource{
@@ -110,7 +111,6 @@ func (s *SQLStorage) constructEvaluationResource(tenantID string, statusStr stri
 				UpdatedAt: &updatedAt,
 			},
 			MLFlowExperimentID: experimentID,
-			Message:            message,
 		},
 		Status:              status,
 		EvaluationJobConfig: *evaluationEntity.Config,
