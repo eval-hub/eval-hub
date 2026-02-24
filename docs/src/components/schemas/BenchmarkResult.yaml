@@ -24,3 +24,6 @@ properties:
   logs_path:
     type: string
     description: Path to logs
+  test:
+    $ref: ./BenchmarkTest.yaml
+    description: Test result
