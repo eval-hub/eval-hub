@@ -112,8 +112,36 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.
 	return client, nil
 }
 
-func GetExperimentID(mlflowClient *mlflowclient.Client, experiment *api.ExperimentConfig) (experimentID string, experimentURL string, err error) {
-	if experiment == nil || experiment.Name == "" {
+func injectEvaluationJobTags(jobId string, evaluation *api.EvaluationJobConfig) []api.ExperimentTag {
+	if evaluation.Experiment != nil {
+		tags := evaluation.Experiment.Tags
+		if tags == nil {
+			tags = make([]api.ExperimentTag, 0)
+		}
+
+		if evaluation.Name != nil {
+			tags = append(tags, api.ExperimentTag{
+				Key:   "evaluation_job_name",
+				Value: *evaluation.Name,
+			})
+		}
+		if evaluation.Description != nil {
+			tags = append(tags, api.ExperimentTag{
+				Key:   "evaluation_job_description",
+				Value: *evaluation.Description,
+			})
+		}
+		tags = append(tags, api.ExperimentTag{
+			Key:   "evaluation_job_id",
+			Value: jobId,
+		})
+		return tags
+	}
+	return []api.ExperimentTag{}
+}
+
+func GetExperimentID(mlflowClient *mlflowclient.Client, jobConfig *api.EvaluationJobConfig, jobId string) (experimentID string, experimentURL string, err error) {
+	if jobConfig.Experiment == nil || jobConfig.Experiment.Name == "" {
 		return "", "", nil
 	}
 
@@ -123,7 +151,7 @@ func GetExperimentID(mlflowClient *mlflowclient.Client, experiment *api.Experime
 		return "", "", serviceerrors.NewServiceError(messages.MLFlowRequiredForExperiment)
 	}
 
-	mlflowExperiment, err := mlflowClient.GetExperimentByName(experiment.Name)
+	mlflowExperiment, err := mlflowClient.GetExperimentByName(jobConfig.Experiment.Name)
 	if err != nil {
 		if !mlflowclient.IsResourceDoesNotExistError(err) {
 			// This is some other error than "resource does not exist" so report it as an error
@@ -132,7 +160,7 @@ func GetExperimentID(mlflowClient *mlflowclient.Client, experiment *api.Experime
 	}
 
 	if mlflowExperiment != nil && mlflowExperiment.Experiment.LifecycleStage == "active" && mlflowExperiment.Experiment.ExperimentID != "" {
-		mlflowClient.GetLogger().Info("Found active experiment", "experiment_name", experiment.Name, "experiment_id", mlflowExperiment.Experiment.ExperimentID)
+		mlflowClient.GetLogger().Info("Found active experiment", "experiment_name", jobConfig.Experiment.Name, "experiment_id", mlflowExperiment.Experiment.ExperimentID)
 		// we found an active experiment with the given name so return the ID
 		return mlflowExperiment.Experiment.ExperimentID, mlflowClient.GetExperimentsURL(), nil
 	}
@@ -141,16 +169,17 @@ func GetExperimentID(mlflowClient *mlflowclient.Client, experiment *api.Experime
 	// but we do not consider this worth taking into account as it is very unlikely to happen.
 
 	// create a new experiment as we did not find an active experiment with the given name
+	tags := injectEvaluationJobTags(jobId, jobConfig)
 	req := mlflowclient.CreateExperimentRequest{
-		Name:             experiment.Name,
-		ArtifactLocation: experiment.ArtifactLocation,
-		Tags:             experiment.Tags,
+		Name:             jobConfig.Experiment.Name,
+		ArtifactLocation: jobConfig.Experiment.ArtifactLocation,
+		Tags:             tags,
 	}
 	resp, err := mlflowClient.CreateExperiment(&req)
 	if err != nil {
 		return "", "", serviceerrors.NewServiceError(messages.MLFlowRequestFailed, "Error", err.Error())
 	}
 
-	mlflowClient.GetLogger().Info("Created new experiment", "experiment_name", experiment.Name, "experiment_id", resp.ExperimentID)
+	mlflowClient.GetLogger().Info("Created new experiment", "experiment_name", jobConfig.Experiment.Name, "experiment_id", resp.ExperimentID)
 	return resp.ExperimentID, mlflowClient.GetExperimentsURL(), nil
 }

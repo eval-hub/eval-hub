@@ -193,6 +193,9 @@ type EvaluationExports struct {
 
 // EvaluationJobConfig represents evaluation job request schema
 type EvaluationJobConfig struct {
+	Name         *string            `json:"name,omitempty"`
+	Description  *string            `json:"description,omitempty"`
+	Tags         []string           `json:"tags,omitempty"`
 	Model        ModelRef           `json:"model" validate:"required"`
 	PassCriteria *PassCriteria      `json:"pass_criteria,omitempty"`
 	Benchmarks   []BenchmarkConfig  `json:"benchmarks" validate:"required,min=1,dive"`

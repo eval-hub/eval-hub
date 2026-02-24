@@ -103,7 +103,8 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 	mlflowExperimentURL := ""
 	if h.mlflowClient != nil {
 		client := h.mlflowClient.WithContext(ctx.Ctx).WithLogger(ctx.Logger)
-		mlflowExperimentID, mlflowExperimentURL, err = mlflow.GetExperimentID(client, evaluation.Experiment)
+
+		mlflowExperimentID, mlflowExperimentURL, err = mlflow.GetExperimentID(client, evaluation, id)
 		if err != nil {
 			w.Error(err, ctx.RequestID)
 			return
