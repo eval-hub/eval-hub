@@ -193,8 +193,8 @@
         "tags": [
           "Evaluations"
         ],
-        "summary": "Get Evaluation Status",
-        "description": "Get the status of an evaluation request.",
+        "summary": "Get Evaluation",
+        "description": "Returns the evaluation job resource with the current status and results.",
         "operationId": "get_evaluations_jobs_id",
         "parameters": [
           {
@@ -1186,6 +1186,21 @@
           "benchmarks"
         ],
         "properties": {
+          "name": {
+            "type": "string",
+            "description": "Evaluation job name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Evaluation job description"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Evaluation job tags"
+          },
           "model": {
             "$ref": "#/components/schemas/ModelRef",
             "description": "Model to evaluate"

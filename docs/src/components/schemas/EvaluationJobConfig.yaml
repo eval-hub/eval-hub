@@ -4,6 +4,17 @@ required:
   - model
   - benchmarks
 properties:
+  name:
+    type: string
+    description: Evaluation job name
+  description:
+    type: string
+    description: Evaluation job description
+  tags:
+    type: array
+    items: 
+      type: string
+    description: Evaluation job tags
   model:
     $ref: ./ModelRef.yaml
     description: Model to evaluate
