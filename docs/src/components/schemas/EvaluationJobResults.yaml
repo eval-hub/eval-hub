@@ -9,3 +9,6 @@ properties:
   mlflow_experiment_url:
     type: string
     description: URL to MLFlow experiment
+  test:
+    $ref: ./EvaluationTest.yaml
+    description: Test result

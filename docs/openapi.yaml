@@ -565,6 +565,21 @@ components:
               items:
                 $ref: '#/components/schemas/BenchmarkStatus'
               description: Per-benchmark status
+    BenchmarkTest:
+      type: object
+      description: The test result of a single benchmark run
+      properties:
+        primary_score:
+          type: number
+          format: float
+          description: Primary score value
+        threshold:
+          type: number
+          format: float
+          description: Threshold value
+        pass:
+          type: boolean
+          description: Whether the benchmark passed
     BenchmarkResult:
       type: object
       description: Result of a single benchmark run
@@ -592,6 +607,24 @@ components:
         logs_path:
           type: string
           description: Path to logs
+        test:
+          $ref: '#/components/schemas/BenchmarkTest'
+          description: Test result
+    EvaluationTest:
+      type: object
+      description: The test result for an evaluation
+      properties:
+        score:
+          type: number
+          format: float
+          description: Evaluation score value
+        threshold:
+          type: number
+          format: float
+          description: Threshold value
+        pass:
+          type: boolean
+          description: Whether the entire evaluation passed
     EvaluationJobResults:
       type: object
       description: Results section for an evaluation job
@@ -604,6 +637,16 @@ components:
         mlflow_experiment_url:
           type: string
           description: URL to MLFlow experiment
+        test:
+          $ref: '#/components/schemas/EvaluationTest'
+          description: Test result
+    ModelAuth:
+      type: object
+      description: The model authentication configuration
+      properties:
+        secret_ref:
+          type: string
+          description: The reference to the secret containing the model authentication credentials
     ModelRef:
       type: object
       description: Model specification for evaluation requests
@@ -617,6 +660,13 @@ components:
         name:
           type: string
           description: Model name
+        parameters:
+          type: object
+          additionalProperties: true
+          description: Model specific parameters
+        auth:
+          $ref: '#/components/schemas/ModelAuth'
+          description: The model authentication configuration
     PassCriteria:
       type: object
       description: Pass/fail threshold criteria
@@ -671,7 +721,7 @@ components:
             parameters:
               type: object
               additionalProperties: true
-              description: Benchmark-specific parameters
+              description: Benchmark specific parameters
     ExperimentTag:
       type: object
       description: Tag on an experiment (e.g. MLFlow)

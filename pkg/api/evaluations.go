@@ -52,8 +52,14 @@ func GetOverallState(s string) (OverallState, error) {
 
 // ModelRef represents model specification for evaluation requests
 type ModelRef struct {
-	URL  string `json:"url" validate:"required"`
-	Name string `json:"name" validate:"required"`
+	URL        string         `json:"url" validate:"required"`
+	Name       string         `json:"name" validate:"required"`
+	Auth       *ModelAuth     `json:"auth,omitempty"`
+	Parameters map[string]any `json:"parameters,omitempty"`
+}
+
+type ModelAuth struct {
+	SecretRef string `json:"secret_ref"`
 }
 
 // MessageInfo represents a message from a downstream service
