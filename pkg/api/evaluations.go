@@ -204,8 +204,7 @@ type EvaluationJobConfig struct {
 
 type EvaluationResource struct {
 	Resource
-	MLFlowExperimentID string       `json:"mlflow_experiment_id,omitempty"`
-	Message            *MessageInfo `json:"message,omitempty"`
+	MLFlowExperimentID string `json:"mlflow_experiment_id,omitempty"`
 }
 
 type EvaluationJobStatus struct {
