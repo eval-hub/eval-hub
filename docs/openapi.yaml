@@ -640,6 +640,13 @@ components:
         test:
           $ref: '#/components/schemas/EvaluationTest'
           description: Test result
+    ModelAuth:
+      type: object
+      description: The model authentication configuration
+      properties:
+        secret_ref:
+          type: string
+          description: The reference to the secret containing the model authentication credentials
     ModelRef:
       type: object
       description: Model specification for evaluation requests
@@ -653,6 +660,9 @@ components:
         name:
           type: string
           description: Model name
+        auth:
+          $ref: '#/components/schemas/ModelAuth'
+          description: The model authentication configuration
     PassCriteria:
       type: object
       description: Pass/fail threshold criteria
