@@ -2,8 +2,11 @@ package sql
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
+	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -133,28 +136,25 @@ func createDeleteEntityStatement(driver, tableName string) (string, error) {
 }
 
 // createCountEntitiesStatement returns a driver-specific COUNT statement
-// to count total entities in the table, optionally filtered by status
-func createCountEntitiesStatement(driver, tableName string, statusFilter string) (string, []any, error) {
+// to count total entities in the table, optionally filtered by the given parameters
+func createCountEntitiesStatement(driver, tableName string, filter map[string]any) (string, []any, error) {
 	quotedTable := quoteIdentifier(driver, tableName)
+
+	filterStatement, err := createFilterStatement(driver, filter, "", 0, 0)
+	if err != nil {
+		return "", nil, err
+	}
 
 	var query string
 	var args []any
 
 	switch driver {
 	case POSTGRES_DRIVER:
-		if statusFilter != "" {
-			query = fmt.Sprintf(`SELECT COUNT(*) FROM %s WHERE status = $1;`, quotedTable)
-			args = []any{statusFilter}
-		} else {
-			query = fmt.Sprintf(`SELECT COUNT(*) FROM %s;`, quotedTable)
-		}
+		query = fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, quotedTable, filterStatement)
+		args = slices.Collect(maps.Values(filter))
 	case SQLITE_DRIVER:
-		if statusFilter != "" {
-			query = fmt.Sprintf(`SELECT COUNT(*) FROM %s WHERE status = ?;`, quotedTable)
-			args = []any{statusFilter}
-		} else {
-			query = fmt.Sprintf(`SELECT COUNT(*) FROM %s;`, quotedTable)
-		}
+		query = fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, quotedTable, filterStatement)
+		args = slices.Collect(maps.Values(filter))
 	default:
 		return "", nil, getUnsupportedDriverError(driver)
 	}
@@ -162,37 +162,102 @@ func createCountEntitiesStatement(driver, tableName string, statusFilter string)
 	return query, args, nil
 }
 
+func getParam(driver string) string {
+	switch driver {
+	case POSTGRES_DRIVER:
+		return "$"
+	case SQLITE_DRIVER:
+		return "?"
+	default:
+		return "?"
+	}
+}
+
+func getParamValue(param string, index int) string {
+	if param == "$" {
+		return fmt.Sprintf("$%d", index)
+	} else {
+		return param
+	}
+}
+
+func getParams(params abstractions.QueryFilter) map[string]any {
+	filter := maps.Clone(params.Params)
+	maps.DeleteFunc(filter, func(k string, v any) bool {
+		return v == "" // delete empty values
+	})
+	return filter
+}
+
+func createFilterStatement(driver string, filter map[string]any, orderBy string, limit int, offset int) (string, error) {
+	param := getParam(driver)
+
+	var sb strings.Builder
+
+	index := 0
+
+	if len(filter) > 0 {
+		sb.WriteString(" WHERE ")
+		for key := range maps.Keys(filter) {
+			if index > 0 {
+				sb.WriteString(" AND ")
+			}
+			sb.WriteString(fmt.Sprintf("%s = %s", key, getParamValue(param, index)))
+			index++
+		}
+	}
+
+	// ORDER BY id DESC LIMIT $2 OFFSET $3
+	if orderBy != "" {
+		// note that we use the value here and not ?
+		sb.WriteString(fmt.Sprintf(" ORDER BY %s", orderBy))
+	}
+	if limit > 0 {
+		sb.WriteString(fmt.Sprintf(" LIMIT %s", getParamValue(param, index)))
+		index++
+	}
+	if offset > 0 {
+		sb.WriteString(fmt.Sprintf(" OFFSET %s", getParamValue(param, index)))
+		index++
+	}
+
+	return sb.String(), nil
+}
+
 // createListEntitiesStatement returns a driver-specific SELECT statement
 // to list entities with pagination (LIMIT and OFFSET), optionally filtered by status
-func createListEntitiesStatement(driver, tableName string, limit, offset int, statusFilter string) (string, []any, error) {
+func createListEntitiesStatement(driver, tableName string, limit, offset int, filter map[string]any) (string, []any, error) {
 	quotedTable := quoteIdentifier(driver, tableName)
 
-	var query string
-	var args []any
+	filterStatement, err := createFilterStatement(driver, filter, "id DESC", limit, offset)
+	if err != nil {
+		return "", nil, err
+	}
 
-	switch driver + tableName {
-	case POSTGRES_DRIVER + TABLE_EVALUATIONS:
-		if statusFilter != "" {
-			query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s WHERE status = $1 ORDER BY id DESC LIMIT $2 OFFSET $3;`, quotedTable)
-			args = []any{statusFilter, limit, offset}
-		} else {
-			query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s ORDER BY id DESC LIMIT $1 OFFSET $2;`, quotedTable)
-			args = []any{limit, offset}
+	var query string
+	var args = slices.Collect(maps.Values(filter))
+	if limit > 0 {
+		args = append(args, limit)
+	}
+	if offset > 0 {
+		args = append(args, offset)
+	}
+
+	switch driver {
+	case POSTGRES_DRIVER:
+		switch tableName {
+		case TABLE_EVALUATIONS:
+			query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s %s;`, quotedTable, filterStatement)
+		default:
+			query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s %s;`, quotedTable, filterStatement)
 		}
-	case SQLITE_DRIVER + TABLE_EVALUATIONS:
-		if statusFilter != "" {
-			query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s WHERE status = ? ORDER BY id DESC LIMIT ? OFFSET ?;`, quotedTable)
-			args = []any{statusFilter, limit, offset}
-		} else {
-			query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s ORDER BY id DESC LIMIT ? OFFSET ?;`, quotedTable)
-			args = []any{limit, offset}
+	case SQLITE_DRIVER:
+		switch tableName {
+		case TABLE_EVALUATIONS:
+			query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s %s;`, quotedTable, filterStatement)
+		default:
+			query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s %s;`, quotedTable, filterStatement)
 		}
-	case POSTGRES_DRIVER + TABLE_COLLECTIONS:
-		query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s ORDER BY id DESC LIMIT $1 OFFSET $2;`, quotedTable)
-		args = []any{limit, offset}
-	case SQLITE_DRIVER + TABLE_COLLECTIONS:
-		query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s ORDER BY id DESC LIMIT ? OFFSET ?;`, quotedTable)
-		args = []any{limit, offset}
 	default:
 		return "", nil, getUnsupportedDriverError(driver)
 	}

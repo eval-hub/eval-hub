@@ -106,7 +106,7 @@ func (s *SQLStorage) constructCollectionResource(dbID string, createdAt time.Tim
 
 func (s *SQLStorage) GetCollections(limit int, offset int) (*abstractions.QueryResults[api.CollectionResource], error) {
 	// Get total count (there are no filters for collections)
-	countQuery, _, err := createCountEntitiesStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS, "")
+	countQuery, _, err := createCountEntitiesStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func (s *SQLStorage) GetCollections(limit int, offset int) (*abstractions.QueryR
 	}
 
 	// Build the list query with pagination and status filter
-	listQuery, listArgs, err := createListEntitiesStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS, limit, offset, "")
+	listQuery, listArgs, err := createListEntitiesStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS, limit, offset, nil)
 	if err != nil {
 		return nil, err
 	}

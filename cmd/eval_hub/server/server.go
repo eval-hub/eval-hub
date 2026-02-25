@@ -117,7 +117,7 @@ func (s *Server) GetPort() int {
 // Returns:
 //   - *slog.Logger: A new logger instance with request-specific fields attached
 func (s *Server) loggerWithRequest(r *http.Request) (string, *slog.Logger) {
-	requestID := r.Header.Get("X-Global-Transaction-Id")
+	requestID := r.Header.Get(TRANSACTION_ID_HEADER)
 	if requestID == "" {
 		requestID = uuid.New().String() // generate a UUID if not present
 	}

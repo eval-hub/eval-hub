@@ -65,6 +65,8 @@ type scenarioConfig struct {
 	response     *http.Response
 	body         []byte
 
+	reqHeaders map[string]string
+
 	lastURL string
 	lastId  string
 
@@ -276,6 +278,28 @@ func (tc *scenarioConfig) checkHealthEndpoint() error {
 	}
 
 	return nil
+}
+
+func (tc *scenarioConfig) iSetHeaderTo(paramName, paramValue string) error {
+	value, err := tc.getId(paramValue)
+	if err != nil {
+		return err
+	}
+	tc.reqHeaders[paramName] = value
+	return nil
+}
+
+func (tc *scenarioConfig) iUnsetHeader(paramName string) error {
+	delete(tc.reqHeaders, paramName)
+	return nil
+}
+
+func (tc *scenarioConfig) iSetTransactionIdTo(paramValue string) error {
+	return tc.iSetHeaderTo(server.TRANSACTION_ID_HEADER, paramValue)
+}
+
+func (tc *scenarioConfig) iUnsetTransactionId() error {
+	return tc.iUnsetHeader(server.TRANSACTION_ID_HEADER)
 }
 
 func (tc *scenarioConfig) iSendARequestTo(method, path string) error {
@@ -518,6 +542,10 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 	}
 	if authToken := os.Getenv("AUTH_TOKEN"); authToken != "" {
 		req.Header.Set("Authorization", "Bearer "+authToken)
+	}
+
+	for k, v := range tc.reqHeaders {
+		req.Header.Set(k, v)
 	}
 
 	tc.response, err = tc.apiFeature.client.Do(req)
@@ -880,6 +908,7 @@ func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, 
 
 func createScenarioConfig(apiConfig *apiFeature) *scenarioConfig {
 	conf := new(scenarioConfig)
+	conf.reqHeaders = make(map[string]string)
 	conf.assets = make(map[string][]string)
 	conf.values = make(map[string]string)
 	conf.apiFeature = apiConfig
@@ -980,6 +1009,10 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.After(tc.assetCleanup)
 
 	ctx.Step(`^the service is running$`, tc.theServiceIsRunning)
+	ctx.Step(`^I set the header "([^"]*)" to "([^"]*)"$`, tc.iSetHeaderTo)
+	ctx.Step(`^I unset the header "([^"]*)"$`, tc.iUnsetHeader)
+	ctx.Step(`^I set transaction-id to "([^"]*)"$`, tc.iSetTransactionIdTo)
+	ctx.Step(`^I unset transaction-id$`, tc.iUnsetTransactionId)
 	ctx.Step(`^I send a (GET|DELETE|POST|PUT) request to "([^"]*)"$`, tc.iSendARequestTo)
 	ctx.Step(`^I send a (POST|PUT|PATCH) request to "([^"]*)" with body "([^"]*)"$`, tc.iSendARequestToWithBody)
 	ctx.Step(`^the response code should be (\d+)$`, tc.theResponseStatusShouldBe)
