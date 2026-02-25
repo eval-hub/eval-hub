@@ -29,6 +29,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/runtimes"
 	"github.com/eval-hub/eval-hub/internal/storage"
 	"github.com/eval-hub/eval-hub/internal/validation"
+	pkgapi "github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/xeipuuv/gojsonschema"
 
 	"github.com/cucumber/godog"
@@ -98,7 +99,7 @@ func logDebug(format string, a ...any) {
 }
 
 func logError(err error) error {
-	getLogger().Printf("Error:%s\n%s\n", err.Error(), string(debug.Stack()))
+	getLogger().Printf("Error: %v\n%s\n", err, string(debug.Stack()))
 	return err
 }
 
@@ -182,8 +183,21 @@ func (a *apiFeature) startLocalServer(port int) error {
 	}
 
 	logger.Info("Providers loaded.")
-
 	serviceConfig.Service.LocalMode = true // set local mode for testing
+	// Override local runtime commands for testing so subprocesses
+	// Exit cleanly instead of failing with "command not found".
+	for key := range providerConfigs {
+		providerCfg := providerConfigs[key]
+		if providerCfg.Runtime == nil {
+			return logError(fmt.Errorf("provider %q has no runtime configuration", providerCfg.Resource.ID))
+		}
+		if providerCfg.Runtime.Local == nil {
+			providerCfg.Runtime.Local = &pkgapi.LocalRuntime{}
+		}
+		providerCfg.Runtime.Local.Command = "true"
+		providerConfigs[key] = providerCfg
+	}
+
 	runtime, err := runtimes.NewRuntime(logger, serviceConfig, providerConfigs)
 	if err != nil {
 		return logError(fmt.Errorf("failed to create runtime: %w", err))
@@ -698,6 +712,12 @@ func (tc *scenarioConfig) theResponseShouldHaveSchemaAs(body *godog.DocString) e
 }
 
 func (tc *scenarioConfig) getJsonPath(jsonPath string) (string, error) {
+	// first check the jsonpath is valid
+	_, err := jsonpath.New(jsonPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to validate JSON path %s: %w", jsonPath, err) // logging of the error is done by the caller
+	}
+
 	raw, err := tc.getJsonPathValue(jsonPath)
 	if err != nil {
 		return "", err
@@ -709,7 +729,7 @@ func (tc *scenarioConfig) getJsonPathValue(jsonPath string) (interface{}, error)
 	var respMap map[string]interface{}
 	err := json.Unmarshal(tc.body, &respMap)
 	if err != nil {
-		return nil, logError(err)
+		return "", err // logging of the error is done by the caller
 	}
 	path := jsonPath
 	if !strings.HasPrefix(path, "$") {
@@ -717,7 +737,7 @@ func (tc *scenarioConfig) getJsonPathValue(jsonPath string) (interface{}, error)
 	}
 	foundValue, err := jsonpath.Get(path, respMap)
 	if err != nil {
-		return nil, logError(fmt.Errorf("failed to get JSON path %s in %s: %w", path, string(tc.body), err))
+		return "", fmt.Errorf("failed to get JSON path %s in %s: %w", jsonPath, string(tc.body), err) // logging of the error is done by the caller
 	}
 	return foundValue, nil
 }

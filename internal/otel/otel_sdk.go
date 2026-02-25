@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/config"
@@ -39,6 +40,7 @@ const (
 // If it does not return an error, make sure to call shutdown for proper cleanup.
 func SetupOTEL(ctx context.Context, config *config.OTELConfig, logger *slog.Logger) (func(context.Context) error, error) {
 	if config == nil || !config.Enabled {
+		logger.Info("OTEL is not enabled, skipping setup")
 		return nil, nil
 	}
 
@@ -75,6 +77,7 @@ func SetupOTEL(ctx context.Context, config *config.OTELConfig, logger *slog.Logg
 		}
 		shutdownFuncs = append(shutdownFuncs, tracerProvider.Shutdown)
 		otel.SetTracerProvider(tracerProvider)
+		logger.Info("OTEL tracer provider created", "exporter_type", config.ExporterType, "exporter_endpoint", safeURL(config.ExporterEndpoint), "exporter_insecure", config.ExporterInsecure)
 	}
 
 	// Set up meter provider.
@@ -86,6 +89,7 @@ func SetupOTEL(ctx context.Context, config *config.OTELConfig, logger *slog.Logg
 		}
 		shutdownFuncs = append(shutdownFuncs, meterProvider.Shutdown)
 		otel.SetMeterProvider(meterProvider)
+		logger.Info("OTEL meter provider created")
 	}
 
 	// Set up logger provider.
@@ -97,6 +101,13 @@ func SetupOTEL(ctx context.Context, config *config.OTELConfig, logger *slog.Logg
 		}
 		shutdownFuncs = append(shutdownFuncs, loggerProvider.Shutdown)
 		global.SetLoggerProvider(loggerProvider)
+		logger.Info("OTEL logger provider created")
+	}
+
+	if err != nil {
+		logger.Error("Failed to setup OTEL", "error", err.Error())
+	} else {
+		logger.Info("OTEL setup complete")
 	}
 
 	return shutdown, err
@@ -118,6 +129,10 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 	tracerBatchInterval := config.TracerBatchInterval
 	if tracerBatchInterval == 0 {
 		tracerBatchInterval = 5 * time.Second
+	}
+	samplingRatio := float64(1.0)
+	if config.SamplingRatio != nil {
+		samplingRatio = *config.SamplingRatio
 	}
 
 	switch config.ExporterType {
@@ -147,7 +162,7 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 		}
 		tracerProvider := trace.NewTracerProvider(
 			trace.WithBatcher(traceExporter, trace.WithBatchTimeout(tracerBatchInterval)),
-			trace.WithSampler(newSampler(config.SamplingRatio)),
+			trace.WithSampler(newSampler(samplingRatio)),
 			trace.WithResource(res),
 		)
 		return tracerProvider, nil
@@ -176,7 +191,7 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 		}
 		tracerProvider := trace.NewTracerProvider(
 			trace.WithBatcher(traceExporter, trace.WithBatchTimeout(tracerBatchInterval)),
-			trace.WithSampler(newSampler(config.SamplingRatio)),
+			trace.WithSampler(newSampler(samplingRatio)),
 			trace.WithResource(res),
 		)
 		return tracerProvider, nil
@@ -260,4 +275,12 @@ func newSampler(ratio float64) trace.Sampler {
 
 func NewRoundTripper(base http.RoundTripper) http.RoundTripper {
 	return otelhttp.NewTransport(base)
+}
+
+func safeURL(endpoint string) string {
+	uri, err := url.Parse(endpoint)
+	if err != nil {
+		return endpoint
+	}
+	return uri.Redacted() // this will return the URL with the password redacted
 }

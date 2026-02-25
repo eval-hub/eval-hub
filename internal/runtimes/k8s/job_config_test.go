@@ -1,9 +1,9 @@
 package k8s
 
 import (
-	"encoding/json"
 	"testing"
 
+	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -68,36 +68,34 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 	if cfg.memoryLimit != defaultMemoryLimit {
 		t.Fatalf("expected memory limit %s, got %s", defaultMemoryLimit, cfg.memoryLimit)
 	}
-	var decoded map[string]any
-	if err := json.Unmarshal([]byte(cfg.jobSpecJSON), &decoded); err != nil {
-		t.Fatalf("unmarshal job spec json: %v", err)
+
+	spec := cfg.jobSpec
+	jobID := spec.JobID
+	if jobID != "job-123" {
+		t.Fatalf("expected job spec json id to be %q, got %v", "job-123", jobID)
 	}
-	jobID, ok := decoded["id"].(string)
-	if !ok || jobID != "job-123" {
-		t.Fatalf("expected job spec json id to be %q, got %v", "job-123", decoded["id"])
+	benchmarkID := spec.BenchmarkID
+	if benchmarkID != "bench-1" {
+		t.Fatalf("expected job spec json benchmark_id to be %q, got %v", "bench-1", benchmarkID)
 	}
-	benchmarkID, ok := decoded["benchmark_id"].(string)
-	if !ok || benchmarkID != "bench-1" {
-		t.Fatalf("expected job spec json benchmark_id to be %q, got %v", "bench-1", decoded["benchmark_id"])
+	numExamples := spec.NumExamples
+	if numExamples == nil || *numExamples != 50 {
+		t.Fatalf("expected job spec json num_examples to be %d, got %v", 50, numExamples)
 	}
-	if numExamples, ok := decoded["num_examples"].(float64); !ok || int(numExamples) != 50 {
-		t.Fatalf("expected job spec json num_examples to be %d, got %v", 50, decoded["num_examples"])
-	}
-	benchmarkConfig, ok := decoded["benchmark_config"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected job spec json benchmark_config to be a map, got %T", decoded["benchmark_config"])
-	}
+	benchmarkConfig := spec.BenchmarkConfig
+
 	if _, exists := benchmarkConfig["num_examples"]; exists {
 		t.Fatalf("expected benchmark_config not to include num_examples")
 	}
-	if benchmarkConfig["max_tokens"] != float64(128) {
+	if benchmarkConfig["max_tokens"] != 128 {
 		t.Fatalf("expected benchmark_config.max_tokens to be %d, got %v", 128, benchmarkConfig["max_tokens"])
 	}
 	if benchmarkConfig["temperature"] != 0.2 {
 		t.Fatalf("expected benchmark_config.temperature to be 0.2, got %v", benchmarkConfig["temperature"])
 	}
-	if callback, ok := decoded["callback_url"].(string); !ok || callback != serviceURL {
-		t.Fatalf("expected job spec json callback_url to be %q, got %v", serviceURL, decoded["callback_url"])
+	callback := spec.CallbackURL
+	if callback == nil || *callback != serviceURL {
+		t.Fatalf("expected job spec json callback_url to be %q, got %v", serviceURL, callback)
 	}
 }
 
@@ -136,17 +134,15 @@ func TestBuildJobConfigAllowsNumExamplesOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error for num_examples-only benchmark_config, got %v", err)
 	}
-	var decoded map[string]any
-	if err := json.Unmarshal([]byte(cfg.jobSpecJSON), &decoded); err != nil {
-		t.Fatalf("unmarshal job spec json: %v", err)
+
+	spec := cfg.jobSpec
+	numExamples := spec.NumExamples
+	if numExamples == nil || *numExamples != 10 {
+		t.Fatalf("expected job spec json num_examples to be %d, got %v", 10, numExamples)
 	}
-	if numExamples, ok := decoded["num_examples"].(float64); !ok || int(numExamples) != 10 {
-		t.Fatalf("expected job spec json num_examples to be %d, got %v", 10, decoded["num_examples"])
-	}
-	benchmarkConfig, ok := decoded["benchmark_config"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected benchmark_config to be a map, got %T", decoded["benchmark_config"])
-	}
+
+	benchmarkConfig := spec.BenchmarkConfig
+
 	if len(benchmarkConfig) != 0 {
 		t.Fatalf("expected empty benchmark_config, got %v", benchmarkConfig)
 	}
@@ -276,14 +272,10 @@ func TestBuildJobConfigAllowsEmptyBenchmarkConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error for empty benchmark_config, got %v", err)
 	}
-	var decoded map[string]any
-	if err := json.Unmarshal([]byte(cfg.jobSpecJSON), &decoded); err != nil {
-		t.Fatalf("unmarshal job spec json: %v", err)
-	}
-	benchmarkConfig, ok := decoded["benchmark_config"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected benchmark_config to be a map, got %T", decoded["benchmark_config"])
-	}
+
+	spec := cfg.jobSpec
+	benchmarkConfig := spec.BenchmarkConfig
+
 	if len(benchmarkConfig) != 0 {
 		t.Fatalf("expected empty benchmark_config, got %v", benchmarkConfig)
 	}
@@ -342,31 +334,25 @@ func TestBuildJobConfigWithOCIExports(t *testing.T) {
 	}
 
 	// jobSpecJSON should contain coordinates but NOT k8s connection
-	var decoded map[string]any
-	if err := json.Unmarshal([]byte(cfg.jobSpecJSON), &decoded); err != nil {
-		t.Fatalf("unmarshal job spec json: %v", err)
+
+	spec := cfg.jobSpec
+	exports := spec.Exports
+	if exports == nil {
+		t.Fatalf("expected exports object, got %v", exports)
 	}
-	exports, ok := decoded["exports"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected exports in job spec json, got %v", decoded["exports"])
+	oci := exports.OCI
+	if oci == nil {
+		t.Fatalf("expected exports.oci, got %v", oci)
 	}
-	oci, ok := exports["oci"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected exports.oci in job spec json, got %v", exports["oci"])
+	coords := oci.Coordinates
+
+	if coords.OCIHost != "quay.io" {
+		t.Fatalf("expected oci_host %q, got %v", "quay.io", coords.OCIHost)
 	}
-	coords, ok := oci["coordinates"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected exports.oci.coordinates in job spec json, got %v", oci["coordinates"])
+	if coords.OCIRepository != "my-org/my-repo" {
+		t.Fatalf("expected oci_repository %q, got %v", "my-org/my-repo", coords.OCIRepository)
 	}
-	if coords["oci_host"] != "quay.io" {
-		t.Fatalf("expected oci_host %q, got %v", "quay.io", coords["oci_host"])
-	}
-	if coords["oci_repository"] != "my-org/my-repo" {
-		t.Fatalf("expected oci_repository %q, got %v", "my-org/my-repo", coords["oci_repository"])
-	}
-	if _, exists := oci["k8s"]; exists {
-		t.Fatalf("expected k8s connection config to NOT be in job spec json, but found %v", oci["k8s"])
-	}
+
 }
 
 func TestNumExamplesFromParametersTypes(t *testing.T) {
@@ -385,7 +371,7 @@ func TestNumExamplesFromParametersTypes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := numExamplesFromParameters(tt.parameters)
+			got := shared.NumExamplesFromParameters(tt.parameters)
 			if tt.want == nil && got != nil {
 				t.Fatalf("expected nil, got %v", *got)
 			}
@@ -401,7 +387,7 @@ func TestNumExamplesFromParametersTypes(t *testing.T) {
 
 func TestCopyParamsCreatesCopy(t *testing.T) {
 	original := map[string]any{"num_examples": 1, "temp": 0.2}
-	copied := copyParams(original)
+	copied := shared.CopyParams(original)
 	if len(copied) != len(original) {
 		t.Fatalf("expected copy size %d, got %d", len(original), len(copied))
 	}

@@ -15,11 +15,13 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^docs/.*\.(html|json)$
       - id: end-of-file-fixer
+        exclude: ^docs/.*\.(html|json)$
       - id: check-yaml
         args: [--allow-multiple-documents]
       - id: check-json
-        exclude: ^examples/api_examples\.ipynb$
+        exclude: ^(examples/api_examples\.ipynb|\.vscode/.*)$
       - id: check-toml
       - id: check-merge-conflict
       - id: check-added-large-files
@@ -33,19 +35,20 @@ repos:
         name: mypy type checking
         #  run with uv
         entry: uv
-        args: [run, mypy, src/]
+        args: [run, mypy, --exclude, "python-server/(build|setup\\.py)", python-server/]
         language: system
         types: [python]
         pass_filenames: false
+        files: ^python-server/
 
       - id: pytest-unit
         name: unit tests
-        #  run with uv
-        entry: uv
-        args: [run, pytest, tests/, -m, "unit", --tb=short, -q]
+        entry: bash
+        args: [-c, 'if [ -d python-server/tests ]; then uv run pytest python-server/tests/ -m "unit" --tb=short -q; else echo "Skipping: python-server/tests/ not found"; fi']
         language: system
         types: [python]
         pass_filenames: false
+        files: ^python-server/
 
       - id: go-test
         name: go unit and FVT tests

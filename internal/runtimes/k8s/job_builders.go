@@ -2,6 +2,7 @@ package k8s
 
 // Contains the builder functions that construct Kubernetes objects
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -104,10 +105,15 @@ func buildK8sName(jobID, resourceGUID, suffix string) string {
 	return name
 }
 
-func buildConfigMap(cfg *jobConfig) *corev1.ConfigMap {
+func buildConfigMap(cfg *jobConfig) (*corev1.ConfigMap, error) {
 	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	annotations := jobAnnotations(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	name := configMapName(cfg.jobID, cfg.resourceGUID)
+
+	specJSON, err := json.MarshalIndent(cfg.jobSpec, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal job spec: %w", err)
+	}
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
@@ -116,9 +122,9 @@ func buildConfigMap(cfg *jobConfig) *corev1.ConfigMap {
 			Annotations: annotations,
 		},
 		Data: map[string]string{
-			jobSpecFileName: cfg.jobSpecJSON,
+			jobSpecFileName: string(specJSON),
 		},
-	}
+	}, nil
 }
 
 func buildJob(cfg *jobConfig) (*batchv1.Job, error) {

@@ -207,8 +207,8 @@ paths:
     get:
       tags:
         - Evaluations
-      summary: Get Evaluation Status
-      description: Get the status of an evaluation request.
+      summary: Get Evaluation
+      description: Returns the evaluation job resource with the current status and results.
       operationId: get_evaluations_jobs_id
       parameters:
         - name: id
@@ -785,16 +785,6 @@ components:
         owner:
           type: string
           description: Owner of the resource
-    MessageInfo:
-      type: object
-      description: Message from a downstream service
-      properties:
-        message:
-          type: string
-          description: Human-readable message
-        message_code:
-          type: string
-          description: Machine-readable code
     EvaluationResource:
       type: object
       description: Evaluation resource (base fields for an evaluation)
@@ -805,9 +795,6 @@ components:
             mlflow_experiment_id:
               type: string
               description: MLFlow experiment ID
-            message:
-              $ref: '#/components/schemas/MessageInfo'
-              description: Status or error message
     OverallState:
       type: string
       enum:
@@ -818,6 +805,16 @@ components:
         - cancelled
         - partially_failed
       description: Overall evaluation job state
+    MessageInfo:
+      type: object
+      description: Message from a downstream service
+      properties:
+        message:
+          type: string
+          description: Human-readable message
+        message_code:
+          type: string
+          description: Machine-readable code
     EvaluationJobState:
       type: object
       description: Overall evaluation job state and message
@@ -875,6 +872,21 @@ components:
               items:
                 $ref: '#/components/schemas/BenchmarkStatus'
               description: Per-benchmark status
+    BenchmarkTest:
+      type: object
+      description: The test result of a single benchmark run
+      properties:
+        primary_score:
+          type: number
+          format: float
+          description: Primary score value
+        threshold:
+          type: number
+          format: float
+          description: Threshold value
+        pass:
+          type: boolean
+          description: Whether the benchmark passed
     BenchmarkResult:
       type: object
       description: Result of a single benchmark run
@@ -902,6 +914,24 @@ components:
         logs_path:
           type: string
           description: Path to logs
+        test:
+          $ref: '#/components/schemas/BenchmarkTest'
+          description: Test result
+    EvaluationTest:
+      type: object
+      description: The test result for an evaluation
+      properties:
+        score:
+          type: number
+          format: float
+          description: Evaluation score value
+        threshold:
+          type: number
+          format: float
+          description: Threshold value
+        pass:
+          type: boolean
+          description: Whether the entire evaluation passed
     EvaluationJobResults:
       type: object
       description: Results section for an evaluation job
@@ -914,6 +944,16 @@ components:
         mlflow_experiment_url:
           type: string
           description: URL to MLFlow experiment
+        test:
+          $ref: '#/components/schemas/EvaluationTest'
+          description: Test result
+    ModelAuth:
+      type: object
+      description: The model authentication configuration
+      properties:
+        secret_ref:
+          type: string
+          description: The reference to the secret containing the model authentication credentials
     ModelRef:
       type: object
       description: Model specification for evaluation requests
@@ -927,6 +967,13 @@ components:
         name:
           type: string
           description: Model name
+        parameters:
+          type: object
+          additionalProperties: true
+          description: Model specific parameters
+        auth:
+          $ref: '#/components/schemas/ModelAuth'
+          description: The model authentication configuration
     PassCriteria:
       type: object
       description: Pass/fail threshold criteria
@@ -981,7 +1028,7 @@ components:
             parameters:
               type: object
               additionalProperties: true
-              description: Benchmark-specific parameters
+              description: Benchmark specific parameters
     ExperimentTag:
       type: object
       description: Tag on an experiment (e.g. MLFlow)
@@ -1088,6 +1135,17 @@ components:
         - model
         - benchmarks
       properties:
+        name:
+          type: string
+          description: Evaluation job name
+        description:
+          type: string
+          description: Evaluation job description
+        tags:
+          type: array
+          items:
+            type: string
+          description: Evaluation job tags
         model:
           $ref: '#/components/schemas/ModelRef'
           description: Model to evaluate

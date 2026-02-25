@@ -15,7 +15,9 @@ runtime:
       - name: VAR_NAME
         value: VALUE
   local:
-    # reserved for local runtime
+    # command is set to true for test-fvt-server-coverage as it runs in local mode.
+    # In actual custom provider configurations, it will be set to the actual command to run.
+    command: "true"
 
 benchmarks:
   - id: arc_easy

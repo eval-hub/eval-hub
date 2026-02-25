@@ -7,6 +7,3 @@ allOf:
       mlflow_experiment_id:
         type: string
         description: MLFlow experiment ID
-      message:
-        $ref: ./MessageInfo.yaml
-        description: Status or error message
