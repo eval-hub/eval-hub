@@ -21,6 +21,12 @@ const SQLITE_INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (id, tenant_
 // PostgreSQL: use $1, $2 placeholders and RETURNING id clause
 const POSTGRES_INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (id, tenant_id, entity) VALUES ($1, $2, $3) RETURNING id;`
 
+// SQLite: use ? placeholders
+const SQLITE_INSERT_PROVIDER_STATEMENT = `INSERT INTO providers (id, tenant_id, entity) VALUES (?, ?, ?);`
+
+// PostgreSQL: use $1, $2 placeholders and RETURNING id clause
+const POSTGRES_INSERT_PROVIDER_STATEMENT = `INSERT INTO providers (id, tenant_id, entity) VALUES ($1, $2, $3) RETURNING id;`
+
 func getUnsupportedDriverError(driver string) error {
 	return fmt.Errorf("unsupported driver: %s", driver)
 }
@@ -52,6 +58,10 @@ func createAddEntityStatement(driver, tableName string) (string, error) {
 	case SQLITE_DRIVER + TABLE_COLLECTIONS:
 		// SQLite: use ? placeholders
 		return SQLITE_INSERT_COLLECTION_STATEMENT, nil
+	case POSTGRES_DRIVER + TABLE_PROVIDERS:
+		return POSTGRES_INSERT_PROVIDER_STATEMENT, nil
+	case SQLITE_DRIVER + TABLE_PROVIDERS:
+		return SQLITE_INSERT_PROVIDER_STATEMENT, nil
 	default:
 		return "", getUnsupportedDriverError(driver)
 	}
@@ -79,6 +89,10 @@ func createGetEntityStatement(driver, tableName string) (string, error) {
 		return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s WHERE id = $1;`, quotedTable), nil
 	case SQLITE_DRIVER + TABLE_COLLECTIONS:
 		// SQLite: use ? placeholder
+		return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s WHERE id = ?;`, quotedTable), nil
+	case POSTGRES_DRIVER + TABLE_PROVIDERS:
+		return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s WHERE id = $1;`, quotedTable), nil
+	case SQLITE_DRIVER + TABLE_PROVIDERS:
 		return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s WHERE id = ?;`, quotedTable), nil
 	default:
 		return "", getUnsupportedDriverError(driver)

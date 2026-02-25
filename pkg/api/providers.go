@@ -62,6 +62,6 @@ type LocalRuntime struct {
 
 // ProviderResourceList represents response for listing providers
 type ProviderResourceList struct {
-	TotalCount int                `json:"total_count"`
-	Items      []ProviderResource `json:"items,omitempty"`
+	Page
+	Items []ProviderResource `json:"items,omitempty"`
 }
