@@ -1,9 +1,14 @@
 type: object
 description: Evaluation provider (configuration and available benchmarks)
-allOf:
-  - type: object
-    properties:
-      id:
-        type: string
-        description: Provider ID
-  - $ref: ./ProviderConfigInternal.yaml
+properties:
+  name:
+    type: string
+    description: Provider name
+  description:
+    type: string
+    description: Provider description
+  benchmarks:
+    type: array
+    items:
+      $ref: ./BenchmarkResource.yaml
+    description: Benchmarks offered by this provider

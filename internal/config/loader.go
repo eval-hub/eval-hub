@@ -82,7 +82,11 @@ func readConfig(logger *slog.Logger, name string, ext string, dirs ...string) (*
 }
 
 func loadProvider(logger *slog.Logger, file string) (*api.ProviderResource, error) {
-	providerConfig := api.ProviderConfig{}
+	type providerConfigInternal struct {
+		ID                 string `mapstructure:"id" yaml:"id" json:"id"`
+		api.ProviderConfig `mapstructure:",squash"`
+	}
+	providerConfig := providerConfigInternal{}
 	configValues, err := readConfig(logger, file, "yaml", providersLookup...)
 	if err != nil {
 		return nil, err
@@ -97,7 +101,7 @@ func loadProvider(logger *slog.Logger, file string) (*api.ProviderResource, erro
 			ReadOnly: true,
 			Owner:    "system",
 		},
-		ProviderConfigInternal: providerConfig.ProviderConfigInternal,
+		ProviderConfig: providerConfig.ProviderConfig,
 	}, nil
 }
 

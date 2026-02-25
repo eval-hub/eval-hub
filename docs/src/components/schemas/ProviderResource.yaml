@@ -6,4 +6,4 @@ allOf:
       resource:
         $ref: ./Resource.yaml
         description: Resource metadata
-  - $ref: ./ProviderConfigInternal.yaml
+  - $ref: ./ProviderConfig.yaml

@@ -648,7 +648,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ProviderConfigInternal"
+                "$ref": "#/components/schemas/ProviderConfig"
               }
             }
           }
@@ -1874,7 +1874,7 @@
           }
         }
       },
-      "ProviderConfigInternal": {
+      "ProviderConfig": {
         "type": "object",
         "description": "Evaluation provider (configuration and available benchmarks)",
         "properties": {
@@ -1909,7 +1909,7 @@
             }
           },
           {
-            "$ref": "#/components/schemas/ProviderConfigInternal"
+            "$ref": "#/components/schemas/ProviderConfig"
           }
         ]
       },
@@ -1929,24 +1929,6 @@
             "description": "Provider resources"
           }
         }
-      },
-      "ProviderConfig": {
-        "type": "object",
-        "description": "Evaluation provider (configuration and available benchmarks)",
-        "allOf": [
-          {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string",
-                "description": "Provider ID"
-              }
-            }
-          },
-          {
-            "$ref": "#/components/schemas/ProviderConfigInternal"
-          }
-        ]
       },
       "PatchOp": {
         "type": "string",
