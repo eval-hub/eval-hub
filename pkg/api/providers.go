@@ -22,13 +22,12 @@ type BenchmarkResource struct {
 type ProviderConfigInternal struct {
 	Name        string              `mapstructure:"name" yaml:"name" json:"name"`
 	Description string              `mapstructure:"description" yaml:"description" json:"description"`
-	Type        string              `mapstructure:"type" yaml:"type" json:"type"`
 	Benchmarks  []BenchmarkResource `mapstructure:"benchmarks" yaml:"benchmarks" json:"benchmarks"`
 	Runtime     *Runtime            `mapstructure:"runtime" yaml:"runtime" json:"runtime,omitempty"`
 }
 
 type ProviderResource struct {
-	Resource Resource `json:"resource"`
+	Resource Resource `mapstructure:"resource" yaml:"resource" json:"resource" validate:"required"`
 	ProviderConfigInternal
 }
 
@@ -69,6 +68,13 @@ type LocalRuntime struct {
 
 // ProviderResourceList represents response for listing providers
 type ProviderResourceList struct {
-	TotalCount int                `json:"total_count"`
-	Items      []ProviderResource `json:"items,omitempty"`
+	Page
+	Items []ProviderResource `json:"items,omitempty"`
+}
+
+type ProviderRequest struct {
+	ID          string              `mapstructure:"id" yaml:"id" json:"id" validate:"required"`
+	Name        string              `mapstructure:"name" yaml:"name" json:"name" validate:"required"`
+	Description string              `mapstructure:"description" yaml:"description" json:"description,omitempty"`
+	Benchmarks  []BenchmarkResource `mapstructure:"benchmarks" yaml:"benchmarks" json:"benchmarks"`
 }
