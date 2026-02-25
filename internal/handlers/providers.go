@@ -97,12 +97,7 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 					Tenant:    &ctx.Tenant,
 					ReadOnly:  false,
 				},
-				ProviderConfig: api.ProviderConfig{
-					Name:        request.Name,
-					Description: request.Description,
-					Benchmarks:  request.Benchmarks,
-					Runtime:     nil,
-				},
+				ProviderConfig: *request,
 			}
 			err := storage.WithContext(runtimeCtx).CreateUserProvider(provider)
 			if err != nil {
