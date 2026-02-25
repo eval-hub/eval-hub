@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/eval-hub/eval-hub/internal/abstractions"
+	"github.com/eval-hub/eval-hub/internal/common"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/http_wrappers"
@@ -57,8 +57,9 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 	logging.LogRequestStarted(ctx)
 
 	now := time.Now()
+	id := common.GUID()
 
-	request := &api.ProviderRequest{}
+	request := &api.ProviderConfig{}
 
 	err := h.withSpan(
 		ctx,
@@ -72,14 +73,12 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 			if err != nil {
 				return err
 			}
-			if err := h.validateProvider(request, storage); err != nil {
-				w.Error(err, ctx.RequestID)
-				return err
-			}
+			// TODO: do we need any extra validation for the provider config?
 			return nil
 		},
 		"validation",
 		"validate-user-provider",
+		"provider.id", id,
 	)
 	if err != nil {
 		return
@@ -92,7 +91,7 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 		func(runtimeCtx context.Context) error {
 			provider = &api.ProviderResource{
 				Resource: api.Resource{
-					ID:        request.ID,
+					ID:        id,
 					CreatedAt: &now,
 					Owner:     ctx.User,
 					Tenant:    &ctx.Tenant,
@@ -116,7 +115,7 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 		},
 		"storage",
 		"store-user-provider",
-		"provider.id", request.ID,
+		"provider.id", id,
 	)
 }
 
@@ -193,22 +192,4 @@ func (h *Handlers) HandleDeleteProvider(ctx *executioncontext.ExecutionContext, 
 		"delete-user-provider",
 		"provider.id", providerId,
 	)
-}
-
-func (h *Handlers) validateProvider(provider *api.ProviderRequest, storage abstractions.Storage) error {
-	err := h.isUniqueId(provider.ID, storage)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (h *Handlers) isUniqueId(id string, storage abstractions.Storage) error {
-	if _, exists := h.providerConfigs[id]; exists {
-		return serviceerrors.NewServiceError(messages.ProviderIDNotUnique, "ProviderID", "id")
-	}
-	if _, err := storage.GetUserProvider(id); err == nil {
-		return serviceerrors.NewServiceError(messages.ProviderIDNotUnique, "ProviderID", "id")
-	}
-	return nil
 }

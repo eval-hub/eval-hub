@@ -33,3 +33,16 @@ Feature: Providers Endpoint
     Then the response code should be 200
     Then the response should contain the value "lm_evaluation_harness" at path "items[0].resource.id"
     And the response should contain the value "arc_easy" at path "items[0].benchmarks[0].id"
+
+  Scenario: Create a user provider
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider.json"
+    Then the response code should be 201
+    Then the response should contain the value "Test Provider" at path "name"
+    Then the response should contain the value "A test provider" at path "description"
+    When I send a GET request to "/api/v1/evaluations/providers/{id}"
+    Then the response code should be 200
+    Then the response should contain the value "Test Provider" at path "name"
+    Then the response should contain the value "A test provider" at path "description"
+    When I send a DELETE request to "/api/v1/evaluations/providers/{id}"
+    Then the response code should be 204

@@ -65,10 +65,3 @@ type ProviderResourceList struct {
 	Page
 	Items []ProviderResource `json:"items,omitempty"`
 }
-
-type ProviderRequest struct {
-	ID          string              `mapstructure:"id" yaml:"id" json:"id" validate:"required"`
-	Name        string              `mapstructure:"name" yaml:"name" json:"name" validate:"required"`
-	Description string              `mapstructure:"description" yaml:"description" json:"description,omitempty"`
-	Benchmarks  []BenchmarkResource `mapstructure:"benchmarks" yaml:"benchmarks" json:"benchmarks"`
-}

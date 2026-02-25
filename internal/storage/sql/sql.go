@@ -24,6 +24,7 @@ const (
 	// These are the only tables currently supported
 	TABLE_EVALUATIONS = "evaluations"
 	TABLE_COLLECTIONS = "collections"
+	TABLE_PROVIDERS   = "providers"
 )
 
 type SQLStorage struct {
