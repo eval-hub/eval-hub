@@ -940,9 +940,6 @@ components:
         description:
           type: string
           description: Provider description
-        type:
-          type: string
-          description: Provider type
         benchmarks:
           type: array
           items:
@@ -957,12 +954,6 @@ components:
             resource:
               $ref: '#/components/schemas/Resource'
               description: Resource metadata
-            type:
-              type: string
-              enum:
-                - system
-                - owned
-              description: Type of collection. 'system' collections are created by the system and are not editable, 'owned' collections are created by the user and are editable.
         - $ref: '#/components/schemas/ProviderConfigInternal'
     ProviderResourceList:
       type: object

@@ -13,7 +13,6 @@ type CollectionConfig struct {
 // CollectionResource represents collection resource
 type CollectionResource struct {
 	Resource Resource `json:"resource"`
-	Type     string   `json:"type" enum:"system,owned"`
 	CollectionConfig
 }
 

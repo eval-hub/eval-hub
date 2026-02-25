@@ -22,7 +22,6 @@ type BenchmarkResource struct {
 type ProviderConfigInternal struct {
 	Name        string              `mapstructure:"name" yaml:"name" json:"name"`
 	Description string              `mapstructure:"description" yaml:"description" json:"description"`
-	Type        string              `mapstructure:"type" yaml:"type" json:"type"`
 	Benchmarks  []BenchmarkResource `mapstructure:"benchmarks" yaml:"benchmarks" json:"benchmarks"`
 	Runtime     *Runtime            `mapstructure:"runtime" yaml:"runtime" json:"runtime,omitempty"`
 }

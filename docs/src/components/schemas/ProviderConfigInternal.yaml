@@ -7,9 +7,6 @@ properties:
   description:
     type: string
     description: Provider description
-  type:
-    type: string
-    description: Provider type
   benchmarks:
     type: array
     items:
