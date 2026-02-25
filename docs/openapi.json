@@ -151,7 +151,7 @@
             "description": "Offset for pagination"
           },
           {
-            "name": "status_filter",
+            "name": "status",
             "in": "query",
             "required": false,
             "schema": {
@@ -160,6 +160,26 @@
               "title": "Status Filter"
             },
             "description": "Filter by status"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            },
+            "description": "Name to search for"
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Tags"
+            },
+            "description": "Tags to search for"
           }
         ],
         "responses": {
@@ -293,15 +313,31 @@
         "operationId": "list_providers",
         "parameters": [
           {
-            "name": "id",
+            "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "description": "Filter by provider ID",
-              "title": "Provider Id"
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Maximum number of evaluations to return",
+              "default": 50,
+              "title": "Limit"
             },
-            "description": "Filter by provider ID"
+            "description": "Maximum number of evaluations to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Offset for pagination",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Offset for pagination"
           },
           {
             "name": "benchmarks",
@@ -314,6 +350,26 @@
               "title": "Benchmarks"
             },
             "description": "Include or exclude benchmarks supported by this provider in the response"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            },
+            "description": "Name to search for"
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Tags"
+            },
+            "description": "Tags to search for"
           }
         ],
         "responses": {

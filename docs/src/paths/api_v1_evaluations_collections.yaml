@@ -5,6 +5,42 @@ get:
   summary: List Collections
   description: List all benchmark collections.
   operationId: get_collections
+  parameters:
+    - name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        maximum: 100
+        minimum: 1
+        description: Maximum number of evaluations to return
+        default: 50
+        title: Limit
+      description: Maximum number of evaluations to return
+    - name: offset
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        description: Offset for pagination
+        default: 0
+        title: Offset
+      description: Offset for pagination
+    - name: name
+      in: query
+      required: false
+      schema:
+        type: string
+        title: Name
+      description: Name to search for
+    - name: tags
+      in: query
+      required: false
+      schema:
+        type: string
+        title: Tags
+      description: Tags to search for
   responses:
     '200':
       description: Successful Response

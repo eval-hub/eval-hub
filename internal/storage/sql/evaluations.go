@@ -161,7 +161,7 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 
 func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, filter abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
 
-	statusFilter, ok := filter.Params["status_filter"]
+	statusFilter, ok := filter.Params["status"]
 	if !ok {
 		statusFilter = ""
 	}

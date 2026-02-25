@@ -62,7 +62,7 @@ type Resource struct {
 
 // Page represents generic pagination schema
 type Page struct {
-	First      *HRef `json:"first"`
+	First      *HRef `json:"first,omitempty"`
 	Next       *HRef `json:"next,omitempty"`
 	Limit      int   `json:"limit"`
 	TotalCount int   `json:"total_count"`

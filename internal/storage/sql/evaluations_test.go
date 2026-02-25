@@ -211,7 +211,7 @@ func TestEvaluationsStorage(t *testing.T) {
 	t.Run("GetEvaluationJobs returns the evaluation jobs", func(t *testing.T) {
 		resp, err := store.GetEvaluationJobs(10, 0, abstractions.QueryFilter{
 			Params: map[string]string{
-				"status_filter": "",
+				"status": "",
 			},
 		})
 		if err != nil {

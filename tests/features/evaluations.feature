@@ -217,7 +217,7 @@ Feature: Evaluations Endpoint
     Then the response code should be 202
     When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_running.json"
     Then the response code should be 204
-    When I send a GET request to "/api/v1/evaluations/jobs?status_filter=running&limit=1"
+    When I send a GET request to "/api/v1/evaluations/jobs?status=running&limit=1"
     Then the response code should be 200
     And the response should contain the value "running" at path "$.items[0].status.state"
     And the response should have schema as:

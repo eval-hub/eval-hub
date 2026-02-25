@@ -17,14 +17,11 @@ import (
 
 // HandleListProviders handles GET /api/v1/evaluations/providers
 func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	providerIdParam := r.Query("id")
+
 	benchmarksParam := r.Query("benchmarks")
 	providerId := ""
 	benchmarks := true
 
-	if len(providerIdParam) > 0 {
-		providerId = providerIdParam[0]
-	}
 	if len(benchmarksParam) > 0 {
 		benchmarks = benchmarksParam[0] != "false"
 	}
@@ -99,7 +96,7 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 				},
 				ProviderConfig: *request,
 			}
-			err := storage.WithContext(runtimeCtx).CreateUserProvider(provider)
+			err := storage.WithContext(runtimeCtx).CreateProvider(provider)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -114,6 +111,13 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 	)
 }
 
+func (h *Handlers) getSystemProvider(providerId string) (*api.ProviderResource, error) {
+	provider, ok := h.providerConfigs[providerId]
+	if !ok {
+		return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "provider", providerId)
+	}
+	return &provider, nil
+}
 func (h *Handlers) HandleGetProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
 
@@ -128,11 +132,20 @@ func (h *Handlers) HandleGetProvider(ctx *executioncontext.ExecutionContext, req
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			provider, err := storage.GetUserProvider(providerId)
+
+			provider, err := h.getSystemProvider(providerId)
 			if err != nil {
-				w.Error(err, ctx.RequestID)
-				return err
+
+				ctx.Logger.Warn("System provider not found", "provider_id", providerId)
+				provider, err = storage.GetProvider(providerId)
+				if err != nil {
+					ctx.Logger.Error("User provider not found", "provider_id", providerId)
+					err = serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "provider", "ResourceId", providerId)
+					w.Error(err, ctx.RequestID)
+					return err
+				}
 			}
+
 			w.WriteJSON(provider, 200)
 			return nil
 		},
@@ -175,7 +188,7 @@ func (h *Handlers) HandleDeleteProvider(ctx *executioncontext.ExecutionContext, 
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			err := storage.DeleteUserProvider(providerId)
+			err := storage.DeleteProvider(providerId)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err

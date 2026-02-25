@@ -43,12 +43,12 @@ type Storage interface {
 	DeleteCollection(id string) error
 
 	// Provider operations
-	CreateUserProvider(provider *api.ProviderResource) error
-	GetUserProvider(id string) (*api.ProviderResource, error)
+	CreateProvider(provider *api.ProviderResource) error
+	GetProvider(id string) (*api.ProviderResource, error)
 	//GetUserProviders(limit int, offset int) (*QueryResults[api.ProviderResource], error)
 	//UpdateUserProvider(provider *api.ProviderResource) error
 	//PatchUserProvider(id string, patches *api.Patch) error
-	DeleteUserProvider(id string) error
+	DeleteProvider(id string) error
 
 	// Close the storage connection
 	Close() error
