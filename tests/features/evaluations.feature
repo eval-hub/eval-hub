@@ -71,12 +71,24 @@ Feature: Evaluations Endpoint
 
   Scenario: List evaluation jobs
     Given the service is running
+    And I set the header "X-User" to "test-user-1"
+    And I set the header "X-Tenant" to "test-tenant-1"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
+    And the response should contain the value "test-user-1" at path "$.resource.owner"
+    And the response should contain the value "test-tenant-1" at path "$.resource.tenant"
+    And I set the header "X-User" to "test-user-2"
+    And I set the header "X-Tenant" to "test-tenant-2"
     And I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
+    And the response should contain the value "test-user-2" at path "$.resource.owner"
+    And the response should contain the value "test-tenant-2" at path "$.resource.tenant"
+    And I set the header "X-User" to "test-user-3"
+    And I set the header "X-Tenant" to "test-tenant-3"
     And I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
+    And the response should contain the value "test-user-3" at path "$.resource.owner"
+    And the response should contain the value "test-tenant-3" at path "$.resource.tenant"
     When I send a GET request to "/api/v1/evaluations/jobs?limit=2"
     Then the response code should be 200
     And the "next.href" field in the response should be saved as "value:next_url"
@@ -131,6 +143,51 @@ Feature: Evaluations Endpoint
             }
         },
         "required": ["limit", "first", "total_count", "items"]
+      }
+    """
+    When I send a GET request to "/api/v1/evaluations/jobs?owner=test-user-1&tenant=test-tenant-1"
+    Then the response code should be 200
+    And the response should have schema as:
+    """
+      {
+        "properties": {
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1
+          }
+        },
+        "required": ["items"]
+      }
+    """
+    When I send a GET request to "/api/v1/evaluations/jobs?owner=test-user-2&tenant=test-tenant-2"
+    Then the response code should be 200
+    And the response should have schema as:
+    """
+      {
+        "properties": {
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1
+          }
+        },
+        "required": ["items"]
+      }
+    """
+    When I send a GET request to "/api/v1/evaluations/jobs?owner=test-user-3&tenant=test-tenant-3"
+    Then the response code should be 200
+    And the response should have schema as:
+    """
+      {
+        "properties": {
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1
+          }
+        },
+        "required": ["items"]
       }
     """
 

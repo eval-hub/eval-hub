@@ -252,10 +252,23 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 		w.Error(err, ctx.RequestID)
 		return
 	}
+	_ /*ownerFilter*/, err = getParam(r, "owner", true, "")
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+	tenantFilter, err := getParam(r, "tenant", true, "")
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
 
 	res, err := storage.GetEvaluationJobs(limit, offset, abstractions.QueryFilter{
-		Params: map[string]string{
+		Params: map[string]any{
 			"status": statusFilter,
+			// TODO - there is not yet an owner column
+			// "owner":  ownerFilter,
+			"tenant_id": tenantFilter,
 		},
 	})
 	if err != nil {

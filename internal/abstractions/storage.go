@@ -15,7 +15,7 @@ type QueryResults[T any] struct {
 }
 
 type QueryFilter struct {
-	Params map[string]string
+	Params map[string]any
 }
 
 type Storage interface {
