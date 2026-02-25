@@ -1,11 +1,5 @@
 package api
 
-// Provider contains the configuration details for an evaluation provider.
-type ProviderConfig struct {
-	ID                     string `mapstructure:"id" yaml:"id" json:"id"`
-	ProviderConfigInternal `mapstructure:",squash"`
-}
-
 type BenchmarkResource struct {
 	ID           string        `mapstructure:"id" yaml:"id" json:"id"`
 	Name         string        `mapstructure:"name" yaml:"name" json:"name"`
@@ -19,7 +13,7 @@ type BenchmarkResource struct {
 	PassCriteria *PassCriteria `mapstructure:"pass_criteria" yaml:"pass_criteria" json:"pass_criteria,omitempty"`
 }
 
-type ProviderConfigInternal struct {
+type ProviderConfig struct {
 	Name        string              `mapstructure:"name" yaml:"name" json:"name"`
 	Description string              `mapstructure:"description" yaml:"description" json:"description"`
 	Benchmarks  []BenchmarkResource `mapstructure:"benchmarks" yaml:"benchmarks" json:"benchmarks"`
@@ -27,8 +21,8 @@ type ProviderConfigInternal struct {
 }
 
 type ProviderResource struct {
-	Resource Resource `mapstructure:"resource" yaml:"resource" json:"resource" validate:"required"`
-	ProviderConfigInternal
+	Resource Resource `json:"resource"`
+	ProviderConfig
 }
 
 type Runtime struct {

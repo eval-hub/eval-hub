@@ -96,6 +96,8 @@ func (r *LocalRuntime) RunEvaluationJob(
 						"benchmark processing canceled",
 						"job_id", jobID,
 						"benchmark_id", ib.bench.ID,
+						"benchmark_index", ib.index,
+						"provider_id", ib.bench.ProviderID,
 					)
 					return
 				default:
@@ -105,6 +107,7 @@ func (r *LocalRuntime) RunEvaluationJob(
 							"error", err,
 							"job_id", jobID,
 							"benchmark_id", ib.bench.ID,
+							"benchmark_index", ib.index,
 							"provider_id", ib.bench.ProviderID,
 						)
 					}
@@ -144,8 +147,8 @@ func (r *LocalRuntime) runBenchmark(
 		return fmt.Errorf("build job spec: %w", err)
 	}
 
-	// Create output directory: /tmp/evalhub-jobs/<jobid>/<providerid>/<benchmarkid>/
-	jobDir := filepath.Join(localJobsBaseDir, jobID, bench.ProviderID, bench.ID)
+	// Create output directory: /tmp/evalhub-jobs/<job_id>/<benchmark_index>/<provider_id>/<benchmark_id>/
+	jobDir := filepath.Join(localJobsBaseDir, jobID, fmt.Sprintf("%d", benchmarkIndex), bench.ProviderID, bench.ID)
 	metaDir := filepath.Join(jobDir, "meta")
 	if err := os.MkdirAll(metaDir, 0755); err != nil {
 		return fmt.Errorf("create meta directory: %w", err)
@@ -171,6 +174,7 @@ func (r *LocalRuntime) runBenchmark(
 		"local runtime job spec written",
 		"job_id", jobID,
 		"benchmark_id", bench.ID,
+		"benchmark_index", benchmarkIndex,
 		"provider_id", bench.ProviderID,
 		"job_spec_path", absJobSpecPath,
 	)
@@ -201,6 +205,9 @@ func (r *LocalRuntime) runBenchmark(
 	r.logger.Info(
 		"local runtime log file created",
 		"job_id", jobID,
+		"benchmark_id", bench.ID,
+		"benchmark_index", benchmarkIndex,
+		"provider_id", bench.ProviderID,
 		"log_file", logFilePath,
 	)
 
@@ -214,6 +221,7 @@ func (r *LocalRuntime) runBenchmark(
 		"local runtime process started",
 		"job_id", jobID,
 		"benchmark_id", bench.ID,
+		"benchmark_index", benchmarkIndex,
 		"provider_id", bench.ProviderID,
 		"pid", cmd.Process.Pid,
 		"command", command,
@@ -227,6 +235,7 @@ func (r *LocalRuntime) runBenchmark(
 			"error", err,
 			"job_id", jobID,
 			"benchmark_id", bench.ID,
+			"benchmark_index", benchmarkIndex,
 			"provider_id", bench.ProviderID,
 		)
 
@@ -247,6 +256,7 @@ func (r *LocalRuntime) runBenchmark(
 			"local runtime process completed",
 			"job_id", jobID,
 			"benchmark_id", bench.ID,
+			"benchmark_index", benchmarkIndex,
 			"provider_id", bench.ProviderID,
 		)
 	}
@@ -310,8 +320,8 @@ func (r *LocalRuntime) failBenchmark(
 
 func (r *LocalRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobResource) error {
 	var deleteErr error
-	for _, bench := range evaluation.Benchmarks {
-		benchDir := filepath.Join(localJobsBaseDir, evaluation.Resource.ID, bench.ProviderID, bench.ID)
+	for i, bench := range evaluation.Benchmarks {
+		benchDir := filepath.Join(localJobsBaseDir, evaluation.Resource.ID, fmt.Sprintf("%d", i), bench.ProviderID, bench.ID)
 		if err := os.RemoveAll(benchDir); err != nil {
 			deleteErr = errors.Join(deleteErr, err)
 			r.logger.Error(

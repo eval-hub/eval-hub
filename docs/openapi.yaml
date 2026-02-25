@@ -127,8 +127,8 @@ paths:
     get:
       tags:
         - Evaluations
-      summary: Get Evaluation Status
-      description: Get the status of an evaluation request.
+      summary: Get Evaluation
+      description: Returns the evaluation job resource with the current status and results.
       operationId: get_evaluations_jobs_id
       parameters:
         - name: id
@@ -304,7 +304,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ProviderConfigInternal'
+              $ref: '#/components/schemas/ProviderConfig'
       responses:
         '200':
           description: Successful Response
@@ -825,6 +825,17 @@ components:
         - model
         - benchmarks
       properties:
+        name:
+          type: string
+          description: Evaluation job name
+        description:
+          type: string
+          description: Evaluation job description
+        tags:
+          type: array
+          items:
+            type: string
+          description: Evaluation job tags
         model:
           $ref: '#/components/schemas/ModelRef'
           description: Model to evaluate
@@ -919,7 +930,7 @@ components:
           $ref: '#/components/schemas/PrimaryScore'
         pass_criteria:
           $ref: '#/components/schemas/PassCriteria'
-    ProviderConfigInternal:
+    ProviderConfig:
       type: object
       description: Evaluation provider (configuration and available benchmarks)
       properties:
@@ -929,9 +940,6 @@ components:
         description:
           type: string
           description: Provider description
-        type:
-          type: string
-          description: Provider type
         benchmarks:
           type: array
           items:
@@ -946,13 +954,7 @@ components:
             resource:
               $ref: '#/components/schemas/Resource'
               description: Resource metadata
-            type:
-              type: string
-              enum:
-                - system
-                - owned
-              description: Type of collection. 'system' collections are created by the system and are not editable, 'owned' collections are created by the user and are editable.
-        - $ref: '#/components/schemas/ProviderConfigInternal'
+        - $ref: '#/components/schemas/ProviderConfig'
     ProviderResourceList:
       type: object
       description: List of providers (no pagination links)
@@ -965,16 +967,6 @@ components:
           items:
             $ref: '#/components/schemas/ProviderResource'
           description: Provider resources
-    ProviderConfig:
-      type: object
-      description: Evaluation provider (configuration and available benchmarks)
-      allOf:
-        - type: object
-          properties:
-            id:
-              type: string
-              description: Provider ID
-        - $ref: '#/components/schemas/ProviderConfigInternal'
     PatchOp:
       type: string
       enum:
