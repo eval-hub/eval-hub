@@ -1,5 +1,6 @@
 id: guidellm
 name: GuideLLM
+title: GuideLLM
 description: Performance benchmarking framework for LLM inference servers
 runtime:
   k8s:

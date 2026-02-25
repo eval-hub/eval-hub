@@ -4,6 +4,9 @@ properties:
   name:
     type: string
     description: Provider name
+  title:
+    type: string
+    description: Provider display title
   description:
     type: string
     description: Provider description
