@@ -7,8 +7,20 @@ properties:
   description:
     type: string
     description: Provider description
+  tags:
+    type: array
+    items: 
+      type: string
+    description: Provider tags
+  runtime:
+    $ref: ./Runtime.yaml
+    description: Provider runtime configuration
   benchmarks:
     type: array
     items:
       $ref: ./BenchmarkResource.yaml
     description: Benchmarks offered by this provider
+required:
+  - name
+  - benchmarks
+  - runtime

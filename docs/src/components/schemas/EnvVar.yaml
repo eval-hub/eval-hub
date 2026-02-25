@@ -1,0 +1,12 @@
+type: object
+description: Environment variable for job configuration
+properties:
+  name:
+    type: string
+    description: Environment variable name
+  value:
+    type: string
+    description: Environment variable value
+required:
+  - name
+  - value
