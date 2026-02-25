@@ -98,7 +98,7 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 					Tenant:    &ctx.Tenant,
 					ReadOnly:  false,
 				},
-				ProviderConfigInternal: api.ProviderConfigInternal{
+				ProviderConfig: api.ProviderConfig{
 					Name:        request.Name,
 					Description: request.Description,
 					Benchmarks:  request.Benchmarks,
