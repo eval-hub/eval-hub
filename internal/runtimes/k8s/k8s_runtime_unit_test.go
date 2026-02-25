@@ -219,6 +219,75 @@ func TestCreateBenchmarkResourcesSetsAnnotations(t *testing.T) {
 	}
 }
 
+func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnv(t *testing.T) {
+	t.Setenv("SERVICE_URL", "http://service.example")
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Model.Auth = &api.ModelAuth{SecretRef: "model-auth-secret"}
+
+	clientset := fake.NewSimpleClientset()
+	runtime := &K8sRuntime{
+		logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper:    &KubernetesHelper{clientset: clientset},
+		providers: sampleProviders(providerID),
+	}
+
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(jobs))
+	}
+	job := jobs[0]
+	container := job.Spec.Template.Spec.Containers[0]
+
+	var foundVolume bool
+	for _, volume := range job.Spec.Template.Spec.Volumes {
+		if volume.Name == modelAuthVolumeName {
+			foundVolume = true
+			if volume.VolumeSource.Secret == nil || volume.VolumeSource.Secret.SecretName != "model-auth-secret" {
+				t.Fatalf("expected model auth secret volume to reference %q", "model-auth-secret")
+			}
+		}
+	}
+	if !foundVolume {
+		t.Fatalf("expected volume %s to be present", modelAuthVolumeName)
+	}
+
+	var foundMount bool
+	for _, mount := range container.VolumeMounts {
+		if mount.Name == modelAuthVolumeName {
+			foundMount = true
+			if mount.MountPath != modelAuthMountPath {
+				t.Fatalf("expected mount path %q, got %q", modelAuthMountPath, mount.MountPath)
+			}
+		}
+	}
+	if !foundMount {
+		t.Fatalf("expected volume mount %s to be present", modelAuthVolumeName)
+	}
+
+	var foundTokenEnv bool
+	var foundCACertEnv bool
+	for _, env := range container.Env {
+		if env.Name == envModelAuthTokenPathName {
+			foundTokenEnv = true
+		}
+		if env.Name == envModelAuthCACertPathName {
+			foundCACertEnv = true
+		}
+	}
+	if !foundTokenEnv {
+		t.Fatalf("expected env var %s to be present", envModelAuthTokenPathName)
+	}
+	if !foundCACertEnv {
+		t.Fatalf("expected env var %s to be present", envModelAuthCACertPathName)
+	}
+}
+
 func TestCreateBenchmarkResourcesDeletesConfigMapOnJobFailure(t *testing.T) {
 	t.Setenv("SERVICE_URL", "http://service.example")
 	providerID := "provider-1"

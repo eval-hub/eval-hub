@@ -59,7 +59,7 @@ type ModelRef struct {
 }
 
 type ModelAuth struct {
-	SecretRef string `json:"secret_ref"`
+	SecretRef string `json:"secret_ref" validate:"required"`
 }
 
 // MessageInfo represents a message from a downstream service

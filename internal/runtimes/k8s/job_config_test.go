@@ -99,6 +99,83 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 	}
 }
 
+func TestBuildJobConfigModelAuthSecretRefPresent(t *testing.T) {
+	t.Setenv(serviceURLEnv, "http://eval-hub")
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-789"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+				Auth: &api.ModelAuth{SecretRef: "my-secret"},
+			},
+			Benchmarks: []api.BenchmarkConfig{
+				{
+					Ref: api.Ref{ID: "bench-1"},
+				},
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
+			},
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, "bench-1", 0)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.modelAuthSecretRef != "my-secret" {
+		t.Fatalf("expected modelAuthSecretRef %q, got %q", "my-secret", cfg.modelAuthSecretRef)
+	}
+}
+
+func TestBuildJobConfigModelAuthSecretRefEmptyWhenNil(t *testing.T) {
+	t.Setenv(serviceURLEnv, "http://eval-hub")
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-790"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.BenchmarkConfig{
+				{
+					Ref: api.Ref{ID: "bench-1"},
+				},
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
+			},
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, "bench-1", 0)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.modelAuthSecretRef != "" {
+		t.Fatalf("expected modelAuthSecretRef to be empty, got %q", cfg.modelAuthSecretRef)
+	}
+}
+
 func TestBuildJobConfigAllowsNumExamplesOnly(t *testing.T) {
 	t.Setenv(serviceURLEnv, "http://eval-hub")
 	evaluation := &api.EvaluationJobResource{
