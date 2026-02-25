@@ -13,10 +13,10 @@ get:
         type: integer
         maximum: 100
         minimum: 1
-        description: Maximum number of evaluations to return
+        description: Maximum number of collections to return
         default: 50
         title: Limit
-      description: Maximum number of evaluations to return
+      description: Maximum number of collections to return
     - name: offset
       in: query
       required: false
