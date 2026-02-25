@@ -1,0 +1,13 @@
+type: object
+description: Local runtime configuration for running evaluations on the host
+properties:
+  command:
+    type: string
+    description: Command to execute for local evaluation runs
+  env:
+    type: array
+    items:
+      $ref: ./EnvVar.yaml
+    description: Environment variables for the local process
+required:
+  - command

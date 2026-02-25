@@ -894,6 +894,75 @@ components:
               items:
                 type: string
               description: Non-fatal errors (e.g. partial list)
+    EnvVar:
+      type: object
+      description: Environment variable for job configuration
+      properties:
+        name:
+          type: string
+          description: Environment variable name
+        value:
+          type: string
+          description: Environment variable value
+      required:
+        - name
+        - value
+    K8sRuntime:
+      type: object
+      description: Kubernetes runtime configuration for provider evaluation jobs
+      properties:
+        image:
+          type: string
+          description: Container image for the evaluation job (e.g. quay.io/evalhub/adapter:latest)
+        entrypoint:
+          type: array
+          items:
+            type: string
+          description: Container entrypoint command
+        cpu_request:
+          type: string
+          description: CPU request (e.g. 250m)
+        memory_request:
+          type: string
+          description: Memory request (e.g. 512Mi)
+        cpu_limit:
+          type: string
+          description: CPU limit (e.g. 1)
+        memory_limit:
+          type: string
+          description: Memory limit (e.g. 2Gi)
+        env:
+          type: array
+          items:
+            $ref: '#/components/schemas/EnvVar'
+          description: Environment variables for the job
+      required:
+        - image
+        - entrypoint
+    LocalRuntime:
+      type: object
+      description: Local runtime configuration for running evaluations on the host
+      properties:
+        command:
+          type: string
+          description: Command to execute for local evaluation runs
+        env:
+          type: array
+          items:
+            $ref: '#/components/schemas/EnvVar'
+          description: Environment variables for the local process
+      required:
+        - command
+    Runtime:
+      type: object
+      description: Provider runtime configuration
+      properties:
+        k8s:
+          $ref: '#/components/schemas/K8sRuntime'
+          description: Kubernetes runtime configuration
+        local:
+          $ref: '#/components/schemas/LocalRuntime'
+          description: Local runtime configuration
     BenchmarkResource:
       type: object
       description: Benchmark specification (from a provider)
@@ -940,11 +1009,23 @@ components:
         description:
           type: string
           description: Provider description
+        tags:
+          type: array
+          items:
+            type: string
+          description: Provider tags
+        runtime:
+          $ref: '#/components/schemas/Runtime'
+          description: Provider runtime configuration
         benchmarks:
           type: array
           items:
             $ref: '#/components/schemas/BenchmarkResource'
           description: Benchmarks offered by this provider
+      required:
+        - name
+        - benchmarks
+        - runtime
     ProviderResource:
       type: object
       description: Provider resource
