@@ -47,9 +47,10 @@ func GetOverallJobStatus(job *api.EvaluationJobResource) (api.OverallState, *api
 
 func ValidateBenchmarkExists(job *api.EvaluationJobResource, runStatus *api.StatusEvent) error {
 	found := false
-	for _, benchmark := range job.Benchmarks {
+	for index, benchmark := range job.Benchmarks {
 		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID &&
-			benchmark.ProviderID == runStatus.BenchmarkStatusEvent.ProviderID {
+			benchmark.ProviderID == runStatus.BenchmarkStatusEvent.ProviderID &&
+			index == runStatus.BenchmarkStatusEvent.BenchmarkIndex {
 			found = true
 			break
 		}
@@ -95,7 +96,8 @@ func UpdateBenchmarkStatus(job *api.EvaluationJobResource, runStatus *api.Status
 	}
 	for index, benchmark := range job.Status.Benchmarks {
 		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID &&
-			benchmark.ProviderID == runStatus.BenchmarkStatusEvent.ProviderID {
+			benchmark.ProviderID == runStatus.BenchmarkStatusEvent.ProviderID &&
+			benchmark.BenchmarkIndex == runStatus.BenchmarkStatusEvent.BenchmarkIndex {
 			job.Status.Benchmarks[index] = *benchmarkStatus
 			return
 		}
