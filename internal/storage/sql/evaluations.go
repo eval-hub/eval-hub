@@ -381,7 +381,7 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 				Artifacts:   runStatus.BenchmarkStatusEvent.Artifacts,
 				MLFlowRunID: runStatus.BenchmarkStatusEvent.MLFlowRunID,
 				LogsPath:    runStatus.BenchmarkStatusEvent.LogsPath,
-				Outcome:     outcome,
+				Test:        outcome,
 			}
 			err := commonStorage.UpdateBenchmarkResults(job, runStatus, &result)
 			if err != nil {
@@ -412,23 +412,23 @@ func computeJobOutcome(job *api.EvaluationJobResource) {
 	var sumOfWeights float32 = 0.0
 	for _, benchmark := range job.Results.Benchmarks {
 		benchmarkWeight := job.Benchmarks[benchmark.BenchmarkIndex].Weight
-		weightedScore := benchmarkWeight * benchmark.Outcome.Score
+		weightedScore := benchmarkWeight * benchmark.Test.PrimaryScore
 		if job.Benchmarks[benchmark.BenchmarkIndex].PrimaryScore.LowerIsBetter {
-			weightedScore = benchmarkWeight * (1 - benchmark.Outcome.Score)
+			weightedScore = benchmarkWeight * (1 - benchmark.Test.PrimaryScore)
 		}
 		sumOfWeightedScores += weightedScore
 		sumOfWeights += benchmarkWeight
 	}
 	weightedAvgJobScore := sumOfWeightedScores / sumOfWeights
-	jobOutcome := api.Outcome{
+	jobTest := api.EvaluationTest{
 		Score:     weightedAvgJobScore,
 		Threshold: job.EvaluationJobConfig.PassCriteria.Threshold,
 		Pass:      weightedAvgJobScore >= job.EvaluationJobConfig.PassCriteria.Threshold,
 	}
-	job.Results.Outcome = &jobOutcome
+	job.Results.Test = &jobTest
 }
 
-func computeBenchmarkOutcome(job *api.EvaluationJobResource, benchmarkStatusEvent *api.BenchmarkStatusEvent) *api.Outcome {
+func computeBenchmarkOutcome(job *api.EvaluationJobResource, benchmarkStatusEvent *api.BenchmarkStatusEvent) *api.BenchmarkTest {
 	for _, benchmark := range job.Benchmarks {
 		if benchmark.ID == benchmarkStatusEvent.ID && benchmark.ProviderID == benchmarkStatusEvent.ProviderID {
 			primaryMetric := benchmark.PrimaryScore.Metric
@@ -438,10 +438,10 @@ func computeBenchmarkOutcome(job *api.EvaluationJobResource, benchmarkStatusEven
 			if benchmark.PrimaryScore.LowerIsBetter {
 				pass = primaryMetricValue <= passCriteria
 			}
-			return &api.Outcome{
-				Score:     primaryMetricValue,
-				Threshold: benchmark.PassCriteria.Threshold,
-				Pass:      pass,
+			return &api.BenchmarkTest{
+				PrimaryScore: primaryMetricValue,
+				Threshold:    benchmark.PassCriteria.Threshold,
+				Pass:         pass,
 			}
 		}
 	}
