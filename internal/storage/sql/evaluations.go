@@ -412,6 +412,9 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 }
 
 func (s *SQLStorage) computeJobTestResult(job *api.EvaluationJobResource) {
+	if job.Results == nil || job.Results.Benchmarks == nil || len(job.Results.Benchmarks) == 0 {
+		return
+	}
 	var sumOfWeightedScores float32 = 0.0
 	var sumOfWeights float32 = 0.0
 	for _, benchmark := range job.Results.Benchmarks {
@@ -432,6 +435,10 @@ func (s *SQLStorage) computeJobTestResult(job *api.EvaluationJobResource) {
 		}
 		sumOfWeightedScores += weightedScore
 		sumOfWeights += benchmarkWeight
+	}
+	if sumOfWeights == 0 {
+		s.logger.Warn("No benchmark weights accumulated; cannot compute job score")
+		return
 	}
 	weightedAvgJobScore := sumOfWeightedScores / sumOfWeights
 	var jobTest *api.EvaluationTest = nil
