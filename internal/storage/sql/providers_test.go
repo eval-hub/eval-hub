@@ -42,14 +42,14 @@ func TestProviderStorage(t *testing.T) {
 	}
 
 	t.Run("CreateUserProvider creates a new provider", func(t *testing.T) {
-		err := store.CreateUserProvider(provider)
+		err := store.CreateProvider(provider)
 		if err != nil {
 			t.Fatalf("CreateUserProvider failed: %v", err)
 		}
 	})
 
 	t.Run("GetUserProvider returns the provider", func(t *testing.T) {
-		got, err := store.GetUserProvider("provider-1")
+		got, err := store.GetProvider("provider-1")
 		if err != nil {
 			t.Fatalf("GetUserProvider failed: %v", err)
 		}
@@ -68,19 +68,19 @@ func TestProviderStorage(t *testing.T) {
 	})
 
 	t.Run("GetUserProvider returns not found for missing provider", func(t *testing.T) {
-		_, err := store.GetUserProvider("non-existent")
+		_, err := store.GetProvider("non-existent")
 		if err == nil {
 			t.Fatal("Expected error for non-existent provider")
 		}
 	})
 
 	t.Run("DeleteUserProvider removes the provider", func(t *testing.T) {
-		err := store.DeleteUserProvider("provider-1")
+		err := store.DeleteProvider("provider-1")
 		if err != nil {
 			t.Fatalf("DeleteUserProvider failed: %v", err)
 		}
 
-		_, err = store.GetUserProvider("provider-1")
+		_, err = store.GetProvider("provider-1")
 		if err == nil {
 			t.Fatal("Expected error after delete, provider should not exist")
 		}

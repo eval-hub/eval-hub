@@ -247,7 +247,7 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 		w.Error(err, ctx.RequestID)
 		return
 	}
-	statusFilter, err := getParam(r, "status_filter", true, "")
+	statusFilter, err := getParam(r, "status", true, "")
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return

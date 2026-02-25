@@ -10,7 +10,7 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
-func (s *SQLStorage) CreateUserProvider(provider *api.ProviderResource) error {
+func (s *SQLStorage) CreateProvider(provider *api.ProviderResource) error {
 	providerID := provider.Resource.ID
 	tenant := s.tenant
 	providerJSON, err := s.createProviderEntity(provider)
@@ -37,7 +37,7 @@ func (s *SQLStorage) createProviderEntity(provider *api.ProviderResource) ([]byt
 	return providerJSON, nil
 }
 
-func (s *SQLStorage) GetUserProvider(id string) (*api.ProviderResource, error) {
+func (s *SQLStorage) GetProvider(id string) (*api.ProviderResource, error) {
 	return s.getUserProviderTransactional(nil, id)
 }
 
@@ -88,7 +88,7 @@ func (s *SQLStorage) constructProviderResource(dbID string, createdAt time.Time,
 	}, nil
 }
 
-func (s *SQLStorage) DeleteUserProvider(id string) error {
+func (s *SQLStorage) DeleteProvider(id string) error {
 	deleteQuery, err := createDeleteEntityStatement(s.sqlConfig.Driver, TABLE_PROVIDERS)
 	if err != nil {
 		return se.NewServiceError(messages.InternalServerError, "Error", "Error while building delete provider query")
