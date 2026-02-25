@@ -370,7 +370,7 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 		}
 		commonStorage.UpdateBenchmarkStatus(job, runStatus, &benchmark)
 
-		outcome := computeBenchmarkOutcome(job, runStatus.BenchmarkStatusEvent)
+		outcome := computeBenchmarkTestResult(job, runStatus.BenchmarkStatusEvent)
 
 		// if the run status is completed, failed, or cancelled, we need to update the results
 		if runStatus.BenchmarkStatusEvent.Status == api.StateCompleted || runStatus.BenchmarkStatusEvent.Status == api.StateFailed || runStatus.BenchmarkStatusEvent.Status == api.StateCancelled {
@@ -391,7 +391,7 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 
 		// get the overall job status
 		overallState, message := commonStorage.GetOverallJobStatus(job)
-		computeJobOutcome(job)
+		computeJobTestResult(job)
 		job.Status.State = overallState
 		job.Status.Message = message
 
@@ -407,7 +407,7 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 	return err
 }
 
-func computeJobOutcome(job *api.EvaluationJobResource) {
+func computeJobTestResult(job *api.EvaluationJobResource) {
 	var sumOfWeightedScores float32 = 0.0
 	var sumOfWeights float32 = 0.0
 	for _, benchmark := range job.Results.Benchmarks {
@@ -428,7 +428,7 @@ func computeJobOutcome(job *api.EvaluationJobResource) {
 	job.Results.Test = &jobTest
 }
 
-func computeBenchmarkOutcome(job *api.EvaluationJobResource, benchmarkStatusEvent *api.BenchmarkStatusEvent) *api.BenchmarkTest {
+func computeBenchmarkTestResult(job *api.EvaluationJobResource, benchmarkStatusEvent *api.BenchmarkStatusEvent) *api.BenchmarkTest {
 	for _, benchmark := range job.Benchmarks {
 		if benchmark.ID == benchmarkStatusEvent.ID && benchmark.ProviderID == benchmarkStatusEvent.ProviderID {
 			primaryMetric := benchmark.PrimaryScore.Metric
