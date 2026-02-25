@@ -1,5 +1,6 @@
 id: lm_evaluation_harness
 name: LM Evaluation Harness
+title: LM Evaluation Harness
 description: Comprehensive evaluation framework for language models with 167 benchmarks
 runtime:
   k8s:

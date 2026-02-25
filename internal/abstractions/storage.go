@@ -15,7 +15,7 @@ type QueryResults[T any] struct {
 }
 
 type QueryFilter struct {
-	Params map[string]string
+	Params map[string]any
 }
 
 type Storage interface {
@@ -41,6 +41,14 @@ type Storage interface {
 	UpdateCollection(collection *api.CollectionResource) error
 	PatchCollection(id string, patches *api.Patch) error
 	DeleteCollection(id string) error
+
+	// Provider operations
+	CreateProvider(provider *api.ProviderResource) error
+	GetProvider(id string) (*api.ProviderResource, error)
+	//GetUserProviders(limit int, offset int) (*QueryResults[api.ProviderResource], error)
+	//UpdateUserProvider(provider *api.ProviderResource) error
+	//PatchUserProvider(id string, patches *api.Patch) error
+	DeleteProvider(id string) error
 
 	// Close the storage connection
 	Close() error

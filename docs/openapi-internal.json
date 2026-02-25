@@ -274,7 +274,7 @@
             "description": "Offset for pagination"
           },
           {
-            "name": "status_filter",
+            "name": "status",
             "in": "query",
             "required": false,
             "schema": {
@@ -283,6 +283,26 @@
               "title": "Status Filter"
             },
             "description": "Filter by status"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            },
+            "description": "Name to search for"
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Tags"
+            },
+            "description": "Tags to search for"
           }
         ],
         "responses": {
@@ -486,15 +506,31 @@
         "operationId": "list_providers",
         "parameters": [
           {
-            "name": "id",
+            "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "description": "Filter by provider ID",
-              "title": "Provider Id"
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Maximum number of evaluations to return",
+              "default": 50,
+              "title": "Limit"
             },
-            "description": "Filter by provider ID"
+            "description": "Maximum number of evaluations to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Offset for pagination",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Offset for pagination"
           },
           {
             "name": "benchmarks",
@@ -507,6 +543,26 @@
               "title": "Benchmarks"
             },
             "description": "Include or exclude benchmarks supported by this provider in the response"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            },
+            "description": "Name to search for"
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Tags"
+            },
+            "description": "Tags to search for"
           }
         ],
         "responses": {
@@ -648,7 +704,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ProviderConfigInternal"
+                "$ref": "#/components/schemas/ProviderConfig"
               }
             }
           }
@@ -784,6 +840,55 @@
         "summary": "List Collections",
         "description": "List all benchmark collections.",
         "operationId": "get_collections",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Maximum number of evaluations to return",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Maximum number of evaluations to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Offset for pagination",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Offset for pagination"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            },
+            "description": "Name to search for"
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Tags"
+            },
+            "description": "Tags to search for"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1824,6 +1929,102 @@
           }
         }
       },
+      "EnvVar": {
+        "type": "object",
+        "description": "Environment variable for job configuration",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Environment variable name"
+          },
+          "value": {
+            "type": "string",
+            "description": "Environment variable value"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ]
+      },
+      "K8sRuntime": {
+        "type": "object",
+        "description": "Kubernetes runtime configuration for provider evaluation jobs",
+        "properties": {
+          "image": {
+            "type": "string",
+            "description": "Container image for the evaluation job (e.g. quay.io/evalhub/adapter:latest)"
+          },
+          "entrypoint": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Container entrypoint command"
+          },
+          "cpu_request": {
+            "type": "string",
+            "description": "CPU request (e.g. 250m)"
+          },
+          "memory_request": {
+            "type": "string",
+            "description": "Memory request (e.g. 512Mi)"
+          },
+          "cpu_limit": {
+            "type": "string",
+            "description": "CPU limit (e.g. 1)"
+          },
+          "memory_limit": {
+            "type": "string",
+            "description": "Memory limit (e.g. 2Gi)"
+          },
+          "env": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnvVar"
+            },
+            "description": "Environment variables for the job"
+          }
+        },
+        "required": [
+          "image",
+          "entrypoint"
+        ]
+      },
+      "LocalRuntime": {
+        "type": "object",
+        "description": "Local runtime configuration for running evaluations on the host",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "Command to execute for local evaluation runs"
+          },
+          "env": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnvVar"
+            },
+            "description": "Environment variables for the local process"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      },
+      "Runtime": {
+        "type": "object",
+        "description": "Provider runtime configuration",
+        "properties": {
+          "k8s": {
+            "$ref": "#/components/schemas/K8sRuntime",
+            "description": "Kubernetes runtime configuration"
+          },
+          "local": {
+            "$ref": "#/components/schemas/LocalRuntime",
+            "description": "Local runtime configuration"
+          }
+        }
+      },
       "BenchmarkResource": {
         "type": "object",
         "description": "Benchmark specification (from a provider)",
@@ -1874,7 +2075,7 @@
           }
         }
       },
-      "ProviderConfigInternal": {
+      "ProviderConfig": {
         "type": "object",
         "description": "Evaluation provider (configuration and available benchmarks)",
         "properties": {
@@ -1882,13 +2083,24 @@
             "type": "string",
             "description": "Provider name"
           },
+          "title": {
+            "type": "string",
+            "description": "Provider display title"
+          },
           "description": {
             "type": "string",
             "description": "Provider description"
           },
-          "type": {
-            "type": "string",
-            "description": "Provider type"
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Provider tags"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/Runtime",
+            "description": "Provider runtime configuration"
           },
           "benchmarks": {
             "type": "array",
@@ -1897,7 +2109,12 @@
             },
             "description": "Benchmarks offered by this provider"
           }
-        }
+        },
+        "required": [
+          "name",
+          "benchmarks",
+          "runtime"
+        ]
       },
       "ProviderResource": {
         "type": "object",
@@ -1909,19 +2126,11 @@
               "resource": {
                 "$ref": "#/components/schemas/Resource",
                 "description": "Resource metadata"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "system",
-                  "owned"
-                ],
-                "description": "Type of collection. 'system' collections are created by the system and are not editable, 'owned' collections are created by the user and are editable."
               }
             }
           },
           {
-            "$ref": "#/components/schemas/ProviderConfigInternal"
+            "$ref": "#/components/schemas/ProviderConfig"
           }
         ]
       },
@@ -1941,24 +2150,6 @@
             "description": "Provider resources"
           }
         }
-      },
-      "ProviderConfig": {
-        "type": "object",
-        "description": "Evaluation provider (configuration and available benchmarks)",
-        "allOf": [
-          {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string",
-                "description": "Provider ID"
-              }
-            }
-          },
-          {
-            "$ref": "#/components/schemas/ProviderConfigInternal"
-          }
-        ]
       },
       "PatchOp": {
         "type": "string",
@@ -2039,14 +2230,6 @@
               "resource": {
                 "$ref": "#/components/schemas/Resource",
                 "description": "Resource metadata"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "system",
-                  "owned"
-                ],
-                "description": "Type of collection. 'system' collections are created by the system and are not editable, 'owned' collections are created by the user and are editable."
               }
             }
           },

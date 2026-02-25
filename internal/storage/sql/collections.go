@@ -19,7 +19,6 @@ import (
 
 func (s *SQLStorage) CreateCollection(collection *api.CollectionResource) error {
 	collectionId := collection.Resource.ID
-	scope := collection.Type
 	tenant := s.tenant
 	collectionJSON, err := s.createCollectionEntity(collection)
 	if err != nil {
@@ -29,7 +28,7 @@ func (s *SQLStorage) CreateCollection(collection *api.CollectionResource) error 
 	if err != nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
 	}
-	_, err = s.exec(nil, addEntityStatement, collectionId, tenant, scope, string(collectionJSON))
+	_, err = s.exec(nil, addEntityStatement, collectionId, tenant, string(collectionJSON))
 	if err != nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
 	}
@@ -59,10 +58,9 @@ func (s *SQLStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 	var dbID string
 	var createdAt, updatedAt time.Time
 	var tenantID string
-	var scope string
 	var collectionsJSON string
 
-	err = s.queryRow(txn, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &tenantID, &scope, &collectionsJSON)
+	err = s.queryRow(txn, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &tenantID, &collectionsJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, se.NewServiceError(messages.ResourceNotFound, "Type", "collection", "ResourceId", id)
@@ -80,7 +78,7 @@ func (s *SQLStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 		return nil, se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "collection", "Error", err.Error())
 	}
 
-	collectionResource, err := s.constructCollectionResource(dbID, createdAt, updatedAt, tenantID, scope, &collectionConfig)
+	collectionResource, err := s.constructCollectionResource(dbID, createdAt, updatedAt, tenantID, &collectionConfig)
 	if err != nil {
 		return nil, se.WithRollback(err)
 	}
@@ -88,7 +86,7 @@ func (s *SQLStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 
 }
 
-func (s *SQLStorage) constructCollectionResource(dbID string, createdAt time.Time, updatedAt time.Time, tenantID string, scope string, collectionConfig *api.CollectionConfig) (*api.CollectionResource, error) {
+func (s *SQLStorage) constructCollectionResource(dbID string, createdAt time.Time, updatedAt time.Time, tenantID string, collectionConfig *api.CollectionConfig) (*api.CollectionResource, error) {
 	if collectionConfig == nil {
 		s.logger.Error("Failed to construct collection resource", "error", "Collection config does not exist", "id", dbID)
 		return nil, se.NewServiceError(messages.InternalServerError, "Error", "Collection config does not exist")
@@ -101,14 +99,14 @@ func (s *SQLStorage) constructCollectionResource(dbID string, createdAt time.Tim
 			CreatedAt: &createdAt,
 			UpdatedAt: &updatedAt,
 		},
-		Type:             scope,
+
 		CollectionConfig: *collectionConfig,
 	}, nil
 }
 
 func (s *SQLStorage) GetCollections(limit int, offset int) (*abstractions.QueryResults[api.CollectionResource], error) {
 	// Get total count (there are no filters for collections)
-	countQuery, _, err := createCountEntitiesStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS, "")
+	countQuery, _, err := createCountEntitiesStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +119,7 @@ func (s *SQLStorage) GetCollections(limit int, offset int) (*abstractions.QueryR
 	}
 
 	// Build the list query with pagination and status filter
-	listQuery, listArgs, err := createListEntitiesStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS, limit, offset, "")
+	listQuery, listArgs, err := createListEntitiesStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS, limit, offset, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -141,10 +139,9 @@ func (s *SQLStorage) GetCollections(limit int, offset int) (*abstractions.QueryR
 		var dbID string
 		var createdAt, updatedAt time.Time
 		var tenantID string
-		var scope string
 		var entityJSON string
 
-		err = rows.Scan(&dbID, &createdAt, &updatedAt, &tenantID, &scope, &entityJSON)
+		err = rows.Scan(&dbID, &createdAt, &updatedAt, &tenantID, &entityJSON)
 		if err != nil {
 			s.logger.Error("Failed to scan collection row", "error", err)
 			return nil, se.NewServiceError(messages.DatabaseOperationFailed, "Type", "collection", "ResourceId", dbID, "Error", err.Error())
@@ -159,7 +156,7 @@ func (s *SQLStorage) GetCollections(limit int, offset int) (*abstractions.QueryR
 		}
 
 		// Construct the CollectionResource
-		resource, err := s.constructCollectionResource(dbID, createdAt, updatedAt, tenantID, scope, &collectionConfig)
+		resource, err := s.constructCollectionResource(dbID, createdAt, updatedAt, tenantID, &collectionConfig)
 		if err != nil {
 			constructErrs = append(constructErrs, err.Error())
 			totalCount--
@@ -187,7 +184,7 @@ func (s *SQLStorage) UpdateCollection(collection *api.CollectionResource) error 
 		if err != nil {
 			return err
 		}
-		if persistedCollection.Type == "system" {
+		if persistedCollection.Resource.Owner == "system" {
 			return se.NewServiceError(messages.BadRequest, "Type", "collection", "ResourceId", collection.Resource.ID, "Error", "System collections cannot be updated")
 		}
 		persistedCollection.CollectionConfig = collection.CollectionConfig
@@ -237,7 +234,7 @@ func (s *SQLStorage) PatchCollection(id string, patches *api.Patch) error {
 		if err != nil {
 			return err
 		}
-		if persistedCollection.Type == "system" {
+		if persistedCollection.Resource.Owner == "system" {
 			return se.NewServiceError(messages.BadRequest, "Type", "collection", "ResourceId", id, "Error", "System collections cannot be patched")
 		}
 		//conevert persistedCollection to json
@@ -272,7 +269,6 @@ func (s *SQLStorage) PatchCollection(id string, patches *api.Patch) error {
 			createdAt,
 			updatedAt,
 			tenantID,
-			persistedCollection.Type,
 			&patchedCollectionConfig)
 		if err != nil {
 			return err

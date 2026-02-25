@@ -1,11 +1,5 @@
 package api
 
-// Provider contains the configuration details for an evaluation provider.
-type ProviderConfig struct {
-	ID                     string `mapstructure:"id" yaml:"id" json:"id"`
-	ProviderConfigInternal `mapstructure:",squash"`
-}
-
 type BenchmarkResource struct {
 	ID           string        `mapstructure:"id" yaml:"id" json:"id"`
 	Name         string        `mapstructure:"name" yaml:"name" json:"name"`
@@ -19,17 +13,17 @@ type BenchmarkResource struct {
 	PassCriteria *PassCriteria `mapstructure:"pass_criteria" yaml:"pass_criteria" json:"pass_criteria,omitempty"`
 }
 
-type ProviderConfigInternal struct {
+type ProviderConfig struct {
 	Name        string              `mapstructure:"name" yaml:"name" json:"name"`
 	Description string              `mapstructure:"description" yaml:"description" json:"description"`
-	Type        string              `mapstructure:"type" yaml:"type" json:"type"`
+	Title       string              `mapstructure:"title" yaml:"title" json:"title"`
 	Benchmarks  []BenchmarkResource `mapstructure:"benchmarks" yaml:"benchmarks" json:"benchmarks"`
 	Runtime     *Runtime            `mapstructure:"runtime" yaml:"runtime" json:"runtime,omitempty"`
 }
 
 type ProviderResource struct {
 	Resource Resource `json:"resource"`
-	ProviderConfigInternal
+	ProviderConfig
 }
 
 type Runtime struct {
@@ -69,6 +63,6 @@ type LocalRuntime struct {
 
 // ProviderResourceList represents response for listing providers
 type ProviderResourceList struct {
-	TotalCount int                `json:"total_count"`
-	Items      []ProviderResource `json:"items,omitempty"`
+	Page
+	Items []ProviderResource `json:"items,omitempty"`
 }

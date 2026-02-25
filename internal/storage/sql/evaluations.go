@@ -160,13 +160,10 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 }
 
 func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, filter abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
+	params := getParams(filter)
 
-	statusFilter, ok := filter.Params["status_filter"]
-	if !ok {
-		statusFilter = ""
-	}
-	// Get total count (with status filter if provided)
-	countQuery, countArgs, err := createCountEntitiesStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, statusFilter)
+	// Get total count (with filter if provided)
+	countQuery, countArgs, err := createCountEntitiesStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, params)
 	if err != nil {
 		return nil, err
 	}
@@ -178,15 +175,23 @@ func (s *SQLStorage) GetEvaluationJobs(limit int, offset int, filter abstraction
 		err = s.queryRow(nil, countQuery).Scan(&totalCount)
 	}
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return &abstractions.QueryResults[api.EvaluationJobResource]{
+				Items:       make([]api.EvaluationJobResource, 0),
+				TotalStored: 0,
+				Errors:      nil,
+			}, nil
+		}
 		s.logger.Error("Failed to count evaluation jobs", "error", err)
 		return nil, se.NewServiceError(messages.QueryFailed, "Type", "evaluation jobs", "Error", err.Error())
 	}
 
-	// Build the list query with pagination and status filter
-	listQuery, listArgs, err := createListEntitiesStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, limit, offset, statusFilter)
+	// Build the list query with pagination and filters
+	listQuery, listArgs, err := createListEntitiesStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, limit, offset, params)
 	if err != nil {
 		return nil, err
 	}
+	s.logger.Info("List evaluations query", "query", listQuery, "args", listArgs, "params", params, "limit", limit, "offset", offset)
 
 	// Query the database
 	rows, err := s.query(nil, listQuery, listArgs...)

@@ -73,6 +73,15 @@ func (f *fakeStorage) PatchCollection(_ string, _ *api.Patch) error {
 func (f *fakeStorage) DeleteCollection(_ string) error {
 	return nil
 }
+func (f *fakeStorage) CreateProvider(_ *api.ProviderResource) error {
+	return nil
+}
+func (f *fakeStorage) GetProvider(_ string) (*api.ProviderResource, error) {
+	return nil, nil
+}
+func (f *fakeStorage) DeleteProvider(_ string) error {
+	return nil
+}
 func (f *fakeStorage) Close() error { return nil }
 
 func (f *fakeStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
@@ -354,7 +363,7 @@ func sampleProviders(providerID string) map[string]api.ProviderResource {
 	return map[string]api.ProviderResource{
 		providerID: {
 			Resource: api.Resource{ID: providerID},
-			ProviderConfigInternal: api.ProviderConfigInternal{
+			ProviderConfig: api.ProviderConfig{
 				Runtime: &api.Runtime{
 					K8s: &api.K8sRuntime{
 						Image: "quay.io/evalhub/adapter:latest",

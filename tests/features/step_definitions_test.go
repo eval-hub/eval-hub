@@ -65,6 +65,8 @@ type scenarioConfig struct {
 	response     *http.Response
 	body         []byte
 
+	reqHeaders map[string]string
+
 	lastURL string
 	lastId  string
 
@@ -278,6 +280,28 @@ func (tc *scenarioConfig) checkHealthEndpoint() error {
 	return nil
 }
 
+func (tc *scenarioConfig) iSetHeaderTo(paramName, paramValue string) error {
+	value, err := tc.getId(paramValue)
+	if err != nil {
+		return err
+	}
+	tc.reqHeaders[paramName] = value
+	return nil
+}
+
+func (tc *scenarioConfig) iUnsetHeader(paramName string) error {
+	delete(tc.reqHeaders, paramName)
+	return nil
+}
+
+func (tc *scenarioConfig) iSetTransactionIdTo(paramValue string) error {
+	return tc.iSetHeaderTo(server.TRANSACTION_ID_HEADER, paramValue)
+}
+
+func (tc *scenarioConfig) iUnsetTransactionId() error {
+	return tc.iUnsetHeader(server.TRANSACTION_ID_HEADER)
+}
+
 func (tc *scenarioConfig) iSendARequestTo(method, path string) error {
 	return tc.iSendARequestToWithBody(method, path, "")
 }
@@ -437,29 +461,19 @@ func extractId(body []byte) (string, error) {
 	return "", nil
 }
 
-func extractIdFromPath(path string) string {
-	for _, prefix := range []string{"/api/v1/evaluations/collections/", "/api/v1/evaluations/jobs/"} {
-		if _, after, found := strings.Cut(path, prefix); found && after != "" {
-			if id, _, ok := strings.Cut(after, "/"); ok {
-				return id
-			}
-			if id, _, ok := strings.Cut(after, "?"); ok {
-				return id
-			}
-			return after
-		}
-	}
-	return ""
-}
+// pathDetails extracts the details from the path
+// the first match is the asset name
+// the second match is the asset type
+// the third match is the asset id
+// Handles: /api/v1/{name}, /api/v1/{name}/{asset}, /api/v1/{name}/{asset}/{id}
+// Uses [^/?]+ to stop at query strings
+var pathDetails = regexp.MustCompile(`^.*/api/v1/([^/?]+)(?:/([^/?]+))?(?:/([^/?]+))?.*$`)
 
-// firstPathSegment matches the first path segment after /api/v1/
-var firstPathSegment = regexp.MustCompile(`^.*/api/v1/([^/]+).*$`)
-
-func getAssetName(path string) (string, error) {
-	if matches := firstPathSegment.FindStringSubmatch(path); len(matches) >= 2 {
-		return matches[1], nil
+func getAssetDetails(path string) (string, string, string, error) {
+	if matches := pathDetails.FindStringSubmatch(path); len(matches) >= 4 {
+		return matches[1], matches[2], matches[3], nil
 	}
-	return "", logError(fmt.Errorf("no first path segment found in path %s", path))
+	return "", "", "", logError(fmt.Errorf("no first path segment found in path %s", path))
 }
 
 func (tc *scenarioConfig) getId(id string) (string, error) {
@@ -530,6 +544,10 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 		req.Header.Set("Authorization", "Bearer "+authToken)
 	}
 
+	for k, v := range tc.reqHeaders {
+		req.Header.Set(k, v)
+	}
+
 	tc.response, err = tc.apiFeature.client.Do(req)
 	if err != nil {
 		logDebug("Failed to send request: %v\n", err)
@@ -549,15 +567,10 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 	}
 
 	// capture resource id for create (evaluation job or collection)
-	if method == http.MethodPost && tc.response.StatusCode == http.StatusAccepted {
-		var assetName string
-		switch {
-		case strings.Contains(endpoint, "/evaluations/collections") && !strings.Contains(endpoint, "/evaluations/collections/"):
-			assetName = "collections"
-		case strings.Contains(endpoint, "/evaluations/jobs") && !strings.Contains(endpoint, "/evaluations/jobs/"):
-			assetName = "evaluations"
-		default:
-			assetName = ""
+	if method == http.MethodPost && (tc.response.StatusCode == http.StatusAccepted || tc.response.StatusCode == http.StatusCreated) {
+		_, assetName, _, err := getAssetDetails(endpoint)
+		if err != nil {
+			return err
 		}
 		if assetName != "" {
 			tc.lastId, err = extractId(tc.body)
@@ -572,17 +585,15 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 	}
 
 	if method == http.MethodDelete {
-		var assetName string
-		switch {
-		case strings.Contains(endpoint, "/evaluations/collections/"):
-			assetName = "collections"
-		case strings.Contains(endpoint, "/evaluations/jobs/"):
-			assetName = "evaluations"
-		default:
-			assetName = ""
+		_, assetName, _, err := getAssetDetails(endpoint)
+		if err != nil {
+			return err
 		}
 		if assetName != "" {
-			id := extractIdFromPath(endpoint)
+			_, _, id, err := getAssetDetails(endpoint)
+			if err != nil {
+				return err
+			}
 			if id == "" {
 				return logError(fmt.Errorf("no ID found in path %s", endpoint))
 			}
@@ -872,6 +883,8 @@ func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, 
 		switch assetName {
 		case "evaluations":
 			url = "evaluations/jobs"
+		case "jobs":
+			url = "evaluations/jobs"
 		case "collections":
 			url = "evaluations/collections"
 		}
@@ -895,6 +908,7 @@ func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, 
 
 func createScenarioConfig(apiConfig *apiFeature) *scenarioConfig {
 	conf := new(scenarioConfig)
+	conf.reqHeaders = make(map[string]string)
 	conf.assets = make(map[string][]string)
 	conf.values = make(map[string]string)
 	conf.apiFeature = apiConfig
@@ -938,20 +952,38 @@ func tidyUpTests() {
 // A bit of a hack to have some checks that the regexes are working as expected
 func checkRegexes() {
 	paths := [][]string{
-		{"/api/v1/evaluations", "evaluations"},
-		{"/api/v1/evaluations/jobs", "evaluations"},
-		{"/api/v1/evaluations/jobs/{id}", "evaluations"},
-		{"/api/v1/evaluations/jobs/{id}/update", "evaluations"},
-		{"/api/v1/collections", "collections"},
-		{"/api/v1/collections/{id}", "collections"},
+		{"/api/v1/evaluations", "evaluations", "", ""},
+		{"/api/v1/evaluations/jobs", "evaluations", "jobs", ""},
+		{"/api/v1/evaluations/jobs/f02b16a2-1990-4626-b24d-1cff3febdbfb", "evaluations", "jobs", "f02b16a2-1990-4626-b24d-1cff3febdbfb"},
+		{"/api/v1/evaluations/jobs/f02b16a2-1990-4626-b24d-1cff3febdbfb/update", "evaluations", "jobs", "f02b16a2-1990-4626-b24d-1cff3febdbfb"},
+		{"/api/v1/evaluations/collections", "evaluations", "collections", ""},
+		{"/api/v1/evaluations/collections/f02b16a2-1990-4626-b24d-1cff3febdbfb", "evaluations", "collections", "f02b16a2-1990-4626-b24d-1cff3febdbfb"},
+		{"/api/v1/evaluations/providers", "evaluations", "providers", ""},
+		{"/api/v1/evaluations/providers/f02b16a2-1990-4626-b24d-1cff3febdbfb", "evaluations", "providers", "f02b16a2-1990-4626-b24d-1cff3febdbfb"},
+		{"http://localhost:8080/api/v1/evaluations", "evaluations", "", ""},
+		{"http://localhost:8080/api/v1/evaluations/jobs", "evaluations", "jobs", ""},
+		{"http://localhost:8080/api/v1/evaluations/jobs/f02b16a2-1990-4626-b24d-1cff3febdbfb", "evaluations", "jobs", "f02b16a2-1990-4626-b24d-1cff3febdbfb"},
+		{"http://localhost:8080/api/v1/evaluations/jobs/f02b16a2-1990-4626-b24d-1cff3febdbfb/update", "evaluations", "jobs", "f02b16a2-1990-4626-b24d-1cff3febdbfb"},
+		{"http://localhost:8080/api/v1/evaluations/collections", "evaluations", "collections", ""},
+		{"http://localhost:8080/api/v1/evaluations/collections/f02b16a2-1990-4626-b24d-1cff3febdbfb", "evaluations", "collections", "f02b16a2-1990-4626-b24d-1cff3febdbfb"},
+		{"http://localhost:8080/api/v1/evaluations/providers", "evaluations", "providers", ""},
+		{"http://localhost:8080/api/v1/evaluations/providers/f02b16a2-1990-4626-b24d-1cff3febdbfb", "evaluations", "providers", "f02b16a2-1990-4626-b24d-1cff3febdbfb"},
+		{"http://localhost:8080/api/v1/evaluations/providers?a=b", "evaluations", "providers", ""},
+		{"http://localhost:8080/api/v1/evaluations/providers/f02b16a2-1990-4626-b24d-1cff3febdbfb?a=b", "evaluations", "providers", "f02b16a2-1990-4626-b24d-1cff3febdbfb"},
 	}
 	for _, path := range paths {
-		name, err := getAssetName(path[0])
+		name, asset, id, err := getAssetDetails(path[0])
 		if err != nil {
-			panic(logError(fmt.Errorf("failed to get asset name for path %s: %v", path, err)))
+			panic(logError(fmt.Errorf("failed to parse details from path %s: %v", path, err)))
 		}
 		if name != path[1] {
 			panic(logError(fmt.Errorf("expected asset name %s for path %s, got %s", path[1], path[0], name)))
+		}
+		if asset != path[2] {
+			panic(logError(fmt.Errorf("expected asset %s for path %s, got %s", path[2], path[0], asset)))
+		}
+		if id != path[3] {
+			panic(logError(fmt.Errorf("expected asset id %s for path %s, got %s", path[3], path[0], id)))
 		}
 	}
 }
@@ -977,6 +1009,10 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.After(tc.assetCleanup)
 
 	ctx.Step(`^the service is running$`, tc.theServiceIsRunning)
+	ctx.Step(`^I set the header "([^"]*)" to "([^"]*)"$`, tc.iSetHeaderTo)
+	ctx.Step(`^I unset the header "([^"]*)"$`, tc.iUnsetHeader)
+	ctx.Step(`^I set transaction-id to "([^"]*)"$`, tc.iSetTransactionIdTo)
+	ctx.Step(`^I unset transaction-id$`, tc.iUnsetTransactionId)
 	ctx.Step(`^I send a (GET|DELETE|POST|PUT) request to "([^"]*)"$`, tc.iSendARequestTo)
 	ctx.Step(`^I send a (POST|PUT|PATCH) request to "([^"]*)" with body "([^"]*)"$`, tc.iSendARequestToWithBody)
 	ctx.Step(`^the response code should be (\d+)$`, tc.theResponseStatusShouldBe)

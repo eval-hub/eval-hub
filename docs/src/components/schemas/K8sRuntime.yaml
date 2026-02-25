@@ -1,0 +1,32 @@
+type: object
+description: Kubernetes runtime configuration for provider evaluation jobs
+properties:
+  image:
+    type: string
+    description: Container image for the evaluation job (e.g. quay.io/evalhub/adapter:latest)
+  entrypoint:
+    type: array
+    items:
+      type: string
+    description: Container entrypoint command
+  cpu_request:
+    type: string
+    description: CPU request (e.g. 250m)
+  memory_request:
+    type: string
+    description: Memory request (e.g. 512Mi)
+  cpu_limit:
+    type: string
+    description: CPU limit (e.g. 1)
+  memory_limit:
+    type: string
+    description: Memory limit (e.g. 2Gi)
+  env:
+    type: array
+    items:
+      $ref: ./EnvVar.yaml
+    description: Environment variables for the job
+required:
+  - image
+  - entrypoint
+

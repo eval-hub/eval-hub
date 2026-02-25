@@ -14,6 +14,12 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+const (
+	TRANSACTION_ID_HEADER = "X-Global-Transaction-Id"
+	USER_HEADER           = "X-User"
+	TENANT_HEADER         = "X-Tenant"
+)
+
 // newExecutionContext creates a new ExecutionContext with default values. This function
 // is called at the route level before invoking evaluation-related handlers to set up
 // request-scoped context.
@@ -36,8 +42,8 @@ func (s *Server) newExecutionContext(r *http.Request) *executioncontext.Executio
 	// Enhance logger with request-specific fields
 	requestID, enhancedLogger := s.loggerWithRequest(r)
 
-	user := r.Header.Get("X-User")
-	tenant := r.Header.Get("X-Tenant")
+	user := r.Header.Get(USER_HEADER)
+	tenant := r.Header.Get(TENANT_HEADER)
 
 	// Use r.Context() so OTEL trace context (and the HTTP span from otelhttp) propagates
 	// to handlers and downstream calls (storage, runtime, mlflow). Using context.Background()
@@ -129,6 +135,9 @@ func (r RespWrapper) Write(buf []byte) (int, error) {
 
 func (r RespWrapper) WriteJSON(v any, code int) {
 	r.SetHeader("Content-Type", "application/json")
+	if r.ctx.RequestID != "" {
+		r.SetHeader(TRANSACTION_ID_HEADER, r.ctx.RequestID)
+	}
 	r.SetStatusCode(code)
 
 	if v != nil {

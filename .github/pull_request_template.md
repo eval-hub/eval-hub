@@ -30,6 +30,7 @@ Please mark the relevant component(s):
 - [ ] Evaluation executors
 - [ ] MLFlow integration
 - [ ] Collection management
+- [ ] Provider management
 - [ ] Kubernetes/OpenShift deployment
 - [ ] Configuration system
 - [ ] Monitoring/metrics
