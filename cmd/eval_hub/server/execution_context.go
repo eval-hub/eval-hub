@@ -129,6 +129,9 @@ func (r RespWrapper) Write(buf []byte) (int, error) {
 
 func (r RespWrapper) WriteJSON(v any, code int) {
 	r.SetHeader("Content-Type", "application/json")
+	if r.ctx.RequestID != "" {
+		r.SetHeader("X-Global-Transaction-Id", r.ctx.RequestID)
+	}
 	r.SetStatusCode(code)
 
 	if v != nil {

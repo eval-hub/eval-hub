@@ -75,6 +75,13 @@ var (
 		"local_runtime_not_enabled",
 	)
 
+	// ProviderIDNotUnique The provider ID '{{.ProviderID}}' is not unique.
+	ProviderIDNotUnique = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The provider ID '{{.ProviderID}}' is not unique.",
+		"provider_id_not_unique",
+	)
+
 	// MLFlowRequiredForExperiment MLflow is required for experiment tracking. Please configure MLflow in the service configuration and try again.
 	MLFlowRequiredForExperiment = createMessage(
 		constants.HTTPCodeBadRequest,

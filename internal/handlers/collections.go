@@ -72,6 +72,9 @@ func (h *Handlers) HandleCreateCollection(ctx *executioncontext.ExecutionContext
 		Resource: api.Resource{
 			ID:        common.GUID(),
 			CreatedAt: &now,
+			Owner:     ctx.User,
+			Tenant:    &ctx.Tenant,
+			ReadOnly:  false,
 		},
 		CollectionConfig: *collection,
 	}
