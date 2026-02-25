@@ -47,9 +47,10 @@ func GetOverallJobStatus(job *api.EvaluationJobResource) (api.OverallState, *api
 
 func ValidateBenchmarkExists(job *api.EvaluationJobResource, runStatus *api.StatusEvent) error {
 	found := false
-	for _, benchmark := range job.Benchmarks {
+	for index, benchmark := range job.Benchmarks {
 		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID &&
-			benchmark.ProviderID == runStatus.BenchmarkStatusEvent.ProviderID {
+			benchmark.ProviderID == runStatus.BenchmarkStatusEvent.ProviderID &&
+			index == runStatus.BenchmarkStatusEvent.BenchmarkIndex {
 			found = true
 			break
 		}
@@ -70,10 +71,11 @@ func UpdateBenchmarkResults(job *api.EvaluationJobResource, runStatus *api.Statu
 
 	for _, benchmark := range job.Results.Benchmarks {
 		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID &&
-			benchmark.ProviderID == runStatus.BenchmarkStatusEvent.ProviderID {
+			benchmark.ProviderID == runStatus.BenchmarkStatusEvent.ProviderID &&
+			benchmark.BenchmarkIndex == runStatus.BenchmarkStatusEvent.BenchmarkIndex {
 			// we should never get here because the final result
 			// can not change, hence we treat this as an error for now
-			return serviceerrors.NewServiceError(messages.InternalServerError, "Error", fmt.Sprintf("Benchmark result already exists for benchmark %s in job %s", runStatus.BenchmarkStatusEvent.ID, job.Resource.ID))
+			return serviceerrors.NewServiceError(messages.InternalServerError, "Error", fmt.Sprintf("Benchmark result already exists for benchmark[%d] %s in job %s", runStatus.BenchmarkStatusEvent.BenchmarkIndex, runStatus.BenchmarkStatusEvent.ID, job.Resource.ID))
 		}
 	}
 	job.Results.Benchmarks = append(job.Results.Benchmarks, *result)
@@ -94,7 +96,8 @@ func UpdateBenchmarkStatus(job *api.EvaluationJobResource, runStatus *api.Status
 	}
 	for index, benchmark := range job.Status.Benchmarks {
 		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID &&
-			benchmark.ProviderID == runStatus.BenchmarkStatusEvent.ProviderID {
+			benchmark.ProviderID == runStatus.BenchmarkStatusEvent.ProviderID &&
+			benchmark.BenchmarkIndex == runStatus.BenchmarkStatusEvent.BenchmarkIndex {
 			job.Status.Benchmarks[index] = *benchmarkStatus
 			return
 		}

@@ -48,7 +48,7 @@ put:
     content:
       application/json:
         schema:
-          $ref: ../components/schemas/ProviderConfigInternal.yaml
+          $ref: ../components/schemas/ProviderConfig.yaml
   responses:
     '200':
       description: Successful Response

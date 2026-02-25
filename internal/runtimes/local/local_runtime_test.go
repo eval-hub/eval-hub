@@ -65,6 +65,10 @@ func (f *fakeStorage) UpdateCollection(_ *api.CollectionResource) error { return
 func (f *fakeStorage) DeleteCollection(_ string) error                  { return nil }
 func (f *fakeStorage) Close() error                                     { return nil }
 
+func (f *fakeStorage) CreateProvider(_ *api.ProviderResource) error        { return nil }
+func (f *fakeStorage) GetProvider(_ string) (*api.ProviderResource, error) { return nil, nil }
+func (f *fakeStorage) DeleteProvider(_ string) error                       { return nil }
+
 func (f *fakeStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 	return &fakeStorage{
 		logger:        logger,
@@ -131,7 +135,7 @@ func sampleLocalProviders(providerID, command string) map[string]api.ProviderRes
 	return map[string]api.ProviderResource{
 		providerID: {
 			Resource: api.Resource{ID: providerID},
-			ProviderConfigInternal: api.ProviderConfigInternal{
+			ProviderConfig: api.ProviderConfig{
 				Runtime: &api.Runtime{
 					Local: &api.LocalRuntime{
 						Command: command,
@@ -149,7 +153,7 @@ func localJobDir(jobID string, benchmarkIndex int, providerID, benchmarkID strin
 	return filepath.Join(localJobsBaseDir, jobID, fmt.Sprintf("%d", benchmarkIndex), providerID, benchmarkID)
 }
 
-func cleanupDir(t *testing.T, jobID, providerID, benchmarkID string) {
+func cleanupDir(t *testing.T, jobID, _ /*providerID*/, _ /*benchmarkID*/ string) {
 	t.Helper()
 	t.Cleanup(func() {
 		os.RemoveAll(filepath.Join(localJobsBaseDir, jobID))
@@ -365,7 +369,7 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 	providers := map[string]api.ProviderResource{
 		providerID: {
 			Resource: api.Resource{ID: providerID},
-			ProviderConfigInternal: api.ProviderConfigInternal{
+			ProviderConfig: api.ProviderConfig{
 				Runtime: &api.Runtime{Local: nil},
 			},
 		},
@@ -404,7 +408,7 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 
 	providers[providerID] = api.ProviderResource{
 		Resource: api.Resource{ID: providerID},
-		ProviderConfigInternal: api.ProviderConfigInternal{
+		ProviderConfig: api.ProviderConfig{
 			Runtime: &api.Runtime{
 				Local: &api.LocalRuntime{Command: ""},
 			},

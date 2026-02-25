@@ -65,7 +65,7 @@ func TestRunEvaluationJobCreatesResources(t *testing.T) {
 		providers: map[string]api.ProviderResource{
 			"lm_evaluation_harness": {
 				Resource: api.Resource{ID: "lm_evaluation_harness"},
-				ProviderConfigInternal: api.ProviderConfigInternal{
+				ProviderConfig: api.ProviderConfig{
 					Runtime: &api.Runtime{
 						K8s: &api.K8sRuntime{
 							Image:       "docker.io/library/busybox:1.36",
@@ -186,7 +186,7 @@ func TestCreateBenchmarkResourcesReturnsErrorWhenConfigMapExists(t *testing.T) {
 		providers: map[string]api.ProviderResource{
 			"lm_evaluation_harness": {
 				Resource: api.Resource{ID: "lm_evaluation_harness"},
-				ProviderConfigInternal: api.ProviderConfigInternal{
+				ProviderConfig: api.ProviderConfig{
 					Runtime: &api.Runtime{
 						K8s: &api.K8sRuntime{
 							Image: "docker.io/library/busybox:1.36",
@@ -251,7 +251,7 @@ func TestCreateBenchmarkResourcesDuplicateBenchmarkIDDoesNotCollide(t *testing.T
 		providers: map[string]api.ProviderResource{
 			"lm_evaluation_harness": {
 				Resource: api.Resource{ID: "lm_evaluation_harness"},
-				ProviderConfigInternal: api.ProviderConfigInternal{
+				ProviderConfig: api.ProviderConfig{
 					Runtime: &api.Runtime{
 						K8s: &api.K8sRuntime{
 							Image: "docker.io/library/busybox:1.36",
@@ -261,7 +261,7 @@ func TestCreateBenchmarkResourcesDuplicateBenchmarkIDDoesNotCollide(t *testing.T
 			},
 			"lighteval": {
 				Resource: api.Resource{ID: "lighteval"},
-				ProviderConfigInternal: api.ProviderConfigInternal{
+				ProviderConfig: api.ProviderConfig{
 					Runtime: &api.Runtime{
 						K8s: &api.K8sRuntime{
 							Image: "docker.io/library/busybox:1.36",
@@ -334,7 +334,7 @@ func TestCreateBenchmarkResourcesSetsAnnotationsIntegration(t *testing.T) {
 		providers: map[string]api.ProviderResource{
 			"lm_evaluation_harness": {
 				Resource: api.Resource{ID: "lm_evaluation_harness"},
-				ProviderConfigInternal: api.ProviderConfigInternal{
+				ProviderConfig: api.ProviderConfig{
 					Runtime: &api.Runtime{
 						K8s: &api.K8sRuntime{
 							Image: "docker.io/library/busybox:1.36",
@@ -427,7 +427,7 @@ func TestRunEvaluationJobReturnsNilOnCreateFailure(t *testing.T) {
 		providers: map[string]api.ProviderResource{
 			"lm_evaluation_harness": {
 				Resource: api.Resource{ID: "lm_evaluation_harness"},
-				ProviderConfigInternal: api.ProviderConfigInternal{
+				ProviderConfig: api.ProviderConfig{
 					Runtime: &api.Runtime{
 						K8s: &api.K8sRuntime{
 							Image: "docker.io/library/busybox:1.36",

@@ -34,7 +34,7 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 	}
 	provider := &api.ProviderResource{
 		Resource: api.Resource{ID: "provider-1"},
-		ProviderConfigInternal: api.ProviderConfigInternal{
+		ProviderConfig: api.ProviderConfig{
 			Runtime: &api.Runtime{
 				K8s: &api.K8sRuntime{
 					Image: "adapter:latest",
@@ -121,7 +121,7 @@ func TestBuildJobConfigAllowsNumExamplesOnly(t *testing.T) {
 	}
 	provider := &api.ProviderResource{
 		Resource: api.Resource{ID: "provider-1"},
-		ProviderConfigInternal: api.ProviderConfigInternal{
+		ProviderConfig: api.ProviderConfig{
 			Runtime: &api.Runtime{
 				K8s: &api.K8sRuntime{
 					Image: "adapter:latest",
@@ -164,7 +164,7 @@ func TestBuildJobConfigMissingRuntime(t *testing.T) {
 	}
 	provider := &api.ProviderResource{
 		Resource: api.Resource{ID: "provider-1"},
-		ProviderConfigInternal: api.ProviderConfigInternal{
+		ProviderConfig: api.ProviderConfig{
 			Runtime: &api.Runtime{},
 		},
 	}
@@ -191,7 +191,7 @@ func TestBuildJobConfigMissingAdapterImage(t *testing.T) {
 	}
 	provider := &api.ProviderResource{
 		Resource: api.Resource{ID: "provider-1"},
-		ProviderConfigInternal: api.ProviderConfigInternal{
+		ProviderConfig: api.ProviderConfig{
 			Runtime: &api.Runtime{},
 		},
 	}
@@ -223,7 +223,7 @@ func TestBuildJobConfigMissingServiceURL(t *testing.T) {
 	}
 	provider := &api.ProviderResource{
 		Resource: api.Resource{ID: "provider-1"},
-		ProviderConfigInternal: api.ProviderConfigInternal{
+		ProviderConfig: api.ProviderConfig{
 			Runtime: &api.Runtime{
 				K8s: &api.K8sRuntime{
 					Image: "adapter:latest",
@@ -259,7 +259,7 @@ func TestBuildJobConfigAllowsEmptyBenchmarkConfig(t *testing.T) {
 	}
 	provider := &api.ProviderResource{
 		Resource: api.Resource{ID: "provider-1"},
-		ProviderConfigInternal: api.ProviderConfigInternal{
+		ProviderConfig: api.ProviderConfig{
 			Runtime: &api.Runtime{
 				K8s: &api.K8sRuntime{
 					Image: "adapter:latest",
@@ -314,7 +314,7 @@ func TestBuildJobConfigWithOCIExports(t *testing.T) {
 	}
 	provider := &api.ProviderResource{
 		Resource: api.Resource{ID: "provider-1"},
-		ProviderConfigInternal: api.ProviderConfigInternal{
+		ProviderConfig: api.ProviderConfig{
 			Runtime: &api.Runtime{
 				K8s: &api.K8sRuntime{
 					Image: "adapter:latest",

@@ -53,7 +53,7 @@ get:
         default: 0
         title: Offset
       description: Offset for pagination
-    - name: status_filter
+    - name: status
       in: query
       required: false
       schema:
@@ -61,6 +61,20 @@ get:
         description: Filter by status
         title: Status Filter
       description: Filter by status
+    - name: name
+      in: query
+      required: false
+      schema:
+        type: string
+        title: Name
+      description: Name to search for
+    - name: tags
+      in: query
+      required: false
+      schema:
+        type: string
+        title: Tags
+      description: Tags to search for
   responses:
     '200':
       description: Successful Response

@@ -1,5 +1,6 @@
 id: lighteval
 name: Lighteval
+title: Lighteval
 description: Lightweight LLM evaluation framework from Hugging Face
 runtime:
   k8s:
