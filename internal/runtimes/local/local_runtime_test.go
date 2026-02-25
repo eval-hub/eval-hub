@@ -131,7 +131,7 @@ func sampleLocalProviders(providerID, command string) map[string]api.ProviderRes
 	return map[string]api.ProviderResource{
 		providerID: {
 			Resource: api.Resource{ID: providerID},
-			ProviderConfigInternal: api.ProviderConfigInternal{
+			ProviderConfig: api.ProviderConfig{
 				Runtime: &api.Runtime{
 					Local: &api.LocalRuntime{
 						Command: command,
@@ -365,7 +365,7 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 	providers := map[string]api.ProviderResource{
 		providerID: {
 			Resource: api.Resource{ID: providerID},
-			ProviderConfigInternal: api.ProviderConfigInternal{
+			ProviderConfig: api.ProviderConfig{
 				Runtime: &api.Runtime{Local: nil},
 			},
 		},
@@ -404,7 +404,7 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 
 	providers[providerID] = api.ProviderResource{
 		Resource: api.Resource{ID: providerID},
-		ProviderConfigInternal: api.ProviderConfigInternal{
+		ProviderConfig: api.ProviderConfig{
 			Runtime: &api.Runtime{
 				Local: &api.LocalRuntime{Command: ""},
 			},

@@ -434,7 +434,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ProviderConfigInternal'
+              $ref: '#/components/schemas/ProviderConfig'
       responses:
         '200':
           description: Successful Response
@@ -1289,7 +1289,7 @@ components:
           $ref: '#/components/schemas/PrimaryScore'
         pass_criteria:
           $ref: '#/components/schemas/PassCriteria'
-    ProviderConfigInternal:
+    ProviderConfig:
       type: object
       description: Evaluation provider (configuration and available benchmarks)
       properties:
@@ -1299,9 +1299,6 @@ components:
         description:
           type: string
           description: Provider description
-        type:
-          type: string
-          description: Provider type
         benchmarks:
           type: array
           items:
@@ -1316,13 +1313,7 @@ components:
             resource:
               $ref: '#/components/schemas/Resource'
               description: Resource metadata
-            type:
-              type: string
-              enum:
-                - system
-                - owned
-              description: Type of collection. 'system' collections are created by the system and are not editable, 'owned' collections are created by the user and are editable.
-        - $ref: '#/components/schemas/ProviderConfigInternal'
+        - $ref: '#/components/schemas/ProviderConfig'
     ProviderResourceList:
       type: object
       description: List of providers (no pagination links)
@@ -1335,16 +1326,6 @@ components:
           items:
             $ref: '#/components/schemas/ProviderResource'
           description: Provider resources
-    ProviderConfig:
-      type: object
-      description: Evaluation provider (configuration and available benchmarks)
-      allOf:
-        - type: object
-          properties:
-            id:
-              type: string
-              description: Provider ID
-        - $ref: '#/components/schemas/ProviderConfigInternal'
     PatchOp:
       type: string
       enum:
@@ -1404,12 +1385,6 @@ components:
             resource:
               $ref: '#/components/schemas/Resource'
               description: Resource metadata
-            type:
-              type: string
-              enum:
-                - system
-                - owned
-              description: Type of collection. 'system' collections are created by the system and are not editable, 'owned' collections are created by the user and are editable.
         - $ref: '#/components/schemas/CollectionConfig'
     CollectionResourceList:
       type: object

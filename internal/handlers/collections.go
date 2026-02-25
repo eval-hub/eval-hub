@@ -73,7 +73,6 @@ func (h *Handlers) HandleCreateCollection(ctx *executioncontext.ExecutionContext
 			ID:        common.GUID(),
 			CreatedAt: &now,
 		},
-		Type:             "owned", //Assumption: system collections are not created through the API
 		CollectionConfig: *collection,
 	}
 	err = storage.CreateCollection(collectionResource)

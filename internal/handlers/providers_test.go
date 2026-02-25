@@ -25,7 +25,7 @@ func TestHandleListProvidersReturnsEmptyForInvalidProviderID(t *testing.T) {
 	providerConfigs := map[string]api.ProviderResource{
 		"garak": {
 			Resource: api.Resource{ID: "garak"},
-			ProviderConfigInternal: api.ProviderConfigInternal{
+			ProviderConfig: api.ProviderConfig{
 				Benchmarks: []api.BenchmarkResource{
 					{ID: "bench-1"},
 				},
