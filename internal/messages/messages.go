@@ -40,11 +40,11 @@ var (
 		"query_parameter_invalid",
 	)
 
-	// JobCanNotBeCancelled The job {{.Id}} can not be cancelled because it is '{{.Status}}'.
-	JobCanNotBeCancelled = createMessage(
+	// JobCanNotBeUpdated The job {{.Id}} can not be {{.NewStatus}} because it is '{{.Status}}'.
+	JobCanNotBeUpdated = createMessage(
 		constants.HTTPCodeConflict,
-		"The job {{.Id}} can not be cancelled because it is '{{.Status}}'.",
-		"job_can_not_be_cancelled",
+		"The job {{.Id}} can not be {{.NewStatus}} because it is '{{.Status}}'.",
+		"job_can_not_be_updated",
 	)
 
 	// InvalidJSONRequest The request JSON is invalid: '{{.Error}}'. Please check the request and try again.

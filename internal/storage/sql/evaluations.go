@@ -299,19 +299,26 @@ func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState
 		if err != nil {
 			return err
 		}
-		switch evaluationJob.Status.State {
-		case api.OverallStateCancelled:
-			// if the job is already cancelled then we don't need to update the status
+
+		// check if the state is unchanged
+		if state == evaluationJob.Status.State {
+			// if the state is the same as the current state then we don't need to update the status
 			// we don't treat this as an error for now, we just return 204
 			return nil
-		case api.OverallStateCompleted, api.OverallStateFailed:
-			return se.NewServiceError(messages.JobCanNotBeCancelled, "Id", id, "Status", evaluationJob.Status.State)
 		}
-		if err := s.updateEvaluationJobStatusTxn(txn, id, state, message); err != nil {
-			return err
+
+		// check if the job is in a final state
+		switch evaluationJob.Status.State {
+		case api.OverallStateCancelled, api.OverallStateCompleted, api.OverallStateFailed, api.OverallStatePartiallyFailed:
+			// the job is already in a final state, so we can't update the status
+			return se.NewServiceError(messages.JobCanNotBeUpdated, "Id", id, "NewStatus", state, "Status", evaluationJob.Status.State)
+		default:
+			if err := s.updateEvaluationJobStatusTxn(txn, id, state, message); err != nil {
+				return err
+			}
+			s.logger.Info("Updated evaluation job status", "id", id, "overall_state", state, "message", message)
+			return nil
 		}
-		s.logger.Info("Updated evaluation job status", "id", id, "overall_state", state, "message", message)
-		return nil
 	})
 	return err
 }
