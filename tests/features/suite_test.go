@@ -50,6 +50,11 @@ func TestFeatures(t *testing.T) {
 		}()
 	}
 
+	tags := os.Getenv("GODOG_TAGS")
+	if tags == "" {
+		tags = "~@ignore"
+	}
+
 	suite := godog.TestSuite{
 		TestSuiteInitializer: InitializeTestSuite,
 		ScenarioInitializer:  InitializeScenario,
@@ -59,6 +64,7 @@ func TestFeatures(t *testing.T) {
 			Paths:    paths,
 			TestingT: t,
 			Strict:   true,
+			Tags:     tags,
 		},
 	}
 

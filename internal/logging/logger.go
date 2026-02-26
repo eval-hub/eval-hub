@@ -14,9 +14,14 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// Log level env: LOG_LEVEL=debug|info|warn|error (default: info).
-const envLogLevel = "LOG_LEVEL"
+// constants for the logging system
+const (
+	// Log level env: LOG_LEVEL=debug|info|warn|error (default: info).
+	envLogLevel = "LOG_LEVEL"
+)
 
+// ShutdownFunc is a function that shuts down the logger
+// the return is an error if the logger could not be shut down
 type ShutdownFunc func() error
 
 // NewLogger creates and returns a new structured logger using zap as the underlying
@@ -51,6 +56,9 @@ func newShutdownFunc(core zapcore.Core) ShutdownFunc {
 	}
 }
 
+// parseLogLevel parses the log level from the environment variable
+// the s is the string to parse
+// the return is the log level
 func parseLogLevel(s string) *zapcore.Level {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "debug":
@@ -91,18 +99,15 @@ func LogRequestStarted(ctx *executioncontext.ExecutionContext) {
 	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request started")
 }
 
-func LogRequestFailed(ctx *executioncontext.ExecutionContext, code int, errorMessage string) {
+func LogRequestFailed(ctx *executioncontext.ExecutionContext, code int, errorMessage string, skip ...int) {
+	skipCount := 3
+	if len(skip) > 0 {
+		skipCount += skip[0]
+	}
 	// log the failed request, the request details and requestId have already been added to the logger
-	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request failed", "error", errorMessage, "code", code, "duration", time.Since(ctx.StartedAt))
+	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, skipCount, "Request failed", "error", errorMessage, "code", code, "duration", time.Since(ctx.StartedAt))
 }
 
 func LogRequestSuccess(ctx *executioncontext.ExecutionContext, code int, response any) {
-	// TODO: we should only log the response if we are in debug mode?
-	// log the successful request, the request details and requestId have already been added to the logger
-	// if response != nil {
-	//	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request successful", "response", response)
-	//} else {
-	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request successful", "duration", time.Since(ctx.StartedAt))
-	//}
-	//}
+	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request successful", "code", code, "duration", time.Since(ctx.StartedAt))
 }
