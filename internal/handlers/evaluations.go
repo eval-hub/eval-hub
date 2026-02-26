@@ -156,6 +156,16 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 }
 
 func (h *Handlers) executeEvaluationJob(ctx context.Context, logger *slog.Logger, runtime abstractions.Runtime, job *api.EvaluationJobResource, storage *abstractions.Storage) error {
+	// Detach storage from the HTTP request context so that background
+	// goroutines inside the runtime can update job status after the
+	// request completes. This is the single transition point from
+	// request-scoped work to background runtime work, covering all
+	// runtime implementations (local, k8s, etc.).
+	if storage != nil && *storage != nil {
+		detached := (*storage).WithContext(context.Background())
+		storage = &detached
+	}
+
 	var err error
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -301,6 +311,16 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
+	}
+
+	// Attempt to cancel any running goroutines/processes for this job before
+	// updating storage. Currently, only the local runtime mode implements CancelJob,
+	// so this will only affect jobs running locally. CancelJob is safe to call for
+	// already-finished or unknown job IDs and is a no-op if the job is not found.
+	if h.runtime != nil {
+		if cancelErr := h.runtime.CancelJob(evaluationJobID); cancelErr != nil {
+			ctx.Logger.Error("Failed to cancel running job", "error", cancelErr, "id", evaluationJobID)
+		}
 	}
 
 	if hardDelete && h.runtime != nil {

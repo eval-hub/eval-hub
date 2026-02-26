@@ -83,6 +83,10 @@ func (r *stubRuntime) RunEvaluationJob(
 	return nil
 }
 
+func (r *stubRuntime) CancelJob(_ string) error {
+	return nil
+}
+
 func (r *stubRuntime) DeleteEvaluationJobResources(_ *api.EvaluationJobResource) error {
 	return nil
 }

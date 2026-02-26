@@ -79,6 +79,7 @@ func (r *fakeRuntime) RunEvaluationJob(_ *api.EvaluationJobResource, _ *abstract
 	r.called = true
 	return r.err
 }
+func (r *fakeRuntime) CancelJob(_ string) error { return nil }
 func (r *fakeRuntime) DeleteEvaluationJobResources(_ *api.EvaluationJobResource) error {
 	r.called = true
 	return r.err
