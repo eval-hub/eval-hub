@@ -393,24 +393,29 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 
 		// first we store the benchmark status
 		benchmark := api.BenchmarkStatus{
-			ProviderID:   runStatus.BenchmarkStatusEvent.ProviderID,
-			ID:           runStatus.BenchmarkStatusEvent.ID,
-			Status:       runStatus.BenchmarkStatusEvent.Status,
-			ErrorMessage: runStatus.BenchmarkStatusEvent.ErrorMessage,
-			StartedAt:    runStatus.BenchmarkStatusEvent.StartedAt,
-			CompletedAt:  runStatus.BenchmarkStatusEvent.CompletedAt,
+			ProviderID:     runStatus.BenchmarkStatusEvent.ProviderID,
+			ID:             runStatus.BenchmarkStatusEvent.ID,
+			Status:         runStatus.BenchmarkStatusEvent.Status,
+			ErrorMessage:   runStatus.BenchmarkStatusEvent.ErrorMessage,
+			StartedAt:      runStatus.BenchmarkStatusEvent.StartedAt,
+			CompletedAt:    runStatus.BenchmarkStatusEvent.CompletedAt,
+			BenchmarkIndex: runStatus.BenchmarkStatusEvent.BenchmarkIndex,
 		}
 		commonStorage.UpdateBenchmarkStatus(job, runStatus, &benchmark)
+
+		outcome := computeBenchmarkTestResult(job, runStatus.BenchmarkStatusEvent)
 
 		// if the run status is completed, failed, or cancelled, we need to update the results
 		if runStatus.BenchmarkStatusEvent.Status == api.StateCompleted || runStatus.BenchmarkStatusEvent.Status == api.StateFailed || runStatus.BenchmarkStatusEvent.Status == api.StateCancelled {
 			result := api.BenchmarkResult{
-				ID:          runStatus.BenchmarkStatusEvent.ID,
-				ProviderID:  runStatus.BenchmarkStatusEvent.ProviderID,
-				Metrics:     runStatus.BenchmarkStatusEvent.Metrics,
-				Artifacts:   runStatus.BenchmarkStatusEvent.Artifacts,
-				MLFlowRunID: runStatus.BenchmarkStatusEvent.MLFlowRunID,
-				LogsPath:    runStatus.BenchmarkStatusEvent.LogsPath,
+				ID:             runStatus.BenchmarkStatusEvent.ID,
+				ProviderID:     runStatus.BenchmarkStatusEvent.ProviderID,
+				Metrics:        runStatus.BenchmarkStatusEvent.Metrics,
+				Artifacts:      runStatus.BenchmarkStatusEvent.Artifacts,
+				MLFlowRunID:    runStatus.BenchmarkStatusEvent.MLFlowRunID,
+				LogsPath:       runStatus.BenchmarkStatusEvent.LogsPath,
+				BenchmarkIndex: runStatus.BenchmarkStatusEvent.BenchmarkIndex,
+				Test:           outcome,
 			}
 			err := commonStorage.UpdateBenchmarkResults(job, runStatus, &result)
 			if err != nil {
@@ -423,6 +428,11 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 		job.Status.State = overallState
 		job.Status.Message = message
 
+		// compute the job test result only if the job is completed
+		if overallState == api.OverallStateCompleted {
+			s.computeJobTestResult(job)
+		}
+
 		entity := EvaluationJobEntity{
 			Config:  &job.EvaluationJobConfig,
 			Status:  job.Status,
@@ -433,4 +443,75 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 	})
 
 	return err
+}
+
+func (s *SQLStorage) computeJobTestResult(job *api.EvaluationJobResource) {
+	if job.Results == nil || job.Results.Benchmarks == nil || len(job.Results.Benchmarks) == 0 {
+		return
+	}
+	var sumOfWeightedScores float32 = 0.0
+	var sumOfWeights float32 = 0.0
+	for _, benchmark := range job.Results.Benchmarks {
+		if benchmark.Test == nil {
+			// if the benchmark test result is not defined, we skip it
+			// This should never happen, since this method is called only when the overall job status is 'completed'
+			s.logger.Info("Benchmark test result is not defined for benchmark", "benchmark_id", benchmark.ID, "benchmark_index", benchmark.BenchmarkIndex)
+			continue
+		}
+		benchmarkWeight := job.Benchmarks[benchmark.BenchmarkIndex].Weight
+		if benchmarkWeight == 0 {
+			// if the benchmark weight is not defined, we set it to 1
+			benchmarkWeight = 1
+		}
+		weightedScore := benchmarkWeight * benchmark.Test.PrimaryScore
+		if job.Benchmarks[benchmark.BenchmarkIndex].PrimaryScore.LowerIsBetter {
+			weightedScore = benchmarkWeight * (1 - benchmark.Test.PrimaryScore)
+		}
+		sumOfWeightedScores += weightedScore
+		sumOfWeights += benchmarkWeight
+		s.logger.Info("Benchmark test result", "benchmark_id", benchmark.ID, "benchmark_index", benchmark.BenchmarkIndex, "primary_score", benchmark.Test.PrimaryScore, "weighted_score", weightedScore, "benchmark_weight", benchmarkWeight, "sum_of_weighted_scores", sumOfWeightedScores, "sum_of_weights", sumOfWeights)
+	}
+	if sumOfWeights == 0 {
+		s.logger.Warn("No benchmark weights accumulated; cannot compute job score")
+		return
+	}
+	weightedAvgJobScore := sumOfWeightedScores / sumOfWeights
+	s.logger.Info("Weighted average job score", "weighted_avg_job_score", weightedAvgJobScore, "sum_of_weighted_scores", sumOfWeightedScores, "sum_of_weights", sumOfWeights)
+	var jobTest *api.EvaluationTest = nil
+	// We set 'test' on the evaluation job only if the pass criteria is defined
+	if job.EvaluationJobConfig.PassCriteria != nil {
+		jobTest = &api.EvaluationTest{
+			Score:     weightedAvgJobScore,
+			Threshold: job.EvaluationJobConfig.PassCriteria.Threshold,
+			Pass:      weightedAvgJobScore >= job.EvaluationJobConfig.PassCriteria.Threshold,
+		}
+	}
+
+	job.Results.Test = jobTest
+}
+
+func computeBenchmarkTestResult(job *api.EvaluationJobResource, benchmarkStatusEvent *api.BenchmarkStatusEvent) *api.BenchmarkTest {
+	for _, benchmark := range job.Benchmarks {
+		if benchmark.ID == benchmarkStatusEvent.ID && benchmark.ProviderID == benchmarkStatusEvent.ProviderID {
+			//TODO: If primary score is not defined in the API request, the default primary score for the benchmark should be read from the provider.
+			//TBD after the code to access providers from 'internal' package is implemented.
+			if benchmark.PrimaryScore != nil && benchmark.PrimaryScore.Metric != "" {
+				primaryMetric := benchmark.PrimaryScore.Metric
+				if primaryMetricValue, ok := benchmarkStatusEvent.Metrics[primaryMetric]; ok {
+					primaryMetricValueFloat := float32(primaryMetricValue.(float64))
+					passCriteria := benchmark.PassCriteria.Threshold
+					pass := primaryMetricValueFloat >= passCriteria
+					if benchmark.PrimaryScore.LowerIsBetter {
+						pass = primaryMetricValueFloat <= passCriteria
+					}
+					return &api.BenchmarkTest{
+						PrimaryScore: primaryMetricValueFloat,
+						Threshold:    benchmark.PassCriteria.Threshold,
+						Pass:         pass,
+					}
+				}
+			}
+		}
+	}
+	return nil
 }

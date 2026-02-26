@@ -154,10 +154,12 @@ type BenchmarkResult struct {
 	Artifacts      map[string]any `json:"artifacts,omitempty"`
 	MLFlowRunID    string         `json:"mlflow_run_id,omitempty"`
 	LogsPath       string         `json:"logs_path,omitempty"`
+	Test           *BenchmarkTest `json:"test,omitempty"`
 }
 
 // EvaluationJobResults represents results section for EvaluationJobResource
 type EvaluationJobResults struct {
+	Test                *EvaluationTest   `json:"test,omitempty"`
 	Benchmarks          []BenchmarkResult `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 	MLFlowExperimentURL string            `json:"mlflow_experiment_url,omitempty"`
 }
@@ -228,4 +230,16 @@ type EvaluationJobResourceList struct {
 	Page
 	Items  []EvaluationJobResource `json:"items"`
 	Errors []string                `json:"errors,omitempty"`
+}
+
+type EvaluationTest struct {
+	Score     float32 `json:"score"`
+	Threshold float32 `json:"threshold"`
+	Pass      bool    `json:"pass"`
+}
+
+type BenchmarkTest struct {
+	PrimaryScore float32 `json:"primary_score"`
+	Threshold    float32 `json:"threshold"`
+	Pass         bool    `json:"pass"`
 }

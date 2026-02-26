@@ -221,6 +221,27 @@ Feature: Evaluations Endpoint
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
+  Scenario: Pass criteria - job and aggregate results after benchmark events
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_for_pass_criteria_test.json"
+    Then the response code should be 202
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_for_pass_criteria_test_b1.json"
+    Then the response code should be 204
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_for_pass_criteria_test_b2.json"
+    Then the response code should be 204
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "arc_easy" at path "$.results.benchmarks[0].id"
+    And the response should contain the value "0.95" at path "$.results.benchmarks[0].test.primary_score"
+    And the response should contain the value "true" at path "$.results.benchmarks[0].test.pass"
+    And the response should contain the value "AraDiCE_boolq_lev" at path "$.results.benchmarks[1].id"
+    And the response should contain the value "0.1" at path "$.results.benchmarks[1].test.primary_score"
+    And the response should contain the value "true" at path "$.results.benchmarks[1].test.pass"
+    And the response should contain the value "0.92|0.93|0.94" at path "$.results.test.score"
+    And the response should contain the value "true" at path "$.results.test.pass"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
   Scenario: Cancel running evaluation job (soft delete)
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
