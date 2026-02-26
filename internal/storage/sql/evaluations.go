@@ -291,6 +291,24 @@ func (s *SQLStorage) DeleteEvaluationJob(id string) error {
 	return err
 }
 
+func (s *SQLStorage) checkEvaluationJobState(evaluationJobID string, evaluationJobState api.OverallState, state api.OverallState) error {
+	// check if the state is unchanged
+	if state == evaluationJobState {
+		// if the state is the same as the current state then we don't need to update the status
+		// we don't treat this as an error for now, we just return 204
+		return nil
+	}
+
+	// check if the job is in a final state
+	switch evaluationJobState {
+	case api.OverallStateCancelled, api.OverallStateCompleted, api.OverallStateFailed, api.OverallStatePartiallyFailed:
+		// the job is already in a final state, so we can't update the status
+		return se.NewServiceError(messages.JobCanNotBeUpdated, "Id", evaluationJobID, "NewStatus", state, "Status", evaluationJobState)
+	}
+
+	return nil
+}
+
 func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error {
 	// we have to get the evaluation job and update the status so we need a transaction
 	err := s.withTransaction("update evaluation job status", id, func(txn *sql.Tx) error {
@@ -300,18 +318,9 @@ func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState
 			return err
 		}
 
-		// check if the state is unchanged
-		if state == evaluationJob.Status.State {
-			// if the state is the same as the current state then we don't need to update the status
-			// we don't treat this as an error for now, we just return 204
-			return nil
-		}
-
-		// check if the job is in a final state
-		switch evaluationJob.Status.State {
-		case api.OverallStateCancelled, api.OverallStateCompleted, api.OverallStateFailed, api.OverallStatePartiallyFailed:
-			// the job is already in a final state, so we can't update the status
-			return se.NewServiceError(messages.JobCanNotBeUpdated, "Id", id, "NewStatus", state, "Status", evaluationJob.Status.State)
+		// check the state
+		if err := s.checkEvaluationJobState(evaluationJob.Resource.ID, evaluationJob.Status.State, state); err != nil {
+			return err
 		}
 
 		entity := EvaluationJobEntity{
@@ -362,6 +371,11 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 	err := s.withTransaction("update evaluation job", id, func(txn *sql.Tx) error {
 		job, err := s.getEvaluationJobTransactional(txn, id)
 		if err != nil {
+			return err
+		}
+
+		// check the state, note that when we update the benchmark status we assume that the state is running
+		if err := s.checkEvaluationJobState(job.Resource.ID, job.Status.State, api.OverallStateRunning); err != nil {
 			return err
 		}
 
