@@ -286,9 +286,9 @@ func TestEvaluationsStorage(t *testing.T) {
 	t.Run("UpdateEvaluationJobStatus same-state is no-op", func(t *testing.T) {
 		noOpID := common.GUID()
 		noOpJob := &api.EvaluationJobResource{
-			Resource:             api.EvaluationResource{Resource: api.Resource{ID: noOpID}},
+			Resource: api.EvaluationResource{Resource: api.Resource{ID: noOpID}},
 			EvaluationJobConfig: api.EvaluationJobConfig{
-				Model:     api.ModelRef{URL: "http://test.com", Name: "test"},
+				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
 				Benchmarks: []api.BenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
 			},
 		}
@@ -328,7 +328,7 @@ func TestEvaluationsStorage(t *testing.T) {
 				config.Benchmarks = append(config.Benchmarks, api.BenchmarkConfig{Ref: api.Ref{ID: "b2"}, ProviderID: "p1"})
 			}
 			job := &api.EvaluationJobResource{
-				Resource:     api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+				Resource:            api.EvaluationResource{Resource: api.Resource{ID: jobID}},
 				EvaluationJobConfig: *config,
 			}
 			if err := store.CreateEvaluationJob(job); err != nil {
@@ -347,7 +347,7 @@ func TestEvaluationsStorage(t *testing.T) {
 				_ = store.UpdateEvaluationJob(jobID, &api.StatusEvent{
 					BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 						ID: "b1", ProviderID: "p1", BenchmarkIndex: 0,
-						Status: api.StateFailed,
+						Status:       api.StateFailed,
 						ErrorMessage: &api.MessageInfo{Message: "err", MessageCode: "E"},
 					},
 				})
@@ -363,7 +363,7 @@ func TestEvaluationsStorage(t *testing.T) {
 				_ = store.UpdateEvaluationJob(jobID, &api.StatusEvent{
 					BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 						ID: "b2", ProviderID: "p1", BenchmarkIndex: 1,
-						Status: api.StateFailed,
+						Status:       api.StateFailed,
 						ErrorMessage: &api.MessageInfo{Message: "err", MessageCode: "E"},
 					},
 				})
@@ -391,7 +391,7 @@ func TestEvaluationsStorage(t *testing.T) {
 			},
 		}
 		job := &api.EvaluationJobResource{
-			Resource:             api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+			Resource:            api.EvaluationResource{Resource: api.Resource{ID: jobID}},
 			EvaluationJobConfig: *config,
 		}
 		if err := store.CreateEvaluationJob(job); err != nil {
@@ -416,7 +416,7 @@ func TestEvaluationsStorage(t *testing.T) {
 		if err := store.UpdateEvaluationJob(jobID, &api.StatusEvent{
 			BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 				ID: "bx", ProviderID: "garak", BenchmarkIndex: 0,
-				Status: api.StateCompleted,
+				Status:  api.StateCompleted,
 				Metrics: map[string]any{"acc": 0.9},
 			},
 		}); err != nil {
@@ -427,7 +427,7 @@ func TestEvaluationsStorage(t *testing.T) {
 		// UpdateEvaluationJobStatus(cancelled). Verify benchmarks preserved.
 		jobID2 := common.GUID()
 		job2 := &api.EvaluationJobResource{
-			Resource:             api.EvaluationResource{Resource: api.Resource{ID: jobID2}},
+			Resource:            api.EvaluationResource{Resource: api.Resource{ID: jobID2}},
 			EvaluationJobConfig: *config,
 		}
 		if err := store.CreateEvaluationJob(job2); err != nil {
