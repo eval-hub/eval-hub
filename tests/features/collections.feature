@@ -1,3 +1,4 @@
+@collections
 Feature: Collections Endpoint
   As a data scientist
   I want to create collections of benchmarks
