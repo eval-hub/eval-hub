@@ -76,9 +76,15 @@ func CommonListFilters(r http_wrappers.RequestWrapper) (*abstractions.QueryFilte
 	if err != nil {
 		return nil, err
 	}
+	if limit < 0 {
+		return nil, serviceerrors.NewServiceError(messages.QueryParameterInvalid, "ParameterName", "limit", "Value", strconv.Itoa(limit))
+	}
 	offset, err := GetParam(r, "offset", true, 0)
 	if err != nil {
 		return nil, err
+	}
+	if offset < 0 {
+		return nil, serviceerrors.NewServiceError(messages.QueryParameterInvalid, "ParameterName", "offset", "Value", strconv.Itoa(offset))
 	}
 	status, err := GetParam(r, "status", true, "")
 	if err != nil {
