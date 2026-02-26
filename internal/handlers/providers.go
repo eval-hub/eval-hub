@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/common"
@@ -140,6 +141,15 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 	)
 }
 
+// isImmutablePatchPath returns true if the JSON Patch path targets an immutable field.
+func isImmutablePatchPath(path string) bool {
+	switch path {
+	case "/resource", "/created_at", "/updated_at":
+		return true
+	}
+	return strings.HasPrefix(path, "/resource/")
+}
+
 func (h *Handlers) getSystemProvider(providerId string) *api.ProviderResource {
 	provider, ok := h.providerConfigs[providerId]
 	if !ok {
@@ -274,6 +284,10 @@ func (h *Handlers) HandlePatchProvider(ctx *executioncontext.ExecutionContext, r
 				}
 				if patches[i].Path == "" {
 					return serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", "Invalid patch path")
+				}
+				if isImmutablePatchPath(patches[i].Path) {
+					return serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error",
+						"Patch path '"+patches[i].Path+"' targets an immutable field and cannot be modified")
 				}
 			}
 			return nil

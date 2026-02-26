@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,8 @@ import (
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/handlers"
+	"github.com/eval-hub/eval-hub/internal/messages"
+	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/go-playground/validator/v10"
 )
@@ -50,8 +53,8 @@ func (r *providersRequest) Query(key string) []string {
 func (f *fakeStorage) CreateProvider(_ *api.ProviderResource) error {
 	return nil
 }
-func (f *fakeStorage) GetProvider(_ string) (*api.ProviderResource, error) {
-	return nil, fmt.Errorf("provider not found")
+func (f *fakeStorage) GetProvider(id string) (*api.ProviderResource, error) {
+	return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "provider", "ResourceId", id)
 }
 func (f *fakeStorage) DeleteProvider(_ string) error {
 	return nil
@@ -494,6 +497,40 @@ func TestHandlePatchProvider(t *testing.T) {
 	}
 	if got.Name != "Original" {
 		t.Errorf("expected Name unchanged Original, got %s", got.Name)
+	}
+}
+
+func TestHandlePatchProviderRejectsImmutablePaths(t *testing.T) {
+	providerID := "user-provider-immutable"
+	storage := &updatePatchProviderStorage{
+		fakeStorage: &fakeStorage{},
+		provider: &api.ProviderResource{
+			Resource:       api.Resource{ID: providerID},
+			ProviderConfig: api.ProviderConfig{Name: "Original", Description: "Desc"},
+		},
+	}
+	providerConfigs := map[string]api.ProviderResource{}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validator.New(), &fakeRuntime{}, nil, providerConfigs, nil)
+
+	immutablePaths := []string{"/resource", "/resource/id", "/resource/tenant", "/created_at", "/updated_at"}
+	for _, path := range immutablePaths {
+		body := fmt.Sprintf(`[{"op":"replace","path":"%s","value":"hacked"}]`, path)
+		req := &providersRequest{
+			MockRequest: createMockRequest("PATCH", "/api/v1/evaluations/providers/"+providerID),
+			pathValues:  map[string]string{constants.PATH_PARAMETER_PROVIDER_ID: providerID},
+		}
+		req.SetBody([]byte(body))
+		recorder := httptest.NewRecorder()
+		resp := MockResponseWrapper{recorder: recorder}
+		ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+		h.HandlePatchProvider(ctx, req, resp)
+		if recorder.Code != 400 {
+			t.Errorf("path %q: expected 400, got %d body %s", path, recorder.Code, recorder.Body.String())
+		}
+		if !strings.Contains(recorder.Body.String(), "immutable") {
+			t.Errorf("path %q: expected response to mention immutable, got %s", path, recorder.Body.String())
+		}
 	}
 }
 
