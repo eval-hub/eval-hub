@@ -201,6 +201,13 @@ func (s *SQLStorage) updateProviderTransactional(txn *sql.Tx, providerID string,
 func (s *SQLStorage) PatchProvider(id string, patches *api.Patch) (*api.ProviderResource, error) {
 	var updated *api.ProviderResource
 	err := s.withTransaction("patch provider", id, func(txn *sql.Tx) error {
+		// TODO: verify the patches and return a validation error if they are on invalid fields
+		//for _, patch := range *patches {
+		//if isImmutablePatchPath(patch.Path) {
+		//	return se.NewServiceError(messages.InvalidJSONRequest, "Type", "provider", "Error", "Invalid patch path")
+		//}
+		//}
+
 		persisted, err := s.getUserProviderTransactional(txn, id)
 		if err != nil {
 			return err
