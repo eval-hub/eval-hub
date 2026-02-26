@@ -1,3 +1,5 @@
+//go:build !mock
+
 package k8s
 
 import (

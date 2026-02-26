@@ -1,3 +1,5 @@
+//go:build mock
+
 package k8s
 
 import (
@@ -20,7 +22,6 @@ import (
 )
 
 const (
-	mockTemplateLabel   = "__MOCK_TEMPLATE"
 	jobIDLabel          = "job_id"
 	mockTemplatesDir    = "tests/mock_templates"
 	defaultMockTemplate = "success_default.json"
@@ -38,8 +39,10 @@ type MockKubernetesHelper struct {
 }
 
 // NewMockKubernetesHelper returns a mock helper that does not call the cluster.
-func NewMockKubernetesHelper(logger *slog.Logger) *MockKubernetesHelper {
-	return &MockKubernetesHelper{logger: logger}
+// When built with -tags=mock and KUBE_MOCK_ENABLED is set, the server uses this.
+func NewKubernetesHelper(logger *slog.Logger) (KubernetesHelperInterface, error) {
+	logger.Info("Using mock Kubernetes helper; no cluster calls, events POST to localhost")
+	return &MockKubernetesHelper{logger: logger}, nil
 }
 
 // ListConfigMaps implements [KubernetesHelperInterface].
