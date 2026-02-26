@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,10 +19,19 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+func getTestNamespace(t *testing.T) string {
+	t.Helper()
+	namespace := strings.TrimSpace(os.Getenv("KUBERNETES_NAMESPACE"))
+	if namespace == "" {
+		return metav1.NamespaceDefault
+	}
+	return namespace
+}
+
 func listJobsByJobID(t *testing.T, clientset kubernetes.Interface, jobID string) []batchv1.Job {
 	t.Helper()
 	labelSelector := fmt.Sprintf("%s=%s", labelJobIDKey, sanitizeLabelValue(jobID))
-	jobs, err := clientset.BatchV1().Jobs(defaultNamespace).List(context.Background(), metav1.ListOptions{LabelSelector: labelSelector})
+	jobs, err := clientset.BatchV1().Jobs(getTestNamespace(t)).List(context.Background(), metav1.ListOptions{LabelSelector: labelSelector})
 	if err != nil {
 		t.Fatalf("failed to list jobs: %v", err)
 	}
@@ -31,7 +41,7 @@ func listJobsByJobID(t *testing.T, clientset kubernetes.Interface, jobID string)
 func listConfigMapsByJobID(t *testing.T, clientset kubernetes.Interface, jobID string) []corev1.ConfigMap {
 	t.Helper()
 	labelSelector := fmt.Sprintf("%s=%s", labelJobIDKey, sanitizeLabelValue(jobID))
-	configMaps, err := clientset.CoreV1().ConfigMaps(defaultNamespace).List(context.Background(), metav1.ListOptions{LabelSelector: labelSelector})
+	configMaps, err := clientset.CoreV1().ConfigMaps(getTestNamespace(t)).List(context.Background(), metav1.ListOptions{LabelSelector: labelSelector})
 	if err != nil {
 		t.Fatalf("failed to list configmaps: %v", err)
 	}
@@ -403,7 +413,7 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnvIntegration(t *testing
 	}
 
 	labelSelector := fmt.Sprintf("%s=%s", labelJobIDKey, sanitizeLabelValue(evaluation.Resource.ID))
-	jobs, err := helper.clientset.BatchV1().Jobs(defaultNamespace).List(context.Background(), metav1.ListOptions{LabelSelector: labelSelector})
+	jobs, err := helper.clientset.BatchV1().Jobs(getTestNamespace(t)).List(context.Background(), metav1.ListOptions{LabelSelector: labelSelector})
 	if err != nil {
 		t.Fatalf("failed to list jobs: %v", err)
 	}
@@ -441,12 +451,20 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnvIntegration(t *testing
 
 	var foundTokenEnv bool
 	var foundCACertEnv bool
+	expectedTokenPath := modelAuthMountPath + "/" + modelAuthTokenFile
+	expectedCACertPath := modelAuthMountPath + "/" + modelAuthCACertFile
 	for _, env := range container.Env {
 		if env.Name == envModelAuthAPIKeyPathName {
 			foundTokenEnv = true
+			if env.Value != expectedTokenPath {
+				t.Fatalf("expected %s to be %q, got %q", envModelAuthAPIKeyPathName, expectedTokenPath, env.Value)
+			}
 		}
 		if env.Name == envModelAuthCACertPathName {
 			foundCACertEnv = true
+			if env.Value != expectedCACertPath {
+				t.Fatalf("expected %s to be %q, got %q", envModelAuthCACertPathName, expectedCACertPath, env.Value)
+			}
 		}
 	}
 	if !foundTokenEnv {

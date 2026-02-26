@@ -280,6 +280,7 @@ func TestBuildJobConfigMissingAdapterImage(t *testing.T) {
 }
 
 func TestBuildJobConfigMissingServiceURL(t *testing.T) {
+	t.Setenv(serviceURLEnv, "")
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource:           api.Resource{ID: "job-123"},
