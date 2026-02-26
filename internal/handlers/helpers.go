@@ -122,3 +122,12 @@ func CommonListFilters(r http_wrappers.RequestWrapper) (*abstractions.QueryFilte
 	}, nil
 
 }
+
+func IncludeSystemDefined(r http_wrappers.RequestWrapper) bool {
+	systemDefinedParam := r.Query("system_defined")
+	systemDefined := true
+	if len(systemDefinedParam) > 0 {
+		systemDefined = systemDefinedParam[0] != "false"
+	}
+	return systemDefined
+}

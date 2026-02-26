@@ -27,6 +27,9 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 		return
 	}
 
+	systemDefined := IncludeSystemDefined(req)
+	ctx.Logger.Info("Include system defined collections", "system_defined", systemDefined)
+
 	res, err := storage.GetCollections(*filter)
 	if err != nil {
 		w.Error(err, ctx.RequestID)

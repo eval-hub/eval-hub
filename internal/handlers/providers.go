@@ -25,28 +25,28 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 	}
 
 	benchmarksParam := r.Query("benchmarks")
-	providerId := ""
 	benchmarks := true
-
 	if len(benchmarksParam) > 0 {
 		benchmarks = benchmarksParam[0] != "false"
 	}
 
 	filter.Params["benchmarks"] = benchmarks
 
-	// TODO - Pass the filter to the storage layer
+	systemDefined := IncludeSystemDefined(r)
+
+	ctx.Logger.Info("Include system defined providers", "system_defined", systemDefined)
 
 	providers := []api.ProviderResource{}
 
-	for _, p := range h.providerConfigs {
-		if providerId != "" && p.Resource.ID != providerId {
-			continue
-		}
-		if !benchmarks {
-			p.Benchmarks = []api.BenchmarkResource{}
-		}
-		providers = append(providers, p)
+	if systemDefined {
+		for _, p := range h.providerConfigs {
 
+			if !benchmarks {
+				p.Benchmarks = []api.BenchmarkResource{}
+			}
+			providers = append(providers, p)
+
+		}
 	}
 
 	w.WriteJSON(api.ProviderResourceList{

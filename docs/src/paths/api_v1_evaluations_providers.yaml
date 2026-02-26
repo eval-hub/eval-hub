@@ -49,6 +49,15 @@ get:
         type: string
         title: Tags
       description: Tags to search for
+    - name: system_defined
+      in: query
+      required: false
+      schema:
+        type: boolean
+        default: true
+        title: System defined providers
+      description: Set to false to exclude system defined providers
+
   responses:
     '200':
       description: Successful Response
