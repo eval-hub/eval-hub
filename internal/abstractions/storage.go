@@ -15,6 +15,8 @@ type QueryResults[T any] struct {
 }
 
 type QueryFilter struct {
+	Limit  int
+	Offset int
 	Params map[string]any
 }
 

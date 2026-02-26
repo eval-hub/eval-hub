@@ -32,7 +32,7 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 		w.Error(err, ctx.RequestID)
 		return
 	}
-	page, err := CreatePage(res.TotalStored, filter.Params["offset"].(int), filter.Params["limit"].(int), ctx, req)
+	page, err := CreatePage(res.TotalStored, filter.Offset, filter.Limit, ctx, req)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return

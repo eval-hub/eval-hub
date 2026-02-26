@@ -72,41 +72,41 @@ func GetParam[T string | int | bool](r http_wrappers.RequestWrapper, name string
 }
 
 func CommonListFilters(r http_wrappers.RequestWrapper) (*abstractions.QueryFilter, error) {
-	limit, err := GetParam[int](r, "limit", true, 50)
+	limit, err := GetParam(r, "limit", true, 50)
 	if err != nil {
 		return nil, err
 	}
-	offset, err := GetParam[int](r, "offset", true, 0)
+	offset, err := GetParam(r, "offset", true, 0)
 	if err != nil {
 		return nil, err
 	}
-	status, err := GetParam[string](r, "status", true, "")
+	status, err := GetParam(r, "status", true, "")
 	if err != nil {
 		return nil, err
 	}
-	name, err := GetParam[string](r, "name", true, "")
+	name, err := GetParam(r, "name", true, "")
 	if err != nil {
 		return nil, err
 	}
-	tags, err := GetParam[string](r, "tags", true, "")
-	if err != nil {
-		return nil, err
-	}
-
-	owner, err := GetParam[string](r, "owner", true, "")
+	tags, err := GetParam(r, "tags", true, "")
 	if err != nil {
 		return nil, err
 	}
 
-	tenant, err := GetParam[string](r, "tenant", true, "")
+	owner, err := GetParam(r, "owner", true, "")
+	if err != nil {
+		return nil, err
+	}
+
+	tenant, err := GetParam(r, "tenant", true, "")
 	if err != nil {
 		return nil, err
 	}
 
 	return &abstractions.QueryFilter{
+		Limit:  limit,
+		Offset: offset,
 		Params: map[string]any{
-			"limit":     limit,
-			"offset":    offset,
 			"status":    status,
 			"name":      name,
 			"tags":      tags,

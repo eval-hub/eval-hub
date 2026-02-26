@@ -218,7 +218,7 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 		w.Error(err, ctx.RequestID)
 		return
 	}
-	page, err := CreatePage(res.TotalStored, filter.Params["offset"].(int), filter.Params["limit"].(int), ctx, r)
+	page, err := CreatePage(res.TotalStored, filter.Offset, filter.Limit, ctx, r)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return

@@ -3,6 +3,7 @@ package sql
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	// import the postgres driver - "pgx"
@@ -161,10 +162,14 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 
 func (s *SQLStorage) GetEvaluationJobs(filter abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
 
-	limit, offset, params := extractQueryParams(filter)
+	filter = extractQueryParams(filter)
+	params := filter.Params
+	limit := filter.Limit
+	offset := filter.Offset
 
+	fmt.Println("filter", filter)
 	// Get total count (with filter if provided)
-	countQuery, countArgs, err := createCountEntitiesStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, params)
+	countQuery, countArgs, err := createCountEntitiesStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, filter.Params)
 	if err != nil {
 		return nil, err
 	}
