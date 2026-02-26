@@ -342,3 +342,15 @@ func createUpdateStatementForPostgres(setParts []string, argsList []any, query s
 	args = argsList
 	return query, args, nil
 }
+
+// Returns the limit, offset, and filtered params
+func extractQueryParams(filter abstractions.QueryFilter) (int, int, map[string]any) {
+	params := getParams(filter)
+	limit := params["limit"].(int)
+	offset := params["offset"].(int)
+	delete(params, "limit")
+	delete(params, "offset")
+	// TODO - remove this delete after adding owner in storage layer
+	delete(params, "owner")
+	return limit, offset, params
+}

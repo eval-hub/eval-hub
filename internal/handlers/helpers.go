@@ -93,10 +93,10 @@ func CommonListFilters(r http_wrappers.RequestWrapper) (*abstractions.QueryFilte
 		return nil, err
 	}
 
-	// owner, err := GetParam[string](r, "owner", true, "")
-	// if err != nil {
-	// 	return nil, err
-	// }
+	owner, err := GetParam[string](r, "owner", true, "")
+	if err != nil {
+		return nil, err
+	}
 
 	tenant, err := GetParam[string](r, "tenant", true, "")
 	if err != nil {
@@ -105,13 +105,12 @@ func CommonListFilters(r http_wrappers.RequestWrapper) (*abstractions.QueryFilte
 
 	return &abstractions.QueryFilter{
 		Params: map[string]any{
-			"limit":  limit,
-			"offset": offset,
-			"status": status,
-			"name":   name,
-			"tags":   tags,
-			// TODO - add owner in storage layer
-			// "owner":     owner,
+			"limit":     limit,
+			"offset":    offset,
+			"status":    status,
+			"name":      name,
+			"tags":      tags,
+			"owner":     owner,
 			"tenant_id": tenant,
 		},
 	}, nil

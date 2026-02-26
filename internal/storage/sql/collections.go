@@ -105,14 +105,11 @@ func (s *SQLStorage) constructCollectionResource(dbID string, createdAt time.Tim
 }
 
 func (s *SQLStorage) GetCollections(filter abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
-	params := getParams(filter)
-	limit := params["limit"].(int)
-	offset := params["offset"].(int)
-	delete(params, "limit")
-	delete(params, "offset")
+
+	limit, offset, params := extractQueryParams(filter)
 
 	// Get total count (there are no filters for collections)
-	countQuery, _, err := createCountEntitiesStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS, nil)
+	countQuery, _, err := createCountEntitiesStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS, params)
 	if err != nil {
 		return nil, err
 	}
