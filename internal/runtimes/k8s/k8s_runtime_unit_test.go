@@ -273,7 +273,7 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnv(t *testing.T) {
 	var foundTokenEnv bool
 	var foundCACertEnv bool
 	for _, env := range container.Env {
-		if env.Name == envModelAuthTokenPathName {
+		if env.Name == envModelAuthAPIKeyPathName {
 			foundTokenEnv = true
 		}
 		if env.Name == envModelAuthCACertPathName {
@@ -281,7 +281,7 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnv(t *testing.T) {
 		}
 	}
 	if !foundTokenEnv {
-		t.Fatalf("expected env var %s to be present", envModelAuthTokenPathName)
+		t.Fatalf("expected env var %s to be present", envModelAuthAPIKeyPathName)
 	}
 	if !foundCACertEnv {
 		t.Fatalf("expected env var %s to be present", envModelAuthCACertPathName)

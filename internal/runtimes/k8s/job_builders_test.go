@@ -323,7 +323,7 @@ func TestBuildJobWithModelAuthSecret(t *testing.T) {
 	var foundCACertEnv bool
 	for _, e := range container.Env {
 		switch e.Name {
-		case envModelAuthTokenPathName:
+		case envModelAuthAPIKeyPathName:
 			foundTokenEnv = true
 			if e.Value != modelAuthMountPath+"/"+modelAuthTokenFile {
 				t.Fatalf("expected env value %q, got %q", modelAuthMountPath+"/"+modelAuthTokenFile, e.Value)
@@ -336,7 +336,7 @@ func TestBuildJobWithModelAuthSecret(t *testing.T) {
 		}
 	}
 	if !foundTokenEnv {
-		t.Fatalf("expected env var %s to be present", envModelAuthTokenPathName)
+		t.Fatalf("expected env var %s to be present", envModelAuthAPIKeyPathName)
 	}
 	if !foundCACertEnv {
 		t.Fatalf("expected env var %s to be present", envModelAuthCACertPathName)
@@ -367,7 +367,7 @@ func TestBuildJobWithoutModelAuthSecret(t *testing.T) {
 	}
 	container := job.Spec.Template.Spec.Containers[0]
 	for _, e := range container.Env {
-		if e.Name == envModelAuthTokenPathName || e.Name == envModelAuthCACertPathName {
+		if e.Name == envModelAuthAPIKeyPathName || e.Name == envModelAuthCACertPathName {
 			t.Fatalf("expected no model auth env vars when modelAuthSecretRef is empty")
 		}
 	}
