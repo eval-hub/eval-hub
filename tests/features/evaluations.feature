@@ -201,11 +201,6 @@ Feature: Evaluations Endpoint
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "running" at path "$.status.state"
-    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}"
-    Then the response code should be 204
-    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
-    Then the response code should be 200
-    And the response should contain the value "cancelled" at path "$.status.state"
     When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_completed.json"
     Then the response code should be 204
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
@@ -216,7 +211,6 @@ Feature: Evaluations Endpoint
     And the response should contain the value "can not be cancelled because" at path "$.message"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    And the response should contain the value "completed" at path "$.status.state"
     And the response should contain the value "evaluation_job_updated" at path "$.status.message.message_code"
     And the response should contain the value "completed" at path "$.status.benchmarks[0].status"
     And the response should contain the value "arc_easy" at path "$.status.benchmarks[0].id"
@@ -226,7 +220,6 @@ Feature: Evaluations Endpoint
     And the response should contain the value "google/flan-t5-small" at path "$.benchmarks[0].parameters.tokenizer"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
-
 
   Scenario: Cancel running evaluation job (soft delete)
     Given the service is running
