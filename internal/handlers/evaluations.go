@@ -297,7 +297,7 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	hardDelete, err := GetParam[bool](r, "hard_delete", true, false)
+	hardDelete, err := GetParam(r, "hard_delete", true, false)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
