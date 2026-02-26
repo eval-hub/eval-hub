@@ -28,7 +28,7 @@ type Storage interface {
 	// Evaluation job operations
 	CreateEvaluationJob(evaluation *api.EvaluationJobResource) error
 	GetEvaluationJob(id string) (*api.EvaluationJobResource, error)
-	GetEvaluationJobs(limit int, offset int, filter QueryFilter) (*QueryResults[api.EvaluationJobResource], error)
+	GetEvaluationJobs(filter QueryFilter) (*QueryResults[api.EvaluationJobResource], error)
 	DeleteEvaluationJob(id string) error
 	UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error
 	// UpdateEvaluationJobStatus is used to update the status of an evaluation job and is internal - do we need it here?
@@ -37,7 +37,7 @@ type Storage interface {
 	// Collection operations
 	CreateCollection(collection *api.CollectionResource) error
 	GetCollection(id string) (*api.CollectionResource, error)
-	GetCollections(limit int, offset int) (*QueryResults[api.CollectionResource], error)
+	GetCollections(filter QueryFilter) (*QueryResults[api.CollectionResource], error)
 	UpdateCollection(collection *api.CollectionResource) error
 	PatchCollection(id string, patches *api.Patch) error
 	DeleteCollection(id string) error
@@ -45,9 +45,9 @@ type Storage interface {
 	// Provider operations
 	CreateProvider(provider *api.ProviderResource) error
 	GetProvider(id string) (*api.ProviderResource, error)
-	//GetUserProviders(limit int, offset int) (*QueryResults[api.ProviderResource], error)
-	//UpdateUserProvider(provider *api.ProviderResource) error
-	//PatchUserProvider(id string, patches *api.Patch) error
+	//GetProviders(limit int, offset int, filter QueryFilter) (*QueryResults[api.ProviderResource], error)
+	//UpdateProvider(provider *api.ProviderResource) error
+	//PatchProvider(id string, patches *api.Patch) error
 	DeleteProvider(id string) error
 
 	// Close the storage connection

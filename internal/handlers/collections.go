@@ -21,23 +21,18 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 
 	logging.LogRequestStarted(ctx)
 
-	limit, err := getParam(req, "limit", true, 50)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-	offset, err := getParam(req, "offset", true, 0)
+	filter, err := CommonListFilters(req)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
 
-	res, err := storage.GetCollections(limit, offset)
+	res, err := storage.GetCollections(*filter)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
-	page, err := CreatePage(res.TotalStored, offset, limit, ctx, req)
+	page, err := CreatePage(res.TotalStored, filter.Params["offset"].(int), filter.Params["limit"].(int), ctx, req)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return

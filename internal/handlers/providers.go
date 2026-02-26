@@ -18,6 +18,12 @@ import (
 // HandleListProviders handles GET /api/v1/evaluations/providers
 func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 
+	filter, err := CommonListFilters(r)
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+
 	benchmarksParam := r.Query("benchmarks")
 	providerId := ""
 	benchmarks := true
@@ -25,6 +31,10 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 	if len(benchmarksParam) > 0 {
 		benchmarks = benchmarksParam[0] != "false"
 	}
+
+	filter.Params["benchmarks"] = benchmarks
+
+	// TODO - Pass the filter to the storage layer
 
 	providers := []api.ProviderResource{}
 

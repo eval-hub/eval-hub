@@ -45,7 +45,7 @@ func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobResource) error {
 func (f *fakeStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) {
 	return nil, nil
 }
-func (f *fakeStorage) GetEvaluationJobs(int, _ int, _ abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
+func (f *fakeStorage) GetEvaluationJobs(_ abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
 	return nil, nil
 }
 func (f *fakeStorage) DeleteEvaluationJob(_ string) error {
@@ -61,7 +61,7 @@ func (f *fakeStorage) CreateCollection(_ *api.CollectionResource) error {
 func (f *fakeStorage) GetCollection(_ string) (*api.CollectionResource, error) {
 	return nil, nil
 }
-func (f *fakeStorage) GetCollections(_ int, _ int) (*abstractions.QueryResults[api.CollectionResource], error) {
+func (f *fakeStorage) GetCollections(_ abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
 	return nil, nil
 }
 func (f *fakeStorage) UpdateCollection(_ *api.CollectionResource) error {
