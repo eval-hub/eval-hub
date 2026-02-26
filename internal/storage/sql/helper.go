@@ -1,34 +1,33 @@
 package sql
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
-	"slices"
 	"strings"
 
-	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 // TODO - do we want to pull out all the SQL statements like this or leave them in the functions?
 
 // SQLite: use ? placeholders
-const SQLITE_INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (id, tenant_id, status, experiment_id, entity) VALUES (?, ?, ?, ?, ?);`
+const SQLITE_INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (id, resource, status, experiment_id, entity) VALUES (?, ?, ?, ?, ?);`
 
 // PostgreSQL: use $1, $2 placeholders and RETURNING id clause
-const POSTGRES_INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (id, tenant_id, status, experiment_id, entity) VALUES ($1, $2, $3, $4, $5) RETURNING id;`
+const POSTGRES_INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (id, resource, status, experiment_id, entity) VALUES ($1, $2, $3, $4, $5) RETURNING id;`
 
 // SQLite: use ? placeholders
-const SQLITE_INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (id, tenant_id, entity) VALUES (?, ?, ?);`
+const SQLITE_INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (id, resource, entity) VALUES (?, ?, ?);`
 
 // PostgreSQL: use $1, $2 placeholders and RETURNING id clause
-const POSTGRES_INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (id, tenant_id, entity) VALUES ($1, $2, $3) RETURNING id;`
+const POSTGRES_INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (id, resource, entity) VALUES ($1, $2, $3) RETURNING id;`
 
 // SQLite: use ? placeholders
-const SQLITE_INSERT_PROVIDER_STATEMENT = `INSERT INTO providers (id, tenant_id, entity) VALUES (?, ?, ?);`
+const SQLITE_INSERT_PROVIDER_STATEMENT = `INSERT INTO providers (id, resource, entity) VALUES (?, ?, ?);`
 
 // PostgreSQL: use $1, $2 placeholders and RETURNING id clause
-const POSTGRES_INSERT_PROVIDER_STATEMENT = `INSERT INTO providers (id, tenant_id, entity) VALUES ($1, $2, $3) RETURNING id;`
+const POSTGRES_INSERT_PROVIDER_STATEMENT = `INSERT INTO providers (id, resource, entity) VALUES ($1, $2, $3) RETURNING id;`
 
 func getUnsupportedDriverError(driver string) error {
 	return fmt.Errorf("unsupported driver: %s", driver)
@@ -71,10 +70,15 @@ func createAddEntityStatement(driver, tableName string) (string, error) {
 }
 
 // quoteIdentifier properly quotes an identifier for the given driver
-func quoteIdentifier(_ /*driver*/ string, identifier string) string {
-	// Escape double quotes by doubling them
-	escaped := strings.ReplaceAll(identifier, `"`, `""`)
-	return fmt.Sprintf(`"%s"`, escaped)
+func quoteIdentifier(driver string, identifier string) string {
+	switch driver {
+	case POSTGRES_DRIVER:
+		//escaped := strings.ReplaceAll(identifier, `"`, `""`)
+		//return fmt.Sprintf(`"%s"`, escaped)
+		return identifier
+	default:
+		return identifier
+	}
 }
 
 // createGetEntityStatement returns a driver-specific SELECT statement
@@ -84,19 +88,19 @@ func createGetEntityStatement(driver, tableName string) (string, error) {
 
 	switch driver + tableName {
 	case POSTGRES_DRIVER + TABLE_EVALUATIONS:
-		return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s WHERE id = $1;`, quotedTable), nil
+		return fmt.Sprintf(`SELECT id, resource, status, experiment_id, entity FROM %s WHERE id = $1;`, quotedTable), nil
 	case SQLITE_DRIVER + TABLE_EVALUATIONS:
 		// SQLite: use ? placeholder
-		return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s WHERE id = ?;`, quotedTable), nil
+		return fmt.Sprintf(`SELECT id, resource, status, experiment_id, entity FROM %s WHERE id = ?;`, quotedTable), nil
 	case POSTGRES_DRIVER + TABLE_COLLECTIONS:
-		return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s WHERE id = $1;`, quotedTable), nil
+		return fmt.Sprintf(`SELECT id, resource, entity FROM %s WHERE id = $1;`, quotedTable), nil
 	case SQLITE_DRIVER + TABLE_COLLECTIONS:
 		// SQLite: use ? placeholder
-		return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s WHERE id = ?;`, quotedTable), nil
+		return fmt.Sprintf(`SELECT id, resource, entity FROM %s WHERE id = ?;`, quotedTable), nil
 	case POSTGRES_DRIVER + TABLE_PROVIDERS:
-		return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s WHERE id = $1;`, quotedTable), nil
+		return fmt.Sprintf(`SELECT id, resource, entity FROM %s WHERE id = $1;`, quotedTable), nil
 	case SQLITE_DRIVER + TABLE_PROVIDERS:
-		return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s WHERE id = ?;`, quotedTable), nil
+		return fmt.Sprintf(`SELECT id, resource, entity FROM %s WHERE id = ?;`, quotedTable), nil
 	default:
 		return "", getUnsupportedDriverError(driver)
 	}
@@ -140,21 +144,18 @@ func createDeleteEntityStatement(driver, tableName string) (string, error) {
 func createCountEntitiesStatement(driver, tableName string, filter map[string]any) (string, []any, error) {
 	quotedTable := quoteIdentifier(driver, tableName)
 
-	filterStatement, err := createFilterStatement(driver, filter, "", 0, 0)
+	filterStatement, args, err := createFilterStatement(driver, filter, "", 0, 0)
 	if err != nil {
 		return "", nil, err
 	}
 
 	var query string
-	var args []any
 
 	switch driver {
 	case POSTGRES_DRIVER:
 		query = fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, quotedTable, filterStatement)
-		args = slices.Collect(maps.Values(filter))
 	case SQLITE_DRIVER:
 		query = fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, quotedTable, filterStatement)
-		args = slices.Collect(maps.Values(filter))
 	default:
 		return "", nil, getUnsupportedDriverError(driver)
 	}
@@ -173,6 +174,46 @@ func getParam(driver string) string {
 	}
 }
 
+func getParamKey(driver string, key string) string {
+	switch driver {
+	case SQLITE_DRIVER:
+		switch key {
+		case "tenant", "owner", "created_at", "updated_at":
+			return fmt.Sprintf("resource ->> '$.%s'", key)
+		default:
+			return key
+		}
+	case POSTGRES_DRIVER:
+		switch key {
+		case "tenant", "owner", "created_at", "updated_at":
+			return fmt.Sprintf("resource ->> '{%s}'", key)
+		default:
+			return key
+		}
+	default:
+		return key
+	}
+}
+
+func setParamValue(driver string, parent string, key string, value string) string {
+	switch driver {
+	case SQLITE_DRIVER:
+		// Use strftime for ISO 8601 - CURRENT_TIMESTAMP/datetime('now') return 'YYYY-MM-DD HH:MM:SS'
+		// but API expects '2006-01-02T15:04:05Z07:00'
+		if value == "CURRENT_TIMESTAMP" {
+			value = "strftime('%Y-%m-%dT%H:%M:%SZ', 'now', 'utc')"
+		}
+		return fmt.Sprintf("json_set( %s, '$.%s', %s )", parent, key, value)
+	case POSTGRES_DRIVER:
+		if value == "CURRENT_TIMESTAMP" {
+			value = `to_jsonb(to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))`
+		}
+		return fmt.Sprintf("jsonb_set( %s, '{%s}', %s )", parent, key, value)
+	default:
+		return value
+	}
+}
+
 func getParamValue(param string, index int) string {
 	if param == "$" {
 		return fmt.Sprintf("$%d", index)
@@ -181,28 +222,23 @@ func getParamValue(param string, index int) string {
 	}
 }
 
-func getParams(params abstractions.QueryFilter) map[string]any {
-	filter := maps.Clone(params.Params)
-	maps.DeleteFunc(filter, func(k string, v any) bool {
-		return v == "" // delete empty values
-	})
-	return filter
-}
-
-func createFilterStatement(driver string, filter map[string]any, orderBy string, limit int, offset int) (string, error) {
+func createFilterStatement(driver string, filter map[string]any, orderBy string, limit int, offset int) (string, []any, error) {
 	param := getParam(driver)
 
 	var sb strings.Builder
+	var args []any
 
-	index := 0
+	// start at 1 because we use $1, $2, $3, etc. placeholders
+	index := 1
 
 	if len(filter) > 0 {
 		sb.WriteString(" WHERE ")
 		for key := range maps.Keys(filter) {
-			if index > 0 {
+			if index > 1 {
 				sb.WriteString(" AND ")
 			}
-			sb.WriteString(fmt.Sprintf("%s = %s", key, getParamValue(param, index)))
+			sb.WriteString(fmt.Sprintf("%s = %s", getParamKey(driver, key), getParamValue(param, index)))
+			args = append(args, filter[key])
 			index++
 		}
 	}
@@ -211,17 +247,22 @@ func createFilterStatement(driver string, filter map[string]any, orderBy string,
 	if orderBy != "" {
 		// note that we use the value here and not ?
 		sb.WriteString(fmt.Sprintf(" ORDER BY %s", orderBy))
+		// no arg because we substitute directly for this value
 	}
 	if limit > 0 {
 		sb.WriteString(fmt.Sprintf(" LIMIT %s", getParamValue(param, index)))
 		index++
+		args = append(args, limit)
 	}
 	if offset > 0 {
 		sb.WriteString(fmt.Sprintf(" OFFSET %s", getParamValue(param, index)))
 		index++
+		args = append(args, offset)
 	}
 
-	return sb.String(), nil
+	fmt.Printf("Filter statement:\n%s\nargs:\n%s\n\n", sb.String(), pretty(args))
+
+	return sb.String(), args, nil
 }
 
 // createListEntitiesStatement returns a driver-specific SELECT statement
@@ -229,38 +270,33 @@ func createFilterStatement(driver string, filter map[string]any, orderBy string,
 func createListEntitiesStatement(driver, tableName string, limit, offset int, filter map[string]any) (string, []any, error) {
 	quotedTable := quoteIdentifier(driver, tableName)
 
-	filterStatement, err := createFilterStatement(driver, filter, "id DESC", limit, offset)
+	filterStatement, args, err := createFilterStatement(driver, filter, "id DESC", limit, offset)
 	if err != nil {
 		return "", nil, err
 	}
 
 	var query string
-	var args = slices.Collect(maps.Values(filter))
-	if limit > 0 {
-		args = append(args, limit)
-	}
-	if offset > 0 {
-		args = append(args, offset)
-	}
 
 	switch driver {
 	case POSTGRES_DRIVER:
 		switch tableName {
 		case TABLE_EVALUATIONS:
-			query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s %s;`, quotedTable, filterStatement)
+			query = fmt.Sprintf(`SELECT id, resource, status, experiment_id, entity FROM %s %s;`, quotedTable, filterStatement)
 		default:
-			query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s %s;`, quotedTable, filterStatement)
+			query = fmt.Sprintf(`SELECT id, resource, entity FROM %s %s;`, quotedTable, filterStatement)
 		}
 	case SQLITE_DRIVER:
 		switch tableName {
 		case TABLE_EVALUATIONS:
-			query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s %s;`, quotedTable, filterStatement)
+			query = fmt.Sprintf(`SELECT id, resource, status, experiment_id, entity FROM %s %s;`, quotedTable, filterStatement)
 		default:
-			query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s %s;`, quotedTable, filterStatement)
+			query = fmt.Sprintf(`SELECT id, resource, entity FROM %s %s;`, quotedTable, filterStatement)
 		}
 	default:
 		return "", nil, getUnsupportedDriverError(driver)
 	}
+
+	print("List entities query:\n%s\nargs:\n%s\n\n", query, pretty(args))
 
 	return query, args, nil
 }
@@ -271,7 +307,12 @@ func createListEntitiesStatement(driver, tableName string, limit, offset int, fi
 // Returns the query, args in SET order then id, and an optional error.
 func CreateUpdateEvaluationStatement(driver, tableName, id string, status api.OverallState, entityJSON string) (query string, args []any, err error) {
 	quotedTable, quotedID, setParts, argsList := tableAndArgsList(driver, tableName, status, entityJSON, id)
-	return createUpdateStatement(driver, quotedTable, quotedID, setParts, argsList)
+	statement, args, err := createUpdateStatement(driver, quotedTable, quotedID, setParts, argsList)
+	if err != nil {
+		return statement, args, err
+	}
+	print("Update evaluation job query:\n%s\nargs:\n%s\n\n", statement, pretty(args))
+	return statement, args, nil
 }
 
 func CreateUpdateCollectionStatement(driver, tableName, id string, entityJSON string) (query string, args []any, err error) {
@@ -294,7 +335,7 @@ func tableAndArgsList(driver string, tableName string, status api.OverallState, 
 	quotedTable := quoteIdentifier(driver, tableName)
 	quotedStatus := quoteIdentifier(driver, "status")
 	quotedEntity := quoteIdentifier(driver, "entity")
-	quotedUpdatedAt := quoteIdentifier(driver, "updated_at")
+	quotedUpdatedAt := quoteIdentifier(driver, "resource") // quoteIdentifier(driver, "updated_at")
 	quotedID := quoteIdentifier(driver, "id")
 
 	var setParts []string
@@ -307,7 +348,8 @@ func tableAndArgsList(driver string, tableName string, status api.OverallState, 
 		setParts = append(setParts, quotedEntity)
 		argsList = append(argsList, entityJSON)
 	}
-	setParts = append(setParts, fmt.Sprintf("%s = CURRENT_TIMESTAMP", quotedUpdatedAt))
+	// UPDATE events SET json_set(data, '$.date', '2024-12-05') WHERE id = 1;
+	setParts = append(setParts, fmt.Sprintf("%s = %s", quotedUpdatedAt, quoteIdentifier(driver, setParamValue(driver, "resource", "updated_at", "CURRENT_TIMESTAMP"))))
 	argsList = append(argsList, id)
 	return quotedTable, quotedID, setParts, argsList
 }
@@ -353,4 +395,18 @@ func extractQueryParams(filter abstractions.QueryFilter) abstractions.QueryFilte
 		Offset: filter.Offset,
 		Params: params,
 	}
+}
+
+// just for debugging
+
+func pretty(v any) string {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err == nil {
+		return string(b)
+	}
+	return fmt.Sprintf("%v", v)
+}
+
+func print(format string, a ...any) {
+	fmt.Printf(format, a...)
 }
