@@ -159,7 +159,7 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 	return job, nil
 }
 
-func (s *SQLStorage) GetEvaluationJobs(filter abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
+func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
 
 	filter = extractQueryParams(filter)
 	params := filter.Params

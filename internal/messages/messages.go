@@ -82,6 +82,13 @@ var (
 		"provider_id_not_unique",
 	)
 
+	// SystemProvider System provider '{{.ProviderID}}' cannot be modified or deleted.
+	SystemProvider = createMessage(
+		constants.HTTPCodeBadRequest,
+		"System provider '{{.ProviderID}}' cannot be modified or deleted.",
+		"system_provider",
+	)
+
 	// MLFlowRequiredForExperiment MLflow is required for experiment tracking. Please configure MLflow in the service configuration and try again.
 	MLFlowRequiredForExperiment = createMessage(
 		constants.HTTPCodeBadRequest,

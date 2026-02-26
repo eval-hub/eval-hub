@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/common"
@@ -14,49 +15,6 @@ import (
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
-
-// HandleListProviders handles GET /api/v1/evaluations/providers
-func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-
-	filter, err := CommonListFilters(r)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-
-	benchmarksParam := r.Query("benchmarks")
-	benchmarks := true
-	if len(benchmarksParam) > 0 {
-		benchmarks = benchmarksParam[0] != "false"
-	}
-
-	filter.Params["benchmarks"] = benchmarks
-
-	systemDefined := IncludeSystemDefined(r)
-
-	ctx.Logger.Info("Include system defined providers", "system_defined", systemDefined)
-
-	providers := []api.ProviderResource{}
-
-	if systemDefined {
-		for _, p := range h.providerConfigs {
-
-			if !benchmarks {
-				p.Benchmarks = []api.BenchmarkResource{}
-			}
-			providers = append(providers, p)
-
-		}
-	}
-
-	w.WriteJSON(api.ProviderResourceList{
-		// TODO: Implement pagination
-		Page: api.Page{
-			TotalCount: len(providers),
-		},
-		Items: providers,
-	}, 200)
-}
 
 func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
@@ -84,7 +42,7 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 			return nil
 		},
 		"validation",
-		"validate-user-provider",
+		"validate-provider",
 		"provider.id", id,
 	)
 	if err != nil {
@@ -116,18 +74,80 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 			}
 		},
 		"storage",
-		"store-user-provider",
+		"create-provider",
 		"provider.id", id,
 	)
 }
 
-func (h *Handlers) getSystemProvider(providerId string) (*api.ProviderResource, error) {
+// HandleListProviders handles GET /api/v1/evaluations/providers
+func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
+
+	logging.LogRequestStarted(ctx)
+
+	_ = h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			filter, err := CommonListFilters(r)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+
+			benchmarksParam := r.Query("benchmarks")
+			benchmarks := true
+			if len(benchmarksParam) > 0 {
+				benchmarks = benchmarksParam[0] != "false"
+			}
+
+			filter.Params["benchmarks"] = benchmarks
+
+			systemDefined := IncludeSystemDefined(r)
+
+			ctx.Logger.Info("Include system defined providers", "system_defined", systemDefined)
+
+			providers := []api.ProviderResource{}
+
+			if systemDefined {
+				for _, p := range h.providerConfigs {
+					if !benchmarks {
+						p.Benchmarks = []api.BenchmarkResource{}
+					}
+					providers = append(providers, p)
+				}
+			}
+
+			queryResults, err := storage.GetProviders(filter)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+
+			result := api.ProviderResourceList{
+				// TODO: Implement pagination
+				Page: api.Page{
+					TotalCount: len(providers) + queryResults.TotalStored,
+				},
+				Items: append(providers, queryResults.Items...),
+			}
+
+			w.WriteJSON(result, 200)
+
+			return nil
+		},
+		"storage",
+		"list-providers",
+	)
+}
+
+func (h *Handlers) getSystemProvider(providerId string) *api.ProviderResource {
 	provider, ok := h.providerConfigs[providerId]
 	if !ok {
-		return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "provider", providerId)
+		return nil
 	}
-	return &provider, nil
+	return &provider
 }
+
 func (h *Handlers) HandleGetProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
 
@@ -142,45 +162,147 @@ func (h *Handlers) HandleGetProvider(ctx *executioncontext.ExecutionContext, req
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-
-			provider, err := h.getSystemProvider(providerId)
-			if err != nil {
-
-				ctx.Logger.Warn("System provider not found", "provider_id", providerId)
-				provider, err = storage.GetProvider(providerId)
+			provider := h.getSystemProvider(providerId)
+			if provider == nil {
+				userProvider, err := storage.GetProvider(providerId)
 				if err != nil {
-					ctx.Logger.Error("User provider not found", "provider_id", providerId)
 					err = serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "provider", "ResourceId", providerId)
 					w.Error(err, ctx.RequestID)
 					return err
 				}
+				provider = userProvider
 			}
 
 			w.WriteJSON(provider, 200)
 			return nil
 		},
 		"storage",
-		"get-user-provider",
+		"get-provider",
 		"provider.id", providerId,
 	)
 }
 
 func (h *Handlers) HandleUpdateProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
+
+	logging.LogRequestStarted(ctx)
+
 	providerId := req.PathValue(constants.PATH_PARAMETER_PROVIDER_ID)
 	if providerId == "" {
 		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PATH_PARAMETER_PROVIDER_ID), ctx.RequestID)
 		return
 	}
-	w.Error(serviceerrors.NewServiceError(messages.NotImplemented, "APi", req.Path()), ctx.RequestID)
+
+	request := &api.ProviderResource{}
+
+	err := h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			if h.getSystemProvider(providerId) != nil {
+				return serviceerrors.NewServiceError(messages.SystemProvider, "ProviderId", providerId)
+			}
+
+			// get the body bytes from the context
+			bodyBytes, err := req.BodyAsBytes()
+			if err != nil {
+				return err
+			}
+			err = serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, request)
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		"validation",
+		"validate-provider-update",
+		"provider.id", providerId,
+	)
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+
+	_ = h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			provider, err := storage.UpdateProvider(providerId, request)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			w.WriteJSON(provider, 200)
+			return nil
+		},
+		"storage",
+		"update-provider",
+		"provider.id", providerId,
+	)
 }
 
 func (h *Handlers) HandlePatchProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
+
+	logging.LogRequestStarted(ctx)
+
 	providerId := req.PathValue(constants.PATH_PARAMETER_PROVIDER_ID)
 	if providerId == "" {
 		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PATH_PARAMETER_PROVIDER_ID), ctx.RequestID)
 		return
 	}
-	w.Error(serviceerrors.NewServiceError(messages.NotImplemented, "APi", req.Path()), ctx.RequestID)
+
+	var patches api.Patch
+
+	err := h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			if h.getSystemProvider(providerId) != nil {
+				return serviceerrors.NewServiceError(messages.SystemProvider, "ProviderId", providerId)
+			}
+
+			bodyBytes, err := req.BodyAsBytes()
+			if err != nil {
+				return err
+			}
+			if err = json.Unmarshal(bodyBytes, &patches); err != nil {
+				return serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", err.Error())
+			}
+			for i := range patches {
+				if err = h.validate.StructCtx(ctx.Ctx, &patches[i]); err != nil {
+					return serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error", err.Error())
+				}
+				if patches[i].Op != api.PatchOpReplace && patches[i].Op != api.PatchOpAdd && patches[i].Op != api.PatchOpRemove {
+					return serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", "Invalid patch operation")
+				}
+				if patches[i].Path == "" {
+					return serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", "Invalid patch path")
+				}
+			}
+			return nil
+		},
+		"validation",
+		"validate-provider-patch",
+		"provider.id", providerId,
+	)
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+
+	_ = h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			provider, err := storage.PatchProvider(providerId, &patches)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			w.WriteJSON(provider, 200)
+			return nil
+		},
+		"storage",
+		"patch-provider",
+		"provider.id", providerId,
+	)
 }
 
 func (h *Handlers) HandleDeleteProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
@@ -207,7 +329,7 @@ func (h *Handlers) HandleDeleteProvider(ctx *executioncontext.ExecutionContext, 
 			return nil
 		},
 		"storage",
-		"delete-user-provider",
+		"delete-provider",
 		"provider.id", providerId,
 	)
 }

@@ -144,6 +144,8 @@ func TestServerSetupRoutes(t *testing.T) {
 		status int
 		body   string
 	}{
+		{http.MethodGet, "/api/v1/evaluations/providers", http.StatusOK, ""},
+
 		{http.MethodGet, "/api/v1/health", http.StatusOK, ""},
 		{http.MethodGet, "/openapi.yaml", http.StatusOK, ""},
 		{http.MethodGet, "/docs", http.StatusOK, ""},
