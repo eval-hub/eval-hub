@@ -1,9 +1,12 @@
+//go:build !mock
+
 package k8s
 
 // Helper wrapper around the Kubernetes clientset.
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -20,9 +23,18 @@ type KubernetesHelper struct {
 	clientset kubernetes.Interface
 }
 
-// NewKubernetesHelper builds a Kubernetes client (in-cluster config, then default kubeconfig)
-// and returns a KubernetesHelper. Call this when LocalMode is false.
-func NewKubernetesHelper() (*KubernetesHelper, error) {
+var _ KubernetesHelperInterface = (*KubernetesHelper)(nil)
+
+// NewKubernetesHelper returns a KubernetesHelperInterface. When KUBE_MOCK_ENABLED is true (or "1")
+// and the binary was built with -tags=mock, it returns the mock. Otherwise it returns the real client.
+func NewKubernetesHelper(logger *slog.Logger) (KubernetesHelperInterface, error) {
+	return newKubernetesHelper(logger)
+}
+
+// newRealKubernetesHelper creates the real Kubernetes client (in-cluster config, then default kubeconfig).
+// Used by NewKubernetesHelper and by the mock stub when the mock is not compiled in.
+func newKubernetesHelper(logger *slog.Logger) (KubernetesHelperInterface, error) {
+	logger.Debug("using real kubernetes helper")
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -39,7 +51,6 @@ func NewKubernetesHelper() (*KubernetesHelper, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return &KubernetesHelper{
 		clientset: clientset,
 	}, nil
@@ -80,6 +91,9 @@ func (h *KubernetesHelper) CreateJob(ctx context.Context, job *batchv1.Job) (*ba
 	if job == nil || job.Namespace == "" || job.Name == "" {
 		return nil, fmt.Errorf("job, namespace, and name are required")
 	}
+	//remove the label __MOCK_TEMPLATE from the job. We don't want this label set on the real job in the cluster.
+	delete(job.Spec.Template.Labels, mockTemplateLabel)
+	delete(job.Labels, mockTemplateLabel)
 	return h.clientset.BatchV1().Jobs(job.Namespace).Create(ctx, job, metav1.CreateOptions{})
 }
 
@@ -135,10 +149,4 @@ func (h *KubernetesHelper) SetConfigMapOwner(ctx context.Context, namespace, nam
 	cm.OwnerReferences = []metav1.OwnerReference{owner}
 	_, err = h.clientset.CoreV1().ConfigMaps(namespace).Update(ctx, cm, metav1.UpdateOptions{})
 	return err
-}
-
-// CreateConfigMapOptions holds optional metadata for CreateConfigMap.
-type CreateConfigMapOptions struct {
-	Labels      map[string]string
-	Annotations map[string]string
 }

@@ -106,7 +106,7 @@ func buildK8sName(jobID, resourceGUID, suffix string) string {
 }
 
 func buildConfigMap(cfg *jobConfig) (*corev1.ConfigMap, error) {
-	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID)
+	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID, nil)
 	annotations := jobAnnotations(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	name := configMapName(cfg.jobID, cfg.resourceGUID)
 
@@ -127,11 +127,11 @@ func buildConfigMap(cfg *jobConfig) (*corev1.ConfigMap, error) {
 	}, nil
 }
 
-func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
+func buildJob(cfg *jobConfig, custom map[string]any) (*batchv1.Job, error) {
 	if cfg.adapterImage == "" {
 		return nil, fmt.Errorf("adapter image is required")
 	}
-	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID)
+	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID, custom)
 	annotations := jobAnnotations(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	jobName := jobName(cfg.jobID, cfg.resourceGUID)
 	configMap := configMapName(cfg.jobID, cfg.resourceGUID)
@@ -467,14 +467,23 @@ func configMapName(jobID, resourceGUID string) string {
 	return buildK8sName(jobID, resourceGUID, specSuffix)
 }
 
-func jobLabels(jobID, providerID, benchmarkID string) map[string]string {
-	return map[string]string{
+func jobLabels(jobID, providerID, benchmarkID string, custom map[string]any) map[string]string {
+	labels := map[string]string{
 		labelAppKey:         labelAppValue,
 		labelComponentKey:   labelComponentValue,
 		labelJobIDKey:       sanitizeLabelValue(jobID),
 		labelProviderIDKey:  sanitizeLabelValue(providerID),
 		labelBenchmarkIDKey: sanitizeLabelValue(benchmarkID),
 	}
+
+	if custom != nil {
+		if mt, ok := custom["_MOCK_TEMPLATES"].(map[string]any); ok && mt[benchmarkID] != nil {
+			if s, ok := mt[benchmarkID].(string); ok {
+				labels["__MOCK_TEMPLATE"] = s
+			}
+		}
+	}
+	return labels
 }
 
 func jobAnnotations(jobID, providerID, benchmarkID string) map[string]string {

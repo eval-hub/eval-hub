@@ -1,3 +1,5 @@
+//go:build !mock
+
 package k8s
 
 import (
@@ -49,8 +51,9 @@ func TestRunEvaluationJobCreatesResources(t *testing.T) {
 	}
 	const apiTimeout = 15 * time.Second
 	t.Setenv("SERVICE_URL", "http://eval-hub")
+	t.Setenv("KUBE_MOCK_ENABLED", "false") // force real client for integration test
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	helper, err := NewKubernetesHelper()
+	helper, err := NewKubernetesHelper(logger)
 	if err != nil {
 		t.Fatalf("failed to create kubernetes helper: %v", err)
 	}
@@ -240,7 +243,7 @@ func TestCreateBenchmarkResourcesDuplicateBenchmarkIDDoesNotCollide(t *testing.T
 	}
 	t.Setenv("SERVICE_URL", "http://eval-hub")
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	helper, err := NewKubernetesHelper()
+	helper, err := NewKubernetesHelper(logger)
 	if err != nil {
 		t.Fatalf("failed to create kubernetes helper: %v", err)
 	}
@@ -306,8 +309,8 @@ func TestCreateBenchmarkResourcesDuplicateBenchmarkIDDoesNotCollide(t *testing.T
 		t.Fatalf("unexpected error creating second benchmark resources: %v", err)
 	}
 
-	jobs := listJobsByJobID(t, helper.clientset.(*fake.Clientset), evaluation.Resource.ID)
-	configMaps := listConfigMapsByJobID(t, helper.clientset.(*fake.Clientset), evaluation.Resource.ID)
+	jobs := listJobsByJobID(t, helper.(*KubernetesHelper).clientset.(*fake.Clientset), evaluation.Resource.ID)
+	configMaps := listConfigMapsByJobID(t, helper.(*KubernetesHelper).clientset.(*fake.Clientset), evaluation.Resource.ID)
 	if len(jobs) != 2 {
 		t.Fatalf("expected 2 jobs, got %d", len(jobs))
 	}
@@ -323,7 +326,7 @@ func TestCreateBenchmarkResourcesSetsAnnotationsIntegration(t *testing.T) {
 	}
 	t.Setenv("SERVICE_URL", "http://eval-hub")
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	helper, err := NewKubernetesHelper()
+	helper, err := NewKubernetesHelper(logger)
 	if err != nil {
 		t.Fatalf("failed to create kubernetes helper: %v", err)
 	}
@@ -370,7 +373,7 @@ func TestCreateBenchmarkResourcesSetsAnnotationsIntegration(t *testing.T) {
 		t.Fatalf("unexpected error creating benchmark resources: %v", err)
 	}
 
-	configMaps := listConfigMapsByJobID(t, helper.clientset.(*fake.Clientset), evaluation.Resource.ID)
+	configMaps := listConfigMapsByJobID(t, helper.(*KubernetesHelper).clientset.(*fake.Clientset), evaluation.Resource.ID)
 	if len(configMaps) != 1 {
 		t.Fatalf("expected 1 configmap, got %d", len(configMaps))
 	}
@@ -385,7 +388,7 @@ func TestCreateBenchmarkResourcesSetsAnnotationsIntegration(t *testing.T) {
 		t.Fatalf("expected configmap benchmark_id annotation %q, got %q", evaluation.Benchmarks[0].ID, cm.Annotations[annotationBenchmarkIDKey])
 	}
 
-	jobs := listJobsByJobID(t, helper.clientset.(*fake.Clientset), evaluation.Resource.ID)
+	jobs := listJobsByJobID(t, helper.(*KubernetesHelper).clientset.(*fake.Clientset), evaluation.Resource.ID)
 	if len(jobs) != 1 {
 		t.Fatalf("expected 1 job, got %d", len(jobs))
 	}

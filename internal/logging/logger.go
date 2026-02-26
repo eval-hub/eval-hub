@@ -32,8 +32,7 @@ type ShutdownFunc func() error
 //   - *slog.Logger: A structured logger instance that can be used throughout the application
 //   - error: An error if the logger could not be initialized
 func NewLogger() (*slog.Logger, ShutdownFunc, error) {
-	var logConfig zap.Config
-	logConfig = zap.NewProductionConfig()
+	logConfig := zap.NewProductionConfig()
 	logConfig.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	if level := parseLogLevel(os.Getenv(envLogLevel)); level != nil {
 		logConfig.Level = zap.NewAtomicLevelAt(*level)

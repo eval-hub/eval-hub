@@ -3,16 +3,18 @@
 # set -e
 
 # try to kill the service if already running?
+#
+# Usage: start_server.sh PID_FILE EXE LOGFILE PORT GOCOVERDIR [mock]
+#   Optional 6th arg: "mock" (or "1"/"true") to start in mock K8s mode (KUBE_MOCK_ENABLED=1).
+#   Otherwise mock mode is enabled only if KUBE_MOCK_ENABLED is already set in the environment.
+#   The executable should be built with -tags=mock for mock mode to use the mock helper.
 
 PID_FILE="$1"
-
 EXE="$2"
-
 LOGFILE="$3"
-
 PORT="$4"
-
 export GOCOVERDIR="$5"
+MOCK_ARG="${6:-}"
 
 # set -x
 
@@ -21,9 +23,18 @@ if [[ ! -f "${EXE}" ]]; then
   exit 2
 fi
 
-# This assumes that the service has already been built
-# Always run in local mode (CORS enabled)
-${EXE} --local > ${LOGFILE} 2>&1 &
+# Enable mock K8s mode if 6th argument is "mock"/"1"/"true" or KUBE_MOCK_ENABLED is already set.
+if [[ "${MOCK_ARG}" == "mock" || "${MOCK_ARG}" == "1" || "${MOCK_ARG}" == "true" ]]; then
+  export KUBE_MOCK_ENABLED=1
+fi
+
+# If KUBE_MOCK_ENABLED is true, run without --local (K8s runtime with mock helper).
+# Otherwise run with --local (local mode, CORS enabled).
+EXTRA_ARGS=""
+if [[ "${KUBE_MOCK_ENABLED}" != "true" && "${KUBE_MOCK_ENABLED}" != "1" ]]; then
+  EXTRA_ARGS="--local"
+fi
+${EXE} ${EXTRA_ARGS} > ${LOGFILE} 2>&1 &
 
 SERVICE_PID=$!
 

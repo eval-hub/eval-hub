@@ -1,0 +1,20 @@
+{
+  "delay_seconds": 1,
+  "benchmark_status_events": [
+    {
+        "status": "running",
+        "artifacts": {
+          "logs": "/data/logs/1234567890.log"
+        }
+      },
+      {
+        "status": "completed",
+        "metrics": {
+          "accuracy": 0.95
+        },
+        "artifacts": {
+          "logs": "/data/logs/1234567890.log"
+        }
+      }
+  ]
+}

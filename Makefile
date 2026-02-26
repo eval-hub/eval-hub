@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage start-service stop-service lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-mock start-service start-service-mock-k8s stop-service lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report
 
 # Variables
 BINARY_NAME = eval-hub
@@ -57,6 +57,11 @@ build-coverage: $(BIN_DIR) ## Build the binary with coverage
 	@go build -race -cover -covermode=atomic -coverpkg=./... -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(BINARY_NAME)-cov $(CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(BINARY_NAME)-cov"
 
+build-mock: $(BIN_DIR) ## Build the binary with mock K8s support (-tags=mock)
+	@echo "Building $(BINARY_NAME) with -tags=mock and ${LDFLAGS}"
+	@go build -race -tags=mock -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(BINARY_NAME) $(CMD_PATH)
+	@echo "Build complete: $(BIN_DIR)/$(BINARY_NAME)"
+
 SERVER_PID_FILE ?= $(BIN_DIR)/pid
 
 ${SERVER_PID_FILE}:
@@ -71,6 +76,10 @@ start-service: ${SERVER_PID_FILE} build ## Run the application in background
 start-service-coverage: ${SERVER_PID_FILE} build-coverage ## Run the application in background
 	@echo "Running $(BINARY_NAME)-cov on port $(PORT)..."
 	@./scripts/start_server.sh "${SERVER_PID_FILE}" "${BIN_DIR}/$(BINARY_NAME)-cov" "${SERVICE_LOG}" ${PORT} "${BIN_DIR}"
+
+start-service-mock-k8s: ${SERVER_PID_FILE} build-mock ## Run the application in background with mock K8s (KUBE_MOCK_ENABLED=1)
+	@echo "Running $(BINARY_NAME) on port $(PORT) with mock K8s..."
+	@./scripts/start_server.sh "${SERVER_PID_FILE}" "${BIN_DIR}/$(BINARY_NAME)" "${SERVICE_LOG}" ${PORT} "" mock
 
 stop-service:
 	-./scripts/stop_server.sh "${SERVER_PID_FILE}"
@@ -115,6 +124,9 @@ SERVER_URL ?= http://localhost:8080
 
 test-fvt-server: start-service ## Run FVT tests using godog against a running server
 	@SERVER_URL="${SERVER_URL}" make test-fvt; status=$$?; make stop-service; exit $$status
+
+test-fvt-server-mock-k8s: start-service-mock-k8s ## Run FVT tests using godog against a running server with mock K8s (KUBE_MOCK_ENABLED=1)
+	@SERVER_URL="${SERVER_URL}" make test-fvt; status=$$?; make stop-service-mock-k8s; exit $$status
 
 test-coverage: $(BIN_DIR) ## Run unit tests with coverage
 	@echo "Running unit tests with coverage..."
