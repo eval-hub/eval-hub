@@ -1,3 +1,4 @@
+@providers
 Feature: Providers Endpoint
   As a user
   I want to query the supported providers

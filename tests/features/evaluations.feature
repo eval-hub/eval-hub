@@ -1,3 +1,4 @@
+@evaluations
 Feature: Evaluations Endpoint
   As a data scientist
   I want to create evaluation jobs
