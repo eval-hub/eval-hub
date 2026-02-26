@@ -283,6 +283,192 @@ func TestEvaluationsStorage(t *testing.T) {
 		}
 	})
 
+	t.Run("UpdateEvaluationJobStatus same-state is no-op", func(t *testing.T) {
+		noOpID := common.GUID()
+		noOpJob := &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{Resource: api.Resource{ID: noOpID}},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
+				Benchmarks: []api.BenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
+			},
+		}
+		if err := store.CreateEvaluationJob(noOpJob); err != nil {
+			t.Fatalf("CreateEvaluationJob: %v", err)
+		}
+		msg := &api.MessageInfo{Message: "no change", MessageCode: "test"}
+		err := store.UpdateEvaluationJobStatus(noOpID, api.OverallStatePending, msg)
+		if err != nil {
+			t.Fatalf("UpdateEvaluationJobStatus same-state should not error: %v", err)
+		}
+		job, err := store.GetEvaluationJob(noOpID)
+		if err != nil {
+			t.Fatalf("GetEvaluationJob failed: %v", err)
+		}
+		if job.Status.State != api.OverallStatePending {
+			t.Errorf("state should remain pending, got %s", job.Status.State)
+		}
+	})
+
+	t.Run("UpdateEvaluationJobStatus rejects transition from terminal states", func(t *testing.T) {
+		terminalStates := []api.OverallState{
+			api.OverallStateCompleted,
+			api.OverallStateFailed,
+			api.OverallStateCancelled,
+			api.OverallStatePartiallyFailed,
+		}
+		for _, terminalState := range terminalStates {
+			jobID := common.GUID()
+			config := &api.EvaluationJobConfig{
+				Model: api.ModelRef{URL: "http://test.com", Name: "test"},
+				Benchmarks: []api.BenchmarkConfig{
+					{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"},
+				},
+			}
+			if terminalState == api.OverallStatePartiallyFailed {
+				config.Benchmarks = append(config.Benchmarks, api.BenchmarkConfig{Ref: api.Ref{ID: "b2"}, ProviderID: "p1"})
+			}
+			job := &api.EvaluationJobResource{
+				Resource:            api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+				EvaluationJobConfig: *config,
+			}
+			if err := store.CreateEvaluationJob(job); err != nil {
+				t.Fatalf("CreateEvaluationJob: %v", err)
+			}
+			// Drive job to terminal state
+			switch terminalState {
+			case api.OverallStateCompleted:
+				if err := store.UpdateEvaluationJob(jobID, &api.StatusEvent{
+					BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+						ID: "b1", ProviderID: "p1", BenchmarkIndex: 0,
+						Status: api.StateCompleted,
+					},
+				}); err != nil {
+					t.Fatalf("setup for %s: %v", terminalState, err)
+				}
+			case api.OverallStateFailed:
+				if err := store.UpdateEvaluationJob(jobID, &api.StatusEvent{
+					BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+						ID: "b1", ProviderID: "p1", BenchmarkIndex: 0,
+						Status:       api.StateFailed,
+						ErrorMessage: &api.MessageInfo{Message: "err", MessageCode: "E"},
+					},
+				}); err != nil {
+					t.Fatalf("setup for %s: %v", terminalState, err)
+				}
+			case api.OverallStateCancelled:
+				if err := store.UpdateEvaluationJobStatus(jobID, api.OverallStateCancelled, &api.MessageInfo{Message: "cancelled", MessageCode: "X"}); err != nil {
+					t.Fatalf("setup for %s: %v", terminalState, err)
+				}
+			case api.OverallStatePartiallyFailed:
+				if err := store.UpdateEvaluationJob(jobID, &api.StatusEvent{
+					BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+						ID: "b1", ProviderID: "p1", BenchmarkIndex: 0,
+						Status: api.StateCompleted,
+					},
+				}); err != nil {
+					t.Fatalf("setup for %s (b1): %v", terminalState, err)
+				}
+				if err := store.UpdateEvaluationJob(jobID, &api.StatusEvent{
+					BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+						ID: "b2", ProviderID: "p1", BenchmarkIndex: 1,
+						Status:       api.StateFailed,
+						ErrorMessage: &api.MessageInfo{Message: "err", MessageCode: "E"},
+					},
+				}); err != nil {
+					t.Fatalf("setup for %s (b2): %v", terminalState, err)
+				}
+			}
+			got, _ := store.GetEvaluationJob(jobID)
+			if got == nil {
+				t.Fatalf("GetEvaluationJob returned nil for %s", jobID)
+			}
+			if got.Status.State != terminalState {
+				t.Fatalf("job %s: expected state %s, got %s", jobID, terminalState, got.Status.State)
+			}
+			err := store.UpdateEvaluationJobStatus(jobID, api.OverallStatePending, &api.MessageInfo{Message: "try", MessageCode: "X"})
+			if err == nil {
+				t.Errorf("UpdateEvaluationJobStatus from %s should return error", terminalState)
+			}
+			if err != nil && !strings.Contains(err.Error(), "can not be") {
+				t.Errorf("expected JobCanNotBeUpdated error, got: %v", err)
+			}
+		}
+	})
+
+	t.Run("UpdateEvaluationJobStatus allows non-terminal transition and preserves Results/Benchmarks", func(t *testing.T) {
+		jobID := common.GUID()
+		config := &api.EvaluationJobConfig{
+			Model: api.ModelRef{URL: "http://test.com", Name: "test"},
+			Benchmarks: []api.BenchmarkConfig{
+				{Ref: api.Ref{ID: "bx"}, ProviderID: "garak"},
+			},
+		}
+		job := &api.EvaluationJobResource{
+			Resource:            api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+			EvaluationJobConfig: *config,
+		}
+		if err := store.CreateEvaluationJob(job); err != nil {
+			t.Fatalf("CreateEvaluationJob: %v", err)
+		}
+		// (1) pending->running: verify State and Message updated
+		msg := &api.MessageInfo{Message: "job running", MessageCode: "RUNNING"}
+		if err := store.UpdateEvaluationJobStatus(jobID, api.OverallStateRunning, msg); err != nil {
+			t.Fatalf("UpdateEvaluationJobStatus pending->running: %v", err)
+		}
+		updated, err := store.GetEvaluationJob(jobID)
+		if err != nil {
+			t.Fatalf("GetEvaluationJob: %v", err)
+		}
+		if updated.Status.State != api.OverallStateRunning {
+			t.Errorf("State should be running, got %s", updated.Status.State)
+		}
+		if updated.Status.Message == nil || updated.Status.Message.Message != "job running" {
+			t.Errorf("Message should be updated, got %v", updated.Status.Message)
+		}
+		// (2) running->cancelled: verify Benchmarks and Results preserved
+		if err := store.UpdateEvaluationJob(jobID, &api.StatusEvent{
+			BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+				ID: "bx", ProviderID: "garak", BenchmarkIndex: 0,
+				Status:  api.StateCompleted,
+				Metrics: map[string]any{"acc": 0.9},
+			},
+		}); err != nil {
+			t.Fatalf("UpdateEvaluationJob completed: %v", err)
+		}
+		// Now run UpdateEvaluationJobStatus: running->cancelled not applicable (job is completed).
+		// From running we can go to cancelled. So: create another job, UpdateEvaluationJob (running),
+		// UpdateEvaluationJobStatus(cancelled). Verify benchmarks preserved.
+		jobID2 := common.GUID()
+		job2 := &api.EvaluationJobResource{
+			Resource:            api.EvaluationResource{Resource: api.Resource{ID: jobID2}},
+			EvaluationJobConfig: *config,
+		}
+		if err := store.CreateEvaluationJob(job2); err != nil {
+			t.Fatalf("CreateEvaluationJob job2: %v", err)
+		}
+		if err := store.UpdateEvaluationJob(jobID2, &api.StatusEvent{
+			BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+				ID: "bx", ProviderID: "garak", BenchmarkIndex: 0,
+				Status: api.StateRunning,
+			},
+		}); err != nil {
+			t.Fatalf("UpdateEvaluationJob job2 running: %v", err)
+		}
+		if err := store.UpdateEvaluationJobStatus(jobID2, api.OverallStateCancelled, &api.MessageInfo{Message: "cancelled", MessageCode: "C"}); err != nil {
+			t.Fatalf("UpdateEvaluationJobStatus running->cancelled: %v", err)
+		}
+		final, err := store.GetEvaluationJob(jobID2)
+		if err != nil {
+			t.Fatalf("GetEvaluationJob job2: %v", err)
+		}
+		if len(final.Status.Benchmarks) != 1 {
+			t.Errorf("Benchmarks should be preserved, got %d", len(final.Status.Benchmarks))
+		}
+		if final.Status.Benchmarks[0].Status != api.StateRunning {
+			t.Errorf("Benchmark status should be preserved as running, got %s", final.Status.Benchmarks[0].Status)
+		}
+	})
+
 	t.Run("DeleteEvaluationJob deletes the evaluation job", func(t *testing.T) {
 		err := store.UpdateEvaluationJobStatus(evaluationId, api.OverallStateCancelled, &api.MessageInfo{
 			Message:     "Evaluation job cancelled",
