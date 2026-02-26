@@ -291,22 +291,22 @@ func (s *SQLStorage) DeleteEvaluationJob(id string) error {
 	return err
 }
 
-func (s *SQLStorage) checkEvaluationJobState(evaluationJobID string, evaluationJobState api.OverallState, state api.OverallState) error {
+func (s *SQLStorage) checkEvaluationJobState(evaluationJobID string, evaluationJobState api.OverallState, state api.OverallState) (bool, error) {
 	// check if the state is unchanged
 	if state == evaluationJobState {
 		// if the state is the same as the current state then we don't need to update the status
 		// we don't treat this as an error for now, we just return 204
-		return nil
+		return true, nil
 	}
 
 	// check if the job is in a final state
 	switch evaluationJobState {
 	case api.OverallStateCancelled, api.OverallStateCompleted, api.OverallStateFailed, api.OverallStatePartiallyFailed:
 		// the job is already in a final state, so we can't update the status
-		return se.NewServiceError(messages.JobCanNotBeUpdated, "Id", evaluationJobID, "NewStatus", state, "Status", evaluationJobState)
+		return false, se.NewServiceError(messages.JobCanNotBeUpdated, "Id", evaluationJobID, "NewStatus", state, "Status", evaluationJobState)
 	}
 
-	return nil
+	return false, nil
 }
 
 func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error {
@@ -319,8 +319,14 @@ func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState
 		}
 
 		// check the state
-		if err := s.checkEvaluationJobState(evaluationJob.Resource.ID, evaluationJob.Status.State, state); err != nil {
+		sameState, err := s.checkEvaluationJobState(evaluationJob.Resource.ID, evaluationJob.Status.State, state)
+		if err != nil {
 			return err
+		}
+		if sameState {
+			// if the state is the same as the current state then we don't need to update the status
+			// we don't treat this as an error for now, we just return 204
+			return nil
 		}
 
 		entity := EvaluationJobEntity{
@@ -374,8 +380,9 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 			return err
 		}
 
-		// check the state, note that when we update the benchmark status we assume that the state is running
-		if err := s.checkEvaluationJobState(job.Resource.ID, job.Status.State, api.OverallStateRunning); err != nil {
+		// Guard: reject benchmark updates if job is already in a terminal state.
+		// We pass OverallStateRunning as the target to leverage checkEvaluationJobState's terminal-state check.
+		if _, err := s.checkEvaluationJobState(job.Resource.ID, job.Status.State, api.OverallStateRunning); err != nil {
 			return err
 		}
 
