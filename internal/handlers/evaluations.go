@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime/debug"
-	"strconv"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
@@ -32,35 +31,6 @@ type BenchmarkSpec struct {
 	BenchmarkID string                 `json:"benchmark_id"`
 	ProviderID  string                 `json:"provider_id"`
 	Config      map[string]interface{} `json:"config,omitempty"`
-}
-
-func getParam[T string | int | bool](r http_wrappers.RequestWrapper, name string, optional bool, defaultValue T) (T, error) {
-	values := r.Query(name)
-	if (len(values) == 0) || (values[0] == "") {
-		if !optional {
-			return defaultValue, serviceerrors.NewServiceError(messages.QueryParameterRequired, "ParameterName", name)
-		}
-		return defaultValue, nil
-	}
-	switch any(defaultValue).(type) {
-	case string:
-		return any(values[0]).(T), nil
-	case int:
-		v, err := strconv.Atoi(values[0])
-		if err != nil {
-			return defaultValue, serviceerrors.NewServiceError(messages.QueryParameterInvalid, "ParameterName", name, "Type", "integer", "Value", values[0])
-		}
-		return any(v).(T), nil
-	case bool:
-		v, err := strconv.ParseBool(values[0])
-		if err != nil {
-			return defaultValue, serviceerrors.NewServiceError(messages.QueryParameterInvalid, "ParameterName", name, "Type", "boolean", "Value", values[0])
-		}
-		return any(v).(T), nil
-	default:
-		// should never get here
-		return any(fmt.Sprintf("%v", values[0])).(T), nil
-	}
 }
 
 // HandleCreateEvaluation handles POST /api/v1/evaluations/jobs
@@ -237,45 +207,18 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 
 	logging.LogRequestStarted(ctx)
 
-	limit, err := getParam(r, "limit", true, 50)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-	offset, err := getParam(r, "offset", true, 0)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-	statusFilter, err := getParam(r, "status", true, "")
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-	_ /*ownerFilter*/, err = getParam(r, "owner", true, "")
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-	tenantFilter, err := getParam(r, "tenant", true, "")
+	filter, err := CommonListFilters(r)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
 
-	res, err := storage.GetEvaluationJobs(limit, offset, abstractions.QueryFilter{
-		Params: map[string]any{
-			"status": statusFilter,
-			// TODO - there is not yet an owner column
-			// "owner":  ownerFilter,
-			"tenant_id": tenantFilter,
-		},
-	})
+	res, err := storage.GetEvaluationJobs(*filter)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
-	page, err := CreatePage(res.TotalStored, offset, limit, ctx, r)
+	page, err := CreatePage(res.TotalStored, filter.Offset, filter.Limit, ctx, r)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
@@ -285,6 +228,7 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 		Items:  res.Items,
 		Errors: res.Errors,
 	}, 200)
+
 }
 
 // HandleGetEvaluation handles GET /api/v1/evaluations/jobs/{id}
@@ -353,7 +297,7 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	hardDelete, err := getParam(r, "hard_delete", true, false)
+	hardDelete, err := GetParam[bool](r, "hard_delete", true, false)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
