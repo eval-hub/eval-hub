@@ -18,25 +18,35 @@ import (
 // HandleListProviders handles GET /api/v1/evaluations/providers
 func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 
-	benchmarksParam := r.Query("benchmarks")
-	providerId := ""
-	benchmarks := true
+	filter, err := CommonListFilters(r)
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
 
+	benchmarksParam := r.Query("benchmarks")
+	benchmarks := true
 	if len(benchmarksParam) > 0 {
 		benchmarks = benchmarksParam[0] != "false"
 	}
 
+	filter.Params["benchmarks"] = benchmarks
+
+	systemDefined := IncludeSystemDefined(r)
+
+	ctx.Logger.Info("Include system defined providers", "system_defined", systemDefined)
+
 	providers := []api.ProviderResource{}
 
-	for _, p := range h.providerConfigs {
-		if providerId != "" && p.Resource.ID != providerId {
-			continue
-		}
-		if !benchmarks {
-			p.Benchmarks = []api.BenchmarkResource{}
-		}
-		providers = append(providers, p)
+	if systemDefined {
+		for _, p := range h.providerConfigs {
 
+			if !benchmarks {
+				p.Benchmarks = []api.BenchmarkResource{}
+			}
+			providers = append(providers, p)
+
+		}
 	}
 
 	w.WriteJSON(api.ProviderResourceList{

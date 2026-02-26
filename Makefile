@@ -9,8 +9,6 @@ PORT ?= 8080
 # Default target
 .DEFAULT_GOAL := help
 
-UNAME := $(shell uname)
-
 # Auto-detect platform for cross-compilation and wheel building
 # Uses Go's native platform detection - override by setting CROSS_GOOS/CROSS_GOARCH env vars if needed.
 CROSS_GOOS ?= $(shell go env GOOS)
@@ -155,45 +153,6 @@ get-deps: ## Get all dependencies
 	@go get -t ./...
 	@echo "Dependencies updated"
 
-POSTGRES_VERSION ?= 18
-
-ifeq (${UNAME}, Darwin)
-install-postgres:
-	brew install postgresql@${POSTGRES_VERSION}
-else ifeq ($(UNAME), Linux)
-install-postgres:
-	sudo apt-get install postgresql
-else
-install-postgres:
-	echo "Unsupported platform: ${UNAME}"
-	exit 1
-endif
-
-ifeq (${UNAME}, Darwin)
-start-postgres:
-	brew services start postgresql@${POSTGRES_VERSION}
-else ifeq ($(UNAME), Linux)
-start-postgres:
-	sudo systemctl start postgresql
-endif
-
-ifeq (${UNAME}, Darwin)
-stop-postgres:
-	brew services stop postgresql@${POSTGRES_VERSION}
-else ifeq ($(UNAME), Linux)
-stop-postgres:
-	sudo systemctl stop postgresql
-endif
-
-create-database:
-	sudo -u postgres createdb eval_hub
-
-create-user:
-	sudo -u postgres createuser -s -d -r eval_hub
-
-grant-permissions:
-	sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE eval_hub TO eval_hub;"
-
 # Cross-compilation variables
 CROSS_OUTPUT_SUFFIX = $(CROSS_GOOS)-$(CROSS_GOARCH)
 CROSS_OUTPUT = bin/eval-hub-$(CROSS_OUTPUT_SUFFIX)$(if $(filter windows,$(CROSS_GOOS)),.exe,)
@@ -324,4 +283,5 @@ check-unused-components:
 documentation: check-unused-components generate-public-docs verify-api-docs
 
 update-redocly-cli:
-	npm i @redocly/cli@latest
+	rm -f package-lock.json
+	npm install @redocly/cli@latest

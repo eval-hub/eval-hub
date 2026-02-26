@@ -21,23 +21,21 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 
 	logging.LogRequestStarted(ctx)
 
-	limit, err := getParam(req, "limit", true, 50)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-	offset, err := getParam(req, "offset", true, 0)
+	filter, err := CommonListFilters(req)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
 
-	res, err := storage.GetCollections(limit, offset)
+	systemDefined := IncludeSystemDefined(req)
+	ctx.Logger.Info("Include system defined collections", "system_defined", systemDefined)
+
+	res, err := storage.GetCollections(*filter)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
-	page, err := CreatePage(res.TotalStored, offset, limit, ctx, req)
+	page, err := CreatePage(res.TotalStored, filter.Offset, filter.Limit, ctx, req)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
