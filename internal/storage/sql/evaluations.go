@@ -312,32 +312,27 @@ func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState
 		case api.OverallStateCancelled, api.OverallStateCompleted, api.OverallStateFailed, api.OverallStatePartiallyFailed:
 			// the job is already in a final state, so we can't update the status
 			return se.NewServiceError(messages.JobCanNotBeUpdated, "Id", id, "NewStatus", state, "Status", evaluationJob.Status.State)
-		default:
-			if err := s.updateEvaluationJobStatusTxn(txn, id, state, message); err != nil {
-				return err
-			}
-			s.logger.Info("Updated evaluation job status", "id", id, "overall_state", state, "message", message)
-			return nil
 		}
+
+		entity := EvaluationJobEntity{
+			Config: &evaluationJob.EvaluationJobConfig,
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{
+					State:   state,
+					Message: message,
+				},
+				Benchmarks: evaluationJob.Status.Benchmarks,
+			},
+			Results: evaluationJob.Results,
+		}
+
+		if err := s.updateEvaluationJobTxn(txn, id, state, &entity); err != nil {
+			return err
+		}
+		s.logger.Info("Updated evaluation job status", "id", id, "overall_state", state, "message", message)
+		return nil
 	})
 	return err
-}
-
-func (s *SQLStorage) updateEvaluationJobStatusTxn(txn *sql.Tx, id string, overallState api.OverallState, message *api.MessageInfo) error {
-	evaluationJob, err := s.getEvaluationJobTransactional(txn, id)
-	if err != nil {
-		return err
-	}
-	evaluationJob.Status.State = overallState
-	evaluationJob.Status.Message = message
-
-	entity := EvaluationJobEntity{
-		Config:  &evaluationJob.EvaluationJobConfig,
-		Status:  evaluationJob.Status,
-		Results: evaluationJob.Results,
-	}
-
-	return s.updateEvaluationJobTxn(txn, id, overallState, &entity)
 }
 
 func (s *SQLStorage) updateEvaluationJobTxn(txn *sql.Tx, id string, status api.OverallState, evaluationJob *EvaluationJobEntity) error {
