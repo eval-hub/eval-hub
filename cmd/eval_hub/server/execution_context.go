@@ -143,7 +143,7 @@ func (r RespWrapper) WriteJSON(v any, code int) {
 	if v != nil {
 		err := json.NewEncoder(r.Response).Encode(v)
 		if err != nil {
-			logging.LogRequestFailed(r.ctx, code, err.Error())
+			logging.LogRequestFailed(r.ctx, code, err.Error(), 1)
 			return
 		}
 	}
@@ -154,7 +154,7 @@ func (r RespWrapper) SetStatusCode(code int) {
 	r.Response.WriteHeader(code)
 }
 
-func (r RespWrapper) ErrorWithMessageCode(requestId string, messageCode *messages.MessageCode, messageParams ...any) {
+func (r RespWrapper) errorWithMessageCode(requestId string, messageCode *messages.MessageCode, messageParams ...any) {
 	msg := messages.GetErrorMessage(messageCode, messageParams...)
 
 	r.DeleteHeader("Content-Length")
@@ -162,13 +162,17 @@ func (r RespWrapper) ErrorWithMessageCode(requestId string, messageCode *message
 	r.SetHeader("X-Content-Type-Options", "nosniff")
 	r.WriteJSON(api.Error{Message: msg, MessageCode: messageCode.GetCode(), Trace: requestId}, messageCode.GetStatusCode())
 
-	logging.LogRequestFailed(r.ctx, messageCode.GetStatusCode(), msg)
+	logging.LogRequestFailed(r.ctx, messageCode.GetStatusCode(), msg, 2)
+}
+
+func (r RespWrapper) ErrorWithMessageCode(requestId string, messageCode *messages.MessageCode, messageParams ...any) {
+	r.errorWithMessageCode(requestId, messageCode, messageParams...)
 }
 
 func (r RespWrapper) Error(err error, requestId string) {
 	if e, ok := err.(abstractions.ServiceError); ok {
-		r.ErrorWithMessageCode(requestId, e.MessageCode(), e.MessageParams()...)
+		r.errorWithMessageCode(requestId, e.MessageCode(), e.MessageParams()...)
 		return
 	}
-	r.ErrorWithMessageCode(requestId, messages.UnknownError, "Error", err.Error())
+	r.errorWithMessageCode(requestId, messages.UnknownError, "Error", err.Error())
 }
