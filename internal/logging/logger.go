@@ -67,9 +67,13 @@ func LogRequestStarted(ctx *executioncontext.ExecutionContext) {
 	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request started")
 }
 
-func LogRequestFailed(ctx *executioncontext.ExecutionContext, code int, errorMessage string) {
+func LogRequestFailed(ctx *executioncontext.ExecutionContext, code int, errorMessage string, skip ...int) {
+	skipCount := 3
+	if len(skip) > 0 {
+		skipCount += skip[0]
+	}
 	// log the failed request, the request details and requestId have already been added to the logger
-	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request failed", "error", errorMessage, "code", code, "duration", time.Since(ctx.StartedAt))
+	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, skipCount, "Request failed", "error", errorMessage, "code", code, "duration", time.Since(ctx.StartedAt))
 }
 
 func LogRequestSuccess(ctx *executioncontext.ExecutionContext, code int, response any) {

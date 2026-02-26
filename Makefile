@@ -283,4 +283,5 @@ check-unused-components:
 documentation: check-unused-components generate-public-docs verify-api-docs
 
 update-redocly-cli:
-	npm i @redocly/cli@latest
+	rm -f package-lock.json
+	npm install @redocly/cli@latest
