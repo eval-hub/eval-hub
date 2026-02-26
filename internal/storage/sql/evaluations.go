@@ -370,12 +370,13 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 
 		// first we store the benchmark status
 		benchmark := api.BenchmarkStatus{
-			ProviderID:   runStatus.BenchmarkStatusEvent.ProviderID,
-			ID:           runStatus.BenchmarkStatusEvent.ID,
-			Status:       runStatus.BenchmarkStatusEvent.Status,
-			ErrorMessage: runStatus.BenchmarkStatusEvent.ErrorMessage,
-			StartedAt:    runStatus.BenchmarkStatusEvent.StartedAt,
-			CompletedAt:  runStatus.BenchmarkStatusEvent.CompletedAt,
+			ProviderID:     runStatus.BenchmarkStatusEvent.ProviderID,
+			ID:             runStatus.BenchmarkStatusEvent.ID,
+			Status:         runStatus.BenchmarkStatusEvent.Status,
+			ErrorMessage:   runStatus.BenchmarkStatusEvent.ErrorMessage,
+			StartedAt:      runStatus.BenchmarkStatusEvent.StartedAt,
+			CompletedAt:    runStatus.BenchmarkStatusEvent.CompletedAt,
+			BenchmarkIndex: runStatus.BenchmarkStatusEvent.BenchmarkIndex,
 		}
 		commonStorage.UpdateBenchmarkStatus(job, runStatus, &benchmark)
 
@@ -384,13 +385,14 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 		// if the run status is completed, failed, or cancelled, we need to update the results
 		if runStatus.BenchmarkStatusEvent.Status == api.StateCompleted || runStatus.BenchmarkStatusEvent.Status == api.StateFailed || runStatus.BenchmarkStatusEvent.Status == api.StateCancelled {
 			result := api.BenchmarkResult{
-				ID:          runStatus.BenchmarkStatusEvent.ID,
-				ProviderID:  runStatus.BenchmarkStatusEvent.ProviderID,
-				Metrics:     runStatus.BenchmarkStatusEvent.Metrics,
-				Artifacts:   runStatus.BenchmarkStatusEvent.Artifacts,
-				MLFlowRunID: runStatus.BenchmarkStatusEvent.MLFlowRunID,
-				LogsPath:    runStatus.BenchmarkStatusEvent.LogsPath,
-				Test:        outcome,
+				ID:             runStatus.BenchmarkStatusEvent.ID,
+				ProviderID:     runStatus.BenchmarkStatusEvent.ProviderID,
+				Metrics:        runStatus.BenchmarkStatusEvent.Metrics,
+				Artifacts:      runStatus.BenchmarkStatusEvent.Artifacts,
+				MLFlowRunID:    runStatus.BenchmarkStatusEvent.MLFlowRunID,
+				LogsPath:       runStatus.BenchmarkStatusEvent.LogsPath,
+				BenchmarkIndex: runStatus.BenchmarkStatusEvent.BenchmarkIndex,
+				Test:           outcome,
 			}
 			err := commonStorage.UpdateBenchmarkResults(job, runStatus, &result)
 			if err != nil {
@@ -444,12 +446,14 @@ func (s *SQLStorage) computeJobTestResult(job *api.EvaluationJobResource) {
 		}
 		sumOfWeightedScores += weightedScore
 		sumOfWeights += benchmarkWeight
+		s.logger.Info("Benchmark test result", "benchmark_id", benchmark.ID, "benchmark_index", benchmark.BenchmarkIndex, "primary_score", benchmark.Test.PrimaryScore, "weighted_score", weightedScore, "benchmark_weight", benchmarkWeight, "sum_of_weighted_scores", sumOfWeightedScores, "sum_of_weights", sumOfWeights)
 	}
 	if sumOfWeights == 0 {
 		s.logger.Warn("No benchmark weights accumulated; cannot compute job score")
 		return
 	}
 	weightedAvgJobScore := sumOfWeightedScores / sumOfWeights
+	s.logger.Info("Weighted average job score", "weighted_avg_job_score", weightedAvgJobScore, "sum_of_weighted_scores", sumOfWeightedScores, "sum_of_weights", sumOfWeights)
 	var jobTest *api.EvaluationTest = nil
 	// We set 'test' on the evaluation job only if the pass criteria is defined
 	if job.EvaluationJobConfig.PassCriteria != nil {
@@ -471,9 +475,9 @@ func computeBenchmarkTestResult(job *api.EvaluationJobResource, benchmarkStatusE
 			if benchmark.PrimaryScore != nil && benchmark.PrimaryScore.Metric != "" {
 				primaryMetric := benchmark.PrimaryScore.Metric
 				if primaryMetricValue, ok := benchmarkStatusEvent.Metrics[primaryMetric]; ok {
-					primaryMetricValueFloat := primaryMetricValue.(float32)
+					primaryMetricValueFloat := float32(primaryMetricValue.(float64))
 					passCriteria := benchmark.PassCriteria.Threshold
-					pass := primaryMetricValueFloat <= passCriteria
+					pass := primaryMetricValueFloat >= passCriteria
 					if benchmark.PrimaryScore.LowerIsBetter {
 						pass = primaryMetricValueFloat <= passCriteria
 					}

@@ -1,0 +1,48 @@
+{
+    "model": {
+      "url": "string",
+      "name": "string"
+    },
+    "pass_criteria" : {
+      "threshold": 0.7 
+    },
+    "benchmarks": [
+      {
+        "id": "arc_easy",
+        "provider_id": "lm_evaluation_harness",
+        "config": {},
+        "primary_score": {
+          "metric" : "accuracy", 
+          "lower_is_better": false
+        },
+        "pass_criteria" : {
+          "threshold": 0.3
+        },
+        "weight": 0.6
+      },
+      {
+        "id": "AraDiCE_boolq_lev",
+        "provider_id": "lm_evaluation_harness",
+        "config": {},
+        "primary_score": {
+          "metric" : "toxicity_rate", 
+          "lower_is_better": true
+        },
+        "pass_criteria" : {
+          "threshold": 0.3
+        },
+        "weight": 0.4
+      }
+    ],
+    "experiment": {
+      "name": "string",
+      "tags": [
+        {
+          "key": "key-a",
+          "value": "value-a"
+        }
+      ]
+    },
+    "timeout_minutes": 60,
+    "retry_attempts": 3
+  }
