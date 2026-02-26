@@ -320,11 +320,11 @@
               "type": "integer",
               "maximum": 100,
               "minimum": 1,
-              "description": "Maximum number of evaluations to return",
+              "description": "Maximum number of providers to return",
               "default": 50,
               "title": "Limit"
             },
-            "description": "Maximum number of evaluations to return"
+            "description": "Maximum number of providers to return"
           },
           {
             "name": "offset",
