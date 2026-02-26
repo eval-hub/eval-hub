@@ -369,8 +369,11 @@ func TestEvaluationsStorage(t *testing.T) {
 				})
 			}
 			got, _ := store.GetEvaluationJob(jobID)
-			if got != nil && got.Status.State != terminalState {
-				t.Logf("job %s state %s (expected %s)", jobID, got.Status.State, terminalState)
+			if got == nil {
+				t.Fatalf("GetEvaluationJob returned nil for %s", jobID)
+			}
+			if got.Status.State != terminalState {
+				t.Fatalf("job %s: expected state %s, got %s", jobID, terminalState, got.Status.State)
 			}
 			err := store.UpdateEvaluationJobStatus(jobID, api.OverallStatePending, &api.MessageInfo{Message: "try", MessageCode: "X"})
 			if err == nil {
