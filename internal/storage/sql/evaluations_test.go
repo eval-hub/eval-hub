@@ -337,36 +337,46 @@ func TestEvaluationsStorage(t *testing.T) {
 			// Drive job to terminal state
 			switch terminalState {
 			case api.OverallStateCompleted:
-				_ = store.UpdateEvaluationJob(jobID, &api.StatusEvent{
+				if err := store.UpdateEvaluationJob(jobID, &api.StatusEvent{
 					BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 						ID: "b1", ProviderID: "p1", BenchmarkIndex: 0,
 						Status: api.StateCompleted,
 					},
-				})
+				}); err != nil {
+					t.Fatalf("setup for %s: %v", terminalState, err)
+				}
 			case api.OverallStateFailed:
-				_ = store.UpdateEvaluationJob(jobID, &api.StatusEvent{
+				if err := store.UpdateEvaluationJob(jobID, &api.StatusEvent{
 					BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 						ID: "b1", ProviderID: "p1", BenchmarkIndex: 0,
 						Status:       api.StateFailed,
 						ErrorMessage: &api.MessageInfo{Message: "err", MessageCode: "E"},
 					},
-				})
+				}); err != nil {
+					t.Fatalf("setup for %s: %v", terminalState, err)
+				}
 			case api.OverallStateCancelled:
-				_ = store.UpdateEvaluationJobStatus(jobID, api.OverallStateCancelled, &api.MessageInfo{Message: "cancelled", MessageCode: "X"})
+				if err := store.UpdateEvaluationJobStatus(jobID, api.OverallStateCancelled, &api.MessageInfo{Message: "cancelled", MessageCode: "X"}); err != nil {
+					t.Fatalf("setup for %s: %v", terminalState, err)
+				}
 			case api.OverallStatePartiallyFailed:
-				_ = store.UpdateEvaluationJob(jobID, &api.StatusEvent{
+				if err := store.UpdateEvaluationJob(jobID, &api.StatusEvent{
 					BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 						ID: "b1", ProviderID: "p1", BenchmarkIndex: 0,
 						Status: api.StateCompleted,
 					},
-				})
-				_ = store.UpdateEvaluationJob(jobID, &api.StatusEvent{
+				}); err != nil {
+					t.Fatalf("setup for %s (b1): %v", terminalState, err)
+				}
+				if err := store.UpdateEvaluationJob(jobID, &api.StatusEvent{
 					BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 						ID: "b2", ProviderID: "p1", BenchmarkIndex: 1,
 						Status:       api.StateFailed,
 						ErrorMessage: &api.MessageInfo{Message: "err", MessageCode: "E"},
 					},
-				})
+				}); err != nil {
+					t.Fatalf("setup for %s (b2): %v", terminalState, err)
+				}
 			}
 			got, _ := store.GetEvaluationJob(jobID)
 			if got == nil {
