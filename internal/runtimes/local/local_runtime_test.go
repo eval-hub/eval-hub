@@ -562,16 +562,14 @@ func TestRunEvaluationJobContextCancellation(t *testing.T) {
 		t.Fatalf("expected no error from CancelJob, got %v", err)
 	}
 
+	// After cancellation, the runtime should NOT call failBenchmark (no status
+	// update), because the process was killed intentionally. The cancel handler
+	// is responsible for setting the overall job state to "cancelled".
 	select {
 	case runStatus := <-statusCh:
-		if runStatus == nil {
-			t.Fatal("expected run status, got nil")
-		}
-		if runStatus.BenchmarkStatusEvent.Status != api.StateFailed {
-			t.Fatalf("expected status %q, got %q", api.StateFailed, runStatus.BenchmarkStatusEvent.Status)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for process cancellation to update storage")
+		t.Fatalf("expected no storage update after cancellation, but got status %q", runStatus.BenchmarkStatusEvent.Status)
+	case <-time.After(2 * time.Second):
+		// Expected: no status event sent after cancellation
 	}
 }
 

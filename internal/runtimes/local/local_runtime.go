@@ -282,6 +282,20 @@ func (r *LocalRuntime) runBenchmark(
 	// Wait for completion (already running in a goroutine via RunEvaluationJob)
 	defer logFile.Close()
 	if err := cmd.Wait(); err != nil {
+		// If the context was cancelled (i.e. CancelJob was called), the process
+		// was killed intentionally. Don't mark the benchmark as failed — the
+		// cancel handler will set the overall job state to "cancelled".
+		if ctx.Err() == context.Canceled {
+			r.logger.Info(
+				"local runtime process killed by cancellation",
+				"job_id", jobID,
+				"benchmark_id", bench.ID,
+				"benchmark_index", benchmarkIndex,
+				"provider_id", bench.ProviderID,
+			)
+			return nil
+		}
+
 		r.logger.Error(
 			"local runtime process failed",
 			"error", err,
@@ -368,6 +382,7 @@ func (r *LocalRuntime) failBenchmark(
 			"error", updateErr,
 			"job_id", jobID,
 			"benchmark_id", bench.ID,
+			"benchmark_index", benchmarkIndex,
 			"provider_id", bench.ProviderID,
 		)
 	}
