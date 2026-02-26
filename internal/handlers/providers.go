@@ -166,7 +166,6 @@ func (h *Handlers) HandleGetProvider(ctx *executioncontext.ExecutionContext, req
 			if provider == nil {
 				userProvider, err := storage.GetProvider(providerId)
 				if err != nil {
-					err = serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "provider", "ResourceId", providerId)
 					w.Error(err, ctx.RequestID)
 					return err
 				}
