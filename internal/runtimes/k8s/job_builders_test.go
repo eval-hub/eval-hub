@@ -268,6 +268,111 @@ func TestBuildJobWithoutOCICredentials(t *testing.T) {
 	}
 }
 
+func TestBuildJobWithModelAuthSecret(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:              "job-auth",
+		benchmarkIndex:     0,
+		resourceGUID:       "guid-auth",
+		namespace:          "default",
+		providerID:         "provider-1",
+		benchmarkID:        "bench-1",
+		adapterImage:       "adapter:latest",
+		defaultEnv:         []api.EnvVar{},
+		modelAuthSecretRef: "model-auth-secret",
+	}
+
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	var foundVolume bool
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == modelAuthVolumeName {
+			foundVolume = true
+			if v.VolumeSource.Secret == nil {
+				t.Fatalf("expected secret volume source for %s", modelAuthVolumeName)
+			}
+			if v.VolumeSource.Secret.SecretName != "model-auth-secret" {
+				t.Fatalf("expected secret name %q, got %q", "model-auth-secret", v.VolumeSource.Secret.SecretName)
+			}
+		}
+	}
+	if !foundVolume {
+		t.Fatalf("expected volume %s to be present", modelAuthVolumeName)
+	}
+
+	container := job.Spec.Template.Spec.Containers[0]
+	var foundMount bool
+	for _, m := range container.VolumeMounts {
+		if m.Name == modelAuthVolumeName {
+			foundMount = true
+			if m.MountPath != modelAuthMountPath {
+				t.Fatalf("expected mount path %q, got %q", modelAuthMountPath, m.MountPath)
+			}
+			if !m.ReadOnly {
+				t.Fatalf("expected mount to be read-only")
+			}
+		}
+	}
+	if !foundMount {
+		t.Fatalf("expected volume mount %s to be present", modelAuthVolumeName)
+	}
+
+	var foundTokenEnv bool
+	var foundCACertEnv bool
+	for _, e := range container.Env {
+		switch e.Name {
+		case envModelAuthAPIKeyPathName:
+			foundTokenEnv = true
+			if e.Value != modelAuthMountPath+"/"+modelAuthTokenFile {
+				t.Fatalf("expected env value %q, got %q", modelAuthMountPath+"/"+modelAuthTokenFile, e.Value)
+			}
+		case envModelAuthCACertPathName:
+			foundCACertEnv = true
+			if e.Value != modelAuthMountPath+"/"+modelAuthCACertFile {
+				t.Fatalf("expected env value %q, got %q", modelAuthMountPath+"/"+modelAuthCACertFile, e.Value)
+			}
+		}
+	}
+	if !foundTokenEnv {
+		t.Fatalf("expected env var %s to be present", envModelAuthAPIKeyPathName)
+	}
+	if !foundCACertEnv {
+		t.Fatalf("expected env var %s to be present", envModelAuthCACertPathName)
+	}
+}
+
+func TestBuildJobWithoutModelAuthSecret(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "job-no-auth",
+		resourceGUID:   "guid-no-auth",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
+	}
+
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == modelAuthVolumeName {
+			t.Fatalf("expected no %s volume when modelAuthSecretRef is empty", modelAuthVolumeName)
+		}
+	}
+	container := job.Spec.Template.Spec.Containers[0]
+	for _, e := range container.Env {
+		if e.Name == envModelAuthAPIKeyPathName || e.Name == envModelAuthCACertPathName {
+			t.Fatalf("expected no model auth env vars when modelAuthSecretRef is empty")
+		}
+	}
+}
+
 func TestContainerCommandList(t *testing.T) {
 	command := buildContainerCommand([]string{"/bin/sh", "-c", "echo hello"})
 	if len(command) != 3 {

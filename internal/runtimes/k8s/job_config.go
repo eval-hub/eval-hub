@@ -49,6 +49,7 @@ type jobConfig struct {
 	mlflowTrackingURI    string
 	mlflowWorkspace      string
 	ociCredentialsSecret string
+	modelAuthSecretRef   string
 }
 
 func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkID string, benchmarkIndex int) (*jobConfig, error) {
@@ -102,6 +103,11 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		ociCredentialsSecret = evaluation.Exports.OCI.K8s.Connection
 	}
 
+	modelAuthSecretRef := ""
+	if evaluation.Model.Auth != nil {
+		modelAuthSecretRef = strings.TrimSpace(evaluation.Model.Auth.SecretRef)
+	}
+
 	return &jobConfig{
 		jobID:                evaluation.Resource.ID,
 		resourceGUID:         uuid.NewString(),
@@ -123,6 +129,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		mlflowTrackingURI:    mlflowTrackingURI,
 		mlflowWorkspace:      mlflowWorkspace,
 		ociCredentialsSecret: ociCredentialsSecret,
+		modelAuthSecretRef:   modelAuthSecretRef,
 	}, nil
 }
 

@@ -39,6 +39,12 @@ const (
 	ociCredentialsMountPath         = "/etc/evalhub/.docker/config.json"
 	ociCredentialsSubPath           = ".dockerconfigjson"
 	envOCIAuthConfigPathName        = "OCI_AUTH_CONFIG_PATH"
+	modelAuthVolumeName             = "model-auth"
+	modelAuthMountPath              = "/var/run/secrets/model"
+	modelAuthTokenFile              = "api-key"
+	modelAuthCACertFile             = "ca_cert"
+	envModelAuthAPIKeyPathName      = "MODEL_AUTH_API_KEY_PATH"
+	envModelAuthCACertPathName      = "MODEL_AUTH_CA_CERT_PATH"
 	serviceCABundleFile             = "service-ca.crt"
 	envMLFlowCertPathName           = "MLFLOW_TRACKING_SERVER_CERT_PATH"
 	defaultAllowPrivilegeEscalation = false
@@ -230,6 +236,23 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 		})
 	}
 
+	// Add model auth secret when configured.
+	if cfg.modelAuthSecretRef != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name: modelAuthVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: cfg.modelAuthSecretRef,
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      modelAuthVolumeName,
+			MountPath: modelAuthMountPath,
+			ReadOnly:  true,
+		})
+	}
+
 	// Set ServiceAccount if configured
 	// applied below in template spec
 
@@ -387,6 +410,18 @@ func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 			Value: ociCredentialsMountPath,
 		})
 		seen[envOCIAuthConfigPathName] = true
+	}
+	if cfg.modelAuthSecretRef != "" {
+		env = append(env, corev1.EnvVar{
+			Name:  envModelAuthAPIKeyPathName,
+			Value: modelAuthMountPath + "/" + modelAuthTokenFile,
+		})
+		seen[envModelAuthAPIKeyPathName] = true
+		env = append(env, corev1.EnvVar{
+			Name:  envModelAuthCACertPathName,
+			Value: modelAuthMountPath + "/" + modelAuthCACertFile,
+		})
+		seen[envModelAuthCACertPathName] = true
 	}
 
 	// Set MLFLOW_TRACKING_SERVER_CERT_PATH so mlflow's tracking client
