@@ -1,0 +1,16 @@
+type: object
+description: S3 test data reference
+required:
+  - bucket
+  - key
+  - secret_ref
+properties:
+  bucket:
+    type: string
+    description: S3 bucket name
+  key:
+    type: string
+    description: S3 object key (path)
+  secret_ref:
+    type: string
+    description: Kubernetes Secret name containing S3 credentials

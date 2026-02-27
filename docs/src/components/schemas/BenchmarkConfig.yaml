@@ -23,3 +23,6 @@ allOf:
         type: object
         additionalProperties: true
         description: Benchmark specific parameters
+      test_data_ref:
+        $ref: ./TestDataRef.yaml
+        description: Reference to the test data source for this benchmark
