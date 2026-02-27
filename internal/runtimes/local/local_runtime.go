@@ -77,7 +77,7 @@ func NewLocalRuntime(
 	return &LocalRuntime{
 		logger:    logger,
 		providers: providerConfigs,
-		tracker: &pidTracker{pids: make(map[string][]int)},
+		tracker:   &pidTracker{pids: make(map[string][]int)},
 	}, nil
 }
 
