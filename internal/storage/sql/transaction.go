@@ -1,5 +1,7 @@
 package sql
 
+// The code in this file must be unware of the database implementation.
+
 import (
 	"context"
 	"database/sql"
