@@ -175,10 +175,10 @@ func getParam(driver string) string {
 
 func getParamValue(param string, index int) string {
 	if param == "$" {
-		return fmt.Sprintf("$%d", index)
-	} else {
-		return param
+		// PostgreSQL placeholders are 1-based: $1, $2, ...
+		return fmt.Sprintf("$%d", index+1)
 	}
+	return param
 }
 
 func getParams(params *abstractions.QueryFilter) map[string]any {

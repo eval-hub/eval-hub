@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/eval-hub/eval-hub/pkg/api"
 	validator "github.com/go-playground/validator/v10"
 )
 
@@ -28,5 +29,17 @@ func register(instance *validator.Validate) {
 }
 
 func registerCustomValidators(instance *validator.Validate) {
-	// register custom validators here
+	// Benchmarks min=1 only when Collection is not set (required_without handles presence; this enforces length)
+	instance.RegisterStructValidation(evaluationJobConfigBenchmarksMin, api.EvaluationJobConfig{})
+}
+
+// evaluationJobConfigBenchmarksMin ensures Benchmarks has at least one element when Collection is not present.
+func evaluationJobConfigBenchmarksMin(sl validator.StructLevel) {
+	cfg := sl.Current().Interface().(api.EvaluationJobConfig)
+	if cfg.Collection != nil && cfg.Collection.ID != "" {
+		return
+	}
+	if len(cfg.Benchmarks) < 1 {
+		sl.ReportError(cfg.Benchmarks, "Benchmarks", "benchmarks", "min=1", "")
+	}
 }
