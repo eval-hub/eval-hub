@@ -120,7 +120,7 @@ func (r *LocalRuntime) RunEvaluationJob(
 
 	go func() {
 		for i, bench := range evaluation.Benchmarks {
-			if err := r.runBenchmark(jobID, bench, i, evaluation, callbackURL, storage); err != nil {
+			if err := r.runBenchmark(jobID, bench, i, evaluation, callbackURL); err != nil {
 				r.logger.Error(
 					"local runtime benchmark launch failed",
 					"error", err,
@@ -129,6 +129,7 @@ func (r *LocalRuntime) RunEvaluationJob(
 					"benchmark_index", i,
 					"provider_id", bench.ProviderID,
 				)
+				r.failBenchmark(jobID, bench, i, storage, err.Error())
 			}
 		}
 	}()
@@ -137,30 +138,26 @@ func (r *LocalRuntime) RunEvaluationJob(
 }
 
 // runBenchmark launches a single benchmark process. It writes the job spec,
-// starts the command, and waits for it to complete.
+// starts the command, and returns immediately. A background goroutine calls
+// cmd.Wait() to reap the child process and prevent zombies.
 func (r *LocalRuntime) runBenchmark(
 	jobID string,
 	bench api.BenchmarkConfig,
 	benchmarkIndex int,
 	evaluation *api.EvaluationJobResource,
 	callbackURL *string,
-	storage *abstractions.Storage,
 ) error {
 	provider, ok := r.providers[bench.ProviderID]
 	if !ok {
-		r.failBenchmark(jobID, bench, benchmarkIndex, storage, fmt.Sprintf("provider %q not found", bench.ProviderID))
 		return fmt.Errorf("provider %q not found", bench.ProviderID)
 	}
 	if provider.Runtime == nil || provider.Runtime.Local == nil || provider.Runtime.Local.Command == "" {
-		err := serviceerrors.NewServiceError(messages.LocalRuntimeNotEnabled, "ProviderID", bench.ProviderID)
-		r.failBenchmark(jobID, bench, benchmarkIndex, storage, err.Error())
-		return err
+		return serviceerrors.NewServiceError(messages.LocalRuntimeNotEnabled, "ProviderID", bench.ProviderID)
 	}
 
 	// Build job spec JSON using shared logic
 	spec, err := shared.BuildJobSpec(evaluation, bench.ProviderID, bench.ID, benchmarkIndex, callbackURL)
 	if err != nil {
-		r.failBenchmark(jobID, bench, benchmarkIndex, storage, fmt.Sprintf("build job spec: %s", err))
 		return fmt.Errorf("build job spec: %w", err)
 	}
 
@@ -259,6 +256,7 @@ func (r *LocalRuntime) runBenchmark(
 		"command", command,
 	)
 
+	// TODO: See if there is a better way to prevent zombies.
 	// Reap the child process in the background to prevent zombies.
 	go func() {
 		if err := cmd.Wait(); err != nil {
