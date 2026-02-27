@@ -226,6 +226,15 @@ func TestHandleDeleteEvaluationCleansUpResources(t *testing.T) {
 			Resource: api.EvaluationResource{
 				Resource: api.Resource{ID: jobID},
 			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{
+					State: api.OverallStateRunning,
+					Message: &api.MessageInfo{
+						Message:     "running",
+						MessageCode: "job_running",
+					},
+				},
+			},
 		},
 	}
 	runtime := &fakeRuntime{}
