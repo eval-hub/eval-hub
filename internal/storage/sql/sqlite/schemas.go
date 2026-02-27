@@ -1,8 +1,6 @@
-package sql
+package sqlite
 
-// SQLITE SCHEMAS
-
-const SQLITE_SCHEMA = `
+const SCHEMA = `
 CREATE TABLE IF NOT EXISTS evaluations (
     id VARCHAR(36) NOT NULL,
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -39,38 +37,4 @@ CREATE INDEX IF NOT EXISTS idx_collection_entity
 ON collections (id);
 
 CREATE INDEX IF NOT EXISTS idx_provider_entity
-ON providers (id);
-`
-
-// POSTGRES SCHEMAS
-
-const POSTGRES_SCHEMA = `
-CREATE TABLE IF NOT EXISTS evaluations (
-    id VARCHAR(36) NOT NULL,
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    tenant_id VARCHAR(255) NOT NULL,
-    status VARCHAR(50) NOT NULL DEFAULT 'pending',
-    experiment_id VARCHAR(255) NOT NULL,
-    entity JSONB NOT NULL,
-    PRIMARY KEY (id)
-);
-
-CREATE TABLE IF NOT EXISTS collections (
-    id VARCHAR(36) NOT NULL,
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    tenant_id VARCHAR(255) NOT NULL,
-    entity JSONB NOT NULL,
-    PRIMARY KEY (id)
-);
-
-CREATE TABLE IF NOT EXISTS providers (
-    id VARCHAR(36) NOT NULL,
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    tenant_id VARCHAR(255) NOT NULL,
-    entity JSONB NOT NULL,
-    PRIMARY KEY (id)
-);
-`
+ON providers (id);`

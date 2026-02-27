@@ -1,11 +1,11 @@
-package sql_test
+package sqlite_test
 
 import (
 	"testing"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/logging"
-	"github.com/eval-hub/eval-hub/internal/storage"
+	"github.com/eval-hub/eval-hub/internal/storage/sql/sqlite"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -16,7 +16,7 @@ func TestProviderStorage(t *testing.T) {
 		"url":           "file::memory:?mode=memory&cache=shared",
 		"database_name": "eval_hub",
 	}
-	store, err := storage.NewStorage(&databaseConfig, false, logger)
+	store, err := sqlite.NewStorage(databaseConfig, false, logger)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}

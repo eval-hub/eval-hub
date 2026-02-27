@@ -23,11 +23,11 @@ type SQLDatabaseConfig struct {
 	// Other map[string]any `mapstructure:",remain"`
 }
 
-func (s *SQLDatabaseConfig) getDriverName() string {
+func (s *SQLDatabaseConfig) GetDriverName() string {
 	return s.Driver
 }
 
-func (s *SQLDatabaseConfig) getConnectionURL() (string, error) {
+func (s *SQLDatabaseConfig) GetConnectionURL() (string, error) {
 	// Sanitize URL to avoid exposing credentials
 	parsed, err := url.Parse(s.URL)
 	if err != nil {
@@ -40,8 +40,8 @@ func (s *SQLDatabaseConfig) getConnectionURL() (string, error) {
 	return parsed.String(), nil
 }
 
-func (s *SQLDatabaseConfig) getDatabaseName() string {
-	connectionURL, err := s.getConnectionURL()
+func (s *SQLDatabaseConfig) GetDatabaseName() string {
+	connectionURL, err := s.GetConnectionURL()
 	if err != nil {
 		return ""
 	}

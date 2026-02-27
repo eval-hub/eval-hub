@@ -78,7 +78,7 @@ func main() {
 	}
 
 	// set up the storage
-	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), logger)
+	storage, err := storage.NewStorage(serviceConfig, serviceConfig.IsOTELEnabled(), logger)
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create storage", logger)

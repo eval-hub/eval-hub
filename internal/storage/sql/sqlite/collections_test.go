@@ -1,16 +1,17 @@
-package sql
+package sqlite
 
 import (
 	"encoding/json"
 	"testing"
 
+	"github.com/eval-hub/eval-hub/internal/storage/sql"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 func TestApplyPatches(t *testing.T) {
 	t.Run("nil patches returns document unchanged", func(t *testing.T) {
 		doc := `{"name":"x"}`
-		got, err := applyPatches(doc, nil)
+		got, err := sql.ApplyPatches(doc, nil)
 		if err != nil {
 			t.Fatalf("applyPatches: %v", err)
 		}
@@ -22,7 +23,7 @@ func TestApplyPatches(t *testing.T) {
 	t.Run("empty patches returns document unchanged", func(t *testing.T) {
 		doc := `{"name":"only"}`
 		patches := &api.Patch{}
-		got, err := applyPatches(doc, patches)
+		got, err := sql.ApplyPatches(doc, patches)
 		if err != nil {
 			t.Fatalf("applyPatches: %v", err)
 		}
@@ -36,7 +37,7 @@ func TestApplyPatches(t *testing.T) {
 		patches := &api.Patch{
 			{Op: api.PatchOpReplace, Path: "/name", Value: "patched-name"},
 		}
-		got, err := applyPatches(doc, patches)
+		got, err := sql.ApplyPatches(doc, patches)
 		if err != nil {
 			t.Fatalf("applyPatches: %v", err)
 		}
@@ -58,7 +59,7 @@ func TestApplyPatches(t *testing.T) {
 			{Op: api.PatchOpReplace, Path: "/name", Value: "x"},
 			{Op: api.PatchOpReplace, Path: "/description", Value: "y"},
 		}
-		got, err := applyPatches(doc, patches)
+		got, err := sql.ApplyPatches(doc, patches)
 		if err != nil {
 			t.Fatalf("applyPatches: %v", err)
 		}
@@ -79,7 +80,7 @@ func TestApplyPatches(t *testing.T) {
 		patches := &api.Patch{
 			{Op: api.PatchOpReplace, Path: "/benchmarks/0/id", Value: "new-id"},
 		}
-		got, err := applyPatches(doc, patches)
+		got, err := sql.ApplyPatches(doc, patches)
 		if err != nil {
 			t.Fatalf("applyPatches: %v", err)
 		}

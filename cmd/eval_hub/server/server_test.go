@@ -267,7 +267,7 @@ func createServer(port int) (*server.Server, error) {
 	} else {
 		serviceConfig.Prometheus.Enabled = true
 	}
-	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), logger)
+	storage, err := storage.NewStorage(serviceConfig, serviceConfig.IsOTELEnabled(), logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create storage: %w", err)
 	}

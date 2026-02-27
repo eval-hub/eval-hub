@@ -1,7 +1,8 @@
-package sql_test
+package sqlite_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"maps"
 	"strings"
 	"testing"
@@ -11,7 +12,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/common"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/logging"
-	"github.com/eval-hub/eval-hub/internal/storage"
+	"github.com/eval-hub/eval-hub/internal/storage/sql/sqlite"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/go-playground/validator/v10"
 )
@@ -29,7 +30,7 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 		"url":           "file::memory:?mode=memory&cache=shared",
 		"database_name": "eval_hub",
 	}
-	store, err := storage.NewStorage(&databaseConfig, false, logger)
+	store, err := sqlite.NewStorage(databaseConfig, false, logger)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -156,7 +157,7 @@ func TestEvaluationsStorage(t *testing.T) {
 		databaseConfig["driver"] = "sqlite"
 		databaseConfig["url"] = "file::memory:?mode=memory&cache=shared"
 		databaseConfig["database_name"] = "eval_hub"
-		s, err := storage.NewStorage(&databaseConfig, false, logger)
+		s, err := sqlite.NewStorage(databaseConfig, false, logger)
 		if err != nil {
 			t.Fatalf("Failed to create storage: %v", err)
 		}
@@ -284,6 +285,7 @@ func TestEvaluationsStorage(t *testing.T) {
 	})
 
 	t.Run("DeleteEvaluationJob deletes the evaluation job", func(t *testing.T) {
+		fmt.Println("Store ", store)
 		err := store.UpdateEvaluationJobStatus(evaluationId, api.OverallStateCancelled, &api.MessageInfo{
 			Message:     "Evaluation job cancelled",
 			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
