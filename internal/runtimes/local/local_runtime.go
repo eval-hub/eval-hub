@@ -199,6 +199,14 @@ func (r *LocalRuntime) runBenchmark(
 	// Build command using shell interpretation
 	command := provider.Runtime.Local.Command
 	cmd := exec.Command("sh", "-c", command)
+	// Setpgid places the child in its own process group (PGID = child PID).
+	// This is critical for two reasons:
+	//   1. cleanupJob calls Kill(-PID, SIGKILL) which targets the entire process
+	//      group. Without Setpgid the child inherits the Go process's group, so
+	//      Kill(-PID) would kill the Go process itself.
+	//   2. The negative PID ensures the entire subprocess tree is killed (sh +
+	//      its children). Without it, only the direct child would be signalled
+	//      and grandchildren could survive as orphans reparented to PID 1.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	// Set environment variables
