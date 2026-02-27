@@ -1,0 +1,62 @@
+authorization:
+  endpoints:
+    # Evaluations
+    - path: /api/v1/evaluations/jobs
+      mappings:
+        - methods: [post]
+          resources:
+            - rewrites:
+                byHttpHeader:
+                  name: X-Tenant
+                resourceAttributes:
+                  namespace: { { .FromHeader } }
+                  apiGroup: trustyai.opendatahub.io
+                  resource: evaluations
+                  verb: create
+            - rewrites:
+                byHttpHeader:
+                  name: X-Tenant
+              resourceAttributes:
+                namespace: { { .FromHeader } }
+                apiGroup: mlflow.kubeflow.org
+                resource: experiments
+                verb: create
+
+        - resources:
+            # For all other methods, use the method as the verb
+            - rewrites:
+                byHttpHeader:
+                  name: X-Tenant
+              resourceAttributes:
+                namespace: { { .FromHeader } }
+                apiGroup: trustyai.opendatahub.io
+                resource: evaluations
+                verb: { { .FromMethod } }
+
+    # Collections
+    - path: /api/v1/evaluations/collections
+      mappings:
+        - resources:
+            # For all methods, use the method as the verb
+            - rewrites:
+                byHttpHeader:
+                  name: X-Tenant
+              resourceAttributes:
+                namespace: { { .FromHeader } }
+                apiGroup: trustyai.opendatahub.io
+                resource: collections
+                verb: { { .FromMethod } }
+
+    # Providers
+    - path: /api/v1/evaluations/providers
+      mappings:
+        - resources:
+            # For all methods, use the method as the verb
+            - rewrites:
+                byHttpHeader:
+                  name: X-Tenant
+              resourceAttributes:
+                namespace: { { .FromHeader } }
+                apiGroup: trustyai.opendatahub.io
+                resource: collections
+                verb: { { .FromMethod } }

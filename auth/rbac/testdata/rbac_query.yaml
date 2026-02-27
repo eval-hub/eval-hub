@@ -1,0 +1,15 @@
+# Test config: endpoint with query string rewrite
+authorization:
+  endpoints:
+    - path: /api/v1/namespaces
+      mappings:
+        - methods: [get]
+          resources:
+            - rewrites:
+                byQueryString:
+                  name: namespace
+              resourceAttributes:
+                namespace: "{{.FromQueryString}}"
+                apiGroup: ""
+                resource: namespaces
+                verb: get

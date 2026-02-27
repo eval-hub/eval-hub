@@ -1,0 +1,16 @@
+# Test config: header + query string + method verb
+authorization:
+  endpoints:
+    - path: /api/v1/evaluations/collections
+      mappings:
+        - resources:
+            - rewrites:
+                byHttpHeader:
+                  name: X-Tenant
+                byQueryString:
+                  name: ns
+              resourceAttributes:
+                namespace: "{{.FromHeader}}"
+                apiGroup: trustyai.opendatahub.io
+                resource: collections
+                verb: "{{.FromMethod}}"
