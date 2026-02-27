@@ -78,13 +78,6 @@ func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, sto
 	return nil
 }
 
-// CancelJob is a no-op for Kubernetes. K8s Jobs run as independent cluster
-// resources and are not managed by in-process goroutines. Cleanup is handled
-// by DeleteEvaluationJobResources, which deletes the K8s Job and ConfigMap objects.
-func (r *K8sRuntime) CancelJob(_ string) error {
-	return nil
-}
-
 func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobResource) error {
 	namespace := resolveNamespace("")
 	propagationPolicy := metav1.DeletePropagationBackground

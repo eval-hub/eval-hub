@@ -313,16 +313,6 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	// Attempt to cancel any running goroutines/processes for this job before
-	// updating storage. Currently, only the local runtime mode implements CancelJob,
-	// so this will only affect jobs running locally. CancelJob is safe to call for
-	// already-finished or unknown job IDs and is a no-op if the job is not found.
-	if h.runtime != nil {
-		if cancelErr := h.runtime.CancelJob(evaluationJobID); cancelErr != nil {
-			ctx.Logger.Error("Failed to cancel running job", "error", cancelErr, "id", evaluationJobID)
-		}
-	}
-
 	if hardDelete && h.runtime != nil {
 		job, err := storage.GetEvaluationJob(evaluationJobID)
 		if err != nil {

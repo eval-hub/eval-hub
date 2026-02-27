@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
-	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -95,8 +94,10 @@ func discardLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-func newRegistry() *jobCancelRegistry {
-	return &jobCancelRegistry{jobs: make(map[string]context.CancelFunc)}
+func newTracker() *jobPIDTracker {
+	return &jobPIDTracker{
+		pids: make(map[string][]int),
+	}
 }
 
 // testContext returns a context with a 10-second deadline tied to t.Cleanup.
@@ -180,7 +181,7 @@ func waitForFile(t *testing.T, path string, timeout time.Duration) {
 }
 
 func TestLocalRuntimeName(t *testing.T) {
-	rt := &LocalRuntime{registry: newRegistry()}
+	rt := &LocalRuntime{tracker: newTracker()}
 	if rt.Name() != "local" {
 		t.Fatalf("expected Name() to return %q, got %q", "local", rt.Name())
 	}
@@ -208,7 +209,7 @@ func TestRunEvaluationJobWritesJobSpec(t *testing.T) {
 		logger:    discardLogger(),
 		ctx:       testContext(t),
 		providers: providers,
-		registry:  newRegistry(),
+		tracker:   newTracker(),
 	}
 
 	err := rt.RunEvaluationJob(evaluation, nil)
@@ -267,7 +268,7 @@ func TestRunEvaluationJobPassesEnvVar(t *testing.T) {
 		logger:    discardLogger(),
 		ctx:       testContext(t),
 		providers: providers,
-		registry:  newRegistry(),
+		tracker:   newTracker(),
 	}
 
 	err := rt.RunEvaluationJob(evaluation, nil)
@@ -312,7 +313,7 @@ func TestRunEvaluationJobNoBenchmarks(t *testing.T) {
 		logger:    discardLogger(),
 		ctx:       context.Background(),
 		providers: sampleLocalProviders(providerID, "true"),
-		registry:  newRegistry(),
+		tracker:   newTracker(),
 	}
 
 	err := rt.RunEvaluationJob(evaluation, nil)
@@ -339,7 +340,7 @@ func TestRunEvaluationJobProviderNotFound(t *testing.T) {
 		logger:    logger,
 		ctx:       tctx,
 		providers: map[string]api.ProviderResource{},
-		registry:  newRegistry(),
+		tracker:   newTracker(),
 	}
 
 	err := rt.RunEvaluationJob(evaluation, &store)
@@ -387,7 +388,7 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 		logger:    logger,
 		ctx:       tctx,
 		providers: providers,
-		registry:  newRegistry(),
+		tracker:   newTracker(),
 	}
 
 	err := rt.RunEvaluationJob(evaluation, &store)
@@ -442,147 +443,27 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 	}
 }
 
-func TestRunEvaluationJobProcessFailureUpdatesStorage(t *testing.T) {
-	providerID := "provider-1"
-	evaluation := sampleEvaluation(providerID)
-	providers := sampleLocalProviders(providerID, "exit 1")
-	cleanupDir(t, "job-1", providerID, "bench-1")
-
-	tctx := testContext(t)
-	logger := discardLogger()
-	statusCh := make(chan *api.StatusEvent, 1)
-	storage := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh}
-	var store abstractions.Storage = storage
-
-	rt := &LocalRuntime{
-		logger:    logger,
-		ctx:       tctx,
-		providers: providers,
-		registry:  newRegistry(),
-	}
-
-	err := rt.RunEvaluationJob(evaluation, &store)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	select {
-	case runStatus := <-statusCh:
-		if runStatus == nil {
-			t.Fatal("expected run status, got nil")
-		}
-		if runStatus.BenchmarkStatusEvent == nil {
-			t.Fatal("expected BenchmarkStatusEvent, got nil")
-		}
-		if runStatus.BenchmarkStatusEvent.Status != api.StateFailed {
-			t.Fatalf("expected status %q, got %q", api.StateFailed, runStatus.BenchmarkStatusEvent.Status)
-		}
-		if runStatus.BenchmarkStatusEvent.ID != "bench-1" {
-			t.Fatalf("expected benchmark ID %q, got %q", "bench-1", runStatus.BenchmarkStatusEvent.ID)
-		}
-		if runStatus.BenchmarkStatusEvent.ProviderID != providerID {
-			t.Fatalf("expected provider ID %q, got %q", providerID, runStatus.BenchmarkStatusEvent.ProviderID)
-		}
-		if runStatus.BenchmarkStatusEvent.ErrorMessage == nil {
-			t.Fatal("expected ErrorMessage, got nil")
-		}
-		if runStatus.BenchmarkStatusEvent.ErrorMessage.MessageCode != constants.MESSAGE_CODE_EVALUATION_JOB_FAILED {
-			t.Fatalf("expected message code %q, got %q",
-				constants.MESSAGE_CODE_EVALUATION_JOB_FAILED,
-				runStatus.BenchmarkStatusEvent.ErrorMessage.MessageCode)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for UpdateEvaluationJob to be called")
-	}
-}
-
 func TestRunEvaluationJobProcessSuccess(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
-	providers := sampleLocalProviders(providerID, "true")
+	dirName := localJobDir("job-1", 0, providerID, "bench-1")
+	sentinelPath := filepath.Join(dirName, "done")
+	providers := sampleLocalProviders(providerID, fmt.Sprintf("touch %s", sentinelPath))
 	cleanupDir(t, "job-1", providerID, "bench-1")
 
-	tctx := testContext(t)
-	logger := discardLogger()
-	statusCh := make(chan *api.StatusEvent, 1)
-	storage := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh}
-	var store abstractions.Storage = storage
-
 	rt := &LocalRuntime{
-		logger:    logger,
-		ctx:       tctx,
+		logger:    discardLogger(),
+		ctx:       testContext(t),
 		providers: providers,
-		registry:  newRegistry(),
+		tracker:   newTracker(),
 	}
 
-	err := rt.RunEvaluationJob(evaluation, &store)
+	err := rt.RunEvaluationJob(evaluation, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	// Wait briefly — storage should NOT be called with failure
-	select {
-	case runStatus := <-statusCh:
-		t.Fatalf("expected no storage update, but got %+v", runStatus)
-	case <-time.After(1 * time.Second):
-		// Success: no failure status was sent
-	}
-}
-
-func TestRunEvaluationJobContextCancellation(t *testing.T) {
-	providerID := "provider-1"
-	evaluation := sampleEvaluation(providerID)
-	providers := sampleLocalProviders(providerID, "sleep 10")
-	cleanupDir(t, "job-1", providerID, "bench-1")
-
-	tctx := testContext(t)
-	logger := discardLogger()
-	statusCh := make(chan *api.StatusEvent, 1)
-	storage := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh}
-	var store abstractions.Storage = storage
-
-	rt := &LocalRuntime{
-		logger:    logger,
-		ctx:       tctx,
-		providers: providers,
-		registry:  newRegistry(),
-	}
-
-	err := rt.RunEvaluationJob(evaluation, &store)
-	if err != nil {
-		t.Fatalf("expected no synchronous error, got %v", err)
-	}
-
-	// Wait for the process to actually start before cancelling
-	logFilePath := filepath.Join(localJobsBaseDir, "job-1", "0", providerID, "bench-1", "jobrun.log")
-	waitForFile(t, logFilePath, 5*time.Second)
-
-	// Cancel via CancelJob
-	if err := rt.CancelJob("job-1"); err != nil {
-		t.Fatalf("expected no error from CancelJob, got %v", err)
-	}
-
-	// After cancellation, the runtime should NOT call failBenchmark (no status
-	// update), because the process was killed intentionally. The cancel handler
-	// is responsible for setting the overall job state to "cancelled".
-	select {
-	case runStatus := <-statusCh:
-		t.Fatalf("expected no storage update after cancellation, but got status %q", runStatus.BenchmarkStatusEvent.Status)
-	case <-time.After(2 * time.Second):
-		// Expected: no status event sent after cancellation
-	}
-}
-
-func TestCancelJobNonExistentJob(t *testing.T) {
-	rt := &LocalRuntime{
-		logger:   discardLogger(),
-		registry: newRegistry(),
-	}
-
-	err := rt.CancelJob("no-such-job")
-	if err != nil {
-		t.Fatalf("expected no error for non-existent job, got %v", err)
-	}
+	waitForFile(t, sentinelPath, 5*time.Second)
 }
 
 func TestRunEvaluationJobMultipleBenchmarks(t *testing.T) {
@@ -610,7 +491,7 @@ func TestRunEvaluationJobMultipleBenchmarks(t *testing.T) {
 		logger:    discardLogger(),
 		ctx:       testContext(t),
 		providers: providers,
-		registry:  newRegistry(),
+		tracker:   newTracker(),
 	}
 
 	err := rt.RunEvaluationJob(evaluation, nil)
@@ -681,7 +562,7 @@ func TestRunEvaluationJobMultipleBenchmarksPartialFailure(t *testing.T) {
 		logger:    logger,
 		ctx:       tctx,
 		providers: providers,
-		registry:  newRegistry(),
+		tracker:   newTracker(),
 	}
 
 	err := rt.RunEvaluationJob(evaluation, &store)
@@ -720,7 +601,7 @@ func TestRunEvaluationJobCallbackURL(t *testing.T) {
 		logger:    discardLogger(),
 		ctx:       testContext(t),
 		providers: providers,
-		registry:  newRegistry(),
+		tracker:   newTracker(),
 	}
 
 	err := rt.RunEvaluationJob(evaluation, nil)
@@ -763,7 +644,7 @@ func TestRunEvaluationJobCallbackURLNotSet(t *testing.T) {
 		logger:    discardLogger(),
 		ctx:       testContext(t),
 		providers: providers,
-		registry:  newRegistry(),
+		tracker:   newTracker(),
 	}
 
 	err := rt.RunEvaluationJob(evaluation, nil)
@@ -800,7 +681,7 @@ func TestRunEvaluationJobCreatesLogFile(t *testing.T) {
 		logger:    discardLogger(),
 		ctx:       testContext(t),
 		providers: providers,
-		registry:  newRegistry(),
+		tracker:   newTracker(),
 	}
 
 	err := rt.RunEvaluationJob(evaluation, nil)
@@ -825,56 +706,6 @@ func TestRunEvaluationJobCreatesLogFile(t *testing.T) {
 	}
 }
 
-func TestRunEvaluationJobProcessFailureAfterRequestContextCancelled(t *testing.T) {
-	providerID := "provider-1"
-	evaluation := sampleEvaluation(providerID)
-	// Use a command that sleeps briefly then exits with error, simulating a
-	// benchmark process that fails after the HTTP request has completed.
-	providers := sampleLocalProviders(providerID, "sleep 0.5 && exit 1")
-	cleanupDir(t, "job-1", providerID, "bench-1")
-
-	logger := discardLogger()
-	statusCh := make(chan *api.StatusEvent, 1)
-	storage := &fakeStorage{logger: logger, runStatusChan: statusCh}
-	var store abstractions.Storage = storage
-
-	// Use a request context that will be cancelled before the process fails,
-	// simulating the HTTP request completing while the benchmark runs.
-	reqCtx, reqCancel := context.WithCancel(context.Background())
-
-	rt := &LocalRuntime{
-		logger:    logger,
-		ctx:       reqCtx,
-		providers: providers,
-		registry:  newRegistry(),
-	}
-
-	err := rt.RunEvaluationJob(evaluation, &store)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	// Cancel the request context immediately, before the process exits.
-	reqCancel()
-
-	// The storage update should still succeed because RunEvaluationJob detaches
-	// the storage context from the HTTP request.
-	select {
-	case runStatus := <-statusCh:
-		if runStatus == nil {
-			t.Fatal("expected run status, got nil")
-		}
-		if runStatus.BenchmarkStatusEvent == nil {
-			t.Fatal("expected BenchmarkStatusEvent, got nil")
-		}
-		if runStatus.BenchmarkStatusEvent.Status != api.StateFailed {
-			t.Fatalf("expected status %q, got %q", api.StateFailed, runStatus.BenchmarkStatusEvent.Status)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("timed out waiting for storage update — job likely stuck in pending due to cancelled context")
-	}
-}
-
 func TestDeleteEvaluationJobResources(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
@@ -891,8 +722,8 @@ func TestDeleteEvaluationJobResources(t *testing.T) {
 	}
 
 	rt := &LocalRuntime{
-		logger:   discardLogger(),
-		registry: newRegistry(),
+		logger:  discardLogger(),
+		tracker: newTracker(),
 	}
 
 	err := rt.DeleteEvaluationJobResources(evaluation)
@@ -924,8 +755,8 @@ func TestDeleteEvaluationJobResourcesNonExistent(t *testing.T) {
 	}
 
 	rt := &LocalRuntime{
-		logger:   discardLogger(),
-		registry: newRegistry(),
+		logger:  discardLogger(),
+		tracker: newTracker(),
 	}
 
 	err := rt.DeleteEvaluationJobResources(evaluation)

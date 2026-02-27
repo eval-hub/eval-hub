@@ -16,7 +16,6 @@ type Runtime interface {
 	WithContext(ctx context.Context) Runtime
 	Name() string
 	RunEvaluationJob(evaluation *api.EvaluationJobResource, storage *Storage) error
-	CancelJob(jobID string) error
 	DeleteEvaluationJobResources(evaluation *api.EvaluationJobResource) error
 }
 

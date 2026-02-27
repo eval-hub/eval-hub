@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"syscall"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/constants"
@@ -19,42 +20,47 @@ import (
 )
 
 const localJobsBaseDir = "/tmp/evalhub-jobs"
-const maxBenchmarkWorkers = 5
 
-// jobCancelRegistry tracks running jobs by ID so they can be cancelled.
-type jobCancelRegistry struct {
+// jobPIDTracker tracks running subprocess PIDs per job so they can be killed on cancel.
+type jobPIDTracker struct {
 	mu   sync.Mutex
-	jobs map[string]context.CancelFunc
+	pids map[string][]int // jobID -> list of PIDs
 }
 
-func (jr *jobCancelRegistry) register(jobID string, cancel context.CancelFunc) {
+func (jr *jobPIDTracker) registerJob(jobID string) {
 	jr.mu.Lock()
 	defer jr.mu.Unlock()
-	jr.jobs[jobID] = cancel
+	jr.pids[jobID] = nil
 }
 
-func (jr *jobCancelRegistry) deregister(jobID string) {
+func (jr *jobPIDTracker) addPID(jobID string, pid int) {
 	jr.mu.Lock()
 	defer jr.mu.Unlock()
-	delete(jr.jobs, jobID)
-}
-
-func (jr *jobCancelRegistry) cancel(jobID string) bool {
-	jr.mu.Lock()
-	defer jr.mu.Unlock()
-	if cancel, ok := jr.jobs[jobID]; ok {
-		cancel()
-		delete(jr.jobs, jobID)
-		return true
+	if _, ok := jr.pids[jobID]; ok {
+		jr.pids[jobID] = append(jr.pids[jobID], pid)
 	}
-	return false
+}
+
+// cleanupJob sends SIGKILL to the process group of every tracked PID for the
+// job and removes the job's entry from the tracker. It is idempotent: calling
+// it for an unknown or already-cleaned-up job is a no-op.
+func (jr *jobPIDTracker) cleanupJob(jobID string) {
+	jr.mu.Lock()
+	defer jr.mu.Unlock()
+	if pids, ok := jr.pids[jobID]; ok {
+		for _, pid := range pids {
+			// Kill the entire process group (negative PID).
+			_ = syscall.Kill(-pid, syscall.SIGKILL)
+		}
+		delete(jr.pids, jobID)
+	}
 }
 
 type LocalRuntime struct {
 	logger    *slog.Logger
 	ctx       context.Context
 	providers map[string]api.ProviderResource
-	registry  *jobCancelRegistry
+	tracker   *jobPIDTracker
 }
 
 func NewLocalRuntime(
@@ -64,7 +70,9 @@ func NewLocalRuntime(
 	return &LocalRuntime{
 		logger:    logger,
 		providers: providerConfigs,
-		registry:  &jobCancelRegistry{jobs: make(map[string]context.CancelFunc)},
+		tracker: &jobPIDTracker{
+			pids: make(map[string][]int),
+		},
 	}, nil
 }
 
@@ -73,7 +81,7 @@ func (r *LocalRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
 		logger:    logger,
 		ctx:       r.ctx,
 		providers: r.providers,
-		registry:  r.registry,
+		tracker:   r.tracker,
 	}
 }
 
@@ -82,7 +90,7 @@ func (r *LocalRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 		logger:    r.logger,
 		ctx:       ctx,
 		providers: r.providers,
-		registry:  r.registry,
+		tracker:   r.tracker,
 	}
 }
 
@@ -99,72 +107,30 @@ func (r *LocalRuntime) RunEvaluationJob(
 		return fmt.Errorf("no benchmarks configured for job %s", evaluation.Resource.ID)
 	}
 
-	// Capture job ID before launching goroutines to avoid a data race
+	// Capture job ID before launching goroutine to avoid a data race
 	// on the shared evaluation pointer.
 	jobID := evaluation.Resource.ID
 
-	// Create a per-job cancellable context detached from the HTTP request
-	// lifetime. CancelJob will call jobCancel to stop all goroutines and
-	// kill spawned processes.
-	jobCtx, jobCancel := context.WithCancel(context.Background())
-	r.registry.register(jobID, jobCancel)
+	r.tracker.registerJob(jobID)
 
 	var callbackURL *string
 	if serviceURL := os.Getenv("SERVICE_URL"); serviceURL != "" {
 		callbackURL = &serviceURL
 	}
 
-	type indexedBenchmark struct {
-		index int
-		bench api.BenchmarkConfig
-	}
-	benchmarks := make(chan indexedBenchmark, len(evaluation.Benchmarks))
-	for i, bench := range evaluation.Benchmarks {
-		benchmarks <- indexedBenchmark{index: i, bench: bench}
-	}
-	close(benchmarks)
-
-	workerCount := maxBenchmarkWorkers
-	if len(evaluation.Benchmarks) < workerCount {
-		workerCount = len(evaluation.Benchmarks)
-	}
-
-	var wg sync.WaitGroup
-	for i := 0; i < workerCount; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for ib := range benchmarks {
-				select {
-				case <-jobCtx.Done():
-					r.logger.Warn(
-						"benchmark processing canceled",
-						"job_id", jobID,
-						"benchmark_id", ib.bench.ID,
-						"benchmark_index", ib.index,
-						"provider_id", ib.bench.ProviderID,
-					)
-					return
-				default:
-					if err := r.runBenchmark(jobCtx, jobID, ib.bench, ib.index, evaluation, callbackURL, storage); err != nil {
-						r.logger.Error(
-							"local runtime benchmark launch failed",
-							"error", err,
-							"job_id", jobID,
-							"benchmark_id", ib.bench.ID,
-							"benchmark_index", ib.index,
-							"provider_id", ib.bench.ProviderID,
-						)
-					}
-				}
-			}
-		}()
-	}
-
-	// Clean up registry entry when all workers finish naturally.
 	go func() {
-		wg.Wait()
-		r.registry.deregister(jobID)
+		for i, bench := range evaluation.Benchmarks {
+			if err := r.runBenchmark(jobID, bench, i, evaluation, callbackURL, storage); err != nil {
+				r.logger.Error(
+					"local runtime benchmark launch failed",
+					"error", err,
+					"job_id", jobID,
+					"benchmark_id", bench.ID,
+					"benchmark_index", i,
+					"provider_id", bench.ProviderID,
+				)
+			}
+		}
 	}()
 
 	return nil
@@ -173,7 +139,6 @@ func (r *LocalRuntime) RunEvaluationJob(
 // runBenchmark launches a single benchmark process. It writes the job spec,
 // starts the command, and waits for it to complete.
 func (r *LocalRuntime) runBenchmark(
-	ctx context.Context,
 	jobID string,
 	bench api.BenchmarkConfig,
 	benchmarkIndex int,
@@ -233,7 +198,8 @@ func (r *LocalRuntime) runBenchmark(
 
 	// Build command using shell interpretation
 	command := provider.Runtime.Local.Command
-	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	cmd := exec.Command("sh", "-c", command)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	// Set environment variables
 	cmd.Env = append(os.Environ(),
@@ -263,11 +229,17 @@ func (r *LocalRuntime) runBenchmark(
 		"log_file", logFilePath,
 	)
 
-	// Start the process asynchronously
+	// Start the process
 	if err := cmd.Start(); err != nil {
 		logFile.Close()
 		return fmt.Errorf("start local process: %w", err)
 	}
+
+	pid := cmd.Process.Pid
+	r.tracker.addPID(jobID, pid)
+
+	// Close the log file — the child process has its own fd copy.
+	logFile.Close()
 
 	r.logger.Info(
 		"local runtime process started",
@@ -275,82 +247,26 @@ func (r *LocalRuntime) runBenchmark(
 		"benchmark_id", bench.ID,
 		"benchmark_index", benchmarkIndex,
 		"provider_id", bench.ProviderID,
-		"pid", cmd.Process.Pid,
+		"pid", pid,
 		"command", command,
 	)
 
-	// Wait for completion (already running in a goroutine via RunEvaluationJob)
-	defer logFile.Close()
-	if err := cmd.Wait(); err != nil {
-		// If the context was cancelled (i.e. CancelJob was called), the process
-		// was killed intentionally. Don't mark the benchmark as failed — the
-		// cancel handler will set the overall job state to "cancelled".
-		if ctx.Err() == context.Canceled {
-			r.logger.Info(
-				"local runtime process killed by cancellation",
+	// Reap the child process in the background to prevent zombies.
+	go func() {
+		if err := cmd.Wait(); err != nil {
+			r.logger.Warn(
+				"local runtime process exited with error",
+				"error", err,
 				"job_id", jobID,
 				"benchmark_id", bench.ID,
 				"benchmark_index", benchmarkIndex,
 				"provider_id", bench.ProviderID,
-			)
-			return nil
-		}
-
-		r.logger.Error(
-			"local runtime process failed",
-			"error", err,
-			"job_id", jobID,
-			"benchmark_id", bench.ID,
-			"benchmark_index", benchmarkIndex,
-			"provider_id", bench.ProviderID,
-		)
-
-		// In local mode, fail the job if the process exits with error,
-		//  unless a callback already reported failure.
-		if !r.benchmarkHasAlreadyFailed(jobID, bench, benchmarkIndex, storage) {
-			r.failBenchmark(jobID, bench, benchmarkIndex, storage, err.Error())
-		} else {
-			r.logger.Warn(
-				"skipping failBenchmark: result already reported via callback",
-				"job_id", jobID,
-				"benchmark_id", bench.ID,
-				"provider_id", bench.ProviderID,
+				"pid", pid,
 			)
 		}
-	} else {
-		r.logger.Info(
-			"local runtime process completed",
-			"job_id", jobID,
-			"benchmark_id", bench.ID,
-			"benchmark_index", benchmarkIndex,
-			"provider_id", bench.ProviderID,
-		)
-	}
+	}()
 
 	return nil
-}
-
-// benchmarkHasAlreadyFailed checks whether a benchmark has already been marked as failed
-// (e.g. via a callback from the benchmark process itself).
-func (r *LocalRuntime) benchmarkHasAlreadyFailed(
-	jobID string,
-	bench api.BenchmarkConfig,
-	benchmarkIndex int,
-	storage *abstractions.Storage,
-) bool {
-	if storage == nil || *storage == nil {
-		return false
-	}
-	job, err := (*storage).GetEvaluationJob(jobID)
-	if err != nil || job == nil || job.Status == nil {
-		return false
-	}
-	for _, bs := range job.Status.Benchmarks {
-		if bs.ID == bench.ID && bs.ProviderID == bench.ProviderID && bs.BenchmarkIndex == benchmarkIndex && bs.Status == api.StateFailed {
-			return true
-		}
-	}
-	return false
 }
 
 // failBenchmark updates storage to mark a benchmark as failed.
@@ -388,16 +304,8 @@ func (r *LocalRuntime) failBenchmark(
 	}
 }
 
-// CancelJob stops all goroutines and kills spawned processes for the given job.
-// The local runtime manages its own worker goroutines and OS processes, so it
-// must explicitly cancel them via the per-job context stored in the registry.
-// Safe to call for already-finished or unknown job IDs (no-op).
-func (r *LocalRuntime) CancelJob(jobID string) error {
-	r.registry.cancel(jobID)
-	return nil
-}
-
 func (r *LocalRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobResource) error {
+	r.tracker.cleanupJob(evaluation.Resource.ID)
 	jobDir := filepath.Join(localJobsBaseDir, evaluation.Resource.ID)
 	if err := os.RemoveAll(jobDir); err != nil {
 		r.logger.Error(

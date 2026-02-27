@@ -4,7 +4,7 @@
       "name": "string"
     },
     "pass_criteria" : {
-      "threshold": 0.7 
+      "threshold": 0.7
     },
     "benchmarks": [
       {
@@ -12,7 +12,7 @@
         "provider_id": "lm_evaluation_harness",
         "config": {},
         "primary_score": {
-          "metric" : "accuracy", 
+          "metric" : "accuracy",
           "lower_is_better": false
         },
         "pass_criteria" : {
@@ -25,7 +25,7 @@
         "provider_id": "lm_evaluation_harness",
         "config": {},
         "primary_score": {
-          "metric" : "toxicity_rate", 
+          "metric" : "toxicity_rate",
           "lower_is_better": true
         },
         "pass_criteria" : {
