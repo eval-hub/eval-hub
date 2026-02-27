@@ -270,21 +270,18 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnv(t *testing.T) {
 		t.Fatalf("expected volume mount %s to be present", modelAuthVolumeName)
 	}
 
-	var foundTokenEnv bool
-	var foundCACertEnv bool
+	envKeys := make(map[string]struct{}, len(container.Env))
 	for _, env := range container.Env {
-		if env.Name == envModelAuthAPIKeyPathName {
-			foundTokenEnv = true
-		}
-		if env.Name == envModelAuthCACertPathName {
-			foundCACertEnv = true
-		}
+		envKeys[env.Name] = struct{}{}
 	}
-	if !foundTokenEnv {
-		t.Fatalf("expected env var %s to be present", envModelAuthAPIKeyPathName)
+	legacyModelAuthKeys := []string{
+		"MODEL_AUTH_API_KEY_PATH",
+		"MODEL_AUTH_CA_CERT_PATH",
 	}
-	if !foundCACertEnv {
-		t.Fatalf("expected env var %s to be present", envModelAuthCACertPathName)
+	for _, key := range legacyModelAuthKeys {
+		if _, found := envKeys[key]; found {
+			t.Fatalf("expected env var %s to be absent", key)
+		}
 	}
 }
 
