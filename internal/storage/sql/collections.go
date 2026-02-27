@@ -104,8 +104,7 @@ func (s *SQLStorage) constructCollectionResource(dbID string, createdAt time.Tim
 	}, nil
 }
 
-func (s *SQLStorage) GetCollections(filter abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
-
+func (s *SQLStorage) GetCollections(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
 	filter = extractQueryParams(filter)
 	params := filter.Params
 	limit := filter.Limit

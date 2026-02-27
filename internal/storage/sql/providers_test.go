@@ -67,6 +67,48 @@ func TestProviderStorage(t *testing.T) {
 		}
 	})
 
+	t.Run("UpdateProvider updates the provider config", func(t *testing.T) {
+		updated := &api.ProviderResource{
+			ProviderConfig: api.ProviderConfig{
+				Name:        "Updated Provider",
+				Description: "Updated description",
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-1", Name: "Bench 1"},
+					{ID: "bench-2", Name: "Bench 2"},
+				},
+			},
+		}
+		got, err := store.UpdateProvider("provider-1", updated)
+		if err != nil {
+			t.Fatalf("UpdateProvider failed: %v", err)
+		}
+		if got.Name != "Updated Provider" {
+			t.Errorf("Expected Name Updated Provider, got %s", got.Name)
+		}
+		if got.Description != "Updated description" {
+			t.Errorf("Expected Description Updated description, got %s", got.Description)
+		}
+		if len(got.Benchmarks) != 2 {
+			t.Errorf("Expected 2 benchmarks, got %d", len(got.Benchmarks))
+		}
+	})
+
+	t.Run("PatchProvider patches the provider config", func(t *testing.T) {
+		patches := api.Patch{
+			{Op: api.PatchOpReplace, Path: "/description", Value: "Patched description"},
+		}
+		got, err := store.PatchProvider("provider-1", &patches)
+		if err != nil {
+			t.Fatalf("PatchProvider failed: %v", err)
+		}
+		if got.Description != "Patched description" {
+			t.Errorf("Expected Description Patched description, got %s", got.Description)
+		}
+		if got.Name != "Updated Provider" {
+			t.Errorf("Expected Name unchanged, got %s", got.Name)
+		}
+	})
+
 	t.Run("GetUserProvider returns not found for missing provider", func(t *testing.T) {
 		_, err := store.GetProvider("non-existent")
 		if err == nil {

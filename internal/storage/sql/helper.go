@@ -181,7 +181,7 @@ func getParamValue(param string, index int) string {
 	}
 }
 
-func getParams(params abstractions.QueryFilter) map[string]any {
+func getParams(params *abstractions.QueryFilter) map[string]any {
 	filter := maps.Clone(params.Params)
 	maps.DeleteFunc(filter, func(k string, v any) bool {
 		return v == "" // delete empty values
@@ -344,11 +344,11 @@ func createUpdateStatementForPostgres(setParts []string, argsList []any, query s
 }
 
 // Returns the limit, offset, and filtered params
-func extractQueryParams(filter abstractions.QueryFilter) abstractions.QueryFilter {
+func extractQueryParams(filter *abstractions.QueryFilter) *abstractions.QueryFilter {
 	params := getParams(filter)
 	// TODO - remove this delete after adding owner in storage layer
 	delete(params, "owner")
-	return abstractions.QueryFilter{
+	return &abstractions.QueryFilter{
 		Limit:  filter.Limit,
 		Offset: filter.Offset,
 		Params: params,

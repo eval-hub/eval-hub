@@ -213,7 +213,7 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 		return
 	}
 
-	res, err := storage.GetEvaluationJobs(*filter)
+	res, err := storage.GetEvaluationJobs(filter)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return

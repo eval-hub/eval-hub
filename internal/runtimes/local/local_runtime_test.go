@@ -45,7 +45,7 @@ func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobResource) error { 
 func (f *fakeStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) {
 	return nil, nil
 }
-func (f *fakeStorage) GetEvaluationJobs(_ abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
+func (f *fakeStorage) GetEvaluationJobs(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
 	return nil, nil
 }
 func (f *fakeStorage) DeleteEvaluationJob(_ string) error { return nil }
@@ -57,7 +57,7 @@ func (f *fakeStorage) CreateCollection(_ *api.CollectionResource) error { return
 func (f *fakeStorage) GetCollection(_ string) (*api.CollectionResource, error) {
 	return nil, nil
 }
-func (f *fakeStorage) GetCollections(_ abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
+func (f *fakeStorage) GetCollections(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
 	return nil, nil
 }
 func (f *fakeStorage) PatchCollection(_ string, _ *api.Patch) error     { return nil }
@@ -68,6 +68,15 @@ func (f *fakeStorage) Close() error                                     { return
 func (f *fakeStorage) CreateProvider(_ *api.ProviderResource) error        { return nil }
 func (f *fakeStorage) GetProvider(_ string) (*api.ProviderResource, error) { return nil, nil }
 func (f *fakeStorage) DeleteProvider(_ string) error                       { return nil }
+func (f *fakeStorage) GetProviders(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.ProviderResource], error) {
+	return nil, nil
+}
+func (f *fakeStorage) UpdateProvider(_ string, _ *api.ProviderResource) (*api.ProviderResource, error) {
+	return nil, nil
+}
+func (f *fakeStorage) PatchProvider(_ string, _ *api.Patch) (*api.ProviderResource, error) {
+	return nil, nil
+}
 
 func (f *fakeStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 	return &fakeStorage{
