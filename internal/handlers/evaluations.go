@@ -309,7 +309,11 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 				ctx.Logger.Error("Failed to delete evaluation runtime resources", "error", err, "id", evaluationJobID)
 			}
 		} else {
-			ctx.Logger.Info("Evaluation job has already cancelled so not deleting runtime resources", "id", evaluationJobID)
+			if (job != nil) && (job.Status != nil) {
+				ctx.Logger.Info(fmt.Sprintf("Evaluation job has has status %s so not deleting runtime resources", job.Status.State), "id", evaluationJobID)
+			} else {
+				ctx.Logger.Info("Evaluation job status not found so not deleting runtime resources", "id", evaluationJobID)
+			}
 		}
 	}
 
