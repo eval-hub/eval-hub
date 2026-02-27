@@ -43,9 +43,7 @@ func (jr *pidTracker) registerJob(jobID string) {
 func (jr *pidTracker) addPID(jobID string, pid int) {
 	jr.mu.Lock()
 	defer jr.mu.Unlock()
-	if _, ok := jr.pids[jobID]; ok {
-		jr.pids[jobID] = append(jr.pids[jobID], pid)
-	}
+	jr.pids[jobID] = append(jr.pids[jobID], pid)
 }
 
 // cancelJob sends SIGKILL to the process group of every tracked PID for the
