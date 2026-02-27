@@ -14,3 +14,17 @@ authorization:
                 apiGroup: trustyai.opendatahub.io
                 resource: collections
                 verb: "{{.FromMethod}}"
+    - path: /api/v1/evaluations/providers
+      mappings:
+        - methods: [post]
+          resources:
+            - rewrites:
+                byHttpHeader:
+                  name: X-Tenant
+                byQueryString:
+                  name: ns
+              resourceAttributes:
+                namespace: "{{.FromHeader}}"
+                apiGroup: trustyai.opendatahub.io
+                resource: providers
+                verb: create

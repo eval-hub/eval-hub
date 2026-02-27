@@ -150,6 +150,29 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 				Verb:      "delete",
 			},
 		}
+
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("ComputeResourceAttributes() = %+v, want %+v", got, want)
+		}
+
+		req = FromRequest{
+			Endpoint:     "/api/v1/evaluations/providers",
+			Method:       "POST",
+			Headers:      Headers{"X-Tenant": {"tenant-b"}},
+			QueryStrings: QueryStrings{},
+		}
+
+		got = ComputeResourceAttributes(req, cfg)
+
+		want = []ResourceAttributes{
+			{
+				Namespace: "tenant-b",
+				APIGroup:  "trustyai.opendatahub.io",
+				Resource:  "providers",
+				Verb:      "create",
+			},
+		}
+
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("ComputeResourceAttributes() = %+v, want %+v", got, want)
 		}
