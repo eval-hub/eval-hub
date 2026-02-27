@@ -81,13 +81,13 @@ func readConfig(logger *slog.Logger, name string, ext string, dirs ...string) (*
 	return configValues, err
 }
 
-func loadProvider(logger *slog.Logger, file string) (*api.ProviderResource, error) {
+func loadProvider(logger *slog.Logger, file string, dirs ...string) (*api.ProviderResource, error) {
 	type providerConfigInternal struct {
 		ID                 string `mapstructure:"id" yaml:"id" json:"id"`
 		api.ProviderConfig `mapstructure:",squash"`
 	}
 	providerConfig := providerConfigInternal{}
-	configValues, err := readConfig(logger, file, "yaml", providersLookup...)
+	configValues, err := readConfig(logger, file, "yaml", dirs...)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +146,7 @@ func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.Pr
 			continue
 		}
 		name := strings.TrimSuffix(file.Name(), ".yaml")
-		providerConfig, err := loadProvider(logger, name)
+		providerConfig, err := loadProvider(logger, name, dirs...)
 		if err != nil {
 			return nil, err
 		}
