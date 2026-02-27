@@ -266,32 +266,19 @@ func (r *LocalRuntime) runBenchmark(
 		"command", command,
 	)
 
-	// Reap the child process in the background to prevent zombies
-	// and fail the benchmark if the command exits with an error.
+	// Stopgap fix: reap the child process in the background to prevent zombies.
+	// Any cmd errors should be debugged from the logs; no action taken here.
+	//
+	// Ideally we would not need cmd.Wait() at all — the double-fork (fork/exec,
+	// setsid, fork again) trick on Unix fully detaches the child and lets init
+	// (PID 1) reap it, eliminating the need for a dedicated goroutine. However,
+	// Windows does not support fork or setsid — processes are managed differently
+	// via the Win32 API (CreateProcess) and there is no concept of zombie processes
+	// in the same way. Until a common cross-platform approach is found for Linux,
+	// macOS, and Windows, this goroutine calling cmd.Wait() serves as the portable
+	// stopgap solution.
 	go func() {
-		if err := cmd.Wait(); err != nil {
-			if r.tracker.wasCancelled(jobID) {
-				r.logger.Info(
-					"local runtime process killed by cancellation",
-					"job_id", jobID,
-					"benchmark_id", bench.ID,
-					"benchmark_index", benchmarkIndex,
-					"provider_id", bench.ProviderID,
-					"pid", pid,
-				)
-			} else {
-				r.logger.Error(
-					"local runtime process exited with error",
-					"error", err,
-					"job_id", jobID,
-					"benchmark_id", bench.ID,
-					"benchmark_index", benchmarkIndex,
-					"provider_id", bench.ProviderID,
-					"pid", pid,
-				)
-				r.failBenchmark(jobID, bench, benchmarkIndex, storage, err.Error())
-			}
-		}
+		_ = cmd.Wait()
 	}()
 
 	return nil

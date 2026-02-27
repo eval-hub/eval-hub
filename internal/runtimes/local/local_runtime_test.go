@@ -452,7 +452,11 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 	}
 }
 
-func TestRunEvaluationJobProcessFailure(t *testing.T) {
+// TestRunEvaluationJobProcessFailureNoCallback verifies that when a subprocess
+// exits with a non-zero status, the server does not call failBenchmark. The
+// subprocess is responsible for reporting its own status via the callback URL;
+// the server only reaps the child process to prevent zombies.
+func TestRunEvaluationJobProcessFailureNoCallback(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 	cleanupDir(t, "job-1")
@@ -477,19 +481,13 @@ func TestRunEvaluationJobProcessFailure(t *testing.T) {
 		t.Fatalf("expected no synchronous error, got %v", err)
 	}
 
+	// The server should NOT report a failed status for a subprocess exit;
+	// the subprocess itself is responsible for status reporting.
 	select {
 	case runStatus := <-statusCh:
-		if runStatus == nil {
-			t.Fatal("expected run status, got nil")
-		}
-		if runStatus.BenchmarkStatusEvent.Status != api.StateFailed {
-			t.Fatalf("expected status %q, got %q", api.StateFailed, runStatus.BenchmarkStatusEvent.Status)
-		}
-		if runStatus.BenchmarkStatusEvent.ID != "bench-1" {
-			t.Fatalf("expected benchmark ID %q, got %q", "bench-1", runStatus.BenchmarkStatusEvent.ID)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for failed benchmark status update")
+		t.Fatalf("expected no status update for process failure, got %+v", runStatus)
+	case <-time.After(1 * time.Second):
+		// Expected: no status update
 	}
 }
 
