@@ -45,7 +45,7 @@ func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobResource) error {
 func (f *fakeStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) {
 	return nil, nil
 }
-func (f *fakeStorage) GetEvaluationJobs(_ abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
+func (f *fakeStorage) GetEvaluationJobs(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
 	return nil, nil
 }
 func (f *fakeStorage) DeleteEvaluationJob(_ string) error {
@@ -61,7 +61,7 @@ func (f *fakeStorage) CreateCollection(_ *api.CollectionResource) error {
 func (f *fakeStorage) GetCollection(_ string) (*api.CollectionResource, error) {
 	return nil, nil
 }
-func (f *fakeStorage) GetCollections(_ abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
+func (f *fakeStorage) GetCollections(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
 	return nil, nil
 }
 func (f *fakeStorage) UpdateCollection(_ *api.CollectionResource) error {
@@ -81,6 +81,15 @@ func (f *fakeStorage) GetProvider(_ string) (*api.ProviderResource, error) {
 }
 func (f *fakeStorage) DeleteProvider(_ string) error {
 	return nil
+}
+func (f *fakeStorage) GetProviders(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.ProviderResource], error) {
+	return nil, nil
+}
+func (f *fakeStorage) UpdateProvider(_ string, _ *api.ProviderResource) (*api.ProviderResource, error) {
+	return nil, nil
+}
+func (f *fakeStorage) PatchProvider(_ string, _ *api.Patch) (*api.ProviderResource, error) {
+	return nil, nil
 }
 func (f *fakeStorage) Close() error { return nil }
 
@@ -270,21 +279,18 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnv(t *testing.T) {
 		t.Fatalf("expected volume mount %s to be present", modelAuthVolumeName)
 	}
 
-	var foundTokenEnv bool
-	var foundCACertEnv bool
+	envKeys := make(map[string]struct{}, len(container.Env))
 	for _, env := range container.Env {
-		if env.Name == envModelAuthAPIKeyPathName {
-			foundTokenEnv = true
-		}
-		if env.Name == envModelAuthCACertPathName {
-			foundCACertEnv = true
-		}
+		envKeys[env.Name] = struct{}{}
 	}
-	if !foundTokenEnv {
-		t.Fatalf("expected env var %s to be present", envModelAuthAPIKeyPathName)
+	legacyModelAuthKeys := []string{
+		"MODEL_AUTH_API_KEY_PATH",
+		"MODEL_AUTH_CA_CERT_PATH",
 	}
-	if !foundCACertEnv {
-		t.Fatalf("expected env var %s to be present", envModelAuthCACertPathName)
+	for _, key := range legacyModelAuthKeys {
+		if _, found := envKeys[key]; found {
+			t.Fatalf("expected env var %s to be absent", key)
+		}
 	}
 }
 

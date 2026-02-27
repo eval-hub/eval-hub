@@ -223,7 +223,7 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 		return
 	}
 
-	res, err := storage.GetEvaluationJobs(*filter)
+	res, err := storage.GetEvaluationJobs(filter)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
@@ -307,40 +307,46 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
+	if h.runtime != nil {
+		job, err := storage.GetEvaluationJob(evaluationJobID)
+		if err != nil {
+			w.Error(err, ctx.RequestID)
+			return
+		}
+		if (job != nil) && (job.Status != nil) && (job.Status.State != api.OverallStateCancelled) {
+			if err := h.runtime.WithLogger(ctx.Logger).WithContext(ctx.Ctx).DeleteEvaluationJobResources(job); err != nil {
+				// Cleanup failures shouldn't block deleting the storage record.
+				ctx.Logger.Error("Failed to delete evaluation runtime resources", "error", err, "id", evaluationJobID)
+			}
+		} else {
+			if (job != nil) && (job.Status != nil) {
+				ctx.Logger.Info(fmt.Sprintf("Evaluation job has has status %s so not deleting runtime resources", job.Status.State), "id", evaluationJobID)
+			} else {
+				ctx.Logger.Info("Evaluation job status not found so not deleting runtime resources", "id", evaluationJobID)
+			}
+		}
+	}
+
 	hardDelete, err := GetParam(r, "hard_delete", true, false)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
 
-	if hardDelete && h.runtime != nil {
-		job, err := storage.GetEvaluationJob(evaluationJobID)
+	if hardDelete {
+		err = storage.DeleteEvaluationJob(evaluationJobID)
 		if err != nil {
+			ctx.Logger.Info("Failed to delete evaluation job", "error", err.Error(), "id", evaluationJobID)
 			w.Error(err, ctx.RequestID)
 			return
 		}
-		if job != nil {
-			if err := h.runtime.WithLogger(ctx.Logger).WithContext(ctx.Ctx).DeleteEvaluationJobResources(job); err != nil {
-				// Cleanup failures shouldn't block deleting the storage record.
-				ctx.Logger.Error("Failed to delete evaluation runtime resources", "error", err, "id", evaluationJobID)
-			}
-		}
-	}
-
-	if !hardDelete {
+	} else {
 		err = storage.UpdateEvaluationJobStatus(evaluationJobID, api.OverallStateCancelled, &api.MessageInfo{
 			Message:     "Evaluation job cancelled",
 			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
 		})
 		if err != nil {
 			ctx.Logger.Info("Failed to cancel evaluation job", "error", err.Error(), "id", evaluationJobID)
-			w.Error(err, ctx.RequestID)
-			return
-		}
-	} else {
-		err = storage.DeleteEvaluationJob(evaluationJobID)
-		if err != nil {
-			ctx.Logger.Info("Failed to delete evaluation job", "error", err.Error(), "id", evaluationJobID)
 			w.Error(err, ctx.RequestID)
 			return
 		}
