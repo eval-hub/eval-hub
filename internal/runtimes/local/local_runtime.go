@@ -21,19 +21,26 @@ import (
 
 const localJobsBaseDir = "/tmp/evalhub-jobs"
 
-// jobPIDTracker tracks running subprocess PIDs per job so they can be killed on cancel.
-type jobPIDTracker struct {
+// jobTracker manages subprocess tracking per job for cancellation.
+type jobTracker interface {
+	registerJob(jobID string)
+	addPID(jobID string, pid int)
+	cancelJob(jobID string)
+}
+
+// pidTracker tracks running subprocess PIDs per job so they can be killed on cancel.
+type pidTracker struct {
 	mu   sync.Mutex
 	pids map[string][]int // jobID -> list of PIDs
 }
 
-func (jr *jobPIDTracker) registerJob(jobID string) {
+func (jr *pidTracker) registerJob(jobID string) {
 	jr.mu.Lock()
 	defer jr.mu.Unlock()
 	jr.pids[jobID] = nil
 }
 
-func (jr *jobPIDTracker) addPID(jobID string, pid int) {
+func (jr *pidTracker) addPID(jobID string, pid int) {
 	jr.mu.Lock()
 	defer jr.mu.Unlock()
 	if _, ok := jr.pids[jobID]; ok {
@@ -44,7 +51,7 @@ func (jr *jobPIDTracker) addPID(jobID string, pid int) {
 // cancelJob sends SIGKILL to the process group of every tracked PID for the
 // job and removes the job's entry from the tracker. It is idempotent: calling
 // it for an unknown or already-cancelled job is a no-op.
-func (jr *jobPIDTracker) cancelJob(jobID string) {
+func (jr *pidTracker) cancelJob(jobID string) {
 	jr.mu.Lock()
 	defer jr.mu.Unlock()
 	if pids, ok := jr.pids[jobID]; ok {
@@ -56,20 +63,11 @@ func (jr *jobPIDTracker) cancelJob(jobID string) {
 	}
 }
 
-// wasCancelled reports whether the job was cancelled (i.e. cancelJob already
-// removed its entry from the tracker).
-func (jr *jobPIDTracker) wasCancelled(jobID string) bool {
-	jr.mu.Lock()
-	defer jr.mu.Unlock()
-	_, ok := jr.pids[jobID]
-	return !ok
-}
-
 type LocalRuntime struct {
 	logger    *slog.Logger
 	ctx       context.Context
 	providers map[string]api.ProviderResource
-	tracker   *jobPIDTracker
+	tracker   jobTracker
 }
 
 func NewLocalRuntime(
@@ -79,9 +77,7 @@ func NewLocalRuntime(
 	return &LocalRuntime{
 		logger:    logger,
 		providers: providerConfigs,
-		tracker: &jobPIDTracker{
-			pids: make(map[string][]int),
-		},
+		tracker: &pidTracker{pids: make(map[string][]int)},
 	}, nil
 }
 

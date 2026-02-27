@@ -103,10 +103,8 @@ func discardLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-func newTracker() *jobPIDTracker {
-	return &jobPIDTracker{
-		pids: make(map[string][]int),
-	}
+func newTracker() jobTracker {
+	return &pidTracker{pids: make(map[string][]int)}
 }
 
 // testContext returns a context with a 10-second deadline tied to t.Cleanup.
