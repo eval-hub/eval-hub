@@ -1,5 +1,7 @@
 type: object
 description: Reference to external test data sources
+required:
+  - s3
 properties:
   s3:
     $ref: ./TestDataRefS3.yaml
