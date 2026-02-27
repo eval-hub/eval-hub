@@ -41,10 +41,10 @@ func (jr *jobPIDTracker) addPID(jobID string, pid int) {
 	}
 }
 
-// cleanupJob sends SIGKILL to the process group of every tracked PID for the
+// cancelJob sends SIGKILL to the process group of every tracked PID for the
 // job and removes the job's entry from the tracker. It is idempotent: calling
-// it for an unknown or already-cleaned-up job is a no-op.
-func (jr *jobPIDTracker) cleanupJob(jobID string) {
+// it for an unknown or already-cancelled job is a no-op.
+func (jr *jobPIDTracker) cancelJob(jobID string) {
 	jr.mu.Lock()
 	defer jr.mu.Unlock()
 	if pids, ok := jr.pids[jobID]; ok {
@@ -54,6 +54,15 @@ func (jr *jobPIDTracker) cleanupJob(jobID string) {
 		}
 		delete(jr.pids, jobID)
 	}
+}
+
+// wasCancelled reports whether the job was cancelled (i.e. cancelJob already
+// removed its entry from the tracker).
+func (jr *jobPIDTracker) wasCancelled(jobID string) bool {
+	jr.mu.Lock()
+	defer jr.mu.Unlock()
+	_, ok := jr.pids[jobID]
+	return !ok
 }
 
 type LocalRuntime struct {
@@ -120,7 +129,7 @@ func (r *LocalRuntime) RunEvaluationJob(
 
 	go func() {
 		for i, bench := range evaluation.Benchmarks {
-			if err := r.runBenchmark(jobID, bench, i, evaluation, callbackURL); err != nil {
+			if err := r.runBenchmark(jobID, bench, i, evaluation, callbackURL, storage); err != nil {
 				r.logger.Error(
 					"local runtime benchmark launch failed",
 					"error", err,
@@ -146,6 +155,7 @@ func (r *LocalRuntime) runBenchmark(
 	benchmarkIndex int,
 	evaluation *api.EvaluationJobResource,
 	callbackURL *string,
+	storage *abstractions.Storage,
 ) error {
 	provider, ok := r.providers[bench.ProviderID]
 	if !ok {
@@ -198,7 +208,7 @@ func (r *LocalRuntime) runBenchmark(
 	cmd := exec.Command("sh", "-c", command)
 	// Setpgid places the child in its own process group (PGID = child PID).
 	// This is critical for two reasons:
-	//   1. cleanupJob calls Kill(-PID, SIGKILL) which targets the entire process
+	//   1. cancelJob calls Kill(-PID, SIGKILL) which targets the entire process
 	//      group. Without Setpgid the child inherits the Go process's group, so
 	//      Kill(-PID) would kill the Go process itself.
 	//   2. The negative PID ensures the entire subprocess tree is killed (sh +
@@ -256,19 +266,31 @@ func (r *LocalRuntime) runBenchmark(
 		"command", command,
 	)
 
-	// TODO: See if there is a better way to prevent zombies.
-	// Reap the child process in the background to prevent zombies.
+	// Reap the child process in the background to prevent zombies
+	// and fail the benchmark if the command exits with an error.
 	go func() {
 		if err := cmd.Wait(); err != nil {
-			r.logger.Warn(
-				"local runtime process exited with error",
-				"error", err,
-				"job_id", jobID,
-				"benchmark_id", bench.ID,
-				"benchmark_index", benchmarkIndex,
-				"provider_id", bench.ProviderID,
-				"pid", pid,
-			)
+			if r.tracker.wasCancelled(jobID) {
+				r.logger.Info(
+					"local runtime process killed by cancellation",
+					"job_id", jobID,
+					"benchmark_id", bench.ID,
+					"benchmark_index", benchmarkIndex,
+					"provider_id", bench.ProviderID,
+					"pid", pid,
+				)
+			} else {
+				r.logger.Error(
+					"local runtime process exited with error",
+					"error", err,
+					"job_id", jobID,
+					"benchmark_id", bench.ID,
+					"benchmark_index", benchmarkIndex,
+					"provider_id", bench.ProviderID,
+					"pid", pid,
+				)
+				r.failBenchmark(jobID, bench, benchmarkIndex, storage, err.Error())
+			}
 		}
 	}()
 
@@ -311,7 +333,7 @@ func (r *LocalRuntime) failBenchmark(
 }
 
 func (r *LocalRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobResource) error {
-	r.tracker.cleanupJob(evaluation.Resource.ID)
+	r.tracker.cancelJob(evaluation.Resource.ID)
 	jobDir := filepath.Join(localJobsBaseDir, evaluation.Resource.ID)
 	if err := os.RemoveAll(jobDir); err != nil {
 		r.logger.Error(
