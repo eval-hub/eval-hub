@@ -37,8 +37,11 @@ type ByQueryString struct {
 }
 
 type ResourceAttributes struct {
-	Namespace string `yaml:"namespace" mapstructure:"namespace"`
-	APIGroup  string `yaml:"apiGroup" mapstructure:"apiGroup"`
-	Resource  string `yaml:"resource" mapstructure:"resource"`
-	Verb      string `yaml:"verb" mapstructure:"verb"`
+	Namespace   string `yaml:"namespace" mapstructure:"namespace"`
+	APIGroup    string `yaml:"apiGroup" mapstructure:"apiGroup"`
+	APIVersion  string `yaml:"apiVersion" mapstructure:"apiVersion"`
+	Resource    string `yaml:"resource" mapstructure:"resource"`
+	Name        string `yaml:"name" mapstructure:"name"`
+	Subresource string `yaml:"subresource" mapstructure:"subresource"`
+	Verb        string `yaml:"verb" mapstructure:"verb"`
 }
