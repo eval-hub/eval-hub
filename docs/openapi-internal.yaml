@@ -1122,6 +1122,31 @@ components:
               type: object
               additionalProperties: true
               description: Benchmark specific parameters
+            test_data_ref:
+              $ref: '#/components/schemas/TestDataRef'
+    TestDataRef:
+      type: object
+      description: Reference to external test data sources
+      properties:
+        s3:
+          $ref: '#/components/schemas/TestDataRefS3'
+    TestDataRefS3:
+      type: object
+      description: S3 test data reference
+      required:
+        - bucket
+        - key
+        - secret_ref
+      properties:
+        bucket:
+          type: string
+          description: S3 bucket name
+        key:
+          type: string
+          description: S3 object key (path)
+        secret_ref:
+          type: string
+          description: Kubernetes Secret name containing S3 credentials
     ExperimentTag:
       type: object
       description: Tag on an experiment (e.g. MLFlow)
