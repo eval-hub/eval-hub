@@ -3,12 +3,19 @@ package sql
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
+	// import the postgres driver - "pgx"
+	_ "github.com/jackc/pgx/v5/stdlib"
+
+	// import the sqlite driver - "sqlite"
+	_ "modernc.org/sqlite"
+
 	"github.com/eval-hub/eval-hub/internal/abstractions"
+	"github.com/eval-hub/eval-hub/internal/storage/sql/postgres"
+	"github.com/eval-hub/eval-hub/internal/storage/sql/shared"
+	"github.com/eval-hub/eval-hub/internal/storage/sql/sqlite"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/uptrace/opentelemetry-go-extra/otelsql"
@@ -20,23 +27,19 @@ const (
 	// These are the only drivers currently supported
 	SQLITE_DRIVER   = "sqlite"
 	POSTGRES_DRIVER = "pgx"
-
-	// These are the only tables currently supported
-	TABLE_EVALUATIONS = "evaluations"
-	TABLE_COLLECTIONS = "collections"
-	TABLE_PROVIDERS   = "providers"
 )
 
 type SQLStorage struct {
-	sqlConfig *SQLDatabaseConfig
-	pool      *sql.DB
-	logger    *slog.Logger
-	ctx       context.Context
-	tenant    api.Tenant
+	sqlConfig         *shared.SQLDatabaseConfig
+	statementsFactory shared.SQLStatementsFactory
+	pool              *sql.DB
+	logger            *slog.Logger
+	ctx               context.Context
+	tenant            api.Tenant
 }
 
 func NewStorage(config map[string]any, otelEnabled bool, logger *slog.Logger) (abstractions.Storage, error) {
-	var sqlConfig SQLDatabaseConfig
+	var sqlConfig shared.SQLDatabaseConfig
 	merr := mapstructure.Decode(config, &sqlConfig)
 	if merr != nil {
 		return nil, merr
@@ -52,8 +55,8 @@ func NewStorage(config map[string]any, otelEnabled bool, logger *slog.Logger) (a
 		return nil, getUnsupportedDriverError(sqlConfig.Driver)
 	}
 
-	databaseName := sqlConfig.getDatabaseName()
-	logger = logger.With("driver", sqlConfig.getDriverName(), "database", databaseName)
+	databaseName := sqlConfig.GetDatabaseName()
+	logger = logger.With("driver", sqlConfig.GetDriverName(), "database", databaseName)
 
 	logger.Info("Creating SQL storage")
 
@@ -85,26 +88,6 @@ func NewStorage(config map[string]any, otelEnabled bool, logger *slog.Logger) (a
 		}
 	}()
 
-	if sqlConfig.Driver == SQLITE_DRIVER {
-		// SQLite only supports one writer at a time; serializing access through
-		// a single connection eliminates lock contention and deadlocks.
-		pool.SetMaxOpenConns(1)
-		if _, err := pool.Exec("PRAGMA busy_timeout = 5000"); err != nil {
-			return nil, fmt.Errorf("failed to set busy_timeout: %w", err)
-		}
-		// Enable WAL mode for file-based databases (in-memory databases don't
-		// support WAL and always return journal_mode="memory").
-		if !strings.Contains(sqlConfig.URL, "mode=memory") {
-			var mode string
-			if err := pool.QueryRow("PRAGMA journal_mode = WAL").Scan(&mode); err != nil {
-				return nil, fmt.Errorf("failed to set journal_mode: %w", err)
-			}
-			if mode != "wal" {
-				return nil, fmt.Errorf("failed to enable WAL mode: database returned journal_mode=%q", mode)
-			}
-		}
-	}
-
 	if sqlConfig.ConnMaxLifetime != nil {
 		pool.SetConnMaxLifetime(*sqlConfig.ConnMaxLifetime)
 	}
@@ -115,11 +98,26 @@ func NewStorage(config map[string]any, otelEnabled bool, logger *slog.Logger) (a
 		pool.SetMaxOpenConns(*sqlConfig.MaxOpenConns)
 	}
 
+	var statementsFactory shared.SQLStatementsFactory
+	switch sqlConfig.Driver {
+	case SQLITE_DRIVER:
+		statementsFactory, err = sqlite.Setup(pool, &sqlConfig)
+		if err != nil {
+			return nil, err
+		}
+	case POSTGRES_DRIVER:
+		statementsFactory, err = postgres.Setup(pool, &sqlConfig)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	s := &SQLStorage{
-		sqlConfig: &sqlConfig,
-		pool:      pool,
-		logger:    logger,
-		ctx:       context.Background(),
+		sqlConfig:         &sqlConfig,
+		statementsFactory: statementsFactory,
+		pool:              pool,
+		logger:            logger,
+		ctx:               context.Background(),
 	}
 
 	// ping the database to verify the DSN provided by the user is valid and the server is accessible
@@ -190,30 +188,33 @@ func (s *SQLStorage) Close() error {
 
 func (s *SQLStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 	return &SQLStorage{
-		sqlConfig: s.sqlConfig,
-		pool:      s.pool,
-		logger:    logger,
-		ctx:       s.ctx,
-		tenant:    s.tenant,
+		sqlConfig:         s.sqlConfig,
+		statementsFactory: s.statementsFactory,
+		pool:              s.pool,
+		logger:            logger,
+		ctx:               s.ctx,
+		tenant:            s.tenant,
 	}
 }
 
 func (s *SQLStorage) WithContext(ctx context.Context) abstractions.Storage {
 	return &SQLStorage{
-		sqlConfig: s.sqlConfig,
-		pool:      s.pool,
-		logger:    s.logger,
-		ctx:       ctx,
-		tenant:    s.tenant,
+		sqlConfig:         s.sqlConfig,
+		statementsFactory: s.statementsFactory,
+		pool:              s.pool,
+		logger:            s.logger,
+		ctx:               ctx,
+		tenant:            s.tenant,
 	}
 }
 
 func (s *SQLStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
 	return &SQLStorage{
-		sqlConfig: s.sqlConfig,
-		pool:      s.pool,
-		logger:    s.logger,
-		ctx:       s.ctx,
-		tenant:    tenant,
+		sqlConfig:         s.sqlConfig,
+		statementsFactory: s.statementsFactory,
+		pool:              s.pool,
+		logger:            s.logger,
+		ctx:               s.ctx,
+		tenant:            tenant,
 	}
 }

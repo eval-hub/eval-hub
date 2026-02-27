@@ -51,10 +51,26 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 		},
 	}
 
+	tenant := api.Tenant("tenant-1")
+	now := time.Now()
+
 	job := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{
-				ID: "job-1",
+				ID:        "job-1",
+				Tenant:    &tenant,
+				CreatedAt: &now,
+				UpdatedAt: &now,
+			},
+			MLFlowExperimentID: "experiment-1",
+		},
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{
+				State: api.OverallStateRunning,
+				Message: &api.MessageInfo{
+					Message:     "Job is running",
+					MessageCode: "JOB_RUNNING",
+				},
 			},
 		},
 		EvaluationJobConfig: *config,
@@ -65,7 +81,6 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 		t.Fatalf("Failed to create job: %v", err)
 	}
 
-	now := time.Now()
 	// Send status update with provider_id (simulating SDK behavior)
 	statusUpdate := &api.StatusEvent{
 		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
@@ -176,10 +191,27 @@ func TestEvaluationsStorage(t *testing.T) {
 				},
 			},
 		}
+
+		tenant := api.Tenant("tenant-1")
+		now := time.Now()
+
 		job := &api.EvaluationJobResource{
 			Resource: api.EvaluationResource{
 				Resource: api.Resource{
-					ID: common.GUID(),
+					ID:        common.GUID(),
+					Tenant:    &tenant,
+					CreatedAt: &now,
+					UpdatedAt: &now,
+				},
+				MLFlowExperimentID: "experiment-1",
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{
+					State: api.OverallStateRunning,
+					Message: &api.MessageInfo{
+						Message:     "Job is running",
+						MessageCode: "JOB_RUNNING",
+					},
 				},
 			},
 			EvaluationJobConfig: *config,
@@ -285,8 +317,28 @@ func TestEvaluationsStorage(t *testing.T) {
 
 	t.Run("UpdateEvaluationJobStatus same-state is no-op", func(t *testing.T) {
 		noOpID := common.GUID()
+		tenant := api.Tenant("tenant-1")
+		now := time.Now()
+
 		noOpJob := &api.EvaluationJobResource{
-			Resource: api.EvaluationResource{Resource: api.Resource{ID: noOpID}},
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{
+					ID:        noOpID,
+					Tenant:    &tenant,
+					CreatedAt: &now,
+					UpdatedAt: &now,
+				},
+				MLFlowExperimentID: "experiment-1",
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{
+					State: api.OverallStateRunning,
+					Message: &api.MessageInfo{
+						Message:     "Job is running",
+						MessageCode: "JOB_RUNNING",
+					},
+				},
+			},
 			EvaluationJobConfig: api.EvaluationJobConfig{
 				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
 				Benchmarks: []api.BenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
@@ -327,8 +379,27 @@ func TestEvaluationsStorage(t *testing.T) {
 			if terminalState == api.OverallStatePartiallyFailed {
 				config.Benchmarks = append(config.Benchmarks, api.BenchmarkConfig{Ref: api.Ref{ID: "b2"}, ProviderID: "p1"})
 			}
+			tenant := api.Tenant("tenant-1")
+			now := time.Now()
 			job := &api.EvaluationJobResource{
-				Resource:            api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+				Resource: api.EvaluationResource{
+					Resource: api.Resource{
+						ID:        jobID,
+						Tenant:    &tenant,
+						CreatedAt: &now,
+						UpdatedAt: &now,
+					},
+					MLFlowExperimentID: "experiment-1",
+				},
+				Status: &api.EvaluationJobStatus{
+					EvaluationJobState: api.EvaluationJobState{
+						State: api.OverallStateRunning,
+						Message: &api.MessageInfo{
+							Message:     "Job is running",
+							MessageCode: "JOB_RUNNING",
+						},
+					},
+				},
 				EvaluationJobConfig: *config,
 			}
 			if err := store.CreateEvaluationJob(job); err != nil {
@@ -403,8 +474,27 @@ func TestEvaluationsStorage(t *testing.T) {
 				{Ref: api.Ref{ID: "bx"}, ProviderID: "garak"},
 			},
 		}
+		tenant := api.Tenant("tenant-1")
+		now := time.Now()
 		job := &api.EvaluationJobResource{
-			Resource:            api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{
+					ID:        jobID,
+					Tenant:    &tenant,
+					CreatedAt: &now,
+					UpdatedAt: &now,
+				},
+				MLFlowExperimentID: "experiment-1",
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{
+					State: api.OverallStatePending,
+					Message: &api.MessageInfo{
+						Message:     "Job pending",
+						MessageCode: "JOB_PENDING",
+					},
+				},
+			},
 			EvaluationJobConfig: *config,
 		}
 		if err := store.CreateEvaluationJob(job); err != nil {
@@ -440,7 +530,24 @@ func TestEvaluationsStorage(t *testing.T) {
 		// UpdateEvaluationJobStatus(cancelled). Verify benchmarks preserved.
 		jobID2 := common.GUID()
 		job2 := &api.EvaluationJobResource{
-			Resource:            api.EvaluationResource{Resource: api.Resource{ID: jobID2}},
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{
+					ID:        jobID2,
+					Tenant:    &tenant,
+					CreatedAt: &now,
+					UpdatedAt: &now,
+				},
+				MLFlowExperimentID: "experiment-1",
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{
+					State: api.OverallStateRunning,
+					Message: &api.MessageInfo{
+						Message:     "Job is running",
+						MessageCode: "JOB_RUNNING",
+					},
+				},
+			},
 			EvaluationJobConfig: *config,
 		}
 		if err := store.CreateEvaluationJob(job2); err != nil {

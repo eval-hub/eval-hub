@@ -5,17 +5,11 @@ import (
 	"encoding/json"
 	"time"
 
-	// import the postgres driver - "pgx"
-
-	_ "github.com/jackc/pgx/v5/stdlib"
-
-	// import the sqlite driver - "sqlite"
-	_ "modernc.org/sqlite"
-
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	se "github.com/eval-hub/eval-hub/internal/serviceerrors"
 	commonStorage "github.com/eval-hub/eval-hub/internal/storage/common"
+	"github.com/eval-hub/eval-hub/internal/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -29,30 +23,19 @@ type EvaluationJobEntity struct {
 // Evaluation job operations
 // #######################################################################
 func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobResource) error {
-	jobID := evaluation.Resource.ID
-	mlflowExperimentID := evaluation.Resource.MLFlowExperimentID
-
-	err := s.withTransaction("create evaluation job", jobID, func(txn *sql.Tx) error {
-		tenant := s.tenant
-
+	return s.withTransaction("create evaluation job", evaluation.Resource.ID, func(txn *sql.Tx) error {
 		evaluationJSON, err := s.createEvaluationJobEntity(evaluation)
 		if err != nil {
 			return se.WithRollback(err)
 		}
-		addEntityStatement, err := createAddEntityStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS)
+		addEntityStatement, args := s.statementsFactory.CreateEvaluationAddEntityStatement(evaluation, string(evaluationJSON))
+		_, err = s.exec(txn, addEntityStatement, args...)
 		if err != nil {
 			return se.WithRollback(err)
 		}
-		s.logger.Info("Creating evaluation job", "id", jobID, "tenant", tenant, "status", api.StatePending, "experiment_id", mlflowExperimentID)
-		// (id, tenant_id, status, experiment_id, entity)
-		_, err = s.exec(txn, addEntityStatement, jobID, tenant, api.StatePending, mlflowExperimentID, string(evaluationJSON))
-		if err != nil {
-			return se.WithRollback(err)
-		}
-
-		return err
+		s.logger.Info("Created evaluation job", "id", evaluation.Resource.ID, "args", args, "addEntityStatement", addEntityStatement)
+		return nil
 	})
-	return err
 }
 
 func (s *SQLStorage) createEvaluationJobEntity(evaluation *api.EvaluationJobResource) ([]byte, error) {
@@ -121,20 +104,11 @@ func (s *SQLStorage) constructEvaluationResource(tenantID string, statusStr stri
 
 func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api.EvaluationJobResource, error) {
 	// Build the SELECT query
-	selectQuery, err := createGetEntityStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS)
-	if err != nil {
-		return nil, se.WithRollback(err)
-	}
+	query := shared.EvaluationJobQuery{ID: id}
+	selectQuery, selectArgs, queryArgs := s.statementsFactory.CreateEvaluationGetEntityStatement(&query)
 
 	// Query the database
-	var dbID string
-	var createdAt, updatedAt time.Time
-	var tenantID string
-	var statusStr string
-	var experimentID string
-	var entityJSON string
-
-	err = s.queryRow(txn, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &tenantID, &statusStr, &experimentID, &entityJSON)
+	err := s.queryRow(txn, selectQuery, selectArgs...).Scan(queryArgs...)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
@@ -146,13 +120,13 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 
 	// Unmarshal the entity JSON into EvaluationJobConfig
 	var evaluationJobEntity EvaluationJobEntity
-	err = json.Unmarshal([]byte(entityJSON), &evaluationJobEntity)
+	err = json.Unmarshal([]byte(query.EntityJSON), &evaluationJobEntity)
 	if err != nil {
 		s.logger.Error("Failed to unmarshal evaluation job entity", "error", err, "id", id)
 		return nil, se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "evaluation job", "Error", err.Error())
 	}
 
-	job, err := s.constructEvaluationResource(tenantID, statusStr, nil, dbID, createdAt, updatedAt, experimentID, &evaluationJobEntity)
+	job, err := s.constructEvaluationResource(query.Tenant, query.Status, nil, query.ID, query.CreatedAt, query.UpdatedAt, query.ExperimentID, &evaluationJobEntity)
 	if err != nil {
 		return nil, se.WithRollback(err)
 	}
@@ -160,19 +134,16 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 }
 
 func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
-
 	filter = extractQueryParams(filter)
 	params := filter.Params
 	limit := filter.Limit
 	offset := filter.Offset
 
 	// Get total count (with filter if provided)
-	countQuery, countArgs, err := createCountEntitiesStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, filter.Params)
-	if err != nil {
-		return nil, err
-	}
+	countQuery, countArgs := s.statementsFactory.CreateCountEntitiesStatement(shared.TABLE_EVALUATIONS, filter.Params)
 
 	var totalCount int
+	var err error
 	if len(countArgs) > 0 {
 		err = s.queryRow(nil, countQuery, countArgs...).Scan(&totalCount)
 	} else {
@@ -191,10 +162,7 @@ func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstr
 	}
 
 	// Build the list query with pagination and filters
-	listQuery, listArgs, err := createListEntitiesStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, limit, offset, params)
-	if err != nil {
-		return nil, err
-	}
+	listQuery, listArgs := s.statementsFactory.CreateListEntitiesStatement(shared.TABLE_EVALUATIONS, limit, offset, params)
 	s.logger.Info("List evaluations query", "query", listQuery, "args", listArgs, "params", params, "limit", limit, "offset", offset)
 
 	// Query the database
@@ -257,13 +225,10 @@ func (s *SQLStorage) DeleteEvaluationJob(id string) error {
 	// we have to get the evaluation job and then update or delete the job so we need a transaction
 	err := s.withTransaction("delete evaluation job", id, func(txn *sql.Tx) error {
 		// check if the evaluation job exists, we do this otherwise we always return 204
-		selectQuery, err := createCheckEntityExistsStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS)
-		if err != nil {
-			return se.WithRollback(err)
-		}
+		selectQuery := s.statementsFactory.CreateCheckEntityExistsStatement(shared.TABLE_EVALUATIONS)
 		var dbID string
 		var statusStr string
-		err = s.queryRow(txn, selectQuery, id).Scan(&dbID, &statusStr)
+		err := s.queryRow(txn, selectQuery, id).Scan(&dbID, &statusStr)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
@@ -272,10 +237,7 @@ func (s *SQLStorage) DeleteEvaluationJob(id string) error {
 		}
 
 		// Build the DELETE query
-		deleteQuery, err := createDeleteEntityStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS)
-		if err != nil {
-			return se.WithRollback(err)
-		}
+		deleteQuery := s.statementsFactory.CreateDeleteEntityStatement(shared.TABLE_EVALUATIONS)
 
 		// Execute the DELETE query
 		_, err = s.exec(txn, deleteQuery, id)
@@ -356,10 +318,7 @@ func (s *SQLStorage) updateEvaluationJobTxn(txn *sql.Tx, id string, status api.O
 		// we should never get here
 		return se.WithRollback(se.NewServiceError(messages.InternalServerError, "Error", err.Error()))
 	}
-	updateQuery, args, err := CreateUpdateEvaluationStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, id, status, string(entityJSON))
-	if err != nil {
-		return se.WithRollback(err)
-	}
+	updateQuery, args := s.statementsFactory.CreateUpdateEntityStatement(shared.TABLE_EVALUATIONS, id, string(entityJSON), &status)
 
 	_, err = s.exec(txn, updateQuery, args...)
 	if err != nil {

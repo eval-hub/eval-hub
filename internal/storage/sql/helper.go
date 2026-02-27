@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
+	"github.com/eval-hub/eval-hub/internal/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -51,19 +52,19 @@ func schemasForDriver(driver string) (string, error) {
 // with properly quoted table name and appropriate placeholder syntax
 func createAddEntityStatement(driver, tableName string) (string, error) {
 	switch driver + tableName {
-	case POSTGRES_DRIVER + TABLE_EVALUATIONS:
+	case POSTGRES_DRIVER + shared.TABLE_EVALUATIONS:
 		return POSTGRES_INSERT_EVALUATION_STATEMENT, nil
-	case SQLITE_DRIVER + TABLE_EVALUATIONS:
+	case SQLITE_DRIVER + shared.TABLE_EVALUATIONS:
 		// SQLite: use ? placeholders
 		return SQLITE_INSERT_EVALUATION_STATEMENT, nil
-	case POSTGRES_DRIVER + TABLE_COLLECTIONS:
+	case POSTGRES_DRIVER + shared.TABLE_COLLECTIONS:
 		return POSTGRES_INSERT_COLLECTION_STATEMENT, nil
-	case SQLITE_DRIVER + TABLE_COLLECTIONS:
+	case SQLITE_DRIVER + shared.TABLE_COLLECTIONS:
 		// SQLite: use ? placeholders
 		return SQLITE_INSERT_COLLECTION_STATEMENT, nil
-	case POSTGRES_DRIVER + TABLE_PROVIDERS:
+	case POSTGRES_DRIVER + shared.TABLE_PROVIDERS:
 		return POSTGRES_INSERT_PROVIDER_STATEMENT, nil
-	case SQLITE_DRIVER + TABLE_PROVIDERS:
+	case SQLITE_DRIVER + shared.TABLE_PROVIDERS:
 		return SQLITE_INSERT_PROVIDER_STATEMENT, nil
 	default:
 		return "", getUnsupportedDriverError(driver)
@@ -83,36 +84,20 @@ func createGetEntityStatement(driver, tableName string) (string, error) {
 	quotedTable := quoteIdentifier(driver, tableName)
 
 	switch driver + tableName {
-	case POSTGRES_DRIVER + TABLE_EVALUATIONS:
+	case POSTGRES_DRIVER + shared.TABLE_EVALUATIONS:
 		return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s WHERE id = $1;`, quotedTable), nil
-	case SQLITE_DRIVER + TABLE_EVALUATIONS:
+	case SQLITE_DRIVER + shared.TABLE_EVALUATIONS:
 		// SQLite: use ? placeholder
 		return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s WHERE id = ?;`, quotedTable), nil
-	case POSTGRES_DRIVER + TABLE_COLLECTIONS:
+	case POSTGRES_DRIVER + shared.TABLE_COLLECTIONS:
 		return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s WHERE id = $1;`, quotedTable), nil
-	case SQLITE_DRIVER + TABLE_COLLECTIONS:
+	case SQLITE_DRIVER + shared.TABLE_COLLECTIONS:
 		// SQLite: use ? placeholder
 		return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s WHERE id = ?;`, quotedTable), nil
-	case POSTGRES_DRIVER + TABLE_PROVIDERS:
+	case POSTGRES_DRIVER + shared.TABLE_PROVIDERS:
 		return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s WHERE id = $1;`, quotedTable), nil
-	case SQLITE_DRIVER + TABLE_PROVIDERS:
+	case SQLITE_DRIVER + shared.TABLE_PROVIDERS:
 		return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s WHERE id = ?;`, quotedTable), nil
-	default:
-		return "", getUnsupportedDriverError(driver)
-	}
-}
-
-// createCheckEntityExistsStatement returns a driver-specific SELECT statement
-// to check if an entity exists by ID and retrieve its status
-func createCheckEntityExistsStatement(driver, tableName string) (string, error) {
-	quotedTable := quoteIdentifier(driver, tableName)
-
-	switch driver {
-	case POSTGRES_DRIVER:
-		return fmt.Sprintf(`SELECT id, status FROM %s WHERE id = $1;`, quotedTable), nil
-	case SQLITE_DRIVER:
-		// SQLite: use ? placeholder
-		return fmt.Sprintf(`SELECT id, status FROM %s WHERE id = ?;`, quotedTable), nil
 	default:
 		return "", getUnsupportedDriverError(driver)
 	}
@@ -246,14 +231,14 @@ func createListEntitiesStatement(driver, tableName string, limit, offset int, fi
 	switch driver {
 	case POSTGRES_DRIVER:
 		switch tableName {
-		case TABLE_EVALUATIONS:
+		case shared.TABLE_EVALUATIONS:
 			query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s %s;`, quotedTable, filterStatement)
 		default:
 			query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s %s;`, quotedTable, filterStatement)
 		}
 	case SQLITE_DRIVER:
 		switch tableName {
-		case TABLE_EVALUATIONS:
+		case shared.TABLE_EVALUATIONS:
 			query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s %s;`, quotedTable, filterStatement)
 		default:
 			query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s %s;`, quotedTable, filterStatement)

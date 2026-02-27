@@ -8,6 +8,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	se "github.com/eval-hub/eval-hub/internal/serviceerrors"
+	"github.com/eval-hub/eval-hub/internal/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	jsonpatch "gopkg.in/evanphx/json-patch.v4"
 )
@@ -19,7 +20,7 @@ func (s *SQLStorage) CreateProvider(provider *api.ProviderResource) error {
 	if err != nil {
 		return se.NewServiceError(messages.InternalServerError, "Error", err)
 	}
-	addEntityStatement, err := createAddEntityStatement(s.sqlConfig.Driver, TABLE_PROVIDERS)
+	addEntityStatement, err := createAddEntityStatement(s.sqlConfig.Driver, shared.TABLE_PROVIDERS)
 	if err != nil {
 		return se.NewServiceError(messages.InternalServerError, "Error", err)
 	}
@@ -44,7 +45,7 @@ func (s *SQLStorage) GetProvider(id string) (*api.ProviderResource, error) {
 }
 
 func (s *SQLStorage) getUserProviderTransactional(txn *sql.Tx, id string) (*api.ProviderResource, error) {
-	selectQuery, err := createGetEntityStatement(s.sqlConfig.Driver, TABLE_PROVIDERS)
+	selectQuery, err := createGetEntityStatement(s.sqlConfig.Driver, shared.TABLE_PROVIDERS)
 	if err != nil {
 		return nil, se.NewServiceError(messages.InternalServerError, "Error", err.Error())
 	}
@@ -91,7 +92,7 @@ func (s *SQLStorage) constructProviderResource(dbID string, createdAt time.Time,
 }
 
 func (s *SQLStorage) DeleteProvider(id string) error {
-	deleteQuery, err := createDeleteEntityStatement(s.sqlConfig.Driver, TABLE_PROVIDERS)
+	deleteQuery, err := createDeleteEntityStatement(s.sqlConfig.Driver, shared.TABLE_PROVIDERS)
 	if err != nil {
 		return se.NewServiceError(messages.InternalServerError, "Error", "Error while building delete provider query")
 	}
@@ -115,7 +116,7 @@ func (s *SQLStorage) GetProviders(filter *abstractions.QueryFilter) (*abstractio
 	// TODO: why is this here?
 	delete(params, "benchmarks")
 
-	selectQuery, args, err := createListEntitiesStatement(s.sqlConfig.Driver, TABLE_PROVIDERS, limit, offset, params)
+	selectQuery, args, err := createListEntitiesStatement(s.sqlConfig.Driver, shared.TABLE_PROVIDERS, limit, offset, params)
 	if err != nil {
 		return nil, se.NewServiceError(messages.InternalServerError, "Error", err.Error())
 	}
@@ -186,7 +187,7 @@ func (s *SQLStorage) updateProviderTransactional(txn *sql.Tx, providerID string,
 	if err != nil {
 		return se.NewServiceError(messages.InternalServerError, "Error", err)
 	}
-	updateStmt, args, err := CreateUpdateCollectionStatement(s.sqlConfig.Driver, TABLE_PROVIDERS, providerID, string(providerJSON))
+	updateStmt, args, err := CreateUpdateCollectionStatement(s.sqlConfig.Driver, shared.TABLE_PROVIDERS, providerID, string(providerJSON))
 	if err != nil {
 		return se.NewServiceError(messages.InternalServerError, "Error", err)
 	}

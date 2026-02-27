@@ -9,6 +9,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	se "github.com/eval-hub/eval-hub/internal/serviceerrors"
+	"github.com/eval-hub/eval-hub/internal/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	jsonpatch "gopkg.in/evanphx/json-patch.v4"
 )
@@ -24,7 +25,7 @@ func (s *SQLStorage) CreateCollection(collection *api.CollectionResource) error 
 	if err != nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
 	}
-	addEntityStatement, err := createAddEntityStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS)
+	addEntityStatement, err := createAddEntityStatement(s.sqlConfig.Driver, shared.TABLE_COLLECTIONS)
 	if err != nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
 	}
@@ -49,7 +50,7 @@ func (s *SQLStorage) GetCollection(id string) (*api.CollectionResource, error) {
 
 func (s *SQLStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.CollectionResource, error) {
 	// Build the SELECT query
-	selectQuery, err := createGetEntityStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS)
+	selectQuery, err := createGetEntityStatement(s.sqlConfig.Driver, shared.TABLE_COLLECTIONS)
 	if err != nil {
 		return nil, serviceerrors.NewServiceError(messages.InternalServerError, "Error", err.Error())
 	}
@@ -111,7 +112,7 @@ func (s *SQLStorage) GetCollections(filter *abstractions.QueryFilter) (*abstract
 	offset := filter.Offset
 
 	// Get total count (there are no filters for collections)
-	countQuery, _, err := createCountEntitiesStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS, params)
+	countQuery, _, err := createCountEntitiesStatement(s.sqlConfig.Driver, shared.TABLE_COLLECTIONS, params)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +125,7 @@ func (s *SQLStorage) GetCollections(filter *abstractions.QueryFilter) (*abstract
 	}
 
 	// Build the list query with pagination and status filter
-	listQuery, listArgs, err := createListEntitiesStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS, limit, offset, nil)
+	listQuery, listArgs, err := createListEntitiesStatement(s.sqlConfig.Driver, shared.TABLE_COLLECTIONS, limit, offset, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +204,7 @@ func (s *SQLStorage) updateCollectionTransactional(txn *sql.Tx, collectionID str
 	if err != nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
 	}
-	updateCollectionStatement, args, err := CreateUpdateCollectionStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS, collectionID, string(collectionJSON))
+	updateCollectionStatement, args, err := CreateUpdateCollectionStatement(s.sqlConfig.Driver, shared.TABLE_COLLECTIONS, collectionID, string(collectionJSON))
 	if err != nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
 	}
@@ -216,7 +217,7 @@ func (s *SQLStorage) updateCollectionTransactional(txn *sql.Tx, collectionID str
 
 func (s *SQLStorage) DeleteCollection(id string) error {
 	// Build the DELETE query
-	deleteQuery, err := createDeleteEntityStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS)
+	deleteQuery, err := createDeleteEntityStatement(s.sqlConfig.Driver, shared.TABLE_COLLECTIONS)
 	if err != nil {
 		return se.NewServiceError(messages.InternalServerError, "Error", "Error while building delete collection query")
 	}
