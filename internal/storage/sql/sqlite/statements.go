@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -50,24 +51,31 @@ func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shar
 
 // createFilterStatement builds a WHERE clause and args from the filter.
 // It validates each key against the table's allowlist, sorts keys deterministically,
-// and returns both the clause and args in matching order.
-func (s *sqliteStatementsFactory) createFilterStatement(filter map[string]any, orderBy string, limit int, offset int, tableName string) (string, []any) {
+// and returns both the clause and args in matching order. Returns an error if any
+// filter key is not in the allowlist (fail closed).
+func (s *sqliteStatementsFactory) createFilterStatement(filter map[string]any, orderBy string, limit int, offset int, tableName string) (string, []any, error) {
 	var args []any
 	var sb strings.Builder
 
 	if len(filter) > 0 {
 		allowed := allowedFilterColumns(tableName)
 		if allowed == nil {
-			return "", nil
+			return "", nil, nil
 		}
 		keys := slices.Collect(maps.Keys(filter))
 		sort.Strings(keys)
+		var disallowed []string
 		validKeys := make([]string, 0, len(keys))
 		for _, key := range keys {
 			if _, ok := allowed[key]; ok {
 				validKeys = append(validKeys, key)
 				args = append(args, filter[key])
+			} else {
+				disallowed = append(disallowed, key)
 			}
+		}
+		if len(disallowed) > 0 {
+			return "", nil, errors.New("disallowed filter columns: " + strings.Join(disallowed, ", "))
 		}
 		if len(validKeys) > 0 {
 			sb.WriteString(" WHERE ")
@@ -91,17 +99,23 @@ func (s *sqliteStatementsFactory) createFilterStatement(filter map[string]any, o
 		sb.WriteString(" OFFSET ?")
 		args = append(args, offset)
 	}
-	return sb.String(), args
+	return sb.String(), args, nil
 }
 
-func (s *sqliteStatementsFactory) CreateCountEntitiesStatement(tableName string, filter map[string]any) (string, []any) {
-	filterClause, args := s.createFilterStatement(filter, "", 0, 0, tableName)
+func (s *sqliteStatementsFactory) CreateCountEntitiesStatement(tableName string, filter map[string]any) (string, []any, error) {
+	filterClause, args, err := s.createFilterStatement(filter, "", 0, 0, tableName)
+	if err != nil {
+		return "", nil, err
+	}
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, tableName, filterClause)
-	return query, args
+	return query, args, nil
 }
 
-func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tableName string, limit, offset int, filter map[string]any) (string, []any) {
-	filterClause, args := s.createFilterStatement(filter, "id DESC", limit, offset, tableName)
+func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tableName string, limit, offset int, filter map[string]any) (string, []any, error) {
+	filterClause, args, err := s.createFilterStatement(filter, "id DESC", limit, offset, tableName)
+	if err != nil {
+		return "", nil, err
+	}
 
 	var query string
 	switch tableName {
@@ -111,7 +125,7 @@ func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tableName string, 
 		query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s%s;`, tableName, filterClause)
 	}
 
-	return query, args
+	return query, args, nil
 }
 
 func (s *sqliteStatementsFactory) CreateCheckEntityExistsStatement(tableName string) string {

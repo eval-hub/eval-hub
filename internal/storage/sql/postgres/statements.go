@@ -68,14 +68,14 @@ func (s *postgresStatementsFactory) createFilterStatement(filter map[string]any,
 	return sb.String()
 }
 
-func (s *postgresStatementsFactory) CreateCountEntitiesStatement(tableName string, filter map[string]any) (string, []any) {
+func (s *postgresStatementsFactory) CreateCountEntitiesStatement(tableName string, filter map[string]any) (string, []any, error) {
 	filterStatement := s.createFilterStatement(filter, "", 0, 0)
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, tableName, filterStatement)
 	args := slices.Collect(maps.Values(filter))
-	return query, args
+	return query, args, nil
 }
 
-func (s *postgresStatementsFactory) CreateListEntitiesStatement(tableName string, limit, offset int, filter map[string]any) (string, []any) {
+func (s *postgresStatementsFactory) CreateListEntitiesStatement(tableName string, limit, offset int, filter map[string]any) (string, []any, error) {
 	filterStatement := s.createFilterStatement(filter, "id DESC", limit, offset)
 
 	var query string
@@ -94,7 +94,7 @@ func (s *postgresStatementsFactory) CreateListEntitiesStatement(tableName string
 		query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s %s;`, tableName, filterStatement)
 	}
 
-	return query, args
+	return query, args, nil
 }
 
 func (s *postgresStatementsFactory) CreateCheckEntityExistsStatement(tableName string) string {

@@ -140,10 +140,12 @@ func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstr
 	offset := filter.Offset
 
 	// Get total count (with filter if provided)
-	countQuery, countArgs := s.statementsFactory.CreateCountEntitiesStatement(shared.TABLE_EVALUATIONS, filter.Params)
+	countQuery, countArgs, err := s.statementsFactory.CreateCountEntitiesStatement(shared.TABLE_EVALUATIONS, filter.Params)
+	if err != nil {
+		return nil, se.NewServiceError(messages.BadRequest, "Error", err.Error())
+	}
 
 	var totalCount int
-	var err error
 	if len(countArgs) > 0 {
 		err = s.queryRow(nil, countQuery, countArgs...).Scan(&totalCount)
 	} else {
@@ -162,7 +164,10 @@ func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstr
 	}
 
 	// Build the list query with pagination and filters
-	listQuery, listArgs := s.statementsFactory.CreateListEntitiesStatement(shared.TABLE_EVALUATIONS, limit, offset, params)
+	listQuery, listArgs, err := s.statementsFactory.CreateListEntitiesStatement(shared.TABLE_EVALUATIONS, limit, offset, params)
+	if err != nil {
+		return nil, se.NewServiceError(messages.BadRequest, "Error", err.Error())
+	}
 	s.logger.Info("List evaluations query", "query", listQuery, "args", listArgs, "params", params, "limit", limit, "offset", offset)
 
 	// Query the database

@@ -254,6 +254,23 @@ func TestEvaluationsStorage(t *testing.T) {
 		}
 	})
 
+	t.Run("GetEvaluationJobs rejects disallowed filter columns", func(t *testing.T) {
+		_, err := store.GetEvaluationJobs(&abstractions.QueryFilter{
+			Limit:  10,
+			Offset: 0,
+			Params: map[string]any{"name": "test", "evil_column": "x"},
+		})
+		if err == nil {
+			t.Fatal("expected error when using disallowed filter columns")
+		}
+		if !strings.Contains(err.Error(), "disallowed filter columns") {
+			t.Errorf("expected error to mention disallowed filter columns, got: %v", err)
+		}
+		if !strings.Contains(err.Error(), "name") || !strings.Contains(err.Error(), "evil_column") {
+			t.Errorf("expected error to include offending key names, got: %v", err)
+		}
+	})
+
 	t.Run("UpdateEvaluationJob updates the evaluation job", func(t *testing.T) {
 		metrics := map[string]any{
 			"metric-1": 1.0,
