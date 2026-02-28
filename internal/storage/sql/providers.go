@@ -112,15 +112,29 @@ func (s *SQLStorage) GetProviders(filter *abstractions.QueryFilter) (*abstractio
 	limit := filter.Limit
 	offset := filter.Offset
 
-	// TODO: why is this here?
 	delete(params, "benchmarks")
 
-	selectQuery, args, err := createListEntitiesStatement(s.sqlConfig.Driver, TABLE_PROVIDERS, limit, offset, params)
+	countQuery, countArgs, err := createProviderCountStatement(s.sqlConfig.Driver, TABLE_PROVIDERS, params)
 	if err != nil {
 		return nil, se.NewServiceError(messages.InternalServerError, "Error", err.Error())
 	}
 
-	rows, err := s.query(nil, selectQuery, args...)
+	var totalCount int
+	if len(countArgs) > 0 {
+		err = s.queryRow(nil, countQuery, countArgs...).Scan(&totalCount)
+	} else {
+		err = s.queryRow(nil, countQuery).Scan(&totalCount)
+	}
+	if err != nil {
+		return nil, se.NewServiceError(messages.QueryFailed, "Type", "providers", "Error", err.Error())
+	}
+
+	listQuery, listArgs, err := createProviderListStatement(s.sqlConfig.Driver, TABLE_PROVIDERS, limit, offset, params)
+	if err != nil {
+		return nil, se.NewServiceError(messages.InternalServerError, "Error", err.Error())
+	}
+
+	rows, err := s.query(nil, listQuery, listArgs...)
 	if err != nil {
 		return nil, se.NewServiceError(messages.InternalServerError, "Error", err.Error())
 	}
@@ -152,7 +166,7 @@ func (s *SQLStorage) GetProviders(filter *abstractions.QueryFilter) (*abstractio
 	}
 	return &abstractions.QueryResults[api.ProviderResource]{
 		Items:       items,
-		TotalStored: len(items),
+		TotalStored: totalCount,
 		Errors:      nil,
 	}, nil
 }
