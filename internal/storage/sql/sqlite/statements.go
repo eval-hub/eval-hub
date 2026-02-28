@@ -4,11 +4,24 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
+
+// allowedFilterColumns returns the set of column names allowed in filter for each table.
+func allowedFilterColumns(tableName string) map[string]struct{} {
+	switch tableName {
+	case shared.TABLE_EVALUATIONS:
+		return map[string]struct{}{"tenant_id": {}, "status": {}, "experiment_id": {}}
+	case shared.TABLE_COLLECTIONS, shared.TABLE_PROVIDERS:
+		return map[string]struct{}{"tenant_id": {}}
+	default:
+		return nil
+	}
+}
 
 const (
 	INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (id, tenant_id, status, experiment_id, entity) VALUES (?, ?, ?, ?, ?);`
@@ -35,60 +48,67 @@ func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shar
 	return SELECT_EVALUATION_STATEMENT, []any{&query.ID}, []any{&query.ID, &query.CreatedAt, &query.UpdatedAt, &query.Tenant, &query.Status, &query.ExperimentID, &query.EntityJSON}
 }
 
-func (s *sqliteStatementsFactory) createFilterStatement(filter map[string]any, orderBy string, limit int, offset int) string {
+// createFilterStatement builds a WHERE clause and args from the filter.
+// It validates each key against the table's allowlist, sorts keys deterministically,
+// and returns both the clause and args in matching order.
+func (s *sqliteStatementsFactory) createFilterStatement(filter map[string]any, orderBy string, limit int, offset int, tableName string) (string, []any) {
+	var args []any
 	var sb strings.Builder
 
 	if len(filter) > 0 {
-		first := true
-		sb.WriteString(" WHERE ")
-		for key := range maps.Keys(filter) {
-			if !first {
-				sb.WriteString(" AND ")
+		allowed := allowedFilterColumns(tableName)
+		if allowed == nil {
+			return "", nil
+		}
+		keys := slices.Collect(maps.Keys(filter))
+		sort.Strings(keys)
+		validKeys := make([]string, 0, len(keys))
+		for _, key := range keys {
+			if _, ok := allowed[key]; ok {
+				validKeys = append(validKeys, key)
+				args = append(args, filter[key])
 			}
-			sb.WriteString(fmt.Sprintf("%s = ?", key))
-			first = false
+		}
+		if len(validKeys) > 0 {
+			sb.WriteString(" WHERE ")
+			for i, key := range validKeys {
+				if i > 0 {
+					sb.WriteString(" AND ")
+				}
+				sb.WriteString(fmt.Sprintf("%s = ?", key))
+			}
 		}
 	}
 
-	// ORDER BY id DESC LIMIT $2 OFFSET $3
 	if orderBy != "" {
-		// note that we use the value here and not ?
 		sb.WriteString(fmt.Sprintf(" ORDER BY %s", orderBy))
 	}
 	if limit > 0 {
 		sb.WriteString(" LIMIT ?")
+		args = append(args, limit)
 	}
 	if offset > 0 {
 		sb.WriteString(" OFFSET ?")
+		args = append(args, offset)
 	}
-
-	return sb.String()
+	return sb.String(), args
 }
 
 func (s *sqliteStatementsFactory) CreateCountEntitiesStatement(tableName string, filter map[string]any) (string, []any) {
-	filterStatement := s.createFilterStatement(filter, "", 0, 0)
-	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, tableName, filterStatement)
-	args := slices.Collect(maps.Values(filter))
+	filterClause, args := s.createFilterStatement(filter, "", 0, 0, tableName)
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, tableName, filterClause)
 	return query, args
 }
 
 func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tableName string, limit, offset int, filter map[string]any) (string, []any) {
-	filterStatement := s.createFilterStatement(filter, "id DESC", limit, offset)
+	filterClause, args := s.createFilterStatement(filter, "id DESC", limit, offset, tableName)
 
 	var query string
-	var args = slices.Collect(maps.Values(filter))
-	if limit > 0 {
-		args = append(args, limit)
-	}
-	if offset > 0 {
-		args = append(args, offset)
-	}
-
 	switch tableName {
 	case shared.TABLE_EVALUATIONS:
-		query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s %s;`, tableName, filterStatement)
+		query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s%s;`, tableName, filterClause)
 	default:
-		query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s %s;`, tableName, filterStatement)
+		query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s%s;`, tableName, filterClause)
 	}
 
 	return query, args
