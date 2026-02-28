@@ -1,14 +1,14 @@
 blank_issues_enabled: false
 contact_links:
-  - name: 📚 Documentation
+  - name: Documentation
     url: https://github.com/eval-hub/eval-hub/blob/main/README.md
-    about: Check our comprehensive documentation first
-  - name: 🔍 Search Existing Issues
+    about: Check the documentation first
+  - name: Search existing issues
     url: https://github.com/eval-hub/eval-hub/issues
-    about: Search existing issues before creating a new one
-  - name: 💬 GitHub Discussions
+    about: Search before opening a new issue
+  - name: Discussions
     url: https://github.com/eval-hub/eval-hub/discussions
-    about: Ask questions and start discussions with the community
-  - name: 🛡️ Security Vulnerabilities
+    about: Ask questions and discuss with the community
+  - name: Security vulnerabilities
     url: https://github.com/eval-hub/eval-hub/security/advisories/new
     about: Report security vulnerabilities privately
