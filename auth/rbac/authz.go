@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"k8s.io/apiserver/pkg/authorization/authorizer"
@@ -10,29 +11,39 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func NewSarAuthorizer(client *kubernetes.Clientset) (authorizer.Authorizer, error) {
+type SarAuthorizer struct {
+	auth   authorizer.Authorizer
+	config AuthorizationConfig
+	client *kubernetes.Clientset
+}
+
+func NewSarAuthorizer(client *kubernetes.Clientset, authConfigPath string) (*SarAuthorizer, error) {
+	cfg, err := loadAuthorizerConfig(authConfigPath)
+	if err != nil {
+		return nil, err
+	}
+
 	authorizerConfig := authorizerfactory.DelegatingAuthorizerConfig{
 		SubjectAccessReviewClient: client.AuthorizationV1(),
 		AllowCacheTTL:             5 * time.Minute,
 		DenyCacheTTL:              30 * time.Second,
 		WebhookRetryBackoff:       options.DefaultAuthWebhookRetryBackoff(),
 	}
-	return authorizerConfig.New()
+
+	auth, err := authorizerConfig.New()
+	if err != nil {
+		return nil, err
+	}
+
+	return &SarAuthorizer{
+		auth:   auth,
+		config: *cfg,
+		client: client,
+	}, nil
 }
 
-func Authorize(ctx context.Context, auth authorizer.Authorizer, resources []ResourceAttributes) bool {
-	for _, resource := range resources {
-		record := authorizer.AttributesRecord{
-			User:            nil,
-			Namespace:       resource.Namespace,
-			APIGroup:        resource.APIGroup,
-			APIVersion:      resource.APIVersion,
-			Resource:        resource.Resource,
-			Subresource:     resource.Subresource,
-			Verb:            resource.Verb,
-			Name:            resource.Name,
-			ResourceRequest: true,
-		}
+func (s *SarAuthorizer) authorize(ctx context.Context, auth authorizer.Authorizer, attributesRecords []authorizer.AttributesRecord) bool {
+	for _, record := range attributesRecords {
 
 		decision, _, err := auth.Authorize(ctx, record)
 		if err != nil {
@@ -44,4 +55,9 @@ func Authorize(ctx context.Context, auth authorizer.Authorizer, resources []Reso
 	}
 
 	return true
+}
+
+func (s *SarAuthorizer) AuthorizeRequest(ctx context.Context, request http.Request) bool {
+	attributesRecords := computeResourceAttributeRecords(request, s.config)
+	return s.authorize(ctx, s.auth, attributesRecords)
 }

@@ -1,12 +1,15 @@
 package rbac
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"testing"
 
 	"github.com/spf13/viper"
+	"k8s.io/apiserver/pkg/authorization/authorizer"
 )
 
 // loadRBACConfigFromYAML loads an RBAC config from a YAML file using Viper.
@@ -34,18 +37,12 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 	t.Run("JobsPost", func(t *testing.T) {
 		cfg := loadRBACConfigFromYAML(t, "rbac_jobs")
 
-		req := FromRequest{
-			Endpoint: "/api/v1/evaluations/jobs",
-			Method:   "POST",
-			Headers: Headers{
-				"X-Tenant": {"tenant-a"},
-			},
-			QueryStrings: QueryStrings{},
-		}
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs", nil)
+		req.Header.Set("X-Tenant", "tenant-a")
 
-		got := ComputeResourceAttributes(req, cfg)
+		got := computeResourceAttributeRecords(*req, cfg)
 
-		want := []ResourceAttributes{
+		want := []authorizer.AttributesRecord{
 			{
 				Namespace: "tenant-a",
 				APIGroup:  "trustyai.opendatahub.io",
@@ -67,16 +64,12 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 	t.Run("JobsGet", func(t *testing.T) {
 		cfg := loadRBACConfigFromYAML(t, "rbac_jobs")
 
-		req := FromRequest{
-			Endpoint:     "/api/v1/evaluations/jobs",
-			Method:       "GET",
-			Headers:      Headers{"X-Tenant": {"my-ns"}},
-			QueryStrings: QueryStrings{},
-		}
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs", nil)
+		req.Header.Set("X-Tenant", "my-ns")
 
-		got := ComputeResourceAttributes(req, cfg)
+		got := computeResourceAttributeRecords(*req, cfg)
 
-		want := []ResourceAttributes{
+		want := []authorizer.AttributesRecord{
 			{
 				Namespace: "my-ns",
 				APIGroup:  "trustyai.opendatahub.io",
@@ -91,14 +84,10 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 	t.Run("NoMatch", func(t *testing.T) {
 		cfg := loadRBACConfigFromYAML(t, "rbac_jobs")
 
-		req := FromRequest{
-			Endpoint:     "/api/v1/other",
-			Method:       "GET",
-			Headers:      Headers{},
-			QueryStrings: QueryStrings{},
-		}
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/other", nil)
+		req.Header.Set("X-Tenant", "my-ns")
 
-		got := ComputeResourceAttributes(req, cfg)
+		got := computeResourceAttributeRecords(*req, cfg)
 
 		if len(got) != 0 {
 			t.Errorf("ComputeResourceAttributes() = %+v, want nil/empty", got)
@@ -107,18 +96,11 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 	t.Run("QueryString", func(t *testing.T) {
 		cfg := loadRBACConfigFromYAML(t, "rbac_query")
 
-		req := FromRequest{
-			Endpoint: "/api/v1/namespaces",
-			Method:   "GET",
-			Headers:  Headers{},
-			QueryStrings: QueryStrings{
-				"namespace": {"query-ns"},
-			},
-		}
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/namespaces?tenant=query-ns", nil)
 
-		got := ComputeResourceAttributes(req, cfg)
+		got := computeResourceAttributeRecords(*req, cfg)
 
-		want := []ResourceAttributes{
+		want := []authorizer.AttributesRecord{
 			{
 				Namespace: "query-ns",
 				APIGroup:  "",
@@ -133,16 +115,12 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 	t.Run("CollectionsMethodVerb", func(t *testing.T) {
 		cfg := loadRBACConfigFromYAML(t, "rbac_mixed")
 
-		req := FromRequest{
-			Endpoint:     "/api/v1/evaluations/collections",
-			Method:       "DELETE",
-			Headers:      Headers{"X-Tenant": {"tenant-b"}},
-			QueryStrings: QueryStrings{},
-		}
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/evaluations/collections", nil)
+		req.Header.Set("X-Tenant", "tenant-b")
 
-		got := ComputeResourceAttributes(req, cfg)
+		got := computeResourceAttributeRecords(*req, cfg)
 
-		want := []ResourceAttributes{
+		want := []authorizer.AttributesRecord{
 			{
 				Namespace: "tenant-b",
 				APIGroup:  "trustyai.opendatahub.io",
@@ -155,16 +133,12 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 			t.Errorf("ComputeResourceAttributes() = %+v, want %+v", got, want)
 		}
 
-		req = FromRequest{
-			Endpoint:     "/api/v1/evaluations/providers",
-			Method:       "POST",
-			Headers:      Headers{"X-Tenant": {"tenant-b"}},
-			QueryStrings: QueryStrings{},
-		}
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/providers", nil)
+		req.Header.Set("X-Tenant", "tenant-b")
 
-		got = ComputeResourceAttributes(req, cfg)
+		got = computeResourceAttributeRecords(*req, cfg)
 
-		want = []ResourceAttributes{
+		want = []authorizer.AttributesRecord{
 			{
 				Namespace: "tenant-b",
 				APIGroup:  "trustyai.opendatahub.io",
@@ -180,17 +154,12 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 	t.Run("NoHeader", func(t *testing.T) {
 		cfg := loadRBACConfigFromYAML(t, "rbac_jobs")
 
-		req := FromRequest{
-			Endpoint:     "/api/v1/evaluations/jobs",
-			Method:       "GET",
-			Headers:      Headers{},
-			QueryStrings: QueryStrings{},
-		}
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs", nil)
 
-		got := ComputeResourceAttributes(req, cfg)
+		got := computeResourceAttributeRecords(*req, cfg)
 
 		// Rule still matches; namespace comes from empty header (template yields empty)
-		want := []ResourceAttributes{
+		want := []authorizer.AttributesRecord{
 			{
 				Namespace: "",
 				APIGroup:  "trustyai.opendatahub.io",

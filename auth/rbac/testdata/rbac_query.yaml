@@ -7,7 +7,7 @@ authorization:
           resources:
             - rewrites:
                 byQueryString:
-                  name: namespace
+                  name: tenant
               resourceAttributes:
                 namespace: "{{.FromQueryString}}"
                 apiGroup: ""

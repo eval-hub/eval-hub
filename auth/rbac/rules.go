@@ -2,37 +2,29 @@ package rbac
 
 import (
 	"bytes"
+	"net/http"
 	"slices"
 	"strings"
 	"text/template"
+
+	"k8s.io/apiserver/pkg/authorization/authorizer"
 )
-
-type Headers map[string][]string
-type QueryStrings map[string][]string
-
-type FromRequest struct {
-	Endpoint     string
-	Headers      Headers
-	QueryStrings QueryStrings
-	Method       string
-}
 
 func matchEndpoint(fromRequest string, fromConfig string) bool {
 	return strings.HasPrefix(fromRequest, fromConfig)
 }
 
 func matchMethods(fromRequest string, fromConfig []string) bool {
-
-	if fromConfig == nil || len(fromConfig) == 0 {
+	if len(fromConfig) == 0 {
 		return true
 	}
 	m := strings.ToLower(fromRequest)
 	return slices.Contains(fromConfig, m)
 }
 
-func extractRule(request FromRequest, config AuthorizationConfig) []ResourceRule {
+func extractRule(request http.Request, config AuthorizationConfig) []ResourceRule {
 	for _, endpoint := range config.Authorization.Endpoints {
-		if matchEndpoint(request.Endpoint, endpoint.Path) {
+		if matchEndpoint(request.URL.Path, endpoint.Path) {
 			for _, mapping := range endpoint.Mappings {
 				if matchMethods(request.Method, mapping.Methods) {
 					return mapping.Resources
@@ -79,31 +71,34 @@ func applyTemplate(templateString string, values TemplateValues) string {
 	return out.String()
 }
 
-func ComputeResourceAttributes(request FromRequest, config AuthorizationConfig) []ResourceAttributes {
+func computeResourceAttributeRecords(request http.Request, config AuthorizationConfig) []authorizer.AttributesRecord {
 	extractedRules := extractRule(request, config)
-	resourceAttributes := []ResourceAttributes{}
+	resourceAttributes := []authorizer.AttributesRecord{}
 
 	for _, rule := range extractedRules {
 		templateValues := TemplateValues{}
 		if rule.Rewrites.ByHttpHeader != nil {
-			value, ok := request.Headers[rule.Rewrites.ByHttpHeader.Name]
+			value, ok := request.Header[rule.Rewrites.ByHttpHeader.Name]
 			if ok && len(value) > 0 {
 				templateValues.FromHeader = value[0]
 			}
 		}
 		if rule.Rewrites.ByQueryString != nil {
-			value, ok := request.QueryStrings[rule.Rewrites.ByQueryString.Name]
+			value, ok := request.URL.Query()[rule.Rewrites.ByQueryString.Name]
 			if ok && len(value) > 0 {
 				templateValues.FromQueryString = value[0]
 			}
 		}
 		templateValues.FromMethod = httpToKubeVerb(request.Method)
 
-		resourceAttributes = append(resourceAttributes, ResourceAttributes{
-			Namespace: applyTemplate(rule.ResourceAttributes.Namespace, templateValues),
-			APIGroup:  applyTemplate(rule.ResourceAttributes.APIGroup, templateValues),
-			Resource:  applyTemplate(rule.ResourceAttributes.Resource, templateValues),
-			Verb:      applyTemplate(rule.ResourceAttributes.Verb, templateValues),
+		resourceAttributes = append(resourceAttributes, authorizer.AttributesRecord{
+			Namespace:   applyTemplate(rule.ResourceAttributes.Namespace, templateValues),
+			APIGroup:    applyTemplate(rule.ResourceAttributes.APIGroup, templateValues),
+			APIVersion:  applyTemplate(rule.ResourceAttributes.APIVersion, templateValues),
+			Resource:    applyTemplate(rule.ResourceAttributes.Resource, templateValues),
+			Subresource: applyTemplate(rule.ResourceAttributes.Subresource, templateValues),
+			Name:        applyTemplate(rule.ResourceAttributes.Name, templateValues),
+			Verb:        applyTemplate(rule.ResourceAttributes.Verb, templateValues),
 		})
 	}
 	return resourceAttributes

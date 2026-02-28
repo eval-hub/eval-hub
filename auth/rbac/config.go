@@ -1,5 +1,11 @@
 package rbac
 
+import (
+	"fmt"
+
+	"github.com/spf13/viper"
+)
+
 type AuthorizationConfig struct {
 	Authorization Authorization `yaml:"authorization" mapstructure:"authorization"`
 }
@@ -44,4 +50,19 @@ type ResourceAttributes struct {
 	Name        string `yaml:"name" mapstructure:"name"`
 	Subresource string `yaml:"subresource" mapstructure:"subresource"`
 	Verb        string `yaml:"verb" mapstructure:"verb"`
+}
+
+func loadAuthorizerConfig(filePath string) (*AuthorizationConfig, error) {
+
+	v := viper.New()
+	v.SetConfigFile(filePath)
+	if err := v.ReadInConfig(); err != nil {
+		return nil, fmt.Errorf("Cannot load authorized config from file (%q): %v", filePath, err)
+	}
+
+	var cfg AuthorizationConfig
+	if err := v.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("Cannot parse authorized config from file (%q): %v", filePath, err)
+	}
+	return &cfg, nil
 }
