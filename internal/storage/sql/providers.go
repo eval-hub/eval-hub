@@ -20,7 +20,7 @@ func (s *SQLStorage) CreateProvider(provider *api.ProviderResource) error {
 		return se.NewServiceError(messages.InternalServerError, "Error", err)
 	}
 	addEntityStatement, args := s.statementsFactory.CreateProviderAddEntityStatement(provider, string(providerJSON))
-	s.logger.Info("Creating user provider", "id", providerID, "args", args)
+	s.logger.Info("Creating user provider", "id", providerID)
 	_, err = s.exec(nil, addEntityStatement, args...)
 	if err != nil {
 		return se.NewServiceError(messages.InternalServerError, "Error", err)

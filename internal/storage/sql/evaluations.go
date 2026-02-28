@@ -33,7 +33,7 @@ func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobResource) 
 		if err != nil {
 			return se.WithRollback(err)
 		}
-		s.logger.Info("Created evaluation job", "id", evaluation.Resource.ID, "args", args, "addEntityStatement", addEntityStatement)
+		s.logger.Info("Created evaluation job", "id", evaluation.Resource.ID, "addEntityStatement", addEntityStatement)
 		return nil
 	})
 }
