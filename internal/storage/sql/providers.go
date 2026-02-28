@@ -15,17 +15,13 @@ import (
 
 func (s *SQLStorage) CreateProvider(provider *api.ProviderResource) error {
 	providerID := provider.Resource.ID
-	tenant := s.tenant
 	providerJSON, err := s.createProviderEntity(provider)
 	if err != nil {
 		return se.NewServiceError(messages.InternalServerError, "Error", err)
 	}
-	addEntityStatement, err := createAddEntityStatement(s.sqlConfig.Driver, shared.TABLE_PROVIDERS)
-	if err != nil {
-		return se.NewServiceError(messages.InternalServerError, "Error", err)
-	}
-	s.logger.Info("Creating user provider", "id", providerID, "tenant", tenant)
-	_, err = s.exec(nil, addEntityStatement, providerID, tenant, string(providerJSON))
+	addEntityStatement, args := s.statementsFactory.CreateProviderAddEntityStatement(provider, string(providerJSON))
+	s.logger.Info("Creating user provider", "id", providerID, "args", args)
+	_, err = s.exec(nil, addEntityStatement, args...)
 	if err != nil {
 		return se.NewServiceError(messages.InternalServerError, "Error", err)
 	}

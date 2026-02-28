@@ -13,7 +13,8 @@ type SQLStatementsFactory interface {
 	//CreateCollectionAddEntityStatement(collection *api.CollectionResource) (string, []any, error)
 
 	// providers operations
-	//CreateProviderAddEntityStatement(provider *api.ProviderResource) (string, []any, error)
+	CreateProviderAddEntityStatement(provider *api.ProviderResource, entity string) (string, []any)
+	CreateProviderGetEntityStatement(query *ProviderQuery) (string, []any, []any)
 
 	// common operations
 	CreateCountEntitiesStatement(tableName string, filter map[string]any) (string, []any)
