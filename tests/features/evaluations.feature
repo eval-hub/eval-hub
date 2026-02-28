@@ -70,6 +70,24 @@ Feature: Evaluations Endpoint
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
 
+  Scenario: Create evaluation job with Collection
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:collection_id"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_collection.json"
+    Then the response code should be 202
+    And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
+    And the response should contain the value "pending" at path "$.status.state"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "{{value:collection_id}}" at path "$.collection.id"
+    And I wait for the evaluation job status to be "completed"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+    When I send a DELETE request to "/api/v1/evaluations/collections/{{value:collection_id}}?hard_delete=true"
+    Then the response code should be 204
+
   Scenario: List evaluation jobs
     Given the service is running
     And I set the header "X-User" to "test-user-1"

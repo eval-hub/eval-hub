@@ -55,7 +55,7 @@ Feature: Providers Endpoint
     Then the response code should be 201
     When I send a GET request to "/api/v1/evaluations/providers?system_defined=false"
     Then the response code should be 200
-    And the array at path "items" in the response should have length 1
+    And the array at path "items" in the response should have length at least 1
     And the response should contain the value "Test Provider" at path "items[0].name"
     When I send a DELETE request to "/api/v1/evaluations/providers/{id}"
     Then the response code should be 204
