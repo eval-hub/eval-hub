@@ -216,7 +216,8 @@ func (a *apiFeature) startLocalServer(port int) error {
 		storage,
 		validate,
 		runtime,
-		mlflowClient)
+		mlflowClient,
+		nil)
 	if err != nil {
 		return err
 	}
