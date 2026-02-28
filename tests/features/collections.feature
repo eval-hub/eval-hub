@@ -231,6 +231,39 @@ Feature: Collections Endpoint
     When I send a GET request to "/api/v1/evaluations/collections?offset=not-a-number"
     Then the response code should be 400
 
+  Scenario: List collections with name and tags filters
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_filter_by_name.json"
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:filter_name_id"
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_filter_by_tag.json"
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:filter_tag_id"
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_filter_both.json"
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:filter_both_id"
+    When I send a GET request to "/api/v1/evaluations/collections?name=list-filter-name-only"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 2
+    And the response should contain the value "list-filter-name-only" at path "items[0].name"
+    And the response should contain the value "list-filter-name-only" at path "items[1].name"
+    When I send a GET request to "/api/v1/evaluations/collections?tags=list-filter-tag"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 2
+    And the response should contain the value "list-filter-tag" at path "items[0].tags[0]"
+    And the response should contain the value "list-filter-tag" at path "items[1].tags[0]"
+    When I send a GET request to "/api/v1/evaluations/collections?name=list-filter-name-only&tags=list-filter-tag"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    And the response should contain the value "list-filter-name-only" at path "items[0].name"
+    And the response should contain the value "list-filter-tag" at path "items[0].tags[0]"
+    When I send a DELETE request to "/api/v1/evaluations/collections/{{value:filter_name_id}}?hard_delete=true"
+    Then the response code should be 204
+    When I send a DELETE request to "/api/v1/evaluations/collections/{{value:filter_tag_id}}?hard_delete=true"
+    Then the response code should be 204
+    When I send a DELETE request to "/api/v1/evaluations/collections/{{value:filter_both_id}}?hard_delete=true"
+    Then the response code should be 204
+
   Scenario: Delete collection with non-existent id returns 204
     Given the service is running
     When I send a DELETE request to "/api/v1/evaluations/collections/00000000-0000-0000-0000-000000000000?hard_delete=true"

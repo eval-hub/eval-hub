@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"slices"
@@ -353,4 +354,101 @@ func extractQueryParams(filter *abstractions.QueryFilter) *abstractions.QueryFil
 		Offset: filter.Offset,
 		Params: params,
 	}
+}
+
+// createCollectionFilterWhereAndArgs builds WHERE clause and args for collections list/count.
+// Entity column stores CollectionConfig JSON (name, tags at top level). Filters: tenant_id, name, tags.
+func createCollectionFilterWhereAndArgs(driver string, params map[string]any) (where string, args []any, err error) {
+	var conditions []string
+	args = make([]any, 0)
+	idx := 0
+	paramPlaceholder := getParam(driver)
+
+	if v, ok := params["tenant_id"].(string); ok && v != "" {
+		idx++
+		conditions = append(conditions, fmt.Sprintf("%s = %s", quoteIdentifier(driver, "tenant_id"), getParamValue(paramPlaceholder, idx-1)))
+		args = append(args, v)
+	}
+
+	if v, ok := params["name"].(string); ok && v != "" {
+		idx++
+		ph := getParamValue(paramPlaceholder, idx-1)
+		switch driver {
+		case POSTGRES_DRIVER:
+			conditions = append(conditions, fmt.Sprintf("(entity->>'name' ILIKE '%s' || %s || '%s')", "%", ph, "%"))
+		case SQLITE_DRIVER:
+			conditions = append(conditions, fmt.Sprintf("(json_extract(entity, '$.name') LIKE '%s' || %s || '%s')", "%", ph, "%"))
+		default:
+			return "", nil, getUnsupportedDriverError(driver)
+		}
+		args = append(args, v)
+	}
+
+	if v, ok := params["tags"].(string); ok && v != "" {
+		tagStrs := strings.Split(v, ",")
+		for i := range tagStrs {
+			tagStrs[i] = strings.TrimSpace(tagStrs[i])
+		}
+		if len(tagStrs) > 0 {
+			switch driver {
+			case POSTGRES_DRIVER:
+				var tagConditions []string
+				for _, tag := range tagStrs {
+					idx++
+					ph := getParamValue(paramPlaceholder, idx-1)
+					tagConditions = append(tagConditions, fmt.Sprintf("(COALESCE(entity->'tags', '[]'::jsonb) @> %s::jsonb)", ph))
+					singleTagJSON, _ := json.Marshal([]string{tag})
+					args = append(args, string(singleTagJSON))
+				}
+				conditions = append(conditions, "("+strings.Join(tagConditions, " OR ")+")")
+			case SQLITE_DRIVER:
+				tagsJSON, err := json.Marshal(tagStrs)
+				if err != nil {
+					return "", nil, err
+				}
+				idx++
+				ph := getParamValue(paramPlaceholder, idx-1)
+				conditions = append(conditions, fmt.Sprintf("(SELECT COUNT(*) FROM json_each(COALESCE(json_extract(entity, '$.tags'), '[]')) AS je WHERE je.value IN (SELECT value FROM json_each(%s))) > 0", ph))
+				args = append(args, string(tagsJSON))
+			default:
+				return "", nil, getUnsupportedDriverError(driver)
+			}
+		}
+	}
+
+	if len(conditions) == 0 {
+		return "", args, nil
+	}
+	return " WHERE " + strings.Join(conditions, " AND "), args, nil
+}
+
+func createCollectionCountStatement(driver, tableName string, params map[string]any) (string, []any, error) {
+	quotedTable := quoteIdentifier(driver, tableName)
+	where, args, err := createCollectionFilterWhereAndArgs(driver, params)
+	if err != nil {
+		return "", nil, err
+	}
+	return fmt.Sprintf("SELECT COUNT(*) FROM %s%s;", quotedTable, where), args, nil
+}
+
+func createCollectionListStatement(driver, tableName string, limit, offset int, params map[string]any) (string, []any, error) {
+	quotedTable := quoteIdentifier(driver, tableName)
+	where, args, err := createCollectionFilterWhereAndArgs(driver, params)
+	if err != nil {
+		return "", nil, err
+	}
+	paramPlaceholder := getParam(driver)
+	idx := len(args)
+	orderLimitOffset := " ORDER BY id DESC"
+	if limit > 0 {
+		idx++
+		orderLimitOffset += fmt.Sprintf(" LIMIT %s", getParamValue(paramPlaceholder, idx-1))
+		args = append(args, limit)
+	}
+	if offset > 0 {
+		idx++
+		orderLimitOffset += fmt.Sprintf(" OFFSET %s", getParamValue(paramPlaceholder, idx-1))
+		args = append(args, offset)
+	}
+	return fmt.Sprintf("SELECT id, created_at, updated_at, tenant_id, entity FROM %s%s%s;", quotedTable, where, orderLimitOffset), args, nil
 }
