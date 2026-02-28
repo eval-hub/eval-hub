@@ -356,9 +356,17 @@ func extractQueryParams(filter *abstractions.QueryFilter) *abstractions.QueryFil
 	}
 }
 
-// createCollectionFilterWhereAndArgs builds WHERE clause and args for collections list/count.
-// Entity column stores CollectionConfig JSON (name, tags at top level). Filters: tenant_id, name, tags.
-func createCollectionFilterWhereAndArgs(driver string, params map[string]any) (where string, args []any, err error) {
+// entityFilterSpec describes JSON paths for name/tags used by buildEntityFilterWhereAndArgs.
+type entityFilterSpec struct {
+	nameExprPG     string // e.g. "entity->>'name'"
+	nameExprSQLite string // e.g. "json_extract(entity, '$.name')"
+	tagsExprPG     string // for direct array: e.g. "entity->'tags'"
+	tagsExprSQLite string // e.g. "json_extract(entity, '$.tags')"
+}
+
+// buildEntityFilterWhereAndArgs builds WHERE clause and args from params using shared logic.
+// extraColumns: optional column filters (param key -> column name), e.g. {"status": "status"}.
+func buildEntityFilterWhereAndArgs(driver string, params map[string]any, spec entityFilterSpec, extraColumns map[string]string) (where string, args []any, err error) {
 	var conditions []string
 	args = make([]any, 0)
 	idx := 0
@@ -370,14 +378,22 @@ func createCollectionFilterWhereAndArgs(driver string, params map[string]any) (w
 		args = append(args, v)
 	}
 
+	for paramKey, column := range extraColumns {
+		if v, ok := params[paramKey].(string); ok && v != "" {
+			idx++
+			conditions = append(conditions, fmt.Sprintf("%s = %s", quoteIdentifier(driver, column), getParamValue(paramPlaceholder, idx-1)))
+			args = append(args, v)
+		}
+	}
+
 	if v, ok := params["name"].(string); ok && v != "" {
 		idx++
 		ph := getParamValue(paramPlaceholder, idx-1)
 		switch driver {
 		case POSTGRES_DRIVER:
-			conditions = append(conditions, fmt.Sprintf("(entity->>'name' ILIKE '%s' || %s || '%s')", "%", ph, "%"))
+			conditions = append(conditions, fmt.Sprintf("(%s ILIKE '%s' || %s || '%s')", spec.nameExprPG, "%", ph, "%"))
 		case SQLITE_DRIVER:
-			conditions = append(conditions, fmt.Sprintf("(json_extract(entity, '$.name') LIKE '%s' || %s || '%s')", "%", ph, "%"))
+			conditions = append(conditions, fmt.Sprintf("(%s LIKE '%s' || %s || '%s')", spec.nameExprSQLite, "%", ph, "%"))
 		default:
 			return "", nil, getUnsupportedDriverError(driver)
 		}
@@ -390,28 +406,9 @@ func createCollectionFilterWhereAndArgs(driver string, params map[string]any) (w
 			tagStrs[i] = strings.TrimSpace(tagStrs[i])
 		}
 		if len(tagStrs) > 0 {
-			switch driver {
-			case POSTGRES_DRIVER:
-				var tagConditions []string
-				for _, tag := range tagStrs {
-					idx++
-					ph := getParamValue(paramPlaceholder, idx-1)
-					tagConditions = append(tagConditions, fmt.Sprintf("(COALESCE(entity->'tags', '[]'::jsonb) @> %s::jsonb)", ph))
-					singleTagJSON, _ := json.Marshal([]string{tag})
-					args = append(args, string(singleTagJSON))
-				}
-				conditions = append(conditions, "("+strings.Join(tagConditions, " OR ")+")")
-			case SQLITE_DRIVER:
-				tagsJSON, err := json.Marshal(tagStrs)
-				if err != nil {
-					return "", nil, err
-				}
-				idx++
-				ph := getParamValue(paramPlaceholder, idx-1)
-				conditions = append(conditions, fmt.Sprintf("(SELECT COUNT(*) FROM json_each(COALESCE(json_extract(entity, '$.tags'), '[]')) AS je WHERE je.value IN (SELECT value FROM json_each(%s))) > 0", ph))
-				args = append(args, string(tagsJSON))
-			default:
-				return "", nil, getUnsupportedDriverError(driver)
+			conditions, args, idx, err = appendTagsDirectArray(driver, paramPlaceholder, idx, tagStrs, spec.tagsExprPG, spec.tagsExprSQLite, conditions, args)
+			if err != nil {
+				return "", nil, err
 			}
 		}
 	}
@@ -420,6 +417,45 @@ func createCollectionFilterWhereAndArgs(driver string, params map[string]any) (w
 		return "", args, nil
 	}
 	return " WHERE " + strings.Join(conditions, " AND "), args, nil
+}
+
+func appendTagsDirectArray(driver, paramPlaceholder string, idx int, tagStrs []string, exprPG, exprSQLite string, conditions []string, args []any) ([]string, []any, int, error) {
+	switch driver {
+	case POSTGRES_DRIVER:
+		var tagConditions []string
+		for _, tag := range tagStrs {
+			idx++
+			ph := getParamValue(paramPlaceholder, idx-1)
+			tagConditions = append(tagConditions, fmt.Sprintf("(COALESCE(%s, '[]'::jsonb) @> %s::jsonb)", exprPG, ph))
+			singleTagJSON, _ := json.Marshal([]string{tag})
+			args = append(args, string(singleTagJSON))
+		}
+		conditions = append(conditions, "("+strings.Join(tagConditions, " OR ")+")")
+	case SQLITE_DRIVER:
+		tagsJSON, err := json.Marshal(tagStrs)
+		if err != nil {
+			return nil, nil, idx, err
+		}
+		idx++
+		ph := getParamValue(paramPlaceholder, idx-1)
+		conditions = append(conditions, fmt.Sprintf("(SELECT COUNT(*) FROM json_each(COALESCE(%s, '[]')) AS je WHERE je.value IN (SELECT value FROM json_each(%s))) > 0", exprSQLite, ph))
+		args = append(args, string(tagsJSON))
+	default:
+		return nil, nil, idx, getUnsupportedDriverError(driver)
+	}
+	return conditions, args, idx, nil
+}
+
+// createCollectionFilterWhereAndArgs builds WHERE clause and args for collections list/count.
+// Entity column stores CollectionConfig JSON (name, tags at top level). Filters: tenant_id, name, tags.
+func createCollectionFilterWhereAndArgs(driver string, params map[string]any) (where string, args []any, err error) {
+	spec := entityFilterSpec{
+		nameExprPG:     "entity->>'name'",
+		nameExprSQLite: "json_extract(entity, '$.name')",
+		tagsExprPG:     "entity->'tags'",
+		tagsExprSQLite: "json_extract(entity, '$.tags')",
+	}
+	return buildEntityFilterWhereAndArgs(driver, params, spec, nil)
 }
 
 func createCollectionCountStatement(driver, tableName string, params map[string]any) (string, []any, error) {
@@ -456,73 +492,14 @@ func createCollectionListStatement(driver, tableName string, limit, offset int, 
 // createEvaluationFilterWhereAndArgs builds WHERE clause and args for evaluations list/count.
 // Entity column stores EvaluationJobEntity JSON (config.name, config.tags under entity->'config'). Filters: tenant_id, status (columns), name, tags (entity JSON).
 func createEvaluationFilterWhereAndArgs(driver string, params map[string]any) (where string, args []any, err error) {
-	var conditions []string
-	args = make([]any, 0)
-	idx := 0
-	paramPlaceholder := getParam(driver)
-
-	if v, ok := params["tenant_id"].(string); ok && v != "" {
-		idx++
-		conditions = append(conditions, fmt.Sprintf("%s = %s", quoteIdentifier(driver, "tenant_id"), getParamValue(paramPlaceholder, idx-1)))
-		args = append(args, v)
+	spec := entityFilterSpec{
+		nameExprPG:     "entity->'config'->>'name'",
+		nameExprSQLite: "json_extract(entity, '$.config.name')",
+		tagsExprPG:     "entity->'config'->'tags'",
+		tagsExprSQLite: "json_extract(entity, '$.config.tags')",
 	}
-
-	if v, ok := params["status"].(string); ok && v != "" {
-		idx++
-		conditions = append(conditions, fmt.Sprintf("%s = %s", quoteIdentifier(driver, "status"), getParamValue(paramPlaceholder, idx-1)))
-		args = append(args, v)
-	}
-
-	if v, ok := params["name"].(string); ok && v != "" {
-		idx++
-		ph := getParamValue(paramPlaceholder, idx-1)
-		switch driver {
-		case POSTGRES_DRIVER:
-			conditions = append(conditions, fmt.Sprintf("(entity->'config'->>'name' ILIKE '%s' || %s || '%s')", "%", ph, "%"))
-		case SQLITE_DRIVER:
-			conditions = append(conditions, fmt.Sprintf("(json_extract(entity, '$.config.name') LIKE '%s' || %s || '%s')", "%", ph, "%"))
-		default:
-			return "", nil, getUnsupportedDriverError(driver)
-		}
-		args = append(args, v)
-	}
-
-	if v, ok := params["tags"].(string); ok && v != "" {
-		tagStrs := strings.Split(v, ",")
-		for i := range tagStrs {
-			tagStrs[i] = strings.TrimSpace(tagStrs[i])
-		}
-		if len(tagStrs) > 0 {
-			switch driver {
-			case POSTGRES_DRIVER:
-				var tagConditions []string
-				for _, tag := range tagStrs {
-					idx++
-					ph := getParamValue(paramPlaceholder, idx-1)
-					tagConditions = append(tagConditions, fmt.Sprintf("(COALESCE(entity->'config'->'tags', '[]'::jsonb) @> %s::jsonb)", ph))
-					singleTagJSON, _ := json.Marshal([]string{tag})
-					args = append(args, string(singleTagJSON))
-				}
-				conditions = append(conditions, "("+strings.Join(tagConditions, " OR ")+")")
-			case SQLITE_DRIVER:
-				tagsJSON, err := json.Marshal(tagStrs)
-				if err != nil {
-					return "", nil, err
-				}
-				idx++
-				ph := getParamValue(paramPlaceholder, idx-1)
-				conditions = append(conditions, fmt.Sprintf("(SELECT COUNT(*) FROM json_each(COALESCE(json_extract(entity, '$.config.tags'), '[]')) AS je WHERE je.value IN (SELECT value FROM json_each(%s))) > 0", ph))
-				args = append(args, string(tagsJSON))
-			default:
-				return "", nil, getUnsupportedDriverError(driver)
-			}
-		}
-	}
-
-	if len(conditions) == 0 {
-		return "", args, nil
-	}
-	return " WHERE " + strings.Join(conditions, " AND "), args, nil
+	extraColumns := map[string]string{"status": "status"}
+	return buildEntityFilterWhereAndArgs(driver, params, spec, extraColumns)
 }
 
 func createEvaluationCountStatement(driver, tableName string, params map[string]any) (string, []any, error) {
@@ -557,69 +534,15 @@ func createEvaluationListStatement(driver, tableName string, limit, offset int, 
 }
 
 // createProviderFilterWhereAndArgs builds WHERE clause and args for providers list/count.
-// Entity column stores ProviderConfig JSON (name, benchmarks[].tags). Filters: tenant_id (column), name (entity->>'name'), tags (any benchmark has tag in entity->'benchmarks').
+// Entity column stores ProviderConfig JSON (name, tags at top level). Filters: tenant_id (column), name (entity->>'name'), tags (entity->'tags').
 func createProviderFilterWhereAndArgs(driver string, params map[string]any) (where string, args []any, err error) {
-	var conditions []string
-	args = make([]any, 0)
-	idx := 0
-	paramPlaceholder := getParam(driver)
-
-	if v, ok := params["tenant_id"].(string); ok && v != "" {
-		idx++
-		conditions = append(conditions, fmt.Sprintf("%s = %s", quoteIdentifier(driver, "tenant_id"), getParamValue(paramPlaceholder, idx-1)))
-		args = append(args, v)
+	spec := entityFilterSpec{
+		nameExprPG:     "entity->>'name'",
+		nameExprSQLite: "json_extract(entity, '$.name')",
+		tagsExprPG:     "entity->'tags'",
+		tagsExprSQLite: "json_extract(entity, '$.tags')",
 	}
-
-	if v, ok := params["name"].(string); ok && v != "" {
-		idx++
-		ph := getParamValue(paramPlaceholder, idx-1)
-		switch driver {
-		case POSTGRES_DRIVER:
-			conditions = append(conditions, fmt.Sprintf("(entity->>'name' ILIKE '%s' || %s || '%s')", "%", ph, "%"))
-		case SQLITE_DRIVER:
-			conditions = append(conditions, fmt.Sprintf("(json_extract(entity, '$.name') LIKE '%s' || %s || '%s')", "%", ph, "%"))
-		default:
-			return "", nil, getUnsupportedDriverError(driver)
-		}
-		args = append(args, v)
-	}
-
-	if v, ok := params["tags"].(string); ok && v != "" {
-		tagStrs := strings.Split(v, ",")
-		for i := range tagStrs {
-			tagStrs[i] = strings.TrimSpace(tagStrs[i])
-		}
-		if len(tagStrs) > 0 {
-			switch driver {
-			case POSTGRES_DRIVER:
-				var tagConditions []string
-				for _, tag := range tagStrs {
-					idx++
-					ph := getParamValue(paramPlaceholder, idx-1)
-					tagConditions = append(tagConditions, fmt.Sprintf("(EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(entity->'benchmarks','[]'::jsonb)) AS b WHERE COALESCE(b->'tags','[]'::jsonb) @> %s::jsonb))", ph))
-					singleTagJSON, _ := json.Marshal([]string{tag})
-					args = append(args, string(singleTagJSON))
-				}
-				conditions = append(conditions, "("+strings.Join(tagConditions, " OR ")+")")
-			case SQLITE_DRIVER:
-				tagsJSON, err := json.Marshal(tagStrs)
-				if err != nil {
-					return "", nil, err
-				}
-				idx++
-				ph := getParamValue(paramPlaceholder, idx-1)
-				conditions = append(conditions, fmt.Sprintf("(SELECT COUNT(*) FROM json_each(COALESCE(json_extract(entity, '$.benchmarks'), '[]')) AS bench, json_each(COALESCE(json_extract(bench.value, '$.tags'), '[]')) AS t WHERE t.value IN (SELECT value FROM json_each(%s))) > 0", ph))
-				args = append(args, string(tagsJSON))
-			default:
-				return "", nil, getUnsupportedDriverError(driver)
-			}
-		}
-	}
-
-	if len(conditions) == 0 {
-		return "", args, nil
-	}
-	return " WHERE " + strings.Join(conditions, " AND "), args, nil
+	return buildEntityFilterWhereAndArgs(driver, params, spec, nil)
 }
 
 func createProviderCountStatement(driver, tableName string, params map[string]any) (string, []any, error) {

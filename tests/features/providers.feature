@@ -79,13 +79,13 @@ Feature: Providers Endpoint
     When I send a GET request to "/api/v1/evaluations/providers?system_defined=false&tags=list-filter-tag"
     Then the response code should be 200
     And the array at path "items" in the response should have length 2
-    And the response should contain the value "list-filter-tag" at path "items[0].benchmarks[0].tags[0]"
-    And the response should contain the value "list-filter-tag" at path "items[1].benchmarks[0].tags[0]"
+    And the response should contain the value "list-filter-tag" at path "items[0].tags[0]"
+    And the response should contain the value "list-filter-tag" at path "items[1].tags[0]"
     When I send a GET request to "/api/v1/evaluations/providers?system_defined=false&name=list-filter-name-only&tags=list-filter-tag"
     Then the response code should be 200
     And the array at path "items" in the response should have length 1
     And the response should contain the value "list-filter-name-only" at path "items[0].name"
-    And the response should contain the value "list-filter-tag" at path "items[0].benchmarks[0].tags[0]"
+    And the response should contain the value "list-filter-tag" at path "items[0].tags[0]"
     When I send a DELETE request to "/api/v1/evaluations/providers/{{value:filter_name_id}}"
     Then the response code should be 204
     When I send a DELETE request to "/api/v1/evaluations/providers/{{value:filter_tag_id}}"
