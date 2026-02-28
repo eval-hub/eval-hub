@@ -53,27 +53,18 @@ func NewSarAuthorizer(client *kubernetes.Clientset, logger *slog.Logger, authCon
 	}, nil
 }
 
-func (s *SarAuthorizer) authorize(ctx context.Context, attributesRecords []authorizer.AttributesRecord) error {
+func (s *SarAuthorizer) Authorize(ctx context.Context, attributesRecords []authorizer.Attributes) (authorized authorizer.Decision, reason string, err error) {
 	for _, record := range attributesRecords {
-
-		decision, _, err := s.auth.Authorize(ctx, record)
-		if err != nil {
-			s.logger.Warn("Error authorizing request", "error", err)
-			return &AuthorizationError{
-				Message: err.Error(),
-			}
-		}
-		if decision != authorizer.DecisionAllow {
-			return &AuthorizationError{
-				Message: "authorization decision: not allowed",
-			}
+		decision, reason, err := s.auth.Authorize(ctx, record)
+		if err != nil || decision != authorizer.DecisionAllow {
+			return decision, reason, err
 		}
 	}
 
-	return nil
+	return authorizer.DecisionAllow, "", nil
 }
 
-func (s *SarAuthorizer) AuthorizeRequest(ctx context.Context, request *http.Request) error {
+func (s *SarAuthorizer) AuthorizeRequest(ctx context.Context, request *http.Request) (authorized authorizer.Decision, reason string, err error) {
 	attributesRecords := AttributesRecordFromRequest(request, s.config)
-	return s.authorize(ctx, attributesRecords)
+	return s.Authorize(ctx, attributesRecords)
 }

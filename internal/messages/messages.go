@@ -171,6 +171,12 @@ var (
 		"The request is invalid: '{{.Error}}'. Please check the request and try again.",
 		"bad_request",
 	)
+
+	Forbidden = createMessage(
+		constants.HTTPCodeForbidden,
+		"The request is not authorized: '{{.Error}}'.",
+		"forbidden",
+	)
 )
 
 type MessageCode struct {

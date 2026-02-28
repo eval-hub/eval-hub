@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/eval-hub/eval-hub/auth"
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/constants"
@@ -31,6 +32,7 @@ type Server struct {
 	validate        *validator.Validate
 	runtime         abstractions.Runtime
 	mlflowClient    *mlflowclient.Client
+	auth            *auth.SarAuthorizer
 }
 
 func (s *Server) isOTELEnabled() bool {
@@ -63,6 +65,7 @@ func NewServer(logger *slog.Logger,
 	validate *validator.Validate,
 	runtime abstractions.Runtime,
 	mlflowClient *mlflowclient.Client,
+	auth *auth.SarAuthorizer,
 ) (*Server, error) {
 
 	if logger == nil {
@@ -354,6 +357,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 
 	// Wrap with metrics middleware (outermost for complete observability)
 	handler = Middleware(handler, prometheusEnabled, s.logger)
+	handler = AuthMiddleware(handler, s.logger, s.auth)
 
 	return handler, nil
 }

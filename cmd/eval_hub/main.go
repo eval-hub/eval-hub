@@ -117,7 +117,15 @@ func main() {
 	}
 
 	// create the server
-	srv, err := server.NewServer(logger, serviceConfig, providerConfigs, storage, validate, runtime, mlflowClient)
+	srv, err := server.NewServer(logger,
+		serviceConfig,
+		providerConfigs,
+		storage,
+		validate,
+		runtime,
+		mlflowClient,
+		nil)
+
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create server", logger)

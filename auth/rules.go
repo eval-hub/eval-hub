@@ -71,9 +71,9 @@ func applyTemplate(templateString string, values TemplateValues) string {
 	return out.String()
 }
 
-func AttributesRecordFromRequest(request *http.Request, config EndpointsAuthorizationConfig) []authorizer.AttributesRecord {
+func AttributesRecordFromRequest(request *http.Request, config EndpointsAuthorizationConfig) []authorizer.Attributes {
 	extractedRules := extractRule(request, config)
-	resourceAttributes := []authorizer.AttributesRecord{}
+	resourceAttributes := []authorizer.Attributes{}
 
 	for _, rule := range extractedRules {
 		templateValues := TemplateValues{}
