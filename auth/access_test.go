@@ -1,4 +1,4 @@
-package rbac
+package auth
 
 import (
 	"net/http"
@@ -14,7 +14,7 @@ import (
 
 // loadRBACConfigFromYAML loads an RBAC config from a YAML file using Viper.
 // yamlName is the base name of the file (e.g. "rbac_jobs") under testdata/.
-func loadRBACConfigFromYAML(t *testing.T, yamlName string) AuthorizationConfig {
+func loadRBACConfigFromYAML(t *testing.T, yamlName string) EndpointsAuthorizationConfig {
 	t.Helper()
 	_, filename, _, _ := runtime.Caller(0)
 	dir := filepath.Dir(filename)
@@ -26,7 +26,7 @@ func loadRBACConfigFromYAML(t *testing.T, yamlName string) AuthorizationConfig {
 		t.Fatalf("ReadInConfig(%q): %v", configPath, err)
 	}
 
-	var cfg AuthorizationConfig
+	var cfg EndpointsAuthorizationConfig
 	if err := v.Unmarshal(&cfg); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs", nil)
 		req.Header.Set("X-Tenant", "tenant-a")
 
-		got := computeResourceAttributeRecords(*req, cfg)
+		got := AttributesRecordFromRequest(req, cfg)
 
 		want := []authorizer.AttributesRecord{
 			{
@@ -67,7 +67,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs", nil)
 		req.Header.Set("X-Tenant", "my-ns")
 
-		got := computeResourceAttributeRecords(*req, cfg)
+		got := AttributesRecordFromRequest(req, cfg)
 
 		want := []authorizer.AttributesRecord{
 			{
@@ -87,7 +87,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/other", nil)
 		req.Header.Set("X-Tenant", "my-ns")
 
-		got := computeResourceAttributeRecords(*req, cfg)
+		got := AttributesRecordFromRequest(req, cfg)
 
 		if len(got) != 0 {
 			t.Errorf("ComputeResourceAttributes() = %+v, want nil/empty", got)
@@ -98,7 +98,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/namespaces?tenant=query-ns", nil)
 
-		got := computeResourceAttributeRecords(*req, cfg)
+		got := AttributesRecordFromRequest(req, cfg)
 
 		want := []authorizer.AttributesRecord{
 			{
@@ -118,7 +118,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/evaluations/collections", nil)
 		req.Header.Set("X-Tenant", "tenant-b")
 
-		got := computeResourceAttributeRecords(*req, cfg)
+		got := AttributesRecordFromRequest(req, cfg)
 
 		want := []authorizer.AttributesRecord{
 			{
@@ -136,7 +136,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req = httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/providers", nil)
 		req.Header.Set("X-Tenant", "tenant-b")
 
-		got = computeResourceAttributeRecords(*req, cfg)
+		got = AttributesRecordFromRequest(req, cfg)
 
 		want = []authorizer.AttributesRecord{
 			{
@@ -156,7 +156,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs", nil)
 
-		got := computeResourceAttributeRecords(*req, cfg)
+		got := AttributesRecordFromRequest(req, cfg)
 
 		// Rule still matches; namespace comes from empty header (template yields empty)
 		want := []authorizer.AttributesRecord{

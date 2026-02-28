@@ -1,4 +1,4 @@
-package rbac
+package auth
 
 import (
 	"bytes"
@@ -22,7 +22,7 @@ func matchMethods(fromRequest string, fromConfig []string) bool {
 	return slices.Contains(fromConfig, m)
 }
 
-func extractRule(request http.Request, config AuthorizationConfig) []ResourceRule {
+func extractRule(request *http.Request, config EndpointsAuthorizationConfig) []ResourceRule {
 	for _, endpoint := range config.Authorization.Endpoints {
 		if matchEndpoint(request.URL.Path, endpoint.Path) {
 			for _, mapping := range endpoint.Mappings {
@@ -71,7 +71,7 @@ func applyTemplate(templateString string, values TemplateValues) string {
 	return out.String()
 }
 
-func computeResourceAttributeRecords(request http.Request, config AuthorizationConfig) []authorizer.AttributesRecord {
+func AttributesRecordFromRequest(request *http.Request, config EndpointsAuthorizationConfig) []authorizer.AttributesRecord {
 	extractedRules := extractRule(request, config)
 	resourceAttributes := []authorizer.AttributesRecord{}
 

@@ -1,7 +1,8 @@
-package rbac
+package auth
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -13,11 +14,20 @@ import (
 
 type SarAuthorizer struct {
 	auth   authorizer.Authorizer
-	config AuthorizationConfig
+	config EndpointsAuthorizationConfig
 	client *kubernetes.Clientset
+	logger *slog.Logger
 }
 
-func NewSarAuthorizer(client *kubernetes.Clientset, authConfigPath string) (*SarAuthorizer, error) {
+type AuthorizationError struct {
+	Message string
+}
+
+func (e *AuthorizationError) Error() string {
+	return e.Message
+}
+
+func NewSarAuthorizer(client *kubernetes.Clientset, logger *slog.Logger, authConfigPath string) (*SarAuthorizer, error) {
 	cfg, err := loadAuthorizerConfig(authConfigPath)
 	if err != nil {
 		return nil, err
@@ -39,25 +49,31 @@ func NewSarAuthorizer(client *kubernetes.Clientset, authConfigPath string) (*Sar
 		auth:   auth,
 		config: *cfg,
 		client: client,
+		logger: logger,
 	}, nil
 }
 
-func (s *SarAuthorizer) authorize(ctx context.Context, auth authorizer.Authorizer, attributesRecords []authorizer.AttributesRecord) bool {
+func (s *SarAuthorizer) authorize(ctx context.Context, attributesRecords []authorizer.AttributesRecord) error {
 	for _, record := range attributesRecords {
 
-		decision, _, err := auth.Authorize(ctx, record)
+		decision, _, err := s.auth.Authorize(ctx, record)
 		if err != nil {
-			return false
+			s.logger.Warn("Error authorizing request", "error", err)
+			return &AuthorizationError{
+				Message: err.Error(),
+			}
 		}
 		if decision != authorizer.DecisionAllow {
-			return false
+			return &AuthorizationError{
+				Message: "authorization decision: not allowed",
+			}
 		}
 	}
 
-	return true
+	return nil
 }
 
-func (s *SarAuthorizer) AuthorizeRequest(ctx context.Context, request http.Request) bool {
-	attributesRecords := computeResourceAttributeRecords(request, s.config)
-	return s.authorize(ctx, s.auth, attributesRecords)
+func (s *SarAuthorizer) AuthorizeRequest(ctx context.Context, request *http.Request) error {
+	attributesRecords := AttributesRecordFromRequest(request, s.config)
+	return s.authorize(ctx, attributesRecords)
 }
