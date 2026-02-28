@@ -65,6 +65,6 @@ func (s *SarAuthorizer) Authorize(ctx context.Context, attributesRecords []autho
 }
 
 func (s *SarAuthorizer) AuthorizeRequest(ctx context.Context, request *http.Request) (authorized authorizer.Decision, reason string, err error) {
-	attributesRecords := AttributesRecordFromRequest(request, s.config)
+	attributesRecords := AttributesFromRequest(request, s.config)
 	return s.Authorize(ctx, attributesRecords)
 }

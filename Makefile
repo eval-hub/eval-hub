@@ -93,7 +93,7 @@ vet: ## Run go vet
 
 test: ## Run unit tests
 	@echo "Running unit tests..."
-	@go test -v ./internal/... ./cmd/...
+	@go test -v ./auth/... ./internal/... ./cmd/...
 
 test-fvt: $(BIN_DIR) ## Run FVT (Functional Verification Tests) using godog
 	@echo "Running FVT tests..."
