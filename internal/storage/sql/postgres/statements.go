@@ -15,6 +15,7 @@ const (
 	SELECT_EVALUATION_STATEMENT = `SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM evaluations WHERE id = $1;`
 
 	INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (id, tenant_id, entity) VALUES ($1, $2, $3) RETURNING id;`
+	SELECT_COLLECTION_STATEMENT = `SELECT id, created_at, updated_at, tenant_id, entity FROM collections WHERE id = $1;`
 
 	INSERT_PROVIDER_STATEMENT = `INSERT INTO providers (id, tenant_id, entity) VALUES ($1, $2, $3) RETURNING id;`
 	SELECT_PROVIDER_STATEMENT = `SELECT id, created_at, updated_at, tenant_id, entity FROM providers WHERE id = $1;`
@@ -68,14 +69,14 @@ func (s *postgresStatementsFactory) createFilterStatement(filter map[string]any,
 	return sb.String()
 }
 
-func (s *postgresStatementsFactory) CreateCountEntitiesStatement(tableName string, filter map[string]any) (string, []any, error) {
+func (s *postgresStatementsFactory) CreateCountEntitiesStatement(tableName string, filter map[string]any) (string, []any) {
 	filterStatement := s.createFilterStatement(filter, "", 0, 0)
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, tableName, filterStatement)
 	args := slices.Collect(maps.Values(filter))
-	return query, args, nil
+	return query, args
 }
 
-func (s *postgresStatementsFactory) CreateListEntitiesStatement(tableName string, limit, offset int, filter map[string]any) (string, []any, error) {
+func (s *postgresStatementsFactory) CreateListEntitiesStatement(tableName string, limit, offset int, filter map[string]any) (string, []any) {
 	filterStatement := s.createFilterStatement(filter, "id DESC", limit, offset)
 
 	var query string
@@ -94,7 +95,7 @@ func (s *postgresStatementsFactory) CreateListEntitiesStatement(tableName string
 		query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s %s;`, tableName, filterStatement)
 	}
 
-	return query, args, nil
+	return query, args
 }
 
 func (s *postgresStatementsFactory) CreateCheckEntityExistsStatement(tableName string) string {
@@ -121,4 +122,12 @@ func (s *postgresStatementsFactory) CreateProviderAddEntityStatement(provider *a
 
 func (s *postgresStatementsFactory) CreateProviderGetEntityStatement(query *shared.ProviderQuery) (string, []any, []any) {
 	return SELECT_PROVIDER_STATEMENT, []any{&query.ID}, []any{&query.ID, &query.CreatedAt, &query.UpdatedAt, &query.Tenant, &query.EntityJSON}
+}
+
+func (s *postgresStatementsFactory) CreateCollectionAddEntityStatement(collection *api.CollectionResource, entity string) (string, []any) {
+	return INSERT_COLLECTION_STATEMENT, []any{collection.Resource.ID, collection.Resource.Tenant, entity}
+}
+
+func (s *postgresStatementsFactory) CreateCollectionGetEntityStatement(query *shared.CollectionQuery) (string, []any, []any) {
+	return SELECT_COLLECTION_STATEMENT, []any{&query.ID}, []any{&query.ID, &query.CreatedAt, &query.UpdatedAt, &query.Tenant, &query.EntityJSON}
 }

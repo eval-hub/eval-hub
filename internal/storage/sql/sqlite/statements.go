@@ -1,7 +1,6 @@
 package sqlite
 
 import (
-	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -29,6 +28,7 @@ const (
 	SELECT_EVALUATION_STATEMENT = `SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM evaluations WHERE id = ?;`
 
 	INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (id, tenant_id, entity) VALUES (?, ?, ?);`
+	SELECT_COLLECTION_STATEMENT = `SELECT id, created_at, updated_at, tenant_id, entity FROM collections WHERE id = ?;`
 
 	INSERT_PROVIDER_STATEMENT = `INSERT INTO providers (id, tenant_id, entity) VALUES (?, ?, ?);`
 	SELECT_PROVIDER_STATEMENT = `SELECT id, created_at, updated_at, tenant_id, entity FROM providers WHERE id = ?;`
@@ -53,14 +53,14 @@ func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shar
 // It validates each key against the table's allowlist, sorts keys deterministically,
 // and returns both the clause and args in matching order. Returns an error if any
 // filter key is not in the allowlist (fail closed).
-func (s *sqliteStatementsFactory) createFilterStatement(filter map[string]any, orderBy string, limit int, offset int, tableName string) (string, []any, error) {
+func (s *sqliteStatementsFactory) createFilterStatement(filter map[string]any, orderBy string, limit int, offset int, tableName string) (string, []any) {
 	var args []any
 	var sb strings.Builder
 
 	if len(filter) > 0 {
 		allowed := allowedFilterColumns(tableName)
 		if allowed == nil {
-			return "", nil, nil
+			return "", nil
 		}
 		keys := slices.Collect(maps.Keys(filter))
 		sort.Strings(keys)
@@ -75,7 +75,7 @@ func (s *sqliteStatementsFactory) createFilterStatement(filter map[string]any, o
 			}
 		}
 		if len(disallowed) > 0 {
-			return "", nil, errors.New("disallowed filter columns: " + strings.Join(disallowed, ", "))
+			// ignore this for now
 		}
 		if len(validKeys) > 0 {
 			sb.WriteString(" WHERE ")
@@ -99,23 +99,17 @@ func (s *sqliteStatementsFactory) createFilterStatement(filter map[string]any, o
 		sb.WriteString(" OFFSET ?")
 		args = append(args, offset)
 	}
-	return sb.String(), args, nil
+	return sb.String(), args
 }
 
-func (s *sqliteStatementsFactory) CreateCountEntitiesStatement(tableName string, filter map[string]any) (string, []any, error) {
-	filterClause, args, err := s.createFilterStatement(filter, "", 0, 0, tableName)
-	if err != nil {
-		return "", nil, err
-	}
+func (s *sqliteStatementsFactory) CreateCountEntitiesStatement(tableName string, filter map[string]any) (string, []any) {
+	filterClause, args := s.createFilterStatement(filter, "", 0, 0, tableName)
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, tableName, filterClause)
-	return query, args, nil
+	return query, args
 }
 
-func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tableName string, limit, offset int, filter map[string]any) (string, []any, error) {
-	filterClause, args, err := s.createFilterStatement(filter, "id DESC", limit, offset, tableName)
-	if err != nil {
-		return "", nil, err
-	}
+func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tableName string, limit, offset int, filter map[string]any) (string, []any) {
+	filterClause, args := s.createFilterStatement(filter, "id DESC", limit, offset, tableName)
 
 	var query string
 	switch tableName {
@@ -125,7 +119,7 @@ func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tableName string, 
 		query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s%s;`, tableName, filterClause)
 	}
 
-	return query, args, nil
+	return query, args
 }
 
 func (s *sqliteStatementsFactory) CreateCheckEntityExistsStatement(tableName string) string {
@@ -152,4 +146,12 @@ func (s *sqliteStatementsFactory) CreateProviderAddEntityStatement(provider *api
 
 func (s *sqliteStatementsFactory) CreateProviderGetEntityStatement(query *shared.ProviderQuery) (string, []any, []any) {
 	return SELECT_PROVIDER_STATEMENT, []any{&query.ID}, []any{&query.ID, &query.CreatedAt, &query.UpdatedAt, &query.Tenant, &query.EntityJSON}
+}
+
+func (s *sqliteStatementsFactory) CreateCollectionAddEntityStatement(collection *api.CollectionResource, entity string) (string, []any) {
+	return INSERT_COLLECTION_STATEMENT, []any{collection.Resource.ID, collection.Resource.Tenant, entity}
+}
+
+func (s *sqliteStatementsFactory) CreateCollectionGetEntityStatement(query *shared.CollectionQuery) (string, []any, []any) {
+	return SELECT_COLLECTION_STATEMENT, []any{&query.ID}, []any{&query.ID, &query.CreatedAt, &query.UpdatedAt, &query.Tenant, &query.EntityJSON}
 }

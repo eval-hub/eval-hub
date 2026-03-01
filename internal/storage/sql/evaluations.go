@@ -3,6 +3,8 @@ package sql
 import (
 	"database/sql"
 	"encoding/json"
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
@@ -139,13 +141,15 @@ func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstr
 	limit := filter.Limit
 	offset := filter.Offset
 
-	// Get total count (with filter if provided)
-	countQuery, countArgs, err := s.statementsFactory.CreateCountEntitiesStatement(shared.TABLE_EVALUATIONS, filter.Params)
-	if err != nil {
-		return nil, se.NewServiceError(messages.BadRequest, "Error", err.Error())
+	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), []string{"tenant_id", "status", "experiment_id"}); err != nil {
+		return nil, err
 	}
 
+	// Get total count (with filter if provided)
+	countQuery, countArgs := s.statementsFactory.CreateCountEntitiesStatement(shared.TABLE_EVALUATIONS, filter.Params)
+
 	var totalCount int
+	var err error
 	if len(countArgs) > 0 {
 		err = s.queryRow(nil, countQuery, countArgs...).Scan(&totalCount)
 	} else {
@@ -164,10 +168,7 @@ func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstr
 	}
 
 	// Build the list query with pagination and filters
-	listQuery, listArgs, err := s.statementsFactory.CreateListEntitiesStatement(shared.TABLE_EVALUATIONS, limit, offset, params)
-	if err != nil {
-		return nil, se.NewServiceError(messages.BadRequest, "Error", err.Error())
-	}
+	listQuery, listArgs := s.statementsFactory.CreateListEntitiesStatement(shared.TABLE_EVALUATIONS, limit, offset, params)
 	s.logger.Info("List evaluations query", "query", listQuery, "args", listArgs, "params", params, "limit", limit, "offset", offset)
 
 	// Query the database

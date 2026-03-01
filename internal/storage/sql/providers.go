@@ -3,6 +3,8 @@ package sql
 import (
 	"database/sql"
 	"encoding/json"
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
@@ -103,10 +105,11 @@ func (s *SQLStorage) GetProviders(filter *abstractions.QueryFilter) (*abstractio
 	// TODO: why is this here?
 	delete(params, "benchmarks")
 
-	listQuery, listArgs, err := s.statementsFactory.CreateListEntitiesStatement(shared.TABLE_PROVIDERS, limit, offset, params)
-	if err != nil {
-		return nil, se.NewServiceError(messages.InternalServerError, "Error", err.Error())
+	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), []string{"tenant_id"}); err != nil {
+		return nil, err
 	}
+
+	listQuery, listArgs := s.statementsFactory.CreateListEntitiesStatement(shared.TABLE_PROVIDERS, limit, offset, params)
 
 	rows, err := s.query(nil, listQuery, listArgs...)
 	if err != nil {
