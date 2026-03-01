@@ -28,6 +28,12 @@ repos:
         args: [--maxkb=1000]
       - id: debug-statements
 
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v4.13.9
+    hooks:
+      - id: commitizen
+        stages: [commit-msg]
+
   # Local checks
   - repo: local
     hooks:

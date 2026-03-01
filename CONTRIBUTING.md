@@ -163,6 +163,14 @@ git commit -m "test(integration): add MLFlow integration tests"
 
 **Types**: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `ci`, `chore`
 
+PRs targeting `main` will fail CI if any commit message does not follow this format.
+
+If you have [pre-commit](https://pre-commit.com) installed, commit messages are also checked locally:
+
+```bash
+pre-commit install --hook-type commit-msg
+```
+
 ## Code Standards
 
 ### Code Quality Tools
