@@ -3,6 +3,7 @@ package sql
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -52,7 +53,7 @@ func NewStorage(config map[string]any, otelEnabled bool, logger *slog.Logger) (a
 	case POSTGRES_DRIVER:
 		break
 	default:
-		return nil, getUnsupportedDriverError(sqlConfig.Driver)
+		return nil, fmt.Errorf("unsupported driver: %s", (sqlConfig.Driver))
 	}
 
 	databaseName := sqlConfig.GetDatabaseName()
@@ -171,10 +172,7 @@ func (s *SQLStorage) queryRow(txn *sql.Tx, query string, args ...any) *sql.Row {
 }
 
 func (s *SQLStorage) ensureSchema() error {
-	schemas, err := schemasForDriver(s.sqlConfig.Driver)
-	if err != nil {
-		return err
-	}
+	schemas := s.statementsFactory.GetTablesSchema()
 	if _, err := s.exec(nil, schemas); err != nil {
 		return err
 	}

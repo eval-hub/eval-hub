@@ -136,7 +136,7 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 }
 
 func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
-	filter = extractQueryParams(filter)
+	filter = shared.ExtractQueryParams(filter)
 	params := filter.Params
 	limit := filter.Limit
 	offset := filter.Offset

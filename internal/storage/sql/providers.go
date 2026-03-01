@@ -97,7 +97,7 @@ func (s *SQLStorage) DeleteProvider(id string) error {
 }
 
 func (s *SQLStorage) GetProviders(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.ProviderResource], error) {
-	filter = extractQueryParams(filter)
+	filter = shared.ExtractQueryParams(filter)
 	params := filter.Params
 	limit := filter.Limit
 	offset := filter.Offset

@@ -94,7 +94,7 @@ func (s *SQLStorage) constructCollectionResource(dbID string, createdAt time.Tim
 }
 
 func (s *SQLStorage) GetCollections(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
-	filter = extractQueryParams(filter)
+	filter = shared.ExtractQueryParams(filter)
 	params := filter.Params
 	limit := filter.Limit
 	offset := filter.Offset

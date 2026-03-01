@@ -19,6 +19,37 @@ const (
 
 	INSERT_PROVIDER_STATEMENT = `INSERT INTO providers (id, tenant_id, entity) VALUES ($1, $2, $3) RETURNING id;`
 	SELECT_PROVIDER_STATEMENT = `SELECT id, created_at, updated_at, tenant_id, entity FROM providers WHERE id = $1;`
+
+	TABLES_SCHEMA = `
+CREATE TABLE IF NOT EXISTS evaluations (
+    id VARCHAR(36) NOT NULL,
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    tenant_id VARCHAR(255) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    experiment_id VARCHAR(255) NOT NULL,
+    entity JSONB NOT NULL,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS collections (
+    id VARCHAR(36) NOT NULL,
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    tenant_id VARCHAR(255) NOT NULL,
+    entity JSONB NOT NULL,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS providers (
+    id VARCHAR(36) NOT NULL,
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    tenant_id VARCHAR(255) NOT NULL,
+    entity JSONB NOT NULL,
+    PRIMARY KEY (id)
+);
+`
 )
 
 type postgresStatementsFactory struct {
@@ -26,6 +57,10 @@ type postgresStatementsFactory struct {
 
 func NewStatementsFactory() shared.SQLStatementsFactory {
 	return &postgresStatementsFactory{}
+}
+
+func (s *postgresStatementsFactory) GetTablesSchema() string {
+	return TABLES_SCHEMA
 }
 
 func (s *postgresStatementsFactory) CreateEvaluationAddEntityStatement(evaluation *api.EvaluationJobResource, entity string) (string, []any) {

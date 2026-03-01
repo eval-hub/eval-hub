@@ -5,6 +5,8 @@ import (
 )
 
 type SQLStatementsFactory interface {
+	GetTablesSchema() string
+
 	// evaluations operations
 	CreateEvaluationAddEntityStatement(evaluation *api.EvaluationJobResource, entity string) (string, []any)
 	CreateEvaluationGetEntityStatement(query *EvaluationJobQuery) (string, []any, []any)

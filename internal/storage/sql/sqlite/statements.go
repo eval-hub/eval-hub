@@ -32,6 +32,46 @@ const (
 
 	INSERT_PROVIDER_STATEMENT = `INSERT INTO providers (id, tenant_id, entity) VALUES (?, ?, ?);`
 	SELECT_PROVIDER_STATEMENT = `SELECT id, created_at, updated_at, tenant_id, entity FROM providers WHERE id = ?;`
+
+	TABLES_SCHEMA = `
+CREATE TABLE IF NOT EXISTS evaluations (
+    id VARCHAR(36) NOT NULL,
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    tenant_id VARCHAR(255) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    experiment_id VARCHAR(255) NOT NULL,
+    entity TEXT NOT NULL,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS collections (
+    id VARCHAR(36) NOT NULL,
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    tenant_id VARCHAR(255) NOT NULL,
+    entity TEXT NOT NULL,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS providers (
+    id VARCHAR(36) NOT NULL,
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    tenant_id VARCHAR(255) NOT NULL,
+    entity TEXT NOT NULL,
+    PRIMARY KEY (id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_eval_entity
+ON evaluations (id);
+
+CREATE INDEX IF NOT EXISTS idx_collection_entity
+ON collections (id);
+
+CREATE INDEX IF NOT EXISTS idx_provider_entity
+ON providers (id);
+`
 )
 
 type sqliteStatementsFactory struct {
@@ -39,6 +79,10 @@ type sqliteStatementsFactory struct {
 
 func NewStatementsFactory() shared.SQLStatementsFactory {
 	return &sqliteStatementsFactory{}
+}
+
+func (s *sqliteStatementsFactory) GetTablesSchema() string {
+	return TABLES_SCHEMA
 }
 
 func (s *sqliteStatementsFactory) CreateEvaluationAddEntityStatement(evaluation *api.EvaluationJobResource, entity string) (string, []any) {
