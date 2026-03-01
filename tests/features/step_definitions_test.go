@@ -402,6 +402,10 @@ func (tc *scenarioConfig) substituteValues(body string) (string, error) {
 					}
 				}
 				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), value)
+			} else if strings.HasPrefix(match[1], valuePrefix) {
+				n := strings.TrimPrefix(match[1], valuePrefix)
+				v := tc.values[n]
+				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), v)
 			} else {
 				return "", logError(fmt.Errorf("unknown substitutionvalue: %s", match[1]))
 			}
