@@ -39,6 +39,12 @@ var (
 		"The query parameter '{{.ParameterName}}' is not a valid {{.Type}}: '{{.Value}}'.",
 		"query_parameter_invalid",
 	)
+	// QueryBadParameter The parameter '{{.ParameterName}}' is not a valid query parameter. Allowed parameters are: {{.AllowedParameters}}.
+	QueryBadParameter = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The parameter '{{.ParameterName}}' is not a valid query parameter. Allowed parameters are: {{.AllowedParameters}}.",
+		"query_bad_parameter",
+	)
 
 	// JobCanNotBeUpdated The job {{.Id}} can not be {{.NewStatus}} because it is '{{.Status}}'.
 	JobCanNotBeUpdated = createMessage(
