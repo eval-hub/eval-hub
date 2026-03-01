@@ -114,7 +114,7 @@ Feature: Providers Endpoint
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/providers?benchmarks=false"
     Then the response code should be 200
-    Then the response should contain the value "[]" at path "items[0].benchmarks"
+    And the response should not contain the path "items[0].benchmarks"
 
   Scenario: Create a user provider
     Given the service is running

@@ -96,12 +96,12 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 			}
 
 			benchmarksParam := r.Query("benchmarks")
-			benchmarks := true
+			includeBenchmarks := true
 			if len(benchmarksParam) > 0 {
-				benchmarks = benchmarksParam[0] != "false"
+				includeBenchmarks = benchmarksParam[0] != "false"
 			}
 
-			filter.Params["benchmarks"] = benchmarks
+			filter.Params["benchmarks"] = includeBenchmarks
 
 			systemDefined := IncludeSystemDefined(r)
 
@@ -111,9 +111,6 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 
 			if systemDefined {
 				for _, p := range h.providerConfigs {
-					if !benchmarks {
-						p.Benchmarks = []api.BenchmarkResource{}
-					}
 					providers = append(providers, p)
 				}
 			}
@@ -124,15 +121,37 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 				return err
 			}
 
-			result := api.ProviderResourceList{
-				// TODO: Implement pagination
-				Page: api.Page{
-					TotalCount: len(providers) + queryResults.TotalStored,
-				},
-				Items: append(providers, queryResults.Items...),
+			allItems := append(providers, queryResults.Items...)
+			page := api.Page{
+				TotalCount: len(providers) + queryResults.TotalStored,
 			}
-
-			w.WriteJSON(result, 200)
+			if includeBenchmarks {
+				w.WriteJSON(api.ProviderResourceList{Page: page, Items: allItems}, 200)
+			} else {
+				itemsNoBenchmarks := make([]map[string]any, 0, len(allItems))
+				for i := range allItems {
+					bytes, err := json.Marshal(allItems[i])
+					if err != nil {
+						w.Error(serviceerrors.NewServiceError(messages.InternalServerError, "Error", err.Error()), ctx.RequestID)
+						return err
+					}
+					var m map[string]any
+					if err := json.Unmarshal(bytes, &m); err != nil {
+						w.Error(serviceerrors.NewServiceError(messages.InternalServerError, "Error", err.Error()), ctx.RequestID)
+						return err
+					}
+					delete(m, "benchmarks")
+					itemsNoBenchmarks = append(itemsNoBenchmarks, m)
+				}
+				body := map[string]any{"total_count": page.TotalCount, "limit": page.Limit, "items": itemsNoBenchmarks}
+				if page.First != nil {
+					body["first"] = page.First
+				}
+				if page.Next != nil {
+					body["next"] = page.Next
+				}
+				w.WriteJSON(body, 200)
+			}
 
 			return nil
 		},
