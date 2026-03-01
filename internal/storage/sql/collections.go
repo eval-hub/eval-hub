@@ -110,26 +110,27 @@ func (s *SQLStorage) GetCollections(filter *abstractions.QueryFilter) (*abstract
 	limit := filter.Limit
 	offset := filter.Offset
 
-	// Get total count (there are no filters for collections)
-	countQuery, _, err := createCountEntitiesStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS, params)
+	countQuery, countArgs, err := createCollectionCountStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS, params)
 	if err != nil {
 		return nil, err
 	}
 
 	var totalCount int
-	err = s.queryRow(nil, countQuery).Scan(&totalCount)
+	if len(countArgs) > 0 {
+		err = s.queryRow(nil, countQuery, countArgs...).Scan(&totalCount)
+	} else {
+		err = s.queryRow(nil, countQuery).Scan(&totalCount)
+	}
 	if err != nil {
 		s.logger.Error("Failed to count collections", "error", err)
 		return nil, se.NewServiceError(messages.QueryFailed, "Type", "collections", "Error", err.Error())
 	}
 
-	// Build the list query with pagination and status filter
-	listQuery, listArgs, err := createListEntitiesStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS, limit, offset, nil)
+	listQuery, listArgs, err := createCollectionListStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS, limit, offset, params)
 	if err != nil {
 		return nil, err
 	}
 
-	// Query the database
 	rows, err := s.query(nil, listQuery, listArgs...)
 	if err != nil {
 		s.logger.Error("Failed to list collections", "error", err)

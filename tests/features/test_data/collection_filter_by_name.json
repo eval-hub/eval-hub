@@ -1,0 +1,6 @@
+{
+  "name": "list-filter-name-only",
+  "description": "Collection for list filter test - name filter",
+  "tags": ["other"],
+  "benchmarks": [{"id": "arc_easy", "provider_id": "lm_evaluation_harness"}]
+}

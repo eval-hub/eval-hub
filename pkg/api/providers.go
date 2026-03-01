@@ -17,6 +17,7 @@ type ProviderConfig struct {
 	Name        string              `mapstructure:"name" yaml:"name" json:"name"`
 	Description string              `mapstructure:"description" yaml:"description" json:"description"`
 	Title       string              `mapstructure:"title" yaml:"title" json:"title"`
+	Tags        []string            `mapstructure:"tags" yaml:"tags" json:"tags,omitempty"`
 	Benchmarks  []BenchmarkResource `mapstructure:"benchmarks" yaml:"benchmarks" json:"benchmarks"`
 	Runtime     *Runtime            `mapstructure:"runtime" yaml:"runtime" json:"runtime,omitempty"`
 }

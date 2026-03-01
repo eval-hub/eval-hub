@@ -60,6 +60,39 @@ Feature: Providers Endpoint
     When I send a DELETE request to "/api/v1/evaluations/providers/{id}"
     Then the response code should be 204
 
+  Scenario: List providers with name and tags filters
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/provider_filter_by_name.json"
+    Then the response code should be 201
+    And the "resource.id" field in the response should be saved as "value:filter_name_id"
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/provider_filter_by_tag.json"
+    Then the response code should be 201
+    And the "resource.id" field in the response should be saved as "value:filter_tag_id"
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/provider_filter_both.json"
+    Then the response code should be 201
+    And the "resource.id" field in the response should be saved as "value:filter_both_id"
+    When I send a GET request to "/api/v1/evaluations/providers?system_defined=false&name=list-filter-name-only"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 2
+    And the response should contain the value "list-filter-name-only" at path "items[0].name"
+    And the response should contain the value "list-filter-name-only" at path "items[1].name"
+    When I send a GET request to "/api/v1/evaluations/providers?system_defined=false&tags=list-filter-tag"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 2
+    And the response should contain the value "list-filter-tag" at path "items[0].tags[0]"
+    And the response should contain the value "list-filter-tag" at path "items[1].tags[0]"
+    When I send a GET request to "/api/v1/evaluations/providers?system_defined=false&name=list-filter-name-only&tags=list-filter-tag"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    And the response should contain the value "list-filter-name-only" at path "items[0].name"
+    And the response should contain the value "list-filter-tag" at path "items[0].tags[0]"
+    When I send a DELETE request to "/api/v1/evaluations/providers/{{value:filter_name_id}}"
+    Then the response code should be 204
+    When I send a DELETE request to "/api/v1/evaluations/providers/{{value:filter_tag_id}}"
+    Then the response code should be 204
+    When I send a DELETE request to "/api/v1/evaluations/providers/{{value:filter_both_id}}"
+    Then the response code should be 204
+
   Scenario: List providers with invalid limit returns 400
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/providers?limit=-1"
@@ -81,7 +114,7 @@ Feature: Providers Endpoint
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/providers?benchmarks=false"
     Then the response code should be 200
-    Then the response should contain the value "[]" at path "items[0].benchmarks"
+    And the response should not contain the path "items[0].benchmarks"
 
   Scenario: Create a user provider
     Given the service is running

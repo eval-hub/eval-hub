@@ -160,14 +160,12 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 }
 
 func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
-
 	filter = extractQueryParams(filter)
 	params := filter.Params
 	limit := filter.Limit
 	offset := filter.Offset
 
-	// Get total count (with filter if provided)
-	countQuery, countArgs, err := createCountEntitiesStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, filter.Params)
+	countQuery, countArgs, err := createEvaluationCountStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, params)
 	if err != nil {
 		return nil, err
 	}
@@ -190,8 +188,7 @@ func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstr
 		return nil, se.NewServiceError(messages.QueryFailed, "Type", "evaluation jobs", "Error", err.Error())
 	}
 
-	// Build the list query with pagination and filters
-	listQuery, listArgs, err := createListEntitiesStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, limit, offset, params)
+	listQuery, listArgs, err := createEvaluationListStatement(s.sqlConfig.Driver, TABLE_EVALUATIONS, limit, offset, params)
 	if err != nil {
 		return nil, err
 	}

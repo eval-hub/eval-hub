@@ -804,6 +804,14 @@ func (tc *scenarioConfig) theResponseShouldNotContainAtJSONPath(expectedValue st
 	return nil
 }
 
+func (tc *scenarioConfig) theResponseShouldNotContainPath(jsonPath string) error {
+	_, err := tc.getJsonPathValue(jsonPath)
+	if err != nil {
+		return nil // path not present, which is what we want
+	}
+	return logError(fmt.Errorf("expected path %s to be absent from response but it was present", jsonPath))
+}
+
 func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLength(jsonPath string, lengthStr string) error {
 	length, err := strconv.Atoi(lengthStr)
 	if err != nil {
@@ -1031,6 +1039,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the "([^"]*)" field in the response should be saved as "([^"]*)"$`, tc.theFieldShouldBeSaved)
 	ctx.Step(`^the response should contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldContainAtJSONPath)
 	ctx.Step(`^the response should not contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldNotContainAtJSONPath)
+	ctx.Step(`^the response should not contain the path "([^"]*)"$`, tc.theResponseShouldNotContainPath)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLength)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^I wait for the evaluation job status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatus)

@@ -258,8 +258,8 @@ func TestHandleListProviders_ExcludesBenchmarksWhenParamFalse(t *testing.T) {
 	if len(got.Items) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(got.Items))
 	}
-	if len(got.Items[0].Benchmarks) != 0 {
-		t.Errorf("expected empty benchmarks when benchmarks=false, got %d", len(got.Items[0].Benchmarks))
+	if got.Items[0].Benchmarks != nil {
+		t.Errorf("expected benchmarks field absent (nil) when benchmarks=false, got %d items", len(got.Items[0].Benchmarks))
 	}
 }
 
