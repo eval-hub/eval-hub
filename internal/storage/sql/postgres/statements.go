@@ -74,6 +74,7 @@ func (s *postgresStatementsFactory) CreateEvaluationGetEntityStatement(query *sh
 func (s *postgresStatementsFactory) createFilterStatement(filter map[string]any, orderBy string, limit int, offset int) string {
 	var sb strings.Builder
 
+	// indexes start at 1
 	index := 1
 
 	if len(filter) > 0 {
