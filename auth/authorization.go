@@ -2,19 +2,21 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/authorization/authorizerfactory"
+	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/kubernetes"
 )
 
 type SarAuthorizer struct {
 	auth   authorizer.Authorizer
-	config EndpointsAuthorizationConfig
+	config AuthConfig
 	client *kubernetes.Clientset
 	logger *slog.Logger
 }
@@ -27,10 +29,10 @@ func (e *AuthorizationError) Error() string {
 	return e.Message
 }
 
-func NewSarAuthorizer(client *kubernetes.Clientset, logger *slog.Logger, authConfigPath string) (*SarAuthorizer, error) {
-	cfg, err := loadAuthorizerConfig(authConfigPath)
-	if err != nil {
-		return nil, err
+func NewSarAuthorizer(client *kubernetes.Clientset, logger *slog.Logger, config *AuthConfig) (*SarAuthorizer, error) {
+
+	if config == nil {
+		return nil, fmt.Errorf("config is required")
 	}
 
 	authorizerConfig := authorizerfactory.DelegatingAuthorizerConfig{
@@ -47,7 +49,7 @@ func NewSarAuthorizer(client *kubernetes.Clientset, logger *slog.Logger, authCon
 
 	return &SarAuthorizer{
 		auth:   auth,
-		config: *cfg,
+		config: *config,
 		client: client,
 		logger: logger,
 	}, nil
@@ -64,7 +66,11 @@ func (s *SarAuthorizer) Authorize(ctx context.Context, attributesRecords []autho
 	return authorizer.DecisionAllow, "", nil
 }
 
-func (s *SarAuthorizer) AuthorizeRequest(ctx context.Context, request *http.Request) (authorized authorizer.Decision, reason string, err error) {
-	attributesRecords := AttributesFromRequest(request, s.config)
+func (s *SarAuthorizer) AuthorizeRequest(ctx context.Context, req *http.Request) (authorized authorizer.Decision, reason string, err error) {
+	user, ok := request.UserFrom(req.Context())
+	if !ok {
+		return authorizer.DecisionDeny, "User not found in request context. Please authenticate.", nil
+	}
+	attributesRecords := AttributesFromRequest(req, s.config, user)
 	return s.Authorize(ctx, attributesRecords)
 }

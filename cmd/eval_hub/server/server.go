@@ -17,6 +17,7 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 	"github.com/go-playground/validator/v10"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -28,11 +29,12 @@ type Server struct {
 	logger          *slog.Logger
 	serviceConfig   *config.Config
 	providerConfigs map[string]api.ProviderResource
+	authConfig      *auth.AuthConfig
 	storage         abstractions.Storage
 	validate        *validator.Validate
 	runtime         abstractions.Runtime
 	mlflowClient    *mlflowclient.Client
-	auth            *auth.SarAuthorizer
+	client          *kubernetes.Clientset
 }
 
 func (s *Server) isOTELEnabled() bool {
@@ -61,11 +63,11 @@ func (s *Server) isOTELEnabled() bool {
 func NewServer(logger *slog.Logger,
 	serviceConfig *config.Config,
 	providerConfigs map[string]api.ProviderResource,
+	authConfig *auth.AuthConfig,
 	storage abstractions.Storage,
 	validate *validator.Validate,
 	runtime abstractions.Runtime,
 	mlflowClient *mlflowclient.Client,
-	auth *auth.SarAuthorizer,
 ) (*Server, error) {
 
 	if logger == nil {
@@ -357,7 +359,8 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 
 	// Wrap with metrics middleware (outermost for complete observability)
 	handler = Middleware(handler, prometheusEnabled, s.logger)
-	handler = AuthMiddleware(handler, s.logger, s.auth)
+	handler = WithAuthorization(handler, s.logger, s.client, s.authConfig)
+	handler = WithAuthentication(handler, s.logger, s.client)
 
 	return handler, nil
 }

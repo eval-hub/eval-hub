@@ -177,6 +177,13 @@ var (
 		"The request is not authorized: '{{.Error}}'.",
 		"forbidden",
 	)
+
+	// Unauthorized The request is not authenticated: '{{.Error}}'.
+	Unauthorized = createMessage(
+		constants.HTTPCodeUnauthorized,
+		"The request is not authenticated: '{{.Error}}'.",
+		"unauthorized",
+	)
 )
 
 type MessageCode struct {

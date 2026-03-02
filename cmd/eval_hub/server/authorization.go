@@ -9,6 +9,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
+	"k8s.io/client-go/kubernetes"
 )
 
 func writeError(w http.ResponseWriter, msg *messages.MessageCode, params ...any) {
@@ -18,8 +19,12 @@ func writeError(w http.ResponseWriter, msg *messages.MessageCode, params ...any)
 	http.Error(w, string(json), msg.GetStatusCode())
 }
 
-func AuthMiddleware(next http.Handler, logger *slog.Logger, auth *auth.SarAuthorizer) http.Handler {
-	if auth == nil {
+func WithAuthorization(next http.Handler, logger *slog.Logger, client *kubernetes.Clientset, config *auth.AuthConfig) http.Handler {
+
+	auth, err := auth.NewSarAuthorizer(client, logger, config)
+
+	if err != nil {
+		logger.Error("Error creating authorizer", "error", err)
 		return next
 	}
 

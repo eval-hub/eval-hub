@@ -7,6 +7,7 @@ import (
 	"strings"
 	"text/template"
 
+	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 )
 
@@ -22,7 +23,7 @@ func matchMethods(fromRequest string, fromConfig []string) bool {
 	return slices.Contains(fromConfig, m)
 }
 
-func extractRule(request *http.Request, config EndpointsAuthorizationConfig) []ResourceRule {
+func extractRule(request *http.Request, config AuthConfig) []ResourceRule {
 	for _, endpoint := range config.Authorization.Endpoints {
 		if matchEndpoint(request.URL.Path, endpoint.Path) {
 			for _, mapping := range endpoint.Mappings {
@@ -71,7 +72,7 @@ func applyTemplate(templateString string, values TemplateValues) string {
 	return out.String()
 }
 
-func AttributesFromRequest(request *http.Request, config EndpointsAuthorizationConfig) []authorizer.Attributes {
+func AttributesFromRequest(request *http.Request, config AuthConfig, user user.Info) []authorizer.Attributes {
 	extractedRules := extractRule(request, config)
 	resourceAttributes := []authorizer.Attributes{}
 
@@ -99,6 +100,7 @@ func AttributesFromRequest(request *http.Request, config EndpointsAuthorizationC
 			Subresource: applyTemplate(rule.ResourceAttributes.Subresource, templateValues),
 			Name:        applyTemplate(rule.ResourceAttributes.Name, templateValues),
 			Verb:        applyTemplate(rule.ResourceAttributes.Verb, templateValues),
+			User:        user,
 		})
 	}
 	return resourceAttributes

@@ -1,10 +1,10 @@
 package auth
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"testing"
 
@@ -14,7 +14,7 @@ import (
 
 // loadRBACConfigFromYAML loads an RBAC config from a YAML file using Viper.
 // yamlName is the base name of the file (e.g. "rbac_jobs") under testdata/.
-func loadRBACConfigFromYAML(t *testing.T, yamlName string) EndpointsAuthorizationConfig {
+func loadRBACConfigFromYAML(t *testing.T, yamlName string) AuthConfig {
 	t.Helper()
 	_, filename, _, _ := runtime.Caller(0)
 	dir := filepath.Dir(filename)
@@ -27,7 +27,7 @@ func loadRBACConfigFromYAML(t *testing.T, yamlName string) EndpointsAuthorizatio
 		t.Fatalf("ReadInConfig(%q): %v", configPath, err)
 	}
 
-	var cfg EndpointsAuthorizationConfig
+	var cfg AuthConfig
 	if err := v.Unmarshal(&cfg); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
@@ -42,6 +42,47 @@ func attributesToRecords(attributes []authorizer.Attributes) []authorizer.Attrib
 	return records
 }
 
+type TestUser struct {
+	Name string
+}
+
+func NewTestUser(name string) *TestUser {
+	return &TestUser{Name: name}
+}
+
+func (u *TestUser) GetName() string {
+	return u.Name
+}
+
+func (u *TestUser) GetUID() string {
+	return u.Name
+}
+
+func (u *TestUser) GetGroups() []string {
+	return []string{"test"}
+}
+
+func (u *TestUser) GetExtra() map[string][]string {
+	return map[string][]string{}
+}
+
+func eq(got []authorizer.AttributesRecord, want []authorizer.AttributesRecord) bool {
+
+	if len(got) != len(want) {
+		return false
+	}
+	for i, g := range got {
+		w := want[i]
+		if g.Namespace != w.Namespace ||
+			g.APIGroup != w.APIGroup ||
+			g.Resource != w.Resource ||
+			g.Verb != w.Verb {
+			return false
+		}
+	}
+	return true
+}
+
 func TestComputeResourceAttributesSuite(t *testing.T) {
 	t.Run("JobsPost", func(t *testing.T) {
 		cfg := loadRBACConfigFromYAML(t, "rbac_jobs")
@@ -49,8 +90,9 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs", nil)
 		req.Header.Set("X-Tenant", "tenant-a")
 
-		got := attributesToRecords(AttributesFromRequest(req, cfg))
+		got := attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
 
+		fmt.Println("got ", got)
 		want := []authorizer.AttributesRecord{
 			{
 				Namespace: "tenant-a",
@@ -65,7 +107,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 				Verb:      "create",
 			},
 		}
-		if !reflect.DeepEqual(got, want) {
+		if !eq(got, want) {
 			t.Errorf("ComputeResourceAttributes() = %+v, want %+v", got, want)
 		}
 
@@ -76,7 +118,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs", nil)
 		req.Header.Set("X-Tenant", "my-ns")
 
-		got := attributesToRecords(AttributesFromRequest(req, cfg))
+		got := attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
 
 		want := []authorizer.AttributesRecord{
 			{
@@ -86,7 +128,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 				Verb:      "get",
 			},
 		}
-		if !reflect.DeepEqual(got, want) {
+		if !eq(got, want) {
 			t.Errorf("ComputeResourceAttributes() = %+v, want %+v", got, want)
 		}
 	})
@@ -96,7 +138,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/other", nil)
 		req.Header.Set("X-Tenant", "my-ns")
 
-		got := attributesToRecords(AttributesFromRequest(req, cfg))
+		got := attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
 
 		if len(got) != 0 {
 			t.Errorf("ComputeResourceAttributes() = %+v, want nil/empty", got)
@@ -107,7 +149,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/namespaces?tenant=query-ns", nil)
 
-		got := attributesToRecords(AttributesFromRequest(req, cfg))
+		got := attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
 
 		want := []authorizer.AttributesRecord{
 			{
@@ -117,7 +159,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 				Verb:      "get",
 			},
 		}
-		if !reflect.DeepEqual(got, want) {
+		if !eq(got, want) {
 			t.Errorf("ComputeResourceAttributes() = %+v, want %+v", got, want)
 		}
 	})
@@ -127,7 +169,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/evaluations/collections", nil)
 		req.Header.Set("X-Tenant", "tenant-b")
 
-		got := attributesToRecords(AttributesFromRequest(req, cfg))
+		got := attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
 
 		want := []authorizer.AttributesRecord{
 			{
@@ -138,14 +180,14 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 			},
 		}
 
-		if !reflect.DeepEqual(got, want) {
+		if !eq(got, want) {
 			t.Errorf("ComputeResourceAttributes() = %+v, want %+v", got, want)
 		}
 
 		req = httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/providers", nil)
 		req.Header.Set("X-Tenant", "tenant-b")
 
-		got = attributesToRecords(AttributesFromRequest(req, cfg))
+		got = attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
 
 		want = []authorizer.AttributesRecord{
 			{
@@ -156,7 +198,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 			},
 		}
 
-		if !reflect.DeepEqual(got, want) {
+		if !eq(got, want) {
 			t.Errorf("ComputeResourceAttributes() = %+v, want %+v", got, want)
 		}
 	})
@@ -165,7 +207,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs", nil)
 
-		got := attributesToRecords(AttributesFromRequest(req, cfg))
+		got := attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
 
 		// Rule still matches; namespace comes from empty header (template yields empty)
 		want := []authorizer.AttributesRecord{
@@ -176,7 +218,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 				Verb:      "get",
 			},
 		}
-		if !reflect.DeepEqual(got, want) {
+		if !eq(got, want) {
 			t.Errorf("ComputeResourceAttributes() = %+v, want %+v", got, want)
 		}
 
