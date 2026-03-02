@@ -367,7 +367,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 }
 
 func (s *Server) setupAuth(handler http.Handler) (http.Handler, error) {
-	if !s.serviceConfig.Service.LocalMode {
+	if !s.serviceConfig.Service.LocalMode && !s.serviceConfig.Service.DisableAuthentication {
 		client, err := k8s.NewKubernetesClient()
 		if err != nil {
 			return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
