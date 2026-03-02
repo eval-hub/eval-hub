@@ -40,6 +40,6 @@ func evaluationJobConfigBenchmarksMin(sl validator.StructLevel) {
 		return
 	}
 	if len(cfg.Benchmarks) < 1 {
-		sl.ReportError(cfg.Benchmarks, "Benchmarks", "benchmarks", "min=1", "")
+		sl.ReportError(cfg.Benchmarks, "Benchmarks", "benchmarks", "min", "1")
 	}
 }
