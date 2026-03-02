@@ -46,7 +46,7 @@ func WithAuthorization(next http.Handler, logger *slog.Logger, client *kubernete
 
 		if decision != authorizer.DecisionAllow {
 			logger.Error("Request forbidden", "path", r.URL.Path, "method", r.Method, "reason", reason)
-			writeError(w, messages.Forbidden, "Error", reason)
+			writeError(w, messages.Forbidden)
 			return
 		}
 

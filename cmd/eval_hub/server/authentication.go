@@ -37,7 +37,7 @@ func WithAuthentication(next http.Handler, logger *slog.Logger, client *kubernet
 		}
 		if !ok {
 			logger.Error("Request not authenticated", "path", r.URL.Path, "method", r.Method)
-			writeError(w, messages.Unauthorized, "Error", "Request not authenticated")
+			writeError(w, messages.Unauthorized)
 			return
 		}
 
