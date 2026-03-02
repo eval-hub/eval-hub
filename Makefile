@@ -3,6 +3,8 @@
 # Variables
 BINARY_NAME = eval-hub
 CMD_PATH = ./cmd/eval_hub
+INIT_BINARY_NAME = eval-hub-init
+INIT_CMD_PATH = ./cmd/eval_hub_init
 BIN_DIR = bin
 PORT ?= 8080
 
@@ -47,15 +49,21 @@ FULL_BUILD_NUMBER ?= 0.2.0
 LDFLAGS_X = -X "${BUILD_PACKAGE}.Build=${FULL_BUILD_NUMBER}" -X "${BUILD_PACKAGE}.BuildDate=$(DATE)"
 LDFLAGS = -buildmode=exe ${LDFLAGS_X}
 
-build: $(BIN_DIR) ## Build the binary
+build: $(BIN_DIR) ## Build the binaries
 	@echo "Building $(BINARY_NAME) with ${LDFLAGS}"
 	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(BINARY_NAME) $(CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(BINARY_NAME)"
+	@echo "Building $(INIT_BINARY_NAME) with ${LDFLAGS}"
+	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(INIT_BINARY_NAME) $(INIT_CMD_PATH)
+	@echo "Build complete: $(BIN_DIR)/$(INIT_BINARY_NAME)"
 
-build-coverage: $(BIN_DIR) ## Build the binary with coverage
+build-coverage: $(BIN_DIR) ## Build the binaries with coverage
 	@echo "Building $(BINARY_NAME)-cov with -cover -covermode=atomic -ldflags ${LDFLAGS} "
 	@go build -race -cover -covermode=atomic -coverpkg=./... -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(BINARY_NAME)-cov $(CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(BINARY_NAME)-cov"
+	@echo "Building $(INIT_BINARY_NAME)-cov with -cover -covermode=atomic -ldflags ${LDFLAGS} "
+	@go build -race -cover -covermode=atomic -coverpkg=./... -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(INIT_BINARY_NAME)-cov $(INIT_CMD_PATH)
+	@echo "Build complete: $(BIN_DIR)/$(INIT_BINARY_NAME)-cov"
 
 SERVER_PID_FILE ?= $(BIN_DIR)/pid
 

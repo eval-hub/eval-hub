@@ -19,12 +19,15 @@ const (
 	defaultJobTTLSeconds            = int32(3600)
 	defaultJobBackoffLimit          = int32(3)
 	adapterContainerName            = "adapter"
+	initContainerName               = "init"
 	jobSpecVolumeName               = "job-spec"
 	dataVolumeName                  = "data"
+	testDataVolumeName              = "test-data"
 	serviceCAVolumeName             = "evalhub-service-ca"
 	jobSpecFileName                 = "job.json"
 	jobSpecMountPath                = "/meta/job.json"
 	dataMountPath                   = "/data"
+	testDataMountPath               = "/test_data"
 	serviceCAMountPath              = "/etc/pki/ca-trust/source/anchors"
 	specSuffix                      = "-spec"
 	envJobIDName                    = "JOB_ID"
@@ -41,10 +44,17 @@ const (
 	envOCIAuthConfigPathName        = "OCI_AUTH_CONFIG_PATH"
 	modelAuthVolumeName             = "model-auth"
 	modelAuthMountPath              = "/var/run/secrets/model"
-	modelAuthTokenFile              = "api-key"
-	modelAuthCACertFile             = "ca_cert"
+	testDataSecretVolumeName        = "test-data-secret"
+	testDataSecretMountPath         = "/var/run/secrets/test-data"
+	testDataInitImage               = "quay.io/evalhub/evalhub:latest"
 	serviceCABundleFile             = "service-ca.crt"
 	envMLFlowCertPathName           = "MLFLOW_TRACKING_SERVER_CERT_PATH"
+	envTestDataS3BucketName         = "TEST_DATA_S3_BUCKET"
+	envTestDataS3KeyName            = "TEST_DATA_S3_KEY"
+	defaultInitCPURequest           = "100m"
+	defaultInitCPULimit             = "500m"
+	defaultInitMemoryRequest        = "128Mi"
+	defaultInitMemoryLimit          = "512Mi"
 	defaultAllowPrivilegeEscalation = false
 	//defaultRunAsUser                = int64(1000)
 	//defaultRunAsGroup               = int64(1000)
@@ -251,6 +261,64 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 		})
 	}
 
+	// Add test data volumes and init container when S3 test data is configured.
+	var initContainers []corev1.Container
+	if hasS3TestData(cfg) {
+		initCommand := defaultTestDataInitCmd
+		initResources := corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse(defaultInitCPURequest),
+				corev1.ResourceMemory: resource.MustParse(defaultInitMemoryRequest),
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse(defaultInitCPULimit),
+				corev1.ResourceMemory: resource.MustParse(defaultInitMemoryLimit),
+			},
+		}
+		volumes = append(volumes, corev1.Volume{
+			Name: testDataVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		})
+		volumes = append(volumes, corev1.Volume{
+			Name: testDataSecretVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: cfg.testDataS3.secretRef,
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      testDataVolumeName,
+			MountPath: testDataMountPath,
+		})
+
+		initContainers = append(initContainers, corev1.Container{
+			Name:            initContainerName,
+			Image:           testDataInitImage,
+			ImagePullPolicy: corev1.PullAlways,
+			Command:         []string{initCommand},
+			Resources:       initResources,
+			Env: []corev1.EnvVar{
+				{Name: envTestDataS3BucketName, Value: cfg.testDataS3.bucket},
+				{Name: envTestDataS3KeyName, Value: normalizeS3Key(cfg.testDataS3.key)},
+			},
+			SecurityContext: defaultSecurityContext(),
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      testDataVolumeName,
+					MountPath: testDataMountPath,
+				},
+				{
+					Name:      testDataSecretVolumeName,
+					MountPath: testDataSecretMountPath,
+					ReadOnly:  true,
+				},
+			},
+		})
+	}
+
 	// Set ServiceAccount if configured
 	// applied below in template spec
 
@@ -270,7 +338,8 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 					Annotations: annotations,
 				},
 				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyNever,
+					RestartPolicy:  corev1.RestartPolicyNever,
+					InitContainers: initContainers,
 					Containers: []corev1.Container{
 						{
 							Name:            adapterContainerName,
@@ -336,6 +405,14 @@ func buildContainerCommand(entrypoint []string) []string {
 		return nil
 	}
 	return command
+}
+
+func hasS3TestData(cfg *jobConfig) bool {
+	return cfg.testDataS3.secretRef != "" && cfg.testDataS3.bucket != "" && cfg.testDataS3.key != ""
+}
+
+func normalizeS3Key(key string) string {
+	return strings.TrimPrefix(strings.TrimSpace(key), "/")
 }
 
 func defaultSecurityContext() *corev1.SecurityContext {

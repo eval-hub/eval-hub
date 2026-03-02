@@ -177,6 +177,57 @@ func TestBuildJobConfigModelAuthSecretRefEmptyWhenNil(t *testing.T) {
 	}
 }
 
+func TestBuildJobConfigTestDataS3(t *testing.T) {
+	t.Setenv(serviceURLEnv, "http://eval-hub")
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-901"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.BenchmarkConfig{
+				{
+					Ref: api.Ref{ID: "bench-1"},
+					TestDataRef: &api.TestDataRef{
+						S3: &api.S3TestDataRef{
+							Bucket:    "bucket-1",
+							Key:       "/a/b",
+							SecretRef: "s3-secret",
+						},
+					},
+				},
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
+			},
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, "bench-1", 0)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.testDataS3.bucket != "bucket-1" {
+		t.Fatalf("expected testDataS3Bucket %q, got %q", "bucket-1", cfg.testDataS3.bucket)
+	}
+	if cfg.testDataS3.key != "/a/b" {
+		t.Fatalf("expected testDataS3Key %q, got %q", "/a/b", cfg.testDataS3.key)
+	}
+	if cfg.testDataS3.secretRef != "s3-secret" {
+		t.Fatalf("expected testDataS3SecretRef %q, got %q", "s3-secret", cfg.testDataS3.secretRef)
+	}
+}
+
 func TestBuildJobConfigAllowsNumExamplesOnly(t *testing.T) {
 	t.Setenv(serviceURLEnv, "http://eval-hub")
 	evaluation := &api.EvaluationJobResource{
