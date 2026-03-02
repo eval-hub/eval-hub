@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: marius
+  name: test-sa
   namespace: default
 
 ---
@@ -34,7 +34,7 @@ metadata:
   namespace: default
 subjects:
   - kind: ServiceAccount
-    name: marius
+    name: test-sa
     namespace: default
 roleRef:
   kind: Role
