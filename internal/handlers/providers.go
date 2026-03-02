@@ -184,7 +184,7 @@ func isAllowedPatch(operation api.PatchOp, path string) bool {
 	}
 	// test prefix matches next
 	for _, patch := range allowedPatches {
-		if patch.Prefix && strings.HasPrefix(path, patch.Path) && patch.Op == operation {
+		if (patch.Prefix && patch.Op == operation) && strings.HasPrefix(path, patch.Path+"/") {
 			return true
 		}
 	}
