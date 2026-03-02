@@ -273,7 +273,7 @@ func (r *LocalRuntime) runBenchmark(
 	// via the Win32 API (CreateProcess) and there is no concept of zombie processes
 	// in the same way. Until a common cross-platform approach is found for Linux,
 	// macOS, and Windows, cmd.Wait() serves as the portable solution.
-	//_ = cmd.Wait()
+	_ = cmd.Wait()
 
 	return nil
 }
