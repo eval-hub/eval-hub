@@ -533,6 +533,9 @@ func (tc *scenarioConfig) getEndpoint(path string) (string, error) {
 }
 
 func (tc *scenarioConfig) iSendARequestToWithInlineBody(method, path string, body *godog.DocString) error {
+	if body == nil {
+		return logError(fmt.Errorf("inline body is missing"))
+	}
 	return tc.iSendARequestToWithBody(method, path, body.Content)
 }
 
