@@ -3,6 +3,7 @@ package sql
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"slices"
 	"time"
@@ -460,6 +461,15 @@ func (s *SQLStorage) computeJobTestResult(job *api.EvaluationJobResource) {
 			s.logger.Info("Benchmark test result is not defined for benchmark", "benchmark_id", benchmark.ID, "benchmark_index", benchmark.BenchmarkIndex)
 			continue
 		}
+		if benchmark.BenchmarkIndex < 0 || benchmark.BenchmarkIndex >= len(resolvedJobBenchmarks) {
+			s.logger.Warn(
+				"benchmark index out of range for resolved benchmarks",
+				"benchmark_id", benchmark.ID,
+				"benchmark_index", benchmark.BenchmarkIndex,
+				"resolved_count", len(resolvedJobBenchmarks),
+			)
+			continue
+		}
 		benchmarkWeight := resolvedJobBenchmarks[benchmark.BenchmarkIndex].Weight
 		if benchmarkWeight == 0 {
 			// if the benchmark weight is not defined, we set it to 1
@@ -526,7 +536,11 @@ func (s *SQLStorage) computeBenchmarkTestResult(job *api.EvaluationJobResource, 
 		if primaryScore != nil && primaryScore.Metric != "" {
 			primaryMetric := primaryScore.Metric
 			if primaryMetricValue, ok := benchmarkStatusEvent.Metrics[primaryMetric]; ok {
-				primaryMetricValueFloat := float32(primaryMetricValue.(float64))
+				primaryMetricValueFloat, err := castAnyToFloat32(primaryMetricValue)
+				if err != nil {
+					s.logger.Error("Failed to cast primary metric value to float32", "error", err, "primary_metric", primaryMetric, "primary_metric_value", primaryMetricValue)
+					return nil
+				}
 				var threshold float32
 				if benchmark.PassCriteria != nil {
 					threshold = benchmark.PassCriteria.Threshold
@@ -548,4 +562,23 @@ func (s *SQLStorage) computeBenchmarkTestResult(job *api.EvaluationJobResource, 
 		}
 	}
 	return nil
+}
+
+func castAnyToFloat32(primaryMetricValue any) (float32, error) {
+	var primaryMetricValueFloat float32
+	switch v := primaryMetricValue.(type) {
+	case float64:
+		primaryMetricValueFloat = float32(v)
+	case float32:
+		primaryMetricValueFloat = v
+	case int:
+		primaryMetricValueFloat = float32(v)
+	case int32:
+		primaryMetricValueFloat = float32(v)
+	case int64:
+		primaryMetricValueFloat = float32(v)
+	default:
+		return 0, fmt.Errorf("unsupported type: %T for primary metric value", primaryMetricValue)
+	}
+	return primaryMetricValueFloat, nil
 }

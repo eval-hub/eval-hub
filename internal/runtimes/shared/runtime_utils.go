@@ -14,7 +14,10 @@ func ResolveProvider(providerID string, providers map[string]api.ProviderResourc
 	}
 	if storage != nil {
 		p, err := storage.GetProvider(providerID)
-		if err == nil && p != nil {
+		if err != nil {
+			return nil, fmt.Errorf("get provider %s: %w", providerID, err)
+		}
+		if p != nil {
 			return p, nil
 		}
 	}

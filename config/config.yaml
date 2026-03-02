@@ -19,9 +19,8 @@ env_mappings:
   MLFLOW_WORKSPACE: mlflow.workspace
 # Database configuration
 database:
-  driver: pgx
-  url: postgres://nbs@localhost:5432/postgres?sslmode=disable
-  database_name: postgres
+  driver: sqlite
+  url: file::eval_hub:?mode=memory&cache=shared
   # driver: pgx
   # url: postgres://user@localhost:5432/eval_hub
 # MLFlow configuration

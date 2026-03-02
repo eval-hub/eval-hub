@@ -16,7 +16,7 @@ type GetCollectionFunc func(id string) (*api.CollectionResource, error)
 
 // GetJobBenchmarks returns the effective benchmark list for a job: from the job's collection when set, otherwise from job.Benchmarks.
 func GetJobBenchmarks(job *api.EvaluationJobResource, getCollection GetCollectionFunc) ([]api.BenchmarkConfig, error) {
-	if job.Collection != nil && job.Collection.ID != "" {
+	if job != nil && job.Collection != nil && job.Collection.ID != "" {
 		if getCollection == nil {
 			return nil, fmt.Errorf("collection is set but getCollection is not available for job %s", job.Resource.ID)
 		}
