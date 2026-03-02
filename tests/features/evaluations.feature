@@ -6,6 +6,7 @@ Feature: Evaluations Endpoint
 
   Scenario: Create an evaluation job
     Given the service is running
+    When the mode is local or CI then skip this scenario
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
@@ -72,6 +73,7 @@ Feature: Evaluations Endpoint
 
   Scenario: Create evaluation job with Collection
     Given the service is running
+    When the mode is local or CI then skip this scenario
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
     Then the response code should be 202
     And the "resource.id" field in the response should be saved as "value:collection_id"

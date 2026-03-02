@@ -73,8 +73,6 @@ type scenarioConfig struct {
 	assets map[string][]string
 
 	values map[string]string
-
-	skipCompletionAssertions bool
 }
 
 func getLogger() *log.Logger {
@@ -306,10 +304,12 @@ func (tc *scenarioConfig) iSendARequestTo(method, path string) error {
 	return tc.iSendARequestToWithBody(method, path, "")
 }
 
-func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) error {
+// isLocalOrCIMode returns true when the test cannot reliably wait for evaluation job
+// completion (e.g. GitHub Actions, localhost, or in-process server). Scenarios that
+// require waiting for job completion should use the explicit step "When the mode is local or CI then skip this scenario" at the start.
+func (tc *scenarioConfig) isLocalOrCIMode() bool {
 	githubActions := os.Getenv("GITHUB_ACTIONS")
 	serverURL := os.Getenv("SERVER_URL")
-	logDebug("GITHUB_ACTIONS=%q\n", githubActions)
 	isLocalhost := false
 	if serverURL != "" {
 		host := serverURL
@@ -319,13 +319,20 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) err
 		isLocalhost = host == "localhost" || host == "127.0.0.1" || host == "::1"
 	}
 	isLocalMode := serverURL == "" || (tc.apiFeature != nil && tc.apiFeature.server != nil)
-	// Skip wait in GitHub Actions or local runs (SERVER_URL empty/localhost or in-process server).
-	if githubActions == "true" || isLocalhost || isLocalMode {
-		// TODO: iWaitForEvaluationJobStatus should wait once async completion is available.
-		logDebug("Skipping status wait (GITHUB_ACTIONS=%q, localhost=%t, local=%t); skipping completion assertions\n", githubActions, isLocalhost, isLocalMode)
-		tc.skipCompletionAssertions = true
-		return nil
+	return githubActions == "true" || isLocalhost || isLocalMode
+}
+
+// whenTheModeIsLocalOrCIThenSkipThisScenario skips the scenario when running in local or CI
+// mode so that scenarios requiring job completion are explicitly skipped instead of failing or timing out.
+func (tc *scenarioConfig) whenTheModeIsLocalOrCIThenSkipThisScenario() error {
+	if tc.isLocalOrCIMode() {
+		logDebug("Skipping scenario: mode is local or CI (cannot wait for job completion)\n")
+		return godog.ErrSkip
 	}
+	return nil
+}
+
+func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) error {
 	deadline := time.Now().Add(2 * time.Minute)
 	var lastErr error
 	for time.Now().Before(deadline) {
@@ -757,15 +764,7 @@ func (tc *scenarioConfig) getJsonPathValue(jsonPath string) (interface{}, error)
 	return foundValue, nil
 }
 
-func isCompletionAssertionPath(jsonPath string) bool {
-	return strings.HasPrefix(jsonPath, "$.status.") || strings.HasPrefix(jsonPath, "$.results.")
-}
-
 func (tc *scenarioConfig) theResponseShouldContainAtJSONPath(expectedValue string, jsonPath string) error {
-	if tc.skipCompletionAssertions && isCompletionAssertionPath(jsonPath) {
-		logDebug("Skipping completion assertion for path %s (CI or local-mode)\n", jsonPath)
-		return nil
-	}
 	if strings.Contains(expectedValue, "{{") {
 		expanded, err := tc.substituteValues(expectedValue)
 		if err != nil {
@@ -1034,6 +1033,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLength)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^I wait for the evaluation job status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatus)
+	ctx.Step(`^the mode is local or CI then skip this scenario$`, tc.whenTheModeIsLocalOrCIThenSkipThisScenario)
 	// Other steps
 	ctx.Step(`^fix this step$`, tc.fixThisStep)
 }

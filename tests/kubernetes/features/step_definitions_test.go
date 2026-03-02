@@ -213,6 +213,10 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	tc := newTestContext()
 
 	ctx.Before(func(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
+		if missing := missingRequiredEnvVars(); len(missing) > 0 {
+			fmt.Printf("Skipping Kubernetes scenario; missing env vars: %s\n", strings.Join(missing, ", "))
+			return ctx, godog.ErrSkip
+		}
 		tc.reset()
 		return ctx, nil
 	})
