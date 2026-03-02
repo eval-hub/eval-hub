@@ -529,8 +529,8 @@ func TestHandlePatchProviderRejectsImmutablePaths(t *testing.T) {
 		if recorder.Code != 400 {
 			t.Errorf("path %q: expected 400, got %d body %s", path, recorder.Code, recorder.Body.String())
 		}
-		if !strings.Contains(recorder.Body.String(), "immutable") {
-			t.Errorf("path %q: expected response to mention immutable, got %s", path, recorder.Body.String())
+		if !strings.Contains(recorder.Body.String(), "is not allowed for the path") {
+			t.Errorf("path %q: expected response to mention 'is not allowed for the path', got %s", path, recorder.Body.String())
 		}
 	}
 }
