@@ -77,6 +77,18 @@ type PassCriteria struct {
 	Threshold float32 `json:"threshold,omitempty" validate:"omitempty,number"`
 }
 
+// S3TestDataRef represents S3 source for test data.
+type S3TestDataRef struct {
+	Bucket    string `json:"bucket" validate:"required"`
+	Key       string `json:"key" validate:"required"`
+	SecretRef string `json:"secret_ref" validate:"required"`
+}
+
+// TestDataRef represents external test data sources.
+type TestDataRef struct {
+	S3 *S3TestDataRef `json:"s3,omitempty"`
+}
+
 // BenchmarkConfig represents a reference to a benchmark
 type BenchmarkConfig struct {
 	Ref
@@ -85,6 +97,7 @@ type BenchmarkConfig struct {
 	PrimaryScore *PrimaryScore  `json:"primary_score,omitempty"`
 	PassCriteria *PassCriteria  `json:"pass_criteria,omitempty"`
 	Parameters   map[string]any `json:"parameters,omitempty"`
+	TestDataRef  *TestDataRef   `json:"test_data_ref,omitempty"`
 }
 
 // ExperimentTag represents a tag on an experiment
@@ -200,7 +213,7 @@ type EvaluationJobConfig struct {
 	Tags         []string           `json:"tags,omitempty"`
 	Model        ModelRef           `json:"model" validate:"required"`
 	PassCriteria *PassCriteria      `json:"pass_criteria,omitempty"`
-	Benchmarks   []BenchmarkConfig  `json:"benchmarks" validate:"required,min=1,dive"`
+	Benchmarks   []BenchmarkConfig  `json:"benchmarks" validate:"required_without=Collection,dive"`
 	Collection   *Ref               `json:"collection,omitempty"`
 	Experiment   *ExperimentConfig  `json:"experiment,omitempty"`
 	Custom       *map[string]any    `json:"custom,omitempty"`

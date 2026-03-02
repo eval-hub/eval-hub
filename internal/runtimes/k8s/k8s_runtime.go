@@ -9,6 +9,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/constants"
+	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,8 +50,12 @@ func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 }
 
 func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, storage *abstractions.Storage) error {
+	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	if err != nil {
+		return err
+	}
 	go func() {
-		for idx, bench := range evaluation.Benchmarks {
+		for idx, bench := range benchmarks {
 			benchCtx := context.Background()
 			if err := r.createBenchmarkResources(benchCtx, r.logger, evaluation, &bench, idx); err != nil {
 				r.logger.Error(

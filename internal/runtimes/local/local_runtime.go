@@ -106,8 +106,9 @@ func (r *LocalRuntime) RunEvaluationJob(
 		return fmt.Errorf("local runtime: nil context — WithContext must be called before RunEvaluationJob")
 	}
 
-	if len(evaluation.Benchmarks) == 0 {
-		return fmt.Errorf("no benchmarks configured for job %s", evaluation.Resource.ID)
+	benchmarksToRun, err := shared.ResolveBenchmarks(evaluation, storage)
+	if err != nil {
+		return err
 	}
 
 	// Capture job ID before launching goroutine to avoid a data race
@@ -122,7 +123,7 @@ func (r *LocalRuntime) RunEvaluationJob(
 	}
 
 	go func() {
-		for i, bench := range evaluation.Benchmarks {
+		for i, bench := range benchmarksToRun {
 			if err := r.runBenchmark(jobID, bench, i, evaluation, callbackURL, storage); err != nil {
 				r.logger.Error(
 					"local runtime benchmark launch failed",
