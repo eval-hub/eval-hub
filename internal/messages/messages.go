@@ -60,6 +60,20 @@ var (
 		"invalid_json_request",
 	)
 
+	// InvalidPatchOperation The patch operation '{{.Operation}}' is not valid. Allowed operations are: {{.AllowedOperations}}.
+	InvalidPatchOperation = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The patch operation '{{.Operation}}' is not valid. Allowed operations are: {{.AllowedOperations}}.",
+		"invalid_patch_operation",
+	)
+
+	// UnallowedPatch The operation '{{.Operation}}' is not allowed for the path '{{.Path}}'.
+	UnallowedPatch = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The operation '{{.Operation}}' is not allowed for the path '{{.Path}}'.",
+		"unallowed_patch",
+	)
+
 	// RequestValidationFailed The request validation failed: '{{.Error}}'. Please check the request and try again.
 	RequestValidationFailed = createMessage(
 		constants.HTTPCodeBadRequest,

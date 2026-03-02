@@ -98,8 +98,12 @@ func logDebug(format string, a ...any) {
 	getLogger().Printf(format, a...)
 }
 
-func logError(err error) error {
-	getLogger().Printf("Error: %v\n%s\n", err, string(debug.Stack()))
+func logError(err error, withStack ...bool) error {
+	if len(withStack) > 0 && withStack[0] {
+		getLogger().Printf("Error: %v\n%s\n", err, string(debug.Stack()))
+	} else {
+		getLogger().Printf("Error: %v\n", err)
+	}
 	return err
 }
 
@@ -535,6 +539,13 @@ func (tc *scenarioConfig) getEndpoint(path string) (string, error) {
 	return endpoint, nil
 }
 
+func (tc *scenarioConfig) iSendARequestToWithInlineBody(method, path string, body *godog.DocString) error {
+	if body == nil {
+		return logError(fmt.Errorf("inline body is missing"))
+	}
+	return tc.iSendARequestToWithBody(method, path, body.Content)
+}
+
 func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) error {
 	endpoint, err := tc.getEndpoint(path)
 	if err != nil {
@@ -777,6 +788,18 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPath(expectedValue strin
 		return logError(err)
 	}
 
+	if strings.HasPrefix(expectedValue, "regex:") {
+		rawExpr := strings.TrimPrefix(expectedValue, "regex:")
+		expr, err := regexp.Compile(rawExpr)
+		if err != nil {
+			return logError(fmt.Errorf("invalid regex %q: %w", rawExpr, err))
+		}
+		if expr.MatchString(foundValue) {
+			logDebug("Value %s matches regex %s in path %s", foundValue, rawExpr, jsonPath)
+			return nil
+		}
+	}
+
 	// make this contains and not equals
 	// if foundValue == strings.TrimSpace(expectedValue) {
 	values := strings.SplitSeq(expectedValue, "|")
@@ -890,6 +913,8 @@ func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, 
 			url = "evaluations/jobs"
 		case "collections":
 			url = "evaluations/collections"
+		case "providers":
+			url = "evaluations/providers"
 		}
 		ids := slices.Clone(ids)
 		for _, id := range ids {
@@ -1018,6 +1043,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I unset transaction-id$`, tc.iUnsetTransactionId)
 	ctx.Step(`^I send a (GET|DELETE|POST|PUT) request to "([^"]*)"$`, tc.iSendARequestTo)
 	ctx.Step(`^I send a (POST|PUT|PATCH) request to "([^"]*)" with body "([^"]*)"$`, tc.iSendARequestToWithBody)
+	ctx.Step(`^I send a (POST|PUT|PATCH) request to "([^"]*)" with body:$`, tc.iSendARequestToWithInlineBody)
 	ctx.Step(`^the response code should be (\d+)$`, tc.theResponseStatusShouldBe)
 	ctx.Step(`^the response should contain "([^"]*)" with value "([^"]*)"$`, tc.theResponseShouldContainWithValue)
 	ctx.Step(`^the response should contain "([^"]*)"$`, tc.theResponseShouldContain)
