@@ -141,8 +141,11 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 
 	benchmarkID := benchmark.ID
 	// Provider/benchmark validation should be handled during creation.
-	provider := r.providers[benchmark.ProviderID]
-	jobConfig, err := buildJobConfig(evaluation, &provider, benchmarkID, benchmarkIndex)
+	provider, err := shared.ResolveProvider(benchmark.ProviderID, r.providers, nil)
+	if err != nil {
+		return err
+	}
+	jobConfig, err := buildJobConfig(evaluation, provider, benchmark, benchmarkIndex)
 	if err != nil {
 		logger.Error("kubernetes job config error", "benchmark_id", benchmarkID, "error", err)
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)

@@ -4,12 +4,14 @@ import (
 	"fmt"
 
 	"github.com/eval-hub/eval-hub/internal/constants"
+	evalcommon "github.com/eval-hub/eval-hub/internal/common"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
-func GetOverallJobStatus(job *api.EvaluationJobResource) (api.OverallState, *api.MessageInfo) {
+// GetOverallJobStatus returns overall state and message. getCollection is used to resolve job benchmark count when job has only a collection reference.
+func GetOverallJobStatus(job *api.EvaluationJobResource, getCollection evalcommon.GetCollectionFunc) (api.OverallState, *api.MessageInfo) {
 	// group all benchmarks by state
 	benchmarkStates := make(map[api.State]int)
 	failureMessage := ""
@@ -20,8 +22,12 @@ func GetOverallJobStatus(job *api.EvaluationJobResource) (api.OverallState, *api
 		}
 	}
 
-	// determine the overall job status
-	total := len(job.Benchmarks)
+	// determine the overall job status (use resolved benchmark count for collection-only jobs)
+	benchmarks, err := evalcommon.GetJobBenchmarks(job, getCollection)
+	total := 0
+	if err == nil {
+		total = len(benchmarks)
+	}
 	completed, failed, running := benchmarkStates[api.StateCompleted], benchmarkStates[api.StateFailed], benchmarkStates[api.StateRunning]
 
 	var overallState api.OverallState

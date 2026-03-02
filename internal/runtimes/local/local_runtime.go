@@ -153,23 +153,16 @@ func (r *LocalRuntime) runBenchmark(
 	callbackURL *string,
 	storage abstractions.Storage,
 ) error {
-	provider, ok := r.providers[bench.ProviderID]
-	if !ok && storage != nil {
-		p, err := storage.GetProvider(bench.ProviderID)
-		if err == nil && p != nil {
-			provider = *p
-			ok = true
-		}
-	}
-	if !ok {
-		return fmt.Errorf("provider %q not found", bench.ProviderID)
+	provider, err := shared.ResolveProvider(bench.ProviderID, r.providers, storage)
+	if err != nil {
+		return err
 	}
 	if provider.Runtime == nil || provider.Runtime.Local == nil || provider.Runtime.Local.Command == "" {
 		return serviceerrors.NewServiceError(messages.LocalRuntimeNotEnabled, "ProviderID", bench.ProviderID)
 	}
 
 	// Build job spec JSON using shared logic
-	spec, err := shared.BuildJobSpec(evaluation, bench.ProviderID, bench.ID, benchmarkIndex, callbackURL)
+	spec, err := shared.BuildJobSpec(evaluation, bench.ProviderID, &bench, benchmarkIndex, callbackURL)
 	if err != nil {
 		return fmt.Errorf("build job spec: %w", err)
 	}
@@ -280,7 +273,7 @@ func (r *LocalRuntime) runBenchmark(
 	// via the Win32 API (CreateProcess) and there is no concept of zombie processes
 	// in the same way. Until a common cross-platform approach is found for Linux,
 	// macOS, and Windows, cmd.Wait() serves as the portable solution.
-	_ = cmd.Wait()
+	//_ = cmd.Wait()
 
 	return nil
 }

@@ -7,6 +7,20 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+// ResolveProvider returns the provider for providerID from the in-memory map, or from storage if not present and storage is non-nil.
+func ResolveProvider(providerID string, providers map[string]api.ProviderResource, storage abstractions.Storage) (*api.ProviderResource, error) {
+	if p, ok := providers[providerID]; ok {
+		return &p, nil
+	}
+	if storage != nil {
+		p, err := storage.GetProvider(providerID)
+		if err == nil && p != nil {
+			return p, nil
+		}
+	}
+	return nil, fmt.Errorf("provider %q not found", providerID)
+}
+
 // ResolveBenchmarks returns the benchmarks to run: from the job's Collection when set (via storage.GetCollection), otherwise from the job's Benchmarks.
 // If evaluation.Collection is set, storage must be non-nil.
 func ResolveBenchmarks(evaluation *api.EvaluationJobResource, storage abstractions.Storage) ([]api.BenchmarkConfig, error) {

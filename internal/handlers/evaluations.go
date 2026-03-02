@@ -110,18 +110,6 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				},
 				EvaluationJobConfig: *evaluation,
 			}
-			// When the job is created with only a collection reference, resolve the collection
-			// and set job.Benchmarks so the runtime can build job specs (FindBenchmarkConfig).
-			if job.Collection != nil && job.Collection.ID != "" && len(job.Benchmarks) == 0 {
-				collection, getErr := storage.WithContext(runtimeCtx).GetCollection(job.Collection.ID)
-				if getErr != nil {
-					return getErr
-				}
-				if collection == nil || len(collection.Benchmarks) == 0 {
-					return serviceerrors.NewServiceError(messages.RequestFieldInvalid, "Error", "collection has no benchmarks")
-				}
-				job.EvaluationJobConfig.Benchmarks = collection.Benchmarks
-			}
 			return storage.WithContext(runtimeCtx).CreateEvaluationJob(job)
 		},
 		"storage",

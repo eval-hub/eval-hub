@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
+	evalcommon "github.com/eval-hub/eval-hub/internal/common"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	se "github.com/eval-hub/eval-hub/internal/serviceerrors"
 	commonStorage "github.com/eval-hub/eval-hub/internal/storage/common"
@@ -279,6 +280,7 @@ func (s *SQLStorage) checkEvaluationJobState(evaluationJobID string, evaluationJ
 
 func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error {
 	// we have to get the evaluation job and update the status so we need a transaction
+	s.logger.Debug("Updating evaluation job status", "id", id, "state", state, "message", message)
 	err := s.withTransaction("update evaluation job status", id, func(txn *sql.Tx) error {
 		// get the evaluation job
 		evaluationJob, err := s.getEvaluationJobTransactional(txn, id)
@@ -340,13 +342,10 @@ func (s *SQLStorage) updateEvaluationJobTxn(txn *sql.Tx, id string, status api.O
 // validateBenchmarkExists checks that the event's benchmark is valid for the job (in job.Benchmarks or in the job's collection).
 func (s *SQLStorage) validateBenchmarkExists(job *api.EvaluationJobResource, runStatus *api.StatusEvent) error {
 	event := runStatus.BenchmarkStatusEvent
-	benchmarks := job.Benchmarks
-	if len(benchmarks) == 0 && job.Collection != nil && job.Collection.ID != "" {
-		collection, err := s.GetCollection(job.Collection.ID)
-		if err != nil || collection == nil {
-			return se.NewServiceError(messages.ResourceNotFound, "Type", "benchmark", "ResourceId", event.ID, "Error", "Invalid Benchmark for the evaluation job")
-		}
-		benchmarks = collection.Benchmarks
+	benchmarks, err := evalcommon.GetJobBenchmarks(job, s.GetCollection)
+	if err != nil {
+		s.logger.Error("Failed to get job benchmarks", "error", err, "job_id", job.Resource.ID)
+		return err
 	}
 	if len(benchmarks) == 0 {
 		return se.NewServiceError(messages.ResourceNotFound, "Type", "benchmark", "ResourceId", event.ID, "Error", "Invalid Benchmark for the evaluation job")
@@ -368,6 +367,7 @@ func (s *SQLStorage) validateBenchmarkExists(job *api.EvaluationJobResource, run
 
 // UpdateEvaluationJobWithRunStatus runs in a transaction: fetches the job, merges RunStatusInternal into the entity, and persists.
 func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
+	s.logger.Debug("Updating evaluation job", "id", id, "runStatus", runStatus)
 	err := s.withTransaction("update evaluation job", id, func(txn *sql.Tx) error {
 		job, err := s.getEvaluationJobTransactional(txn, id)
 		if err != nil {
@@ -418,7 +418,7 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 		}
 
 		// get the overall job status
-		overallState, message := commonStorage.GetOverallJobStatus(job)
+		overallState, message := commonStorage.GetOverallJobStatus(job, s.GetCollection)
 		job.Status.State = overallState
 		job.Status.Message = message
 
@@ -445,6 +445,11 @@ func (s *SQLStorage) computeJobTestResult(job *api.EvaluationJobResource) {
 	}
 	var sumOfWeightedScores float32 = 0.0
 	var sumOfWeights float32 = 0.0
+	resolvedJobBenchmarks, err := evalcommon.GetJobBenchmarks(job, s.GetCollection)
+	if err != nil {
+		s.logger.Error("Failed to get job benchmarks", "error", err, "job_id", job.Resource.ID)
+		return
+	}
 	for _, benchmark := range job.Results.Benchmarks {
 		if benchmark.Test == nil {
 			// if the benchmark test result is not defined, we skip it
@@ -452,13 +457,13 @@ func (s *SQLStorage) computeJobTestResult(job *api.EvaluationJobResource) {
 			s.logger.Info("Benchmark test result is not defined for benchmark", "benchmark_id", benchmark.ID, "benchmark_index", benchmark.BenchmarkIndex)
 			continue
 		}
-		benchmarkWeight := job.Benchmarks[benchmark.BenchmarkIndex].Weight
+		benchmarkWeight := resolvedJobBenchmarks[benchmark.BenchmarkIndex].Weight
 		if benchmarkWeight == 0 {
 			// if the benchmark weight is not defined, we set it to 1
 			benchmarkWeight = 1
 		}
 		weightedScore := benchmarkWeight * benchmark.Test.PrimaryScore
-		if primaryScore := job.Benchmarks[benchmark.BenchmarkIndex].PrimaryScore; primaryScore != nil && primaryScore.LowerIsBetter {
+		if primaryScore := resolvedJobBenchmarks[benchmark.BenchmarkIndex].PrimaryScore; primaryScore != nil && primaryScore.LowerIsBetter {
 			weightedScore = benchmarkWeight * (1 - benchmark.Test.PrimaryScore)
 		}
 		sumOfWeightedScores += weightedScore
@@ -486,12 +491,10 @@ func (s *SQLStorage) computeJobTestResult(job *api.EvaluationJobResource) {
 
 func (s *SQLStorage) computeBenchmarkTestResult(job *api.EvaluationJobResource, benchmarkStatusEvent *api.BenchmarkStatusEvent) *api.BenchmarkTest {
 	// job could have benchmarks array or it could have collection. If it has collection, we need to get the benchmarks from the collection
-	benchmarks := job.Benchmarks
-	if len(benchmarks) == 0 && job.Collection != nil {
-		collection, err := s.GetCollection(job.Collection.ID)
-		if err == nil && collection != nil {
-			benchmarks = collection.Benchmarks
-		}
+	benchmarks, err := evalcommon.GetJobBenchmarks(job, s.GetCollection)
+	if err != nil {
+		s.logger.Error("Failed to get job benchmarks", "error", err, "job_id", job.Resource.ID)
+		return nil
 	}
 	if len(benchmarks) == 0 {
 		return nil
