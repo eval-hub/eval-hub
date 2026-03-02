@@ -3,8 +3,8 @@ package common
 import (
 	"fmt"
 
-	"github.com/eval-hub/eval-hub/internal/constants"
 	evalcommon "github.com/eval-hub/eval-hub/internal/common"
+	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
