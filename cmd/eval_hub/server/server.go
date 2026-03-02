@@ -194,11 +194,7 @@ func (s *Server) handle(router *http.ServeMux, pattern string, handler http.Hand
 	s.logger.Info("Registered API", "pattern", pattern)
 }
 
-func (s *Server) setupRoutes() (http.Handler, error) {
-	router := http.NewServeMux()
-	h := handlers.New(s.storage, s.validate, s.runtime, s.mlflowClient, s.providerConfigs, s.serviceConfig)
-
-	// Health and status endpoints
+func (s *Server) setupAuthRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, "/api/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -210,8 +206,9 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
+}
 
-	// Evaluation jobs endpoints
+func (s *Server) setupEvaluationJobsRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, "/api/v1/evaluations/jobs", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -225,8 +222,9 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
+}
 
-	// Handle events endpoint
+func (s *Server) setupEvaluationJobEventsRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/jobs/{%s}/events", constants.PATH_PARAMETER_JOB_ID), func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -238,8 +236,9 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
+}
 
-	// Handle individual job endpoints
+func (s *Server) setupEvaluationJobRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/jobs/{%s}", constants.PATH_PARAMETER_JOB_ID), func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -253,8 +252,9 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
+}
 
-	// Collections endpoints
+func (s *Server) setupCollectionsRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, "/api/v1/evaluations/collections", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -268,7 +268,9 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
+}
 
+func (s *Server) setupCollectionRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/collections/{%s}", constants.PATH_PARAMETER_COLLECTION_ID), func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -286,8 +288,9 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
+}
 
-	// Providers endpoints
+func (s *Server) setupProvidersRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, "/api/v1/evaluations/providers", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -301,6 +304,9 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
+}
+
+func (s *Server) setupProviderRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/providers/{%s}", constants.PATH_PARAMETER_PROVIDER_ID), func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -318,8 +324,9 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
+}
 
-	// OpenAPI documentation endpoints
+func (s *Server) setupOpenAPIRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, "/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -331,7 +338,9 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
+}
 
+func (s *Server) setupDocsRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, "/docs", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -342,7 +351,34 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		default:
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
+
 	})
+}
+
+func (s *Server) setupRoutes() (http.Handler, error) {
+	router := http.NewServeMux()
+	h := handlers.New(s.storage, s.validate, s.runtime, s.mlflowClient, s.providerConfigs, s.serviceConfig)
+
+	// Health and status endpoints
+	s.setupAuthRoutes(h, router)
+
+	// Evaluation jobs endpoints
+	s.setupEvaluationJobsRoutes(h, router)
+	s.setupEvaluationJobEventsRoutes(h, router)
+	s.setupEvaluationJobRoutes(h, router)
+
+	// Collections endpoints
+	s.setupCollectionsRoutes(h, router)
+	s.setupCollectionRoutes(h, router)
+
+	// Providers endpoints
+	s.setupProvidersRoutes(h, router)
+	s.setupProviderRoutes(h, router)
+
+	// OpenAPI documentation endpoints
+	s.setupOpenAPIRoutes(h, router)
+
+	s.setupDocsRoutes(h, router)
 
 	// Prometheus metrics endpoint
 	prometheusEnabled := s.serviceConfig.IsPrometheusEnabled()
