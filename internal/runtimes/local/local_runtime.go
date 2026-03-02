@@ -122,9 +122,9 @@ func (r *LocalRuntime) RunEvaluationJob(
 		callbackURL = &serviceURL
 	}
 
-	go func() {
-		for i, bench := range benchmarksToRun {
-			if err := r.runBenchmark(jobID, bench, i, evaluation, callbackURL, storage); err != nil {
+	for i, bench := range benchmarksToRun {
+		go func() {
+			if err := r.runBenchmark(jobID, bench, i, evaluation, callbackURL); err != nil {
 				r.logger.Error(
 					"local runtime benchmark launch failed",
 					"error", err,
@@ -135,22 +135,22 @@ func (r *LocalRuntime) RunEvaluationJob(
 				)
 				r.failBenchmark(jobID, bench, i, storage, err.Error())
 			}
-		}
-	}()
+		}()
+	}
 
 	return nil
 }
 
 // runBenchmark launches a single benchmark process. It writes the job spec,
-// starts the command, and returns immediately. A background goroutine calls
-// cmd.Wait() to reap the child process and prevent zombies.
+// starts the command, and waits for it to finish. The caller is expected to
+// invoke this from its own goroutine. cmd.Wait() reaps the child process to
+// prevent zombies.
 func (r *LocalRuntime) runBenchmark(
 	jobID string,
 	bench api.BenchmarkConfig,
 	benchmarkIndex int,
 	evaluation *api.EvaluationJobResource,
 	callbackURL *string,
-	storage *abstractions.Storage,
 ) error {
 	provider, ok := r.providers[bench.ProviderID]
 	if !ok {
@@ -261,7 +261,8 @@ func (r *LocalRuntime) runBenchmark(
 		"command", command,
 	)
 
-	// Stopgap fix: reap the child process in the background to prevent zombies.
+	// Reap the child process to prevent zombies. Each benchmark runs in its
+	// own goroutine, so this blocks only this benchmark's goroutine.
 	// Any cmd errors should be debugged from the logs; no action taken here.
 	//
 	// Ideally we would not need cmd.Wait() at all — the double-fork (fork/exec,
@@ -270,11 +271,8 @@ func (r *LocalRuntime) runBenchmark(
 	// Windows does not support fork or setsid — processes are managed differently
 	// via the Win32 API (CreateProcess) and there is no concept of zombie processes
 	// in the same way. Until a common cross-platform approach is found for Linux,
-	// macOS, and Windows, this goroutine calling cmd.Wait() serves as the portable
-	// stopgap solution.
-	go func() {
-		_ = cmd.Wait()
-	}()
+	// macOS, and Windows, cmd.Wait() serves as the portable solution.
+	_ = cmd.Wait()
 
 	return nil
 }
