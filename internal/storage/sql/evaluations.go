@@ -418,7 +418,10 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 		}
 
 		// get the overall job status
-		overallState, message := commonStorage.GetOverallJobStatus(job, s.GetCollection)
+		overallState, message, err := commonStorage.GetOverallJobStatus(job, s.GetCollection)
+		if err != nil {
+			return err
+		}
 		job.Status.State = overallState
 		job.Status.Message = message
 

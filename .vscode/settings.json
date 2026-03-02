@@ -1,0 +1,28 @@
+{
+    "go.toolsEnvVars": {
+        "GOPROXY": "https://proxy.golang.org,direct"
+    },
+    "terminal.integrated.env": {
+        "GOPROXY": "https://proxy.golang.org,direct"
+    },
+    "sqltools.connections": [
+        {
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 5432,
+            "driver": "PostgreSQL",
+            "name": "Local postgres",
+            "username": "nbs",
+            "database": "postgres",
+            "password": ""
+        },
+        {
+            "previewLimit": 50,
+            "driver": "SQLite",
+            "name": "Local sqlite",
+            "database": "file::eval_hub:?mode=memory&cache=shared"
+        }
+    ],
+    "sqltools.useNodeRuntime": true
+}

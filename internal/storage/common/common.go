@@ -11,7 +11,7 @@ import (
 )
 
 // GetOverallJobStatus returns overall state and message. getCollection is used to resolve job benchmark count when job has only a collection reference.
-func GetOverallJobStatus(job *api.EvaluationJobResource, getCollection evalcommon.GetCollectionFunc) (api.OverallState, *api.MessageInfo) {
+func GetOverallJobStatus(job *api.EvaluationJobResource, getCollection evalcommon.GetCollectionFunc) (api.OverallState, *api.MessageInfo, error) {
 	// group all benchmarks by state
 	benchmarkStates := make(map[api.State]int)
 	failureMessage := ""
@@ -25,9 +25,13 @@ func GetOverallJobStatus(job *api.EvaluationJobResource, getCollection evalcommo
 	// determine the overall job status (use resolved benchmark count for collection-only jobs)
 	benchmarks, err := evalcommon.GetJobBenchmarks(job, getCollection)
 	total := 0
-	if err == nil {
-		total = len(benchmarks)
+	if err != nil || len(benchmarks) == 0 {
+		return api.OverallStatePending, &api.MessageInfo{
+			Message:     "Evaluation job is pending",
+			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
+		}, err
 	}
+	total = len(benchmarks)
 	completed, failed, running := benchmarkStates[api.StateCompleted], benchmarkStates[api.StateFailed], benchmarkStates[api.StateRunning]
 
 	var overallState api.OverallState
@@ -48,7 +52,7 @@ func GetOverallJobStatus(job *api.EvaluationJobResource, getCollection evalcommo
 	return overallState, &api.MessageInfo{
 		Message:     stateMessage,
 		MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
-	}
+	}, nil
 }
 
 func UpdateBenchmarkResults(job *api.EvaluationJobResource, runStatus *api.StatusEvent, result *api.BenchmarkResult) error {
