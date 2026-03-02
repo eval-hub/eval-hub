@@ -786,9 +786,14 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPath(expectedValue strin
 		return logError(err)
 	}
 
-	if expr, err := regexp.Compile(expectedValue); err == nil {
+	if strings.HasPrefix(expectedValue, "regex:") {
+		rawExpr := strings.TrimPrefix(expectedValue, "regex:")
+		expr, err := regexp.Compile(rawExpr)
+		if err != nil {
+			return logError(fmt.Errorf("invalid regex %q: %w", rawExpr, err))
+		}
 		if expr.MatchString(foundValue) {
-			logDebug("Value %s matches %s in path %s", foundValue, expectedValue, jsonPath)
+			logDebug("Value %s matches regex %s in path %s", foundValue, rawExpr, jsonPath)
 			return nil
 		}
 	}
