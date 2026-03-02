@@ -372,6 +372,35 @@ func (s *SQLStorage) updateEvaluationJobTxn(txn *sql.Tx, id string, status api.O
 	return nil
 }
 
+// validateBenchmarkExists checks that the event's benchmark is valid for the job (in job.Benchmarks or in the job's collection).
+func (s *SQLStorage) validateBenchmarkExists(job *api.EvaluationJobResource, runStatus *api.StatusEvent) error {
+	event := runStatus.BenchmarkStatusEvent
+	benchmarks := job.Benchmarks
+	if len(benchmarks) == 0 && job.Collection != nil && job.Collection.ID != "" {
+		collection, err := s.GetCollection(job.Collection.ID)
+		if err != nil || collection == nil {
+			return se.NewServiceError(messages.ResourceNotFound, "Type", "benchmark", "ResourceId", event.ID, "Error", "Invalid Benchmark for the evaluation job")
+		}
+		benchmarks = collection.Benchmarks
+	}
+	if len(benchmarks) == 0 {
+		return se.NewServiceError(messages.ResourceNotFound, "Type", "benchmark", "ResourceId", event.ID, "Error", "Invalid Benchmark for the evaluation job")
+	}
+	found := false
+	for index, benchmark := range benchmarks {
+		if benchmark.ID == event.ID &&
+			benchmark.ProviderID == event.ProviderID &&
+			index == event.BenchmarkIndex {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return se.NewServiceError(messages.ResourceNotFound, "Type", "benchmark", "ResourceId", event.ID, "Error", "Invalid Benchmark for the evaluation job")
+	}
+	return nil
+}
+
 // UpdateEvaluationJobWithRunStatus runs in a transaction: fetches the job, merges RunStatusInternal into the entity, and persists.
 func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
 	err := s.withTransaction("update evaluation job", id, func(txn *sql.Tx) error {
@@ -386,7 +415,7 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 			return err
 		}
 
-		err = commonStorage.ValidateBenchmarkExists(job, runStatus)
+		err = s.validateBenchmarkExists(job, runStatus)
 		if err != nil {
 			return err
 		}
@@ -403,7 +432,7 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 		}
 		commonStorage.UpdateBenchmarkStatus(job, runStatus, &benchmark)
 
-		outcome := computeBenchmarkTestResult(job, runStatus.BenchmarkStatusEvent)
+		outcome := s.computeBenchmarkTestResult(job, runStatus.BenchmarkStatusEvent)
 
 		// if the run status is completed, failed, or cancelled, we need to update the results
 		if runStatus.BenchmarkStatusEvent.Status == api.StateCompleted || runStatus.BenchmarkStatusEvent.Status == api.StateFailed || runStatus.BenchmarkStatusEvent.Status == api.StateCancelled {
@@ -464,7 +493,7 @@ func (s *SQLStorage) computeJobTestResult(job *api.EvaluationJobResource) {
 			benchmarkWeight = 1
 		}
 		weightedScore := benchmarkWeight * benchmark.Test.PrimaryScore
-		if job.Benchmarks[benchmark.BenchmarkIndex].PrimaryScore.LowerIsBetter {
+		if primaryScore := job.Benchmarks[benchmark.BenchmarkIndex].PrimaryScore; primaryScore != nil && primaryScore.LowerIsBetter {
 			weightedScore = benchmarkWeight * (1 - benchmark.Test.PrimaryScore)
 		}
 		sumOfWeightedScores += weightedScore
@@ -490,25 +519,59 @@ func (s *SQLStorage) computeJobTestResult(job *api.EvaluationJobResource) {
 	job.Results.Test = jobTest
 }
 
-func computeBenchmarkTestResult(job *api.EvaluationJobResource, benchmarkStatusEvent *api.BenchmarkStatusEvent) *api.BenchmarkTest {
-	for _, benchmark := range job.Benchmarks {
-		if benchmark.ID == benchmarkStatusEvent.ID && benchmark.ProviderID == benchmarkStatusEvent.ProviderID {
-			//TODO: If primary score is not defined in the API request, the default primary score for the benchmark should be read from the provider.
-			//TBD after the code to access providers from 'internal' package is implemented.
-			if benchmark.PrimaryScore != nil && benchmark.PrimaryScore.Metric != "" {
-				primaryMetric := benchmark.PrimaryScore.Metric
-				if primaryMetricValue, ok := benchmarkStatusEvent.Metrics[primaryMetric]; ok {
-					primaryMetricValueFloat := float32(primaryMetricValue.(float64))
-					passCriteria := benchmark.PassCriteria.Threshold
-					pass := primaryMetricValueFloat >= passCriteria
-					if benchmark.PrimaryScore.LowerIsBetter {
-						pass = primaryMetricValueFloat <= passCriteria
+func (s *SQLStorage) computeBenchmarkTestResult(job *api.EvaluationJobResource, benchmarkStatusEvent *api.BenchmarkStatusEvent) *api.BenchmarkTest {
+	// job could have benchmarks array or it could have collection. If it has collection, we need to get the benchmarks from the collection
+	benchmarks := job.Benchmarks
+	if len(benchmarks) == 0 && job.Collection != nil {
+		collection, err := s.GetCollection(job.Collection.ID)
+		if err == nil && collection != nil {
+			benchmarks = collection.Benchmarks
+		}
+	}
+	if len(benchmarks) == 0 {
+		return nil
+	}
+	for _, benchmark := range benchmarks {
+		if benchmark.ID != benchmarkStatusEvent.ID || benchmark.ProviderID != benchmarkStatusEvent.ProviderID {
+			continue
+		}
+		primaryScore := benchmark.PrimaryScore
+		var providerBench *api.BenchmarkResource
+		// if the primary score is not defined, we need to get the primary score from the provider
+		if (primaryScore == nil || primaryScore.Metric == "") && benchmark.ProviderID != "" {
+			provider, err := s.GetProvider(benchmark.ProviderID)
+			if err == nil && provider != nil {
+				for i := range provider.Benchmarks {
+					if provider.Benchmarks[i].ID == benchmark.ID {
+						providerBench = &provider.Benchmarks[i]
+						break
 					}
-					return &api.BenchmarkTest{
-						PrimaryScore: primaryMetricValueFloat,
-						Threshold:    benchmark.PassCriteria.Threshold,
-						Pass:         pass,
-					}
+				}
+			}
+			if providerBench != nil && providerBench.PrimaryScore != nil && providerBench.PrimaryScore.Metric != "" {
+				primaryScore = providerBench.PrimaryScore
+			}
+		}
+		if primaryScore != nil && primaryScore.Metric != "" {
+			primaryMetric := primaryScore.Metric
+			if primaryMetricValue, ok := benchmarkStatusEvent.Metrics[primaryMetric]; ok {
+				primaryMetricValueFloat := float32(primaryMetricValue.(float64))
+				var threshold float32
+				if benchmark.PassCriteria != nil {
+					threshold = benchmark.PassCriteria.Threshold
+				} else if providerBench != nil && providerBench.PassCriteria != nil {
+					threshold = providerBench.PassCriteria.Threshold
+				} else {
+					return nil
+				}
+				pass := primaryMetricValueFloat >= threshold
+				if primaryScore.LowerIsBetter {
+					pass = primaryMetricValueFloat <= threshold
+				}
+				return &api.BenchmarkTest{
+					PrimaryScore: primaryMetricValueFloat,
+					Threshold:    threshold,
+					Pass:         pass,
 				}
 			}
 		}

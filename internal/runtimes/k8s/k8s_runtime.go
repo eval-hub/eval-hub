@@ -49,7 +49,7 @@ func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 	}
 }
 
-func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, storage *abstractions.Storage) error {
+func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, storage abstractions.Storage) error {
 	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
 	if err != nil {
 		return err
@@ -65,9 +65,9 @@ func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, sto
 					"benchmark_id", bench.ID,
 				)
 
-				if storage != nil && *storage != nil {
+				if storage != nil {
 					runStatus := buildBenchmarkFailureStatus(&bench, err)
-					if updateErr := (*storage).UpdateEvaluationJob(evaluation.Resource.ID, runStatus); updateErr != nil {
+					if updateErr := storage.UpdateEvaluationJob(evaluation.Resource.ID, runStatus); updateErr != nil {
 						r.logger.Error(
 							"failed to update benchmark status",
 							"error", updateErr,

@@ -52,7 +52,7 @@ func (r *LocalRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 
 func (r *LocalRuntime) RunEvaluationJob(
 	evaluation *api.EvaluationJobResource,
-	storage *abstractions.Storage,
+	storage abstractions.Storage,
 ) error {
 	if r.ctx == nil {
 		r.logger.Error("RunEvaluationJob called with nil context; WithContext must be called before RunEvaluationJob")
@@ -128,9 +128,16 @@ func (r *LocalRuntime) runBenchmark(
 	benchmarkIndex int,
 	evaluation *api.EvaluationJobResource,
 	callbackURL *string,
-	storage *abstractions.Storage,
+	storage abstractions.Storage,
 ) error {
 	provider, ok := r.providers[bench.ProviderID]
+	if !ok && storage != nil {
+		p, err := storage.GetProvider(bench.ProviderID)
+		if err == nil && p != nil {
+			provider = *p
+			ok = true
+		}
+	}
 	if !ok {
 		r.failBenchmark(jobID, bench, storage, fmt.Sprintf("provider %q not found", bench.ProviderID))
 		return fmt.Errorf("provider %q not found", bench.ProviderID)
@@ -270,12 +277,12 @@ func (r *LocalRuntime) runBenchmark(
 func (r *LocalRuntime) benchmarkHasAlreadyFailed(
 	jobID string,
 	bench api.BenchmarkConfig,
-	storage *abstractions.Storage,
+	storage abstractions.Storage,
 ) bool {
-	if storage == nil || *storage == nil {
+	if storage == nil {
 		return false
 	}
-	job, err := (*storage).GetEvaluationJob(jobID)
+	job, err := storage.GetEvaluationJob(jobID)
 	if err != nil || job == nil || job.Status == nil {
 		return false
 	}
@@ -291,10 +298,10 @@ func (r *LocalRuntime) benchmarkHasAlreadyFailed(
 func (r *LocalRuntime) failBenchmark(
 	jobID string,
 	bench api.BenchmarkConfig,
-	storage *abstractions.Storage,
+	storage abstractions.Storage,
 	errMsg string,
 ) {
-	if storage == nil || *storage == nil {
+	if storage == nil {
 		return
 	}
 	runStatus := &api.StatusEvent{
@@ -308,7 +315,7 @@ func (r *LocalRuntime) failBenchmark(
 			},
 		},
 	}
-	if updateErr := (*storage).UpdateEvaluationJob(jobID, runStatus); updateErr != nil {
+	if updateErr := storage.UpdateEvaluationJob(jobID, runStatus); updateErr != nil {
 		r.logger.Error(
 			"failed to update benchmark status",
 			"error", updateErr,

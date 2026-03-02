@@ -343,7 +343,7 @@ func TestRunEvaluationJobMarksBenchmarkFailedOnCreateError(t *testing.T) {
 	storage := &fakeStorage{logger: logger, ctx: context.Background(), runStatusChan: statusCh}
 	var store abstractions.Storage = storage
 
-	if err := runtime.RunEvaluationJob(evaluation, &store); err != nil {
+	if err := runtime.RunEvaluationJob(evaluation, store); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
@@ -393,7 +393,7 @@ func TestRunEvaluationJobHandlesUpdateFailure(t *testing.T) {
 	}
 	var store abstractions.Storage = storage
 
-	if err := runtime.RunEvaluationJob(evaluation, &store); err != nil {
+	if err := runtime.RunEvaluationJob(evaluation, store); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 

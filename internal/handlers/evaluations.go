@@ -56,7 +56,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 			if err != nil {
 				return err
 			}
-			return h.validateBenchmarkReferences(evaluation)
+			return h.validateBenchmarkReferences(ctx.Ctx, evaluation, storage)
 		},
 		"validation",
 		"validate-evaluation-job",
@@ -110,6 +110,18 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				},
 				EvaluationJobConfig: *evaluation,
 			}
+			// When the job is created with only a collection reference, resolve the collection
+			// and set job.Benchmarks so the runtime can build job specs (FindBenchmarkConfig).
+			if job.Collection != nil && job.Collection.ID != "" && len(job.Benchmarks) == 0 {
+				collection, getErr := storage.WithContext(runtimeCtx).GetCollection(job.Collection.ID)
+				if getErr != nil {
+					return getErr
+				}
+				if collection == nil || len(collection.Benchmarks) == 0 {
+					return serviceerrors.NewServiceError(messages.RequestFieldInvalid, "Error", "collection has no benchmarks")
+				}
+				job.EvaluationJobConfig.Benchmarks = collection.Benchmarks
+			}
 			return storage.WithContext(runtimeCtx).CreateEvaluationJob(job)
 		},
 		"storage",
@@ -128,7 +140,12 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		ctx,
 		func(runtimeCtx context.Context) (fnErr error) {
 			if h.runtime != nil {
-				runErr := h.executeEvaluationJob(runtimeCtx, ctx.Logger, h.runtime, job, &storage)
+				// Use a context that outlives the request so runtime goroutines can still call storage (e.g. GetProvider) after the handler returns 202.
+				// Pass storage by value (not &runtimeStorage): the runtime runs work in goroutines that outlive this handler. If we passed a pointer to our
+				// local variable, those goroutines would dereference it after the handler stack is gone (use-after-return). Passing the interface value
+				// lets the goroutines capture a copy, so storage calls remain valid.
+				runtimeStorage := storage.WithContext(context.WithoutCancel(ctx.Ctx))
+				runErr := h.executeEvaluationJob(runtimeCtx, ctx.Logger, h.runtime, job, runtimeStorage)
 				if runErr != nil {
 					ctx.Logger.Error("RunEvaluationJob failed", "error", runErr, "job_id", job.Resource.ID)
 					state := api.OverallStateFailed
@@ -155,7 +172,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 	)
 }
 
-func (h *Handlers) executeEvaluationJob(ctx context.Context, logger *slog.Logger, runtime abstractions.Runtime, job *api.EvaluationJobResource, storage *abstractions.Storage) error {
+func (h *Handlers) executeEvaluationJob(ctx context.Context, logger *slog.Logger, runtime abstractions.Runtime, job *api.EvaluationJobResource, storage abstractions.Storage) error {
 	var err error
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -171,10 +188,22 @@ func (h *Handlers) executeEvaluationJob(ctx context.Context, logger *slog.Logger
 	return err
 }
 
-func (h *Handlers) validateBenchmarkReferences(evaluation *api.EvaluationJobConfig) error {
+func (h *Handlers) validateBenchmarkReferences(ctx context.Context, evaluation *api.EvaluationJobConfig, storage abstractions.Storage) error {
 	for _, benchmark := range evaluation.Benchmarks {
-		provider, ok := h.providerConfigs[benchmark.ProviderID]
-		if !ok {
+		var provider *api.ProviderResource
+		if p, ok := h.providerConfigs[benchmark.ProviderID]; ok {
+			provider = &p
+		} else if storage != nil {
+			var err error
+			provider, err = storage.WithContext(ctx).GetProvider(benchmark.ProviderID)
+			if err != nil || provider == nil {
+				return serviceerrors.NewServiceError(
+					messages.RequestFieldInvalid,
+					"ParameterName", "provider_id",
+					"Value", benchmark.ProviderID,
+				)
+			}
+		} else {
 			return serviceerrors.NewServiceError(
 				messages.RequestFieldInvalid,
 				"ParameterName", "provider_id",

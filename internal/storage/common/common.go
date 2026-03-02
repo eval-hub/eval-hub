@@ -45,22 +45,6 @@ func GetOverallJobStatus(job *api.EvaluationJobResource) (api.OverallState, *api
 	}
 }
 
-func ValidateBenchmarkExists(job *api.EvaluationJobResource, runStatus *api.StatusEvent) error {
-	found := false
-	for index, benchmark := range job.Benchmarks {
-		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID &&
-			benchmark.ProviderID == runStatus.BenchmarkStatusEvent.ProviderID &&
-			index == runStatus.BenchmarkStatusEvent.BenchmarkIndex {
-			found = true
-			break
-		}
-	}
-	if !found {
-		return serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "benchmark", "ResourceId", runStatus.BenchmarkStatusEvent.ID, "Error", "Invalid Benchmark for the evaluation job")
-	}
-	return nil
-}
-
 func UpdateBenchmarkResults(job *api.EvaluationJobResource, runStatus *api.StatusEvent, result *api.BenchmarkResult) error {
 	if job.Results == nil {
 		job.Results = &api.EvaluationJobResults{}

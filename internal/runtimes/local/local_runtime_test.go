@@ -343,7 +343,7 @@ func TestRunEvaluationJobProviderNotFound(t *testing.T) {
 		providers: map[string]api.ProviderResource{},
 	}
 
-	err := rt.RunEvaluationJob(evaluation, &store)
+	err := rt.RunEvaluationJob(evaluation, store)
 	if err != nil {
 		t.Fatalf("expected no synchronous error, got %v", err)
 	}
@@ -390,7 +390,7 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 		providers: providers,
 	}
 
-	err := rt.RunEvaluationJob(evaluation, &store)
+	err := rt.RunEvaluationJob(evaluation, store)
 	if err != nil {
 		t.Fatalf("expected no synchronous error, got %v", err)
 	}
@@ -424,7 +424,7 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 		},
 	}
 
-	err = rt.RunEvaluationJob(evaluation, &store2)
+	err = rt.RunEvaluationJob(evaluation, store2)
 	if err != nil {
 		t.Fatalf("expected no synchronous error for empty command, got %v", err)
 	}
@@ -460,7 +460,7 @@ func TestRunEvaluationJobProcessFailureUpdatesStorage(t *testing.T) {
 		providers: providers,
 	}
 
-	err := rt.RunEvaluationJob(evaluation, &store)
+	err := rt.RunEvaluationJob(evaluation, store)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -513,7 +513,7 @@ func TestRunEvaluationJobProcessSuccess(t *testing.T) {
 		providers: providers,
 	}
 
-	err := rt.RunEvaluationJob(evaluation, &store)
+	err := rt.RunEvaluationJob(evaluation, store)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -547,7 +547,7 @@ func TestRunEvaluationJobContextCancellation(t *testing.T) {
 		providers: providers,
 	}
 
-	err := rt.RunEvaluationJob(evaluation, &store)
+	err := rt.RunEvaluationJob(evaluation, store)
 	if err != nil {
 		t.Fatalf("expected no synchronous error, got %v", err)
 	}
@@ -669,7 +669,7 @@ func TestRunEvaluationJobMultipleBenchmarksPartialFailure(t *testing.T) {
 		providers: providers,
 	}
 
-	err := rt.RunEvaluationJob(evaluation, &store)
+	err := rt.RunEvaluationJob(evaluation, store)
 	if err != nil {
 		t.Fatalf("expected no synchronous error, got %v", err)
 	}

@@ -891,6 +891,8 @@ func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, 
 			url = "evaluations/jobs"
 		case "collections":
 			url = "evaluations/collections"
+		case "providers":
+			url = "evaluations/providers"
 		}
 		ids := slices.Clone(ids)
 		for _, id := range ids {
