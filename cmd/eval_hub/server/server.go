@@ -411,8 +411,14 @@ func (s *Server) setupAuth(handler http.Handler) (http.Handler, error) {
 		if s.authConfig == nil {
 			return nil, fmt.Errorf("auth.yaml config is required")
 		}
-		handler = WithAuthorization(handler, s.logger, client, s.authConfig)
-		handler = WithAuthentication(handler, s.logger, client, s.authConfig)
+		handler, err = WithAuthorization(handler, s.logger, client, s.authConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create authorization handler: %w", err)
+		}
+		handler, err = WithAuthentication(handler, s.logger, client, s.authConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create authentication handler: %w", err)
+		}
 	}
 	return handler, nil
 }

@@ -11,12 +11,12 @@ import (
 )
 
 // Performs authentication on the configured endpoints. Other endpoints are allowed without authentication.
-func WithAuthentication(next http.Handler, logger *slog.Logger, client *kubernetes.Clientset, config *auth.AuthConfig) http.Handler {
+func WithAuthentication(next http.Handler, logger *slog.Logger, client *kubernetes.Clientset, config *auth.AuthConfig) (http.Handler, error) {
 
 	authn, err := auth.NewAuthenticator(client, logger)
 	if err != nil {
 		logger.Error("Error creating authenticator", "error", err)
-		return next
+		return nil, err
 	}
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -46,5 +46,5 @@ func WithAuthentication(next http.Handler, logger *slog.Logger, client *kubernet
 		next.ServeHTTP(w, r)
 	})
 
-	return handler
+	return handler, nil
 }

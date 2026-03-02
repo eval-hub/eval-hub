@@ -21,13 +21,13 @@ func writeError(w http.ResponseWriter, msg *messages.MessageCode, params ...any)
 }
 
 // Performs authorization on the configured endpoints. Other endpoints are allowed without authorization.
-func WithAuthorization(next http.Handler, logger *slog.Logger, client *kubernetes.Clientset, config *auth.AuthConfig) http.Handler {
+func WithAuthorization(next http.Handler, logger *slog.Logger, client *kubernetes.Clientset, config *auth.AuthConfig) (http.Handler, error) {
 
 	auth, err := auth.NewSarAuthorizer(client, logger, config)
 
 	if err != nil {
 		logger.Error("Error creating authorizer", "error", err)
-		return next
+		return nil, err
 	}
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -60,5 +60,5 @@ func WithAuthorization(next http.Handler, logger *slog.Logger, client *kubernete
 
 	})
 
-	return handler
+	return handler, nil
 }
