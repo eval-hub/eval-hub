@@ -408,6 +408,9 @@ func (s *Server) setupAuth(handler http.Handler) (http.Handler, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
 		}
+		if s.authConfig == nil {
+			return nil, fmt.Errorf("auth.yaml config is required")
+		}
 		handler = WithAuthorization(handler, s.logger, client, s.authConfig)
 		handler = WithAuthentication(handler, s.logger, client, s.authConfig)
 	}
