@@ -13,11 +13,11 @@ import (
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/handlers"
 	"github.com/eval-hub/eval-hub/internal/messages"
+	"github.com/eval-hub/eval-hub/internal/runtimes/k8s"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 	"github.com/go-playground/validator/v10"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -34,7 +34,6 @@ type Server struct {
 	validate        *validator.Validate
 	runtime         abstractions.Runtime
 	mlflowClient    *mlflowclient.Client
-	client          *kubernetes.Clientset
 }
 
 func (s *Server) isOTELEnabled() bool {
@@ -88,6 +87,7 @@ func NewServer(logger *slog.Logger,
 		logger:          logger,
 		serviceConfig:   serviceConfig,
 		providerConfigs: providerConfigs,
+		authConfig:      authConfig,
 		storage:         storage,
 		validate:        validate,
 		runtime:         runtime,
@@ -359,9 +359,22 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 
 	// Wrap with metrics middleware (outermost for complete observability)
 	handler = Middleware(handler, prometheusEnabled, s.logger)
-	handler = WithAuthorization(handler, s.logger, s.client, s.authConfig)
-	handler = WithAuthentication(handler, s.logger, s.client)
+	handler, err := s.setupAuth(handler)
+	if err != nil {
+		return nil, err
+	}
+	return handler, nil
+}
 
+func (s *Server) setupAuth(handler http.Handler) (http.Handler, error) {
+	if !s.serviceConfig.Service.LocalMode {
+		client, err := k8s.NewKubernetesClient()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
+		}
+		handler = WithAuthorization(handler, s.logger, client, s.authConfig)
+		handler = WithAuthentication(handler, s.logger, client, s.authConfig)
+	}
 	return handler, nil
 }
 

@@ -23,7 +23,7 @@ func matchMethods(fromRequest string, fromConfig []string) bool {
 	return slices.Contains(fromConfig, m)
 }
 
-func extractRule(request *http.Request, config AuthConfig) []ResourceRule {
+func FindRules(request *http.Request, config AuthConfig) []ResourceRule {
 	for _, endpoint := range config.Authorization.Endpoints {
 		if matchEndpoint(request.URL.Path, endpoint.Path) {
 			for _, mapping := range endpoint.Mappings {
@@ -73,7 +73,7 @@ func applyTemplate(templateString string, values TemplateValues) string {
 }
 
 func AttributesFromRequest(request *http.Request, config AuthConfig, user user.Info) []authorizer.Attributes {
-	extractedRules := extractRule(request, config)
+	extractedRules := FindRules(request, config)
 	resourceAttributes := []authorizer.Attributes{}
 
 	for _, rule := range extractedRules {

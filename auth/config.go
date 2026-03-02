@@ -1,11 +1,5 @@
 package auth
 
-import (
-	"fmt"
-
-	"github.com/spf13/viper"
-)
-
 type AuthConfig struct {
 	Authorization EndpointsAuthorization `yaml:"authorization" mapstructure:"authorization"`
 }
@@ -50,19 +44,4 @@ type ResourceAttributes struct {
 	Name        string `yaml:"name" mapstructure:"name"`
 	Subresource string `yaml:"subresource" mapstructure:"subresource"`
 	Verb        string `yaml:"verb" mapstructure:"verb"`
-}
-
-func LoadAuthConfig(filePath string) (*AuthConfig, error) {
-
-	v := viper.New()
-	v.SetConfigFile(filePath)
-	if err := v.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("Cannot load authorized config from file (%q): %v", filePath, err)
-	}
-
-	var cfg AuthConfig
-	if err := v.Unmarshal(&cfg); err != nil {
-		return nil, fmt.Errorf("Cannot parse authorized config from file (%q): %v", filePath, err)
-	}
-	return &cfg, nil
 }

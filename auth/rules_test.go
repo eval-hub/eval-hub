@@ -12,9 +12,9 @@ import (
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 )
 
-// loadRBACConfigFromYAML loads an RBAC config from a YAML file using Viper.
+// loadAuthConfigFromYAML loads an RBAC config from a YAML file using Viper.
 // yamlName is the base name of the file (e.g. "rbac_jobs") under testdata/.
-func loadRBACConfigFromYAML(t *testing.T, yamlName string) AuthConfig {
+func loadAuthConfigFromYAML(t *testing.T, yamlName string) AuthConfig {
 	t.Helper()
 	_, filename, _, _ := runtime.Caller(0)
 	dir := filepath.Dir(filename)
@@ -85,7 +85,7 @@ func eq(got []authorizer.AttributesRecord, want []authorizer.AttributesRecord) b
 
 func TestComputeResourceAttributesSuite(t *testing.T) {
 	t.Run("JobsPost", func(t *testing.T) {
-		cfg := loadRBACConfigFromYAML(t, "rbac_jobs")
+		cfg := loadAuthConfigFromYAML(t, "rbac_jobs")
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs", nil)
 		req.Header.Set("X-Tenant", "tenant-a")
@@ -110,10 +110,9 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		if !eq(got, want) {
 			t.Errorf("ComputeResourceAttributes() = %+v, want %+v", got, want)
 		}
-
 	})
 	t.Run("JobsGet", func(t *testing.T) {
-		cfg := loadRBACConfigFromYAML(t, "rbac_jobs")
+		cfg := loadAuthConfigFromYAML(t, "rbac_jobs")
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs", nil)
 		req.Header.Set("X-Tenant", "my-ns")
@@ -133,7 +132,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		}
 	})
 	t.Run("NoMatch", func(t *testing.T) {
-		cfg := loadRBACConfigFromYAML(t, "rbac_jobs")
+		cfg := loadAuthConfigFromYAML(t, "rbac_jobs")
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/other", nil)
 		req.Header.Set("X-Tenant", "my-ns")
@@ -145,7 +144,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		}
 	})
 	t.Run("QueryString", func(t *testing.T) {
-		cfg := loadRBACConfigFromYAML(t, "rbac_query")
+		cfg := loadAuthConfigFromYAML(t, "rbac_query")
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/namespaces?tenant=query-ns", nil)
 
@@ -164,7 +163,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		}
 	})
 	t.Run("CollectionsMethodVerb", func(t *testing.T) {
-		cfg := loadRBACConfigFromYAML(t, "rbac_mixed")
+		cfg := loadAuthConfigFromYAML(t, "rbac_mixed")
 
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/evaluations/collections", nil)
 		req.Header.Set("X-Tenant", "tenant-b")
@@ -203,7 +202,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		}
 	})
 	t.Run("NoHeader", func(t *testing.T) {
-		cfg := loadRBACConfigFromYAML(t, "rbac_jobs")
+		cfg := loadAuthConfigFromYAML(t, "rbac_jobs")
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs", nil)
 

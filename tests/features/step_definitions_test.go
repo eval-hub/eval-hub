@@ -213,11 +213,11 @@ func (a *apiFeature) startLocalServer(port int) error {
 	a.server, err = server.NewServer(logger,
 		serviceConfig,
 		providerConfigs,
+		nil,
 		storage,
 		validate,
 		runtime,
-		mlflowClient,
-		nil)
+		mlflowClient)
 	if err != nil {
 		return err
 	}

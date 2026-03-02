@@ -10,16 +10,26 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func WithAuthentication(next http.Handler, logger *slog.Logger, client *kubernetes.Clientset) http.Handler {
+func WithAuthentication(next http.Handler, logger *slog.Logger, client *kubernetes.Clientset, config *auth.AuthConfig) http.Handler {
 
-	auth, err := auth.NewAuthenticator(client, logger)
+	authn, err := auth.NewAuthenticator(client, logger, config)
 	if err != nil {
 		logger.Error("Error creating authenticator", "error", err)
 		return next
 	}
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp, ok, err := auth.AuthenticateRequest(r)
+		logger.Info("Authenticating request", "path", r.URL.Path, "method", r.Method)
+		rules := auth.FindRules(r, *config)
+		if len(rules) == 0 {
+			logger.Info("No rules found for request", "path", r.URL.Path, "method", r.Method)
+			// If the endpoint and method is not mentioned in the authorization config,
+			// we skip authentication as well. Authorization will get no user info.
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		resp, ok, err := authn.AuthenticateRequest(r)
 		if err != nil {
 			logger.Error("Error authenticating request", "error", err)
 			writeError(w, messages.InternalServerError, "Error", err.Error())

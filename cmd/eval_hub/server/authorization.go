@@ -9,6 +9,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
+	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -30,6 +31,11 @@ func WithAuthorization(next http.Handler, logger *slog.Logger, client *kubernete
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
+		_, ok := request.UserFrom(r.Context())
+		if !ok {
+			next.ServeHTTP(w, r)
+			return
+		}
 		decision, reason, err := auth.AuthorizeRequest(r.Context(), r)
 
 		if err != nil {

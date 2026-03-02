@@ -9,7 +9,7 @@ authorization:
                 byHttpHeader:
                   name: X-Tenant
                 resourceAttributes:
-                  namespace: { { .FromHeader } }
+                  namespace: "{{.FromHeader}}"
                   apiGroup: trustyai.opendatahub.io
                   resource: evaluations
                   verb: create
@@ -17,7 +17,7 @@ authorization:
                 byHttpHeader:
                   name: X-Tenant
               resourceAttributes:
-                namespace: { { .FromHeader } }
+                namespace: "{{.FromHeader}}"
                 apiGroup: mlflow.kubeflow.org
                 resource: experiments
                 verb: create
@@ -28,10 +28,10 @@ authorization:
                 byHttpHeader:
                   name: X-Tenant
               resourceAttributes:
-                namespace: { { .FromHeader } }
+                namespace: "{{.FromHeader}}"
                 apiGroup: trustyai.opendatahub.io
                 resource: evaluations
-                verb: { { .FromMethod } }
+                verb: "{{.FromMethod}}"
 
     # Collections
     - path: /api/v1/evaluations/collections
@@ -42,10 +42,10 @@ authorization:
                 byHttpHeader:
                   name: X-Tenant
               resourceAttributes:
-                namespace: { { .FromHeader } }
+                namespace: "{{.FromHeader}}"
                 apiGroup: trustyai.opendatahub.io
                 resource: collections
-                verb: { { .FromMethod } }
+                verb: "{{.FromMethod}}"
 
     # Providers
     - path: /api/v1/evaluations/providers
@@ -56,7 +56,7 @@ authorization:
                 byHttpHeader:
                   name: X-Tenant
               resourceAttributes:
-                namespace: { { .FromHeader } }
+                namespace: "{{.FromHeader}}"
                 apiGroup: trustyai.opendatahub.io
                 resource: collections
-                verb: { { .FromMethod } }
+                verb:  "{{.FromMethod}}"
