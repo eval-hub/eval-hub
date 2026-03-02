@@ -3,12 +3,13 @@ package local
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
+	"syscall"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/constants"
@@ -19,19 +20,63 @@ import (
 )
 
 const localJobsBaseDir = "/tmp/evalhub-jobs"
-const maxBenchmarkWorkers = 5
+
+// jobTracker manages subprocess tracking per job for cancellation.
+type jobTracker interface {
+	registerJob(jobID string)
+	addPID(jobID string, pid int)
+	cancelJob(jobID string)
+}
+
+// pidTracker tracks running subprocess PIDs per job so they can be killed on cancel.
+type pidTracker struct {
+	mu   sync.Mutex
+	pids map[string][]int // jobID -> list of PIDs
+}
+
+func (jr *pidTracker) registerJob(jobID string) {
+	jr.mu.Lock()
+	defer jr.mu.Unlock()
+	jr.pids[jobID] = nil
+}
+
+func (jr *pidTracker) addPID(jobID string, pid int) {
+	jr.mu.Lock()
+	defer jr.mu.Unlock()
+	jr.pids[jobID] = append(jr.pids[jobID], pid)
+}
+
+// cancelJob sends SIGKILL to the process group of every tracked PID for the
+// job and removes the job's entry from the tracker. It is idempotent: calling
+// it for an unknown or already-cancelled job is a no-op.
+func (jr *pidTracker) cancelJob(jobID string) {
+	jr.mu.Lock()
+	defer jr.mu.Unlock()
+	if pids, ok := jr.pids[jobID]; ok {
+		for _, pid := range pids {
+			// Kill the entire process group (negative PID).
+			_ = syscall.Kill(-pid, syscall.SIGKILL)
+		}
+		delete(jr.pids, jobID)
+	}
+}
 
 type LocalRuntime struct {
 	logger    *slog.Logger
 	ctx       context.Context
 	providers map[string]api.ProviderResource
+	tracker   jobTracker
 }
 
 func NewLocalRuntime(
 	logger *slog.Logger,
 	providerConfigs map[string]api.ProviderResource,
 ) (abstractions.Runtime, error) {
-	return &LocalRuntime{logger: logger, providers: providerConfigs}, nil
+	return &LocalRuntime{
+		logger:    logger,
+		providers: providerConfigs,
+		tracker:   &pidTracker{pids: make(map[string][]int)},
+	}, nil
 }
 
 func (r *LocalRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
@@ -39,14 +84,16 @@ func (r *LocalRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
 		logger:    logger,
 		ctx:       r.ctx,
 		providers: r.providers,
+		tracker:   r.tracker,
 	}
 }
 
 func (r *LocalRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 	return &LocalRuntime{
 		logger:    r.logger,
-		ctx:       context.WithoutCancel(ctx), // FIXME: address job cancellation logic
+		ctx:       ctx,
 		providers: r.providers,
+		tracker:   r.tracker,
 	}
 }
 
@@ -64,64 +111,39 @@ func (r *LocalRuntime) RunEvaluationJob(
 		return err
 	}
 
-	// Capture job ID before launching goroutines to avoid a data race
+	// Capture job ID before launching goroutine to avoid a data race
 	// on the shared evaluation pointer.
 	jobID := evaluation.Resource.ID
+
+	r.tracker.registerJob(jobID)
 
 	var callbackURL *string
 	if serviceURL := os.Getenv("SERVICE_URL"); serviceURL != "" {
 		callbackURL = &serviceURL
 	}
 
-	type indexedBenchmark struct {
-		index int
-		bench api.BenchmarkConfig
-	}
-	benchmarks := make(chan indexedBenchmark, len(benchmarksToRun))
-	for i, bench := range benchmarksToRun {
-		benchmarks <- indexedBenchmark{index: i, bench: bench}
-	}
-	close(benchmarks)
-
-	workerCount := maxBenchmarkWorkers
-	if len(benchmarksToRun) < workerCount {
-		workerCount = len(benchmarksToRun)
-	}
-
-	for i := 0; i < workerCount; i++ {
-		go func() {
-			for ib := range benchmarks {
-				select {
-				case <-r.ctx.Done():
-					r.logger.Warn(
-						"benchmark processing canceled",
-						"job_id", jobID,
-						"benchmark_id", ib.bench.ID,
-						"benchmark_index", ib.index,
-						"provider_id", ib.bench.ProviderID,
-					)
-					return
-				default:
-					if err := r.runBenchmark(jobID, ib.bench, ib.index, evaluation, callbackURL, storage); err != nil {
-						r.logger.Error(
-							"local runtime benchmark launch failed",
-							"error", err,
-							"job_id", jobID,
-							"benchmark_id", ib.bench.ID,
-							"benchmark_index", ib.index,
-							"provider_id", ib.bench.ProviderID,
-						)
-					}
-				}
+	go func() {
+		for i, bench := range benchmarksToRun {
+			if err := r.runBenchmark(jobID, bench, i, evaluation, callbackURL, storage); err != nil {
+				r.logger.Error(
+					"local runtime benchmark launch failed",
+					"error", err,
+					"job_id", jobID,
+					"benchmark_id", bench.ID,
+					"benchmark_index", i,
+					"provider_id", bench.ProviderID,
+				)
+				r.failBenchmark(jobID, bench, i, storage, err.Error())
 			}
-		}()
-	}
+		}
+	}()
 
 	return nil
 }
 
 // runBenchmark launches a single benchmark process. It writes the job spec,
-// starts the command, and waits for it to complete.
+// starts the command, and returns immediately. A background goroutine calls
+// cmd.Wait() to reap the child process and prevent zombies.
 func (r *LocalRuntime) runBenchmark(
 	jobID string,
 	bench api.BenchmarkConfig,
@@ -132,19 +154,15 @@ func (r *LocalRuntime) runBenchmark(
 ) error {
 	provider, ok := r.providers[bench.ProviderID]
 	if !ok {
-		r.failBenchmark(jobID, bench, storage, fmt.Sprintf("provider %q not found", bench.ProviderID))
 		return fmt.Errorf("provider %q not found", bench.ProviderID)
 	}
 	if provider.Runtime == nil || provider.Runtime.Local == nil || provider.Runtime.Local.Command == "" {
-		err := serviceerrors.NewServiceError(messages.LocalRuntimeNotEnabled, "ProviderID", bench.ProviderID)
-		r.failBenchmark(jobID, bench, storage, err.Error())
-		return err
+		return serviceerrors.NewServiceError(messages.LocalRuntimeNotEnabled, "ProviderID", bench.ProviderID)
 	}
 
 	// Build job spec JSON using shared logic
 	spec, err := shared.BuildJobSpec(evaluation, bench.ProviderID, bench.ID, benchmarkIndex, callbackURL)
 	if err != nil {
-		r.failBenchmark(jobID, bench, storage, fmt.Sprintf("build job spec: %s", err))
 		return fmt.Errorf("build job spec: %w", err)
 	}
 
@@ -182,7 +200,16 @@ func (r *LocalRuntime) runBenchmark(
 
 	// Build command using shell interpretation
 	command := provider.Runtime.Local.Command
-	cmd := exec.CommandContext(r.ctx, "sh", "-c", command)
+	cmd := exec.Command("sh", "-c", command)
+	// Setpgid places the child in its own process group (PGID = child PID).
+	// This is critical for two reasons:
+	//   1. cancelJob calls Kill(-PID, SIGKILL) which targets the entire process
+	//      group. Without Setpgid the child inherits the Go process's group, so
+	//      Kill(-PID) would kill the Go process itself.
+	//   2. The negative PID ensures the entire subprocess tree is killed (sh +
+	//      its children). Without it, only the direct child would be signalled
+	//      and grandchildren could survive as orphans reparented to PID 1.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	// Set environment variables
 	cmd.Env = append(os.Environ(),
@@ -212,11 +239,17 @@ func (r *LocalRuntime) runBenchmark(
 		"log_file", logFilePath,
 	)
 
-	// Start the process asynchronously
+	// Start the process
 	if err := cmd.Start(); err != nil {
 		logFile.Close()
 		return fmt.Errorf("start local process: %w", err)
 	}
+
+	pid := cmd.Process.Pid
+	r.tracker.addPID(jobID, pid)
+
+	// Close the log file — the child process has its own fd copy.
+	logFile.Close()
 
 	r.logger.Info(
 		"local runtime process started",
@@ -224,73 +257,33 @@ func (r *LocalRuntime) runBenchmark(
 		"benchmark_id", bench.ID,
 		"benchmark_index", benchmarkIndex,
 		"provider_id", bench.ProviderID,
-		"pid", cmd.Process.Pid,
+		"pid", pid,
 		"command", command,
 	)
 
-	// Wait for completion (already running in a goroutine via RunEvaluationJob)
-	defer logFile.Close()
-	if err := cmd.Wait(); err != nil {
-		r.logger.Error(
-			"local runtime process failed",
-			"error", err,
-			"job_id", jobID,
-			"benchmark_id", bench.ID,
-			"benchmark_index", benchmarkIndex,
-			"provider_id", bench.ProviderID,
-		)
-
-		// In local mode, fail the job if the process exits with error,
-		//  unless a callback already reported failure.
-		if !r.benchmarkHasAlreadyFailed(jobID, bench, storage) {
-			r.failBenchmark(jobID, bench, storage, err.Error())
-		} else {
-			r.logger.Warn(
-				"skipping failBenchmark: result already reported via callback",
-				"job_id", jobID,
-				"benchmark_id", bench.ID,
-				"provider_id", bench.ProviderID,
-			)
-		}
-	} else {
-		r.logger.Info(
-			"local runtime process completed",
-			"job_id", jobID,
-			"benchmark_id", bench.ID,
-			"benchmark_index", benchmarkIndex,
-			"provider_id", bench.ProviderID,
-		)
-	}
+	// Stopgap fix: reap the child process in the background to prevent zombies.
+	// Any cmd errors should be debugged from the logs; no action taken here.
+	//
+	// Ideally we would not need cmd.Wait() at all — the double-fork (fork/exec,
+	// setsid, fork again) trick on Unix fully detaches the child and lets init
+	// (PID 1) reap it, eliminating the need for a dedicated goroutine. However,
+	// Windows does not support fork or setsid — processes are managed differently
+	// via the Win32 API (CreateProcess) and there is no concept of zombie processes
+	// in the same way. Until a common cross-platform approach is found for Linux,
+	// macOS, and Windows, this goroutine calling cmd.Wait() serves as the portable
+	// stopgap solution.
+	go func() {
+		_ = cmd.Wait()
+	}()
 
 	return nil
-}
-
-// benchmarkHasAlreadyFailed checks whether a benchmark has already been marked as failed
-// (e.g. via a callback from the benchmark process itself).
-func (r *LocalRuntime) benchmarkHasAlreadyFailed(
-	jobID string,
-	bench api.BenchmarkConfig,
-	storage *abstractions.Storage,
-) bool {
-	if storage == nil || *storage == nil {
-		return false
-	}
-	job, err := (*storage).GetEvaluationJob(jobID)
-	if err != nil || job == nil || job.Status == nil {
-		return false
-	}
-	for _, bs := range job.Status.Benchmarks {
-		if bs.ID == bench.ID && bs.ProviderID == bench.ProviderID && bs.Status == api.StateFailed {
-			return true
-		}
-	}
-	return false
 }
 
 // failBenchmark updates storage to mark a benchmark as failed.
 func (r *LocalRuntime) failBenchmark(
 	jobID string,
 	bench api.BenchmarkConfig,
+	benchmarkIndex int,
 	storage *abstractions.Storage,
 	errMsg string,
 ) {
@@ -299,9 +292,10 @@ func (r *LocalRuntime) failBenchmark(
 	}
 	runStatus := &api.StatusEvent{
 		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
-			ProviderID: bench.ProviderID,
-			ID:         bench.ID,
-			Status:     api.StateFailed,
+			ProviderID:     bench.ProviderID,
+			ID:             bench.ID,
+			BenchmarkIndex: benchmarkIndex,
+			Status:         api.StateFailed,
 			ErrorMessage: &api.MessageInfo{
 				Message:     errMsg,
 				MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED,
@@ -314,36 +308,30 @@ func (r *LocalRuntime) failBenchmark(
 			"error", updateErr,
 			"job_id", jobID,
 			"benchmark_id", bench.ID,
+			"benchmark_index", benchmarkIndex,
 			"provider_id", bench.ProviderID,
 		)
 	}
 }
 
 func (r *LocalRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobResource) error {
-	var deleteErr error
-	for i, bench := range evaluation.Benchmarks {
-		benchDir := filepath.Join(localJobsBaseDir, evaluation.Resource.ID, fmt.Sprintf("%d", i), bench.ProviderID, bench.ID)
-		if err := os.RemoveAll(benchDir); err != nil {
-			deleteErr = errors.Join(deleteErr, err)
-			r.logger.Error(
-				"failed to remove local runtime directory",
-				"error", err,
-				"job_id", evaluation.Resource.ID,
-				"benchmark_id", bench.ID,
-				"provider_id", bench.ProviderID,
-				"directory", benchDir,
-			)
-		} else {
-			r.logger.Info(
-				"removed local runtime directory",
-				"job_id", evaluation.Resource.ID,
-				"benchmark_id", bench.ID,
-				"provider_id", bench.ProviderID,
-				"directory", benchDir,
-			)
-		}
+	r.tracker.cancelJob(evaluation.Resource.ID)
+	jobDir := filepath.Join(localJobsBaseDir, evaluation.Resource.ID)
+	if err := os.RemoveAll(jobDir); err != nil {
+		r.logger.Error(
+			"failed to remove local runtime job directory",
+			"error", err,
+			"job_id", evaluation.Resource.ID,
+			"directory", jobDir,
+		)
+		return err
 	}
-	return deleteErr
+	r.logger.Info(
+		"removed local runtime job directory",
+		"job_id", evaluation.Resource.ID,
+		"directory", jobDir,
+	)
+	return nil
 }
 
 func (r *LocalRuntime) Name() string {

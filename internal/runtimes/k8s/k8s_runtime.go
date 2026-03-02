@@ -66,7 +66,7 @@ func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, sto
 				)
 
 				if storage != nil && *storage != nil {
-					runStatus := buildBenchmarkFailureStatus(&bench, err)
+					runStatus := buildBenchmarkFailureStatus(&bench, idx, err)
 					if updateErr := (*storage).UpdateEvaluationJob(evaluation.Resource.ID, runStatus); updateErr != nil {
 						r.logger.Error(
 							"failed to update benchmark status",
@@ -226,13 +226,14 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 	return nil
 }
 
-func buildBenchmarkFailureStatus(benchmark *api.BenchmarkConfig, runErr error) *api.StatusEvent {
+func buildBenchmarkFailureStatus(benchmark *api.BenchmarkConfig, benchmarkIndex int, runErr error) *api.StatusEvent {
 	return &api.StatusEvent{
 		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
-			ProviderID:   benchmark.ProviderID,
-			ID:           benchmark.ID,
-			Status:       api.StateFailed,
-			ErrorMessage: &api.MessageInfo{Message: runErr.Error(), MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED},
+			ProviderID:     benchmark.ProviderID,
+			ID:             benchmark.ID,
+			BenchmarkIndex: benchmarkIndex,
+			Status:         api.StateFailed,
+			ErrorMessage:   &api.MessageInfo{Message: runErr.Error(), MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED},
 		},
 	}
 }
