@@ -14,16 +14,12 @@ import (
 )
 
 type Authenticator struct {
-	auth   authenticator.Request
-	config *AuthConfig
+	auth authenticator.Request
+
 	logger *slog.Logger
 }
 
-func NewAuthenticator(client *kubernetes.Clientset, logger *slog.Logger, config *AuthConfig) (*Authenticator, error) {
-
-	if config == nil {
-		return nil, fmt.Errorf("config is required")
-	}
+func NewAuthenticator(client *kubernetes.Clientset, logger *slog.Logger) (*Authenticator, error) {
 
 	tokenClient := client.AuthenticationV1()
 	if tokenClient == nil {
@@ -47,7 +43,6 @@ func NewAuthenticator(client *kubernetes.Clientset, logger *slog.Logger, config 
 
 	return &Authenticator{
 		auth:   authenticator,
-		config: config,
 		logger: logger,
 	}, nil
 }

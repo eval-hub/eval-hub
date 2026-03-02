@@ -10,9 +10,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+// Performs authentication on the configured endpoints. Other endpoints are allowed without authentication.
 func WithAuthentication(next http.Handler, logger *slog.Logger, client *kubernetes.Clientset, config *auth.AuthConfig) http.Handler {
 
-	authn, err := auth.NewAuthenticator(client, logger, config)
+	authn, err := auth.NewAuthenticator(client, logger)
 	if err != nil {
 		logger.Error("Error creating authenticator", "error", err)
 		return next
@@ -32,7 +33,7 @@ func WithAuthentication(next http.Handler, logger *slog.Logger, client *kubernet
 		resp, ok, err := authn.AuthenticateRequest(r)
 		if err != nil {
 			logger.Error("Error authenticating request", "error", err)
-			writeError(w, messages.InternalServerError, "Error", err.Error())
+			writeError(w, messages.Unauthorized, "Error", err.Error())
 			return
 		}
 		if !ok {

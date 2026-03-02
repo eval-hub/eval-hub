@@ -20,6 +20,7 @@ func writeError(w http.ResponseWriter, msg *messages.MessageCode, params ...any)
 	http.Error(w, string(json), msg.GetStatusCode())
 }
 
+// Performs authorization on the configured endpoints. Other endpoints are allowed without authorization.
 func WithAuthorization(next http.Handler, logger *slog.Logger, client *kubernetes.Clientset, config *auth.AuthConfig) http.Handler {
 
 	auth, err := auth.NewSarAuthorizer(client, logger, config)
@@ -33,6 +34,7 @@ func WithAuthorization(next http.Handler, logger *slog.Logger, client *kubernete
 
 		user, ok := request.UserFrom(r.Context())
 		if !ok {
+			// If no user is found we assume that this endpoints is allowed with not authn/z
 			next.ServeHTTP(w, r)
 			return
 		}
