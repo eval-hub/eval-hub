@@ -20,6 +20,9 @@ type Authenticator struct {
 }
 
 func NewAuthenticator(client *kubernetes.Clientset, logger *slog.Logger) (*Authenticator, error) {
+	if client == nil {
+		return nil, fmt.Errorf("client is required")
+	}
 
 	tokenClient := client.AuthenticationV1()
 	if tokenClient == nil {

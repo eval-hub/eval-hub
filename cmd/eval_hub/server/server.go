@@ -194,7 +194,7 @@ func (s *Server) handle(router *http.ServeMux, pattern string, handler http.Hand
 	s.logger.Info("Registered API", "pattern", pattern)
 }
 
-func (s *Server) setupAuthRoutes(h *handlers.Handlers, router *http.ServeMux) {
+func (s *Server) setupHealthRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, "/api/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -359,8 +359,8 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	router := http.NewServeMux()
 	h := handlers.New(s.storage, s.validate, s.runtime, s.mlflowClient, s.providerConfigs, s.serviceConfig)
 
-	// Health and status endpoints
-	s.setupAuthRoutes(h, router)
+	// Health
+	s.setupHealthRoutes(h, router)
 
 	// Evaluation jobs endpoints
 	s.setupEvaluationJobsRoutes(h, router)
