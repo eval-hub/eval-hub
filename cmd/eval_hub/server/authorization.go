@@ -31,7 +31,7 @@ func WithAuthorization(next http.Handler, logger *slog.Logger, client *kubernete
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		_, ok := request.UserFrom(r.Context())
+		user, ok := request.UserFrom(r.Context())
 		if !ok {
 			next.ServeHTTP(w, r)
 			return
@@ -49,6 +49,8 @@ func WithAuthorization(next http.Handler, logger *slog.Logger, client *kubernete
 			writeError(w, messages.Forbidden, "Error", reason)
 			return
 		}
+
+		logger.Info("Request authorized", "path", r.URL.Path, "method", r.Method, "user", user.GetName())
 
 		next.ServeHTTP(w, r)
 

@@ -57,8 +57,10 @@ func NewSarAuthorizer(client *kubernetes.Clientset, logger *slog.Logger, config 
 
 func (s *SarAuthorizer) Authorize(ctx context.Context, attributesRecords []authorizer.Attributes) (authorized authorizer.Decision, reason string, err error) {
 	for _, record := range attributesRecords {
+		s.logger.Info("Authorizing request", "record", record)
 		decision, reason, err := s.auth.Authorize(ctx, record)
 		if err != nil || decision != authorizer.DecisionAllow {
+			s.logger.Info("FAIL", "decision", decision, "reason", reason, "error", err)
 			return decision, reason, err
 		}
 	}

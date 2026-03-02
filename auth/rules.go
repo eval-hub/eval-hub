@@ -93,14 +93,15 @@ func AttributesFromRequest(request *http.Request, config AuthConfig, user user.I
 		templateValues.FromMethod = httpToKubeVerb(request.Method)
 
 		resourceAttributes = append(resourceAttributes, authorizer.AttributesRecord{
-			Namespace:   applyTemplate(rule.ResourceAttributes.Namespace, templateValues),
-			APIGroup:    applyTemplate(rule.ResourceAttributes.APIGroup, templateValues),
-			APIVersion:  applyTemplate(rule.ResourceAttributes.APIVersion, templateValues),
-			Resource:    applyTemplate(rule.ResourceAttributes.Resource, templateValues),
-			Subresource: applyTemplate(rule.ResourceAttributes.Subresource, templateValues),
-			Name:        applyTemplate(rule.ResourceAttributes.Name, templateValues),
-			Verb:        applyTemplate(rule.ResourceAttributes.Verb, templateValues),
-			User:        user,
+			Namespace:       applyTemplate(rule.ResourceAttributes.Namespace, templateValues),
+			APIGroup:        applyTemplate(rule.ResourceAttributes.APIGroup, templateValues),
+			APIVersion:      applyTemplate(rule.ResourceAttributes.APIVersion, templateValues),
+			Resource:        applyTemplate(rule.ResourceAttributes.Resource, templateValues),
+			Subresource:     applyTemplate(rule.ResourceAttributes.Subresource, templateValues),
+			Name:            applyTemplate(rule.ResourceAttributes.Name, templateValues),
+			Verb:            applyTemplate(rule.ResourceAttributes.Verb, templateValues),
+			User:            user,
+			ResourceRequest: true,
 		})
 	}
 	return resourceAttributes

@@ -58,5 +58,5 @@ authorization:
               resourceAttributes:
                 namespace: "{{.FromHeader}}"
                 apiGroup: trustyai.opendatahub.io
-                resource: collections
+                resource: providers
                 verb:  "{{.FromMethod}}"

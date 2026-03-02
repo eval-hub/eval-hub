@@ -1,0 +1,33 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: eval-hub-service-full-access
+  namespace: default
+rules:
+  - apiGroups:
+      - trustyai.opendatahub.io
+    resources:
+      - evaluations
+      - collections
+      - providers
+    verbs:
+      - get
+      - list
+      - create
+      - update
+      - patch
+      - delete
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: eval-hub-service-full-access
+  namespace: default
+subjects:
+  - kind: ServiceAccount
+    name: marius
+    namespace: default
+roleRef:
+  kind: Role
+  name: eval-hub-service-full-access
