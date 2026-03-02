@@ -8,11 +8,11 @@ authorization:
             - rewrites:
                 byHttpHeader:
                   name: X-Tenant
-                resourceAttributes:
-                  namespace: "{{.FromHeader}}"
-                  apiGroup: trustyai.opendatahub.io
-                  resource: evaluations
-                  verb: create
+              resourceAttributes:
+                namespace: "{{.FromHeader}}"
+                apiGroup: trustyai.opendatahub.io
+                resource: evaluations
+                verb: create
             - rewrites:
                 byHttpHeader:
                   name: X-Tenant
