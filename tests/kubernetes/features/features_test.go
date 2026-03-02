@@ -2,17 +2,12 @@ package features
 
 import (
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/cucumber/godog"
 )
 
 func TestFeatures(t *testing.T) {
-	missing := missingRequiredEnvVars()
-	if len(missing) > 0 {
-		t.Skipf("skipping kubernetes tests; missing env vars: %s", strings.Join(missing, ", "))
-	}
 	opts := &godog.Options{
 		Format:   "pretty",
 		Paths:    []string{"."},

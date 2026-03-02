@@ -55,6 +55,10 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	tc := &testContext{}
 
 	ctx.Before(func(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
+		if os.Getenv("MLFLOW_TRACKING_URI") == "" {
+			debugLog("Skipping MLflow scenario; MLFLOW_TRACKING_URI is not set")
+			return ctx, godog.ErrSkip
+		}
 		tc.reset()
 		return ctx, nil
 	})

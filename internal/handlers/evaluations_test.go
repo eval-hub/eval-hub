@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -60,6 +61,14 @@ func (f *fakeStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, er
 	return f.job, nil
 }
 
+func (f *fakeStorage) GetEvaluationJobs(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
+	return &abstractions.QueryResults[api.EvaluationJobResource]{Items: []api.EvaluationJobResource{}, TotalStored: 0}, nil
+}
+
+func (f *fakeStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
+	return nil
+}
+
 func (f *fakeStorage) DeleteEvaluationJob(id string) error {
 	f.deleteID = id
 	return nil
@@ -82,6 +91,60 @@ func (r *fakeRuntime) RunEvaluationJob(_ *api.EvaluationJobResource, _ abstracti
 func (r *fakeRuntime) DeleteEvaluationJobResources(_ *api.EvaluationJobResource) error {
 	r.called = true
 	return r.err
+}
+
+type listEvaluationsRequest struct {
+	*MockRequest
+	queryValues map[string][]string
+	pathValues  map[string]string
+}
+
+func (r *listEvaluationsRequest) Query(key string) []string {
+	if values, ok := r.queryValues[key]; ok {
+		return values
+	}
+	return []string{}
+}
+
+func (r *listEvaluationsRequest) PathValue(name string) string {
+	return r.pathValues[name]
+}
+
+type listEvaluationsStorage struct {
+	*fakeStorage
+	jobs []api.EvaluationJobResource
+	err  error
+}
+
+func (s *listEvaluationsStorage) WithLogger(_ *slog.Logger) abstractions.Storage { return s }
+func (s *listEvaluationsStorage) WithContext(_ context.Context) abstractions.Storage {
+	return s
+}
+func (s *listEvaluationsStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
+
+func (s *listEvaluationsStorage) GetEvaluationJobs(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &abstractions.QueryResults[api.EvaluationJobResource]{
+		Items:       s.jobs,
+		TotalStored: len(s.jobs),
+	}, nil
+}
+
+type updateEvaluationStorage struct {
+	*fakeStorage
+	updateErr error
+}
+
+func (s *updateEvaluationStorage) WithLogger(_ *slog.Logger) abstractions.Storage { return s }
+func (s *updateEvaluationStorage) WithContext(_ context.Context) abstractions.Storage {
+	return s
+}
+func (s *updateEvaluationStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
+
+func (s *updateEvaluationStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
+	return s.updateErr
 }
 
 type deleteRequest struct {
@@ -374,5 +437,139 @@ func TestHandleCreateEvaluationRejectsInvalidBenchmarkID(t *testing.T) {
 
 	if recorder.Code != 400 {
 		t.Fatalf("expected status 400, got %d", recorder.Code)
+	}
+}
+
+func TestHandleListEvaluations(t *testing.T) {
+	storage := &listEvaluationsStorage{
+		fakeStorage: &fakeStorage{},
+		jobs: []api.EvaluationJobResource{
+			{
+				Resource: api.EvaluationResource{
+					Resource: api.Resource{ID: "job-1"},
+				},
+			},
+		},
+	}
+	validate := validator.New()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+
+	req := &listEvaluationsRequest{
+		MockRequest: createMockRequest("GET", "/api/v1/evaluations/jobs"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+
+	h.HandleListEvaluations(ctx, req, resp)
+
+	if recorder.Code != 200 {
+		t.Fatalf("expected status 200, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+	var got api.EvaluationJobResourceList
+	if err := json.NewDecoder(recorder.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.TotalCount != 1 {
+		t.Errorf("expected TotalCount 1, got %d", got.TotalCount)
+	}
+	if len(got.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(got.Items))
+	}
+	if got.Items[0].Resource.ID != "job-1" {
+		t.Errorf("expected id job-1, got %s", got.Items[0].Resource.ID)
+	}
+}
+
+func TestHandleGetEvaluation(t *testing.T) {
+	storage := &fakeStorage{
+		job: &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{ID: "job-get"},
+			},
+		},
+	}
+	validate := validator.New()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+
+	req := &deleteRequest{
+		MockRequest: createMockRequest("GET", "/api/v1/evaluations/jobs/job-get"),
+		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: "job-get"},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+
+	h.HandleGetEvaluation(ctx, req, resp)
+
+	if recorder.Code != 200 {
+		t.Fatalf("expected status 200, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+	var got api.EvaluationJobResource
+	if err := json.NewDecoder(recorder.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.Resource.ID != "job-get" {
+		t.Errorf("expected id job-get, got %s", got.Resource.ID)
+	}
+}
+
+func TestHandleGetEvaluation_MissingPathParam(t *testing.T) {
+	storage := &fakeStorage{}
+	validate := validator.New()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+
+	req := &deleteRequest{
+		MockRequest: createMockRequest("GET", "/api/v1/evaluations/jobs/"),
+		pathValues:  map[string]string{},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+
+	h.HandleGetEvaluation(ctx, req, resp)
+
+	if recorder.Code != 400 {
+		t.Fatalf("expected status 400 for missing path param, got %d", recorder.Code)
+	}
+}
+
+type updateEvaluationRequest struct {
+	*bodyRequest
+	pathValues map[string]string
+}
+
+func (r *updateEvaluationRequest) PathValue(name string) string {
+	return r.pathValues[name]
+}
+
+func TestHandleUpdateEvaluation(t *testing.T) {
+	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{}}
+	validate := validator.New()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+
+	body := `{"benchmark_status_event":{"provider_id":"p1","id":"b1","status":"completed"}}`
+	req := &bodyRequest{
+		MockRequest: createMockRequest("PUT", "/api/v1/evaluations/jobs/job-update/events"),
+		body:        []byte(body),
+	}
+	reqWithPath := &updateEvaluationRequest{
+		bodyRequest: req,
+		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: "job-update"},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+
+	h.HandleUpdateEvaluation(ctx, reqWithPath, resp)
+
+	if recorder.Code != 204 {
+		t.Fatalf("expected status 204, got %d body %s", recorder.Code, recorder.Body.String())
 	}
 }

@@ -39,6 +39,12 @@ var (
 		"The query parameter '{{.ParameterName}}' is not a valid {{.Type}}: '{{.Value}}'.",
 		"query_parameter_invalid",
 	)
+	// QueryBadParameter The parameter '{{.ParameterName}}' is not a valid query parameter. Allowed parameters are: {{.AllowedParameters}}.
+	QueryBadParameter = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The parameter '{{.ParameterName}}' is not a valid query parameter. Allowed parameters are: {{.AllowedParameters}}.",
+		"query_bad_parameter",
+	)
 
 	// JobCanNotBeUpdated The job {{.Id}} can not be {{.NewStatus}} because it is '{{.Status}}'.
 	JobCanNotBeUpdated = createMessage(
@@ -52,6 +58,20 @@ var (
 		constants.HTTPCodeBadRequest,
 		"The request JSON is invalid: '{{.Error}}'. Please check the request and try again.",
 		"invalid_json_request",
+	)
+
+	// InvalidPatchOperation The patch operation '{{.Operation}}' is not valid. Allowed operations are: {{.AllowedOperations}}.
+	InvalidPatchOperation = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The patch operation '{{.Operation}}' is not valid. Allowed operations are: {{.AllowedOperations}}.",
+		"invalid_patch_operation",
+	)
+
+	// UnallowedPatch The operation '{{.Operation}}' is not allowed for the path '{{.Path}}'.
+	UnallowedPatch = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The operation '{{.Operation}}' is not allowed for the path '{{.Path}}'.",
+		"unallowed_patch",
 	)
 
 	// RequestValidationFailed The request validation failed: '{{.Error}}'. Please check the request and try again.
