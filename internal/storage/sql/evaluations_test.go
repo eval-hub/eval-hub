@@ -588,8 +588,112 @@ func TestEvaluationsStorage(t *testing.T) {
 		if len(final.Status.Benchmarks) != 1 {
 			t.Errorf("Benchmarks should be preserved, got %d", len(final.Status.Benchmarks))
 		}
-		if final.Status.Benchmarks[0].Status != api.StateRunning {
-			t.Errorf("Benchmark status should be preserved as running, got %s", final.Status.Benchmarks[0].Status)
+		if final.Status.Benchmarks[0].Status != api.StateCancelled {
+			t.Errorf("Benchmark status should be cancelled, got %s", final.Status.Benchmarks[0].Status)
+		}
+		if final.Status.Benchmarks[0].ErrorMessage == nil {
+			t.Fatal("Benchmark error_message should be set after cancellation")
+		}
+		if final.Status.Benchmarks[0].ErrorMessage.Message != "cancelled" {
+			t.Errorf("Benchmark error_message.message should be 'cancelled', got %s", final.Status.Benchmarks[0].ErrorMessage.Message)
+		}
+		if final.Status.Benchmarks[0].ErrorMessage.MessageCode != "C" {
+			t.Errorf("Benchmark error_message.message_code should be 'C', got %s", final.Status.Benchmarks[0].ErrorMessage.MessageCode)
+		}
+	})
+
+	t.Run("CancelEvaluationJob cascades only to non-terminal benchmarks", func(t *testing.T) {
+		jobID := common.GUID()
+		config := &api.EvaluationJobConfig{
+			Model: api.ModelRef{URL: "http://test.com", Name: "test"},
+			Benchmarks: []api.BenchmarkConfig{
+				{Ref: api.Ref{ID: "b1"}, ProviderID: "prov1"},
+				{Ref: api.Ref{ID: "b2"}, ProviderID: "prov2"},
+				{Ref: api.Ref{ID: "b3"}, ProviderID: "prov3"},
+			},
+		}
+		tenant := api.Tenant("tenant-1")
+		now := time.Now()
+		job := &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{
+					ID:        jobID,
+					Tenant:    &tenant,
+					CreatedAt: &now,
+					UpdatedAt: &now,
+				},
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{
+					State: api.OverallStateRunning,
+				},
+			},
+			EvaluationJobConfig: *config,
+		}
+		if err := store.CreateEvaluationJob(job); err != nil {
+			t.Fatalf("CreateEvaluationJob: %v", err)
+		}
+		// Set benchmark 0 to running, benchmark 1 to completed, benchmark 2 to pending
+		if err := store.UpdateEvaluationJob(jobID, &api.StatusEvent{
+			BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+				ID: "b1", ProviderID: "prov1", BenchmarkIndex: 0,
+				Status: api.StateRunning,
+			},
+		}); err != nil {
+			t.Fatalf("UpdateEvaluationJob b1 running: %v", err)
+		}
+		if err := store.UpdateEvaluationJob(jobID, &api.StatusEvent{
+			BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+				ID: "b2", ProviderID: "prov2", BenchmarkIndex: 1,
+				Status:  api.StateCompleted,
+				Metrics: map[string]any{"acc": 0.95},
+			},
+		}); err != nil {
+			t.Fatalf("UpdateEvaluationJob b2 completed: %v", err)
+		}
+		if err := store.UpdateEvaluationJob(jobID, &api.StatusEvent{
+			BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+				ID: "b3", ProviderID: "prov3", BenchmarkIndex: 2,
+				Status: api.StatePending,
+			},
+		}); err != nil {
+			t.Fatalf("UpdateEvaluationJob b3 pending: %v", err)
+		}
+
+		cancelMsg := &api.MessageInfo{
+			Message:     "Evaluation job cancelled",
+			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
+		}
+		if err := store.UpdateEvaluationJobStatus(jobID, api.OverallStateCancelled, cancelMsg); err != nil {
+			t.Fatalf("UpdateEvaluationJobStatus running->cancelled: %v", err)
+		}
+		final, err := store.GetEvaluationJob(jobID)
+		if err != nil {
+			t.Fatalf("GetEvaluationJob: %v", err)
+		}
+		if len(final.Status.Benchmarks) != 3 {
+			t.Fatalf("Expected 3 benchmarks, got %d", len(final.Status.Benchmarks))
+		}
+		// b1 was running → should be cancelled with error message
+		if final.Status.Benchmarks[0].Status != api.StateCancelled {
+			t.Errorf("b1 should be cancelled, got %s", final.Status.Benchmarks[0].Status)
+		}
+		if final.Status.Benchmarks[0].ErrorMessage == nil || final.Status.Benchmarks[0].ErrorMessage.MessageCode != constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED {
+			t.Errorf("b1 should have cancellation error message")
+		}
+		// b2 was completed → should remain completed
+		if final.Status.Benchmarks[1].Status != api.StateCompleted {
+			t.Errorf("b2 should remain completed, got %s", final.Status.Benchmarks[1].Status)
+		}
+		if final.Status.Benchmarks[1].ErrorMessage != nil {
+			t.Errorf("b2 should not have error message, got %v", final.Status.Benchmarks[1].ErrorMessage)
+		}
+		// b3 was pending → should be cancelled with error message
+		if final.Status.Benchmarks[2].Status != api.StateCancelled {
+			t.Errorf("b3 should be cancelled, got %s", final.Status.Benchmarks[2].Status)
+		}
+		if final.Status.Benchmarks[2].ErrorMessage == nil || final.Status.Benchmarks[2].ErrorMessage.MessageCode != constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED {
+			t.Errorf("b3 should have cancellation error message")
 		}
 	})
 

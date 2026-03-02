@@ -283,6 +283,9 @@ Feature: Evaluations Endpoint
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "cancelled" at path "$.status.state"
+    And the response should contain the value "cancelled" at path "$.status.benchmarks[0].status"
+    And the response should contain the value "Evaluation job cancelled" at path "$.status.benchmarks[0].error_message.message"
+    And the response should contain the value "evaluation_job_cancelled" at path "$.status.benchmarks[0].error_message.message_code"
 
   Scenario: Cancel evaluation job with invalid hard_delete query
     Given the service is running
