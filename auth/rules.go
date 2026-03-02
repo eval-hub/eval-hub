@@ -79,9 +79,9 @@ func AttributesFromRequest(request *http.Request, config AuthConfig, user user.I
 	for _, rule := range extractedRules {
 		templateValues := TemplateValues{}
 		if rule.Rewrites.ByHttpHeader != nil {
-			value, ok := request.Header[rule.Rewrites.ByHttpHeader.Name]
-			if ok && len(value) > 0 {
-				templateValues.FromHeader = value[0]
+			value := request.Header.Get(rule.Rewrites.ByHttpHeader.Name)
+			if value != "" {
+				templateValues.FromHeader = value
 			}
 		}
 		if rule.Rewrites.ByQueryString != nil {
