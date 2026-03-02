@@ -13,8 +13,8 @@ import (
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/handlers"
-	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/messages"
+	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/validation"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -116,7 +116,9 @@ type updatePatchDeleteCollectionStorage struct {
 	deleteErr  error
 }
 
-func (s *updatePatchDeleteCollectionStorage) WithLogger(_ *slog.Logger) abstractions.Storage { return s }
+func (s *updatePatchDeleteCollectionStorage) WithLogger(_ *slog.Logger) abstractions.Storage {
+	return s
+}
 func (s *updatePatchDeleteCollectionStorage) WithContext(_ context.Context) abstractions.Storage {
 	return s
 }
