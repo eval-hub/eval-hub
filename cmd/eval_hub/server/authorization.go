@@ -52,6 +52,8 @@ func WithAuthorization(next http.Handler, logger *slog.Logger, client *kubernete
 
 		logger.Info("Request authorized", "path", r.URL.Path, "method", r.Method, "user", user.GetName())
 
+		r.Header.Set(USER_HEADER, user.GetName())
+		r.Header.Del("Authorization")
 		next.ServeHTTP(w, r)
 
 	})
