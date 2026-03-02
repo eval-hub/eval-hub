@@ -1,0 +1,1 @@
+{"model":{"url":"{{env:MODEL_URL|http://test.com}}","name":"{{env:MODEL_NAME|test}}"},"collection":{"id":"{{value:collection_id}}"},"experiment":{"name":"{{mlflow:my-test-experiment}}","tags":[{"key":"environment","value":"test"}]}}

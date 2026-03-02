@@ -1,45 +1,12 @@
-name: Question or General Discussion
-description: Ask a question or start a general discussion about eval-hub
-title: "[Question]: "
-labels: ["kind/question", "kind/discussion"]
-assignees: []
+name: Question
+description: Ask a question or start a discussion
+title: "question: "
+labels: ["kind/question"]
 body:
-  - type: markdown
-    attributes:
-      value: |
-        Thanks for your question! This template is for general questions, usage help, and discussions about eval-hub.
-
-        For bugs, please use the Bug Report template. For feature requests, please use the Feature Request template.
-
-  - type: dropdown
-    id: question-type
-    attributes:
-      label: Question Type
-      description: What type of question is this?
-      options:
-        - Usage Help - How to use eval-hub
-        - Configuration - Setup and configuration questions
-        - Integration - Integrating with other systems
-        - Best Practices - Recommended approaches
-        - Architecture - Understanding eval-hub design
-        - Deployment - Local, Podman, or Kubernetes/OpenShift deployment questions
-        - Troubleshooting - General troubleshooting help
-        - General Discussion - Open discussion topic
-    validations:
-      required: true
-
   - type: textarea
     id: question
     attributes:
-      label: Your Question
-      description: Please describe your question or discussion topic in detail.
-      placeholder: |
-        What would you like to know or discuss?
-
-        For usage questions, please include:
-        - What you're trying to accomplish
-        - What you've already tried
-        - Specific areas where you need guidance
+      label: Your question
     validations:
       required: true
 
@@ -47,58 +14,4 @@ body:
     id: context
     attributes:
       label: Context
-      description: Provide context about your use case, environment, or situation.
-      placeholder: |
-        Please include:
-        - Your use case or project goals
-        - Current setup or environment
-        - Any constraints or requirements
-        - Relevant background information
-
-  - type: textarea
-    id: what-tried
-    attributes:
-      label: What Have You Tried?
-      description: What steps have you already taken to find an answer?
-      placeholder: |
-        - I read the documentation at...
-        - I tried searching for...
-        - I looked at examples in...
-        - I attempted to configure...
-
-  - type: textarea
-    id: environment
-    attributes:
-      label: Environment (if relevant)
-      description: If your question is environment-specific, please provide details.
-      placeholder: |
-        - OS: Ubuntu 22.04
-        - Python: 3.11.0
-        - Podman: 4.7.0 (if applicable)
-        - Kubernetes: 1.28 (if applicable)
-        - eval-hub version: 0.1.1
-        - Deployment method: Local/Podman/Kubernetes/OpenShift
-
-  - type: textarea
-    id: additional-info
-    attributes:
-      label: Additional Information
-      description: Any other information that might be helpful for providing an answer.
-      placeholder: |
-        - Links to relevant documentation
-        - Screenshots or logs (if applicable)
-        - Related issues or discussions
-        - Specific error messages
-
-  - type: checkboxes
-    id: checklist
-    attributes:
-      label: Pre-submission Checklist
-      description: Please confirm you have done the following
-      options:
-        - label: I have searched existing issues and discussions for similar questions
-          required: true
-        - label: I have reviewed the relevant documentation (README, API docs, CONTRIBUTING)
-          required: true
-        - label: This is not a bug report or feature request (for those, I would use the appropriate template)
-          required: true
+      description: What have you tried? What's your setup?

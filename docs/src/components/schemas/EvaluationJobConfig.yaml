@@ -12,7 +12,7 @@ properties:
     description: Evaluation job description
   tags:
     type: array
-    items: 
+    items:
       type: string
     description: Evaluation job tags
   model:

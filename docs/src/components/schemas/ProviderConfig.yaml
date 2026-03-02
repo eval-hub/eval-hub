@@ -12,7 +12,7 @@ properties:
     description: Provider description
   tags:
     type: array
-    items: 
+    items:
       type: string
     description: Provider tags
   runtime:

@@ -17,6 +17,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/handlers"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
+	"github.com/eval-hub/eval-hub/internal/validation"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/go-playground/validator/v10"
 )
@@ -558,5 +559,81 @@ func TestHandlePatchProviderRejectsSystemProvider(t *testing.T) {
 
 	if recorder.Code == 200 {
 		t.Fatal("expected error when patching system provider")
+	}
+}
+
+func TestHandleCreateProvider(t *testing.T) {
+	storage := &fakeStorage{}
+	validate, _ := validation.NewValidator()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+
+	body := `{"name":"My Provider","description":"A test provider","benchmarks":[{"id":"bench-1","provider_id":"p1"}]}`
+	req := &providersRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/providers"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{},
+	}
+	req.SetBody([]byte(body))
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+
+	h.HandleCreateProvider(ctx, req, resp)
+
+	if recorder.Code != 201 {
+		t.Fatalf("expected status 201, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+	var got api.ProviderResource
+	if err := json.NewDecoder(recorder.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.Resource.ID == "" {
+		t.Error("expected non-empty resource ID")
+	}
+	if got.Name != "My Provider" {
+		t.Errorf("expected name My Provider, got %s", got.Name)
+	}
+}
+
+func TestHandleDeleteProvider(t *testing.T) {
+	storage := &fakeStorage{}
+	validate := validator.New()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("DELETE", "/api/v1/evaluations/providers/my-provider"),
+		pathValues:  map[string]string{constants.PATH_PARAMETER_PROVIDER_ID: "my-provider"},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+
+	h.HandleDeleteProvider(ctx, req, resp)
+
+	if recorder.Code != 204 {
+		t.Fatalf("expected status 204, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestHandleDeleteProvider_MissingPathParam(t *testing.T) {
+	storage := &fakeStorage{}
+	validate := validator.New()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("DELETE", "/api/v1/evaluations/providers/"),
+		pathValues:  map[string]string{},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+
+	h.HandleDeleteProvider(ctx, req, resp)
+
+	if recorder.Code != 400 {
+		t.Fatalf("expected status 400 for missing path param, got %d", recorder.Code)
 	}
 }

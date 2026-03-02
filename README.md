@@ -8,20 +8,8 @@ A lightweight REST API service for orchestrating LLM evaluations across multiple
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    A[Client API Requests] --> B[EvalHub Service]
+![Architecture](docs/images/architecture.svg)
 
-    subgraph B[EvalHub Service]
-        H[Handlers<br/>net/http] --> R[Runtime Executors]
-        H --> S[Storage<br/>SQLite / PostgreSQL]
-        H --> M[MLflow Tracking]
-    end
-
-    R --> D[lm-evaluation-harness]
-    R --> E[RAGAS / Garak]
-    R --> F[GuideLLM / Custom]
-```
 
 The service uses Go's standard `net/http` router, structured logging with zap, Prometheus metrics, and a pluggable storage layer (SQLite for development, PostgreSQL for production). Providers and benchmarks are declared in YAML configuration files shipped with the container image.
 

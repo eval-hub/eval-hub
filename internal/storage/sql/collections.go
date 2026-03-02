@@ -3,12 +3,15 @@ package sql
 import (
 	"database/sql"
 	"encoding/json"
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	se "github.com/eval-hub/eval-hub/internal/serviceerrors"
+	"github.com/eval-hub/eval-hub/internal/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	jsonpatch "gopkg.in/evanphx/json-patch.v4"
 )
@@ -18,17 +21,12 @@ import (
 //#######################################################################
 
 func (s *SQLStorage) CreateCollection(collection *api.CollectionResource) error {
-	collectionId := collection.Resource.ID
-	tenant := s.tenant
 	collectionJSON, err := s.createCollectionEntity(collection)
 	if err != nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
 	}
-	addEntityStatement, err := createAddEntityStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS)
-	if err != nil {
-		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
-	}
-	_, err = s.exec(nil, addEntityStatement, collectionId, tenant, string(collectionJSON))
+	addEntityStatement, args := s.statementsFactory.CreateCollectionAddEntityStatement(collection, string(collectionJSON))
+	_, err = s.exec(nil, addEntityStatement, args...)
 	if err != nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
 	}
@@ -49,18 +47,10 @@ func (s *SQLStorage) GetCollection(id string) (*api.CollectionResource, error) {
 
 func (s *SQLStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.CollectionResource, error) {
 	// Build the SELECT query
-	selectQuery, err := createGetEntityStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS)
-	if err != nil {
-		return nil, serviceerrors.NewServiceError(messages.InternalServerError, "Error", err.Error())
-	}
+	query := shared.CollectionQuery{ID: id}
+	selectQuery, selectArgs, queryArgs := s.statementsFactory.CreateCollectionGetEntityStatement(&query)
 
-	// Query the database
-	var dbID string
-	var createdAt, updatedAt time.Time
-	var tenantID string
-	var collectionsJSON string
-
-	err = s.queryRow(txn, selectQuery, id).Scan(&dbID, &createdAt, &updatedAt, &tenantID, &collectionsJSON)
+	err := s.queryRow(txn, selectQuery, selectArgs...).Scan(queryArgs...)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, se.NewServiceError(messages.ResourceNotFound, "Type", "collection", "ResourceId", id)
@@ -72,18 +62,17 @@ func (s *SQLStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 
 	// Unmarshal the entity JSON into EvaluationJobConfig
 	var collectionConfig api.CollectionConfig
-	err = json.Unmarshal([]byte(collectionsJSON), &collectionConfig)
+	err = json.Unmarshal([]byte(query.EntityJSON), &collectionConfig)
 	if err != nil {
 		s.logger.Error("Failed to unmarshal collection config", "error", err, "id", id)
 		return nil, se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "collection", "Error", err.Error())
 	}
 
-	collectionResource, err := s.constructCollectionResource(dbID, createdAt, updatedAt, tenantID, &collectionConfig)
+	collectionResource, err := s.constructCollectionResource(query.ID, query.CreatedAt, query.UpdatedAt, query.Tenant, &collectionConfig)
 	if err != nil {
 		return nil, se.WithRollback(err)
 	}
 	return collectionResource, nil
-
 }
 
 func (s *SQLStorage) constructCollectionResource(dbID string, createdAt time.Time, updatedAt time.Time, tenantID string, collectionConfig *api.CollectionConfig) (*api.CollectionResource, error) {
@@ -105,29 +94,27 @@ func (s *SQLStorage) constructCollectionResource(dbID string, createdAt time.Tim
 }
 
 func (s *SQLStorage) GetCollections(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
-	filter = extractQueryParams(filter)
+	filter = shared.ExtractQueryParams(filter)
 	params := filter.Params
 	limit := filter.Limit
 	offset := filter.Offset
 
-	// Get total count (there are no filters for collections)
-	countQuery, _, err := createCountEntitiesStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS, params)
-	if err != nil {
+	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), []string{"tenant_id"}); err != nil {
 		return nil, err
 	}
 
+	// Get total count (there are no filters for collections)
+	countQuery, _ := s.statementsFactory.CreateCountEntitiesStatement(shared.TABLE_COLLECTIONS, params)
+
 	var totalCount int
-	err = s.queryRow(nil, countQuery).Scan(&totalCount)
+	err := s.queryRow(nil, countQuery).Scan(&totalCount)
 	if err != nil {
 		s.logger.Error("Failed to count collections", "error", err)
 		return nil, se.NewServiceError(messages.QueryFailed, "Type", "collections", "Error", err.Error())
 	}
 
 	// Build the list query with pagination and status filter
-	listQuery, listArgs, err := createListEntitiesStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS, limit, offset, nil)
-	if err != nil {
-		return nil, err
-	}
+	listQuery, listArgs := s.statementsFactory.CreateListEntitiesStatement(shared.TABLE_COLLECTIONS, limit, offset, nil)
 
 	// Query the database
 	rows, err := s.query(nil, listQuery, listArgs...)
@@ -203,10 +190,7 @@ func (s *SQLStorage) updateCollectionTransactional(txn *sql.Tx, collectionID str
 	if err != nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
 	}
-	updateCollectionStatement, args, err := CreateUpdateCollectionStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS, collectionID, string(collectionJSON))
-	if err != nil {
-		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
-	}
+	updateCollectionStatement, args := s.statementsFactory.CreateUpdateEntityStatement(shared.TABLE_COLLECTIONS, collectionID, string(collectionJSON), nil)
 	_, err = s.exec(txn, updateCollectionStatement, args...)
 	if err != nil {
 		return serviceerrors.WithRollback(err)
@@ -216,13 +200,10 @@ func (s *SQLStorage) updateCollectionTransactional(txn *sql.Tx, collectionID str
 
 func (s *SQLStorage) DeleteCollection(id string) error {
 	// Build the DELETE query
-	deleteQuery, err := createDeleteEntityStatement(s.sqlConfig.Driver, TABLE_COLLECTIONS)
-	if err != nil {
-		return se.NewServiceError(messages.InternalServerError, "Error", "Error while building delete collection query")
-	}
+	deleteQuery := s.statementsFactory.CreateDeleteEntityStatement(shared.TABLE_COLLECTIONS)
 
 	// Execute the DELETE query
-	_, err = s.exec(nil, deleteQuery, id)
+	_, err := s.exec(nil, deleteQuery, id)
 	if err != nil {
 		s.logger.Error("Failed to delete collection", "error", err, "id", id)
 		return se.NewServiceError(messages.DatabaseOperationFailed, "Type", "collection", "ResourceId", id, "Error", err.Error())
