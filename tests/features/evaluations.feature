@@ -386,6 +386,31 @@ Feature: Evaluations Endpoint
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
+  Scenario: Partially failed job - one benchmark completed and one failed
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_for_pass_criteria_test.json"
+    Then the response code should be 202
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_for_pass_criteria_test_b1.json"
+    Then the response code should be 204
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_for_pass_criteria_test_b2_failed.json"
+    Then the response code should be 204
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "partially_failed" at path "$.status.state"
+    And the response should contain the value "arc_easy" at path "$.status.benchmarks[0].id"
+    And the response should contain the value "completed" at path "$.status.benchmarks[0].status"
+    And the response should contain the value "AraDiCE_boolq_lev" at path "$.status.benchmarks[1].id"
+    And the response should contain the value "failed" at path "$.status.benchmarks[1].status"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
+  Scenario: List evaluation jobs returns empty when filter matches no jobs
+    Given the service is running
+    When I send a GET request to "/api/v1/evaluations/jobs?owner=nonexistent-user-empty-list&tenant=nonexistent-tenant-empty-list&limit=10"
+    Then the response code should be 200
+    And the response should contain the value "0" at path "$.total_count"
+    And the array at path "$.items" in the response should have length 0
+
   Scenario: Evaluation endpoints reject unsupported methods
     Given the service is running
     When I send a PUT request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
