@@ -183,7 +183,7 @@ func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstr
 
 	// Process rows
 	var constructErrs []string
-	var items []api.EvaluationJobResource
+	items := make([]api.EvaluationJobResource, 0)
 	for rows.Next() {
 		var dbID string
 		var createdAt, updatedAt time.Time

@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
+	"github.com/eval-hub/eval-hub/internal/common"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
@@ -153,7 +154,7 @@ func (r *LocalRuntime) runBenchmark(
 	callbackURL *string,
 	storage abstractions.Storage,
 ) error {
-	provider, err := shared.ResolveProvider(bench.ProviderID, r.providers, storage)
+	provider, err := common.ResolveProvider(bench.ProviderID, r.providers, storage)
 	if err != nil {
 		return err
 	}

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
+	"github.com/eval-hub/eval-hub/internal/common"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -141,7 +142,7 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 
 	benchmarkID := benchmark.ID
 	// Provider/benchmark validation should be handled during creation.
-	provider, err := shared.ResolveProvider(benchmark.ProviderID, r.providers, nil)
+	provider, err := common.ResolveProvider(benchmark.ProviderID, r.providers, nil)
 	if err != nil {
 		return err
 	}
