@@ -101,9 +101,9 @@ $(GOBIN)/gotest:
 	GOBIN=$(GOBIN) go install github.com/rakyll/gotest@latest
 
 test-color: $(GOBIN)/gotest
-	`@echo` "Running unit tests with color..."
+	@echo "Running unit tests with color..."
 	@$(GOBIN)/gotest -v -race ./internal/... ./cmd/...
-	`@echo` "Unit tests complete"
+	@echo "Unit tests complete"
 
 test-fvt: $(BIN_DIR) ## Run FVT (Functional Verification Tests) using godog
 	@echo "Running FVT tests..."

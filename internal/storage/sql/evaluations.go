@@ -132,7 +132,7 @@ func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstr
 	limit := filter.Limit
 	offset := filter.Offset
 
-	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), []string{"tenant_id", "owner", "status", "experiment_id"}); err != nil {
+	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), s.statementsFactory.GetAllowedFilterColumns(shared.TABLE_EVALUATIONS)); err != nil {
 		return nil, err
 	}
 

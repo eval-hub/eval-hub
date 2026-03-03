@@ -11,18 +11,6 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
-// allowedFilterColumns returns the set of column names allowed in filter for each table.
-func allowedFilterColumns(tableName string) map[string]struct{} {
-	switch tableName {
-	case shared.TABLE_EVALUATIONS:
-		return map[string]struct{}{"tenant_id": {}, "owner": {}, "status": {}, "experiment_id": {}}
-	case shared.TABLE_COLLECTIONS, shared.TABLE_PROVIDERS:
-		return map[string]struct{}{"tenant_id": {}, "owner": {}}
-	default:
-		return nil
-	}
-}
-
 const (
 	INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (id, tenant_id, owner, status, experiment_id, entity) VALUES (?, ?, ?, ?, ?, ?);`
 	SELECT_EVALUATION_STATEMENT = `SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE id = ?;`
@@ -88,12 +76,50 @@ func (s *sqliteStatementsFactory) GetTablesSchema() string {
 	return TABLES_SCHEMA
 }
 
+// allowedFilterColumns returns the set of column/param names allowed in filter for each table.
+func (s *sqliteStatementsFactory) GetAllowedFilterColumns(tableName string) []string {
+	allColumns := []string{"tenant_id", "owner", "name", "tags"}
+	switch tableName {
+	case shared.TABLE_EVALUATIONS:
+		return append(allColumns, "status", "experiment_id")
+	case shared.TABLE_PROVIDERS:
+		return allColumns // "benchmarks" and "system_defined" are not allowed filters for providers from the database
+	case shared.TABLE_COLLECTIONS:
+		return allColumns
+	default:
+		return nil
+	}
+}
+
 func (s *sqliteStatementsFactory) CreateEvaluationAddEntityStatement(evaluation *api.EvaluationJobResource, entity string) (string, []any) {
 	return INSERT_EVALUATION_STATEMENT, []any{evaluation.Resource.ID, evaluation.Resource.Tenant, evaluation.Resource.Owner, evaluation.Status.State, evaluation.Resource.MLFlowExperimentID, entity}
 }
 
 func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EvaluationJobQuery) (string, []any, []any) {
 	return SELECT_EVALUATION_STATEMENT, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.Resource.MLFlowExperimentID, &query.EntityJSON}
+}
+
+// evaluationFilterCondition returns the SQL condition and args for an evaluation filter key.
+// For "name" and "tags" (stored in entity JSON), uses json_extract/json_each.
+// Tags supports "key" (match by key) or "key:value" (match by key and value).
+func (s *sqliteStatementsFactory) evaluationFilterCondition(tableName string, key string, value any) (condition string, args []any) {
+	if tableName != shared.TABLE_EVALUATIONS {
+		return key + " = ?", []any{value}
+	}
+	switch key {
+	case "name":
+		return "json_extract(entity, '$.config.experiment.name') = ?", []any{value}
+	case "tags":
+		tagStr, _ := value.(string)
+		if keyPart, valuePart, ok := strings.Cut(tagStr, ":"); ok && valuePart != "" {
+			// tags=key:value - match by both key and value
+			return "EXISTS (SELECT 1 FROM json_each(json_extract(entity, '$.config.experiment.tags')) WHERE json_extract(value, '$.key') = ? AND json_extract(value, '$.value') = ?)", []any{keyPart, valuePart}
+		}
+		// tags=key - match by key only
+		return "EXISTS (SELECT 1 FROM json_each(json_extract(entity, '$.config.experiment.tags')) WHERE json_extract(value, '$.key') = ?)", []any{tagStr}
+	default:
+		return key + " = ?", []any{value}
+	}
 }
 
 // createFilterStatement builds a WHERE clause and args from the filter.
@@ -105,7 +131,7 @@ func (s *sqliteStatementsFactory) createFilterStatement(filter map[string]any, o
 	var sb strings.Builder
 
 	if len(filter) > 0 {
-		allowed := allowedFilterColumns(tableName)
+		allowed := s.GetAllowedFilterColumns(tableName)
 		if allowed == nil {
 			return "", nil
 		}
@@ -114,9 +140,8 @@ func (s *sqliteStatementsFactory) createFilterStatement(filter map[string]any, o
 		var disallowed []string
 		validKeys := make([]string, 0, len(keys))
 		for _, key := range keys {
-			if _, ok := allowed[key]; ok {
+			if slices.Contains(allowed, key) {
 				validKeys = append(validKeys, key)
-				args = append(args, filter[key])
 			} else {
 				disallowed = append(disallowed, key)
 			}
@@ -130,7 +155,9 @@ func (s *sqliteStatementsFactory) createFilterStatement(filter map[string]any, o
 				if i > 0 {
 					sb.WriteString(" AND ")
 				}
-				sb.WriteString(fmt.Sprintf("%s = ?", key))
+				cond, condArgs := s.evaluationFilterCondition(tableName, key, filter[key])
+				sb.WriteString(cond)
+				args = append(args, condArgs...)
 			}
 		}
 	}

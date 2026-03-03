@@ -397,10 +397,10 @@ func (tc *scenarioConfig) substituteValues(body string) (string, error) {
 		match := re.FindStringSubmatch(body)
 		if len(match) > 1 {
 			if strings.HasPrefix(match[1], mlflowPrefix) {
-				v := ""
-				if tc.isMLFlow() {
-					v = strings.TrimPrefix(match[1], mlflowPrefix)
-				}
+				// Use the literal after mlflow: as the experiment name. When MLflow is configured,
+				// it could be resolved from MLflow; for tests without MLflow, this allows name-based
+				// search to match stored jobs.
+				v := strings.TrimPrefix(match[1], mlflowPrefix)
 				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), v)
 			} else if strings.HasPrefix(match[1], envPrefix) {
 				raw := strings.TrimPrefix(match[1], envPrefix)
