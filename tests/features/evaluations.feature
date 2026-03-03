@@ -191,6 +191,8 @@ Feature: Evaluations Endpoint
         "required": ["items"]
       }
     """
+    And the response should contain the value "test-user-1" at path "$.items[0].resource.owner"
+    And the response should contain the value "test-tenant-1" at path "$.items[0].resource.tenant"
     When I send a GET request to "/api/v1/evaluations/jobs?owner=test-user-2&tenant=test-tenant-2"
     Then the response code should be 200
     And the response should have schema as:
@@ -206,6 +208,8 @@ Feature: Evaluations Endpoint
         "required": ["items"]
       }
     """
+    And the response should contain the value "test-user-2" at path "$.items[0].resource.owner"
+    And the response should contain the value "test-tenant-2" at path "$.items[0].resource.tenant"
     When I send a GET request to "/api/v1/evaluations/jobs?owner=test-user-3&tenant=test-tenant-3"
     Then the response code should be 200
     And the response should have schema as:
@@ -219,6 +223,23 @@ Feature: Evaluations Endpoint
           }
         },
         "required": ["items"]
+      }
+    """
+    And the response should contain the value "test-user-3" at path "$.items[0].resource.owner"
+    And the response should contain the value "test-tenant-3" at path "$.items[0].resource.tenant"
+    When I send a GET request to "/api/v1/evaluations/jobs?owner=test-user-not-3"
+    Then the response code should be 200
+    And the response should have schema as:
+    """
+      {
+        "properties": {
+          "total_count": {
+            "type": "number",
+            "min": 0,
+            "max": 0
+          }
+        },
+        "required": ["total_count"]
       }
     """
 

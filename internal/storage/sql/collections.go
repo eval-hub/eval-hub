@@ -68,14 +68,14 @@ func (s *SQLStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 		return nil, se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "collection", "Error", err.Error())
 	}
 
-	collectionResource, err := s.constructCollectionResource(query.ID, query.CreatedAt, query.UpdatedAt, query.Tenant, &collectionConfig)
+	collectionResource, err := s.constructCollectionResource(query.ID, query.CreatedAt, query.UpdatedAt, query.Tenant, query.Owner, &collectionConfig)
 	if err != nil {
 		return nil, se.WithRollback(err)
 	}
 	return collectionResource, nil
 }
 
-func (s *SQLStorage) constructCollectionResource(dbID string, createdAt time.Time, updatedAt time.Time, tenantID string, collectionConfig *api.CollectionConfig) (*api.CollectionResource, error) {
+func (s *SQLStorage) constructCollectionResource(dbID string, createdAt time.Time, updatedAt time.Time, tenantID string, owner string, collectionConfig *api.CollectionConfig) (*api.CollectionResource, error) {
 	if collectionConfig == nil {
 		s.logger.Error("Failed to construct collection resource", "error", "Collection config does not exist", "id", dbID)
 		return nil, se.NewServiceError(messages.InternalServerError, "Error", "Collection config does not exist")
@@ -87,6 +87,7 @@ func (s *SQLStorage) constructCollectionResource(dbID string, createdAt time.Tim
 			Tenant:    &tenant,
 			CreatedAt: &createdAt,
 			UpdatedAt: &updatedAt,
+			Owner:     api.User(owner),
 		},
 
 		CollectionConfig: *collectionConfig,
@@ -99,7 +100,7 @@ func (s *SQLStorage) GetCollections(filter *abstractions.QueryFilter) (*abstract
 	limit := filter.Limit
 	offset := filter.Offset
 
-	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), []string{"tenant_id"}); err != nil {
+	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), []string{"tenant_id", "owner"}); err != nil {
 		return nil, err
 	}
 
@@ -131,9 +132,10 @@ func (s *SQLStorage) GetCollections(filter *abstractions.QueryFilter) (*abstract
 		var dbID string
 		var createdAt, updatedAt time.Time
 		var tenantID string
+		var owner string
 		var entityJSON string
 
-		err = rows.Scan(&dbID, &createdAt, &updatedAt, &tenantID, &entityJSON)
+		err = rows.Scan(&dbID, &createdAt, &updatedAt, &tenantID, &owner, &entityJSON)
 		if err != nil {
 			s.logger.Error("Failed to scan collection row", "error", err)
 			return nil, se.NewServiceError(messages.DatabaseOperationFailed, "Type", "collection", "ResourceId", dbID, "Error", err.Error())
@@ -148,7 +150,7 @@ func (s *SQLStorage) GetCollections(filter *abstractions.QueryFilter) (*abstract
 		}
 
 		// Construct the CollectionResource
-		resource, err := s.constructCollectionResource(dbID, createdAt, updatedAt, tenantID, &collectionConfig)
+		resource, err := s.constructCollectionResource(dbID, createdAt, updatedAt, tenantID, owner, &collectionConfig)
 		if err != nil {
 			constructErrs = append(constructErrs, err.Error())
 			totalCount--
@@ -255,6 +257,7 @@ func (s *SQLStorage) PatchCollection(id string, patches *api.Patch) error {
 			createdAt,
 			updatedAt,
 			tenantID,
+			string(persistedCollection.Resource.Owner),
 			&patchedCollectionConfig)
 		if err != nil {
 			return err

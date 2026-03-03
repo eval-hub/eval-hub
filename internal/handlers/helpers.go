@@ -15,7 +15,6 @@ import (
 
 func CreatePage(total int, offset int, limit int, ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper) (*api.Page, error) {
 	// Calculate pagination info
-
 	hasNext := offset+limit < total
 	var nextHref *api.HRef
 	if hasNext {
@@ -98,12 +97,10 @@ func CommonListFilters(r http_wrappers.RequestWrapper) (*abstractions.QueryFilte
 	if err != nil {
 		return nil, err
 	}
-
 	owner, err := GetParam(r, "owner", true, "")
 	if err != nil {
 		return nil, err
 	}
-
 	tenant, err := GetParam(r, "tenant", true, "")
 	if err != nil {
 		return nil, err
@@ -120,7 +117,6 @@ func CommonListFilters(r http_wrappers.RequestWrapper) (*abstractions.QueryFilte
 			"tenant_id": tenant,
 		},
 	}, nil
-
 }
 
 func IncludeSystemDefined(r http_wrappers.RequestWrapper) bool {

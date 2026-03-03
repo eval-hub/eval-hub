@@ -46,6 +46,9 @@ func (f *fakeStorage) WithContext(_ context.Context) abstractions.Storage {
 func (f *fakeStorage) WithTenant(_ api.Tenant) abstractions.Storage {
 	return f
 }
+func (f *fakeStorage) WithOwner(_ api.User) abstractions.Storage {
+	return f
+}
 
 func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobResource) error {
 	return nil
@@ -121,6 +124,7 @@ func (s *listEvaluationsStorage) WithContext(_ context.Context) abstractions.Sto
 	return s
 }
 func (s *listEvaluationsStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
+func (s *listEvaluationsStorage) WithOwner(_ api.User) abstractions.Storage    { return s }
 
 func (s *listEvaluationsStorage) GetEvaluationJobs(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
 	if s.err != nil {
@@ -142,6 +146,7 @@ func (s *updateEvaluationStorage) WithContext(_ context.Context) abstractions.St
 	return s
 }
 func (s *updateEvaluationStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
+func (s *updateEvaluationStorage) WithOwner(_ api.User) abstractions.Storage    { return s }
 
 func (s *updateEvaluationStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
 	return s.updateErr

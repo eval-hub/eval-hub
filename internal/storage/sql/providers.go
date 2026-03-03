@@ -64,10 +64,10 @@ func (s *SQLStorage) getUserProviderTransactional(txn *sql.Tx, id string) (*api.
 		return nil, se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "provider", "Error", err.Error())
 	}
 
-	return s.constructProviderResource(query.ID, query.CreatedAt, query.UpdatedAt, query.Tenant, &providerConfig)
+	return s.constructProviderResource(query.ID, query.CreatedAt, query.UpdatedAt, query.Tenant, query.Owner, &providerConfig)
 }
 
-func (s *SQLStorage) constructProviderResource(dbID string, createdAt time.Time, updatedAt time.Time, tenantID string, providerConfig *api.ProviderConfig) (*api.ProviderResource, error) {
+func (s *SQLStorage) constructProviderResource(dbID string, createdAt time.Time, updatedAt time.Time, tenantID string, owner string, providerConfig *api.ProviderConfig) (*api.ProviderResource, error) {
 	if providerConfig == nil {
 		s.logger.Error("Failed to construct provider resource", "error", "Provider config does not exist", "id", dbID)
 		return nil, se.NewServiceError(messages.InternalServerError, "Error", "Provider config does not exist")
@@ -79,6 +79,7 @@ func (s *SQLStorage) constructProviderResource(dbID string, createdAt time.Time,
 			Tenant:    &tenant,
 			CreatedAt: &createdAt,
 			UpdatedAt: &updatedAt,
+			Owner:     api.User(owner),
 		},
 		ProviderConfig: *providerConfig,
 	}, nil
@@ -102,10 +103,7 @@ func (s *SQLStorage) GetProviders(filter *abstractions.QueryFilter) (*abstractio
 	limit := filter.Limit
 	offset := filter.Offset
 
-	// TODO: why is this here?
-	delete(params, "benchmarks")
-
-	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), []string{"tenant_id"}); err != nil {
+	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), []string{"tenant_id", "owner", "benchmarks", "name", "tags", "system_defined"}); err != nil {
 		return nil, err
 	}
 
@@ -122,8 +120,9 @@ func (s *SQLStorage) GetProviders(filter *abstractions.QueryFilter) (*abstractio
 		var dbID string
 		var createdAt, updatedAt time.Time
 		var tenantID string
+		var owner string
 		var entityJSON string
-		err = rows.Scan(&dbID, &createdAt, &updatedAt, &tenantID, &entityJSON)
+		err = rows.Scan(&dbID, &createdAt, &updatedAt, &tenantID, &owner, &entityJSON)
 		if err != nil {
 			return nil, se.NewServiceError(messages.InternalServerError, "Error", err.Error())
 		}
@@ -132,7 +131,7 @@ func (s *SQLStorage) GetProviders(filter *abstractions.QueryFilter) (*abstractio
 		if err != nil {
 			return nil, se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "provider", "Error", err.Error())
 		}
-		resource, err := s.constructProviderResource(dbID, createdAt, updatedAt, tenantID, &providerConfig)
+		resource, err := s.constructProviderResource(dbID, createdAt, updatedAt, tenantID, owner, &providerConfig)
 		if err != nil {
 			return nil, se.NewServiceError(messages.InternalServerError, "Error", err.Error())
 		}

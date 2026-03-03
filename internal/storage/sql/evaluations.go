@@ -57,7 +57,7 @@ func (s *SQLStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, er
 	return s.getEvaluationJobTransactional(nil, id)
 }
 
-func (s *SQLStorage) constructEvaluationResource(tenantID string, statusStr string, message *api.MessageInfo, dbID string, createdAt time.Time, updatedAt time.Time, experimentID string, evaluationEntity *EvaluationJobEntity) (*api.EvaluationJobResource, error) {
+func (s *SQLStorage) constructEvaluationResource(tenantID string, owner string, statusStr string, message *api.MessageInfo, dbID string, createdAt time.Time, updatedAt time.Time, experimentID string, evaluationEntity *EvaluationJobEntity) (*api.EvaluationJobResource, error) {
 	if evaluationEntity == nil {
 		s.logger.Error("Failed to construct evaluation job resource", "error", "Evaluation entity does not exist", "id", dbID)
 		// Post-read validation: no writes done, so do not request rollback.
@@ -94,6 +94,7 @@ func (s *SQLStorage) constructEvaluationResource(tenantID string, statusStr stri
 				Tenant:    &tenant,
 				CreatedAt: &createdAt,
 				UpdatedAt: &updatedAt,
+				Owner:     api.User(owner),
 			},
 			MLFlowExperimentID: experimentID,
 		},
@@ -128,7 +129,7 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 		return nil, se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "evaluation job", "Error", err.Error())
 	}
 
-	job, err := s.constructEvaluationResource(query.Tenant, query.Status, nil, query.ID, query.CreatedAt, query.UpdatedAt, query.ExperimentID, &evaluationJobEntity)
+	job, err := s.constructEvaluationResource(query.Tenant, query.Owner, query.Status, nil, query.ID, query.CreatedAt, query.UpdatedAt, query.ExperimentID, &evaluationJobEntity)
 	if err != nil {
 		return nil, se.WithRollback(err)
 	}
@@ -141,7 +142,7 @@ func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstr
 	limit := filter.Limit
 	offset := filter.Offset
 
-	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), []string{"tenant_id", "status", "experiment_id"}); err != nil {
+	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), []string{"tenant_id", "owner", "status", "experiment_id"}); err != nil {
 		return nil, err
 	}
 
@@ -186,11 +187,12 @@ func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstr
 		var dbID string
 		var createdAt, updatedAt time.Time
 		var tenantID string
+		var owner string
 		var statusStr string
 		var experimentID string
 		var entityJSON string
 
-		err = rows.Scan(&dbID, &createdAt, &updatedAt, &tenantID, &statusStr, &experimentID, &entityJSON)
+		err = rows.Scan(&dbID, &createdAt, &updatedAt, &tenantID, &owner, &statusStr, &experimentID, &entityJSON)
 		if err != nil {
 			s.logger.Error("Failed to scan evaluation job row", "error", err)
 			return nil, se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", dbID, "Error", err.Error())
@@ -205,7 +207,7 @@ func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstr
 		}
 
 		// Construct the EvaluationJobResource
-		resource, err := s.constructEvaluationResource(tenantID, statusStr, nil, dbID, createdAt, updatedAt, experimentID, &evaluationJobEntity)
+		resource, err := s.constructEvaluationResource(tenantID, owner, statusStr, nil, dbID, createdAt, updatedAt, experimentID, &evaluationJobEntity)
 		if err != nil {
 			constructErrs = append(constructErrs, err.Error())
 			totalCount--

@@ -9,6 +9,7 @@ type EvaluationJobQuery struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	Tenant       string
+	Owner        string
 	Status       string
 	ExperimentID string
 	EntityJSON   string
@@ -19,6 +20,7 @@ type CollectionQuery struct {
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 	Tenant     string
+	Owner      string
 	EntityJSON string
 }
 
@@ -27,5 +29,6 @@ type ProviderQuery struct {
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 	Tenant     string
+	Owner      string
 	EntityJSON string
 }

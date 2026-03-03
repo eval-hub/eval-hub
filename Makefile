@@ -95,6 +95,16 @@ test: ## Run unit tests
 	@echo "Running unit tests..."
 	@go test -v ./internal/... ./cmd/...
 
+GOBIN := $(shell go env GOPATH)/bin
+
+$(GOBIN)/gotest:
+	go install github.com/rakyll/gotest@latest
+
+test-color: $(GOBIN)/gotest
+	@echo "Running unit tests with color..."
+	@$(GOBIN)/gotest -v -race ./internal/... ./cmd/...
+	@echo "Unit tests complete"
+
 test-fvt: $(BIN_DIR) ## Run FVT (Functional Verification Tests) using godog
 	@echo "Running FVT tests..."
 	@go test -v -race ./tests/features/...
@@ -285,4 +295,3 @@ documentation: check-unused-components generate-public-docs verify-api-docs
 update-redocly-cli:
 	rm -f package-lock.json
 	npm install @redocly/cli@latest
-
