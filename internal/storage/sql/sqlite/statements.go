@@ -103,9 +103,6 @@ func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shar
 // For "name" and "tags" (stored in entity JSON), uses json_extract/json_each.
 // Tags supports "key" (match by key) or "key:value" (match by key and value).
 func (s *sqliteStatementsFactory) evaluationFilterCondition(tableName string, key string, value any) (condition string, args []any) {
-	if tableName != shared.TABLE_EVALUATIONS {
-		return key + " = ?", []any{value}
-	}
 	switch key {
 	case "name":
 		return "json_extract(entity, '$.config.experiment.name') = ?", []any{value}
