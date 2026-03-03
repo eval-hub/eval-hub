@@ -51,16 +51,15 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 		},
 	}
 
-	tenant := api.Tenant("tenant-1")
 	now := time.Now()
 
 	job := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{
 				ID:        "job-1",
-				Tenant:    &tenant,
-				CreatedAt: &now,
-				UpdatedAt: &now,
+				Tenant:    api.Tenant("tenant-1"),
+				CreatedAt: now,
+				UpdatedAt: now,
 			},
 			MLFlowExperimentID: "experiment-1",
 		},
@@ -192,16 +191,15 @@ func TestEvaluationsStorage(t *testing.T) {
 			},
 		}
 
-		tenant := api.Tenant("tenant-1")
 		now := time.Now()
 
 		job := &api.EvaluationJobResource{
 			Resource: api.EvaluationResource{
 				Resource: api.Resource{
 					ID:        common.GUID(),
-					Tenant:    &tenant,
-					CreatedAt: &now,
-					UpdatedAt: &now,
+					Tenant:    api.Tenant("tenant-1"),
+					CreatedAt: now,
+					UpdatedAt: now,
 				},
 				MLFlowExperimentID: "experiment-1",
 			},
@@ -334,16 +332,15 @@ func TestEvaluationsStorage(t *testing.T) {
 
 	t.Run("UpdateEvaluationJobStatus same-state is no-op", func(t *testing.T) {
 		noOpID := common.GUID()
-		tenant := api.Tenant("tenant-1")
 		now := time.Now()
 
 		noOpJob := &api.EvaluationJobResource{
 			Resource: api.EvaluationResource{
 				Resource: api.Resource{
 					ID:        noOpID,
-					Tenant:    &tenant,
-					CreatedAt: &now,
-					UpdatedAt: &now,
+					Tenant:    api.Tenant("tenant-1"),
+					CreatedAt: now,
+					UpdatedAt: now,
 				},
 				MLFlowExperimentID: "experiment-1",
 			},
@@ -396,15 +393,14 @@ func TestEvaluationsStorage(t *testing.T) {
 			if terminalState == api.OverallStatePartiallyFailed {
 				config.Benchmarks = append(config.Benchmarks, api.BenchmarkConfig{Ref: api.Ref{ID: "b2"}, ProviderID: "p1"})
 			}
-			tenant := api.Tenant("tenant-1")
 			now := time.Now()
 			job := &api.EvaluationJobResource{
 				Resource: api.EvaluationResource{
 					Resource: api.Resource{
 						ID:        jobID,
-						Tenant:    &tenant,
-						CreatedAt: &now,
-						UpdatedAt: &now,
+						Tenant:    api.Tenant("tenant-1"),
+						CreatedAt: now,
+						UpdatedAt: now,
 					},
 					MLFlowExperimentID: "experiment-1",
 				},
@@ -491,15 +487,14 @@ func TestEvaluationsStorage(t *testing.T) {
 				{Ref: api.Ref{ID: "bx"}, ProviderID: "garak"},
 			},
 		}
-		tenant := api.Tenant("tenant-1")
 		now := time.Now()
 		job := &api.EvaluationJobResource{
 			Resource: api.EvaluationResource{
 				Resource: api.Resource{
 					ID:        jobID,
-					Tenant:    &tenant,
-					CreatedAt: &now,
-					UpdatedAt: &now,
+					Tenant:    api.Tenant("tenant-1"),
+					CreatedAt: now,
+					UpdatedAt: now,
 				},
 				MLFlowExperimentID: "experiment-1",
 			},
@@ -550,9 +545,9 @@ func TestEvaluationsStorage(t *testing.T) {
 			Resource: api.EvaluationResource{
 				Resource: api.Resource{
 					ID:        jobID2,
-					Tenant:    &tenant,
-					CreatedAt: &now,
-					UpdatedAt: &now,
+					Tenant:    api.Tenant("tenant-1"),
+					CreatedAt: now,
+					UpdatedAt: now,
 				},
 				MLFlowExperimentID: "experiment-1",
 			},
@@ -612,15 +607,14 @@ func TestEvaluationsStorage(t *testing.T) {
 				{Ref: api.Ref{ID: "b3"}, ProviderID: "prov3"},
 			},
 		}
-		tenant := api.Tenant("tenant-1")
 		now := time.Now()
 		job := &api.EvaluationJobResource{
 			Resource: api.EvaluationResource{
 				Resource: api.Resource{
 					ID:        jobID,
-					Tenant:    &tenant,
-					CreatedAt: &now,
-					UpdatedAt: &now,
+					Tenant:    api.Tenant("tenant-1"),
+					CreatedAt: now,
+					UpdatedAt: now,
 				},
 			},
 			Status: &api.EvaluationJobStatus{

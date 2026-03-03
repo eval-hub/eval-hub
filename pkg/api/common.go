@@ -52,12 +52,12 @@ type Patch []PatchOperation
 
 // Resource represents base resource fields
 type Resource struct {
-	ID        string     `json:"id"`
-	Tenant    *Tenant    `json:"tenant,omitempty"`
-	CreatedAt *time.Time `json:"created_at,omitempty"`
-	UpdatedAt *time.Time `json:"updated_at,omitempty"`
-	ReadOnly  bool       `json:"read_only,omitempty"`
-	Owner     User       `json:"owner,omitempty"`
+	ID        string    `json:"id"`
+	Tenant    Tenant    `json:"tenant,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	ReadOnly  bool      `json:"read_only,omitempty"`
+	Owner     User      `json:"owner,omitempty"`
 }
 
 // Page represents generic pagination schema

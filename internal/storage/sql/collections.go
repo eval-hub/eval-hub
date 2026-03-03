@@ -47,7 +47,7 @@ func (s *SQLStorage) GetCollection(id string) (*api.CollectionResource, error) {
 
 func (s *SQLStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.CollectionResource, error) {
 	// Build the SELECT query
-	query := shared.CollectionQuery{ID: id}
+	query := shared.CollectionQuery{Resource: api.Resource{ID: id}}
 	selectQuery, selectArgs, queryArgs := s.statementsFactory.CreateCollectionGetEntityStatement(&query)
 
 	err := s.queryRow(txn, selectQuery, selectArgs...).Scan(queryArgs...)
@@ -68,28 +68,20 @@ func (s *SQLStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 		return nil, se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "collection", "Error", err.Error())
 	}
 
-	collectionResource, err := s.constructCollectionResource(query.ID, query.CreatedAt, query.UpdatedAt, query.Tenant, query.Owner, &collectionConfig)
+	collectionResource, err := s.constructCollectionResource(&query.Resource, &collectionConfig)
 	if err != nil {
 		return nil, se.WithRollback(err)
 	}
 	return collectionResource, nil
 }
 
-func (s *SQLStorage) constructCollectionResource(dbID string, createdAt time.Time, updatedAt time.Time, tenantID string, owner string, collectionConfig *api.CollectionConfig) (*api.CollectionResource, error) {
+func (s *SQLStorage) constructCollectionResource(resource *api.Resource, collectionConfig *api.CollectionConfig) (*api.CollectionResource, error) {
 	if collectionConfig == nil {
-		s.logger.Error("Failed to construct collection resource", "error", "Collection config does not exist", "id", dbID)
+		s.logger.Error("Failed to construct collection resource", "error", "Collection config does not exist", "id", resource.ID)
 		return nil, se.NewServiceError(messages.InternalServerError, "Error", "Collection config does not exist")
 	}
-	tenant := api.Tenant(tenantID)
 	return &api.CollectionResource{
-		Resource: api.Resource{
-			ID:        dbID,
-			Tenant:    &tenant,
-			CreatedAt: &createdAt,
-			UpdatedAt: &updatedAt,
-			Owner:     api.User(owner),
-		},
-
+		Resource:         *resource,
 		CollectionConfig: *collectionConfig,
 	}, nil
 }
@@ -129,35 +121,31 @@ func (s *SQLStorage) GetCollections(filter *abstractions.QueryFilter) (*abstract
 	var constructErrs []string
 	var items []api.CollectionResource
 	for rows.Next() {
-		var dbID string
-		var createdAt, updatedAt time.Time
-		var tenantID string
-		var owner string
+		resource := api.Resource{}
 		var entityJSON string
 
-		err = rows.Scan(&dbID, &createdAt, &updatedAt, &tenantID, &owner, &entityJSON)
+		err = rows.Scan(&resource.ID, &resource.CreatedAt, &resource.UpdatedAt, &resource.Tenant, &resource.Owner, &entityJSON)
 		if err != nil {
 			s.logger.Error("Failed to scan collection row", "error", err)
-			return nil, se.NewServiceError(messages.DatabaseOperationFailed, "Type", "collection", "ResourceId", dbID, "Error", err.Error())
+			return nil, se.NewServiceError(messages.DatabaseOperationFailed, "Type", "collection", "ResourceId", resource.ID, "Error", err.Error())
 		}
-
 		// Unmarshal the entity JSON into collectionConfig
 		var collectionConfig api.CollectionConfig
 		err = json.Unmarshal([]byte(entityJSON), &collectionConfig)
 		if err != nil {
-			s.logger.Error("Failed to unmarshal collection entity", "error", err, "id", dbID)
+			s.logger.Error("Failed to unmarshal collection entity", "error", err, "id", resource.ID)
 			return nil, se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "collection", "Error", err.Error())
 		}
 
 		// Construct the CollectionResource
-		resource, err := s.constructCollectionResource(dbID, createdAt, updatedAt, tenantID, owner, &collectionConfig)
+		collectionResource, err := s.constructCollectionResource(&resource, &collectionConfig)
 		if err != nil {
 			constructErrs = append(constructErrs, err.Error())
 			totalCount--
 			continue
 		}
 
-		items = append(items, *resource)
+		items = append(items, *collectionResource)
 	}
 
 	if err = rows.Err(); err != nil {
@@ -242,23 +230,22 @@ func (s *SQLStorage) PatchCollection(id string, patches *api.Patch) error {
 			return err
 		}
 		//convert the patched config back to a CollectionResource
-		var createdAt, updatedAt time.Time
-		if persistedCollection.Resource.CreatedAt != nil {
-			createdAt = *persistedCollection.Resource.CreatedAt
+		resource := api.Resource{
+			ID:        id,
+			Tenant:    persistedCollection.Resource.Tenant,
+			CreatedAt: persistedCollection.Resource.CreatedAt,
+			UpdatedAt: persistedCollection.Resource.UpdatedAt,
+			Owner:     persistedCollection.Resource.Owner,
+			ReadOnly:  persistedCollection.Resource.ReadOnly,
 		}
-		if persistedCollection.Resource.UpdatedAt != nil {
-			updatedAt = *persistedCollection.Resource.UpdatedAt
+		now := time.Now()
+		if resource.CreatedAt.IsZero() {
+			resource.CreatedAt = now
 		}
-		tenantID := ""
-		if persistedCollection.Resource.Tenant != nil {
-			tenantID = string(*persistedCollection.Resource.Tenant)
+		if resource.UpdatedAt.IsZero() {
+			resource.UpdatedAt = now
 		}
-		persistedCollection, err = s.constructCollectionResource(id,
-			createdAt,
-			updatedAt,
-			tenantID,
-			string(persistedCollection.Resource.Owner),
-			&patchedCollectionConfig)
+		persistedCollection, err = s.constructCollectionResource(&resource, &patchedCollectionConfig)
 		if err != nil {
 			return err
 		}

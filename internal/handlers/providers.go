@@ -55,7 +55,6 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 
 	logging.LogRequestStarted(ctx)
 
-	now := time.Now()
 	id := common.GUID()
 
 	request := &api.ProviderConfig{}
@@ -91,9 +90,9 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 			provider = &api.ProviderResource{
 				Resource: api.Resource{
 					ID:        id,
-					CreatedAt: &now,
+					CreatedAt: time.Now(),
 					Owner:     ctx.User,
-					Tenant:    &ctx.Tenant,
+					Tenant:    ctx.Tenant,
 					ReadOnly:  false,
 				},
 				ProviderConfig: *request,

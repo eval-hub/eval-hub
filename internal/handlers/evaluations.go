@@ -39,7 +39,6 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 
 	logging.LogRequestStarted(ctx)
 
-	now := time.Now()
 	id := common.GUID()
 
 	evaluation := &api.EvaluationJobConfig{}
@@ -89,9 +88,9 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				Resource: api.EvaluationResource{
 					Resource: api.Resource{
 						ID:        id,
-						CreatedAt: &now,
+						CreatedAt: time.Now(),
 						Owner:     ctx.User,
-						Tenant:    &ctx.Tenant,
+						Tenant:    ctx.Tenant,
 						ReadOnly:  false,
 					},
 					MLFlowExperimentID: mlflowExperimentID,

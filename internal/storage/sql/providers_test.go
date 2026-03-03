@@ -21,12 +21,11 @@ func TestProviderStorage(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
-	now := time.Now()
 	provider := &api.ProviderResource{
 		Resource: api.Resource{
 			ID:        "provider-1",
-			CreatedAt: &now,
-			Tenant:    func() *api.Tenant { t := api.Tenant("tenant-1"); return &t }(),
+			CreatedAt: time.Now(),
+			Tenant:    api.Tenant("tenant-1"),
 		},
 		ProviderConfig: api.ProviderConfig{
 			Name:        "Test Provider",
