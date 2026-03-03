@@ -142,9 +142,6 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 			// TODO filter the system providers as well?
 			if systemDefined {
 				for _, p := range h.providerConfigs {
-					if !benchmarks {
-						p.Benchmarks = []api.BenchmarkResource{}
-					}
 					providers = append(providers, p)
 				}
 			}
