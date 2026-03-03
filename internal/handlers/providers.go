@@ -165,8 +165,8 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 
 			// remove the benchmarks if requested
 			if !benchmarks {
-				for _, provider := range result.Items {
-					provider.Benchmarks = []api.BenchmarkResource{}
+				for i := range result.Items {
+					result.Items[i].Benchmarks = []api.BenchmarkResource{}
 				}
 			}
 
