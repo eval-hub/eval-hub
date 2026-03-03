@@ -285,7 +285,7 @@ func createServer(port int) (*server.Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MLFlow client: %w", err)
 	}
-	return server.NewServer(logger, serviceConfig, providerConfigs, store, validate, runtime, mlflowClient)
+	return server.NewServer(logger, serviceConfig, providerConfigs, nil, store, validate, runtime, mlflowClient)
 }
 
 func getKeyAsString(obj map[string]interface{}, key string) string {

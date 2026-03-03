@@ -299,6 +299,18 @@ func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState
 			return nil
 		}
 
+		benchmarks := evaluationJob.Status.Benchmarks
+
+		// When cancelling a job, cascade cancellation to all non-terminal benchmarks
+		if state == api.OverallStateCancelled {
+			for i := range benchmarks {
+				if !api.IsBenchmarkTerminalState(benchmarks[i].Status) {
+					benchmarks[i].Status = api.StateCancelled
+					benchmarks[i].ErrorMessage = message
+				}
+			}
+		}
+
 		entity := EvaluationJobEntity{
 			Config: &evaluationJob.EvaluationJobConfig,
 			Status: &api.EvaluationJobStatus{
@@ -306,7 +318,7 @@ func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState
 					State:   state,
 					Message: message,
 				},
-				Benchmarks: evaluationJob.Status.Benchmarks,
+				Benchmarks: benchmarks,
 			},
 			Results: evaluationJob.Results,
 		}
@@ -372,8 +384,8 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 
 		outcome := computeBenchmarkTestResult(job, runStatus.BenchmarkStatusEvent)
 
-		// if the run status is completed, failed, or cancelled, we need to update the results
-		if runStatus.BenchmarkStatusEvent.Status == api.StateCompleted || runStatus.BenchmarkStatusEvent.Status == api.StateFailed || runStatus.BenchmarkStatusEvent.Status == api.StateCancelled {
+		// if the run status is terminal, we need to update the results
+		if api.IsBenchmarkTerminalState(runStatus.BenchmarkStatusEvent.Status) {
 			result := api.BenchmarkResult{
 				ID:             runStatus.BenchmarkStatusEvent.ID,
 				ProviderID:     runStatus.BenchmarkStatusEvent.ProviderID,

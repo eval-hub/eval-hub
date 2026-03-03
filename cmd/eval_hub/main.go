@@ -116,8 +116,21 @@ func main() {
 		otelShutdown = shutdown
 	}
 
+	authConfig, err := config.LoadAuthConfig(logger, args.ConfigDir)
+	if err != nil {
+		startUpFailed(serviceConfig, err, "Failed to load auth config", logger)
+	}
+
 	// create the server
-	srv, err := server.NewServer(logger, serviceConfig, providerConfigs, storage, validate, runtime, mlflowClient)
+	srv, err := server.NewServer(logger,
+		serviceConfig,
+		providerConfigs,
+		authConfig,
+		storage,
+		validate,
+		runtime,
+		mlflowClient)
+
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create server", logger)

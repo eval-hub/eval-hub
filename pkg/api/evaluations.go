@@ -16,6 +16,12 @@ const (
 	StateCancelled State = "cancelled"
 )
 
+// IsBenchmarkTerminalState reports whether a benchmark state is terminal
+// (completed, failed, or cancelled) and should not be overwritten.
+func IsBenchmarkTerminalState(s State) bool {
+	return s == StateCompleted || s == StateFailed || s == StateCancelled
+}
+
 type OverallState string
 
 const (
