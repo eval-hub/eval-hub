@@ -15,7 +15,7 @@ RUN go mod download
 COPY . .
 
 # Build arguments for versioning
-ARG BUILD_NUMBER=0.0.1
+ARG BUILD_NUMBER=0.0.2
 ARG BUILD_DATE
 ARG BUILD_PACKAGE=main
 

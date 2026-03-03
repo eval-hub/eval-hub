@@ -30,8 +30,7 @@
     },
     {
       "name": "Collections",
-      "description": "Benchmark collection management endpoints",
-      "x-internal": true
+      "description": "Benchmark collection management endpoints"
     },
     {
       "name": "Providers",

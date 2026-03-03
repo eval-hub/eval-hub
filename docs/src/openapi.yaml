@@ -19,7 +19,6 @@ tags:
     description: Evaluation job management endpoints
   - name: Collections
     description: Benchmark collection management endpoints
-    x-internal: true
   - name: Providers
     description: Evaluation provider endpoints
   - name: Health

@@ -29,6 +29,10 @@
       "description": "Evaluation job management endpoints"
     },
     {
+      "name": "Collections",
+      "description": "Benchmark collection management endpoints"
+    },
+    {
       "name": "Providers",
       "description": "Evaluation provider endpoints"
     },

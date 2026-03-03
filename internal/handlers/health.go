@@ -19,10 +19,6 @@ type HealthResponse struct {
 }
 
 func (h *Handlers) HandleHealth(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper, build string, buildDate string) {
-	if build == "0.0.1" {
-		// for now we only want a real build number and not the default value
-		build = ""
-	}
 	// for now we serialize on each call but we could add
 	// a struct to store the health information and only
 	// serialize it when something changes
