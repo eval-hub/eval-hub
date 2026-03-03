@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
-	"syscall"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/constants"
@@ -55,7 +54,7 @@ func (jr *pidTracker) cancelJob(jobID string) {
 	if pids, ok := jr.pids[jobID]; ok {
 		for _, pid := range pids {
 			// Kill the entire process group (negative PID).
-			_ = syscall.Kill(-pid, syscall.SIGKILL)
+			_ = killProcessGroup(pid)
 		}
 		delete(jr.pids, jobID)
 	}
@@ -209,7 +208,7 @@ func (r *LocalRuntime) runBenchmark(
 	//   2. The negative PID ensures the entire subprocess tree is killed (sh +
 	//      its children). Without it, only the direct child would be signalled
 	//      and grandchildren could survive as orphans reparented to PID 1.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	setSysProcAttr(cmd)
 
 	// Set environment variables
 	cmd.Env = append(os.Environ(),
