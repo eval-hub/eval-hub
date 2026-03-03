@@ -235,8 +235,8 @@ Feature: Evaluations Endpoint
         "properties": {
           "total_count": {
             "type": "number",
-            "min": 0,
-            "max": 0
+            "minimum": 0,
+            "maximum": 0
           }
         },
         "required": ["total_count"]
