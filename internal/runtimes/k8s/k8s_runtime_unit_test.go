@@ -407,6 +407,31 @@ func TestRunEvaluationJobHandlesUpdateFailure(t *testing.T) {
 	}
 }
 
+func TestRunEvaluationJobReturnsErrorWhenResolveBenchmarksFails(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{URL: "http://model.example", Name: "model-1"},
+			Collection: &api.Ref{ID: "coll-1"},
+			Benchmarks: nil,
+		},
+	}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	runtime := &K8sRuntime{
+		logger:    logger,
+		helper:    &KubernetesHelper{clientset: fake.NewSimpleClientset()},
+		providers: map[string]api.ProviderResource{},
+		ctx:       context.Background(),
+	}
+	err := runtime.RunEvaluationJob(evaluation, nil)
+	if err == nil {
+		t.Fatal("expected error when ResolveBenchmarks fails (collection set, storage nil), got nil")
+	}
+	if err.Error() != "collection is set but storage is not available for job job-1" {
+		t.Fatalf("expected ResolveBenchmarks error, got %q", err.Error())
+	}
+}
+
 func sampleEvaluation(providerID string) *api.EvaluationJobResource {
 	return &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
