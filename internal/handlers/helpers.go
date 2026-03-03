@@ -85,6 +85,7 @@ func CommonListFilters(r http_wrappers.RequestWrapper) (*abstractions.QueryFilte
 	if offset < 0 {
 		return nil, serviceerrors.NewServiceError(messages.QueryParameterInvalid, "ParameterName", "offset", "Type", "integer", "Value", strconv.Itoa(offset))
 	}
+	// this is not a common parameter but as long as it is empty by default then it will be ignored
 	status, err := GetParam(r, "status", true, "")
 	if err != nil {
 		return nil, err
@@ -105,6 +106,7 @@ func CommonListFilters(r http_wrappers.RequestWrapper) (*abstractions.QueryFilte
 	if err != nil {
 		return nil, err
 	}
+	// we can not add the 'benchmarks' parameter here because it's default value is 'true' and that is not valid for all APIs
 
 	return &abstractions.QueryFilter{
 		Limit:  limit,
