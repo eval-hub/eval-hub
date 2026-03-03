@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/eval-hub/eval-hub/auth"
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/handlers"
 	"github.com/eval-hub/eval-hub/internal/messages"
+	"github.com/eval-hub/eval-hub/internal/runtimes/k8s"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 	"github.com/go-playground/validator/v10"
@@ -27,6 +29,7 @@ type Server struct {
 	logger          *slog.Logger
 	serviceConfig   *config.Config
 	providerConfigs map[string]api.ProviderResource
+	authConfig      *auth.AuthConfig
 	storage         abstractions.Storage
 	validate        *validator.Validate
 	runtime         abstractions.Runtime
@@ -59,6 +62,7 @@ func (s *Server) isOTELEnabled() bool {
 func NewServer(logger *slog.Logger,
 	serviceConfig *config.Config,
 	providerConfigs map[string]api.ProviderResource,
+	authConfig *auth.AuthConfig,
 	storage abstractions.Storage,
 	validate *validator.Validate,
 	runtime abstractions.Runtime,
@@ -83,6 +87,7 @@ func NewServer(logger *slog.Logger,
 		logger:          logger,
 		serviceConfig:   serviceConfig,
 		providerConfigs: providerConfigs,
+		authConfig:      authConfig,
 		storage:         storage,
 		validate:        validate,
 		runtime:         runtime,
@@ -189,11 +194,7 @@ func (s *Server) handle(router *http.ServeMux, pattern string, handler http.Hand
 	s.logger.Info("Registered API", "pattern", pattern)
 }
 
-func (s *Server) setupRoutes() (http.Handler, error) {
-	router := http.NewServeMux()
-	h := handlers.New(s.storage, s.validate, s.runtime, s.mlflowClient, s.providerConfigs, s.serviceConfig)
-
-	// Health and status endpoints
+func (s *Server) setupHealthRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, "/api/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -205,8 +206,9 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
+}
 
-	// Evaluation jobs endpoints
+func (s *Server) setupEvaluationJobsRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, "/api/v1/evaluations/jobs", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -220,8 +222,9 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
+}
 
-	// Handle events endpoint
+func (s *Server) setupEvaluationJobEventsRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/jobs/{%s}/events", constants.PATH_PARAMETER_JOB_ID), func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -233,8 +236,9 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
+}
 
-	// Handle individual job endpoints
+func (s *Server) setupEvaluationJobRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/jobs/{%s}", constants.PATH_PARAMETER_JOB_ID), func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -248,8 +252,9 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
+}
 
-	// Collections endpoints
+func (s *Server) setupCollectionsRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, "/api/v1/evaluations/collections", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -263,7 +268,9 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
+}
 
+func (s *Server) setupCollectionRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/collections/{%s}", constants.PATH_PARAMETER_COLLECTION_ID), func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -281,8 +288,9 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
+}
 
-	// Providers endpoints
+func (s *Server) setupProvidersRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, "/api/v1/evaluations/providers", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -296,6 +304,9 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
+}
+
+func (s *Server) setupProviderRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/providers/{%s}", constants.PATH_PARAMETER_PROVIDER_ID), func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -313,8 +324,9 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
+}
 
-	// OpenAPI documentation endpoints
+func (s *Server) setupOpenAPIRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, "/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -326,7 +338,9 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
+}
 
+func (s *Server) setupDocsRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, "/docs", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
@@ -337,7 +351,34 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		default:
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
+
 	})
+}
+
+func (s *Server) setupRoutes() (http.Handler, error) {
+	router := http.NewServeMux()
+	h := handlers.New(s.storage, s.validate, s.runtime, s.mlflowClient, s.providerConfigs, s.serviceConfig)
+
+	// Health
+	s.setupHealthRoutes(h, router)
+
+	// Evaluation jobs endpoints
+	s.setupEvaluationJobsRoutes(h, router)
+	s.setupEvaluationJobEventsRoutes(h, router)
+	s.setupEvaluationJobRoutes(h, router)
+
+	// Collections endpoints
+	s.setupCollectionsRoutes(h, router)
+	s.setupCollectionRoutes(h, router)
+
+	// Providers endpoints
+	s.setupProvidersRoutes(h, router)
+	s.setupProviderRoutes(h, router)
+
+	// OpenAPI documentation endpoints
+	s.setupOpenAPIRoutes(h, router)
+
+	s.setupDocsRoutes(h, router)
 
 	// Prometheus metrics endpoint
 	prometheusEnabled := s.serviceConfig.IsPrometheusEnabled()
@@ -354,7 +395,31 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 
 	// Wrap with metrics middleware (outermost for complete observability)
 	handler = Middleware(handler, prometheusEnabled, s.logger)
+	handler, err := s.setupAuth(handler)
+	if err != nil {
+		return nil, err
+	}
+	return handler, nil
+}
 
+func (s *Server) setupAuth(handler http.Handler) (http.Handler, error) {
+	if !s.serviceConfig.Service.LocalMode && !s.serviceConfig.Service.DisableAuth {
+		client, err := k8s.NewKubernetesClient()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
+		}
+		if s.authConfig == nil {
+			return nil, fmt.Errorf("auth.yaml config is required")
+		}
+		handler, err = WithAuthorization(handler, s.logger, client, s.authConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create authorization handler: %w", err)
+		}
+		handler, err = WithAuthentication(handler, s.logger, client, s.authConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create authentication handler: %w", err)
+		}
+	}
 	return handler, nil
 }
 

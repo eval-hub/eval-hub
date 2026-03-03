@@ -7,6 +7,8 @@ import (
 type SQLStatementsFactory interface {
 	GetTablesSchema() string
 
+	GetAllowedFilterColumns(tableName string) []string
+
 	// evaluations operations
 	CreateEvaluationAddEntityStatement(evaluation *api.EvaluationJobResource, entity string) (string, []any)
 	CreateEvaluationGetEntityStatement(query *EvaluationJobQuery) (string, []any, []any)

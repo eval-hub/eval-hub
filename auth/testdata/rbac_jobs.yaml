@@ -1,0 +1,33 @@
+# Test config: evaluations jobs endpoint (POST and other methods)
+authorization:
+  endpoints:
+    - path: /api/v1/evaluations/jobs
+      mappings:
+        - methods: [post]
+          resources:
+            - rewrites:
+                byHttpHeader:
+                  name: X-Tenant
+              resourceAttributes:
+                namespace: "{{.FromHeader}}"
+                apiGroup: trustyai.opendatahub.io
+                resource: evaluations
+                verb: create
+            - rewrites:
+                byHttpHeader:
+                  name: X-Tenant
+              resourceAttributes:
+                namespace: "{{.FromHeader}}"
+                apiGroup: mlflow.kubeflow.org
+                resource: experiments
+                verb: create
+
+        - resources:
+            - rewrites:
+                byHttpHeader:
+                  name: X-Tenant
+              resourceAttributes:
+                namespace: "{{.FromHeader}}"
+                apiGroup: trustyai.opendatahub.io
+                resource: evaluations
+                verb: "{{.FromMethod}}"

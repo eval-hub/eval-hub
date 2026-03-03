@@ -23,6 +23,7 @@ type fakeStorage struct {
 	runStatusChan chan *api.StatusEvent
 	updateErr     error
 	tenant        api.Tenant
+	owner         api.User
 }
 
 // UpdateEvaluationJob implements [abstractions.Storage].
@@ -100,6 +101,7 @@ func (f *fakeStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 		runStatusChan: f.runStatusChan,
 		updateErr:     f.updateErr,
 		tenant:        f.tenant,
+		owner:         f.owner,
 	}
 }
 
@@ -110,6 +112,7 @@ func (f *fakeStorage) WithContext(ctx context.Context) abstractions.Storage {
 		runStatusChan: f.runStatusChan,
 		updateErr:     f.updateErr,
 		tenant:        f.tenant,
+		owner:         f.owner,
 	}
 }
 
@@ -120,6 +123,18 @@ func (f *fakeStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
 		runStatusChan: f.runStatusChan,
 		updateErr:     f.updateErr,
 		tenant:        tenant,
+		owner:         f.owner,
+	}
+}
+
+func (f *fakeStorage) WithOwner(owner api.User) abstractions.Storage {
+	return &fakeStorage{
+		logger:        f.logger,
+		ctx:           f.ctx,
+		runStatusChan: f.runStatusChan,
+		updateErr:     f.updateErr,
+		tenant:        f.tenant,
+		owner:         owner,
 	}
 }
 

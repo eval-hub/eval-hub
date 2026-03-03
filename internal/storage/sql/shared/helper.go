@@ -30,8 +30,6 @@ func getParams(params *abstractions.QueryFilter) map[string]any {
 // Returns the limit, offset, and filtered params
 func ExtractQueryParams(filter *abstractions.QueryFilter) *abstractions.QueryFilter {
 	params := getParams(filter)
-	// TODO - remove this delete after adding owner in storage layer
-	delete(params, "owner")
 	return &abstractions.QueryFilter{
 		Limit:  filter.Limit,
 		Offset: filter.Offset,

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/storage/sql/shared"
@@ -11,14 +12,14 @@ import (
 )
 
 const (
-	INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (id, tenant_id, status, experiment_id, entity) VALUES ($1, $2, $3, $4, $5) RETURNING id;`
-	SELECT_EVALUATION_STATEMENT = `SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM evaluations WHERE id = $1;`
+	INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (id, tenant_id, owner, status, experiment_id, entity) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id;`
+	SELECT_EVALUATION_STATEMENT = `SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE id = $1;`
 
-	INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (id, tenant_id, entity) VALUES ($1, $2, $3) RETURNING id;`
-	SELECT_COLLECTION_STATEMENT = `SELECT id, created_at, updated_at, tenant_id, entity FROM collections WHERE id = $1;`
+	INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (id, tenant_id, owner, entity) VALUES ($1, $2, $3, $4) RETURNING id;`
+	SELECT_COLLECTION_STATEMENT = `SELECT id, created_at, updated_at, tenant_id, owner, entity FROM collections WHERE id = $1;`
 
-	INSERT_PROVIDER_STATEMENT = `INSERT INTO providers (id, tenant_id, entity) VALUES ($1, $2, $3) RETURNING id;`
-	SELECT_PROVIDER_STATEMENT = `SELECT id, created_at, updated_at, tenant_id, entity FROM providers WHERE id = $1;`
+	INSERT_PROVIDER_STATEMENT = `INSERT INTO providers (id, tenant_id, owner, entity) VALUES ($1, $2, $3, $4) RETURNING id;`
+	SELECT_PROVIDER_STATEMENT = `SELECT id, created_at, updated_at, tenant_id, owner, entity FROM providers WHERE id = $1;`
 
 	TABLES_SCHEMA = `
 CREATE TABLE IF NOT EXISTS evaluations (
@@ -26,6 +27,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     tenant_id VARCHAR(255) NOT NULL,
+    owner VARCHAR(255) NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
     experiment_id VARCHAR(255) NOT NULL,
     entity JSONB NOT NULL,
@@ -37,6 +39,7 @@ CREATE TABLE IF NOT EXISTS collections (
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     tenant_id VARCHAR(255) NOT NULL,
+    owner VARCHAR(255) NOT NULL,
     entity JSONB NOT NULL,
     PRIMARY KEY (id)
 );
@@ -46,6 +49,7 @@ CREATE TABLE IF NOT EXISTS providers (
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     tenant_id VARCHAR(255) NOT NULL,
+    owner VARCHAR(255) NOT NULL,
     entity JSONB NOT NULL,
     PRIMARY KEY (id)
 );
@@ -64,71 +68,107 @@ func (s *postgresStatementsFactory) GetTablesSchema() string {
 }
 
 func (s *postgresStatementsFactory) CreateEvaluationAddEntityStatement(evaluation *api.EvaluationJobResource, entity string) (string, []any) {
-	return INSERT_EVALUATION_STATEMENT, []any{evaluation.Resource.ID, evaluation.Resource.Tenant, evaluation.Status.State, evaluation.Resource.MLFlowExperimentID, entity}
+	return INSERT_EVALUATION_STATEMENT, []any{evaluation.Resource.ID, evaluation.Resource.Tenant, evaluation.Resource.Owner, evaluation.Status.State, evaluation.Resource.MLFlowExperimentID, entity}
 }
 
 func (s *postgresStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EvaluationJobQuery) (string, []any, []any) {
-	return SELECT_EVALUATION_STATEMENT, []any{&query.ID}, []any{&query.ID, &query.CreatedAt, &query.UpdatedAt, &query.Tenant, &query.Status, &query.ExperimentID, &query.EntityJSON}
+	return SELECT_EVALUATION_STATEMENT, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.Resource.MLFlowExperimentID, &query.EntityJSON}
 }
 
-func (s *postgresStatementsFactory) createFilterStatement(filter map[string]any, orderBy string, limit int, offset int) string {
-	var sb strings.Builder
+// allowedFilterColumns returns the set of column/param names allowed in filter for each table.
+func (s *postgresStatementsFactory) GetAllowedFilterColumns(tableName string) []string {
+	allColumns := []string{"tenant_id", "owner", "name", "tags"}
+	switch tableName {
+	case shared.TABLE_EVALUATIONS:
+		return append(allColumns, "status", "experiment_id")
+	case shared.TABLE_PROVIDERS:
+		return allColumns // "benchmarks" and "system_defined" are not allowed filters for providers from the database
+	case shared.TABLE_COLLECTIONS:
+		return allColumns
+	default:
+		return nil
+	}
+}
 
-	// indexes start at 1
-	index := 1
-
-	if len(filter) > 0 {
-		sb.WriteString(" WHERE ")
-		for key := range maps.Keys(filter) {
-			if index > 1 {
-				sb.WriteString(" AND ")
-			}
-			sb.WriteString(fmt.Sprintf("%s = $%d", key, index))
-			index++
+// evaluationFilterCondition returns the SQL condition and args for an evaluation filter key.
+// Tags supports "key" (match by key) or "key:value" (match by key and value).
+func (s *postgresStatementsFactory) evaluationFilterCondition(key string, value any, index int) (condition string, args []any, nextIndex int) {
+	switch key {
+	case "name":
+		return fmt.Sprintf("entity->'config'->'experiment'->>'name' = $%d", index), []any{value}, index + 1
+	case "tags":
+		tagStr, _ := value.(string)
+		if keyPart, valuePart, ok := strings.Cut(tagStr, ":"); ok && valuePart != "" {
+			// tags=key:value - match by both key and value
+			return fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_array_elements(entity->'config'->'experiment'->'tags') AS tag WHERE tag->>'key' = $%d AND tag->>'value' = $%d)", index, index+1), []any{keyPart, valuePart}, index + 2
 		}
+		// tags=key - match by key only
+		return fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_array_elements(entity->'config'->'experiment'->'tags') AS tag WHERE tag->>'key' = $%d)", index), []any{tagStr}, index + 1
+	default:
+		return fmt.Sprintf("%s = $%d", key, index), []any{value}, index + 1
+	}
+}
+
+func (s *postgresStatementsFactory) createFilterStatement(filter map[string]any, orderBy string, limit int, offset int, tableName string) (string, []any) {
+	var sb strings.Builder
+	var args []any
+
+	allowed := s.GetAllowedFilterColumns(tableName)
+	if allowed == nil {
+		return "", nil
+	}
+	keys := slices.Collect(maps.Keys(filter))
+	sort.Strings(keys)
+	index := 1
+	for _, key := range keys {
+		if !slices.Contains(allowed, key) {
+			continue
+		}
+		if index > 1 {
+			sb.WriteString(" AND ")
+		}
+		var cond string
+		var condArgs []any
+		cond, condArgs, index = s.evaluationFilterCondition(key, filter[key], index)
+		sb.WriteString(cond)
+		args = append(args, condArgs...)
+	}
+	filterClause := ""
+	if len(args) > 0 {
+		filterClause = " WHERE " + sb.String()
 	}
 
-	// ORDER BY id DESC LIMIT $2 OFFSET $3
 	if orderBy != "" {
-		// note that we use the value here and not $n
-		sb.WriteString(fmt.Sprintf(" ORDER BY %s", orderBy))
+		filterClause += fmt.Sprintf(" ORDER BY %s", orderBy)
 	}
 	if limit > 0 {
-		sb.WriteString(fmt.Sprintf(" LIMIT $%d", index))
+		filterClause += fmt.Sprintf(" LIMIT $%d", index)
+		args = append(args, limit)
 		index++
 	}
 	if offset > 0 {
-		sb.WriteString(fmt.Sprintf(" OFFSET $%d", index))
-		index++
+		filterClause += fmt.Sprintf(" OFFSET $%d", index)
+		args = append(args, offset)
 	}
 
-	return sb.String()
+	return filterClause, args
 }
 
 func (s *postgresStatementsFactory) CreateCountEntitiesStatement(tableName string, filter map[string]any) (string, []any) {
-	filterStatement := s.createFilterStatement(filter, "", 0, 0)
-	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, tableName, filterStatement)
-	args := slices.Collect(maps.Values(filter))
+	filterClause, args := s.createFilterStatement(filter, "", 0, 0, tableName)
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, tableName, filterClause)
 	return query, args
 }
 
 func (s *postgresStatementsFactory) CreateListEntitiesStatement(tableName string, limit, offset int, filter map[string]any) (string, []any) {
-	filterStatement := s.createFilterStatement(filter, "id DESC", limit, offset)
+	filterClause, args := s.createFilterStatement(filter, "id DESC", limit, offset, tableName)
 
 	var query string
-	var args = slices.Collect(maps.Values(filter))
-	if limit > 0 {
-		args = append(args, limit)
-	}
-	if offset > 0 {
-		args = append(args, offset)
-	}
-
 	switch tableName {
 	case shared.TABLE_EVALUATIONS:
-		query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, status, experiment_id, entity FROM %s %s;`, tableName, filterStatement)
+		query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM %s%s;`, tableName, filterClause)
 	default:
-		query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, entity FROM %s %s;`, tableName, filterStatement)
+		query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, entity FROM %s%s;`, tableName, filterClause)
 	}
 
 	return query, args
@@ -153,17 +193,17 @@ func (s *postgresStatementsFactory) CreateUpdateEntityStatement(tableName, id st
 }
 
 func (s *postgresStatementsFactory) CreateProviderAddEntityStatement(provider *api.ProviderResource, entity string) (string, []any) {
-	return INSERT_PROVIDER_STATEMENT, []any{provider.Resource.ID, provider.Resource.Tenant, entity}
+	return INSERT_PROVIDER_STATEMENT, []any{provider.Resource.ID, provider.Resource.Tenant, provider.Resource.Owner, entity}
 }
 
 func (s *postgresStatementsFactory) CreateProviderGetEntityStatement(query *shared.ProviderQuery) (string, []any, []any) {
-	return SELECT_PROVIDER_STATEMENT, []any{&query.ID}, []any{&query.ID, &query.CreatedAt, &query.UpdatedAt, &query.Tenant, &query.EntityJSON}
+	return SELECT_PROVIDER_STATEMENT, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 }
 
 func (s *postgresStatementsFactory) CreateCollectionAddEntityStatement(collection *api.CollectionResource, entity string) (string, []any) {
-	return INSERT_COLLECTION_STATEMENT, []any{collection.Resource.ID, collection.Resource.Tenant, entity}
+	return INSERT_COLLECTION_STATEMENT, []any{collection.Resource.ID, collection.Resource.Tenant, collection.Resource.Owner, entity}
 }
 
 func (s *postgresStatementsFactory) CreateCollectionGetEntityStatement(query *shared.CollectionQuery) (string, []any, []any) {
-	return SELECT_COLLECTION_STATEMENT, []any{&query.ID}, []any{&query.ID, &query.CreatedAt, &query.UpdatedAt, &query.Tenant, &query.EntityJSON}
+	return SELECT_COLLECTION_STATEMENT, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 }

@@ -247,3 +247,6 @@ mlruns/
 mlflow.log
 .idea/
 .serena/
+
+# Claude - for now this is ignored - later we may want to share this
+.claude/

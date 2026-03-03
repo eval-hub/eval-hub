@@ -99,6 +99,10 @@ func (f *fakeStorage) WithContext(ctx context.Context) abstractions.Storage {
 	}
 }
 
+func (f *fakeStorage) WithOwner(owner api.User) abstractions.Storage {
+	return f
+}
+
 func discardLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }

@@ -37,6 +37,7 @@ type SQLStorage struct {
 	logger            *slog.Logger
 	ctx               context.Context
 	tenant            api.Tenant
+	owner             api.User
 }
 
 func NewStorage(config map[string]any, otelEnabled bool, logger *slog.Logger) (abstractions.Storage, error) {
@@ -192,6 +193,7 @@ func (s *SQLStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 		logger:            logger,
 		ctx:               s.ctx,
 		tenant:            s.tenant,
+		owner:             s.owner,
 	}
 }
 
@@ -203,6 +205,7 @@ func (s *SQLStorage) WithContext(ctx context.Context) abstractions.Storage {
 		logger:            s.logger,
 		ctx:               ctx,
 		tenant:            s.tenant,
+		owner:             s.owner,
 	}
 }
 
@@ -214,5 +217,18 @@ func (s *SQLStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
 		logger:            s.logger,
 		ctx:               s.ctx,
 		tenant:            tenant,
+		owner:             s.owner,
+	}
+}
+
+func (s *SQLStorage) WithOwner(owner api.User) abstractions.Storage {
+	return &SQLStorage{
+		sqlConfig:         s.sqlConfig,
+		statementsFactory: s.statementsFactory,
+		pool:              s.pool,
+		logger:            s.logger,
+		ctx:               s.ctx,
+		tenant:            s.tenant,
+		owner:             owner,
 	}
 }

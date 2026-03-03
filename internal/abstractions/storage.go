@@ -24,6 +24,7 @@ type Storage interface {
 	WithLogger(logger *slog.Logger) Storage
 	WithContext(ctx context.Context) Storage
 	WithTenant(tenant api.Tenant) Storage
+	WithOwner(owner api.User) Storage
 
 	Ping(timeout time.Duration) error
 

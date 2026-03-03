@@ -57,9 +57,9 @@ repos:
         files: ^python-server/
 
       - id: go-test
-        name: go unit and FVT tests
+        name: go unit and integration tests
         entry: make
-        args: [clean, build, test-all]
+        args: [test-all]
         language: system
         types: [go]
         pass_filenames: false

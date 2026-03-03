@@ -1,31 +1,21 @@
 package shared
 
 import (
-	"time"
+	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 type EvaluationJobQuery struct {
-	ID           string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	Tenant       string
-	Status       string
-	ExperimentID string
-	EntityJSON   string
+	Resource   api.EvaluationResource
+	Status     string
+	EntityJSON string
 }
 
 type CollectionQuery struct {
-	ID         string
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-	Tenant     string
+	Resource   api.Resource
 	EntityJSON string
 }
 
 type ProviderQuery struct {
-	ID         string
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-	Tenant     string
+	Resource   api.Resource
 	EntityJSON string
 }

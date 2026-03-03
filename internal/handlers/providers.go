@@ -51,11 +51,10 @@ type allowedPatch struct {
 }
 
 func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
-	now := time.Now()
 	id := common.GUID()
 
 	request := &api.ProviderConfig{}
@@ -91,9 +90,9 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 			provider = &api.ProviderResource{
 				Resource: api.Resource{
 					ID:        id,
-					CreatedAt: &now,
+					CreatedAt: time.Now(),
 					Owner:     ctx.User,
-					Tenant:    &ctx.Tenant,
+					Tenant:    ctx.Tenant,
 					ReadOnly:  false,
 				},
 				ProviderConfig: *request,
@@ -115,7 +114,7 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 
 // HandleListProviders handles GET /api/v1/evaluations/providers
 func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
@@ -134,19 +133,15 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 				benchmarks = benchmarksParam[0] != "false"
 			}
 
-			filter.Params["benchmarks"] = benchmarks
-
 			systemDefined := IncludeSystemDefined(r)
 
 			ctx.Logger.Info("Include system defined providers", "system_defined", systemDefined)
 
 			providers := []api.ProviderResource{}
 
+			// TODO filter the system providers as well?
 			if systemDefined {
 				for _, p := range h.providerConfigs {
-					if !benchmarks {
-						p.Benchmarks = []api.BenchmarkResource{}
-					}
 					providers = append(providers, p)
 				}
 			}
@@ -163,6 +158,13 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 					TotalCount: len(providers) + queryResults.TotalStored,
 				},
 				Items: append(providers, queryResults.Items...),
+			}
+
+			// remove the benchmarks if requested
+			if !benchmarks {
+				for i := range result.Items {
+					result.Items[i].Benchmarks = []api.BenchmarkResource{}
+				}
 			}
 
 			w.WriteJSON(result, 200)
@@ -200,7 +202,7 @@ func (h *Handlers) getSystemProvider(providerId string) *api.ProviderResource {
 }
 
 func (h *Handlers) HandleGetProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
@@ -233,7 +235,7 @@ func (h *Handlers) HandleGetProvider(ctx *executioncontext.ExecutionContext, req
 }
 
 func (h *Handlers) HandleUpdateProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
@@ -290,7 +292,7 @@ func (h *Handlers) HandleUpdateProvider(ctx *executioncontext.ExecutionContext, 
 }
 
 func (h *Handlers) HandlePatchProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
@@ -359,7 +361,7 @@ func (h *Handlers) HandlePatchProvider(ctx *executioncontext.ExecutionContext, r
 }
 
 func (h *Handlers) HandleDeleteProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 

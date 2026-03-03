@@ -61,10 +61,10 @@ func (f *fakeStorage) DeleteProvider(_ string) error {
 	return nil
 }
 func (f *fakeStorage) UpdateProvider(_ string, provider *api.ProviderResource) (*api.ProviderResource, error) {
-	return nil, fmt.Errorf("not implemented")
+	return provider, nil
 }
 func (f *fakeStorage) PatchProvider(_ string, _ *api.Patch) (*api.ProviderResource, error) {
-	return nil, fmt.Errorf("not implemented")
+	return nil, fmt.Errorf("not implemented PatchProvider in fakeStorage")
 }
 func (f *fakeStorage) GetProviders(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.ProviderResource], error) {
 	return &abstractions.QueryResults[api.ProviderResource]{Items: []api.ProviderResource{}, TotalStored: 0}, nil
@@ -80,6 +80,7 @@ func (s *updatePatchProviderStorage) WithContext(_ context.Context) abstractions
 	return s
 }
 func (s *updatePatchProviderStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
+func (s *updatePatchProviderStorage) WithOwner(_ api.User) abstractions.Storage    { return s }
 
 func (s *updatePatchProviderStorage) GetProvider(id string) (*api.ProviderResource, error) {
 	if s.provider != nil && s.provider.Resource.ID == id {
@@ -130,6 +131,7 @@ func (s *listProvidersStorage) WithContext(_ context.Context) abstractions.Stora
 	return s
 }
 func (s *listProvidersStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
+func (s *listProvidersStorage) WithOwner(_ api.User) abstractions.Storage    { return s }
 
 func (s *listProvidersStorage) GetProviders(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.ProviderResource], error) {
 	if s.err != nil {
