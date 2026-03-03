@@ -133,19 +133,15 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 				benchmarks = benchmarksParam[0] != "false"
 			}
 
-			filter.Params["benchmarks"] = benchmarks
-
 			systemDefined := IncludeSystemDefined(r)
 
 			ctx.Logger.Info("Include system defined providers", "system_defined", systemDefined)
 
 			providers := []api.ProviderResource{}
 
+			// TODO filter the system providers as well?
 			if systemDefined {
 				for _, p := range h.providerConfigs {
-					if !benchmarks {
-						p.Benchmarks = []api.BenchmarkResource{}
-					}
 					providers = append(providers, p)
 				}
 			}
@@ -162,6 +158,13 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 					TotalCount: len(providers) + queryResults.TotalStored,
 				},
 				Items: append(providers, queryResults.Items...),
+			}
+
+			// remove the benchmarks if requested
+			if !benchmarks {
+				for i := range result.Items {
+					result.Items[i].Benchmarks = []api.BenchmarkResource{}
+				}
 			}
 
 			w.WriteJSON(result, 200)

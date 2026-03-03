@@ -92,7 +92,7 @@ func (s *SQLStorage) GetCollections(filter *abstractions.QueryFilter) (*abstract
 	limit := filter.Limit
 	offset := filter.Offset
 
-	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), []string{"tenant_id", "owner"}); err != nil {
+	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), s.statementsFactory.GetAllowedFilterColumns(shared.TABLE_COLLECTIONS)); err != nil {
 		return nil, err
 	}
 

@@ -95,7 +95,7 @@ func (s *SQLStorage) GetProviders(filter *abstractions.QueryFilter) (*abstractio
 	limit := filter.Limit
 	offset := filter.Offset
 
-	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), []string{"tenant_id", "owner", "benchmarks", "name", "tags", "system_defined"}); err != nil {
+	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), s.statementsFactory.GetAllowedFilterColumns(shared.TABLE_PROVIDERS)); err != nil {
 		return nil, err
 	}
 
