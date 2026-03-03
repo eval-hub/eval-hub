@@ -92,7 +92,7 @@ func (s *postgresStatementsFactory) GetAllowedFilterColumns(tableName string) []
 
 // evaluationFilterCondition returns the SQL condition and args for an evaluation filter key.
 // Tags supports "key" (match by key) or "key:value" (match by key and value).
-func (s *postgresStatementsFactory) evaluationFilterCondition(tableName string, key string, value any, index int) (condition string, args []any, nextIndex int) {
+func (s *postgresStatementsFactory) evaluationFilterCondition(key string, value any, index int) (condition string, args []any, nextIndex int) {
 	switch key {
 	case "name":
 		return fmt.Sprintf("entity->'config'->'experiment'->>'name' = $%d", index), []any{value}, index + 1
@@ -129,7 +129,7 @@ func (s *postgresStatementsFactory) createFilterStatement(filter map[string]any,
 		}
 		var cond string
 		var condArgs []any
-		cond, condArgs, index = s.evaluationFilterCondition(tableName, key, filter[key], index)
+		cond, condArgs, index = s.evaluationFilterCondition(key, filter[key], index)
 		sb.WriteString(cond)
 		args = append(args, condArgs...)
 	}

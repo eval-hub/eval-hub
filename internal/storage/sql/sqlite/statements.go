@@ -102,7 +102,7 @@ func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shar
 // evaluationFilterCondition returns the SQL condition and args for an evaluation filter key.
 // For "name" and "tags" (stored in entity JSON), uses json_extract/json_each.
 // Tags supports "key" (match by key) or "key:value" (match by key and value).
-func (s *sqliteStatementsFactory) evaluationFilterCondition(tableName string, key string, value any) (condition string, args []any) {
+func (s *sqliteStatementsFactory) evaluationFilterCondition(key string, value any) (condition string, args []any) {
 	switch key {
 	case "name":
 		return "json_extract(entity, '$.config.experiment.name') = ?", []any{value}
@@ -152,7 +152,7 @@ func (s *sqliteStatementsFactory) createFilterStatement(filter map[string]any, o
 				if i > 0 {
 					sb.WriteString(" AND ")
 				}
-				cond, condArgs := s.evaluationFilterCondition(tableName, key, filter[key])
+				cond, condArgs := s.evaluationFilterCondition(key, filter[key])
 				sb.WriteString(cond)
 				args = append(args, condArgs...)
 			}
