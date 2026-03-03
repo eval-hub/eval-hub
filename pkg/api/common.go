@@ -54,8 +54,8 @@ type Patch []PatchOperation
 type Resource struct {
 	ID        string    `json:"id"`
 	Tenant    Tenant    `json:"tenant,omitempty"`
-	CreatedAt time.Time `json:"created_at,omitempty"`
-	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitzero"`
+	UpdatedAt time.Time `json:"updated_at,omitzero"`
 	ReadOnly  bool      `json:"read_only,omitempty"`
 	Owner     User      `json:"owner,omitempty"`
 }
