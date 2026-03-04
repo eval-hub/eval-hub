@@ -1,7 +1,9 @@
 package sqlite
 
 import (
+	"database/sql"
 	"fmt"
+	"log/slog"
 	"maps"
 	"slices"
 	"sort"
@@ -66,10 +68,11 @@ ON providers (id);
 )
 
 type sqliteStatementsFactory struct {
+	logger *slog.Logger
 }
 
-func NewStatementsFactory() shared.SQLStatementsFactory {
-	return &sqliteStatementsFactory{}
+func NewStatementsFactory(logger *slog.Logger) shared.SQLStatementsFactory {
+	return &sqliteStatementsFactory{logger: logger}
 }
 
 func (s *sqliteStatementsFactory) GetTablesSchema() string {
@@ -95,8 +98,8 @@ func (s *sqliteStatementsFactory) CreateEvaluationAddEntityStatement(evaluation 
 	return INSERT_EVALUATION_STATEMENT, []any{evaluation.Resource.ID, evaluation.Resource.Tenant, evaluation.Resource.Owner, evaluation.Status.State, evaluation.Resource.MLFlowExperimentID, entity}
 }
 
-func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EvaluationJobQuery) (string, []any, []any) {
-	return SELECT_EVALUATION_STATEMENT, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.Resource.MLFlowExperimentID, &query.EntityJSON}
+func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
+	return SELECT_EVALUATION_STATEMENT, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
 }
 
 // evaluationFilterCondition returns the SQL condition and args for an evaluation filter key.
@@ -144,7 +147,8 @@ func (s *sqliteStatementsFactory) createFilterStatement(filter map[string]any, o
 			}
 		}
 		if len(disallowed) > 0 {
-			// ignore this for now
+			// ignore this for now as we validate the filter before calling this function
+			s.logger.Warn("Disallowed filter keys", "keys", disallowed, "tableName", tableName)
 		}
 		if len(validKeys) > 0 {
 			sb.WriteString(" WHERE ")
@@ -193,6 +197,15 @@ func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tableName string, 
 	return query, args
 }
 
+func (s *sqliteStatementsFactory) ScanRowForEntity(tableName string, rows *sql.Rows, query *shared.EntityQuery) error {
+	switch tableName {
+	case shared.TABLE_EVALUATIONS:
+		return rows.Scan(&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON)
+	default:
+		return rows.Scan(&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON)
+	}
+}
+
 func (s *sqliteStatementsFactory) CreateCheckEntityExistsStatement(tableName string) string {
 	return fmt.Sprintf(`SELECT id, status FROM %s WHERE id = ?;`, tableName)
 }
@@ -215,7 +228,7 @@ func (s *sqliteStatementsFactory) CreateProviderAddEntityStatement(provider *api
 	return INSERT_PROVIDER_STATEMENT, []any{provider.Resource.ID, provider.Resource.Tenant, provider.Resource.Owner, entity}
 }
 
-func (s *sqliteStatementsFactory) CreateProviderGetEntityStatement(query *shared.ProviderQuery) (string, []any, []any) {
+func (s *sqliteStatementsFactory) CreateProviderGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
 	return SELECT_PROVIDER_STATEMENT, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 }
 
@@ -223,6 +236,6 @@ func (s *sqliteStatementsFactory) CreateCollectionAddEntityStatement(collection 
 	return INSERT_COLLECTION_STATEMENT, []any{collection.Resource.ID, collection.Resource.Tenant, collection.Resource.Owner, entity}
 }
 
-func (s *sqliteStatementsFactory) CreateCollectionGetEntityStatement(query *shared.CollectionQuery) (string, []any, []any) {
+func (s *sqliteStatementsFactory) CreateCollectionGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
 	return SELECT_COLLECTION_STATEMENT, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 }

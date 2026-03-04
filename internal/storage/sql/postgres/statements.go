@@ -1,7 +1,9 @@
 package postgres
 
 import (
+	"database/sql"
 	"fmt"
+	"log/slog"
 	"maps"
 	"slices"
 	"sort"
@@ -57,10 +59,11 @@ CREATE TABLE IF NOT EXISTS providers (
 )
 
 type postgresStatementsFactory struct {
+	logger *slog.Logger
 }
 
-func NewStatementsFactory() shared.SQLStatementsFactory {
-	return &postgresStatementsFactory{}
+func NewStatementsFactory(logger *slog.Logger) shared.SQLStatementsFactory {
+	return &postgresStatementsFactory{logger: logger}
 }
 
 func (s *postgresStatementsFactory) GetTablesSchema() string {
@@ -71,8 +74,8 @@ func (s *postgresStatementsFactory) CreateEvaluationAddEntityStatement(evaluatio
 	return INSERT_EVALUATION_STATEMENT, []any{evaluation.Resource.ID, evaluation.Resource.Tenant, evaluation.Resource.Owner, evaluation.Status.State, evaluation.Resource.MLFlowExperimentID, entity}
 }
 
-func (s *postgresStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EvaluationJobQuery) (string, []any, []any) {
-	return SELECT_EVALUATION_STATEMENT, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.Resource.MLFlowExperimentID, &query.EntityJSON}
+func (s *postgresStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
+	return SELECT_EVALUATION_STATEMENT, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
 }
 
 // allowedFilterColumns returns the set of column/param names allowed in filter for each table.
@@ -174,6 +177,15 @@ func (s *postgresStatementsFactory) CreateListEntitiesStatement(tableName string
 	return query, args
 }
 
+func (s *postgresStatementsFactory) ScanRowForEntity(tableName string, rows *sql.Rows, query *shared.EntityQuery) error {
+	switch tableName {
+	case shared.TABLE_EVALUATIONS:
+		return rows.Scan(&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON)
+	default:
+		return rows.Scan(&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON)
+	}
+}
+
 func (s *postgresStatementsFactory) CreateCheckEntityExistsStatement(tableName string) string {
 	return fmt.Sprintf(`SELECT id, status FROM %s WHERE id = $1;`, tableName)
 }
@@ -196,7 +208,7 @@ func (s *postgresStatementsFactory) CreateProviderAddEntityStatement(provider *a
 	return INSERT_PROVIDER_STATEMENT, []any{provider.Resource.ID, provider.Resource.Tenant, provider.Resource.Owner, entity}
 }
 
-func (s *postgresStatementsFactory) CreateProviderGetEntityStatement(query *shared.ProviderQuery) (string, []any, []any) {
+func (s *postgresStatementsFactory) CreateProviderGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
 	return SELECT_PROVIDER_STATEMENT, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 }
 
@@ -204,6 +216,6 @@ func (s *postgresStatementsFactory) CreateCollectionAddEntityStatement(collectio
 	return INSERT_COLLECTION_STATEMENT, []any{collection.Resource.ID, collection.Resource.Tenant, collection.Resource.Owner, entity}
 }
 
-func (s *postgresStatementsFactory) CreateCollectionGetEntityStatement(query *shared.CollectionQuery) (string, []any, []any) {
+func (s *postgresStatementsFactory) CreateCollectionGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
 	return SELECT_COLLECTION_STATEMENT, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 }

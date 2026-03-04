@@ -3,8 +3,6 @@ package sql
 import (
 	"database/sql"
 	"encoding/json"
-	"maps"
-	"slices"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/messages"
@@ -56,48 +54,9 @@ func (s *SQLStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, er
 	return s.getEvaluationJobTransactional(nil, id)
 }
 
-func (s *SQLStorage) constructEvaluationResource(resource *api.EvaluationResource, status string, evaluationEntity *EvaluationJobEntity) (*api.EvaluationJobResource, error) {
-	if resource == nil {
-		s.logger.Error("Failed to construct evaluation job resource", "error", "Evaluation resource")
-		// Post-read validation: no writes done, so do not request rollback.
-		return nil, se.NewServiceError(messages.InternalServerError, "Error", "Evaluation resource does not exist")
-	}
-	if evaluationEntity == nil {
-		s.logger.Error("Failed to construct evaluation job resource", "error", "Evaluation entity does not exist", "id", resource.ID)
-		// Post-read validation: no writes done, so do not request rollback.
-		return nil, se.NewServiceError(messages.InternalServerError, "Error", "Evaluation entity does not exist")
-	}
-	if evaluationEntity.Config == nil {
-		s.logger.Error("Failed to construct evaluation job resource", "error", "Evaluation config does not exist", "id", resource.ID)
-		// Post-read validation: no writes done, so do not request rollback.
-		return nil, se.NewServiceError(messages.InternalServerError, "Error", "Evaluation config does not exist")
-	}
-	if evaluationEntity.Status == nil {
-		evaluationEntity.Status = &api.EvaluationJobStatus{}
-	}
-
-	overAllState := evaluationEntity.Status.State
-	if status != "" {
-		if s, err := api.GetOverallState(status); err == nil {
-			overAllState = s
-		}
-	}
-	statusObject := evaluationEntity.Status
-	statusObject.State = overAllState
-	statusObject.Message = evaluationEntity.Status.Message
-
-	evaluationResource := &api.EvaluationJobResource{
-		Resource:            *resource,
-		Status:              statusObject,
-		EvaluationJobConfig: *evaluationEntity.Config,
-		Results:             evaluationEntity.Results,
-	}
-	return evaluationResource, nil
-}
-
 func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api.EvaluationJobResource, error) {
 	// Build the SELECT query
-	query := shared.EvaluationJobQuery{Resource: api.EvaluationResource{Resource: api.Resource{ID: id}}}
+	query := shared.EntityQuery{Resource: api.Resource{ID: id}}
 	selectQuery, selectArgs, queryArgs := s.statementsFactory.CreateEvaluationGetEntityStatement(&query)
 
 	// Query the database
@@ -119,7 +78,8 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 		return nil, se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "evaluation job", "Error", err.Error())
 	}
 
-	job, err := s.constructEvaluationResource(&query.Resource, "", &evaluationJobEntity)
+	status := ""
+	job, err := constructEvaluationResource(s.logger, &query, status, &evaluationJobEntity)
 	if err != nil {
 		return nil, se.WithRollback(err)
 	}
@@ -127,92 +87,10 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 }
 
 func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
-	filter = shared.ExtractQueryParams(filter)
-	params := filter.Params
-	limit := filter.Limit
-	offset := filter.Offset
+	// TODO: use a transaction if needed
+	var txn *sql.Tx
 
-	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), s.statementsFactory.GetAllowedFilterColumns(shared.TABLE_EVALUATIONS)); err != nil {
-		return nil, err
-	}
-
-	// Get total count (with filter if provided)
-	countQuery, countArgs := s.statementsFactory.CreateCountEntitiesStatement(shared.TABLE_EVALUATIONS, filter.Params)
-
-	var totalCount int
-	var err error
-	if len(countArgs) > 0 {
-		err = s.queryRow(nil, countQuery, countArgs...).Scan(&totalCount)
-	} else {
-		err = s.queryRow(nil, countQuery).Scan(&totalCount)
-	}
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return &abstractions.QueryResults[api.EvaluationJobResource]{
-				Items:       make([]api.EvaluationJobResource, 0),
-				TotalStored: 0,
-				Errors:      nil,
-			}, nil
-		}
-		s.logger.Error("Failed to count evaluation jobs", "error", err)
-		return nil, se.NewServiceError(messages.QueryFailed, "Type", "evaluation jobs", "Error", err.Error())
-	}
-
-	// Build the list query with pagination and filters
-	listQuery, listArgs := s.statementsFactory.CreateListEntitiesStatement(shared.TABLE_EVALUATIONS, limit, offset, params)
-	s.logger.Info("List evaluations query", "query", listQuery, "args", listArgs, "params", params, "limit", limit, "offset", offset)
-
-	// Query the database
-	rows, err := s.query(nil, listQuery, listArgs...)
-	if err != nil {
-		s.logger.Error("Failed to list evaluation jobs", "error", err)
-		return nil, se.NewServiceError(messages.QueryFailed, "Type", "evaluation jobs", "Error", err.Error())
-	}
-	defer rows.Close()
-
-	// Process rows
-	var constructErrs []string
-	var items []api.EvaluationJobResource
-	for rows.Next() {
-		resource := api.EvaluationResource{}
-		var statusStr string
-		var entityJSON string
-
-		err = rows.Scan(&resource.ID, &resource.CreatedAt, &resource.UpdatedAt, &resource.Tenant, &resource.Owner, &statusStr, &resource.MLFlowExperimentID, &entityJSON)
-		if err != nil {
-			s.logger.Error("Failed to scan evaluation job row", "error", err)
-			return nil, se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", resource.ID, "Error", err.Error())
-		}
-
-		// Unmarshal the entity JSON into EvaluationJobConfig
-		var evaluationJobEntity EvaluationJobEntity
-		err = json.Unmarshal([]byte(entityJSON), &evaluationJobEntity)
-		if err != nil {
-			s.logger.Error("Failed to unmarshal evaluation job entity", "error", err, "id", resource.ID)
-			return nil, se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "evaluation job", "Error", err.Error())
-		}
-
-		// Construct the EvaluationJobResource
-		evaluationJobResource, err := s.constructEvaluationResource(&resource, statusStr, &evaluationJobEntity)
-		if err != nil {
-			constructErrs = append(constructErrs, err.Error())
-			totalCount--
-			continue
-		}
-
-		items = append(items, *evaluationJobResource)
-	}
-
-	if err = rows.Err(); err != nil {
-		s.logger.Error("Error iterating evaluation job rows", "error", err)
-		return nil, se.NewServiceError(messages.QueryFailed, "Type", "evaluation jobs", "Error", err.Error())
-	}
-
-	return &abstractions.QueryResults[api.EvaluationJobResource]{
-		Items:       items,
-		TotalStored: totalCount,
-		Errors:      constructErrs,
-	}, nil
+	return listEntities[api.EvaluationJobResource](s, txn, shared.TABLE_EVALUATIONS, filter)
 }
 
 func (s *SQLStorage) DeleteEvaluationJob(id string) error {

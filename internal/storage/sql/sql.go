@@ -14,6 +14,8 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
+	"github.com/eval-hub/eval-hub/internal/messages"
+	se "github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/storage/sql/postgres"
 	"github.com/eval-hub/eval-hub/internal/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/internal/storage/sql/sqlite"
@@ -103,12 +105,12 @@ func NewStorage(config map[string]any, otelEnabled bool, logger *slog.Logger) (a
 	var statementsFactory shared.SQLStatementsFactory
 	switch sqlConfig.Driver {
 	case SQLITE_DRIVER:
-		statementsFactory, err = sqlite.Setup(pool, &sqlConfig)
+		statementsFactory, err = sqlite.Setup(logger, pool, &sqlConfig)
 		if err != nil {
 			return nil, err
 		}
 	case POSTGRES_DRIVER:
-		statementsFactory, err = postgres.Setup(pool, &sqlConfig)
+		statementsFactory, err = postgres.Setup(logger, pool, &sqlConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -170,6 +172,26 @@ func (s *SQLStorage) queryRow(txn *sql.Tx, query string, args ...any) *sql.Row {
 	} else {
 		return s.pool.QueryRowContext(s.ctx, query, args...)
 	}
+}
+
+func (s *SQLStorage) getTotalCount(txn *sql.Tx, tableName string, params map[string]any, typeName string) (int, error) {
+	countQuery, countArgs := s.statementsFactory.CreateCountEntitiesStatement(tableName, params)
+
+	var totalCount int
+	var err error
+	if len(countArgs) > 0 {
+		err = s.queryRow(txn, countQuery, countArgs...).Scan(&totalCount)
+	} else {
+		err = s.queryRow(txn, countQuery).Scan(&totalCount)
+	}
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, nil
+		}
+		s.logger.Error(fmt.Sprintf("Failed to count %s", typeName), "error", err)
+		return 0, se.NewServiceError(messages.QueryFailed, "Type", typeName, "Error", err.Error())
+	}
+	return totalCount, nil
 }
 
 func (s *SQLStorage) ensureSchema() error {

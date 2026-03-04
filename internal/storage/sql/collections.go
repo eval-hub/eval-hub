@@ -3,8 +3,6 @@ package sql
 import (
 	"database/sql"
 	"encoding/json"
-	"maps"
-	"slices"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
@@ -47,7 +45,7 @@ func (s *SQLStorage) GetCollection(id string) (*api.CollectionResource, error) {
 
 func (s *SQLStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.CollectionResource, error) {
 	// Build the SELECT query
-	query := shared.CollectionQuery{Resource: api.Resource{ID: id}}
+	query := shared.EntityQuery{Resource: api.Resource{ID: id}}
 	selectQuery, selectArgs, queryArgs := s.statementsFactory.CreateCollectionGetEntityStatement(&query)
 
 	err := s.queryRow(txn, selectQuery, selectArgs...).Scan(queryArgs...)
@@ -68,96 +66,19 @@ func (s *SQLStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 		return nil, se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "collection", "Error", err.Error())
 	}
 
-	collectionResource, err := s.constructCollectionResource(&query.Resource, &collectionConfig)
-	if err != nil {
-		return nil, se.WithRollback(err)
+	collectionResource := api.CollectionResource{
+		Resource:         query.Resource,
+		CollectionConfig: collectionConfig,
 	}
-	return collectionResource, nil
-}
 
-func (s *SQLStorage) constructCollectionResource(resource *api.Resource, collectionConfig *api.CollectionConfig) (*api.CollectionResource, error) {
-	if collectionConfig == nil {
-		s.logger.Error("Failed to construct collection resource", "error", "Collection config does not exist", "id", resource.ID)
-		return nil, se.NewServiceError(messages.InternalServerError, "Error", "Collection config does not exist")
-	}
-	return &api.CollectionResource{
-		Resource:         *resource,
-		CollectionConfig: *collectionConfig,
-	}, nil
+	return &collectionResource, nil
 }
 
 func (s *SQLStorage) GetCollections(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
-	filter = shared.ExtractQueryParams(filter)
-	params := filter.Params
-	limit := filter.Limit
-	offset := filter.Offset
+	// TODO: use a transaction if needed
+	var txn *sql.Tx
 
-	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), s.statementsFactory.GetAllowedFilterColumns(shared.TABLE_COLLECTIONS)); err != nil {
-		return nil, err
-	}
-
-	// Get total count (there are no filters for collections)
-	countQuery, _ := s.statementsFactory.CreateCountEntitiesStatement(shared.TABLE_COLLECTIONS, params)
-
-	var totalCount int
-	err := s.queryRow(nil, countQuery).Scan(&totalCount)
-	if err != nil {
-		s.logger.Error("Failed to count collections", "error", err)
-		return nil, se.NewServiceError(messages.QueryFailed, "Type", "collections", "Error", err.Error())
-	}
-
-	// Build the list query with pagination and status filter
-	listQuery, listArgs := s.statementsFactory.CreateListEntitiesStatement(shared.TABLE_COLLECTIONS, limit, offset, nil)
-
-	// Query the database
-	rows, err := s.query(nil, listQuery, listArgs...)
-	if err != nil {
-		s.logger.Error("Failed to list collections", "error", err)
-		return nil, se.NewServiceError(messages.QueryFailed, "Type", "collections", "Error", err.Error())
-	}
-	defer rows.Close()
-
-	// Process rows
-	var constructErrs []string
-	var items []api.CollectionResource
-	for rows.Next() {
-		resource := api.Resource{}
-		var entityJSON string
-
-		err = rows.Scan(&resource.ID, &resource.CreatedAt, &resource.UpdatedAt, &resource.Tenant, &resource.Owner, &entityJSON)
-		if err != nil {
-			s.logger.Error("Failed to scan collection row", "error", err)
-			return nil, se.NewServiceError(messages.DatabaseOperationFailed, "Type", "collection", "ResourceId", resource.ID, "Error", err.Error())
-		}
-		// Unmarshal the entity JSON into collectionConfig
-		var collectionConfig api.CollectionConfig
-		err = json.Unmarshal([]byte(entityJSON), &collectionConfig)
-		if err != nil {
-			s.logger.Error("Failed to unmarshal collection entity", "error", err, "id", resource.ID)
-			return nil, se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "collection", "Error", err.Error())
-		}
-
-		// Construct the CollectionResource
-		collectionResource, err := s.constructCollectionResource(&resource, &collectionConfig)
-		if err != nil {
-			constructErrs = append(constructErrs, err.Error())
-			totalCount--
-			continue
-		}
-
-		items = append(items, *collectionResource)
-	}
-
-	if err = rows.Err(); err != nil {
-		s.logger.Error("Error iterating collection rows", "error", err)
-		return nil, se.NewServiceError(messages.QueryFailed, "Type", "collections", "Error", err.Error())
-	}
-
-	return &abstractions.QueryResults[api.CollectionResource]{
-		Items:       items,
-		TotalStored: totalCount,
-		Errors:      constructErrs,
-	}, nil
+	return listEntities[api.CollectionResource](s, txn, shared.TABLE_COLLECTIONS, filter)
 }
 
 func (s *SQLStorage) UpdateCollection(collection *api.CollectionResource) error {
@@ -223,33 +144,25 @@ func (s *SQLStorage) PatchCollection(id string, patches *api.Patch) error {
 		if err != nil {
 			return err
 		}
-		//convert the patchedCollectionJSON back to a CollectionConfig
-		var patchedCollectionConfig api.CollectionConfig
-		err = json.Unmarshal([]byte(patchedCollectionJSON), &patchedCollectionConfig)
+		//convert the patchedCollectionJSON back to a CollectionResource
+		var patchedCollection api.CollectionResource
+		err = json.Unmarshal([]byte(patchedCollectionJSON), &patchedCollection)
 		if err != nil {
 			return err
 		}
 		//convert the patched config back to a CollectionResource
-		resource := api.Resource{
-			ID:        id,
-			Tenant:    persistedCollection.Resource.Tenant,
-			CreatedAt: persistedCollection.Resource.CreatedAt,
-			UpdatedAt: persistedCollection.Resource.UpdatedAt,
-			Owner:     persistedCollection.Resource.Owner,
-			ReadOnly:  persistedCollection.Resource.ReadOnly,
-		}
-		now := time.Now()
+		resource := patchedCollection.Resource
 		if resource.CreatedAt.IsZero() {
-			resource.CreatedAt = now
+			resource.CreatedAt = time.Now()
 		}
 		if resource.UpdatedAt.IsZero() {
-			resource.UpdatedAt = now
+			resource.UpdatedAt = resource.CreatedAt
 		}
-		persistedCollection, err = s.constructCollectionResource(&resource, &patchedCollectionConfig)
-		if err != nil {
-			return err
+		result := api.CollectionResource{
+			Resource:         resource,
+			CollectionConfig: patchedCollection.CollectionConfig,
 		}
-		return s.updateCollectionTransactional(txn, id, persistedCollection)
+		return s.updateCollectionTransactional(txn, id, &result)
 	})
 	return err
 }
