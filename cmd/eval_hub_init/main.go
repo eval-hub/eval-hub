@@ -60,10 +60,25 @@ func run() error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
+	accessKey := readSecret(accessKeyIDKey)
+	secretKey := readSecret(secretAccessKey)
 	region := readSecret(regionOptionalKey)
 	endpoint := readSecret(endpointKey)
 
-	cfg, err := loadAWSConfig(ctx, region)
+	if accessKey == "" {
+		return fmt.Errorf("missing required secret %s", accessKeyIDKey)
+	}
+	if secretKey == "" {
+		return fmt.Errorf("missing required secret %s", secretAccessKey)
+	}
+	if region == "" {
+		return fmt.Errorf("missing required secret %s", regionOptionalKey)
+	}
+	if endpoint == "" {
+		return fmt.Errorf("missing required secret %s", endpointKey)
+	}
+
+	cfg, err := loadAWSConfig(ctx, region, accessKey, secretKey)
 	if err != nil {
 		return err
 	}
@@ -118,10 +133,7 @@ func run() error {
 	return nil
 }
 
-func loadAWSConfig(ctx context.Context, region string) (aws.Config, error) {
-	accessKey := readSecret(accessKeyIDKey)
-	secretKey := readSecret(secretAccessKey)
-
+func loadAWSConfig(ctx context.Context, region, accessKey, secretKey string) (aws.Config, error) {
 	opts := []func(*config.LoadOptions) error{}
 	if region != "" {
 		opts = append(opts, config.WithRegion(region))

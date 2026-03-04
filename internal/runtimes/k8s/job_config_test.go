@@ -213,7 +213,7 @@ func TestBuildJobConfigTestDataS3(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, "bench-1", 0)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}

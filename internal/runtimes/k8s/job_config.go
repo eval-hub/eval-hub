@@ -88,11 +88,6 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		return nil, err
 	}
 
-	benchmarkConfig, err := shared.FindBenchmarkConfig(evaluation, benchmarkID)
-	if err != nil {
-		return nil, err
-	}
-
 	// Get EvalHub instance name from environment (set by operator in deployment)
 	evalHubInstanceName := strings.TrimSpace(os.Getenv(evalHubInstanceNameEnv))
 

@@ -408,7 +408,10 @@ func buildContainerCommand(entrypoint []string) []string {
 }
 
 func hasS3TestData(cfg *jobConfig) bool {
-	return cfg.testDataS3.secretRef != "" && cfg.testDataS3.bucket != "" && cfg.testDataS3.key != ""
+	if cfg.testDataS3.secretRef == "" || cfg.testDataS3.bucket == "" {
+		return false
+	}
+	return normalizeS3Key(cfg.testDataS3.key) != ""
 }
 
 func normalizeS3Key(key string) string {
