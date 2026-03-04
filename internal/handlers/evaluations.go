@@ -35,6 +35,10 @@ type BenchmarkSpec struct {
 
 // HandleCreateEvaluation handles POST /api/v1/evaluations/jobs
 func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+	if ctx.Tenant == "" {
+		w.ErrorWithMessageCode(ctx.RequestID, messages.TenantRequired)
+		return
+	}
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
@@ -212,6 +216,10 @@ func benchmarkExists(benchmarks []api.BenchmarkResource, id string) bool {
 
 // HandleListEvaluations handles GET /api/v1/evaluations/jobs
 func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+	if ctx.Tenant == "" {
+		w.ErrorWithMessageCode(ctx.RequestID, messages.TenantRequired)
+		return
+	}
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
@@ -221,6 +229,9 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 		w.Error(err, ctx.RequestID)
 		return
 	}
+
+	// Enforce tenant isolation: always scope queries to the request tenant
+	filter.Params["tenant_id"] = string(ctx.Tenant)
 
 	res, err := storage.GetEvaluationJobs(filter)
 	if err != nil {

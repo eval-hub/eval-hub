@@ -447,8 +447,13 @@ func (s *Server) Start() error {
 		return err
 	}
 
-	s.logger.Info("Server starting", "port", s.port)
-	err = s.httpServer.ListenAndServe()
+	if tls := s.serviceConfig.Service.TLS; tls != nil && tls.CertFile != "" && tls.KeyFile != "" {
+		s.logger.Info("Server starting with TLS", "port", s.port, "cert", tls.CertFile, "key", tls.KeyFile)
+		err = s.httpServer.ListenAndServeTLS(tls.CertFile, tls.KeyFile)
+	} else {
+		s.logger.Info("Server starting", "port", s.port)
+		err = s.httpServer.ListenAndServe()
+	}
 
 	if err == http.ErrServerClosed {
 		s.logger.Info("Server closed gracefully")

@@ -204,6 +204,13 @@ var (
 		"The request is not authenticated.",
 		"unauthorized",
 	)
+
+	// TenantRequired The X-Tenant header is required for this endpoint.
+	TenantRequired = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The X-Tenant header is required for this endpoint.",
+		"tenant_required",
+	)
 )
 
 type MessageCode struct {
