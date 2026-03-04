@@ -163,7 +163,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 	if err != nil {
 		return logError(fmt.Errorf("failed to create validator: %w", err))
 	}
-	serviceConfig, err := config.LoadConfig(logger, "0.0.1", "local", time.Now().Format(time.RFC3339))
+	serviceConfig, err := config.LoadConfig(logger, "0.2.0", "local", time.Now().Format(time.RFC3339))
 	if err != nil {
 		return logError(fmt.Errorf("failed to load service config: %w", err))
 	}

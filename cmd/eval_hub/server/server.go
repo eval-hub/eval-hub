@@ -408,9 +408,7 @@ func (s *Server) setupAuth(handler http.Handler) (http.Handler, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
 		}
-		if s.authConfig == nil {
-			return nil, fmt.Errorf("auth.yaml config is required")
-		}
+
 		handler, err = WithAuthorization(handler, s.logger, client, s.authConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create authorization handler: %w", err)
@@ -419,6 +417,7 @@ func (s *Server) setupAuth(handler http.Handler) (http.Handler, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create authentication handler: %w", err)
 		}
+		s.logger.Info("Authentication and authorization setup completed")
 	}
 	return handler, nil
 }
@@ -447,8 +446,13 @@ func (s *Server) Start() error {
 		return err
 	}
 
-	s.logger.Info("Server starting", "port", s.port)
-	err = s.httpServer.ListenAndServe()
+	if tls := s.serviceConfig.Service.TLS; tls != nil && tls.CertFile != "" && tls.KeyFile != "" {
+		s.logger.Info("Server starting with TLS", "port", s.port, "cert", tls.CertFile, "key", tls.KeyFile)
+		err = s.httpServer.ListenAndServeTLS(tls.CertFile, tls.KeyFile)
+	} else {
+		s.logger.Info("Server starting", "port", s.port)
+		err = s.httpServer.ListenAndServe()
+	}
 
 	if err == http.ErrServerClosed {
 		s.logger.Info("Server closed gracefully")

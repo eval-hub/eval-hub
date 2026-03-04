@@ -43,7 +43,7 @@ $(BIN_DIR):
 	@mkdir -p $(BIN_DIR)
 
 BUILD_PACKAGE ?= main
-FULL_BUILD_NUMBER ?= 0.0.1
+FULL_BUILD_NUMBER ?= 0.2.0
 LDFLAGS_X = -X "${BUILD_PACKAGE}.Build=${FULL_BUILD_NUMBER}" -X "${BUILD_PACKAGE}.BuildDate=$(DATE)"
 LDFLAGS = -buildmode=exe ${LDFLAGS_X}
 

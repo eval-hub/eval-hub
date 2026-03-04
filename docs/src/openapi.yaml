@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Eval Hub
   description: API REST server for evaluation backend orchestration
-  version: 0.0.1
+  version: 0.2.0
   contact:
     name: API Support
   license:
@@ -11,15 +11,12 @@ info:
 servers:
   - url: http://localhost:8080
     description: Local development server
-  - url: https://api.example.org
-    description: Production server
 security: []
 tags:
   - name: Evaluations
     description: Evaluation job management endpoints
   - name: Collections
     description: Benchmark collection management endpoints
-    x-internal: true
   - name: Providers
     description: Evaluation provider endpoints
   - name: Health

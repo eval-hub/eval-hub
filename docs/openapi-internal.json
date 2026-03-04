@@ -3,7 +3,7 @@
   "info": {
     "title": "Eval Hub",
     "description": "API REST server for evaluation backend orchestration",
-    "version": "0.0.1",
+    "version": "0.2.0",
     "contact": {
       "name": "API Support"
     },
@@ -16,10 +16,6 @@
     {
       "url": "http://localhost:8080",
       "description": "Local development server"
-    },
-    {
-      "url": "https://api.example.org",
-      "description": "Production server"
     }
   ],
   "security": [],
@@ -30,8 +26,7 @@
     },
     {
       "name": "Collections",
-      "description": "Benchmark collection management endpoints",
-      "x-internal": true
+      "description": "Benchmark collection management endpoints"
     },
     {
       "name": "Providers",
@@ -844,7 +839,6 @@
     },
     "/api/v1/evaluations/collections": {
       "get": {
-        "x-internal": true,
         "tags": [
           "Collections"
         ],
@@ -937,7 +931,6 @@
         }
       },
       "post": {
-        "x-internal": true,
         "tags": [
           "Collections"
         ],
@@ -982,7 +975,6 @@
     },
     "/api/v1/evaluations/collections/{id}": {
       "get": {
-        "x-internal": true,
         "tags": [
           "Collections"
         ],
@@ -1026,7 +1018,6 @@
         }
       },
       "put": {
-        "x-internal": true,
         "tags": [
           "Collections"
         ],
@@ -1080,7 +1071,6 @@
         }
       },
       "patch": {
-        "x-internal": true,
         "tags": [
           "Collections"
         ],
@@ -1139,7 +1129,6 @@
         }
       },
       "delete": {
-        "x-internal": true,
         "tags": [
           "Collections"
         ],

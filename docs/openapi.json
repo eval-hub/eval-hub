@@ -3,7 +3,7 @@
   "info": {
     "title": "Eval Hub",
     "description": "API REST server for evaluation backend orchestration",
-    "version": "0.0.1",
+    "version": "0.2.0",
     "contact": {
       "name": "API Support"
     },
@@ -16,10 +16,6 @@
     {
       "url": "http://localhost:8080",
       "description": "Local development server"
-    },
-    {
-      "url": "https://api.example.org",
-      "description": "Production server"
     }
   ],
   "security": [],
@@ -27,6 +23,10 @@
     {
       "name": "Evaluations",
       "description": "Evaluation job management endpoints"
+    },
+    {
+      "name": "Collections",
+      "description": "Benchmark collection management endpoints"
     },
     {
       "name": "Providers",
@@ -633,6 +633,334 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/v1/evaluations/collections": {
+      "get": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "List Collections",
+        "description": "List all benchmark collections.",
+        "operationId": "get_collections",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Maximum number of collections to return",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Maximum number of collections to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Offset for pagination",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Offset for pagination"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            },
+            "description": "Name to search for"
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Tags"
+            },
+            "description": "Tags to search for"
+          },
+          {
+            "name": "system_defined",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "System defined collections"
+            },
+            "description": "Set to false to exclude system defined collections"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResourceList"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Create Collection",
+        "description": "Create a new collection.",
+        "operationId": "post_collections",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionConfig"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/v1/evaluations/collections/{id}": {
+      "get": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Get Collection",
+        "description": "Get details of a specific collection.",
+        "operationId": "get_collections_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Update Collection",
+        "description": "Update an existing collection.",
+        "operationId": "put_collections_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionConfig"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Patch Collection",
+        "description": "Partially update an existing collection.",
+        "operationId": "patch_collections_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "title": "Json Patch",
+                "description": "JSON Patch operation",
+                "items": {
+                  "$ref": "#/components/schemas/PatchOperation"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Delete Collection",
+        "description": "Delete a collection.",
+        "operationId": "delete_collections_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Success"
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -1645,6 +1973,85 @@
         "required": [
           "op",
           "path"
+        ]
+      },
+      "CollectionConfig": {
+        "type": "object",
+        "description": "Request to create or update a collection",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Collection name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Optional description"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tags"
+          },
+          "custom": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Custom key-value data"
+          },
+          "pass_criteria": {
+            "$ref": "#/components/schemas/PassCriteria",
+            "description": "Pass criteria for the collection"
+          },
+          "benchmarks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BenchmarkConfig"
+            },
+            "description": "Benchmarks in the collection"
+          }
+        },
+        "required": [
+          "benchmarks"
+        ]
+      },
+      "CollectionResource": {
+        "type": "object",
+        "description": "Collection resource",
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "resource": {
+                "$ref": "#/components/schemas/Resource",
+                "description": "Resource metadata"
+              }
+            }
+          },
+          {
+            "$ref": "#/components/schemas/CollectionConfig"
+          }
+        ]
+      },
+      "CollectionResourceList": {
+        "type": "object",
+        "description": "List of collection resources with pagination",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Page"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CollectionResource"
+                },
+                "description": "Collection resources"
+              }
+            }
+          }
         ]
       }
     },

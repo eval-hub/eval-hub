@@ -17,7 +17,7 @@ func TestLoadConfig(t *testing.T) {
 	logger := logging.FallbackLogger()
 
 	t.Run("loading config from tests directory", func(t *testing.T) {
-		serviceConfig, err := config.LoadConfig(logger, "0.0.1", "local", time.Now().Format(time.RFC3339), "../../tests")
+		serviceConfig, err := config.LoadConfig(logger, "0.2.0", "local", time.Now().Format(time.RFC3339), "../../tests")
 		if err != nil {
 			t.Fatalf("Failed to load config: %v", err)
 		}
@@ -37,7 +37,7 @@ func TestLoadConfig(t *testing.T) {
 		t.Cleanup(func() {
 			os.Unsetenv("MLFLOW_TRACKING_URI")
 		})
-		serviceConfig, err := config.LoadConfig(logger, "0.0.1", "local", time.Now().Format(time.RFC3339), "../../tests")
+		serviceConfig, err := config.LoadConfig(logger, "0.2.0", "local", time.Now().Format(time.RFC3339), "../../tests")
 		if err != nil {
 			t.Fatalf("Failed to load config: %v", err)
 		}
@@ -83,7 +83,7 @@ database:
 			os.Unsetenv("CONFIG_PATH")
 		})
 
-		serviceConfig, err := config.LoadConfig(logger, "0.0.1", "local", time.Now().Format(time.RFC3339), baseDir)
+		serviceConfig, err := config.LoadConfig(logger, "0.2.0", "local", time.Now().Format(time.RFC3339), baseDir)
 		if err != nil {
 			t.Fatalf("Failed to load config: %v", err)
 		}
@@ -135,7 +135,7 @@ secrets:
 			os.Unsetenv("CONFIG_PATH")
 		})
 
-		serviceConfig, err := config.LoadConfig(logger, "0.0.1", "local", time.Now().Format(time.RFC3339), baseDir)
+		serviceConfig, err := config.LoadConfig(logger, "0.2.0", "local", time.Now().Format(time.RFC3339), baseDir)
 		if err != nil {
 			t.Fatalf("Failed to load config: %v", err)
 		}
@@ -187,7 +187,7 @@ secrets:
 		})
 
 		// Should NOT fail looking for /tmp/db_password
-		serviceConfig, err := config.LoadConfig(logger, "0.0.1", "local", time.Now().Format(time.RFC3339), baseDir)
+		serviceConfig, err := config.LoadConfig(logger, "0.2.0", "local", time.Now().Format(time.RFC3339), baseDir)
 		if err != nil {
 			t.Fatalf("Failed to load config: %v", err)
 		}
@@ -207,7 +207,7 @@ secrets:
 		t.Cleanup(func() {
 			os.Remove(secretPath)
 		})
-		serviceConfig, err := config.LoadConfig(logger, "0.0.1", "local", time.Now().Format(time.RFC3339), "../../tests/secrets")
+		serviceConfig, err := config.LoadConfig(logger, "0.2.0", "local", time.Now().Format(time.RFC3339), "../../tests/secrets")
 		if err != nil {
 			t.Fatalf("Failed to load config: %v", err)
 		}
