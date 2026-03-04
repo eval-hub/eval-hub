@@ -55,7 +55,7 @@ func (s *AuthConfig) Optimize() AuthConfig {
 	// that at runtime we don't need to re-compute the index.
 
 	for _, endpoint := range s.Authorization.Endpoints {
-		parts := strings.Split(endpoint.Path, "*")
+		parts := strings.Split(endpoint.Path, "/")
 		endpoints = append(endpoints, Endpoint{
 			Path:      endpoint.Path,
 			Mappings:  endpoint.Mappings,

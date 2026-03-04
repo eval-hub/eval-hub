@@ -12,43 +12,23 @@ import (
 )
 
 func matchEndpoint(endpoint string, endpointPattern Endpoint) bool {
-	parts := endpointPattern.PathParts
-	if len(parts) == 1 {
-		// no wildcard
-		return strings.HasPrefix(endpoint, endpointPattern.Path)
+	pattern_parts := endpointPattern.PathParts
+	if len(pattern_parts) == 0 {
+		return false
 	}
+	endpoint_parts := strings.Split(endpoint, "/")
 
-	pos := 0
-	match := true
-
-	for _, part := range parts {
-		lenPart := len(part)
-		if lenPart == 0 {
+	for i, part := range pattern_parts {
+		if part == "*" {
 			continue
 		}
 
-		if part[lenPart-1] == '/' {
-			lenPart--
-		}
-
-		if !strings.HasPrefix(endpoint[pos:], part[:lenPart]) {
+		if i >= len(endpoint_parts) || endpoint_parts[i] != part {
 			return false
 		}
-		pos += lenPart
-
-		if len(endpoint) <= pos+1 {
-			continue
-		}
-		// Skip the part that corresponds with the wildcard position
-		idx := strings.Index(endpoint[pos+1:], "/")
-
-		if idx > -1 {
-			pos += idx + 1
-		}
-
 	}
 
-	return match
+	return true
 }
 
 func matchMethods(fromRequest string, fromConfig []string) bool {

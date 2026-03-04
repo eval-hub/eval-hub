@@ -271,6 +271,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 			path          string
 			expectedMatch bool
 		}{
+			{"/api/v1/jobs", "/api/v1/jobsabc", false},
 			{"/api/v1/jobs", "/api/v1/jobs/123", true},
 			{"/api/v1/jobs/*", "/api/v1/jobs", true},
 			{"/api/v1/jobs/*", "/api/v1/jobs/123", true},
@@ -283,7 +284,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		for _, c := range cases {
 			e := Endpoint{
 				Path:      c.pattern,
-				PathParts: strings.Split(c.pattern, "*"),
+				PathParts: strings.Split(c.pattern, "/"),
 			}
 			match := matchEndpoint(c.path, e)
 			if match != c.expectedMatch {
