@@ -194,11 +194,11 @@ func LoadAuthConfig(logger *slog.Logger, dirs ...string) (*auth.AuthConfig, erro
 //
 // Configuration loading order (later sources override earlier ones):
 //  1. config.yaml (config/config.yaml) - Configuration loaded first
-//  2. Environment variables - Mapped via env.mappings configuration
+//  2. Environment variables - Mapped via env_mappings configuration
 //  3. Secrets from files - Mapped via secrets.mappings with secrets.dir
 //
 // Configuration supports:
-//   - Environment variable mapping: Define in env.mappings (e.g., PORT → service.port)
+//   - Environment variable mapping: Define in env_mappings (e.g., PORT → service.port)
 //   - Secrets from files: Define in secrets.mappings with secrets.dir (e.g., /tmp/db_password → database.password)
 //   - Optional secrets: Append :optional to the secret file name to mark it as optional.
 //     If an optional secret file doesn't exist, no error is logged and the configuration

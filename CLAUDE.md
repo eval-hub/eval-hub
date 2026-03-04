@@ -103,7 +103,7 @@ Configuration uses Viper with a sophisticated loading strategy:
 
 
 Configuration supports:
-- **Environment variable mapping**: Define in `env.mappings` (e.g., `PORT` → `service.port`)
+- **Environment variable mapping**: Define in `env_mappings` (e.g., `PORT` → `service.port`)
 - **Secrets from files**: Define in `secrets.mappings` with `secrets.dir` (e.g., `/tmp/db_password` → `database.password`)
 - Values cascade from config.yaml to env vars to secrets
 
