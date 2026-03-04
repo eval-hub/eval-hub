@@ -244,7 +244,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		}
 	})
 
-	t.Run("MatchStatusEventst", func(t *testing.T) {
+	t.Run("MatchStatusEvents", func(t *testing.T) {
 		cfg := loadAuthConfigFromYAML(t, "rbac_jobs").Optimize()
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs/2349872398472/events", nil)
