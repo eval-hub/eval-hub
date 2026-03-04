@@ -148,6 +148,7 @@ func main() {
 		"build_date", serviceConfig.Service.BuildDate,
 		"validator", validate != nil,
 		"local", serviceConfig.Service.LocalMode,
+		"tls", serviceConfig.Service.TLSEnabled(),
 		"mlflow_tracking", mlflowClient != nil,
 		"otel", serviceConfig.IsOTELEnabled(),
 		"prometheus", serviceConfig.IsPrometheusEnabled(),
