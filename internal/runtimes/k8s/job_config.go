@@ -74,7 +74,10 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		return nil, fmt.Errorf("%s is required", serviceURLEnv)
 	}
 
-	namespace := resolveNamespace("")
+	// Use the tenant namespace for job placement; fall back to service namespace for non-MT mode
+	serviceNamespace := resolveNamespace("")
+	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
+
 	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, benchmarkID, benchmarkIndex, &serviceURL)
 	if err != nil {
 		return nil, err
@@ -87,14 +90,19 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	mlflowTrackingURI := strings.TrimSpace(os.Getenv(mlflowTrackingURIEnv))
 	mlflowWorkspace := strings.TrimSpace(os.Getenv(mlflowWorkspaceEnv))
 
+	// In MT mode, use the tenant namespace as the MLflow workspace
+	if evaluation.Resource.Tenant != "" {
+		mlflowWorkspace = string(evaluation.Resource.Tenant)
+	}
+
 	// Build ServiceAccount name, ConfigMap name, and EvalHub URL if instance name is set
+	// EvalHub URL always uses the service namespace (where EvalHub runs), not the tenant namespace
 	var serviceAccountName, serviceCAConfigMap, evalHubURL string
 	if evalHubInstanceName != "" {
 		serviceAccountName = evalHubInstanceName + serviceAccountNameSuffix
 		serviceCAConfigMap = evalHubInstanceName + serviceCAConfigMapSuffix
-		// EvalHub URL points to the kube-rbac-proxy HTTPS endpoint
 		evalHubURL = fmt.Sprintf("https://%s.%s.svc.cluster.local:%s",
-			evalHubInstanceName, namespace, defaultEvalHubPort)
+			evalHubInstanceName, serviceNamespace, defaultEvalHubPort)
 	}
 
 	// Extract OCI credentials secret name from exports config (not forwarded to jobSpec)
