@@ -2,9 +2,7 @@ package auth
 
 import (
 	"bytes"
-	"fmt"
 	"net/http"
-	"path"
 	"slices"
 	"strings"
 	"text/template"
@@ -13,21 +11,44 @@ import (
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 )
 
-func matchEndpoint(endpoint string, pattern string) bool {
-	fmt.Println("endpoint", endpoint, "pattern", pattern)
-	if idx := strings.Index(pattern, "*"); idx != -1 {
-		if len(endpoint) <= idx {
-			return false
-		}
-		suffix := pattern[idx:]
-		endpoint_suffix := endpoint[idx:]
-		match, err := path.Match(suffix, endpoint_suffix)
-		if err != nil {
-			return false
-		}
-		return match
+func matchEndpoint(endpoint string, endpointPattern Endpoint) bool {
+	parts := endpointPattern.PathParts
+	if len(parts) == 1 {
+		// no wildcard
+		return strings.HasPrefix(endpoint, endpointPattern.Path)
 	}
-	return strings.HasPrefix(endpoint, pattern)
+
+	pos := 0
+	match := true
+
+	for _, part := range parts {
+		lenPart := len(part)
+		if lenPart == 0 {
+			continue
+		}
+
+		if part[lenPart-1] == '/' {
+			lenPart--
+		}
+
+		if !strings.HasPrefix(endpoint[pos:], part[:lenPart]) {
+			return false
+		}
+		pos += lenPart
+
+		if len(endpoint) <= pos+1 {
+			continue
+		}
+		// Skip the part that corresponds with the wildcard position
+		idx := strings.Index(endpoint[pos+1:], "/")
+
+		if idx > -1 {
+			pos += idx + 1
+		}
+
+	}
+
+	return match
 }
 
 func matchMethods(fromRequest string, fromConfig []string) bool {
@@ -40,7 +61,7 @@ func matchMethods(fromRequest string, fromConfig []string) bool {
 
 func FindRules(request *http.Request, config AuthConfig) []ResourceRule {
 	for _, endpoint := range config.Authorization.Endpoints {
-		if matchEndpoint(request.URL.Path, endpoint.Path) {
+		if matchEndpoint(request.URL.Path, endpoint) {
 			for _, mapping := range endpoint.Mappings {
 				if matchMethods(request.Method, mapping.Methods) {
 					return mapping.Resources
