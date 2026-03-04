@@ -119,14 +119,14 @@ Run the binary:
 Build the container image:
 ```bash
 podman build -t eval-hub:latest \
-  --build-arg BUILD_NUMBER=0.0.1 \
+  --build-arg BUILD_NUMBER=0.2.0 \
   --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
   -f Containerfile .
 ```
 
 This builds the image with:
 - Go 1.25 toolchain (UBI9 base)
-- Build metadata (version 0.0.1 and timestamp)
+- Build metadata (version 0.2.0 and timestamp)
 - Multi-stage build for minimal final image
 
 Run the container locally:

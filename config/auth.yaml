@@ -21,6 +21,14 @@ authorization:
                 apiGroup: mlflow.kubeflow.org
                 resource: experiments
                 verb: create
+            - rewrites:
+                byHttpHeader:
+                  name: X-Tenant
+              resourceAttributes:
+                namespace: "{{.FromHeader}}"
+                apiGroup: mlflow.kubeflow.org
+                resource: experiments
+                verb: get
 
         - resources:
             # For all other methods, use the method as the verb
