@@ -1,0 +1,19 @@
+{
+  "name": "Provider for pass_criteria from provider test",
+  "description": "Two benchmarks with primary_score and pass_criteria",
+  "benchmarks": [
+    {
+      "id": "pc_b1",
+      "name": "pc_b1",
+      "primary_score": { "metric": "accuracy", "lower_is_better": false },
+      "pass_criteria": { "threshold": 0.5 }
+    },
+    {
+      "id": "pc_b2",
+      "name": "pc_b2",
+      "primary_score": { "metric": "f1", "lower_is_better": false },
+      "pass_criteria": { "threshold": 0.6 }
+    }
+  ],
+  "runtime": { "local": { "command": "true" } }
+}

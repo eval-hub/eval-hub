@@ -46,7 +46,7 @@ func (r *stubRuntime) Name() string {
 
 func (r *stubRuntime) RunEvaluationJob(
 	evaluation *api.EvaluationJobResource,
-	_ *abstractions.Storage,
+	_ abstractions.Storage,
 ) error {
 	if len(evaluation.Benchmarks) == 0 {
 		return fmt.Errorf("no benchmarks configured for job %s", evaluation.Resource.ID)
@@ -58,7 +58,7 @@ func (r *stubRuntime) RunEvaluationJob(
 		return fmt.Errorf("provider %q not found", bench.ProviderID)
 	}
 
-	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, bench.ID, 0, nil)
+	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, &bench, 0, nil)
 	if err != nil {
 		return fmt.Errorf("build job spec: %w", err)
 	}

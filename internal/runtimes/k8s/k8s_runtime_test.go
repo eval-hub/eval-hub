@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/google/uuid"
 	batchv1 "k8s.io/api/batch/v1"
@@ -119,9 +118,7 @@ func TestRunEvaluationJobCreatesResources(t *testing.T) {
 		},
 	}
 
-	var storageNil = (*abstractions.Storage)(nil)
-
-	if err := runtime.RunEvaluationJob(evaluation, storageNil); err != nil {
+	if err := runtime.RunEvaluationJob(evaluation, nil); err != nil {
 		t.Fatalf("RunEvaluationJob returned error: %v", err)
 	}
 

@@ -354,7 +354,7 @@ func TestRunEvaluationJobProviderNotFound(t *testing.T) {
 		tracker:   newTracker(),
 	}
 
-	err := rt.RunEvaluationJob(evaluation, &store)
+	err := rt.RunEvaluationJob(evaluation, store)
 	if err != nil {
 		t.Fatalf("expected no synchronous error, got %v", err)
 	}
@@ -402,7 +402,7 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 		tracker:   newTracker(),
 	}
 
-	err := rt.RunEvaluationJob(evaluation, &store)
+	err := rt.RunEvaluationJob(evaluation, store)
 	if err != nil {
 		t.Fatalf("expected no synchronous error, got %v", err)
 	}
@@ -436,7 +436,7 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 		},
 	}
 
-	err = rt.RunEvaluationJob(evaluation, &store2)
+	err = rt.RunEvaluationJob(evaluation, store2)
 	if err != nil {
 		t.Fatalf("expected no synchronous error for empty command, got %v", err)
 	}
@@ -478,7 +478,7 @@ func TestRunEvaluationJobProcessFailureNoCallback(t *testing.T) {
 		tracker:   newTracker(),
 	}
 
-	err := rt.RunEvaluationJob(evaluation, &store)
+	err := rt.RunEvaluationJob(evaluation, store)
 	if err != nil {
 		t.Fatalf("expected no synchronous error, got %v", err)
 	}
@@ -518,7 +518,7 @@ func TestRunEvaluationJobCancelledNoFailure(t *testing.T) {
 		tracker:   newTracker(),
 	}
 
-	err := rt.RunEvaluationJob(evaluation, &store)
+	err := rt.RunEvaluationJob(evaluation, store)
 	if err != nil {
 		t.Fatalf("expected no synchronous error, got %v", err)
 	}
@@ -639,7 +639,7 @@ func TestRunEvaluationJobMultipleBenchmarksPartialFailure(t *testing.T) {
 		tracker:   newTracker(),
 	}
 
-	err := rt.RunEvaluationJob(evaluation, &store)
+	err := rt.RunEvaluationJob(evaluation, store)
 	if err != nil {
 		t.Fatalf("expected no synchronous error, got %v", err)
 	}

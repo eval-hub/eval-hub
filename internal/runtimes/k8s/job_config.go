@@ -52,7 +52,7 @@ type jobConfig struct {
 	modelAuthSecretRef   string
 }
 
-func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkID string, benchmarkIndex int) (*jobConfig, error) {
+func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkConfig *api.BenchmarkConfig, benchmarkIndex int) (*jobConfig, error) {
 	runtime := provider.Runtime
 	if runtime == nil || runtime.K8s == nil {
 		return nil, fmt.Errorf("provider %q missing runtime configuration", provider.Resource.ID)
@@ -75,7 +75,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	}
 
 	namespace := resolveNamespace("")
-	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, benchmarkID, benchmarkIndex, &serviceURL)
+	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, benchmarkConfig, benchmarkIndex, &serviceURL)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		resourceGUID:         uuid.NewString(),
 		namespace:            namespace,
 		providerID:           provider.Resource.ID,
-		benchmarkID:          benchmarkID,
+		benchmarkID:          benchmarkConfig.ID,
 		adapterImage:         runtime.K8s.Image,
 		entrypoint:           runtime.K8s.Entrypoint,
 		defaultEnv:           runtime.K8s.Env,

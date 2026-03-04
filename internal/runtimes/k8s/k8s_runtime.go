@@ -8,6 +8,7 @@ import (
 	"log/slog"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
+	"github.com/eval-hub/eval-hub/internal/common"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -49,7 +50,7 @@ func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 	}
 }
 
-func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, storage *abstractions.Storage) error {
+func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, storage abstractions.Storage) error {
 	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
 	if err != nil {
 		return err
@@ -65,9 +66,9 @@ func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, sto
 					"benchmark_id", bench.ID,
 				)
 
-				if storage != nil && *storage != nil {
+				if storage != nil {
 					runStatus := buildBenchmarkFailureStatus(&bench, idx, err)
-					if updateErr := (*storage).UpdateEvaluationJob(evaluation.Resource.ID, runStatus); updateErr != nil {
+					if updateErr := storage.UpdateEvaluationJob(evaluation.Resource.ID, runStatus); updateErr != nil {
 						r.logger.Error(
 							"failed to update benchmark status",
 							"error", updateErr,
@@ -141,8 +142,11 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 
 	benchmarkID := benchmark.ID
 	// Provider/benchmark validation should be handled during creation.
-	provider := r.providers[benchmark.ProviderID]
-	jobConfig, err := buildJobConfig(evaluation, &provider, benchmarkID, benchmarkIndex)
+	provider, err := common.ResolveProvider(benchmark.ProviderID, r.providers, nil)
+	if err != nil {
+		return err
+	}
+	jobConfig, err := buildJobConfig(evaluation, provider, benchmark, benchmarkIndex)
 	if err != nil {
 		logger.Error("kubernetes job config error", "benchmark_id", benchmarkID, "error", err)
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)

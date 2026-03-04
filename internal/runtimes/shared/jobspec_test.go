@@ -131,60 +131,13 @@ func TestCopyParamsShallowCopy(t *testing.T) {
 	}
 }
 
-// --- FindBenchmarkConfig ---
-
-func TestFindBenchmarkConfigFound(t *testing.T) {
-	eval := baseEvaluation()
-	config, err := FindBenchmarkConfig(eval, "bench-1")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if config.ID != "bench-1" {
-		t.Fatalf("expected bench-1, got %s", config.ID)
-	}
-	if config.ProviderID != "provider-1" {
-		t.Fatalf("expected provider-1, got %s", config.ProviderID)
-	}
-}
-
-func TestFindBenchmarkConfigSecondBenchmark(t *testing.T) {
-	eval := baseEvaluation()
-	config, err := FindBenchmarkConfig(eval, "bench-2")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if config.ID != "bench-2" {
-		t.Fatalf("expected bench-2, got %s", config.ID)
-	}
-}
-
-func TestFindBenchmarkConfigNotFound(t *testing.T) {
-	eval := baseEvaluation()
-	_, err := FindBenchmarkConfig(eval, "nonexistent")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "benchmark config not found") {
-		t.Fatalf("expected 'benchmark config not found', got %q", err.Error())
-	}
-}
-
-func TestFindBenchmarkConfigNoBenchmarks(t *testing.T) {
-	eval := baseEvaluation()
-	eval.Benchmarks = nil
-	_, err := FindBenchmarkConfig(eval, "bench-1")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
 // --- BuildJobSpecJSON ---
 
 func TestBuildJobSpecJSONHappyPath(t *testing.T) {
 	eval := baseEvaluation()
 	callbackURL := "http://callback.example/status"
 
-	spec, err := BuildJobSpec(eval, "provider-1", "bench-1", 0, &callbackURL)
+	spec, err := BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, &callbackURL)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -228,7 +181,7 @@ func TestBuildJobSpecJSONHappyPath(t *testing.T) {
 func TestBuildJobSpecJSONNilCallbackURL(t *testing.T) {
 	eval := baseEvaluation()
 
-	spec, err := BuildJobSpec(eval, "provider-1", "bench-1", 0, nil)
+	spec, err := BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -242,7 +195,7 @@ func TestBuildJobSpecJSONNilExperiment(t *testing.T) {
 	eval := baseEvaluation()
 	eval.Experiment = nil
 
-	spec, err := BuildJobSpec(eval, "provider-1", "bench-1", 0, nil)
+	spec, err := BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -258,7 +211,7 @@ func TestBuildJobSpecJSONNilExperiment(t *testing.T) {
 func TestBuildJobSpecJSONNoNumExamples(t *testing.T) {
 	eval := baseEvaluation()
 	// Use bench-2 which has no num_examples
-	spec, err := BuildJobSpec(eval, "provider-2", "bench-2", 0, nil)
+	spec, err := BuildJobSpec(eval, "provider-2", &eval.Benchmarks[1], 0, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -268,14 +221,14 @@ func TestBuildJobSpecJSONNoNumExamples(t *testing.T) {
 	}
 }
 
-func TestBuildJobSpecJSONBenchmarkNotFound(t *testing.T) {
+func TestBuildJobSpecJSONBenchmarkNotProvided(t *testing.T) {
 	eval := baseEvaluation()
-	_, err := BuildJobSpec(eval, "provider-1", "nonexistent", 0, nil)
+	_, err := BuildJobSpec(eval, "provider-1", nil, 0, nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "benchmark config not found") {
-		t.Fatalf("expected 'benchmark config not found', got %q", err.Error())
+	if !strings.Contains(err.Error(), "benchmark is required") {
+		t.Fatalf("expected 'benchmark is required', got %q", err.Error())
 	}
 }
 
@@ -283,7 +236,7 @@ func TestBuildJobSpecJSONDoesNotMutateOriginalParams(t *testing.T) {
 	eval := baseEvaluation()
 	originalParams := eval.Benchmarks[0].Parameters
 
-	_, err := BuildJobSpec(eval, "provider-1", "bench-1", 0, nil)
+	_, err := BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
