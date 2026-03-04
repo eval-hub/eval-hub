@@ -2,7 +2,9 @@ package auth
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
+	"path"
 	"slices"
 	"strings"
 	"text/template"
@@ -11,8 +13,21 @@ import (
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 )
 
-func matchEndpoint(fromRequest string, fromConfig string) bool {
-	return strings.HasPrefix(fromRequest, fromConfig)
+func matchEndpoint(endpoint string, pattern string) bool {
+	fmt.Println("endpoint", endpoint, "pattern", pattern)
+	if idx := strings.Index(pattern, "*"); idx != -1 {
+		if len(endpoint) <= idx {
+			return false
+		}
+		suffix := pattern[idx:]
+		endpoint_suffix := endpoint[idx:]
+		match, err := path.Match(suffix, endpoint_suffix)
+		if err != nil {
+			return false
+		}
+		return match
+	}
+	return strings.HasPrefix(endpoint, pattern)
 }
 
 func matchMethods(fromRequest string, fromConfig []string) bool {
@@ -104,5 +119,6 @@ func AttributesFromRequest(request *http.Request, config AuthConfig, user user.I
 			ResourceRequest: true,
 		})
 	}
+
 	return resourceAttributes
 }

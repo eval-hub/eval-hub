@@ -73,5 +73,6 @@ func (s *SarAuthorizer) AuthorizeRequest(ctx context.Context, req *http.Request)
 		return authorizer.DecisionDeny, "User not found in request context. Please authenticate.", nil
 	}
 	attributesRecords := AttributesFromRequest(req, s.config, user)
+
 	return s.Authorize(ctx, attributesRecords)
 }

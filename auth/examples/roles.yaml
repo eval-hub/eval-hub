@@ -18,6 +18,7 @@ rules:
       - evaluations
       - collections
       - providers
+      - status-events
     verbs:
       - get
       - list

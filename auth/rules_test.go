@@ -222,4 +222,45 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		}
 
 	})
+	t.Run("MatchSpecificJob", func(t *testing.T) {
+		cfg := loadAuthConfigFromYAML(t, "rbac_jobs")
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs/2349872398472", nil)
+		req.Header.Set("X-Tenant", "my-ns")
+
+		got := attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
+
+		want := []authorizer.AttributesRecord{
+			{
+				Namespace: "my-ns",
+				APIGroup:  "trustyai.opendatahub.io",
+				Resource:  "evaluations",
+				Verb:      "get",
+			},
+		}
+		if !eq(got, want) {
+			t.Errorf("ComputeResourceAttributes() = %+v, want %+v", got, want)
+		}
+	})
+
+	t.Run("MatchStatusEventst", func(t *testing.T) {
+		cfg := loadAuthConfigFromYAML(t, "rbac_jobs")
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs/2349872398472/events", nil)
+		req.Header.Set("X-Tenant", "my-ns")
+
+		got := attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
+
+		want := []authorizer.AttributesRecord{
+			{
+				Namespace: "my-ns",
+				APIGroup:  "trustyai.opendatahub.io",
+				Resource:  "status-events",
+				Verb:      "create",
+			},
+		}
+		if !eq(got, want) {
+			t.Errorf("ComputeResourceAttributes() = %+v, want %+v", got, want)
+		}
+	})
 }
