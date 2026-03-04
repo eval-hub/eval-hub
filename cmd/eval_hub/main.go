@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/eval-hub/eval-hub/auth"
 	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/logging"
@@ -116,9 +117,12 @@ func main() {
 		otelShutdown = shutdown
 	}
 
-	authConfig, err := config.LoadAuthConfig(logger, args.ConfigDir)
-	if err != nil {
-		startUpFailed(serviceConfig, err, "Failed to load auth config", logger)
+	var authConfig *auth.AuthConfig = nil
+	if !serviceConfig.Service.DisableAuth {
+		authConfig, err = config.LoadAuthConfig(logger, args.ConfigDir)
+		if err != nil {
+			startUpFailed(serviceConfig, err, "Failed to setup authentication and authorization", logger)
+		}
 	}
 
 	// create the server
