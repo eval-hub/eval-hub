@@ -35,11 +35,10 @@ type BenchmarkSpec struct {
 
 // HandleCreateEvaluation handles POST /api/v1/evaluations/jobs
 func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
-	now := time.Now()
 	id := common.GUID()
 
 	evaluation := &api.EvaluationJobConfig{}
@@ -89,9 +88,9 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				Resource: api.EvaluationResource{
 					Resource: api.Resource{
 						ID:        id,
-						CreatedAt: &now,
+						CreatedAt: time.Now(),
 						Owner:     ctx.User,
-						Tenant:    &ctx.Tenant,
+						Tenant:    ctx.Tenant,
 						ReadOnly:  false,
 					},
 					MLFlowExperimentID: mlflowExperimentID,
@@ -156,6 +155,16 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 }
 
 func (h *Handlers) executeEvaluationJob(ctx context.Context, logger *slog.Logger, runtime abstractions.Runtime, job *api.EvaluationJobResource, storage *abstractions.Storage) error {
+	// Detach storage from the HTTP request context so that background
+	// goroutines inside the runtime can update job status after the
+	// request completes. This is the single transition point from
+	// request-scoped work to background runtime work, covering all
+	// runtime implementations (local, k8s, etc.).
+	if storage != nil && *storage != nil {
+		detached := (*storage).WithContext(context.Background())
+		storage = &detached
+	}
+
 	var err error
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -203,7 +212,7 @@ func benchmarkExists(benchmarks []api.BenchmarkResource, id string) bool {
 
 // HandleListEvaluations handles GET /api/v1/evaluations/jobs
 func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
@@ -233,7 +242,8 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 
 // HandleGetEvaluation handles GET /api/v1/evaluations/jobs/{id}
 func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
+
 	logging.LogRequestStarted(ctx)
 
 	// Extract ID from path
@@ -253,7 +263,8 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 }
 
 func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
+
 	logging.LogRequestStarted(ctx)
 
 	// Extract ID from path
@@ -287,7 +298,8 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 
 // HandleCancelEvaluation handles DELETE /api/v1/evaluations/jobs/{id}
 func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
+
 	logging.LogRequestStarted(ctx)
 
 	// Extract ID from path
@@ -297,40 +309,46 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
+	if h.runtime != nil {
+		job, err := storage.GetEvaluationJob(evaluationJobID)
+		if err != nil {
+			w.Error(err, ctx.RequestID)
+			return
+		}
+		if (job != nil) && (job.Status != nil) && (job.Status.State != api.OverallStateCancelled) {
+			if err := h.runtime.WithLogger(ctx.Logger).WithContext(ctx.Ctx).DeleteEvaluationJobResources(job); err != nil {
+				// Cleanup failures shouldn't block deleting the storage record.
+				ctx.Logger.Error("Failed to delete evaluation runtime resources", "error", err, "id", evaluationJobID)
+			}
+		} else {
+			if (job != nil) && (job.Status != nil) {
+				ctx.Logger.Info(fmt.Sprintf("Evaluation job has has status %s so not deleting runtime resources", job.Status.State), "id", evaluationJobID)
+			} else {
+				ctx.Logger.Info("Evaluation job status not found so not deleting runtime resources", "id", evaluationJobID)
+			}
+		}
+	}
+
 	hardDelete, err := GetParam(r, "hard_delete", true, false)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
 
-	if hardDelete && h.runtime != nil {
-		job, err := storage.GetEvaluationJob(evaluationJobID)
+	if hardDelete {
+		err = storage.DeleteEvaluationJob(evaluationJobID)
 		if err != nil {
+			ctx.Logger.Info("Failed to delete evaluation job", "error", err.Error(), "id", evaluationJobID)
 			w.Error(err, ctx.RequestID)
 			return
 		}
-		if job != nil {
-			if err := h.runtime.WithLogger(ctx.Logger).WithContext(ctx.Ctx).DeleteEvaluationJobResources(job); err != nil {
-				// Cleanup failures shouldn't block deleting the storage record.
-				ctx.Logger.Error("Failed to delete evaluation runtime resources", "error", err, "id", evaluationJobID)
-			}
-		}
-	}
-
-	if !hardDelete {
+	} else {
 		err = storage.UpdateEvaluationJobStatus(evaluationJobID, api.OverallStateCancelled, &api.MessageInfo{
 			Message:     "Evaluation job cancelled",
 			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
 		})
 		if err != nil {
 			ctx.Logger.Info("Failed to cancel evaluation job", "error", err.Error(), "id", evaluationJobID)
-			w.Error(err, ctx.RequestID)
-			return
-		}
-	} else {
-		err = storage.DeleteEvaluationJob(evaluationJobID)
-		if err != nil {
-			ctx.Logger.Info("Failed to delete evaluation job", "error", err.Error(), "id", evaluationJobID)
 			w.Error(err, ctx.RequestID)
 			return
 		}

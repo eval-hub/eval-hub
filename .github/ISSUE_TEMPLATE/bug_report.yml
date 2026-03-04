@@ -1,73 +1,37 @@
-name: Bug Report
-description: Create a report to help us improve
-title: "[Bug]: "
-labels: ["kind/bug", "status/triage"]
-assignees: []
+name: Bug report
+description: Something isn't working
+title: "fix: "
+labels: ["kind/fix", "status/triage"]
 body:
-  - type: markdown
-    attributes:
-      value: |
-        Thanks for taking the time to fill out this bug report! Please provide as much detail as possible to help us understand and reproduce the issue.
-
   - type: textarea
     id: description
     attributes:
-      label: Bug Description
-      description: A clear and concise description of what the bug is.
-      placeholder: Describe the issue you're experiencing...
+      label: What happened?
+      description: What did you expect, and what happened instead?
     validations:
       required: true
 
   - type: textarea
     id: reproduction
     attributes:
-      label: Steps to Reproduce
-      description: Steps to reproduce the behavior
+      label: Steps to reproduce
       placeholder: |
-        1. Make a request to '...'
-        2. Set configuration '....'
-        3. Run command '....'
-        4. See error
+        1.
+        2.
+        3.
     validations:
       required: true
-
-  - type: textarea
-    id: expected
-    attributes:
-      label: Expected Behavior
-      description: A clear and concise description of what you expected to happen.
-      placeholder: What should have happened instead?
-    validations:
-      required: true
-
-  - type: textarea
-    id: actual
-    attributes:
-      label: Actual Behavior
-      description: What actually happened?
-      placeholder: What happened instead?
-    validations:
-      required: true
-
-  - type: textarea
-    id: logs
-    attributes:
-      label: Relevant Logs
-      description: Please copy and paste any relevant log output. This will be automatically formatted into code.
-      render: shell
-      placeholder: Paste logs here...
 
   - type: dropdown
     id: component
     attributes:
       label: Component
-      description: Which component is affected?
       options:
         - API
         - Executor (lm-evaluation-harness)
         - Executor (NeMo Evaluator)
         - Executor (Lighteval/KFP)
-        - MLFlow Integration
+        - MLFlow integration
         - Deployment (Local/Podman/Kubernetes/OpenShift)
         - Configuration
         - Documentation
@@ -78,61 +42,13 @@ body:
   - type: input
     id: version
     attributes:
-      label: Eval Hub Version
-      description: What version of eval-hub are you running?
-      placeholder: e.g., 0.1.1
-    validations:
-      required: true
-
-  - type: dropdown
-    id: environment
-    attributes:
-      label: Environment
-      description: Where are you running eval-hub?
-      options:
-        - Local Development
-        - Podman
-        - Kubernetes
-        - OpenShift
-        - Other
+      label: Version
+      placeholder: e.g. 0.1.0
     validations:
       required: true
 
   - type: textarea
-    id: system-info
+    id: logs
     attributes:
-      label: System Information
-      description: |
-        Provide system information:
-        - OS and version
-        - Python version
-        - Podman version (if using containers)
-        - Kubernetes/OpenShift version (if using clusters)
-        - Any other relevant system details
-      placeholder: |
-        OS: Ubuntu 22.04
-        Python: 3.11.0
-        Podman: 4.7.0 (if applicable)
-        Kubernetes: 1.28 (if applicable)
-    validations:
-      required: true
-
-  - type: textarea
-    id: additional-context
-    attributes:
-      label: Additional Context
-      description: Add any other context about the problem here, such as configuration files, screenshots, etc.
-      placeholder: Any additional information that might help...
-
-  - type: checkboxes
-    id: search
-    attributes:
-      label: Pre-submission Checklist
-      description: Please confirm you have done the following
-      options:
-        - label: I have searched existing issues to ensure this bug hasn't been reported already
-          required: true
-        - label: I have reviewed the documentation and troubleshooting guides
-          required: true
-        - label: I can reproduce this issue consistently
-          required: false
+      label: Relevant logs or errors
+      render: shell

@@ -10,12 +10,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/eval-hub/eval-hub/auth"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/spf13/viper"
 )
 
 var (
-	providersLookup = []string{"config/providers", "./config/providers", "../../config/providers", "../../../config/providers"}
+	configLookup = []string{"config", "./config", "../../config", "../../../config"}
 )
 
 type EnvMap struct {
@@ -130,7 +131,10 @@ func hasExplicitConfigDir(dirs []string) bool {
 
 func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.ProviderResource, error) {
 	if !hasExplicitConfigDir(dirs) {
-		dirs = providersLookup
+		dirs = []string{}
+		for _, dir := range configLookup {
+			dirs = append(dirs, dir+"/providers")
+		}
 	} else {
 		dirs = []string{dirs[0] + "/providers"}
 	}
@@ -161,6 +165,27 @@ func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.Pr
 	}
 
 	return providerConfigs, nil
+}
+
+func LoadAuthConfig(logger *slog.Logger, dirs ...string) (*auth.AuthConfig, error) {
+	logger.Info("Start reading auth configuration", "dirs", dirs)
+
+	if !hasExplicitConfigDir(dirs) {
+		dirs = configLookup
+	}
+
+	v, err := readConfig(logger, "auth", "yaml", dirs...)
+	if err != nil {
+		logger.Error("Failed to read auth configuration", "error", err.Error())
+		return nil, err
+	}
+
+	var authConfig auth.AuthConfig
+	if err := v.Unmarshal(&authConfig); err != nil {
+		return nil, err
+	}
+
+	return &authConfig, nil
 }
 
 // LoadConfig loads configuration using a two-tier system with Viper. This implements
@@ -200,7 +225,7 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 	logger.Info("Start reading configuration", "version", version, "build", build, "build_date", buildDate, "dirs", dirs)
 
 	if !hasExplicitConfigDir(dirs) {
-		dirs = []string{"config", "./config", "../../config", "../../../config"} // tests is for running the service on a local machine (not local mode)
+		dirs = configLookup
 	}
 
 	configValues, err := readConfig(logger, "config", "yaml", dirs...)

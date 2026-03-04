@@ -23,6 +23,7 @@ type fakeStorage struct {
 	runStatusChan chan *api.StatusEvent
 	updateErr     error
 	tenant        api.Tenant
+	owner         api.User
 }
 
 // UpdateEvaluationJob implements [abstractions.Storage].
@@ -100,6 +101,7 @@ func (f *fakeStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 		runStatusChan: f.runStatusChan,
 		updateErr:     f.updateErr,
 		tenant:        f.tenant,
+		owner:         f.owner,
 	}
 }
 
@@ -110,6 +112,7 @@ func (f *fakeStorage) WithContext(ctx context.Context) abstractions.Storage {
 		runStatusChan: f.runStatusChan,
 		updateErr:     f.updateErr,
 		tenant:        f.tenant,
+		owner:         f.owner,
 	}
 }
 
@@ -120,6 +123,18 @@ func (f *fakeStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
 		runStatusChan: f.runStatusChan,
 		updateErr:     f.updateErr,
 		tenant:        tenant,
+		owner:         f.owner,
+	}
+}
+
+func (f *fakeStorage) WithOwner(owner api.User) abstractions.Storage {
+	return &fakeStorage{
+		logger:        f.logger,
+		ctx:           f.ctx,
+		runStatusChan: f.runStatusChan,
+		updateErr:     f.updateErr,
+		tenant:        f.tenant,
+		owner:         owner,
 	}
 }
 
@@ -279,21 +294,18 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnv(t *testing.T) {
 		t.Fatalf("expected volume mount %s to be present", modelAuthVolumeName)
 	}
 
-	var foundTokenEnv bool
-	var foundCACertEnv bool
+	envKeys := make(map[string]struct{}, len(container.Env))
 	for _, env := range container.Env {
-		if env.Name == envModelAuthAPIKeyPathName {
-			foundTokenEnv = true
-		}
-		if env.Name == envModelAuthCACertPathName {
-			foundCACertEnv = true
-		}
+		envKeys[env.Name] = struct{}{}
 	}
-	if !foundTokenEnv {
-		t.Fatalf("expected env var %s to be present", envModelAuthAPIKeyPathName)
+	legacyModelAuthKeys := []string{
+		"MODEL_AUTH_API_KEY_PATH",
+		"MODEL_AUTH_CA_CERT_PATH",
 	}
-	if !foundCACertEnv {
-		t.Fatalf("expected env var %s to be present", envModelAuthCACertPathName)
+	for _, key := range legacyModelAuthKeys {
+		if _, found := envKeys[key]; found {
+			t.Fatalf("expected env var %s to be absent", key)
+		}
 	}
 }
 

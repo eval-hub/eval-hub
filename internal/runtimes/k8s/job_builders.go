@@ -43,8 +43,6 @@ const (
 	modelAuthMountPath              = "/var/run/secrets/model"
 	modelAuthTokenFile              = "api-key"
 	modelAuthCACertFile             = "ca_cert"
-	envModelAuthAPIKeyPathName      = "MODEL_AUTH_API_KEY_PATH"
-	envModelAuthCACertPathName      = "MODEL_AUTH_CA_CERT_PATH"
 	serviceCABundleFile             = "service-ca.crt"
 	envMLFlowCertPathName           = "MLFLOW_TRACKING_SERVER_CERT_PATH"
 	defaultAllowPrivilegeEscalation = false
@@ -410,18 +408,6 @@ func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 			Value: ociCredentialsMountPath,
 		})
 		seen[envOCIAuthConfigPathName] = true
-	}
-	if cfg.modelAuthSecretRef != "" {
-		env = append(env, corev1.EnvVar{
-			Name:  envModelAuthAPIKeyPathName,
-			Value: modelAuthMountPath + "/" + modelAuthTokenFile,
-		})
-		seen[envModelAuthAPIKeyPathName] = true
-		env = append(env, corev1.EnvVar{
-			Name:  envModelAuthCACertPathName,
-			Value: modelAuthMountPath + "/" + modelAuthCACertFile,
-		})
-		seen[envModelAuthCACertPathName] = true
 	}
 
 	// Set MLFLOW_TRACKING_SERVER_CERT_PATH so mlflow's tracking client

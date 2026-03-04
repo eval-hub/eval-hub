@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Eval Hub
   description: API REST server for evaluation backend orchestration
-  version: 0.0.1
+  version: 0.2.0
   contact:
     name: API Support
   license:
@@ -11,15 +11,12 @@ info:
 servers:
   - url: http://localhost:8080
     description: Local development server
-  - url: https://api.example.org
-    description: Production server
 security: []
 tags:
   - name: Evaluations
     description: Evaluation job management endpoints
   - name: Collections
     description: Benchmark collection management endpoints
-    x-internal: true
   - name: Providers
     description: Evaluation provider endpoints
   - name: Health
@@ -565,7 +562,6 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/evaluations/collections:
     get:
-      x-internal: true
       tags:
         - Collections
       summary: List Collections
@@ -631,7 +627,6 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     post:
-      x-internal: true
       tags:
         - Collections
       summary: Create Collection
@@ -660,7 +655,6 @@ paths:
           $ref: '#/components/responses/NotFound'
   /api/v1/evaluations/collections/{id}:
     get:
-      x-internal: true
       tags:
         - Collections
       summary: Get Collection
@@ -689,7 +683,6 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     put:
-      x-internal: true
       tags:
         - Collections
       summary: Update Collection
@@ -724,7 +717,6 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     patch:
-      x-internal: true
       tags:
         - Collections
       summary: Patch Collection
@@ -763,7 +755,6 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     delete:
-      x-internal: true
       tags:
         - Collections
       summary: Delete Collection
@@ -1096,6 +1087,31 @@ components:
           type: boolean
           default: false
           description: Whether lower values indicate better performance
+    TestDataRefS3:
+      type: object
+      description: S3 test data reference
+      required:
+        - bucket
+        - key
+        - secret_ref
+      properties:
+        bucket:
+          type: string
+          description: S3 bucket name
+        key:
+          type: string
+          description: S3 object key (path)
+        secret_ref:
+          type: string
+          description: Kubernetes Secret name containing S3 credentials
+    TestDataRef:
+      type: object
+      description: Reference to external test data sources
+      required:
+        - s3
+      properties:
+        s3:
+          $ref: '#/components/schemas/TestDataRefS3'
     BenchmarkConfig:
       type: object
       description: Reference to a benchmark in a collection or evaluation
@@ -1122,6 +1138,9 @@ components:
               type: object
               additionalProperties: true
               description: Benchmark specific parameters
+            test_data_ref:
+              $ref: '#/components/schemas/TestDataRef'
+              description: Reference to the test data source for this benchmark
     ExperimentTag:
       type: object
       description: Tag on an experiment (e.g. MLFlow)

@@ -43,7 +43,7 @@ $(BIN_DIR):
 	@mkdir -p $(BIN_DIR)
 
 BUILD_PACKAGE ?= main
-FULL_BUILD_NUMBER ?= 0.0.1
+FULL_BUILD_NUMBER ?= 0.2.0
 LDFLAGS_X = -X "${BUILD_PACKAGE}.Build=${FULL_BUILD_NUMBER}" -X "${BUILD_PACKAGE}.BuildDate=$(DATE)"
 LDFLAGS = -buildmode=exe ${LDFLAGS_X}
 
@@ -93,7 +93,17 @@ vet: ## Run go vet
 
 test: ## Run unit tests
 	@echo "Running unit tests..."
-	@go test -v ./internal/... ./cmd/...
+	@go test -v ./auth/... ./internal/... ./cmd/...
+
+GOBIN := $(shell go env GOPATH)/bin
+
+$(GOBIN)/gotest:
+	GOBIN=$(GOBIN) go install github.com/rakyll/gotest@latest
+
+test-color: $(GOBIN)/gotest
+	@echo "Running unit tests with color..."
+	@$(GOBIN)/gotest -v -race ./internal/... ./cmd/...
+	@echo "Unit tests complete"
 
 test-fvt: $(BIN_DIR) ## Run FVT (Functional Verification Tests) using godog
 	@echo "Running FVT tests..."

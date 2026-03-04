@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/eval-hub/eval-hub/auth"
 	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/logging"
@@ -25,7 +26,7 @@ import (
 
 var (
 	// Version can be set during the compilation
-	Version string = "0.0.1"
+	Version string = "0.2.0"
 	// Build is set during the compilation
 	Build string
 	// BuildDate is set during the compilation
@@ -116,8 +117,24 @@ func main() {
 		otelShutdown = shutdown
 	}
 
+	var authConfig *auth.AuthConfig = nil
+	if !serviceConfig.Service.DisableAuth {
+		authConfig, err = config.LoadAuthConfig(logger, args.ConfigDir)
+		if err != nil {
+			startUpFailed(serviceConfig, err, "Failed to setup authentication and authorization", logger)
+		}
+	}
+
 	// create the server
-	srv, err := server.NewServer(logger, serviceConfig, providerConfigs, storage, validate, runtime, mlflowClient)
+	srv, err := server.NewServer(logger,
+		serviceConfig,
+		providerConfigs,
+		authConfig,
+		storage,
+		validate,
+		runtime,
+		mlflowClient)
+
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create server", logger)

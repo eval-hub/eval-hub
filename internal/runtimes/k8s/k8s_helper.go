@@ -20,9 +20,7 @@ type KubernetesHelper struct {
 	clientset kubernetes.Interface
 }
 
-// NewKubernetesHelper builds a Kubernetes client (in-cluster config, then default kubeconfig)
-// and returns a KubernetesHelper. Call this when LocalMode is false.
-func NewKubernetesHelper() (*KubernetesHelper, error) {
+func NewKubernetesClient() (*kubernetes.Clientset, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -39,7 +37,17 @@ func NewKubernetesHelper() (*KubernetesHelper, error) {
 	if err != nil {
 		return nil, err
 	}
+	return clientset, nil
+}
 
+// NewKubernetesHelper builds a Kubernetes client (in-cluster config, then default kubeconfig)
+// and returns a KubernetesHelper. Call this when LocalMode is false.
+func NewKubernetesHelper() (*KubernetesHelper, error) {
+
+	clientset, err := NewKubernetesClient()
+	if err != nil {
+		return nil, err
+	}
 	return &KubernetesHelper{
 		clientset: clientset,
 	}, nil

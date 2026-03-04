@@ -255,7 +255,7 @@ func createServer(port int) (*server.Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create validator: %w", err)
 	}
-	serviceConfig, err := config.LoadConfig(logger, "0.0.1", "local", time.Now().Format(time.RFC3339))
+	serviceConfig, err := config.LoadConfig(logger, "0.2.0", "local", time.Now().Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load service config: %w", err)
 	}
@@ -267,7 +267,7 @@ func createServer(port int) (*server.Server, error) {
 	} else {
 		serviceConfig.Prometheus.Enabled = true
 	}
-	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), logger)
+	store, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create storage: %w", err)
 	}
@@ -284,7 +284,7 @@ func createServer(port int) (*server.Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MLFlow client: %w", err)
 	}
-	return server.NewServer(logger, serviceConfig, providerConfigs, storage, validate, runtime, mlflowClient)
+	return server.NewServer(logger, serviceConfig, providerConfigs, nil, store, validate, runtime, mlflowClient)
 }
 
 func getKeyAsString(obj map[string]interface{}, key string) string {

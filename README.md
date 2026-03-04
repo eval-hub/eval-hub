@@ -3,25 +3,14 @@
 [![CI](https://github.com/eval-hub/eval-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/eval-hub/eval-hub/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/eval-hub/eval-hub.svg)](https://pkg.go.dev/github.com/eval-hub/eval-hub)
 [![Go Report Card](https://goreportcard.com/badge/github.com/eval-hub/eval-hub)](https://goreportcard.com/report/github.com/eval-hub/eval-hub)
+[![codecov](https://codecov.io/github/eval-hub/eval-hub/graph/badge.svg?token=LHJACCNC9A)](https://codecov.io/github/eval-hub/eval-hub)
 
 A lightweight REST API service for orchestrating LLM evaluations across multiple backends. Written in Go, it routes evaluation requests to frameworks like lm-evaluation-harness, RAGAS, Garak, and GuideLLM orchestrated via a [complementary SDK](https://github.com/eval-hub/eval-hub-sdk), tracks experiments via MLflow, and runs natively on OpenShift.
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    A[Client API Requests] --> B[EvalHub Service]
+![Architecture](docs/images/architecture.svg)
 
-    subgraph B[EvalHub Service]
-        H[Handlers<br/>net/http] --> R[Runtime Executors]
-        H --> S[Storage<br/>SQLite / PostgreSQL]
-        H --> M[MLflow Tracking]
-    end
-
-    R --> D[lm-evaluation-harness]
-    R --> E[RAGAS / Garak]
-    R --> F[GuideLLM / Custom]
-```
 
 The service uses Go's standard `net/http` router, structured logging with zap, Prometheus metrics, and a pluggable storage layer (SQLite for development, PostgreSQL for production). Providers and benchmarks are declared in YAML configuration files shipped with the container image.
 

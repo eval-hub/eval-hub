@@ -17,12 +17,44 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+var (
+	// these are the allowed patches for the user-defined provider config
+	allowedPatches = []allowedPatch{
+		{Path: "/name", Op: api.PatchOpReplace, Prefix: false},
+
+		{Path: "/title", Op: api.PatchOpAdd, Prefix: false},
+		{Path: "/title", Op: api.PatchOpRemove, Prefix: false},
+		{Path: "/title", Op: api.PatchOpReplace, Prefix: false},
+
+		{Path: "/description", Op: api.PatchOpAdd, Prefix: false},
+		{Path: "/description", Op: api.PatchOpRemove, Prefix: false},
+		{Path: "/description", Op: api.PatchOpReplace, Prefix: false},
+
+		{Path: "/tags", Op: api.PatchOpAdd, Prefix: true},
+		{Path: "/tags", Op: api.PatchOpRemove, Prefix: true},
+		{Path: "/tags", Op: api.PatchOpReplace, Prefix: true},
+
+		{Path: "/custom", Op: api.PatchOpAdd, Prefix: true},
+		{Path: "/custom", Op: api.PatchOpRemove, Prefix: true},
+		{Path: "/custom", Op: api.PatchOpReplace, Prefix: true},
+
+		{Path: "/runtime", Op: api.PatchOpReplace, Prefix: true},
+
+		{Path: "/benchmarks", Op: api.PatchOpReplace, Prefix: true},
+	}
+)
+
+type allowedPatch struct {
+	Path   string
+	Op     api.PatchOp
+	Prefix bool
+}
+
 func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
-	now := time.Now()
 	id := common.GUID()
 
 	request := &api.ProviderConfig{}
@@ -58,9 +90,9 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 			provider = &api.ProviderResource{
 				Resource: api.Resource{
 					ID:        id,
-					CreatedAt: &now,
+					CreatedAt: time.Now(),
 					Owner:     ctx.User,
-					Tenant:    &ctx.Tenant,
+					Tenant:    ctx.Tenant,
 					ReadOnly:  false,
 				},
 				ProviderConfig: *request,
@@ -82,7 +114,7 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 
 // HandleListProviders handles GET /api/v1/evaluations/providers
 func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
@@ -101,19 +133,15 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 				benchmarks = benchmarksParam[0] != "false"
 			}
 
-			filter.Params["benchmarks"] = benchmarks
-
 			systemDefined := IncludeSystemDefined(r)
 
 			ctx.Logger.Info("Include system defined providers", "system_defined", systemDefined)
 
 			providers := []api.ProviderResource{}
 
+			// TODO filter the system providers as well?
 			if systemDefined {
 				for _, p := range h.providerConfigs {
-					if !benchmarks {
-						p.Benchmarks = []api.BenchmarkResource{}
-					}
 					providers = append(providers, p)
 				}
 			}
@@ -132,6 +160,13 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 				Items: append(providers, queryResults.Items...),
 			}
 
+			// remove the benchmarks if requested
+			if !benchmarks {
+				for i := range result.Items {
+					result.Items[i].Benchmarks = []api.BenchmarkResource{}
+				}
+			}
+
 			w.WriteJSON(result, 200)
 
 			return nil
@@ -141,13 +176,21 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 	)
 }
 
-// isImmutablePatchPath returns true if the JSON Patch path targets an immutable field.
-func isImmutablePatchPath(path string) bool {
-	switch path {
-	case "/resource", "/created_at", "/updated_at":
-		return true
+// isAllowedPatch returns true if the JSON Patch path targets a valid field.
+func isAllowedPatch(operation api.PatchOp, path string) bool {
+	// test exact matches first
+	for _, patch := range allowedPatches {
+		if patch.Path == path && patch.Op == operation {
+			return true
+		}
 	}
-	return strings.HasPrefix(path, "/resource/")
+	// test prefix matches next
+	for _, patch := range allowedPatches {
+		if (patch.Prefix && patch.Op == operation) && strings.HasPrefix(path, patch.Path+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Handlers) getSystemProvider(providerId string) *api.ProviderResource {
@@ -159,7 +202,7 @@ func (h *Handlers) getSystemProvider(providerId string) *api.ProviderResource {
 }
 
 func (h *Handlers) HandleGetProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
@@ -192,7 +235,7 @@ func (h *Handlers) HandleGetProvider(ctx *executioncontext.ExecutionContext, req
 }
 
 func (h *Handlers) HandleUpdateProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
@@ -249,7 +292,7 @@ func (h *Handlers) HandleUpdateProvider(ctx *executioncontext.ExecutionContext, 
 }
 
 func (h *Handlers) HandlePatchProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
@@ -280,14 +323,13 @@ func (h *Handlers) HandlePatchProvider(ctx *executioncontext.ExecutionContext, r
 					return serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error", err.Error())
 				}
 				if patches[i].Op != api.PatchOpReplace && patches[i].Op != api.PatchOpAdd && patches[i].Op != api.PatchOpRemove {
-					return serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", "Invalid patch operation")
+					return serviceerrors.NewServiceError(messages.InvalidPatchOperation, "Operation", string(patches[i].Op), "AllowedOperations", strings.Join([]string{string(api.PatchOpReplace), string(api.PatchOpAdd), string(api.PatchOpRemove)}, ", "))
 				}
 				if patches[i].Path == "" {
 					return serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", "Invalid patch path")
 				}
-				if isImmutablePatchPath(patches[i].Path) {
-					return serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error",
-						"Patch path '"+patches[i].Path+"' targets an immutable field and cannot be modified")
+				if !isAllowedPatch(patches[i].Op, patches[i].Path) {
+					return serviceerrors.NewServiceError(messages.UnallowedPatch, "Operation", patches[i].Op, "Path", patches[i].Path)
 				}
 			}
 			return nil
@@ -319,7 +361,7 @@ func (h *Handlers) HandlePatchProvider(ctx *executioncontext.ExecutionContext, r
 }
 
 func (h *Handlers) HandleDeleteProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 

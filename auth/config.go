@@ -1,0 +1,47 @@
+package auth
+
+type AuthConfig struct {
+	Authorization EndpointsAuthorization `yaml:"authorization" mapstructure:"authorization"`
+}
+
+type EndpointsAuthorization struct {
+	Endpoints []Endpoint `yaml:"endpoints" mapstructure:"endpoints"`
+}
+
+type Endpoint struct {
+	Path     string    `yaml:"path" mapstructure:"path"`
+	Mappings []Mapping `yaml:"mappings" mapstructure:"mappings"`
+}
+
+type Mapping struct {
+	Methods   []string       `yaml:"methods" mapstructure:"methods"`
+	Resources []ResourceRule `yaml:"resources" mapstructure:"resources"`
+}
+
+type ResourceRule struct {
+	Rewrites           Rewrite            `yaml:"rewrites" mapstructure:"rewrites"`
+	ResourceAttributes ResourceAttributes `yaml:"resourceAttributes" mapstructure:"resourceAttributes"`
+}
+
+type Rewrite struct {
+	ByHttpHeader  *ByHttpHeader  `yaml:"byHttpHeader,omitempty" mapstructure:"byHttpHeader"`
+	ByQueryString *ByQueryString `yaml:"byQueryString,omitempty" mapstructure:"byQueryString"`
+}
+
+type ByHttpHeader struct {
+	Name string `yaml:"name" mapstructure:"name"`
+}
+
+type ByQueryString struct {
+	Name string `yaml:"name" mapstructure:"name"`
+}
+
+type ResourceAttributes struct {
+	Namespace   string `yaml:"namespace" mapstructure:"namespace"`
+	APIGroup    string `yaml:"apiGroup" mapstructure:"apiGroup"`
+	APIVersion  string `yaml:"apiVersion" mapstructure:"apiVersion"`
+	Resource    string `yaml:"resource" mapstructure:"resource"`
+	Name        string `yaml:"name" mapstructure:"name"`
+	Subresource string `yaml:"subresource" mapstructure:"subresource"`
+	Verb        string `yaml:"verb" mapstructure:"verb"`
+}

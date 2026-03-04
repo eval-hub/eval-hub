@@ -73,8 +73,6 @@ type scenarioConfig struct {
 	assets map[string][]string
 
 	values map[string]string
-
-	skipCompletionAssertions bool
 }
 
 func getLogger() *log.Logger {
@@ -100,8 +98,12 @@ func logDebug(format string, a ...any) {
 	getLogger().Printf(format, a...)
 }
 
-func logError(err error) error {
-	getLogger().Printf("Error: %v\n%s\n", err, string(debug.Stack()))
+func logError(err error, withStack ...bool) error {
+	if len(withStack) > 0 && withStack[0] {
+		getLogger().Printf("Error: %v\n%s\n", err, string(debug.Stack()))
+	} else {
+		getLogger().Printf("Error: %v\n", err)
+	}
 	return err
 }
 
@@ -161,7 +163,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 	if err != nil {
 		return logError(fmt.Errorf("failed to create validator: %w", err))
 	}
-	serviceConfig, err := config.LoadConfig(logger, "0.0.1", "local", time.Now().Format(time.RFC3339))
+	serviceConfig, err := config.LoadConfig(logger, "0.2.0", "local", time.Now().Format(time.RFC3339))
 	if err != nil {
 		return logError(fmt.Errorf("failed to load service config: %w", err))
 	}
@@ -213,6 +215,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 	a.server, err = server.NewServer(logger,
 		serviceConfig,
 		providerConfigs,
+		nil,
 		storage,
 		validate,
 		runtime,
@@ -306,10 +309,12 @@ func (tc *scenarioConfig) iSendARequestTo(method, path string) error {
 	return tc.iSendARequestToWithBody(method, path, "")
 }
 
-func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) error {
+// isLocalOrCIMode returns true when the test cannot reliably wait for evaluation job
+// completion (e.g. GitHub Actions, localhost, or in-process server). Scenarios that
+// require waiting for job completion should use the explicit step "When the mode is local or CI then skip this scenario" at the start.
+func (tc *scenarioConfig) isLocalOrCIMode() bool {
 	githubActions := os.Getenv("GITHUB_ACTIONS")
 	serverURL := os.Getenv("SERVER_URL")
-	logDebug("GITHUB_ACTIONS=%q\n", githubActions)
 	isLocalhost := false
 	if serverURL != "" {
 		host := serverURL
@@ -319,13 +324,20 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) err
 		isLocalhost = host == "localhost" || host == "127.0.0.1" || host == "::1"
 	}
 	isLocalMode := serverURL == "" || (tc.apiFeature != nil && tc.apiFeature.server != nil)
-	// Skip wait in GitHub Actions or local runs (SERVER_URL empty/localhost or in-process server).
-	if githubActions == "true" || isLocalhost || isLocalMode {
-		// TODO: iWaitForEvaluationJobStatus should wait once async completion is available.
-		logDebug("Skipping status wait (GITHUB_ACTIONS=%q, localhost=%t, local=%t); skipping completion assertions\n", githubActions, isLocalhost, isLocalMode)
-		tc.skipCompletionAssertions = true
-		return nil
+	return githubActions == "true" || isLocalhost || isLocalMode
+}
+
+// whenTheModeIsLocalOrCIThenSkipThisScenario skips the scenario when running in local or CI
+// mode so that scenarios requiring job completion are explicitly skipped instead of failing or timing out.
+func (tc *scenarioConfig) whenTheModeIsLocalOrCIThenSkipThisScenario() error {
+	if tc.isLocalOrCIMode() {
+		logDebug("Skipping scenario: mode is local or CI (cannot wait for job completion)\n")
+		return godog.ErrSkip
 	}
+	return nil
+}
+
+func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) error {
 	deadline := time.Now().Add(2 * time.Minute)
 	var lastErr error
 	for time.Now().Before(deadline) {
@@ -385,10 +397,10 @@ func (tc *scenarioConfig) substituteValues(body string) (string, error) {
 		match := re.FindStringSubmatch(body)
 		if len(match) > 1 {
 			if strings.HasPrefix(match[1], mlflowPrefix) {
-				v := ""
-				if tc.isMLFlow() {
-					v = strings.TrimPrefix(match[1], mlflowPrefix)
-				}
+				// Use the literal after mlflow: as the experiment name. When MLflow is configured,
+				// it could be resolved from MLflow; for tests without MLflow, this allows name-based
+				// search to match stored jobs.
+				v := strings.TrimPrefix(match[1], mlflowPrefix)
 				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), v)
 			} else if strings.HasPrefix(match[1], envPrefix) {
 				raw := strings.TrimPrefix(match[1], envPrefix)
@@ -402,6 +414,10 @@ func (tc *scenarioConfig) substituteValues(body string) (string, error) {
 					}
 				}
 				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), value)
+			} else if strings.HasPrefix(match[1], valuePrefix) {
+				n := strings.TrimPrefix(match[1], valuePrefix)
+				v := tc.values[n]
+				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), v)
 			} else {
 				return "", logError(fmt.Errorf("unknown substitutionvalue: %s", match[1]))
 			}
@@ -522,6 +538,13 @@ func (tc *scenarioConfig) getEndpoint(path string) (string, error) {
 	}
 
 	return endpoint, nil
+}
+
+func (tc *scenarioConfig) iSendARequestToWithInlineBody(method, path string, body *godog.DocString) error {
+	if body == nil {
+		return logError(fmt.Errorf("inline body is missing"))
+	}
+	return tc.iSendARequestToWithBody(method, path, body.Content)
 }
 
 func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) error {
@@ -753,15 +776,7 @@ func (tc *scenarioConfig) getJsonPathValue(jsonPath string) (interface{}, error)
 	return foundValue, nil
 }
 
-func isCompletionAssertionPath(jsonPath string) bool {
-	return strings.HasPrefix(jsonPath, "$.status.") || strings.HasPrefix(jsonPath, "$.results.")
-}
-
 func (tc *scenarioConfig) theResponseShouldContainAtJSONPath(expectedValue string, jsonPath string) error {
-	if tc.skipCompletionAssertions && isCompletionAssertionPath(jsonPath) {
-		logDebug("Skipping completion assertion for path %s (CI or local-mode)\n", jsonPath)
-		return nil
-	}
 	if strings.Contains(expectedValue, "{{") {
 		expanded, err := tc.substituteValues(expectedValue)
 		if err != nil {
@@ -772,6 +787,18 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPath(expectedValue strin
 	foundValue, err := tc.getJsonPath(jsonPath)
 	if err != nil {
 		return logError(err)
+	}
+
+	if strings.HasPrefix(expectedValue, "regex:") {
+		rawExpr := strings.TrimPrefix(expectedValue, "regex:")
+		expr, err := regexp.Compile(rawExpr)
+		if err != nil {
+			return logError(fmt.Errorf("invalid regex %q: %w", rawExpr, err))
+		}
+		if expr.MatchString(foundValue) {
+			logDebug("Value %s matches regex %s in path %s", foundValue, rawExpr, jsonPath)
+			return nil
+		}
 	}
 
 	// make this contains and not equals
@@ -887,6 +914,8 @@ func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, 
 			url = "evaluations/jobs"
 		case "collections":
 			url = "evaluations/collections"
+		case "providers":
+			url = "evaluations/providers"
 		}
 		ids := slices.Clone(ids)
 		for _, id := range ids {
@@ -1015,6 +1044,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I unset transaction-id$`, tc.iUnsetTransactionId)
 	ctx.Step(`^I send a (GET|DELETE|POST|PUT) request to "([^"]*)"$`, tc.iSendARequestTo)
 	ctx.Step(`^I send a (POST|PUT|PATCH) request to "([^"]*)" with body "([^"]*)"$`, tc.iSendARequestToWithBody)
+	ctx.Step(`^I send a (POST|PUT|PATCH) request to "([^"]*)" with body:$`, tc.iSendARequestToWithInlineBody)
 	ctx.Step(`^the response code should be (\d+)$`, tc.theResponseStatusShouldBe)
 	ctx.Step(`^the response should contain "([^"]*)" with value "([^"]*)"$`, tc.theResponseShouldContainWithValue)
 	ctx.Step(`^the response should contain "([^"]*)"$`, tc.theResponseShouldContain)
@@ -1030,6 +1060,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLength)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^I wait for the evaluation job status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatus)
+	ctx.Step(`^the mode is local or CI then skip this scenario$`, tc.whenTheModeIsLocalOrCIThenSkipThisScenario)
 	// Other steps
 	ctx.Step(`^fix this step$`, tc.fixThisStep)
 }

@@ -1,8 +1,8 @@
 package messages
 
 import (
-	"fmt"
-	"strings"
+	"bytes"
+	"text/template"
 
 	"github.com/eval-hub/eval-hub/internal/constants"
 )
@@ -39,6 +39,12 @@ var (
 		"The query parameter '{{.ParameterName}}' is not a valid {{.Type}}: '{{.Value}}'.",
 		"query_parameter_invalid",
 	)
+	// QueryBadParameter The parameter '{{.ParameterName}}' is not a valid query parameter. Allowed parameters are: {{.AllowedParameters}}.
+	QueryBadParameter = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The parameter '{{.ParameterName}}' is not a valid query parameter. Allowed parameters are: {{.AllowedParameters}}.",
+		"query_bad_parameter",
+	)
 
 	// JobCanNotBeUpdated The job {{.Id}} can not be {{.NewStatus}} because it is '{{.Status}}'.
 	JobCanNotBeUpdated = createMessage(
@@ -52,6 +58,20 @@ var (
 		constants.HTTPCodeBadRequest,
 		"The request JSON is invalid: '{{.Error}}'. Please check the request and try again.",
 		"invalid_json_request",
+	)
+
+	// InvalidPatchOperation The patch operation '{{.Operation}}' is not valid. Allowed operations are: {{.AllowedOperations}}.
+	InvalidPatchOperation = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The patch operation '{{.Operation}}' is not valid. Allowed operations are: {{.AllowedOperations}}.",
+		"invalid_patch_operation",
+	)
+
+	// UnallowedPatch The operation '{{.Operation}}' is not allowed for the path '{{.Path}}'.
+	UnallowedPatch = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The operation '{{.Operation}}' is not allowed for the path '{{.Path}}'.",
+		"unallowed_patch",
 	)
 
 	// RequestValidationFailed The request validation failed: '{{.Error}}'. Please check the request and try again.
@@ -171,6 +191,19 @@ var (
 		"The request is invalid: '{{.Error}}'. Please check the request and try again.",
 		"bad_request",
 	)
+
+	Forbidden = createMessage(
+		constants.HTTPCodeForbidden,
+		"The request is not authorized.",
+		"forbidden",
+	)
+
+	// Unauthorized The request is not authenticated: '{{.Error}}'.
+	Unauthorized = createMessage(
+		constants.HTTPCodeUnauthorized,
+		"The request is not authenticated.",
+		"unauthorized",
+	)
 )
 
 type MessageCode struct {
@@ -201,6 +234,7 @@ func createMessage(status int, one string, code string) *MessageCode {
 
 func GetErrorMessage(messageCode *MessageCode, messageParams ...any) string {
 	msg := messageCode.GetMessage()
+	params := make(map[string]any)
 	for i := 0; i < len(messageParams); i += 2 {
 		param := messageParams[i]
 		var paramValue any
@@ -209,7 +243,14 @@ func GetErrorMessage(messageCode *MessageCode, messageParams ...any) string {
 		} else {
 			paramValue = "NOT_DEFINED" // this is a placeholder for a missing parameter value - if you see this value then the code needs to be fixed
 		}
-		msg = strings.ReplaceAll(msg, fmt.Sprintf("{{.%v}}", param), fmt.Sprintf("%v", paramValue))
+		params[param.(string)] = paramValue
 	}
-	return msg
+
+	tmpl, _ := template.New("errmfs").Parse(msg)
+	out := bytes.NewBuffer(nil)
+	err := tmpl.Execute(out, params)
+	if err != nil {
+		return "INVALID TEMPLATE"
+	}
+	return out.String()
 }
