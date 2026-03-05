@@ -266,7 +266,7 @@ func createServer(port int) (*sidecarServer.SidecarServer, error) {
 		serviceConfig.Prometheus.Enabled = true
 	}
 	if serviceConfig.Sidecar.EvalHub == nil {
-		serviceConfig.Sidecar.EvalHub = &config.EvalHubConfig{BaseURL: "http://localhost:8080"}
+		serviceConfig.Sidecar.EvalHub = &config.EvalHubClientConfig{BaseURL: "http://localhost:8080"}
 	} else if serviceConfig.Sidecar.EvalHub.BaseURL == "" {
 		serviceConfig.Sidecar.EvalHub.BaseURL = "http://localhost:8080"
 	}

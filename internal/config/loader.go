@@ -188,23 +188,39 @@ func LoadAuthConfig(logger *slog.Logger, dirs ...string) (*auth.AuthConfig, erro
 	return &authConfig, nil
 }
 
-// LoadConfig loads configuration using a two-tier system with Viper. It supports
-// cascading configuration values and multiple sources, and returns Config with
-// version, build, and buildDate set on Service when present.
+// LoadConfig loads configuration using a two-tier system with Viper. This implements
+// a sophisticated loading strategy that supports cascading configuration values and
+// multiple sources.
 //
 // Configuration loading order (later sources override earlier ones):
-//  1. config.yaml - Loaded first from dirs
-//  2. Environment variables - Mapped via env.mappings in the config file
+//  1. config.yaml (config/config.yaml) - Configuration loaded first
+//  2. Environment variables - Mapped via env.mappings configuration
 //  3. Secrets from files - Mapped via secrets.mappings with secrets.dir
+//
+// Configuration supports:
+//   - Environment variable mapping: Define in env.mappings (e.g., PORT → service.port)
+//   - Secrets from files: Define in secrets.mappings with secrets.dir (e.g., /tmp/db_password → database.password)
+//   - Optional secrets: Append :optional to the secret file name to mark it as optional.
+//     If an optional secret file doesn't exist, no error is logged and the configuration
+//     continues loading without that secret value.
+//
+// Example configuration structure:
+//
+//	env:
+//	  mappings:
+//	    service.port: PORT
+//	secrets:
+//	  dir: /tmp
+//	  mappings:
+//	    database.password: db_password
+//	    optional.token: api_token:optional
 //
 // Parameters:
 //   - logger: The logger for configuration loading messages
-//   - version, build, buildDate: Set on Config.Service when Service is non-nil
-//   - dirs: Directories to search for the config file; if empty, default lookup paths are used
 //
 // Returns:
 //   - *Config: The loaded configuration with all sources applied
-//   - error: Non-nil if configuration cannot be loaded or unmarshaling fails
+//   - error: An error if configuration cannot be loaded or is invalid
 func LoadConfig(logger *slog.Logger, version string, build string, buildDate string, dirs ...string) (*Config, error) {
 	logger.Info("Start reading configuration", "version", version, "build", build, "build_date", buildDate, "dirs", dirs)
 
@@ -219,7 +235,9 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 	}
 
 	// If CONFIG_PATH is set, load the operator-mounted config and apply its
-	// top-level keys over the bundled defaults.
+	// top-level keys over the bundled defaults. This replaces (not deep-merges)
+	// sections like secrets, so bundled secret mappings don't leak through.
+	// Values not present in the operator config (e.g. service) are preserved.
 	if configPath := os.Getenv("CONFIG_PATH"); configPath != "" {
 		logger.Info("CONFIG_PATH set, applying operator config", "config_path", configPath)
 		operatorConfig := viper.New()
@@ -244,14 +262,17 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 		}
 	}
 	if secrets.Dir != "" {
+		// check that the secrets directory exists
 		if _, err := os.Stat(secrets.Dir); !os.IsNotExist(err) {
 			for fileName, fieldName := range secrets.Mappings {
+				// the secret file name can be optional by appending :optional to the file name
 				optional := strings.HasSuffix(fileName, ":optional")
 				if optional {
 					fileName = strings.TrimSuffix(fileName, ":optional")
 				}
 				secret, err := getSecret(secrets.Dir, fileName, optional)
 				if err != nil {
+					// log the error and fail the startup (by returning the error)
 					logger.Error("Failed to read secret file", "file", fmt.Sprintf("%s/%s", secrets.Dir, fileName), "error", err.Error())
 					return nil, err
 				}
@@ -270,11 +291,10 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 		return nil, err
 	}
 
-	if conf.Service != nil {
-		conf.Service.Version = version
-		conf.Service.Build = build
-		conf.Service.BuildDate = buildDate
-	}
+	// set the version, build, and build date
+	conf.Service.Version = version
+	conf.Service.Build = build
+	conf.Service.BuildDate = buildDate
 
 	logger.Info("End reading configuration", "config", RedactedJSON(conf, redactedFields))
 	return &conf, nil

@@ -36,7 +36,7 @@ type SidecarResponse struct {
 // with timeout, TLS (CA cert, insecure skip verify), and auth (token path / static token), similar to MLFlowClient.
 // If isOTELEnabled is true, the client's transport is wrapped with OTEL instrumentation.
 // Returns (nil, nil) when cfg is nil or BaseURL is empty.
-func NewEvalHubClientFromConfig(cfg *config.EvalHubConfig, isOTELEnabled bool, logger *slog.Logger) (*EvalHubClient, error) {
+func NewEvalHubClientFromConfig(cfg *config.EvalHubClientConfig, isOTELEnabled bool, logger *slog.Logger) (*EvalHubClient, error) {
 	if cfg == nil || strings.TrimSpace(cfg.BaseURL) == "" {
 		logger.Warn("EvalHub base URL is not set, skipping eval-hub client creation")
 		return nil, nil

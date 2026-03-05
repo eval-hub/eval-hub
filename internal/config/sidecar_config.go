@@ -6,19 +6,19 @@ import (
 )
 
 type SidecarConfig struct {
-	EvalHub          *EvalHubConfig          `mapstructure:"eval_hub"`
+	EvalHub          *EvalHubClientConfig    `mapstructure:"eval_hub"`
 	ServiceAccount   *ServiceAccountConfig   `mapstructure:"service_account"`
 	SidecarContainer *SidecarContainerConfig `mapstructure:"sidecar_container,omitempty"`
 }
 
-type EvalHubConfig struct {
+type EvalHubClientConfig struct {
 	BaseURL            string        `mapstructure:"base_url,omitempty"`
 	HTTPTimeout        time.Duration `mapstructure:"http_timeout"`
 	CACertPath         string        `mapstructure:"ca_cert_path,omitempty"`
 	InsecureSkipVerify bool          `mapstructure:"insecure_skip_verify,omitempty"`
 	Token              string        `mapstructure:"token,omitempty"`
 	TokenPath          string        `mapstructure:"token_path,omitempty"`
-	TLSConfig          *tls.Config  // set at runtime, not from config file
+	TLSConfig          *tls.Config   // set at runtime, not from config file
 }
 
 type ServiceAccountConfig struct {
