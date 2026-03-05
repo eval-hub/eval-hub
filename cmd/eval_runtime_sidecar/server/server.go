@@ -2,34 +2,45 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/eval-hub/eval-hub/auth"
+	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
 	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/clients"
-	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/common"
-	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/config"
 	handlers "github.com/eval-hub/eval-hub/eval_runtime_sidecar/handlers"
-	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/messages"
-	"github.com/eval-hub/eval-hub/internal/runtimes/k8s"
+	"github.com/eval-hub/eval-hub/internal/config"
+	"github.com/eval-hub/eval-hub/internal/constants"
+	"github.com/eval-hub/eval-hub/internal/executioncontext"
+	"github.com/eval-hub/eval-hub/internal/messages"
+	"github.com/eval-hub/eval-hub/pkg/api"
+	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"github.com/google/uuid"
 )
 
-type Server struct {
+const (
+	TRANSACTION_ID_HEADER = "X-Global-Transaction-Id"
+	USER_HEADER           = "X-User"
+	TENANT_HEADER         = "X-Tenant"
+)
+
+type SidecarServer struct {
 	httpServer    *http.Server
 	port          int
 	logger        *slog.Logger
-	sidecarConfig *config.Config
+	serviceConfig *config.Config
 	authConfig    *auth.AuthConfig
 	evalHubClient *clients.EvalHubClient
+	mlflowClient  *mlflowclient.Client
 }
 
-func (s *Server) isOTELEnabled() bool {
-	return (s.sidecarConfig != nil) && s.sidecarConfig.IsOTELEnabled()
+func (s *SidecarServer) isOTELEnabled() bool {
+	return (s.serviceConfig != nil) && s.serviceConfig.IsOTELEnabled()
 }
 
 // NewServer creates a new HTTP server instance with the provided logger and configuration.
@@ -51,25 +62,38 @@ func (s *Server) isOTELEnabled() bool {
 // Returns:
 //   - *Server: A configured server instance
 //   - error: An error if logger or serviceConfig is nil
-func NewServer(logger *slog.Logger,
-	sidecarConfig *config.Config,
-) (*Server, error) {
+func NewSidecarServer(logger *slog.Logger,
+	serviceConfig *config.Config,
+	evalHubClient *clients.EvalHubClient,
+	mlflowClient *mlflowclient.Client,
+) (*SidecarServer, error) {
 
 	if logger == nil {
 		return nil, fmt.Errorf("logger is required for the server")
 	}
-	if (sidecarConfig == nil) || (sidecarConfig.Sidecar == nil) {
-		return nil, fmt.Errorf("sidecar config is required for the sidecar server")
+	if serviceConfig == nil {
+		return nil, fmt.Errorf("service config is required for the sidecar server")
 	}
 
-	return &Server{
-		port:          sidecarConfig.Sidecar.Port,
+	if evalHubClient == nil {
+		return nil, fmt.Errorf("eval hub client is required for the sidecar server")
+	}
+
+	port := 8080
+	if serviceConfig.Service != nil {
+		port = serviceConfig.Service.Port
+	}
+
+	return &SidecarServer{
+		port:          port,
 		logger:        logger,
-		sidecarConfig: sidecarConfig,
+		serviceConfig: serviceConfig,
+		evalHubClient: evalHubClient,
+		mlflowClient:  mlflowClient,
 	}, nil
 }
 
-func (s *Server) GetPort() int {
+func (s *SidecarServer) GetPort() int {
 	return s.port
 }
 
@@ -95,18 +119,18 @@ func (s *Server) GetPort() int {
 //
 // Returns:
 //   - *slog.Logger: A new logger instance with request-specific fields attached
-func (s *Server) loggerWithRequest(r *http.Request) (string, *slog.Logger) {
+func (s *SidecarServer) loggerWithRequest(r *http.Request) (string, *slog.Logger) {
 	requestID := r.Header.Get(TRANSACTION_ID_HEADER)
 	if requestID == "" {
 		requestID = uuid.New().String() // generate a UUID if not present
 	}
 
-	enhancedLogger := s.logger.With(common.LOG_REQUEST_ID, requestID)
+	enhancedLogger := s.logger.With(constants.LOG_REQUEST_ID, requestID)
 
 	// Extract and add HTTP method and URI if they exist
 	method := r.Method
 	if method != "" {
-		enhancedLogger = enhancedLogger.With(common.LOG_METHOD, method)
+		enhancedLogger = enhancedLogger.With(constants.LOG_METHOD, method)
 	}
 
 	uri := ""
@@ -117,18 +141,18 @@ func (s *Server) loggerWithRequest(r *http.Request) (string, *slog.Logger) {
 		uri = r.RequestURI
 	}
 	if uri != "" {
-		enhancedLogger = enhancedLogger.With(common.LOG_URI, uri)
+		enhancedLogger = enhancedLogger.With(constants.LOG_URI, uri)
 	}
 
 	// Extract and add HTTP request fields to logger if they exist
 	userAgent := r.Header.Get("User-Agent")
 	if userAgent != "" {
-		enhancedLogger = enhancedLogger.With(common.LOG_USER_AGENT, userAgent)
+		enhancedLogger = enhancedLogger.With(constants.LOG_USER_AGENT, userAgent)
 	}
 
 	remoteAddr := r.RemoteAddr
 	if remoteAddr != "" {
-		enhancedLogger = enhancedLogger.With(common.LOG_REMOTE_ADR, remoteAddr)
+		enhancedLogger = enhancedLogger.With(constants.LOG_REMOTE_ADR, remoteAddr)
 	}
 
 	// Extract remote_user from URL user info or header
@@ -140,18 +164,37 @@ func (s *Server) loggerWithRequest(r *http.Request) (string, *slog.Logger) {
 		remoteUser = r.Header.Get("Remote-User")
 	}
 	if remoteUser != "" {
-		enhancedLogger = enhancedLogger.With(common.LOG_USER, remoteUser)
+		enhancedLogger = enhancedLogger.With(constants.LOG_USER, remoteUser)
 	}
 
 	referer := r.Header.Get("Referer")
 	if referer != "" {
-		enhancedLogger = enhancedLogger.With(common.LOG_REFERER, referer)
+		enhancedLogger = enhancedLogger.With(constants.LOG_REFERER, referer)
 	}
 
 	return requestID, enhancedLogger
 }
 
-func (s *Server) handleFunc(router *http.ServeMux, pattern string, handler func(http.ResponseWriter, *http.Request)) {
+func (s *SidecarServer) newExecutionContext(r *http.Request) *executioncontext.ExecutionContext {
+	// Enhance logger with request-specific fields
+	requestID, enhancedLogger := s.loggerWithRequest(r)
+
+	user := r.Header.Get(USER_HEADER)
+	tenant := r.Header.Get(TENANT_HEADER)
+
+	// Use r.Context() so OTEL trace context (and the HTTP span from otelhttp) propagates
+	// to handlers and downstream calls (storage, runtime, mlflow). Using context.Background()
+	// would break parent-span linkage and create orphan traces.
+	return executioncontext.NewExecutionContext(
+		r.Context(),
+		requestID,
+		enhancedLogger,
+		3,
+		api.User(user),
+		api.Tenant(tenant))
+}
+
+func (s *SidecarServer) handleFunc(router *http.ServeMux, pattern string, handler func(http.ResponseWriter, *http.Request)) {
 	s.handle(router, pattern, http.HandlerFunc(handler))
 }
 
@@ -159,7 +202,7 @@ func spanNameFormatter(operation string, r *http.Request) string {
 	return fmt.Sprintf("%s %s", r.Method, operation)
 }
 
-func (s *Server) handle(router *http.ServeMux, pattern string, handler http.Handler) {
+func (s *SidecarServer) handle(router *http.ServeMux, pattern string, handler http.Handler) {
 	if s.isOTELEnabled() {
 		handler = otelhttp.NewHandler(handler, pattern, otelhttp.WithSpanNameFormatter(spanNameFormatter))
 		s.logger.Info("Enabled OTEL handler", "pattern", pattern)
@@ -168,37 +211,44 @@ func (s *Server) handle(router *http.ServeMux, pattern string, handler http.Hand
 	s.logger.Info("Registered API", "pattern", pattern)
 }
 
-func (s *Server) setupHealthRoutes(h *handlers.Handlers, router *http.ServeMux) {
+func (s *SidecarServer) setupHealthRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, "/api/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
-		resp := NewRespWrapper(w, ctx)
-		req := NewRequestWrapper(r)
+		resp := server.NewRespWrapper(w, ctx)
+		req := server.NewRequestWrapper(r)
 		switch req.Method() {
 		case http.MethodGet:
-			h.HandleHealth(ctx, req, resp, s.sidecarConfig.Sidecar.Build, s.sidecarConfig.Sidecar.BuildDate)
+			build, buildDate := "", ""
+			if s.serviceConfig.Service != nil {
+				build, buildDate = s.serviceConfig.Service.Build, s.serviceConfig.Service.BuildDate
+			}
+			h.HandleHealth(ctx, req, resp, build, buildDate)
 		default:
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
 }
 
-func (s *Server) setupEvaluationJobEventsRoutes(h *handlers.Handlers, router *http.ServeMux) {
-	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/jobs/{%s}/events", common.PATH_PARAMETER_JOB_ID), func(w http.ResponseWriter, r *http.Request) {
+func (s *SidecarServer) setupEvaluationJobEventsRoutes(h *handlers.Handlers, router *http.ServeMux) {
+	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/jobs/{%s}/events", constants.PATH_PARAMETER_JOB_ID), func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
-		resp := NewRespWrapper(w, ctx)
-		req := NewRequestWrapper(r)
 		switch r.Method {
 		case http.MethodPost:
-			h.HandleUpdateEvaluation(ctx, req, resp)
+			h.HandleUpdateEvaluation(ctx, w, r)
 		default:
-			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"message_code": "method_not_allowed",
+				"message":      fmt.Sprintf("method %s is not allowed for %s", r.Method, r.URL.Path),
+			})
 		}
 	})
 }
 
-func (s *Server) setupRoutes() (http.Handler, error) {
+func (s *SidecarServer) setupRoutes() (http.Handler, error) {
 	router := http.NewServeMux()
-	h := handlers.New(s.sidecarConfig, s.evalHubClient)
+	h := handlers.New(s.serviceConfig, s.evalHubClient)
 
 	// Health
 	s.setupHealthRoutes(h, router)
@@ -206,55 +256,27 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	s.setupEvaluationJobEventsRoutes(h, router)
 
 	// Prometheus metrics endpoint
-	prometheusEnabled := s.sidecarConfig.IsPrometheusEnabled()
+	prometheusEnabled := s.serviceConfig.IsPrometheusEnabled()
 	if prometheusEnabled {
 		//TODO: Explore sending metrics on sidecar shutdown
 		//router.Handle("/metrics", promhttp.Handler())
 		//s.logger.Info("Registered API", "pattern", "/metrics")
 	}
 
-	// Enable CORS in local mode only (for development/testing)
 	handler := http.Handler(router)
-	if s.sidecarConfig.Sidecar.LocalMode {
-		handler = CorsMiddleware(handler, s.sidecarConfig)
-	}
 
 	// Wrap with metrics middleware (outermost for complete observability)
-	handler = Middleware(handler, prometheusEnabled, s.logger)
-	handler, err := s.setupAuth(handler)
-	if err != nil {
-		return nil, err
-	}
-	return handler, nil
-}
+	handler = server.Middleware(handler, prometheusEnabled, s.logger)
 
-func (s *Server) setupAuth(handler http.Handler) (http.Handler, error) {
-	if !s.sidecarConfig.Sidecar.LocalMode && !s.sidecarConfig.Sidecar.DisableAuth {
-		client, err := k8s.NewKubernetesClient()
-		if err != nil {
-			return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
-		}
-		if s.authConfig == nil {
-			return nil, fmt.Errorf("auth.yaml config is required")
-		}
-		handler, err = WithAuthorization(handler, s.logger, client, s.authConfig)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create authorization handler: %w", err)
-		}
-		handler, err = WithAuthentication(handler, s.logger, client, s.authConfig)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create authentication handler: %w", err)
-		}
-	}
 	return handler, nil
 }
 
 // SetupRoutes exposes the route setup for testing
-func (s *Server) SetupRoutes() (http.Handler, error) {
+func (s *SidecarServer) SetupRoutes() (http.Handler, error) {
 	return s.setupRoutes()
 }
 
-func (s *Server) Start() error {
+func (s *SidecarServer) Start() error {
 	handler, err := s.setupRoutes()
 	if err != nil {
 		return err
@@ -267,8 +289,12 @@ func (s *Server) Start() error {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	s.logger.Info("Writing the server ready message", "file", s.sidecarConfig.Sidecar.ReadyFile)
-	err = SetReady(s.sidecarConfig, s.logger)
+	readyFile := ""
+	if s.serviceConfig.Service != nil {
+		readyFile = s.serviceConfig.Service.ReadyFile
+	}
+	s.logger.Info("Writing the server ready message", "file", readyFile)
+	err = server.SetSidecarReady(s.serviceConfig, s.logger)
 	if err != nil {
 		return err
 	}
@@ -283,7 +309,7 @@ func (s *Server) Start() error {
 	return err
 }
 
-func (s *Server) Shutdown(ctx context.Context) error {
+func (s *SidecarServer) Shutdown(ctx context.Context) error {
 	s.logger.Info("Shutting down server gracefully...")
 	return s.httpServer.Shutdown(ctx)
 }

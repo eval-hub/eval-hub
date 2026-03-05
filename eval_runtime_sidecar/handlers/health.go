@@ -3,8 +3,8 @@ package handlers
 import (
 	"time"
 
-	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/executioncontext"
-	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/http_wrappers"
+	"github.com/eval-hub/eval-hub/internal/executioncontext"
+	"github.com/eval-hub/eval-hub/internal/http_wrappers"
 )
 
 const (

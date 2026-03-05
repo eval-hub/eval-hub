@@ -18,10 +18,10 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.Client, error) {
+func NewMLFlowClient(mlFLowConfig *config.MLFlowConfig, isOTELEnabled bool, logger *slog.Logger) (*mlflowclient.Client, error) {
 	url := ""
-	if config.MLFlow != nil && config.MLFlow.TrackingURI != "" {
-		url = config.MLFlow.TrackingURI
+	if mlFLowConfig != nil && mlFLowConfig.TrackingURI != "" {
+		url = mlFLowConfig.TrackingURI
 	}
 
 	if url == "" {
@@ -29,43 +29,43 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.
 		return nil, nil
 	}
 
-	if config.MLFlow.HTTPTimeout == 0 {
-		config.MLFlow.HTTPTimeout = 30 * time.Second
+	if mlFLowConfig.HTTPTimeout == 0 {
+		mlFLowConfig.HTTPTimeout = 30 * time.Second
 	}
 
 	// Build TLS config if not already provided
-	if config.MLFlow.TLSConfig == nil {
+	if mlFLowConfig.TLSConfig == nil {
 		tlsConfig := &tls.Config{
 			MinVersion: tls.VersionTLS12,
 			MaxVersion: tls.VersionTLS13,
 		}
 
 		// Load custom CA certificate if specified
-		if config.MLFlow.CACertPath != "" {
-			caCert, err := os.ReadFile(config.MLFlow.CACertPath)
+		if mlFLowConfig.CACertPath != "" {
+			caCert, err := os.ReadFile(mlFLowConfig.CACertPath)
 			if err != nil {
-				return nil, fmt.Errorf("failed to read MLflow CA certificate at %s: %w", config.MLFlow.CACertPath, err)
+				return nil, fmt.Errorf("failed to read MLflow CA certificate at %s: %w", mlFLowConfig.CACertPath, err)
 			}
 			caCertPool := x509.NewCertPool()
 			if !caCertPool.AppendCertsFromPEM(caCert) {
-				return nil, fmt.Errorf("failed to parse MLflow CA certificate at %s: file contains no valid PEM certificates", config.MLFlow.CACertPath)
+				return nil, fmt.Errorf("failed to parse MLflow CA certificate at %s: file contains no valid PEM certificates", mlFLowConfig.CACertPath)
 			}
 			tlsConfig.RootCAs = caCertPool
-			logger.Info("Loaded MLflow CA certificate", "path", config.MLFlow.CACertPath)
+			logger.Info("Loaded MLflow CA certificate", "path", mlFLowConfig.CACertPath)
 		}
 
-		if config.MLFlow.InsecureSkipVerify {
+		if mlFLowConfig.InsecureSkipVerify {
 			tlsConfig.InsecureSkipVerify = true
 			logger.Warn("MLflow TLS certificate verification is disabled")
 		}
 
-		config.MLFlow.TLSConfig = tlsConfig
+		mlFLowConfig.TLSConfig = tlsConfig
 	}
 
 	httpClient := &http.Client{
-		Timeout: config.MLFlow.HTTPTimeout,
+		Timeout: mlFLowConfig.HTTPTimeout,
 		Transport: &http.Transport{
-			TLSClientConfig: config.MLFlow.TLSConfig,
+			TLSClientConfig: mlFLowConfig.TLSConfig,
 		},
 	}
 
@@ -79,7 +79,7 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.
 	//      Kubernetes projected SA tokens that are rotated on disk by the kubelet.
 	//   2. Static token (WithToken) — for local development without a token file.
 	// At runtime, the token file takes precedence over the static token.
-	tokenPath := config.MLFlow.TokenPath
+	tokenPath := mlFLowConfig.TokenPath
 	if tokenPath == "" {
 		tokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	}
@@ -87,18 +87,18 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.
 	// absence at request time (e.g. projected volume not yet mounted).
 	client = client.WithTokenPath(tokenPath)
 	logger.Info("MLflow auth token path configured (per-request reading)", "path", tokenPath)
-	if config.MLFlow.Token != "" {
-		client = client.WithToken(config.MLFlow.Token)
+	if mlFLowConfig.Token != "" {
+		client = client.WithToken(mlFLowConfig.Token)
 		logger.Info("MLflow static auth token configured (fallback)")
 	}
 
 	// Set workspace if configured
-	if config.MLFlow.Workspace != "" {
-		client = client.WithWorkspace(config.MLFlow.Workspace)
-		logger.Info("MLflow workspace configured", "workspace", config.MLFlow.Workspace)
+	if mlFLowConfig.Workspace != "" {
+		client = client.WithWorkspace(mlFLowConfig.Workspace)
+		logger.Info("MLflow workspace configured", "workspace", mlFLowConfig.Workspace)
 	}
 
-	if config.IsOTELEnabled() {
+	if isOTELEnabled {
 		currentHTTPClient := client.GetHTTPClient()
 		client = client.WithHTTPClient(&http.Client{
 			Transport: otelhttp.NewTransport(currentHTTPClient.Transport),

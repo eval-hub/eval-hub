@@ -19,6 +19,7 @@ const (
 	defaultJobTTLSeconds            = int32(3600)
 	defaultJobBackoffLimit          = int32(3)
 	adapterContainerName            = "adapter"
+	sidecarContainerName            = "sidecar"
 	jobSpecVolumeName               = "job-spec"
 	dataVolumeName                  = "data"
 	serviceCAVolumeName             = "evalhub-service-ca"
@@ -277,6 +278,16 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 							Image:           cfg.adapterImage,
 							ImagePullPolicy: corev1.PullAlways,
 							Command:         buildContainerCommand(cfg.entrypoint),
+							Env:             envVars,
+							Resources:       resources,
+							SecurityContext: defaultSecurityContext(),
+							VolumeMounts:    volumeMounts,
+						},
+						{
+							Name:            sidecarContainerName,
+							Image:           cfg.adapterImage,
+							ImagePullPolicy: corev1.PullAlways,
+							Command:         []string{"/app/eval-runtime-sidecar"},
 							Env:             envVars,
 							Resources:       resources,
 							SecurityContext: defaultSecurityContext(),

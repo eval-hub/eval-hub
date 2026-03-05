@@ -51,12 +51,19 @@ func writeFile(fname string, message string, fileType string, logger *slog.Logge
 	return err
 }
 
-func getReadyContents(conf *config.Config) string {
-	return fmt.Sprintf("Version: %s\nBuild: %s\nBuildDate: %s\n", conf.Service.Version, conf.Service.Build, conf.Service.BuildDate)
+func getReadyContents(serviceVersion string, serviceBuild string, serviceBuildDate string) string {
+	return fmt.Sprintf("Version: %s\nBuild: %s\nBuildDate: %s\n", serviceVersion, serviceBuild, serviceBuildDate)
 }
 
 func SetReady(conf *config.Config, logger *slog.Logger) error {
-	return writeFile(conf.Service.ReadyFile, getReadyContents(conf), "ready", logger)
+	return writeFile(conf.Service.ReadyFile, getReadyContents(conf.Service.Version, conf.Service.Build, conf.Service.BuildDate), "ready", logger)
+}
+
+func SetSidecarReady(conf *config.Config, logger *slog.Logger) error {
+	if conf == nil || conf.Service == nil {
+		return fmt.Errorf("config and config.Service are required for sidecar ready")
+	}
+	return writeFile(conf.Service.ReadyFile, getReadyContents(conf.Service.Version, conf.Service.Build, conf.Service.BuildDate), "ready", logger)
 }
 
 func SetTerminationMessage(terminationFile string, message string, logger *slog.Logger) error {

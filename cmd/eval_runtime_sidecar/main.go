@@ -10,17 +10,18 @@ import (
 
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
+	sidecarServer "github.com/eval-hub/eval-hub/cmd/eval_runtime_sidecar/server"
+	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/clients"
 	"github.com/eval-hub/eval-hub/internal/config"
+	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/mlflow"
 	"github.com/eval-hub/eval-hub/internal/otel"
-	"github.com/eval-hub/eval-hub/internal/runtimes"
-	"github.com/eval-hub/eval-hub/internal/storage"
-	"github.com/eval-hub/eval-hub/internal/validation"
 )
 
 var (
@@ -34,13 +35,11 @@ var (
 
 type Args struct {
 	ConfigDir string
-	LocalMode bool
 }
 
 func args() Args {
 	configDir := ""
 	dir := flag.String("configdir", configDir, "Directory to search for configuration files.")
-	local := flag.Bool("local", false, "Server operates in local mode or not.")
 	flag.Parse()
 	configDir = *dir
 	if configDir == "" {
@@ -49,7 +48,6 @@ func args() Args {
 
 	return Args{
 		ConfigDir: configDir,
-		LocalMode: *local,
 	}
 }
 
@@ -59,49 +57,18 @@ func main() {
 	logger, logShutdown, err := logging.NewLogger()
 	if err != nil {
 		// we do this as no point trying to continue
-		startUpFailed(nil, err, "Failed to create service logger", logging.FallbackLogger())
+		startUpFailed(terminationFilePath(nil, logger), err, "Failed to create service logger", logging.FallbackLogger())
 	}
 
 	serviceConfig, err := config.LoadConfig(logger, Version, Build, BuildDate, args.ConfigDir)
 	if err != nil {
 		// we do this as no point trying to continue
-		startUpFailed(nil, err, "Failed to create service config", logger)
+		startUpFailed(terminationFilePath(nil, logger), err, "Failed to create service config", logger)
 	}
-
-	serviceConfig.Service.LocalMode = args.LocalMode
-
-	// set up the validator
-	validate, err := validation.NewValidator()
-	if err != nil {
-		// we do this as no point trying to continue
-		startUpFailed(serviceConfig, err, "Failed to create validator", logger)
-	}
-
-	// set up the storage
-	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), logger)
-	if err != nil {
-		// we do this as no point trying to continue
-		startUpFailed(serviceConfig, err, "Failed to create storage", logger)
-	}
-
-	// set up the provider configs
-	providerConfigs, err := config.LoadProviderConfigs(logger, args.ConfigDir)
-	if err != nil {
-		// we do this as no point trying to continue
-		startUpFailed(serviceConfig, err, "Failed to create provider configs", logger)
-	}
-
-	// setup runtime
-	runtime, err := runtimes.NewRuntime(logger, serviceConfig, providerConfigs)
-	if err != nil {
-		// we do this as no point trying to continue
-		startUpFailed(serviceConfig, err, "Failed to create runtime", logger)
-	}
-	logger.Info("Runtime created", "runtime", runtime.Name())
 
 	mlflowClient, err := mlflow.NewMLFlowClient(serviceConfig.MLFlow, serviceConfig.IsOTELEnabled(), logger)
 	if err != nil {
-		startUpFailed(serviceConfig, err, "Failed to create MLFlow client", logger)
+		startUpFailed(terminationFilePath(serviceConfig, logger), err, "Failed to create MLFlow client", logger)
 	}
 
 	// setup OTEL
@@ -111,39 +78,35 @@ func main() {
 		shutdown, err := otel.SetupOTEL(context.Background(), serviceConfig.OTEL, logger)
 		if err != nil {
 			// we do this as no point trying to continue
-			startUpFailed(serviceConfig, err, "Failed to setup OTEL", logger)
+			startUpFailed(terminationFilePath(serviceConfig, logger), err, "Failed to setup OTEL", logger)
 		}
 		otelShutdown = shutdown
 	}
 
-	authConfig, err := config.LoadAuthConfig(logger, args.ConfigDir)
+	evalHubClient, err := clients.NewEvalHubClientFromConfig(serviceConfig.Sidecar.EvalHub, serviceConfig.IsOTELEnabled(), logger)
 	if err != nil {
-		startUpFailed(serviceConfig, err, "Failed to load auth config", logger)
+		startUpFailed(terminationFilePath(serviceConfig, logger), err, "Failed to create eval-hub client", logger)
+	}
+	if evalHubClient == nil {
+		startUpFailed(terminationFilePath(serviceConfig, logger), fmt.Errorf("eval_hub.base_url is required"), "EvalHub base URL is required for the sidecar", logger)
 	}
 
 	// create the server
-	srv, err := server.NewServer(logger,
-		serviceConfig,
-		providerConfigs,
-		authConfig,
-		storage,
-		validate,
-		runtime,
-		mlflowClient)
-
+	srv, err := sidecarServer.NewSidecarServer(logger, serviceConfig, evalHubClient, mlflowClient)
 	if err != nil {
-		// we do this as no point trying to continue
-		startUpFailed(serviceConfig, err, "Failed to create server", logger)
+		startUpFailed(terminationFilePath(serviceConfig, logger), err, "Failed to create sidecar server", logger)
 	}
 
 	// log the start up details
+	version, build, buildDate := "", "", ""
+	if serviceConfig.Service != nil {
+		version, build, buildDate = serviceConfig.Service.Version, serviceConfig.Service.Build, serviceConfig.Service.BuildDate
+	}
 	logger.Info("Server starting",
 		"server_port", srv.GetPort(),
-		"version", serviceConfig.Service.Version,
-		"build", serviceConfig.Service.Build,
-		"build_date", serviceConfig.Service.BuildDate,
-		"validator", validate != nil,
-		"local", serviceConfig.Service.LocalMode,
+		"version", version,
+		"build", build,
+		"build_date", buildDate,
 		"mlflow_tracking", mlflowClient != nil,
 		"otel", serviceConfig.IsOTELEnabled(),
 		"prometheus", serviceConfig.IsPrometheusEnabled(),
@@ -157,7 +120,7 @@ func main() {
 				logger.Info("Server closed gracefully")
 				return
 			}
-			startUpFailed(serviceConfig, err, "Server failed to start", logger)
+			startUpFailed(terminationFilePath(serviceConfig, logger), err, "Server failed to start", logger)
 		}
 	}()
 
@@ -170,12 +133,6 @@ func main() {
 	waitForShutdown := 30 * time.Second
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), waitForShutdown)
 	defer cancel()
-
-	// shutdown the storage
-	logger.Info("Shutting down storage...")
-	if err := storage.Close(); err != nil {
-		logger.Error("Failed to close storage", "error", err.Error())
-	}
 
 	// shutdown the otel tracing
 	if otelShutdown != nil {
@@ -196,8 +153,19 @@ func main() {
 	}
 }
 
-func startUpFailed(conf *config.Config, err error, msg string, logger *slog.Logger) {
-	termErr := server.SetTerminationMessage(server.GetTerminationFile(conf, logger), fmt.Sprintf("%s: %s", msg, err.Error()), logger)
+func terminationFilePath(cfg *config.Config, logger *slog.Logger) string {
+	if cfg != nil && cfg.Service != nil && strings.TrimSpace(cfg.Service.TerminationFile) != "" {
+		return strings.TrimSpace(cfg.Service.TerminationFile)
+	}
+	if tf := os.Getenv(constants.EnvVarTerminationFile); tf != "" {
+		logger.Info("Termination file set from environment variable", "env", constants.EnvVarTerminationFile, "file", tf)
+		return tf
+	}
+	return "/opt/evalhub/work/termination-log"
+}
+
+func startUpFailed(terminationFile string, err error, msg string, logger *slog.Logger) {
+	termErr := server.SetTerminationMessage(terminationFile, fmt.Sprintf("%s: %s", msg, err.Error()), logger)
 	if termErr != nil {
 		logger.Error("Failed to set termination message", "message", msg, "error", termErr.Error())
 		log.Println(termErr.Error())

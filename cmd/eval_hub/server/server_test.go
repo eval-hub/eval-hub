@@ -280,7 +280,7 @@ func createServer(port int) (*server.Server, error) {
 	serviceConfig.Service.LocalMode = true // set local mode for testing
 	// Use stub runtime to avoid file writes and process spawning during tests
 	runtime := &stubRuntime{logger: logger, providers: providerConfigs}
-	mlflowClient, err := mlflow.NewMLFlowClient(serviceConfig, logger)
+	mlflowClient, err := mlflow.NewMLFlowClient(serviceConfig.MLFlow, serviceConfig.IsOTELEnabled(), logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MLFlow client: %w", err)
 	}

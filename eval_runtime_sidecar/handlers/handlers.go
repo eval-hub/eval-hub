@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/clients"
-	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/config"
+	"github.com/eval-hub/eval-hub/internal/config"
 )
 
 // Contains the service state information that handlers can access

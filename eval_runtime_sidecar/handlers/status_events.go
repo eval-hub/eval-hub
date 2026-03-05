@@ -1,47 +1,57 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 
-	evalhub "github.com/eval-hub/eval-hub/eval_runtime_sidecar/api/eval_hub"
-	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/common"
-	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/executioncontext"
-	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/http_wrappers"
-	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/logging"
-	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/serialization"
+	"github.com/eval-hub/eval-hub/internal/constants"
+	"github.com/eval-hub/eval-hub/internal/executioncontext"
+	"github.com/eval-hub/eval-hub/internal/logging"
 )
 
-func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+type errorResponse struct {
+	MessageCode string `json:"message_code"`
+	Message     string `json:"message"`
+}
+
+func writeErrorJSON(w http.ResponseWriter, code int, messageCode, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(errorResponse{MessageCode: messageCode, Message: message})
+}
+
+func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext, w http.ResponseWriter, r *http.Request) {
 	logging.LogRequestStarted(ctx)
 
 	// Extract ID from path
-	evaluationJobID := r.PathValue(common.PATH_PARAMETER_JOB_ID)
+	evaluationJobID := r.PathValue(constants.PATH_PARAMETER_JOB_ID)
 	if evaluationJobID == "" {
-		ctx.Logger.Error("path parameter %s is required", common.PATH_PARAMETER_JOB_ID, nil)
-		w.Error(fmt.Errorf("path parameter %s is required", common.PATH_PARAMETER_JOB_ID), ctx.RequestID)
+		writeErrorJSON(w, http.StatusBadRequest, "missing_path_parameter", fmt.Sprintf("path parameter %s is required", constants.PATH_PARAMETER_JOB_ID))
 		return
 	}
 
-	// get the body bytes from the context
-	bodyBytes, err := r.BodyAsBytes()
+	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
-		w.Error(err, ctx.RequestID)
+		writeErrorJSON(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	status := &evalhub.StatusEvent{}
-	err = serialization.Unmarshal(nil, ctx, bodyBytes, status)
+
+	if h.evalHubClient == nil {
+		writeErrorJSON(w, http.StatusServiceUnavailable, "eval_hub_not_configured", "EvalHub client is not configured (base URL not set)")
+		return
+	}
+
+	res, err := h.evalHubClient.PostEvent(evaluationJobID, bodyBytes)
 	if err != nil {
-		w.Error(err, ctx.RequestID)
+		writeErrorJSON(w, http.StatusInternalServerError, "internal_server_error", err.Error())
 		return
 	}
 
-	//TODO: Validate the status event
-
-	err = h.evalHubClient.PostEvent(evaluationJobID, status)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(res.StatusCode)
+	if len(res.Body) > 0 {
+		w.Write(res.Body)
 	}
-
-	w.WriteJSON(nil, 204)
 }
