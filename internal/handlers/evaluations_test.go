@@ -65,7 +65,7 @@ func (f *fakeStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, er
 }
 
 func (f *fakeStorage) GetEvaluationJobs(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
-	return &abstractions.QueryResults[api.EvaluationJobResource]{Items: []api.EvaluationJobResource{}, TotalStored: 0}, nil
+	return &abstractions.QueryResults[api.EvaluationJobResource]{Items: []api.EvaluationJobResource{}, TotalCount: 0}, nil
 }
 
 func (f *fakeStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
@@ -131,8 +131,8 @@ func (s *listEvaluationsStorage) GetEvaluationJobs(_ *abstractions.QueryFilter) 
 		return nil, s.err
 	}
 	return &abstractions.QueryResults[api.EvaluationJobResource]{
-		Items:       s.jobs,
-		TotalStored: len(s.jobs),
+		Items:      s.jobs,
+		TotalCount: len(s.jobs),
 	}, nil
 }
 

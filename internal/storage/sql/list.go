@@ -29,7 +29,7 @@ func getTypeFromTableName(tableName string) string {
 }
 
 func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.CollectionResource](s *SQLStorage, txn *sql.Tx, tableName string, filter *abstractions.QueryFilter) (*abstractions.QueryResults[T], error) {
-	filter = shared.ExtractQueryParams(filter)
+	filter = filter.ExtractQueryParams()
 	params := filter.Params
 	limit := filter.Limit
 	offset := filter.Offset
@@ -78,8 +78,8 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 	}
 
 	return &abstractions.QueryResults[T]{
-		Items:       items,
-		TotalStored: totalCount,
+		Items:      items,
+		TotalCount: totalCount,
 	}, nil
 }
 

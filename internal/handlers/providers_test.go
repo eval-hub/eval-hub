@@ -67,7 +67,7 @@ func (f *fakeStorage) PatchProvider(_ string, _ *api.Patch) (*api.ProviderResour
 	return nil, fmt.Errorf("not implemented PatchProvider in fakeStorage")
 }
 func (f *fakeStorage) GetProviders(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.ProviderResource], error) {
-	return &abstractions.QueryResults[api.ProviderResource]{Items: []api.ProviderResource{}, TotalStored: 0}, nil
+	return &abstractions.QueryResults[api.ProviderResource]{Items: []api.ProviderResource{}, TotalCount: 0}, nil
 }
 
 type updatePatchProviderStorage struct {
@@ -138,8 +138,8 @@ func (s *listProvidersStorage) GetProviders(_ *abstractions.QueryFilter) (*abstr
 		return nil, s.err
 	}
 	return &abstractions.QueryResults[api.ProviderResource]{
-		Items:       s.providers,
-		TotalStored: len(s.providers),
+		Items:      s.providers,
+		TotalCount: len(s.providers),
 	}, nil
 }
 

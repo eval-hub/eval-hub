@@ -227,7 +227,7 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 		w.Error(err, ctx.RequestID)
 		return
 	}
-	page, err := CreatePage(res.TotalStored, filter.Offset, filter.Limit, ctx, r)
+	page, err := CreatePage(res.TotalCount, filter.Offset, filter.Limit, ctx, r)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
@@ -237,7 +237,6 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 		Items:  res.Items,
 		Errors: res.Errors,
 	}, 200)
-
 }
 
 // HandleGetEvaluation handles GET /api/v1/evaluations/jobs/{id}
