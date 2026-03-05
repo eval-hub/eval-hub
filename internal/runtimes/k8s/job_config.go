@@ -52,6 +52,7 @@ type jobConfig struct {
 	ociCredentialsSecret string
 	modelAuthSecretRef   string
 	testDataS3           s3TestDataConfig
+	testDataInitImage    string
 }
 
 type s3TestDataConfig struct {

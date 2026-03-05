@@ -137,8 +137,10 @@ test-fvt-server: start-service ## Run FVT tests using godog against a running se
 test-coverage: $(BIN_DIR) ## Run unit tests with coverage
 	@echo "Running unit tests with coverage..."
 	@go test -v -race -coverprofile=$(BIN_DIR)/coverage.out -covermode=atomic ./internal/... ./cmd/...
+	@go test -v -race -coverprofile=$(BIN_DIR)/coverage-init.out -covermode=atomic ./cmd/eval_hub_init
 	@go tool cover -html=$(BIN_DIR)/coverage.out -o $(BIN_DIR)/coverage.html
-	@echo "Coverage report generated: $(BIN_DIR)/coverage.html"
+	@go tool cover -html=$(BIN_DIR)/coverage-init.out -o $(BIN_DIR)/coverage-init.html
+	@echo "Coverage report generated: $(BIN_DIR)/coverage.html and $(BIN_DIR)/coverage-init.html"
 
 test-fvt-coverage: $(BIN_DIR)## Run integration (FVT) tests with coverage
 	@echo "Running integration (FVT) tests with coverage..."

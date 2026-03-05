@@ -10,6 +10,7 @@ type ServiceConfig struct {
 	Host            string `mapstructure:"host,omitempty"`
 	ReadyFile       string `mapstructure:"ready_file"`
 	TerminationFile string `mapstructure:"termination_file"`
+	EvalInitImage   string `mapstructure:"eval_init_image,omitempty"`
 	LocalMode       bool   `mapstructure:"local_mode,omitempty"`
 	DisableAuth     bool   `mapstructure:"disable_auth,omitempty"`
 	TLSCertFile     string `mapstructure:"tls_cert_file,omitempty"`

@@ -265,6 +265,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	var initContainers []corev1.Container
 	if hasS3TestData(cfg) {
 		initCommand := defaultTestDataInitCmd
+		initImage := defaultIfEmpty(cfg.testDataInitImage, testDataInitImage)
 		initResources := corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse(defaultInitCPURequest),
@@ -296,7 +297,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 
 		initContainers = append(initContainers, corev1.Container{
 			Name:            initContainerName,
-			Image:           testDataInitImage,
+			Image:           initImage,
 			ImagePullPolicy: corev1.PullAlways,
 			Command:         []string{initCommand},
 			Resources:       initResources,

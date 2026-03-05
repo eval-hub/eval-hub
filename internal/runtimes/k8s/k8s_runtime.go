@@ -21,15 +21,16 @@ type K8sRuntime struct {
 	helper    *KubernetesHelper
 	providers map[string]api.ProviderResource
 	ctx       context.Context
+	initImage string
 }
 
 // NewK8sRuntime creates a Kubernetes runtime.
-func NewK8sRuntime(logger *slog.Logger, providerConfigs map[string]api.ProviderResource) (abstractions.Runtime, error) {
+func NewK8sRuntime(logger *slog.Logger, providerConfigs map[string]api.ProviderResource, initImage string) (abstractions.Runtime, error) {
 	helper, err := NewKubernetesHelper()
 	if err != nil {
 		return nil, err
 	}
-	return &K8sRuntime{logger: logger, helper: helper, providers: providerConfigs}, nil
+	return &K8sRuntime{logger: logger, helper: helper, providers: providerConfigs, initImage: initImage}, nil
 }
 
 func (r *K8sRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
@@ -38,6 +39,7 @@ func (r *K8sRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
 		helper:    r.helper,
 		providers: r.providers,
 		ctx:       r.ctx,
+		initImage: r.initImage,
 	}
 }
 
@@ -47,6 +49,7 @@ func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 		helper:    r.helper,
 		providers: r.providers,
 		ctx:       ctx,
+		initImage: r.initImage,
 	}
 }
 
@@ -151,6 +154,7 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		logger.Error("kubernetes job config error", "benchmark_id", benchmarkID, "error", err)
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
 	}
+	jobConfig.testDataInitImage = r.initImage
 	logger.Info(
 		"kubernetes job config",
 		"job_id", evaluation.Resource.ID,
