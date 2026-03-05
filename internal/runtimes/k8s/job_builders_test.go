@@ -350,6 +350,38 @@ func TestBuildJobWithS3TestData(t *testing.T) {
 	}
 }
 
+func TestBuildJobWithS3TestDataSkipsEmptyNormalizedKey(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "job-s3-empty",
+		resourceGUID:   "guid-s3-empty",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
+		testDataS3: s3TestDataConfig{
+			bucket:    "bucket-1",
+			key:       "/",
+			secretRef: "s3-secret",
+		},
+	}
+
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	if len(job.Spec.Template.Spec.InitContainers) != 0 {
+		t.Fatalf("expected no init containers when normalized key is empty")
+	}
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == testDataVolumeName || v.Name == testDataSecretVolumeName {
+			t.Fatalf("expected no test data volumes when normalized key is empty")
+		}
+	}
+}
+
 func TestBuildJobWithModelAuthSecret(t *testing.T) {
 	cfg := &jobConfig{
 		jobID:              "job-auth",
