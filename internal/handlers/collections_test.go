@@ -21,7 +21,7 @@ import (
 
 // collection methods for fakeStorage - required for Storage interface
 func (f *fakeStorage) GetCollections(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
-	return &abstractions.QueryResults[api.CollectionResource]{Items: []api.CollectionResource{}, TotalStored: 0}, nil
+	return &abstractions.QueryResults[api.CollectionResource]{Items: []api.CollectionResource{}, TotalCount: 0}, nil
 }
 
 func (f *fakeStorage) CreateCollection(_ *api.CollectionResource) error {
@@ -61,8 +61,8 @@ func (s *listCollectionsStorage) GetCollections(_ *abstractions.QueryFilter) (*a
 		return nil, s.err
 	}
 	return &abstractions.QueryResults[api.CollectionResource]{
-		Items:       s.collections,
-		TotalStored: len(s.collections),
+		Items:      s.collections,
+		TotalCount: len(s.collections),
 	}, nil
 }
 

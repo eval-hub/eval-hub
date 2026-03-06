@@ -1,7 +1,9 @@
 package sqlite
 
 import (
+	"database/sql"
 	"fmt"
+	"log/slog"
 	"maps"
 	"slices"
 	"sort"
@@ -66,10 +68,11 @@ ON providers (id);
 )
 
 type sqliteStatementsFactory struct {
+	logger *slog.Logger
 }
 
-func NewStatementsFactory() shared.SQLStatementsFactory {
-	return &sqliteStatementsFactory{}
+func NewStatementsFactory(logger *slog.Logger) shared.SQLStatementsFactory {
+	return &sqliteStatementsFactory{logger: logger}
 }
 
 func (s *sqliteStatementsFactory) GetTablesSchema() string {
@@ -78,14 +81,14 @@ func (s *sqliteStatementsFactory) GetTablesSchema() string {
 
 // allowedFilterColumns returns the set of column/param names allowed in filter for each table.
 func (s *sqliteStatementsFactory) GetAllowedFilterColumns(tableName string) []string {
-	allColumns := []string{"tenant_id", "owner", "name", "tags"}
+	allColumns := []string{"owner", "name", "tags"}
 	switch tableName {
 	case shared.TABLE_EVALUATIONS:
 		return append(allColumns, "status", "experiment_id")
 	case shared.TABLE_PROVIDERS:
 		return allColumns // "benchmarks" and "system_defined" are not allowed filters for providers from the database
 	case shared.TABLE_COLLECTIONS:
-		return allColumns
+		return allColumns // "system_defined" is not allowed filter for collections from the database
 	default:
 		return nil
 	}
@@ -95,25 +98,24 @@ func (s *sqliteStatementsFactory) CreateEvaluationAddEntityStatement(evaluation 
 	return INSERT_EVALUATION_STATEMENT, []any{evaluation.Resource.ID, evaluation.Resource.Tenant, evaluation.Resource.Owner, evaluation.Status.State, evaluation.Resource.MLFlowExperimentID, entity}
 }
 
-func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EvaluationJobQuery) (string, []any, []any) {
-	return SELECT_EVALUATION_STATEMENT, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.Resource.MLFlowExperimentID, &query.EntityJSON}
+func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
+	return SELECT_EVALUATION_STATEMENT, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
 }
 
-// evaluationFilterCondition returns the SQL condition and args for an evaluation filter key.
-// For "name" and "tags" (stored in entity JSON), uses json_extract/json_each.
-// Tags supports "key" (match by key) or "key:value" (match by key and value).
-func (s *sqliteStatementsFactory) evaluationFilterCondition(key string, value any) (condition string, args []any) {
+// entityFilterCondition returns the SQL condition and args for a filter key.
+func (s *sqliteStatementsFactory) entityFilterCondition(key string, value any, tableName string) (condition string, args []any) {
 	switch key {
 	case "name":
-		return "json_extract(entity, '$.config.experiment.name') = ?", []any{value}
+		// name at top level
+		return "json_extract(entity, '$.name') = ?", []any{value}
 	case "tags":
 		tagStr, _ := value.(string)
-		if keyPart, valuePart, ok := strings.Cut(tagStr, ":"); ok && valuePart != "" {
-			// tags=key:value - match by both key and value
-			return "EXISTS (SELECT 1 FROM json_each(json_extract(entity, '$.config.experiment.tags')) WHERE json_extract(value, '$.key') = ? AND json_extract(value, '$.value') = ?)", []any{keyPart, valuePart}
+		// evaluations: tags at config.tags; providers and collections: tags at entity root
+		tagsPath := "$.tags"
+		if tableName == shared.TABLE_EVALUATIONS {
+			tagsPath = "$.config.tags"
 		}
-		// tags=key - match by key only
-		return "EXISTS (SELECT 1 FROM json_each(json_extract(entity, '$.config.experiment.tags')) WHERE json_extract(value, '$.key') = ?)", []any{tagStr}
+		return fmt.Sprintf("json_type(json_extract(entity, '%s')) = 'array' AND EXISTS (SELECT 1 FROM json_each(json_extract(entity, '%s')) WHERE value = ?)", tagsPath, tagsPath), []any{tagStr}
 	default:
 		return key + " = ?", []any{value}
 	}
@@ -129,9 +131,8 @@ func (s *sqliteStatementsFactory) createFilterStatement(filter map[string]any, o
 
 	if len(filter) > 0 {
 		allowed := s.GetAllowedFilterColumns(tableName)
-		if allowed == nil {
-			return "", nil
-		}
+		// tenant_id is allowed but not as set by the user
+		allowed = append(allowed, "tenant_id")
 		keys := slices.Collect(maps.Keys(filter))
 		sort.Strings(keys)
 		var disallowed []string
@@ -144,7 +145,8 @@ func (s *sqliteStatementsFactory) createFilterStatement(filter map[string]any, o
 			}
 		}
 		if len(disallowed) > 0 {
-			// ignore this for now
+			// ignore this for now as we validate the filter before calling this function
+			s.logger.Warn("Disallowed filter keys", "keys", disallowed, "tableName", tableName)
 		}
 		if len(validKeys) > 0 {
 			sb.WriteString(" WHERE ")
@@ -152,7 +154,7 @@ func (s *sqliteStatementsFactory) createFilterStatement(filter map[string]any, o
 				if i > 0 {
 					sb.WriteString(" AND ")
 				}
-				cond, condArgs := s.evaluationFilterCondition(key, filter[key])
+				cond, condArgs := s.entityFilterCondition(key, filter[key], tableName)
 				sb.WriteString(cond)
 				args = append(args, condArgs...)
 			}
@@ -193,6 +195,15 @@ func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tableName string, 
 	return query, args
 }
 
+func (s *sqliteStatementsFactory) ScanRowForEntity(tableName string, rows *sql.Rows, query *shared.EntityQuery) error {
+	switch tableName {
+	case shared.TABLE_EVALUATIONS:
+		return rows.Scan(&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON)
+	default:
+		return rows.Scan(&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON)
+	}
+}
+
 func (s *sqliteStatementsFactory) CreateCheckEntityExistsStatement(tableName string) string {
 	return fmt.Sprintf(`SELECT id, status FROM %s WHERE id = ?;`, tableName)
 }
@@ -215,7 +226,7 @@ func (s *sqliteStatementsFactory) CreateProviderAddEntityStatement(provider *api
 	return INSERT_PROVIDER_STATEMENT, []any{provider.Resource.ID, provider.Resource.Tenant, provider.Resource.Owner, entity}
 }
 
-func (s *sqliteStatementsFactory) CreateProviderGetEntityStatement(query *shared.ProviderQuery) (string, []any, []any) {
+func (s *sqliteStatementsFactory) CreateProviderGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
 	return SELECT_PROVIDER_STATEMENT, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 }
 
@@ -223,6 +234,6 @@ func (s *sqliteStatementsFactory) CreateCollectionAddEntityStatement(collection 
 	return INSERT_COLLECTION_STATEMENT, []any{collection.Resource.ID, collection.Resource.Tenant, collection.Resource.Owner, entity}
 }
 
-func (s *sqliteStatementsFactory) CreateCollectionGetEntityStatement(query *shared.CollectionQuery) (string, []any, []any) {
+func (s *sqliteStatementsFactory) CreateCollectionGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
 	return SELECT_COLLECTION_STATEMENT, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 }

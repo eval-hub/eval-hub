@@ -67,7 +67,7 @@ func (f *fakeStorage) PatchProvider(_ string, _ *api.Patch) (*api.ProviderResour
 	return nil, fmt.Errorf("not implemented PatchProvider in fakeStorage")
 }
 func (f *fakeStorage) GetProviders(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.ProviderResource], error) {
-	return &abstractions.QueryResults[api.ProviderResource]{Items: []api.ProviderResource{}, TotalStored: 0}, nil
+	return &abstractions.QueryResults[api.ProviderResource]{Items: []api.ProviderResource{}, TotalCount: 0}, nil
 }
 
 type updatePatchProviderStorage struct {
@@ -138,8 +138,8 @@ func (s *listProvidersStorage) GetProviders(_ *abstractions.QueryFilter) (*abstr
 		return nil, s.err
 	}
 	return &abstractions.QueryResults[api.ProviderResource]{
-		Items:       s.providers,
-		TotalStored: len(s.providers),
+		Items:      s.providers,
+		TotalCount: len(s.providers),
 	}, nil
 }
 
@@ -188,6 +188,56 @@ func TestHandleListProviders_ReturnsSystemProviders(t *testing.T) {
 	}
 	if got.Items[0].Name != "LM Eval Harness" {
 		t.Errorf("expected name LM Eval Harness, got %s", got.Items[0].Name)
+	}
+}
+
+func TestHandleListProviders_AppliesPaginationWhenLimitLessThanSystemProviders(t *testing.T) {
+	providerConfigs := map[string]api.ProviderResource{
+		"lm_evaluation_harness": {
+			Resource:       api.Resource{ID: "lm_evaluation_harness"},
+			ProviderConfig: api.ProviderConfig{Name: "LM Eval Harness"},
+		},
+		"lighteval": {
+			Resource:       api.Resource{ID: "lighteval"},
+			ProviderConfig: api.ProviderConfig{Name: "Lighteval"},
+		},
+		"guidellm": {
+			Resource:       api.Resource{ID: "guidellm"},
+			ProviderConfig: api.ProviderConfig{Name: "Guidellm"},
+		},
+	}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(&fakeStorage{}, validator.New(), &fakeRuntime{}, nil, providerConfigs, nil)
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers"),
+		queryValues: map[string][]string{"limit": {"2"}, "offset": {"0"}},
+		pathValues:  map[string]string{},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+
+	h.HandleListProviders(ctx, req, resp)
+
+	if recorder.Code != 200 {
+		t.Fatalf("expected status 200, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+	var got api.ProviderResourceList
+	if err := json.NewDecoder(recorder.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.TotalCount != 3 {
+		t.Errorf("expected TotalCount 3, got %d", got.TotalCount)
+	}
+	if got.Limit != 2 {
+		t.Errorf("expected Limit 2, got %d", got.Limit)
+	}
+	if len(got.Items) != 2 {
+		t.Fatalf("expected 2 items when limit=2, got %d", len(got.Items))
+	}
+	if got.Next == nil {
+		t.Error("expected next link when more items exist")
 	}
 }
 

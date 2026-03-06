@@ -4,6 +4,8 @@
 
 Closes #
 
+Assisted-by: <!-- Cursor, Claude etc -->
+
 ## Type
 
 - [ ] feat

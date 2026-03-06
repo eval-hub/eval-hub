@@ -3,8 +3,6 @@ package sql
 import (
 	"database/sql"
 	"encoding/json"
-	"maps"
-	"slices"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/messages"
@@ -15,6 +13,10 @@ import (
 )
 
 func (s *SQLStorage) CreateProvider(provider *api.ProviderResource) error {
+	if err := s.verifyTenant(nil, shared.TABLE_PROVIDERS); err != nil {
+		return err
+	}
+
 	providerID := provider.Resource.ID
 	providerJSON, err := s.createProviderEntity(provider)
 	if err != nil {
@@ -38,12 +40,15 @@ func (s *SQLStorage) createProviderEntity(provider *api.ProviderResource) ([]byt
 }
 
 func (s *SQLStorage) GetProvider(id string) (*api.ProviderResource, error) {
+	if err := s.verifyTenant(nil, shared.TABLE_PROVIDERS); err != nil {
+		return nil, err
+	}
 	return s.getUserProviderTransactional(nil, id)
 }
 
 func (s *SQLStorage) getUserProviderTransactional(txn *sql.Tx, id string) (*api.ProviderResource, error) {
 	// Build the SELECT query
-	query := shared.ProviderQuery{Resource: api.Resource{ID: id}}
+	query := shared.EntityQuery{Resource: api.Resource{ID: id}}
 	selectQuery, selectArgs, queryArgs := s.statementsFactory.CreateProviderGetEntityStatement(&query)
 
 	// Query the database
@@ -63,21 +68,19 @@ func (s *SQLStorage) getUserProviderTransactional(txn *sql.Tx, id string) (*api.
 		return nil, se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "provider", "Error", err.Error())
 	}
 
-	return s.constructProviderResource(&query.Resource, &providerConfig)
-}
-
-func (s *SQLStorage) constructProviderResource(resource *api.Resource, providerConfig *api.ProviderConfig) (*api.ProviderResource, error) {
-	if providerConfig == nil {
-		s.logger.Error("Failed to construct provider resource", "error", "Provider config does not exist", "id", resource.ID)
-		return nil, se.NewServiceError(messages.InternalServerError, "Error", "Provider config does not exist")
+	resource := api.ProviderResource{
+		Resource:       query.Resource,
+		ProviderConfig: providerConfig,
 	}
-	return &api.ProviderResource{
-		Resource:       *resource,
-		ProviderConfig: *providerConfig,
-	}, nil
+
+	return &resource, nil
 }
 
 func (s *SQLStorage) DeleteProvider(id string) error {
+	if err := s.verifyTenant(nil, shared.TABLE_PROVIDERS); err != nil {
+		return err
+	}
+
 	deleteQuery := s.statementsFactory.CreateDeleteEntityStatement(shared.TABLE_PROVIDERS)
 	_, err := s.exec(nil, deleteQuery, id)
 	if err != nil {
@@ -90,53 +93,19 @@ func (s *SQLStorage) DeleteProvider(id string) error {
 }
 
 func (s *SQLStorage) GetProviders(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.ProviderResource], error) {
-	filter = shared.ExtractQueryParams(filter)
-	params := filter.Params
-	limit := filter.Limit
-	offset := filter.Offset
-
-	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), s.statementsFactory.GetAllowedFilterColumns(shared.TABLE_PROVIDERS)); err != nil {
+	if err := s.verifyTenant(filter, shared.TABLE_PROVIDERS); err != nil {
 		return nil, err
 	}
 
-	listQuery, listArgs := s.statementsFactory.CreateListEntitiesStatement(shared.TABLE_PROVIDERS, limit, offset, params)
-
-	rows, err := s.query(nil, listQuery, listArgs...)
-	if err != nil {
-		return nil, se.NewServiceError(messages.InternalServerError, "Error", err.Error())
-	}
-	defer rows.Close()
-
-	items := []api.ProviderResource{}
-	for rows.Next() {
-		resource := api.Resource{}
-		var entityJSON string
-		err = rows.Scan(&resource.ID, &resource.CreatedAt, &resource.UpdatedAt, &resource.Tenant, &resource.Owner, &entityJSON)
-		if err != nil {
-			return nil, se.NewServiceError(messages.InternalServerError, "Error", err.Error())
-		}
-		var providerConfig api.ProviderConfig
-		err = json.Unmarshal([]byte(entityJSON), &providerConfig)
-		if err != nil {
-			return nil, se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "provider", "Error", err.Error())
-		}
-		providerResource, err := s.constructProviderResource(&resource, &providerConfig)
-		if err != nil {
-			return nil, se.NewServiceError(messages.InternalServerError, "Error", err.Error())
-		}
-		items = append(items, *providerResource)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, se.NewServiceError(messages.InternalServerError, "Error", err.Error())
-	}
-	return &abstractions.QueryResults[api.ProviderResource]{
-		Items:       items,
-		TotalStored: len(items),
-		Errors:      nil,
-	}, nil
+	var txn *sql.Tx
+	return listEntities[api.ProviderResource](s, txn, shared.TABLE_PROVIDERS, filter)
 }
 
 func (s *SQLStorage) UpdateProvider(id string, provider *api.ProviderResource) (*api.ProviderResource, error) {
+	if err := s.verifyTenant(nil, shared.TABLE_PROVIDERS); err != nil {
+		return nil, err
+	}
+
 	var updated *api.ProviderResource
 	err := s.withTransaction("update provider", id, func(txn *sql.Tx) error {
 		persisted, err := s.getUserProviderTransactional(txn, id)
@@ -175,6 +144,10 @@ func (s *SQLStorage) updateProviderTransactional(txn *sql.Tx, providerID string,
 }
 
 func (s *SQLStorage) PatchProvider(id string, patches *api.Patch) (*api.ProviderResource, error) {
+	if err := s.verifyTenant(nil, shared.TABLE_PROVIDERS); err != nil {
+		return nil, err
+	}
+
 	var updated *api.ProviderResource
 	err := s.withTransaction("patch provider", id, func(txn *sql.Tx) error {
 		// TODO: verify the patches and return a validation error if they are on invalid fields

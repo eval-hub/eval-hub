@@ -29,7 +29,7 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 		"url":           "file::memory:?mode=memory&cache=shared",
 		"database_name": "eval_hub",
 	}
-	store, err := storage.NewStorage(&databaseConfig, false, logger)
+	store, err := storage.NewStorage(&databaseConfig, false, false, logger)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestEvaluationsStorage(t *testing.T) {
 		databaseConfig["driver"] = "sqlite"
 		databaseConfig["url"] = "file::memory:?mode=memory&cache=shared"
 		databaseConfig["database_name"] = "eval_hub"
-		s, err := storage.NewStorage(&databaseConfig, false, logger)
+		s, err := storage.NewStorage(&databaseConfig, false, false, logger)
 		if err != nil {
 			t.Fatalf("Failed to create storage: %v", err)
 		}
@@ -252,6 +252,37 @@ func TestEvaluationsStorage(t *testing.T) {
 		}
 	})
 
+	t.Run("GetEvaluationJobs returns empty list when no pending evaluation jobs are found", func(t *testing.T) {
+		resp, err := store.GetEvaluationJobs(&abstractions.QueryFilter{
+			Limit:  10,
+			Offset: 0,
+			Params: map[string]any{"status": "pending"},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error getting evaluation jobs: %v", err)
+		}
+		if resp.TotalCount != 0 {
+			t.Fatalf("Expected 0 evaluation jobs, got %d", resp.TotalCount)
+		}
+	})
+
+	t.Run("GetEvaluationJobs returns 1 item querying running evaluation jobs", func(t *testing.T) {
+		resp, err := store.GetEvaluationJobs(&abstractions.QueryFilter{
+			Limit:  10,
+			Offset: 0,
+			Params: map[string]any{"status": "running"},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error getting evaluation jobs: %v", err)
+		}
+		if resp.TotalCount != 1 {
+			t.Fatalf("Expected 1 evaluation jobs, got %d", resp.TotalCount)
+		}
+		if resp.Items[0].Status.State != api.OverallStateRunning {
+			t.Fatalf("Expected running evaluation job, got %s", resp.Items[0].Status.State)
+		}
+	})
+
 	t.Run("GetEvaluationJobs rejects disallowed filter columns", func(t *testing.T) {
 		_, err := store.GetEvaluationJobs(&abstractions.QueryFilter{
 			Limit:  10,
@@ -264,9 +295,9 @@ func TestEvaluationsStorage(t *testing.T) {
 		if !strings.Contains(err.Error(), "is not a valid query parameter") {
 			t.Errorf("expected error to mention 'is not a valid query parameter', got: %v", err)
 		}
-		//if !strings.Contains(err.Error(), "name") || !strings.Contains(err.Error(), "evil_column") {
-		//	t.Errorf("expected error to include offending key names, got: %v", err)
-		//}
+		if !strings.Contains(err.Error(), "name") || !strings.Contains(err.Error(), "evil_column") {
+			t.Errorf("expected error to include offending key names, got: %v", err)
+		}
 	})
 
 	t.Run("UpdateEvaluationJob updates the evaluation job", func(t *testing.T) {

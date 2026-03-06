@@ -145,6 +145,9 @@ func (s *Server) loggerWithRequest(r *http.Request) (string, *slog.Logger) {
 		uri = r.RequestURI
 	}
 	if uri != "" {
+		if r.URL.RawQuery != "" {
+			uri = fmt.Sprintf("%s?%s", uri, r.URL.RawQuery)
+		}
 		enhancedLogger = enhancedLogger.With(constants.LOG_URI, uri)
 	}
 
@@ -405,7 +408,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 }
 
 func (s *Server) setupAuth(handler http.Handler) (http.Handler, error) {
-	if !s.serviceConfig.Service.LocalMode && !s.serviceConfig.Service.DisableAuth {
+	if s.serviceConfig.IsAuthenticationEnabled() {
 		client, err := k8s.NewKubernetesClient()
 		if err != nil {
 			return nil, fmt.Errorf("failed to create kubernetes client: %w", err)

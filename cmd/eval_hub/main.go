@@ -79,7 +79,7 @@ func main() {
 	}
 
 	// set up the storage
-	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), logger)
+	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger)
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create storage", logger)
@@ -117,8 +117,9 @@ func main() {
 		otelShutdown = shutdown
 	}
 
+	// setup authentication and authorization
 	var authConfig *auth.AuthConfig = nil
-	if !serviceConfig.Service.DisableAuth {
+	if serviceConfig.IsAuthenticationEnabled() {
 		authConfig, err = config.LoadAuthConfig(logger, args.ConfigDir)
 		if err != nil {
 			startUpFailed(serviceConfig, err, "Failed to setup authentication and authorization", logger)
@@ -152,6 +153,7 @@ func main() {
 		"mlflow_tracking", mlflowClient != nil,
 		"otel", serviceConfig.IsOTELEnabled(),
 		"prometheus", serviceConfig.IsPrometheusEnabled(),
+		"authentication", serviceConfig.IsAuthenticationEnabled(),
 	)
 
 	// Start server in a goroutine

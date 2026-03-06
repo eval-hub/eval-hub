@@ -3,9 +3,12 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/common"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
@@ -112,68 +115,114 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 	)
 }
 
+func (h *Handlers) filterSystemProviders(filter map[string]any) []api.ProviderResource {
+	filteredProviders := []api.ProviderResource{}
+	for _, p := range h.providerConfigs {
+		if len(filter) == 0 {
+			filteredProviders = append(filteredProviders, p)
+			continue
+		}
+		for k, v := range filter {
+			pass := true
+			// we don't query by owner, tenant, or status as they are not relevant for system providers
+			switch k {
+			case "name":
+				if p.ProviderConfig.Name != v {
+					pass = false
+				}
+			case "tags":
+				if !slices.Contains(p.ProviderConfig.Tags, v.(string)) {
+					pass = false
+				}
+			}
+			if pass {
+				filteredProviders = append(filteredProviders, p)
+			}
+		}
+	}
+	return filteredProviders
+}
+
 // HandleListProviders handles GET /api/v1/evaluations/providers
-func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
-	_ = h.withSpan(
-		ctx,
-		func(runtimeCtx context.Context) error {
-			filter, err := CommonListFilters(r)
+	allowedParams := []string{"limit", "offset", "benchmarks", "name", "tags", "system_defined", "benchmarks", "owner"}
+	badParams := getAllParams(req, allowedParams...)
+	if len(badParams) > 0 {
+		// just report the first bad parameter
+		w.Error(serviceerrors.NewServiceError(messages.QueryBadParameter, "ParameterName", badParams[0], "AllowedParameters", strings.Join(allowedParams, ", ")), ctx.RequestID)
+		return
+	}
+
+	filter, err := CommonListFilters(req)
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+
+	providers := []api.ProviderResource{}
+
+	if IncludeSystemDefined(req) {
+		providers = h.filterSystemProviders(filter.ExtractQueryParams().Params)
+		ctx.Logger.Info(fmt.Sprintf("Included %d system defined providers", len(providers)))
+	}
+
+	totalCount := len(providers)
+
+	// first check to see if the system providers are enough for the paging
+	if len(providers) > 0 {
+		if len(providers) < (filter.Limit + filter.Offset) {
+			userFilter := &abstractions.QueryFilter{
+				Limit:  max(0, filter.Limit-len(providers)),
+				Offset: max(0, filter.Offset-len(providers)),
+				Params: filter.Params,
+			}
+			queryResults, err := storage.GetProviders(userFilter)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
-				return err
+				return
 			}
+			providers = append(providers, queryResults.Items...)
+			totalCount += queryResults.TotalCount
+		}
+	} else {
+		// no system providers so normal flow for user providers
+		queryResults, err := storage.GetProviders(filter)
+		if err != nil {
+			w.Error(err, ctx.RequestID)
+			return
+		}
+		providers = append(providers, queryResults.Items...)
+		totalCount += queryResults.TotalCount
+	}
 
-			benchmarksParam := r.Query("benchmarks")
-			benchmarks := true
-			if len(benchmarksParam) > 0 {
-				benchmarks = benchmarksParam[0] != "false"
-			}
+	// remove the benchmarks if requested
+	benchmarks, err := GetParam(req, "benchmarks", true, true)
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+	if !benchmarks {
+		for i := range providers {
+			providers[i].Benchmarks = []api.BenchmarkResource{}
+		}
+	}
 
-			systemDefined := IncludeSystemDefined(r)
+	page, err := CreatePage(ctx, totalCount, filter.Offset, filter.Limit, req)
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
 
-			ctx.Logger.Info("Include system defined providers", "system_defined", systemDefined)
+	result := api.ProviderResourceList{
+		Page:  *page,
+		Items: providers[:min(len(providers), filter.Limit)],
+	}
 
-			providers := []api.ProviderResource{}
-
-			// TODO filter the system providers as well?
-			if systemDefined {
-				for _, p := range h.providerConfigs {
-					providers = append(providers, p)
-				}
-			}
-
-			queryResults, err := storage.GetProviders(filter)
-			if err != nil {
-				w.Error(err, ctx.RequestID)
-				return err
-			}
-
-			result := api.ProviderResourceList{
-				// TODO: Implement pagination
-				Page: api.Page{
-					TotalCount: len(providers) + queryResults.TotalStored,
-				},
-				Items: append(providers, queryResults.Items...),
-			}
-
-			// remove the benchmarks if requested
-			if !benchmarks {
-				for i := range result.Items {
-					result.Items[i].Benchmarks = []api.BenchmarkResource{}
-				}
-			}
-
-			w.WriteJSON(result, 200)
-
-			return nil
-		},
-		"storage",
-		"list-providers",
-	)
+	w.WriteJSON(result, 200)
 }
 
 // isAllowedPatch returns true if the JSON Patch path targets a valid field.

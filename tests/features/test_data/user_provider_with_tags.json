@@ -1,0 +1,11 @@
+{
+    "name": "List Search Provider",
+    "description": "Provider for list API search tests",
+    "tags": ["list-test-tag", "searchable"],
+    "benchmarks": [
+        {
+            "id": "arc_easy",
+            "name": "lm_evaluation_harness"
+        }
+    ]
+}

@@ -3,12 +3,13 @@ package sqlite
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/storage/sql/shared"
 )
 
-func Setup(pool *sql.DB, config *shared.SQLDatabaseConfig) (shared.SQLStatementsFactory, error) {
+func Setup(logger *slog.Logger, pool *sql.DB, config *shared.SQLDatabaseConfig) (shared.SQLStatementsFactory, error) {
 	// SQLite only supports one writer at a time; serializing access through
 	// a single connection eliminates lock contention and deadlocks.
 	pool.SetMaxOpenConns(5)
@@ -26,5 +27,5 @@ func Setup(pool *sql.DB, config *shared.SQLDatabaseConfig) (shared.SQLStatements
 			return nil, fmt.Errorf("failed to enable WAL mode: database returned journal_mode=%q", mode)
 		}
 	}
-	return NewStatementsFactory(), nil
+	return NewStatementsFactory(logger), nil
 }
