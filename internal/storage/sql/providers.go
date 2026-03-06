@@ -13,6 +13,10 @@ import (
 )
 
 func (s *SQLStorage) CreateProvider(provider *api.ProviderResource) error {
+	if err := s.verifyTenant(nil, shared.TABLE_PROVIDERS); err != nil {
+		return err
+	}
+
 	providerID := provider.Resource.ID
 	providerJSON, err := s.createProviderEntity(provider)
 	if err != nil {
@@ -36,6 +40,9 @@ func (s *SQLStorage) createProviderEntity(provider *api.ProviderResource) ([]byt
 }
 
 func (s *SQLStorage) GetProvider(id string) (*api.ProviderResource, error) {
+	if err := s.verifyTenant(nil, shared.TABLE_PROVIDERS); err != nil {
+		return nil, err
+	}
 	return s.getUserProviderTransactional(nil, id)
 }
 
@@ -70,6 +77,10 @@ func (s *SQLStorage) getUserProviderTransactional(txn *sql.Tx, id string) (*api.
 }
 
 func (s *SQLStorage) DeleteProvider(id string) error {
+	if err := s.verifyTenant(nil, shared.TABLE_PROVIDERS); err != nil {
+		return err
+	}
+
 	deleteQuery := s.statementsFactory.CreateDeleteEntityStatement(shared.TABLE_PROVIDERS)
 	_, err := s.exec(nil, deleteQuery, id)
 	if err != nil {
@@ -82,13 +93,19 @@ func (s *SQLStorage) DeleteProvider(id string) error {
 }
 
 func (s *SQLStorage) GetProviders(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.ProviderResource], error) {
-	// TODO: use a transaction if needed
-	var txn *sql.Tx
+	if err := s.verifyTenant(filter, shared.TABLE_PROVIDERS); err != nil {
+		return nil, err
+	}
 
+	var txn *sql.Tx
 	return listEntities[api.ProviderResource](s, txn, shared.TABLE_PROVIDERS, filter)
 }
 
 func (s *SQLStorage) UpdateProvider(id string, provider *api.ProviderResource) (*api.ProviderResource, error) {
+	if err := s.verifyTenant(nil, shared.TABLE_PROVIDERS); err != nil {
+		return nil, err
+	}
+
 	var updated *api.ProviderResource
 	err := s.withTransaction("update provider", id, func(txn *sql.Tx) error {
 		persisted, err := s.getUserProviderTransactional(txn, id)
@@ -127,6 +144,10 @@ func (s *SQLStorage) updateProviderTransactional(txn *sql.Tx, providerID string,
 }
 
 func (s *SQLStorage) PatchProvider(id string, patches *api.Patch) (*api.ProviderResource, error) {
+	if err := s.verifyTenant(nil, shared.TABLE_PROVIDERS); err != nil {
+		return nil, err
+	}
+
 	var updated *api.ProviderResource
 	err := s.withTransaction("patch provider", id, func(txn *sql.Tx) error {
 		// TODO: verify the patches and return a validation error if they are on invalid fields

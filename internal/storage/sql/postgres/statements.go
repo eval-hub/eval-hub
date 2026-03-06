@@ -80,35 +80,37 @@ func (s *postgresStatementsFactory) CreateEvaluationGetEntityStatement(query *sh
 
 // allowedFilterColumns returns the set of column/param names allowed in filter for each table.
 func (s *postgresStatementsFactory) GetAllowedFilterColumns(tableName string) []string {
-	allColumns := []string{"tenant_id", "owner", "name", "tags"}
+	allColumns := []string{"owner", "name", "tags"}
 	switch tableName {
 	case shared.TABLE_EVALUATIONS:
 		return append(allColumns, "status", "experiment_id")
 	case shared.TABLE_PROVIDERS:
 		return allColumns // "benchmarks" and "system_defined" are not allowed filters for providers from the database
 	case shared.TABLE_COLLECTIONS:
-		return allColumns
+		return allColumns // "system_defined" is not allowed filter for collections from the database
 	default:
 		return nil
 	}
 }
 
-// evaluationFilterCondition returns the SQL condition and args for an evaluation filter key.
-// Tags supports "key" (match by key) or "key:value" (match by key and value).
-func (s *postgresStatementsFactory) evaluationFilterCondition(key string, value any, index int) (condition string, args []any, nextIndex int) {
+// entityFilterCondition returns the SQL condition and args for a filter key.
+func (s *postgresStatementsFactory) entityFilterCondition(key string, value any, index int, tableName string) (condition string, args []any) {
 	switch key {
 	case "name":
-		return fmt.Sprintf("entity->'config'->'experiment'->>'name' = $%d", index), []any{value}, index + 1
+		// name at top level
+		return fmt.Sprintf("entity->>'name' = $%d", index), []any{value}
+	case "experiment_id":
+		return fmt.Sprintf("entity->>'resource.mlflow_experiment_id' = $%d", index), []any{value}
 	case "tags":
 		tagStr, _ := value.(string)
-		if keyPart, valuePart, ok := strings.Cut(tagStr, ":"); ok && valuePart != "" {
-			// tags=key:value - match by both key and value
-			return fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_array_elements(entity->'config'->'experiment'->'tags') AS tag WHERE tag->>'key' = $%d AND tag->>'value' = $%d)", index, index+1), []any{keyPart, valuePart}, index + 2
+		// evaluations: tags at config.tags; providers and collections: tags at entity root
+		tagsPath := "entity->'tags'"
+		if tableName == shared.TABLE_EVALUATIONS {
+			tagsPath = "entity->'config'->'tags'"
 		}
-		// tags=key - match by key only
-		return fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_array_elements(entity->'config'->'experiment'->'tags') AS tag WHERE tag->>'key' = $%d)", index), []any{tagStr}, index + 1
+		return fmt.Sprintf("jsonb_typeof(%s) = 'array' AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(%s) AS tag WHERE tag = $%d)", tagsPath, tagsPath, index), []any{tagStr}
 	default:
-		return fmt.Sprintf("%s = $%d", key, index), []any{value}, index + 1
+		return fmt.Sprintf("%s = $%d", key, index), []any{value}
 	}
 }
 
@@ -132,7 +134,8 @@ func (s *postgresStatementsFactory) createFilterStatement(filter map[string]any,
 		}
 		var cond string
 		var condArgs []any
-		cond, condArgs, index = s.evaluationFilterCondition(key, filter[key], index)
+		cond, condArgs = s.entityFilterCondition(key, filter[key], index, tableName)
+		index++
 		sb.WriteString(cond)
 		args = append(args, condArgs...)
 	}

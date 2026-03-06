@@ -38,6 +38,11 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 		return nil, err
 	}
 
+	// When tenant is set we must always filter by tenant
+	if s.tenant != "" {
+		params["tenant_id"] = string(s.tenant)
+	}
+
 	typeName := getTypeFromTableName(tableName)
 
 	// Get total count (with filter if provided)

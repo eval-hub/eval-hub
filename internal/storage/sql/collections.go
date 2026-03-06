@@ -11,7 +11,6 @@ import (
 	se "github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
-	jsonpatch "gopkg.in/evanphx/json-patch.v4"
 )
 
 //#######################################################################
@@ -19,6 +18,10 @@ import (
 //#######################################################################
 
 func (s *SQLStorage) CreateCollection(collection *api.CollectionResource) error {
+	if err := s.verifyTenant(nil, shared.TABLE_COLLECTIONS); err != nil {
+		return err
+	}
+
 	collectionJSON, err := s.createCollectionEntity(collection)
 	if err != nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
@@ -40,6 +43,10 @@ func (s *SQLStorage) createCollectionEntity(collection *api.CollectionResource) 
 }
 
 func (s *SQLStorage) GetCollection(id string) (*api.CollectionResource, error) {
+	if err := s.verifyTenant(nil, shared.TABLE_COLLECTIONS); err != nil {
+		return nil, err
+	}
+
 	return s.getCollectionTransactional(nil, id)
 }
 
@@ -75,13 +82,19 @@ func (s *SQLStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 }
 
 func (s *SQLStorage) GetCollections(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
-	// TODO: use a transaction if needed
-	var txn *sql.Tx
+	if err := s.verifyTenant(filter, shared.TABLE_COLLECTIONS); err != nil {
+		return nil, err
+	}
 
+	var txn *sql.Tx
 	return listEntities[api.CollectionResource](s, txn, shared.TABLE_COLLECTIONS, filter)
 }
 
 func (s *SQLStorage) UpdateCollection(collection *api.CollectionResource) error {
+	if err := s.verifyTenant(nil, shared.TABLE_COLLECTIONS); err != nil {
+		return err
+	}
+
 	err := s.withTransaction("update collection", collection.Resource.ID, func(txn *sql.Tx) error {
 		persistedCollection, err := s.getCollectionTransactional(txn, collection.Resource.ID)
 		if err != nil {
@@ -126,6 +139,10 @@ func (s *SQLStorage) DeleteCollection(id string) error {
 }
 
 func (s *SQLStorage) PatchCollection(id string, patches *api.Patch) error {
+	if err := s.verifyTenant(nil, shared.TABLE_COLLECTIONS); err != nil {
+		return err
+	}
+
 	err := s.withTransaction("patch collection", id, func(txn *sql.Tx) error {
 		persistedCollection, err := s.getCollectionTransactional(txn, id)
 		if err != nil {
@@ -165,19 +182,4 @@ func (s *SQLStorage) PatchCollection(id string, patches *api.Patch) error {
 		return s.updateCollectionTransactional(txn, id, &result)
 	})
 	return err
-}
-
-func applyPatches(s string, patches *api.Patch) ([]byte, error) {
-	if patches == nil || len(*patches) == 0 {
-		return []byte(s), nil
-	}
-	patchesJSON, err := json.Marshal(patches)
-	if err != nil {
-		return nil, err
-	}
-	patch, err := jsonpatch.DecodePatch(patchesJSON)
-	if err != nil {
-		return nil, err
-	}
-	return patch.Apply([]byte(s))
 }

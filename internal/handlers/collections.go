@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/common"
@@ -21,6 +22,14 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 
 	logging.LogRequestStarted(ctx)
 
+	allowedParams := []string{"limit", "offset", "name", "tags", "system_defined", "owner"}
+	badParams := getAllParams(req, allowedParams...)
+	if len(badParams) > 0 {
+		// just report the first bad parameter
+		w.Error(serviceerrors.NewServiceError(messages.QueryBadParameter, "ParameterName", badParams[0], "AllowedParameters", strings.Join(allowedParams, ", ")), ctx.RequestID)
+		return
+	}
+
 	filter, err := CommonListFilters(req)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
@@ -35,7 +44,7 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 		w.Error(err, ctx.RequestID)
 		return
 	}
-	page, err := CreatePage(res.TotalCount, filter.Offset, filter.Limit, ctx, req)
+	page, err := CreatePage(ctx, res.TotalCount, filter.Offset, filter.Limit, req)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return

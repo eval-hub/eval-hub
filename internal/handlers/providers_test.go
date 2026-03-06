@@ -191,6 +191,56 @@ func TestHandleListProviders_ReturnsSystemProviders(t *testing.T) {
 	}
 }
 
+func TestHandleListProviders_AppliesPaginationWhenLimitLessThanSystemProviders(t *testing.T) {
+	providerConfigs := map[string]api.ProviderResource{
+		"lm_evaluation_harness": {
+			Resource:       api.Resource{ID: "lm_evaluation_harness"},
+			ProviderConfig: api.ProviderConfig{Name: "LM Eval Harness"},
+		},
+		"lighteval": {
+			Resource:       api.Resource{ID: "lighteval"},
+			ProviderConfig: api.ProviderConfig{Name: "Lighteval"},
+		},
+		"guidellm": {
+			Resource:       api.Resource{ID: "guidellm"},
+			ProviderConfig: api.ProviderConfig{Name: "Guidellm"},
+		},
+	}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(&fakeStorage{}, validator.New(), &fakeRuntime{}, nil, providerConfigs, nil)
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers"),
+		queryValues: map[string][]string{"limit": {"2"}, "offset": {"0"}},
+		pathValues:  map[string]string{},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+
+	h.HandleListProviders(ctx, req, resp)
+
+	if recorder.Code != 200 {
+		t.Fatalf("expected status 200, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+	var got api.ProviderResourceList
+	if err := json.NewDecoder(recorder.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.TotalCount != 3 {
+		t.Errorf("expected TotalCount 3, got %d", got.TotalCount)
+	}
+	if got.Limit != 2 {
+		t.Errorf("expected Limit 2, got %d", got.Limit)
+	}
+	if len(got.Items) != 2 {
+		t.Fatalf("expected 2 items when limit=2, got %d", len(got.Items))
+	}
+	if got.Next == nil {
+		t.Error("expected next link when more items exist")
+	}
+}
+
 func TestHandleListProviders_ExcludesSystemProvidersWhenParamFalse(t *testing.T) {
 	providerConfigs := map[string]api.ProviderResource{
 		"lm_evaluation_harness": {

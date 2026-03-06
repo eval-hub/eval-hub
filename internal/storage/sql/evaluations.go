@@ -22,6 +22,10 @@ type EvaluationJobEntity struct {
 // Evaluation job operations
 // #######################################################################
 func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobResource) error {
+	if err := s.verifyTenant(nil, shared.TABLE_EVALUATIONS); err != nil {
+		return err
+	}
+
 	return s.withTransaction("create evaluation job", evaluation.Resource.ID, func(txn *sql.Tx) error {
 		evaluationJSON, err := s.createEvaluationJobEntity(evaluation)
 		if err != nil {
@@ -51,6 +55,9 @@ func (s *SQLStorage) createEvaluationJobEntity(evaluation *api.EvaluationJobReso
 }
 
 func (s *SQLStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, error) {
+	if err := s.verifyTenant(nil, shared.TABLE_EVALUATIONS); err != nil {
+		return nil, err
+	}
 	return s.getEvaluationJobTransactional(nil, id)
 }
 
@@ -75,7 +82,7 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 	err = json.Unmarshal([]byte(query.EntityJSON), &evaluationJobEntity)
 	if err != nil {
 		s.logger.Error("Failed to unmarshal evaluation job entity", "error", err, "id", id)
-		return nil, se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "evaluation job", "Error", err.Error())
+		return nil, se.WithRollback(se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "evaluation job", "Error", err.Error()))
 	}
 
 	status := ""
@@ -87,13 +94,19 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 }
 
 func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
-	// TODO: use a transaction if needed
-	var txn *sql.Tx
+	if err := s.verifyTenant(filter, shared.TABLE_EVALUATIONS); err != nil {
+		return nil, err
+	}
 
+	var txn *sql.Tx
 	return listEntities[api.EvaluationJobResource](s, txn, shared.TABLE_EVALUATIONS, filter)
 }
 
 func (s *SQLStorage) DeleteEvaluationJob(id string) error {
+	if err := s.verifyTenant(nil, shared.TABLE_EVALUATIONS); err != nil {
+		return err
+	}
+
 	// we have to get the evaluation job and then update or delete the job so we need a transaction
 	err := s.withTransaction("delete evaluation job", id, func(txn *sql.Tx) error {
 		// check if the evaluation job exists, we do this otherwise we always return 204
@@ -144,6 +157,10 @@ func (s *SQLStorage) checkEvaluationJobState(evaluationJobID string, evaluationJ
 }
 
 func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error {
+	if err := s.verifyTenant(nil, shared.TABLE_EVALUATIONS); err != nil {
+		return err
+	}
+
 	// we have to get the evaluation job and update the status so we need a transaction
 	err := s.withTransaction("update evaluation job status", id, func(txn *sql.Tx) error {
 		// get the evaluation job
@@ -187,11 +204,7 @@ func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState
 			Results: evaluationJob.Results,
 		}
 
-		if err := s.updateEvaluationJobTxn(txn, id, state, &entity); err != nil {
-			return err
-		}
-		s.logger.Info("Updated evaluation job status", "id", id, "overall_state", state, "message", message)
-		return nil
+		return s.updateEvaluationJobTxn(txn, id, state, &entity)
 	})
 	return err
 }
@@ -217,7 +230,13 @@ func (s *SQLStorage) updateEvaluationJobTxn(txn *sql.Tx, id string, status api.O
 
 // UpdateEvaluationJobWithRunStatus runs in a transaction: fetches the job, merges RunStatusInternal into the entity, and persists.
 func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
+	if err := s.verifyTenant(nil, shared.TABLE_EVALUATIONS); err != nil {
+		return err
+	}
+
 	err := s.withTransaction("update evaluation job", id, func(txn *sql.Tx) error {
+		s.logger.Info("Updating evaluation job", "id", id, "status", runStatus.BenchmarkStatusEvent.Status, "runStatus", runStatus)
+
 		job, err := s.getEvaluationJobTransactional(txn, id)
 		if err != nil {
 			return err
@@ -267,9 +286,11 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 		}
 
 		// get the overall job status
-		overallState, message := commonStorage.GetOverallJobStatus(job)
+		overallState, message := commonStorage.GetOverallJobStatus(s.logger, job)
 		job.Status.State = overallState
 		job.Status.Message = message
+
+		s.logger.Info("Calculated overall job status", "id", id, "overall_state", overallState, "status", runStatus.BenchmarkStatusEvent.Status)
 
 		// compute the job test result only if the job is completed
 		if overallState == api.OverallStateCompleted {

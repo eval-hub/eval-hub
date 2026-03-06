@@ -144,12 +144,20 @@ func (h *Handlers) filterSystemProviders(filter map[string]any) []api.ProviderRe
 }
 
 // HandleListProviders handles GET /api/v1/evaluations/providers
-func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
-	filter, err := CommonListFilters(r)
+	allowedParams := []string{"limit", "offset", "benchmarks", "name", "tags", "system_defined", "benchmarks", "owner"}
+	badParams := getAllParams(req, allowedParams...)
+	if len(badParams) > 0 {
+		// just report the first bad parameter
+		w.Error(serviceerrors.NewServiceError(messages.QueryBadParameter, "ParameterName", badParams[0], "AllowedParameters", strings.Join(allowedParams, ", ")), ctx.RequestID)
+		return
+	}
+
+	filter, err := CommonListFilters(req)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
@@ -157,27 +165,42 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 
 	providers := []api.ProviderResource{}
 
-	if IncludeSystemDefined(r) {
+	if IncludeSystemDefined(req) {
 		providers = h.filterSystemProviders(filter.ExtractQueryParams().Params)
 		ctx.Logger.Info(fmt.Sprintf("Included %d system defined providers", len(providers)))
 	}
 
-	var queryResults *abstractions.QueryResults[api.ProviderResource]
+	totalCount := len(providers)
 
 	// first check to see if the system providers are enough for the paging
-	if len(providers) < filter.Limit {
-		systemProviders := len(providers)
-		queryResults, err = storage.GetProviders(filter)
+	if len(providers) > 0 {
+		if len(providers) < filter.Limit {
+			userFilter := &abstractions.QueryFilter{
+				Limit:  max(0, filter.Limit-len(providers)),
+				Offset: max(0, filter.Offset-len(providers)),
+				Params: filter.Params,
+			}
+			queryResults, err := storage.GetProviders(userFilter)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return
+			}
+			providers = append(providers, queryResults.Items...)
+			totalCount += queryResults.TotalCount
+		}
+	} else {
+		// no system providers so normal flow for user providers
+		queryResults, err := storage.GetProviders(filter)
 		if err != nil {
 			w.Error(err, ctx.RequestID)
 			return
 		}
 		providers = append(providers, queryResults.Items...)
-		queryResults.TotalCount += systemProviders
+		totalCount += queryResults.TotalCount
 	}
 
 	// remove the benchmarks if requested
-	benchmarks, err := GetParam(r, "benchmarks", true, true)
+	benchmarks, err := GetParam(req, "benchmarks", true, true)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
@@ -188,7 +211,7 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 		}
 	}
 
-	page, err := CreatePage(queryResults.TotalCount, filter.Offset, filter.Limit, ctx, r)
+	page, err := CreatePage(ctx, totalCount, filter.Offset, filter.Limit, req)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
@@ -196,7 +219,7 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 
 	result := api.ProviderResourceList{
 		Page:  *page,
-		Items: providers,
+		Items: providers[:min(len(providers), filter.Limit)],
 	}
 
 	w.WriteJSON(result, 200)

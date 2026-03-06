@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/messages"
@@ -9,7 +10,7 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
-func GetOverallJobStatus(job *api.EvaluationJobResource) (api.OverallState, *api.MessageInfo) {
+func GetOverallJobStatus(logger *slog.Logger, job *api.EvaluationJobResource) (api.OverallState, *api.MessageInfo) {
 	// group all benchmarks by state
 	benchmarkStates := make(map[api.State]int)
 	failureMessage := ""
@@ -22,7 +23,9 @@ func GetOverallJobStatus(job *api.EvaluationJobResource) (api.OverallState, *api
 
 	// determine the overall job status
 	total := len(job.Benchmarks)
-	completed, failed, running := benchmarkStates[api.StateCompleted], benchmarkStates[api.StateFailed], benchmarkStates[api.StateRunning]
+	completed, failed, running, cancelled := benchmarkStates[api.StateCompleted], benchmarkStates[api.StateFailed], benchmarkStates[api.StateRunning], benchmarkStates[api.StateCancelled]
+
+	logger.Debug("Calculating overall job status", "total", total, "completed", completed, "failed", failed, "running", running, "cancelled", cancelled)
 
 	var overallState api.OverallState
 	var stateMessage string
@@ -35,6 +38,8 @@ func GetOverallJobStatus(job *api.EvaluationJobResource) (api.OverallState, *api
 		overallState, stateMessage = api.OverallStatePartiallyFailed, "Some of the benchmarks failed. \n"+failureMessage
 	case running > 0:
 		overallState, stateMessage = api.OverallStateRunning, "Evaluation job is running"
+	case cancelled == total:
+		overallState, stateMessage = api.OverallStateCancelled, "Evaluation job is cancelled"
 	default:
 		overallState, stateMessage = api.OverallStatePending, "Evaluation job is pending"
 	}

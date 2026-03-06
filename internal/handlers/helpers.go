@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"fmt"
+	"maps"
 	"net/url"
+	"slices"
 	"strconv"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
@@ -13,7 +15,7 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
-func CreatePage(total int, offset int, limit int, ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper) (*api.Page, error) {
+func CreatePage(ctx *executioncontext.ExecutionContext, total int, offset int, limit int, r http_wrappers.RequestWrapper) (*api.Page, error) {
 	// Calculate pagination info
 	hasNext := offset+limit < total
 	var nextHref *api.HRef
@@ -41,6 +43,14 @@ func CreatePage(total int, offset int, limit int, ctx *executioncontext.Executio
 	}, nil
 }
 
+func DecodeParam(v string) string {
+	decoded, err := url.QueryUnescape(v)
+	if err != nil {
+		return v
+	}
+	return decoded
+}
+
 func GetParam[T string | int | bool](r http_wrappers.RequestWrapper, name string, optional bool, defaultValue T) (T, error) {
 	values := r.Query(name)
 	if (len(values) == 0) || (values[0] == "") {
@@ -51,7 +61,7 @@ func GetParam[T string | int | bool](r http_wrappers.RequestWrapper, name string
 	}
 	switch any(defaultValue).(type) {
 	case string:
-		return any(values[0]).(T), nil
+		return any(DecodeParam(values[0])).(T), nil
 	case int:
 		v, err := strconv.Atoi(values[0])
 		if err != nil {
@@ -71,52 +81,45 @@ func GetParam[T string | int | bool](r http_wrappers.RequestWrapper, name string
 }
 
 func CommonListFilters(r http_wrappers.RequestWrapper) (*abstractions.QueryFilter, error) {
+	// note that a user can not search by tenant
 	limit, err := GetParam(r, "limit", true, 50)
 	if err != nil {
 		return nil, err
 	}
 	if limit < 0 {
-		return nil, serviceerrors.NewServiceError(messages.QueryParameterInvalid, "ParameterName", "limit", "Type", "integer", "Value", strconv.Itoa(limit))
+		return nil, serviceerrors.NewServiceError(messages.QueryParameterInvalid, "ParameterName", "limit", "Type", "positive integer", "Value", strconv.Itoa(limit))
 	}
+
 	offset, err := GetParam(r, "offset", true, 0)
 	if err != nil {
 		return nil, err
 	}
 	if offset < 0 {
-		return nil, serviceerrors.NewServiceError(messages.QueryParameterInvalid, "ParameterName", "offset", "Type", "integer", "Value", strconv.Itoa(offset))
+		return nil, serviceerrors.NewServiceError(messages.QueryParameterInvalid, "ParameterName", "offset", "Type", "positive integer", "Value", strconv.Itoa(offset))
 	}
-	// this is not a common parameter but as long as it is empty by default then it will be ignored
-	status, err := GetParam(r, "status", true, "")
-	if err != nil {
-		return nil, err
-	}
+
 	name, err := GetParam(r, "name", true, "")
 	if err != nil {
 		return nil, err
 	}
+
 	tags, err := GetParam(r, "tags", true, "")
 	if err != nil {
 		return nil, err
 	}
+
 	owner, err := GetParam(r, "owner", true, "")
 	if err != nil {
 		return nil, err
 	}
-	tenant, err := GetParam(r, "tenant", true, "")
-	if err != nil {
-		return nil, err
-	}
-	// we can not add the 'benchmarks' parameter here because it's default value is 'true' and that is not valid for all APIs
 
 	return &abstractions.QueryFilter{
 		Limit:  limit,
 		Offset: offset,
 		Params: map[string]any{
-			"status":    status,
-			"name":      name,
-			"tags":      tags,
-			"owner":     owner,
-			"tenant_id": tenant,
+			"name":  name,
+			"tags":  tags,
+			"owner": owner,
 		},
 	}, nil
 }
@@ -128,4 +131,15 @@ func IncludeSystemDefined(r http_wrappers.RequestWrapper) bool {
 		systemDefined = systemDefinedParam[0] != "false"
 	}
 	return systemDefined
+}
+
+func getAllParams(r http_wrappers.RequestWrapper, allowedParams ...string) []string {
+	uri, err := url.Parse(r.URI())
+	if err != nil {
+		return []string{}
+	}
+	params := slices.Collect(maps.Keys(uri.Query()))
+	return slices.DeleteFunc(params, func(p string) bool {
+		return slices.Contains(allowedParams, p)
+	})
 }

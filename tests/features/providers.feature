@@ -66,6 +66,134 @@ Feature: Providers Endpoint
     Then the response code should be 400
     And the response should contain the value "query_parameter_invalid" at path "message_code"
 
+  Scenario: List providers with all search parameters and pagination
+    Given the service is running
+    And there are no user providers
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider.json"
+    Then the response code should be 201
+    And the "resource.id" field in the response should be saved as "value:provider1_id"
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider_with_tags.json"
+    Then the response code should be 201
+    And the "resource.id" field in the response should be saved as "value:provider2_id"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=2&offset=0"
+    Then the response code should be 200
+    And the response should contain the value "2" at path "$.limit"
+    And the array at path "items" in the response should have length 2
+    And the response should contain the value "3" at path "$.total_count"
+    And the response should contain "next"
+    And the "next.href" field in the response should be saved as "value:next_url"
+    When I send a GET request to "{{value:next_url}}"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length at least 1
+    When I send a GET request to "/api/v1/evaluations/providers?limit=5&offset=0"
+    Then the response code should be 200
+    And the response should contain the value "5" at path "$.limit"
+    And the array at path "items" in the response should have length at least 5
+    When I send a GET request to "/api/v1/evaluations/providers?limit=2&offset=1"
+    Then the response code should be 200
+    And the response should contain the value "2" at path "$.limit"
+    And the array at path "items" in the response should have length at least 1
+    When I send a GET request to "/api/v1/evaluations/providers?limit=100&offset=0"
+    Then the response code should be 200
+    And the response should contain the value "100" at path "$.limit"
+    When I send a GET request to "/api/v1/evaluations/providers?benchmarks=false&limit=5"
+    Then the response code should be 200
+    And the response should not contain the value "0" at path "$.total_count"
+    And the response should contain the value "[]" at path "items[0].benchmarks"
+    When I send a GET request to "/api/v1/evaluations/providers?name=Lighteval&limit=10"
+    Then the response code should be 200
+    And the response should contain the value "Lighteval" at path "$.items[0].name"
+    And the response should contain the value "1" at path "$.total_count"
+    When I send a GET request to "/api/v1/evaluations/providers?tags=nonexistent-tag&limit=10"
+    Then the response code should be 200
+    And the response should contain the value "0" at path "$.total_count"
+    When I send a GET request to "/api/v1/evaluations/providers?system_defined=false&limit=10"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 2
+    And the response should contain the value "2" at path "$.total_count"
+    When I send a DELETE request to "/api/v1/evaluations/providers/{{value:provider1_id}}"
+    Then the response code should be 204
+    When I send a DELETE request to "/api/v1/evaluations/providers/{{value:provider2_id}}"
+    Then the response code should be 204
+
+  Scenario: List providers with comprehensive search parameters and pagination
+    Given the service is running
+    And there are no user providers
+    And I set the header "X-User" to "prov-owner-a"
+    And I set the header "X-Tenant" to "prov-tenant-x"
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider.json"
+    Then the response code should be 201
+    And the "resource.id" field in the response should be saved as "value:list_prov1_id"
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider_with_tags.json"
+    Then the response code should be 201
+    And the "resource.id" field in the response should be saved as "value:list_prov2_id"
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider.json"
+    Then the response code should be 201
+    And the "resource.id" field in the response should be saved as "value:list_prov3_id"
+    When I send a GET request to "/api/v1/evaluations/providers?name=Lighteval&limit=10"
+    Then the response code should be 200
+    And the response should contain the value "Lighteval" at path "$.items[0].name"
+    And the response should contain the value "1" at path "$.total_count"
+    When I send a GET request to "/api/v1/evaluations/providers?name=LM%20Evaluation%20Harness&limit=10"
+    Then the response code should be 200
+    And the response should contain the value "LM Evaluation Harness" at path "$.items[0].name"
+    And the response should contain the value "1" at path "$.total_count"
+    When I send a GET request to "/api/v1/evaluations/providers?system_defined=false&limit=10"
+    Then the response code should be 200
+    And the response should contain the value "3" at path "$.total_count"
+    When I send a GET request to "/api/v1/evaluations/providers?tags=nonexistent-tag&limit=10"
+    Then the response code should be 200
+    And the response should contain the value "0" at path "$.total_count"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=1&offset=0"
+    Then the response code should be 200
+    And the response should contain the value "1" at path "$.limit"
+    And the array at path "items" in the response should have length 1
+    And the response should contain "next"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=1&offset=1"
+    Then the response code should be 200
+    And the response should contain the value "1" at path "$.limit"
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/providers?limit=2&offset=0"
+    Then the response code should be 200
+    And the response should contain the value "2" at path "$.limit"
+    And the array at path "items" in the response should have length 2
+    When I send a GET request to "/api/v1/evaluations/providers?limit=2&offset=1"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 2
+    When I send a GET request to "/api/v1/evaluations/providers?limit=2&offset=2"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length at least 1
+    When I send a GET request to "/api/v1/evaluations/providers?limit=5&offset=0"
+    Then the response code should be 200
+    And the response should contain the value "5" at path "$.limit"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=0"
+    Then the response code should be 200
+    And the response should contain the value "50" at path "$.limit"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=100&offset=0"
+    Then the response code should be 200
+    And the response should contain the value "100" at path "$.limit"
+    When I send a GET request to "/api/v1/evaluations/providers?benchmarks=false&limit=5"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length at least 3
+    And the response should not contain the value "0" at path "$.total_count"
+    And the response should contain the value "[]" at path "items[0].benchmarks"
+    When I send a GET request to "/api/v1/evaluations/providers?benchmarks=true&limit=5"
+    Then the response code should be 200
+    And the array at path "items[0].benchmarks" in the response should have length at least 1
+    When I send a GET request to "/api/v1/evaluations/providers?limit=2&name=Test%20Provider&benchmarks=false"
+    Then the response code should be 200
+    And the response should contain the value "2" at path "$.limit"
+    And the array at path "items" in the response should have length at least 1
+    And the response should not contain the value "0" at path "$.total_count"
+    And the response should contain the value "[]" at path "items[0].benchmarks"
+    And the response should contain the value "Test Provider" at path "$.items[0].name"
+    When I send a DELETE request to "/api/v1/evaluations/providers/{{value:list_prov1_id}}"
+    Then the response code should be 204
+    When I send a DELETE request to "/api/v1/evaluations/providers/{{value:list_prov2_id}}"
+    Then the response code should be 204
+    When I send a DELETE request to "/api/v1/evaluations/providers/{{value:list_prov3_id}}"
+    Then the response code should be 204
+
   Scenario: Get providers for non existent provider_id
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/providers/oops"
@@ -81,6 +209,7 @@ Feature: Providers Endpoint
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/providers?benchmarks=false"
     Then the response code should be 200
+    And the response should not contain the value "0" at path "$.total_count"
     Then the response should contain the value "[]" at path "items[0].benchmarks"
 
   Scenario: Create a user provider

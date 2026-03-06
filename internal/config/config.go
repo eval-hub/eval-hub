@@ -15,3 +15,7 @@ func (c *Config) IsOTELEnabled() bool {
 func (c *Config) IsPrometheusEnabled() bool {
 	return (c != nil) && (c.Prometheus != nil) && c.Prometheus.Enabled
 }
+
+func (c *Config) IsAuthenticationEnabled() bool {
+	return (c != nil) && (c.Service != nil) && !c.Service.DisableAuth && !c.Service.LocalMode
+}

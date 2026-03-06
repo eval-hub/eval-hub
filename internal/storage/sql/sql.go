@@ -3,12 +3,14 @@ package sql
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
 
 	// import the postgres driver - "pgx"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	jsonpatch "gopkg.in/evanphx/json-patch.v4"
 
 	// import the sqlite driver - "sqlite"
 	_ "modernc.org/sqlite"
@@ -33,16 +35,17 @@ const (
 )
 
 type SQLStorage struct {
-	sqlConfig         *shared.SQLDatabaseConfig
-	statementsFactory shared.SQLStatementsFactory
-	pool              *sql.DB
-	logger            *slog.Logger
-	ctx               context.Context
-	tenant            api.Tenant
-	owner             api.User
+	sqlConfig             *shared.SQLDatabaseConfig
+	statementsFactory     shared.SQLStatementsFactory
+	pool                  *sql.DB
+	logger                *slog.Logger
+	ctx                   context.Context
+	tenant                api.Tenant
+	owner                 api.User
+	authenticationEnabled bool
 }
 
-func NewStorage(config map[string]any, otelEnabled bool, logger *slog.Logger) (abstractions.Storage, error) {
+func NewStorage(config map[string]any, otelEnabled bool, authenticationEnabled bool, logger *slog.Logger) (abstractions.Storage, error) {
 	var sqlConfig shared.SQLDatabaseConfig
 	merr := mapstructure.Decode(config, &sqlConfig)
 	if merr != nil {
@@ -117,11 +120,12 @@ func NewStorage(config map[string]any, otelEnabled bool, logger *slog.Logger) (a
 	}
 
 	s := &SQLStorage{
-		sqlConfig:         &sqlConfig,
-		statementsFactory: statementsFactory,
-		pool:              pool,
-		logger:            logger,
-		ctx:               context.Background(),
+		sqlConfig:             &sqlConfig,
+		statementsFactory:     statementsFactory,
+		pool:                  pool,
+		logger:                logger,
+		ctx:                   context.Background(),
+		authenticationEnabled: authenticationEnabled,
 	}
 
 	// ping the database to verify the DSN provided by the user is valid and the server is accessible
@@ -203,54 +207,85 @@ func (s *SQLStorage) ensureSchema() error {
 	return nil
 }
 
+func (s *SQLStorage) verifyTenant(filter *abstractions.QueryFilter, tableName string) error {
+	if s.authenticationEnabled && s.tenant == "" {
+		return se.NewServiceError(messages.Unauthorized, "Error", "Tenant is required")
+	}
+	if filter != nil {
+		if _, exists := filter.Params["tenant_id"]; exists {
+			return se.NewServiceError(messages.QueryBadParameter, "ParameterName", "tenant_id", "AllowedParameters", s.statementsFactory.GetAllowedFilterColumns(tableName))
+		}
+	}
+	return nil
+}
+
+func applyPatches(resource string, patches *api.Patch) ([]byte, error) {
+	if patches == nil || len(*patches) == 0 {
+		return []byte(resource), nil
+	}
+	patchesJSON, err := json.Marshal(patches)
+	if err != nil {
+		return nil, err
+	}
+	patch, err := jsonpatch.DecodePatch(patchesJSON)
+	if err != nil {
+		return nil, err
+	}
+	return patch.Apply([]byte(resource))
+}
+
 func (s *SQLStorage) Close() error {
 	return s.pool.Close()
 }
 
 func (s *SQLStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 	return &SQLStorage{
-		sqlConfig:         s.sqlConfig,
-		statementsFactory: s.statementsFactory,
-		pool:              s.pool,
-		logger:            logger,
-		ctx:               s.ctx,
-		tenant:            s.tenant,
-		owner:             s.owner,
+		sqlConfig:             s.sqlConfig,
+		statementsFactory:     s.statementsFactory,
+		pool:                  s.pool,
+		logger:                logger,
+		ctx:                   s.ctx,
+		tenant:                s.tenant,
+		owner:                 s.owner,
+		authenticationEnabled: s.authenticationEnabled,
 	}
 }
 
 func (s *SQLStorage) WithContext(ctx context.Context) abstractions.Storage {
 	return &SQLStorage{
-		sqlConfig:         s.sqlConfig,
-		statementsFactory: s.statementsFactory,
-		pool:              s.pool,
-		logger:            s.logger,
-		ctx:               ctx,
-		tenant:            s.tenant,
-		owner:             s.owner,
+		sqlConfig:             s.sqlConfig,
+		statementsFactory:     s.statementsFactory,
+		pool:                  s.pool,
+		logger:                s.logger,
+		ctx:                   ctx,
+		tenant:                s.tenant,
+		owner:                 s.owner,
+		authenticationEnabled: s.authenticationEnabled,
 	}
 }
 
 func (s *SQLStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
 	return &SQLStorage{
-		sqlConfig:         s.sqlConfig,
-		statementsFactory: s.statementsFactory,
-		pool:              s.pool,
-		logger:            s.logger,
-		ctx:               s.ctx,
-		tenant:            tenant,
-		owner:             s.owner,
+		sqlConfig:             s.sqlConfig,
+		statementsFactory:     s.statementsFactory,
+		pool:                  s.pool,
+		logger:                s.logger,
+		ctx:                   s.ctx,
+		tenant:                tenant,
+		owner:                 s.owner,
+		authenticationEnabled: s.authenticationEnabled,
 	}
 }
 
 func (s *SQLStorage) WithOwner(owner api.User) abstractions.Storage {
 	return &SQLStorage{
-		sqlConfig:         s.sqlConfig,
-		statementsFactory: s.statementsFactory,
-		pool:              s.pool,
-		logger:            s.logger,
-		ctx:               s.ctx,
-		tenant:            s.tenant,
-		owner:             owner,
+		sqlConfig:             s.sqlConfig,
+		statementsFactory:     s.statementsFactory,
+		pool:                  s.pool,
+		logger:                s.logger,
+		ctx:                   s.ctx,
+		tenant:                s.tenant,
+		owner:                 owner,
+		authenticationEnabled: s.authenticationEnabled,
 	}
 }
