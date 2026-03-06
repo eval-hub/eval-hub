@@ -108,8 +108,6 @@ func (s *sqliteStatementsFactory) entityFilterCondition(key string, value any, t
 	case "name":
 		// name at top level
 		return "json_extract(entity, '$.name') = ?", []any{value}
-	case "experiment_id":
-		return "json_extract(entity, '$.resource.mlflow_experiment_id') = ?", []any{value}
 	case "tags":
 		tagStr, _ := value.(string)
 		// evaluations: tags at config.tags; providers and collections: tags at entity root

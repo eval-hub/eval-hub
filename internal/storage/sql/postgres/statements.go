@@ -99,8 +99,6 @@ func (s *postgresStatementsFactory) entityFilterCondition(key string, value any,
 	case "name":
 		// name at top level
 		return fmt.Sprintf("entity->>'name' = $%d", index), []any{value}
-	case "experiment_id":
-		return fmt.Sprintf("entity->>'resource.mlflow_experiment_id' = $%d", index), []any{value}
 	case "tags":
 		tagStr, _ := value.(string)
 		// evaluations: tags at config.tags; providers and collections: tags at entity root
