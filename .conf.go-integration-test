@@ -1,0 +1,7 @@
+# go-test grc colorizer configuration for integration tests that have color except for the summary at the end
+regexp=--- PASS: .* (\(\d+\.\d+s\))
+colour=green, yellow
+-
+regexp=--- FAIL: .* (\(\d+\.\d+s\))
+colour=red, yellow
+-

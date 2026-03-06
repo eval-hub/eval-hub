@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/spf13/viper"
@@ -14,7 +15,7 @@ import (
 
 // loadAuthConfigFromYAML loads an RBAC config from a YAML file using Viper.
 // yamlName is the base name of the file (e.g. "rbac_jobs") under testdata/.
-func loadAuthConfigFromYAML(t *testing.T, yamlName string) AuthConfig {
+func loadAuthConfigFromYAML(t *testing.T, yamlName string) *AuthConfig {
 	t.Helper()
 	_, filename, _, _ := runtime.Caller(0)
 	dir := filepath.Dir(filename)
@@ -31,7 +32,7 @@ func loadAuthConfigFromYAML(t *testing.T, yamlName string) AuthConfig {
 	if err := v.Unmarshal(&cfg); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
-	return cfg
+	return cfg.Optimize()
 }
 
 func attributesToRecords(attributes []authorizer.Attributes) []authorizer.AttributesRecord {
@@ -207,11 +208,27 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs", nil)
 
 		got := attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
-
+		fmt.Println("got ", got)
 		// Rule still matches; namespace comes from empty header (template yields empty)
 		want := []authorizer.AttributesRecord{
+			{},
+		}
+		if !eq(got, want) {
+			t.Errorf("ComputeResourceAttributes() = %+v, want %+v", got, want)
+		}
+
+	})
+	t.Run("MatchSpecificJob", func(t *testing.T) {
+		cfg := loadAuthConfigFromYAML(t, "rbac_jobs")
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs/2349872398472", nil)
+		req.Header.Set("X-Tenant", "my-ns")
+
+		got := attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
+
+		want := []authorizer.AttributesRecord{
 			{
-				Namespace: "",
+				Namespace: "my-ns",
 				APIGroup:  "trustyai.opendatahub.io",
 				Resource:  "evaluations",
 				Verb:      "get",
@@ -220,6 +237,55 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		if !eq(got, want) {
 			t.Errorf("ComputeResourceAttributes() = %+v, want %+v", got, want)
 		}
+	})
 
+	t.Run("MatchStatusEvents", func(t *testing.T) {
+		cfg := loadAuthConfigFromYAML(t, "rbac_jobs")
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs/2349872398472/events", nil)
+		req.Header.Set("X-Tenant", "my-ns")
+
+		got := attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
+
+		want := []authorizer.AttributesRecord{
+			{
+				Namespace: "my-ns",
+				APIGroup:  "trustyai.opendatahub.io",
+				Resource:  "status-events",
+				Verb:      "create",
+			},
+		}
+		if !eq(got, want) {
+			t.Errorf("ComputeResourceAttributes() = %+v, want %+v", got, want)
+		}
+	})
+
+	t.Run("MatchPaths", func(t *testing.T) {
+		cases := []struct {
+			pattern       string
+			path          string
+			expectedMatch bool
+		}{
+			{"/api/v1/jobs", "/api/v1/jobsabc", false},
+			{"/api/v1/jobs", "/api/v1/jobs/123", true},
+			{"/api/v1/jobs/*", "/api/v1/jobs", true},
+			{"/api/v1/jobs/*", "/api/v1/jobs/123", true},
+			{"/api/v1/jobs/*", "/api/v1/jobs/123/details", true},
+			{"/api/*/jobs/*", "/api/v2/jobs/abc", true},
+			{"/api/*/jobs/*", "/api/v2/users/123", false},
+			{"/api/v1/evaluations/jobs/*/events", "/api/v1/evaluations/jobs", false},
+		}
+
+		for _, c := range cases {
+			e := Endpoint{
+				Path:      c.pattern,
+				PathParts: strings.Split(c.pattern, "/"),
+			}
+			match := matchEndpoint(c.path, e)
+			if match != c.expectedMatch {
+				t.Errorf("MatchEndpoint(%s, %s) = %v, want %v", c.pattern, c.path, match, c.expectedMatch)
+			}
+			fmt.Printf("Pattern: %-15s Path: %-25s Match: %v\n", c.pattern, c.path, matchEndpoint(c.path, e))
+		}
 	})
 }

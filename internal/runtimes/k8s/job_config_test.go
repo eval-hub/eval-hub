@@ -10,6 +10,14 @@ import (
 func TestBuildJobConfigDefaults(t *testing.T) {
 	serviceURL := "http://eval-hub"
 	t.Setenv(serviceURLEnv, serviceURL)
+	benchmark := api.BenchmarkConfig{
+		Ref: api.Ref{ID: "bench-1"},
+		Parameters: map[string]any{
+			"num_examples": 50,
+			"max_tokens":   128,
+			"temperature":  0.2,
+		},
+	}
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource:           api.Resource{ID: "job-123"},
@@ -21,14 +29,7 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 				Name: "model",
 			},
 			Benchmarks: []api.BenchmarkConfig{
-				{
-					Ref: api.Ref{ID: "bench-1"},
-					Parameters: map[string]any{
-						"num_examples": 50,
-						"max_tokens":   128,
-						"temperature":  0.2,
-					},
-				},
+				benchmark,
 			},
 		},
 	}
@@ -43,7 +44,7 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, "bench-1", 0)
+	cfg, err := buildJobConfig(evaluation, provider, &benchmark, 0)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
@@ -129,7 +130,7 @@ func TestBuildJobConfigModelAuthSecretRefPresent(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, "bench-1", 0)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
@@ -167,12 +168,63 @@ func TestBuildJobConfigModelAuthSecretRefEmptyWhenNil(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, "bench-1", 0)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
 	if cfg.modelAuthSecretRef != "" {
 		t.Fatalf("expected modelAuthSecretRef to be empty, got %q", cfg.modelAuthSecretRef)
+	}
+}
+
+func TestBuildJobConfigTestDataS3(t *testing.T) {
+	t.Setenv(serviceURLEnv, "http://eval-hub")
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-901"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.BenchmarkConfig{
+				{
+					Ref: api.Ref{ID: "bench-1"},
+					TestDataRef: &api.TestDataRef{
+						S3: &api.S3TestDataRef{
+							Bucket:    "bucket-1",
+							Key:       "/a/b",
+							SecretRef: "s3-secret",
+						},
+					},
+				},
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
+			},
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.testDataS3.bucket != "bucket-1" {
+		t.Fatalf("expected testDataS3Bucket %q, got %q", "bucket-1", cfg.testDataS3.bucket)
+	}
+	if cfg.testDataS3.key != "/a/b" {
+		t.Fatalf("expected testDataS3Key %q, got %q", "/a/b", cfg.testDataS3.key)
+	}
+	if cfg.testDataS3.secretRef != "s3-secret" {
+		t.Fatalf("expected testDataS3SecretRef %q, got %q", "s3-secret", cfg.testDataS3.secretRef)
 	}
 }
 
@@ -207,7 +259,7 @@ func TestBuildJobConfigAllowsNumExamplesOnly(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, "bench-1", 0)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0)
 	if err != nil {
 		t.Fatalf("expected no error for num_examples-only benchmark_config, got %v", err)
 	}
@@ -246,7 +298,7 @@ func TestBuildJobConfigMissingRuntime(t *testing.T) {
 		},
 	}
 
-	_, err := buildJobConfig(evaluation, provider, "bench-1", 0)
+	_, err := buildJobConfig(evaluation, provider, &api.BenchmarkConfig{}, 0)
 	if err == nil {
 		t.Fatalf("expected error for missing runtime")
 	}
@@ -273,7 +325,7 @@ func TestBuildJobConfigMissingAdapterImage(t *testing.T) {
 		},
 	}
 
-	_, err := buildJobConfig(evaluation, provider, "bench-1", 0)
+	_, err := buildJobConfig(evaluation, provider, nil, 0)
 	if err == nil {
 		t.Fatalf("expected error for missing adapter image")
 	}
@@ -310,7 +362,7 @@ func TestBuildJobConfigMissingServiceURL(t *testing.T) {
 		},
 	}
 
-	_, err := buildJobConfig(evaluation, provider, "bench-1", 0)
+	_, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0)
 	if err == nil {
 		t.Fatalf("expected error for missing %s", serviceURLEnv)
 	}
@@ -346,7 +398,7 @@ func TestBuildJobConfigAllowsEmptyBenchmarkConfig(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, "bench-1", 0)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0)
 	if err != nil {
 		t.Fatalf("expected no error for empty benchmark_config, got %v", err)
 	}
@@ -401,7 +453,7 @@ func TestBuildJobConfigWithOCIExports(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, "bench-1", 0)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}

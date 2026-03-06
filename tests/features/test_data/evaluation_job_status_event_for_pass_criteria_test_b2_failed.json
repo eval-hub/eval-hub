@@ -1,0 +1,14 @@
+{
+  "benchmark_status_event": {
+    "id": "AraDiCE_boolq_lev",
+    "provider_id": "lm_evaluation_harness",
+    "benchmark_index": 1,
+    "status": "failed",
+    "error_message": {
+      "message": "Benchmark run failed",
+      "message_code": "benchmark_failed"
+    },
+    "started_at": "2026-01-12T10:45:32Z",
+    "completed_at": "2026-01-12T10:47:12Z"
+  }
+}

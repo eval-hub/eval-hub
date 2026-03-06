@@ -22,9 +22,10 @@ const (
 	mlflowTrackingURIEnv     = "MLFLOW_TRACKING_URI"
 	mlflowWorkspaceEnv       = "MLFLOW_WORKSPACE"
 	inClusterNamespaceFile   = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
-	serviceAccountNameSuffix = "-jobs"
+	serviceAccountNameSuffix = "-job"
 	serviceCAConfigMapSuffix = "-service-ca"
 	defaultEvalHubPort       = "8443"
+	defaultTestDataInitCmd   = "/app/eval-hub-init"
 )
 
 type jobConfig struct {
@@ -50,9 +51,17 @@ type jobConfig struct {
 	mlflowWorkspace      string
 	ociCredentialsSecret string
 	modelAuthSecretRef   string
+	testDataS3           s3TestDataConfig
+	testDataInitImage    string
 }
 
-func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkID string, benchmarkIndex int) (*jobConfig, error) {
+type s3TestDataConfig struct {
+	bucket    string
+	key       string
+	secretRef string
+}
+
+func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkConfig *api.BenchmarkConfig, benchmarkIndex int) (*jobConfig, error) {
 	runtime := provider.Runtime
 	if runtime == nil || runtime.K8s == nil {
 		return nil, fmt.Errorf("provider %q missing runtime configuration", provider.Resource.ID)
@@ -75,7 +84,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	}
 
 	namespace := resolveNamespace("")
-	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, benchmarkID, benchmarkIndex, &serviceURL)
+	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, benchmarkConfig, benchmarkIndex, &serviceURL)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +99,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	// Build ServiceAccount name, ConfigMap name, and EvalHub URL if instance name is set
 	var serviceAccountName, serviceCAConfigMap, evalHubURL string
 	if evalHubInstanceName != "" {
-		serviceAccountName = evalHubInstanceName + serviceAccountNameSuffix
+		serviceAccountName = evalHubInstanceName + "-" + namespace + serviceAccountNameSuffix
 		serviceCAConfigMap = evalHubInstanceName + serviceCAConfigMapSuffix
 		// EvalHub URL points to the kube-rbac-proxy HTTPS endpoint
 		evalHubURL = fmt.Sprintf("https://%s.%s.svc.cluster.local:%s",
@@ -108,12 +117,19 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		modelAuthSecretRef = strings.TrimSpace(evaluation.Model.Auth.SecretRef)
 	}
 
+	var testDataS3Bucket, testDataS3Key, testDataS3SecretRef string
+	if benchmarkConfig.TestDataRef != nil && benchmarkConfig.TestDataRef.S3 != nil {
+		testDataS3Bucket = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.Bucket)
+		testDataS3Key = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.Key)
+		testDataS3SecretRef = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.SecretRef)
+	}
+
 	return &jobConfig{
 		jobID:                evaluation.Resource.ID,
 		resourceGUID:         uuid.NewString(),
 		namespace:            namespace,
 		providerID:           provider.Resource.ID,
-		benchmarkID:          benchmarkID,
+		benchmarkID:          benchmarkConfig.ID,
 		adapterImage:         runtime.K8s.Image,
 		entrypoint:           runtime.K8s.Entrypoint,
 		defaultEnv:           runtime.K8s.Env,
@@ -130,6 +146,11 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		mlflowWorkspace:      mlflowWorkspace,
 		ociCredentialsSecret: ociCredentialsSecret,
 		modelAuthSecretRef:   modelAuthSecretRef,
+		testDataS3: s3TestDataConfig{
+			bucket:    testDataS3Bucket,
+			key:       testDataS3Key,
+			secretRef: testDataS3SecretRef,
+		},
 	}, nil
 }
 

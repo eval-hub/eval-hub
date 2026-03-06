@@ -117,28 +117,43 @@ cp bin/eval-hub python-server/evalhub_server/binaries/eval-hub-$(uname -s | tr '
 cd python-server
 
 # Option 1: Build with native platform tag (linux_x86_64, etc.)
-python -m build --wheel
+uv build --wheel
 
 # Option 2: Build with PyPI-compatible tag (same as CI)
-WHEEL_PLATFORM=manylinux_2_17_x86_64 python -m build --wheel  # Linux x64
-WHEEL_PLATFORM=manylinux_2_17_aarch64 python -m build --wheel  # Linux ARM64
-WHEEL_PLATFORM=macosx_11_0_arm64 python -m build --wheel      # macOS Apple Silicon
-WHEEL_PLATFORM=macosx_10_9_x86_64 python -m build --wheel     # macOS Intel
-WHEEL_PLATFORM=win_amd64 python -m build --wheel              # Windows
+WHEEL_PLATFORM=manylinux_2_17_x86_64 uv build --wheel  # Linux x64
+WHEEL_PLATFORM=manylinux_2_17_aarch64 uv build --wheel  # Linux ARM64
+WHEEL_PLATFORM=macosx_11_0_arm64 uv build --wheel      # macOS Apple Silicon
+WHEEL_PLATFORM=macosx_10_9_x86_64 uv build --wheel     # macOS Intel
+WHEEL_PLATFORM=win_amd64 uv build --wheel              # Windows
 
 # Install locally
-pip install dist/*.whl
+uv pip install dist/*.whl
 ```
 
 ### Testing Locally
 
 ```bash
-# Install in development mode
+# Install in development mode (includes dev dependencies: ruff, pytest)
 cd python-server
-pip install -e .
+uv sync --extra dev
 
 # Test the import
-python -c "from evalhub_server import get_binary_path; print(get_binary_path())"
+uv run python -c "from evalhub_server import get_binary_path; print(get_binary_path())"
+
+# Run unit tests
+uv run pytest -v
+```
+
+### Linting
+
+```bash
+cd python-server
+
+# Check lint errors and formatting
+uv run ruff check . && uv run ruff format --check .
+
+# Auto-fix lint errors and formatting
+uv run ruff check --fix . && uv run ruff format .
 ```
 
 ## Version Synchronization

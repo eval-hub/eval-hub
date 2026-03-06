@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/eval-hub/eval-hub/auth"
@@ -431,12 +433,21 @@ func (s *Server) SetupRoutes() (http.Handler, error) {
 }
 
 func (s *Server) Start() error {
+	if err := s.serviceConfig.Service.ValidateTLSConfig(); err != nil {
+		return err
+	}
+
 	handler, err := s.setupRoutes()
 	if err != nil {
 		return err
 	}
+	host := s.serviceConfig.Service.Host
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	addr := net.JoinHostPort(host, strconv.Itoa(s.port))
 	s.httpServer = &http.Server{
-		Addr:         fmt.Sprintf(":%d", s.port),
+		Addr:         addr,
 		Handler:      handler,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
@@ -449,8 +460,17 @@ func (s *Server) Start() error {
 		return err
 	}
 
-	s.logger.Info("Server starting", "port", s.port)
-	err = s.httpServer.ListenAndServe()
+	tlsEnabled := s.serviceConfig.Service.TLSEnabled()
+	s.logger.Info("Server starting", "addr", addr, "tls", tlsEnabled)
+
+	if tlsEnabled {
+		err = s.httpServer.ListenAndServeTLS(
+			s.serviceConfig.Service.TLSCertFile,
+			s.serviceConfig.Service.TLSKeyFile,
+		)
+	} else {
+		err = s.httpServer.ListenAndServe()
+	}
 
 	if err == http.ErrServerClosed {
 		s.logger.Info("Server closed gracefully")

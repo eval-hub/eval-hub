@@ -293,6 +293,40 @@ Feature: Evaluations Endpoint
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
+  @ignore
+  Scenario: Pass criteria from provider - test results from provider benchmarks
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/provider_pass_criteria_test.json"
+    Then the response code should be 201
+    And the "resource.id" field in the response should be saved as "value:provider_id"
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_pass_criteria_from_provider_test.json"
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:collection_id"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_pass_criteria_from_provider_test.json"
+    Then the response code should be 202
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_pass_criteria_provider_b1.json"
+    Then the response code should be 204
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_pass_criteria_provider_b2.json"
+    Then the response code should be 204
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "pc_b1" at path "$.results.benchmarks[0].id"
+    And the response should contain the value "0.9" at path "$.results.benchmarks[0].test.primary_score"
+    And the response should contain the value "true" at path "$.results.benchmarks[0].test.pass"
+    And the response should contain the value "0.5" at path "$.results.benchmarks[0].test.threshold"
+    And the response should contain the value "pc_b2" at path "$.results.benchmarks[1].id"
+    And the response should contain the value "0.8" at path "$.results.benchmarks[1].test.primary_score"
+    And the response should contain the value "true" at path "$.results.benchmarks[1].test.pass"
+    And the response should contain the value "0.6" at path "$.results.benchmarks[1].test.threshold"
+    And the response should contain the value "0.84|0.85|0.86" at path "$.results.test.score"
+    And the response should contain the value "true" at path "$.results.test.pass"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+    When I send a DELETE request to "/api/v1/evaluations/collections/{{value:collection_id}}?hard_delete=true"
+    Then the response code should be 204
+    When I send a DELETE request to "/api/v1/evaluations/providers/{{value:provider_id}}"
+    Then the response code should be 204
+
   Scenario: Cancel running evaluation job (soft delete)
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
@@ -379,6 +413,30 @@ Feature: Evaluations Endpoint
     And the response should contain the value "cancelled" at path "$.status.state"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
+
+  Scenario: Partially failed job - one benchmark completed and one failed
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_for_pass_criteria_test.json"
+    Then the response code should be 202
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_for_pass_criteria_test_b1.json"
+    Then the response code should be 204
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_for_pass_criteria_test_b2_failed.json"
+    Then the response code should be 204
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "partially_failed" at path "$.status.state"
+    And the response should contain the value "arc_easy" at path "$.status.benchmarks[0].id"
+    And the response should contain the value "completed" at path "$.status.benchmarks[0].status"
+    And the response should contain the value "AraDiCE_boolq_lev" at path "$.status.benchmarks[1].id"
+    And the response should contain the value "failed" at path "$.status.benchmarks[1].status"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
+  Scenario: List evaluation jobs returns empty when filter matches no jobs
+    Given the service is running
+    When I send a GET request to "/api/v1/evaluations/jobs?owner=nonexistent-user-empty-list&limit=10"
+    Then the response code should be 200
+    And the response should contain the value "0" at path "$.total_count"
 
   Scenario: List evaluation jobs with all search filters
     Given the service is running

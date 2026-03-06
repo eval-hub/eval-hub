@@ -20,6 +20,7 @@ The service uses Go's standard `net/http` router, structured logging with zap, P
 
 - Go 1.25+
 - Make
+- Python 3 (for `make test`; used by scripts/grcat for colored output)
 - Podman (for container builds)
 - Access to an OpenShift or Kubernetes cluster (for deployment)
 

@@ -30,7 +30,12 @@ eval-hub-server = "evalhub_server.main:main"
 [project.optional-dependencies]
 dev = [
     "ruff>=0.14.14",
+    "pytest>=8.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["unit: unit tests"]
 
 [project.urls]
 Homepage = "https://github.com/eval-hub/eval-hub"

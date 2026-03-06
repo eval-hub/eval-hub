@@ -268,6 +268,120 @@ func TestBuildJobWithoutOCICredentials(t *testing.T) {
 	}
 }
 
+func TestBuildJobWithS3TestData(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "job-s3",
+		resourceGUID:   "guid-s3",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
+		testDataS3: s3TestDataConfig{
+			bucket:    "bucket-1",
+			key:       "/a/b",
+			secretRef: "s3-secret",
+		},
+	}
+
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	if len(job.Spec.Template.Spec.InitContainers) != 1 {
+		t.Fatalf("expected 1 init container, got %d", len(job.Spec.Template.Spec.InitContainers))
+	}
+	initContainer := job.Spec.Template.Spec.InitContainers[0]
+	if initContainer.Name != initContainerName {
+		t.Fatalf("expected init container name %q, got %q", initContainerName, initContainer.Name)
+	}
+	if initContainer.Image != testDataInitImage {
+		t.Fatalf("expected init container image %q, got %q", testDataInitImage, initContainer.Image)
+	}
+	if len(initContainer.Command) != 1 || initContainer.Command[0] != defaultTestDataInitCmd {
+		t.Fatalf("expected init container command %q, got %v", defaultTestDataInitCmd, initContainer.Command)
+	}
+
+	var foundBucketEnv, foundKeyEnv bool
+	for _, env := range initContainer.Env {
+		if env.Name == envTestDataS3BucketName {
+			foundBucketEnv = true
+			if env.Value != "bucket-1" {
+				t.Fatalf("expected bucket env %q, got %q", "bucket-1", env.Value)
+			}
+		}
+		if env.Name == envTestDataS3KeyName {
+			foundKeyEnv = true
+			if env.Value != "a/b" {
+				t.Fatalf("expected key env %q, got %q", "a/b", env.Value)
+			}
+		}
+	}
+	if !foundBucketEnv || !foundKeyEnv {
+		t.Fatalf("expected bucket/key env vars on init container")
+	}
+
+	var foundTestDataVolume, foundSecretVolume bool
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == testDataVolumeName {
+			foundTestDataVolume = true
+		}
+		if v.Name == testDataSecretVolumeName {
+			foundSecretVolume = true
+			if v.VolumeSource.Secret == nil || v.VolumeSource.Secret.SecretName != "s3-secret" {
+				t.Fatalf("expected secret volume %q with secret %q", testDataSecretVolumeName, "s3-secret")
+			}
+		}
+	}
+	if !foundTestDataVolume || !foundSecretVolume {
+		t.Fatalf("expected test data and secret volumes to be present")
+	}
+
+	var foundTestDataMount bool
+	for _, m := range job.Spec.Template.Spec.Containers[0].VolumeMounts {
+		if m.Name == testDataVolumeName && m.MountPath == testDataMountPath {
+			foundTestDataMount = true
+		}
+	}
+	if !foundTestDataMount {
+		t.Fatalf("expected adapter to mount %s", testDataMountPath)
+	}
+}
+
+func TestBuildJobWithS3TestDataSkipsEmptyNormalizedKey(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "job-s3-empty",
+		resourceGUID:   "guid-s3-empty",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
+		testDataS3: s3TestDataConfig{
+			bucket:    "bucket-1",
+			key:       "/",
+			secretRef: "s3-secret",
+		},
+	}
+
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	if len(job.Spec.Template.Spec.InitContainers) != 0 {
+		t.Fatalf("expected no init containers when normalized key is empty")
+	}
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == testDataVolumeName || v.Name == testDataSecretVolumeName {
+			t.Fatalf("expected no test data volumes when normalized key is empty")
+		}
+	}
+}
+
 func TestBuildJobWithModelAuthSecret(t *testing.T) {
 	cfg := &jobConfig{
 		jobID:              "job-auth",
