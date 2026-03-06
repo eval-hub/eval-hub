@@ -16,11 +16,9 @@ import (
 
 	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
 	sidecarServer "github.com/eval-hub/eval-hub/cmd/eval_runtime_sidecar/server"
-	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/clients"
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/logging"
-	"github.com/eval-hub/eval-hub/internal/mlflow"
 	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -265,25 +263,16 @@ func createServer(port int) (*sidecarServer.SidecarServer, error) {
 	} else {
 		serviceConfig.Prometheus.Enabled = true
 	}
+	if serviceConfig.Sidecar == nil {
+		serviceConfig.Sidecar = &config.SidecarConfig{}
+	}
 	if serviceConfig.Sidecar.EvalHub == nil {
 		serviceConfig.Sidecar.EvalHub = &config.EvalHubClientConfig{BaseURL: "http://localhost:8080"}
 	} else if serviceConfig.Sidecar.EvalHub.BaseURL == "" {
 		serviceConfig.Sidecar.EvalHub.BaseURL = "http://localhost:8080"
 	}
 
-	evalHubClient, err := clients.NewEvalHubClientFromConfig(serviceConfig.Sidecar.EvalHub, serviceConfig.IsOTELEnabled(), logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create eval-hub client: %w", err)
-	}
-	if evalHubClient == nil {
-		return nil, fmt.Errorf("eval-hub client is nil (EvalHub base URL required)")
-	}
-
-	mlflowClient, err := mlflow.NewMLFlowClient(serviceConfig.MLFlow, serviceConfig.IsOTELEnabled(), logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create MLFlow client: %w", err)
-	}
-	return sidecarServer.NewSidecarServer(logger, serviceConfig, evalHubClient, mlflowClient)
+	return sidecarServer.NewSidecarServer(logger, serviceConfig)
 }
 
 func getKeyAsString(obj map[string]interface{}, key string) string {

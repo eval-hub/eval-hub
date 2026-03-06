@@ -16,11 +16,9 @@ import (
 
 	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
 	sidecarServer "github.com/eval-hub/eval-hub/cmd/eval_runtime_sidecar/server"
-	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/clients"
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/logging"
-	"github.com/eval-hub/eval-hub/internal/mlflow"
 	"github.com/eval-hub/eval-hub/internal/otel"
 )
 
@@ -66,11 +64,6 @@ func main() {
 		startUpFailed(terminationFilePath(nil, logger), err, "Failed to create service config", logger)
 	}
 
-	mlflowClient, err := mlflow.NewMLFlowClient(serviceConfig.MLFlow, serviceConfig.IsOTELEnabled(), logger)
-	if err != nil {
-		startUpFailed(terminationFilePath(serviceConfig, logger), err, "Failed to create MLFlow client", logger)
-	}
-
 	// setup OTEL
 	var otelShutdown func(context.Context) error
 	if serviceConfig.IsOTELEnabled() {
@@ -83,16 +76,12 @@ func main() {
 		otelShutdown = shutdown
 	}
 
-	evalHubClient, err := clients.NewEvalHubClientFromConfig(serviceConfig.Sidecar.EvalHub, serviceConfig.IsOTELEnabled(), logger)
-	if err != nil {
-		startUpFailed(terminationFilePath(serviceConfig, logger), err, "Failed to create eval-hub client", logger)
-	}
-	if evalHubClient == nil {
+	if serviceConfig.Sidecar == nil || serviceConfig.Sidecar.EvalHub == nil || strings.TrimSpace(serviceConfig.Sidecar.EvalHub.BaseURL) == "" {
 		startUpFailed(terminationFilePath(serviceConfig, logger), fmt.Errorf("eval_hub.base_url is required"), "EvalHub base URL is required for the sidecar", logger)
 	}
 
 	// create the server
-	srv, err := sidecarServer.NewSidecarServer(logger, serviceConfig, evalHubClient, mlflowClient)
+	srv, err := sidecarServer.NewSidecarServer(logger, serviceConfig)
 	if err != nil {
 		startUpFailed(terminationFilePath(serviceConfig, logger), err, "Failed to create sidecar server", logger)
 	}
@@ -107,7 +96,7 @@ func main() {
 		"version", version,
 		"build", build,
 		"build_date", buildDate,
-		"mlflow_tracking", mlflowClient != nil,
+		"mlflow_tracking", serviceConfig.MLFlow != nil && serviceConfig.MLFlow.TrackingURI != "",
 		"otel", serviceConfig.IsOTELEnabled(),
 		"prometheus", serviceConfig.IsPrometheusEnabled(),
 	)
