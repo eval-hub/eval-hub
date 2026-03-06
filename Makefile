@@ -93,12 +93,12 @@ vet: ## Run go vet
 
 test: ## Run unit tests
 	@echo "Running unit tests..."
-	@go test -v ./auth/... ./internal/... ./cmd/... | ${PWD}/scripts/grcat ${PWD}/.conf.go-test
+	@bash -c 'set -o pipefail; go test -v ./auth/... ./internal/... ./cmd/... | ${PWD}/scripts/grcat ${PWD}/.conf.go-test'
 	@echo "Unit tests complete"
 
 test-fvt: $(BIN_DIR) ## Run FVT (Functional Verification Tests) using godog
 	@echo "Running FVT tests..."
-	@go test -v -race ./tests/features/... | ${PWD}/scripts/grcat ${PWD}/.conf.go-integration-test; $?=${PIPESTATUS[0]}
+	@bash -c 'set -o pipefail; go test -v -race ./tests/features/... | ${PWD}/scripts/grcat ${PWD}/.conf.go-integration-test; $?=${PIPESTATUS[0]}'
 
 fvt-report: ## Generate HTML report for FVT tests
 	@echo "Generating FVT JSON report..."
@@ -137,6 +137,7 @@ test-fvt-server-coverage: start-service-coverage ## Run FVT tests using godog ag
 test-all-coverage: test-coverage test-fvt-server-coverage ## Run all tests (unit + FVT) with coverage
 
 install-deps: ## Install dependencies
+	@command -v python3 >/dev/null 2>&1 || { echo "Error: Python 3 is required for make test (scripts/grcat). Install python3 and retry."; exit 1; }
 	@echo "Installing dependencies..."
 	@go mod download
 	@go mod tidy
