@@ -6,9 +6,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/google/uuid"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 const (
@@ -16,6 +19,11 @@ const (
 	defaultMemoryRequest     = "512Mi"
 	defaultCPULimit          = "1"
 	defaultMemoryLimit       = "2Gi"
+	defaultSidecarImage      = "eval-runtime-sidecar:latest"
+	defaultSidecarCPURequest = "100m"
+	defaultSidecarMemoryRequest = "128Mi"
+	defaultSidecarCPULimit   = "200m"
+	defaultSidecarMemoryLimit = "256Mi"
 	defaultNamespace         = "default"
 	serviceURLEnv            = "SERVICE_URL"
 	evalHubInstanceNameEnv   = "EVALHUB_INSTANCE_NAME"
@@ -35,6 +43,7 @@ type jobConfig struct {
 	benchmarkID          string
 	benchmarkIndex       int
 	adapterImage         string
+	sidecarImage         string
 	entrypoint           []string
 	defaultEnv           []api.EnvVar
 	cpuRequest           string
@@ -50,9 +59,10 @@ type jobConfig struct {
 	mlflowWorkspace      string
 	ociCredentialsSecret string
 	modelAuthSecretRef   string
+	sidecarResources     corev1.ResourceRequirements
 }
 
-func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkID string, benchmarkIndex int) (*jobConfig, error) {
+func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkID string, benchmarkIndex int, serviceConfig *config.Config) (*jobConfig, error) {
 	runtime := provider.Runtime
 	if runtime == nil || runtime.K8s == nil {
 		return nil, fmt.Errorf("provider %q missing runtime configuration", provider.Resource.ID)
@@ -108,6 +118,11 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		modelAuthSecretRef = strings.TrimSpace(evaluation.Model.Auth.SecretRef)
 	}
 
+	sidecarImage, sidecarResources, err := sidecarImageAndResources(serviceConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	return &jobConfig{
 		jobID:                evaluation.Resource.ID,
 		resourceGUID:         uuid.NewString(),
@@ -115,6 +130,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		providerID:           provider.Resource.ID,
 		benchmarkID:          benchmarkID,
 		adapterImage:         runtime.K8s.Image,
+		sidecarImage:         sidecarImage,
 		entrypoint:           runtime.K8s.Entrypoint,
 		defaultEnv:           runtime.K8s.Env,
 		cpuRequest:           cpuRequest,
@@ -130,7 +146,93 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		mlflowWorkspace:      mlflowWorkspace,
 		ociCredentialsSecret: ociCredentialsSecret,
 		modelAuthSecretRef:   modelAuthSecretRef,
+		sidecarResources:     sidecarResources,
 	}, nil
+}
+
+// sidecarImageAndResources returns image and resources for the sidecar container from
+// config.Sidecar.SidecarContainer (YAML key "sidecar"), or defaults when nil/empty.
+func sidecarImageAndResources(serviceConfig *config.Config) (image string, resources corev1.ResourceRequirements, err error) {
+	image = defaultSidecarImage
+	resources = defaultSidecarResourceRequirements()
+	if serviceConfig != nil && serviceConfig.Sidecar != nil && serviceConfig.Sidecar.SidecarContainer != nil {
+		sc := serviceConfig.Sidecar.SidecarContainer
+		if sc.Image != "" {
+			image = strings.TrimSpace(sc.Image)
+		}
+		if sc.Resources != nil {
+			resources, err = resourceRequirementsFromConfig(sc.Resources)
+			if err != nil {
+				return "", corev1.ResourceRequirements{}, err
+			}
+		}
+	}
+	return image, resources, nil
+}
+
+func defaultSidecarResourceRequirements() corev1.ResourceRequirements {
+	q := func(s string) resource.Quantity {
+		qu, _ := resource.ParseQuantity(s)
+		return qu
+	}
+	return corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    q(defaultSidecarCPURequest),
+			corev1.ResourceMemory: q(defaultSidecarMemoryRequest),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    q(defaultSidecarCPULimit),
+			corev1.ResourceMemory: q(defaultSidecarMemoryLimit),
+		},
+	}
+}
+
+// resourceRequirementsFromConfig converts config.ResourceRequirements to corev1.ResourceRequirements.
+// Empty strings are skipped (not set). Uses default sidecar quantities for any missing request/limit.
+func resourceRequirementsFromConfig(cfg *config.ResourceRequirements) (corev1.ResourceRequirements, error) {
+	out := defaultSidecarResourceRequirements()
+	if cfg == nil {
+		return out, nil
+	}
+	parse := func(s string) (resource.Quantity, error) {
+		if s == "" {
+			return resource.Quantity{}, nil
+		}
+		return resource.ParseQuantity(s)
+	}
+	if cfg.Requests != nil {
+		if cfg.Requests.CPU != "" {
+			q, err := parse(cfg.Requests.CPU)
+			if err != nil {
+				return corev1.ResourceRequirements{}, fmt.Errorf("sidecar resources.requests.cpu: %w", err)
+			}
+			out.Requests[corev1.ResourceCPU] = q
+		}
+		if cfg.Requests.Memory != "" {
+			q, err := parse(cfg.Requests.Memory)
+			if err != nil {
+				return corev1.ResourceRequirements{}, fmt.Errorf("sidecar resources.requests.memory: %w", err)
+			}
+			out.Requests[corev1.ResourceMemory] = q
+		}
+	}
+	if cfg.Limits != nil {
+		if cfg.Limits.CPU != "" {
+			q, err := parse(cfg.Limits.CPU)
+			if err != nil {
+				return corev1.ResourceRequirements{}, fmt.Errorf("sidecar resources.limits.cpu: %w", err)
+			}
+			out.Limits[corev1.ResourceCPU] = q
+		}
+		if cfg.Limits.Memory != "" {
+			q, err := parse(cfg.Limits.Memory)
+			if err != nil {
+				return corev1.ResourceRequirements{}, fmt.Errorf("sidecar resources.limits.memory: %w", err)
+			}
+			out.Limits[corev1.ResourceMemory] = q
+		}
+	}
+	return out, nil
 }
 
 func defaultIfEmpty(value string, fallback string) string {

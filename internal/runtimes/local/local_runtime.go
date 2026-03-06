@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
+	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
@@ -61,38 +62,43 @@ func (jr *pidTracker) cancelJob(jobID string) {
 }
 
 type LocalRuntime struct {
-	logger    *slog.Logger
-	ctx       context.Context
-	providers map[string]api.ProviderResource
-	tracker   jobTracker
+	logger        *slog.Logger
+	ctx           context.Context
+	serviceConfig *config.Config
+	providers     map[string]api.ProviderResource
+	tracker       jobTracker
 }
 
 func NewLocalRuntime(
 	logger *slog.Logger,
+	serviceConfig *config.Config,
 	providerConfigs map[string]api.ProviderResource,
 ) (abstractions.Runtime, error) {
 	return &LocalRuntime{
-		logger:    logger,
-		providers: providerConfigs,
-		tracker:   &pidTracker{pids: make(map[string][]int)},
+		logger:        logger,
+		serviceConfig: serviceConfig,
+		providers:     providerConfigs,
+		tracker:       &pidTracker{pids: make(map[string][]int)},
 	}, nil
 }
 
 func (r *LocalRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
 	return &LocalRuntime{
-		logger:    logger,
-		ctx:       r.ctx,
-		providers: r.providers,
-		tracker:   r.tracker,
+		logger:        logger,
+		ctx:           r.ctx,
+		serviceConfig: r.serviceConfig,
+		providers:     r.providers,
+		tracker:       r.tracker,
 	}
 }
 
 func (r *LocalRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 	return &LocalRuntime{
-		logger:    r.logger,
-		ctx:       ctx,
-		providers: r.providers,
-		tracker:   r.tracker,
+		logger:        r.logger,
+		ctx:           ctx,
+		serviceConfig: r.serviceConfig,
+		providers:     r.providers,
+		tracker:       r.tracker,
 	}
 }
 

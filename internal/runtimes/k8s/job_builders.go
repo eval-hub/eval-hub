@@ -150,7 +150,60 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 		return nil, err
 	}
 
-	// Build volumes list
+	// Build runtimeContainerVolumes list
+	runtimeContainerVolumes, runtimeContainerVolumeMounts := buildRuntimeContainerVolumesAndMounts(configMap, cfg)
+
+	// Set ServiceAccount if configured
+	// applied below in template spec
+
+	return &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        jobName,
+			Namespace:   cfg.namespace,
+			Labels:      labels,
+			Annotations: annotations,
+		},
+		Spec: batchv1.JobSpec{
+			BackoffLimit:            &backoff,
+			TTLSecondsAfterFinished: &ttl,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels:      labels,
+					Annotations: annotations,
+				},
+				Spec: corev1.PodSpec{
+					RestartPolicy: corev1.RestartPolicyNever,
+					Containers: []corev1.Container{
+						{
+							Name:            adapterContainerName,
+							Image:           cfg.adapterImage,
+							ImagePullPolicy: corev1.PullAlways,
+							Command:         buildContainerCommand(cfg.entrypoint),
+							Env:             envVars,
+							Resources:       resources,
+							SecurityContext: defaultSecurityContext(),
+							VolumeMounts:    runtimeContainerVolumeMounts,
+						},
+						{
+							Name:            sidecarContainerName,
+							Image:           cfg.sidecarImage,
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							Command:         []string{"/app/eval-runtime-sidecar"},
+							Env:             envVars,
+							Resources:       cfg.sidecarResources,
+							SecurityContext: defaultSecurityContext(),
+							VolumeMounts:    runtimeContainerVolumeMounts,
+						},
+					},
+					Volumes:            runtimeContainerVolumes,
+					ServiceAccountName: cfg.serviceAccountName,
+				},
+			},
+		},
+	}, nil
+}
+
+func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]corev1.Volume, []corev1.VolumeMount) {
 	volumes := []corev1.Volume{
 		{
 			Name: jobSpecVolumeName,
@@ -251,55 +304,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 			ReadOnly:  true,
 		})
 	}
-
-	// Set ServiceAccount if configured
-	// applied below in template spec
-
-	return &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        jobName,
-			Namespace:   cfg.namespace,
-			Labels:      labels,
-			Annotations: annotations,
-		},
-		Spec: batchv1.JobSpec{
-			BackoffLimit:            &backoff,
-			TTLSecondsAfterFinished: &ttl,
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels:      labels,
-					Annotations: annotations,
-				},
-				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyNever,
-					Containers: []corev1.Container{
-						{
-							Name:            adapterContainerName,
-							Image:           cfg.adapterImage,
-							ImagePullPolicy: corev1.PullAlways,
-							Command:         buildContainerCommand(cfg.entrypoint),
-							Env:             envVars,
-							Resources:       resources,
-							SecurityContext: defaultSecurityContext(),
-							VolumeMounts:    volumeMounts,
-						},
-						{
-							Name:            sidecarContainerName,
-							Image:           cfg.adapterImage,
-							ImagePullPolicy: corev1.PullAlways,
-							Command:         []string{"/app/eval-runtime-sidecar"},
-							Env:             envVars,
-							Resources:       resources,
-							SecurityContext: defaultSecurityContext(),
-							VolumeMounts:    volumeMounts,
-						},
-					},
-					Volumes:            volumes,
-					ServiceAccountName: cfg.serviceAccountName,
-				},
-			},
-		},
-	}, nil
+	return volumes, volumeMounts
 }
 
 func ensureServiceCAVolume(volumes []corev1.Volume, configMapName string) []corev1.Volume {
