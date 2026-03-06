@@ -93,21 +93,12 @@ vet: ## Run go vet
 
 test: ## Run unit tests
 	@echo "Running unit tests..."
-	@go test -v ./auth/... ./internal/... ./cmd/...
-
-GOBIN := $(shell go env GOPATH)/bin
-
-$(GOBIN)/gotest:
-	GOBIN=$(GOBIN) go install github.com/rakyll/gotest@latest
-
-test-color: $(GOBIN)/gotest
-	@echo "Running unit tests with color..."
-	@$(GOBIN)/gotest -v -race ./internal/... ./cmd/...
+	@go test -v ./auth/... ./internal/... ./cmd/... | ${PWD}/scripts/grcat ${PWD}/.conf.go-test
 	@echo "Unit tests complete"
 
 test-fvt: $(BIN_DIR) ## Run FVT (Functional Verification Tests) using godog
 	@echo "Running FVT tests..."
-	@go test -v -race ./tests/features/...
+	@go test -v -race ./tests/features/... | ${PWD}/scripts/grcat ${PWD}/.conf.go-integration-test; $?=${PIPESTATUS[0]}
 
 fvt-report: ## Generate HTML report for FVT tests
 	@echo "Generating FVT JSON report..."
