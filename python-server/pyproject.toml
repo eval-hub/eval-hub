@@ -43,7 +43,7 @@ Repository = "https://github.com/eval-hub/eval-hub"
 "Bug Tracker" = "https://github.com/eval-hub/eval-hub/issues"
 
 [tool.setuptools.dynamic]
-version = {file = "../VERSION"}
+version = {file = "VERSION"}
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -1,6 +1,6 @@
 # eval-hub-server
 
-This package provides the eval-hub server binary for multiple platforms.
+This package is a thin Python wrapper that packages and distributes the compiled Go eval-hub server binary for multiple platforms. It handles platform detection and binary resolution so consumers can simply install and run.
 
 It is primarily intended to be used as a dependency of `eval-hub-sdk`.
 
@@ -64,57 +64,7 @@ For more information, see the [eval-hub-sdk repository](https://github.com/eval-
 
 ## Development
 
-This package is automatically built and published when a new release is created in the eval-hub repository. The build process:
-
-1. Compiles Go binaries for all supported platforms
-2. Creates platform-specific Python wheels containing the appropriate binary
-3. Publishes to PyPI using trusted publishing
-
-### Local Development
-
-1. Clone and setup
-   ```bash
-   git clone <repository>
-   cd eval-hub
-   uv venv
-   source .venv/bin/activate  # On Windows: .venv\\Scripts\\activate
-   uv pip install -e "./python-server[dev]"
-   ```
-
-2. Build Go binaries
-
-   This step can be skipped if Go server binaries are already built. See the main project README for details.
-
-   Example for macOS arm64:
-   ```bash
-   make cross-compile CROSS_GOOS=darwin CROSS_GOARCH=arm64
-   ```
-   See Makefile `build-all-platforms` target for other options.
-
-3. Install wheel and setuptools
-   Install uv wheel and setuptools with the target `install-wheel-tools`
-   ```bash
-   make install-wheel-tools
-   ```
-
-4. Copy the Go-Binary
-
-   python wheel looks for compiled Go-Binaries is a different path from the compiled out path. Copy to the desired location.
-   ```bash
-   make download-binary
-   ```
-
-5. Build Python wheel
-
-   Example for macOS arm64:
-   ```bash
-   make build-wheel WHEEL_PLATFORM=macosx_11_0_arm64 WHEEL_BINARY=eval-hub-darwin-arm64
-   ```
-   See Makefile `build-all-wheels` target for other options.
-
-   The wheel file will be under `python-server/dist` directory.
-
-For usage, see [Usage](#usage).
+See [DEVELOPMENT.md](DEVELOPMENT.md) for build process details, local development setup, testing, and troubleshooting.
 
 ## License
 
