@@ -563,9 +563,15 @@ func (tc *scenarioConfig) extractId(body []byte) (string, error) {
 		if err != nil {
 			return "", tc.logError(fmt.Errorf("failed to unmarshal body %s: %w", string(body), err))
 		}
-		if id, ok := obj["resource"].(map[string]any)["id"].(string); ok {
-			return id, nil
+		resource, ok := obj["resource"].(map[string]any)
+		if !ok {
+			return "", tc.logError(fmt.Errorf("response does not contain resource object: %s", string(body)))
 		}
+		id, ok := resource["id"].(string)
+		if !ok || id == "" {
+			return "", tc.logError(fmt.Errorf("response does not contain resource.id: %s", string(body)))
+		}
+		return id, nil
 	}
 	return "", nil
 }
