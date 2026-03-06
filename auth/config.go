@@ -49,7 +49,7 @@ type ResourceAttributes struct {
 	Verb        string `yaml:"verb" mapstructure:"verb"`
 }
 
-func (s *AuthConfig) Optimize() AuthConfig {
+func (s *AuthConfig) Optimize() *AuthConfig {
 	endpoints := []Endpoint{}
 	// Extract wildcard index from each endpoint path since the pattern is fixed so
 	// that at runtime we don't need to re-compute the index.
@@ -62,7 +62,7 @@ func (s *AuthConfig) Optimize() AuthConfig {
 			PathParts: parts,
 		})
 	}
-	return AuthConfig{
+	return &AuthConfig{
 		Authorization: EndpointsAuthorization{
 			Endpoints: endpoints,
 		},

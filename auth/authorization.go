@@ -16,7 +16,7 @@ import (
 
 type SarAuthorizer struct {
 	auth   authorizer.Authorizer
-	config AuthConfig
+	config *AuthConfig
 	client *kubernetes.Clientset
 	logger *slog.Logger
 }
@@ -49,7 +49,7 @@ func NewSarAuthorizer(client *kubernetes.Clientset, logger *slog.Logger, config 
 
 	return &SarAuthorizer{
 		auth:   auth,
-		config: *config,
+		config: config,
 		client: client,
 		logger: logger,
 	}, nil
