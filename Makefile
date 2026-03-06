@@ -98,7 +98,7 @@ test: ## Run unit tests
 
 test-fvt: $(BIN_DIR) ## Run FVT (Functional Verification Tests) using godog
 	@echo "Running FVT tests..."
-	@bash -c 'set -o pipefail; go test -v -race ./tests/features/... | ${PWD}/scripts/grcat ${PWD}/.conf.go-integration-test; $?=${PIPESTATUS[0]}'
+	@bash -c 'set -o pipefail; go test -v -race ./tests/features/... | ${PWD}/scripts/grcat ${PWD}/.conf.go-integration-test'
 
 fvt-report: ## Generate HTML report for FVT tests
 	@echo "Generating FVT JSON report..."
