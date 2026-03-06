@@ -174,7 +174,7 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 
 	// first check to see if the system providers are enough for the paging
 	if len(providers) > 0 {
-		if len(providers) < filter.Limit {
+		if len(providers) < (filter.Limit + filter.Offset) {
 			userFilter := &abstractions.QueryFilter{
 				Limit:  max(0, filter.Limit-len(providers)),
 				Offset: max(0, filter.Offset-len(providers)),
