@@ -8,6 +8,7 @@ import (
 	"log/slog"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
+	"github.com/eval-hub/eval-hub/internal/common"
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
@@ -22,15 +23,16 @@ type K8sRuntime struct {
 	helper        *KubernetesHelper
 	providers     map[string]api.ProviderResource
 	ctx           context.Context
+	initImage     string
 }
 
 // NewK8sRuntime creates a Kubernetes runtime.
-func NewK8sRuntime(logger *slog.Logger, serviceConfig *config.Config, providerConfigs map[string]api.ProviderResource) (abstractions.Runtime, error) {
+func NewK8sRuntime(logger *slog.Logger, serviceConfig *config.Config, providerConfigs map[string]api.ProviderResource, initImage string) (abstractions.Runtime, error) {
 	helper, err := NewKubernetesHelper()
 	if err != nil {
 		return nil, err
 	}
-	return &K8sRuntime{logger: logger, serviceConfig: serviceConfig, helper: helper, providers: providerConfigs}, nil
+	return &K8sRuntime{logger: logger, serviceConfig: serviceConfig, helper: helper, providers: providerConfigs, initImage: initImage}, nil
 }
 
 func (r *K8sRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
@@ -40,6 +42,7 @@ func (r *K8sRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
 		helper:        r.helper,
 		providers:     r.providers,
 		ctx:           r.ctx,
+		initImage:     r.initImage,
 	}
 }
 
@@ -50,10 +53,11 @@ func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 		helper:        r.helper,
 		providers:     r.providers,
 		ctx:           ctx,
+		initImage:     r.initImage,
 	}
 }
 
-func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, storage *abstractions.Storage) error {
+func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, storage abstractions.Storage) error {
 	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
 	if err != nil {
 		return err
@@ -69,9 +73,9 @@ func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, sto
 					"benchmark_id", bench.ID,
 				)
 
-				if storage != nil && *storage != nil {
+				if storage != nil {
 					runStatus := buildBenchmarkFailureStatus(&bench, idx, err)
-					if updateErr := (*storage).UpdateEvaluationJob(evaluation.Resource.ID, runStatus); updateErr != nil {
+					if updateErr := storage.UpdateEvaluationJob(evaluation.Resource.ID, runStatus); updateErr != nil {
 						r.logger.Error(
 							"failed to update benchmark status",
 							"error", updateErr,
@@ -145,12 +149,16 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 
 	benchmarkID := benchmark.ID
 	// Provider/benchmark validation should be handled during creation.
-	provider := r.providers[benchmark.ProviderID]
-	jobConfig, err := buildJobConfig(evaluation, &provider, benchmarkID, benchmarkIndex, r.serviceConfig)
+	provider, err := common.ResolveProvider(benchmark.ProviderID, r.providers, nil)
+	if err != nil {
+		return err
+	}
+	jobConfig, err := buildJobConfig(evaluation, provider, benchmark, benchmarkIndex, r.serviceConfig)
 	if err != nil {
 		logger.Error("kubernetes job config error", "benchmark_id", benchmarkID, "error", err)
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
 	}
+	jobConfig.testDataInitImage = r.initImage
 	logger.Info(
 		"kubernetes job config",
 		"job_id", evaluation.Resource.ID,

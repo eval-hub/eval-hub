@@ -15,7 +15,7 @@ RUN go mod download
 COPY . .
 
 # Build arguments for versioning
-ARG BUILD_NUMBER=0.0.1
+ARG BUILD_NUMBER=0.2.0
 ARG BUILD_DATE
 ARG BUILD_PACKAGE=main
 
@@ -28,10 +28,17 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 
 # Build eval-runtime-sidecar binary (same image can run either via container command override)
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-    -ldflags="-w -s -X 'main.Build=${BUILD_NUMBER}' -X 'main.BuildDate=${BUILD_DATE}'" \
+    -ldflags="-w -s -X '${BUILD_PACKAGE}.Build=${BUILD_NUMBER}' -X '${BUILD_PACKAGE}.BuildDate=${BUILD_DATE}'" \
     -a -installsuffix cgo \
     -o eval-runtime-sidecar \
     ./cmd/eval_runtime_sidecar
+
+# Build the init container binary
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-w -s -X '${BUILD_PACKAGE}.Build=${BUILD_NUMBER}' -X '${BUILD_PACKAGE}.BuildDate=${BUILD_DATE}'" \
+    -a -installsuffix cgo \
+    -o eval-hub-init \
+    ./cmd/eval_hub_init
 
 # Runtime stage
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
@@ -45,6 +52,7 @@ RUN groupadd -g 1000 evalhub && \
 # Copy both binaries from builder
 COPY --from=builder --chown=evalhub:evalhub /build/eval-hub /app/eval-hub
 COPY --from=builder --chown=evalhub:evalhub /build/eval-runtime-sidecar /app/eval-runtime-sidecar
+COPY --from=builder --chown=evalhub:evalhub /build/eval-hub-init /app/eval-hub-init
 
 
 # The config file should not really be part of the image.

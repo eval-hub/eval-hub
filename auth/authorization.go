@@ -16,7 +16,7 @@ import (
 
 type SarAuthorizer struct {
 	auth   authorizer.Authorizer
-	config AuthConfig
+	config *AuthConfig
 	client *kubernetes.Clientset
 	logger *slog.Logger
 }
@@ -49,7 +49,7 @@ func NewSarAuthorizer(client *kubernetes.Clientset, logger *slog.Logger, config 
 
 	return &SarAuthorizer{
 		auth:   auth,
-		config: *config,
+		config: config,
 		client: client,
 		logger: logger,
 	}, nil
@@ -73,5 +73,6 @@ func (s *SarAuthorizer) AuthorizeRequest(ctx context.Context, req *http.Request)
 		return authorizer.DecisionDeny, "User not found in request context. Please authenticate.", nil
 	}
 	attributesRecords := AttributesFromRequest(req, s.config, user)
+
 	return s.Authorize(ctx, attributesRecords)
 }

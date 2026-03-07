@@ -3,6 +3,10 @@
 # Variables
 BINARY_NAME = eval-hub
 CMD_PATH = ./cmd/eval_hub
+INIT_BINARY_NAME = eval-hub-init
+INIT_CMD_PATH = ./cmd/eval_hub_init
+SIDECAR_BINARY_NAME = eval-hub-sidecar
+SIDECAR_CMD_PATH = ./cmd/eval_hub_sidecar
 BIN_DIR = bin
 PORT ?= 8080
 
@@ -43,19 +47,31 @@ $(BIN_DIR):
 	@mkdir -p $(BIN_DIR)
 
 BUILD_PACKAGE ?= main
-FULL_BUILD_NUMBER ?= 0.0.1
+FULL_BUILD_NUMBER ?= $(shell cat VERSION)
 LDFLAGS_X = -X "${BUILD_PACKAGE}.Build=${FULL_BUILD_NUMBER}" -X "${BUILD_PACKAGE}.BuildDate=$(DATE)"
 LDFLAGS = -buildmode=exe ${LDFLAGS_X}
 
-build: $(BIN_DIR) ## Build the binary
+build: $(BIN_DIR) ## Build the binaries
 	@echo "Building $(BINARY_NAME) with ${LDFLAGS}"
 	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(BINARY_NAME) $(CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(BINARY_NAME)"
+	@echo "Building $(INIT_BINARY_NAME) with ${LDFLAGS}"
+	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(INIT_BINARY_NAME) $(INIT_CMD_PATH)
+	@echo "Build complete: $(BIN_DIR)/$(INIT_BINARY_NAME)"
+	@echo "Building $(SIDECAR_BINARY_NAME) with ${LDFLAGS}"
+	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(SIDECAR_BINARY_NAME) $(SIDECAR_CMD_PATH)
+	@echo "Build complete: $(BIN_DIR)/$(SIDECAR_BINARY_NAME)"
 
-build-coverage: $(BIN_DIR) ## Build the binary with coverage
+build-coverage: $(BIN_DIR) ## Build the binaries with coverage
 	@echo "Building $(BINARY_NAME)-cov with -cover -covermode=atomic -ldflags ${LDFLAGS} "
 	@go build -race -cover -covermode=atomic -coverpkg=./... -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(BINARY_NAME)-cov $(CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(BINARY_NAME)-cov"
+	@echo "Building $(INIT_BINARY_NAME)-cov with -cover -covermode=atomic -ldflags ${LDFLAGS} "
+	@go build -race -cover -covermode=atomic -coverpkg=./... -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(INIT_BINARY_NAME)-cov $(INIT_CMD_PATH)
+	@echo "Build complete: $(BIN_DIR)/$(INIT_BINARY_NAME)-cov"
+	@echo "Building $(SIDECAR_BINARY_NAME)-cov with -cover -covermode=atomic -ldflags ${LDFLAGS} "
+	@go build -race -cover -covermode=atomic -coverpkg=./... -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(SIDECAR_BINARY_NAME)-cov $(SIDECAR_CMD_PATH)
+	@echo "Build complete: $(BIN_DIR)/$(SIDECAR_BINARY_NAME)-cov"
 
 SERVER_PID_FILE ?= $(BIN_DIR)/pid
 
@@ -93,21 +109,12 @@ vet: ## Run go vet
 
 test: ## Run unit tests
 	@echo "Running unit tests..."
-	@go test -v ./auth/... ./internal/... ./cmd/...
-
-GOBIN := $(shell go env GOPATH)/bin
-
-$(GOBIN)/gotest:
-	GOBIN=$(GOBIN) go install github.com/rakyll/gotest@latest
-
-test-color: $(GOBIN)/gotest
-	@echo "Running unit tests with color..."
-	@$(GOBIN)/gotest -v -race ./internal/... ./cmd/...
+	@bash -c 'set -o pipefail; go test -v ./auth/... ./internal/... ./cmd/... | ${PWD}/scripts/grcat ${PWD}/.conf.go-test'
 	@echo "Unit tests complete"
 
 test-fvt: $(BIN_DIR) ## Run FVT (Functional Verification Tests) using godog
 	@echo "Running FVT tests..."
-	@go test -v -race ./tests/features/...
+	@bash -c 'set -o pipefail; go test -v -race ./tests/features/... | ${PWD}/scripts/grcat ${PWD}/.conf.go-integration-test'
 
 fvt-report: ## Generate HTML report for FVT tests
 	@echo "Generating FVT JSON report..."
@@ -129,8 +136,10 @@ test-fvt-server: start-service ## Run FVT tests using godog against a running se
 test-coverage: $(BIN_DIR) ## Run unit tests with coverage
 	@echo "Running unit tests with coverage..."
 	@go test -v -race -coverprofile=$(BIN_DIR)/coverage.out -covermode=atomic ./internal/... ./cmd/...
+	@go test -v -race -coverprofile=$(BIN_DIR)/coverage-init.out -covermode=atomic ./cmd/eval_hub_init
 	@go tool cover -html=$(BIN_DIR)/coverage.out -o $(BIN_DIR)/coverage.html
-	@echo "Coverage report generated: $(BIN_DIR)/coverage.html"
+	@go tool cover -html=$(BIN_DIR)/coverage-init.out -o $(BIN_DIR)/coverage-init.html
+	@echo "Coverage report generated: $(BIN_DIR)/coverage.html and $(BIN_DIR)/coverage-init.html"
 
 test-fvt-coverage: $(BIN_DIR)## Run integration (FVT) tests with coverage
 	@echo "Running integration (FVT) tests with coverage..."
@@ -146,6 +155,7 @@ test-fvt-server-coverage: start-service-coverage ## Run FVT tests using godog ag
 test-all-coverage: test-coverage test-fvt-server-coverage ## Run all tests (unit + FVT) with coverage
 
 install-deps: ## Install dependencies
+	@command -v python3 >/dev/null 2>&1 || { echo "Error: Python 3 is required for make test (scripts/grcat). Install python3 and retry."; exit 1; }
 	@echo "Installing dependencies..."
 	@go mod download
 	@go mod tidy
@@ -231,6 +241,7 @@ clean-wheels: ## Clean Python wheel build artifacts
 	@rm -rf python-server/build/
 	@rm -rf python-server/*.egg-info
 	@find python-server/evalhub_server/binaries/ -type f ! -name '.gitkeep' -delete
+	@rm -f python-server/VERSION
 
 .PHONY: build-wheel
 build-wheel: ## Build Python wheel: make build-wheel WHEEL_PLATFORM=manylinux_2_17_x86_64 WHEEL_BINARY=eval-hub-linux-amd64
@@ -245,6 +256,7 @@ build-wheel: ## Build Python wheel: make build-wheel WHEEL_PLATFORM=manylinux_2_
 	@find python-server/evalhub_server/binaries/ -type f ! -name '.gitkeep' -exec chmod +x {} +
 	@echo "Building wheel for $(WHEEL_PLATFORM) with binary $(WHEEL_BINARY)..."
 	@rm -rf python-server/build/
+	@cp VERSION python-server/VERSION
 	WHEEL_PLATFORM=$(WHEEL_PLATFORM) uv build --wheel python-server
 
 .PHONY: build-all-wheels

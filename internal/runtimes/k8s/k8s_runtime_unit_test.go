@@ -309,6 +309,103 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnv(t *testing.T) {
 	}
 }
 
+func TestCreateBenchmarkResourcesAddsInitContainerForS3TestData(t *testing.T) {
+	t.Setenv("SERVICE_URL", "http://service.example")
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Benchmarks[0].TestDataRef = &api.TestDataRef{
+		S3: &api.S3TestDataRef{
+			Bucket:    "bucket-1",
+			Key:       "/a/b",
+			SecretRef: "s3-secret",
+		},
+	}
+
+	clientset := fake.NewSimpleClientset()
+	runtime := &K8sRuntime{
+		logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper:    &KubernetesHelper{clientset: clientset},
+		providers: sampleProviders(providerID),
+	}
+
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(jobs))
+	}
+	job := jobs[0]
+	if len(job.Spec.Template.Spec.InitContainers) != 1 {
+		t.Fatalf("expected 1 init container, got %d", len(job.Spec.Template.Spec.InitContainers))
+	}
+
+	initContainer := job.Spec.Template.Spec.InitContainers[0]
+	if initContainer.Name != initContainerName {
+		t.Fatalf("expected init container name %q, got %q", initContainerName, initContainer.Name)
+	}
+	if len(initContainer.Command) != 1 || initContainer.Command[0] != defaultTestDataInitCmd {
+		t.Fatalf("expected init container command %q, got %v", defaultTestDataInitCmd, initContainer.Command)
+	}
+
+	var foundBucketEnv, foundKeyEnv bool
+	for _, env := range initContainer.Env {
+		if env.Name == envTestDataS3BucketName {
+			foundBucketEnv = true
+			if env.Value != "bucket-1" {
+				t.Fatalf("expected bucket env %q, got %q", "bucket-1", env.Value)
+			}
+		}
+		if env.Name == envTestDataS3KeyName {
+			foundKeyEnv = true
+			if env.Value != "a/b" {
+				t.Fatalf("expected key env %q, got %q", "a/b", env.Value)
+			}
+		}
+	}
+	if !foundBucketEnv || !foundKeyEnv {
+		t.Fatalf("expected bucket/key env vars on init container")
+	}
+
+	var foundTestDataVolume, foundSecretVolume bool
+	for _, volume := range job.Spec.Template.Spec.Volumes {
+		if volume.Name == testDataVolumeName {
+			foundTestDataVolume = true
+		}
+		if volume.Name == testDataSecretVolumeName {
+			foundSecretVolume = true
+			if volume.VolumeSource.Secret == nil || volume.VolumeSource.Secret.SecretName != "s3-secret" {
+				t.Fatalf("expected secret volume %q with secret %q", testDataSecretVolumeName, "s3-secret")
+			}
+		}
+	}
+	if !foundTestDataVolume || !foundSecretVolume {
+		t.Fatalf("expected test data and secret volumes to be present")
+	}
+
+	var foundInitMounts bool
+	for _, mount := range initContainer.VolumeMounts {
+		if mount.Name == testDataVolumeName && mount.MountPath == testDataMountPath {
+			foundInitMounts = true
+		}
+	}
+	if !foundInitMounts {
+		t.Fatalf("expected init container to mount %s", testDataMountPath)
+	}
+
+	var foundAdapterMount bool
+	for _, mount := range job.Spec.Template.Spec.Containers[0].VolumeMounts {
+		if mount.Name == testDataVolumeName && mount.MountPath == testDataMountPath {
+			foundAdapterMount = true
+		}
+	}
+	if !foundAdapterMount {
+		t.Fatalf("expected adapter container to mount %s", testDataMountPath)
+	}
+}
+
 func TestCreateBenchmarkResourcesDeletesConfigMapOnJobFailure(t *testing.T) {
 	t.Setenv("SERVICE_URL", "http://service.example")
 	providerID := "provider-1"
@@ -358,7 +455,7 @@ func TestRunEvaluationJobMarksBenchmarkFailedOnCreateError(t *testing.T) {
 	storage := &fakeStorage{logger: logger, ctx: context.Background(), runStatusChan: statusCh}
 	var store abstractions.Storage = storage
 
-	if err := runtime.RunEvaluationJob(evaluation, &store); err != nil {
+	if err := runtime.RunEvaluationJob(evaluation, store); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
@@ -408,7 +505,7 @@ func TestRunEvaluationJobHandlesUpdateFailure(t *testing.T) {
 	}
 	var store abstractions.Storage = storage
 
-	if err := runtime.RunEvaluationJob(evaluation, &store); err != nil {
+	if err := runtime.RunEvaluationJob(evaluation, store); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
@@ -419,6 +516,31 @@ func TestRunEvaluationJobHandlesUpdateFailure(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("expected UpdateEvaluationJob to be called")
+	}
+}
+
+func TestRunEvaluationJobReturnsErrorWhenResolveBenchmarksFails(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model:      api.ModelRef{URL: "http://model.example", Name: "model-1"},
+			Collection: &api.Ref{ID: "coll-1"},
+			Benchmarks: nil,
+		},
+	}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	runtime := &K8sRuntime{
+		logger:    logger,
+		helper:    &KubernetesHelper{clientset: fake.NewSimpleClientset()},
+		providers: map[string]api.ProviderResource{},
+		ctx:       context.Background(),
+	}
+	err := runtime.RunEvaluationJob(evaluation, nil)
+	if err == nil {
+		t.Fatal("expected error when ResolveBenchmarks fails (collection set, storage nil), got nil")
+	}
+	if err.Error() != "collection is set but storage is not available for job job-1" {
+		t.Fatalf("expected ResolveBenchmarks error, got %q", err.Error())
 	}
 }
 

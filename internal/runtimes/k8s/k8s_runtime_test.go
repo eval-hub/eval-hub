@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/google/uuid"
 	batchv1 "k8s.io/api/batch/v1"
@@ -119,9 +118,7 @@ func TestRunEvaluationJobCreatesResources(t *testing.T) {
 		},
 	}
 
-	var storageNil = (*abstractions.Storage)(nil)
-
-	if err := runtime.RunEvaluationJob(evaluation, storageNil); err != nil {
+	if err := runtime.RunEvaluationJob(evaluation, nil); err != nil {
 		t.Fatalf("RunEvaluationJob returned error: %v", err)
 	}
 
@@ -449,4 +446,114 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnvIntegration(t *testing
 		t.Fatalf("expected volume mount %s to be present", modelAuthVolumeName)
 	}
 
+}
+
+func TestCreateBenchmarkResourcesAddsInitContainerForS3TestDataIntegration(t *testing.T) {
+	if os.Getenv("K8S_INTEGRATION_TEST") != "1" {
+		t.Skip("set K8S_INTEGRATION_TEST=1 to run against a real cluster")
+	}
+	t.Setenv("SERVICE_URL", "http://eval-hub")
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	helper, err := NewKubernetesHelper()
+	if err != nil {
+		t.Fatalf("failed to create kubernetes helper: %v", err)
+	}
+	runtime := &K8sRuntime{
+		logger: logger,
+		helper: helper,
+		ctx:    context.Background(),
+		providers: map[string]api.ProviderResource{
+			"lm_evaluation_harness": {
+				Resource: api.Resource{ID: "lm_evaluation_harness"},
+				ProviderConfig: api.ProviderConfig{
+					Runtime: &api.Runtime{
+						K8s: &api.K8sRuntime{
+							Image: "docker.io/library/busybox:1.36",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: uuid.NewString()},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.BenchmarkConfig{
+				{
+					Ref:        api.Ref{ID: "arc_easy"},
+					ProviderID: "lm_evaluation_harness",
+					TestDataRef: &api.TestDataRef{
+						S3: &api.S3TestDataRef{
+							Bucket:    "bucket-1",
+							Key:       "/a/b",
+							SecretRef: "s3-secret",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	t.Cleanup(func() {
+		_ = runtime.DeleteEvaluationJobResources(evaluation)
+	})
+
+	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[0], 0); err != nil {
+		t.Fatalf("unexpected error creating benchmark resources: %v", err)
+	}
+
+	jobs := listJobsByJobID(t, helper.clientset, evaluation.Resource.ID)
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(jobs))
+	}
+	job := jobs[0]
+	if len(job.Spec.Template.Spec.InitContainers) != 1 {
+		t.Fatalf("expected 1 init container, got %d", len(job.Spec.Template.Spec.InitContainers))
+	}
+	initContainer := job.Spec.Template.Spec.InitContainers[0]
+	if initContainer.Name != initContainerName {
+		t.Fatalf("expected init container name %q, got %q", initContainerName, initContainer.Name)
+	}
+
+	var foundBucketEnv, foundKeyEnv bool
+	for _, env := range initContainer.Env {
+		if env.Name == envTestDataS3BucketName {
+			foundBucketEnv = true
+			if env.Value != "bucket-1" {
+				t.Fatalf("expected bucket env %q, got %q", "bucket-1", env.Value)
+			}
+		}
+		if env.Name == envTestDataS3KeyName {
+			foundKeyEnv = true
+			if env.Value != "a/b" {
+				t.Fatalf("expected key env %q, got %q", "a/b", env.Value)
+			}
+		}
+	}
+	if !foundBucketEnv || !foundKeyEnv {
+		t.Fatalf("expected bucket/key env vars on init container")
+	}
+
+	var foundTestDataVolume, foundSecretVolume bool
+	for _, volume := range job.Spec.Template.Spec.Volumes {
+		if volume.Name == testDataVolumeName {
+			foundTestDataVolume = true
+		}
+		if volume.Name == testDataSecretVolumeName {
+			foundSecretVolume = true
+			if volume.VolumeSource.Secret == nil || volume.VolumeSource.Secret.SecretName != "s3-secret" {
+				t.Fatalf("expected secret volume %q with secret %q", testDataSecretVolumeName, "s3-secret")
+			}
+		}
+	}
+	if !foundTestDataVolume || !foundSecretVolume {
+		t.Fatalf("expected test data and secret volumes to be present")
+	}
 }

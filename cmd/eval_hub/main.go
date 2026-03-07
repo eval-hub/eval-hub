@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/eval-hub/eval-hub/auth"
 	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/logging"
@@ -25,7 +26,7 @@ import (
 
 var (
 	// Version can be set during the compilation
-	Version string = "0.0.1"
+	Version string = "0.2.0"
 	// Build is set during the compilation
 	Build string
 	// BuildDate is set during the compilation
@@ -116,9 +117,12 @@ func main() {
 		otelShutdown = shutdown
 	}
 
-	authConfig, err := config.LoadAuthConfig(logger, args.ConfigDir)
-	if err != nil {
-		startUpFailed(serviceConfig, err, "Failed to load auth config", logger)
+	var authConfig *auth.AuthConfig = nil
+	if !serviceConfig.Service.DisableAuth {
+		authConfig, err = config.LoadAuthConfig(logger, args.ConfigDir)
+		if err != nil {
+			startUpFailed(serviceConfig, err, "Failed to setup authentication and authorization", logger)
+		}
 	}
 
 	// create the server
@@ -144,6 +148,7 @@ func main() {
 		"build_date", serviceConfig.Service.BuildDate,
 		"validator", validate != nil,
 		"local", serviceConfig.Service.LocalMode,
+		"tls", serviceConfig.Service.TLSEnabled(),
 		"mlflow_tracking", mlflowClient != nil,
 		"otel", serviceConfig.IsOTELEnabled(),
 		"prometheus", serviceConfig.IsPrometheusEnabled(),

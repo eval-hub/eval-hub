@@ -11,8 +11,24 @@ import (
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 )
 
-func matchEndpoint(fromRequest string, fromConfig string) bool {
-	return strings.HasPrefix(fromRequest, fromConfig)
+func matchEndpoint(endpoint string, endpointPattern Endpoint) bool {
+	pattern_parts := endpointPattern.PathParts
+	if len(pattern_parts) == 0 {
+		return false
+	}
+	endpoint_parts := strings.Split(endpoint, "/")
+
+	for i, part := range pattern_parts {
+		if part == "*" {
+			continue
+		}
+
+		if i >= len(endpoint_parts) || endpoint_parts[i] != part {
+			return false
+		}
+	}
+
+	return true
 }
 
 func matchMethods(fromRequest string, fromConfig []string) bool {
@@ -23,9 +39,9 @@ func matchMethods(fromRequest string, fromConfig []string) bool {
 	return slices.Contains(fromConfig, m)
 }
 
-func FindRules(request *http.Request, config AuthConfig) []ResourceRule {
+func FindRules(request *http.Request, config *AuthConfig) []ResourceRule {
 	for _, endpoint := range config.Authorization.Endpoints {
-		if matchEndpoint(request.URL.Path, endpoint.Path) {
+		if matchEndpoint(request.URL.Path, endpoint) {
 			for _, mapping := range endpoint.Mappings {
 				if matchMethods(request.Method, mapping.Methods) {
 					return mapping.Resources
@@ -72,7 +88,7 @@ func applyTemplate(templateString string, values TemplateValues) string {
 	return out.String()
 }
 
-func AttributesFromRequest(request *http.Request, config AuthConfig, user user.Info) []authorizer.Attributes {
+func AttributesFromRequest(request *http.Request, config *AuthConfig, user user.Info) []authorizer.Attributes {
 	extractedRules := FindRules(request, config)
 	resourceAttributes := []authorizer.Attributes{}
 
@@ -80,9 +96,17 @@ func AttributesFromRequest(request *http.Request, config AuthConfig, user user.I
 		templateValues := TemplateValues{}
 		if rule.Rewrites.ByHttpHeader != nil {
 			value := request.Header.Get(rule.Rewrites.ByHttpHeader.Name)
-			if value != "" {
-				templateValues.FromHeader = value
+			if value == "" {
+				// A required header rewrite is configured but the header is missing.
+				// Return an attribute record that will always be denied: empty namespace,
+				// resource, and verb guarantee the SAR check fails.
+				resourceAttributes = append(resourceAttributes, authorizer.AttributesRecord{
+					User:            user,
+					ResourceRequest: true,
+				})
+				continue
 			}
+			templateValues.FromHeader = value
 		}
 		if rule.Rewrites.ByQueryString != nil {
 			value, ok := request.URL.Query()[rule.Rewrites.ByQueryString.Name]
@@ -104,5 +128,6 @@ func AttributesFromRequest(request *http.Request, config AuthConfig, user user.I
 			ResourceRequest: true,
 		})
 	}
+
 	return resourceAttributes
 }

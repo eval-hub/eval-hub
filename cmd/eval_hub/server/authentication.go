@@ -21,7 +21,7 @@ func WithAuthentication(next http.Handler, logger *slog.Logger, client *kubernet
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		logger.Info("Authenticating request", "path", r.URL.Path, "method", r.Method)
-		rules := auth.FindRules(r, *config)
+		rules := auth.FindRules(r, config)
 		if len(rules) == 0 {
 			logger.Info("No rules found for request", "path", r.URL.Path, "method", r.Method)
 			// If the endpoint and method is not mentioned in the authorization config,

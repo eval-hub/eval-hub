@@ -1,5 +1,7 @@
 package auth
 
+import "strings"
+
 type AuthConfig struct {
 	Authorization EndpointsAuthorization `yaml:"authorization" mapstructure:"authorization"`
 }
@@ -9,8 +11,9 @@ type EndpointsAuthorization struct {
 }
 
 type Endpoint struct {
-	Path     string    `yaml:"path" mapstructure:"path"`
-	Mappings []Mapping `yaml:"mappings" mapstructure:"mappings"`
+	Path      string    `yaml:"path" mapstructure:"path"`
+	Mappings  []Mapping `yaml:"mappings" mapstructure:"mappings"`
+	PathParts []string
 }
 
 type Mapping struct {
@@ -44,4 +47,24 @@ type ResourceAttributes struct {
 	Name        string `yaml:"name" mapstructure:"name"`
 	Subresource string `yaml:"subresource" mapstructure:"subresource"`
 	Verb        string `yaml:"verb" mapstructure:"verb"`
+}
+
+func (s *AuthConfig) Optimize() *AuthConfig {
+	endpoints := []Endpoint{}
+	// Extract wildcard index from each endpoint path since the pattern is fixed so
+	// that at runtime we don't need to re-compute the index.
+
+	for _, endpoint := range s.Authorization.Endpoints {
+		parts := strings.Split(endpoint.Path, "/")
+		endpoints = append(endpoints, Endpoint{
+			Path:      endpoint.Path,
+			Mappings:  endpoint.Mappings,
+			PathParts: parts,
+		})
+	}
+	return &AuthConfig{
+		Authorization: EndpointsAuthorization{
+			Endpoints: endpoints,
+		},
+	}
 }

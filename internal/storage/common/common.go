@@ -3,13 +3,15 @@ package common
 import (
 	"fmt"
 
+	evalcommon "github.com/eval-hub/eval-hub/internal/common"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
-func GetOverallJobStatus(job *api.EvaluationJobResource) (api.OverallState, *api.MessageInfo) {
+// GetOverallJobStatus returns overall state and message. getCollection is used to resolve job benchmark count when job has only a collection reference.
+func GetOverallJobStatus(job *api.EvaluationJobResource, getCollection evalcommon.GetCollectionFunc) (api.OverallState, *api.MessageInfo, error) {
 	// group all benchmarks by state
 	benchmarkStates := make(map[api.State]int)
 	failureMessage := ""
@@ -20,8 +22,16 @@ func GetOverallJobStatus(job *api.EvaluationJobResource) (api.OverallState, *api
 		}
 	}
 
-	// determine the overall job status
-	total := len(job.Benchmarks)
+	// determine the overall job status (use resolved benchmark count for collection-only jobs)
+	benchmarks, err := evalcommon.GetJobBenchmarks(job, getCollection)
+	total := 0
+	if err != nil || len(benchmarks) == 0 {
+		return api.OverallStatePending, &api.MessageInfo{
+			Message:     "Evaluation job is pending",
+			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
+		}, err
+	}
+	total = len(benchmarks)
 	completed, failed, running := benchmarkStates[api.StateCompleted], benchmarkStates[api.StateFailed], benchmarkStates[api.StateRunning]
 
 	var overallState api.OverallState
@@ -42,23 +52,7 @@ func GetOverallJobStatus(job *api.EvaluationJobResource) (api.OverallState, *api
 	return overallState, &api.MessageInfo{
 		Message:     stateMessage,
 		MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
-	}
-}
-
-func ValidateBenchmarkExists(job *api.EvaluationJobResource, runStatus *api.StatusEvent) error {
-	found := false
-	for index, benchmark := range job.Benchmarks {
-		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID &&
-			benchmark.ProviderID == runStatus.BenchmarkStatusEvent.ProviderID &&
-			index == runStatus.BenchmarkStatusEvent.BenchmarkIndex {
-			found = true
-			break
-		}
-	}
-	if !found {
-		return serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "benchmark", "ResourceId", runStatus.BenchmarkStatusEvent.ID, "Error", "Invalid Benchmark for the evaluation job")
-	}
-	return nil
+	}, nil
 }
 
 func UpdateBenchmarkResults(job *api.EvaluationJobResource, runStatus *api.StatusEvent, result *api.BenchmarkResult) error {

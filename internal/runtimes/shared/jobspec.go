@@ -35,13 +35,12 @@ type JobSpecExportsOCI struct {
 func BuildJobSpec(
 	evaluation *api.EvaluationJobResource,
 	providerID string,
-	benchmarkID string,
+	benchmarkConfig *api.BenchmarkConfig,
 	benchmarkIndex int,
 	callbackURL *string,
 ) (*JobSpec, error) {
-	benchmarkConfig, err := FindBenchmarkConfig(evaluation, benchmarkID)
-	if err != nil {
-		return nil, err
+	if benchmarkConfig == nil {
+		return nil, fmt.Errorf("benchmark is required")
 	}
 	benchmarkParams := CopyParams(benchmarkConfig.Parameters)
 	numExamples := NumExamplesFromParameters(benchmarkParams)
@@ -50,7 +49,7 @@ func BuildJobSpec(
 	spec := JobSpec{
 		JobID:           evaluation.Resource.ID,
 		ProviderID:      providerID,
-		BenchmarkID:     benchmarkID,
+		BenchmarkID:     benchmarkConfig.ID,
 		BenchmarkIndex:  benchmarkIndex,
 		Model:           evaluation.Model,
 		NumExamples:     numExamples,
@@ -70,20 +69,6 @@ func BuildJobSpec(
 	}
 
 	return &spec, nil
-}
-
-// FindBenchmarkConfig finds a benchmark config by ID within an evaluation.
-func FindBenchmarkConfig(
-	evaluation *api.EvaluationJobResource,
-	benchmarkID string,
-) (*api.BenchmarkConfig, error) {
-	for i := range evaluation.Benchmarks {
-		benchmark := &evaluation.Benchmarks[i]
-		if benchmark.ID == benchmarkID {
-			return benchmark, nil
-		}
-	}
-	return nil, fmt.Errorf("benchmark config not found for %q", benchmarkID)
 }
 
 // CopyParams creates a shallow copy of a parameters map.

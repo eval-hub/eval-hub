@@ -29,7 +29,7 @@ spec:
         eval-hub.github.io/provider_id: "lm_evaluation_harness"
         eval-hub.github.io/benchmark_id: "mmlu"
     spec:
-      serviceAccountName: evalhub-jobs
+      serviceAccountName: evalhub-default-job
       restartPolicy: Never
       containers:
         - name: adapter

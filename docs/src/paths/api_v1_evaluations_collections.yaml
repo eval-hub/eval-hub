@@ -1,5 +1,4 @@
 get:
-  x-internal: true
   tags:
     - Collections
   summary: List Collections
@@ -49,7 +48,6 @@ get:
         default: true
         title: System defined collections
       description: Set to false to exclude system defined collections
-
   responses:
     '200':
       description: Successful Response
@@ -66,7 +64,6 @@ get:
     '404':
       $ref: ../components/responses/NotFound.yaml
 post:
-  x-internal: true
   tags:
     - Collections
   summary: Create Collection

@@ -15,24 +15,25 @@ import (
 )
 
 const (
-	defaultCPURequest        = "250m"
-	defaultMemoryRequest     = "512Mi"
-	defaultCPULimit          = "1"
-	defaultMemoryLimit       = "2Gi"
-	defaultSidecarImage      = "eval-runtime-sidecar:latest"
-	defaultSidecarCPURequest = "100m"
+	defaultCPURequest           = "250m"
+	defaultMemoryRequest        = "512Mi"
+	defaultCPULimit             = "1"
+	defaultMemoryLimit          = "2Gi"
+	defaultSidecarImage         = "eval-runtime-sidecar:latest"
+	defaultSidecarCPURequest    = "100m"
 	defaultSidecarMemoryRequest = "128Mi"
-	defaultSidecarCPULimit   = "200m"
-	defaultSidecarMemoryLimit = "256Mi"
-	defaultNamespace         = "default"
-	serviceURLEnv            = "SERVICE_URL"
-	evalHubInstanceNameEnv   = "EVALHUB_INSTANCE_NAME"
-	mlflowTrackingURIEnv     = "MLFLOW_TRACKING_URI"
-	mlflowWorkspaceEnv       = "MLFLOW_WORKSPACE"
-	inClusterNamespaceFile   = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
-	serviceAccountNameSuffix = "-jobs"
-	serviceCAConfigMapSuffix = "-service-ca"
-	defaultEvalHubPort       = "8443"
+	defaultSidecarCPULimit      = "200m"
+	defaultSidecarMemoryLimit   = "256Mi"
+	defaultNamespace            = "default"
+	serviceURLEnv               = "SERVICE_URL"
+	evalHubInstanceNameEnv      = "EVALHUB_INSTANCE_NAME"
+	mlflowTrackingURIEnv        = "MLFLOW_TRACKING_URI"
+	mlflowWorkspaceEnv          = "MLFLOW_WORKSPACE"
+	inClusterNamespaceFile      = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	serviceAccountNameSuffix    = "-job"
+	serviceCAConfigMapSuffix    = "-service-ca"
+	defaultEvalHubPort          = "8443"
+	defaultTestDataInitCmd      = "/app/eval-hub-init"
 )
 
 type jobConfig struct {
@@ -60,9 +61,17 @@ type jobConfig struct {
 	ociCredentialsSecret string
 	modelAuthSecretRef   string
 	sidecarResources     corev1.ResourceRequirements
+	testDataS3           s3TestDataConfig
+	testDataInitImage    string
 }
 
-func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkID string, benchmarkIndex int, serviceConfig *config.Config) (*jobConfig, error) {
+type s3TestDataConfig struct {
+	bucket    string
+	key       string
+	secretRef string
+}
+
+func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkConfig *api.BenchmarkConfig, benchmarkIndex int, serviceConfig *config.Config) (*jobConfig, error) {
 	runtime := provider.Runtime
 	if runtime == nil || runtime.K8s == nil {
 		return nil, fmt.Errorf("provider %q missing runtime configuration", provider.Resource.ID)
@@ -85,7 +94,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	}
 
 	namespace := resolveNamespace("")
-	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, benchmarkID, benchmarkIndex, &serviceURL)
+	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, benchmarkConfig, benchmarkIndex, &serviceURL)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +109,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	// Build ServiceAccount name, ConfigMap name, and EvalHub URL if instance name is set
 	var serviceAccountName, serviceCAConfigMap, evalHubURL string
 	if evalHubInstanceName != "" {
-		serviceAccountName = evalHubInstanceName + serviceAccountNameSuffix
+		serviceAccountName = evalHubInstanceName + "-" + namespace + serviceAccountNameSuffix
 		serviceCAConfigMap = evalHubInstanceName + serviceCAConfigMapSuffix
 		// EvalHub URL points to the kube-rbac-proxy HTTPS endpoint
 		evalHubURL = fmt.Sprintf("https://%s.%s.svc.cluster.local:%s",
@@ -122,13 +131,19 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	if err != nil {
 		return nil, err
 	}
+	var testDataS3Bucket, testDataS3Key, testDataS3SecretRef string
+	if benchmarkConfig.TestDataRef != nil && benchmarkConfig.TestDataRef.S3 != nil {
+		testDataS3Bucket = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.Bucket)
+		testDataS3Key = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.Key)
+		testDataS3SecretRef = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.SecretRef)
+	}
 
 	return &jobConfig{
 		jobID:                evaluation.Resource.ID,
 		resourceGUID:         uuid.NewString(),
 		namespace:            namespace,
 		providerID:           provider.Resource.ID,
-		benchmarkID:          benchmarkID,
+		benchmarkID:          benchmarkConfig.ID,
 		adapterImage:         runtime.K8s.Image,
 		sidecarImage:         sidecarImage,
 		entrypoint:           runtime.K8s.Entrypoint,
@@ -147,6 +162,11 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		ociCredentialsSecret: ociCredentialsSecret,
 		modelAuthSecretRef:   modelAuthSecretRef,
 		sidecarResources:     sidecarResources,
+		testDataS3: s3TestDataConfig{
+			bucket:    testDataS3Bucket,
+			key:       testDataS3Key,
+			secretRef: testDataS3SecretRef,
+		},
 	}, nil
 }
 
