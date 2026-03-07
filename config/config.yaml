@@ -43,3 +43,14 @@ otel:
   # enable_logs: true
 prometheus:
   enabled: true
+
+sidecar:
+  sidecar_container:
+    image: eval-runtime-sidecar:latest
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi

@@ -15,13 +15,11 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
+	sidecarServer "github.com/eval-hub/eval-hub/cmd/eval_runtime_sidecar/server"
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/logging"
-	"github.com/eval-hub/eval-hub/internal/mlflow"
 	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
-	"github.com/eval-hub/eval-hub/internal/storage"
-	"github.com/eval-hub/eval-hub/internal/validation"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -46,7 +44,7 @@ func (r *stubRuntime) Name() string {
 
 func (r *stubRuntime) RunEvaluationJob(
 	evaluation *api.EvaluationJobResource,
-	_ abstractions.Storage,
+	_ *abstractions.Storage,
 ) error {
 	if len(evaluation.Benchmarks) == 0 {
 		return fmt.Errorf("no benchmarks configured for job %s", evaluation.Resource.ID)
@@ -58,7 +56,7 @@ func (r *stubRuntime) RunEvaluationJob(
 		return fmt.Errorf("provider %q not found", bench.ProviderID)
 	}
 
-	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, &bench, 0, nil)
+	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, bench.ID, 0, nil)
 	if err != nil {
 		return fmt.Errorf("build job spec: %w", err)
 	}
@@ -246,20 +244,18 @@ func TestServerShutdown(t *testing.T) {
 	})
 }
 
-func createServer(port int) (*server.Server, error) {
+func createServer(port int) (*sidecarServer.SidecarServer, error) {
 	logger, _, err := logging.NewLogger()
 	if err != nil {
 		return nil, err
 	}
-	validate, err := validation.NewValidator()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create validator: %w", err)
-	}
-	serviceConfig, err := config.LoadConfig(logger, "0.2.0", "local", time.Now().Format(time.RFC3339))
+	serviceConfig, err := config.LoadConfig(logger, "0.0.1", "local", time.Now().Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load service config: %w", err)
 	}
-	serviceConfig.Service.Port = port
+	if serviceConfig.Service != nil {
+		serviceConfig.Service.Port = port
+	}
 	if serviceConfig.Prometheus == nil {
 		serviceConfig.Prometheus = &config.PrometheusConfig{
 			Enabled: true,
@@ -267,24 +263,16 @@ func createServer(port int) (*server.Server, error) {
 	} else {
 		serviceConfig.Prometheus.Enabled = true
 	}
-	store, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create storage: %w", err)
+	if serviceConfig.Sidecar == nil {
+		serviceConfig.Sidecar = &config.SidecarConfig{}
 	}
-	// set up the provider configs
-	providerConfigs, err := config.LoadProviderConfigs(logger)
-	if err != nil {
-		// we do this as no point trying to continue
-		return nil, fmt.Errorf("failed to load provider configs: %w", err)
+	if serviceConfig.Sidecar.EvalHub == nil {
+		serviceConfig.Sidecar.EvalHub = &config.EvalHubClientConfig{BaseURL: "http://localhost:8080"}
+	} else if serviceConfig.Sidecar.EvalHub.BaseURL == "" {
+		serviceConfig.Sidecar.EvalHub.BaseURL = "http://localhost:8080"
 	}
-	serviceConfig.Service.LocalMode = true // set local mode for testing
-	// Use stub runtime to avoid file writes and process spawning during tests
-	runtime := &stubRuntime{logger: logger, providers: providerConfigs}
-	mlflowClient, err := mlflow.NewMLFlowClient(serviceConfig.MLFlow, serviceConfig.IsOTELEnabled(), logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create MLFlow client: %w", err)
-	}
-	return server.NewServer(logger, serviceConfig, providerConfigs, nil, store, validate, runtime, mlflowClient)
+
+	return sidecarServer.NewSidecarServer(logger, serviceConfig)
 }
 
 func getKeyAsString(obj map[string]interface{}, key string) string {

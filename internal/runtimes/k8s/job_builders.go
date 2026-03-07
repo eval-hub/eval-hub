@@ -19,6 +19,7 @@ const (
 	defaultJobTTLSeconds            = int32(3600)
 	defaultJobBackoffLimit          = int32(3)
 	adapterContainerName            = "adapter"
+	sidecarContainerName            = "sidecar"
 	initContainerName               = "init"
 	jobSpecVolumeName               = "job-spec"
 	dataVolumeName                  = "data"
@@ -159,7 +160,65 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 		return nil, err
 	}
 
-	// Build volumes list
+	// Build runtimeContainerVolumes list
+	runtimeContainerVolumes, runtimeContainerVolumeMounts := buildRuntimeContainerVolumesAndMounts(configMap, cfg)
+
+	initContainers, volumes := initContainerVolumesAndMounts(cfg)
+
+	jobVolumes := append(runtimeContainerVolumes, volumes...)
+
+	// Set ServiceAccount if configured
+	// applied below in template spec
+
+	return &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        jobName,
+			Namespace:   cfg.namespace,
+			Labels:      labels,
+			Annotations: annotations,
+		},
+		Spec: batchv1.JobSpec{
+			BackoffLimit:            &backoff,
+			TTLSecondsAfterFinished: &ttl,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels:      labels,
+					Annotations: annotations,
+				},
+				Spec: corev1.PodSpec{
+					RestartPolicy:  corev1.RestartPolicyNever,
+					InitContainers: initContainers,
+					Containers: []corev1.Container{
+						{
+							Name:            adapterContainerName,
+							Image:           cfg.adapterImage,
+							ImagePullPolicy: corev1.PullAlways,
+							Command:         buildContainerCommand(cfg.entrypoint),
+							Env:             envVars,
+							Resources:       resources,
+							SecurityContext: defaultSecurityContext(),
+							VolumeMounts:    runtimeContainerVolumeMounts,
+						},
+						{
+							Name:            sidecarContainerName,
+							Image:           cfg.sidecarImage,
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							Command:         []string{"/app/eval-runtime-sidecar"},
+							Env:             envVars,
+							Resources:       cfg.sidecarResources,
+							SecurityContext: defaultSecurityContext(),
+							VolumeMounts:    runtimeContainerVolumeMounts,
+						},
+					},
+					Volumes:            jobVolumes,
+					ServiceAccountName: cfg.serviceAccountName,
+				},
+			},
+		},
+	}, nil
+}
+
+func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]corev1.Volume, []corev1.VolumeMount) {
 	volumes := []corev1.Volume{
 		{
 			Name: jobSpecVolumeName,
@@ -261,8 +320,12 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 		})
 	}
 
-	// Add test data volumes and init container when S3 test data is configured.
+	return volumes, volumeMounts
+}
+
+func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1.Volume) {
 	var initContainers []corev1.Container
+	var volumes []corev1.Volume
 	if hasS3TestData(cfg) {
 		initCommand := defaultTestDataInitCmd
 		initImage := defaultIfEmpty(cfg.testDataInitImage, testDataInitImage)
@@ -290,10 +353,6 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 				},
 			},
 		})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      testDataVolumeName,
-			MountPath: testDataMountPath,
-		})
 
 		initContainers = append(initContainers, corev1.Container{
 			Name:            initContainerName,
@@ -319,46 +378,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 			},
 		})
 	}
-
-	// Set ServiceAccount if configured
-	// applied below in template spec
-
-	return &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        jobName,
-			Namespace:   cfg.namespace,
-			Labels:      labels,
-			Annotations: annotations,
-		},
-		Spec: batchv1.JobSpec{
-			BackoffLimit:            &backoff,
-			TTLSecondsAfterFinished: &ttl,
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels:      labels,
-					Annotations: annotations,
-				},
-				Spec: corev1.PodSpec{
-					RestartPolicy:  corev1.RestartPolicyNever,
-					InitContainers: initContainers,
-					Containers: []corev1.Container{
-						{
-							Name:            adapterContainerName,
-							Image:           cfg.adapterImage,
-							ImagePullPolicy: corev1.PullAlways,
-							Command:         buildContainerCommand(cfg.entrypoint),
-							Env:             envVars,
-							Resources:       resources,
-							SecurityContext: defaultSecurityContext(),
-							VolumeMounts:    volumeMounts,
-						},
-					},
-					Volumes:            volumes,
-					ServiceAccountName: cfg.serviceAccountName,
-				},
-			},
-		},
-	}, nil
+	return initContainers, volumes
 }
 
 func ensureServiceCAVolume(volumes []corev1.Volume, configMapName string) []corev1.Volume {

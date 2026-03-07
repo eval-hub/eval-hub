@@ -100,7 +100,7 @@ func main() {
 	}
 	logger.Info("Runtime created", "runtime", runtime.Name())
 
-	mlflowClient, err := mlflow.NewMLFlowClient(serviceConfig, logger)
+	mlflowClient, err := mlflow.NewMLFlowClient(serviceConfig.MLFlow, serviceConfig.IsOTELEnabled(), logger)
 	if err != nil {
 		startUpFailed(serviceConfig, err, "Failed to create MLFlow client", logger)
 	}
