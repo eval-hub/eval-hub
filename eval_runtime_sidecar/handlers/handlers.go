@@ -11,6 +11,7 @@ import (
 )
 
 // Handlers holds service state for HTTP handlers.
+// Having separate HTTP clients for eval-hub and mlflow since we might want to disable TLS for one but not the other etc..
 type Handlers struct {
 	serviceConfig     *config.Config
 	evalHubHTTPClient *http.Client
