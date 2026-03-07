@@ -88,7 +88,7 @@ func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, sto
 }
 
 func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobResource) error {
-	namespace := resolveNamespace("")
+	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
 	propagationPolicy := metav1.DeletePropagationBackground
 	deleteOptions := metav1.DeleteOptions{PropagationPolicy: &propagationPolicy}
 
