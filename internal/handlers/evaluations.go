@@ -228,7 +228,7 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 
 	logging.LogRequestStarted(ctx)
 
-	allowedParams := []string{"limit", "offset", "status", "name", "tags", "owner"}
+	allowedParams := []string{"limit", "offset", "status", "name", "tags", "owner", "experiment_id"}
 	badParams := getAllParams(req, allowedParams...)
 	if len(badParams) > 0 {
 		// just report the first bad parameter
