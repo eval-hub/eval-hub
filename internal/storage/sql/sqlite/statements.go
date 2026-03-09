@@ -104,8 +104,13 @@ func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shar
 func (s *sqliteStatementsFactory) entityFilterCondition(key string, value any, tableName string) (condition string, args []any) {
 	switch key {
 	case "name":
+		// evaluations: name at config.name; providers and collections: name at entity root
+		namePath := "$.name"
+		if tableName == shared.TABLE_EVALUATIONS {
+			namePath = "$.config.name"
+		}
 		// name at top level
-		return "json_extract(entity, '$.name') = ?", []any{value}
+		return fmt.Sprintf("json_extract(entity, '%s') = ?", namePath), []any{value}
 	case "tags":
 		tagStr, _ := value.(string)
 		// evaluations: tags at config.tags; providers and collections: tags at entity root

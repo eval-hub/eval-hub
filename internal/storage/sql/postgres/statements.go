@@ -97,8 +97,12 @@ func (s *postgresStatementsFactory) GetAllowedFilterColumns(tableName string) []
 func (s *postgresStatementsFactory) entityFilterCondition(key string, value any, index int, tableName string) (condition string, args []any) {
 	switch key {
 	case "name":
-		// name at top level
-		return fmt.Sprintf("entity->>'name' = $%d", index), []any{value}
+		// evaluations: name at config.name; providers and collections: name at entity root
+		namePath := "entity->>'name'"
+		if tableName == shared.TABLE_EVALUATIONS {
+			namePath = "entity->'config'->>'name'"
+		}
+		return fmt.Sprintf("%s = $%d", namePath, index), []any{value}
 	case "tags":
 		tagStr, _ := value.(string)
 		// evaluations: tags at config.tags; providers and collections: tags at entity root
