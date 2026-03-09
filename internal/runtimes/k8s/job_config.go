@@ -108,9 +108,11 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		}
 		serviceAccountName = evalHubInstanceName + "-" + saNamespace + serviceAccountNameSuffix
 		serviceCAConfigMap = evalHubInstanceName + serviceCAConfigMapSuffix
-		// EvalHub URL points to the kube-rbac-proxy HTTPS endpoint in the instance namespace
+		// EvalHub URL points to the kube-rbac-proxy HTTPS endpoint in the instance namespace.
+		// Use saNamespace (which has the local-mode fallback applied) to avoid a malformed host
+		// when instanceNamespace is empty.
 		evalHubURL = fmt.Sprintf("https://%s.%s.svc.cluster.local:%s",
-			evalHubInstanceName, instanceNamespace, defaultEvalHubPort)
+			evalHubInstanceName, saNamespace, defaultEvalHubPort)
 	}
 
 	// Extract OCI credentials secret name from exports config (not forwarded to jobSpec)
