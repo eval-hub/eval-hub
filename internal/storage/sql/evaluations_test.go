@@ -28,7 +28,8 @@ func getDBName() string {
 
 func getDBInMemoryURL() string {
 	// we want each test to use a unique in-memory database
-	return fmt.Sprintf("file:%s:?mode=memory", getDBName())
+	return fmt.Sprintf("file:%s?mode=memory&cache=shared", getDBName())
+}
 }
 
 // TestGetEvaluationJobs_TenantFilter verifies that WithTenant scopes list results
