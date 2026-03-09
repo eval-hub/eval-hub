@@ -26,8 +26,8 @@ type SQLStatementsFactory interface {
 	// common operations
 	CreateCountEntitiesStatement(tenant api.Tenant, tableName string, filter map[string]any) (string, []any)
 	CreateListEntitiesStatement(tenant api.Tenant, tableName string, limit, offset int, filter map[string]any) (string, []any)
-	ScanRowForEntity(tableName string, rows *sql.Rows, query *EntityQuery) error
-	CreateCheckEntityExistsStatement(tableName string) string
-	CreateDeleteEntityStatement(tableName string) string
-	CreateUpdateEntityStatement(tableName, id string, entityJSON string, status *api.OverallState) (string, []any)
+	ScanRowForEntity(tenant api.Tenant, ableName string, rows *sql.Rows, query *EntityQuery) error
+	CreateCheckEntityExistsStatement(tenant api.Tenant, tableName string, id string) (string, []any)
+	CreateDeleteEntityStatement(tenant api.Tenant, tableName string, id string) (string, []any)
+	CreateUpdateEntityStatement(tenant api.Tenant, tableName, id string, entityJSON string, status *api.OverallState) (string, []any)
 }

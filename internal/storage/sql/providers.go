@@ -81,8 +81,8 @@ func (s *SQLStorage) DeleteProvider(id string) error {
 		return err
 	}
 
-	deleteQuery := s.statementsFactory.CreateDeleteEntityStatement(shared.TABLE_PROVIDERS)
-	_, err := s.exec(nil, deleteQuery, id)
+	deleteQuery, args := s.statementsFactory.CreateDeleteEntityStatement(s.tenant, shared.TABLE_PROVIDERS, id)
+	_, err := s.exec(nil, deleteQuery, args...)
 	if err != nil {
 		s.logger.Error("Failed to delete provider", "error", err, "id", id)
 		return se.NewServiceError(messages.DatabaseOperationFailed, "Type", "provider", "ResourceId", id, "Error", err.Error())
@@ -134,7 +134,7 @@ func (s *SQLStorage) updateProviderTransactional(txn *sql.Tx, providerID string,
 	if err != nil {
 		return se.NewServiceError(messages.InternalServerError, "Error", err)
 	}
-	updateStmt, args := s.statementsFactory.CreateUpdateEntityStatement(shared.TABLE_PROVIDERS, providerID, string(providerJSON), nil)
+	updateStmt, args := s.statementsFactory.CreateUpdateEntityStatement(s.tenant, shared.TABLE_PROVIDERS, providerID, string(providerJSON), nil)
 	_, err = s.exec(txn, updateStmt, args...)
 	if err != nil {
 		s.logger.Error("Failed to update provider", "error", err, "id", providerID)

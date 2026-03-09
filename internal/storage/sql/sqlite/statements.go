@@ -194,7 +194,7 @@ func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant,
 	return query, args
 }
 
-func (s *sqliteStatementsFactory) ScanRowForEntity(tableName string, rows *sql.Rows, query *shared.EntityQuery) error {
+func (s *sqliteStatementsFactory) ScanRowForEntity(tenant api.Tenant, tableName string, rows *sql.Rows, query *shared.EntityQuery) error {
 	switch tableName {
 	case shared.TABLE_EVALUATIONS:
 		return rows.Scan(&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON)
@@ -203,15 +203,21 @@ func (s *sqliteStatementsFactory) ScanRowForEntity(tableName string, rows *sql.R
 	}
 }
 
-func (s *sqliteStatementsFactory) CreateCheckEntityExistsStatement(tableName string) string {
-	return fmt.Sprintf(`SELECT id, status FROM %s WHERE id = ?;`, tableName)
+func (s *sqliteStatementsFactory) CreateCheckEntityExistsStatement(tenant api.Tenant, tableName string, id string) (string, []any) {
+	if !tenant.IsEmpty() {
+		return fmt.Sprintf(`SELECT id, status FROM %s WHERE id = ? AND tenant_id = ?;`, tableName), []any{id, tenant.String()}
+	}
+	return fmt.Sprintf(`SELECT id, status FROM %s WHERE id = ?;`, tableName), []any{id}
 }
 
-func (s *sqliteStatementsFactory) CreateDeleteEntityStatement(tableName string) string {
-	return fmt.Sprintf(`DELETE FROM %s WHERE id = ?;`, tableName)
+func (s *sqliteStatementsFactory) CreateDeleteEntityStatement(tenant api.Tenant, tableName string, id string) (string, []any) {
+	if !tenant.IsEmpty() {
+		return fmt.Sprintf(`DELETE FROM %s WHERE id = ? AND tenant_id = ?;`, tableName), []any{id, tenant.String()}
+	}
+	return fmt.Sprintf(`DELETE FROM %s WHERE id = ?;`, tableName), []any{id}
 }
 
-func (s *sqliteStatementsFactory) CreateUpdateEntityStatement(tableName, id string, entityJSON string, status *api.OverallState) (string, []any) {
+func (s *sqliteStatementsFactory) CreateUpdateEntityStatement(tenant api.Tenant, tableName, id string, entityJSON string, status *api.OverallState) (string, []any) {
 	// UPDATE "evaluations" SET "status" = ?, "entity" = ?, "updated_at" = CURRENT_TIMESTAMP WHERE "id" = ?;
 	switch tableName {
 	case shared.TABLE_EVALUATIONS:

@@ -2,6 +2,7 @@ package sql_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"maps"
 	"strings"
 	"testing"
@@ -16,16 +17,30 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
+var (
+	dbIndex = 0
+)
+
+func getDBName() string {
+	dbIndex++
+	return fmt.Sprintf("eval_hub_tenant_test_%d", dbIndex)
+}
+
+func getDBInMemoryURL() string {
+	// we want each test to use a unique in-memory database
+	return fmt.Sprintf("file:%s:?mode=memory", getDBName())
+}
+
 // TestGetEvaluationJobs_TenantFilter verifies that WithTenant scopes list results
 // to only the jobs belonging to that tenant.
 func TestGetEvaluationJobs_TenantFilter(t *testing.T) {
 	logger := logging.FallbackLogger()
 	databaseConfig := map[string]any{
 		"driver":        "sqlite",
-		"url":           "file::memory:?mode=memory&cache=shared",
+		"url":           getDBInMemoryURL(),
 		"database_name": "eval_hub_tenant_test",
 	}
-	store, err := storage.NewStorage(&databaseConfig, false, logger)
+	store, err := storage.NewStorage(&databaseConfig, false, false, logger)
 	if err != nil {
 		t.Fatalf("failed to create storage: %v", err)
 	}
@@ -113,7 +128,7 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 	logger := logging.FallbackLogger()
 	databaseConfig := map[string]any{
 		"driver":        "sqlite",
-		"url":           "file::memory:?mode=memory&cache=shared",
+		"url":           getDBInMemoryURL(),
 		"database_name": "eval_hub",
 	}
 	store, err := storage.NewStorage(&databaseConfig, false, false, logger)
@@ -255,7 +270,7 @@ func TestEvaluationsStorage(t *testing.T) {
 	t.Run("NewStorage creates a new storage instance", func(t *testing.T) {
 		databaseConfig := map[string]any{}
 		databaseConfig["driver"] = "sqlite"
-		databaseConfig["url"] = "file::memory:?mode=memory&cache=shared"
+		databaseConfig["url"] = getDBInMemoryURL()
 		databaseConfig["database_name"] = "eval_hub"
 		s, err := storage.NewStorage(&databaseConfig, false, false, logger)
 		if err != nil {
@@ -349,7 +364,7 @@ func TestEvaluationsStorage(t *testing.T) {
 			t.Fatalf("unexpected error getting evaluation jobs: %v", err)
 		}
 		if resp.TotalCount != 0 {
-			t.Fatalf("Expected 0 evaluation jobs, got %d", resp.TotalCount)
+			t.Fatalf("Expected 0 evaluation jobs, got %d: %s", resp.TotalCount, prettyPrint(resp))
 		}
 	})
 
@@ -825,4 +840,12 @@ func TestEvaluationsStorage(t *testing.T) {
 			t.Fatalf("Failed to delete evaluation job: %v", err)
 		}
 	})
+}
+
+func prettyPrint(v any) string {
+	json, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("%v", v)
+	}
+	return string(json)
 }

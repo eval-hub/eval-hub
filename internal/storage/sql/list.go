@@ -85,7 +85,7 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 
 func scanResource[T api.EvaluationJobResource | api.ProviderResource | api.CollectionResource](s *SQLStorage, rows *sql.Rows, tableName string) (*T, error) {
 	query := shared.EntityQuery{}
-	err := s.statementsFactory.ScanRowForEntity(tableName, rows, &query)
+	err := s.statementsFactory.ScanRowForEntity(s.tenant, tableName, rows, &query)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Failed to scan %s row", getTypeFromTableName(tableName)), "error", err)
 		return nil, serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", getTypeFromTableName(tableName), "ResourceId", query.Resource.ID, "Error", err.Error())

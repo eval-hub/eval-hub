@@ -114,7 +114,7 @@ func (s *SQLStorage) updateCollectionTransactional(txn *sql.Tx, collectionID str
 	if err != nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
 	}
-	updateCollectionStatement, args := s.statementsFactory.CreateUpdateEntityStatement(shared.TABLE_COLLECTIONS, collectionID, string(collectionJSON), nil)
+	updateCollectionStatement, args := s.statementsFactory.CreateUpdateEntityStatement(s.tenant, shared.TABLE_COLLECTIONS, collectionID, string(collectionJSON), nil)
 	_, err = s.exec(txn, updateCollectionStatement, args...)
 	if err != nil {
 		return serviceerrors.WithRollback(err)
@@ -123,11 +123,15 @@ func (s *SQLStorage) updateCollectionTransactional(txn *sql.Tx, collectionID str
 }
 
 func (s *SQLStorage) DeleteCollection(id string) error {
+	if err := s.verifyTenant(); err != nil {
+		return err
+	}
+
 	// Build the DELETE query
-	deleteQuery := s.statementsFactory.CreateDeleteEntityStatement(shared.TABLE_COLLECTIONS)
+	deleteQuery, args := s.statementsFactory.CreateDeleteEntityStatement(s.tenant, shared.TABLE_COLLECTIONS, id)
 
 	// Execute the DELETE query
-	_, err := s.exec(nil, deleteQuery, id)
+	_, err := s.exec(nil, deleteQuery, args...)
 	if err != nil {
 		s.logger.Error("Failed to delete collection", "error", err, "id", id)
 		return se.NewServiceError(messages.DatabaseOperationFailed, "Type", "collection", "ResourceId", id, "Error", err.Error())

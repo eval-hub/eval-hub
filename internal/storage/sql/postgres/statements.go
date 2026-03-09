@@ -189,7 +189,7 @@ func (s *postgresStatementsFactory) CreateListEntitiesStatement(tenant api.Tenan
 	return query, args
 }
 
-func (s *postgresStatementsFactory) ScanRowForEntity(tableName string, rows *sql.Rows, query *shared.EntityQuery) error {
+func (s *postgresStatementsFactory) ScanRowForEntity(tenant api.Tenant, tableName string, rows *sql.Rows, query *shared.EntityQuery) error {
 	switch tableName {
 	case shared.TABLE_EVALUATIONS:
 		return rows.Scan(&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON)
@@ -198,20 +198,32 @@ func (s *postgresStatementsFactory) ScanRowForEntity(tableName string, rows *sql
 	}
 }
 
-func (s *postgresStatementsFactory) CreateCheckEntityExistsStatement(tableName string) string {
-	return fmt.Sprintf(`SELECT id, status FROM %s WHERE id = $1;`, tableName)
+func (s *postgresStatementsFactory) CreateCheckEntityExistsStatement(tenant api.Tenant, tableName string, id string) (string, []any) {
+	if !tenant.IsEmpty() {
+		return fmt.Sprintf(`SELECT id, status FROM %s WHERE id = $1 AND tenant_id = $2;`, tableName), []any{id, tenant.String()}
+	}
+	return fmt.Sprintf(`SELECT id, status FROM %s WHERE id = $1;`, tableName), []any{id}
 }
 
-func (s *postgresStatementsFactory) CreateDeleteEntityStatement(tableName string) string {
-	return fmt.Sprintf(`DELETE FROM %s WHERE id = $1;`, tableName)
+func (s *postgresStatementsFactory) CreateDeleteEntityStatement(tenant api.Tenant, tableName string, id string) (string, []any) {
+	if !tenant.IsEmpty() {
+		return fmt.Sprintf(`DELETE FROM %s WHERE id = $1 AND tenant_id = $2;`, tableName), []any{id, tenant.String()}
+	}
+	return fmt.Sprintf(`DELETE FROM %s WHERE id = $1;`, tableName), []any{id}
 }
 
-func (s *postgresStatementsFactory) CreateUpdateEntityStatement(tableName, id string, entityJSON string, status *api.OverallState) (string, []any) {
+func (s *postgresStatementsFactory) CreateUpdateEntityStatement(tenant api.Tenant, tableName, id string, entityJSON string, status *api.OverallState) (string, []any) {
 	// UPDATE "evaluations" SET "status" = ?, "entity" = ?, "updated_at" = CURRENT_TIMESTAMP WHERE "id" = ?;
 	switch tableName {
 	case shared.TABLE_EVALUATIONS:
+		if !tenant.IsEmpty() {
+			return fmt.Sprintf(`UPDATE %s SET status = $1, entity = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND tenant_id = $4;`, tableName), []any{*status, entityJSON, id, tenant.String()}
+		}
 		return fmt.Sprintf(`UPDATE %s SET status = $1, entity = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3;`, tableName), []any{*status, entityJSON, id}
 	default:
+		if !tenant.IsEmpty() {
+			return fmt.Sprintf(`UPDATE %s SET entity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND tenant_id = $3;`, tableName), []any{entityJSON, id, tenant.String()}
+		}
 		return fmt.Sprintf(`UPDATE %s SET entity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2;`, tableName), []any{entityJSON, id}
 	}
 }

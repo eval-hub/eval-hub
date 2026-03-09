@@ -112,10 +112,10 @@ func (s *SQLStorage) DeleteEvaluationJob(id string) error {
 	// we have to get the evaluation job and then update or delete the job so we need a transaction
 	err := s.withTransaction("delete evaluation job", id, func(txn *sql.Tx) error {
 		// check if the evaluation job exists, we do this otherwise we always return 204
-		selectQuery := s.statementsFactory.CreateCheckEntityExistsStatement(shared.TABLE_EVALUATIONS)
+		selectQuery, args := s.statementsFactory.CreateCheckEntityExistsStatement(s.tenant, shared.TABLE_EVALUATIONS, id)
 		var dbID string
 		var statusStr string
-		err := s.queryRow(txn, selectQuery, id).Scan(&dbID, &statusStr)
+		err := s.queryRow(txn, selectQuery, args...).Scan(&dbID, &statusStr)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
@@ -124,10 +124,10 @@ func (s *SQLStorage) DeleteEvaluationJob(id string) error {
 		}
 
 		// Build the DELETE query
-		deleteQuery := s.statementsFactory.CreateDeleteEntityStatement(shared.TABLE_EVALUATIONS)
+		deleteQuery, args := s.statementsFactory.CreateDeleteEntityStatement(s.tenant, shared.TABLE_EVALUATIONS, id)
 
 		// Execute the DELETE query
-		_, err = s.exec(txn, deleteQuery, id)
+		_, err = s.exec(txn, deleteQuery, args...)
 		if err != nil {
 			s.logger.Error("Failed to delete evaluation job", "error", err, "id", id)
 			return se.WithRollback(se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error()))
@@ -218,7 +218,7 @@ func (s *SQLStorage) updateEvaluationJobTxn(txn *sql.Tx, id string, status api.O
 		// we should never get here
 		return se.WithRollback(se.NewServiceError(messages.InternalServerError, "Error", err.Error()))
 	}
-	updateQuery, args := s.statementsFactory.CreateUpdateEntityStatement(shared.TABLE_EVALUATIONS, id, string(entityJSON), &status)
+	updateQuery, args := s.statementsFactory.CreateUpdateEntityStatement(s.tenant, shared.TABLE_EVALUATIONS, id, string(entityJSON), &status)
 
 	_, err = s.exec(txn, updateQuery, args...)
 	if err != nil {
