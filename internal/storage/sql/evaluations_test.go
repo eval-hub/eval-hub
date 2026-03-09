@@ -380,6 +380,9 @@ func TestEvaluationsStorage(t *testing.T) {
 		if resp.TotalCount != 1 {
 			t.Fatalf("Expected 1 evaluation jobs, got %d", resp.TotalCount)
 		}
+		if len(resp.Items) != 1 {
+			t.Fatalf("Expected 1 evaluation job, got %d", len(resp.Items))
+		}
 		if resp.Items[0].Status.State != api.OverallStateRunning {
 			t.Fatalf("Expected running evaluation job, got %s", resp.Items[0].Status.State)
 		}
