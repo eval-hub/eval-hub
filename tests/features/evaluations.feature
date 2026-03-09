@@ -119,8 +119,7 @@ Feature: Evaluations Endpoint
     And I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the response should contain the value "test-user-3" at path "$.resource.owner"
-    And the response should contain the value "test-tenant-3" at path "$.resource.tenant"
-    And I unset the header "X-Tenant"
+    And the response should contain the value "test-tenant" at path "$.resource.tenant"
     When I send a GET request to "/api/v1/evaluations/jobs?limit=2"
     Then the response code should be 200
     And the "next.href" field in the response should be saved as "value:next_url"
@@ -466,7 +465,6 @@ Feature: Evaluations Endpoint
     When I send a GET request to "/api/v1/evaluations/jobs"
     Then the response code should be 200
     And the response should contain the value "4" at path "$.total_count"
-    And I unset the header "X-Tenant"
     When I send a GET request to "/api/v1/evaluations/jobs?status=running&owner=search-user-a&limit=10"
     Then the response code should be 200
     And the response should contain the value "running" at path "$.items[0].status.state"
