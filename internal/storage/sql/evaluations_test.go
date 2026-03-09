@@ -30,7 +30,6 @@ func getDBInMemoryURL() string {
 	// we want each test to use a unique in-memory database
 	return fmt.Sprintf("file:%s?mode=memory&cache=shared", getDBName())
 }
-}
 
 // TestGetEvaluationJobs_TenantFilter verifies that WithTenant scopes list results
 // to only the jobs belonging to that tenant.

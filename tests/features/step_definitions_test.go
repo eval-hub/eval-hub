@@ -176,6 +176,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 		return logError(fmt.Errorf("failed to load service config: %w", err))
 	}
 	serviceConfig.Service.Port = port
+	serviceConfig.Service.LocalMode = true // set local mode for testing
 
 	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger)
 	if err != nil {
@@ -195,7 +196,6 @@ func (a *apiFeature) startLocalServer(port int) error {
 	}
 
 	logger.Info("Providers loaded.")
-	serviceConfig.Service.LocalMode = true // set local mode for testing
 	// Override local runtime commands for testing so subprocesses
 	// Exit cleanly instead of failing with "command not found".
 	for key := range providerConfigs {
