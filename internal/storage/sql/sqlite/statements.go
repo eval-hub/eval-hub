@@ -13,13 +13,10 @@ import (
 
 const (
 	INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (id, tenant_id, owner, status, experiment_id, entity) VALUES (?, ?, ?, ?, ?, ?);`
-	SELECT_EVALUATION_STATEMENT = `SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE id = ?;`
 
 	INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (id, tenant_id, owner, entity) VALUES (?, ?, ?, ?);`
-	SELECT_COLLECTION_STATEMENT = `SELECT id, created_at, updated_at, tenant_id, owner, entity FROM collections WHERE id = ?;`
 
 	INSERT_PROVIDER_STATEMENT = `INSERT INTO providers (id, tenant_id, owner, entity) VALUES (?, ?, ?, ?);`
-	SELECT_PROVIDER_STATEMENT = `SELECT id, created_at, updated_at, tenant_id, owner, entity FROM providers WHERE id = ?;`
 
 	TABLES_SCHEMA = `
 CREATE TABLE IF NOT EXISTS evaluations (
@@ -97,7 +94,10 @@ func (s *sqliteStatementsFactory) CreateEvaluationAddEntityStatement(evaluation 
 }
 
 func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
-	return SELECT_EVALUATION_STATEMENT, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
+	if query.Resource.Tenant.IsEmpty() {
+		return `SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE id = ?;`, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
+	}
+	return `SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE id = ? AND tenant_id = ?;`, []any{&query.Resource.ID, query.Resource.Tenant.String()}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
 }
 
 // entityFilterCondition returns the SQL condition and args for a filter key.
@@ -204,6 +204,7 @@ func (s *sqliteStatementsFactory) ScanRowForEntity(tenant api.Tenant, tableName 
 }
 
 func (s *sqliteStatementsFactory) CreateCheckEntityExistsStatement(tenant api.Tenant, tableName string, id string) (string, []any) {
+	// SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE id = ?;
 	if !tenant.IsEmpty() {
 		return fmt.Sprintf(`SELECT id, status FROM %s WHERE id = ? AND tenant_id = ?;`, tableName), []any{id, tenant.String()}
 	}
@@ -221,8 +222,14 @@ func (s *sqliteStatementsFactory) CreateUpdateEntityStatement(tenant api.Tenant,
 	// UPDATE "evaluations" SET "status" = ?, "entity" = ?, "updated_at" = CURRENT_TIMESTAMP WHERE "id" = ?;
 	switch tableName {
 	case shared.TABLE_EVALUATIONS:
+		if !tenant.IsEmpty() {
+			return fmt.Sprintf(`UPDATE %s SET status = ?, entity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?;`, tableName), []any{*status, entityJSON, id, tenant.String()}
+		}
 		return fmt.Sprintf(`UPDATE %s SET status = ?, entity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;`, tableName), []any{*status, entityJSON, id}
 	default:
+		if !tenant.IsEmpty() {
+			return fmt.Sprintf(`UPDATE %s SET entity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?;`, tableName), []any{entityJSON, id, tenant.String()}
+		}
 		return fmt.Sprintf(`UPDATE %s SET entity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;`, tableName), []any{entityJSON, id}
 	}
 }
@@ -232,7 +239,11 @@ func (s *sqliteStatementsFactory) CreateProviderAddEntityStatement(provider *api
 }
 
 func (s *sqliteStatementsFactory) CreateProviderGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
-	return SELECT_PROVIDER_STATEMENT, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
+	// SELECT id, created_at, updated_at, tenant_id, owner, entity FROM providers WHERE id = ?;
+	if query.Resource.Tenant.IsEmpty() {
+		return `SELECT id, created_at, updated_at, tenant_id, owner, entity FROM providers WHERE id = ?;`, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
+	}
+	return `SELECT id, created_at, updated_at, tenant_id, owner, entity FROM providers WHERE id = ? AND tenant_id = ?;`, []any{&query.Resource.ID, query.Resource.Tenant.String()}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 }
 
 func (s *sqliteStatementsFactory) CreateCollectionAddEntityStatement(collection *api.CollectionResource, entity string) (string, []any) {
@@ -240,5 +251,9 @@ func (s *sqliteStatementsFactory) CreateCollectionAddEntityStatement(collection 
 }
 
 func (s *sqliteStatementsFactory) CreateCollectionGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
-	return SELECT_COLLECTION_STATEMENT, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
+	// SELECT id, created_at, updated_at, tenant_id, owner, entity FROM collections WHERE id = ?;
+	if query.Resource.Tenant.IsEmpty() {
+		return `SELECT id, created_at, updated_at, tenant_id, owner, entity FROM collections WHERE id = ?;`, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
+	}
+	return `SELECT id, created_at, updated_at, tenant_id, owner, entity FROM collections WHERE id = ? AND tenant_id = ?;`, []any{&query.Resource.ID, query.Resource.Tenant.String()}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 }
