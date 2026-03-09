@@ -18,7 +18,7 @@ import (
 //#######################################################################
 
 func (s *SQLStorage) CreateCollection(collection *api.CollectionResource) error {
-	if err := s.verifyTenant(nil, shared.TABLE_COLLECTIONS); err != nil {
+	if err := s.verifyTenant(); err != nil {
 		return err
 	}
 
@@ -43,7 +43,7 @@ func (s *SQLStorage) createCollectionEntity(collection *api.CollectionResource) 
 }
 
 func (s *SQLStorage) GetCollection(id string) (*api.CollectionResource, error) {
-	if err := s.verifyTenant(nil, shared.TABLE_COLLECTIONS); err != nil {
+	if err := s.verifyTenant(); err != nil {
 		return nil, err
 	}
 
@@ -82,7 +82,7 @@ func (s *SQLStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 }
 
 func (s *SQLStorage) GetCollections(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
-	if err := s.verifyTenant(filter, shared.TABLE_COLLECTIONS); err != nil {
+	if err := s.verifyTenant(); err != nil {
 		return nil, err
 	}
 
@@ -91,7 +91,7 @@ func (s *SQLStorage) GetCollections(filter *abstractions.QueryFilter) (*abstract
 }
 
 func (s *SQLStorage) UpdateCollection(collection *api.CollectionResource) error {
-	if err := s.verifyTenant(nil, shared.TABLE_COLLECTIONS); err != nil {
+	if err := s.verifyTenant(); err != nil {
 		return err
 	}
 
@@ -139,7 +139,7 @@ func (s *SQLStorage) DeleteCollection(id string) error {
 }
 
 func (s *SQLStorage) PatchCollection(id string, patches *api.Patch) error {
-	if err := s.verifyTenant(nil, shared.TABLE_COLLECTIONS); err != nil {
+	if err := s.verifyTenant(); err != nil {
 		return err
 	}
 

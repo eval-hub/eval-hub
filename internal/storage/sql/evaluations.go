@@ -24,7 +24,7 @@ type EvaluationJobEntity struct {
 // Evaluation job operations
 // #######################################################################
 func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobResource) error {
-	if err := s.verifyTenant(nil, shared.TABLE_EVALUATIONS); err != nil {
+	if err := s.verifyTenant(); err != nil {
 		return err
 	}
 
@@ -57,7 +57,7 @@ func (s *SQLStorage) createEvaluationJobEntity(evaluation *api.EvaluationJobReso
 }
 
 func (s *SQLStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, error) {
-	if err := s.verifyTenant(nil, shared.TABLE_EVALUATIONS); err != nil {
+	if err := s.verifyTenant(); err != nil {
 		return nil, err
 	}
 	return s.getEvaluationJobTransactional(nil, id)
@@ -96,7 +96,7 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 }
 
 func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
-	if err := s.verifyTenant(filter, shared.TABLE_EVALUATIONS); err != nil {
+	if err := s.verifyTenant(); err != nil {
 		return nil, err
 	}
 
@@ -105,7 +105,7 @@ func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstr
 }
 
 func (s *SQLStorage) DeleteEvaluationJob(id string) error {
-	if err := s.verifyTenant(nil, shared.TABLE_EVALUATIONS); err != nil {
+	if err := s.verifyTenant(); err != nil {
 		return err
 	}
 
@@ -159,7 +159,7 @@ func (s *SQLStorage) checkEvaluationJobState(evaluationJobID string, evaluationJ
 }
 
 func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error {
-	if err := s.verifyTenant(nil, shared.TABLE_EVALUATIONS); err != nil {
+	if err := s.verifyTenant(); err != nil {
 		return err
 	}
 
@@ -259,7 +259,7 @@ func (s *SQLStorage) validateBenchmarkExists(job *api.EvaluationJobResource, run
 
 // UpdateEvaluationJobWithRunStatus runs in a transaction: fetches the job, merges RunStatusInternal into the entity, and persists.
 func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
-	if err := s.verifyTenant(nil, shared.TABLE_EVALUATIONS); err != nil {
+	if err := s.verifyTenant(); err != nil {
 		return err
 	}
 

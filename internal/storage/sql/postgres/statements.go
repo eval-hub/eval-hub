@@ -4,9 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"maps"
 	"slices"
-	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/storage/sql/shared"
@@ -112,60 +111,72 @@ func (s *postgresStatementsFactory) entityFilterCondition(key string, value any,
 	}
 }
 
-func (s *postgresStatementsFactory) createFilterStatement(filter map[string]any, orderBy string, limit int, offset int, tableName string) (string, []any) {
+func (s *postgresStatementsFactory) createFilterStatement(tenant api.Tenant, filter map[string]any, orderBy string, limit int, offset int, tableName string) (string, []any) {
 	var sb strings.Builder
 	var args []any
 
-	allowed := s.GetAllowedFilterColumns(tableName)
-	if allowed == nil {
-		return "", nil
-	}
-	keys := slices.Collect(maps.Keys(filter))
-	sort.Strings(keys)
 	index := 1
-	for _, key := range keys {
-		if !slices.Contains(allowed, key) {
-			continue
-		}
-		if index > 1 {
-			sb.WriteString(" AND ")
-		}
-		var cond string
-		var condArgs []any
-		cond, condArgs = s.entityFilterCondition(key, filter[key], index, tableName)
+	and := false
+
+	// we must always filter by tenant_id if it exists
+	if !tenant.IsEmpty() {
+		sb.WriteString(" WHERE ")
+		cond, condArgs := s.entityFilterCondition("tenant_id", tenant.String(), index, tableName)
 		index++
 		sb.WriteString(cond)
 		args = append(args, condArgs...)
+		and = true
 	}
-	filterClause := ""
-	if len(args) > 0 {
-		filterClause = " WHERE " + sb.String()
+
+	if len(filter) > 0 {
+		allowed := s.GetAllowedFilterColumns(tableName)
+		for key, value := range filter {
+			if slices.Contains(allowed, key) {
+				if !and {
+					sb.WriteString(" WHERE ")
+					and = true
+				} else if and {
+					sb.WriteString(" AND ")
+				}
+				cond, condArgs := s.entityFilterCondition(key, value, index, tableName)
+				index++
+				sb.WriteString(cond)
+				args = append(args, condArgs...)
+			} else {
+				// should never get here as we validate the filter before calling this function
+				s.logger.Warn("Disallowed filter key", "key", key, "tableName", tableName)
+			}
+		}
 	}
 
 	if orderBy != "" {
-		filterClause += fmt.Sprintf(" ORDER BY %s", orderBy)
+		sb.WriteString(" ORDER BY ")
+		sb.WriteString(orderBy)
 	}
 	if limit > 0 {
-		filterClause += fmt.Sprintf(" LIMIT $%d", index)
-		args = append(args, limit)
+		sb.WriteString(" LIMIT $")
+		sb.WriteString(strconv.Itoa(index))
 		index++
+		args = append(args, limit)
 	}
 	if offset > 0 {
-		filterClause += fmt.Sprintf(" OFFSET $%d", index)
+		sb.WriteString(" OFFSET $")
+		sb.WriteString(strconv.Itoa(index))
+		index++
 		args = append(args, offset)
 	}
 
-	return filterClause, args
+	return sb.String(), args
 }
 
-func (s *postgresStatementsFactory) CreateCountEntitiesStatement(tableName string, filter map[string]any) (string, []any) {
-	filterClause, args := s.createFilterStatement(filter, "", 0, 0, tableName)
+func (s *postgresStatementsFactory) CreateCountEntitiesStatement(tenant api.Tenant, tableName string, filter map[string]any) (string, []any) {
+	filterClause, args := s.createFilterStatement(tenant, filter, "", 0, 0, tableName)
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, tableName, filterClause)
 	return query, args
 }
 
-func (s *postgresStatementsFactory) CreateListEntitiesStatement(tableName string, limit, offset int, filter map[string]any) (string, []any) {
-	filterClause, args := s.createFilterStatement(filter, "id DESC", limit, offset, tableName)
+func (s *postgresStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant, tableName string, limit, offset int, filter map[string]any) (string, []any) {
+	filterClause, args := s.createFilterStatement(tenant, filter, "id DESC", limit, offset, tableName)
 
 	var query string
 	switch tableName {

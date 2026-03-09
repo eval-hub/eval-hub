@@ -13,7 +13,7 @@ import (
 )
 
 func (s *SQLStorage) CreateProvider(provider *api.ProviderResource) error {
-	if err := s.verifyTenant(nil, shared.TABLE_PROVIDERS); err != nil {
+	if err := s.verifyTenant(); err != nil {
 		return err
 	}
 
@@ -40,7 +40,7 @@ func (s *SQLStorage) createProviderEntity(provider *api.ProviderResource) ([]byt
 }
 
 func (s *SQLStorage) GetProvider(id string) (*api.ProviderResource, error) {
-	if err := s.verifyTenant(nil, shared.TABLE_PROVIDERS); err != nil {
+	if err := s.verifyTenant(); err != nil {
 		return nil, err
 	}
 	return s.getUserProviderTransactional(nil, id)
@@ -77,7 +77,7 @@ func (s *SQLStorage) getUserProviderTransactional(txn *sql.Tx, id string) (*api.
 }
 
 func (s *SQLStorage) DeleteProvider(id string) error {
-	if err := s.verifyTenant(nil, shared.TABLE_PROVIDERS); err != nil {
+	if err := s.verifyTenant(); err != nil {
 		return err
 	}
 
@@ -93,7 +93,7 @@ func (s *SQLStorage) DeleteProvider(id string) error {
 }
 
 func (s *SQLStorage) GetProviders(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.ProviderResource], error) {
-	if err := s.verifyTenant(filter, shared.TABLE_PROVIDERS); err != nil {
+	if err := s.verifyTenant(); err != nil {
 		return nil, err
 	}
 
@@ -102,7 +102,7 @@ func (s *SQLStorage) GetProviders(filter *abstractions.QueryFilter) (*abstractio
 }
 
 func (s *SQLStorage) UpdateProvider(id string, provider *api.ProviderResource) (*api.ProviderResource, error) {
-	if err := s.verifyTenant(nil, shared.TABLE_PROVIDERS); err != nil {
+	if err := s.verifyTenant(); err != nil {
 		return nil, err
 	}
 
@@ -144,7 +144,7 @@ func (s *SQLStorage) updateProviderTransactional(txn *sql.Tx, providerID string,
 }
 
 func (s *SQLStorage) PatchProvider(id string, patches *api.Patch) (*api.ProviderResource, error) {
-	if err := s.verifyTenant(nil, shared.TABLE_PROVIDERS); err != nil {
+	if err := s.verifyTenant(); err != nil {
 		return nil, err
 	}
 

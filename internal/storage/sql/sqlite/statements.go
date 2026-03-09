@@ -4,9 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"maps"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/storage/sql/shared"
@@ -125,44 +123,44 @@ func (s *sqliteStatementsFactory) entityFilterCondition(key string, value any, t
 // It validates each key against the table's allowlist, sorts keys deterministically,
 // and returns both the clause and args in matching order. Returns an error if any
 // filter key is not in the allowlist (fail closed).
-func (s *sqliteStatementsFactory) createFilterStatement(filter map[string]any, orderBy string, limit int, offset int, tableName string) (string, []any) {
+func (s *sqliteStatementsFactory) createFilterStatement(tenant api.Tenant, filter map[string]any, orderBy string, limit int, offset int, tableName string) (string, []any) {
 	var args []any
 	var sb strings.Builder
 
+	and := false
+
+	// we must always filter by tenant_id if it exists
+	if !tenant.IsEmpty() {
+		sb.WriteString(" WHERE ")
+		cond, condArgs := s.entityFilterCondition("tenant_id", tenant.String(), tableName)
+		sb.WriteString(cond)
+		args = append(args, condArgs...)
+		and = true
+	}
+
 	if len(filter) > 0 {
 		allowed := s.GetAllowedFilterColumns(tableName)
-		// tenant_id is allowed but not as set by the user
-		allowed = append(allowed, "tenant_id")
-		keys := slices.Collect(maps.Keys(filter))
-		sort.Strings(keys)
-		var disallowed []string
-		validKeys := make([]string, 0, len(keys))
-		for _, key := range keys {
+		for key, value := range filter {
 			if slices.Contains(allowed, key) {
-				validKeys = append(validKeys, key)
-			} else {
-				disallowed = append(disallowed, key)
-			}
-		}
-		if len(disallowed) > 0 {
-			// ignore this for now as we validate the filter before calling this function
-			s.logger.Warn("Disallowed filter keys", "keys", disallowed, "tableName", tableName)
-		}
-		if len(validKeys) > 0 {
-			sb.WriteString(" WHERE ")
-			for i, key := range validKeys {
-				if i > 0 {
+				if !and {
+					sb.WriteString(" WHERE ")
+					and = true
+				} else if and {
 					sb.WriteString(" AND ")
 				}
-				cond, condArgs := s.entityFilterCondition(key, filter[key], tableName)
+				cond, condArgs := s.entityFilterCondition(key, value, tableName)
 				sb.WriteString(cond)
 				args = append(args, condArgs...)
+			} else {
+				// should never get here as we validate the filter before calling this function
+				s.logger.Warn("Disallowed filter key", "key", key, "tableName", tableName)
 			}
 		}
 	}
 
 	if orderBy != "" {
-		sb.WriteString(fmt.Sprintf(" ORDER BY %s", orderBy))
+		sb.WriteString(" ORDER BY ")
+		sb.WriteString(orderBy)
 	}
 	if limit > 0 {
 		sb.WriteString(" LIMIT ?")
@@ -172,17 +170,18 @@ func (s *sqliteStatementsFactory) createFilterStatement(filter map[string]any, o
 		sb.WriteString(" OFFSET ?")
 		args = append(args, offset)
 	}
+
 	return sb.String(), args
 }
 
-func (s *sqliteStatementsFactory) CreateCountEntitiesStatement(tableName string, filter map[string]any) (string, []any) {
-	filterClause, args := s.createFilterStatement(filter, "", 0, 0, tableName)
+func (s *sqliteStatementsFactory) CreateCountEntitiesStatement(tenant api.Tenant, tableName string, filter map[string]any) (string, []any) {
+	filterClause, args := s.createFilterStatement(tenant, filter, "", 0, 0, tableName)
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, tableName, filterClause)
 	return query, args
 }
 
-func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tableName string, limit, offset int, filter map[string]any) (string, []any) {
-	filterClause, args := s.createFilterStatement(filter, "id DESC", limit, offset, tableName)
+func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant, tableName string, limit, offset int, filter map[string]any) (string, []any) {
+	filterClause, args := s.createFilterStatement(tenant, filter, "id DESC", limit, offset, tableName)
 
 	var query string
 	switch tableName {

@@ -179,7 +179,7 @@ func (s *SQLStorage) queryRow(txn *sql.Tx, query string, args ...any) *sql.Row {
 }
 
 func (s *SQLStorage) getTotalCount(txn *sql.Tx, tableName string, params map[string]any, typeName string) (int, error) {
-	countQuery, countArgs := s.statementsFactory.CreateCountEntitiesStatement(tableName, params)
+	countQuery, countArgs := s.statementsFactory.CreateCountEntitiesStatement(s.tenant, tableName, params)
 
 	var totalCount int
 	var err error
@@ -207,14 +207,9 @@ func (s *SQLStorage) ensureSchema() error {
 	return nil
 }
 
-func (s *SQLStorage) verifyTenant(filter *abstractions.QueryFilter, tableName string) error {
+func (s *SQLStorage) verifyTenant() error {
 	if s.authenticationEnabled && s.tenant == "" {
 		return se.NewServiceError(messages.Unauthorized, "Error", "Tenant is required")
-	}
-	if filter != nil {
-		if _, exists := filter.Params["tenant_id"]; exists {
-			return se.NewServiceError(messages.QueryBadParameter, "ParameterName", "tenant_id", "AllowedParameters", s.statementsFactory.GetAllowedFilterColumns(tableName))
-		}
 	}
 	return nil
 }

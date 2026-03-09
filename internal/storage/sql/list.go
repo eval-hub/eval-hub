@@ -38,11 +38,6 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 		return nil, err
 	}
 
-	// When tenant is set we must always filter by tenant
-	if s.tenant != "" {
-		params["tenant_id"] = string(s.tenant)
-	}
-
 	typeName := getTypeFromTableName(tableName)
 
 	// Get total count (with filter if provided)
@@ -52,7 +47,7 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 	}
 
 	// Build the list query with pagination and filters
-	listQuery, listArgs := s.statementsFactory.CreateListEntitiesStatement(tableName, limit, offset, params)
+	listQuery, listArgs := s.statementsFactory.CreateListEntitiesStatement(s.tenant, tableName, limit, offset, params)
 	s.logger.Info(fmt.Sprintf("List %s query", typeName), "query", listQuery, "args", listArgs, "params", params, "limit", limit, "offset", offset)
 
 	// Query the database

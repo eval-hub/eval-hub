@@ -24,8 +24,8 @@ type SQLStatementsFactory interface {
 	CreateProviderGetEntityStatement(query *EntityQuery) (string, []any, []any)
 
 	// common operations
-	CreateCountEntitiesStatement(tableName string, filter map[string]any) (string, []any)
-	CreateListEntitiesStatement(tableName string, limit, offset int, filter map[string]any) (string, []any)
+	CreateCountEntitiesStatement(tenant api.Tenant, tableName string, filter map[string]any) (string, []any)
+	CreateListEntitiesStatement(tenant api.Tenant, tableName string, limit, offset int, filter map[string]any) (string, []any)
 	ScanRowForEntity(tableName string, rows *sql.Rows, query *EntityQuery) error
 	CreateCheckEntityExistsStatement(tableName string) string
 	CreateDeleteEntityStatement(tableName string) string

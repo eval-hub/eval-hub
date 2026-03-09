@@ -19,6 +19,8 @@ type QueryFilter struct {
 	Limit  int
 	Offset int
 	Params map[string]any
+	// Make tenant explicit because it is not a user parameter
+	Tenant api.Tenant
 }
 
 // Returns the limit, offset, and filtered params
@@ -32,6 +34,7 @@ func (filter *QueryFilter) ExtractQueryParams() *QueryFilter {
 		Limit:  filter.Limit,
 		Offset: filter.Offset,
 		Params: params,
+		Tenant: filter.Tenant,
 	}
 }
 

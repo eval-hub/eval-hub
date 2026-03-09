@@ -118,7 +118,7 @@ fvt-report: ## Generate HTML report for FVT tests
 	if [ -f cucumber-report.html ]; then echo "Report generated: cucumber-report.html"; else echo "Report not generated: cucumber-report.html"; fi; \
 	exit $$status
 
-test-all: test test-fvt ## Run all tests (unit + FVT)
+test-all: test test-fvt test-fvt-server ## Run all tests (unit + FVT)
 
 SERVER_URL ?= http://localhost:8080
 
