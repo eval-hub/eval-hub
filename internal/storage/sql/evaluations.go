@@ -65,7 +65,7 @@ func (s *SQLStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, er
 
 func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api.EvaluationJobResource, error) {
 	// Build the SELECT query
-	query := shared.EntityQuery{Resource: api.Resource{ID: id}}
+	query := shared.EntityQuery{Resource: api.Resource{ID: id, Tenant: s.tenant}}
 	selectQuery, selectArgs, queryArgs := s.statementsFactory.CreateEvaluationGetEntityStatement(&query)
 
 	// Query the database

@@ -52,7 +52,7 @@ func (s *SQLStorage) GetCollection(id string) (*api.CollectionResource, error) {
 
 func (s *SQLStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.CollectionResource, error) {
 	// Build the SELECT query
-	query := shared.EntityQuery{Resource: api.Resource{ID: id}}
+	query := shared.EntityQuery{Resource: api.Resource{ID: id, Tenant: s.tenant}}
 	selectQuery, selectArgs, queryArgs := s.statementsFactory.CreateCollectionGetEntityStatement(&query)
 
 	err := s.queryRow(txn, selectQuery, selectArgs...).Scan(queryArgs...)

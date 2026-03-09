@@ -48,7 +48,7 @@ func (s *SQLStorage) GetProvider(id string) (*api.ProviderResource, error) {
 
 func (s *SQLStorage) getUserProviderTransactional(txn *sql.Tx, id string) (*api.ProviderResource, error) {
 	// Build the SELECT query
-	query := shared.EntityQuery{Resource: api.Resource{ID: id}}
+	query := shared.EntityQuery{Resource: api.Resource{ID: id, Tenant: s.tenant}}
 	selectQuery, selectArgs, queryArgs := s.statementsFactory.CreateProviderGetEntityStatement(&query)
 
 	// Query the database
