@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "eval-hub-server"
-version = "0.1.0a0"
+dynamic = ["version"]
 description = "Server binary for eval-hub"
 authors = [
     {name = "Rui Vieira", email = "rui@redhat.com"},
@@ -41,6 +41,9 @@ markers = ["unit: unit tests"]
 Homepage = "https://github.com/eval-hub/eval-hub"
 Repository = "https://github.com/eval-hub/eval-hub"
 "Bug Tracker" = "https://github.com/eval-hub/eval-hub/issues"
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
 
 [tool.setuptools.packages.find]
 where = ["."]

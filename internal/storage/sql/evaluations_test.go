@@ -16,6 +16,93 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
+// TestGetEvaluationJobs_TenantFilter verifies that WithTenant scopes list results
+// to only the jobs belonging to that tenant.
+func TestGetEvaluationJobs_TenantFilter(t *testing.T) {
+	logger := logging.FallbackLogger()
+	databaseConfig := map[string]any{
+		"driver":        "sqlite",
+		"url":           "file::memory:?mode=memory&cache=shared",
+		"database_name": "eval_hub_tenant_test",
+	}
+	store, err := storage.NewStorage(&databaseConfig, false, logger)
+	if err != nil {
+		t.Fatalf("failed to create storage: %v", err)
+	}
+
+	now := time.Now()
+	makeJob := func(id, tenant string) *api.EvaluationJobResource {
+		return &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{
+					ID:        id,
+					Tenant:    api.Tenant(tenant),
+					CreatedAt: now,
+					UpdatedAt: now,
+				},
+				MLFlowExperimentID: "exp-1",
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{State: api.OverallStatePending},
+			},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Model:      api.ModelRef{URL: "http://model", Name: "m"},
+				Benchmarks: []api.BenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
+			},
+		}
+	}
+
+	if err := store.CreateEvaluationJob(makeJob("job-team-a-1", "team-a")); err != nil {
+		t.Fatalf("create job-team-a-1: %v", err)
+	}
+	if err := store.CreateEvaluationJob(makeJob("job-team-a-2", "team-a")); err != nil {
+		t.Fatalf("create job-team-a-2: %v", err)
+	}
+	if err := store.CreateEvaluationJob(makeJob("job-team-b-1", "team-b")); err != nil {
+		t.Fatalf("create job-team-b-1: %v", err)
+	}
+
+	filter := &abstractions.QueryFilter{Limit: 50, Offset: 0, Params: map[string]any{}}
+
+	t.Run("team-a sees only its own jobs", func(t *testing.T) {
+		res, err := store.WithTenant(api.Tenant("team-a")).GetEvaluationJobs(filter)
+		if err != nil {
+			t.Fatalf("GetEvaluationJobs: %v", err)
+		}
+		if len(res.Items) != 2 {
+			t.Errorf("expected 2 jobs for team-a, got %d", len(res.Items))
+		}
+		for _, j := range res.Items {
+			if j.Resource.Tenant != "team-a" {
+				t.Errorf("unexpected tenant %q in result", j.Resource.Tenant)
+			}
+		}
+	})
+
+	t.Run("team-b sees only its own jobs", func(t *testing.T) {
+		res, err := store.WithTenant(api.Tenant("team-b")).GetEvaluationJobs(filter)
+		if err != nil {
+			t.Fatalf("GetEvaluationJobs: %v", err)
+		}
+		if len(res.Items) != 1 {
+			t.Errorf("expected 1 job for team-b, got %d", len(res.Items))
+		}
+		if res.Items[0].Resource.ID != "job-team-b-1" {
+			t.Errorf("expected job-team-b-1, got %q", res.Items[0].Resource.ID)
+		}
+	})
+
+	t.Run("unknown tenant sees no jobs", func(t *testing.T) {
+		res, err := store.WithTenant(api.Tenant("team-c")).GetEvaluationJobs(filter)
+		if err != nil {
+			t.Fatalf("GetEvaluationJobs: %v", err)
+		}
+		if len(res.Items) != 0 {
+			t.Errorf("expected 0 jobs for team-c, got %d", len(res.Items))
+		}
+	})
+}
+
 // TestUpdateEvaluationJob_PreservesProviderID verifies that provider_id is
 // preserved when creating benchmark statuses via status updates.
 //
