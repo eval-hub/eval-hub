@@ -392,10 +392,6 @@ func (tc *scenarioConfig) iSetTransactionIdTo(paramValue string) error {
 	return tc.iSetHeaderTo(server.TRANSACTION_ID_HEADER, paramValue)
 }
 
-func (tc *scenarioConfig) iUnsetTransactionId() error {
-	return tc.iUnsetHeader(server.TRANSACTION_ID_HEADER)
-}
-
 func (tc *scenarioConfig) iSendARequestTo(method, path string) error {
 	return tc.iSendARequestToWithBody(method, path, "")
 }
@@ -678,7 +674,7 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 
 	defer func() {
 		// we do this for now as request ids are supposed to be unique per request
-		tc.iUnsetTransactionId()
+		tc.iUnsetHeader(server.TRANSACTION_ID_HEADER)
 	}()
 
 	tc.body, err = io.ReadAll(tc.response.Body)
@@ -1146,7 +1142,6 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I set the header "([^"]*)" to "([^"]*)"$`, tc.iSetHeaderTo)
 	ctx.Step(`^I unset the header "([^"]*)"$`, tc.iUnsetHeader)
 	ctx.Step(`^I set transaction-id to "([^"]*)"$`, tc.iSetTransactionIdTo)
-	ctx.Step(`^I unset transaction-id$`, tc.iUnsetTransactionId)
 	ctx.Step(`^I send a (GET|DELETE|POST|PUT) request to "([^"]*)"$`, tc.iSendARequestTo)
 	ctx.Step(`^I send a (POST|PUT|PATCH) request to "([^"]*)" with body "([^"]*)"$`, tc.iSendARequestToWithBody)
 	ctx.Step(`^I send a (POST|PUT|PATCH) request to "([^"]*)" with body:$`, tc.iSendARequestToWithInlineBody)
