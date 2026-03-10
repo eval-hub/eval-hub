@@ -51,6 +51,8 @@ func GetOverallJobStatus(logger *slog.Logger, job *api.EvaluationJobResource, ge
 		overallState, stateMessage = api.OverallStatePartiallyFailed, "Some of the benchmarks failed. \n"+failureMessage
 	case cancelled == total:
 		overallState, stateMessage = api.OverallStateCancelled, "Evaluation job is cancelled"
+	case completed+failed+cancelled == total:
+		overallState, stateMessage = api.OverallStatePartiallyFailed, "Some of the benchmarks failed or cancelled. \n"+failureMessage
 	case running > 0, completed > 0, failed > 0, cancelled > 0: // if at least one benchmark has reported a state then the job is running
 		overallState, stateMessage = api.OverallStateRunning, "Evaluation job is running"
 	default:

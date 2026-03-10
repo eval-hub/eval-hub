@@ -329,6 +329,8 @@ Feature: Evaluations Endpoint
     And the response should contain the value "0.6" at path "$.results.benchmarks[?(@.id == &quot;pc_b2&quot;)].test.threshold"
     And the response should contain the value "0.84|0.85|0.86" at path "$.results.test.score"
     And the response should contain the value "true" at path "$.results.test.pass"
+
+    And the response should contain the value "completed" at path "$.status.state"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
     When I send a DELETE request to "/api/v1/evaluations/collections/{{value:collection_id}}"
