@@ -20,9 +20,9 @@ func NewHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logger *slo
 		return nil, nil
 	}
 
-	timeout := mlflowConfig.HTTPTimeout
-	if timeout == 0 {
-		timeout = defaultHTTPTimeout
+	timeout := defaultHTTPTimeout
+	if timeout > (0 * time.Second) {
+		timeout = mlflowConfig.HTTPTimeout
 	}
 
 	tlsConfig, err := common.BuildTLSConfig(mlflowConfig.CACertPath, mlflowConfig.InsecureSkipVerify, logger, "MLflow")

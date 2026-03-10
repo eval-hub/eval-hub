@@ -1,6 +1,7 @@
 package eval_hub
 
 import (
+	"crypto/tls"
 	"log/slog"
 	"net/http"
 	"time"
@@ -13,20 +14,25 @@ const defaultHTTPTimeout = 30 * time.Second
 
 // NewHTTPClient creates an HTTP client for the eval-hub service from config.
 // Returns (nil, nil) when Sidecar.EvalHub is not configured.
-func NewHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logger *slog.Logger) (*http.Client, error) {
-	if serviceConfig == nil || serviceConfig.Sidecar == nil || serviceConfig.Sidecar.EvalHub == nil {
+func NewHTTPClient(config *config.Config, isOTELEnabled bool, logger *slog.Logger) (*http.Client, error) {
+	if config == nil || config.Sidecar == nil {
 		return nil, nil
 	}
-	cfg := serviceConfig.Sidecar.EvalHub
+	cfg := config.Sidecar.EvalHub
 
-	timeout := cfg.HTTPTimeout
-	if timeout == 0 {
-		timeout = defaultHTTPTimeout
+	timeout := defaultHTTPTimeout
+
+	if cfg != nil && cfg.HTTPTimeout > (0*time.Second) {
+		timeout = cfg.HTTPTimeout
 	}
 
-	tlsConfig, err := common.BuildTLSConfig(cfg.CACertPath, cfg.InsecureSkipVerify, logger, "EvalHub")
-	if err != nil {
-		return nil, err
+	var tlsConfig *tls.Config
+	var err error
+	if cfg != nil {
+		tlsConfig, err = common.BuildTLSConfig(cfg.CACertPath, cfg.InsecureSkipVerify, logger, "EvalHub")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	client := common.NewHTTPClient(timeout, tlsConfig, isOTELEnabled, logger, "EvalHub")

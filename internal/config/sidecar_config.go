@@ -6,6 +6,8 @@ import (
 )
 
 type SidecarConfig struct {
+	Port             int                     `mapstructure:"port,omitempty"`
+	BaseURL          string                  `mapstructure:"base_url,omitempty"`
 	EvalHub          *EvalHubClientConfig    `mapstructure:"eval_hub"`
 	ServiceAccount   *ServiceAccountConfig   `mapstructure:"service_account"`
 	SidecarContainer *SidecarContainerConfig `mapstructure:"sidecar_container,omitempty"`

@@ -62,8 +62,8 @@ COPY --chown=evalhub:evalhub config/providers /app/config/providers
 # Set working directory
 WORKDIR /app
 
-# Switch to non-root user
-USER evalhub
+# Switch to non-root user (numeric UID so Kubernetes runAsNonRoot can verify)
+USER 1000
 
 # Expose service port
 EXPOSE 8080

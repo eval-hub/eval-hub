@@ -57,8 +57,11 @@ func main() {
 		// we do this as no point trying to continue
 		startUpFailed(terminationFilePath(nil, logger), err, "Failed to create service logger", logging.FallbackLogger())
 	}
-
-	serviceConfig, err := config.LoadConfig(logger, Version, Build, BuildDate, args.ConfigDir)
+	defaultConfigDir := "/etc/evalhub/config"
+	if args.ConfigDir == "" {
+		args.ConfigDir = defaultConfigDir
+	}
+	config, err := config.LoadConfig(logger, Version, Build, BuildDate, args.ConfigDir)
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(terminationFilePath(nil, logger), err, "Failed to create service config", logger)
@@ -66,39 +69,35 @@ func main() {
 
 	// setup OTEL
 	var otelShutdown func(context.Context) error
-	if serviceConfig.IsOTELEnabled() {
+	if config.IsOTELEnabled() {
 		// TODO CHECK TO SEE WHY WE HAVE TO PASS IN A CONTEXT HERE
-		shutdown, err := otel.SetupOTEL(context.Background(), serviceConfig.OTEL, logger)
+		shutdown, err := otel.SetupOTEL(context.Background(), config.OTEL, logger)
 		if err != nil {
 			// we do this as no point trying to continue
-			startUpFailed(terminationFilePath(serviceConfig, logger), err, "Failed to setup OTEL", logger)
+			startUpFailed(terminationFilePath(config, logger), err, "Failed to setup OTEL", logger)
 		}
 		otelShutdown = shutdown
 	}
 
-	if serviceConfig.Sidecar == nil || serviceConfig.Sidecar.EvalHub == nil || strings.TrimSpace(serviceConfig.Sidecar.EvalHub.BaseURL) == "" {
-		startUpFailed(terminationFilePath(serviceConfig, logger), fmt.Errorf("eval_hub.base_url is required"), "EvalHub base URL is required for the sidecar", logger)
-	}
-
 	// create the server
-	srv, err := sidecarServer.NewSidecarServer(logger, serviceConfig)
+	srv, err := sidecarServer.NewSidecarServer(logger, config)
 	if err != nil {
-		startUpFailed(terminationFilePath(serviceConfig, logger), err, "Failed to create sidecar server", logger)
+		startUpFailed(terminationFilePath(config, logger), err, "Failed to create sidecar server", logger)
 	}
 
 	// log the start up details
 	version, build, buildDate := "", "", ""
-	if serviceConfig.Service != nil {
-		version, build, buildDate = serviceConfig.Service.Version, serviceConfig.Service.Build, serviceConfig.Service.BuildDate
+	if config.Service != nil {
+		version, build, buildDate = config.Service.Version, config.Service.Build, config.Service.BuildDate
 	}
 	logger.Info("Server starting",
 		"server_port", srv.GetPort(),
 		"version", version,
 		"build", build,
 		"build_date", buildDate,
-		"mlflow_tracking", serviceConfig.MLFlow != nil && serviceConfig.MLFlow.TrackingURI != "",
-		"otel", serviceConfig.IsOTELEnabled(),
-		"prometheus", serviceConfig.IsPrometheusEnabled(),
+		"mlflow_tracking", config.MLFlow != nil && config.MLFlow.TrackingURI != "",
+		"otel", config.IsOTELEnabled(),
+		"prometheus", config.IsPrometheusEnabled(),
 	)
 
 	// Start server in a goroutine
@@ -109,7 +108,7 @@ func main() {
 				logger.Info("Server closed gracefully")
 				return
 			}
-			startUpFailed(terminationFilePath(serviceConfig, logger), err, "Server failed to start", logger)
+			startUpFailed(terminationFilePath(config, logger), err, "Server failed to start", logger)
 		}
 	}()
 

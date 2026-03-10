@@ -54,13 +54,15 @@ type jobConfig struct {
 	jobSpec              shared.JobSpec
 	serviceAccountName   string
 	serviceCAConfigMap   string
-	evalHubURL           string
+	evalHubURL           string // in-cluster URL for sidecar to call eval-hub
+	sidecarBaseURL       string // base URL for adapter/runtime to call sidecar's proxy (config.Sidecar.BaseURL)
 	evalHubInstanceName  string
 	mlflowTrackingURI    string
 	mlflowWorkspace      string
 	ociCredentialsSecret string
 	modelAuthSecretRef   string
 	sidecarResources     corev1.ResourceRequirements
+	localMode            bool
 	testDataS3           s3TestDataConfig
 	testDataInitImage    string
 }
@@ -93,7 +95,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		return nil, fmt.Errorf("%s is required", serviceURLEnv)
 	}
 
-	namespace := resolveNamespace("")
+	namespace := resolveNamespace("prabhu")
 	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, benchmarkConfig, benchmarkIndex, &serviceURL)
 	if err != nil {
 		return nil, err
@@ -131,6 +133,11 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	if err != nil {
 		return nil, err
 	}
+	sidecarBaseURL := "http://localhost:8081"
+	if serviceConfig != nil && serviceConfig.Sidecar != nil {
+		sidecarBaseURL = strings.TrimSpace(serviceConfig.Sidecar.BaseURL)
+	}
+	localMode := serviceConfig != nil && serviceConfig.Service != nil && serviceConfig.Service.LocalMode
 	var testDataS3Bucket, testDataS3Key, testDataS3SecretRef string
 	if benchmarkConfig.TestDataRef != nil && benchmarkConfig.TestDataRef.S3 != nil {
 		testDataS3Bucket = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.Bucket)
@@ -162,6 +169,8 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		ociCredentialsSecret: ociCredentialsSecret,
 		modelAuthSecretRef:   modelAuthSecretRef,
 		sidecarResources:     sidecarResources,
+		sidecarBaseURL:       sidecarBaseURL,
+		localMode:            localMode,
 		testDataS3: s3TestDataConfig{
 			bucket:    testDataS3Bucket,
 			key:       testDataS3Key,

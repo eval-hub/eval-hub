@@ -22,6 +22,8 @@ env_mappings:
   MLFLOW_INSECURE_SKIP_VERIFY: mlflow.insecure_skip_verify
   MLFLOW_TOKEN_PATH: mlflow.token_path
   MLFLOW_WORKSPACE: mlflow.workspace
+  EVALHUB_CA_CERT_PATH: sidecar.eval_hub.ca_cert_path
+  EVALHUB_INSECURE_SKIP_VERIFY: sidecar.eval_hub.insecure_skip_verify
 # Database configuration
 database:
   driver: sqlite
@@ -45,8 +47,20 @@ prometheus:
   enabled: true
 
 sidecar:
+  base_url: http://localhost:8081  # URL for adapter/runtime to call sidecar proxy (cluster mode)
+  port: 8081
+  eval_hub:
+    # Backend for /api/v1/evaluations/ proxy (main eval-hub service). Use https:// when TLS is enabled.
+    base_url: http://localhost:8080
+    # TLS for outbound calls to eval-hub (sidecar -> eval-hub API):
+    # ca_cert_path: path to PEM CA bundle that signed the eval-hub server cert (e.g. OpenShift service CA).
+    # insecure_skip_verify: set to true only for dev with self-signed certs; disables server cert verification.
+    ca_cert_path: ""
+    insecure_skip_verify: false
+    token: ""
+    token_path: ""
   sidecar_container:
-    image: eval-runtime-sidecar:latest
+    image: quay.io/rh-ee-nbs/nbs-dev:eval-hub_v7
     resources:
       requests:
         cpu: 100m

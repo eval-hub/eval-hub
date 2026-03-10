@@ -13,33 +13,33 @@ import (
 )
 
 type SidecarServer struct {
-	httpServer    *http.Server
-	port          int
-	logger        *slog.Logger
-	serviceConfig *config.Config
+	httpServer *http.Server
+	port       int
+	logger     *slog.Logger
+	config     *config.Config
 }
 
 // NewSidecarServer creates a new sidecar HTTP server with the given logger and config.
 func NewSidecarServer(logger *slog.Logger,
-	serviceConfig *config.Config,
+	config *config.Config,
 ) (*SidecarServer, error) {
 
 	if logger == nil {
 		return nil, fmt.Errorf("logger is required for the server")
 	}
-	if serviceConfig == nil {
+	if config == nil {
 		return nil, fmt.Errorf("service config is required for the sidecar server")
 	}
 
-	port := 8080
-	if serviceConfig.Service != nil {
-		port = serviceConfig.Service.Port
+	port := 8081
+	if config.Sidecar != nil && config.Sidecar.Port > 0 {
+		port = config.Sidecar.Port
 	}
 
 	return &SidecarServer{
-		port:          port,
-		logger:        logger,
-		serviceConfig: serviceConfig,
+		port:   port,
+		logger: logger,
+		config: config,
 	}, nil
 }
 
@@ -49,7 +49,7 @@ func (s *SidecarServer) GetPort() int {
 
 func (s *SidecarServer) setupRoutes() (http.Handler, error) {
 	router := http.NewServeMux()
-	h, err := handlers.New(s.serviceConfig, s.logger)
+	h, err := handlers.New(s.config, s.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create handlers: %w", err)
 	}
@@ -61,9 +61,10 @@ func (s *SidecarServer) setupRoutes() (http.Handler, error) {
 	return handler, nil
 }
 
-func (s *SidecarServer) setupAuthProxyRoutes(h *handlers.Handlers, router *http.ServeMux) {
-	router.HandleFunc("/v1/evaluations/", h.HandleEvalHubProxy)
+func (s *SidecarServer) setupAuthProxyRoutes(h *handlers.Handlers, router *http.ServeMux) error {
+	router.HandleFunc("/api/v1/evaluations/", h.HandleEvalHubProxy)
 	router.HandleFunc("/mlflow/", h.HandleMLflowProxy)
+	return nil
 }
 
 // SetupRoutes exposes the route setup for testing
@@ -85,11 +86,11 @@ func (s *SidecarServer) Start() error {
 	}
 
 	readyFile := ""
-	if s.serviceConfig.Service != nil {
-		readyFile = s.serviceConfig.Service.ReadyFile
+	if s.config.Service != nil {
+		readyFile = s.config.Service.ReadyFile
 	}
 	s.logger.Info("Writing the server ready message", "file", readyFile)
-	err = server.SetReady(s.serviceConfig, s.logger)
+	err = server.SetReady(s.config, s.logger)
 	if err != nil {
 		return err
 	}

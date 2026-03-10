@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage start-service stop-service lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-sidecar start-service stop-service start-sidecar stop-sidecar lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report
 
 # Variables
 BINARY_NAME = eval-hub
@@ -6,7 +6,7 @@ CMD_PATH = ./cmd/eval_hub
 INIT_BINARY_NAME = eval-hub-init
 INIT_CMD_PATH = ./cmd/eval_hub_init
 SIDECAR_BINARY_NAME = eval-hub-sidecar
-SIDECAR_CMD_PATH = ./cmd/eval_hub_sidecar
+SIDECAR_CMD_PATH = ./cmd/eval_runtime_sidecar
 BIN_DIR = bin
 PORT ?= 8080
 
@@ -91,6 +91,23 @@ start-service-coverage: ${SERVER_PID_FILE} build-coverage ## Run the application
 stop-service:
 	-./scripts/stop_server.sh "${SERVER_PID_FILE}"
 	! grep -i -F panic "${SERVICE_LOG}"
+
+# Sidecar (eval-runtime-sidecar) starter/stopper
+SIDECAR_PID_FILE ?= $(BIN_DIR)/sidecar.pid
+SIDECAR_LOG ?= $(BIN_DIR)/sidecar.log
+
+build-sidecar: $(BIN_DIR) ## Build only the sidecar binary
+	@echo "Building $(SIDECAR_BINARY_NAME) with ${LDFLAGS}"
+	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(SIDECAR_BINARY_NAME) $(SIDECAR_CMD_PATH)
+	@echo "Build complete: $(BIN_DIR)/$(SIDECAR_BINARY_NAME)"
+
+start-sidecar: build-sidecar ## Run the sidecar in background (port $(SIDECAR_PORT))
+	@rm -f "${SIDECAR_PID_FILE}" && true
+	@echo "Running $(SIDECAR_BINARY_NAME) on port $(SIDECAR_PORT)..."
+	@./scripts/start_sidecar.sh "${SIDECAR_PID_FILE}" "${BIN_DIR}/$(SIDECAR_BINARY_NAME)" "${SIDECAR_LOG}" $(SIDECAR_PORT)
+
+stop-sidecar: ## Stop the sidecar
+	-./scripts/stop_server.sh "${SIDECAR_PID_FILE}"
 
 lint: ## Lint the code (runs go vet)
 	@echo "Linting code..."
