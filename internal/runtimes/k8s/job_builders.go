@@ -46,7 +46,6 @@ const (
 	modelAuthMountPath              = "/var/run/secrets/model"
 	testDataSecretVolumeName        = "test-data-secret"
 	testDataSecretMountPath         = "/var/run/secrets/test-data"
-	testDataInitImage               = "quay.io/evalhub/evalhub:latest"
 	serviceCABundleFile             = "service-ca.crt"
 	envMLFlowCertPathName           = "MLFLOW_TRACKING_SERVER_CERT_PATH"
 	envTestDataS3BucketName         = "TEST_DATA_S3_BUCKET"
@@ -264,8 +263,11 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	// Add test data volumes and init container when S3 test data is configured.
 	var initContainers []corev1.Container
 	if hasS3TestData(cfg) {
+		if cfg.testDataInitImage == "" {
+			return nil, fmt.Errorf("init image is required when S3 test data is configured")
+		}
 		initCommand := defaultTestDataInitCmd
-		initImage := defaultIfEmpty(cfg.testDataInitImage, testDataInitImage)
+		initImage := cfg.testDataInitImage
 		initResources := corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse(defaultInitCPURequest),
