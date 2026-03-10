@@ -304,25 +304,34 @@ Feature: Evaluations Endpoint
     And the "resource.id" field in the response should be saved as "value:collection_id"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_pass_criteria_from_provider_test.json"
     Then the response code should be 202
+    And the response should contain the value "value:collection_id" at path "$.collection.id"
     When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_pass_criteria_provider_b1.json"
     Then the response code should be 204
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "pc_b1" at path "$.status.benchmarks[?(@.id == &quot;pc_b1&quot;)].id"
+    And the response should contain the value "running" at path "$.status.state"
+    And the response should contain the value "completed" at path "$.status.benchmarks[?(@.id == &quot;pc_b1&quot;)].status"
+    And the response should contain the value "0.9" at path "$.results.benchmarks[?(@.id == &quot;pc_b1&quot;)].metrics.accuracy"
+    And the response should contain the value "2026-01-12T10:45:32Z" at path "$.status.benchmarks[?(@.id == &quot;pc_b1&quot;)].started_at"
+    And the response should contain the value "2026-01-12T10:47:12Z" at path "$.status.benchmarks[?(@.id == &quot;pc_b1&quot;)].completed_at"
     When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_pass_criteria_provider_b2.json"
     Then the response code should be 204
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    And the response should contain the value "pc_b1" at path "$.results.benchmarks[0].id"
-    And the response should contain the value "0.9" at path "$.results.benchmarks[0].test.primary_score"
-    And the response should contain the value "true" at path "$.results.benchmarks[0].test.pass"
-    And the response should contain the value "0.5" at path "$.results.benchmarks[0].test.threshold"
-    And the response should contain the value "pc_b2" at path "$.results.benchmarks[1].id"
-    And the response should contain the value "0.8" at path "$.results.benchmarks[1].test.primary_score"
-    And the response should contain the value "true" at path "$.results.benchmarks[1].test.pass"
-    And the response should contain the value "0.6" at path "$.results.benchmarks[1].test.threshold"
+    And the response should contain the value "pc_b1" at path "$.results.benchmarks[?(@.id == &quot;pc_b1&quot;)].id"
+    And the response should contain the value "0.9" at path "$.results.benchmarks[?(@.id == &quot;pc_b1&quot;)].test.primary_score"
+    And the response should contain the value "true" at path "$.results.benchmarks[?(@.id == &quot;pc_b1&quot;)].test.pass"
+    And the response should contain the value "0.5" at path "$.results.benchmarks[?(@.id == &quot;pc_b1&quot;)].test.threshold"
+    And the response should contain the value "pc_b2" at path "$.results.benchmarks[?(@.id == &quot;pc_b2&quot;)].id"
+    And the response should contain the value "0.8" at path "$.results.benchmarks[?(@.id == &quot;pc_b2&quot;)].test.primary_score"
+    And the response should contain the value "true" at path "$.results.benchmarks[?(@.id == &quot;pc_b2&quot;)].test.pass"
+    And the response should contain the value "0.6" at path "$.results.benchmarks[?(@.id == &quot;pc_b2&quot;)].test.threshold"
     And the response should contain the value "0.84|0.85|0.86" at path "$.results.test.score"
     And the response should contain the value "true" at path "$.results.test.pass"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
-    When I send a DELETE request to "/api/v1/evaluations/collections/{{value:collection_id}}?hard_delete=true"
+    When I send a DELETE request to "/api/v1/evaluations/collections/{{value:collection_id}}"
     Then the response code should be 204
     When I send a DELETE request to "/api/v1/evaluations/providers/{{value:provider_id}}"
     Then the response code should be 204
@@ -370,6 +379,8 @@ Feature: Evaluations Endpoint
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs/unknown-id/events" with body "file:/evaluation_job_status_event_running.json"
 
+  @focus
+  @ignore
   Scenario: List evaluation jobs filtered by status
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"

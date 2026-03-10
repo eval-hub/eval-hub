@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"log/slog"
 
+	evalcommon "github.com/eval-hub/eval-hub/internal/common"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
-func GetOverallJobStatus(logger *slog.Logger, job *api.EvaluationJobResource) (api.OverallState, *api.MessageInfo) {
+// GetOverallJobStatus returns overall state and message. getCollection is used to resolve job benchmark count when job has only a collection reference.
+func GetOverallJobStatus(logger *slog.Logger, job *api.EvaluationJobResource, getCollection evalcommon.GetCollectionFunc) (api.OverallState, *api.MessageInfo, error) {
 	// group all benchmarks by state
 	benchmarkStates := make(map[api.State]int)
 	failureMessage := ""
@@ -21,11 +23,17 @@ func GetOverallJobStatus(logger *slog.Logger, job *api.EvaluationJobResource) (a
 		}
 	}
 
-	// determine the overall job status
-	total := len(job.Benchmarks)
-	completed, failed, running, cancelled := benchmarkStates[api.StateCompleted], benchmarkStates[api.StateFailed], benchmarkStates[api.StateRunning], benchmarkStates[api.StateCancelled]
-
-	logger.Debug("Calculating overall job status", "total", total, "completed", completed, "failed", failed, "running", running, "cancelled", cancelled)
+	// determine the overall job status (use resolved benchmark count for collection-only jobs)
+	benchmarks, err := evalcommon.GetJobBenchmarks(job, getCollection)
+	total := 0
+	if err != nil || len(benchmarks) == 0 {
+		return api.OverallStatePending, &api.MessageInfo{
+			Message:     "Evaluation job is pending",
+			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
+		}, err
+	}
+	total = len(benchmarks)
+	completed, failed, running := benchmarkStates[api.StateCompleted], benchmarkStates[api.StateFailed], benchmarkStates[api.StateRunning]
 
 	var overallState api.OverallState
 	var stateMessage string
@@ -38,8 +46,6 @@ func GetOverallJobStatus(logger *slog.Logger, job *api.EvaluationJobResource) (a
 		overallState, stateMessage = api.OverallStatePartiallyFailed, "Some of the benchmarks failed. \n"+failureMessage
 	case running > 0:
 		overallState, stateMessage = api.OverallStateRunning, "Evaluation job is running"
-	case cancelled == total:
-		overallState, stateMessage = api.OverallStateCancelled, "Evaluation job is cancelled"
 	default:
 		overallState, stateMessage = api.OverallStatePending, "Evaluation job is pending"
 	}
@@ -47,7 +53,7 @@ func GetOverallJobStatus(logger *slog.Logger, job *api.EvaluationJobResource) (a
 	return overallState, &api.MessageInfo{
 		Message:     stateMessage,
 		MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
-	}
+	}, nil
 }
 
 func UpdateBenchmarkResults(job *api.EvaluationJobResource, runStatus *api.StatusEvent, result *api.BenchmarkResult) error {

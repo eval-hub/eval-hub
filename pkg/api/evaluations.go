@@ -219,7 +219,7 @@ type EvaluationJobConfig struct {
 	Tags         []string           `json:"tags,omitempty"`
 	Model        ModelRef           `json:"model" validate:"required"`
 	PassCriteria *PassCriteria      `json:"pass_criteria,omitempty"`
-	Benchmarks   []BenchmarkConfig  `json:"benchmarks" validate:"required_without=Collection,dive"`
+	Benchmarks   []BenchmarkConfig  `json:"benchmarks,omitempty" validate:"omitempty,required_without=Collection,dive"`
 	Collection   *Ref               `json:"collection,omitempty"`
 	Experiment   *ExperimentConfig  `json:"experiment,omitempty"`
 	Custom       *map[string]any    `json:"custom,omitempty"`

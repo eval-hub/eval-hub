@@ -1,1 +1,7 @@
-[{"op":"replace","path":"/name","value":"patched-collection-name"}]
+[
+    {
+        "op": "replace",
+        "path": "/name",
+        "value": "patched-collection-name"
+    }
+]
