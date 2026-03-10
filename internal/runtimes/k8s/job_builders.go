@@ -348,6 +348,14 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		})
 	}
 
+	// Adapter must mount test-data volume when S3 test data is used so it can read data downloaded by init container.
+	if hasS3TestData(cfg) {
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      testDataVolumeName,
+			MountPath: testDataMountPath,
+		})
+	}
+
 	return volumes, volumeMounts
 }
 

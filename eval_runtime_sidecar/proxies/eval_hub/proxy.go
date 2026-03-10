@@ -24,6 +24,6 @@ func Proxy(logger *slog.Logger, w http.ResponseWriter, r *http.Request, client *
 	if tokenPath == "" {
 		tokenPath = common.DefaultTokenPath
 	}
-	token := ResolveAuthToken(logger, tokenPath, cfg.Token)
+	token := common.ResolveAuthToken(logger, tokenPath, cfg.Token)
 	common.ProxyRequest(logger, w, r, client, baseURL, token)
 }

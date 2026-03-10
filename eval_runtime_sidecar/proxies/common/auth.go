@@ -1,4 +1,4 @@
-package eval_hub
+package common
 
 import (
 	"log/slog"

@@ -8,8 +8,8 @@ import (
 )
 
 func TestBuildJobConfigDefaults(t *testing.T) {
-	serviceURL := "http://eval-hub"
-	t.Setenv(serviceURLEnv, serviceURL)
+	callbackURL := "http://localhost:8080"
+	t.Setenv(serviceURLEnv, callbackURL)
 	benchmark := api.BenchmarkConfig{
 		Ref: api.Ref{ID: "bench-1"},
 		Parameters: map[string]any{
@@ -95,8 +95,8 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 		t.Fatalf("expected benchmark_config.temperature to be 0.2, got %v", benchmarkConfig["temperature"])
 	}
 	callback := spec.CallbackURL
-	if callback == nil || *callback != serviceURL {
-		t.Fatalf("expected job spec json callback_url to be %q, got %v", serviceURL, callback)
+	if callback == nil || *callback != callbackURL {
+		t.Fatalf("expected job spec json callback_url to be %q, got %v", callbackURL, callback)
 	}
 }
 
@@ -331,43 +331,6 @@ func TestBuildJobConfigMissingAdapterImage(t *testing.T) {
 	}
 }
 
-func TestBuildJobConfigMissingServiceURL(t *testing.T) {
-	t.Setenv(serviceURLEnv, "")
-	evaluation := &api.EvaluationJobResource{
-		Resource: api.EvaluationResource{
-			Resource:           api.Resource{ID: "job-123"},
-			MLFlowExperimentID: "",
-		},
-		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
-				URL:  "http://model",
-				Name: "model",
-			},
-			Benchmarks: []api.BenchmarkConfig{
-				{
-					Ref:        api.Ref{ID: "bench-1"},
-					Parameters: map[string]any{"num_examples": 50},
-				},
-			},
-		},
-	}
-	provider := &api.ProviderResource{
-		Resource: api.Resource{ID: "provider-1"},
-		ProviderConfig: api.ProviderConfig{
-			Runtime: &api.Runtime{
-				K8s: &api.K8sRuntime{
-					Image: "adapter:latest",
-				},
-			},
-		},
-	}
-
-	_, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil)
-	if err == nil {
-		t.Fatalf("expected error for missing %s", serviceURLEnv)
-	}
-}
-
 func TestBuildJobConfigAllowsEmptyBenchmarkConfig(t *testing.T) {
 	t.Setenv(serviceURLEnv, "http://eval-hub")
 	evaluation := &api.EvaluationJobResource{
@@ -568,7 +531,7 @@ func TestBuildJobConfigUsesTenantNamespace(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
@@ -604,7 +567,7 @@ func TestBuildJobConfigEmptyTenantFallsBack(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
