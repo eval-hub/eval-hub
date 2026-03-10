@@ -19,6 +19,18 @@ type PatchOp string
 type Tenant string
 type User string
 
+func (t Tenant) String() string {
+	return string(t)
+}
+
+func (t Tenant) IsEmpty() bool {
+	return t == ""
+}
+
+func (u User) String() string {
+	return string(u)
+}
+
 const (
 	PatchOpReplace PatchOp = "replace"
 	PatchOpAdd     PatchOp = "add"

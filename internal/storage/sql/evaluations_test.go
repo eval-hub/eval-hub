@@ -2,6 +2,7 @@ package sql_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"maps"
 	"strings"
 	"testing"
@@ -16,6 +17,107 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
+var (
+	dbIndex = 0
+)
+
+func getDBName() string {
+	dbIndex++
+	return fmt.Sprintf("eval_hub_tenant_test_%d", dbIndex)
+}
+
+func getDBInMemoryURL() string {
+	// we want each test to use a unique in-memory database
+	return fmt.Sprintf("file:%s?mode=memory&cache=shared", getDBName())
+}
+
+// TestGetEvaluationJobs_TenantFilter verifies that WithTenant scopes list results
+// to only the jobs belonging to that tenant.
+func TestGetEvaluationJobs_TenantFilter(t *testing.T) {
+	logger := logging.FallbackLogger()
+	databaseConfig := map[string]any{
+		"driver":        "sqlite",
+		"url":           getDBInMemoryURL(),
+		"database_name": "eval_hub_tenant_test",
+	}
+	store, err := storage.NewStorage(&databaseConfig, false, false, logger)
+	if err != nil {
+		t.Fatalf("failed to create storage: %v", err)
+	}
+
+	now := time.Now()
+	makeJob := func(id, tenant string) *api.EvaluationJobResource {
+		return &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{
+					ID:        id,
+					Tenant:    api.Tenant(tenant),
+					CreatedAt: now,
+					UpdatedAt: now,
+				},
+				MLFlowExperimentID: "exp-1",
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{State: api.OverallStatePending},
+			},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Model:      api.ModelRef{URL: "http://model", Name: "m"},
+				Benchmarks: []api.BenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
+			},
+		}
+	}
+
+	if err := store.CreateEvaluationJob(makeJob("job-team-a-1", "team-a")); err != nil {
+		t.Fatalf("create job-team-a-1: %v", err)
+	}
+	if err := store.CreateEvaluationJob(makeJob("job-team-a-2", "team-a")); err != nil {
+		t.Fatalf("create job-team-a-2: %v", err)
+	}
+	if err := store.CreateEvaluationJob(makeJob("job-team-b-1", "team-b")); err != nil {
+		t.Fatalf("create job-team-b-1: %v", err)
+	}
+
+	filter := &abstractions.QueryFilter{Limit: 50, Offset: 0, Params: map[string]any{}}
+
+	t.Run("team-a sees only its own jobs", func(t *testing.T) {
+		res, err := store.WithTenant(api.Tenant("team-a")).GetEvaluationJobs(filter)
+		if err != nil {
+			t.Fatalf("GetEvaluationJobs: %v", err)
+		}
+		if len(res.Items) != 2 {
+			t.Errorf("expected 2 jobs for team-a, got %d", len(res.Items))
+		}
+		for _, j := range res.Items {
+			if j.Resource.Tenant != "team-a" {
+				t.Errorf("unexpected tenant %q in result", j.Resource.Tenant)
+			}
+		}
+	})
+
+	t.Run("team-b sees only its own jobs", func(t *testing.T) {
+		res, err := store.WithTenant(api.Tenant("team-b")).GetEvaluationJobs(filter)
+		if err != nil {
+			t.Fatalf("GetEvaluationJobs: %v", err)
+		}
+		if len(res.Items) != 1 {
+			t.Errorf("expected 1 job for team-b, got %d", len(res.Items))
+		}
+		if res.Items[0].Resource.ID != "job-team-b-1" {
+			t.Errorf("expected job-team-b-1, got %q", res.Items[0].Resource.ID)
+		}
+	})
+
+	t.Run("unknown tenant sees no jobs", func(t *testing.T) {
+		res, err := store.WithTenant(api.Tenant("team-c")).GetEvaluationJobs(filter)
+		if err != nil {
+			t.Fatalf("GetEvaluationJobs: %v", err)
+		}
+		if len(res.Items) != 0 {
+			t.Errorf("expected 0 jobs for team-c, got %d", len(res.Items))
+		}
+	})
+}
+
 // TestUpdateEvaluationJob_PreservesProviderID verifies that provider_id is
 // preserved when creating benchmark statuses via status updates.
 //
@@ -26,10 +128,10 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 	logger := logging.FallbackLogger()
 	databaseConfig := map[string]any{
 		"driver":        "sqlite",
-		"url":           "file::memory:?mode=memory&cache=shared",
+		"url":           getDBInMemoryURL(),
 		"database_name": "eval_hub",
 	}
-	store, err := storage.NewStorage(&databaseConfig, false, logger)
+	store, err := storage.NewStorage(&databaseConfig, false, false, logger)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -168,9 +270,9 @@ func TestEvaluationsStorage(t *testing.T) {
 	t.Run("NewStorage creates a new storage instance", func(t *testing.T) {
 		databaseConfig := map[string]any{}
 		databaseConfig["driver"] = "sqlite"
-		databaseConfig["url"] = "file::memory:?mode=memory&cache=shared"
+		databaseConfig["url"] = getDBInMemoryURL()
 		databaseConfig["database_name"] = "eval_hub"
-		s, err := storage.NewStorage(&databaseConfig, false, logger)
+		s, err := storage.NewStorage(&databaseConfig, false, false, logger)
 		if err != nil {
 			t.Fatalf("Failed to create storage: %v", err)
 		}
@@ -252,6 +354,40 @@ func TestEvaluationsStorage(t *testing.T) {
 		}
 	})
 
+	t.Run("GetEvaluationJobs returns empty list when no pending evaluation jobs are found", func(t *testing.T) {
+		resp, err := store.GetEvaluationJobs(&abstractions.QueryFilter{
+			Limit:  10,
+			Offset: 0,
+			Params: map[string]any{"status": "pending"},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error getting evaluation jobs: %v", err)
+		}
+		if resp.TotalCount != 0 {
+			t.Fatalf("Expected 0 evaluation jobs, got %d: %s", resp.TotalCount, prettyPrint(resp))
+		}
+	})
+
+	t.Run("GetEvaluationJobs returns 1 item querying running evaluation jobs", func(t *testing.T) {
+		resp, err := store.GetEvaluationJobs(&abstractions.QueryFilter{
+			Limit:  10,
+			Offset: 0,
+			Params: map[string]any{"status": "running"},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error getting evaluation jobs: %v", err)
+		}
+		if resp.TotalCount != 1 {
+			t.Fatalf("Expected 1 evaluation jobs, got %d", resp.TotalCount)
+		}
+		if len(resp.Items) != 1 {
+			t.Fatalf("Expected 1 evaluation job, got %d", len(resp.Items))
+		}
+		if resp.Items[0].Status.State != api.OverallStateRunning {
+			t.Fatalf("Expected running evaluation job, got %s", resp.Items[0].Status.State)
+		}
+	})
+
 	t.Run("GetEvaluationJobs rejects disallowed filter columns", func(t *testing.T) {
 		_, err := store.GetEvaluationJobs(&abstractions.QueryFilter{
 			Limit:  10,
@@ -264,9 +400,9 @@ func TestEvaluationsStorage(t *testing.T) {
 		if !strings.Contains(err.Error(), "is not a valid query parameter") {
 			t.Errorf("expected error to mention 'is not a valid query parameter', got: %v", err)
 		}
-		//if !strings.Contains(err.Error(), "name") || !strings.Contains(err.Error(), "evil_column") {
-		//	t.Errorf("expected error to include offending key names, got: %v", err)
-		//}
+		if !strings.Contains(err.Error(), "name") || !strings.Contains(err.Error(), "evil_column") {
+			t.Errorf("expected error to include offending key names, got: %v", err)
+		}
 	})
 
 	t.Run("UpdateEvaluationJob updates the evaluation job", func(t *testing.T) {
@@ -707,4 +843,12 @@ func TestEvaluationsStorage(t *testing.T) {
 			t.Fatalf("Failed to delete evaluation job: %v", err)
 		}
 	})
+}
+
+func prettyPrint(v any) string {
+	json, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("%v", v)
+	}
+	return string(json)
 }

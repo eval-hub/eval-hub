@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/common"
@@ -17,9 +18,17 @@ import (
 
 // HandleListCollections handles GET /api/v1/evaluations/collections
 func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
+
+	allowedParams := []string{"limit", "offset", "name", "tags", "system_defined", "owner"}
+	badParams := getAllParams(req, allowedParams...)
+	if len(badParams) > 0 {
+		// just report the first bad parameter
+		w.Error(serviceerrors.NewServiceError(messages.QueryBadParameter, "ParameterName", badParams[0], "AllowedParameters", strings.Join(allowedParams, ", ")), ctx.RequestID)
+		return
+	}
 
 	filter, err := CommonListFilters(req)
 	if err != nil {
@@ -35,7 +44,7 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 		w.Error(err, ctx.RequestID)
 		return
 	}
-	page, err := CreatePage(res.TotalStored, filter.Offset, filter.Limit, ctx, req)
+	page, err := CreatePage(ctx, res.TotalCount, filter.Offset, filter.Limit, req)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
@@ -48,7 +57,7 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 
 // HandleCreateCollection handles POST /api/v1/evaluations/collections
 func (h *Handlers) HandleCreateCollection(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
@@ -85,7 +94,7 @@ func (h *Handlers) HandleCreateCollection(ctx *executioncontext.ExecutionContext
 
 // HandleGetCollection handles GET /api/v1/evaluations/collections/{collection_id}
 func (h *Handlers) HandleGetCollection(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 	logging.LogRequestStarted(ctx)
 
 	// Extract ID from path
@@ -106,7 +115,7 @@ func (h *Handlers) HandleGetCollection(ctx *executioncontext.ExecutionContext, r
 
 // HandleUpdateCollection handles PUT /api/v1/evaluations/collections/{collection_id}
 func (h *Handlers) HandleUpdateCollection(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
@@ -146,7 +155,7 @@ func (h *Handlers) HandleUpdateCollection(ctx *executioncontext.ExecutionContext
 
 // HandlePatchCollection handles PATCH /api/v1/evaluations/collections/{collection_id}
 func (h *Handlers) HandlePatchCollection(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
@@ -195,7 +204,7 @@ func (h *Handlers) HandlePatchCollection(ctx *executioncontext.ExecutionContext,
 
 // HandleDeleteCollection handles DELETE /api/v1/evaluations/collections/{collection_id}
 func (h *Handlers) HandleDeleteCollection(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx)
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 	logging.LogRequestStarted(ctx)
 
 	// Extract ID from path

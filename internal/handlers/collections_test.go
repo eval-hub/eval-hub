@@ -21,7 +21,7 @@ import (
 
 // collection methods for fakeStorage - required for Storage interface
 func (f *fakeStorage) GetCollections(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
-	return &abstractions.QueryResults[api.CollectionResource]{Items: []api.CollectionResource{}, TotalStored: 0}, nil
+	return &abstractions.QueryResults[api.CollectionResource]{Items: []api.CollectionResource{}, TotalCount: 0}, nil
 }
 
 func (f *fakeStorage) CreateCollection(_ *api.CollectionResource) error {
@@ -55,14 +55,15 @@ func (s *listCollectionsStorage) WithContext(_ context.Context) abstractions.Sto
 	return s
 }
 func (s *listCollectionsStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
+func (s *listCollectionsStorage) WithOwner(_ api.User) abstractions.Storage    { return s }
 
 func (s *listCollectionsStorage) GetCollections(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
 	if s.err != nil {
 		return nil, s.err
 	}
 	return &abstractions.QueryResults[api.CollectionResource]{
-		Items:       s.collections,
-		TotalStored: len(s.collections),
+		Items:      s.collections,
+		TotalCount: len(s.collections),
 	}, nil
 }
 
@@ -77,6 +78,7 @@ func (s *getCollectionStorage) WithContext(_ context.Context) abstractions.Stora
 	return s
 }
 func (s *getCollectionStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
+func (s *getCollectionStorage) WithOwner(_ api.User) abstractions.Storage    { return s }
 
 func (s *getCollectionStorage) GetCollection(id string) (*api.CollectionResource, error) {
 	if s.err != nil {
@@ -99,6 +101,7 @@ func (s *createCollectionStorage) WithContext(_ context.Context) abstractions.St
 	return s
 }
 func (s *createCollectionStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
+func (s *createCollectionStorage) WithOwner(_ api.User) abstractions.Storage    { return s }
 
 func (s *createCollectionStorage) CreateCollection(c *api.CollectionResource) error {
 	if s.err != nil {
@@ -123,6 +126,7 @@ func (s *updatePatchDeleteCollectionStorage) WithContext(_ context.Context) abst
 	return s
 }
 func (s *updatePatchDeleteCollectionStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
+func (s *updatePatchDeleteCollectionStorage) WithOwner(_ api.User) abstractions.Storage    { return s }
 
 func (s *updatePatchDeleteCollectionStorage) GetCollection(id string) (*api.CollectionResource, error) {
 	if s.collection != nil && s.collection.Resource.ID == id {
@@ -432,5 +436,125 @@ func TestHandleDeleteCollection(t *testing.T) {
 
 	if recorder.Code != 204 {
 		t.Fatalf("expected status 204, got %d", recorder.Code)
+	}
+}
+
+// tenantTrackingStorage records tenant and owner passed via WithTenant/WithOwner.
+type tenantTrackingStorage struct {
+	*fakeStorage
+	tenant api.Tenant
+	owner  api.User
+}
+
+func (s *tenantTrackingStorage) WithLogger(_ *slog.Logger) abstractions.Storage     { return s }
+func (s *tenantTrackingStorage) WithContext(_ context.Context) abstractions.Storage { return s }
+func (s *tenantTrackingStorage) WithTenant(t api.Tenant) abstractions.Storage       { s.tenant = t; return s }
+func (s *tenantTrackingStorage) WithOwner(u api.User) abstractions.Storage          { s.owner = u; return s }
+func (s *tenantTrackingStorage) GetCollections(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
+	return &abstractions.QueryResults[api.CollectionResource]{Items: []api.CollectionResource{}, TotalCount: 0}, nil
+}
+func (s *tenantTrackingStorage) GetCollection(id string) (*api.CollectionResource, error) {
+	return &api.CollectionResource{Resource: api.Resource{ID: id}}, nil
+}
+func (s *tenantTrackingStorage) CreateCollection(_ *api.CollectionResource) error { return nil }
+func (s *tenantTrackingStorage) UpdateCollection(_ *api.CollectionResource) error { return nil }
+func (s *tenantTrackingStorage) PatchCollection(_ string, _ *api.Patch) error     { return nil }
+func (s *tenantTrackingStorage) DeleteCollection(_ string) error                  { return nil }
+
+func TestCollectionHandlers_PropagateTenantAndOwner(t *testing.T) {
+	validate, _ := validation.NewValidator()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	tests := []struct {
+		name    string
+		method  string
+		path    string
+		body    string
+		pathVal map[string]string
+		handler func(h *handlers.Handlers, ctx *executioncontext.ExecutionContext, req *providersRequest, resp MockResponseWrapper)
+	}{
+		{
+			name:   "ListCollections",
+			method: "GET",
+			path:   "/api/v1/evaluations/collections",
+			handler: func(h *handlers.Handlers, ctx *executioncontext.ExecutionContext, req *providersRequest, resp MockResponseWrapper) {
+				h.HandleListCollections(ctx, req, resp)
+			},
+		},
+		{
+			name:   "CreateCollection",
+			method: "POST",
+			path:   "/api/v1/evaluations/collections",
+			body:   `{"name":"Test","benchmarks":[{"id":"b1","provider_id":"p1"}]}`,
+			handler: func(h *handlers.Handlers, ctx *executioncontext.ExecutionContext, req *providersRequest, resp MockResponseWrapper) {
+				h.HandleCreateCollection(ctx, req, resp)
+			},
+		},
+		{
+			name:    "GetCollection",
+			method:  "GET",
+			path:    "/api/v1/evaluations/collections/coll-1",
+			pathVal: map[string]string{constants.PATH_PARAMETER_COLLECTION_ID: "coll-1"},
+			handler: func(h *handlers.Handlers, ctx *executioncontext.ExecutionContext, req *providersRequest, resp MockResponseWrapper) {
+				h.HandleGetCollection(ctx, req, resp)
+			},
+		},
+		{
+			name:    "UpdateCollection",
+			method:  "PUT",
+			path:    "/api/v1/evaluations/collections/coll-1",
+			body:    `{"name":"Updated","benchmarks":[{"id":"b1","provider_id":"p1"}]}`,
+			pathVal: map[string]string{constants.PATH_PARAMETER_COLLECTION_ID: "coll-1"},
+			handler: func(h *handlers.Handlers, ctx *executioncontext.ExecutionContext, req *providersRequest, resp MockResponseWrapper) {
+				h.HandleUpdateCollection(ctx, req, resp)
+			},
+		},
+		{
+			name:    "PatchCollection",
+			method:  "PATCH",
+			path:    "/api/v1/evaluations/collections/coll-1",
+			body:    `[{"op":"replace","path":"/name","value":"Patched"}]`,
+			pathVal: map[string]string{constants.PATH_PARAMETER_COLLECTION_ID: "coll-1"},
+			handler: func(h *handlers.Handlers, ctx *executioncontext.ExecutionContext, req *providersRequest, resp MockResponseWrapper) {
+				h.HandlePatchCollection(ctx, req, resp)
+			},
+		},
+		{
+			name:    "DeleteCollection",
+			method:  "DELETE",
+			path:    "/api/v1/evaluations/collections/coll-1",
+			pathVal: map[string]string{constants.PATH_PARAMETER_COLLECTION_ID: "coll-1"},
+			handler: func(h *handlers.Handlers, ctx *executioncontext.ExecutionContext, req *providersRequest, resp MockResponseWrapper) {
+				h.HandleDeleteCollection(ctx, req, resp)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storage := &tenantTrackingStorage{fakeStorage: &fakeStorage{}}
+			h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+
+			req := &providersRequest{
+				MockRequest: createMockRequest(tt.method, tt.path),
+				queryValues: map[string][]string{},
+				pathValues:  tt.pathVal,
+			}
+			if tt.body != "" {
+				req.SetBody([]byte(tt.body))
+			}
+			recorder := httptest.NewRecorder()
+			resp := MockResponseWrapper{recorder: recorder}
+			ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "my-user", "my-tenant")
+
+			tt.handler(h, ctx, req, resp)
+
+			if storage.tenant != "my-tenant" {
+				t.Errorf("expected tenant 'my-tenant', got '%s'", storage.tenant)
+			}
+			if storage.owner != "my-user" {
+				t.Errorf("expected owner 'my-user', got '%s'", storage.owner)
+			}
+		})
 	}
 }

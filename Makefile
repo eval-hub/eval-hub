@@ -143,7 +143,7 @@ fvt-report: ## Generate HTML report for FVT tests
 	if [ -f cucumber-report.html ]; then echo "Report generated: cucumber-report.html"; else echo "Report not generated: cucumber-report.html"; fi; \
 	exit $$status
 
-test-all: test test-fvt ## Run all tests (unit + FVT)
+test-all: test test-fvt test-fvt-server ## Run all tests (unit + FVT)
 
 SERVER_URL ?= http://localhost:8080
 
@@ -274,6 +274,11 @@ build-wheel: ## Build Python wheel: make build-wheel WHEEL_PLATFORM=manylinux_2_
 	@echo "Building wheel for $(WHEEL_PLATFORM) with binary $(WHEEL_BINARY)..."
 	@rm -rf python-server/build/
 	@cp VERSION python-server/VERSION
+	@if [ -n "$(DEV_SUFFIX)" ]; then \
+		BASE=$$(tr -d '\n' < python-server/VERSION); \
+		echo "$${BASE}.$(DEV_SUFFIX)" > python-server/VERSION; \
+		echo "Python package version: $${BASE}.$(DEV_SUFFIX)"; \
+	fi
 	WHEEL_PLATFORM=$(WHEEL_PLATFORM) uv build --wheel python-server
 
 .PHONY: build-all-wheels

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -88,7 +89,7 @@ func applyTemplate(templateString string, values TemplateValues) string {
 	return out.String()
 }
 
-func AttributesFromRequest(request *http.Request, config *AuthConfig, user user.Info) []authorizer.Attributes {
+func AttributesFromRequest(request *http.Request, config *AuthConfig, user user.Info) ([]authorizer.Attributes, error) {
 	extractedRules := FindRules(request, config)
 	resourceAttributes := []authorizer.Attributes{}
 
@@ -97,22 +98,17 @@ func AttributesFromRequest(request *http.Request, config *AuthConfig, user user.
 		if rule.Rewrites.ByHttpHeader != nil {
 			value := request.Header.Get(rule.Rewrites.ByHttpHeader.Name)
 			if value == "" {
-				// A required header rewrite is configured but the header is missing.
-				// Return an attribute record that will always be denied: empty namespace,
-				// resource, and verb guarantee the SAR check fails.
-				resourceAttributes = append(resourceAttributes, authorizer.AttributesRecord{
-					User:            user,
-					ResourceRequest: true,
-				})
-				continue
+				return nil, fmt.Errorf("required header %s is missing", rule.Rewrites.ByHttpHeader.Name)
 			}
 			templateValues.FromHeader = value
 		}
 		if rule.Rewrites.ByQueryString != nil {
 			value, ok := request.URL.Query()[rule.Rewrites.ByQueryString.Name]
-			if ok && len(value) > 0 {
-				templateValues.FromQueryString = value[0]
+			if !ok || len(value) == 0 {
+				return nil, fmt.Errorf("required query string %s is missing", rule.Rewrites.ByQueryString.Name)
 			}
+
+			templateValues.FromQueryString = value[0]
 		}
 		templateValues.FromMethod = httpToKubeVerb(request.Method)
 
@@ -129,5 +125,5 @@ func AttributesFromRequest(request *http.Request, config *AuthConfig, user user.
 		})
 	}
 
-	return resourceAttributes
+	return resourceAttributes, nil
 }

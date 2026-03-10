@@ -31,10 +31,7 @@ func New(config *config.Config, logger *slog.Logger) (*Handlers, error) {
 	}
 	evalHubBaseURL := os.Getenv("EVALHUB_URL")
 	if evalHubBaseURL == "" {
-		evalHubBaseURL = strings.TrimSpace(strings.TrimSuffix(config.Sidecar.EvalHub.BaseURL, "/"))
-	}
-	if evalHubBaseURL == "" {
-		return nil, fmt.Errorf("eval_hub.base_url not set")
+		return nil, fmt.Errorf("EVALHUB_URL environment variable is not set")
 	}
 	mlflowHTTPClient, err := mlflow.NewHTTPClient(config, config.IsOTELEnabled(), logger)
 	if err != nil {

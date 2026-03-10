@@ -7,8 +7,6 @@ authorization:
             - rewrites:
                 byHttpHeader:
                   name: X-Tenant
-                byQueryString:
-                  name: ns
               resourceAttributes:
                 namespace: "{{.FromHeader}}"
                 apiGroup: trustyai.opendatahub.io
@@ -21,8 +19,6 @@ authorization:
             - rewrites:
                 byHttpHeader:
                   name: X-Tenant
-                byQueryString:
-                  name: ns
               resourceAttributes:
                 namespace: "{{.FromHeader}}"
                 apiGroup: trustyai.opendatahub.io

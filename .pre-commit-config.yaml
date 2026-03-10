@@ -59,7 +59,7 @@ repos:
       - id: go-test
         name: go unit and integration tests
         entry: make
-        args: [test-all]
+        args: [test, test-fvt]
         language: system
         types: [go]
         pass_filenames: false

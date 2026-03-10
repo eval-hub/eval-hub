@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
@@ -74,6 +75,11 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 	mlflowExperimentURL := ""
 	if h.mlflowClient != nil {
 		client := h.mlflowClient.WithContext(ctx.Ctx).WithLogger(ctx.Logger)
+		// Experiments must be scoped to the tenant namespace so job pods running
+		// in that namespace can reach them with their own X-MLFLOW-WORKSPACE header.
+		if !ctx.Tenant.IsEmpty() {
+			client = client.WithWorkspace(ctx.Tenant.String())
+		}
 
 		mlflowExperimentID, mlflowExperimentURL, err = mlflow.GetExperimentID(client, evaluation, id)
 		if err != nil {
@@ -222,15 +228,40 @@ func benchmarkExists(benchmarks []api.BenchmarkResource, id string) bool {
 }
 
 // HandleListEvaluations handles GET /api/v1/evaluations/jobs
-func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
-	filter, err := CommonListFilters(r)
+	allowedParams := []string{"limit", "offset", "status", "name", "tags", "owner", "experiment_id"}
+	badParams := getAllParams(req, allowedParams...)
+	if len(badParams) > 0 {
+		// just report the first bad parameter
+		w.Error(serviceerrors.NewServiceError(messages.QueryBadParameter, "ParameterName", badParams[0], "AllowedParameters", strings.Join(allowedParams, ", ")), ctx.RequestID)
+		return
+	}
+
+	filter, err := CommonListFilters(req)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
+	}
+
+	status, err := GetParam(req, "status", true, "")
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+	if status != "" {
+		filter.Params["status"] = status
+	}
+	experimentID, err := GetParam(req, "experiment_id", true, "")
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+	if experimentID != "" {
+		filter.Params["experiment_id"] = experimentID
 	}
 
 	res, err := storage.GetEvaluationJobs(filter)
@@ -238,7 +269,7 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 		w.Error(err, ctx.RequestID)
 		return
 	}
-	page, err := CreatePage(res.TotalStored, filter.Offset, filter.Limit, ctx, r)
+	page, err := CreatePage(ctx, res.TotalCount, filter.Offset, filter.Limit, req)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
@@ -248,7 +279,6 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 		Items:  res.Items,
 		Errors: res.Errors,
 	}, 200)
-
 }
 
 // HandleGetEvaluation handles GET /api/v1/evaluations/jobs/{id}
@@ -297,6 +327,8 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 		w.Error(err, ctx.RequestID)
 		return
 	}
+
+	ctx.Logger.Info("Updating evaluation job", "id", evaluationJobID, "state", status.BenchmarkStatusEvent.Status, "status", status)
 
 	err = storage.UpdateEvaluationJob(evaluationJobID, status)
 	if err != nil {

@@ -117,8 +117,16 @@ func checkBaseURL(uri *url.URL, from string) {
 }
 
 func createApiFeature() (*apiFeature, error) {
+	timeout := 60 * time.Second
+	if timeoutStr := os.Getenv("TEST_TIMEOUT"); timeoutStr != "" {
+		if eTimeout, err := strconv.Atoi(timeoutStr); err != nil {
+			logDebug("Invalid TEST_TIMEOUT: %v\n", err.Error())
+		} else {
+			timeout = time.Duration(eTimeout) * time.Second
+		}
+	}
 	client := &http.Client{
-		Timeout: 5 * time.Second,
+		Timeout: timeout,
 	}
 
 	if serverURL := os.Getenv("SERVER_URL"); serverURL != "" {
@@ -168,8 +176,9 @@ func (a *apiFeature) startLocalServer(port int) error {
 		return logError(fmt.Errorf("failed to load service config: %w", err))
 	}
 	serviceConfig.Service.Port = port
+	serviceConfig.Service.LocalMode = true // set local mode for testing
 
-	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), logger)
+	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger)
 	if err != nil {
 		return logError(fmt.Errorf("failed to create storage: %w", err))
 	}
@@ -187,7 +196,6 @@ func (a *apiFeature) startLocalServer(port int) error {
 	}
 
 	logger.Info("Providers loaded.")
-	serviceConfig.Service.LocalMode = true // set local mode for testing
 	// Override local runtime commands for testing so subprocesses
 	// Exit cleanly instead of failing with "command not found".
 	for key := range providerConfigs {
@@ -253,11 +261,34 @@ func (a *apiFeature) cleanup(ctx context.Context, _ *godog.Scenario, _ error) (c
 	return ctx, nil
 }
 
+func (tc *scenarioConfig) logDebug(format string, a ...any) {
+	if v, exists := tc.reqHeaders[server.TRANSACTION_ID_HEADER]; exists && v != "" {
+		format = fmt.Sprintf("(%s) %s", v, format)
+	}
+	fmt.Printf(format, a...)
+	getLogger().Printf(format, a...)
+}
+
+func (tc *scenarioConfig) logError(err error, withStack ...bool) error {
+	var sb = strings.Builder{}
+	sb.WriteString("Error")
+	if reqId, exists := tc.reqHeaders[server.TRANSACTION_ID_HEADER]; exists && reqId != "" {
+		sb.WriteString(fmt.Sprintf(" (%s)", reqId))
+	}
+	sb.WriteString(": ")
+	if len(withStack) > 0 && withStack[0] {
+		getLogger().Printf("%s%v\n%s\n", sb.String(), err, string(debug.Stack()))
+	} else {
+		getLogger().Printf("%s%v\n", sb.String(), err)
+	}
+	return fmt.Errorf("%s%v", sb.String(), err)
+}
+
 func (tc *scenarioConfig) theServiceIsRunning(ctx context.Context) error {
 	// Check that the server is actually running by sending a request to the health endpoint
 	for range 10 {
 		if err := tc.checkHealthEndpoint(); err != nil {
-			logDebug("Error checking health endpoint: %v\n", err.Error())
+			tc.logDebug("Error checking health endpoint: %v\n", err.Error())
 			time.Sleep(1 * time.Second)
 		} else {
 			break
@@ -267,17 +298,77 @@ func (tc *scenarioConfig) theServiceIsRunning(ctx context.Context) error {
 	return nil
 }
 
-func (tc *scenarioConfig) checkHealthEndpoint() error {
-	if err := tc.iSendARequestTo("GET", "/api/v1/health"); err != nil {
-		return logError(fmt.Errorf("failed to send health check request: %w for URL %s", err, tc.apiFeature.baseURL.String()))
+func (tc *scenarioConfig) thereAreNoUserProviders(ctx context.Context) error {
+	if err := tc.iSendARequestTo("GET", "/api/v1/evaluations/providers?system_defined=false&limit=100"); err != nil {
+		return err
 	}
 	if tc.response.StatusCode != 200 {
-		return logError(fmt.Errorf("expected status 200, got %d", tc.response.StatusCode))
+		return tc.logError(fmt.Errorf("expected 200 listing user providers, got %d: %s", tc.response.StatusCode, string(tc.body)))
+	}
+	var resp struct {
+		Items []struct {
+			Resource struct {
+				ID string `json:"id"`
+			} `json:"resource"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(tc.body, &resp); err != nil {
+		return tc.logError(fmt.Errorf("failed to parse providers list: %w", err))
+	}
+	for _, item := range resp.Items {
+		if item.Resource.ID != "" {
+			if err := tc.iSendARequestTo("DELETE", "/api/v1/evaluations/providers/"+item.Resource.ID); err != nil {
+				return err
+			}
+			if tc.response != nil && tc.response.StatusCode != 204 {
+				return tc.logError(fmt.Errorf("failed to delete provider %s: status %d", item.Resource.ID, tc.response.StatusCode))
+			}
+		}
+	}
+	return nil
+}
+
+func (tc *scenarioConfig) thereAreNoEvaluationJobs(ctx context.Context) error {
+	if err := tc.iSendARequestTo("GET", "/api/v1/evaluations/jobs?limit=100"); err != nil {
+		return err
+	}
+	if tc.response.StatusCode != 200 {
+		return tc.logError(fmt.Errorf("expected 200 listing evaluation jobs, got %d: %s", tc.response.StatusCode, string(tc.body)))
+	}
+	var resp struct {
+		Items []struct {
+			Resource struct {
+				ID string `json:"id"`
+			} `json:"resource"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(tc.body, &resp); err != nil {
+		return tc.logError(fmt.Errorf("failed to parse evaluation jobs list: %w", err))
+	}
+	for _, item := range resp.Items {
+		if item.Resource.ID != "" {
+			if err := tc.iSendARequestTo("DELETE", "/api/v1/evaluations/jobs/"+item.Resource.ID+"?hard_delete=true"); err != nil {
+				return err
+			}
+			if tc.response != nil && tc.response.StatusCode != 204 {
+				return tc.logError(fmt.Errorf("failed to delete evaluation job %s: status %d", item.Resource.ID, tc.response.StatusCode))
+			}
+		}
+	}
+	return nil
+}
+
+func (tc *scenarioConfig) checkHealthEndpoint() error {
+	if err := tc.iSendARequestTo("GET", "/api/v1/health"); err != nil {
+		return tc.logError(fmt.Errorf("failed to send health check request: %w for URL %s", err, tc.apiFeature.baseURL.String()))
+	}
+	if tc.response.StatusCode != 200 {
+		return tc.logError(fmt.Errorf("expected status 200, got %d", tc.response.StatusCode))
 	}
 
 	match := "\"status\":\"healthy\""
 	if !strings.Contains(string(tc.body), match) {
-		return logError(fmt.Errorf("expected body to contain %s, got %s", match, string(tc.body)))
+		return tc.logError(fmt.Errorf("expected body to contain %s, got %s", match, string(tc.body)))
 	}
 
 	return nil
@@ -299,10 +390,6 @@ func (tc *scenarioConfig) iUnsetHeader(paramName string) error {
 
 func (tc *scenarioConfig) iSetTransactionIdTo(paramValue string) error {
 	return tc.iSetHeaderTo(server.TRANSACTION_ID_HEADER, paramValue)
-}
-
-func (tc *scenarioConfig) iUnsetTransactionId() error {
-	return tc.iUnsetHeader(server.TRANSACTION_ID_HEADER)
 }
 
 func (tc *scenarioConfig) iSendARequestTo(method, path string) error {
@@ -331,7 +418,7 @@ func (tc *scenarioConfig) isLocalOrCIMode() bool {
 // mode so that scenarios requiring job completion are explicitly skipped instead of failing or timing out.
 func (tc *scenarioConfig) whenTheModeIsLocalOrCIThenSkipThisScenario() error {
 	if tc.isLocalOrCIMode() {
-		logDebug("Skipping scenario: mode is local or CI (cannot wait for job completion)\n")
+		tc.logDebug("Skipping scenario: mode is local or CI (cannot wait for job completion)\n")
 		return godog.ErrSkip
 	}
 	return nil
@@ -356,21 +443,21 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) err
 				lastErr = fmt.Errorf("expected status %q but got %q", expectedStatus, status)
 			}
 		} else if tc.response != nil {
-			lastErr = fmt.Errorf("unexpected response status %d", tc.response.StatusCode)
+			lastErr = tc.logError(fmt.Errorf("unexpected response status %d", tc.response.StatusCode))
 		}
 		time.Sleep(1 * time.Second)
 	}
 	if lastErr != nil {
-		return logError(lastErr)
+		return tc.logError(lastErr)
 	}
-	return logError(fmt.Errorf("timed out waiting for status %q", expectedStatus))
+	return tc.logError(fmt.Errorf("timed out waiting for status %q", expectedStatus))
 }
 
 func (tc *scenarioConfig) findFile(fileName string) (string, error) {
 	file := filepath.Join("test_data", fileName)
 	if _, err := os.Stat(file); os.IsNotExist(err) {
 		path, _ := os.Getwd()
-		return "", logError(fmt.Errorf("test file %s not found in directory %s", fileName, path))
+		return "", tc.logError(fmt.Errorf("test file %s not found in directory %s", fileName, path))
 	}
 	return file, nil
 }
@@ -419,7 +506,7 @@ func (tc *scenarioConfig) substituteValues(body string) (string, error) {
 				v := tc.values[n]
 				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), v)
 			} else {
-				return "", logError(fmt.Errorf("unknown substitutionvalue: %s", match[1]))
+				return "", tc.logError(fmt.Errorf("unknown substitutionvalue: %s", match[1]))
 			}
 		}
 	}
@@ -447,17 +534,17 @@ func (tc *scenarioConfig) getRequestBody(body string) (io.Reader, error) {
 	return strings.NewReader(body), nil
 }
 
-func (sc *scenarioConfig) addAsset(assetName, id string) {
-	sc.assets[assetName] = append(sc.assets[assetName], id)
-	logDebug("Added asset id %s for %s\n", id, assetName)
+func (tc *scenarioConfig) addAsset(assetName, id string) {
+	tc.assets[assetName] = append(tc.assets[assetName], id)
+	tc.logDebug("Added asset id %s for %s\n", id, assetName)
 }
 
-func (sc *scenarioConfig) removeAsset(assetName, id string) {
-	ids := sc.assets[assetName]
+func (tc *scenarioConfig) removeAsset(assetName, id string) {
+	ids := tc.assets[assetName]
 	if slices.Contains(ids, id) {
-		sc.assets[assetName] = slices.DeleteFunc(ids, func(s string) bool {
+		tc.assets[assetName] = slices.DeleteFunc(ids, func(s string) bool {
 			if s == id {
-				logDebug("Removed asset id %s for %s\n", id, assetName)
+				tc.logDebug("Removed asset id %s for %s\n", id, assetName)
 				return true
 			}
 			return false
@@ -465,13 +552,21 @@ func (sc *scenarioConfig) removeAsset(assetName, id string) {
 	}
 }
 
-func extractId(body []byte) (string, error) {
-	obj := make(map[string]interface{})
-	err := json.Unmarshal(body, &obj)
-	if err != nil {
-		return "", logError(fmt.Errorf("failed to unmarshal body %s: %w", string(body), err))
-	}
-	if id, ok := obj["resource"].(map[string]any)["id"].(string); ok {
+func (tc *scenarioConfig) extractId(body []byte) (string, error) {
+	if len(body) > 0 {
+		obj := make(map[string]interface{})
+		err := json.Unmarshal(body, &obj)
+		if err != nil {
+			return "", tc.logError(fmt.Errorf("failed to unmarshal body %s: %w", string(body), err))
+		}
+		resource, ok := obj["resource"].(map[string]any)
+		if !ok {
+			return "", tc.logError(fmt.Errorf("response does not contain resource object: %s", string(body)))
+		}
+		id, ok := resource["id"].(string)
+		if !ok || id == "" {
+			return "", tc.logError(fmt.Errorf("response does not contain resource.id: %s", string(body)))
+		}
 		return id, nil
 	}
 	return "", nil
@@ -485,11 +580,11 @@ func extractId(body []byte) (string, error) {
 // Uses [^/?]+ to stop at query strings
 var pathDetails = regexp.MustCompile(`^.*/api/v1/([^/?]+)(?:/([^/?]+))?(?:/([^/?]+))?.*$`)
 
-func getAssetDetails(path string) (string, string, string, error) {
+func (tc *scenarioConfig) getAssetDetails(path string) (string, string, string, error) {
 	if matches := pathDetails.FindStringSubmatch(path); len(matches) >= 4 {
 		return matches[1], matches[2], matches[3], nil
 	}
-	return "", "", "", logError(fmt.Errorf("no first path segment found in path %s", path))
+	return "", "", "", tc.logError(fmt.Errorf("no first path segment found in path %s", path))
 }
 
 func (tc *scenarioConfig) getId(id string) (string, error) {
@@ -497,7 +592,7 @@ func (tc *scenarioConfig) getId(id string) (string, error) {
 		n := strings.TrimPrefix(id, valuePrefix)
 		v := tc.values[n]
 		if v == "" {
-			return "", logError(fmt.Errorf("failed to find value %s", n))
+			return "", tc.logError(fmt.Errorf("failed to find value %s", n))
 		}
 		return v, nil
 	}
@@ -513,7 +608,7 @@ func (tc *scenarioConfig) getEndpoint(path string) (string, error) {
 			if len(match) > 1 {
 				v, err := tc.getId(match[1])
 				if err != nil {
-					return "", logError(fmt.Errorf("failed to substitute value: %s", err.Error()))
+					return "", tc.logError(fmt.Errorf("failed to substitute value: %s", err.Error()))
 				}
 				path = strings.ReplaceAll(path, fmt.Sprintf("{{%s}}", match[1]), v)
 			} else {
@@ -527,7 +622,7 @@ func (tc *scenarioConfig) getEndpoint(path string) (string, error) {
 
 	if strings.Contains(path, "{id}") {
 		if tc.lastId == "" {
-			return "", logError(fmt.Errorf("last ID is not set"))
+			return "", tc.logError(fmt.Errorf("last ID is not set"))
 		}
 		path = strings.Replace(path, "{id}", tc.lastId, 1)
 	}
@@ -542,7 +637,7 @@ func (tc *scenarioConfig) getEndpoint(path string) (string, error) {
 
 func (tc *scenarioConfig) iSendARequestToWithInlineBody(method, path string, body *godog.DocString) error {
 	if body == nil {
-		return logError(fmt.Errorf("inline body is missing"))
+		return tc.logError(fmt.Errorf("inline body is missing"))
 	}
 	return tc.iSendARequestToWithBody(method, path, body.Content)
 }
@@ -557,10 +652,10 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 	if err != nil {
 		return err
 	}
-	logDebug("Sending %s request to %s\n", method, endpoint)
+	tc.logDebug("Sending %s request to %s\n", method, endpoint)
 	req, err := http.NewRequest(method, endpoint, entity)
 	if err != nil {
-		logDebug("Failed to create request: %v\n", err)
+		tc.logDebug("Failed to create request: %v\n", err)
 		return err
 	}
 	if authToken := os.Getenv("AUTH_TOKEN"); authToken != "" {
@@ -573,9 +668,14 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 
 	tc.response, err = tc.apiFeature.client.Do(req)
 	if err != nil {
-		logDebug("Failed to send request: %v\n", err)
+		tc.logDebug("Failed to send request: %v\n", err)
 		return err
 	}
+
+	defer func() {
+		// we do this for now as request ids are supposed to be unique per request
+		tc.iUnsetHeader(server.TRANSACTION_ID_HEADER)
+	}()
 
 	tc.body, err = io.ReadAll(tc.response.Body)
 	if err != nil {
@@ -583,50 +683,48 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 	}
 	defer tc.response.Body.Close()
 
-	if len(tc.body) > 0 && len(tc.body) < 512 {
-		logDebug("Response status %d for %s with body %s\n", tc.response.StatusCode, endpoint, string(tc.body))
+	if len(tc.body) > 0 && len(tc.body) < 1024*5 {
+		tc.logDebug("Response status %d for %s %s with body %s\n", tc.response.StatusCode, method, endpoint, string(tc.body))
 	} else {
-		logDebug("Response status %d for %s\n", tc.response.StatusCode, endpoint)
+		tc.logDebug("Response status %d for %s %s\n", tc.response.StatusCode, method, endpoint)
 	}
 
 	// capture resource id for create (evaluation job or collection)
 	if method == http.MethodPost && (tc.response.StatusCode == http.StatusAccepted || tc.response.StatusCode == http.StatusCreated) {
-		_, assetName, _, err := getAssetDetails(endpoint)
+		_, assetName, _, err := tc.getAssetDetails(endpoint)
 		if err != nil {
 			return err
 		}
 		if assetName != "" {
-			tc.lastId, err = extractId(tc.body)
+			tc.lastId, err = tc.extractId(tc.body)
 			if err != nil {
 				return err
 			}
 			if tc.lastId == "" {
-				return logError(fmt.Errorf("response does not contain an ID in response %s", string(tc.body)))
+				return tc.logError(fmt.Errorf("response does not contain an ID in response %s", string(tc.body)))
 			}
 			tc.addAsset(assetName, tc.lastId)
 		}
 	}
 
 	if method == http.MethodDelete {
-		_, assetName, _, err := getAssetDetails(endpoint)
+		_, assetName, _, err := tc.getAssetDetails(endpoint)
 		if err != nil {
 			return err
 		}
 		if assetName != "" {
-			_, _, id, err := getAssetDetails(endpoint)
+			_, _, id, err := tc.getAssetDetails(endpoint)
 			if err != nil {
 				return err
 			}
 			if id == "" {
-				return logError(fmt.Errorf("no ID found in path %s", endpoint))
+				return tc.logError(fmt.Errorf("no ID found in path %s", endpoint))
 			}
 			parsedURL, err := url.Parse(endpoint)
 			if err != nil {
-				return logError(fmt.Errorf("failed to parse endpoint %s: %w", endpoint, err))
+				return tc.logError(fmt.Errorf("failed to parse endpoint %s: %w", endpoint, err))
 			}
-			if assetName == "evaluations" && parsedURL.Query().Get("hard_delete") == "true" {
-				tc.removeAsset(assetName, id)
-			} else {
+			if parsedURL.Query().Get("hard_delete") == "true" {
 				tc.removeAsset(assetName, id)
 			}
 		}
@@ -637,7 +735,7 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 
 func (tc *scenarioConfig) theResponseStatusShouldBe(status int) error {
 	if tc.response.StatusCode != status {
-		return logError(fmt.Errorf("expected status %d, got %d with response %s", status, tc.response.StatusCode, string(tc.body)))
+		return tc.logError(fmt.Errorf("expected status %d, got %d with response %s", status, tc.response.StatusCode, string(tc.body)))
 	}
 	return nil
 }
@@ -645,11 +743,11 @@ func (tc *scenarioConfig) theResponseStatusShouldBe(status int) error {
 func (tc *scenarioConfig) theResponseShouldContainWithValue(key, value string) error {
 	var data map[string]interface{}
 	if err := json.Unmarshal(tc.body, &data); err != nil {
-		return logError(err)
+		return tc.logError(err)
 	}
 
 	if data[key] != value {
-		return logError(fmt.Errorf("expected %s to be %s, got %v", key, value, data[key]))
+		return tc.logError(fmt.Errorf("expected %s to be %s, got %v", key, value, data[key]))
 	}
 
 	return nil
@@ -658,11 +756,11 @@ func (tc *scenarioConfig) theResponseShouldContainWithValue(key, value string) e
 func (tc *scenarioConfig) theResponseShouldContain(key string) error {
 	var data map[string]interface{}
 	if err := json.Unmarshal(tc.body, &data); err != nil {
-		return logError(err)
+		return tc.logError(err)
 	}
 
 	if _, ok := data[key]; !ok {
-		return logError(fmt.Errorf("response does not contain key: %s", key))
+		return tc.logError(fmt.Errorf("response does not contain key: %s", key))
 	}
 
 	return nil
@@ -671,7 +769,7 @@ func (tc *scenarioConfig) theResponseShouldContain(key string) error {
 func (tc *scenarioConfig) theResponseShouldContainPrometheusMetrics() error {
 	bodyStr := string(tc.body)
 	if !strings.Contains(bodyStr, "# HELP") || !strings.Contains(bodyStr, "# TYPE") {
-		return logError(fmt.Errorf("response does not appear to be Prometheus metrics format"))
+		return tc.logError(fmt.Errorf("response does not appear to be Prometheus metrics format"))
 	}
 	return nil
 }
@@ -679,7 +777,7 @@ func (tc *scenarioConfig) theResponseShouldContainPrometheusMetrics() error {
 func (tc *scenarioConfig) theResponseShouldBeJSON() error {
 	var data interface{}
 	if err := json.Unmarshal(tc.body, &data); err != nil {
-		return logError(err)
+		return tc.logError(err)
 	}
 	return nil
 }
@@ -687,7 +785,7 @@ func (tc *scenarioConfig) theResponseShouldBeJSON() error {
 func (tc *scenarioConfig) theMetricsShouldInclude(metricName string) error {
 	bodyStr := string(tc.body)
 	if !strings.Contains(bodyStr, metricName) {
-		return logError(fmt.Errorf("metrics do not include %s", metricName))
+		return tc.logError(fmt.Errorf("metrics do not include %s", metricName))
 	}
 	return nil
 }
@@ -696,7 +794,7 @@ func (tc *scenarioConfig) theMetricsShouldShowRequestCountFor(path string) error
 	bodyStr := string(tc.body)
 	// Check if metrics contain the path
 	if !strings.Contains(bodyStr, path) {
-		return logError(fmt.Errorf("metrics do not show requests for path %s", path))
+		return tc.logError(fmt.Errorf("metrics do not show requests for path %s", path))
 	}
 	return nil
 }
@@ -714,7 +812,7 @@ func asPrettyJson(s string) string {
 	return string(ns)
 }
 
-func compareJSONSchema(expectedSchema string, actualResponse string) error {
+func (tc *scenarioConfig) compareJSONSchema(expectedSchema string, actualResponse string) error {
 	expectedSchemaLoader := gojsonschema.NewStringLoader(expectedSchema)
 	actualResultLoader := gojsonschema.NewStringLoader(actualResponse)
 	result, validateErr := gojsonschema.Validate(expectedSchemaLoader, actualResultLoader)
@@ -733,16 +831,16 @@ func compareJSONSchema(expectedSchema string, actualResponse string) error {
 		for _, err := range result.Errors() {
 			fmt.Printf("- %s value = %s\n", err, err.Value())
 		}
-		return logError(fmt.Errorf("the response %s does not match %s", asPrettyJson(actualResponse), expectedSchema))
+		return tc.logError(fmt.Errorf("the response %s does not match %s", asPrettyJson(actualResponse), expectedSchema))
 	}
 	if result.Valid() {
 		return nil
 	}
-	return logError(fmt.Errorf("failed to validate the response %s but no error detected when expecting %s", asPrettyJson(actualResponse), expectedSchema))
+	return tc.logError(fmt.Errorf("failed to validate the response %s but no error detected when expecting %s", asPrettyJson(actualResponse), expectedSchema))
 }
 
 func (tc *scenarioConfig) theResponseShouldHaveSchemaAs(body *godog.DocString) error {
-	return compareJSONSchema(body.Content, string(tc.body))
+	return tc.compareJSONSchema(body.Content, string(tc.body))
 }
 
 func (tc *scenarioConfig) getJsonPath(jsonPath string) (string, error) {
@@ -786,17 +884,17 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPath(expectedValue strin
 	}
 	foundValue, err := tc.getJsonPath(jsonPath)
 	if err != nil {
-		return logError(err)
+		return tc.logError(err)
 	}
 
 	if strings.HasPrefix(expectedValue, "regex:") {
 		rawExpr := strings.TrimPrefix(expectedValue, "regex:")
 		expr, err := regexp.Compile(rawExpr)
 		if err != nil {
-			return logError(fmt.Errorf("invalid regex %q: %w", rawExpr, err))
+			return tc.logError(fmt.Errorf("invalid regex %q: %w", rawExpr, err))
 		}
 		if expr.MatchString(foundValue) {
-			logDebug("Value %s matches regex %s in path %s", foundValue, rawExpr, jsonPath)
+			tc.logDebug("Value %s matches regex %s in path %s", foundValue, rawExpr, jsonPath)
 			return nil
 		}
 	}
@@ -810,7 +908,7 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPath(expectedValue strin
 		}
 	}
 
-	return logError(fmt.Errorf("expected %s to be %s but was %s", jsonPath, expectedValue, foundValue))
+	return tc.logError(fmt.Errorf("expected %s to be %s but was %s in %s", jsonPath, expectedValue, foundValue, asPrettyJson(string(tc.body))))
 }
 
 func (tc *scenarioConfig) theResponseShouldNotContainAtJSONPath(expectedValue string, jsonPath string) error {
@@ -822,7 +920,7 @@ func (tc *scenarioConfig) theResponseShouldNotContainAtJSONPath(expectedValue st
 		expectedValue = expanded
 	}
 	if tc.theResponseShouldContainAtJSONPath(expectedValue, jsonPath) == nil {
-		return logError(fmt.Errorf("expected %s to not contain %s but it did", jsonPath, expectedValue))
+		return tc.logError(fmt.Errorf("expected %s to not contain %s but it did", jsonPath, expectedValue))
 	}
 	return nil
 }
@@ -830,7 +928,7 @@ func (tc *scenarioConfig) theResponseShouldNotContainAtJSONPath(expectedValue st
 func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLength(jsonPath string, lengthStr string) error {
 	length, err := strconv.Atoi(lengthStr)
 	if err != nil {
-		return logError(fmt.Errorf("expected integer length, got %q: %w", lengthStr, err))
+		return tc.logError(fmt.Errorf("expected integer length, got %q: %w", lengthStr, err))
 	}
 	raw, err := tc.getJsonPathValue(jsonPath)
 	if err != nil {
@@ -838,10 +936,10 @@ func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLength(jsonPath stri
 	}
 	arr, ok := raw.([]interface{})
 	if !ok {
-		return logError(fmt.Errorf("value at path %s is not an array, got %T", jsonPath, raw))
+		return tc.logError(fmt.Errorf("value at path %s is not an array, got %T", jsonPath, raw))
 	}
 	if len(arr) != length {
-		return logError(fmt.Errorf("expected array at path %s to have length %d, got %d", jsonPath, length, len(arr)))
+		return tc.logError(fmt.Errorf("expected array at path %s to have length %d, got %d", jsonPath, length, len(arr)))
 	}
 	return nil
 }
@@ -849,7 +947,7 @@ func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLength(jsonPath stri
 func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLengthAtLeast(jsonPath string, minLengthStr string) error {
 	minLength, err := strconv.Atoi(minLengthStr)
 	if err != nil {
-		return logError(fmt.Errorf("expected integer min length, got %q: %w", minLengthStr, err))
+		return tc.logError(fmt.Errorf("expected integer min length, got %q: %w", minLengthStr, err))
 	}
 	raw, err := tc.getJsonPathValue(jsonPath)
 	if err != nil {
@@ -857,10 +955,10 @@ func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLengthAtLeast(jsonPa
 	}
 	arr, ok := raw.([]interface{})
 	if !ok {
-		return logError(fmt.Errorf("value at path %s is not an array, got %T", jsonPath, raw))
+		return tc.logError(fmt.Errorf("value at path %s is not an array, got %T", jsonPath, raw))
 	}
 	if len(arr) < minLength {
-		return logError(fmt.Errorf("expected array at path %s to have length >= %d, got %d", jsonPath, minLength, len(arr)))
+		return tc.logError(fmt.Errorf("expected array at path %s to have length >= %d, got %d", jsonPath, minLength, len(arr)))
 	}
 	return nil
 }
@@ -875,27 +973,27 @@ func getJsonPointer(path string) string {
 func (tc *scenarioConfig) theFieldShouldBeSaved(path string, name string) error {
 	jsonParsed, err := gabs.ParseJSON(tc.body)
 	if err != nil {
-		return logError(fmt.Errorf("failed to parse JSON response: %w", err))
+		return tc.logError(fmt.Errorf("failed to parse JSON response: %w", err))
 	}
 	// This directly uses a JSON pointer path
 	pathObj, err := jsonParsed.JSONPointer(getJsonPointer(path))
 	if err != nil {
-		return logError(fmt.Errorf("path %v does not exist in \n%s", path, string(tc.body)))
+		return tc.logError(fmt.Errorf("path %v does not exist in \n%s", path, string(tc.body)))
 	}
 	finalResult, ok := pathObj.Data().(string)
 	if !ok {
-		return logError(fmt.Errorf("expected %s to be a string but got %T", path, pathObj.Data()))
+		return tc.logError(fmt.Errorf("expected %s to be a string but got %T", path, pathObj.Data()))
 	}
 	if strings.HasPrefix(name, valuePrefix) {
 		tc.values[strings.TrimPrefix(name, valuePrefix)] = finalResult
 	} else {
-		return logError(fmt.Errorf("unexpected value %s, should start with '%s'", name, valuePrefix))
+		return tc.logError(fmt.Errorf("unexpected value %s, should start with '%s'", name, valuePrefix))
 	}
 	return nil
 }
 
 func (tc *scenarioConfig) fixThisStep() error {
-	logDebug("TODO: fix this step")
+	tc.logDebug("TODO: fix this step")
 	return godog.ErrSkip
 }
 
@@ -922,13 +1020,13 @@ func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, 
 			path := fmt.Sprintf("/api/v1/%s/%s?hard_delete=true", url, id)
 			err := tc.iSendARequestTo("DELETE", path)
 			if err != nil {
-				return ctx, logError(fmt.Errorf("failed to delete asset %s with id '%s': %w", assetName, id, err))
+				return ctx, tc.logError(fmt.Errorf("failed to delete asset %s with id '%s': %w", assetName, id, err))
 			}
 			err = tc.theResponseStatusShouldBe(204)
 			if err != nil {
-				return ctx, logError(fmt.Errorf("failed to delete asset %s expected status %d but got %d: %w", tc.lastURL, 204, tc.response.StatusCode, err))
+				return ctx, tc.logError(fmt.Errorf("failed to delete asset %s expected status %d but got %d: %w", tc.lastURL, 204, tc.response.StatusCode, err))
 			}
-			logDebug("Deleted asset %s with status %d\n", path, tc.response.StatusCode)
+			tc.logDebug("Deleted asset %s with status %d\n", path, tc.response.StatusCode)
 		}
 	}
 	tc.assets = nil
@@ -957,7 +1055,7 @@ func waitForService() {
 	tc := createScenarioConfig(api)
 	for range 10 {
 		if err := tc.checkHealthEndpoint(); err != nil {
-			logDebug("Error checking health endpoint: %v\n", err.Error())
+			tc.logDebug("Error checking health endpoint: %v\n", err.Error())
 			time.Sleep(1 * time.Second)
 		} else {
 			return
@@ -980,6 +1078,7 @@ func tidyUpTests() {
 
 // A bit of a hack to have some checks that the regexes are working as expected
 func checkRegexes() {
+	tc := createScenarioConfig(api)
 	paths := [][]string{
 		{"/api/v1/evaluations", "evaluations", "", ""},
 		{"/api/v1/evaluations/jobs", "evaluations", "jobs", ""},
@@ -1001,18 +1100,18 @@ func checkRegexes() {
 		{"http://localhost:8080/api/v1/evaluations/providers/f02b16a2-1990-4626-b24d-1cff3febdbfb?a=b", "evaluations", "providers", "f02b16a2-1990-4626-b24d-1cff3febdbfb"},
 	}
 	for _, path := range paths {
-		name, asset, id, err := getAssetDetails(path[0])
+		name, asset, id, err := tc.getAssetDetails(path[0])
 		if err != nil {
-			panic(logError(fmt.Errorf("failed to parse details from path %s: %v", path, err)))
+			panic(tc.logError(fmt.Errorf("failed to parse details from path %s: %v", path, err)))
 		}
 		if name != path[1] {
-			panic(logError(fmt.Errorf("expected asset name %s for path %s, got %s", path[1], path[0], name)))
+			panic(tc.logError(fmt.Errorf("expected asset name %s for path %s, got %s", path[1], path[0], name)))
 		}
 		if asset != path[2] {
-			panic(logError(fmt.Errorf("expected asset %s for path %s, got %s", path[2], path[0], asset)))
+			panic(tc.logError(fmt.Errorf("expected asset %s for path %s, got %s", path[2], path[0], asset)))
 		}
 		if id != path[3] {
-			panic(logError(fmt.Errorf("expected asset id %s for path %s, got %s", path[3], path[0], id)))
+			panic(tc.logError(fmt.Errorf("expected asset id %s for path %s, got %s", path[3], path[0], id)))
 		}
 	}
 }
@@ -1038,10 +1137,11 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.After(tc.assetCleanup)
 
 	ctx.Step(`^the service is running$`, tc.theServiceIsRunning)
+	ctx.Step(`^there are no evaluation jobs$`, tc.thereAreNoEvaluationJobs)
+	ctx.Step(`^there are no user providers$`, tc.thereAreNoUserProviders)
 	ctx.Step(`^I set the header "([^"]*)" to "([^"]*)"$`, tc.iSetHeaderTo)
 	ctx.Step(`^I unset the header "([^"]*)"$`, tc.iUnsetHeader)
 	ctx.Step(`^I set transaction-id to "([^"]*)"$`, tc.iSetTransactionIdTo)
-	ctx.Step(`^I unset transaction-id$`, tc.iUnsetTransactionId)
 	ctx.Step(`^I send a (GET|DELETE|POST|PUT) request to "([^"]*)"$`, tc.iSendARequestTo)
 	ctx.Step(`^I send a (POST|PUT|PATCH) request to "([^"]*)" with body "([^"]*)"$`, tc.iSendARequestToWithBody)
 	ctx.Step(`^I send a (POST|PUT|PATCH) request to "([^"]*)" with body:$`, tc.iSendARequestToWithInlineBody)

@@ -527,6 +527,92 @@ func TestCopyParamsCreatesCopy(t *testing.T) {
 	}
 }
 
+func TestResolveNamespaceUsesConfigured(t *testing.T) {
+	ns := resolveNamespace("my-tenant")
+	if ns != "my-tenant" {
+		t.Fatalf("expected %q, got %q", "my-tenant", ns)
+	}
+}
+
+func TestResolveNamespaceEmptyFallsBack(t *testing.T) {
+	ns := resolveNamespace("")
+	if ns == "" {
+		t.Fatalf("expected non-empty fallback namespace")
+	}
+}
+
+func TestBuildJobConfigUsesTenantNamespace(t *testing.T) {
+	t.Setenv(serviceURLEnv, "http://eval-hub")
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-tenant", Tenant: "team-a"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.BenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}},
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
+			},
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.namespace != "team-a" {
+		t.Fatalf("expected namespace %q, got %q", "team-a", cfg.namespace)
+	}
+}
+
+func TestBuildJobConfigEmptyTenantFallsBack(t *testing.T) {
+	t.Setenv(serviceURLEnv, "http://eval-hub")
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-no-tenant"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.BenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}},
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
+			},
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.namespace == "" {
+		t.Fatalf("expected non-empty fallback namespace when tenant is empty")
+	}
+}
+
 func intPtr(value int) *int {
 	return &value
 }

@@ -47,20 +47,17 @@ prometheus:
   enabled: true
 
 sidecar:
-  base_url: http://localhost:8081  # URL for adapter/runtime to call sidecar proxy (cluster mode)
-  port: 8081
+  base_url: http://localhost:8080  # URL for adapter/runtime to call sidecar proxy (cluster mode)
+  port: 8080
   eval_hub:
-    # Backend for /api/v1/evaluations/ proxy (main eval-hub service). Use https:// when TLS is enabled.
-    base_url: http://localhost:8080
     # TLS for outbound calls to eval-hub (sidecar -> eval-hub API):
     # ca_cert_path: path to PEM CA bundle that signed the eval-hub server cert (e.g. OpenShift service CA).
     # insecure_skip_verify: set to true only for dev with self-signed certs; disables server cert verification.
     ca_cert_path: ""
-    insecure_skip_verify: false
-    token: ""
-    token_path: ""
+    insecure_skip_verify: true
+    token_path: "/var/run/secrets/kubernetes.io/serviceaccount/token"
   sidecar_container:
-    image: quay.io/rh-ee-nbs/nbs-dev:eval-hub_v7
+    image: quay.io/evalhub/evalhub:latest
     resources:
       requests:
         cpu: 100m

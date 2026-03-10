@@ -262,6 +262,28 @@ Run Kubernetes FVT:
 go test -v ./tests/kubernetes/features
 ```
 
+## Exposing private functions for tests
+
+Create a file called `export_test.go`:
+
+```go
+// ------------------------------------------------------ {COPYRIGHT-TOP} ---
+// IBM Confidential
+// OCO Source Materials
+// IBM Watson Machine Learning Core
+//
+// Copyright IBM Corp. 2025. All Rights Reserved.
+//
+// The source code for this program is not published or otherwise
+// divested of its trade secrets, irrespective of what has been
+// deposited with the U.S. Copyright Office.
+// ------------------------------------------------------ {COPYRIGHT-END} ---
+
+package accessrules
+
+var EvaluateAccessGroup = evaluateAccessGroup
+```
+
 ## Features
 
 ### Structured Logging

@@ -14,7 +14,6 @@ type SidecarConfig struct {
 }
 
 type EvalHubClientConfig struct {
-	BaseURL            string        `mapstructure:"base_url,omitempty"`
 	HTTPTimeout        time.Duration `mapstructure:"http_timeout"`
 	CACertPath         string        `mapstructure:"ca_cert_path,omitempty"`
 	InsecureSkipVerify bool          `mapstructure:"insecure_skip_verify,omitempty"`

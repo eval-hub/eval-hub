@@ -3,21 +3,39 @@ package abstractions
 import (
 	"context"
 	"log/slog"
+	"maps"
 	"time"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 type QueryResults[T any] struct {
-	Items       []T
-	TotalStored int
-	Errors      []string
+	Items      []T
+	TotalCount int
+	Errors     []string
 }
 
 type QueryFilter struct {
 	Limit  int
 	Offset int
 	Params map[string]any
+	// Make tenant explicit because it is not a user parameter
+	Tenant api.Tenant
+}
+
+// Returns the limit, offset, and filtered params
+func (filter *QueryFilter) ExtractQueryParams() *QueryFilter {
+	params := maps.Clone(filter.Params)
+	// delete empty values
+	maps.DeleteFunc(params, func(k string, v any) bool {
+		return v == ""
+	})
+	return &QueryFilter{
+		Limit:  filter.Limit,
+		Offset: filter.Offset,
+		Params: params,
+		Tenant: filter.Tenant,
+	}
 }
 
 type Storage interface {

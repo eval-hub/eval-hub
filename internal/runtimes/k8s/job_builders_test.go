@@ -278,6 +278,7 @@ func TestBuildJobWithS3TestData(t *testing.T) {
 		benchmarkID:    "bench-1",
 		adapterImage:   "adapter:latest",
 		defaultEnv:     []api.EnvVar{},
+		testDataInitImage: "quay.io/evalhub/evalhub:test",
 		testDataS3: s3TestDataConfig{
 			bucket:    "bucket-1",
 			key:       "/a/b",
@@ -297,8 +298,8 @@ func TestBuildJobWithS3TestData(t *testing.T) {
 	if initContainer.Name != initContainerName {
 		t.Fatalf("expected init container name %q, got %q", initContainerName, initContainer.Name)
 	}
-	if initContainer.Image != testDataInitImage {
-		t.Fatalf("expected init container image %q, got %q", testDataInitImage, initContainer.Image)
+	if initContainer.Image != "quay.io/evalhub/evalhub:test" {
+		t.Fatalf("expected init container image %q, got %q", "quay.io/evalhub/evalhub:test", initContainer.Image)
 	}
 	if len(initContainer.Command) != 1 || initContainer.Command[0] != defaultTestDataInitCmd {
 		t.Fatalf("expected init container command %q, got %v", defaultTestDataInitCmd, initContainer.Command)

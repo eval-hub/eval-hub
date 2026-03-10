@@ -90,13 +90,14 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	if evaluation.Model.URL == "" || evaluation.Model.Name == "" {
 		return nil, fmt.Errorf("model url and name are required")
 	}
-	serviceURL := strings.TrimSpace(os.Getenv(serviceURLEnv))
-	if serviceURL == "" {
-		return nil, fmt.Errorf("%s is required", serviceURLEnv)
+
+	sidecarBaseURL := "http://localhost:8080"
+	if serviceConfig != nil && serviceConfig.Sidecar != nil {
+		sidecarBaseURL = strings.TrimSpace(serviceConfig.Sidecar.BaseURL)
 	}
 
 	namespace := resolveNamespace("prabhu")
-	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, benchmarkConfig, benchmarkIndex, &serviceURL)
+	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, benchmarkConfig, benchmarkIndex, &sidecarBaseURL)
 	if err != nil {
 		return nil, err
 	}
@@ -106,16 +107,32 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 
 	// Get MLFlow configuration from environment (set by operator in deployment)
 	mlflowTrackingURI := strings.TrimSpace(os.Getenv(mlflowTrackingURIEnv))
-	mlflowWorkspace := strings.TrimSpace(os.Getenv(mlflowWorkspaceEnv))
+	// Job pod must send X-MLFLOW-WORKSPACE = tenant namespace so MLflow's kubernetes-auth
+	// checks RBAC in the correct namespace. Always use the job's namespace; the
+	// MLFLOW_WORKSPACE env var on EvalHub identifies EvalHub's own namespace,
+	// not the tenant's, so it must not be forwarded to job pods.
+	mlflowWorkspace := ""
+	if mlflowTrackingURI != "" {
+		mlflowWorkspace = namespace
+	}
 
-	// Build ServiceAccount name, ConfigMap name, and EvalHub URL if instance name is set
+	// Build ServiceAccount name, ConfigMap name, and EvalHub URL if instance name is set.
+	// The SA name uses the instance namespace (not the tenant namespace) to match
+	// the operator's naming convention: <instance>-<instance-namespace>-job.
+	instanceNamespace := readInClusterNamespace()
 	var serviceAccountName, serviceCAConfigMap, evalHubURL string
 	if evalHubInstanceName != "" {
-		serviceAccountName = evalHubInstanceName + "-" + namespace + serviceAccountNameSuffix
+		saNamespace := instanceNamespace
+		if saNamespace == "" {
+			saNamespace = namespace // fallback for local mode
+		}
+		serviceAccountName = evalHubInstanceName + "-" + saNamespace + serviceAccountNameSuffix
 		serviceCAConfigMap = evalHubInstanceName + serviceCAConfigMapSuffix
-		// EvalHub URL points to the kube-rbac-proxy HTTPS endpoint
+		// EvalHub URL points to the kube-rbac-proxy HTTPS endpoint in the instance namespace.
+		// Use saNamespace (which has the local-mode fallback applied) to avoid a malformed host
+		// when instanceNamespace is empty.
 		evalHubURL = fmt.Sprintf("https://%s.%s.svc.cluster.local:%s",
-			evalHubInstanceName, namespace, defaultEvalHubPort)
+			evalHubInstanceName, saNamespace, defaultEvalHubPort)
 	}
 
 	// Extract OCI credentials secret name from exports config (not forwarded to jobSpec)
@@ -133,10 +150,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	if err != nil {
 		return nil, err
 	}
-	sidecarBaseURL := "http://localhost:8081"
-	if serviceConfig != nil && serviceConfig.Sidecar != nil {
-		sidecarBaseURL = strings.TrimSpace(serviceConfig.Sidecar.BaseURL)
-	}
+
 	localMode := serviceConfig != nil && serviceConfig.Service != nil && serviceConfig.Service.LocalMode
 	var testDataS3Bucket, testDataS3Key, testDataS3SecretRef string
 	if benchmarkConfig.TestDataRef != nil && benchmarkConfig.TestDataRef.S3 != nil {

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/storage"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -16,7 +17,7 @@ func TestProviderStorage(t *testing.T) {
 		"url":           "file::memory:?mode=memory&cache=shared",
 		"database_name": "eval_hub",
 	}
-	store, err := storage.NewStorage(&databaseConfig, false, logger)
+	store, err := storage.NewStorage(&databaseConfig, false, false, logger)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -105,6 +106,62 @@ func TestProviderStorage(t *testing.T) {
 		}
 		if got.Name != "Updated Provider" {
 			t.Errorf("Expected Name unchanged, got %s", got.Name)
+		}
+	})
+
+	t.Run("GetProviders with name filter returns matching providers", func(t *testing.T) {
+		filter := &abstractions.QueryFilter{
+			Limit:  10,
+			Offset: 0,
+			Params: map[string]any{"name": "Updated Provider"},
+		}
+		got, err := store.GetProviders(filter)
+		if err != nil {
+			t.Fatalf("GetProviders failed: %v", err)
+		}
+		if got.TotalCount != 1 {
+			t.Errorf("Expected 1 provider, got total_count=%d", got.TotalCount)
+		}
+		if len(got.Items) != 1 {
+			t.Errorf("Expected 1 item, got %d", len(got.Items))
+		}
+		if len(got.Items) > 0 && got.Items[0].Name != "Updated Provider" {
+			t.Errorf("Expected name Updated Provider, got %s", got.Items[0].Name)
+		}
+	})
+
+	t.Run("GetProviders with tags filter returns matching providers", func(t *testing.T) {
+		providerWithTags := &api.ProviderResource{
+			Resource: api.Resource{
+				ID:        "provider-2",
+				CreatedAt: time.Now(),
+				Tenant:    api.Tenant("tenant-1"),
+			},
+			ProviderConfig: api.ProviderConfig{
+				Name:        "Tagged Provider",
+				Description: "Provider with tags",
+				Tags:        []string{"list-test-tag", "searchable"},
+			},
+		}
+		if err := store.CreateProvider(providerWithTags); err != nil {
+			t.Fatalf("CreateProvider failed: %v", err)
+		}
+		defer store.DeleteProvider("provider-2")
+
+		filter := &abstractions.QueryFilter{
+			Limit:  10,
+			Offset: 0,
+			Params: map[string]any{"tags": "list-test-tag"},
+		}
+		got, err := store.GetProviders(filter)
+		if err != nil {
+			t.Fatalf("GetProviders failed: %v", err)
+		}
+		if got.TotalCount != 1 {
+			t.Errorf("Expected 1 provider with tag, got total_count=%d", got.TotalCount)
+		}
+		if len(got.Items) > 0 && got.Items[0].Name != "Tagged Provider" {
+			t.Errorf("Expected name Tagged Provider, got %s", got.Items[0].Name)
 		}
 	})
 

@@ -50,7 +50,6 @@ const (
 	modelAuthMountPath              = "/var/run/secrets/model"
 	testDataSecretVolumeName        = "test-data-secret"
 	testDataSecretMountPath         = "/var/run/secrets/test-data"
-	testDataInitImage               = "quay.io/evalhub/evalhub:latest"
 	serviceCABundleFile             = "service-ca.crt"
 	envMLFlowCertPathName           = "MLFLOW_TRACKING_SERVER_CERT_PATH"
 	envTestDataS3BucketName         = "TEST_DATA_S3_BUCKET"
@@ -189,7 +188,10 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 
 	sidecarContainerVolumes, sidecarContainerVolumeMounts := buildSidecarContainerVolumesAndMounts(configMap, cfg)
 
-	initContainers, InitContainsVolumes := initContainerVolumesAndMounts(cfg)
+	initContainers, InitContainsVolumes, err := initContainerVolumesAndMounts(cfg)
+	if err != nil {
+		return nil, err
+	}
 
 	jobVolumes := mergeVolumesByName(runtimeContainerVolumes, InitContainsVolumes, sidecarContainerVolumes)
 
@@ -467,12 +469,15 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 	return volumes, volumeMounts
 }
 
-func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1.Volume) {
+func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1.Volume, error) {
 	var initContainers []corev1.Container
 	var volumes []corev1.Volume
 	if hasS3TestData(cfg) {
+		if cfg.testDataInitImage == "" {
+			return nil, nil, fmt.Errorf("init image is required when S3 test data is configured")
+		}
 		initCommand := defaultTestDataInitCmd
-		initImage := defaultIfEmpty(cfg.testDataInitImage, testDataInitImage)
+		initImage := cfg.testDataInitImage
 		initResources := corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse(defaultInitCPURequest),
@@ -522,7 +527,7 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 			},
 		})
 	}
-	return initContainers, volumes
+	return initContainers, volumes, nil
 }
 
 func ensureServiceCAVolume(volumes []corev1.Volume, configMapName string) []corev1.Volume {

@@ -31,7 +31,7 @@ func NewSidecarServer(logger *slog.Logger,
 		return nil, fmt.Errorf("service config is required for the sidecar server")
 	}
 
-	port := 8081
+	port := 8080
 	if config.Sidecar != nil && config.Sidecar.Port > 0 {
 		port = config.Sidecar.Port
 	}
