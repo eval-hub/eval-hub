@@ -270,14 +270,14 @@ func TestBuildJobWithoutOCICredentials(t *testing.T) {
 
 func TestBuildJobWithS3TestData(t *testing.T) {
 	cfg := &jobConfig{
-		jobID:          "job-s3",
-		resourceGUID:   "guid-s3",
-		benchmarkIndex: 0,
-		namespace:      "default",
-		providerID:     "provider-1",
-		benchmarkID:    "bench-1",
-		adapterImage:   "adapter:latest",
-		defaultEnv:     []api.EnvVar{},
+		jobID:             "job-s3",
+		resourceGUID:      "guid-s3",
+		benchmarkIndex:    0,
+		namespace:         "default",
+		providerID:        "provider-1",
+		benchmarkID:       "bench-1",
+		adapterImage:      "adapter:latest",
+		defaultEnv:        []api.EnvVar{},
 		testDataInitImage: "quay.io/evalhub/evalhub:test",
 		testDataS3: s3TestDataConfig{
 			bucket:    "bucket-1",
