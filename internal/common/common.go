@@ -56,18 +56,16 @@ func GetJobBenchmarks(job *api.EvaluationJobResource, getCollection GetCollectio
 		}
 		if len(coll.Benchmarks) == 0 {
 			return nil, serviceerrors.NewServiceError(
-				messages.BadRequest,
-				"ParameterName", "Error",
-				"Value", fmt.Sprintf("Collection %s has no benchmarks", job.Collection.ID),
+				messages.CollectionEmpty,
+				"CollectionID", job.Collection.ID,
 			)
 		}
 		return coll.Benchmarks, nil
 	}
 	if len(job.Benchmarks) == 0 {
 		return nil, serviceerrors.NewServiceError(
-			messages.BadRequest,
-			"ParameterName", "Error",
-			"Value", fmt.Sprintf("no benchmarks configured for job %s", job.Collection.ID),
+			messages.EvaluationJobEmpty,
+			"EvaluationJobID", job.Resource.ID,
 		)
 	}
 	return job.Benchmarks, nil

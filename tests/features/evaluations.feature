@@ -293,7 +293,6 @@ Feature: Evaluations Endpoint
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
-  @ignore
   Scenario: Pass criteria from provider - test results from provider benchmarks
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/providers" with body "file:/provider_pass_criteria_test.json"
@@ -305,6 +304,7 @@ Feature: Evaluations Endpoint
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_pass_criteria_from_provider_test.json"
     Then the response code should be 202
     And the response should contain the value "value:collection_id" at path "$.collection.id"
+    And the response should contain the value "pending" at path "$.status.state"
     When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_pass_criteria_provider_b1.json"
     Then the response code should be 204
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
@@ -379,8 +379,6 @@ Feature: Evaluations Endpoint
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs/unknown-id/events" with body "file:/evaluation_job_status_event_running.json"
 
-  @focus
-  @ignore
   Scenario: List evaluation jobs filtered by status
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"

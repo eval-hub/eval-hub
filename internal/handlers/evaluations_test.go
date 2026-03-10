@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http/httptest"
@@ -353,6 +354,41 @@ func TestHandleCreateEvaluationRejectsMissingBenchmarkID(t *testing.T) {
 	}
 	if recorder.Code != 400 {
 		t.Fatalf("expected status 400, got %d", recorder.Code)
+	}
+}
+
+func TestHandleCreateEvaluationRejectsMissingBenchmarks(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	storage := &fakeStorage{}
+	runtime := &fakeRuntime{}
+	validate := validator.New()
+	h := handlers.New(storage, validate, runtime, nil, nil, nil)
+
+	index := 1
+
+	invalidRequestBodies := []string{
+		`{"model":{"url":"http://test.com","name":"test"},"benchmarks":[]}`,
+		`{"model":{"url":"http://test.com","name":"test"}}`,
+	}
+	for _, body := range invalidRequestBodies {
+		req := &bodyRequest{
+			MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+			body:        []byte(body),
+		}
+
+		ctx := executioncontext.NewExecutionContext(context.Background(), fmt.Sprintf("invalid-request-body-%d", index), logger, time.Second, "test-user", "test-tenant")
+		index++
+		recorder := httptest.NewRecorder()
+		resp := MockResponseWrapper{recorder: recorder}
+
+		h.HandleCreateEvaluation(ctx, req, resp)
+
+		if runtime.called {
+			t.Fatalf("did not expect runtime to be invoked")
+		}
+		if recorder.Code != 400 {
+			t.Fatalf("expected status 400, got %d: %s", recorder.Code, recorder.Body.String())
+		}
 	}
 }
 

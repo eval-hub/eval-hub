@@ -171,7 +171,7 @@ func (s *Server) loggerWithRequest(r *http.Request) (string, *slog.Logger) {
 		remoteUser = r.Header.Get("Remote-User")
 	}
 	if remoteUser != "" {
-		enhancedLogger = enhancedLogger.With(constants.LOG_USER, remoteUser)
+		enhancedLogger = enhancedLogger.With(constants.LOG_REMOTE_USER, remoteUser)
 	}
 
 	referer := r.Header.Get("Referer")
