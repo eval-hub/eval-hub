@@ -213,10 +213,10 @@ var (
 		"forbidden",
 	)
 
-	// UnableToAuthorizeRequest The request is not authorized: '{{.Error}}'.
-	UnableToAuthorizeRequest = createMessage(
+	// BadAuthorizationRequest Bad request: '{{.Error}}'.
+	BadAuthorizationRequest = createMessage(
 		constants.HTTPCodeBadRequest,
-		"The request is not authorized: '{{.Error}}'.",
+		"Bad request: '{{.Error}}'.",
 		"unable_to_authorize_request",
 	)
 
