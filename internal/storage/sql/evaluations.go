@@ -315,7 +315,13 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 		}
 
 		// get the overall job status
-		overallState, message, err := commonStorage.GetOverallJobStatus(s.logger, job, s.GetCollection)
+		overallState, message, err := commonStorage.GetOverallJobStatus(
+			s.logger,
+			job,
+			func(collectionID string) (*api.CollectionResource, error) {
+				return s.getCollectionTransactional(txn, collectionID)
+			},
+		)
 		if err != nil {
 			return err
 		}
