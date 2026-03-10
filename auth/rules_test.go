@@ -91,7 +91,11 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs", nil)
 		req.Header.Set("X-Tenant", "tenant-a")
 
-		got := attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
+		atr, err := AttributesFromRequest(req, cfg, NewTestUser("test"))
+		if err != nil {
+			t.Errorf("Got error = %+v, want nil", err)
+		}
+		got := attributesToRecords(atr)
 
 		fmt.Println("got ", got)
 		want := []authorizer.AttributesRecord{
@@ -118,7 +122,11 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs", nil)
 		req.Header.Set("X-Tenant", "my-ns")
 
-		got := attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
+		atr, err := AttributesFromRequest(req, cfg, NewTestUser("test"))
+		if err != nil {
+			t.Errorf("Got error = %+v, want nil", err)
+		}
+		got := attributesToRecords(atr)
 
 		want := []authorizer.AttributesRecord{
 			{
@@ -138,7 +146,11 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/other", nil)
 		req.Header.Set("X-Tenant", "my-ns")
 
-		got := attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
+		atr, err := AttributesFromRequest(req, cfg, NewTestUser("test"))
+		if err != nil {
+			t.Errorf("Got error = %+v, want nil", err)
+		}
+		got := attributesToRecords(atr)
 
 		if len(got) != 0 {
 			t.Errorf("ComputeResourceAttributes() = %+v, want nil/empty", got)
@@ -149,7 +161,11 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/namespaces?tenant=query-ns", nil)
 
-		got := attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
+		atr, err := AttributesFromRequest(req, cfg, NewTestUser("test"))
+		if err != nil {
+			t.Errorf("Got error = %+v, want nil", err)
+		}
+		got := attributesToRecords(atr)
 
 		want := []authorizer.AttributesRecord{
 			{
@@ -169,7 +185,11 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/evaluations/collections", nil)
 		req.Header.Set("X-Tenant", "tenant-b")
 
-		got := attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
+		atr, err := AttributesFromRequest(req, cfg, NewTestUser("test"))
+		if err != nil {
+			t.Errorf("Got error = %+v, want nil", err)
+		}
+		got := attributesToRecords(atr)
 
 		want := []authorizer.AttributesRecord{
 			{
@@ -187,7 +207,11 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req = httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/providers", nil)
 		req.Header.Set("X-Tenant", "tenant-b")
 
-		got = attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
+		atr, err = AttributesFromRequest(req, cfg, NewTestUser("test"))
+		if err != nil {
+			t.Errorf("Got error = %+v, want nil", err)
+		}
+		got = attributesToRecords(atr)
 
 		want = []authorizer.AttributesRecord{
 			{
@@ -207,14 +231,9 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs", nil)
 
-		got := attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
-		fmt.Println("got ", got)
-		// Rule still matches; namespace comes from empty header (template yields empty)
-		want := []authorizer.AttributesRecord{
-			{},
-		}
-		if !eq(got, want) {
-			t.Errorf("ComputeResourceAttributes() = %+v, want %+v", got, want)
+		atr, err := AttributesFromRequest(req, cfg, NewTestUser("test"))
+		if err == nil {
+			t.Errorf("Expected error = %+v, go %+v", err, atr)
 		}
 
 	})
@@ -224,7 +243,11 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs/2349872398472", nil)
 		req.Header.Set("X-Tenant", "my-ns")
 
-		got := attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
+		atr, err := AttributesFromRequest(req, cfg, NewTestUser("test"))
+		if err != nil {
+			t.Errorf("Got error = %+v, want nil", err)
+		}
+		got := attributesToRecords(atr)
 
 		want := []authorizer.AttributesRecord{
 			{
@@ -245,7 +268,11 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs/2349872398472/events", nil)
 		req.Header.Set("X-Tenant", "my-ns")
 
-		got := attributesToRecords(AttributesFromRequest(req, cfg, NewTestUser("test")))
+		atr, err := AttributesFromRequest(req, cfg, NewTestUser("test"))
+		if err != nil {
+			t.Errorf("Got error = %+v, want nil", err)
+		}
+		got := attributesToRecords(atr)
 
 		want := []authorizer.AttributesRecord{
 			{
