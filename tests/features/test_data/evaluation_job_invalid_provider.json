@@ -8,5 +8,6 @@
       "id": "arc_easy",
       "provider_id": "unknown_provider"
     }
-  ]
+  ],
+  "name": "test-evaluation-job"
 }

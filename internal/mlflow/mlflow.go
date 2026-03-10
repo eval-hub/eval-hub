@@ -119,10 +119,10 @@ func injectEvaluationJobTags(jobId string, evaluation *api.EvaluationJobConfig) 
 			tags = make([]api.ExperimentTag, 0)
 		}
 
-		if evaluation.Name != nil {
+		if evaluation.Name != "" {
 			tags = append(tags, api.ExperimentTag{
 				Key:   "evaluation_job_name",
-				Value: *evaluation.Name,
+				Value: evaluation.Name,
 			})
 		}
 		if evaluation.Description != nil {

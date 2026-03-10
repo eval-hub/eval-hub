@@ -24,6 +24,5 @@
       }
     ]
   },
-  "name": "test-evaluation-job",
   "tags": [ "environment" ]
 }

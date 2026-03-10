@@ -8,5 +8,6 @@
       "id": "unknown_benchmark",
       "provider_id": "lm_evaluation_harness"
     }
-  ]
+  ],
+  "name": "test-evaluation-job"
 }

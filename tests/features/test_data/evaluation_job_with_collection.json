@@ -14,5 +14,6 @@
                 "value": "test"
             }
         ]
-    }
+    },
+    "name": "test-evaluation-job"
 }

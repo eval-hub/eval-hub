@@ -9,5 +9,6 @@
         "tokenizer": "google/flan-t5-small"
       }
     }
-  ]
+  ],
+  "name": "test-evaluation-job"
 }

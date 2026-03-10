@@ -192,7 +192,7 @@ func TestHandleCreateEvaluationMarksFailedWhenRuntimeErrors(t *testing.T) {
 
 	req := &bodyRequest{
 		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
-		body:        []byte(`{"model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1","provider_id":"garak"}]}`),
+		body:        []byte(`{"name": "test-evaluation-job", "model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1","provider_id":"garak"}]}`),
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
@@ -236,7 +236,7 @@ func TestHandleCreateEvaluationSucceedsWhenRuntimeOk(t *testing.T) {
 
 	req := &bodyRequest{
 		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
-		body:        []byte(`{"model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1","provider_id":"garak"}]}`),
+		body:        []byte(`{"name": "test-evaluation-job", "model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1","provider_id":"garak"}]}`),
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
@@ -341,7 +341,7 @@ func TestHandleCreateEvaluationRejectsMissingBenchmarkID(t *testing.T) {
 
 	req := &bodyRequest{
 		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
-		body:        []byte(`{"model":{"url":"http://test.com","name":"test"},"benchmarks":[{"provider_id":"garak"}]}`),
+		body:        []byte(`{"name": "test-evaluation-job", "model":{"url":"http://test.com","name":"test"},"benchmarks":[{"provider_id":"garak"}]}`),
 	}
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-3", logger, time.Second, "test-user", "test-tenant")
 	recorder := httptest.NewRecorder()
@@ -367,8 +367,8 @@ func TestHandleCreateEvaluationRejectsMissingBenchmarks(t *testing.T) {
 	index := 1
 
 	invalidRequestBodies := []string{
-		`{"model":{"url":"http://test.com","name":"test"},"benchmarks":[]}`,
-		`{"model":{"url":"http://test.com","name":"test"}}`,
+		`{"name": "test-evaluation-job", "model":{"url":"http://test.com","name":"test"},"benchmarks":[]}`,
+		`{"name": "test-evaluation-job", "model":{"url":"http://test.com","name":"test"}}`,
 	}
 	for _, body := range invalidRequestBodies {
 		req := &bodyRequest{
@@ -401,7 +401,7 @@ func TestHandleCreateEvaluationRejectsMissingProviderID(t *testing.T) {
 
 	req := &bodyRequest{
 		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
-		body:        []byte(`{"model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1"}]}`),
+		body:        []byte(`{"name": "test-evaluation-job", "model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1"}]}`),
 	}
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-4", logger, time.Second, "test-user", "test-tenant")
 	recorder := httptest.NewRecorder()
@@ -437,7 +437,7 @@ func TestHandleCreateEvaluationRejectsInvalidProviderID(t *testing.T) {
 
 	req := &bodyRequest{
 		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
-		body:        []byte(`{"model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1","provider_id":"unknown"}]}`),
+		body:        []byte(`{"name": "test-evaluation-job", "model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1","provider_id":"unknown"}]}`),
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
@@ -469,7 +469,7 @@ func TestHandleCreateEvaluationRejectsInvalidBenchmarkID(t *testing.T) {
 
 	req := &bodyRequest{
 		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
-		body:        []byte(`{"model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"unknown","provider_id":"garak"}]}`),
+		body:        []byte(`{"name": "test-evaluation-job", "model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"unknown","provider_id":"garak"}]}`),
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}

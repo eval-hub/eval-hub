@@ -24,6 +24,7 @@ func TestEvaluationJobConfigBenchmarksMin_WithCollection(t *testing.T) {
 	}
 	// When Collection is set with ID, empty Benchmarks is allowed
 	cfg := api.EvaluationJobConfig{
+		Name:       "test-evaluation-job",
 		Model:      api.ModelRef{URL: "http://test.com", Name: "model"},
 		Collection: &api.Ref{ID: "coll-1"},
 		Benchmarks: []api.BenchmarkConfig{},
@@ -41,6 +42,7 @@ func TestEvaluationJobConfigBenchmarksMin_WithoutCollection_EmptyBenchmarks(t *t
 	}
 	// When Collection is not set, Benchmarks must have at least 1 element
 	cfg := api.EvaluationJobConfig{
+		Name:       "test-evaluation-job",
 		Model:      api.ModelRef{URL: "http://test.com", Name: "model"},
 		Benchmarks: []api.BenchmarkConfig{},
 	}
@@ -64,6 +66,7 @@ func TestEvaluationJobConfigBenchmarksMin_WithoutCollection_WithBenchmark(t *tes
 		t.Fatalf("NewValidator() error: %v", err)
 	}
 	cfg := api.EvaluationJobConfig{
+		Name:  "test-evaluation-job",
 		Model: api.ModelRef{URL: "http://test.com", Name: "model"},
 		Benchmarks: []api.BenchmarkConfig{
 			{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
