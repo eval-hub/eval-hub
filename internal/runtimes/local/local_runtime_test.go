@@ -199,7 +199,7 @@ func TestLocalRuntimeName(t *testing.T) {
 }
 
 func TestNewLocalRuntime(t *testing.T) {
-	rt, err := NewLocalRuntime(discardLogger(), nil, nil)
+	rt, err := NewLocalRuntime(discardLogger(), nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}

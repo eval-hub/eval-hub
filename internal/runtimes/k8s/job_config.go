@@ -96,7 +96,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		sidecarBaseURL = strings.TrimSpace(serviceConfig.Sidecar.BaseURL)
 	}
 
-	namespace := resolveNamespace("prabhu")
+	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
 	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, benchmarkConfig, benchmarkIndex, &sidecarBaseURL)
 	if err != nil {
 		return nil, err

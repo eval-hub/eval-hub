@@ -16,7 +16,7 @@ func NewRuntime(
 	providerConfigs map[string]api.ProviderResource,
 ) (abstractions.Runtime, error) {
 	if serviceConfig.Service.LocalMode {
-		return local.NewLocalRuntime(logger, serviceConfig, providerConfigs)
+		return local.NewLocalRuntime(logger, providerConfigs)
 	}
-	return k8s.NewK8sRuntime(logger, serviceConfig, providerConfigs, serviceConfig.Service.EvalInitImage)
+	return k8s.NewK8sRuntime(logger, serviceConfig, providerConfigs)
 }
