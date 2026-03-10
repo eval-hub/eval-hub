@@ -1233,56 +1233,69 @@ components:
       title: EvaluationExportsOCI
     EvaluationExports:
       type: object
-      description: Optional exports configuration for an evaluation job.
+      description: |
+        Optional exports configuration for an evaluation job. When provided, the evaluation job results will be exported to the specified location.
       properties:
         oci:
           $ref: '#/components/schemas/EvaluationExportsOCI'
-          description: OCI artifact export configuration
+          description: |
+            The OCI artifact export configuration.
       additionalProperties: false
       title: EvaluationExports
     EvaluationJobConfig:
       type: object
-      description: Evaluation job request configuration
+      description: |
+        The evaluation job request configuration.
       required:
+        - name
         - model
-        - benchmarks
       properties:
         name:
           type: string
-          description: Evaluation job name
+          description: |
+            The evaluation job name.
         description:
           type: string
-          description: Evaluation job description
+          description: |
+            The evaluation job description.
         tags:
           type: array
           items:
             type: string
-          description: Evaluation job tags
+          description: |
+            The evaluation job tags.
         model:
           $ref: '#/components/schemas/ModelRef'
-          description: Model to evaluate
+          description: |
+            The model to evaluate.
         pass_criteria:
           $ref: '#/components/schemas/PassCriteria'
-          description: Overall pass criteria
+          description: |
+            The overall pass criteria for the evaluation job.
         benchmarks:
           type: array
           items:
             $ref: '#/components/schemas/BenchmarkConfig'
-          minItems: 1
-          description: Benchmarks to run
+          description: |
+            The evaluation benchmarks to run. Either `benchmarks` or `collection` must be provided, but not both.
         collection:
           $ref: '#/components/schemas/Ref'
-          description: Optional collection reference
+          description: |
+            Optional collection reference. When provided, the benchmarks will be taken from the collection. Either `benchmarks` or `collection` must be provided, but not both.
         experiment:
           $ref: '#/components/schemas/ExperimentConfig'
-          description: MLFlow experiment config
+          description: |
+            The MLFlow experiment configuration. When provided, the evaluation job will be tracked in MLFlow.
         custom:
           type: object
           additionalProperties: true
-          description: Custom request data
+          description: |
+            Custom request data. This can be used for user specific job data.
         exports:
           $ref: '#/components/schemas/EvaluationExports'
-          description: Optional exports configuration for the evaluation job
+          description: |
+            Optional exports configuration for the evaluation job. When provided, the evaluation job results will be exported to the specified location.
+      title: EvaluationJobConfig
     EvaluationJobResource:
       type: object
       description: Full evaluation job resource (response)

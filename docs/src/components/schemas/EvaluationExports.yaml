@@ -1,8 +1,11 @@
 type: object
-description: Optional exports configuration for an evaluation job.
+description: >
+  Optional exports configuration for an evaluation job.
+  When provided, the evaluation job results will be exported to the specified location.
 properties:
   oci:
     $ref: ./EvaluationExportsOCI.yaml
-    description: OCI artifact export configuration
+    description: >
+      The OCI artifact export configuration.
 additionalProperties: false
 title: EvaluationExports
