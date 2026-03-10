@@ -42,7 +42,7 @@ func WithAuthorization(next http.Handler, logger *slog.Logger, client *kubernete
 		switch decision {
 
 		case authorizer.DecisionNoOpinion:
-			logger.Error("Unable to authorize request", "path", r.URL.Path, "method", r.Method, "reason", reason, "error", err)
+			logger.Error("Unable to authorize request", "path", r.URL.Path, "method", r.Method, "reason", reason)
 			writeError(w, messages.UnableToAuthorizeRequest, "Error", reason)
 			return
 		case authorizer.DecisionDeny:
