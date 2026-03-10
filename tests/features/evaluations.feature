@@ -303,7 +303,7 @@ Feature: Evaluations Endpoint
     And the "resource.id" field in the response should be saved as "value:collection_id"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_pass_criteria_from_provider_test.json"
     Then the response code should be 202
-    And the response should contain the value "value:collection_id" at path "$.collection.id"
+    And the response should contain the value "{{value:collection_id}}" at path "$.collection.id"
     And the response should contain the value "pending" at path "$.status.state"
     When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_pass_criteria_provider_b1.json"
     Then the response code should be 204

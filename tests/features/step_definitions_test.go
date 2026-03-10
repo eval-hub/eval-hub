@@ -885,10 +885,6 @@ func (tc *scenarioConfig) getJsonPathValue(jsonPath string) (interface{}, error)
 }
 
 func (tc *scenarioConfig) theResponseShouldContainAtJSONPath(expectedValue string, jsonPath string) error {
-	expectedValue, err := tc.getId(expectedValue)
-	if err != nil {
-		return err
-	}
 	if strings.Contains(expectedValue, "{{") {
 		expanded, err := tc.substituteValues(expectedValue)
 		if err != nil {
