@@ -33,6 +33,13 @@ get:
         type: string
         title: Name
       description: Name to search for
+    - name: category
+      in: query
+      required: false
+      schema:
+        type: string
+        title: Category
+      description: Category to search for
     - name: tags
       in: query
       required: false

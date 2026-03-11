@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -156,7 +157,7 @@ func TestHandleListProviders_ReturnsSystemProviders(t *testing.T) {
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil)
+	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers"),
@@ -206,7 +207,7 @@ func TestHandleListProviders_AppliesPaginationWhenLimitLessThanSystemProviders(t
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil)
+	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers"),
@@ -240,6 +241,101 @@ func TestHandleListProviders_AppliesPaginationWhenLimitLessThanSystemProviders(t
 	}
 }
 
+func TestHandleListProviders_FilterSystemProvidersWithCommaAndPipe(t *testing.T) {
+	providerConfigs := map[string]api.ProviderResource{
+		"p1": {
+			Resource:       api.Resource{ID: "p1"},
+			ProviderConfig: api.ProviderConfig{Name: "Lighteval", Tags: []string{"tag-a", "tag-b"}},
+		},
+		"p2": {
+			Resource:       api.Resource{ID: "p2"},
+			ProviderConfig: api.ProviderConfig{Name: "Guidellm", Tags: []string{"tag-a"}},
+		},
+		"p3": {
+			Resource:       api.Resource{ID: "p3"},
+			ProviderConfig: api.ProviderConfig{Name: "LM Harness", Tags: []string{"tag-b", "tag-c"}},
+		},
+	}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil, nil)
+
+	tests := []struct {
+		name            string
+		queryValues     map[string][]string
+		wantCount       int
+		wantProviderIDs []string
+	}{
+		{
+			name:            "tags OR (pipe): tag-a|tag-b matches p1,p2,p3",
+			queryValues:     map[string][]string{"tags": {"tag-a|tag-b"}},
+			wantCount:       3,
+			wantProviderIDs: []string{"p1", "p2", "p3"},
+		},
+		{
+			name:            "tags AND (comma): tag-a,tag-b matches only p1",
+			queryValues:     map[string][]string{"tags": {"tag-a,tag-b"}},
+			wantCount:       1,
+			wantProviderIDs: []string{"p1"},
+		},
+		{
+			name:            "name OR (pipe): Lighteval|Guidellm matches p1,p2",
+			queryValues:     map[string][]string{"name": {"Lighteval|Guidellm"}},
+			wantCount:       2,
+			wantProviderIDs: []string{"p1", "p2"},
+		},
+		{
+			name:            "name AND tags: both must match",
+			queryValues:     map[string][]string{"name": {"Lighteval"}, "tags": {"tag-a"}},
+			wantCount:       1,
+			wantProviderIDs: []string{"p1"},
+		},
+		{
+			name:            "tags AND (comma) no match",
+			queryValues:     map[string][]string{"tags": {"tag-a,tag-c"}},
+			wantCount:       0,
+			wantProviderIDs: []string{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &providersRequest{
+				MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers"),
+				queryValues: tt.queryValues,
+				pathValues:  map[string]string{},
+			}
+			recorder := httptest.NewRecorder()
+			resp := MockResponseWrapper{recorder: recorder}
+			ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+
+			h.HandleListProviders(ctx, req, resp)
+
+			if recorder.Code != 200 {
+				t.Fatalf("expected status 200, got %d body %s", recorder.Code, recorder.Body.String())
+			}
+			var got api.ProviderResourceList
+			if err := json.NewDecoder(recorder.Body).Decode(&got); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if got.TotalCount != tt.wantCount {
+				t.Errorf("expected TotalCount %d, got %d", tt.wantCount, got.TotalCount)
+			}
+			gotIDs := make([]string, 0, len(got.Items))
+			for _, p := range got.Items {
+				gotIDs = append(gotIDs, p.Resource.ID)
+			}
+			if len(gotIDs) != len(tt.wantProviderIDs) {
+				t.Errorf("expected %d items, got %d: %v", len(tt.wantProviderIDs), len(gotIDs), gotIDs)
+			} else {
+				for _, wantID := range tt.wantProviderIDs {
+					if !slices.Contains(gotIDs, wantID) {
+						t.Errorf("expected provider %q in results, got %v", wantID, gotIDs)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestHandleListProviders_ExcludesSystemProvidersWhenParamFalse(t *testing.T) {
 	providerConfigs := map[string]api.ProviderResource{
 		"lm_evaluation_harness": {
@@ -248,7 +344,7 @@ func TestHandleListProviders_ExcludesSystemProvidersWhenParamFalse(t *testing.T)
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil)
+	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers"),
@@ -287,7 +383,7 @@ func TestHandleListProviders_ExcludesBenchmarksWhenParamFalse(t *testing.T) {
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil)
+	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers"),
@@ -326,7 +422,7 @@ func TestHandleListProviders_ReturnsUserProvidersFromStorage(t *testing.T) {
 	}
 	providerConfigs := map[string]api.ProviderResource{}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil)
+	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers"),
@@ -366,7 +462,7 @@ func TestHandleListProviders_ReturnsErrorWhenStorageFails(t *testing.T) {
 		err:         fmt.Errorf("storage unavailable"),
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, map[string]api.ProviderResource{}, nil)
+	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, map[string]api.ProviderResource{}, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers"),
@@ -386,7 +482,7 @@ func TestHandleListProviders_ReturnsErrorWhenStorageFails(t *testing.T) {
 
 func TestHandleListProviders_Returns400WhenInvalidLimit(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &fakeRuntime{}, nil, map[string]api.ProviderResource{}, nil)
+	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &fakeRuntime{}, nil, map[string]api.ProviderResource{}, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers"),
@@ -416,7 +512,7 @@ func TestHandleListProvidersReturnsEmptyForInvalidProviderID(t *testing.T) {
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil)
+	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers/unknown"),
@@ -450,7 +546,7 @@ func TestHandleUpdateProvider(t *testing.T) {
 	// providerConfigs empty so getSystemProvider returns nil
 	providerConfigs := map[string]api.ProviderResource{}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil)
+	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil, nil)
 
 	body := `{"name":"Updated Name","description":"Updated desc","benchmarks":[]}`
 	req := &providersRequest{
@@ -488,7 +584,7 @@ func TestHandleUpdateProviderRejectsSystemProvider(t *testing.T) {
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil)
+	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil, nil)
 
 	body := `{"name":"Hacked","description":"","benchmarks":[]}`
 	req := &providersRequest{
@@ -523,7 +619,7 @@ func TestHandlePatchProvider(t *testing.T) {
 	}
 	providerConfigs := map[string]api.ProviderResource{}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil)
+	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil, nil)
 
 	body := `[{"op":"replace","path":"/description","value":"Patched description"}]`
 	req := &providersRequest{
@@ -563,7 +659,7 @@ func TestHandlePatchProviderRejectsImmutablePaths(t *testing.T) {
 	}
 	providerConfigs := map[string]api.ProviderResource{}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil)
+	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil, nil)
 
 	immutablePaths := []string{"/resource", "/resource/id", "/resource/tenant", "/created_at", "/updated_at"}
 	for _, path := range immutablePaths {
@@ -594,7 +690,7 @@ func TestHandlePatchProviderRejectsSystemProvider(t *testing.T) {
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil)
+	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil, nil)
 
 	body := `[{"op":"replace","path":"/name","value":"Hacked"}]`
 	req := &providersRequest{
@@ -617,7 +713,7 @@ func TestHandleCreateProvider(t *testing.T) {
 	storage := &fakeStorage{}
 	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil, nil)
 
 	body := `{"name":"My Provider","description":"A test provider","benchmarks":[{"id":"bench-1","provider_id":"p1"}]}`
 	req := &providersRequest{
@@ -651,7 +747,7 @@ func TestHandleDeleteProvider(t *testing.T) {
 	storage := &fakeStorage{}
 	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("DELETE", "/api/v1/evaluations/providers/my-provider"),
@@ -672,7 +768,7 @@ func TestHandleDeleteProvider_MissingPathParam(t *testing.T) {
 	storage := &fakeStorage{}
 	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("DELETE", "/api/v1/evaluations/providers/"),

@@ -26,16 +26,17 @@ import (
 )
 
 type Server struct {
-	httpServer      *http.Server
-	port            int
-	logger          *slog.Logger
-	serviceConfig   *config.Config
-	providerConfigs map[string]api.ProviderResource
-	authConfig      *auth.AuthConfig
-	storage         abstractions.Storage
-	validate        *validator.Validate
-	runtime         abstractions.Runtime
-	mlflowClient    *mlflowclient.Client
+	httpServer        *http.Server
+	port              int
+	logger            *slog.Logger
+	serviceConfig     *config.Config
+	providerConfigs   map[string]api.ProviderResource
+	collectionConfigs map[string]api.CollectionResource
+	authConfig        *auth.AuthConfig
+	storage           abstractions.Storage
+	validate          *validator.Validate
+	runtime           abstractions.Runtime
+	mlflowClient      *mlflowclient.Client
 }
 
 func (s *Server) isOTELEnabled() bool {
@@ -362,7 +363,7 @@ func (s *Server) setupDocsRoutes(h *handlers.Handlers, router *http.ServeMux) {
 
 func (s *Server) setupRoutes() (http.Handler, error) {
 	router := http.NewServeMux()
-	h := handlers.New(s.storage, s.validate, s.runtime, s.mlflowClient, s.providerConfigs, s.serviceConfig)
+	h := handlers.New(s.storage, s.validate, s.runtime, s.mlflowClient, s.providerConfigs, s.collectionConfigs, s.serviceConfig)
 
 	// Health
 	s.setupHealthRoutes(h, router)

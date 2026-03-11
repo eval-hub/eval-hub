@@ -696,6 +696,16 @@
             "description": "Name to search for"
           },
           {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Category"
+            },
+            "description": "Category to search for"
+          },
+          {
             "name": "tags",
             "in": "query",
             "required": false,
@@ -1931,20 +1941,31 @@
       },
       "ProviderResourceList": {
         "type": "object",
-        "description": "List of providers (no pagination links)",
-        "properties": {
-          "total_count": {
-            "type": "integer",
-            "description": "Total number of providers"
+        "description": "List of provider resources with pagination",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Page"
           },
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ProviderResource"
-            },
-            "description": "Provider resources"
+          {
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ProviderResource"
+                },
+                "description": "Provider resources"
+              },
+              "errors": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Non-fatal errors (e.g. partial list)"
+              }
+            }
           }
-        }
+        ]
       },
       "PatchOp": {
         "type": "string",
@@ -1983,6 +2004,10 @@
             "type": "string",
             "description": "Collection name"
           },
+          "category": {
+            "type": "string",
+            "description": "Collection category"
+          },
           "description": {
             "type": "string",
             "description": "Optional description"
@@ -2012,6 +2037,8 @@
           }
         },
         "required": [
+          "name",
+          "category",
           "benchmarks"
         ]
       },

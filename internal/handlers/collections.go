@@ -2,9 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/common"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
@@ -13,14 +17,98 @@ import (
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/serialization"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
+	"github.com/eval-hub/eval-hub/internal/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
+
+func (h *Handlers) filterSystemCollections(filter map[string]any) []api.CollectionResource {
+	// Filter keys relevant for system providers (owner, tenant_id, status are not applicable)
+	allowedKeys := []string{"name", "tags"}
+	filteredCollections := make([]api.CollectionResource, 0, len(h.collectionConfigs))
+
+	for _, c := range h.collectionConfigs {
+		if len(filter) == 0 {
+			filteredCollections = append(filteredCollections, c)
+			continue
+		}
+		matchesAll := true
+		for _, key := range slices.Sorted(maps.Keys(filter)) {
+			if !slices.Contains(allowedKeys, key) {
+				continue
+			}
+			v := filter[key]
+			values, operator := shared.GetValues(key, v)
+			if !matchesCollectionFilterKey(c, key, values, operator) {
+				matchesAll = false
+				break
+			}
+		}
+		if matchesAll {
+			filteredCollections = append(filteredCollections, c)
+		}
+	}
+	return filteredCollections
+}
+
+// matchesFilterKey returns true if the provider matches the filter key.
+// values and operator come from shared.GetValues (comma=AND, pipe=OR).
+func matchesCollectionFilterKey(c api.CollectionResource, key string, values []any, operator string) bool {
+	getStr := func(v any) string {
+		if s, ok := v.(string); ok {
+			return s
+		}
+		return fmt.Sprintf("%v", v)
+	}
+	switch key {
+	case "name":
+		if operator == "OR" {
+			for _, val := range values {
+				if c.CollectionConfig.Name == getStr(val) {
+					return true
+				}
+			}
+			return false
+		}
+		// AND: name must equal all values (typically one value)
+		for _, val := range values {
+			if c.CollectionConfig.Name != getStr(val) {
+				return false
+			}
+		}
+		return true
+	case "tags":
+		if operator == "OR" {
+			for _, val := range values {
+				if slices.Contains(c.CollectionConfig.Tags, getStr(val)) {
+					return true
+				}
+			}
+			return false
+		}
+		// AND: provider must have all tags
+		for _, val := range values {
+			if !slices.Contains(c.CollectionConfig.Tags, getStr(val)) {
+				return false
+			}
+		}
+		return true
+	default:
+		return true
+	}
+}
 
 // HandleListCollections handles GET /api/v1/evaluations/collections
 func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
-	logging.LogRequestStarted(ctx)
+	filter, err := CommonListFilters(req)
+
+	logging.LogRequestStarted(ctx, "filter", filter)
+
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
 
 	allowedParams := []string{"limit", "offset", "name", "tags", "system_defined", "owner"}
 	badParams := getAllParams(req, allowedParams...)
@@ -30,29 +118,54 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 		return
 	}
 
-	filter, err := CommonListFilters(req)
+	collections := []api.CollectionResource{}
+
+	if IncludeSystemDefined(req) {
+		collections = h.filterSystemCollections(filter.ExtractQueryParams().Params)
+		ctx.Logger.Info(fmt.Sprintf("Included %d system defined collections", len(collections)))
+	}
+
+	totalCount := len(collections)
+
+	// first check to see if the system collections are enough for the paging
+	if len(collections) > 0 {
+		if len(collections) < (filter.Limit + filter.Offset) {
+			userFilter := &abstractions.QueryFilter{
+				Limit:  max(0, filter.Limit-len(collections)),
+				Offset: max(0, filter.Offset-len(collections)),
+				Params: filter.Params,
+			}
+			queryResults, err := storage.GetCollections(userFilter)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return
+			}
+			collections = append(collections, queryResults.Items...)
+			totalCount += queryResults.TotalCount
+		}
+	} else {
+		// no system collections so normal flow for user collections
+		queryResults, err := storage.GetCollections(filter)
+		if err != nil {
+			w.Error(err, ctx.RequestID)
+			return
+		}
+		collections = append(collections, queryResults.Items...)
+		totalCount += queryResults.TotalCount
+	}
+
+	page, err := CreatePage(ctx, totalCount, filter.Offset, filter.Limit, req)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
 
-	systemDefined := IncludeSystemDefined(req)
-	ctx.Logger.Info("Include system defined collections", "system_defined", systemDefined)
-
-	res, err := storage.GetCollections(filter)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-	page, err := CreatePage(ctx, res.TotalCount, filter.Offset, filter.Limit, req)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-	w.WriteJSON(api.CollectionResourceList{
+	result := api.CollectionResourceList{
 		Page:  *page,
-		Items: res.Items,
-	}, 200)
+		Items: collections[:min(len(collections), filter.Limit)],
+	}
+
+	w.WriteJSON(result, 200)
 }
 
 // HandleCreateCollection handles POST /api/v1/evaluations/collections

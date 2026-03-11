@@ -472,23 +472,17 @@ func (tc *scenarioConfig) getFile(fileName string) (string, error) {
 	return string(contents), nil
 }
 
-func (tc *scenarioConfig) isMLFlow() bool {
-	return os.Getenv("MLFLOW_TRACKING_URI") != ""
-}
-
 func (tc *scenarioConfig) substituteValues(body string) (string, error) {
 	re := regexp.MustCompile(`\{\{([^}]*)\}\}`)
 	for strings.Contains(body, "{{") {
 		match := re.FindStringSubmatch(body)
 		if len(match) > 1 {
-			if strings.HasPrefix(match[1], mlflowPrefix) {
+			if after, ok := strings.CutPrefix(match[1], mlflowPrefix); ok {
 				// Use the literal after mlflow: as the experiment name. When MLflow is configured,
 				// it could be resolved from MLflow; for tests without MLflow, this allows name-based
 				// search to match stored jobs.
-				v := strings.TrimPrefix(match[1], mlflowPrefix)
-				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), v)
-			} else if strings.HasPrefix(match[1], envPrefix) {
-				raw := strings.TrimPrefix(match[1], envPrefix)
+				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), after)
+			} else if raw, ok0 := strings.CutPrefix(match[1], envPrefix); ok0 {
 				envName, fallback, hasFallback := strings.Cut(raw, "|")
 				value, ok := os.LookupEnv(envName)
 				if !ok {
@@ -499,12 +493,12 @@ func (tc *scenarioConfig) substituteValues(body string) (string, error) {
 					}
 				}
 				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), value)
-			} else if strings.HasPrefix(match[1], valuePrefix) {
-				n := strings.TrimPrefix(match[1], valuePrefix)
+			} else if after1, ok1 := strings.CutPrefix(match[1], valuePrefix); ok1 {
+				n := after1
 				v := tc.values[n]
 				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), v)
 			} else {
-				return "", tc.logError(fmt.Errorf("unknown substitutionvalue: %s", match[1]))
+				return "", tc.logError(fmt.Errorf("unknown substitution value: %s", match[1]))
 			}
 		}
 	}

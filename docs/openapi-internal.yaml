@@ -596,6 +596,13 @@ paths:
             type: string
             title: Name
           description: Name to search for
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            title: Category
+          description: Category to search for
         - name: tags
           in: query
           required: false
@@ -1525,16 +1532,21 @@ components:
         - $ref: '#/components/schemas/ProviderConfig'
     ProviderResourceList:
       type: object
-      description: List of providers (no pagination links)
-      properties:
-        total_count:
-          type: integer
-          description: Total number of providers
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProviderResource'
-          description: Provider resources
+      description: List of provider resources with pagination
+      allOf:
+        - $ref: '#/components/schemas/Page'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProviderResource'
+              description: Provider resources
+            errors:
+              type: array
+              items:
+                type: string
+              description: Non-fatal errors (e.g. partial list)
     PatchOp:
       type: string
       enum:
@@ -1563,6 +1575,9 @@ components:
         name:
           type: string
           description: Collection name
+        category:
+          type: string
+          description: Collection category
         description:
           type: string
           description: Optional description
@@ -1584,6 +1599,8 @@ components:
             $ref: '#/components/schemas/BenchmarkConfig'
           description: Benchmarks in the collection
       required:
+        - name
+        - category
         - benchmarks
     CollectionResource:
       type: object
