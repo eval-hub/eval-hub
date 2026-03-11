@@ -27,30 +27,30 @@ func getString(value any) string {
 	return fmt.Sprintf("%v", value)
 }
 
+// GetValues parses a filter value into individual values and returns the operator.
+// Supports "," for AND (all must match) and "|" for OR (any must match) in any value.
 func GetValues(key string, values any) ([]any, string) {
-	switch key {
-	case "tags":
-		if strings.Contains(getString(values), ",") {
-			var results []any
-			for _, value := range strings.Split(getString(values), ",") {
-				results = append(results, value)
-			}
-			return results, "AND"
-		} else if strings.Contains(values.(string), "|") {
-			var results []any
-			for _, value := range strings.Split(getString(values), "|") {
-				results = append(results, value)
-			}
-			return results, "OR"
-		} else {
-			return []any{values}, "AND"
+	s := getString(values)
+	if strings.Contains(s, ",") {
+		parts := strings.Split(s, ",")
+		results := make([]any, 0, len(parts))
+		for _, p := range parts {
+			results = append(results, strings.TrimSpace(p))
 		}
-	default:
-		return []any{values}, "AND"
+		return results, "AND"
 	}
+	if strings.Contains(s, "|") {
+		parts := strings.Split(s, "|")
+		results := make([]any, 0, len(parts))
+		for _, p := range parts {
+			results = append(results, strings.TrimSpace(p))
+		}
+		return results, "OR"
+	}
+	return []any{values}, "AND"
 }
 
-// createFilterStatement builds a WHERE clause and args from the filter.
+// CreateFilterStatement builds a WHERE clause and args from the filter.
 // It validates each key against the table's allowlist, sorts keys deterministically,
 // and returns both the clause and args in matching order. Returns an error if any
 // filter key is not in the allowlist (fail closed).
