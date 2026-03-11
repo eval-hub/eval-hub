@@ -110,7 +110,7 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 		return
 	}
 
-	allowedParams := []string{"limit", "offset", "name", "tags", "system_defined", "owner"}
+	allowedParams := []string{"limit", "offset", "name", "category", "tags", "system_defined", "owner"}
 	badParams := getAllParams(req, allowedParams...)
 	if len(badParams) > 0 {
 		// just report the first bad parameter
