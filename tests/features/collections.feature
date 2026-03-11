@@ -311,6 +311,9 @@ Feature: Collections Endpoint
     When I send a GET request to "/api/v1/evaluations/collections?tags=test-tag-2|test-tag-3"
     Then the response code should be 200
     And the array at path "items" in the response should have length 2
+    When I send a GET request to "/api/v1/evaluations/collections?tags=test-tag-2%7Ctest-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 2
     When I send a GET request to "/api/v1/evaluations/collections?name=test-collection-3"
     Then the response code should be 200
     And the array at path "items" in the response should have length 1

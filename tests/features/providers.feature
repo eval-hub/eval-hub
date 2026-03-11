@@ -414,6 +414,9 @@ Feature: Providers Endpoint
     When I send a GET request to "/api/v1/evaluations/providers?tags=test-tag-2|test-tag-3"
     Then the response code should be 200
     And the array at path "items" in the response should have length 2
+    When I send a GET request to "/api/v1/evaluations/providers?tags=test-tag-2%7Ctest-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 2
     When I send a GET request to "/api/v1/evaluations/providers?name=test-provider-3"
     Then the response code should be 200
     And the array at path "items" in the response should have length 1
