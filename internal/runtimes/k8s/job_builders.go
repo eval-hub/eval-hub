@@ -245,9 +245,9 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyNever,
-					InitContainers:    initContainers,
-					Containers:        containers,
-					Volumes:           jobVolumes,
+					InitContainers:     initContainers,
+					Containers:         containers,
+					Volumes:            jobVolumes,
 					ServiceAccountName: cfg.serviceAccountName,
 				},
 			},
