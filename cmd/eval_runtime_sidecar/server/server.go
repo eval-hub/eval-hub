@@ -54,14 +54,14 @@ func (s *SidecarServer) setupRoutes() (http.Handler, error) {
 		return nil, fmt.Errorf("failed to create handlers: %w", err)
 	}
 
-	s.setupAuthProxyRoutes(h, router)
+	s.setupSidecarProxyRoutes(h, router)
 
 	handler := http.Handler(router)
 
 	return handler, nil
 }
 
-func (s *SidecarServer) setupAuthProxyRoutes(h *handlers.Handlers, router *http.ServeMux) error {
+func (s *SidecarServer) setupSidecarProxyRoutes(h *handlers.Handlers, router *http.ServeMux) error {
 	router.HandleFunc("/api/v1/evaluations/", h.HandleEvalHubProxy)
 	router.HandleFunc("/mlflow/", h.HandleMLflowProxy)
 	return nil
