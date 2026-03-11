@@ -166,6 +166,12 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 
 	providers := []api.ProviderResource{}
 
+	// TODO fix(filter): make system-defined providers follow the same filter semantics as stored providers.
+	// CommonListFilters now feeds centralized query params into the system-provider path,
+	// but filterSystemProviders still does a raw tag equality check and evaluates each key independently.
+	// Queries like ?tags=a|b, ?tags=a,b, or ?name=x&tags=y will therefore behave differently for
+	// system providers than for storage-backed providers, and multi-key matches can append the same provider more than once.
+	// Please reuse the same AND/OR evaluation here instead of the bespoke matcher.
 	if IncludeSystemDefined(req) {
 		providers = h.filterSystemProviders(filter.ExtractQueryParams().Params)
 		ctx.Logger.Info(fmt.Sprintf("Included %d system defined providers", len(providers)))

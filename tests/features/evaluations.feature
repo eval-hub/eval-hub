@@ -615,6 +615,9 @@ Feature: Evaluations Endpoint
     When I send a GET request to "/api/v1/evaluations/jobs?tags=test-tag-2,test-tag-3"
     Then the response code should be 200
     And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/jobs?tags=test-tag-2&tags=test-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
     When I send a GET request to "/api/v1/evaluations/jobs?tags=test-tag-2|test-tag-3"
     Then the response code should be 200
     And the array at path "items" in the response should have length 2

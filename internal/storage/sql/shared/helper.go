@@ -2,6 +2,7 @@ package shared
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -78,7 +79,10 @@ func CreateFilterStatement(tenant api.Tenant, s SQLStatementsFactory, filter map
 
 	if len(filter) > 0 {
 		allowed := s.GetAllowedFilterColumns(tableName)
-		for key, values := range filter {
+		// Sort keys for deterministic query generation to avoid caching issues
+		keys := slices.Sorted(maps.Keys(filter))
+		for _, key := range keys {
+			values := filter[key]
 			if slices.Contains(allowed, key) {
 				allValues, operator := GetValues(key, values)
 				for _, value := range allValues {

@@ -53,8 +53,15 @@ func DecodeParam(v string) string {
 }
 
 func GetParam[T string | int | bool](r http_wrappers.RequestWrapper, name string, optional bool, defaultValue T) (T, error) {
-	values := r.Query(name)
-	if (len(values) == 0) || (values[0] == "") {
+	rawValues := r.Query(name)
+	// Ignore empty repeated query values before joining
+	values := make([]string, 0, len(rawValues))
+	for _, value := range rawValues {
+		if value != "" {
+			values = append(values, value)
+		}
+	}
+	if len(values) == 0 {
 		if !optional {
 			return defaultValue, serviceerrors.NewServiceError(messages.QueryParameterRequired, "ParameterName", name)
 		}
