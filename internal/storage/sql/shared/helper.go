@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -18,18 +19,25 @@ func ValidateFilter(filter []string, allowedColumns []string) error {
 	return nil
 }
 
+func getString(value any) string {
+	if v, ok := value.(string); ok {
+		return v
+	}
+	return fmt.Sprintf("%v", value)
+}
+
 func GetValues(key string, values any) ([]any, string) {
 	switch key {
 	case "tags":
-		if strings.Contains(values.(string), ",") {
+		if strings.Contains(getString(values), ",") {
 			var results []any
-			for _, value := range strings.Split(values.(string), ",") {
+			for _, value := range strings.Split(getString(values), ",") {
 				results = append(results, value)
 			}
 			return results, "AND"
 		} else if strings.Contains(values.(string), "|") {
 			var results []any
-			for _, value := range strings.Split(values.(string), "|") {
+			for _, value := range strings.Split(getString(values), "|") {
 				results = append(results, value)
 			}
 			return results, "OR"
