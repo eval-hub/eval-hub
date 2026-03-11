@@ -310,8 +310,6 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnv(t *testing.T) {
 }
 
 func TestCreateBenchmarkResourcesAddsInitContainerForS3TestData(t *testing.T) {
-	// Sobha TODO: fix this test please
-	t.Skip("Sobha TODO: fix this test please")
 
 	t.Setenv("SERVICE_URL", "http://service.example")
 	providerID := "provider-1"
@@ -329,6 +327,7 @@ func TestCreateBenchmarkResourcesAddsInitContainerForS3TestData(t *testing.T) {
 		logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper:    &KubernetesHelper{clientset: clientset},
 		providers: sampleProviders(providerID),
+		initImage: "quay.io/evalhub/evalhub:test", // required when S3 test data is configured
 	}
 
 	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0)
