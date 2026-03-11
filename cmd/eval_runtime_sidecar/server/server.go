@@ -63,7 +63,7 @@ func (s *SidecarServer) setupRoutes() (http.Handler, error) {
 
 func (s *SidecarServer) setupSidecarProxyRoutes(h *handlers.Handlers, router *http.ServeMux) error {
 	router.HandleFunc("/api/v1/evaluations/", h.HandleEvalHubProxy)
-	router.HandleFunc("/mlflow/", h.HandleMLflowProxy)
+	router.HandleFunc("/api/2.0/mlflow/", h.HandleMLflowProxy)
 	return nil
 }
 
