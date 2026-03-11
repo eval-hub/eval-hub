@@ -148,7 +148,7 @@ func TestServerSetupRoutes(t *testing.T) {
 		{http.MethodGet, "/openapi.yaml", http.StatusOK, ""},
 		{http.MethodGet, "/docs", http.StatusOK, ""},
 		// Evaluation endpoints
-		{http.MethodPost, "/api/v1/evaluations/jobs", http.StatusAccepted, `{"model": {"url": "http://test.com", "name": "test"}, "benchmarks": [{"id": "arc_easy", "provider_id": "lm_evaluation_harness"}]}`},
+		{http.MethodPost, "/api/v1/evaluations/jobs", http.StatusAccepted, `{"name": "test-evaluation-job", "model": {"url": "http://test.com", "name": "test"}, "benchmarks": [{"id": "arc_easy", "provider_id": "lm_evaluation_harness"}]}`},
 		{http.MethodGet, "/api/v1/evaluations/jobs", http.StatusOK, ""},
 		{http.MethodGet, "/api/v1/evaluations/jobs/test-id", http.StatusNotFound, ""},
 		// Collections
@@ -178,19 +178,19 @@ func TestServerSetupRoutes(t *testing.T) {
 			handler.ServeHTTP(w, req)
 
 			if w.Code != tc.status {
-				t.Errorf("Expected status %d for %s %s, got %d with message %s", tc.status, tc.method, tc.path, w.Code, w.Body.String())
+				t.Fatalf("Expected status %d for %s %s, got %d with message %s", tc.status, tc.method, tc.path, w.Code, w.Body.String())
 			}
 
 			if (tc.method == http.MethodPost) && (w.Body.String() != "") && (strings.HasPrefix(tc.path, "/api/v1/evaluations/jobs")) {
 				var body map[string]interface{}
 				if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-					t.Errorf("Failed to unmarshal body: %v", err)
+					t.Fatalf("Failed to unmarshal body: %v", err)
 				}
 				id := getKeyAsString(body["resource"].(map[string]interface{}), "id")
 				if id != "" {
 					evaluationIds = append(evaluationIds, id)
 				} else {
-					t.Errorf("Failed to find id in response body: %s", w.Body.String())
+					t.Fatalf("Failed to find id in response body: %s", w.Body.String())
 				}
 			}
 		})

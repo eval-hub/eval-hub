@@ -101,7 +101,10 @@ func (s *SQLStorage) UpdateCollection(collection *api.CollectionResource) error 
 			return err
 		}
 		if persistedCollection.Resource.Owner == "system" {
-			return se.NewServiceError(messages.BadRequest, "Type", "collection", "ResourceId", collection.Resource.ID, "Error", "System collections cannot be updated")
+			return se.NewServiceError(
+				messages.SystemCollection,
+				"CollectionID", collection.Resource.ID,
+			)
 		}
 		persistedCollection.CollectionConfig = collection.CollectionConfig
 		return s.updateCollectionTransactional(txn, collection.Resource.ID, persistedCollection)
@@ -153,25 +156,28 @@ func (s *SQLStorage) PatchCollection(id string, patches *api.Patch) error {
 			return err
 		}
 		if persistedCollection.Resource.Owner == "system" {
-			return se.NewServiceError(messages.BadRequest, "Type", "collection", "ResourceId", id, "Error", "System collections cannot be patched")
+			return se.NewServiceError(
+				messages.SystemCollection,
+				"CollectionID", id,
+			)
 		}
-		//conevert persistedCollection to json
+		// convert persistedCollection to json
 		persistedCollectionJSON, err := s.createCollectionEntity(persistedCollection)
 		if err != nil {
 			return err
 		}
-		//apply the patches to the persistedCollectionJSON
+		// apply the patches to the persistedCollectionJSON
 		patchedCollectionJSON, err := applyPatches(string(persistedCollectionJSON), patches)
 		if err != nil {
 			return err
 		}
-		//convert the patchedCollectionJSON back to a CollectionResource
+		// convert the patchedCollectionJSON back to a CollectionResource
 		var patchedCollection api.CollectionResource
 		err = json.Unmarshal([]byte(patchedCollectionJSON), &patchedCollection)
 		if err != nil {
 			return err
 		}
-		//convert the patched config back to a CollectionResource
+		// convert the patched config back to a CollectionResource
 		resource := patchedCollection.Resource
 		if resource.CreatedAt.IsZero() {
 			resource.CreatedAt = time.Now()

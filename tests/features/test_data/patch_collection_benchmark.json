@@ -1,1 +1,7 @@
-[{"op":"replace","path":"/benchmarks/0/id","value":"patched-benchmark-id"}]
+[
+    {
+        "op": "replace",
+        "path": "/benchmarks/0/id",
+        "value": "patched-benchmark-id"
+    }
+]

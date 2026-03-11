@@ -67,8 +67,9 @@ type scenarioConfig struct {
 
 	reqHeaders map[string]string
 
-	lastURL string
-	lastId  string
+	lastURL    string
+	lastMethod string
+	lastId     string
 
 	assets map[string][]string
 
@@ -648,6 +649,7 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 		return err
 	}
 	tc.lastURL = endpoint
+	tc.lastMethod = method
 	entity, err := tc.getRequestBody(body)
 	if err != nil {
 		return err
@@ -735,7 +737,7 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 
 func (tc *scenarioConfig) theResponseStatusShouldBe(status int) error {
 	if tc.response.StatusCode != status {
-		return tc.logError(fmt.Errorf("expected status %d, got %d with response %s", status, tc.response.StatusCode, string(tc.body)))
+		return tc.logError(fmt.Errorf("expected status %d, got %d for request %s %s with response %s", status, tc.response.StatusCode, tc.lastMethod, tc.lastURL, string(tc.body)))
 	}
 	return nil
 }
@@ -843,11 +845,19 @@ func (tc *scenarioConfig) theResponseShouldHaveSchemaAs(body *godog.DocString) e
 	return tc.compareJSONSchema(body.Content, string(tc.body))
 }
 
+func (tc *scenarioConfig) unquoteJsonPath(jsonPath string) string {
+	s := strings.ReplaceAll(jsonPath, "&quot;", "\"")
+	// s = strings.ReplaceAll(jsonPath, "&#39;", "'")
+	return s
+}
+
 func (tc *scenarioConfig) getJsonPath(jsonPath string) (string, error) {
+	jsonPath = tc.unquoteJsonPath(jsonPath)
+
 	// first check the jsonpath is valid
 	_, err := jsonpath.New(jsonPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to validate JSON path %s: %w", jsonPath, err) // logging of the error is done by the caller
+		return "", fmt.Errorf("failed to validate JSON path %s: %w : %s", jsonPath, err, string(tc.body)) // logging of the error is done by the caller
 	}
 
 	raw, err := tc.getJsonPathValue(jsonPath)

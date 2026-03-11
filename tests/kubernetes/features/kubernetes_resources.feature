@@ -27,7 +27,7 @@ Feature: Kubernetes Resources Validation
     And the ConfigMap data "job.json" should contain field "model.url"
     And the ConfigMap data "job.json" should contain field "model.name"
     And the ConfigMap data "job.json" should contain field "callback_url"
-    And the ConfigMap data "job.json" should contain field "benchmark_config" as object
+    And the ConfigMap data "job.json" should contain field "parameters" as object
     And the ConfigMap should have an ownerReference of kind "Job"
     And the ConfigMap ownerReference should have controller set to true
     And the ConfigMap ownerReference should reference the created Job
@@ -58,8 +58,6 @@ Feature: Kubernetes Resources Validation
     And the Job pod template should have container named "adapter"
     And the container should have a non-empty image
     And the container should have "imagePullPolicy" set to "Always"
-    And the container should have environment variable "JOB_ID" set to the job ID
-    And the container should have environment variable "EVALHUB_URL" derived from service account name
     And the container command should be a valid array
     And the container command should not contain empty strings
     And the container command should have trimmed whitespace from each element
@@ -78,7 +76,6 @@ Feature: Kubernetes Resources Validation
     And the container should have volumeMount "evalhub-service-ca" at path "/etc/pki/ca-trust/source/anchors"
     And the volumeMount "evalhub-service-ca" should be readOnly
     And the container should have environment variables from the provider configuration
-    And the environment variable "JOB_ID" should not be overridden by provider variables
 
   Scenario: Job and ConfigMap specification (multi-benchmark)
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_multi_benchmark.json"
@@ -91,8 +88,8 @@ Feature: Kubernetes Resources Validation
     And each Job should have a unique benchmark_id label
     And each ConfigMap should have a unique benchmark_id label
     And for benchmark "arc_easy" the ConfigMap data "job.json" should contain field "num_examples" with value from parameters
-    And for benchmark "hellaswag" the ConfigMap data "job.json" field "benchmark_config" should not contain "num_examples"
-    And for benchmark "hellaswag" the ConfigMap data "job.json" should contain field "benchmark_config" as empty object
+    And for benchmark "hellaswag" the ConfigMap data "job.json" field "parameters" should not contain "num_examples"
+    And for benchmark "hellaswag" the ConfigMap data "job.json" should contain field "parameters" as empty object
 
   Scenario: Delete evaluation job behaviors
     Given I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_basic.json"

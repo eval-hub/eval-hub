@@ -43,6 +43,7 @@
         }
       ]
     },
+    "name": "test-evaluation-job",
     "timeout_minutes": 60,
     "retry_attempts": 3
   }

@@ -172,11 +172,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	ttl := defaultJobTTLSeconds
 	backoff := defaultJobBackoffLimit
 
-	adapterCallbackURL := cfg.sidecarBaseURL
-	if cfg.localMode {
-		adapterCallbackURL = cfg.evalHubURL
-	}
-	adapterEnvVars := buildEnvVars(cfg, adapterCallbackURL)
+	adapterEnvVars := buildEnvVars(cfg)
 	resources, err := buildResources(cfg)
 	if err != nil {
 		return nil, err
@@ -594,25 +590,9 @@ func boolPtr(value bool) *bool {
 
 // buildEnvVars builds environment variables for a container. evalHubURLValue is the value for EVALHUB_URL
 // (adapter: cfg.evalHubURL in local mode, cfg.sidecarBaseURL otherwise; sidecar: always cfg.evalHubURL).
-func buildEnvVars(cfg *jobConfig, evalHubURLValue string) []corev1.EnvVar {
+func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 	var env []corev1.EnvVar
 	seen := map[string]bool{}
-
-	// Add JOB_ID
-	env = append(env, corev1.EnvVar{
-		Name:  envJobIDName,
-		Value: cfg.jobID,
-	})
-	seen[envJobIDName] = true
-
-	// Add EVALHUB_URL if configured
-	if evalHubURLValue != "" {
-		env = append(env, corev1.EnvVar{
-			Name:  envEvalHubURLName,
-			Value: evalHubURLValue,
-		})
-		seen[envEvalHubURLName] = true
-	}
 
 	// Add MLFlow environment variables if tracking is configured
 	if cfg.mlflowTrackingURI != "" {
@@ -679,9 +659,6 @@ func buildEnvVars(cfg *jobConfig, evalHubURLValue string) []corev1.EnvVar {
 func buildSidecarEnvVars(cfg *jobConfig, evalHubURLValue string) []corev1.EnvVar {
 	var env []corev1.EnvVar
 	seen := map[string]bool{}
-
-	env = append(env, corev1.EnvVar{Name: envJobIDName, Value: cfg.jobID})
-	seen[envJobIDName] = true
 
 	if evalHubURLValue != "" {
 		env = append(env, corev1.EnvVar{Name: envEvalHubURLName, Value: evalHubURLValue})

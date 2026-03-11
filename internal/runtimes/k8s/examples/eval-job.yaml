@@ -36,11 +36,7 @@ spec:
           image: quay.io/evalhub/adapter:latest
           imagePullPolicy: Always
           command: []
-          env:
-            - name: JOB_ID
-              value: "001"
-            - name: EVALHUB_URL
-              value: "https://evalhub.evalhub.svc.cluster.local:8443"
+          env: []
           resources:
             requests:
               cpu: "250m"

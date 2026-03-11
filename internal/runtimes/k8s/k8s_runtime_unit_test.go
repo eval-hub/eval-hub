@@ -326,6 +326,7 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnv(t *testing.T) {
 }
 
 func TestCreateBenchmarkResourcesAddsInitContainerForS3TestData(t *testing.T) {
+
 	t.Setenv("SERVICE_URL", "http://service.example")
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)

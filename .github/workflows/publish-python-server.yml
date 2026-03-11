@@ -55,7 +55,7 @@ jobs:
         with:
           name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
           path: ${{ matrix.output }}
-          retention-days: 1
+          retention-days: 7
 
   build-wheels:
     name: Build Python wheels
@@ -138,7 +138,7 @@ jobs:
         with:
           name: wheel-${{ matrix.platform }}-${{ matrix.arch }}
           path: python-server/dist/*.whl
-          retention-days: 1
+          retention-days: 7
 
   publish:
     name: Publish to PyPI

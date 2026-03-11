@@ -146,7 +146,7 @@ class MyAdapter(FrameworkAdapter):
     def run_benchmark_job(self, config: JobSpec, callbacks: JobCallbacks) -> JobResults:
         # run your evaluation logic, report progress via callbacks
         callbacks.report_status(JobStatusUpdate(status=JobStatus.RUNNING, progress=0.5))
-        score = evaluate(config.model, config.benchmark_config)
+        score = evaluate(config.model, config.parameters)
         return JobResults(
             id=config.id,
             benchmark_id=config.benchmark_id,

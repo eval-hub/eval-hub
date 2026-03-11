@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
+	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/http_wrappers"
 	"github.com/eval-hub/eval-hub/internal/logging"
@@ -44,6 +45,14 @@ func (s *Server) newExecutionContext(r *http.Request) *executioncontext.Executio
 
 	user := r.Header.Get(USER_HEADER)
 	tenant := r.Header.Get(TENANT_HEADER)
+
+	// add the tenant and user to the logger
+	if tenant != "" {
+		enhancedLogger = enhancedLogger.With(constants.LOG_TENANT, tenant)
+	}
+	if user != "" {
+		enhancedLogger = enhancedLogger.With(constants.LOG_USER, user)
+	}
 
 	// Use r.Context() so OTEL trace context (and the HTTP span from otelhttp) propagates
 	// to handlers and downstream calls (storage, runtime, mlflow). Using context.Background()

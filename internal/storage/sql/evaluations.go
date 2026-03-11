@@ -232,9 +232,9 @@ func (s *SQLStorage) updateEvaluationJobTxn(txn *sql.Tx, id string, status api.O
 }
 
 // validateBenchmarkExists checks that the event's benchmark is valid for the job (in job.Benchmarks or in the job's collection).
-func (s *SQLStorage) validateBenchmarkExists(job *api.EvaluationJobResource, runStatus *api.StatusEvent) error {
+func (s *SQLStorage) validateBenchmarkExists(job *api.EvaluationJobResource, runStatus *api.StatusEvent, getCollection evalcommon.GetCollectionFunc) error {
 	event := runStatus.BenchmarkStatusEvent
-	benchmarks, err := evalcommon.GetJobBenchmarks(job, s.GetCollection)
+	benchmarks, err := evalcommon.GetJobBenchmarks(job, getCollection)
 	if err != nil {
 		s.logger.Error("Failed to get job benchmarks", "error", err, "job_id", job.Resource.ID)
 		return err
@@ -277,7 +277,12 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 			return err
 		}
 
-		err = s.validateBenchmarkExists(job, runStatus)
+		getCollection := func(collectionID string) (*api.CollectionResource, error) {
+			// TODO - cache the collection
+			return s.getCollectionTransactional(txn, collectionID)
+		}
+
+		err = s.validateBenchmarkExists(job, runStatus, getCollection)
 		if err != nil {
 			return err
 		}
@@ -294,7 +299,7 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 		}
 		commonStorage.UpdateBenchmarkStatus(job, runStatus, &benchmark)
 
-		outcome := s.computeBenchmarkTestResult(job, runStatus.BenchmarkStatusEvent)
+		outcome := s.computeBenchmarkTestResult(job, runStatus.BenchmarkStatusEvent, getCollection)
 
 		// if the run status is terminal, we need to update the results
 		if api.IsBenchmarkTerminalState(runStatus.BenchmarkStatusEvent.Status) {
@@ -315,7 +320,10 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 		}
 
 		// get the overall job status
-		overallState, message := commonStorage.GetOverallJobStatus(s.logger, job)
+		overallState, message, err := commonStorage.GetOverallJobStatus(s.logger, job, getCollection)
+		if err != nil {
+			return err
+		}
 		job.Status.State = overallState
 		job.Status.Message = message
 
@@ -323,7 +331,7 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 
 		// compute the job test result only if the job is completed
 		if overallState == api.OverallStateCompleted {
-			s.computeJobTestResult(job)
+			s.computeJobTestResult(job, getCollection)
 		}
 
 		entity := EvaluationJobEntity{
@@ -338,13 +346,13 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 	return err
 }
 
-func (s *SQLStorage) computeJobTestResult(job *api.EvaluationJobResource) {
+func (s *SQLStorage) computeJobTestResult(job *api.EvaluationJobResource, getCollection evalcommon.GetCollectionFunc) {
 	if job.Results == nil || job.Results.Benchmarks == nil || len(job.Results.Benchmarks) == 0 {
 		return
 	}
 	var sumOfWeightedScores float32 = 0.0
 	var sumOfWeights float32 = 0.0
-	resolvedJobBenchmarks, err := evalcommon.GetJobBenchmarks(job, s.GetCollection)
+	resolvedJobBenchmarks, err := evalcommon.GetJobBenchmarks(job, getCollection)
 	if err != nil {
 		s.logger.Error("Failed to get job benchmarks", "error", err, "job_id", job.Resource.ID)
 		return
@@ -397,9 +405,9 @@ func (s *SQLStorage) computeJobTestResult(job *api.EvaluationJobResource) {
 	job.Results.Test = jobTest
 }
 
-func (s *SQLStorage) computeBenchmarkTestResult(job *api.EvaluationJobResource, benchmarkStatusEvent *api.BenchmarkStatusEvent) *api.BenchmarkTest {
+func (s *SQLStorage) computeBenchmarkTestResult(job *api.EvaluationJobResource, benchmarkStatusEvent *api.BenchmarkStatusEvent, getCollection evalcommon.GetCollectionFunc) *api.BenchmarkTest {
 	// job could have benchmarks array or it could have collection. If it has collection, we need to get the benchmarks from the collection
-	benchmarks, err := evalcommon.GetJobBenchmarks(job, s.GetCollection)
+	benchmarks, err := evalcommon.GetJobBenchmarks(job, getCollection)
 	if err != nil {
 		s.logger.Error("Failed to get job benchmarks", "error", err, "job_id", job.Resource.ID)
 		return nil

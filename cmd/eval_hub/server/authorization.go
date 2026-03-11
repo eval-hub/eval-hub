@@ -40,10 +40,9 @@ func WithAuthorization(next http.Handler, logger *slog.Logger, client *kubernete
 		}
 		decision, reason, err := auth.AuthorizeRequest(r.Context(), r)
 		switch decision {
-
 		case authorizer.DecisionNoOpinion:
-			logger.Error("Bad request", "path", r.URL.Path, "method", r.Method, "reason", reason)
-			writeError(w, messages.BadRequest, "Error", reason)
+			logger.Error("Unable to authorize bad request", "path", r.URL.Path, "method", r.Method, "reason", reason)
+			writeError(w, messages.BadAuthorizationRequest, "Error", reason)
 			return
 		case authorizer.DecisionDeny:
 			logger.Error("Request forbidden", "path", r.URL.Path, "method", r.Method, "reason", reason)

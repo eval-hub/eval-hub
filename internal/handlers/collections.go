@@ -95,6 +95,7 @@ func (h *Handlers) HandleCreateCollection(ctx *executioncontext.ExecutionContext
 // HandleGetCollection handles GET /api/v1/evaluations/collections/{collection_id}
 func (h *Handlers) HandleGetCollection(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
+
 	logging.LogRequestStarted(ctx)
 
 	// Extract ID from path
@@ -205,6 +206,7 @@ func (h *Handlers) HandlePatchCollection(ctx *executioncontext.ExecutionContext,
 // HandleDeleteCollection handles DELETE /api/v1/evaluations/collections/{collection_id}
 func (h *Handlers) HandleDeleteCollection(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
+
 	logging.LogRequestStarted(ctx)
 
 	// Extract ID from path

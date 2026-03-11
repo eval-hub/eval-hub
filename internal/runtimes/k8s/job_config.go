@@ -118,11 +118,11 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		mlflowWorkspace = namespace
 	}
 
-	// Build ServiceAccount name, ConfigMap name, and EvalHub URL if instance name is set.
+	// Build ServiceAccount name and ConfigMap name if instance name is set.
 	// The SA name uses the instance namespace (not the tenant namespace) to match
 	// the operator's naming convention: <instance>-<instance-namespace>-job.
 	instanceNamespace := readInClusterNamespace()
-	var serviceAccountName, serviceCAConfigMap, evalHubURL string
+	var serviceAccountName, serviceCAConfigMap string
 	if evalHubInstanceName != "" {
 		saNamespace := instanceNamespace
 		if saNamespace == "" {
@@ -130,11 +130,6 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		}
 		serviceAccountName = evalHubInstanceName + "-" + saNamespace + serviceAccountNameSuffix
 		serviceCAConfigMap = evalHubInstanceName + serviceCAConfigMapSuffix
-		// EvalHub URL points to the kube-rbac-proxy HTTPS endpoint in the instance namespace.
-		// Use saNamespace (which has the local-mode fallback applied) to avoid a malformed host
-		// when instanceNamespace is empty.
-		evalHubURL = fmt.Sprintf("https://%s.%s.svc.cluster.local:%s",
-			evalHubInstanceName, saNamespace, defaultEvalHubPort)
 	}
 
 	// Extract OCI credentials secret name from exports config (not forwarded to jobSpec)
@@ -178,7 +173,6 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		jobSpec:              *spec,
 		serviceAccountName:   serviceAccountName,
 		serviceCAConfigMap:   serviceCAConfigMap,
-		evalHubURL:           evalHubURL,
 		evalHubInstanceName:  evalHubInstanceName,
 		mlflowTrackingURI:    mlflowTrackingURI,
 		mlflowWorkspace:      mlflowWorkspace,

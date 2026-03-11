@@ -8,7 +8,7 @@ import (
 )
 
 func TestNewServiceError(t *testing.T) {
-	err := NewServiceError(messages.BadRequest, "Error", "test error")
+	err := NewServiceError(messages.InternalServerError, "Error", "test error")
 	if err == nil {
 		t.Fatal("NewServiceError returned nil")
 	}
@@ -24,7 +24,7 @@ func TestNewServiceError(t *testing.T) {
 }
 
 func TestWithRollback_Method(t *testing.T) {
-	err := NewServiceError(messages.BadRequest, "Error", "test")
+	err := NewServiceError(messages.InternalServerError, "Error", "test")
 	wrapped := err.WithRollback()
 	if !wrapped.ShouldRollback() {
 		t.Error("WithRollback() should set rollback to true")
@@ -35,7 +35,7 @@ func TestWithRollback_Method(t *testing.T) {
 }
 
 func TestWithRollback_Func_ServiceError(t *testing.T) {
-	err := NewServiceError(messages.BadRequest, "Error", "test")
+	err := NewServiceError(messages.InternalServerError, "Error", "test")
 	wrapped := WithRollback(err)
 	if wrapped == nil {
 		t.Fatal("WithRollback returned nil")

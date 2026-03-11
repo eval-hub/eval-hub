@@ -10,5 +10,6 @@
         "num_examples": 10
       }
     }
-  ]
+  ],
+  "name": "test-evaluation-job"
 }

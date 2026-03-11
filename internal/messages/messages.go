@@ -109,6 +109,13 @@ var (
 		"system_provider",
 	)
 
+	// SystemCollection System collection '{{.CollectionID}}' cannot be modified or deleted.
+	SystemCollection = createMessage(
+		constants.HTTPCodeBadRequest,
+		"System collection '{{.CollectionID}}' cannot be modified or deleted.",
+		"system_collection",
+	)
+
 	// MLFlowRequiredForExperiment MLflow is required for experiment tracking. Please configure MLflow in the service configuration and try again.
 	MLFlowRequiredForExperiment = createMessage(
 		constants.HTTPCodeBadRequest,
@@ -157,6 +164,20 @@ var (
 		"query_failed",
 	)
 
+	// CollectionEmpty The collection {{.CollectionID}} does not have any benchmarks.
+	CollectionEmpty = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The collection {{.CollectionID}} does not have any benchmarks.",
+		"collection_empty",
+	)
+
+	// EvaluationJobEmpty The evaluation job {{.EvaluationJobID}} does not have any benchmarks.
+	EvaluationJobEmpty = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The evaluation job {{.EvaluationJobID}} does not have any benchmarks.",
+		"evaluation_job_empty",
+	)
+
 	// InternalServerError An internal server error occurred: '{{.Error}}'.
 	InternalServerError = createMessage(
 		constants.HTTPCodeInternalServerError,
@@ -185,17 +206,18 @@ var (
 		"unknown_error",
 	)
 
-	// BadRequest The request is invalid: '{{.Error}}'. Please check the request and try again.
-	BadRequest = createMessage(
-		constants.HTTPCodeBadRequest,
-		"The request is invalid: '{{.Error}}'. Please check the request and try again.",
-		"bad_request",
-	)
-
+	// Forbidden The request is not authorized.
 	Forbidden = createMessage(
 		constants.HTTPCodeForbidden,
 		"The request is not authorized.",
 		"forbidden",
+	)
+
+	// BadAuthorizationRequest Bad request: '{{.Error}}'.
+	BadAuthorizationRequest = createMessage(
+		constants.HTTPCodeBadRequest,
+		"Bad request: '{{.Error}}'.",
+		"unable_to_authorize_request",
 	)
 
 	// Unauthorized The request is not authenticated: '{{.Error}}'.

@@ -165,7 +165,6 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		"benchmark_id", benchmarkID,
 		"service_account", jobConfig.serviceAccountName,
 		"service_ca_configmap", jobConfig.serviceCAConfigMap,
-		"evalhub_url", jobConfig.evalHubURL,
 	)
 	configMap, err := buildConfigMap(jobConfig)
 	if err != nil {
