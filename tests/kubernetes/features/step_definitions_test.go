@@ -190,6 +190,7 @@ func (tc *testContext) cleanup(ctx context.Context) error {
 		}
 		req, err := http.NewRequestWithContext(ctx, "DELETE", tc.baseURL+"/api/v1/evaluations/jobs/"+jobID+"?hard_delete=true", nil)
 		if err == nil {
+			req.Header.Set("X-Tenant", tc.namespace)
 			authToken := os.Getenv("AUTH_TOKEN")
 			if authToken != "" {
 				req.Header.Set("Authorization", "Bearer "+authToken)
@@ -283,7 +284,6 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the Job pod template should have container named "([^"]*)"$`, tc.jobPodTemplateShouldHaveContainer)
 	ctx.Step(`^the container should have a non-empty image$`, tc.containerShouldHaveImage)
 	ctx.Step(`^the container should have "([^"]*)" set to "([^"]*)"$`, tc.containerShouldHaveValue)
-	ctx.Step(`^the container should have environment variable "([^"]*)" set to the job ID$`, tc.containerShouldHaveEnvVarWithJobID)
 	ctx.Step(`^the container securityContext should have "([^"]*)" set to (true|false)$`, tc.containerSecurityContextShouldHaveBoolValue)
 	ctx.Step(`^the container securityContext capabilities should drop "([^"]*)"$`, tc.containerSecurityContextCapabilitiesShouldDrop)
 	ctx.Step(`^the container securityContext should have seccompProfile type "([^"]*)"$`, tc.containerSecurityContextSeccompProfile)
@@ -293,7 +293,6 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the container should have memory limit set$`, tc.containerShouldHaveMemoryLimitSet)
 	ctx.Step(`^the Job pod template should have serviceAccountName derived from service account name$`, tc.jobPodTemplateShouldHaveServiceAccountFromSA)
 	ctx.Step(`^the volume "([^"]*)" should reference ConfigMap derived from service account name$`, tc.volumeShouldReferenceConfigMapFromSA)
-	ctx.Step(`^the container should have environment variable "([^"]*)" derived from service account name$`, tc.containerEnvVarShouldBeDerivedFromSA)
 
 	// Volume & Mount Steps
 	ctx.Step(`^the Job pod template should have volume "([^"]*)" of type ConfigMap$`, tc.jobPodTemplateShouldHaveConfigMapVolume)
@@ -309,7 +308,6 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the container command should not contain empty strings$`, tc.containerCommandShouldNotContainEmptyStrings)
 	ctx.Step(`^the container command should have trimmed whitespace from each element$`, tc.containerCommandShouldHaveTrimmedWhitespace)
 	ctx.Step(`^the container should have environment variables from the provider configuration$`, tc.containerShouldHaveProviderEnvVars)
-	ctx.Step(`^the environment variable "([^"]*)" should not be overridden by provider variables$`, tc.envVarShouldNotBeOverridden)
 
 	// Deletion Steps
 	ctx.Step(`^all Jobs associated with the evaluation job should be deleted$`, tc.allJobsShouldBeDeleted)
@@ -388,6 +386,8 @@ func (tc *testContext) iSendRequestWithBody(method, path, bodyFile string) error
 	if bodyReader != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+
+	req.Header.Set("X-Tenant", tc.namespace)
 
 	// Add authentication token if available
 	authToken := os.Getenv("AUTH_TOKEN")
@@ -1394,28 +1394,6 @@ func (tc *testContext) containerShouldHaveImage() error {
 	return nil
 }
 
-func (tc *testContext) containerShouldHaveEnvVarWithJobID(envVar string) error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
-	}
-	if tc.lastJobID == "" {
-		return fmt.Errorf("no job ID tracked")
-	}
-
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
-	for _, env := range container.Env {
-		if env.Name == envVar && env.Value == tc.lastJobID {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("Container %s does not have env var %s with value %s", container.Name, envVar, tc.lastJobID)
-}
-
 func (tc *testContext) containerSecurityContextShouldHaveBoolValue(field, value string) error {
 	if tc.currentJob == nil {
 		return fmt.Errorf("no current Job")
@@ -1578,56 +1556,6 @@ func (tc *testContext) volumeShouldReferenceConfigMapFromSA(volumeName string) e
 	}
 	expected := envValue + "-service-ca"
 	return tc.volumeShouldReferenceConfigMapByName(volumeName, expected)
-}
-
-func (tc *testContext) containerEnvVarShouldBeDerivedFromSA(targetEnvVar string) error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
-	}
-	envValue, err := tc.instanceNameFromServiceAccount()
-	if err != nil {
-		return err
-	}
-	expected := fmt.Sprintf("https://%s.%s.svc.cluster.local:8443", envValue, tc.namespace)
-	return tc.containerEnvVarShouldEqualValue(targetEnvVar, expected)
-}
-
-func (tc *testContext) containerEnvVarShouldEqualValue(envVar, expected string) error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
-	}
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
-	for _, env := range container.Env {
-		if env.Name == envVar {
-			if env.Value != expected {
-				return fmt.Errorf("Container %s env var %s expected %s, got %s", container.Name, envVar, expected, env.Value)
-			}
-			return nil
-		}
-	}
-	return fmt.Errorf("Container %s does not have env var %s", container.Name, envVar)
-}
-
-func (tc *testContext) getContainerEnvValue(envVar string) (string, error) {
-	if tc.currentJob == nil {
-		return "", fmt.Errorf("no current Job")
-	}
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return "", fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
-	for _, env := range container.Env {
-		if env.Name == envVar {
-			if env.Value == "" {
-				return "", fmt.Errorf("Container %s env var %s is empty", container.Name, envVar)
-			}
-			return env.Value, nil
-		}
-	}
-	return "", fmt.Errorf("Container %s does not have env var %s", container.Name, envVar)
 }
 
 func (tc *testContext) instanceNameFromServiceAccount() (string, error) {
@@ -1858,35 +1786,6 @@ func (tc *testContext) containerShouldHaveProviderEnvVars() error {
 	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	if len(container.Env) == 0 {
 		return fmt.Errorf("Container %s has no environment variables", container.Name)
-	}
-
-	return nil
-}
-
-func (tc *testContext) envVarShouldNotBeOverridden(envVar string) error {
-	// Validates that JOB_ID is present and not overridden
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
-	}
-
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
-	foundCount := 0
-	for _, env := range container.Env {
-		if env.Name == envVar {
-			foundCount++
-		}
-	}
-
-	if foundCount == 0 {
-		return fmt.Errorf("Container %s does not have env var %s", container.Name, envVar)
-	}
-
-	if foundCount > 1 {
-		return fmt.Errorf("Container %s has multiple definitions of env var %s", container.Name, envVar)
 	}
 
 	return nil
@@ -2279,6 +2178,7 @@ func (tc *testContext) fetchBenchmarkStatuses() ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
+	req.Header.Set("X-Tenant", tc.namespace)
 	authToken := os.Getenv("AUTH_TOKEN")
 	if authToken != "" {
 		req.Header.Set("Authorization", "Bearer "+authToken)

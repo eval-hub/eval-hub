@@ -58,8 +58,6 @@ Feature: Kubernetes Resources Validation
     And the Job pod template should have container named "adapter"
     And the container should have a non-empty image
     And the container should have "imagePullPolicy" set to "Always"
-    And the container should have environment variable "JOB_ID" set to the job ID
-    And the container should have environment variable "EVALHUB_URL" derived from service account name
     And the container command should be a valid array
     And the container command should not contain empty strings
     And the container command should have trimmed whitespace from each element
@@ -78,7 +76,6 @@ Feature: Kubernetes Resources Validation
     And the container should have volumeMount "evalhub-service-ca" at path "/etc/pki/ca-trust/source/anchors"
     And the volumeMount "evalhub-service-ca" should be readOnly
     And the container should have environment variables from the provider configuration
-    And the environment variable "JOB_ID" should not be overridden by provider variables
 
   Scenario: Job and ConfigMap specification (multi-benchmark)
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_multi_benchmark.json"

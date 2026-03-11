@@ -30,8 +30,6 @@ const (
 	testDataMountPath               = "/test_data"
 	serviceCAMountPath              = "/etc/pki/ca-trust/source/anchors"
 	specSuffix                      = "-spec"
-	envJobIDName                    = "JOB_ID"
-	envEvalHubURLName               = "EVALHUB_URL"
 	envMLFlowTrackingURIName        = "MLFLOW_TRACKING_URI"
 	envMLFlowWorkspaceName          = "MLFLOW_WORKSPACE"
 	envMLFlowTokenPathName          = "MLFLOW_TRACKING_TOKEN_PATH"
@@ -444,22 +442,6 @@ func boolPtr(value bool) *bool {
 func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 	var env []corev1.EnvVar
 	seen := map[string]bool{}
-
-	// Add JOB_ID
-	env = append(env, corev1.EnvVar{
-		Name:  envJobIDName,
-		Value: cfg.jobID,
-	})
-	seen[envJobIDName] = true
-
-	// Add EVALHUB_URL if configured
-	if cfg.evalHubURL != "" {
-		env = append(env, corev1.EnvVar{
-			Name:  envEvalHubURLName,
-			Value: cfg.evalHubURL,
-		})
-		seen[envEvalHubURLName] = true
-	}
 
 	// Add MLFlow environment variables if tracking is configured
 	if cfg.mlflowTrackingURI != "" {
