@@ -61,7 +61,7 @@ func CreateFilterStatement(tenant api.Tenant, s SQLStatementsFactory, filter map
 	index := 1
 
 	haveWhere := false
-	haveOperator := false
+	writtenFilterKey := false
 
 	// we must always filter by tenant_id if it exists
 	if !tenant.IsEmpty() {
@@ -74,7 +74,6 @@ func CreateFilterStatement(tenant api.Tenant, s SQLStatementsFactory, filter map
 			sb.WriteString(" AND ")
 		}
 		haveWhere = true
-		haveOperator = true
 	}
 
 	if len(filter) > 0 {
@@ -85,21 +84,33 @@ func CreateFilterStatement(tenant api.Tenant, s SQLStatementsFactory, filter map
 			values := filter[key]
 			if slices.Contains(allowed, key) {
 				allValues, operator := GetValues(key, values)
-				for _, value := range allValues {
-					if !haveWhere {
-						sb.WriteString(" WHERE ")
-						haveWhere = true
-					} else if !haveOperator {
+				wrapInParens := operator == "OR" && len(allValues) > 1
+
+				if !haveWhere {
+					sb.WriteString(" WHERE ")
+					haveWhere = true
+				} else if writtenFilterKey {
+					sb.WriteString(" AND ")
+				}
+
+				if wrapInParens {
+					sb.WriteString("(")
+				}
+				for i, value := range allValues {
+					if i > 0 {
 						sb.WriteString(" ")
 						sb.WriteString(operator)
 						sb.WriteString(" ")
 					}
-					haveOperator = false
 					cond, condArgs := s.CreateEntityFilterCondition(key, value, index, tableName)
 					index += len(condArgs)
 					sb.WriteString(cond)
 					args = append(args, condArgs...)
 				}
+				if wrapInParens {
+					sb.WriteString(")")
+				}
+				writtenFilterKey = true
 			} else {
 				// should never get here as we validate the filter before calling this function
 				s.GetLogger().Warn("Disallowed filter key", "key", key, "tableName", tableName)
