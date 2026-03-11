@@ -6,12 +6,13 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
-	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/proxies/eval_hub"
-	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/proxies/mlflow"
+	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/proxy"
 	"github.com/eval-hub/eval-hub/internal/config"
 )
+
+const ServiceAccountTokenPathDefault = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+const MLFlowTokenPathDefault = "/var/run/secrets/mlflow/token"
 
 // Handlers holds service state for HTTP handlers.
 // Having separate HTTP clients for eval-hub and mlflow since we might want to disable TLS for one but not the other etc..
@@ -25,7 +26,7 @@ type Handlers struct {
 }
 
 func New(config *config.Config, logger *slog.Logger) (*Handlers, error) {
-	evalHubHTTPClient, err := eval_hub.NewHTTPClient(config, config.IsOTELEnabled(), logger)
+	evalHubHTTPClient, err := proxy.NewEvalHubHTTPClient(config, config.IsOTELEnabled(), logger)
 	if err != nil {
 		logger.Error("failed to create eval-hub HTTP client", "error", err)
 		return nil, fmt.Errorf("failed to create eval-hub HTTP client: %w", err)
@@ -34,7 +35,7 @@ func New(config *config.Config, logger *slog.Logger) (*Handlers, error) {
 	if evalHubBaseURL == "" {
 		return nil, fmt.Errorf("EVALHUB_URL environment variable is not set")
 	}
-	mlflowHTTPClient, err := mlflow.NewHTTPClient(config, config.IsOTELEnabled(), logger)
+	mlflowHTTPClient, err := proxy.NewMLFlowHTTPClient(config, config.IsOTELEnabled(), logger)
 	if err != nil {
 		logger.Error("failed to create mlflow HTTP client", "error", err)
 		return nil, fmt.Errorf("failed to create mlflow HTTP client: %w", err)
@@ -57,25 +58,39 @@ func New(config *config.Config, logger *slog.Logger) (*Handlers, error) {
 	}, nil
 }
 
-// HandleEvalHubProxy forwards the request to the eval-hub service.
-func (h *Handlers) HandleEvalHubProxy(w http.ResponseWriter, r *http.Request) {
-	h.logger.Info("Handling eval-hub proxy request", "method", r.Method, "url", r.URL.Path)
-	var cfg *config.EvalHubClientConfig
-	if h.serviceConfig != nil && h.serviceConfig.Sidecar != nil {
-		cfg = h.serviceConfig.Sidecar.EvalHub
+func (h *Handlers) HandleProxyCall(w http.ResponseWriter, r *http.Request) {
+	targetBaseURL, tokenParams, httpClient, err := h.parseProxyCall(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
-	eval_hub.Proxy(h.logger, w, r, h.evalHubHTTPClient, h.evalHubBaseURL, cfg)
+	proxy.ProxyRequest(h.logger, w, r, httpClient, targetBaseURL, *tokenParams)
 }
 
-// HandleMLflowProxy forwards the request to the MLflow service.
-func (h *Handlers) HandleMLflowProxy(w http.ResponseWriter, r *http.Request) {
-	var cfg *config.MLFlowConfig
-	if h.serviceConfig != nil {
-		cfg = h.serviceConfig.MLFlow
+func (h *Handlers) parseProxyCall(r *http.Request) (string, *proxy.AuthTokenInput, *http.Client, error) {
+	switch r.RequestURI {
+	case "/api/v1/evaluations/":
+		ehClientConfig := h.serviceConfig.Sidecar.EvalHub
+		if ehClientConfig != nil {
+			return h.evalHubBaseURL, &proxy.AuthTokenInput{
+				TargetEndpoint:    "eval-hub",
+				AuthTokenPath:     ServiceAccountTokenPathDefault,
+				AuthToken:         ehClientConfig.Token,
+				TokenCacheTimeout: ehClientConfig.TokenCacheTimeout,
+			}, h.evalHubHTTPClient, nil
+		} else {
+			return "", nil, nil, fmt.Errorf("eval-hub proxy is not configured")
+		}
+	case "/api/2.0/mlflow/":
+		mlflowClientConfig := h.serviceConfig.MLFlow
+		if mlflowClientConfig != nil {
+			return h.mlflowTrackingURI, &proxy.AuthTokenInput{
+				TargetEndpoint: "mlflow",
+				AuthTokenPath:  MLFlowTokenPathDefault,
+			}, h.mlflowHTTPClient, nil
+		} else {
+			return "", nil, nil, fmt.Errorf("mlflow proxy is not configured")
+		}
 	}
-	var tokenCacheTimeout time.Duration
-	if h.serviceConfig != nil && h.serviceConfig.Sidecar != nil && h.serviceConfig.Sidecar.MLFlow != nil {
-		tokenCacheTimeout = h.serviceConfig.Sidecar.MLFlow.TokenCacheTimeout
-	}
-	mlflow.Proxy(h.logger, w, r, h.mlflowHTTPClient, h.mlflowTrackingURI, cfg, tokenCacheTimeout)
+	return "", nil, nil, fmt.Errorf("unknown proxy call: %s", r.RequestURI)
 }
