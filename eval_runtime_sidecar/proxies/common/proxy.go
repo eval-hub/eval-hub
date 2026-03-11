@@ -10,6 +10,23 @@ import (
 
 const DefaultTokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 
+// headersForLog returns a copy of h suitable for logging, with Authorization values obfuscated.
+func headersForLog(h http.Header) http.Header {
+	out := h.Clone()
+	if v := out.Get("Authorization"); v != "" {
+		if strings.HasPrefix(v, "Bearer ") {
+			out.Set("Authorization", "Bearer ***")
+		} else if strings.HasPrefix(v, "Basic ") {
+			out.Set("Authorization", "Basic ***")
+		} else {
+			out.Set("Authorization", "***")
+		}
+	} else {
+		out.Set("Authorization", "Empty")
+	}
+	return out
+}
+
 // SetAuthHeader sets the Authorization header on req if token is non-empty.
 // If token does not already start with "Bearer " or "Basic ", it is prefixed with "Bearer ".
 func SetAuthHeader(req *http.Request, token string) {
@@ -29,8 +46,13 @@ func ProxyRequest(logger *slog.Logger, w http.ResponseWriter, r *http.Request, c
 	if r.URL.RawQuery != "" {
 		targetURL += "?" + r.URL.RawQuery
 	}
-	body, _ := io.ReadAll(r.Body)
-	req, err := http.NewRequest(r.Method, targetURL, bytes.NewReader(body))
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, bytes.NewReader(body))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -44,7 +66,7 @@ func ProxyRequest(logger *slog.Logger, w http.ResponseWriter, r *http.Request, c
 	}
 	SetAuthHeader(req, authToken)
 
-	logger.Info("Proxying request", "method", req.Method, "url", req.URL.String(), "headers", req.Header)
+	logger.Info("Proxying request", "method", req.Method, "url", req.URL.String(), "headers", headersForLog(req.Header))
 	resp, err := client.Do(req)
 	if err != nil {
 		logger.Error("Error proxying request", "method", req.Method, "url", req.URL.String(), "error", err)
@@ -52,7 +74,7 @@ func ProxyRequest(logger *slog.Logger, w http.ResponseWriter, r *http.Request, c
 		return
 	}
 	defer resp.Body.Close()
-	logger.Info("Response from proxy", "method", req.Method, "url", req.URL.String(), "status", resp.StatusCode, "headers", resp.Header)
+	logger.Info("Response from proxy", "method", req.Method, "url", req.URL.String(), "status", resp.StatusCode)
 	for k, v := range resp.Header {
 		for _, vv := range v {
 			w.Header().Add(k, vv)

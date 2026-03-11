@@ -93,7 +93,9 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 
 	sidecarBaseURL := "http://localhost:8080"
 	if serviceConfig != nil && serviceConfig.Sidecar != nil {
-		sidecarBaseURL = strings.TrimSpace(serviceConfig.Sidecar.BaseURL)
+		if baseURL := strings.TrimSpace(serviceConfig.Sidecar.BaseURL); baseURL != "" {
+			sidecarBaseURL = baseURL
+		}
 	}
 
 	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
@@ -200,8 +202,8 @@ func sidecarImageAndResources(serviceConfig *config.Config) (image string, resou
 	resources = defaultSidecarResourceRequirements()
 	if serviceConfig != nil && serviceConfig.Sidecar != nil && serviceConfig.Sidecar.SidecarContainer != nil {
 		sc := serviceConfig.Sidecar.SidecarContainer
-		if sc.Image != "" {
-			image = strings.TrimSpace(sc.Image)
+		if trimmed := strings.TrimSpace(sc.Image); trimmed != "" {
+			image = trimmed
 		}
 		if sc.Resources != nil {
 			resources, err = resourceRequirementsFromConfig(sc.Resources)

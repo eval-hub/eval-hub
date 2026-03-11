@@ -24,6 +24,7 @@ env_mappings:
   MLFLOW_WORKSPACE: mlflow.workspace
   EVALHUB_CA_CERT_PATH: sidecar.eval_hub.ca_cert_path
   EVALHUB_INSECURE_SKIP_VERIFY: sidecar.eval_hub.insecure_skip_verify
+  SIDECAR_PORT: sidecar.port
 # Database configuration
 database:
   driver: sqlite

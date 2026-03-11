@@ -16,11 +16,9 @@ func ResolveAuthToken(logger *slog.Logger, authTokenPath, authToken string) stri
 		if err == nil {
 			logger.Info("Read auth token from file", "path", authTokenPath)
 			if token := strings.TrimSpace(string(tokenData)); token != "" {
-				logger.Debug("Auth token", "token", token)
 				return token
 			}
 		}
 	}
-	logger.Debug("Using static auth token", "token", authToken)
 	return authToken
 }

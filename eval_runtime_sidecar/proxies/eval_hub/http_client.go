@@ -22,7 +22,7 @@ func NewHTTPClient(config *config.Config, isOTELEnabled bool, logger *slog.Logge
 
 	timeout := defaultHTTPTimeout
 
-	if cfg != nil && cfg.HTTPTimeout > (0*time.Second) {
+	if cfg != nil && cfg.HTTPTimeout > 0 {
 		timeout = cfg.HTTPTimeout
 	}
 

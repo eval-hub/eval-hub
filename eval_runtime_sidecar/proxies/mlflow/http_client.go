@@ -14,14 +14,15 @@ const defaultHTTPTimeout = 30 * time.Second
 // NewHTTPClient creates an HTTP client for the MLflow service from config.
 // Returns (nil, nil) when MLFlow is not configured or TrackingURI is empty.
 func NewHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logger *slog.Logger) (*http.Client, error) {
-	mlflowConfig := serviceConfig.MLFlow
-	if mlflowConfig == nil || mlflowConfig.TrackingURI == "" {
+	if serviceConfig == nil || serviceConfig.MLFlow == nil || serviceConfig.MLFlow.TrackingURI == "" {
 		logger.Warn("MLFlow tracking URI is not set, skipping MLFlow client creation")
 		return nil, nil
 	}
 
+	mlflowConfig := serviceConfig.MLFlow
+
 	timeout := defaultHTTPTimeout
-	if timeout > (0 * time.Second) {
+	if mlflowConfig.HTTPTimeout > 0 {
 		timeout = mlflowConfig.HTTPTimeout
 	}
 

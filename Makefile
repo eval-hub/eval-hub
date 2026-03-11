@@ -95,16 +95,19 @@ stop-service:
 # Sidecar (eval-runtime-sidecar) starter/stopper
 SIDECAR_PID_FILE ?= $(BIN_DIR)/sidecar.pid
 SIDECAR_LOG ?= $(BIN_DIR)/sidecar.log
+SIDECAR_PORT ?= 8081
+# Config dir for sidecar (repo config; set EVAL_HUB_CONFIG_DIR or pass --configdir to override at runtime)
+SIDECAR_CONFIG_DIR ?= config
 
 build-sidecar: $(BIN_DIR) ## Build only the sidecar binary
 	@echo "Building $(SIDECAR_BINARY_NAME) with ${LDFLAGS}"
 	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(SIDECAR_BINARY_NAME) $(SIDECAR_CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(SIDECAR_BINARY_NAME)"
 
-start-sidecar: build-sidecar ## Run the sidecar in background (port $(SIDECAR_PORT))
+start-sidecar: build-sidecar ## Run the sidecar in background (port $(SIDECAR_PORT), config from $(SIDECAR_CONFIG_DIR))
 	@rm -f "${SIDECAR_PID_FILE}" && true
-	@echo "Running $(SIDECAR_BINARY_NAME) on port $(SIDECAR_PORT)..."
-	@./scripts/start_sidecar.sh "${SIDECAR_PID_FILE}" "${BIN_DIR}/$(SIDECAR_BINARY_NAME)" "${SIDECAR_LOG}" $(SIDECAR_PORT)
+	@echo "Running $(SIDECAR_BINARY_NAME) on port $(SIDECAR_PORT) (config: $(SIDECAR_CONFIG_DIR))..."
+	@SIDECAR_PORT="$(SIDECAR_PORT)" EVAL_HUB_CONFIG_DIR="$(SIDECAR_CONFIG_DIR)" ./scripts/start_sidecar.sh "${SIDECAR_PID_FILE}" "${BIN_DIR}/$(SIDECAR_BINARY_NAME)" "${SIDECAR_LOG}" "$(SIDECAR_PORT)" "$(SIDECAR_CONFIG_DIR)"
 
 stop-sidecar: ## Stop the sidecar
 	-./scripts/stop_server.sh "${SIDECAR_PID_FILE}"

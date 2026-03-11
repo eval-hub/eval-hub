@@ -155,6 +155,9 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		logger.Error("kubernetes job config error", "benchmark_id", benchmarkID, "error", err)
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
 	}
+	if r.serviceConfig == nil || r.serviceConfig.Service == nil {
+		return fmt.Errorf("service config is required")
+	}
 	jobConfig.testDataInitImage = r.serviceConfig.Service.EvalInitImage
 	logger.Info(
 		"kubernetes job config",

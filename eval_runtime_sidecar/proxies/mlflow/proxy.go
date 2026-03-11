@@ -15,14 +15,12 @@ func Proxy(logger *slog.Logger, w http.ResponseWriter, r *http.Request, client *
 		http.Error(w, "mlflow proxy not configured", http.StatusServiceUnavailable)
 		return
 	}
+
 	if cfg == nil {
 		http.Error(w, "mlflow not configured", http.StatusServiceUnavailable)
 		return
 	}
-	tokenPath := cfg.TokenPath
-	if tokenPath == "" {
-		tokenPath = common.DefaultTokenPath
-	}
-	token := common.ResolveAuthToken(logger, tokenPath, cfg.Token)
+
+	token := common.ResolveAuthToken(logger, cfg.TokenPath, cfg.Token)
 	common.ProxyRequest(logger, w, r, client, trackingURI, token)
 }
