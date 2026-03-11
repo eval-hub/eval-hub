@@ -160,12 +160,12 @@ func TestBuildJobSpecJSONHappyPath(t *testing.T) {
 	if spec.NumExamples == nil || *spec.NumExamples != 5 {
 		t.Fatalf("expected NumExamples 5, got %v", spec.NumExamples)
 	}
-	// num_examples should be stripped from BenchmarkConfig
-	if _, exists := spec.BenchmarkConfig["num_examples"]; exists {
-		t.Fatal("expected num_examples to be removed from BenchmarkConfig")
+	// num_examples should be stripped from Parameters
+	if _, exists := spec.Parameters["num_examples"]; exists {
+		t.Fatal("expected num_examples to be removed from Parameters")
 	}
-	if spec.BenchmarkConfig["foo"] != "bar" {
-		t.Fatalf("expected BenchmarkConfig[foo]=%q, got %q", "bar", spec.BenchmarkConfig["foo"])
+	if spec.Parameters["foo"] != "bar" {
+		t.Fatalf("expected Parameters[foo]=%q, got %q", "bar", spec.Parameters["foo"])
 	}
 	if spec.ExperimentName != "exp-1" {
 		t.Fatalf("expected ExperimentName %q, got %q", "exp-1", spec.ExperimentName)

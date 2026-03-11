@@ -24,7 +24,7 @@ data:
         "name": "example-model"
       },
       "num_examples": 50,
-      "benchmark_config": {
+      "parameters": {
         "max_tokens": 128,
         "temperature": 0.2
       },

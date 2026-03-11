@@ -83,16 +83,16 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 	if numExamples == nil || *numExamples != 50 {
 		t.Fatalf("expected job spec json num_examples to be %d, got %v", 50, numExamples)
 	}
-	benchmarkConfig := spec.BenchmarkConfig
+	parameters := spec.Parameters
 
-	if _, exists := benchmarkConfig["num_examples"]; exists {
-		t.Fatalf("expected benchmark_config not to include num_examples")
+	if _, exists := parameters["num_examples"]; exists {
+		t.Fatalf("expected parameters not to include num_examples")
 	}
-	if benchmarkConfig["max_tokens"] != 128 {
-		t.Fatalf("expected benchmark_config.max_tokens to be %d, got %v", 128, benchmarkConfig["max_tokens"])
+	if parameters["max_tokens"] != 128 {
+		t.Fatalf("expected parameters.max_tokens to be %d, got %v", 128, parameters["max_tokens"])
 	}
-	if benchmarkConfig["temperature"] != 0.2 {
-		t.Fatalf("expected benchmark_config.temperature to be 0.2, got %v", benchmarkConfig["temperature"])
+	if parameters["temperature"] != 0.2 {
+		t.Fatalf("expected parameters.temperature to be 0.2, got %v", parameters["temperature"])
 	}
 	callback := spec.CallbackURL
 	if callback == nil || *callback != serviceURL {
@@ -261,7 +261,7 @@ func TestBuildJobConfigAllowsNumExamplesOnly(t *testing.T) {
 
 	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0)
 	if err != nil {
-		t.Fatalf("expected no error for num_examples-only benchmark_config, got %v", err)
+		t.Fatalf("expected no error for num_examples-only parameters, got %v", err)
 	}
 
 	spec := cfg.jobSpec
@@ -270,10 +270,10 @@ func TestBuildJobConfigAllowsNumExamplesOnly(t *testing.T) {
 		t.Fatalf("expected job spec json num_examples to be %d, got %v", 10, numExamples)
 	}
 
-	benchmarkConfig := spec.BenchmarkConfig
+	parameters := spec.Parameters
 
-	if len(benchmarkConfig) != 0 {
-		t.Fatalf("expected empty benchmark_config, got %v", benchmarkConfig)
+	if len(parameters) != 0 {
+		t.Fatalf("expected empty parameters, got %v", parameters)
 	}
 }
 
@@ -368,7 +368,7 @@ func TestBuildJobConfigMissingServiceURL(t *testing.T) {
 	}
 }
 
-func TestBuildJobConfigAllowsEmptyBenchmarkConfig(t *testing.T) {
+func TestBuildJobConfigAllowsEmptyParameters(t *testing.T) {
 	t.Setenv(serviceURLEnv, "http://eval-hub")
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
@@ -400,14 +400,14 @@ func TestBuildJobConfigAllowsEmptyBenchmarkConfig(t *testing.T) {
 
 	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0)
 	if err != nil {
-		t.Fatalf("expected no error for empty benchmark_config, got %v", err)
+		t.Fatalf("expected no error for empty parameters, got %v", err)
 	}
 
 	spec := cfg.jobSpec
-	benchmarkConfig := spec.BenchmarkConfig
+	parameters := spec.Parameters
 
-	if len(benchmarkConfig) != 0 {
-		t.Fatalf("expected empty benchmark_config, got %v", benchmarkConfig)
+	if len(parameters) != 0 {
+		t.Fatalf("expected empty parameters, got %v", parameters)
 	}
 }
 

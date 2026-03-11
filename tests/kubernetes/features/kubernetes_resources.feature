@@ -27,7 +27,7 @@ Feature: Kubernetes Resources Validation
     And the ConfigMap data "job.json" should contain field "model.url"
     And the ConfigMap data "job.json" should contain field "model.name"
     And the ConfigMap data "job.json" should contain field "callback_url"
-    And the ConfigMap data "job.json" should contain field "benchmark_config" as object
+    And the ConfigMap data "job.json" should contain field "parameters" as object
     And the ConfigMap should have an ownerReference of kind "Job"
     And the ConfigMap ownerReference should have controller set to true
     And the ConfigMap ownerReference should reference the created Job
@@ -91,8 +91,8 @@ Feature: Kubernetes Resources Validation
     And each Job should have a unique benchmark_id label
     And each ConfigMap should have a unique benchmark_id label
     And for benchmark "arc_easy" the ConfigMap data "job.json" should contain field "num_examples" with value from parameters
-    And for benchmark "hellaswag" the ConfigMap data "job.json" field "benchmark_config" should not contain "num_examples"
-    And for benchmark "hellaswag" the ConfigMap data "job.json" should contain field "benchmark_config" as empty object
+    And for benchmark "hellaswag" the ConfigMap data "job.json" field "parameters" should not contain "num_examples"
+    And for benchmark "hellaswag" the ConfigMap data "job.json" should contain field "parameters" as empty object
 
   Scenario: Delete evaluation job behaviors
     Given I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_basic.json"

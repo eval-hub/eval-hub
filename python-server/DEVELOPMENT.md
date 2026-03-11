@@ -216,4 +216,3 @@ print(platform.machine().lower())  # x86_64, arm64, amd64, aarch64
 
 - **Static binaries**: Use `CGO_ENABLED=0` to avoid glibc dependencies and security issues
 - **Permissions**: `setup.py` makes binaries executable on Unix (chmod 755)
-
