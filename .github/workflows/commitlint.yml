@@ -27,4 +27,4 @@ jobs:
         run: uv pip install --system commitizen==4.13.9
 
       - name: Lint commit messages
-        run: cz check --rev-range origin/main..HEAD  --allowed-prefixes "EH "
+        run: cz check --rev-range origin/main..HEAD  --allowed-prefixes "EH " "Merge "
