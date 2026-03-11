@@ -2,6 +2,7 @@ package abstractions
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"maps"
 	"time"
@@ -36,6 +37,10 @@ func (filter *QueryFilter) ExtractQueryParams() *QueryFilter {
 		Params: params,
 		Tenant: filter.Tenant,
 	}
+}
+
+func (filter *QueryFilter) String() string {
+	return fmt.Sprintf(`{"limit":%d,"offset":%d,"params":%v,"tenant":"%s"}`, filter.Limit, filter.Offset, filter.Params, filter.Tenant)
 }
 
 type Storage interface {

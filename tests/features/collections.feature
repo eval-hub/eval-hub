@@ -27,6 +27,11 @@ Feature: Collections Endpoint
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_no_name.json"
     Then the response code should be 400
 
+  Scenario: Create a collection without category field returns 400
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_no_category.json"
+    Then the response code should be 400
+
   Scenario: Create a collection without description field returns 400
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_no_description.json"
@@ -235,3 +240,122 @@ Feature: Collections Endpoint
     Given the service is running
     When I send a DELETE request to "/api/v1/evaluations/collections/00000000-0000-0000-0000-000000000000?hard_delete=true"
     Then the response code should be 204
+
+  Scenario: List collections by tags and name
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/collections" with body:
+    """
+    {
+      "name": "test-collection-1",
+      "description": "Collection of benchmarks for FVT",
+      "category": "test",
+      "tags": ["test-tag-1", "test-tag-2"],
+      "benchmarks": [
+        {
+          "id": "arc_easy",
+          "provider_id": "lm_evaluation_harness"
+        }
+      ]
+    }
+    """
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:first_id"
+    When I send a POST request to "/api/v1/evaluations/collections" with body:
+    """
+    {
+      "name": "test-collection-2",
+      "description": "Collection of benchmarks for FVT",
+      "category": "test",
+      "tags": ["test-tag-1"],
+      "benchmarks": [
+        {
+          "id": "arc_easy",
+          "provider_id": "lm_evaluation_harness"
+        }
+      ]
+    }
+    """
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:second_id"
+    When I send a POST request to "/api/v1/evaluations/collections" with body:
+    """
+    {
+      "name": "test-collection-3",
+      "description": "Collection of benchmarks for FVT",
+      "category": "test",
+      "tags": ["test-tag-3", "test-tag-2", "test-tag-1"],
+      "benchmarks": [
+        {
+          "id": "arc_easy",
+          "provider_id": "lm_evaluation_harness"
+        }
+      ]
+    }
+    """
+    Then the response code should be 202
+    When I send a GET request to "/api/v1/evaluations/collections?tags=test-tag-1"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 3
+    When I send a GET request to "/api/v1/evaluations/collections?tags=test-tag-2"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 2
+    When I send a GET request to "/api/v1/evaluations/collections?tags=test-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/collections?tags=test-tag-4"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/collections?tags=test-tag-2,test-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/collections?tags=test-tag-2|test-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 2
+    When I send a GET request to "/api/v1/evaluations/collections?name=test-collection-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/collections?name=test-collection-4"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/collections?name=test-collection-1"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/collections?name=test-collection-2"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/collections?name=test-collection-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/collections?name=test-collection-4"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/collections?name=test-collection-1&tags=test-tag-1"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/collections?name=test-collection-1&tags=test-tag-2"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/collections?name=test-collection-1&tags=test-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/collections?name=test-collection-1&tags=test-tag-4"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/collections?name=test-collection-2&tags=test-tag-1"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/collections?name=test-collection-2&tags=test-tag-2"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/collections?name=test-collection-2&tags=test-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/collections?name=test-collection-3&tags=test-tag-1"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/collections?name=test-collection-3&tags=test-tag-2"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/collections?name=test-collection-3&tags=test-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1

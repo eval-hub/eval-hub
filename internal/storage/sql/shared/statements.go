@@ -2,14 +2,18 @@ package shared
 
 import (
 	"database/sql"
+	"log/slog"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 type SQLStatementsFactory interface {
+	GetLogger() *slog.Logger
+
 	GetTablesSchema() string
 
 	GetAllowedFilterColumns(tableName string) []string
+	CreateEntityFilterCondition(key string, value any, index int, tableName string) (condition string, args []any)
 
 	// evaluations operations
 	CreateEvaluationAddEntityStatement(evaluation *api.EvaluationJobResource, entity string) (string, []any)

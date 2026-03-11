@@ -168,10 +168,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 	if err != nil {
 		return err
 	}
-	validate, err := validation.NewValidator()
-	if err != nil {
-		return logError(fmt.Errorf("failed to create validator: %w", err))
-	}
+	validate := validation.NewValidator()
 	serviceConfig, err := config.LoadConfig(logger, "0.2.0", "local", time.Now().Format(time.RFC3339))
 	if err != nil {
 		return logError(fmt.Errorf("failed to load service config: %w", err))
@@ -949,7 +946,7 @@ func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLength(jsonPath stri
 		return tc.logError(fmt.Errorf("value at path %s is not an array, got %T", jsonPath, raw))
 	}
 	if len(arr) != length {
-		return tc.logError(fmt.Errorf("expected array at path %s to have length %d, got %d", jsonPath, length, len(arr)))
+		return tc.logError(fmt.Errorf("expected array at path %s to have length %d, got %d in %s", jsonPath, length, len(arr), asPrettyJson(string(tc.body))))
 	}
 	return nil
 }

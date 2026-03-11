@@ -147,19 +147,20 @@ func (h *Handlers) filterSystemProviders(filter map[string]any) []api.ProviderRe
 func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
-	logging.LogRequestStarted(ctx)
+	filter, err := CommonListFilters(req)
+
+	logging.LogRequestStarted(ctx, "filter", filter)
+
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
 
 	allowedParams := []string{"limit", "offset", "benchmarks", "name", "tags", "system_defined", "benchmarks", "owner"}
 	badParams := getAllParams(req, allowedParams...)
 	if len(badParams) > 0 {
 		// just report the first bad parameter
 		w.Error(serviceerrors.NewServiceError(messages.QueryBadParameter, "ParameterName", badParams[0], "AllowedParameters", strings.Join(allowedParams, ", ")), ctx.RequestID)
-		return
-	}
-
-	filter, err := CommonListFilters(req)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
 		return
 	}
 

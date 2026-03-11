@@ -96,8 +96,8 @@ func SkipCallersForInfo(ctx context.Context, logger *slog.Logger, level slog.Lev
 	_ = logger.Handler().Handle(ctx, r)
 }
 
-func LogRequestStarted(ctx *executioncontext.ExecutionContext) {
-	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request started")
+func LogRequestStarted(ctx *executioncontext.ExecutionContext, args ...any) {
+	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request started", args...)
 }
 
 func LogRequestFailed(ctx *executioncontext.ExecutionContext, code int, errorMessage string, skip ...int) {

@@ -13,8 +13,8 @@ import (
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/storage"
+	"github.com/eval-hub/eval-hub/internal/validation"
 	"github.com/eval-hub/eval-hub/pkg/api"
-	"github.com/go-playground/validator/v10"
 )
 
 var (
@@ -430,7 +430,7 @@ func TestEvaluationsStorage(t *testing.T) {
 		if completedAtStr == "" {
 			t.Fatalf("CompletedAt is empty")
 		}
-		val := validator.New()
+		val := validation.NewValidator()
 		err := val.Struct(status)
 		if err != nil {
 			t.Fatalf("Failed to validate status: %v", err)

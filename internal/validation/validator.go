@@ -8,11 +8,13 @@ import (
 	validator "github.com/go-playground/validator/v10"
 )
 
-func NewValidator() (*validator.Validate, error) {
+func NewValidator() *validator.Validate {
 	validate := validator.New(validator.WithRequiredStructEnabled())
+	// this is the definition for tag name validation
+	validate.RegisterAlias("tagname", "max=128,min=1,excludesall=0x2C0x7C")
 	register(validate)
 	registerCustomValidators(validate)
-	return validate, nil
+	return validate
 }
 
 func register(instance *validator.Validate) {

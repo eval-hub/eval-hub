@@ -8,20 +8,14 @@ import (
 )
 
 func TestNewValidator(t *testing.T) {
-	validate, err := NewValidator()
-	if err != nil {
-		t.Fatalf("NewValidator() error: %v", err)
-	}
+	validate := NewValidator()
 	if validate == nil {
 		t.Fatal("NewValidator() returned nil validator")
 	}
 }
 
 func TestEvaluationJobConfigBenchmarksMin_WithCollection(t *testing.T) {
-	validate, err := NewValidator()
-	if err != nil {
-		t.Fatalf("NewValidator() error: %v", err)
-	}
+	validate := NewValidator()
 	// When Collection is set with ID, empty Benchmarks is allowed
 	cfg := api.EvaluationJobConfig{
 		Name:       "test-evaluation-job",
@@ -29,24 +23,21 @@ func TestEvaluationJobConfigBenchmarksMin_WithCollection(t *testing.T) {
 		Collection: &api.Ref{ID: "coll-1"},
 		Benchmarks: []api.BenchmarkConfig{},
 	}
-	err = validate.Struct(cfg)
+	err := validate.Struct(cfg)
 	if err != nil {
 		t.Errorf("expected no error when Collection is set, got: %v", err)
 	}
 }
 
 func TestEvaluationJobConfigBenchmarksMin_WithoutCollection_EmptyBenchmarks(t *testing.T) {
-	validate, err := NewValidator()
-	if err != nil {
-		t.Fatalf("NewValidator() error: %v", err)
-	}
+	validate := NewValidator()
 	// When Collection is not set, Benchmarks must have at least 1 element
 	cfg := api.EvaluationJobConfig{
 		Name:       "test-evaluation-job",
 		Model:      api.ModelRef{URL: "http://test.com", Name: "model"},
 		Benchmarks: []api.BenchmarkConfig{},
 	}
-	err = validate.Struct(cfg)
+	err := validate.Struct(cfg)
 	if err == nil {
 		t.Fatal("expected validation error when Benchmarks is empty and Collection not set")
 	}
@@ -61,10 +52,7 @@ func TestEvaluationJobConfigBenchmarksMin_WithoutCollection_EmptyBenchmarks(t *t
 }
 
 func TestEvaluationJobConfigBenchmarksMin_WithoutCollection_WithBenchmark(t *testing.T) {
-	validate, err := NewValidator()
-	if err != nil {
-		t.Fatalf("NewValidator() error: %v", err)
-	}
+	validate := NewValidator()
 	cfg := api.EvaluationJobConfig{
 		Name:  "test-evaluation-job",
 		Model: api.ModelRef{URL: "http://test.com", Name: "model"},
@@ -72,7 +60,7 @@ func TestEvaluationJobConfigBenchmarksMin_WithoutCollection_WithBenchmark(t *tes
 			{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
 		},
 	}
-	err = validate.Struct(cfg)
+	err := validate.Struct(cfg)
 	if err != nil {
 		t.Errorf("expected no error when Benchmarks has 1+ elements, got: %v", err)
 	}

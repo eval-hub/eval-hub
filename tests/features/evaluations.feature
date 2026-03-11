@@ -541,3 +541,128 @@ Feature: Evaluations Endpoint
     Then the response code should be 405
     When I send a GET request to "/api/v1/evaluations/jobs/unknown-id/events"
     Then the response code should be 405
+
+  Scenario: List evaluation jobs by tags and name
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+    """
+    {
+      "model": {
+        "url": "http://test.com",
+        "name": "test"
+      },
+      "benchmarks": [
+        {
+          "id": "arc_easy",
+          "provider_id": "lm_evaluation_harness"
+        }
+      ],
+      "name": "test-evaluation-job-1",
+      "tags": ["test-tag-1", "test-tag-2"]
+    }
+    """
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:first_id"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+    """
+    {
+      "model": {
+        "url": "http://test.com",
+        "name": "test"
+      },
+      "benchmarks": [
+        {
+          "id": "arc_easy",
+          "provider_id": "lm_evaluation_harness"
+        }
+      ],
+      "name": "test-evaluation-job-2",
+      "tags": ["test-tag-1"]
+    }
+    """
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:second_id"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+    """
+    {
+      "model": {
+        "url": "http://test.com",
+        "name": "test"
+      },
+      "benchmarks": [
+        {
+          "id": "arc_easy",
+          "provider_id": "lm_evaluation_harness"
+        }
+      ],
+      "name": "test-evaluation-job-3",
+      "tags": ["test-tag-3", "test-tag-2", "test-tag-1"]
+    }
+    """
+    Then the response code should be 202
+    When I send a GET request to "/api/v1/evaluations/jobs?tags=test-tag-1"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 3
+    When I send a GET request to "/api/v1/evaluations/jobs?tags=test-tag-2"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 2
+    When I send a GET request to "/api/v1/evaluations/jobs?tags=test-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/jobs?tags=test-tag-4"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/jobs?tags=test-tag-2,test-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/jobs?tags=test-tag-2|test-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 2
+    When I send a GET request to "/api/v1/evaluations/jobs?name=test-evaluation-job-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/jobs?name=test-evaluation-job-4"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/jobs?name=test-evaluation-job-1"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/jobs?name=test-evaluation-job-2"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/jobs?name=test-evaluation-job-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/jobs?name=test-evaluation-job-4"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/jobs?name=test-evaluation-job-1&tags=test-tag-1"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/jobs?name=test-evaluation-job-1&tags=test-tag-2"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/jobs?name=test-evaluation-job-1&tags=test-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/jobs?name=test-evaluation-job-1&tags=test-tag-4"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/jobs?name=test-evaluation-job-2&tags=test-tag-1"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/jobs?name=test-evaluation-job-2&tags=test-tag-2"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/jobs?name=test-evaluation-job-2&tags=test-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/jobs?name=test-evaluation-job-3&tags=test-tag-1"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/jobs?name=test-evaluation-job-3&tags=test-tag-2"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/jobs?name=test-evaluation-job-3&tags=test-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1

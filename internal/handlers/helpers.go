@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
@@ -61,7 +62,15 @@ func GetParam[T string | int | bool](r http_wrappers.RequestWrapper, name string
 	}
 	switch any(defaultValue).(type) {
 	case string:
-		return any(DecodeParam(values[0])).(T), nil
+		// we support multiple values for a single parameter by joining them with a comma
+		var sb strings.Builder
+		for i, value := range values {
+			if i > 0 {
+				sb.WriteString(",")
+			}
+			sb.WriteString(DecodeParam(value))
+		}
+		return any(sb.String()).(T), nil
 	case int:
 		v, err := strconv.Atoi(values[0])
 		if err != nil {

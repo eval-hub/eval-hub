@@ -4,9 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"slices"
-	"strconv"
-	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -62,6 +59,10 @@ func NewStatementsFactory(logger *slog.Logger) shared.SQLStatementsFactory {
 	return &postgresStatementsFactory{logger: logger}
 }
 
+func (s *postgresStatementsFactory) GetLogger() *slog.Logger {
+	return s.logger
+}
+
 func (s *postgresStatementsFactory) GetTablesSchema() string {
 	return TABLES_SCHEMA
 }
@@ -94,7 +95,7 @@ func (s *postgresStatementsFactory) GetAllowedFilterColumns(tableName string) []
 }
 
 // entityFilterCondition returns the SQL condition and args for a filter key.
-func (s *postgresStatementsFactory) entityFilterCondition(key string, value any, index int, tableName string) (condition string, args []any) {
+func (s *postgresStatementsFactory) CreateEntityFilterCondition(key string, value any, index int, tableName string) (condition string, args []any) {
 	switch key {
 	case "name":
 		// evaluations: name at config.name; providers and collections: name at entity root
@@ -111,77 +112,23 @@ func (s *postgresStatementsFactory) entityFilterCondition(key string, value any,
 			tagsPath = "entity->'config'->'tags'"
 		}
 		return fmt.Sprintf("jsonb_typeof(%s) = 'array' AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(%s) AS tag WHERE tag = $%d)", tagsPath, tagsPath, index), []any{tagStr}
+	case "ORDER BY":
+		return "ORDER BY " + value.(string), []any{}
+	case "LIMIT", "OFFSET":
+		return fmt.Sprintf("%s $%d", key, index), []any{value}
 	default:
 		return fmt.Sprintf("%s = $%d", key, index), []any{value}
 	}
 }
 
-func (s *postgresStatementsFactory) createFilterStatement(tenant api.Tenant, filter map[string]any, orderBy string, limit int, offset int, tableName string) (string, []any) {
-	var sb strings.Builder
-	var args []any
-
-	index := 1
-	and := false
-
-	// we must always filter by tenant_id if it exists
-	if !tenant.IsEmpty() {
-		sb.WriteString(" WHERE ")
-		cond, condArgs := s.entityFilterCondition("tenant_id", tenant.String(), index, tableName)
-		index++
-		sb.WriteString(cond)
-		args = append(args, condArgs...)
-		and = true
-	}
-
-	if len(filter) > 0 {
-		allowed := s.GetAllowedFilterColumns(tableName)
-		for key, value := range filter {
-			if slices.Contains(allowed, key) {
-				if !and {
-					sb.WriteString(" WHERE ")
-					and = true
-				} else if and {
-					sb.WriteString(" AND ")
-				}
-				cond, condArgs := s.entityFilterCondition(key, value, index, tableName)
-				index++
-				sb.WriteString(cond)
-				args = append(args, condArgs...)
-			} else {
-				// should never get here as we validate the filter before calling this function
-				s.logger.Warn("Disallowed filter key", "key", key, "tableName", tableName)
-			}
-		}
-	}
-
-	if orderBy != "" {
-		sb.WriteString(" ORDER BY ")
-		sb.WriteString(orderBy)
-	}
-	if limit > 0 {
-		sb.WriteString(" LIMIT $")
-		sb.WriteString(strconv.Itoa(index))
-		index++
-		args = append(args, limit)
-	}
-	if offset > 0 {
-		sb.WriteString(" OFFSET $")
-		sb.WriteString(strconv.Itoa(index))
-		index++
-		args = append(args, offset)
-	}
-
-	return sb.String(), args
-}
-
 func (s *postgresStatementsFactory) CreateCountEntitiesStatement(tenant api.Tenant, tableName string, filter map[string]any) (string, []any) {
-	filterClause, args := s.createFilterStatement(tenant, filter, "", 0, 0, tableName)
+	filterClause, args := shared.CreateFilterStatement(tenant, s, filter, "", 0, 0, tableName)
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, tableName, filterClause)
 	return query, args
 }
 
 func (s *postgresStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant, tableName string, limit, offset int, filter map[string]any) (string, []any) {
-	filterClause, args := s.createFilterStatement(tenant, filter, "id DESC", limit, offset, tableName)
+	filterClause, args := shared.CreateFilterStatement(tenant, s, filter, "id DESC", limit, offset, tableName)
 
 	var query string
 	switch tableName {

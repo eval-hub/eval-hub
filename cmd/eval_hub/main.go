@@ -72,11 +72,7 @@ func main() {
 	serviceConfig.Service.LocalMode = args.LocalMode
 
 	// set up the validator
-	validate, err := validation.NewValidator()
-	if err != nil {
-		// we do this as no point trying to continue
-		startUpFailed(serviceConfig, err, "Failed to create validator", logger)
-	}
+	validate := validation.NewValidator()
 
 	// set up the storage
 	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger)

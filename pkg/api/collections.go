@@ -4,7 +4,8 @@ package api
 type CollectionConfig struct {
 	Name         string            `json:"name" validate:"required"`
 	Description  *string           `json:"description,omitempty" validate:"required"`
-	Tags         []string          `json:"tags,omitempty"`
+	Category     string            `json:"category" validate:"required,max=128,min=1"`
+	Tags         []string          `json:"tags,omitempty" validate:"omitempty,dive,tagname"`
 	Custom       *map[string]any   `json:"custom,omitempty"`
 	PassCriteria PassCriteria      `json:"pass_criteria,omitempty"`
 	Benchmarks   []BenchmarkConfig `json:"benchmarks" validate:"required,min=1,dive"`

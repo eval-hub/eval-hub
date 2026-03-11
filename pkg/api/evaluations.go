@@ -220,7 +220,7 @@ type EvaluationExports struct {
 type EvaluationJobConfig struct {
 	Name         string             `json:"name" validate:"required"`
 	Description  *string            `json:"description,omitempty"`
-	Tags         []string           `json:"tags,omitempty"`
+	Tags         []string           `json:"tags,omitempty" validate:"omitempty,dive,tagname"`
 	Model        ModelRef           `json:"model" validate:"required"`
 	PassCriteria *PassCriteria      `json:"pass_criteria,omitempty"`
 	Benchmarks   []BenchmarkConfig  `json:"benchmarks,omitempty" validate:"omitempty,required_without=Collection,dive"`

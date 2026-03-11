@@ -15,8 +15,8 @@ import (
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/handlers"
+	"github.com/eval-hub/eval-hub/internal/validation"
 	"github.com/eval-hub/eval-hub/pkg/api"
-	"github.com/go-playground/validator/v10"
 )
 
 type bodyRequest struct {
@@ -175,7 +175,7 @@ func TestHandleCreateEvaluationMarksFailedWhenRuntimeErrors(t *testing.T) {
 	// note that the fake storage only implements the functions that are used in this test
 	storage := &fakeStorage{}
 	runtime := &fakeRuntime{err: errors.New("runtime failed")}
-	validate := validator.New()
+	validate := validation.NewValidator()
 	providerConfigs := map[string]api.ProviderResource{
 		"garak": {
 			Resource: api.Resource{ID: "garak"},
@@ -220,7 +220,7 @@ func TestHandleCreateEvaluationSucceedsWhenRuntimeOk(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	storage := &fakeStorage{}
 	runtime := &fakeRuntime{}
-	validate := validator.New()
+	validate := validation.NewValidator()
 	providerConfigs := map[string]api.ProviderResource{
 		"garak": {
 			Resource: api.Resource{ID: "garak"},
@@ -265,7 +265,7 @@ func TestHandleCancelEvaluationWithSoftDeleteDoesNotCleanupResources(t *testing.
 		},
 	}
 	runtime := &fakeRuntime{}
-	validate := validator.New()
+	validate := validation.NewValidator()
 	h := handlers.New(storage, validate, runtime, nil, nil, nil)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-3", logger, time.Second, "test-user", "test-tenant")
 
@@ -307,7 +307,7 @@ func TestHandleDeleteEvaluationCleansUpResources(t *testing.T) {
 		},
 	}
 	runtime := &fakeRuntime{}
-	validate := validator.New()
+	validate := validation.NewValidator()
 	h := handlers.New(storage, validate, runtime, nil, nil, nil)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-4", logger, time.Second, "test-user", "test-tenant")
 
@@ -336,7 +336,7 @@ func TestHandleCreateEvaluationRejectsMissingBenchmarkID(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	storage := &fakeStorage{}
 	runtime := &fakeRuntime{}
-	validate := validator.New()
+	validate := validation.NewValidator()
 	h := handlers.New(storage, validate, runtime, nil, nil, nil)
 
 	req := &bodyRequest{
@@ -361,7 +361,7 @@ func TestHandleCreateEvaluationRejectsMissingBenchmarks(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	storage := &fakeStorage{}
 	runtime := &fakeRuntime{}
-	validate := validator.New()
+	validate := validation.NewValidator()
 	h := handlers.New(storage, validate, runtime, nil, nil, nil)
 
 	index := 1
@@ -396,7 +396,7 @@ func TestHandleCreateEvaluationRejectsMissingProviderID(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	storage := &fakeStorage{}
 	runtime := &fakeRuntime{}
-	validate := validator.New()
+	validate := validation.NewValidator()
 	h := handlers.New(storage, validate, runtime, nil, nil, nil)
 
 	req := &bodyRequest{
@@ -421,7 +421,7 @@ func TestHandleCreateEvaluationRejectsInvalidProviderID(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	storage := &fakeStorage{}
 	runtime := &fakeRuntime{}
-	validate := validator.New()
+	validate := validation.NewValidator()
 	providerConfigs := map[string]api.ProviderResource{
 		"garak": {
 			Resource: api.Resource{ID: "garak"},
@@ -453,7 +453,7 @@ func TestHandleCreateEvaluationRejectsInvalidBenchmarkID(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	storage := &fakeStorage{}
 	runtime := &fakeRuntime{}
-	validate := validator.New()
+	validate := validation.NewValidator()
 	providerConfigs := map[string]api.ProviderResource{
 		"garak": {
 			Resource: api.Resource{ID: "garak"},
@@ -492,7 +492,7 @@ func TestHandleListEvaluations(t *testing.T) {
 			},
 		},
 	}
-	validate := validator.New()
+	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
@@ -533,7 +533,7 @@ func TestHandleGetEvaluation(t *testing.T) {
 			},
 		},
 	}
-	validate := validator.New()
+	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
@@ -561,7 +561,7 @@ func TestHandleGetEvaluation(t *testing.T) {
 
 func TestHandleGetEvaluation_MissingPathParam(t *testing.T) {
 	storage := &fakeStorage{}
-	validate := validator.New()
+	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
@@ -591,7 +591,7 @@ func (r *updateEvaluationRequest) PathValue(name string) string {
 
 func TestHandleUpdateEvaluation(t *testing.T) {
 	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{}}
-	validate := validator.New()
+	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
