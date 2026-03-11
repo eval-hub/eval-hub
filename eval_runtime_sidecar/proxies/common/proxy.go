@@ -8,8 +8,6 @@ import (
 	"strings"
 )
 
-const DefaultTokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-
 // headersForLog returns a copy of h suitable for logging, with Authorization values obfuscated.
 func headersForLog(h http.Header) http.Header {
 	out := h.Clone()
@@ -41,7 +39,7 @@ func SetAuthHeader(req *http.Request, token string) {
 
 // ProxyRequest forwards r to targetBaseURL (path and query from r), sets Content-Type and optional auth,
 // performs the request with client, and copies the response to w.
-func ProxyRequest(logger *slog.Logger, w http.ResponseWriter, r *http.Request, client *http.Client, targetBaseURL string, authToken string) {
+func ProxyRequest(logger *slog.Logger, w http.ResponseWriter, r *http.Request, client *http.Client, targetBaseURL string, authInput AuthTokenInput) {
 	targetURL := strings.TrimSuffix(targetBaseURL, "/") + r.URL.Path
 	if r.URL.RawQuery != "" {
 		targetURL += "?" + r.URL.RawQuery
@@ -64,6 +62,8 @@ func ProxyRequest(logger *slog.Logger, w http.ResponseWriter, r *http.Request, c
 	if tenant := r.Header.Get("X-Tenant"); tenant != "" {
 		req.Header.Set("X-Tenant", tenant)
 	}
+
+	authToken := ResolveAuthToken(logger, authInput)
 	SetAuthHeader(req, authToken)
 
 	logger.Info("Proxying request", "method", req.Method, "url", req.URL.String(), "headers", headersForLog(req.Header))

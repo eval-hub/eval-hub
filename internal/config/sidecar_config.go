@@ -9,6 +9,7 @@ type SidecarConfig struct {
 	Port             int                     `mapstructure:"port,omitempty"`
 	BaseURL          string                  `mapstructure:"base_url,omitempty"`
 	EvalHub          *EvalHubClientConfig    `mapstructure:"eval_hub"`
+	MLFlow           *SidecarMLFlowConfig    `mapstructure:"mlflow,omitempty"`
 	SidecarContainer *SidecarContainerConfig `mapstructure:"sidecar_container,omitempty"`
 }
 
@@ -17,8 +18,13 @@ type EvalHubClientConfig struct {
 	CACertPath         string        `mapstructure:"ca_cert_path,omitempty"`
 	InsecureSkipVerify bool          `mapstructure:"insecure_skip_verify,omitempty"`
 	Token              string        `mapstructure:"token,omitempty"`
-	TokenPath          string        `mapstructure:"token_path,omitempty"`
+	TokenCacheTimeout  time.Duration `mapstructure:"token_cache_timeout"`
 	TLSConfig          *tls.Config   // set at runtime, not from config file
+}
+
+// SidecarMLFlowConfig holds sidecar-specific MLflow settings (e.g. token cache TTL).
+type SidecarMLFlowConfig struct {
+	TokenCacheTimeout time.Duration `mapstructure:"token_cache_timeout"`
 }
 
 type ServiceAccountConfig struct {

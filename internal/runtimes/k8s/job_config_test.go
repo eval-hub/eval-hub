@@ -9,7 +9,6 @@ import (
 
 func TestBuildJobConfigDefaults(t *testing.T) {
 	callbackURL := "http://localhost:8080"
-	t.Setenv(serviceURLEnv, callbackURL)
 	benchmark := api.BenchmarkConfig{
 		Ref: api.Ref{ID: "bench-1"},
 		Parameters: map[string]any{
@@ -101,7 +100,6 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 }
 
 func TestBuildJobConfigModelAuthSecretRefPresent(t *testing.T) {
-	t.Setenv(serviceURLEnv, "http://eval-hub")
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{ID: "job-789"},
@@ -140,7 +138,6 @@ func TestBuildJobConfigModelAuthSecretRefPresent(t *testing.T) {
 }
 
 func TestBuildJobConfigModelAuthSecretRefEmptyWhenNil(t *testing.T) {
-	t.Setenv(serviceURLEnv, "http://eval-hub")
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{ID: "job-790"},
@@ -178,7 +175,6 @@ func TestBuildJobConfigModelAuthSecretRefEmptyWhenNil(t *testing.T) {
 }
 
 func TestBuildJobConfigTestDataS3(t *testing.T) {
-	t.Setenv(serviceURLEnv, "http://eval-hub")
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{ID: "job-901"},
@@ -229,7 +225,6 @@ func TestBuildJobConfigTestDataS3(t *testing.T) {
 }
 
 func TestBuildJobConfigAllowsNumExamplesOnly(t *testing.T) {
-	t.Setenv(serviceURLEnv, "http://eval-hub")
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource:           api.Resource{ID: "job-456"},
@@ -278,7 +273,6 @@ func TestBuildJobConfigAllowsNumExamplesOnly(t *testing.T) {
 }
 
 func TestBuildJobConfigMissingRuntime(t *testing.T) {
-	t.Setenv(serviceURLEnv, "http://eval-hub")
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource:           api.Resource{ID: "job-123"},
@@ -305,7 +299,6 @@ func TestBuildJobConfigMissingRuntime(t *testing.T) {
 }
 
 func TestBuildJobConfigMissingAdapterImage(t *testing.T) {
-	t.Setenv(serviceURLEnv, "http://eval-hub")
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource:           api.Resource{ID: "job-123"},
@@ -332,7 +325,6 @@ func TestBuildJobConfigMissingAdapterImage(t *testing.T) {
 }
 
 func TestBuildJobConfigAllowsEmptyBenchmarkConfig(t *testing.T) {
-	t.Setenv(serviceURLEnv, "http://eval-hub")
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource:           api.Resource{ID: "job-123"},
@@ -375,7 +367,6 @@ func TestBuildJobConfigAllowsEmptyBenchmarkConfig(t *testing.T) {
 }
 
 func TestBuildJobConfigWithOCIExports(t *testing.T) {
-	t.Setenv(serviceURLEnv, "http://eval-hub")
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{ID: "job-oci"},
@@ -505,7 +496,6 @@ func TestResolveNamespaceEmptyFallsBack(t *testing.T) {
 }
 
 func TestBuildJobConfigUsesTenantNamespace(t *testing.T) {
-	t.Setenv(serviceURLEnv, "http://eval-hub")
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{ID: "job-tenant", Tenant: "team-a"},
@@ -541,7 +531,6 @@ func TestBuildJobConfigUsesTenantNamespace(t *testing.T) {
 }
 
 func TestBuildJobConfigEmptyTenantFallsBack(t *testing.T) {
-	t.Setenv(serviceURLEnv, "http://eval-hub")
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{ID: "job-no-tenant"},

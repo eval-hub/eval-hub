@@ -25,14 +25,11 @@ const (
 	defaultSidecarCPULimit      = "200m"
 	defaultSidecarMemoryLimit   = "256Mi"
 	defaultNamespace            = "default"
-	serviceURLEnv               = "SERVICE_URL"
 	evalHubInstanceNameEnv      = "EVALHUB_INSTANCE_NAME"
 	mlflowTrackingURIEnv        = "MLFLOW_TRACKING_URI"
-	mlflowWorkspaceEnv          = "MLFLOW_WORKSPACE"
 	inClusterNamespaceFile      = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 	serviceAccountNameSuffix    = "-job"
 	serviceCAConfigMapSuffix    = "-service-ca"
-	defaultEvalHubPort          = "8443"
 	defaultTestDataInitCmd      = "/app/eval-hub-init"
 )
 

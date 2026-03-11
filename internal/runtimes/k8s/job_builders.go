@@ -31,7 +31,6 @@ const (
 	testDataMountPath               = "/test_data"
 	serviceCAMountPath              = "/etc/pki/ca-trust/source/anchors"
 	specSuffix                      = "-spec"
-	envJobIDName                    = "JOB_ID"
 	envEvalHubURLName               = "EVALHUB_URL"
 	envMLFlowTrackingURIName        = "MLFLOW_TRACKING_URI"
 	envMLFlowWorkspaceName          = "MLFLOW_WORKSPACE"

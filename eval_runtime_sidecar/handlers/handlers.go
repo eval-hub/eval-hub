@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/proxies/eval_hub"
 	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/proxies/mlflow"
@@ -72,5 +73,9 @@ func (h *Handlers) HandleMLflowProxy(w http.ResponseWriter, r *http.Request) {
 	if h.serviceConfig != nil {
 		cfg = h.serviceConfig.MLFlow
 	}
-	mlflow.Proxy(h.logger, w, r, h.mlflowHTTPClient, h.mlflowTrackingURI, cfg)
+	var tokenCacheTimeout time.Duration
+	if h.serviceConfig != nil && h.serviceConfig.Sidecar != nil && h.serviceConfig.Sidecar.MLFlow != nil {
+		tokenCacheTimeout = h.serviceConfig.Sidecar.MLFlow.TokenCacheTimeout
+	}
+	mlflow.Proxy(h.logger, w, r, h.mlflowHTTPClient, h.mlflowTrackingURI, cfg, tokenCacheTimeout)
 }

@@ -61,10 +61,9 @@ func (s *SidecarServer) setupRoutes() (http.Handler, error) {
 	return handler, nil
 }
 
-func (s *SidecarServer) setupSidecarProxyRoutes(h *handlers.Handlers, router *http.ServeMux) error {
+func (s *SidecarServer) setupSidecarProxyRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	router.HandleFunc("/api/v1/evaluations/", h.HandleEvalHubProxy)
 	router.HandleFunc("/api/2.0/mlflow/", h.HandleMLflowProxy)
-	return nil
 }
 
 // SetupRoutes exposes the route setup for testing

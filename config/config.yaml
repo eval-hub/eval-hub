@@ -24,6 +24,8 @@ env_mappings:
   MLFLOW_WORKSPACE: mlflow.workspace
   EVALHUB_CA_CERT_PATH: sidecar.eval_hub.ca_cert_path
   EVALHUB_INSECURE_SKIP_VERIFY: sidecar.eval_hub.insecure_skip_verify
+  EVALHUB_TOKEN_CACHE_TIMEOUT: sidecar.eval_hub.token_cache_timeout
+  MLFLOW_TOKEN_CACHE_TIMEOUT: sidecar.mlflow.token_cache_timeout
   SIDECAR_PORT: sidecar.port
 # Database configuration
 database:
@@ -56,9 +58,13 @@ sidecar:
     # insecure_skip_verify: set to true only for dev with self-signed certs; disables server cert verification.
     ca_cert_path: ""
     insecure_skip_verify: true
-    token_path: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+    # token_cache_timeout: TTL for in-memory auth token cache (e.g. "5m", "1h"). Empty/0 uses default (5m).
+    # token_cache_timeout: 5m
+  mlflow:
+    # token_cache_timeout: TTL for in-memory auth token cache for MLflow proxy (e.g. "5m", "1h"). Empty/0 uses default (5m).
+    # token_cache_timeout: 5m
   sidecar_container:
-    image: quay.io/evalhub/evalhub:latest
+    image: quay.io/rh-ee-nbs/nbs-dev:eval-hub_v10
     resources:
       requests:
         cpu: 100m
