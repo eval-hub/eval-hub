@@ -22,8 +22,8 @@ import (
 )
 
 func (h *Handlers) filterSystemCollections(filter map[string]any) []api.CollectionResource {
-	// Filter keys relevant for system providers (owner, tenant_id, status are not applicable)
-	allowedKeys := []string{"name", "tags"}
+	// Filter keys relevant for system collections (owner, tenant_id, status are not applicable)
+	allowedKeys := []string{"name", "category", "tags"}
 	filteredCollections := make([]api.CollectionResource, 0, len(h.collectionConfigs))
 
 	for _, c := range h.collectionConfigs {
@@ -72,6 +72,22 @@ func matchesCollectionFilterKey(c api.CollectionResource, key string, values []a
 		// AND: name must equal all values (typically one value)
 		for _, val := range values {
 			if c.CollectionConfig.Name != getStr(val) {
+				return false
+			}
+		}
+		return true
+	case "category":
+		if operator == "OR" {
+			for _, val := range values {
+				if c.CollectionConfig.Category == getStr(val) {
+					return true
+				}
+			}
+			return false
+		}
+		// AND: name must equal all values (typically one value)
+		for _, val := range values {
+			if c.CollectionConfig.Category != getStr(val) {
 				return false
 			}
 		}
