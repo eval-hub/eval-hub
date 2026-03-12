@@ -216,6 +216,8 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 		return
 	}
 
+	isReadOnly := "true" == filter.Params["read_only"]
+
 	providers := []api.ProviderResource{}
 
 	if IncludeSystemDefined(req) {
@@ -228,28 +230,31 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 	// first check to see if the system providers are enough for the paging
 	if filter.Offset < len(providers) {
 		if len(providers) < filter.Limit {
-			userFilter := &abstractions.QueryFilter{
-				Limit:  max(0, filter.Limit-len(providers)),
-				Offset: max(0, filter.Offset-len(providers)),
-				Params: filter.Params,
+			if !isReadOnly {
+				userFilter := &abstractions.QueryFilter{
+					Limit:  max(0, filter.Limit-len(providers)),
+					Offset: max(0, filter.Offset-len(providers)),
+					Params: filter.Params,
+				}
+				ctx.Logger.Debug("Get providers", "filter", userFilter)
+				queryResults, err := storage.GetProviders(userFilter)
+				if err != nil {
+					w.Error(err, ctx.RequestID)
+					return
+				}
+				providers = append(providers[filter.Offset:], queryResults.Items...)
+				totalCount += queryResults.TotalCount
 			}
-			queryResults, err := storage.GetProviders(userFilter)
-			if err != nil {
-				w.Error(err, ctx.RequestID)
-				return
-			}
-			providers = append(providers[filter.Offset:], queryResults.Items...)
-			totalCount += queryResults.TotalCount
 		} else {
 			providers = providers[:filter.Limit]
 		}
-	} else {
-		// no system providers so normal flow for user providers
+	} else if !isReadOnly {
 		userFilter := &abstractions.QueryFilter{
-			Limit:  max(0, filter.Limit-len(providers)),
+			Limit:  filter.Limit,
 			Offset: max(0, filter.Offset-len(providers)),
 			Params: filter.Params,
 		}
+		ctx.Logger.Debug("Get providers", "filter", userFilter)
 		queryResults, err := storage.GetProviders(userFilter)
 		if err != nil {
 			w.Error(err, ctx.RequestID)

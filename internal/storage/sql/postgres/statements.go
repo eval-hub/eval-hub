@@ -123,15 +123,6 @@ func (s *postgresStatementsFactory) CreateEntityFilterCondition(key string, valu
 			tagsPath = "entity->'config'->'tags'"
 		}
 		return fmt.Sprintf("jsonb_typeof(%s) = 'array' AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(%s) AS tag WHERE tag = $%d)", tagsPath, tagsPath, index), []any{tagStr}
-	case "read_only":
-		switch tableName {
-		case shared.TABLE_PROVIDERS, shared.TABLE_COLLECTIONS:
-			readOnlyPath := "entity->'resource'->>'read_only'"
-			return fmt.Sprintf("%s = $%d", readOnlyPath, index), []any{value}
-		default:
-			// should never get here as we validate the filter before calling this function
-			return "", []any{}
-		}
 	case "ORDER BY":
 		return "ORDER BY " + value.(string), []any{}
 	case "LIMIT", "OFFSET":

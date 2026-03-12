@@ -136,6 +136,8 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 		return
 	}
 
+	isReadOnly := "true" == filter.Params["read_only"]
+
 	collections := []api.CollectionResource{}
 
 	if IncludeSystemDefined(req) {
@@ -148,26 +150,29 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 	// first check to see if the system collections are enough for the paging
 	if filter.Offset < len(collections) {
 		if len(collections) < filter.Limit {
-			userFilter := &abstractions.QueryFilter{
-				Limit:  max(0, filter.Limit-len(collections)),
-				Offset: max(0, filter.Offset-len(collections)),
-				Params: filter.Params,
+			if !isReadOnly {
+				userFilter := &abstractions.QueryFilter{
+					Limit:  max(0, filter.Limit-len(collections)),
+					Offset: max(0, filter.Offset-len(collections)),
+					Params: filter.Params,
+				}
+				ctx.Logger.Debug("Get collections", "filter", userFilter)
+				queryResults, err := storage.GetCollections(userFilter)
+				if err != nil {
+					w.Error(err, ctx.RequestID)
+					return
+				}
+				collections = append(collections[filter.Offset:], queryResults.Items...)
+				totalCount += queryResults.TotalCount
 			}
-			queryResults, err := storage.GetCollections(userFilter)
-			if err != nil {
-				w.Error(err, ctx.RequestID)
-				return
-			}
-			collections = append(collections[filter.Offset:], queryResults.Items...)
-			totalCount += queryResults.TotalCount
 		}
-	} else {
-		// no system collections so normal flow for user collections
+	} else if !isReadOnly {
 		userFilter := &abstractions.QueryFilter{
-			Limit:  max(0, filter.Limit-len(collections)),
+			Limit:  filter.Limit,
 			Offset: max(0, filter.Offset-len(collections)),
 			Params: filter.Params,
 		}
+		ctx.Logger.Debug("Get collections", "filter", userFilter)
 		queryResults, err := storage.GetCollections(userFilter)
 		if err != nil {
 			w.Error(err, ctx.RequestID)

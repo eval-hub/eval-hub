@@ -129,15 +129,6 @@ func (s *sqliteStatementsFactory) CreateEntityFilterCondition(key string, value 
 			tagsPath = "$.config.tags"
 		}
 		return fmt.Sprintf("json_type(json_extract(entity, '%s')) = 'array' AND EXISTS (SELECT 1 FROM json_each(json_extract(entity, '%s')) WHERE value = ?)", tagsPath, tagsPath), []any{tagStr}
-	case "read_only":
-		switch tableName {
-		case shared.TABLE_PROVIDERS, shared.TABLE_COLLECTIONS:
-			readOnlyPath := "$.resource.read_only"
-			return fmt.Sprintf("json_extract(entity, '%s') = ?", readOnlyPath), []any{value}
-		default:
-			// should never get here as we validate the filter before calling this function
-			return "", []any{}
-		}
 	case "ORDER BY":
 		return "ORDER BY " + value.(string), []any{}
 	case "LIMIT", "OFFSET":
