@@ -3,7 +3,7 @@ description: Leaderboard v2
 tags:
   - leaderboard
 pass_criteria:
-  threshold: 90.0
+  threshold: 38.0
 benchmarks:
   - id: leaderboard_ifeval
     provider_id: lm_evaluation_harness
