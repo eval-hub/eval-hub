@@ -26,7 +26,9 @@ func (h *Handlers) filterSystemCollections(filter map[string]any) []api.Collecti
 	allowedKeys := []string{"name", "category", "tags"}
 	filteredCollections := make([]api.CollectionResource, 0, len(h.collectionConfigs))
 
-	for _, c := range h.collectionConfigs {
+	// Iterate over sorted keys for deterministic ordering (map iteration is random)
+	for _, id := range slices.Sorted(maps.Keys(h.collectionConfigs)) {
+		c := h.collectionConfigs[id]
 		if len(filter) == 0 {
 			filteredCollections = append(filteredCollections, c)
 			continue

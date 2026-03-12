@@ -122,7 +122,9 @@ func (h *Handlers) filterSystemProviders(filter map[string]any) []api.ProviderRe
 	allowedKeys := []string{"name", "tags"}
 	filteredProviders := make([]api.ProviderResource, 0, len(h.providerConfigs))
 
-	for _, p := range h.providerConfigs {
+	// Iterate over sorted keys for deterministic ordering (map iteration is random)
+	for _, id := range slices.Sorted(maps.Keys(h.providerConfigs)) {
+		p := h.providerConfigs[id]
 		if len(filter) == 0 {
 			filteredProviders = append(filteredProviders, p)
 			continue
