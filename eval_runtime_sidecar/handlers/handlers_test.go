@@ -22,15 +22,17 @@ func TestNew(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error when EVALHUB_URL is not set")
 		}
-		if err.Error() != "EVALHUB_URL environment variable is not set" {
+		if err.Error() != "EVALHUB_URL environment is not set" {
 			t.Errorf("unexpected error: %v", err)
 		}
 	})
 
-	t.Run("returns Handlers when EVALHUB_URL set and config valid", func(t *testing.T) {
+	t.Run("returns Handlers when EVALHUB_URL and MLFLOW_TRACKING_URI set and config valid", func(t *testing.T) {
 		t.Setenv("EVALHUB_URL", "http://localhost:8080")
+		t.Setenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 		cfg := &config.Config{
 			Sidecar: &config.SidecarConfig{EvalHub: &config.EvalHubClientConfig{}},
+			MLFlow:  &config.MLFlowConfig{TrackingURI: "http://localhost:5000"},
 		}
 		h, err := New(cfg, logger)
 		if err != nil {
@@ -39,17 +41,22 @@ func TestNew(t *testing.T) {
 		if h == nil {
 			t.Fatal("expected non-nil Handlers")
 		}
-		if h.evalHubBaseURL != "http://localhost:8080" {
-			t.Errorf("evalHubBaseURL = %q, want http://localhost:8080", h.evalHubBaseURL)
+		if h.evalHubProxy == nil {
+			t.Error("expected non-nil evalHubProxy")
+		}
+		if h.mlflowProxy == nil {
+			t.Error("expected non-nil mlflowProxy")
 		}
 	})
 }
 
 func TestHandlers_HandleProxyCall(t *testing.T) {
 	t.Setenv("EVALHUB_URL", "http://localhost:8080")
+	t.Setenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 	logger := slog.Default()
 	cfg := &config.Config{
 		Sidecar: &config.SidecarConfig{EvalHub: &config.EvalHubClientConfig{}},
+		MLFlow:  &config.MLFlowConfig{TrackingURI: "http://localhost:5000"},
 	}
 	h, err := New(cfg, logger)
 	if err != nil {
@@ -69,7 +76,10 @@ func TestHandlers_HandleProxyCall(t *testing.T) {
 	})
 
 	t.Run("eval-hub path with nil EvalHub returns 400", func(t *testing.T) {
-		cfgNoEvalHub := &config.Config{Sidecar: &config.SidecarConfig{}}
+		cfgNoEvalHub := &config.Config{
+			Sidecar: &config.SidecarConfig{},
+			MLFlow:  &config.MLFlowConfig{TrackingURI: "http://localhost:5000"},
+		}
 		h2, err := New(cfgNoEvalHub, logger)
 		if err != nil {
 			t.Fatalf("New() error: %v", err)
@@ -93,12 +103,20 @@ func TestHandlers_HandleProxyCall(t *testing.T) {
 	})
 
 	t.Run("mlflow path with nil MLFlow returns 400", func(t *testing.T) {
+		// Handlers with no MLFlow config: parseProxyCall returns error for mlflow path
+		cfgNoMLFlow := &config.Config{
+			Sidecar: &config.SidecarConfig{EvalHub: &config.EvalHubClientConfig{}},
+			// MLFlow intentionally nil
+		}
+		hNoMLFlow, err := New(cfgNoMLFlow, logger)
+		if err != nil {
+			t.Fatalf("New() error: %v", err)
+		}
 		req := httptest.NewRequest(http.MethodGet, "/api/2.0/mlflow/experiments/list", nil)
 		rw := httptest.NewRecorder()
-		h.HandleProxyCall(rw, req)
-		// Our config has no MLFlow, so we get "mlflow proxy is not configured"
+		hNoMLFlow.HandleProxyCall(rw, req)
 		if rw.Code != http.StatusBadRequest {
-			t.Errorf("status = %d, want 400", rw.Code)
+			t.Errorf("status = %d, want 400 (mlflow proxy not configured)", rw.Code)
 		}
 	})
 }

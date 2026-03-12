@@ -1,12 +1,30 @@
 package proxy
 
 import (
-	"bytes"
-	"io"
+	"context"
 	"log/slog"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"strings"
 )
+
+type contextKeyAuthInput struct{}
+
+// ContextWithAuthInput returns a context that carries authInput for the reverse proxy Director.
+func ContextWithAuthInput(ctx context.Context, authInput AuthTokenInput) context.Context {
+	return context.WithValue(ctx, contextKeyAuthInput{}, authInput)
+}
+
+// AuthInputFromContext returns the AuthTokenInput from ctx, or a zero value if none.
+func AuthInputFromContext(ctx context.Context) (AuthTokenInput, bool) {
+	v := ctx.Value(contextKeyAuthInput{})
+	if v == nil {
+		return AuthTokenInput{}, false
+	}
+	a, ok := v.(AuthTokenInput)
+	return a, ok
+}
 
 // headersForLog returns a copy of h suitable for logging, with Authorization values obfuscated.
 func headersForLog(h http.Header) http.Header {
@@ -25,6 +43,15 @@ func headersForLog(h http.Header) http.Header {
 	return out
 }
 
+// roundTripperFromClient adapts *http.Client to http.RoundTripper so ReverseProxy can use client's Transport, timeout, etc.
+type roundTripperFromClient struct {
+	client *http.Client
+}
+
+func (r *roundTripperFromClient) RoundTrip(req *http.Request) (*http.Response, error) {
+	return r.client.Do(req)
+}
+
 // SetAuthHeader sets the Authorization header on req if token is non-empty.
 // If token does not already start with "Bearer " or "Basic ", it is prefixed with "Bearer ".
 func SetAuthHeader(req *http.Request, token string) {
@@ -37,49 +64,39 @@ func SetAuthHeader(req *http.Request, token string) {
 	req.Header.Set("Authorization", token)
 }
 
-// ProxyRequest forwards r to targetBaseURL (path and query from r), sets Content-Type and optional auth,
-// performs the request with client, and copies the response to w.
-func ProxyRequest(logger *slog.Logger, w http.ResponseWriter, r *http.Request, client *http.Client, targetBaseURL string, authInput AuthTokenInput) {
-	targetURL := strings.TrimSuffix(targetBaseURL, "/") + r.URL.Path
-	if r.URL.RawQuery != "" {
-		targetURL += "?" + r.URL.RawQuery
-	}
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	defer r.Body.Close()
-	req, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, bytes.NewReader(body))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	req.ContentLength = int64(len(body))
-	if ct := r.Header.Get("Content-Type"); ct != "" {
-		req.Header.Set("Content-Type", ct)
-	}
-	if tenant := r.Header.Get("X-Tenant"); tenant != "" {
-		req.Header.Set("X-Tenant", tenant)
+// NewReverseProxy returns an httputil.ReverseProxy that forwards to target using client.
+// Per-request auth is read from the request context (ContextWithAuthInput). Logger is used for request/response logging.
+// The returned proxy is safe to reuse for many requests.
+func NewReverseProxy(target *url.URL, client *http.Client, logger *slog.Logger) *httputil.ReverseProxy {
+	transport := &roundTripperFromClient{client: client}
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	proxy.Transport = transport
+
+	proxy.Director = func(req *http.Request) {
+		req.URL.Scheme = target.Scheme
+		req.URL.Host = target.Host
+		req.Host = target.Host
+		req.RequestURI = "" // required for client requests
+		// Content-Type and X-Tenant are already on req (copied from incoming by ReverseProxy)
+		authInput, ok := AuthInputFromContext(req.Context())
+		if ok {
+			authToken := ResolveAuthToken(logger, authInput)
+			SetAuthHeader(req, authToken)
+		}
+		logger.Info("Proxying request", "method", req.Method, "url", req.URL.String(), "headers", headersForLog(req.Header))
 	}
 
-	authToken := ResolveAuthToken(logger, authInput)
-	SetAuthHeader(req, authToken)
+	proxy.ModifyResponse = func(resp *http.Response) error {
+		if resp.Request != nil {
+			logger.Info("Response from proxy", "method", resp.Request.Method, "url", resp.Request.URL.String(), "status", resp.StatusCode)
+		}
+		return nil
+	}
 
-	logger.Info("Proxying request", "method", req.Method, "url", req.URL.String(), "headers", headersForLog(req.Header))
-	resp, err := client.Do(req)
-	if err != nil {
+	proxy.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {
 		logger.Error("Error proxying request", "method", req.Method, "url", req.URL.String(), "error", err)
 		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
 	}
-	defer resp.Body.Close()
-	logger.Info("Response from proxy", "method", req.Method, "url", req.URL.String(), "status", resp.StatusCode)
-	for k, v := range resp.Header {
-		for _, vv := range v {
-			w.Header().Add(k, vv)
-		}
-	}
-	w.WriteHeader(resp.StatusCode)
-	io.Copy(w, resp.Body)
+
+	return proxy
 }

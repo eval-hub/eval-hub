@@ -1,9 +1,11 @@
 package proxy
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -71,7 +73,24 @@ func TestSetAuthHeader(t *testing.T) {
 	})
 }
 
-func TestProxyRequest(t *testing.T) {
+func TestContextWithAuthInput(t *testing.T) {
+	ctx := context.Background()
+	_, ok := AuthInputFromContext(ctx)
+	if ok {
+		t.Error("AuthInputFromContext(background) should not have value")
+	}
+	input := AuthTokenInput{TargetEndpoint: "ep", AuthToken: "tok"}
+	ctx = ContextWithAuthInput(ctx, input)
+	got, ok := AuthInputFromContext(ctx)
+	if !ok {
+		t.Fatal("AuthInputFromContext should have value after ContextWithAuthInput")
+	}
+	if got.TargetEndpoint != "ep" || got.AuthToken != "tok" {
+		t.Errorf("AuthInputFromContext = %+v, want TargetEndpoint=ep AuthToken=tok", got)
+	}
+}
+
+func TestNewReverseProxy(t *testing.T) {
 	logger := slog.Default()
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/evaluations/jobs" {
@@ -83,13 +102,19 @@ func TestProxyRequest(t *testing.T) {
 	}))
 	defer backend.Close()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs", nil)
-	rw := httptest.NewRecorder()
+	target, err := url.Parse(strings.TrimSuffix(backend.URL, "/"))
+	if err != nil {
+		t.Fatalf("url.Parse: %v", err)
+	}
+	proxy := NewReverseProxy(target, backend.Client(), logger)
 	authInput := AuthTokenInput{
 		TargetEndpoint: "proxy-test",
 		AuthToken:      "test-token",
 	}
-	ProxyRequest(logger, rw, req, backend.Client(), strings.TrimSuffix(backend.URL, "/"), authInput)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs", nil)
+	req = req.WithContext(ContextWithAuthInput(req.Context(), authInput))
+	rw := httptest.NewRecorder()
+	proxy.ServeHTTP(rw, req)
 
 	if rw.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200", rw.Code)
