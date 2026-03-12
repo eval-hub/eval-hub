@@ -26,7 +26,7 @@ benchmarks:
     weight: 1
     primary_score:
       metric: acc_norm
-      lower_is_better: true
+      lower_is_better: false
     pass_criteria:
       threshold: 40.0
   - id: leaderboard_mmlu_pro
@@ -34,7 +34,7 @@ benchmarks:
     weight: 1
     primary_score:
       metric: acc_norm
-      lower_is_better: true
+      lower_is_better: false
     pass_criteria:
       threshold: 60.0
   - id: leaderboard_musr
@@ -42,7 +42,7 @@ benchmarks:
     weight: 1
     primary_score:
       metric: acc_norm
-      lower_is_better: true
+      lower_is_better: false
     pass_criteria:
       threshold: 38.0
   - id: leaderboard_math_hard
@@ -50,6 +50,6 @@ benchmarks:
     weight: 1
     primary_score:
       metric: exact_match
-      lower_is_better: true
+      lower_is_better: false
     pass_criteria:
       threshold: 55.0
