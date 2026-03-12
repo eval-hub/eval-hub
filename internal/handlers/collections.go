@@ -50,7 +50,7 @@ func (h *Handlers) filterSystemCollections(filter map[string]any) []api.Collecti
 	return filteredCollections
 }
 
-// matchesFilterKey returns true if the provider matches the filter key.
+// matchesCollectionFilterKey returns true if the collection matches the filter key.
 // values and operator come from shared.GetValues (comma=AND, pipe=OR).
 func matchesCollectionFilterKey(c api.CollectionResource, key string, values []any, operator string) bool {
 	getStr := func(v any) string {
