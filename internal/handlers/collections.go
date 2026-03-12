@@ -145,9 +145,15 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 
 	totalCount := len(collections)
 
+	if filter.Offset < len(collections) {
+		collections = collections[filter.Offset:]
+	} else {
+		collections = []api.CollectionResource{}
+	}
+
 	// first check to see if the system collections are enough for the paging
-	if len(collections) > 0 {
-		if len(collections) < (filter.Limit + filter.Offset) {
+	if (len(collections) > 0) && (filter.Offset < len(collections)) {
+		if len(collections) < filter.Limit {
 			userFilter := &abstractions.QueryFilter{
 				Limit:  max(0, filter.Limit-len(collections)),
 				Offset: max(0, filter.Offset-len(collections)),

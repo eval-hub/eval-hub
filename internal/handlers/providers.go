@@ -208,7 +208,7 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 		return
 	}
 
-	allowedParams := []string{"limit", "offset", "benchmarks", "name", "tags", "system_defined", "benchmarks", "owner"}
+	allowedParams := []string{"limit", "offset", "benchmarks", "name", "tags", "system_defined", "benchmarks", "owner", "read_only"}
 	badParams := getAllParams(req, allowedParams...)
 	if len(badParams) > 0 {
 		// just report the first bad parameter
@@ -225,9 +225,15 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 
 	totalCount := len(providers)
 
+	if filter.Offset < len(providers) {
+		providers = providers[filter.Offset:]
+	} else {
+		providers = []api.ProviderResource{}
+	}
+
 	// first check to see if the system providers are enough for the paging
-	if len(providers) > 0 {
-		if len(providers) < (filter.Limit + filter.Offset) {
+	if (len(providers) > 0) && (filter.Offset < len(providers)) {
+		if len(providers) < filter.Limit {
 			userFilter := &abstractions.QueryFilter{
 				Limit:  max(0, filter.Limit-len(providers)),
 				Offset: max(0, filter.Offset-len(providers)),

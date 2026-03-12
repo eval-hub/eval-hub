@@ -926,6 +926,14 @@ func (tc *scenarioConfig) theResponseShouldNotContainAtJSONPath(expectedValue st
 	return nil
 }
 
+func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLengthValue(jsonPath string, lengthValue string) error {
+	value, err := tc.getId(lengthValue)
+	if err != nil {
+		return tc.logError(err)
+	}
+	return tc.theArrayAtPathInResponseShouldHaveLength(jsonPath, value)
+}
+
 func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLength(jsonPath string, lengthStr string) error {
 	length, err := strconv.Atoi(lengthStr)
 	if err != nil {
@@ -983,7 +991,11 @@ func (tc *scenarioConfig) theFieldShouldBeSaved(path string, name string) error 
 	}
 	finalResult, ok := pathObj.Data().(string)
 	if !ok {
-		return tc.logError(fmt.Errorf("expected %s to be a string but got %T", path, pathObj.Data()))
+		if floatResult, ok := pathObj.Data().(float64); ok {
+			finalResult = strconv.FormatFloat(floatResult, 'f', -1, 64)
+		} else {
+			return tc.logError(fmt.Errorf("expected %s to be a string or float64 but got %T", path, pathObj.Data()))
+		}
 	}
 	if strings.HasPrefix(name, valuePrefix) {
 		tc.values[strings.TrimPrefix(name, valuePrefix)] = finalResult
@@ -1159,6 +1171,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the response should contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldContainAtJSONPath)
 	ctx.Step(`^the response should not contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldNotContainAtJSONPath)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLength)
+	ctx.Step(`^the array at path "([^"]*)" in the response should have length "([^"]*)"$`, tc.theArrayAtPathInResponseShouldHaveLengthValue)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^I wait for the evaluation job status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatus)
 	ctx.Step(`^the mode is local or CI then skip this scenario$`, tc.whenTheModeIsLocalOrCIThenSkipThisScenario)

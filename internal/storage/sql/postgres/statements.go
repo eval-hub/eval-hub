@@ -86,15 +86,18 @@ func (s *postgresStatementsFactory) GetAllowedFilterColumns(tableName string) []
 	case shared.TABLE_EVALUATIONS:
 		return append(allColumns, "status", "experiment_id")
 	case shared.TABLE_PROVIDERS:
-		return allColumns // "benchmarks" and "system_defined" are not allowed filters for providers from the database
+		return append(allColumns, "read_only") // "benchmarks" and "system_defined" are not allowed filters for providers from the database
 	case shared.TABLE_COLLECTIONS:
-		return append(allColumns, "category") // "system_defined" is not allowed filter for collections from the database
+		return append(allColumns, "category", "read_only") // "system_defined" is not allowed filter for collections from the database
 	default:
 		return nil
 	}
 }
 
 // entityFilterCondition returns the SQL condition and args for a filter key.
+// PostgreSQL includes two native operators: arrow operator ( -> ) and arrow-text operator (- >> ) to query JSONB documents.
+// The arrow operator -> returns a JSONB object field by key or array index and is suitable for navigating nested structures.
+// The arrow-text operator ->> returns the object field as plain text.
 func (s *postgresStatementsFactory) CreateEntityFilterCondition(key string, value any, index int, tableName string) (condition string, args []any) {
 	switch key {
 	case "name":
@@ -120,6 +123,15 @@ func (s *postgresStatementsFactory) CreateEntityFilterCondition(key string, valu
 			tagsPath = "entity->'config'->'tags'"
 		}
 		return fmt.Sprintf("jsonb_typeof(%s) = 'array' AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(%s) AS tag WHERE tag = $%d)", tagsPath, tagsPath, index), []any{tagStr}
+	case "read_only":
+		switch tableName {
+		case shared.TABLE_PROVIDERS, shared.TABLE_COLLECTIONS:
+			readOnlyPath := "entity->'resource'->>'read_only'"
+			return fmt.Sprintf("%s = $%d", readOnlyPath, index), []any{value}
+		default:
+			// should never get here as we validate the filter before calling this function
+			return "", []any{}
+		}
 	case "ORDER BY":
 		return "ORDER BY " + value.(string), []any{}
 	case "LIMIT", "OFFSET":

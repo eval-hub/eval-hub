@@ -129,10 +129,16 @@ func CommonListFilters(r http_wrappers.RequestWrapper, extraParams ...string) (*
 		return nil, err
 	}
 
+	readOnly, err := GetParam(r, "read_only", true, "")
+	if err != nil {
+		return nil, err
+	}
+
 	params := map[string]any{
-		"name":  name,
-		"tags":  tags,
-		"owner": owner,
+		"name":      name,
+		"tags":      tags,
+		"owner":     owner,
+		"read_only": readOnly,
 	}
 
 	for _, param := range extraParams {

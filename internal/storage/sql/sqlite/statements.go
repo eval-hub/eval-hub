@@ -83,9 +83,9 @@ func (s *sqliteStatementsFactory) GetAllowedFilterColumns(tableName string) []st
 	case shared.TABLE_EVALUATIONS:
 		return append(allColumns, "status", "experiment_id")
 	case shared.TABLE_PROVIDERS:
-		return allColumns // "benchmarks" and "system_defined" are not allowed filters for providers from the database
+		return append(allColumns, "read_only") // "benchmarks" and "system_defined" are not allowed filters for providers from the database
 	case shared.TABLE_COLLECTIONS:
-		return append(allColumns, "category") // "system_defined" is not allowed filter for collections from the database
+		return append(allColumns, "category", "read_only") // "system_defined" is not allowed filter for collections from the database
 	default:
 		return nil
 	}
@@ -129,6 +129,15 @@ func (s *sqliteStatementsFactory) CreateEntityFilterCondition(key string, value 
 			tagsPath = "$.config.tags"
 		}
 		return fmt.Sprintf("json_type(json_extract(entity, '%s')) = 'array' AND EXISTS (SELECT 1 FROM json_each(json_extract(entity, '%s')) WHERE value = ?)", tagsPath, tagsPath), []any{tagStr}
+	case "read_only":
+		switch tableName {
+		case shared.TABLE_PROVIDERS, shared.TABLE_COLLECTIONS:
+			readOnlyPath := "$.resource.read_only"
+			return fmt.Sprintf("json_extract(entity, '%s') = ?", readOnlyPath), []any{value}
+		default:
+			// should never get here as we validate the filter before calling this function
+			return "", []any{}
+		}
 	case "ORDER BY":
 		return "ORDER BY " + value.(string), []any{}
 	case "LIMIT", "OFFSET":

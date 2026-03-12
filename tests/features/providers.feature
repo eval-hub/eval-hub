@@ -66,6 +66,35 @@ Feature: Providers Endpoint
     Then the response code should be 400
     And the response should contain the value "query_parameter_invalid" at path "message_code"
 
+  Scenario: List system providers with pagination
+    Given the service is running
+    And there are no user providers
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=0&read_only=true"
+    Then the response code should be 200
+    And the response should contain the value "50" at path "$.limit"
+    And the "total_count" field in the response should be saved as "value:num:providers"
+    And the response should contain the value "3" at path "$.total_count"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=0"
+    Then the response code should be 200
+    And the response should contain the value "50" at path "$.limit"
+    And the array at path "items" in the response should have length "value:num:providers"
+    And the response should contain the value "{{value:num:providers}}" at path "$.total_count"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=1"
+    Then the response code should be 200
+    And the response should contain the value "50" at path "$.limit"
+    And the array at path "items" in the response should have length 2
+    And the response should contain the value "{{value:num:providers}}" at path "$.total_count"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=2"
+    Then the response code should be 200
+    And the response should contain the value "50" at path "$.limit"
+    And the array at path "items" in the response should have length 1
+    And the response should contain the value "{{value:num:providers}}" at path "$.total_count"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=3"
+    Then the response code should be 200
+    And the response should contain the value "50" at path "$.limit"
+    And the array at path "items" in the response should have length 0
+    And the response should contain the value "{{value:num:providers}}" at path "$.total_count"
+
   Scenario: List providers with all search parameters and pagination
     Given the service is running
     And there are no user providers
