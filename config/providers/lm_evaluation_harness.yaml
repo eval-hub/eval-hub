@@ -2040,3 +2040,70 @@ benchmarks:
     tags:
       - code
       - lm_eval
+  - id: leaderboard_ifeval
+    name: Leaderboard IFEval
+    description: Leaderboard IFEval evaluation benchmark
+    category: instruction_following
+    metrics:
+      - prompt_level_strict_acc
+      - inst_level_strict_acc
+      - prompt_level_loose_acc
+      - inst_level_loose_acc
+    num_few_shot: 0
+    tags:
+      - instruction_following
+      - lm_eval
+  - id: leaderboard_bbh
+    name: Leaderboard BBH
+    description: Leaderboard BBH evaluation benchmark
+    category: reasoning
+    metrics:
+      - acc_norm
+    num_few_shot: 0
+    tags:
+      - reasoning
+      - science
+      - lm_eval
+  - id: leaderboard_gpqa
+    name: Leaderboard GPQa
+    description: Leaderboard GPQa evaluation benchmark
+    category: reasoning
+    metrics:
+      - acc_norm
+    num_few_shot: 0
+    tags:
+      - reasoning
+      - science
+      - lm_eval
+  - id: leaderboard_mmlu_pro
+    name: Leaderboard Mmlu Pro
+    description: Leaderboard Mmlu Pro evaluation benchmark
+    category: reasoning
+    metrics:
+      - acc_norm
+    num_few_shot: 0
+    tags:
+      - reasoning
+      - science
+      - lm_eval
+  - id: leaderboard_musr
+    name: Leaderboard MUSR
+    description: Leaderboard MUSR evaluation benchmark
+    category: reasoning
+    metrics:
+      - acc_norm
+    num_few_shot: 0
+    tags:
+      - reasoning
+      - lm_eval
+  - id: leaderboard_math_hard
+    name: Leaderboard Math Hard
+    description: Leaderboard Math Hard evaluation benchmark
+    category: math
+    metrics:
+      - exact_match
+    num_few_shot: 0
+    tags:
+      - math
+      - science
+      - lm_eval
