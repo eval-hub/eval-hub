@@ -167,13 +167,12 @@ func (s *updatePatchDeleteCollectionStorage) DeleteCollection(id string) error {
 }
 
 func TestHandleListCollections(t *testing.T) {
-	desc := "Test collection"
 	collections := []api.CollectionResource{
 		{
 			Resource: api.Resource{ID: "coll-1"},
 			CollectionConfig: api.CollectionConfig{
 				Name:        "Collection 1",
-				Description: &desc,
+				Description: "Test collection",
 				Benchmarks:  []api.BenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
 			},
 		},
@@ -290,12 +289,11 @@ func TestHandleCreateCollection(t *testing.T) {
 }
 
 func TestHandleGetCollection(t *testing.T) {
-	desc := "Test"
 	coll := &api.CollectionResource{
 		Resource: api.Resource{ID: "coll-123"},
 		CollectionConfig: api.CollectionConfig{
 			Name:        "Found Collection",
-			Description: &desc,
+			Description: "Test",
 			Benchmarks:  []api.BenchmarkConfig{},
 		},
 	}
@@ -350,14 +348,13 @@ func TestHandleGetCollection_MissingPathParam(t *testing.T) {
 }
 
 func TestHandleUpdateCollection(t *testing.T) {
-	desc := "Original"
 	storage := &updatePatchDeleteCollectionStorage{
 		fakeStorage: &fakeStorage{},
 		collection: &api.CollectionResource{
 			Resource: api.Resource{ID: "coll-update"},
 			CollectionConfig: api.CollectionConfig{
 				Name:        "Original",
-				Description: &desc,
+				Description: "Original",
 				Benchmarks:  []api.BenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
 			},
 		},
@@ -403,14 +400,13 @@ func TestHandleUpdateCollection(t *testing.T) {
 }
 
 func TestHandlePatchCollection(t *testing.T) {
-	desc := "Original"
 	storage := &updatePatchDeleteCollectionStorage{
 		fakeStorage: &fakeStorage{},
 		collection: &api.CollectionResource{
 			Resource: api.Resource{ID: "coll-patch"},
 			CollectionConfig: api.CollectionConfig{
 				Name:        "Original",
-				Description: &desc,
+				Description: "Original",
 				Benchmarks:  []api.BenchmarkConfig{},
 			},
 		},

@@ -32,10 +32,10 @@ Feature: Collections Endpoint
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_no_category.json"
     Then the response code should be 400
 
-  Scenario: Create a collection without description field returns 400
+  Scenario: Create a collection without description field returns 202
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_no_description.json"
-    Then the response code should be 400
+    Then the response code should be 202
 
   Scenario: Create a collection with a benchmark that does not contain 'id' returns 400
     Given the service is running
@@ -98,12 +98,12 @@ Feature: Collections Endpoint
     When I send a PUT request to "/api/v1/evaluations/collections/{id}" with body "file:/collection_no_name.json"
     Then the response code should be 400
 
-  Scenario: Update collection without description in body returns 400
+  Scenario: Update collection without description in body returns 200
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
     Then the response code should be 202
     When I send a PUT request to "/api/v1/evaluations/collections/{id}" with body "file:/collection_no_description.json"
-    Then the response code should be 400
+    Then the response code should be 200
 
   Scenario: Update collection without benchmarks in body returns 400
     Given the service is running
