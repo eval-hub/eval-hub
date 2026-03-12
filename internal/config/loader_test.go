@@ -226,6 +226,20 @@ secrets:
 			t.Fatalf("Database password is not set")
 		}
 	})
+
+	t.Run("loads providers from explicit config dir", func(t *testing.T) {
+		_, err := config.LoadProviderConfigs(logger)
+		if err != nil {
+			t.Fatalf("LoadProviderConfigs failed: %v", err)
+		}
+	})
+
+	t.Run("loads collections from explicit config dir", func(t *testing.T) {
+		_, err := config.LoadCollectionConfigs(logger)
+		if err != nil {
+			t.Fatalf("LoadCollectionConfigs failed: %v", err)
+		}
+	})
 }
 
 func TestRedactedJSON(t *testing.T) {

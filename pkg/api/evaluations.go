@@ -79,12 +79,12 @@ type MessageInfo struct {
 }
 
 type PrimaryScore struct {
-	Metric        string `json:"metric"`
-	LowerIsBetter bool   `json:"lower_is_better,omitempty" validate:"omitempty,boolean"`
+	Metric        string `mapstructure:"metric" json:"metric" validate:"required"`
+	LowerIsBetter bool   `mapstructure:"lower_is_better" json:"lower_is_better,omitempty" validate:"omitempty,boolean"`
 }
 
 type PassCriteria struct {
-	Threshold float32 `json:"threshold,omitempty" validate:"omitempty,number"`
+	Threshold float32 `mapstructure:"threshold" json:"threshold,omitempty" validate:"omitempty,number"`
 }
 
 // S3TestDataRef represents S3 source for test data.
@@ -96,18 +96,18 @@ type S3TestDataRef struct {
 
 // TestDataRef represents external test data sources.
 type TestDataRef struct {
-	S3 *S3TestDataRef `json:"s3,omitempty"`
+	S3 *S3TestDataRef `mapstructure:"s3" json:"s3,omitempty"`
 }
 
 // BenchmarkConfig represents a reference to a benchmark
 type BenchmarkConfig struct {
-	Ref
-	ProviderID   string         `json:"provider_id" validate:"required"`
-	Weight       float32        `json:"weight,omitempty" validate:"omitempty,min=0,max=1"`
-	PrimaryScore *PrimaryScore  `json:"primary_score,omitempty"`
-	PassCriteria *PassCriteria  `json:"pass_criteria,omitempty"`
-	Parameters   map[string]any `json:"parameters,omitempty"`
-	TestDataRef  *TestDataRef   `json:"test_data_ref,omitempty"`
+	Ref          `mapstructure:",squash"`
+	ProviderID   string         `mapstructure:"provider_id" json:"provider_id" validate:"required"`
+	Weight       float32        `mapstructure:"weight" json:"weight,omitempty" validate:"omitempty,min=0,max=1"`
+	PrimaryScore *PrimaryScore  `mapstructure:"primary_score" json:"primary_score,omitempty"`
+	PassCriteria *PassCriteria  `mapstructure:"pass_criteria" json:"pass_criteria,omitempty"`
+	Parameters   map[string]any `mapstructure:"parameters" json:"parameters,omitempty"`
+	TestDataRef  *TestDataRef   `mapstructure:"test_data_ref" json:"test_data_ref,omitempty"`
 }
 
 // ExperimentTag represents a tag on an experiment

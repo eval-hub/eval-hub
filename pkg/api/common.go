@@ -38,7 +38,7 @@ const (
 )
 
 type Ref struct {
-	ID string `json:"id" validate:"required"`
+	ID string `mapstructure:"id" json:"id" validate:"required"`
 }
 
 type HRef struct {

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/eval-hub/eval-hub/auth"
+	"github.com/eval-hub/eval-hub/internal/validation"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/spf13/viper"
 )
@@ -96,19 +97,26 @@ func loadProvider(logger *slog.Logger, file string, dirs ...string) (*api.Provid
 	if err := configValues.Unmarshal(&providerConfig); err != nil {
 		return nil, err
 	}
-	return &api.ProviderResource{
+	res := &api.ProviderResource{
 		Resource: api.Resource{
 			ID:       providerConfig.ID,
 			ReadOnly: true,
 			Owner:    "system",
 		},
 		ProviderConfig: providerConfig.ProviderConfig,
-	}, nil
+	}
+
+	// validate the provider
+	if err := validation.NewValidator().Struct(res); err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
 
 func loadCollection(logger *slog.Logger, file string, dirs ...string) (*api.CollectionResource, error) {
 	type collectionConfigInternal struct {
-		ID                   string `mapstructure:"id" yaml:"id" json:"id"`
+		ID                   string `mapstructure:"id"`
 		api.CollectionConfig `mapstructure:",squash"`
 	}
 	collectionConfig := collectionConfigInternal{}
@@ -120,17 +128,24 @@ func loadCollection(logger *slog.Logger, file string, dirs ...string) (*api.Coll
 	if err := configValues.Unmarshal(&collectionConfig); err != nil {
 		return nil, err
 	}
-	return &api.CollectionResource{
+	res := &api.CollectionResource{
 		Resource: api.Resource{
 			ID:       collectionConfig.ID,
 			ReadOnly: true,
 			Owner:    "system",
 		},
 		CollectionConfig: collectionConfig.CollectionConfig,
-	}, nil
+	}
+
+	// validate the collection
+	if err := validation.NewValidator().Struct(res); err != nil {
+		return nil, fmt.Errorf("failed to validate collection : %w \n with config: %s", err, RedactedJSON(res, []string{}))
+	}
+
+	return res, nil
 }
 
-func scanFolders(logger *slog.Logger, dirs ...string) ([]os.DirEntry, error) {
+func scanFolders(logger *slog.Logger, dirs ...string) ([]os.DirEntry, string, error) {
 	var dirsChecked []string
 	for _, dir := range dirs {
 		absDir, err := filepath.Abs(dir)
@@ -143,10 +158,10 @@ func scanFolders(logger *slog.Logger, dirs ...string) ([]os.DirEntry, error) {
 		if err != nil {
 			continue
 		}
-		return files, nil
+		return files, absDir, nil
 	}
 	logger.Warn("No providers found", "directories", dirsChecked)
-	return []os.DirEntry{}, nil
+	return []os.DirEntry{}, "", nil
 }
 
 func hasExplicitConfigDir(dirs []string) bool {
@@ -165,7 +180,7 @@ func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.Pr
 
 	providerConfigs := make(map[string]api.ProviderResource)
 
-	files, err := scanFolders(logger, dirs...)
+	files, dir, err := scanFolders(logger, dirs...)
 	if err != nil {
 		return providerConfigs, err
 	}
@@ -174,7 +189,7 @@ func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.Pr
 			continue
 		}
 		name := strings.TrimSuffix(file.Name(), ".yaml")
-		providerConfig, err := loadProvider(logger, name, dirs...)
+		providerConfig, err := loadProvider(logger, name, dir)
 		if err != nil {
 			return nil, err
 		}
@@ -203,7 +218,7 @@ func LoadCollectionConfigs(logger *slog.Logger, dirs ...string) (map[string]api.
 
 	collectionConfigs := make(map[string]api.CollectionResource)
 
-	files, err := scanFolders(logger, dirs...)
+	files, dir, err := scanFolders(logger, dirs...)
 	if err != nil {
 		return collectionConfigs, err
 	}
@@ -212,7 +227,7 @@ func LoadCollectionConfigs(logger *slog.Logger, dirs ...string) (map[string]api.
 			continue
 		}
 		name := strings.TrimSuffix(file.Name(), ".yaml")
-		collectionConfig, err := loadCollection(logger, name, dirs...)
+		collectionConfig, err := loadCollection(logger, name, dir)
 		if err != nil {
 			return nil, err
 		}
