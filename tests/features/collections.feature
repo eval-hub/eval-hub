@@ -241,7 +241,7 @@ Feature: Collections Endpoint
     When I send a DELETE request to "/api/v1/evaluations/collections/00000000-0000-0000-0000-000000000000?hard_delete=true"
     Then the response code should be 204
 
-  Scenario: List collections by tags and name
+  Scenario: List collections by tags and name and category
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body:
     """
@@ -282,7 +282,7 @@ Feature: Collections Endpoint
     {
       "name": "test-collection-3",
       "description": "Collection of benchmarks for FVT",
-      "category": "test",
+      "category": "test3",
       "tags": ["test-tag-3", "test-tag-2", "test-tag-1"],
       "benchmarks": [
         {
@@ -362,3 +362,27 @@ Feature: Collections Endpoint
     When I send a GET request to "/api/v1/evaluations/collections?name=test-collection-3&tags=test-tag-3"
     Then the response code should be 200
     And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/collections?category=test"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 2
+    When I send a GET request to "/api/v1/evaluations/collections?category=test3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/collections?category=test4"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/collections?category=test&name=test-collection-1"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/collections?category=test&name=test-collection-2"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/collections?category=test&name=test-collection-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/collections?category=test3&name=test-collection-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/collections?category=test&name=test-collection-4"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0

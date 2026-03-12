@@ -96,7 +96,7 @@ func GetParam[T string | int | bool](r http_wrappers.RequestWrapper, name string
 	}
 }
 
-func CommonListFilters(r http_wrappers.RequestWrapper) (*abstractions.QueryFilter, error) {
+func CommonListFilters(r http_wrappers.RequestWrapper, extraParams ...string) (*abstractions.QueryFilter, error) {
 	// note that a user can not search by tenant
 	limit, err := GetParam(r, "limit", true, 50)
 	if err != nil {
@@ -129,14 +129,26 @@ func CommonListFilters(r http_wrappers.RequestWrapper) (*abstractions.QueryFilte
 		return nil, err
 	}
 
+	params := map[string]any{
+		"name":  name,
+		"tags":  tags,
+		"owner": owner,
+	}
+
+	for _, param := range extraParams {
+		value, err := GetParam(r, param, true, "")
+		if err != nil {
+			return nil, err
+		}
+		if value != "" {
+			params[param] = value
+		}
+	}
+
 	return &abstractions.QueryFilter{
 		Limit:  limit,
 		Offset: offset,
-		Params: map[string]any{
-			"name":  name,
-			"tags":  tags,
-			"owner": owner,
-		},
+		Params: params,
 	}, nil
 }
 

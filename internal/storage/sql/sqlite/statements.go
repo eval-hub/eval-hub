@@ -85,7 +85,7 @@ func (s *sqliteStatementsFactory) GetAllowedFilterColumns(tableName string) []st
 	case shared.TABLE_PROVIDERS:
 		return allColumns // "benchmarks" and "system_defined" are not allowed filters for providers from the database
 	case shared.TABLE_COLLECTIONS:
-		return allColumns // "system_defined" is not allowed filter for collections from the database
+		return append(allColumns, "category") // "system_defined" is not allowed filter for collections from the database
 	default:
 		return nil
 	}
@@ -113,6 +113,14 @@ func (s *sqliteStatementsFactory) CreateEntityFilterCondition(key string, value 
 		}
 		// name at top level
 		return fmt.Sprintf("json_extract(entity, '%s') = ?", namePath), []any{value}
+	case "category":
+		if tableName == shared.TABLE_COLLECTIONS {
+			// collections: category at entity root
+			categoryPath := "$.category"
+			return fmt.Sprintf("json_extract(entity, '%s') = ?", categoryPath), []any{value}
+		}
+		// should never get here as we validate the filter before calling this function
+		return "", []any{}
 	case "tags":
 		tagStr, _ := value.(string)
 		// evaluations: tags at config.tags; providers and collections: tags at entity root

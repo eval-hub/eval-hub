@@ -85,7 +85,7 @@ func matchesCollectionFilterKey(c api.CollectionResource, key string, values []a
 			}
 			return false
 		}
-		// AND: name must equal all values (typically one value)
+		// AND: category must equal all values (typically one value)
 		for _, val := range values {
 			if c.CollectionConfig.Category != getStr(val) {
 				return false
@@ -101,7 +101,7 @@ func matchesCollectionFilterKey(c api.CollectionResource, key string, values []a
 			}
 			return false
 		}
-		// AND: provider must have all tags
+		// AND: collection must have all tags
 		for _, val := range values {
 			if !slices.Contains(c.CollectionConfig.Tags, getStr(val)) {
 				return false
@@ -117,7 +117,7 @@ func matchesCollectionFilterKey(c api.CollectionResource, key string, values []a
 func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
-	filter, err := CommonListFilters(req)
+	filter, err := CommonListFilters(req, "category")
 
 	logging.LogRequestStarted(ctx, "filter", filter)
 
