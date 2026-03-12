@@ -69,7 +69,7 @@ Feature: Providers Endpoint
   Scenario: List system providers with pagination
     Given the service is running
     And there are no user providers
-    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=0&read_only=true"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=0&system_defined=only"
     Then the response code should be 200
     And the response should contain the value "50" at path "$.limit"
     And the "total_count" field in the response should be saved as "value:num_providers"
@@ -97,7 +97,7 @@ Feature: Providers Endpoint
     When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider.json"
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:provider1_id"
-    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=0&read_only=true"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=0&system_defined=only"
     Then the response code should be 200
     And the response should contain the value "{{value:num_providers}}" at path "$.total_count"
     When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset={{value:num_providers}}"

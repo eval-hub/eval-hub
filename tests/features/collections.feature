@@ -386,3 +386,18 @@ Feature: Collections Endpoint
     When I send a GET request to "/api/v1/evaluations/collections?category=test&name=test-collection-4"
     Then the response code should be 200
     And the array at path "items" in the response should have length 0
+
+  @ignore
+  Scenario: List system defined collections with pagination
+    Given the service is running
+    And there are no user collections
+    When I send a GET request to "/api/v1/evaluations/collections?limit=50&offset=0&system_defined=true"
+    Then the response code should be 200
+    And the response should contain the value "50" at path "$.limit"
+    And the "total_count" field in the response should be saved as "value:num_collections"
+    And the response should contain the value "1" at path "$.total_count"
+    When I send a GET request to "/api/v1/evaluations/collections?limit=50&offset=0"
+    Then the response code should be 200
+    And the response should contain the value "50" at path "$.limit"
+    And the array at path "items" in the response should have length "value:num_collections"
+    And the response should contain the value "{{value:num_collections}}" at path "$.total_count"

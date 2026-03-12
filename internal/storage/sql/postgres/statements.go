@@ -86,9 +86,9 @@ func (s *postgresStatementsFactory) GetAllowedFilterColumns(tableName string) []
 	case shared.TABLE_EVALUATIONS:
 		return append(allColumns, "status", "experiment_id")
 	case shared.TABLE_PROVIDERS:
-		return append(allColumns, "read_only") // "benchmarks" and "system_defined" are not allowed filters for providers from the database
+		return allColumns // "benchmarks" and "system_defined" are not allowed filters for providers from the database
 	case shared.TABLE_COLLECTIONS:
-		return append(allColumns, "category", "read_only") // "system_defined" is not allowed filter for collections from the database
+		return append(allColumns, "category") // "system_defined" is not allowed filter for collections from the database
 	default:
 		return nil
 	}

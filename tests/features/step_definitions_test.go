@@ -208,6 +208,12 @@ func (a *apiFeature) startLocalServer(port int) error {
 		providerConfigs[key] = providerCfg
 	}
 
+	// set up the collection configs
+	collectionConfigs, err := config.LoadCollectionConfigs(logger)
+	if err != nil {
+		return logError(fmt.Errorf("failed to load collection configs: %w", err))
+	}
+
 	runtime, err := runtimes.NewRuntime(logger, serviceConfig, providerConfigs)
 	if err != nil {
 		return logError(fmt.Errorf("failed to create runtime: %w", err))
@@ -221,6 +227,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 	a.server, err = server.NewServer(logger,
 		serviceConfig,
 		providerConfigs,
+		collectionConfigs,
 		nil,
 		storage,
 		validate,
@@ -320,6 +327,36 @@ func (tc *scenarioConfig) thereAreNoUserProviders(ctx context.Context) error {
 			}
 			if tc.response != nil && tc.response.StatusCode != 204 {
 				return tc.logError(fmt.Errorf("failed to delete provider %s: status %d", item.Resource.ID, tc.response.StatusCode))
+			}
+		}
+	}
+	return nil
+}
+
+func (tc *scenarioConfig) thereAreNoUserCollections(ctx context.Context) error {
+	if err := tc.iSendARequestTo("GET", "/api/v1/evaluations/collections?system_defined=false&limit=100"); err != nil {
+		return err
+	}
+	if tc.response.StatusCode != 200 {
+		return tc.logError(fmt.Errorf("expected 200 listing user collections, got %d: %s", tc.response.StatusCode, string(tc.body)))
+	}
+	var resp struct {
+		Items []struct {
+			Resource struct {
+				ID string `json:"id"`
+			} `json:"resource"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(tc.body, &resp); err != nil {
+		return tc.logError(fmt.Errorf("failed to parse collections list: %w", err))
+	}
+	for _, item := range resp.Items {
+		if item.Resource.ID != "" {
+			if err := tc.iSendARequestTo("DELETE", "/api/v1/evaluations/collections/"+item.Resource.ID); err != nil {
+				return err
+			}
+			if tc.response != nil && tc.response.StatusCode != 204 {
+				return tc.logError(fmt.Errorf("failed to delete collection %s: status %d", item.Resource.ID, tc.response.StatusCode))
 			}
 		}
 	}
@@ -1152,6 +1189,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the service is running$`, tc.theServiceIsRunning)
 	ctx.Step(`^there are no evaluation jobs$`, tc.thereAreNoEvaluationJobs)
 	ctx.Step(`^there are no user providers$`, tc.thereAreNoUserProviders)
+	ctx.Step(`^there are no user collections$`, tc.thereAreNoUserCollections)
 	ctx.Step(`^I set the header "([^"]*)" to "([^"]*)"$`, tc.iSetHeaderTo)
 	ctx.Step(`^I unset the header "([^"]*)"$`, tc.iUnsetHeader)
 	ctx.Step(`^I set transaction-id to "([^"]*)"$`, tc.iSetTransactionIdTo)

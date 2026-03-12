@@ -65,6 +65,7 @@ func (s *Server) isOTELEnabled() bool {
 func NewServer(logger *slog.Logger,
 	serviceConfig *config.Config,
 	providerConfigs map[string]api.ProviderResource,
+	collectionConfigs map[string]api.CollectionResource,
 	authConfig *auth.AuthConfig,
 	storage abstractions.Storage,
 	validate *validator.Validate,
@@ -86,15 +87,16 @@ func NewServer(logger *slog.Logger,
 	}
 
 	return &Server{
-		port:            serviceConfig.Service.Port,
-		logger:          logger,
-		serviceConfig:   serviceConfig,
-		providerConfigs: providerConfigs,
-		authConfig:      authConfig,
-		storage:         storage,
-		validate:        validate,
-		runtime:         runtime,
-		mlflowClient:    mlflowClient,
+		port:              serviceConfig.Service.Port,
+		logger:            logger,
+		serviceConfig:     serviceConfig,
+		providerConfigs:   providerConfigs,
+		collectionConfigs: collectionConfigs,
+		authConfig:        authConfig,
+		storage:           storage,
+		validate:          validate,
+		runtime:           runtime,
+		mlflowClient:      mlflowClient,
 	}, nil
 }
 

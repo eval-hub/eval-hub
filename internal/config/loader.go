@@ -106,6 +106,30 @@ func loadProvider(logger *slog.Logger, file string, dirs ...string) (*api.Provid
 	}, nil
 }
 
+func loadCollection(logger *slog.Logger, file string, dirs ...string) (*api.CollectionResource, error) {
+	type collectionConfigInternal struct {
+		ID                   string `mapstructure:"id" yaml:"id" json:"id"`
+		api.CollectionConfig `mapstructure:",squash"`
+	}
+	collectionConfig := collectionConfigInternal{}
+	configValues, err := readConfig(logger, file, "yaml", dirs...)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := configValues.Unmarshal(&collectionConfig); err != nil {
+		return nil, err
+	}
+	return &api.CollectionResource{
+		Resource: api.Resource{
+			ID:       collectionConfig.ID,
+			ReadOnly: true,
+			Owner:    "system",
+		},
+		CollectionConfig: collectionConfig.CollectionConfig,
+	}, nil
+}
+
 func scanFolders(logger *slog.Logger, dirs ...string) ([]os.DirEntry, error) {
 	var dirsChecked []string
 	for _, dir := range dirs {
@@ -165,6 +189,44 @@ func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.Pr
 	}
 
 	return providerConfigs, nil
+}
+
+func LoadCollectionConfigs(logger *slog.Logger, dirs ...string) (map[string]api.CollectionResource, error) {
+	if !hasExplicitConfigDir(dirs) {
+		dirs = []string{}
+		for _, dir := range configLookup {
+			dirs = append(dirs, dir+"/collections")
+		}
+	} else {
+		dirs = []string{dirs[0] + "/collections"}
+	}
+
+	collectionConfigs := make(map[string]api.CollectionResource)
+
+	files, err := scanFolders(logger, dirs...)
+	if err != nil {
+		return collectionConfigs, err
+	}
+	for _, file := range files {
+		if file.IsDir() || !strings.HasSuffix(file.Name(), ".yaml") {
+			continue
+		}
+		name := strings.TrimSuffix(file.Name(), ".yaml")
+		collectionConfig, err := loadCollection(logger, name, dirs...)
+		if err != nil {
+			return nil, err
+		}
+
+		if collectionConfig.Resource.ID == "" {
+			logger.Warn("Collection config missing id, skipping", "file", file.Name())
+			continue
+		}
+
+		collectionConfigs[collectionConfig.Resource.ID] = *collectionConfig
+		logger.Info("Collection loaded", "collection_id", collectionConfig.Resource.ID)
+	}
+
+	return collectionConfigs, nil
 }
 
 func LoadAuthConfig(logger *slog.Logger, dirs ...string) (*auth.AuthConfig, error) {

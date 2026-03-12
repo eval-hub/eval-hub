@@ -208,7 +208,7 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 		return
 	}
 
-	allowedParams := []string{"limit", "offset", "benchmarks", "name", "tags", "system_defined", "benchmarks", "owner", "read_only"}
+	allowedParams := []string{"limit", "offset", "benchmarks", "name", "tags", "system_defined", "benchmarks", "owner"}
 	badParams := getAllParams(req, allowedParams...)
 	if len(badParams) > 0 {
 		// just report the first bad parameter
@@ -216,7 +216,12 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 		return
 	}
 
-	isReadOnly := "true" == filter.Params["read_only"]
+	systemDefined, err := GetParam(req, "system_defined", true, "")
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+	isReadOnly := "only" == systemDefined
 
 	providers := []api.ProviderResource{}
 

@@ -275,13 +275,18 @@ func createServer(port int) (*server.Server, error) {
 		// we do this as no point trying to continue
 		return nil, fmt.Errorf("failed to load provider configs: %w", err)
 	}
+	collectionConfigs, err := config.LoadCollectionConfigs(logger)
+	if err != nil {
+		// we do this as no point trying to continue
+		return nil, fmt.Errorf("failed to load collection configs: %w", err)
+	}
 	// Use stub runtime to avoid file writes and process spawning during tests
 	runtime := &stubRuntime{logger: logger, providers: providerConfigs}
 	mlflowClient, err := mlflow.NewMLFlowClient(serviceConfig, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MLFlow client: %w", err)
 	}
-	return server.NewServer(logger, serviceConfig, providerConfigs, nil, store, validate, runtime, mlflowClient)
+	return server.NewServer(logger, serviceConfig, providerConfigs, collectionConfigs, nil, store, validate, runtime, mlflowClient)
 }
 
 func getKeyAsString(obj map[string]interface{}, key string) string {

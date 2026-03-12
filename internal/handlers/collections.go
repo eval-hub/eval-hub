@@ -136,7 +136,12 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 		return
 	}
 
-	isReadOnly := "true" == filter.Params["read_only"]
+	systemDefined, err := GetParam(req, "system_defined", true, "")
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+	isReadOnly := "only" == systemDefined
 
 	collections := []api.CollectionResource{}
 
