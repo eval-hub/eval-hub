@@ -145,14 +145,8 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 
 	totalCount := len(collections)
 
-	if filter.Offset < len(collections) {
-		collections = collections[filter.Offset:]
-	} else {
-		collections = []api.CollectionResource{}
-	}
-
 	// first check to see if the system collections are enough for the paging
-	if (len(collections) > 0) && (filter.Offset < len(collections)) {
+	if filter.Offset < len(collections) {
 		if len(collections) < filter.Limit {
 			userFilter := &abstractions.QueryFilter{
 				Limit:  max(0, filter.Limit-len(collections)),
@@ -164,12 +158,17 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 				w.Error(err, ctx.RequestID)
 				return
 			}
-			collections = append(collections, queryResults.Items...)
+			collections = append(collections[filter.Offset:], queryResults.Items...)
 			totalCount += queryResults.TotalCount
 		}
 	} else {
 		// no system collections so normal flow for user collections
-		queryResults, err := storage.GetCollections(filter)
+		userFilter := &abstractions.QueryFilter{
+			Limit:  max(0, filter.Limit-len(collections)),
+			Offset: max(0, filter.Offset-len(collections)),
+			Params: filter.Params,
+		}
+		queryResults, err := storage.GetCollections(userFilter)
 		if err != nil {
 			w.Error(err, ctx.RequestID)
 			return

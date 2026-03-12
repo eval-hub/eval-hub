@@ -225,14 +225,8 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 
 	totalCount := len(providers)
 
-	if filter.Offset < len(providers) {
-		providers = providers[filter.Offset:]
-	} else {
-		providers = []api.ProviderResource{}
-	}
-
 	// first check to see if the system providers are enough for the paging
-	if (len(providers) > 0) && (filter.Offset < len(providers)) {
+	if filter.Offset < len(providers) {
 		if len(providers) < filter.Limit {
 			userFilter := &abstractions.QueryFilter{
 				Limit:  max(0, filter.Limit-len(providers)),
@@ -244,17 +238,24 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 				w.Error(err, ctx.RequestID)
 				return
 			}
-			providers = append(providers, queryResults.Items...)
+			providers = append(providers[filter.Offset:], queryResults.Items...)
 			totalCount += queryResults.TotalCount
+		} else {
+			providers = providers[:filter.Limit]
 		}
 	} else {
 		// no system providers so normal flow for user providers
-		queryResults, err := storage.GetProviders(filter)
+		userFilter := &abstractions.QueryFilter{
+			Limit:  max(0, filter.Limit-len(providers)),
+			Offset: max(0, filter.Offset-len(providers)),
+			Params: filter.Params,
+		}
+		queryResults, err := storage.GetProviders(userFilter)
 		if err != nil {
 			w.Error(err, ctx.RequestID)
 			return
 		}
-		providers = append(providers, queryResults.Items...)
+		providers = queryResults.Items
 		totalCount += queryResults.TotalCount
 	}
 
