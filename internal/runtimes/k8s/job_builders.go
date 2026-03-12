@@ -33,7 +33,7 @@ const (
 	specSuffix                      = "-spec"
 	envEvalHubURLName               = "EVALHUB_URL"
 	envEvalHubCACertPathName        = "EVALHUB_CA_CERT_PATH"
-	envEvalHubInsecureSkipVerify   = "EVALHUB_INSECURE_SKIP_VERIFY"
+	envEvalHubInsecureSkipVerify    = "EVALHUB_INSECURE_SKIP_VERIFY"
 	envMLFlowTrackingURIName        = "MLFLOW_TRACKING_URI"
 	envMLFlowWorkspaceName          = "MLFLOW_WORKSPACE"
 	envMLFlowTokenPathName          = "MLFLOW_TRACKING_TOKEN_PATH"
