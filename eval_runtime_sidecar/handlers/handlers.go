@@ -68,8 +68,8 @@ func (h *Handlers) HandleProxyCall(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) parseProxyCall(r *http.Request) (string, *proxy.AuthTokenInput, *http.Client, error) {
-	switch r.RequestURI {
-	case "/api/v1/evaluations/":
+	switch {
+	case strings.HasPrefix(r.RequestURI, "/api/v1/evaluations/"):
 		ehClientConfig := h.serviceConfig.Sidecar.EvalHub
 		if ehClientConfig != nil {
 			return h.evalHubBaseURL, &proxy.AuthTokenInput{
@@ -78,19 +78,18 @@ func (h *Handlers) parseProxyCall(r *http.Request) (string, *proxy.AuthTokenInpu
 				AuthToken:         ehClientConfig.Token,
 				TokenCacheTimeout: ehClientConfig.TokenCacheTimeout,
 			}, h.evalHubHTTPClient, nil
-		} else {
-			return "", nil, nil, fmt.Errorf("eval-hub proxy is not configured")
 		}
-	case "/api/2.0/mlflow/":
+		return "", nil, nil, fmt.Errorf("eval-hub proxy is not configured")
+	case strings.HasPrefix(r.RequestURI, "/api/2.0/mlflow/"):
 		mlflowClientConfig := h.serviceConfig.MLFlow
 		if mlflowClientConfig != nil {
 			return h.mlflowTrackingURI, &proxy.AuthTokenInput{
 				TargetEndpoint: "mlflow",
 				AuthTokenPath:  MLFlowTokenPathDefault,
 			}, h.mlflowHTTPClient, nil
-		} else {
-			return "", nil, nil, fmt.Errorf("mlflow proxy is not configured")
 		}
+		return "", nil, nil, fmt.Errorf("mlflow proxy is not configured")
+	default:
+		return "", nil, nil, fmt.Errorf("unknown proxy call: %s", r.RequestURI)
 	}
-	return "", nil, nil, fmt.Errorf("unknown proxy call: %s", r.RequestURI)
 }

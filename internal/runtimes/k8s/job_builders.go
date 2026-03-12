@@ -32,6 +32,8 @@ const (
 	serviceCAMountPath              = "/etc/pki/ca-trust/source/anchors"
 	specSuffix                      = "-spec"
 	envEvalHubURLName               = "EVALHUB_URL"
+	envEvalHubCACertPathName        = "EVALHUB_CA_CERT_PATH"
+	envEvalHubInsecureSkipVerify   = "EVALHUB_INSECURE_SKIP_VERIFY"
 	envMLFlowTrackingURIName        = "MLFLOW_TRACKING_URI"
 	envMLFlowWorkspaceName          = "MLFLOW_WORKSPACE"
 	envMLFlowTokenPathName          = "MLFLOW_TRACKING_TOKEN_PATH"
@@ -662,6 +664,16 @@ func buildSidecarEnvVars(cfg *jobConfig, evalHubURLValue string) []corev1.EnvVar
 	if evalHubURLValue != "" {
 		env = append(env, corev1.EnvVar{Name: envEvalHubURLName, Value: evalHubURLValue})
 		seen[envEvalHubURLName] = true
+		// Enable TLS verification for sidecar -> eval-hub when service CA is mounted
+		if cfg.serviceCAConfigMap != "" {
+			env = append(env, corev1.EnvVar{
+				Name:  envEvalHubCACertPathName,
+				Value: serviceCAMountPath + "/" + serviceCABundleFile,
+			})
+			seen[envEvalHubCACertPathName] = true
+			env = append(env, corev1.EnvVar{Name: envEvalHubInsecureSkipVerify, Value: "false"})
+			seen[envEvalHubInsecureSkipVerify] = true
+		}
 	}
 
 	if cfg.mlflowTrackingURI != "" {

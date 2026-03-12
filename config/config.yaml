@@ -53,18 +53,20 @@ sidecar:
   base_url: http://localhost:8080  # URL for adapter/runtime to call sidecar proxy (cluster mode)
   port: 8080
   eval_hub:
-    # TLS for outbound calls to eval-hub (sidecar -> eval-hub API):
-    # ca_cert_path: path to PEM CA bundle that signed the eval-hub server cert (e.g. OpenShift service CA).
-    # insecure_skip_verify: set to true only for dev with self-signed certs; disables server cert verification.
-    ca_cert_path: ""
-    insecure_skip_verify: true
+    # TLS for outbound calls to eval-hub (sidecar -> eval-hub API).
+    # On cluster: job pods inject EVALHUB_CA_CERT_PATH and EVALHUB_INSECURE_SKIP_VERIFY when service CA is
+    # mounted; ensure evalhub-config ConfigMap includes env_mappings for these so the sidecar uses TLS.
+    # ca_cert_path: path to PEM CA bundle that signed the eval-hub server cert (e.g. /etc/pki/ca-trust/source/anchors/service-ca.crt).
+    # insecure_skip_verify: set to true only for dev with self-signed certs; set false to verify server cert.
+    ca_cert_path: "/etc/pki/ca-trust/source/anchors/service-ca.crt"
+    insecure_skip_verify: false
     # token_cache_timeout: TTL for in-memory auth token cache (e.g. "5m", "1h"). Empty/0 uses default (5m).
     # token_cache_timeout: 5m
   mlflow:
     # token_cache_timeout: TTL for in-memory auth token cache for MLflow proxy (e.g. "5m", "1h"). Empty/0 uses default (5m).
     # token_cache_timeout: 5m
   sidecar_container:
-    image: quay.io/rh-ee-nbs/nbs-dev:eval-hub_v10
+    image: quay.io/evalhub/evalhub:latest
     resources:
       requests:
         cpu: 100m

@@ -31,6 +31,7 @@ const (
 	serviceAccountNameSuffix    = "-job"
 	serviceCAConfigMapSuffix    = "-service-ca"
 	defaultTestDataInitCmd      = "/app/eval-hub-init"
+	defaultEvalHubPort          = "8443"
 )
 
 type jobConfig struct {
@@ -119,7 +120,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	// The SA name uses the instance namespace (not the tenant namespace) to match
 	// the operator's naming convention: <instance>-<instance-namespace>-job.
 	instanceNamespace := readInClusterNamespace()
-	var serviceAccountName, serviceCAConfigMap string
+	var serviceAccountName, serviceCAConfigMap, evalHubURL string
 	if evalHubInstanceName != "" {
 		saNamespace := instanceNamespace
 		if saNamespace == "" {
@@ -127,6 +128,13 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		}
 		serviceAccountName = evalHubInstanceName + "-" + saNamespace + serviceAccountNameSuffix
 		serviceCAConfigMap = evalHubInstanceName + serviceCAConfigMapSuffix
+		// EvalHub URL points to the kube-rbac-proxy HTTPS endpoint in the instance namespace.
+		// Use saNamespace (which has the local-mode fallback applied) to avoid a malformed host
+		// when instanceNamespace is empty.
+		// This is required by sidecar to call eval-hub API.
+		// This is different from job_spec.callback_url which is used by the adapter to call the sidecar
+		evalHubURL = fmt.Sprintf("https://%s.%s.svc.cluster.local:%s",
+			evalHubInstanceName, saNamespace, defaultEvalHubPort)
 	}
 
 	// Extract OCI credentials secret name from exports config (not forwarded to jobSpec)
@@ -178,6 +186,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		sidecarResources:     sidecarResources,
 		sidecarBaseURL:       sidecarBaseURL,
 		localMode:            localMode,
+		evalHubURL:           evalHubURL,
 		testDataS3: s3TestDataConfig{
 			bucket:    testDataS3Bucket,
 			key:       testDataS3Key,
