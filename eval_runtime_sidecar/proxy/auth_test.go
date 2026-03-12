@@ -74,8 +74,8 @@ func TestResolveAuthToken(t *testing.T) {
 	t.Run("cache returns same token on second call for same endpoint", func(t *testing.T) {
 		input := AuthTokenInput{
 			TargetEndpoint:    unique("cached"),
-			AuthTokenPath:    "",
-			AuthToken:        "cached-token",
+			AuthTokenPath:     "",
+			AuthToken:         "cached-token",
 			TokenCacheTimeout: time.Minute,
 		}
 		got1 := ResolveAuthToken(logger, input)
