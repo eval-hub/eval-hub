@@ -6,6 +6,7 @@ type Config struct {
 	MLFlow     *MLFlowConfig     `mapstructure:"mlflow,omitempty"`
 	OTEL       *OTELConfig       `mapstructure:"otel,omitempty"`
 	Prometheus *PrometheusConfig `mapstructure:"prometheus,omitempty"`
+	Sidecar    *SidecarConfig    `mapstructure:"sidecar,omitempty"`
 }
 
 func (c *Config) IsOTELEnabled() bool {

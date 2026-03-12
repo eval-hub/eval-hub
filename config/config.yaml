@@ -22,6 +22,11 @@ env_mappings:
   MLFLOW_INSECURE_SKIP_VERIFY: mlflow.insecure_skip_verify
   MLFLOW_TOKEN_PATH: mlflow.token_path
   MLFLOW_WORKSPACE: mlflow.workspace
+  EVALHUB_CA_CERT_PATH: sidecar.eval_hub.ca_cert_path
+  EVALHUB_INSECURE_SKIP_VERIFY: sidecar.eval_hub.insecure_skip_verify
+  EVALHUB_TOKEN_CACHE_TIMEOUT: sidecar.eval_hub.token_cache_timeout
+  MLFLOW_TOKEN_CACHE_TIMEOUT: sidecar.mlflow.token_cache_timeout
+  SIDECAR_PORT: sidecar.port
 # Database configuration
 database:
   driver: sqlite
@@ -43,3 +48,29 @@ otel:
   # enable_logs: true
 prometheus:
   enabled: true
+
+sidecar:
+  base_url: http://localhost:8080  # URL for adapter/runtime to call sidecar proxy (cluster mode)
+  port: 8080
+  eval_hub:
+    # TLS for outbound calls to eval-hub (sidecar -> eval-hub API).
+    # On cluster: job pods inject EVALHUB_CA_CERT_PATH and EVALHUB_INSECURE_SKIP_VERIFY when service CA is
+    # mounted; ensure evalhub-config ConfigMap includes env_mappings for these so the sidecar uses TLS.
+    # ca_cert_path: path to PEM CA bundle that signed the eval-hub server cert (e.g. /etc/pki/ca-trust/source/anchors/service-ca.crt).
+    # insecure_skip_verify: set to true only for dev with self-signed certs; set false to verify server cert.
+    ca_cert_path: "/etc/pki/ca-trust/source/anchors/service-ca.crt"
+    insecure_skip_verify: false
+    # token_cache_timeout: TTL for in-memory auth token cache (e.g. "5m", "1h"). Empty/0 uses default (5m).
+    # token_cache_timeout: 5m
+  mlflow:
+    # token_cache_timeout: TTL for in-memory auth token cache for MLflow proxy (e.g. "5m", "1h"). Empty/0 uses default (5m).
+    # token_cache_timeout: 5m
+  sidecar_container:
+    image: quay.io/evalhub/evalhub:latest
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
