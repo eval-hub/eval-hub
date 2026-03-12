@@ -139,7 +139,7 @@ func loadCollection(logger *slog.Logger, file string, dirs ...string) (*api.Coll
 
 	// validate the collection
 	if err := validation.NewValidator().Struct(res); err != nil {
-		return nil, fmt.Errorf("failed to validate collection : %w \n with config: %s", err, RedactedJSON(res, []string{}))
+		return nil, err
 	}
 
 	return res, nil
