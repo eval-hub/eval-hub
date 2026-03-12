@@ -387,11 +387,10 @@ Feature: Collections Endpoint
     Then the response code should be 200
     And the array at path "items" in the response should have length 0
 
-  @ignore
   Scenario: List system defined collections with pagination
     Given the service is running
     And there are no user collections
-    When I send a GET request to "/api/v1/evaluations/collections?limit=50&offset=0&system_defined=true"
+    When I send a GET request to "/api/v1/evaluations/collections?limit=50&offset=0&system_defined=only"
     Then the response code should be 200
     And the response should contain the value "50" at path "$.limit"
     And the "total_count" field in the response should be saved as "value:num_collections"
