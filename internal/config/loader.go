@@ -160,7 +160,7 @@ func scanFolders(logger *slog.Logger, dirs ...string) ([]os.DirEntry, string, er
 		}
 		return files, absDir, nil
 	}
-	logger.Warn("No providers found", "directories", dirsChecked)
+	logger.Warn("No config files found", "directories", dirsChecked)
 	return []os.DirEntry{}, "", nil
 }
 
