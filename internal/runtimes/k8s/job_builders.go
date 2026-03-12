@@ -187,7 +187,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	var sidecarEnvVars []corev1.EnvVar
 	if !cfg.localMode {
 		sidecarContainerVolumes, sidecarContainerVolumeMounts = buildSidecarContainerVolumesAndMounts(configMap, cfg)
-		sidecarEnvVars = buildSidecarEnvVars(cfg, cfg.evalHubURL)
+		sidecarEnvVars = buildSidecarEnvVars(cfg)
 	}
 
 	initContainers, InitContainsVolumes, err := initContainerVolumesAndMounts(cfg)
@@ -595,11 +595,16 @@ func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 	var env []corev1.EnvVar
 	seen := map[string]bool{}
 
+	mlflowTrackingURI := cfg.mlflowTrackingURI
+	//When sidecar is at play, mlflow calls are proxied through the sidecar.
+	if !cfg.localMode {
+		mlflowTrackingURI = cfg.sidecarBaseURL
+	}
 	// Add MLFlow environment variables if tracking is configured
 	if cfg.mlflowTrackingURI != "" {
 		env = append(env, corev1.EnvVar{
 			Name:  envMLFlowTrackingURIName,
-			Value: cfg.mlflowTrackingURI,
+			Value: mlflowTrackingURI,
 		})
 		seen[envMLFlowTrackingURIName] = true
 
@@ -657,12 +662,12 @@ func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 
 // buildSidecarEnvVars builds environment variables for the sidecar container only (proxy-related).
 // It does not include OCI credentials path or provider defaultEnv; those are for the adapter/runtime.
-func buildSidecarEnvVars(cfg *jobConfig, evalHubURLValue string) []corev1.EnvVar {
+func buildSidecarEnvVars(cfg *jobConfig) []corev1.EnvVar {
 	var env []corev1.EnvVar
 	seen := map[string]bool{}
 
-	if evalHubURLValue != "" {
-		env = append(env, corev1.EnvVar{Name: envEvalHubURLName, Value: evalHubURLValue})
+	if cfg.evalHubURL != "" {
+		env = append(env, corev1.EnvVar{Name: envEvalHubURLName, Value: cfg.evalHubURL})
 		seen[envEvalHubURLName] = true
 		// Enable TLS verification for sidecar -> eval-hub when service CA is mounted
 		if cfg.serviceCAConfigMap != "" {
