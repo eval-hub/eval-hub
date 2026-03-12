@@ -80,7 +80,7 @@ func (h *Handlers) parseProxyCall(r *http.Request) (string, *proxy.AuthTokenInpu
 			}, h.evalHubHTTPClient, nil
 		}
 		return "", nil, nil, fmt.Errorf("eval-hub proxy is not configured")
-	case strings.HasPrefix(r.RequestURI, "/api/2.0/mlflow/"):
+	case strings.Contains(r.RequestURI, "/mlflow/"):
 		mlflowClientConfig := h.serviceConfig.MLFlow
 		if mlflowClientConfig != nil {
 			return h.mlflowTrackingURI, &proxy.AuthTokenInput{
