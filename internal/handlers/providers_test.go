@@ -16,6 +16,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/handlers"
+	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/validation"
@@ -60,8 +61,13 @@ func (f *fakeStorage) GetProvider(id string) (*api.ProviderResource, error) {
 func (f *fakeStorage) DeleteProvider(_ string) error {
 	return nil
 }
-func (f *fakeStorage) UpdateProvider(_ string, provider *api.ProviderResource) (*api.ProviderResource, error) {
-	return provider, nil
+func (f *fakeStorage) UpdateProvider(id string, provider *api.ProviderConfig) (*api.ProviderResource, error) {
+	return &api.ProviderResource{
+		Resource: api.Resource{
+			ID: id,
+		},
+		ProviderConfig: *provider,
+	}, nil
 }
 func (f *fakeStorage) PatchProvider(_ string, _ *api.Patch) (*api.ProviderResource, error) {
 	return nil, fmt.Errorf("not implemented PatchProvider in fakeStorage")
@@ -88,10 +94,12 @@ func (s *updatePatchProviderStorage) GetProvider(id string) (*api.ProviderResour
 	}
 	return nil, fmt.Errorf("provider not found")
 }
-func (s *updatePatchProviderStorage) UpdateProvider(id string, provider *api.ProviderResource) (*api.ProviderResource, error) {
+func (s *updatePatchProviderStorage) UpdateProvider(id string, provider *api.ProviderConfig) (*api.ProviderResource, error) {
 	updated := &api.ProviderResource{
-		Resource:       s.provider.Resource,
-		ProviderConfig: provider.ProviderConfig,
+		Resource: api.Resource{
+			ID: id,
+		},
+		ProviderConfig: *provider,
 	}
 	s.provider = updated
 	return updated, nil
@@ -536,7 +544,9 @@ func TestHandleUpdateProvider(t *testing.T) {
 	storage := &updatePatchProviderStorage{
 		fakeStorage: base,
 		provider: &api.ProviderResource{
-			Resource: api.Resource{ID: providerID},
+			Resource: api.Resource{
+				ID: providerID,
+			},
 			ProviderConfig: api.ProviderConfig{
 				Name:        "Original",
 				Description: "Original desc",
@@ -545,7 +555,7 @@ func TestHandleUpdateProvider(t *testing.T) {
 	}
 	// providerConfigs empty so getSystemProvider returns nil
 	providerConfigs := map[string]api.ProviderResource{}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := logging.FallbackLogger() // slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, providerConfigs, nil, nil)
 
 	body := `{"name":"Updated Name","description":"Updated desc","benchmarks":[]}`

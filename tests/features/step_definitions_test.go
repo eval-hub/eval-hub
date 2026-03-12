@@ -183,7 +183,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 	logger.Info("Storage created.")
 
 	// set up the provider configs
-	providerConfigs, err := config.LoadProviderConfigs(logger)
+	providerConfigs, err := config.LoadProviderConfigs(logger, validate)
 	if err != nil {
 		// we do this as no point trying to continue
 		return logError(fmt.Errorf("failed to load provider configs: %w", err))
@@ -209,7 +209,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 	}
 
 	// set up the collection configs
-	collectionConfigs, err := config.LoadCollectionConfigs(logger)
+	collectionConfigs, err := config.LoadCollectionConfigs(logger, validate)
 	if err != nil {
 		return logError(fmt.Errorf("failed to load collection configs: %w", err))
 	}

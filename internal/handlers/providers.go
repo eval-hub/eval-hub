@@ -364,7 +364,7 @@ func (h *Handlers) HandleUpdateProvider(ctx *executioncontext.ExecutionContext, 
 		return
 	}
 
-	request := &api.ProviderResource{}
+	request := &api.ProviderConfig{}
 
 	err := h.withSpan(
 		ctx,

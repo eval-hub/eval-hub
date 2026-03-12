@@ -45,7 +45,7 @@ func TestEvaluationJobConfigBenchmarksMin_WithoutCollection_EmptyBenchmarks(t *t
 	if !ok || len(valErr) == 0 {
 		t.Fatalf("expected validator.ValidationErrors with at least one error, got %T: %v", err, err)
 	}
-	if valErr[0].Tag() != "min" || valErr[0].Param() != "1" || valErr[0].Field() != "Benchmarks" {
+	if valErr[0].Tag() != "min" || valErr[0].Param() != "1" || valErr[0].Field() != "benchmarks" {
 		t.Errorf("expected first error Tag=min Param=1 Field=Benchmarks, got Tag=%q Param=%q Field=%q",
 			valErr[0].Tag(), valErr[0].Param(), valErr[0].Field())
 	}

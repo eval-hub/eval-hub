@@ -64,15 +64,15 @@ type Storage interface {
 	CreateCollection(collection *api.CollectionResource) error
 	GetCollection(id string) (*api.CollectionResource, error)
 	GetCollections(filter *QueryFilter) (*QueryResults[api.CollectionResource], error)
-	UpdateCollection(collection *api.CollectionResource) error
-	PatchCollection(id string, patches *api.Patch) error
+	UpdateCollection(id string, collection *api.CollectionConfig) (*api.CollectionResource, error)
+	PatchCollection(id string, patches *api.Patch) (*api.CollectionResource, error)
 	DeleteCollection(id string) error
 
 	// Provider operations
 	CreateProvider(provider *api.ProviderResource) error
 	GetProvider(id string) (*api.ProviderResource, error)
 	GetProviders(filter *QueryFilter) (*QueryResults[api.ProviderResource], error)
-	UpdateProvider(id string, provider *api.ProviderResource) (*api.ProviderResource, error)
+	UpdateProvider(id string, providerConfig *api.ProviderConfig) (*api.ProviderResource, error)
 	PatchProvider(id string, patches *api.Patch) (*api.ProviderResource, error)
 	DeleteProvider(id string) error
 

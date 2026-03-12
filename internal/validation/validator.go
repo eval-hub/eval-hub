@@ -8,10 +8,20 @@ import (
 	validator "github.com/go-playground/validator/v10"
 )
 
+var (
+	tagAliases = map[string]string{
+		// this is the definition for tag name validation
+		"tagname": "max=128,min=1,excludesall=0x2C0x7C",
+		// this is the definition for id validation for a uuid - system resources are not uuid's
+		"resource_id": "required,min=1,max=36",
+	}
+)
+
 func NewValidator() *validator.Validate {
 	validate := validator.New(validator.WithRequiredStructEnabled())
-	// this is the definition for tag name validation
-	validate.RegisterAlias("tagname", "max=128,min=1,excludesall=0x2C0x7C")
+	for alias, definition := range tagAliases {
+		validate.RegisterAlias(alias, definition)
+	}
 	register(validate)
 	registerCustomValidators(validate)
 	return validate
@@ -37,11 +47,12 @@ func registerCustomValidators(instance *validator.Validate) {
 
 // evaluationJobConfigBenchmarksMin ensures Benchmarks has at least one element when Collection is not present.
 func evaluationJobConfigBenchmarksMin(sl validator.StructLevel) {
-	cfg := sl.Current().Interface().(api.EvaluationJobConfig)
-	if cfg.Collection != nil && cfg.Collection.ID != "" {
-		return
-	}
-	if len(cfg.Benchmarks) < 1 {
-		sl.ReportError(cfg.Benchmarks, "Benchmarks", "benchmarks", "min", "1")
+	if cfg, ok := sl.Current().Interface().(api.EvaluationJobConfig); ok {
+		if cfg.Collection != nil && cfg.Collection.ID != "" {
+			return
+		}
+		if len(cfg.Benchmarks) < 1 {
+			sl.ReportError(cfg.Benchmarks, "benchmarks", "benchmarks", "min", "1")
+		}
 	}
 }

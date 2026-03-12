@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	"github.com/eval-hub/eval-hub/auth"
-	"github.com/eval-hub/eval-hub/internal/validation"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	"github.com/go-playground/validator/v10"
 	"github.com/spf13/viper"
 )
 
@@ -83,7 +83,7 @@ func readConfig(logger *slog.Logger, name string, ext string, dirs ...string) (*
 	return configValues, err
 }
 
-func loadProvider(logger *slog.Logger, file string, dirs ...string) (*api.ProviderResource, error) {
+func loadProvider(logger *slog.Logger, validate *validator.Validate, file string, dirs ...string) (*api.ProviderResource, error) {
 	type providerConfigInternal struct {
 		ID                 string `mapstructure:"id" yaml:"id" json:"id"`
 		api.ProviderConfig `mapstructure:",squash"`
@@ -107,14 +107,14 @@ func loadProvider(logger *slog.Logger, file string, dirs ...string) (*api.Provid
 	}
 
 	// validate the provider
-	if err := validation.NewValidator().Struct(res); err != nil {
+	if err := validate.Struct(res); err != nil {
 		return nil, err
 	}
 
 	return res, nil
 }
 
-func loadCollection(logger *slog.Logger, file string, dirs ...string) (*api.CollectionResource, error) {
+func loadCollection(logger *slog.Logger, validate *validator.Validate, file string, dirs ...string) (*api.CollectionResource, error) {
 	type collectionConfigInternal struct {
 		ID                   string `mapstructure:"id"`
 		api.CollectionConfig `mapstructure:",squash"`
@@ -138,7 +138,7 @@ func loadCollection(logger *slog.Logger, file string, dirs ...string) (*api.Coll
 	}
 
 	// validate the collection
-	if err := validation.NewValidator().Struct(res); err != nil {
+	if err := validate.Struct(res); err != nil {
 		return nil, err
 	}
 
@@ -168,7 +168,7 @@ func hasExplicitConfigDir(dirs []string) bool {
 	return len(dirs) > 0 && dirs[0] != ""
 }
 
-func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.ProviderResource, error) {
+func LoadProviderConfigs(logger *slog.Logger, validate *validator.Validate, dirs ...string) (map[string]api.ProviderResource, error) {
 	if !hasExplicitConfigDir(dirs) {
 		dirs = []string{}
 		for _, dir := range configLookup {
@@ -189,7 +189,7 @@ func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.Pr
 			continue
 		}
 		name := strings.TrimSuffix(file.Name(), ".yaml")
-		providerConfig, err := loadProvider(logger, name, dir)
+		providerConfig, err := loadProvider(logger, validate, name, dir)
 		if err != nil {
 			return nil, err
 		}
@@ -206,7 +206,7 @@ func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.Pr
 	return providerConfigs, nil
 }
 
-func LoadCollectionConfigs(logger *slog.Logger, dirs ...string) (map[string]api.CollectionResource, error) {
+func LoadCollectionConfigs(logger *slog.Logger, validate *validator.Validate, dirs ...string) (map[string]api.CollectionResource, error) {
 	if !hasExplicitConfigDir(dirs) {
 		dirs = []string{}
 		for _, dir := range configLookup {
@@ -227,7 +227,7 @@ func LoadCollectionConfigs(logger *slog.Logger, dirs ...string) (map[string]api.
 			continue
 		}
 		name := strings.TrimSuffix(file.Name(), ".yaml")
-		collectionConfig, err := loadCollection(logger, name, dir)
+		collectionConfig, err := loadCollection(logger, validate, name, dir)
 		if err != nil {
 			return nil, err
 		}

@@ -270,12 +270,12 @@ func createServer(port int) (*server.Server, error) {
 		return nil, fmt.Errorf("failed to create storage: %w", err)
 	}
 	// set up the provider configs
-	providerConfigs, err := config.LoadProviderConfigs(logger)
+	providerConfigs, err := config.LoadProviderConfigs(logger, validate)
 	if err != nil {
 		// we do this as no point trying to continue
 		return nil, fmt.Errorf("failed to load provider configs: %w", err)
 	}
-	collectionConfigs, err := config.LoadCollectionConfigs(logger)
+	collectionConfigs, err := config.LoadCollectionConfigs(logger, validate)
 	if err != nil {
 		// we do this as no point trying to continue
 		return nil, fmt.Errorf("failed to load collection configs: %w", err)

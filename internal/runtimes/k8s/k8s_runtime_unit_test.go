@@ -65,11 +65,11 @@ func (f *fakeStorage) GetCollection(_ string) (*api.CollectionResource, error) {
 func (f *fakeStorage) GetCollections(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
 	return nil, nil
 }
-func (f *fakeStorage) UpdateCollection(_ *api.CollectionResource) error {
-	return nil
+func (f *fakeStorage) UpdateCollection(_ string, _ *api.CollectionConfig) (*api.CollectionResource, error) {
+	return nil, nil
 }
-func (f *fakeStorage) PatchCollection(_ string, _ *api.Patch) error {
-	return nil
+func (f *fakeStorage) PatchCollection(_ string, _ *api.Patch) (*api.CollectionResource, error) {
+	return nil, nil
 }
 func (f *fakeStorage) DeleteCollection(_ string) error {
 	return nil
@@ -86,7 +86,7 @@ func (f *fakeStorage) DeleteProvider(_ string) error {
 func (f *fakeStorage) GetProviders(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.ProviderResource], error) {
 	return nil, nil
 }
-func (f *fakeStorage) UpdateProvider(_ string, _ *api.ProviderResource) (*api.ProviderResource, error) {
+func (f *fakeStorage) UpdateProvider(_ string, _ *api.ProviderConfig) (*api.ProviderResource, error) {
 	return nil, nil
 }
 func (f *fakeStorage) PatchProvider(_ string, _ *api.Patch) (*api.ProviderResource, error) {

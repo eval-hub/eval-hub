@@ -286,18 +286,13 @@ func (h *Handlers) HandleUpdateCollection(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	collectionResource := &api.CollectionResource{
-		Resource: api.Resource{
-			ID: collectionID,
-		},
-		CollectionConfig: *collection,
-	}
-	err = storage.UpdateCollection(collectionResource)
+	result, err := storage.UpdateCollection(collectionID, collection)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
-	w.WriteJSON(collectionResource, 200)
+
+	w.WriteJSON(result, 200)
 }
 
 // HandlePatchCollection handles PATCH /api/v1/evaluations/collections/{collection_id}
@@ -341,12 +336,13 @@ func (h *Handlers) HandlePatchCollection(ctx *executioncontext.ExecutionContext,
 		}
 	}
 
-	err = storage.PatchCollection(collectionID, &patches)
+	result, err := storage.PatchCollection(collectionID, &patches)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
-	w.WriteJSON(nil, 200)
+
+	w.WriteJSON(result, 200)
 }
 
 // HandleDeleteCollection handles DELETE /api/v1/evaluations/collections/{collection_id}

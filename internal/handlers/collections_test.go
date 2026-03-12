@@ -32,12 +32,12 @@ func (f *fakeStorage) GetCollection(id string) (*api.CollectionResource, error) 
 	return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "collection", "ResourceId", id)
 }
 
-func (f *fakeStorage) UpdateCollection(_ *api.CollectionResource) error {
-	return nil
+func (f *fakeStorage) UpdateCollection(_ string, _ *api.CollectionConfig) (*api.CollectionResource, error) {
+	return nil, nil
 }
 
-func (f *fakeStorage) PatchCollection(_ string, _ *api.Patch) error {
-	return nil
+func (f *fakeStorage) PatchCollection(_ string, _ *api.Patch) (*api.CollectionResource, error) {
+	return nil, nil
 }
 
 func (f *fakeStorage) DeleteCollection(_ string) error {
@@ -135,17 +135,22 @@ func (s *updatePatchDeleteCollectionStorage) GetCollection(id string) (*api.Coll
 	return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "collection", "ResourceId", id)
 }
 
-func (s *updatePatchDeleteCollectionStorage) UpdateCollection(c *api.CollectionResource) error {
+func (s *updatePatchDeleteCollectionStorage) UpdateCollection(id string, c *api.CollectionConfig) (*api.CollectionResource, error) {
 	if s.updateErr != nil {
-		return s.updateErr
+		return nil, s.updateErr
 	}
-	s.collection = c
-	return nil
+	s.collection = &api.CollectionResource{
+		Resource: api.Resource{
+			ID: id,
+		},
+		CollectionConfig: *c,
+	}
+	return s.collection, nil
 }
 
-func (s *updatePatchDeleteCollectionStorage) PatchCollection(id string, patches *api.Patch) error {
+func (s *updatePatchDeleteCollectionStorage) PatchCollection(id string, patches *api.Patch) (*api.CollectionResource, error) {
 	if s.patchErr != nil {
-		return s.patchErr
+		return nil, s.patchErr
 	}
 	if s.collection != nil && s.collection.Resource.ID == id {
 		for _, p := range *patches {
@@ -156,7 +161,7 @@ func (s *updatePatchDeleteCollectionStorage) PatchCollection(id string, patches 
 			}
 		}
 	}
-	return nil
+	return s.collection, nil
 }
 
 func (s *updatePatchDeleteCollectionStorage) DeleteCollection(id string) error {
@@ -471,9 +476,13 @@ func (s *tenantTrackingStorage) GetCollection(id string) (*api.CollectionResourc
 	return &api.CollectionResource{Resource: api.Resource{ID: id}}, nil
 }
 func (s *tenantTrackingStorage) CreateCollection(_ *api.CollectionResource) error { return nil }
-func (s *tenantTrackingStorage) UpdateCollection(_ *api.CollectionResource) error { return nil }
-func (s *tenantTrackingStorage) PatchCollection(_ string, _ *api.Patch) error     { return nil }
-func (s *tenantTrackingStorage) DeleteCollection(_ string) error                  { return nil }
+func (s *tenantTrackingStorage) UpdateCollection(_ string, _ *api.CollectionConfig) (*api.CollectionResource, error) {
+	return nil, nil
+}
+func (s *tenantTrackingStorage) PatchCollection(_ string, _ *api.Patch) (*api.CollectionResource, error) {
+	return nil, nil
+}
+func (s *tenantTrackingStorage) DeleteCollection(_ string) error { return nil }
 
 func TestCollectionHandlers_PropagateTenantAndOwner(t *testing.T) {
 	validate := validation.NewValidator()
