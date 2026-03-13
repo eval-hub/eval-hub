@@ -208,7 +208,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 		return logError(fmt.Errorf("failed to load collection configs: %w", err))
 	}
 
-	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger, collectionConfigs)
+	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger)
 	if err != nil {
 		return logError(fmt.Errorf("failed to create storage: %w", err))
 	}

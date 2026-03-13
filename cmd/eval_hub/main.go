@@ -74,6 +74,13 @@ func main() {
 	// set up the validator
 	validate := validation.NewValidator()
 
+	// set up the storage
+	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger)
+	if err != nil {
+		// we do this as no point trying to continue
+		startUpFailed(serviceConfig, err, "Failed to create storage", logger)
+	}
+
 	// set up the provider configs
 	providerConfigs, err := config.LoadProviderConfigs(logger, validate, args.ConfigDir)
 	if err != nil {
@@ -86,13 +93,6 @@ func main() {
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create collection configs", logger)
-	}
-
-	// set up the storage
-	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger, collectionConfigs)
-	if err != nil {
-		// we do this as no point trying to continue
-		startUpFailed(serviceConfig, err, "Failed to create storage", logger)
 	}
 
 	// setup runtime

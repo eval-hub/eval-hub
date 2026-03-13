@@ -69,7 +69,7 @@ func (f *fakeStorage) GetEvaluationJobs(_ *abstractions.QueryFilter) (*abstracti
 	return &abstractions.QueryResults[api.EvaluationJobResource]{Items: []api.EvaluationJobResource{}, TotalCount: 0}, nil
 }
 
-func (f *fakeStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
+func (f *fakeStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent, _ []api.BenchmarkConfig) error {
 	return nil
 }
 
@@ -149,7 +149,7 @@ func (s *updateEvaluationStorage) WithContext(_ context.Context) abstractions.St
 func (s *updateEvaluationStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
 func (s *updateEvaluationStorage) WithOwner(_ api.User) abstractions.Storage    { return s }
 
-func (s *updateEvaluationStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
+func (s *updateEvaluationStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent, _ []api.BenchmarkConfig) error {
 	return s.updateErr
 }
 
@@ -590,7 +590,15 @@ func (r *updateEvaluationRequest) PathValue(name string) string {
 }
 
 func TestHandleUpdateEvaluation(t *testing.T) {
-	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{}}
+	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{
+		job: &api.EvaluationJobResource{
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Benchmarks: []api.BenchmarkConfig{
+					{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"},
+				},
+			},
+		},
+	}}
 	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil, nil)

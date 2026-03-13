@@ -265,7 +265,7 @@ func createServer(port int) (*server.Server, error) {
 		serviceConfig.Prometheus.Enabled = true
 	}
 	serviceConfig.Service.LocalMode = true // set local mode for testing
-	store, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger, nil)
+	store, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create storage: %w", err)
 	}

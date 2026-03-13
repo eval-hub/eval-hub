@@ -333,7 +333,22 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 
 	ctx.Logger.Info("Updating evaluation job", "id", evaluationJobID, "state", status.BenchmarkStatusEvent.Status, "status", status)
 
-	err = storage.UpdateEvaluationJob(evaluationJobID, status)
+	// Resolve benchmarks at handler level so storage doesn't need collection configs
+	job, err := storage.GetEvaluationJob(evaluationJobID)
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+	getCollection := func(id string) (*api.CollectionResource, error) {
+		return common.ResolveCollection(id, h.collectionConfigs, storage)
+	}
+	benchmarks, err := common.GetJobBenchmarks(job, getCollection)
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+
+	err = storage.UpdateEvaluationJob(evaluationJobID, status, benchmarks)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return

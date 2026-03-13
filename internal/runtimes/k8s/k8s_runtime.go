@@ -74,7 +74,7 @@ func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, sto
 
 				if storage != nil {
 					runStatus := buildBenchmarkFailureStatus(&bench, idx, err)
-					if updateErr := storage.UpdateEvaluationJob(evaluation.Resource.ID, runStatus); updateErr != nil {
+					if updateErr := storage.UpdateEvaluationJob(evaluation.Resource.ID, runStatus, benchmarks); updateErr != nil {
 						r.logger.Error(
 							"failed to update benchmark status",
 							"error", updateErr,

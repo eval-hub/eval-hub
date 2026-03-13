@@ -258,7 +258,7 @@ func (s *SQLStorage) validateBenchmarkExists(job *api.EvaluationJobResource, run
 }
 
 // UpdateEvaluationJobWithRunStatus runs in a transaction: fetches the job, merges RunStatusInternal into the entity, and persists.
-func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
+func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent, benchmarks []api.BenchmarkConfig) error {
 	if err := s.verifyTenant(); err != nil {
 		return err
 	}
@@ -277,11 +277,11 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 			return err
 		}
 
-		getCollection := func(collectionID string) (*api.CollectionResource, error) {
-			if c, ok := s.collectionConfigs[collectionID]; ok {
-				return &c, nil
-			}
-			return s.getCollectionTransactional(txn, collectionID)
+		// Wrap pre-resolved benchmarks so internal functions that expect getCollection keep working.
+		getCollection := func(_ string) (*api.CollectionResource, error) {
+			return &api.CollectionResource{
+				CollectionConfig: api.CollectionConfig{Benchmarks: benchmarks},
+			}, nil
 		}
 
 		err = s.validateBenchmarkExists(job, runStatus, getCollection)

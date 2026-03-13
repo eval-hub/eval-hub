@@ -28,7 +28,7 @@ type fakeStorage struct {
 }
 
 // UpdateEvaluationJob implements [abstractions.Storage].
-func (f *fakeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
+func (f *fakeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent, _ []api.BenchmarkConfig) error {
 	f.called = true
 	f.runStatus = runStatus
 	if f.runStatusChan != nil {

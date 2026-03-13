@@ -251,7 +251,13 @@ func (h *Handlers) HandleGetCollection(ctx *executioncontext.ExecutionContext, r
 		return
 	}
 
-	response, err := common.ResolveCollection(collectionID, h.collectionConfigs, storage)
+	// Check system-defined collections first, then fall back to storage
+	if c, ok := h.collectionConfigs[collectionID]; ok {
+		w.WriteJSON(&c, 200)
+		return
+	}
+
+	response, err := storage.GetCollection(collectionID)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return

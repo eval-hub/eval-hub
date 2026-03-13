@@ -138,7 +138,7 @@ func (r *LocalRuntime) RunEvaluationJob(
 					"benchmark_index", i,
 					"provider_id", bench.ProviderID,
 				)
-				r.failBenchmark(jobID, bench, i, storage, err.Error())
+				r.failBenchmark(jobID, bench, i, benchmarksToRun, storage, err.Error())
 			}
 		}()
 	}
@@ -288,6 +288,7 @@ func (r *LocalRuntime) failBenchmark(
 	jobID string,
 	bench api.BenchmarkConfig,
 	benchmarkIndex int,
+	benchmarks []api.BenchmarkConfig,
 	storage abstractions.Storage,
 	errMsg string,
 ) {
@@ -306,7 +307,7 @@ func (r *LocalRuntime) failBenchmark(
 			},
 		},
 	}
-	if updateErr := storage.UpdateEvaluationJob(jobID, runStatus); updateErr != nil {
+	if updateErr := storage.UpdateEvaluationJob(jobID, runStatus, benchmarks); updateErr != nil {
 		r.logger.Error(
 			"failed to update benchmark status",
 			"error", updateErr,
