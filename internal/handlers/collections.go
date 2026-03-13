@@ -251,7 +251,7 @@ func (h *Handlers) HandleGetCollection(ctx *executioncontext.ExecutionContext, r
 		return
 	}
 
-	response, err := storage.GetCollection(collectionID)
+	response, err := common.ResolveCollection(collectionID, h.collectionConfigs, storage)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return

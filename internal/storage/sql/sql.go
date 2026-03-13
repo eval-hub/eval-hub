@@ -43,9 +43,10 @@ type SQLStorage struct {
 	tenant                api.Tenant
 	owner                 api.User
 	authenticationEnabled bool
+	collectionConfigs     map[string]api.CollectionResource
 }
 
-func NewStorage(config map[string]any, otelEnabled bool, authenticationEnabled bool, logger *slog.Logger) (abstractions.Storage, error) {
+func NewStorage(config map[string]any, otelEnabled bool, authenticationEnabled bool, logger *slog.Logger, collectionConfigs map[string]api.CollectionResource) (abstractions.Storage, error) {
 	var sqlConfig shared.SQLDatabaseConfig
 	merr := mapstructure.Decode(config, &sqlConfig)
 	if merr != nil {
@@ -126,6 +127,7 @@ func NewStorage(config map[string]any, otelEnabled bool, authenticationEnabled b
 		logger:                logger,
 		ctx:                   context.Background(),
 		authenticationEnabled: authenticationEnabled,
+		collectionConfigs:     collectionConfigs,
 	}
 
 	// ping the database to verify the DSN provided by the user is valid and the server is accessible
@@ -243,6 +245,7 @@ func (s *SQLStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 		tenant:                s.tenant,
 		owner:                 s.owner,
 		authenticationEnabled: s.authenticationEnabled,
+		collectionConfigs:     s.collectionConfigs,
 	}
 }
 
@@ -256,6 +259,7 @@ func (s *SQLStorage) WithContext(ctx context.Context) abstractions.Storage {
 		tenant:                s.tenant,
 		owner:                 s.owner,
 		authenticationEnabled: s.authenticationEnabled,
+		collectionConfigs:     s.collectionConfigs,
 	}
 }
 
@@ -269,6 +273,7 @@ func (s *SQLStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
 		tenant:                tenant,
 		owner:                 s.owner,
 		authenticationEnabled: s.authenticationEnabled,
+		collectionConfigs:     s.collectionConfigs,
 	}
 }
 
@@ -282,5 +287,6 @@ func (s *SQLStorage) WithOwner(owner api.User) abstractions.Storage {
 		tenant:                s.tenant,
 		owner:                 owner,
 		authenticationEnabled: s.authenticationEnabled,
+		collectionConfigs:     s.collectionConfigs,
 	}
 }

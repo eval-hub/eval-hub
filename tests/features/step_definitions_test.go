@@ -176,12 +176,6 @@ func (a *apiFeature) startLocalServer(port int) error {
 	serviceConfig.Service.Port = port
 	serviceConfig.Service.LocalMode = true // set local mode for testing
 
-	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger)
-	if err != nil {
-		return logError(fmt.Errorf("failed to create storage: %w", err))
-	}
-	logger.Info("Storage created.")
-
 	// set up the provider configs
 	providerConfigs, err := config.LoadProviderConfigs(logger, validate)
 	if err != nil {
@@ -213,6 +207,12 @@ func (a *apiFeature) startLocalServer(port int) error {
 	if err != nil {
 		return logError(fmt.Errorf("failed to load collection configs: %w", err))
 	}
+
+	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger, collectionConfigs)
+	if err != nil {
+		return logError(fmt.Errorf("failed to create storage: %w", err))
+	}
+	logger.Info("Storage created.")
 
 	runtime, err := runtimes.NewRuntime(logger, serviceConfig, providerConfigs, collectionConfigs)
 	if err != nil {

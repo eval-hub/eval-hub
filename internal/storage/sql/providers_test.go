@@ -17,7 +17,7 @@ func TestProviderStorage(t *testing.T) {
 		"url":           "file::memory:?mode=memory&cache=shared",
 		"database_name": "eval_hub",
 	}
-	store, err := storage.NewStorage(&databaseConfig, false, false, logger)
+	store, err := storage.NewStorage(&databaseConfig, false, false, logger, nil)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}

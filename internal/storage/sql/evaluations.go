@@ -278,7 +278,9 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 		}
 
 		getCollection := func(collectionID string) (*api.CollectionResource, error) {
-			// TODO - cache the collection
+			if c, ok := s.collectionConfigs[collectionID]; ok {
+				return &c, nil
+			}
 			return s.getCollectionTransactional(txn, collectionID)
 		}
 
