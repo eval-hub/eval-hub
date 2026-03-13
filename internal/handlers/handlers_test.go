@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,7 +23,9 @@ func TestNew(t *testing.T) {
 }
 
 func createExecutionContext() *executioncontext.ExecutionContext {
-	return &executioncontext.ExecutionContext{}
+	return &executioncontext.ExecutionContext{
+		Ctx: context.Background(),
+	}
 }
 
 func createMockRequest(method string, uri string) *MockRequest {
