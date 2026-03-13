@@ -19,6 +19,7 @@ type ExecutionContext struct {
 	Ctx       context.Context
 	RequestID string
 	Logger    *slog.Logger
+	LogLevel  slog.Level
 	StartedAt time.Time
 	User      api.User
 	Tenant    api.Tenant
@@ -37,6 +38,7 @@ func NewExecutionContext(
 		Ctx:       ctx,
 		RequestID: requestID,
 		Logger:    logger,
+		LogLevel:  slog.LevelInfo,
 		StartedAt: time.Now(),
 		User:      user,
 		Tenant:    tenant,
@@ -48,6 +50,7 @@ func (e *ExecutionContext) WithContext(ctx context.Context) *ExecutionContext {
 		Ctx:       ctx,
 		RequestID: e.RequestID,
 		Logger:    e.Logger,
+		LogLevel:  e.LogLevel,
 		StartedAt: e.StartedAt,
 		User:      e.User,
 		Tenant:    e.Tenant,

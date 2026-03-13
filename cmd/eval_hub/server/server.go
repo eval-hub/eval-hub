@@ -205,6 +205,7 @@ func (s *Server) handle(router *http.ServeMux, pattern string, handler http.Hand
 func (s *Server) setupHealthRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, "/api/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
+		ctx.LogLevel = slog.LevelDebug
 		resp := NewRespWrapper(w, ctx)
 		req := NewRequestWrapper(r)
 		switch req.Method() {
