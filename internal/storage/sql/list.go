@@ -46,6 +46,20 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 	limit := filter.Limit
 	offset := filter.Offset
 
+	tenant := s.tenant
+
+	if scope, ok := params["scope"]; ok {
+		switch scope {
+		case abstractions.ScopeSystem:
+			params["owner"] = abstractions.OwnerSystem
+			// we don't want to filter by tenant_id for system resources
+			tenant = ""
+		case abstractions.ScopeTenant:
+			params["owner"] = "!" + abstractions.OwnerSystem
+		}
+		delete(params, "scope")
+	}
+
 	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), s.statementsFactory.GetAllowedFilterColumns(tableName)); err != nil {
 		return nil, err
 	}
@@ -53,13 +67,13 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 	typeName := getTypeFromTableName(tableName)
 
 	// Get total count (with filter if provided)
-	totalCount, err := s.getTotalCount(txn, tableName, filter.Params, typeName)
+	totalCount, err := s.getTotalCount(txn, tenant, tableName, filter.Params, typeName)
 	if err != nil {
 		return nil, err
 	}
 
 	// Build the list query with pagination and filters
-	listQuery, listArgs := s.statementsFactory.CreateListEntitiesStatement(s.tenant, tableName, limit, offset, params)
+	listQuery, listArgs := s.statementsFactory.CreateListEntitiesStatement(tenant, tableName, limit, offset, params)
 	s.logger.Debug(fmt.Sprintf("List %s query", typeName), "query", listQuery, "args", listArgs, "params", params, "limit", limit, "offset", offset)
 
 	// Query the database

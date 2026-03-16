@@ -33,7 +33,6 @@ func (s *sqlStorage) loadSystemResources(systemCollections map[string]api.Collec
 					Limit:  200,
 					Offset: offset,
 					Params: map[string]any{},
-					Tenant: "",
 				}
 				collections, err := s.GetCollections(&filter)
 				if err != nil {
@@ -99,7 +98,6 @@ func (s *sqlStorage) loadSystemResources(systemCollections map[string]api.Collec
 					Limit:  200,
 					Offset: offset,
 					Params: map[string]any{},
-					Tenant: "",
 				}
 				providers, err := s.GetProviders(&filter)
 				if err != nil {

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -97,10 +98,8 @@ func (s *sqliteStatementsFactory) CreateEvaluationAddEntityStatement(evaluation 
 }
 
 func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
-	if query.Resource.Tenant.IsEmpty() {
-		return `SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE id = ?;`, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
-	}
-	return `SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE id = ? AND tenant_id = ?;`, []any{&query.Resource.ID, query.Resource.Tenant.String()}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
+	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, query.Resource.ID)
+	return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE %s;`, where), whereArgs, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
 }
 
 // entityFilterCondition returns the SQL condition and args for a filter key.
@@ -146,13 +145,15 @@ func (s *sqliteStatementsFactory) CreateEntityFilterCondition(key string, value 
 }
 
 func (s *sqliteStatementsFactory) CreateCountEntitiesStatement(tenant api.Tenant, tableName string, filter map[string]any) (string, []any) {
-	filterClause, args := shared.CreateFilterStatement(tenant, s, filter, "", 0, 0, tableName)
+	where, whereArgs := s.getWhereStatement(tenant, "") // we don't need to filter by id as we want to count all entities
+	filterClause, args := shared.CreateFilterStatement(s, where, whereArgs, filter, "", 0, 0, tableName)
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, tableName, filterClause)
 	return query, args
 }
 
 func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant, tableName string, limit, offset int, filter map[string]any) (string, []any) {
-	filterClause, args := shared.CreateFilterStatement(tenant, s, filter, "id DESC", limit, offset, tableName)
+	where, whereArgs := s.getWhereStatement(tenant, "") // we don't need to filter by id as we want to count all entities
+	filterClause, args := shared.CreateFilterStatement(s, where, whereArgs, filter, "id DESC", limit, offset, tableName)
 
 	var query string
 	switch tableName {
@@ -174,15 +175,8 @@ func (s *sqliteStatementsFactory) ScanRowForEntity(tenant api.Tenant, tableName 
 	}
 }
 
-func (s *sqliteStatementsFactory) CreateCheckEntityExistsStatement(tenant api.Tenant, tableName string, id string) (string, []any) {
-	// SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE id = ?;
-	if !tenant.IsEmpty() {
-		return fmt.Sprintf(`SELECT id, status FROM %s WHERE id = ? AND tenant_id = ?;`, tableName), []any{id, tenant.String()}
-	}
-	return fmt.Sprintf(`SELECT id, status FROM %s WHERE id = ?;`, tableName), []any{id}
-}
-
 func (s *sqliteStatementsFactory) CreateDeleteEntityStatement(tenant api.Tenant, tableName string, id string) (string, []any) {
+	// these WHERE statements are okay because we can only delete user resources
 	if !tenant.IsEmpty() {
 		return fmt.Sprintf(`DELETE FROM %s WHERE id = ? AND tenant_id = ?;`, tableName), []any{id, tenant.String()}
 	}
@@ -190,7 +184,7 @@ func (s *sqliteStatementsFactory) CreateDeleteEntityStatement(tenant api.Tenant,
 }
 
 func (s *sqliteStatementsFactory) CreateUpdateEntityStatement(tenant api.Tenant, tableName, id string, entityJSON string, status *api.OverallState) (string, []any) {
-	// UPDATE "evaluations" SET "status" = ?, "entity" = ?, "updated_at" = CURRENT_TIMESTAMP WHERE "id" = ?;
+	// these WHERE statements are okay because we can only update user resources
 	switch tableName {
 	case shared.TABLE_EVALUATIONS:
 		if !tenant.IsEmpty() {
@@ -209,14 +203,28 @@ func (s *sqliteStatementsFactory) CreateProviderAddEntityStatement(provider *api
 	return INSERT_PROVIDER_STATEMENT, []any{provider.Resource.ID, provider.Resource.Tenant, provider.Resource.Owner, entity}
 }
 
-func (s *sqliteStatementsFactory) CreateProviderGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
+func (s *sqliteStatementsFactory) getWhereStatement(tenant api.Tenant, id string) (string, []any) {
+	var sb strings.Builder
+	var args []any
+	if id != "" {
+		sb.WriteString("id = ?")
+		args = append(args, id)
+	}
 	// As we want to allow system providers to be selected without a tenant_id, we have to select
 	// either with tenant_id == tenant_id OR owner == system
-	// SELECT id, created_at, updated_at, tenant_id, owner, entity FROM providers WHERE id = ?;
-	if query.Resource.Tenant.IsEmpty() {
-		return `SELECT id, created_at, updated_at, tenant_id, owner, entity FROM providers WHERE id = ?;`, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
+	if !tenant.IsEmpty() {
+		if sb.Len() > 0 {
+			sb.WriteString(" AND ")
+		}
+		sb.WriteString(fmt.Sprintf("(tenant_id = ? OR owner = '%s')", abstractions.OwnerSystem))
+		args = append(args, tenant.String())
 	}
-	return `SELECT id, created_at, updated_at, tenant_id, owner, entity FROM providers WHERE id = ? AND (tenant_id = ? OR owner = 'system');`, []any{&query.Resource.ID, query.Resource.Tenant.String()}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
+	return sb.String(), args
+}
+
+func (s *sqliteStatementsFactory) CreateProviderGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
+	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, query.Resource.ID)
+	return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, entity FROM providers WHERE %s;`, where), whereArgs, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 }
 
 func (s *sqliteStatementsFactory) CreateCollectionAddEntityStatement(collection *api.CollectionResource, entity string) (string, []any) {
@@ -224,11 +232,6 @@ func (s *sqliteStatementsFactory) CreateCollectionAddEntityStatement(collection 
 }
 
 func (s *sqliteStatementsFactory) CreateCollectionGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
-	// As we want to allow system collections to be selected without a tenant_id, we have to select
-	// either with tenant_id == tenant_id OR owner == system
-	// SELECT id, created_at, updated_at, tenant_id, owner, entity FROM collections WHERE id = ?;
-	if query.Resource.Tenant.IsEmpty() {
-		return `SELECT id, created_at, updated_at, tenant_id, owner, entity FROM collections WHERE id = ?;`, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
-	}
-	return `SELECT id, created_at, updated_at, tenant_id, owner, entity FROM collections WHERE id = ? AND (tenant_id = ? OR owner = 'system');`, []any{&query.Resource.ID, query.Resource.Tenant.String()}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
+	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, query.Resource.ID)
+	return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, entity FROM collections WHERE %s;`, where), whereArgs, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 }

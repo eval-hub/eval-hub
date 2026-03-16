@@ -39,6 +39,7 @@ const (
 	valuePrefix  = "value:"
 	mlflowPrefix = "mlflow:"
 	envPrefix    = "env:"
+	regexpPrefix = "regex:"
 )
 
 var (
@@ -332,6 +333,52 @@ func (tc *scenarioConfig) thereAreNoUserProviders(ctx context.Context) error {
 	return nil
 }
 
+func (tc *scenarioConfig) thereAreSystemProviders(ctx context.Context) error {
+	if err := tc.iSendARequestTo("GET", "/api/v1/evaluations/providers?scope=system&limit=100"); err != nil {
+		return err
+	}
+	if tc.response.StatusCode != 200 {
+		return tc.logError(fmt.Errorf("expected 200 listing system providers, got %d: %s", tc.response.StatusCode, string(tc.body)))
+	}
+
+	var resp struct {
+		TotalCount int `json:"total_count"`
+	}
+	if err := json.Unmarshal(tc.body, &resp); err != nil {
+		return tc.logError(fmt.Errorf("failed to parse providers list: %w", err))
+	}
+
+	if resp.TotalCount == 0 {
+		tc.logDebug("Skipping scenario: no system providers found so skipping the scenario\n")
+		return godog.ErrSkip
+	}
+
+	return nil
+}
+
+func (tc *scenarioConfig) thereAreSystemCollections(ctx context.Context) error {
+	if err := tc.iSendARequestTo("GET", "/api/v1/evaluations/collections?scope=system&limit=100"); err != nil {
+		return err
+	}
+	if tc.response.StatusCode != 200 {
+		return tc.logError(fmt.Errorf("expected 200 listing system collections, got %d: %s", tc.response.StatusCode, string(tc.body)))
+	}
+
+	var resp struct {
+		TotalCount int `json:"total_count"`
+	}
+	if err := json.Unmarshal(tc.body, &resp); err != nil {
+		return tc.logError(fmt.Errorf("failed to parse collections list: %w", err))
+	}
+
+	if resp.TotalCount == 0 {
+		tc.logDebug("Skipping scenario: no system collections found so skipping the scenario\n")
+		return godog.ErrSkip
+	}
+
+	return nil
+}
+
 func (tc *scenarioConfig) thereAreNoUserCollections(ctx context.Context) error {
 	if err := tc.iSendARequestTo("GET", "/api/v1/evaluations/collections?scope=tenant&limit=100"); err != nil {
 		return err
@@ -518,7 +565,7 @@ func (tc *scenarioConfig) substituteValues(body string) (string, error) {
 				// it could be resolved from MLflow; for tests without MLflow, this allows name-based
 				// search to match stored jobs.
 				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), after)
-			} else if raw, ok0 := strings.CutPrefix(match[1], envPrefix); ok0 {
+			} else if raw, ok := strings.CutPrefix(match[1], envPrefix); ok {
 				envName, fallback, hasFallback := strings.Cut(raw, "|")
 				value, ok := os.LookupEnv(envName)
 				if !ok {
@@ -529,7 +576,7 @@ func (tc *scenarioConfig) substituteValues(body string) (string, error) {
 					}
 				}
 				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), value)
-			} else if after1, ok1 := strings.CutPrefix(match[1], valuePrefix); ok1 {
+			} else if after1, ok := strings.CutPrefix(match[1], valuePrefix); ok {
 				n := after1
 				v := tc.values[n]
 				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), v)
@@ -916,6 +963,14 @@ func (tc *scenarioConfig) getJsonPathValue(jsonPath string) (interface{}, error)
 }
 
 func (tc *scenarioConfig) theResponseShouldContainAtJSONPath(expectedValue string, jsonPath string) error {
+	return tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "contains")
+}
+
+func (tc *scenarioConfig) theResponseShouldContainAtJSONPathAtLeast(expectedValue string, jsonPath string) error {
+	return tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, ">=")
+}
+
+func (tc *scenarioConfig) theResponseShouldContainAtJSONPathImpl(expectedValue string, jsonPath string, match string) error {
 	if strings.Contains(expectedValue, "{{") {
 		expanded, err := tc.substituteValues(expectedValue)
 		if err != nil {
@@ -928,8 +983,7 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPath(expectedValue strin
 		return tc.logError(err)
 	}
 
-	if strings.HasPrefix(expectedValue, "regex:") {
-		rawExpr := strings.TrimPrefix(expectedValue, "regex:")
+	if rawExpr, ok := strings.CutPrefix(expectedValue, regexpPrefix); ok {
 		expr, err := regexp.Compile(rawExpr)
 		if err != nil {
 			return tc.logError(fmt.Errorf("invalid regex %q: %w", rawExpr, err))
@@ -940,12 +994,41 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPath(expectedValue strin
 		}
 	}
 
-	// make this contains and not equals
-	// if foundValue == strings.TrimSpace(expectedValue) {
 	values := strings.SplitSeq(expectedValue, "|")
 	for value := range values {
-		if strings.Contains(foundValue, value) {
-			return nil
+		switch match {
+		case "==":
+			if foundValue == strings.TrimSpace(value) {
+				return nil
+			}
+		case "<=":
+			fv, err := strconv.ParseFloat(foundValue, 64)
+			if err != nil {
+				return tc.logError(fmt.Errorf("failed to parse found value %s as float: %w", foundValue, err))
+			}
+			ex, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+			if err != nil {
+				return tc.logError(fmt.Errorf("failed to parse expected value %s as float: %w", value, err))
+			}
+			if fv <= ex {
+				return nil
+			}
+		case ">=":
+			fv, err := strconv.ParseFloat(foundValue, 64)
+			if err != nil {
+				return tc.logError(fmt.Errorf("failed to parse found value %s as float: %w", foundValue, err))
+			}
+			ex, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+			if err != nil {
+				return tc.logError(fmt.Errorf("failed to parse expected value %s as float: %w", value, err))
+			}
+			if fv >= ex {
+				return nil
+			}
+		case "contains":
+			if strings.Contains(foundValue, strings.TrimSpace(value)) {
+				return nil
+			}
 		}
 	}
 
@@ -1196,7 +1279,9 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the service is running$`, tc.theServiceIsRunning)
 	ctx.Step(`^there are no evaluation jobs$`, tc.thereAreNoEvaluationJobs)
 	ctx.Step(`^there are no user providers$`, tc.thereAreNoUserProviders)
+	ctx.Step(`^there are system providers$`, tc.thereAreSystemProviders)
 	ctx.Step(`^there are no user collections$`, tc.thereAreNoUserCollections)
+	ctx.Step(`^there are system collections$`, tc.thereAreSystemCollections)
 	ctx.Step(`^I set the header "([^"]*)" to "([^"]*)"$`, tc.iSetHeaderTo)
 	ctx.Step(`^I unset the header "([^"]*)"$`, tc.iUnsetHeader)
 	ctx.Step(`^I set transaction-id to "([^"]*)"$`, tc.iSetTransactionIdTo)
@@ -1214,6 +1299,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the response should have schema as:$`, tc.theResponseShouldHaveSchemaAs)
 	ctx.Step(`^the "([^"]*)" field in the response should be saved as "([^"]*)"$`, tc.theFieldShouldBeSaved)
 	ctx.Step(`^the response should contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldContainAtJSONPath)
+	ctx.Step(`^the response should contain at least the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldContainAtJSONPathAtLeast)
 	ctx.Step(`^the response should not contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldNotContainAtJSONPath)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLength)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length "([^"]*)"$`, tc.theArrayAtPathInResponseShouldHaveLengthValue)

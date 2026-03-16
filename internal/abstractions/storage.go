@@ -10,6 +10,13 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+const (
+	ScopeSystem = "system"
+	ScopeTenant = "tenant"
+
+	OwnerSystem = "system"
+)
+
 type QueryResults[T any] struct {
 	Items      []T
 	TotalCount int
@@ -20,8 +27,6 @@ type QueryFilter struct {
 	Limit  int
 	Offset int
 	Params map[string]any
-	// Make tenant explicit because it is not a user parameter
-	Tenant api.Tenant
 }
 
 // ExtractQueryParams returns the limit, offset, and filtered params
@@ -35,7 +40,6 @@ func (filter *QueryFilter) ExtractQueryParams() *QueryFilter {
 		Limit:  filter.Limit,
 		Offset: filter.Offset,
 		Params: params,
-		Tenant: filter.Tenant,
 	}
 }
 
@@ -51,7 +55,7 @@ func (filter *QueryFilter) HasParams(params ...string) bool {
 }
 
 func (filter *QueryFilter) String() string {
-	return fmt.Sprintf(`{"limit":%d,"offset":%d,"params":%v,"tenant":"%s"}`, filter.Limit, filter.Offset, filter.Params, filter.Tenant)
+	return fmt.Sprintf(`{"limit":%d,"offset":%d,"params":%v}`, filter.Limit, filter.Offset, filter.Params)
 }
 
 type Storage interface {

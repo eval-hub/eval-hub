@@ -62,19 +62,28 @@ Feature: Providers Endpoint
     When I send a DELETE request to "/api/v1/evaluations/providers/{id}"
     Then the response code should be 204
 
-  # TODO: Fix this test
-  @ignore
   Scenario: List providers with scope=system returns only system providers
     Given the service is running
+    And there are system providers
+    And I set the header "X-Tenant" to "test-tenant"
+    When I send a GET request to "/api/v1/evaluations/providers?scope=system"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length at least 1
+    And the response should contain the value "true" at path "items[0].resource.read_only"
+
+  Scenario: List providers with no returns all providers
+    Given the service is running
+    And there are system providers
+    And there are no user providers
     And I set the header "X-Tenant" to "test-tenant"
     When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider.json"
     Then the response code should be 201
-    When I send a GET request to "/api/v1/evaluations/providers?scope=tenant"
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider.json"
+    Then the response code should be 201
+    When I send a GET request to "/api/v1/evaluations/providers"
     Then the response code should be 200
-    And the array at path "items" in the response should have length at least 1
-    And the response should contain the value "Test Provider" at path "items[0].name"
-    When I send a DELETE request to "/api/v1/evaluations/providers/{id}"
-    Then the response code should be 204
+    And the response should contain at least the value "3" at path "total_count"
+    And the array at path "items" in the response should have length at least 3
 
   Scenario: List providers with invalid limit returns 400
     Given the service is running
@@ -84,7 +93,8 @@ Feature: Providers Endpoint
 
   Scenario: List system providers with pagination
     Given the service is running
-    And there are no user providers
+    And there are system providers
+    # This will skip the scenario if there are no system providers
     When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=0&scope=system"
     Then the response code should be 200
     And the response should contain the value "50" at path "$.limit"
@@ -131,10 +141,8 @@ Feature: Providers Endpoint
     Then the response code should be 200
     And the response should contain the value "1" at path "$.limit"
     And the array at path "items" in the response should have length 1
-    #And the response should contain the value "{{value:provider1_id}}" at path "$.items[0].resource.id"
+    And the response should contain the value "{{value:provider1_id}}|{{value:provider2_id}}" at path "$.items[0].resource.id"
 
-  # TODO: Fix this test
-  @ignore
   Scenario: List providers with all search parameters and pagination
     Given the service is running
     And I set the header "X-Tenant" to "test-tenant"
@@ -166,7 +174,6 @@ Feature: Providers Endpoint
     Then the response code should be 200
     And the response should not contain the value "0" at path "$.total_count"
     And the response should contain the value "[]" at path "items[0].benchmarks"
-    And the response should contain the value "lighteval" at path "$.items[0].name"
     When I send a GET request to "/api/v1/evaluations/providers?tags=nonexistent-tag&limit=10"
     Then the response code should be 200
     And the response should contain the value "0" at path "$.total_count"
@@ -178,12 +185,14 @@ Feature: Providers Endpoint
     Then the response code should be 204
     When I send a DELETE request to "/api/v1/evaluations/providers/{{value:provider2_id}}"
     Then the response code should be 204
-    When I send a GET request to "/api/v1/evaluations/providers?name=lighteval&limit=10"
+    When I send a GET request to "/api/v1/evaluations/providers/lighteval"
+    Then the response code should be 200
+    And the response should contain the value "Lighteval" at path "$.name"
+    When I send a GET request to "/api/v1/evaluations/providers?name=Lighteval&limit=10"
     Then the response code should be 200
     And the response should contain the value "1" at path "$.total_count"
+    And the response should contain the value "Lighteval" at path "$.items[0].name"
 
-  # TODO: Fix this test
-  @ignore
   Scenario: List providers with comprehensive search parameters and pagination
     Given the service is running
     And there are no user providers
@@ -198,9 +207,9 @@ Feature: Providers Endpoint
     When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider.json"
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:list_prov3_id"
-    When I send a GET request to "/api/v1/evaluations/providers?name=lighteval&limit=10"
+    When I send a GET request to "/api/v1/evaluations/providers?name=Lighteval&limit=10"
     Then the response code should be 200
-    And the response should contain the value "lighteval" at path "$.items[0].name"
+    And the response should contain the value "Lighteval" at path "$.items[0].name"
     And the response should contain the value "1" at path "$.total_count"
     When I send a GET request to "/api/v1/evaluations/providers?name=LM%20Evaluation%20Harness&limit=10"
     Then the response code should be 200

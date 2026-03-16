@@ -112,15 +112,10 @@ func (s *sqlStorage) DeleteEvaluationJob(id string) error {
 	// we have to get the evaluation job and then update or delete the job so we need a transaction
 	err := s.withTransaction("delete evaluation job", id, func(txn *sql.Tx) error {
 		// check if the evaluation job exists, we do this otherwise we always return 204
-		selectQuery, args := s.statementsFactory.CreateCheckEntityExistsStatement(s.tenant, shared.TABLE_EVALUATIONS, id)
-		var dbID string
-		var statusStr string
-		err := s.queryRow(txn, selectQuery, args...).Scan(&dbID, &statusStr)
+		_, err := s.getEvaluationJobTransactional(txn, id)
 		if err != nil {
-			if err == sql.ErrNoRows {
-				return se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
-			}
-			return se.WithRollback(se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error()))
+			s.logger.Debug("Failed to get evaluation job", "error", err, "id", id)
+			return se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
 		}
 
 		// Build the DELETE query

@@ -222,8 +222,8 @@ func (s *sqlStorage) queryRow(txn *sql.Tx, query string, args ...any) *sql.Row {
 	}
 }
 
-func (s *sqlStorage) getTotalCount(txn *sql.Tx, tableName string, params map[string]any, typeName string) (int, error) {
-	countQuery, countArgs := s.statementsFactory.CreateCountEntitiesStatement(s.tenant, tableName, params)
+func (s *sqlStorage) getTotalCount(txn *sql.Tx, tenant api.Tenant, tableName string, params map[string]any, typeName string) (int, error) {
+	countQuery, countArgs := s.statementsFactory.CreateCountEntitiesStatement(tenant, tableName, params)
 
 	var totalCount int
 	var err error

@@ -119,28 +119,10 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 		return
 	}
 
-	// owner and scope are mutually exclusive
-	mismatchedParams := []string{"owner", "scope"}
-	if filter.HasParams(mismatchedParams...) {
-		w.Error(serviceerrors.NewServiceError(messages.QueryParameterMismatch, "ParameterNames", strings.Join(mismatchedParams, ",")), ctx.RequestID)
+	err = CheckScope(filter)
+	if err != nil {
+		w.Error(err, ctx.RequestID)
 		return
-	}
-
-	// scope matches to other fields in the filter
-	// scope==system ==> owner EQ system
-	// scope==tenant ==> owner NE system
-	if scope, ok := filter.Params["scope"]; ok {
-		switch scope {
-		case "system":
-			filter.Params["owner"] = "system"
-			delete(filter.Params, "scope")
-		case "tenant":
-			filter.Params["owner"] = "!system"
-			delete(filter.Params, "scope")
-		default:
-			w.Error(serviceerrors.NewServiceError(messages.QueryParameterValueInvalid, "ParameterName", "scope", "AllowedValues", "system|tenant"), ctx.RequestID)
-			return
-		}
 	}
 
 	allowedParams := []string{"limit", "offset", "benchmarks", "name", "tags", "benchmarks", "owner", "scope"}
