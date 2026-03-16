@@ -14,9 +14,10 @@ func NewRuntime(
 	logger *slog.Logger,
 	serviceConfig *config.Config,
 	providerConfigs map[string]api.ProviderResource,
+	collectionConfigs map[string]api.CollectionResource,
 ) (abstractions.Runtime, error) {
 	if serviceConfig.Service.LocalMode {
-		return local.NewLocalRuntime(logger, providerConfigs)
+		return local.NewLocalRuntime(logger, providerConfigs, collectionConfigs)
 	}
-	return k8s.NewK8sRuntime(logger, serviceConfig, providerConfigs)
+	return k8s.NewK8sRuntime(logger, serviceConfig, providerConfigs, collectionConfigs)
 }

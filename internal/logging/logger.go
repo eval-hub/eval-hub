@@ -78,14 +78,26 @@ func parseLogLevel(s string) *zapcore.Level {
 	}
 }
 
-// SkipCallersForInfo logs a message at the given level with the given args, skipping the given number of callers
+type logLevelKeyType struct{}
+
+// LogLevelKey is a context key for overriding the log level of a request.
+var LogLevelKey = logLevelKeyType{}
+
+// LogWithCallerSkip logs a message at the given level with the given args, skipping the given number of callers
 // the caller is the function that called this function plus one, i.e the function that called one of the Log* functions
 // the skip is the number of callers to skip
 // the msg is the message to log
 // the args are the arguments to add to the message
 // the logger is the logger to use
 // the level is the level to log at
-func SkipCallersForInfo(ctx context.Context, logger *slog.Logger, level slog.Level, skip int, msg string, args ...any) {
+func LogWithCallerSkip(ctx context.Context, logger *slog.Logger, level slog.Level, skip int, msg string, args ...any) {
+	// Allow handlers to override the log level for an entire request by storing
+	// a value in the context (e.g. health checks log at debug to avoid flooding
+	// logs from readiness/liveness probes). This keeps the log-level decision in
+	// the handler where the business logic lives, rather than in the routing layer.
+	if lvl, ok := ctx.Value(LogLevelKey).(slog.Level); ok {
+		level = lvl
+	}
 	if !logger.Enabled(ctx, level) {
 		return
 	}
@@ -96,8 +108,8 @@ func SkipCallersForInfo(ctx context.Context, logger *slog.Logger, level slog.Lev
 	_ = logger.Handler().Handle(ctx, r)
 }
 
-func LogRequestStarted(ctx *executioncontext.ExecutionContext) {
-	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request started")
+func LogRequestStarted(ctx *executioncontext.ExecutionContext, args ...any) {
+	LogWithCallerSkip(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request started", args...)
 }
 
 func LogRequestFailed(ctx *executioncontext.ExecutionContext, code int, errorMessage string, skip ...int) {
@@ -106,9 +118,9 @@ func LogRequestFailed(ctx *executioncontext.ExecutionContext, code int, errorMes
 		skipCount += skip[0]
 	}
 	// log the failed request, the request details and requestId have already been added to the logger
-	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, skipCount, "Request failed", "error", errorMessage, "code", code, "duration", time.Since(ctx.StartedAt))
+	LogWithCallerSkip(ctx.Ctx, ctx.Logger, slog.LevelInfo, skipCount, "Request failed", "error", errorMessage, "code", code, "duration", time.Since(ctx.StartedAt))
 }
 
 func LogRequestSuccess(ctx *executioncontext.ExecutionContext, code int, response any) {
-	SkipCallersForInfo(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request successful", "code", code, "duration", time.Since(ctx.StartedAt))
+	LogWithCallerSkip(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request successful", "code", code, "duration", time.Since(ctx.StartedAt))
 }

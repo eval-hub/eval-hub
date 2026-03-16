@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,14 +16,16 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	h := handlers.New(nil, nil, nil, nil, nil, nil)
+	h := handlers.New(nil, nil, nil, nil, nil, nil, nil)
 	if h == nil {
 		t.Error("New() returned nil")
 	}
 }
 
 func createExecutionContext() *executioncontext.ExecutionContext {
-	return &executioncontext.ExecutionContext{}
+	return &executioncontext.ExecutionContext{
+		Ctx: context.Background(),
+	}
 }
 
 func createMockRequest(method string, uri string) *MockRequest {

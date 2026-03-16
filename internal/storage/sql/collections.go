@@ -90,26 +90,35 @@ func (s *SQLStorage) GetCollections(filter *abstractions.QueryFilter) (*abstract
 	return listEntities[api.CollectionResource](s, txn, shared.TABLE_COLLECTIONS, filter)
 }
 
-func (s *SQLStorage) UpdateCollection(collection *api.CollectionResource) error {
+func (s *SQLStorage) UpdateCollection(id string, collection *api.CollectionConfig) (*api.CollectionResource, error) {
 	if err := s.verifyTenant(); err != nil {
-		return err
+		return nil, err
 	}
 
-	err := s.withTransaction("update collection", collection.Resource.ID, func(txn *sql.Tx) error {
-		persistedCollection, err := s.getCollectionTransactional(txn, collection.Resource.ID)
+	var updated *api.CollectionResource
+
+	err := s.withTransaction("update collection", id, func(txn *sql.Tx) error {
+		persistedCollection, err := s.getCollectionTransactional(txn, id)
 		if err != nil {
 			return err
 		}
 		if persistedCollection.Resource.Owner == "system" {
 			return se.NewServiceError(
 				messages.SystemCollection,
-				"CollectionID", collection.Resource.ID,
+				"CollectionID", id,
 			)
 		}
-		persistedCollection.CollectionConfig = collection.CollectionConfig
-		return s.updateCollectionTransactional(txn, collection.Resource.ID, persistedCollection)
+		persistedCollection.CollectionConfig = *collection
+		err = s.updateCollectionTransactional(txn, id, persistedCollection)
+		if err != nil {
+			return err
+		}
+		updated, err = s.getCollectionTransactional(txn, id)
+
+		return err
 	})
-	return err
+
+	return updated, err
 }
 
 func (s *SQLStorage) updateCollectionTransactional(txn *sql.Tx, collectionID string, collection *api.CollectionResource) error {
@@ -145,10 +154,12 @@ func (s *SQLStorage) DeleteCollection(id string) error {
 	return nil
 }
 
-func (s *SQLStorage) PatchCollection(id string, patches *api.Patch) error {
+func (s *SQLStorage) PatchCollection(id string, patches *api.Patch) (*api.CollectionResource, error) {
 	if err := s.verifyTenant(); err != nil {
-		return err
+		return nil, err
 	}
+
+	var updated *api.CollectionResource
 
 	err := s.withTransaction("patch collection", id, func(txn *sql.Tx) error {
 		persistedCollection, err := s.getCollectionTransactional(txn, id)
@@ -189,7 +200,13 @@ func (s *SQLStorage) PatchCollection(id string, patches *api.Patch) error {
 			Resource:         resource,
 			CollectionConfig: patchedCollection.CollectionConfig,
 		}
-		return s.updateCollectionTransactional(txn, id, &result)
+		err = s.updateCollectionTransactional(txn, id, &result)
+		if err != nil {
+			return err
+		}
+		updated, err = s.getCollectionTransactional(txn, id)
+		return err
 	})
-	return err
+
+	return updated, err
 }

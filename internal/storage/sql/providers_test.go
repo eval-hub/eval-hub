@@ -68,14 +68,12 @@ func TestProviderStorage(t *testing.T) {
 	})
 
 	t.Run("UpdateProvider updates the provider config", func(t *testing.T) {
-		updated := &api.ProviderResource{
-			ProviderConfig: api.ProviderConfig{
-				Name:        "Updated Provider",
-				Description: "Updated description",
-				Benchmarks: []api.BenchmarkResource{
-					{ID: "bench-1", Name: "Bench 1"},
-					{ID: "bench-2", Name: "Bench 2"},
-				},
+		updated := &api.ProviderConfig{
+			Name:        "Updated Provider",
+			Description: "Updated description",
+			Benchmarks: []api.BenchmarkResource{
+				{ID: "bench-1", Name: "Bench 1"},
+				{ID: "bench-2", Name: "Bench 2"},
 			},
 		}
 		got, err := store.UpdateProvider("provider-1", updated)

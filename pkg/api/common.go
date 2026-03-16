@@ -38,7 +38,7 @@ const (
 )
 
 type Ref struct {
-	ID string `json:"id" validate:"required"`
+	ID string `mapstructure:"id" json:"id" validate:"required"`
 }
 
 type HRef struct {
@@ -64,7 +64,7 @@ type Patch []PatchOperation
 
 // Resource represents base resource fields
 type Resource struct {
-	ID        string    `json:"id"`
+	ID        string    `json:"id" validate:"resource_id"`
 	Tenant    Tenant    `json:"tenant,omitempty"`
 	CreatedAt time.Time `json:"created_at,omitzero"`
 	UpdatedAt time.Time `json:"updated_at,omitzero"`

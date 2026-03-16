@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -15,7 +16,7 @@ func TestResolveBenchmarks_FromJobBenchmarks(t *testing.T) {
 			},
 		},
 	}
-	got, err := ResolveBenchmarks(eval, nil)
+	got, err := ResolveBenchmarks(eval, nil, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -28,14 +29,14 @@ func TestResolveBenchmarks_CollectionSetStorageNil_ReturnsError(t *testing.T) {
 	eval := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Collection: &api.Ref{ID: "coll-1"},
+			Collection: &api.CollectionRef{ID: "coll-1"},
 		},
 	}
-	_, err := ResolveBenchmarks(eval, nil)
+	_, err := ResolveBenchmarks(eval, nil, nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if err.Error() != "collection is set but storage is not available for job job-1" {
-		t.Fatalf("expected collection/storage error, got %q", err.Error())
+	if !strings.Contains(err.Error(), `collection "coll-1" not found`) {
+		t.Fatalf("expected collection not found error, got %q", err.Error())
 	}
 }

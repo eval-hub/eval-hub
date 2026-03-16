@@ -22,16 +22,17 @@ type K8sRuntime struct {
 	serviceConfig *config.Config
 	helper        *KubernetesHelper
 	providers     map[string]api.ProviderResource
+	collections   map[string]api.CollectionResource
 	ctx           context.Context
 }
 
 // NewK8sRuntime creates a Kubernetes runtime.
-func NewK8sRuntime(logger *slog.Logger, serviceConfig *config.Config, providerConfigs map[string]api.ProviderResource) (abstractions.Runtime, error) {
+func NewK8sRuntime(logger *slog.Logger, serviceConfig *config.Config, providerConfigs map[string]api.ProviderResource, collectionConfigs map[string]api.CollectionResource) (abstractions.Runtime, error) {
 	helper, err := NewKubernetesHelper()
 	if err != nil {
 		return nil, err
 	}
-	return &K8sRuntime{logger: logger, serviceConfig: serviceConfig, helper: helper, providers: providerConfigs}, nil
+	return &K8sRuntime{logger: logger, serviceConfig: serviceConfig, helper: helper, providers: providerConfigs, collections: collectionConfigs}, nil
 }
 
 func (r *K8sRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
@@ -40,6 +41,7 @@ func (r *K8sRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
 		serviceConfig: r.serviceConfig,
 		helper:        r.helper,
 		providers:     r.providers,
+		collections:   r.collections,
 		ctx:           r.ctx,
 	}
 }
@@ -50,12 +52,13 @@ func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 		serviceConfig: r.serviceConfig,
 		helper:        r.helper,
 		providers:     r.providers,
+		collections:   r.collections,
 		ctx:           ctx,
 	}
 }
 
 func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, storage abstractions.Storage) error {
-	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	benchmarks, err := shared.ResolveBenchmarks(evaluation, r.collections, storage)
 	if err != nil {
 		return err
 	}
@@ -72,7 +75,7 @@ func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, sto
 
 				if storage != nil {
 					runStatus := buildBenchmarkFailureStatus(&bench, idx, err)
-					if updateErr := storage.UpdateEvaluationJob(evaluation.Resource.ID, runStatus); updateErr != nil {
+					if updateErr := storage.UpdateEvaluationJob(evaluation.Resource.ID, runStatus, benchmarks); updateErr != nil {
 						r.logger.Error(
 							"failed to update benchmark status",
 							"error", updateErr,

@@ -4,8 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"slices"
-	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -70,6 +68,10 @@ func NewStatementsFactory(logger *slog.Logger) shared.SQLStatementsFactory {
 	return &sqliteStatementsFactory{logger: logger}
 }
 
+func (s *sqliteStatementsFactory) GetLogger() *slog.Logger {
+	return s.logger
+}
+
 func (s *sqliteStatementsFactory) GetTablesSchema() string {
 	return TABLES_SCHEMA
 }
@@ -83,7 +85,7 @@ func (s *sqliteStatementsFactory) GetAllowedFilterColumns(tableName string) []st
 	case shared.TABLE_PROVIDERS:
 		return allColumns // "benchmarks" and "system_defined" are not allowed filters for providers from the database
 	case shared.TABLE_COLLECTIONS:
-		return allColumns // "system_defined" is not allowed filter for collections from the database
+		return append(allColumns, "category") // "system_defined" is not allowed filter for collections from the database
 	default:
 		return nil
 	}
@@ -101,7 +103,7 @@ func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shar
 }
 
 // entityFilterCondition returns the SQL condition and args for a filter key.
-func (s *sqliteStatementsFactory) entityFilterCondition(key string, value any, tableName string) (condition string, args []any) {
+func (s *sqliteStatementsFactory) CreateEntityFilterCondition(key string, value any, index int, tableName string) (condition string, args []any) {
 	switch key {
 	case "name":
 		// evaluations: name at config.name; providers and collections: name at entity root
@@ -111,6 +113,14 @@ func (s *sqliteStatementsFactory) entityFilterCondition(key string, value any, t
 		}
 		// name at top level
 		return fmt.Sprintf("json_extract(entity, '%s') = ?", namePath), []any{value}
+	case "category":
+		if tableName == shared.TABLE_COLLECTIONS {
+			// collections: category at entity root
+			categoryPath := "$.category"
+			return fmt.Sprintf("json_extract(entity, '%s') = ?", categoryPath), []any{value}
+		}
+		// should never get here as we validate the filter before calling this function
+		return "", []any{}
 	case "tags":
 		tagStr, _ := value.(string)
 		// evaluations: tags at config.tags; providers and collections: tags at entity root
@@ -119,74 +129,23 @@ func (s *sqliteStatementsFactory) entityFilterCondition(key string, value any, t
 			tagsPath = "$.config.tags"
 		}
 		return fmt.Sprintf("json_type(json_extract(entity, '%s')) = 'array' AND EXISTS (SELECT 1 FROM json_each(json_extract(entity, '%s')) WHERE value = ?)", tagsPath, tagsPath), []any{tagStr}
+	case "ORDER BY":
+		return "ORDER BY " + value.(string), []any{}
+	case "LIMIT", "OFFSET":
+		return key + " ?", []any{value}
 	default:
 		return key + " = ?", []any{value}
 	}
 }
 
-// createFilterStatement builds a WHERE clause and args from the filter.
-// It validates each key against the table's allowlist, sorts keys deterministically,
-// and returns both the clause and args in matching order. Returns an error if any
-// filter key is not in the allowlist (fail closed).
-func (s *sqliteStatementsFactory) createFilterStatement(tenant api.Tenant, filter map[string]any, orderBy string, limit int, offset int, tableName string) (string, []any) {
-	var args []any
-	var sb strings.Builder
-
-	and := false
-
-	// we must always filter by tenant_id if it exists
-	if !tenant.IsEmpty() {
-		sb.WriteString(" WHERE ")
-		cond, condArgs := s.entityFilterCondition("tenant_id", tenant.String(), tableName)
-		sb.WriteString(cond)
-		args = append(args, condArgs...)
-		and = true
-	}
-
-	if len(filter) > 0 {
-		allowed := s.GetAllowedFilterColumns(tableName)
-		for key, value := range filter {
-			if slices.Contains(allowed, key) {
-				if !and {
-					sb.WriteString(" WHERE ")
-					and = true
-				} else if and {
-					sb.WriteString(" AND ")
-				}
-				cond, condArgs := s.entityFilterCondition(key, value, tableName)
-				sb.WriteString(cond)
-				args = append(args, condArgs...)
-			} else {
-				// should never get here as we validate the filter before calling this function
-				s.logger.Warn("Disallowed filter key", "key", key, "tableName", tableName)
-			}
-		}
-	}
-
-	if orderBy != "" {
-		sb.WriteString(" ORDER BY ")
-		sb.WriteString(orderBy)
-	}
-	if limit > 0 {
-		sb.WriteString(" LIMIT ?")
-		args = append(args, limit)
-	}
-	if offset > 0 {
-		sb.WriteString(" OFFSET ?")
-		args = append(args, offset)
-	}
-
-	return sb.String(), args
-}
-
 func (s *sqliteStatementsFactory) CreateCountEntitiesStatement(tenant api.Tenant, tableName string, filter map[string]any) (string, []any) {
-	filterClause, args := s.createFilterStatement(tenant, filter, "", 0, 0, tableName)
+	filterClause, args := shared.CreateFilterStatement(tenant, s, filter, "", 0, 0, tableName)
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, tableName, filterClause)
 	return query, args
 }
 
 func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant, tableName string, limit, offset int, filter map[string]any) (string, []any) {
-	filterClause, args := s.createFilterStatement(tenant, filter, "id DESC", limit, offset, tableName)
+	filterClause, args := shared.CreateFilterStatement(tenant, s, filter, "id DESC", limit, offset, tableName)
 
 	var query string
 	switch tableName {

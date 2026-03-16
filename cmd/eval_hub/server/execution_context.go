@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/constants"
@@ -92,7 +91,7 @@ func (r *ReqWrapper) Path() string {
 func (r *ReqWrapper) Query(key string) []string {
 	values, found := r.Request.URL.Query()[key]
 	if found {
-		return strings.Split(strings.TrimSpace(values[0]), ",")
+		return values
 	}
 	return []string{}
 }

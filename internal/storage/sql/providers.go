@@ -101,7 +101,7 @@ func (s *SQLStorage) GetProviders(filter *abstractions.QueryFilter) (*abstractio
 	return listEntities[api.ProviderResource](s, txn, shared.TABLE_PROVIDERS, filter)
 }
 
-func (s *SQLStorage) UpdateProvider(id string, provider *api.ProviderResource) (*api.ProviderResource, error) {
+func (s *SQLStorage) UpdateProvider(id string, providerConfig *api.ProviderConfig) (*api.ProviderResource, error) {
 	if err := s.verifyTenant(); err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func (s *SQLStorage) UpdateProvider(id string, provider *api.ProviderResource) (
 		}
 		merged := &api.ProviderResource{
 			Resource:       persisted.Resource,
-			ProviderConfig: provider.ProviderConfig,
+			ProviderConfig: *providerConfig,
 		}
 		if err := s.updateProviderTransactional(txn, id, merged); err != nil {
 			return err

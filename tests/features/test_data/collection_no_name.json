@@ -1,1 +1,10 @@
-{"description":"Collection without name field","benchmarks":[{"id":"arc_easy","provider_id":"lm_evaluation_harness"}]}
+{
+    "description": "Collection without name field",
+    "category": "test",
+    "benchmarks": [
+        {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness"
+        }
+    ]
+}

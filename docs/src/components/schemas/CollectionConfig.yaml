@@ -4,6 +4,9 @@ properties:
   name:
     type: string
     description: Collection name
+  category:
+    type: string
+    description: Collection category
   description:
     type: string
     description: Optional description
@@ -25,4 +28,6 @@ properties:
       $ref: ./BenchmarkConfig.yaml
     description: Benchmarks in the collection
 required:
+  - name
+  - category
   - benchmarks

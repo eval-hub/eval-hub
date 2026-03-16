@@ -152,7 +152,7 @@ func TestServerSetupRoutes(t *testing.T) {
 		{http.MethodGet, "/api/v1/evaluations/jobs", http.StatusOK, ""},
 		{http.MethodGet, "/api/v1/evaluations/jobs/test-id", http.StatusNotFound, ""},
 		// Collections
-		{http.MethodPost, "/api/v1/evaluations/collections", http.StatusAccepted, `{"name": "test-benchmarks-collection", "description": "Collection of benchmarks for FVT", "benchmarks": [{"id": "arc_easy", "provider_id": "lm_evaluation_harness"}]}`},
+		{http.MethodPost, "/api/v1/evaluations/collections", http.StatusAccepted, `{"name": "test-benchmarks-collection", "description": "Collection of benchmarks for FVT", "category": "test", "benchmarks": [{"id": "arc_easy", "provider_id": "lm_evaluation_harness"}]}`},
 		{http.MethodGet, "/api/v1/evaluations/collections", http.StatusOK, ""},
 		{http.MethodGet, "/api/v1/evaluations/collections/test-collection", http.StatusNotFound, ""},
 		// Providers
@@ -251,10 +251,7 @@ func createServer(port int) (*server.Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	validate, err := validation.NewValidator()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create validator: %w", err)
-	}
+	validate := validation.NewValidator()
 	serviceConfig, err := config.LoadConfig(logger, "0.2.0", "local", time.Now().Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load service config: %w", err)
@@ -273,10 +270,15 @@ func createServer(port int) (*server.Server, error) {
 		return nil, fmt.Errorf("failed to create storage: %w", err)
 	}
 	// set up the provider configs
-	providerConfigs, err := config.LoadProviderConfigs(logger)
+	providerConfigs, err := config.LoadProviderConfigs(logger, validate)
 	if err != nil {
 		// we do this as no point trying to continue
 		return nil, fmt.Errorf("failed to load provider configs: %w", err)
+	}
+	collectionConfigs, err := config.LoadCollectionConfigs(logger, validate)
+	if err != nil {
+		// we do this as no point trying to continue
+		return nil, fmt.Errorf("failed to load collection configs: %w", err)
 	}
 	// Use stub runtime to avoid file writes and process spawning during tests
 	runtime := &stubRuntime{logger: logger, providers: providerConfigs}
@@ -284,7 +286,7 @@ func createServer(port int) (*server.Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MLFlow client: %w", err)
 	}
-	return server.NewServer(logger, serviceConfig, providerConfigs, nil, store, validate, runtime, mlflowClient)
+	return server.NewServer(logger, serviceConfig, providerConfigs, collectionConfigs, nil, store, validate, runtime, mlflowClient)
 }
 
 func getKeyAsString(obj map[string]interface{}, key string) string {

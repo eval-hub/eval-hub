@@ -469,6 +469,13 @@ paths:
             type: string
             title: Name
           description: Name to search for
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            title: Category
+          description: Category to search for
         - name: tags
           in: query
           required: false
@@ -931,15 +938,6 @@ components:
         auth:
           $ref: '#/components/schemas/ModelAuth'
           description: The model authentication configuration
-    PassCriteria:
-      type: object
-      description: Pass/fail threshold criteria
-      properties:
-        threshold:
-          type: number
-          format: float
-          default: 0
-          description: Threshold value
     Ref:
       type: object
       description: Reference by ID
@@ -960,6 +958,15 @@ components:
           type: boolean
           default: false
           description: Whether lower values indicate better performance
+    PassCriteria:
+      type: object
+      description: Pass/fail threshold criteria
+      properties:
+        threshold:
+          type: number
+          format: float
+          default: 0
+          description: Threshold value
     TestDataRefS3:
       type: object
       description: S3 test data reference
@@ -1014,6 +1021,20 @@ components:
             test_data_ref:
               $ref: '#/components/schemas/TestDataRef'
               description: Reference to the test data source for this benchmark
+    CollectionRef:
+      type: object
+      description: Collection Reference
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Unique identifier
+        benchmarks:
+          type: array
+          items:
+            $ref: '#/components/schemas/BenchmarkConfig'
+          description: The benchmarks supported by this collection. If a benchmark is specified but is not supported by the collection, the evaluation job will fail. This is needed in order to allow overriding the collection benchmarks for a specific evaluation job.
     ExperimentTag:
       type: object
       description: Tag on an experiment (e.g. MLFlow)
@@ -1117,6 +1138,7 @@ components:
       title: EvaluationExports
     EvaluationJobConfig:
       type: object
+      title: EvaluationJobConfig
       description: |
         The evaluation job request configuration.
       required:
@@ -1141,20 +1163,20 @@ components:
           $ref: '#/components/schemas/ModelRef'
           description: |
             The model to evaluate.
-        pass_criteria:
-          $ref: '#/components/schemas/PassCriteria'
+        collection:
+          $ref: '#/components/schemas/CollectionRef'
           description: |
-            The overall pass criteria for the evaluation job.
+            Optional collection reference. When provided, the benchmarks will be taken from the collection. Either `benchmarks` or `collection` must be provided, but not both.
         benchmarks:
           type: array
           items:
             $ref: '#/components/schemas/BenchmarkConfig'
           description: |
             The evaluation benchmarks to run. Either `benchmarks` or `collection` must be provided, but not both.
-        collection:
-          $ref: '#/components/schemas/Ref'
+        pass_criteria:
+          $ref: '#/components/schemas/PassCriteria'
           description: |
-            Optional collection reference. When provided, the benchmarks will be taken from the collection. Either `benchmarks` or `collection` must be provided, but not both.
+            The overall pass criteria for the evaluation job.
         experiment:
           $ref: '#/components/schemas/ExperimentConfig'
           description: |
@@ -1168,7 +1190,13 @@ components:
           $ref: '#/components/schemas/EvaluationExports'
           description: |
             Optional exports configuration for the evaluation job. When provided, the evaluation job results will be exported to the specified location.
-      title: EvaluationJobConfig
+      oneOf:
+        - title: Benchmarks
+          required:
+            - benchmarks
+        - title: Collection
+          required:
+            - collection
     EvaluationJobResource:
       type: object
       description: Full evaluation job resource (response)
@@ -1349,16 +1377,21 @@ components:
         - $ref: '#/components/schemas/ProviderConfig'
     ProviderResourceList:
       type: object
-      description: List of providers (no pagination links)
-      properties:
-        total_count:
-          type: integer
-          description: Total number of providers
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProviderResource'
-          description: Provider resources
+      description: List of provider resources with pagination
+      allOf:
+        - $ref: '#/components/schemas/Page'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProviderResource'
+              description: Provider resources
+            errors:
+              type: array
+              items:
+                type: string
+              description: Non-fatal errors (e.g. partial list)
     PatchOp:
       type: string
       enum:
@@ -1387,6 +1420,9 @@ components:
         name:
           type: string
           description: Collection name
+        category:
+          type: string
+          description: Collection category
         description:
           type: string
           description: Optional description
@@ -1408,6 +1444,8 @@ components:
             $ref: '#/components/schemas/BenchmarkConfig'
           description: Benchmarks in the collection
       required:
+        - name
+        - category
         - benchmarks
     CollectionResource:
       type: object

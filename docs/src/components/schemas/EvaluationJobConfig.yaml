@@ -1,4 +1,5 @@
 type: object
+title: EvaluationJobConfig
 description: >
   The evaluation job request configuration.
 required:
@@ -23,10 +24,11 @@ properties:
     $ref: ./ModelRef.yaml
     description: >
       The model to evaluate.
-  pass_criteria:
-    $ref: ./PassCriteria.yaml
+  collection:
+    $ref: ./CollectionRef.yaml
     description: >
-      The overall pass criteria for the evaluation job.
+      Optional collection reference. When provided, the benchmarks will be taken from the collection.
+      Either `benchmarks` or `collection` must be provided, but not both.
   benchmarks:
     type: array
     items:
@@ -34,11 +36,10 @@ properties:
     description: >
       The evaluation benchmarks to run.
       Either `benchmarks` or `collection` must be provided, but not both.
-  collection:
-    $ref: ./Ref.yaml
+  pass_criteria:
+    $ref: ./PassCriteria.yaml
     description: >
-      Optional collection reference. When provided, the benchmarks will be taken from the collection.
-      Either `benchmarks` or `collection` must be provided, but not both.
+      The overall pass criteria for the evaluation job.
   experiment:
     $ref: ./ExperimentConfig.yaml
     description: >
@@ -54,4 +55,9 @@ properties:
     description: >
       Optional exports configuration for the evaluation job.
       When provided, the evaluation job results will be exported to the specified location.
-title: EvaluationJobConfig
+
+oneOf:
+  - title: Benchmarks
+    required: [benchmarks]
+  - title: Collection
+    required: [collection]

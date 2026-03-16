@@ -58,6 +58,7 @@ COPY --from=builder --chown=evalhub:evalhub /build/eval-hub-init /app/eval-hub-i
 # The config file should not really be part of the image.
 COPY --chown=evalhub:evalhub config/config.yaml /app/config/config.yaml
 COPY --chown=evalhub:evalhub config/providers /app/config/providers
+COPY --chown=evalhub:evalhub config/collections /app/config/collections
 
 # Set working directory
 WORKDIR /app

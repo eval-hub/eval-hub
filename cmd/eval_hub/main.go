@@ -72,11 +72,7 @@ func main() {
 	serviceConfig.Service.LocalMode = args.LocalMode
 
 	// set up the validator
-	validate, err := validation.NewValidator()
-	if err != nil {
-		// we do this as no point trying to continue
-		startUpFailed(serviceConfig, err, "Failed to create validator", logger)
-	}
+	validate := validation.NewValidator()
 
 	// set up the storage
 	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger)
@@ -86,14 +82,21 @@ func main() {
 	}
 
 	// set up the provider configs
-	providerConfigs, err := config.LoadProviderConfigs(logger, args.ConfigDir)
+	providerConfigs, err := config.LoadProviderConfigs(logger, validate, args.ConfigDir)
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create provider configs", logger)
 	}
 
+	// set up the collection configs
+	collectionConfigs, err := config.LoadCollectionConfigs(logger, validate, args.ConfigDir)
+	if err != nil {
+		// we do this as no point trying to continue
+		startUpFailed(serviceConfig, err, "Failed to create collection configs", logger)
+	}
+
 	// setup runtime
-	runtime, err := runtimes.NewRuntime(logger, serviceConfig, providerConfigs)
+	runtime, err := runtimes.NewRuntime(logger, serviceConfig, providerConfigs, collectionConfigs)
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create runtime", logger)
@@ -130,6 +133,7 @@ func main() {
 	srv, err := server.NewServer(logger,
 		serviceConfig,
 		providerConfigs,
+		collectionConfigs,
 		authConfig,
 		storage,
 		validate,

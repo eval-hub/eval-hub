@@ -10,6 +10,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/logging"
+	"github.com/eval-hub/eval-hub/internal/validation"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -226,6 +227,20 @@ secrets:
 			t.Fatalf("Database password is not set")
 		}
 	})
+
+	t.Run("loads providers from config dir", func(t *testing.T) {
+		_, err := config.LoadProviderConfigs(logger, validation.NewValidator())
+		if err != nil {
+			t.Fatalf("LoadProviderConfigs failed: %v", err)
+		}
+	})
+
+	t.Run("loads collections from config dir", func(t *testing.T) {
+		_, err := config.LoadCollectionConfigs(logger, validation.NewValidator())
+		if err != nil {
+			t.Fatalf("LoadCollectionConfigs failed: %v", err)
+		}
+	})
 }
 
 func TestRedactedJSON(t *testing.T) {
@@ -300,7 +315,7 @@ func TestLoadProviderConfigs(t *testing.T) {
 		os.MkdirAll(provDir, 0755)
 		writeProviderYAML(t, provDir, "alpha", "Alpha Provider")
 
-		providers, err := config.LoadProviderConfigs(logger, dir)
+		providers, err := config.LoadProviderConfigs(logger, validation.NewValidator(), dir)
 		if err != nil {
 			t.Fatalf("LoadProviderConfigs failed: %v", err)
 		}
@@ -320,7 +335,7 @@ func TestLoadProviderConfigs(t *testing.T) {
 		writeProviderYAML(t, provDir, "beta", "Beta")
 		writeProviderYAML(t, provDir, "gamma", "Gamma")
 
-		providers, err := config.LoadProviderConfigs(logger, dir)
+		providers, err := config.LoadProviderConfigs(logger, validation.NewValidator(), dir)
 		if err != nil {
 			t.Fatalf("LoadProviderConfigs failed: %v", err)
 		}
@@ -329,16 +344,16 @@ func TestLoadProviderConfigs(t *testing.T) {
 		}
 	})
 
-	t.Run("skips providers with missing id", func(t *testing.T) {
+	t.Run("fail providers with missing id", func(t *testing.T) {
 		dir := t.TempDir()
 		provDir := filepath.Join(dir, "providers")
 		os.MkdirAll(provDir, 0755)
 		content := "name: No ID Provider\ndescription: missing id field\n"
 		os.WriteFile(filepath.Join(provDir, "noid.yaml"), []byte(content), 0600)
 
-		providers, err := config.LoadProviderConfigs(logger, dir)
-		if err != nil {
-			t.Fatalf("LoadProviderConfigs failed: %v", err)
+		providers, err := config.LoadProviderConfigs(logger, validation.NewValidator(), dir)
+		if err == nil {
+			t.Fatalf("LoadProviderConfigs did not fail when expecting an error for missing id")
 		}
 		if len(providers) != 0 {
 			t.Fatalf("Expected 0 providers (missing id), got %d", len(providers))
@@ -353,7 +368,7 @@ func TestLoadProviderConfigs(t *testing.T) {
 		os.WriteFile(filepath.Join(provDir, "readme.txt"), []byte("ignore me"), 0600)
 		os.MkdirAll(filepath.Join(provDir, "subdir"), 0755)
 
-		providers, err := config.LoadProviderConfigs(logger, dir)
+		providers, err := config.LoadProviderConfigs(logger, validation.NewValidator(), dir)
 		if err != nil {
 			t.Fatalf("LoadProviderConfigs failed: %v", err)
 		}
@@ -365,7 +380,7 @@ func TestLoadProviderConfigs(t *testing.T) {
 	t.Run("returns empty map when providers dir missing", func(t *testing.T) {
 		dir := t.TempDir() // no "providers" subdir
 
-		providers, err := config.LoadProviderConfigs(logger, dir)
+		providers, err := config.LoadProviderConfigs(logger, validation.NewValidator(), dir)
 		if err != nil {
 			t.Fatalf("LoadProviderConfigs failed: %v", err)
 		}
@@ -375,7 +390,7 @@ func TestLoadProviderConfigs(t *testing.T) {
 	})
 
 	t.Run("falls back to default lookup paths when no explicit dir", func(t *testing.T) {
-		providers, err := config.LoadProviderConfigs(logger, "")
+		providers, err := config.LoadProviderConfigs(logger, validation.NewValidator(), "")
 		if err != nil {
 			t.Fatalf("LoadProviderConfigs failed: %v", err)
 		}
@@ -401,7 +416,7 @@ benchmarks:
 `
 		os.WriteFile(filepath.Join(provDir, "mytest.yaml"), []byte(content), 0600)
 
-		providers, err := config.LoadProviderConfigs(logger, dir)
+		providers, err := config.LoadProviderConfigs(logger, validation.NewValidator(), dir)
 		if err != nil {
 			t.Fatalf("LoadProviderConfigs failed: %v", err)
 		}

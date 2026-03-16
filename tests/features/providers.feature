@@ -66,6 +66,57 @@ Feature: Providers Endpoint
     Then the response code should be 400
     And the response should contain the value "query_parameter_invalid" at path "message_code"
 
+  Scenario: List system providers with pagination
+    Given the service is running
+    And there are no user providers
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=0&system_defined=only"
+    Then the response code should be 200
+    And the response should contain the value "50" at path "$.limit"
+    And the "total_count" field in the response should be saved as "value:num_providers"
+    And the response should contain the value "3" at path "$.total_count"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=0"
+    Then the response code should be 200
+    And the response should contain the value "50" at path "$.limit"
+    And the array at path "items" in the response should have length "value:num_providers"
+    And the response should contain the value "{{value:num_providers}}" at path "$.total_count"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=1"
+    Then the response code should be 200
+    And the response should contain the value "50" at path "$.limit"
+    And the array at path "items" in the response should have length 2
+    And the response should contain the value "{{value:num_providers}}" at path "$.total_count"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=2"
+    Then the response code should be 200
+    And the response should contain the value "50" at path "$.limit"
+    And the array at path "items" in the response should have length 1
+    And the response should contain the value "{{value:num_providers}}" at path "$.total_count"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=3"
+    Then the response code should be 200
+    And the response should contain the value "50" at path "$.limit"
+    And the array at path "items" in the response should have length 0
+    And the response should contain the value "{{value:num_providers}}" at path "$.total_count"
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider.json"
+    Then the response code should be 201
+    And the "resource.id" field in the response should be saved as "value:provider1_id"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=0&system_defined=only"
+    Then the response code should be 200
+    And the response should contain the value "{{value:num_providers}}" at path "$.total_count"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset={{value:num_providers}}"
+    Then the response code should be 200
+    And the response should contain the value "50" at path "$.limit"
+    And the array at path "items" in the response should have length 1
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider.json"
+    Then the response code should be 201
+    And the "resource.id" field in the response should be saved as "value:provider2_id"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=3"
+    Then the response code should be 200
+    And the response should contain the value "50" at path "$.limit"
+    And the array at path "items" in the response should have length 2
+    When I send a GET request to "/api/v1/evaluations/providers?limit=1&offset=3"
+    Then the response code should be 200
+    And the response should contain the value "1" at path "$.limit"
+    And the array at path "items" in the response should have length 1
+    #And the response should contain the value "{{value:provider1_id}}" at path "$.items[0].resource.id"
+
   Scenario: List providers with all search parameters and pagination
     Given the service is running
     And there are no user providers
@@ -348,3 +399,120 @@ Feature: Providers Endpoint
     Then the response code should be 400
     And the response should contain the value "unallowed_patch" at path "message_code"
     And the response should contain the value "The operation 'remove' is not allowed for the path '/name'" at path "message"
+
+  Scenario: List providers by tags and name
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/providers" with body:
+    """
+    {
+      "name": "test-provider-1",
+      "description": "Test provider 1 for FVT",
+      "tags": ["test-tag-1", "test-tag-2"],
+      "benchmarks": [
+        {
+            "id": "arc_easy",
+            "name": "lm_evaluation_harness"
+        }
+      ]
+    }
+    """
+    Then the response code should be 201
+    When I send a POST request to "/api/v1/evaluations/providers" with body:
+    """
+    {
+      "name": "test-provider-2",
+      "description": "Test provider 2 for FVT",
+      "tags": ["test-tag-1"],
+      "benchmarks": [
+        {
+            "id": "arc_easy",
+            "name": "lm_evaluation_harness"
+        }
+      ]
+    }
+    """
+    Then the response code should be 201
+    When I send a POST request to "/api/v1/evaluations/providers" with body:
+    """
+    {
+      "name": "test-provider-3",
+      "description": "Test provider 3 for FVT",
+      "tags": ["test-tag-3", "test-tag-2", "test-tag-1"],
+      "benchmarks": [
+        {
+            "id": "arc_easy",
+            "name": "lm_evaluation_harness"
+        }
+      ]
+    }
+    """
+    Then the response code should be 201
+    When I send a GET request to "/api/v1/evaluations/providers?tags=test-tag-1"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 3
+    When I send a GET request to "/api/v1/evaluations/providers?tags=test-tag-2"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 2
+    When I send a GET request to "/api/v1/evaluations/providers?tags=test-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/providers?tags=test-tag-4"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/providers?tags=test-tag-2,test-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/providers?tags=test-tag-2|test-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 2
+    When I send a GET request to "/api/v1/evaluations/providers?tags=test-tag-2%7Ctest-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 2
+    When I send a GET request to "/api/v1/evaluations/providers?name=test-provider-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/providers?name=test-provider-4"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/providers?name=test-provider-1"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/providers?name=test-provider-2"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/providers?name=test-provider-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/providers?name=test-provider-4"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/providers?name=test-provider-1&tags=test-tag-1"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/providers?name=test-provider-1&tags=test-tag-2"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/providers?name=test-provider-1&tags=test-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/providers?name=test-provider-1&tags=test-tag-4"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/providers?name=test-provider-2&tags=test-tag-1"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/providers?name=test-provider-2&tags=test-tag-2"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/providers?name=test-provider-2&tags=test-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    When I send a GET request to "/api/v1/evaluations/providers?name=test-provider-3&tags=test-tag-1"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/providers?name=test-provider-3&tags=test-tag-2"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/providers?name=test-provider-3&tags=test-tag-3"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1

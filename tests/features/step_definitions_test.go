@@ -168,10 +168,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 	if err != nil {
 		return err
 	}
-	validate, err := validation.NewValidator()
-	if err != nil {
-		return logError(fmt.Errorf("failed to create validator: %w", err))
-	}
+	validate := validation.NewValidator()
 	serviceConfig, err := config.LoadConfig(logger, "0.2.0", "local", time.Now().Format(time.RFC3339))
 	if err != nil {
 		return logError(fmt.Errorf("failed to load service config: %w", err))
@@ -179,14 +176,8 @@ func (a *apiFeature) startLocalServer(port int) error {
 	serviceConfig.Service.Port = port
 	serviceConfig.Service.LocalMode = true // set local mode for testing
 
-	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger)
-	if err != nil {
-		return logError(fmt.Errorf("failed to create storage: %w", err))
-	}
-	logger.Info("Storage created.")
-
 	// set up the provider configs
-	providerConfigs, err := config.LoadProviderConfigs(logger)
+	providerConfigs, err := config.LoadProviderConfigs(logger, validate)
 	if err != nil {
 		// we do this as no point trying to continue
 		return logError(fmt.Errorf("failed to load provider configs: %w", err))
@@ -211,7 +202,19 @@ func (a *apiFeature) startLocalServer(port int) error {
 		providerConfigs[key] = providerCfg
 	}
 
-	runtime, err := runtimes.NewRuntime(logger, serviceConfig, providerConfigs)
+	// set up the collection configs
+	collectionConfigs, err := config.LoadCollectionConfigs(logger, validate)
+	if err != nil {
+		return logError(fmt.Errorf("failed to load collection configs: %w", err))
+	}
+
+	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger)
+	if err != nil {
+		return logError(fmt.Errorf("failed to create storage: %w", err))
+	}
+	logger.Info("Storage created.")
+
+	runtime, err := runtimes.NewRuntime(logger, serviceConfig, providerConfigs, collectionConfigs)
 	if err != nil {
 		return logError(fmt.Errorf("failed to create runtime: %w", err))
 	}
@@ -224,6 +227,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 	a.server, err = server.NewServer(logger,
 		serviceConfig,
 		providerConfigs,
+		collectionConfigs,
 		nil,
 		storage,
 		validate,
@@ -323,6 +327,36 @@ func (tc *scenarioConfig) thereAreNoUserProviders(ctx context.Context) error {
 			}
 			if tc.response != nil && tc.response.StatusCode != 204 {
 				return tc.logError(fmt.Errorf("failed to delete provider %s: status %d", item.Resource.ID, tc.response.StatusCode))
+			}
+		}
+	}
+	return nil
+}
+
+func (tc *scenarioConfig) thereAreNoUserCollections(ctx context.Context) error {
+	if err := tc.iSendARequestTo("GET", "/api/v1/evaluations/collections?system_defined=false&limit=100"); err != nil {
+		return err
+	}
+	if tc.response.StatusCode != 200 {
+		return tc.logError(fmt.Errorf("expected 200 listing user collections, got %d: %s", tc.response.StatusCode, string(tc.body)))
+	}
+	var resp struct {
+		Items []struct {
+			Resource struct {
+				ID string `json:"id"`
+			} `json:"resource"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(tc.body, &resp); err != nil {
+		return tc.logError(fmt.Errorf("failed to parse collections list: %w", err))
+	}
+	for _, item := range resp.Items {
+		if item.Resource.ID != "" {
+			if err := tc.iSendARequestTo("DELETE", "/api/v1/evaluations/collections/"+item.Resource.ID); err != nil {
+				return err
+			}
+			if tc.response != nil && tc.response.StatusCode != 204 {
+				return tc.logError(fmt.Errorf("failed to delete collection %s: status %d", item.Resource.ID, tc.response.StatusCode))
 			}
 		}
 	}
@@ -475,23 +509,17 @@ func (tc *scenarioConfig) getFile(fileName string) (string, error) {
 	return string(contents), nil
 }
 
-func (tc *scenarioConfig) isMLFlow() bool {
-	return os.Getenv("MLFLOW_TRACKING_URI") != ""
-}
-
 func (tc *scenarioConfig) substituteValues(body string) (string, error) {
 	re := regexp.MustCompile(`\{\{([^}]*)\}\}`)
 	for strings.Contains(body, "{{") {
 		match := re.FindStringSubmatch(body)
 		if len(match) > 1 {
-			if strings.HasPrefix(match[1], mlflowPrefix) {
+			if after, ok := strings.CutPrefix(match[1], mlflowPrefix); ok {
 				// Use the literal after mlflow: as the experiment name. When MLflow is configured,
 				// it could be resolved from MLflow; for tests without MLflow, this allows name-based
 				// search to match stored jobs.
-				v := strings.TrimPrefix(match[1], mlflowPrefix)
-				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), v)
-			} else if strings.HasPrefix(match[1], envPrefix) {
-				raw := strings.TrimPrefix(match[1], envPrefix)
+				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), after)
+			} else if raw, ok0 := strings.CutPrefix(match[1], envPrefix); ok0 {
 				envName, fallback, hasFallback := strings.Cut(raw, "|")
 				value, ok := os.LookupEnv(envName)
 				if !ok {
@@ -502,12 +530,12 @@ func (tc *scenarioConfig) substituteValues(body string) (string, error) {
 					}
 				}
 				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), value)
-			} else if strings.HasPrefix(match[1], valuePrefix) {
-				n := strings.TrimPrefix(match[1], valuePrefix)
+			} else if after1, ok1 := strings.CutPrefix(match[1], valuePrefix); ok1 {
+				n := after1
 				v := tc.values[n]
 				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), v)
 			} else {
-				return "", tc.logError(fmt.Errorf("unknown substitutionvalue: %s", match[1]))
+				return "", tc.logError(fmt.Errorf("unknown substitution value: %s", match[1]))
 			}
 		}
 	}
@@ -938,6 +966,14 @@ func (tc *scenarioConfig) theResponseShouldNotContainAtJSONPath(expectedValue st
 	return nil
 }
 
+func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLengthValue(jsonPath string, lengthValue string) error {
+	value, err := tc.getId(lengthValue)
+	if err != nil {
+		return tc.logError(err)
+	}
+	return tc.theArrayAtPathInResponseShouldHaveLength(jsonPath, value)
+}
+
 func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLength(jsonPath string, lengthStr string) error {
 	length, err := strconv.Atoi(lengthStr)
 	if err != nil {
@@ -952,7 +988,7 @@ func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLength(jsonPath stri
 		return tc.logError(fmt.Errorf("value at path %s is not an array, got %T", jsonPath, raw))
 	}
 	if len(arr) != length {
-		return tc.logError(fmt.Errorf("expected array at path %s to have length %d, got %d", jsonPath, length, len(arr)))
+		return tc.logError(fmt.Errorf("expected array at path %s to have length %d, got %d in %s", jsonPath, length, len(arr), asPrettyJson(string(tc.body))))
 	}
 	return nil
 }
@@ -995,7 +1031,11 @@ func (tc *scenarioConfig) theFieldShouldBeSaved(path string, name string) error 
 	}
 	finalResult, ok := pathObj.Data().(string)
 	if !ok {
-		return tc.logError(fmt.Errorf("expected %s to be a string but got %T", path, pathObj.Data()))
+		if floatResult, ok := pathObj.Data().(float64); ok {
+			finalResult = strconv.FormatFloat(floatResult, 'f', -1, 64)
+		} else {
+			return tc.logError(fmt.Errorf("expected %s to be a string or float64 but got %T", path, pathObj.Data()))
+		}
 	}
 	if strings.HasPrefix(name, valuePrefix) {
 		tc.values[strings.TrimPrefix(name, valuePrefix)] = finalResult
@@ -1152,6 +1192,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the service is running$`, tc.theServiceIsRunning)
 	ctx.Step(`^there are no evaluation jobs$`, tc.thereAreNoEvaluationJobs)
 	ctx.Step(`^there are no user providers$`, tc.thereAreNoUserProviders)
+	ctx.Step(`^there are no user collections$`, tc.thereAreNoUserCollections)
 	ctx.Step(`^I set the header "([^"]*)" to "([^"]*)"$`, tc.iSetHeaderTo)
 	ctx.Step(`^I unset the header "([^"]*)"$`, tc.iUnsetHeader)
 	ctx.Step(`^I set transaction-id to "([^"]*)"$`, tc.iSetTransactionIdTo)
@@ -1171,6 +1212,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the response should contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldContainAtJSONPath)
 	ctx.Step(`^the response should not contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldNotContainAtJSONPath)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLength)
+	ctx.Step(`^the array at path "([^"]*)" in the response should have length "([^"]*)"$`, tc.theArrayAtPathInResponseShouldHaveLengthValue)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^I wait for the evaluation job status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatus)
 	ctx.Step(`^the mode is local or CI then skip this scenario$`, tc.whenTheModeIsLocalOrCIThenSkipThisScenario)

@@ -884,6 +884,16 @@
             "description": "Name to search for"
           },
           {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Category"
+            },
+            "description": "Category to search for"
+          },
+          {
             "name": "tags",
             "in": "query",
             "required": false,
@@ -1553,18 +1563,6 @@
           }
         }
       },
-      "PassCriteria": {
-        "type": "object",
-        "description": "Pass/fail threshold criteria",
-        "properties": {
-          "threshold": {
-            "type": "number",
-            "format": "float",
-            "default": 0,
-            "description": "Threshold value"
-          }
-        }
-      },
       "Ref": {
         "type": "object",
         "description": "Reference by ID",
@@ -1590,6 +1588,18 @@
             "type": "boolean",
             "default": false,
             "description": "Whether lower values indicate better performance"
+          }
+        }
+      },
+      "PassCriteria": {
+        "type": "object",
+        "description": "Pass/fail threshold criteria",
+        "properties": {
+          "threshold": {
+            "type": "number",
+            "format": "float",
+            "default": 0,
+            "description": "Threshold value"
           }
         }
       },
@@ -1670,6 +1680,26 @@
             }
           }
         ]
+      },
+      "CollectionRef": {
+        "type": "object",
+        "description": "Collection Reference",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier"
+          },
+          "benchmarks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BenchmarkConfig"
+            },
+            "description": "The benchmarks supported by this collection. If a benchmark is specified but is not supported by the collection, the evaluation job will fail. This is needed in order to allow overriding the collection benchmarks for a specific evaluation job."
+          }
+        }
       },
       "ExperimentTag": {
         "type": "object",
@@ -1802,6 +1832,7 @@
       },
       "EvaluationJobConfig": {
         "type": "object",
+        "title": "EvaluationJobConfig",
         "description": "The evaluation job request configuration.\n",
         "required": [
           "name",
@@ -1827,9 +1858,9 @@
             "$ref": "#/components/schemas/ModelRef",
             "description": "The model to evaluate.\n"
           },
-          "pass_criteria": {
-            "$ref": "#/components/schemas/PassCriteria",
-            "description": "The overall pass criteria for the evaluation job.\n"
+          "collection": {
+            "$ref": "#/components/schemas/CollectionRef",
+            "description": "Optional collection reference. When provided, the benchmarks will be taken from the collection. Either `benchmarks` or `collection` must be provided, but not both.\n"
           },
           "benchmarks": {
             "type": "array",
@@ -1838,9 +1869,9 @@
             },
             "description": "The evaluation benchmarks to run. Either `benchmarks` or `collection` must be provided, but not both.\n"
           },
-          "collection": {
-            "$ref": "#/components/schemas/Ref",
-            "description": "Optional collection reference. When provided, the benchmarks will be taken from the collection. Either `benchmarks` or `collection` must be provided, but not both.\n"
+          "pass_criteria": {
+            "$ref": "#/components/schemas/PassCriteria",
+            "description": "The overall pass criteria for the evaluation job.\n"
           },
           "experiment": {
             "$ref": "#/components/schemas/ExperimentConfig",
@@ -1856,7 +1887,20 @@
             "description": "Optional exports configuration for the evaluation job. When provided, the evaluation job results will be exported to the specified location.\n"
           }
         },
-        "title": "EvaluationJobConfig"
+        "oneOf": [
+          {
+            "title": "Benchmarks",
+            "required": [
+              "benchmarks"
+            ]
+          },
+          {
+            "title": "Collection",
+            "required": [
+              "collection"
+            ]
+          }
+        ]
       },
       "EvaluationJobResource": {
         "type": "object",
@@ -2186,20 +2230,31 @@
       },
       "ProviderResourceList": {
         "type": "object",
-        "description": "List of providers (no pagination links)",
-        "properties": {
-          "total_count": {
-            "type": "integer",
-            "description": "Total number of providers"
+        "description": "List of provider resources with pagination",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Page"
           },
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ProviderResource"
-            },
-            "description": "Provider resources"
+          {
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ProviderResource"
+                },
+                "description": "Provider resources"
+              },
+              "errors": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Non-fatal errors (e.g. partial list)"
+              }
+            }
           }
-        }
+        ]
       },
       "PatchOp": {
         "type": "string",
@@ -2238,6 +2293,10 @@
             "type": "string",
             "description": "Collection name"
           },
+          "category": {
+            "type": "string",
+            "description": "Collection category"
+          },
           "description": {
             "type": "string",
             "description": "Optional description"
@@ -2267,6 +2326,8 @@
           }
         },
         "required": [
+          "name",
+          "category",
           "benchmarks"
         ]
       },

@@ -1065,6 +1065,15 @@ components:
         auth:
           $ref: '#/components/schemas/ModelAuth'
           description: The model authentication configuration
+    PassCriteria:
+      type: object
+      description: Pass/fail threshold criteria
+      properties:
+        threshold:
+          type: number
+          format: float
+          default: 0
+          description: Threshold value
     Ref:
       type: object
       description: Reference by ID
@@ -1085,15 +1094,6 @@ components:
           type: boolean
           default: false
           description: Whether lower values indicate better performance
-    PassCriteria:
-      type: object
-      description: Pass/fail threshold criteria
-      properties:
-        threshold:
-          type: number
-          format: float
-          default: 0
-          description: Threshold value
     TestDataRefS3:
       type: object
       description: S3 test data reference
@@ -1148,20 +1148,6 @@ components:
             test_data_ref:
               $ref: '#/components/schemas/TestDataRef'
               description: Reference to the test data source for this benchmark
-    CollectionRef:
-      type: object
-      description: Collection Reference
-      required:
-        - id
-      properties:
-        id:
-          type: string
-          description: Unique identifier
-        benchmarks:
-          type: array
-          items:
-            $ref: '#/components/schemas/BenchmarkConfig'
-          description: The benchmarks supported by this collection. If a benchmark is specified but is not supported by the collection, the evaluation job will fail. This is needed in order to allow overriding the collection benchmarks for a specific evaluation job.
     ExperimentTag:
       type: object
       description: Tag on an experiment (e.g. MLFlow)
@@ -1265,7 +1251,6 @@ components:
       title: EvaluationExports
     EvaluationJobConfig:
       type: object
-      title: EvaluationJobConfig
       description: |
         The evaluation job request configuration.
       required:
@@ -1290,20 +1275,20 @@ components:
           $ref: '#/components/schemas/ModelRef'
           description: |
             The model to evaluate.
-        collection:
-          $ref: '#/components/schemas/CollectionRef'
+        pass_criteria:
+          $ref: '#/components/schemas/PassCriteria'
           description: |
-            Optional collection reference. When provided, the benchmarks will be taken from the collection. Either `benchmarks` or `collection` must be provided, but not both.
+            The overall pass criteria for the evaluation job.
         benchmarks:
           type: array
           items:
             $ref: '#/components/schemas/BenchmarkConfig'
           description: |
             The evaluation benchmarks to run. Either `benchmarks` or `collection` must be provided, but not both.
-        pass_criteria:
-          $ref: '#/components/schemas/PassCriteria'
+        collection:
+          $ref: '#/components/schemas/Ref'
           description: |
-            The overall pass criteria for the evaluation job.
+            Optional collection reference. When provided, the benchmarks will be taken from the collection. Either `benchmarks` or `collection` must be provided, but not both.
         experiment:
           $ref: '#/components/schemas/ExperimentConfig'
           description: |
@@ -1317,13 +1302,7 @@ components:
           $ref: '#/components/schemas/EvaluationExports'
           description: |
             Optional exports configuration for the evaluation job. When provided, the evaluation job results will be exported to the specified location.
-      oneOf:
-        - title: Benchmarks
-          required:
-            - benchmarks
-        - title: Collection
-          required:
-            - collection
+      title: EvaluationJobConfig
     EvaluationJobResource:
       type: object
       description: Full evaluation job resource (response)

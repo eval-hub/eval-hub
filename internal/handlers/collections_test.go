@@ -32,12 +32,12 @@ func (f *fakeStorage) GetCollection(id string) (*api.CollectionResource, error) 
 	return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "collection", "ResourceId", id)
 }
 
-func (f *fakeStorage) UpdateCollection(_ *api.CollectionResource) error {
-	return nil
+func (f *fakeStorage) UpdateCollection(_ string, _ *api.CollectionConfig) (*api.CollectionResource, error) {
+	return nil, nil
 }
 
-func (f *fakeStorage) PatchCollection(_ string, _ *api.Patch) error {
-	return nil
+func (f *fakeStorage) PatchCollection(_ string, _ *api.Patch) (*api.CollectionResource, error) {
+	return nil, nil
 }
 
 func (f *fakeStorage) DeleteCollection(_ string) error {
@@ -135,17 +135,22 @@ func (s *updatePatchDeleteCollectionStorage) GetCollection(id string) (*api.Coll
 	return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "collection", "ResourceId", id)
 }
 
-func (s *updatePatchDeleteCollectionStorage) UpdateCollection(c *api.CollectionResource) error {
+func (s *updatePatchDeleteCollectionStorage) UpdateCollection(id string, c *api.CollectionConfig) (*api.CollectionResource, error) {
 	if s.updateErr != nil {
-		return s.updateErr
+		return nil, s.updateErr
 	}
-	s.collection = c
-	return nil
+	s.collection = &api.CollectionResource{
+		Resource: api.Resource{
+			ID: id,
+		},
+		CollectionConfig: *c,
+	}
+	return s.collection, nil
 }
 
-func (s *updatePatchDeleteCollectionStorage) PatchCollection(id string, patches *api.Patch) error {
+func (s *updatePatchDeleteCollectionStorage) PatchCollection(id string, patches *api.Patch) (*api.CollectionResource, error) {
 	if s.patchErr != nil {
-		return s.patchErr
+		return nil, s.patchErr
 	}
 	if s.collection != nil && s.collection.Resource.ID == id {
 		for _, p := range *patches {
@@ -156,7 +161,7 @@ func (s *updatePatchDeleteCollectionStorage) PatchCollection(id string, patches 
 			}
 		}
 	}
-	return nil
+	return s.collection, nil
 }
 
 func (s *updatePatchDeleteCollectionStorage) DeleteCollection(id string) error {
@@ -167,13 +172,12 @@ func (s *updatePatchDeleteCollectionStorage) DeleteCollection(id string) error {
 }
 
 func TestHandleListCollections(t *testing.T) {
-	desc := "Test collection"
 	collections := []api.CollectionResource{
 		{
 			Resource: api.Resource{ID: "coll-1"},
 			CollectionConfig: api.CollectionConfig{
 				Name:        "Collection 1",
-				Description: &desc,
+				Description: "Test collection",
 				Benchmarks:  []api.BenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
 			},
 		},
@@ -182,12 +186,9 @@ func TestHandleListCollections(t *testing.T) {
 		fakeStorage: &fakeStorage{},
 		collections: collections,
 	}
-	validate, err := validation.NewValidator()
-	if err != nil {
-		t.Fatalf("NewValidator: %v", err)
-	}
+	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/collections"),
@@ -226,9 +227,9 @@ func TestHandleListCollections_StorageError(t *testing.T) {
 		fakeStorage: &fakeStorage{},
 		err:         serviceerrors.NewServiceError(messages.InternalServerError, "Error", "db error"),
 	}
-	validate, _ := validation.NewValidator()
+	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/collections"),
@@ -248,14 +249,23 @@ func TestHandleListCollections_StorageError(t *testing.T) {
 
 func TestHandleCreateCollection(t *testing.T) {
 	storage := &createCollectionStorage{fakeStorage: &fakeStorage{}}
-	validate, err := validation.NewValidator()
-	if err != nil {
-		t.Fatalf("NewValidator: %v", err)
-	}
+	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil, nil)
 
-	body := `{"name":"My Collection","description":"A test collection","benchmarks":[{"id":"b1","provider_id":"p1"}]}`
+	body := `
+	{
+	  "name": "My Collection",
+	  "description": "A test collection",
+	  "category": "test",
+	  "benchmarks":[
+	    {
+	      "id": "b1",
+		  "provider_id": "p1"
+		}
+	  ]
+	}`
+
 	req := &providersRequest{
 		MockRequest: createMockRequest("POST", "/api/v1/evaluations/collections"),
 		queryValues: map[string][]string{},
@@ -284,19 +294,18 @@ func TestHandleCreateCollection(t *testing.T) {
 }
 
 func TestHandleGetCollection(t *testing.T) {
-	desc := "Test"
 	coll := &api.CollectionResource{
 		Resource: api.Resource{ID: "coll-123"},
 		CollectionConfig: api.CollectionConfig{
 			Name:        "Found Collection",
-			Description: &desc,
+			Description: "Test",
 			Benchmarks:  []api.BenchmarkConfig{},
 		},
 	}
 	storage := &getCollectionStorage{fakeStorage: &fakeStorage{}, collection: coll}
-	validate, _ := validation.NewValidator()
+	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/collections/coll-123"),
@@ -323,9 +332,9 @@ func TestHandleGetCollection(t *testing.T) {
 
 func TestHandleGetCollection_MissingPathParam(t *testing.T) {
 	storage := &fakeStorage{}
-	validate, _ := validation.NewValidator()
+	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/collections/"),
@@ -344,23 +353,34 @@ func TestHandleGetCollection_MissingPathParam(t *testing.T) {
 }
 
 func TestHandleUpdateCollection(t *testing.T) {
-	desc := "Original"
 	storage := &updatePatchDeleteCollectionStorage{
 		fakeStorage: &fakeStorage{},
 		collection: &api.CollectionResource{
 			Resource: api.Resource{ID: "coll-update"},
 			CollectionConfig: api.CollectionConfig{
 				Name:        "Original",
-				Description: &desc,
+				Description: "Original",
 				Benchmarks:  []api.BenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
 			},
 		},
 	}
-	validate, _ := validation.NewValidator()
+	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil, nil)
 
-	body := `{"name":"Updated Name","description":"Updated desc","benchmarks":[{"id":"b1","provider_id":"p1"}]}`
+	body := `
+	{
+	  "name": "Updated Name",
+	  "description": "Updated desc",
+	  "category": "test",
+	  "benchmarks":[
+	    {
+	      "id": "b1",
+		  "provider_id": "p1"
+		}
+	  ]
+	}`
+
 	req := &providersRequest{
 		MockRequest: createMockRequest("PUT", "/api/v1/evaluations/collections/coll-update"),
 		pathValues:  map[string]string{constants.PATH_PARAMETER_COLLECTION_ID: "coll-update"},
@@ -385,21 +405,20 @@ func TestHandleUpdateCollection(t *testing.T) {
 }
 
 func TestHandlePatchCollection(t *testing.T) {
-	desc := "Original"
 	storage := &updatePatchDeleteCollectionStorage{
 		fakeStorage: &fakeStorage{},
 		collection: &api.CollectionResource{
 			Resource: api.Resource{ID: "coll-patch"},
 			CollectionConfig: api.CollectionConfig{
 				Name:        "Original",
-				Description: &desc,
+				Description: "Original",
 				Benchmarks:  []api.BenchmarkConfig{},
 			},
 		},
 	}
-	validate, _ := validation.NewValidator()
+	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil, nil)
 
 	body := `[{"op":"replace","path":"/name","value":"Patched Name"}]`
 	req := &providersRequest{
@@ -420,9 +439,9 @@ func TestHandlePatchCollection(t *testing.T) {
 
 func TestHandleDeleteCollection(t *testing.T) {
 	storage := &updatePatchDeleteCollectionStorage{fakeStorage: &fakeStorage{}}
-	validate, _ := validation.NewValidator()
+	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("DELETE", "/api/v1/evaluations/collections/coll-del"),
@@ -457,12 +476,16 @@ func (s *tenantTrackingStorage) GetCollection(id string) (*api.CollectionResourc
 	return &api.CollectionResource{Resource: api.Resource{ID: id}}, nil
 }
 func (s *tenantTrackingStorage) CreateCollection(_ *api.CollectionResource) error { return nil }
-func (s *tenantTrackingStorage) UpdateCollection(_ *api.CollectionResource) error { return nil }
-func (s *tenantTrackingStorage) PatchCollection(_ string, _ *api.Patch) error     { return nil }
-func (s *tenantTrackingStorage) DeleteCollection(_ string) error                  { return nil }
+func (s *tenantTrackingStorage) UpdateCollection(_ string, _ *api.CollectionConfig) (*api.CollectionResource, error) {
+	return nil, nil
+}
+func (s *tenantTrackingStorage) PatchCollection(_ string, _ *api.Patch) (*api.CollectionResource, error) {
+	return nil, nil
+}
+func (s *tenantTrackingStorage) DeleteCollection(_ string) error { return nil }
 
 func TestCollectionHandlers_PropagateTenantAndOwner(t *testing.T) {
-	validate, _ := validation.NewValidator()
+	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	tests := []struct {
@@ -533,7 +556,7 @@ func TestCollectionHandlers_PropagateTenantAndOwner(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			storage := &tenantTrackingStorage{fakeStorage: &fakeStorage{}}
-			h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+			h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil, nil)
 
 			req := &providersRequest{
 				MockRequest: createMockRequest(tt.method, tt.path),

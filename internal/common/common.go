@@ -31,6 +31,23 @@ func ResolveProvider(providerID string, providers map[string]api.ProviderResourc
 	return nil, fmt.Errorf("provider %q not found", providerID)
 }
 
+// ResolveCollection returns the collection for collectionID from the in-memory map, or from storage if not present and storage is non-nil.
+func ResolveCollection(collectionID string, collections map[string]api.CollectionResource, storage abstractions.Storage) (*api.CollectionResource, error) {
+	if c, ok := collections[collectionID]; ok {
+		return &c, nil
+	}
+	if storage != nil {
+		c, err := storage.GetCollection(collectionID)
+		if err != nil {
+			return nil, fmt.Errorf("get collection %s: %w", collectionID, err)
+		}
+		if c != nil {
+			return c, nil
+		}
+	}
+	return nil, fmt.Errorf("collection %q not found", collectionID)
+}
+
 // GetCollectionFunc returns a collection by ID. Used to resolve job benchmarks from collection without depending on storage.
 type GetCollectionFunc func(id string) (*api.CollectionResource, error)
 

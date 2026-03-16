@@ -2,6 +2,7 @@ package abstractions
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"maps"
 	"time"
@@ -38,6 +39,10 @@ func (filter *QueryFilter) ExtractQueryParams() *QueryFilter {
 	}
 }
 
+func (filter *QueryFilter) String() string {
+	return fmt.Sprintf(`{"limit":%d,"offset":%d,"params":%v,"tenant":"%s"}`, filter.Limit, filter.Offset, filter.Params, filter.Tenant)
+}
+
 type Storage interface {
 	WithLogger(logger *slog.Logger) Storage
 	WithContext(ctx context.Context) Storage
@@ -51,7 +56,7 @@ type Storage interface {
 	GetEvaluationJob(id string) (*api.EvaluationJobResource, error)
 	GetEvaluationJobs(filter *QueryFilter) (*QueryResults[api.EvaluationJobResource], error)
 	DeleteEvaluationJob(id string) error
-	UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error
+	UpdateEvaluationJob(id string, runStatus *api.StatusEvent, benchmarks []api.BenchmarkConfig) error
 	// UpdateEvaluationJobStatus is used to update the status of an evaluation job and is internal - do we need it here?
 	UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error
 
@@ -59,15 +64,15 @@ type Storage interface {
 	CreateCollection(collection *api.CollectionResource) error
 	GetCollection(id string) (*api.CollectionResource, error)
 	GetCollections(filter *QueryFilter) (*QueryResults[api.CollectionResource], error)
-	UpdateCollection(collection *api.CollectionResource) error
-	PatchCollection(id string, patches *api.Patch) error
+	UpdateCollection(id string, collection *api.CollectionConfig) (*api.CollectionResource, error)
+	PatchCollection(id string, patches *api.Patch) (*api.CollectionResource, error)
 	DeleteCollection(id string) error
 
 	// Provider operations
 	CreateProvider(provider *api.ProviderResource) error
 	GetProvider(id string) (*api.ProviderResource, error)
 	GetProviders(filter *QueryFilter) (*QueryResults[api.ProviderResource], error)
-	UpdateProvider(id string, provider *api.ProviderResource) (*api.ProviderResource, error)
+	UpdateProvider(id string, providerConfig *api.ProviderConfig) (*api.ProviderResource, error)
 	PatchProvider(id string, patches *api.Patch) (*api.ProviderResource, error)
 	DeleteProvider(id string) error
 

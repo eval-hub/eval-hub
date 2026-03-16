@@ -48,7 +48,7 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 
 	// Build the list query with pagination and filters
 	listQuery, listArgs := s.statementsFactory.CreateListEntitiesStatement(s.tenant, tableName, limit, offset, params)
-	s.logger.Info(fmt.Sprintf("List %s query", typeName), "query", listQuery, "args", listArgs, "params", params, "limit", limit, "offset", offset)
+	s.logger.Debug(fmt.Sprintf("List %s query", typeName), "query", listQuery, "args", listArgs, "params", params, "limit", limit, "offset", offset)
 
 	// Query the database
 	rows, err := s.query(txn, listQuery, listArgs...)
@@ -58,8 +58,8 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 	}
 	defer rows.Close()
 
-	// Process rows
-	var items []T
+	// Process rows (use make so empty result serializes to [] not null)
+	items := make([]T, 0)
 	for rows.Next() {
 		resource, err := scanResource[T](s, rows, tableName)
 		if err != nil {
