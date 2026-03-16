@@ -258,13 +258,6 @@ func (s *sqlStorage) verifyTenant() error {
 	return nil
 }
 
-func (s *sqlStorage) setReadOnly(resource *api.Resource) {
-	if (resource != nil) && resource.IsSystemResource() {
-		// do this for now as the read_only field is not stored in the database
-		resource.ReadOnly = true
-	}
-}
-
 // isVisibleResource checks if a resource is visible to the current tenant.
 // A system resource is always visible, a user resource is visible if the tenant_id matches.
 func (s *sqlStorage) isVisibleResource(resource *api.Resource) bool {

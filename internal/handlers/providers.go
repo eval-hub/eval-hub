@@ -87,7 +87,6 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 					CreatedAt: time.Now(),
 					Owner:     ctx.User,
 					Tenant:    ctx.Tenant,
-					ReadOnly:  false,
 				},
 				ProviderConfig: *request,
 			}

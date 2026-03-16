@@ -104,7 +104,6 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 						CreatedAt: time.Now(),
 						Owner:     ctx.User,
 						Tenant:    ctx.Tenant,
-						ReadOnly:  false,
 					},
 					MLFlowExperimentID: mlflowExperimentID,
 				},

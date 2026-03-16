@@ -59,7 +59,6 @@ func (s *sqlStorage) loadSystemResources(systemCollections map[string]api.Collec
 				// make sure that these are set
 				collection.Resource.Tenant = ""
 				collection.Resource.Owner = "system"
-				collection.Resource.ReadOnly = true
 				if existingCollection, ok := existingCollections[collection.Resource.ID]; ok {
 					collection.Resource.CreatedAt = existingCollection.Resource.CreatedAt
 					collection.Resource.UpdatedAt = existingCollection.Resource.UpdatedAt
@@ -124,7 +123,6 @@ func (s *sqlStorage) loadSystemResources(systemCollections map[string]api.Collec
 				// make sure that these are set
 				provider.Resource.Tenant = ""
 				provider.Resource.Owner = "system"
-				provider.Resource.ReadOnly = true
 				if existingProvider, ok := existingProviders[provider.Resource.ID]; ok {
 					provider.Resource.CreatedAt = existingProvider.Resource.CreatedAt
 					provider.Resource.UpdatedAt = existingProvider.Resource.UpdatedAt

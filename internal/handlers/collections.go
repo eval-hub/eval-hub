@@ -88,7 +88,6 @@ func (h *Handlers) HandleCreateCollection(ctx *executioncontext.ExecutionContext
 			CreatedAt: time.Now(),
 			Owner:     ctx.User,
 			Tenant:    ctx.Tenant,
-			ReadOnly:  false,
 		},
 		CollectionConfig: *collection,
 	}

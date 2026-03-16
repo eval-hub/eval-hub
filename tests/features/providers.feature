@@ -69,7 +69,7 @@ Feature: Providers Endpoint
     When I send a GET request to "/api/v1/evaluations/providers?scope=system"
     Then the response code should be 200
     And the array at path "items" in the response should have length at least 1
-    And the response should contain the value "true" at path "items[0].resource.read_only"
+    And the response should contain the value "system" at path "items[0].resource.owner"
 
   Scenario: List providers with no returns all providers
     Given the service is running
@@ -426,6 +426,7 @@ Feature: Providers Endpoint
     And the response should contain the value "unallowed_patch" at path "message_code"
     And the response should contain the value "The operation 'remove' is not allowed for the path '/name'" at path "message"
 
+  @focus
   Scenario: List providers by tags and name
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/providers" with body:

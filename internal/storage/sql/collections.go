@@ -26,9 +26,6 @@ func (s *sqlStorage) CreateCollection(collection *api.CollectionResource) error 
 }
 
 func (s *sqlStorage) createCollectionTxn(txn *sql.Tx, collection *api.CollectionResource) error {
-	// do this for now as the read_only field is not stored in the database
-	s.setReadOnly(&collection.Resource)
-
 	collectionJSON, err := s.createCollectionEntity(collection)
 	if err != nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
@@ -87,9 +84,6 @@ func (s *sqlStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 		return nil, se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "collection", "Error", err.Error())
 	}
 
-	// do this for now as the read_only field is not stored in the database
-	s.setReadOnly(&query.Resource)
-
 	collectionResource := api.CollectionResource{
 		Resource:         query.Resource,
 		CollectionConfig: collectionConfig,
@@ -119,7 +113,7 @@ func (s *sqlStorage) UpdateCollection(id string, collection *api.CollectionConfi
 		if err != nil {
 			return err
 		}
-		if !persistedCollection.Resource.CanUpdate() {
+		if persistedCollection.Resource.IsSystemResource() {
 			return se.NewServiceError(
 				messages.ReadOnlyCollection,
 				"CollectionID", id,
@@ -175,7 +169,7 @@ func (s *sqlStorage) DeleteCollection(id string) error {
 		if err != nil {
 			return err
 		}
-		if !persistedCollection.Resource.CanDelete() {
+		if persistedCollection.Resource.IsSystemResource() {
 			return se.NewServiceError(
 				messages.ReadOnlyCollection,
 				"CollectionID", persistedCollection.Resource.ID,

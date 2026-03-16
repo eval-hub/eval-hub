@@ -21,9 +21,6 @@ func (s *sqlStorage) CreateProvider(provider *api.ProviderResource) error {
 }
 
 func (s *sqlStorage) createProviderTxn(txn *sql.Tx, provider *api.ProviderResource) error {
-	// do this for now as the read_only field is not stored in the database
-	s.setReadOnly(&provider.Resource)
-
 	providerJSON, err := s.createProviderEntity(provider)
 	if err != nil {
 		return se.NewServiceError(messages.InternalServerError, "Error", err)
@@ -68,9 +65,6 @@ func (s *sqlStorage) getUserProviderTransactional(txn *sql.Tx, id string) (*api.
 		return nil, se.NewServiceError(messages.DatabaseOperationFailed, "Type", "provider", "ResourceId", id, "Error", err.Error())
 	}
 
-	// do this for now as the read_only field is not stored in the database
-	s.setReadOnly(&query.Resource)
-
 	// now check that the tenant_id is allowed to see this resource
 	if !s.isVisibleResource(&query.Resource) {
 		return nil, se.NewServiceError(messages.ResourceNotFound, "Type", "provider", "ResourceId", id)
@@ -114,7 +108,7 @@ func (s *sqlStorage) DeleteProvider(id string) error {
 		if err != nil {
 			return err
 		}
-		if !persistedProvider.Resource.CanDelete() {
+		if persistedProvider.Resource.IsSystemResource() {
 			return se.NewServiceError(
 				messages.ReadOnlyProvider,
 				"ProviderID", id,
@@ -144,7 +138,7 @@ func (s *sqlStorage) UpdateProvider(id string, providerConfig *api.ProviderConfi
 		if err != nil {
 			return err
 		}
-		if !persisted.Resource.CanUpdate() {
+		if persisted.Resource.IsSystemResource() {
 			return se.NewServiceError(
 				messages.ReadOnlyProvider,
 				"ProviderID", id,
@@ -199,7 +193,7 @@ func (s *sqlStorage) PatchProvider(id string, patches *api.Patch) (*api.Provider
 		if err != nil {
 			return err
 		}
-		if !persisted.Resource.CanUpdate() {
+		if persisted.Resource.IsSystemResource() {
 			return se.NewServiceError(
 				messages.ReadOnlyProvider,
 				"ProviderID", id,

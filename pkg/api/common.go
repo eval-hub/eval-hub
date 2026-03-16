@@ -68,20 +68,11 @@ type Resource struct {
 	Tenant    Tenant    `json:"tenant,omitempty"`
 	CreatedAt time.Time `json:"created_at,omitzero"`
 	UpdatedAt time.Time `json:"updated_at,omitzero"`
-	ReadOnly  bool      `json:"read_only,omitempty"`
 	Owner     User      `json:"owner,omitempty"`
 }
 
 func (r Resource) IsSystemResource() bool {
 	return r.Owner == "system"
-}
-
-func (r Resource) CanUpdate() bool {
-	return !r.IsSystemResource() // && !r.ReadOnly
-}
-
-func (r Resource) CanDelete() bool {
-	return !r.IsSystemResource() // && !r.ReadOnly
 }
 
 // Page represents generic pagination schema
