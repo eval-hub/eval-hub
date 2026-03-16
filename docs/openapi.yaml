@@ -252,14 +252,17 @@ paths:
             type: string
             title: Tags
           description: Tags to search for
-        - name: system_defined
+        - name: scope
           in: query
           required: false
           schema:
-            type: boolean
-            default: true
-            title: System defined providers
-          description: Set to false to exclude system defined providers
+            type: string
+            enum:
+              - system
+              - tenant
+            default: null
+            title: Scope of providers
+          description: Set to `system` to get only system defined providers, or `tenant` to get only tenant defined providers.
       responses:
         '200':
           description: Successful Response
@@ -483,14 +486,17 @@ paths:
             type: string
             title: Tags
           description: Tags to search for
-        - name: system_defined
+        - name: scope
           in: query
           required: false
           schema:
-            type: boolean
-            default: true
-            title: System defined collections
-          description: Set to false to exclude system defined collections
+            type: string
+            enum:
+              - system
+              - tenant
+            default: null
+            title: Scope of collections
+          description: Set to `system` to get only system defined collections, or `tenant` to get only tenant defined collections.
       responses:
         '200':
           description: Successful Response
@@ -743,9 +749,6 @@ components:
           type: string
           format: date-time
           description: Last update timestamp
-        read_only:
-          type: boolean
-          description: Whether the resource is read-only
         owner:
           type: string
           description: Owner of the resource
