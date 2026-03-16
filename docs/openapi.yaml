@@ -1034,7 +1034,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/BenchmarkConfig'
-          description: The benchmarks supported by this collection. If a benchmark is specified but is not supported by the collection, the evaluation job will fail. This is needed in order to allow overridding the collection benchmarks for a specific evaluation job.
+          description: The benchmarks supported by this collection. If a benchmark is specified but is not supported by the collection, the evaluation job will fail. This is needed in order to allow overriding the collection benchmarks for a specific evaluation job.
     ExperimentTag:
       type: object
       description: Tag on an experiment (e.g. MLFlow)
