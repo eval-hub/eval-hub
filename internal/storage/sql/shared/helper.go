@@ -66,6 +66,7 @@ func CreateFilterStatement(s SQLStatementsFactory, where string, whereArgs []any
 		sb.WriteString(" WHERE ")
 		sb.WriteString(where)
 		args = append(args, whereArgs...)
+		index += len(whereArgs)
 		haveWhere = true
 		if len(filter) > 0 {
 			sb.WriteString(" AND ")

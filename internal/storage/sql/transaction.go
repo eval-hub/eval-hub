@@ -27,7 +27,7 @@ func (s *sqlStorage) withTransaction(name string, resourceID string, fn Transact
 		} else {
 			// This is not a service error, so we rollback the transaction
 			// we could decide to fail here if we don't get a service error
-			commit = true // false
+			commit = false
 		}
 	}
 	if commit {

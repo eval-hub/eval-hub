@@ -95,7 +95,8 @@ func main() {
 		startUpFailed(serviceConfig, err, "Failed to create storage", logger)
 	}
 	// setup runtime
-	runtime, err := runtimes.NewRuntime(logger, serviceConfig, nil, nil) // providerConfigs, collectionConfigs
+	// TODO - remove providerConfigs and collectionConfigs from the runtime
+	runtime, err := runtimes.NewRuntime(logger, serviceConfig, providerConfigs, collectionConfigs)
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create runtime", logger)
