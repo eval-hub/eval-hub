@@ -20,7 +20,7 @@ func TestEvaluationJobConfigBenchmarksMin_WithCollection(t *testing.T) {
 	cfg := api.EvaluationJobConfig{
 		Name:       "test-evaluation-job",
 		Model:      api.ModelRef{URL: "http://test.com", Name: "model"},
-		Collection: &api.Ref{ID: "coll-1"},
+		Collection: &api.CollectionRef{ID: "coll-1"},
 		Benchmarks: []api.BenchmarkConfig{},
 	}
 	err := validate.Struct(cfg)

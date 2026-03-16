@@ -527,7 +527,7 @@ func TestRunEvaluationJobReturnsErrorWhenResolveBenchmarksFails(t *testing.T) {
 		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Model:      api.ModelRef{URL: "http://model.example", Name: "model-1"},
-			Collection: &api.Ref{ID: "coll-1"},
+			Collection: &api.CollectionRef{ID: "coll-1"},
 			Benchmarks: nil,
 		},
 	}

@@ -216,6 +216,11 @@ type EvaluationExports struct {
 	OCI *EvaluationExportsOCI `json:"oci,omitempty"`
 }
 
+type CollectionRef struct {
+	ID         string            `mapstructure:"id" json:"id" validate:"required"`
+	Benchmarks []BenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,dive"`
+}
+
 // EvaluationJobConfig represents evaluation job request schema
 type EvaluationJobConfig struct {
 	Name         string             `json:"name" validate:"required"`
@@ -224,7 +229,7 @@ type EvaluationJobConfig struct {
 	Model        ModelRef           `json:"model" validate:"required"`
 	PassCriteria *PassCriteria      `json:"pass_criteria,omitempty"`
 	Benchmarks   []BenchmarkConfig  `json:"benchmarks,omitempty" validate:"omitempty,required_without=Collection,dive"`
-	Collection   *Ref               `json:"collection,omitempty" validate:"omitempty,required_without=Benchmarks"`
+	Collection   *CollectionRef     `json:"collection,omitempty" validate:"omitempty,required_without=Benchmarks"`
 	Experiment   *ExperimentConfig  `json:"experiment,omitempty"`
 	Custom       *map[string]any    `json:"custom,omitempty"`
 	Exports      *EvaluationExports `json:"exports,omitempty"`

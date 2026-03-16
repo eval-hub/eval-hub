@@ -35,7 +35,7 @@ properties:
       The evaluation benchmarks to run.
       Either `benchmarks` or `collection` must be provided, but not both.
   collection:
-    $ref: ./Ref.yaml
+    $ref: ./CollectionRef.yaml
     description: >
       Optional collection reference. When provided, the benchmarks will be taken from the collection.
       Either `benchmarks` or `collection` must be provided, but not both.

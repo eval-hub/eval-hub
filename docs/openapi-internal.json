@@ -1681,6 +1681,26 @@
           }
         ]
       },
+      "CollectionRef": {
+        "type": "object",
+        "description": "Collection Reference",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier"
+          },
+          "benchmarks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BenchmarkConfig"
+            },
+            "description": "The benchmarks supported by this collection. If a benchmark is specified but is not supported by the collection, the evaluation job will fail. This is needed in order to allow overridding the collection benchmarks for a specific evaluation job."
+          }
+        }
+      },
       "ExperimentTag": {
         "type": "object",
         "description": "Tag on an experiment (e.g. MLFlow)",
@@ -1849,7 +1869,7 @@
             "description": "The evaluation benchmarks to run. Either `benchmarks` or `collection` must be provided, but not both.\n"
           },
           "collection": {
-            "$ref": "#/components/schemas/Ref",
+            "$ref": "#/components/schemas/CollectionRef",
             "description": "Optional collection reference. When provided, the benchmarks will be taken from the collection. Either `benchmarks` or `collection` must be provided, but not both.\n"
           },
           "experiment": {

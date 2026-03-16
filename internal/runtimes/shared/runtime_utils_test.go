@@ -29,7 +29,7 @@ func TestResolveBenchmarks_CollectionSetStorageNil_ReturnsError(t *testing.T) {
 	eval := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Collection: &api.Ref{ID: "coll-1"},
+			Collection: &api.CollectionRef{ID: "coll-1"},
 		},
 	}
 	_, err := ResolveBenchmarks(eval, nil, nil)
