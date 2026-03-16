@@ -1563,18 +1563,6 @@
           }
         }
       },
-      "PassCriteria": {
-        "type": "object",
-        "description": "Pass/fail threshold criteria",
-        "properties": {
-          "threshold": {
-            "type": "number",
-            "format": "float",
-            "default": 0,
-            "description": "Threshold value"
-          }
-        }
-      },
       "Ref": {
         "type": "object",
         "description": "Reference by ID",
@@ -1600,6 +1588,18 @@
             "type": "boolean",
             "default": false,
             "description": "Whether lower values indicate better performance"
+          }
+        }
+      },
+      "PassCriteria": {
+        "type": "object",
+        "description": "Pass/fail threshold criteria",
+        "properties": {
+          "threshold": {
+            "type": "number",
+            "format": "float",
+            "default": 0,
+            "description": "Threshold value"
           }
         }
       },
@@ -1832,6 +1832,7 @@
       },
       "EvaluationJobConfig": {
         "type": "object",
+        "title": "EvaluationJobConfig",
         "description": "The evaluation job request configuration.\n",
         "required": [
           "name",
@@ -1857,9 +1858,9 @@
             "$ref": "#/components/schemas/ModelRef",
             "description": "The model to evaluate.\n"
           },
-          "pass_criteria": {
-            "$ref": "#/components/schemas/PassCriteria",
-            "description": "The overall pass criteria for the evaluation job.\n"
+          "collection": {
+            "$ref": "#/components/schemas/CollectionRef",
+            "description": "Optional collection reference. When provided, the benchmarks will be taken from the collection. Either `benchmarks` or `collection` must be provided, but not both.\n"
           },
           "benchmarks": {
             "type": "array",
@@ -1868,9 +1869,9 @@
             },
             "description": "The evaluation benchmarks to run. Either `benchmarks` or `collection` must be provided, but not both.\n"
           },
-          "collection": {
-            "$ref": "#/components/schemas/CollectionRef",
-            "description": "Optional collection reference. When provided, the benchmarks will be taken from the collection. Either `benchmarks` or `collection` must be provided, but not both.\n"
+          "pass_criteria": {
+            "$ref": "#/components/schemas/PassCriteria",
+            "description": "The overall pass criteria for the evaluation job.\n"
           },
           "experiment": {
             "$ref": "#/components/schemas/ExperimentConfig",
@@ -1886,7 +1887,20 @@
             "description": "Optional exports configuration for the evaluation job. When provided, the evaluation job results will be exported to the specified location.\n"
           }
         },
-        "title": "EvaluationJobConfig"
+        "oneOf": [
+          {
+            "title": "Benchmarks",
+            "required": [
+              "benchmarks"
+            ]
+          },
+          {
+            "title": "Collection",
+            "required": [
+              "collection"
+            ]
+          }
+        ]
       },
       "EvaluationJobResource": {
         "type": "object",
