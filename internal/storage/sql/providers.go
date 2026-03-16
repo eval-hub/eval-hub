@@ -12,26 +12,34 @@ import (
 	jsonpatch "gopkg.in/evanphx/json-patch.v4"
 )
 
-func (s *SQLStorage) CreateProvider(provider *api.ProviderResource) error {
+func (s *sqlStorage) CreateProvider(provider *api.ProviderResource) error {
 	if err := s.verifyTenant(); err != nil {
 		return err
 	}
 
-	providerID := provider.Resource.ID
+	return s.createProviderTxn(nil, provider)
+}
+
+func (s *sqlStorage) createProviderTxn(txn *sql.Tx, provider *api.ProviderResource) error {
+	// do this for now as the read_only field is not stored in the database
+	s.setReadOnly(&provider.Resource)
+
 	providerJSON, err := s.createProviderEntity(provider)
 	if err != nil {
 		return se.NewServiceError(messages.InternalServerError, "Error", err)
 	}
 	addEntityStatement, args := s.statementsFactory.CreateProviderAddEntityStatement(provider, string(providerJSON))
-	s.logger.Info("Creating user provider", "id", providerID)
-	_, err = s.exec(nil, addEntityStatement, args...)
+	_, err = s.exec(txn, addEntityStatement, args...)
 	if err != nil {
 		return se.NewServiceError(messages.InternalServerError, "Error", err)
 	}
+
+	s.logger.Info("Stored provider", "id", provider.Resource.ID, "resource", s.prettyPrint(provider.Resource))
+
 	return nil
 }
 
-func (s *SQLStorage) createProviderEntity(provider *api.ProviderResource) ([]byte, error) {
+func (s *sqlStorage) createProviderEntity(provider *api.ProviderResource) ([]byte, error) {
 	providerJSON, err := json.Marshal(provider.ProviderConfig)
 	if err != nil {
 		return nil, se.NewServiceError(messages.InternalServerError, "Error", err.Error())
@@ -39,15 +47,14 @@ func (s *SQLStorage) createProviderEntity(provider *api.ProviderResource) ([]byt
 	return providerJSON, nil
 }
 
-func (s *SQLStorage) GetProvider(id string) (*api.ProviderResource, error) {
+func (s *sqlStorage) GetProvider(id string) (*api.ProviderResource, error) {
 	if err := s.verifyTenant(); err != nil {
 		return nil, err
 	}
 	return s.getUserProviderTransactional(nil, id)
 }
 
-func (s *SQLStorage) getUserProviderTransactional(txn *sql.Tx, id string) (*api.ProviderResource, error) {
-	// Build the SELECT query
+func (s *sqlStorage) getUserProviderTransactional(txn *sql.Tx, id string) (*api.ProviderResource, error) {
 	query := shared.EntityQuery{Resource: api.Resource{ID: id, Tenant: s.tenant}}
 	selectQuery, selectArgs, queryArgs := s.statementsFactory.CreateProviderGetEntityStatement(&query)
 
@@ -59,6 +66,14 @@ func (s *SQLStorage) getUserProviderTransactional(txn *sql.Tx, id string) (*api.
 		}
 		s.logger.Error("Failed to get provider", "error", err, "id", id)
 		return nil, se.NewServiceError(messages.DatabaseOperationFailed, "Type", "provider", "ResourceId", id, "Error", err.Error())
+	}
+
+	// do this for now as the read_only field is not stored in the database
+	s.setReadOnly(&query.Resource)
+
+	// now check that the tenant_id is allowed to see this resource
+	if !s.isVisibleResource(&query.Resource) {
+		return nil, se.NewServiceError(messages.ResourceNotFound, "Type", "provider", "ResourceId", id)
 	}
 
 	var providerConfig api.ProviderConfig
@@ -76,23 +91,40 @@ func (s *SQLStorage) getUserProviderTransactional(txn *sql.Tx, id string) (*api.
 	return &resource, nil
 }
 
-func (s *SQLStorage) DeleteProvider(id string) error {
-	if err := s.verifyTenant(); err != nil {
-		return err
-	}
-
+func (s *sqlStorage) deleteProviderTxn(txn *sql.Tx, id string) error {
 	deleteQuery, args := s.statementsFactory.CreateDeleteEntityStatement(s.tenant, shared.TABLE_PROVIDERS, id)
-	_, err := s.exec(nil, deleteQuery, args...)
+	_, err := s.exec(txn, deleteQuery, args...)
 	if err != nil {
 		s.logger.Error("Failed to delete provider", "error", err, "id", id)
 		return se.NewServiceError(messages.DatabaseOperationFailed, "Type", "provider", "ResourceId", id, "Error", err.Error())
 	}
 
-	s.logger.Info("Deleted user provider", "id", id)
+	s.logger.Debug("Deleted provider", "id", id)
+
 	return nil
 }
 
-func (s *SQLStorage) GetProviders(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.ProviderResource], error) {
+func (s *sqlStorage) DeleteProvider(id string) error {
+	if err := s.verifyTenant(); err != nil {
+		return err
+	}
+
+	return s.withTransaction("delete provider", id, func(txn *sql.Tx) error {
+		persistedProvider, err := s.getUserProviderTransactional(txn, id)
+		if err != nil {
+			return err
+		}
+		if !persistedProvider.Resource.CanDelete() {
+			return se.NewServiceError(
+				messages.ReadOnlyProvider,
+				"ProviderID", id,
+			)
+		}
+		return s.deleteProviderTxn(txn, persistedProvider.Resource.ID)
+	})
+}
+
+func (s *sqlStorage) GetProviders(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.ProviderResource], error) {
 	if err := s.verifyTenant(); err != nil {
 		return nil, err
 	}
@@ -101,7 +133,7 @@ func (s *SQLStorage) GetProviders(filter *abstractions.QueryFilter) (*abstractio
 	return listEntities[api.ProviderResource](s, txn, shared.TABLE_PROVIDERS, filter)
 }
 
-func (s *SQLStorage) UpdateProvider(id string, providerConfig *api.ProviderConfig) (*api.ProviderResource, error) {
+func (s *sqlStorage) UpdateProvider(id string, providerConfig *api.ProviderConfig) (*api.ProviderResource, error) {
 	if err := s.verifyTenant(); err != nil {
 		return nil, err
 	}
@@ -111,6 +143,12 @@ func (s *SQLStorage) UpdateProvider(id string, providerConfig *api.ProviderConfi
 		persisted, err := s.getUserProviderTransactional(txn, id)
 		if err != nil {
 			return err
+		}
+		if !persisted.Resource.CanUpdate() {
+			return se.NewServiceError(
+				messages.ReadOnlyProvider,
+				"ProviderID", id,
+			)
 		}
 		merged := &api.ProviderResource{
 			Resource:       persisted.Resource,
@@ -125,11 +163,11 @@ func (s *SQLStorage) UpdateProvider(id string, providerConfig *api.ProviderConfi
 	if err != nil {
 		return nil, err
 	}
-	s.logger.Info("Updated provider", "id", id)
+	s.logger.Debug("Updated provider", "id", id)
 	return updated, nil
 }
 
-func (s *SQLStorage) updateProviderTransactional(txn *sql.Tx, providerID string, provider *api.ProviderResource) error {
+func (s *sqlStorage) updateProviderTransactional(txn *sql.Tx, providerID string, provider *api.ProviderResource) error {
 	providerJSON, err := s.createProviderEntity(provider)
 	if err != nil {
 		return se.NewServiceError(messages.InternalServerError, "Error", err)
@@ -143,7 +181,7 @@ func (s *SQLStorage) updateProviderTransactional(txn *sql.Tx, providerID string,
 	return nil
 }
 
-func (s *SQLStorage) PatchProvider(id string, patches *api.Patch) (*api.ProviderResource, error) {
+func (s *sqlStorage) PatchProvider(id string, patches *api.Patch) (*api.ProviderResource, error) {
 	if err := s.verifyTenant(); err != nil {
 		return nil, err
 	}
@@ -160,6 +198,12 @@ func (s *SQLStorage) PatchProvider(id string, patches *api.Patch) (*api.Provider
 		persisted, err := s.getUserProviderTransactional(txn, id)
 		if err != nil {
 			return err
+		}
+		if !persisted.Resource.CanUpdate() {
+			return se.NewServiceError(
+				messages.ReadOnlyProvider,
+				"ProviderID", id,
+			)
 		}
 		persistedJSON, err := s.createProviderEntity(persisted)
 		if err != nil {
@@ -186,7 +230,7 @@ func (s *SQLStorage) PatchProvider(id string, patches *api.Patch) (*api.Provider
 	if err != nil {
 		return nil, err
 	}
-	s.logger.Info("Patched provider", "id", id)
+	s.logger.Debug("Patched provider", "id", id)
 	return updated, nil
 }
 

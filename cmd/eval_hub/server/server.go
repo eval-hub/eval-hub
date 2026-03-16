@@ -16,7 +16,6 @@ import (
 	"github.com/eval-hub/eval-hub/internal/handlers"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/runtimes/k8s"
-	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 	"github.com/go-playground/validator/v10"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -26,17 +25,15 @@ import (
 )
 
 type Server struct {
-	httpServer        *http.Server
-	port              int
-	logger            *slog.Logger
-	serviceConfig     *config.Config
-	providerConfigs   map[string]api.ProviderResource
-	collectionConfigs map[string]api.CollectionResource
-	authConfig        *auth.AuthConfig
-	storage           abstractions.Storage
-	validate          *validator.Validate
-	runtime           abstractions.Runtime
-	mlflowClient      *mlflowclient.Client
+	httpServer    *http.Server
+	port          int
+	logger        *slog.Logger
+	serviceConfig *config.Config
+	authConfig    *auth.AuthConfig
+	storage       abstractions.Storage
+	validate      *validator.Validate
+	runtime       abstractions.Runtime
+	mlflowClient  *mlflowclient.Client
 }
 
 func (s *Server) isOTELEnabled() bool {
@@ -64,8 +61,6 @@ func (s *Server) isOTELEnabled() bool {
 //   - error: An error if logger or serviceConfig is nil
 func NewServer(logger *slog.Logger,
 	serviceConfig *config.Config,
-	providerConfigs map[string]api.ProviderResource,
-	collectionConfigs map[string]api.CollectionResource,
 	authConfig *auth.AuthConfig,
 	storage abstractions.Storage,
 	validate *validator.Validate,
@@ -87,16 +82,14 @@ func NewServer(logger *slog.Logger,
 	}
 
 	return &Server{
-		port:              serviceConfig.Service.Port,
-		logger:            logger,
-		serviceConfig:     serviceConfig,
-		providerConfigs:   providerConfigs,
-		collectionConfigs: collectionConfigs,
-		authConfig:        authConfig,
-		storage:           storage,
-		validate:          validate,
-		runtime:           runtime,
-		mlflowClient:      mlflowClient,
+		port:          serviceConfig.Service.Port,
+		logger:        logger,
+		serviceConfig: serviceConfig,
+		authConfig:    authConfig,
+		storage:       storage,
+		validate:      validate,
+		runtime:       runtime,
+		mlflowClient:  mlflowClient,
 	}, nil
 }
 
@@ -365,7 +358,7 @@ func (s *Server) setupDocsRoutes(h *handlers.Handlers, router *http.ServeMux) {
 
 func (s *Server) setupRoutes() (http.Handler, error) {
 	router := http.NewServeMux()
-	h := handlers.New(s.storage, s.validate, s.runtime, s.mlflowClient, s.providerConfigs, s.collectionConfigs, s.serviceConfig)
+	h := handlers.New(s.storage, s.validate, s.runtime, s.mlflowClient, s.serviceConfig)
 
 	// Health
 	s.setupHealthRoutes(h, router)

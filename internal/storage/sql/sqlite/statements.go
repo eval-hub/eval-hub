@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -83,9 +84,9 @@ func (s *sqliteStatementsFactory) GetAllowedFilterColumns(tableName string) []st
 	case shared.TABLE_EVALUATIONS:
 		return append(allColumns, "status", "experiment_id")
 	case shared.TABLE_PROVIDERS:
-		return allColumns // "benchmarks" and "system_defined" are not allowed filters for providers from the database
+		return allColumns // "benchmarks" and "scope" are not allowed filters for providers from the database
 	case shared.TABLE_COLLECTIONS:
-		return append(allColumns, "category") // "system_defined" is not allowed filter for collections from the database
+		return append(allColumns, "category") // "scope" is not allowed filter for collections from the database
 	default:
 		return nil
 	}
@@ -134,6 +135,12 @@ func (s *sqliteStatementsFactory) CreateEntityFilterCondition(key string, value 
 	case "LIMIT", "OFFSET":
 		return key + " ?", []any{value}
 	default:
+		switch v := value.(type) {
+		case string:
+			if strings.HasPrefix(v, "!") {
+				return "NOT (" + key + " = ?)", []any{v[1:]}
+			}
+		}
 		return key + " = ?", []any{value}
 	}
 }
@@ -203,11 +210,13 @@ func (s *sqliteStatementsFactory) CreateProviderAddEntityStatement(provider *api
 }
 
 func (s *sqliteStatementsFactory) CreateProviderGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
+	// As we want to allow system providers to be selected without a tenant_id, we have to select
+	// either with tenant_id == tenant_id OR owner == system
 	// SELECT id, created_at, updated_at, tenant_id, owner, entity FROM providers WHERE id = ?;
 	if query.Resource.Tenant.IsEmpty() {
 		return `SELECT id, created_at, updated_at, tenant_id, owner, entity FROM providers WHERE id = ?;`, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 	}
-	return `SELECT id, created_at, updated_at, tenant_id, owner, entity FROM providers WHERE id = ? AND tenant_id = ?;`, []any{&query.Resource.ID, query.Resource.Tenant.String()}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
+	return `SELECT id, created_at, updated_at, tenant_id, owner, entity FROM providers WHERE id = ? AND (tenant_id = ? OR owner = 'system');`, []any{&query.Resource.ID, query.Resource.Tenant.String()}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 }
 
 func (s *sqliteStatementsFactory) CreateCollectionAddEntityStatement(collection *api.CollectionResource, entity string) (string, []any) {
@@ -215,9 +224,11 @@ func (s *sqliteStatementsFactory) CreateCollectionAddEntityStatement(collection 
 }
 
 func (s *sqliteStatementsFactory) CreateCollectionGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
+	// As we want to allow system collections to be selected without a tenant_id, we have to select
+	// either with tenant_id == tenant_id OR owner == system
 	// SELECT id, created_at, updated_at, tenant_id, owner, entity FROM collections WHERE id = ?;
 	if query.Resource.Tenant.IsEmpty() {
 		return `SELECT id, created_at, updated_at, tenant_id, owner, entity FROM collections WHERE id = ?;`, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 	}
-	return `SELECT id, created_at, updated_at, tenant_id, owner, entity FROM collections WHERE id = ? AND tenant_id = ?;`, []any{&query.Resource.ID, query.Resource.Tenant.String()}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
+	return `SELECT id, created_at, updated_at, tenant_id, owner, entity FROM collections WHERE id = ? AND (tenant_id = ? OR owner = 'system');`, []any{&query.Resource.ID, query.Resource.Tenant.String()}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 }

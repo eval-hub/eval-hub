@@ -2,13 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
-	"maps"
-	"slices"
 	"strings"
 	"time"
 
-	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/common"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
@@ -17,109 +13,14 @@ import (
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/serialization"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
-	"github.com/eval-hub/eval-hub/internal/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
-
-func (h *Handlers) filterSystemCollections(filter map[string]any) []api.CollectionResource {
-	// Filter keys relevant for system collections (owner, tenant_id, status are not applicable)
-	allowedKeys := []string{"name", "category", "tags"}
-	filteredCollections := make([]api.CollectionResource, 0, len(h.collectionConfigs))
-
-	// Iterate over sorted keys for deterministic ordering (map iteration is random)
-	for _, id := range slices.Sorted(maps.Keys(h.collectionConfigs)) {
-		c := h.collectionConfigs[id]
-		if len(filter) == 0 {
-			filteredCollections = append(filteredCollections, c)
-			continue
-		}
-		matchesAll := true
-		for _, key := range slices.Sorted(maps.Keys(filter)) {
-			if !slices.Contains(allowedKeys, key) {
-				continue
-			}
-			v := filter[key]
-			values, operator := shared.GetValues(key, v)
-			if !matchesCollectionFilterKey(c, key, values, operator) {
-				matchesAll = false
-				break
-			}
-		}
-		if matchesAll {
-			filteredCollections = append(filteredCollections, c)
-		}
-	}
-	return filteredCollections
-}
-
-// matchesCollectionFilterKey returns true if the collection matches the filter key.
-// values and operator come from shared.GetValues (comma=AND, pipe=OR).
-func matchesCollectionFilterKey(c api.CollectionResource, key string, values []any, operator string) bool {
-	getStr := func(v any) string {
-		if s, ok := v.(string); ok {
-			return s
-		}
-		return fmt.Sprintf("%v", v)
-	}
-	switch key {
-	case "name":
-		if operator == "OR" {
-			for _, val := range values {
-				if c.CollectionConfig.Name == getStr(val) {
-					return true
-				}
-			}
-			return false
-		}
-		// AND: name must equal all values (typically one value)
-		for _, val := range values {
-			if c.CollectionConfig.Name != getStr(val) {
-				return false
-			}
-		}
-		return true
-	case "category":
-		if operator == "OR" {
-			for _, val := range values {
-				if c.CollectionConfig.Category == getStr(val) {
-					return true
-				}
-			}
-			return false
-		}
-		// AND: category must equal all values (typically one value)
-		for _, val := range values {
-			if c.CollectionConfig.Category != getStr(val) {
-				return false
-			}
-		}
-		return true
-	case "tags":
-		if operator == "OR" {
-			for _, val := range values {
-				if slices.Contains(c.CollectionConfig.Tags, getStr(val)) {
-					return true
-				}
-			}
-			return false
-		}
-		// AND: collection must have all tags
-		for _, val := range values {
-			if !slices.Contains(c.CollectionConfig.Tags, getStr(val)) {
-				return false
-			}
-		}
-		return true
-	default:
-		return true
-	}
-}
 
 // HandleListCollections handles GET /api/v1/evaluations/collections
 func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
-	filter, err := CommonListFilters(req, "category")
+	filter, err := CommonListFilters(req, "category", "scope")
 
 	logging.LogRequestStarted(ctx, "filter", filter)
 
@@ -128,7 +29,31 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 		return
 	}
 
-	allowedParams := []string{"limit", "offset", "name", "category", "tags", "system_defined", "owner"}
+	// owner and scope are mutually exclusive
+	mismatchedParams := []string{"owner", "scope"}
+	if filter.HasParams(mismatchedParams...) {
+		w.Error(serviceerrors.NewServiceError(messages.QueryParameterMismatch, "ParameterNames", strings.Join(mismatchedParams, ",")), ctx.RequestID)
+		return
+	}
+
+	// scope matches to other fields in the filter
+	// scope==system ==> owner EQ system
+	// scope==tenant ==> owner NE system
+	if scope, ok := filter.Params["scope"]; ok {
+		switch scope {
+		case "system":
+			filter.Params["owner"] = "system"
+			delete(filter.Params, "scope")
+		case "tenant":
+			filter.Params["owner"] = "!system"
+			delete(filter.Params, "scope")
+		default:
+			w.Error(serviceerrors.NewServiceError(messages.QueryParameterValueInvalid, "ParameterName", "scope", "AllowedValues", "system|tenant"), ctx.RequestID)
+			return
+		}
+	}
+
+	allowedParams := []string{"limit", "offset", "name", "category", "tags", "owner", "scope"}
 	badParams := getAllParams(req, allowedParams...)
 	if len(badParams) > 0 {
 		// just report the first bad parameter
@@ -136,58 +61,13 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 		return
 	}
 
-	systemDefined, err := GetParam(req, "system_defined", true, "")
+	collections, err := storage.GetCollections(filter)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
-	isReadOnly := "only" == systemDefined
 
-	collections := []api.CollectionResource{}
-
-	if IncludeSystemDefined(req) {
-		collections = h.filterSystemCollections(filter.ExtractQueryParams().Params)
-		ctx.Logger.Info(fmt.Sprintf("Included %d system defined collections", len(collections)))
-	}
-
-	totalCount := len(collections)
-
-	// first check to see if the system collections are enough for the paging
-	if filter.Offset < len(collections) {
-		if len(collections) < filter.Limit {
-			if !isReadOnly {
-				userFilter := &abstractions.QueryFilter{
-					Limit:  max(0, filter.Limit-len(collections)),
-					Offset: max(0, filter.Offset-len(collections)),
-					Params: filter.Params,
-				}
-				ctx.Logger.Debug("Get collections", "filter", userFilter)
-				queryResults, err := storage.GetCollections(userFilter)
-				if err != nil {
-					w.Error(err, ctx.RequestID)
-					return
-				}
-				collections = append(collections[filter.Offset:], queryResults.Items...)
-				totalCount += queryResults.TotalCount
-			}
-		}
-	} else if !isReadOnly {
-		userFilter := &abstractions.QueryFilter{
-			Limit:  filter.Limit,
-			Offset: max(0, filter.Offset-len(collections)),
-			Params: filter.Params,
-		}
-		ctx.Logger.Debug("Get collections", "filter", userFilter)
-		queryResults, err := storage.GetCollections(userFilter)
-		if err != nil {
-			w.Error(err, ctx.RequestID)
-			return
-		}
-		collections = append(collections, queryResults.Items...)
-		totalCount += queryResults.TotalCount
-	}
-
-	page, err := CreatePage(ctx, totalCount, filter.Offset, filter.Limit, req)
+	page, err := CreatePage(ctx, collections.TotalCount, filter.Offset, filter.Limit, req)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
@@ -195,7 +75,7 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 
 	result := api.CollectionResourceList{
 		Page:  *page,
-		Items: collections[:min(len(collections), filter.Limit)],
+		Items: collections.Items,
 	}
 
 	w.WriteJSON(result, 200)
@@ -248,12 +128,6 @@ func (h *Handlers) HandleGetCollection(ctx *executioncontext.ExecutionContext, r
 	collectionID := req.PathValue(constants.PATH_PARAMETER_COLLECTION_ID)
 	if collectionID == "" {
 		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PATH_PARAMETER_COLLECTION_ID), ctx.RequestID)
-		return
-	}
-
-	// Check system-defined collections first, then fall back to storage
-	if c, ok := h.collectionConfigs[collectionID]; ok {
-		w.WriteJSON(&c, 200)
 		return
 	}
 

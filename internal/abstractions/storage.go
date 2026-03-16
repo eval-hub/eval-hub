@@ -24,7 +24,7 @@ type QueryFilter struct {
 	Tenant api.Tenant
 }
 
-// Returns the limit, offset, and filtered params
+// ExtractQueryParams returns the limit, offset, and filtered params
 func (filter *QueryFilter) ExtractQueryParams() *QueryFilter {
 	params := maps.Clone(filter.Params)
 	// delete empty values
@@ -37,6 +37,17 @@ func (filter *QueryFilter) ExtractQueryParams() *QueryFilter {
 		Params: params,
 		Tenant: filter.Tenant,
 	}
+}
+
+// HasParams returns true if all the given params are present in the filter and have non-empty values
+func (filter *QueryFilter) HasParams(params ...string) bool {
+	queryParams := filter.ExtractQueryParams().Params
+	for _, param := range params {
+		if _, exists := queryParams[param]; !exists {
+			return false
+		}
+	}
+	return true
 }
 
 func (filter *QueryFilter) String() string {

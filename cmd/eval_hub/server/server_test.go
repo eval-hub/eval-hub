@@ -265,10 +265,6 @@ func createServer(port int) (*server.Server, error) {
 		serviceConfig.Prometheus.Enabled = true
 	}
 	serviceConfig.Service.LocalMode = true // set local mode for testing
-	store, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create storage: %w", err)
-	}
 	// set up the provider configs
 	providerConfigs, err := config.LoadProviderConfigs(logger, validate)
 	if err != nil {
@@ -280,13 +276,17 @@ func createServer(port int) (*server.Server, error) {
 		// we do this as no point trying to continue
 		return nil, fmt.Errorf("failed to load collection configs: %w", err)
 	}
+	store, err := storage.NewStorage(serviceConfig.Database, collectionConfigs, providerConfigs, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create storage: %w", err)
+	}
 	// Use stub runtime to avoid file writes and process spawning during tests
 	runtime := &stubRuntime{logger: logger, providers: providerConfigs}
 	mlflowClient, err := mlflow.NewMLFlowClient(serviceConfig, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MLFlow client: %w", err)
 	}
-	return server.NewServer(logger, serviceConfig, providerConfigs, collectionConfigs, nil, store, validate, runtime, mlflowClient)
+	return server.NewServer(logger, serviceConfig, nil, store, validate, runtime, mlflowClient)
 }
 
 func getKeyAsString(obj map[string]interface{}, key string) string {

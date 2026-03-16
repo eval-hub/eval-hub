@@ -16,6 +16,12 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+type allowedPatch struct {
+	Path   string
+	Op     api.PatchOp
+	Prefix bool
+}
+
 func CreatePage(ctx *executioncontext.ExecutionContext, total int, offset int, limit int, r http_wrappers.RequestWrapper) (*api.Page, error) {
 	// Calculate pagination info
 	hasNext := offset+limit < total
@@ -150,15 +156,6 @@ func CommonListFilters(r http_wrappers.RequestWrapper, extraParams ...string) (*
 		Offset: offset,
 		Params: params,
 	}, nil
-}
-
-func IncludeSystemDefined(r http_wrappers.RequestWrapper) bool {
-	systemDefinedParam := r.Query("system_defined")
-	systemDefined := true
-	if len(systemDefinedParam) > 0 {
-		systemDefined = systemDefinedParam[0] != "false"
-	}
-	return systemDefined
 }
 
 func getAllParams(r http_wrappers.RequestWrapper, allowedParams ...string) []string {

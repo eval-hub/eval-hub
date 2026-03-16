@@ -34,7 +34,7 @@ const (
 	POSTGRES_DRIVER = "pgx"
 )
 
-type SQLStorage struct {
+type sqlStorage struct {
 	sqlConfig             *shared.SQLDatabaseConfig
 	statementsFactory     shared.SQLStatementsFactory
 	pool                  *sql.DB
@@ -43,9 +43,17 @@ type SQLStorage struct {
 	tenant                api.Tenant
 	owner                 api.User
 	authenticationEnabled bool
+	maxArgLength          int
 }
 
-func NewStorage(config map[string]any, otelEnabled bool, authenticationEnabled bool, logger *slog.Logger) (abstractions.Storage, error) {
+func NewStorage(
+	config map[string]any,
+	systemCollections map[string]api.CollectionResource,
+	systemProviders map[string]api.ProviderResource,
+	otelEnabled bool,
+	authenticationEnabled bool,
+	logger *slog.Logger,
+) (abstractions.Storage, error) {
 	var sqlConfig shared.SQLDatabaseConfig
 	merr := mapstructure.Decode(config, &sqlConfig)
 	if merr != nil {
@@ -62,8 +70,11 @@ func NewStorage(config map[string]any, otelEnabled bool, authenticationEnabled b
 		return nil, fmt.Errorf("unsupported driver: %s", (sqlConfig.Driver))
 	}
 
+	logger = logger.With("driver", sqlConfig.GetDriverName())
 	databaseName := sqlConfig.GetDatabaseName()
-	logger = logger.With("driver", sqlConfig.GetDriverName(), "database", databaseName)
+	if databaseName != "" {
+		logger = logger.With("database", databaseName)
+	}
 
 	logger.Info("Creating SQL storage")
 
@@ -119,13 +130,14 @@ func NewStorage(config map[string]any, otelEnabled bool, authenticationEnabled b
 		}
 	}
 
-	s := &SQLStorage{
+	s := &sqlStorage{
 		sqlConfig:             &sqlConfig,
 		statementsFactory:     statementsFactory,
 		pool:                  pool,
 		logger:                logger,
 		ctx:                   context.Background(),
 		authenticationEnabled: authenticationEnabled,
+		maxArgLength:          512,
 	}
 
 	// ping the database to verify the DSN provided by the user is valid and the server is accessible
@@ -141,20 +153,48 @@ func NewStorage(config map[string]any, otelEnabled bool, authenticationEnabled b
 		return nil, err
 	}
 
+	// load any system resources
+	if err := s.loadSystemResources(systemCollections, systemProviders); err != nil {
+		return nil, err
+	}
+
 	success = true
 	return s, nil
 }
 
 // Ping the database to verify DSN provided by the user is valid and the
 // server accessible. If the ping fails exit the program with an error.
-func (s *SQLStorage) Ping(timeout time.Duration) error {
+func (s *sqlStorage) Ping(timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	return s.pool.PingContext(ctx)
 }
 
-func (s *SQLStorage) exec(txn *sql.Tx, query string, args ...any) (sql.Result, error) {
+func (s *sqlStorage) safeArg(arg any) any {
+	if arg == nil {
+		return nil
+	}
+	if v, ok := arg.(string); ok && len(v) > s.maxArgLength {
+		return v[:s.maxArgLength] + "..."
+	}
+	return arg
+}
+
+func (s *sqlStorage) safeArgs(args []any) []any {
+	newArgs := make([]any, len(args))
+	for i, arg := range args {
+		newArg := s.safeArg(arg)
+		if newArg != nil {
+			newArgs[i] = newArg
+		}
+	}
+	return newArgs
+}
+
+func (s *sqlStorage) exec(txn *sql.Tx, query string, args ...any) (sql.Result, error) {
+	s.logger.Debug("Executing exec", "transaction", txn != nil, "query", query, "args", s.safeArgs(args))
+
 	if txn != nil {
 		return txn.ExecContext(s.ctx, query, args...)
 	} else {
@@ -162,7 +202,9 @@ func (s *SQLStorage) exec(txn *sql.Tx, query string, args ...any) (sql.Result, e
 	}
 }
 
-func (s *SQLStorage) query(txn *sql.Tx, query string, args ...any) (*sql.Rows, error) {
+func (s *sqlStorage) query(txn *sql.Tx, query string, args ...any) (*sql.Rows, error) {
+	s.logger.Debug("Executing query", "transaction", txn != nil, "query", query, "args", s.safeArgs(args))
+
 	if txn != nil {
 		return txn.QueryContext(s.ctx, query, args...)
 	} else {
@@ -170,7 +212,9 @@ func (s *SQLStorage) query(txn *sql.Tx, query string, args ...any) (*sql.Rows, e
 	}
 }
 
-func (s *SQLStorage) queryRow(txn *sql.Tx, query string, args ...any) *sql.Row {
+func (s *sqlStorage) queryRow(txn *sql.Tx, query string, args ...any) *sql.Row {
+	s.logger.Debug("Executing row query", "transaction", txn != nil, "query", query, "args", s.safeArgs(args))
+
 	if txn != nil {
 		return txn.QueryRowContext(s.ctx, query, args...)
 	} else {
@@ -178,7 +222,7 @@ func (s *SQLStorage) queryRow(txn *sql.Tx, query string, args ...any) *sql.Row {
 	}
 }
 
-func (s *SQLStorage) getTotalCount(txn *sql.Tx, tableName string, params map[string]any, typeName string) (int, error) {
+func (s *sqlStorage) getTotalCount(txn *sql.Tx, tableName string, params map[string]any, typeName string) (int, error) {
 	countQuery, countArgs := s.statementsFactory.CreateCountEntitiesStatement(s.tenant, tableName, params)
 
 	var totalCount int
@@ -198,7 +242,7 @@ func (s *SQLStorage) getTotalCount(txn *sql.Tx, tableName string, params map[str
 	return totalCount, nil
 }
 
-func (s *SQLStorage) ensureSchema() error {
+func (s *sqlStorage) ensureSchema() error {
 	schemas := s.statementsFactory.GetTablesSchema()
 	if _, err := s.exec(nil, schemas); err != nil {
 		return err
@@ -207,11 +251,40 @@ func (s *SQLStorage) ensureSchema() error {
 	return nil
 }
 
-func (s *SQLStorage) verifyTenant() error {
+func (s *sqlStorage) verifyTenant() error {
 	if s.authenticationEnabled && s.tenant == "" {
 		return se.NewServiceError(messages.Unauthorized, "Error", "Tenant is required")
 	}
 	return nil
+}
+
+func (s *sqlStorage) setReadOnly(resource *api.Resource) {
+	if (resource != nil) && resource.IsSystemResource() {
+		// do this for now as the read_only field is not stored in the database
+		resource.ReadOnly = true
+	}
+}
+
+// isVisibleResource checks if a resource is visible to the current tenant.
+// A system resource is always visible, a user resource is visible if the tenant_id matches.
+func (s *sqlStorage) isVisibleResource(resource *api.Resource) bool {
+	// now check that the tenant_id matches and owner matches the system owner
+	if !resource.IsSystemResource() {
+		// this is a user resource so check the tenant_id matches
+		if resource.Tenant.String() != s.tenant.String() {
+			s.logger.Debug("Tenant mismatch for resource", "id", resource.ID, "resource_tenant", resource.Tenant, "resource", s.prettyPrint(resource))
+			return false
+		}
+	}
+	return true
+}
+
+func (s *sqlStorage) prettyPrint(v any) string {
+	jsonBytes, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		jsonBytes = []byte(fmt.Sprintf("%v", v))
+	}
+	return string(jsonBytes[:min(len(jsonBytes), s.maxArgLength)])
 }
 
 func applyPatches(resource string, patches *api.Patch) ([]byte, error) {
@@ -229,12 +302,12 @@ func applyPatches(resource string, patches *api.Patch) ([]byte, error) {
 	return patch.Apply([]byte(resource))
 }
 
-func (s *SQLStorage) Close() error {
+func (s *sqlStorage) Close() error {
 	return s.pool.Close()
 }
 
-func (s *SQLStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
-	return &SQLStorage{
+func (s *sqlStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
+	return &sqlStorage{
 		sqlConfig:             s.sqlConfig,
 		statementsFactory:     s.statementsFactory,
 		pool:                  s.pool,
@@ -243,11 +316,12 @@ func (s *SQLStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 		tenant:                s.tenant,
 		owner:                 s.owner,
 		authenticationEnabled: s.authenticationEnabled,
+		maxArgLength:          s.maxArgLength,
 	}
 }
 
-func (s *SQLStorage) WithContext(ctx context.Context) abstractions.Storage {
-	return &SQLStorage{
+func (s *sqlStorage) WithContext(ctx context.Context) abstractions.Storage {
+	return &sqlStorage{
 		sqlConfig:             s.sqlConfig,
 		statementsFactory:     s.statementsFactory,
 		pool:                  s.pool,
@@ -256,11 +330,12 @@ func (s *SQLStorage) WithContext(ctx context.Context) abstractions.Storage {
 		tenant:                s.tenant,
 		owner:                 s.owner,
 		authenticationEnabled: s.authenticationEnabled,
+		maxArgLength:          s.maxArgLength,
 	}
 }
 
-func (s *SQLStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
-	return &SQLStorage{
+func (s *sqlStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
+	return &sqlStorage{
 		sqlConfig:             s.sqlConfig,
 		statementsFactory:     s.statementsFactory,
 		pool:                  s.pool,
@@ -269,11 +344,12 @@ func (s *SQLStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
 		tenant:                tenant,
 		owner:                 s.owner,
 		authenticationEnabled: s.authenticationEnabled,
+		maxArgLength:          s.maxArgLength,
 	}
 }
 
-func (s *SQLStorage) WithOwner(owner api.User) abstractions.Storage {
-	return &SQLStorage{
+func (s *sqlStorage) WithOwner(owner api.User) abstractions.Storage {
+	return &sqlStorage{
 		sqlConfig:             s.sqlConfig,
 		statementsFactory:     s.statementsFactory,
 		pool:                  s.pool,
@@ -282,5 +358,6 @@ func (s *SQLStorage) WithOwner(owner api.User) abstractions.Storage {
 		tenant:                s.tenant,
 		owner:                 owner,
 		authenticationEnabled: s.authenticationEnabled,
+		maxArgLength:          s.maxArgLength,
 	}
 }

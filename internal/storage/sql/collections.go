@@ -17,24 +17,34 @@ import (
 // Collection operations
 //#######################################################################
 
-func (s *SQLStorage) CreateCollection(collection *api.CollectionResource) error {
+func (s *sqlStorage) CreateCollection(collection *api.CollectionResource) error {
 	if err := s.verifyTenant(); err != nil {
 		return err
 	}
+
+	return s.createCollectionTxn(nil, collection)
+}
+
+func (s *sqlStorage) createCollectionTxn(txn *sql.Tx, collection *api.CollectionResource) error {
+	// do this for now as the read_only field is not stored in the database
+	s.setReadOnly(&collection.Resource)
 
 	collectionJSON, err := s.createCollectionEntity(collection)
 	if err != nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
 	}
 	addEntityStatement, args := s.statementsFactory.CreateCollectionAddEntityStatement(collection, string(collectionJSON))
-	_, err = s.exec(nil, addEntityStatement, args...)
+	_, err = s.exec(txn, addEntityStatement, args...)
 	if err != nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
 	}
+
+	s.logger.Info("Stored collection", "id", collection.Resource.ID, "resource", s.prettyPrint(collection.Resource))
+
 	return nil
 }
 
-func (s *SQLStorage) createCollectionEntity(collection *api.CollectionResource) ([]byte, error) {
+func (s *sqlStorage) createCollectionEntity(collection *api.CollectionResource) ([]byte, error) {
 	collectionJSON, err := json.Marshal(collection.CollectionConfig)
 	if err != nil {
 		return nil, serviceerrors.NewServiceError(messages.InternalServerError, "Error", err.Error())
@@ -42,7 +52,7 @@ func (s *SQLStorage) createCollectionEntity(collection *api.CollectionResource) 
 	return collectionJSON, nil
 }
 
-func (s *SQLStorage) GetCollection(id string) (*api.CollectionResource, error) {
+func (s *sqlStorage) GetCollection(id string) (*api.CollectionResource, error) {
 	if err := s.verifyTenant(); err != nil {
 		return nil, err
 	}
@@ -50,8 +60,7 @@ func (s *SQLStorage) GetCollection(id string) (*api.CollectionResource, error) {
 	return s.getCollectionTransactional(nil, id)
 }
 
-func (s *SQLStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.CollectionResource, error) {
-	// Build the SELECT query
+func (s *sqlStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.CollectionResource, error) {
 	query := shared.EntityQuery{Resource: api.Resource{ID: id, Tenant: s.tenant}}
 	selectQuery, selectArgs, queryArgs := s.statementsFactory.CreateCollectionGetEntityStatement(&query)
 
@@ -65,6 +74,11 @@ func (s *SQLStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 		return nil, se.NewServiceError(messages.DatabaseOperationFailed, "Type", "collection", "ResourceId", id, "Error", err.Error())
 	}
 
+	// now check that the tenant_id is allowed to see this resource
+	if !s.isVisibleResource(&query.Resource) {
+		return nil, se.NewServiceError(messages.ResourceNotFound, "Type", "collection", "ResourceId", id)
+	}
+
 	// Unmarshal the entity JSON into EvaluationJobConfig
 	var collectionConfig api.CollectionConfig
 	err = json.Unmarshal([]byte(query.EntityJSON), &collectionConfig)
@@ -72,6 +86,9 @@ func (s *SQLStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 		s.logger.Error("Failed to unmarshal collection config", "error", err, "id", id)
 		return nil, se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "collection", "Error", err.Error())
 	}
+
+	// do this for now as the read_only field is not stored in the database
+	s.setReadOnly(&query.Resource)
 
 	collectionResource := api.CollectionResource{
 		Resource:         query.Resource,
@@ -81,7 +98,7 @@ func (s *SQLStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 	return &collectionResource, nil
 }
 
-func (s *SQLStorage) GetCollections(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
+func (s *sqlStorage) GetCollections(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
 	if err := s.verifyTenant(); err != nil {
 		return nil, err
 	}
@@ -90,7 +107,7 @@ func (s *SQLStorage) GetCollections(filter *abstractions.QueryFilter) (*abstract
 	return listEntities[api.CollectionResource](s, txn, shared.TABLE_COLLECTIONS, filter)
 }
 
-func (s *SQLStorage) UpdateCollection(id string, collection *api.CollectionConfig) (*api.CollectionResource, error) {
+func (s *sqlStorage) UpdateCollection(id string, collection *api.CollectionConfig) (*api.CollectionResource, error) {
 	if err := s.verifyTenant(); err != nil {
 		return nil, err
 	}
@@ -102,9 +119,9 @@ func (s *SQLStorage) UpdateCollection(id string, collection *api.CollectionConfi
 		if err != nil {
 			return err
 		}
-		if persistedCollection.Resource.Owner == "system" {
+		if !persistedCollection.Resource.CanUpdate() {
 			return se.NewServiceError(
-				messages.SystemCollection,
+				messages.ReadOnlyCollection,
 				"CollectionID", id,
 			)
 		}
@@ -121,7 +138,7 @@ func (s *SQLStorage) UpdateCollection(id string, collection *api.CollectionConfi
 	return updated, err
 }
 
-func (s *SQLStorage) updateCollectionTransactional(txn *sql.Tx, collectionID string, collection *api.CollectionResource) error {
+func (s *sqlStorage) updateCollectionTransactional(txn *sql.Tx, collectionID string, collection *api.CollectionResource) error {
 	collectionJSON, err := s.createCollectionEntity(collection)
 	if err != nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
@@ -134,27 +151,41 @@ func (s *SQLStorage) updateCollectionTransactional(txn *sql.Tx, collectionID str
 	return nil
 }
 
-func (s *SQLStorage) DeleteCollection(id string) error {
-	if err := s.verifyTenant(); err != nil {
-		return err
-	}
-
-	// Build the DELETE query
+func (s *sqlStorage) deleteCollectionTxn(txn *sql.Tx, id string) error {
 	deleteQuery, args := s.statementsFactory.CreateDeleteEntityStatement(s.tenant, shared.TABLE_COLLECTIONS, id)
 
-	// Execute the DELETE query
-	_, err := s.exec(nil, deleteQuery, args...)
+	_, err := s.exec(txn, deleteQuery, args...)
 	if err != nil {
 		s.logger.Error("Failed to delete collection", "error", err, "id", id)
 		return se.NewServiceError(messages.DatabaseOperationFailed, "Type", "collection", "ResourceId", id, "Error", err.Error())
 	}
 
-	s.logger.Info("Deleted collection", "id", id)
+	s.logger.Debug("Deleted collection", "id", id)
 
 	return nil
 }
 
-func (s *SQLStorage) PatchCollection(id string, patches *api.Patch) (*api.CollectionResource, error) {
+func (s *sqlStorage) DeleteCollection(id string) error {
+	if err := s.verifyTenant(); err != nil {
+		return err
+	}
+
+	return s.withTransaction("delete collection", id, func(txn *sql.Tx) error {
+		persistedCollection, err := s.getCollectionTransactional(txn, id)
+		if err != nil {
+			return err
+		}
+		if !persistedCollection.Resource.CanDelete() {
+			return se.NewServiceError(
+				messages.ReadOnlyCollection,
+				"CollectionID", persistedCollection.Resource.ID,
+			)
+		}
+		return s.deleteCollectionTxn(txn, persistedCollection.Resource.ID)
+	})
+}
+
+func (s *sqlStorage) PatchCollection(id string, patches *api.Patch) (*api.CollectionResource, error) {
 	if err := s.verifyTenant(); err != nil {
 		return nil, err
 	}
@@ -168,7 +199,7 @@ func (s *SQLStorage) PatchCollection(id string, patches *api.Patch) (*api.Collec
 		}
 		if persistedCollection.Resource.Owner == "system" {
 			return se.NewServiceError(
-				messages.SystemCollection,
+				messages.ReadOnlyCollection,
 				"CollectionID", id,
 			)
 		}

@@ -28,7 +28,19 @@ func getTypeFromTableName(tableName string) string {
 	return "unknown"
 }
 
-func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.CollectionResource](s *SQLStorage, txn *sql.Tx, tableName string, filter *abstractions.QueryFilter) (*abstractions.QueryResults[T], error) {
+func getResource[T api.EvaluationJobResource | api.ProviderResource | api.CollectionResource](t *T) *api.Resource {
+	switch r := any(t).(type) {
+	case *api.EvaluationJobResource:
+		return &r.Resource.Resource
+	case *api.ProviderResource:
+		return &r.Resource
+	case *api.CollectionResource:
+		return &r.Resource
+	}
+	return nil
+}
+
+func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.CollectionResource](s *sqlStorage, txn *sql.Tx, tableName string, filter *abstractions.QueryFilter) (*abstractions.QueryResults[T], error) {
 	filter = filter.ExtractQueryParams()
 	params := filter.Params
 	limit := filter.Limit
@@ -65,6 +77,10 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 		if err != nil {
 			return nil, err
 		}
+
+		// do this for now as the read_only field is not stored in the database
+		s.setReadOnly(getResource(resource))
+
 		if resource == nil {
 			totalCount--
 			continue
@@ -83,7 +99,7 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 	}, nil
 }
 
-func scanResource[T api.EvaluationJobResource | api.ProviderResource | api.CollectionResource](s *SQLStorage, rows *sql.Rows, tableName string) (*T, error) {
+func scanResource[T api.EvaluationJobResource | api.ProviderResource | api.CollectionResource](s *sqlStorage, rows *sql.Rows, tableName string) (*T, error) {
 	query := shared.EntityQuery{}
 	err := s.statementsFactory.ScanRowForEntity(s.tenant, tableName, rows, &query)
 	if err != nil {

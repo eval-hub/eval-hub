@@ -72,6 +72,18 @@ type Resource struct {
 	Owner     User      `json:"owner,omitempty"`
 }
 
+func (r Resource) IsSystemResource() bool {
+	return r.Owner == "system"
+}
+
+func (r Resource) CanUpdate() bool {
+	return !r.IsSystemResource() // && !r.ReadOnly
+}
+
+func (r Resource) CanDelete() bool {
+	return !r.IsSystemResource() // && !r.ReadOnly
+}
+
 // Page represents generic pagination schema
 type Page struct {
 	First      *HRef `json:"first,omitempty"`

@@ -71,6 +71,7 @@ type scenarioConfig struct {
 	lastMethod string
 	lastId     string
 
+	// assetsSync sync.Mutex
 	assets map[string][]string
 
 	values map[string]string
@@ -208,7 +209,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 		return logError(fmt.Errorf("failed to load collection configs: %w", err))
 	}
 
-	storage, err := storage.NewStorage(serviceConfig.Database, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger)
+	storage, err := storage.NewStorage(serviceConfig.Database, collectionConfigs, providerConfigs, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger)
 	if err != nil {
 		return logError(fmt.Errorf("failed to create storage: %w", err))
 	}
@@ -226,8 +227,6 @@ func (a *apiFeature) startLocalServer(port int) error {
 
 	a.server, err = server.NewServer(logger,
 		serviceConfig,
-		providerConfigs,
-		collectionConfigs,
 		nil,
 		storage,
 		validate,
@@ -304,7 +303,7 @@ func (tc *scenarioConfig) theServiceIsRunning(ctx context.Context) error {
 }
 
 func (tc *scenarioConfig) thereAreNoUserProviders(ctx context.Context) error {
-	if err := tc.iSendARequestTo("GET", "/api/v1/evaluations/providers?system_defined=false&limit=100"); err != nil {
+	if err := tc.iSendARequestTo("GET", "/api/v1/evaluations/providers?scope=tenant&limit=100"); err != nil {
 		return err
 	}
 	if tc.response.StatusCode != 200 {
@@ -334,7 +333,7 @@ func (tc *scenarioConfig) thereAreNoUserProviders(ctx context.Context) error {
 }
 
 func (tc *scenarioConfig) thereAreNoUserCollections(ctx context.Context) error {
-	if err := tc.iSendARequestTo("GET", "/api/v1/evaluations/collections?system_defined=false&limit=100"); err != nil {
+	if err := tc.iSendARequestTo("GET", "/api/v1/evaluations/collections?scope=tenant&limit=100"); err != nil {
 		return err
 	}
 	if tc.response.StatusCode != 200 {
@@ -564,11 +563,15 @@ func (tc *scenarioConfig) getRequestBody(body string) (io.Reader, error) {
 }
 
 func (tc *scenarioConfig) addAsset(assetName, id string) {
+	//tc.assetsSync.Lock()
+	//defer tc.assetsSync.Unlock()
 	tc.assets[assetName] = append(tc.assets[assetName], id)
 	tc.logDebug("Added asset id %s for %s\n", id, assetName)
 }
 
 func (tc *scenarioConfig) removeAsset(assetName, id string) {
+	//tc.assetsSync.Lock()
+	//defer tc.assetsSync.Unlock()
 	ids := tc.assets[assetName]
 	if slices.Contains(ids, id) {
 		tc.assets[assetName] = slices.DeleteFunc(ids, func(s string) bool {
@@ -777,7 +780,7 @@ func (tc *scenarioConfig) theResponseShouldContainWithValue(key, value string) e
 	}
 
 	if data[key] != value {
-		return tc.logError(fmt.Errorf("expected %s to be %s, got %v", key, value, data[key]))
+		return tc.logError(fmt.Errorf("expected %s to be %s, got %v in %s", key, value, data[key], asPrettyJson(string(tc.body))))
 	}
 
 	return nil
@@ -790,7 +793,7 @@ func (tc *scenarioConfig) theResponseShouldContain(key string) error {
 	}
 
 	if _, ok := data[key]; !ok {
-		return tc.logError(fmt.Errorf("response does not contain key: %s", key))
+		return tc.logError(fmt.Errorf("response does not contain key: %s in %s", key, asPrettyJson(string(tc.body))))
 	}
 
 	return nil
@@ -885,7 +888,7 @@ func (tc *scenarioConfig) getJsonPath(jsonPath string) (string, error) {
 	// first check the jsonpath is valid
 	_, err := jsonpath.New(jsonPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to validate JSON path %s: %w : %s", jsonPath, err, string(tc.body)) // logging of the error is done by the caller
+		return "", fmt.Errorf("failed to validate JSON path %s: %w : %s", jsonPath, err, asPrettyJson(string(tc.body))) // logging of the error is done by the caller
 	}
 
 	raw, err := tc.getJsonPathValue(jsonPath)
@@ -907,7 +910,7 @@ func (tc *scenarioConfig) getJsonPathValue(jsonPath string) (interface{}, error)
 	}
 	foundValue, err := jsonpath.Get(path, respMap)
 	if err != nil {
-		return "", fmt.Errorf("failed to get JSON path %s in %s: %w", jsonPath, string(tc.body), err) // logging of the error is done by the caller
+		return "", fmt.Errorf("failed to get JSON path %s in %s: %w", jsonPath, asPrettyJson(string(tc.body)), err) // logging of the error is done by the caller
 	}
 	return foundValue, nil
 }
@@ -1004,7 +1007,7 @@ func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLengthAtLeast(jsonPa
 		return tc.logError(fmt.Errorf("value at path %s is not an array, got %T", jsonPath, raw))
 	}
 	if len(arr) < minLength {
-		return tc.logError(fmt.Errorf("expected array at path %s to have length >= %d, got %d", jsonPath, minLength, len(arr)))
+		return tc.logError(fmt.Errorf("expected array at path %s to have length >= %d, got %d in %s", jsonPath, minLength, len(arr), asPrettyJson(string(tc.body))))
 	}
 	return nil
 }
@@ -1053,6 +1056,8 @@ func (tc *scenarioConfig) saveScenarioName(ctx context.Context, sc *godog.Scenar
 }
 
 func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
+	//tc.assetsSync.Lock()
+	//defer tc.assetsSync.Unlock()
 	for assetName, ids := range tc.assets {
 		url := assetName
 		switch assetName {
@@ -1074,9 +1079,11 @@ func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, 
 			}
 			err = tc.theResponseStatusShouldBe(204)
 			if err != nil {
-				return ctx, tc.logError(fmt.Errorf("failed to delete asset %s expected status %d but got %d: %w", tc.lastURL, 204, tc.response.StatusCode, err))
+				err = tc.logError(fmt.Errorf("failed to delete asset %s expected status %d but got %d: %w", tc.lastURL, 204, tc.response.StatusCode, err))
+				// return ctx, err
+			} else {
+				tc.logDebug("Deleted asset %s with status %d\n", path, tc.response.StatusCode)
 			}
-			tc.logDebug("Deleted asset %s with status %d\n", path, tc.response.StatusCode)
 		}
 	}
 	tc.assets = nil
