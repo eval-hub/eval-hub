@@ -57,7 +57,6 @@ get:
         enum:
           - system
           - tenant
-        default:
         title: Scope of providers
       description: Set to `system` to get only system defined providers, or `tenant` to get only tenant defined providers.
 
