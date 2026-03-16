@@ -134,11 +134,8 @@ func (s *sqliteStatementsFactory) CreateEntityFilterCondition(key string, value 
 	case "LIMIT", "OFFSET":
 		return key + " ?", []any{value}
 	default:
-		switch v := value.(type) {
-		case string:
-			if strings.HasPrefix(v, "!") {
-				return "NOT (" + key + " = ?)", []any{v[1:]}
-			}
+		if v, ok := value.(string); ok && strings.HasPrefix(v, "!") {
+			return "NOT (" + key + " = ?)", []any{v[1:]}
 		}
 		return key + " = ?", []any{value}
 	}

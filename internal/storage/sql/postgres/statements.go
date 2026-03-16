@@ -130,6 +130,9 @@ func (s *postgresStatementsFactory) CreateEntityFilterCondition(key string, valu
 	case "LIMIT", "OFFSET":
 		return fmt.Sprintf("%s $%d", key, index), []any{value}
 	default:
+		if v, ok := value.(string); ok && strings.HasPrefix(v, "!") {
+			return fmt.Sprintf("NOT (%s = $%d)", key, index), []any{v[1:]}
+		}
 		return fmt.Sprintf("%s = $%d", key, index), []any{value}
 	}
 }
