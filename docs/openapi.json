@@ -1681,7 +1681,7 @@
       },
       "CollectionRef": {
         "type": "object",
-        "description": "The collection to use for evaluation jobs.\n",
+        "description": "The collection to use for the evaluation job.\n",
         "required": [
           "id"
         ],

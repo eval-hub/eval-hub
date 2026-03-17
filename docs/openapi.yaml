@@ -1179,7 +1179,7 @@ components:
     CollectionRef:
       type: object
       description: |
-        The collection to use for evaluation jobs.
+        The collection to use for the evaluation job.
       required:
         - id
       properties:
