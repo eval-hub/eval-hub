@@ -1068,6 +1068,33 @@ components:
         auth:
           $ref: '#/components/schemas/ModelAuth'
           description: The model authentication configuration
+    EvaluationJobConfigCommon1:
+      type: object
+      title: EvaluationJobConfigCommon1
+      description: |
+        The evaluation job request configuration.
+      required:
+        - name
+        - model
+      properties:
+        name:
+          type: string
+          description: |
+            The evaluation job name.
+        description:
+          type: string
+          description: |
+            The evaluation job description.
+        tags:
+          type: array
+          items:
+            type: string
+          description: |
+            The evaluation job tags.
+        model:
+          $ref: '#/components/schemas/ModelRef'
+          description: |
+            The model to evaluate.
     Ref:
       type: object
       description: Reference by ID
@@ -1252,40 +1279,12 @@ components:
             The OCI artifact export configuration.
       additionalProperties: false
       title: EvaluationExports
-    EvaluationJobConfigBenchmarks:
+    EvaluationJobConfigCommon2:
       type: object
-      title: EvaluationJobConfigBenchmarks
+      title: EvaluationJobConfigCommon2
       description: |
         The evaluation job request configuration.
-      required:
-        - name
-        - model
-        - benchmarks
       properties:
-        name:
-          type: string
-          description: |
-            The evaluation job name.
-        description:
-          type: string
-          description: |
-            The evaluation job description.
-        tags:
-          type: array
-          items:
-            type: string
-          description: |
-            The evaluation job tags.
-        model:
-          $ref: '#/components/schemas/ModelRef'
-          description: |
-            The model to evaluate.
-        benchmarks:
-          type: array
-          items:
-            $ref: '#/components/schemas/BenchmarkConfig'
-          description: |
-            The evaluation benchmarks to run.
         pass_criteria:
           $ref: '#/components/schemas/PassCriteria'
           description: |
@@ -1303,6 +1302,20 @@ components:
           additionalProperties: true
           description: |
             Custom request data. This can be used for user specific job data.
+    EvaluationJobConfigBenchmarks:
+      allOf:
+        - $ref: '#/components/schemas/EvaluationJobConfigCommon1'
+        - type: object
+          required:
+            - benchmarks
+          properties:
+            benchmarks:
+              type: array
+              items:
+                $ref: '#/components/schemas/BenchmarkConfig'
+              description: |
+                The evaluation benchmarks to run.
+        - $ref: '#/components/schemas/EvaluationJobConfigCommon2'
     CollectionRef:
       type: object
       description: |
@@ -1321,52 +1334,15 @@ components:
           description: |
             The benchmarks supported by this collection. If a benchmark is specified but is not supported by the collection, the evaluation job will fail. This is needed in order to allow overriding the collection benchmarks for a specific evaluation job.
     EvaluationJobConfigCollection:
-      type: object
-      title: EvaluationJobConfigCollection
-      description: |
-        The evaluation job request configuration using a collection.
-      required:
-        - name
-        - model
-        - collection
-      properties:
-        name:
-          type: string
-          description: |
-            The evaluation job name.
-        description:
-          type: string
-          description: |
-            The evaluation job description.
-        tags:
-          type: array
-          items:
-            type: string
-          description: |
-            The evaluation job tags.
-        model:
-          $ref: '#/components/schemas/ModelRef'
-          description: |
-            The model to evaluate.
-        collection:
-          $ref: '#/components/schemas/CollectionRef'
-        pass_criteria:
-          $ref: '#/components/schemas/PassCriteria'
-          description: |
-            The overall pass criteria for the evaluation job.
-        experiment:
-          $ref: '#/components/schemas/ExperimentConfig'
-          description: |
-            The MLFlow experiment configuration. When provided, the evaluation job will be tracked in MLFlow.
-        exports:
-          $ref: '#/components/schemas/EvaluationExports'
-          description: |
-            Optional exports configuration for the evaluation job. When provided, the evaluation job results will be exported to the specified location.
-        custom:
-          type: object
-          additionalProperties: true
-          description: |
-            Custom request data. This can be used for user specific job data.
+      allOf:
+        - $ref: '#/components/schemas/EvaluationJobConfigCommon1'
+        - type: object
+          required:
+            - collection
+          properties:
+            collection:
+              $ref: '#/components/schemas/CollectionRef'
+        - $ref: '#/components/schemas/EvaluationJobConfigCommon2'
     EvaluationJobConfig:
       type: object
       title: EvaluationJobConfig

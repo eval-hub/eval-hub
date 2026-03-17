@@ -1,0 +1,24 @@
+type: object
+title: EvaluationJobConfigCommon2
+description: >
+  The evaluation job request configuration.
+properties:
+  pass_criteria:
+    $ref: ./PassCriteria.yaml
+    description: >
+      The overall pass criteria for the evaluation job.
+  experiment:
+    $ref: ./ExperimentConfig.yaml
+    description: >
+      The MLFlow experiment configuration.
+      When provided, the evaluation job will be tracked in MLFlow.
+  exports:
+    $ref: ./EvaluationExports.yaml
+    description: >
+      Optional exports configuration for the evaluation job.
+      When provided, the evaluation job results will be exported to the specified location.
+  custom:
+    type: object
+    additionalProperties: true
+    description: >
+      Custom request data. This can be used for user specific job data.

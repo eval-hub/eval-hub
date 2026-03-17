@@ -1377,6 +1377,36 @@
           }
         }
       },
+      "EvaluationJobConfigCommon1": {
+        "type": "object",
+        "title": "EvaluationJobConfigCommon1",
+        "description": "The evaluation job request configuration.\n",
+        "required": [
+          "name",
+          "model"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The evaluation job name.\n"
+          },
+          "description": {
+            "type": "string",
+            "description": "The evaluation job description.\n"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The evaluation job tags.\n"
+          },
+          "model": {
+            "$ref": "#/components/schemas/ModelRef",
+            "description": "The model to evaluate.\n"
+          }
+        }
+      },
       "Ref": {
         "type": "object",
         "description": "Reference by ID",
@@ -1624,42 +1654,11 @@
         "additionalProperties": false,
         "title": "EvaluationExports"
       },
-      "EvaluationJobConfigBenchmarks": {
+      "EvaluationJobConfigCommon2": {
         "type": "object",
-        "title": "EvaluationJobConfigBenchmarks",
+        "title": "EvaluationJobConfigCommon2",
         "description": "The evaluation job request configuration.\n",
-        "required": [
-          "name",
-          "model",
-          "benchmarks"
-        ],
         "properties": {
-          "name": {
-            "type": "string",
-            "description": "The evaluation job name.\n"
-          },
-          "description": {
-            "type": "string",
-            "description": "The evaluation job description.\n"
-          },
-          "tags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "The evaluation job tags.\n"
-          },
-          "model": {
-            "$ref": "#/components/schemas/ModelRef",
-            "description": "The model to evaluate.\n"
-          },
-          "benchmarks": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BenchmarkConfig"
-            },
-            "description": "The evaluation benchmarks to run.\n"
-          },
           "pass_criteria": {
             "$ref": "#/components/schemas/PassCriteria",
             "description": "The overall pass criteria for the evaluation job.\n"
@@ -1678,6 +1677,31 @@
             "description": "Custom request data. This can be used for user specific job data.\n"
           }
         }
+      },
+      "EvaluationJobConfigBenchmarks": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/EvaluationJobConfigCommon1"
+          },
+          {
+            "type": "object",
+            "required": [
+              "benchmarks"
+            ],
+            "properties": {
+              "benchmarks": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BenchmarkConfig"
+                },
+                "description": "The evaluation benchmarks to run.\n"
+              }
+            }
+          },
+          {
+            "$ref": "#/components/schemas/EvaluationJobConfigCommon2"
+          }
+        ]
       },
       "CollectionRef": {
         "type": "object",
@@ -1700,55 +1724,25 @@
         }
       },
       "EvaluationJobConfigCollection": {
-        "type": "object",
-        "title": "EvaluationJobConfigCollection",
-        "description": "The evaluation job request configuration using a collection.\n",
-        "required": [
-          "name",
-          "model",
-          "collection"
-        ],
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "The evaluation job name.\n"
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/EvaluationJobConfigCommon1"
           },
-          "description": {
-            "type": "string",
-            "description": "The evaluation job description.\n"
-          },
-          "tags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "The evaluation job tags.\n"
-          },
-          "model": {
-            "$ref": "#/components/schemas/ModelRef",
-            "description": "The model to evaluate.\n"
-          },
-          "collection": {
-            "$ref": "#/components/schemas/CollectionRef"
-          },
-          "pass_criteria": {
-            "$ref": "#/components/schemas/PassCriteria",
-            "description": "The overall pass criteria for the evaluation job.\n"
-          },
-          "experiment": {
-            "$ref": "#/components/schemas/ExperimentConfig",
-            "description": "The MLFlow experiment configuration. When provided, the evaluation job will be tracked in MLFlow.\n"
-          },
-          "exports": {
-            "$ref": "#/components/schemas/EvaluationExports",
-            "description": "Optional exports configuration for the evaluation job. When provided, the evaluation job results will be exported to the specified location.\n"
-          },
-          "custom": {
+          {
             "type": "object",
-            "additionalProperties": true,
-            "description": "Custom request data. This can be used for user specific job data.\n"
+            "required": [
+              "collection"
+            ],
+            "properties": {
+              "collection": {
+                "$ref": "#/components/schemas/CollectionRef"
+              }
+            }
+          },
+          {
+            "$ref": "#/components/schemas/EvaluationJobConfigCommon2"
           }
-        }
+        ]
       },
       "EvaluationJobConfig": {
         "type": "object",

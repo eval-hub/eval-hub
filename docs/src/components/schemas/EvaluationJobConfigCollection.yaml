@@ -1,48 +1,9 @@
-type: object
-title: EvaluationJobConfigCollection
-description: >
-  The evaluation job request configuration using a collection.
-required:
-  - name
-  - model
-  - collection
-properties:
-  name:
-    type: string
-    description: >
-      The evaluation job name.
-  description:
-    type: string
-    description: >
-      The evaluation job description.
-  tags:
-    type: array
-    items:
-      type: string
-    description: >
-      The evaluation job tags.
-  model:
-    $ref: ./ModelRef.yaml
-    description: >
-      The model to evaluate.
-  collection:
-    $ref: ./CollectionRef.yaml
-  pass_criteria:
-    $ref: ./PassCriteria.yaml
-    description: >
-      The overall pass criteria for the evaluation job.
-  experiment:
-    $ref: ./ExperimentConfig.yaml
-    description: >
-      The MLFlow experiment configuration.
-      When provided, the evaluation job will be tracked in MLFlow.
-  exports:
-    $ref: ./EvaluationExports.yaml
-    description: >
-      Optional exports configuration for the evaluation job.
-      When provided, the evaluation job results will be exported to the specified location.
-  custom:
-    type: object
-    additionalProperties: true
-    description: >
-      Custom request data. This can be used for user specific job data.
+allOf:
+  - $ref: ./EvaluationJobConfigCommon1.yaml
+  - type: object
+    required:
+      - collection
+    properties:
+      collection:
+        $ref: ./CollectionRef.yaml
+  - $ref: ./EvaluationJobConfigCommon2.yaml
