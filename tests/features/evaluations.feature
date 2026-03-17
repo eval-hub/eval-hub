@@ -66,7 +66,6 @@ Feature: Evaluations Endpoint
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_missing_model.json"
     Then the response code should be 400
 
-  @focus
   Scenario: Create evaluation job missing benchmarks
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
