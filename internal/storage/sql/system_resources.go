@@ -2,6 +2,7 @@ package sql
 
 import (
 	"database/sql"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -34,8 +35,10 @@ func (s *sqlStorage) loadSystemResources(systemCollections map[string]api.Collec
 					Offset: offset,
 					Params: map[string]any{},
 				}
+
 				collections, err := s.GetCollections(&filter)
 				if err != nil {
+					fmt.Println("WOOT", err)
 					return serviceerrors.WithRollback(err)
 				}
 				for _, collection := range collections.Items {
@@ -55,6 +58,7 @@ func (s *sqlStorage) loadSystemResources(systemCollections map[string]api.Collec
 					offset += filter.Limit
 				}
 			}
+
 			for _, collection := range systemCollections {
 				// make sure that these are set
 				collection.Resource.Tenant = ""

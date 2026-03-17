@@ -9,8 +9,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/proxy"
 	"github.com/eval-hub/eval-hub/internal/config"
+	"github.com/eval-hub/eval-hub/internal/servers/runtime_sidecar/proxy"
 )
 
 const ServiceAccountTokenPathDefault = "/var/run/secrets/kubernetes.io/serviceaccount/token"

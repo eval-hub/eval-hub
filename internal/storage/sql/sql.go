@@ -251,13 +251,6 @@ func (s *sqlStorage) ensureSchema() error {
 	return nil
 }
 
-func (s *sqlStorage) verifyTenant() error {
-	if s.authenticationEnabled && s.tenant == "" {
-		return se.NewServiceError(messages.Unauthorized, "Error", "Tenant is required")
-	}
-	return nil
-}
-
 // isVisibleResource checks if a resource is visible to the current tenant.
 // A system resource is always visible, a user resource is visible if the tenant_id matches.
 func (s *sqlStorage) isVisibleResource(resource *api.Resource) bool {

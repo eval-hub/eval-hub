@@ -14,7 +14,9 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/auth"
-	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
+	"github.com/eval-hub/eval-hub/internal/servers"
+	evalhub "github.com/eval-hub/eval-hub/internal/servers/eval_hub_service"
+
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/mlflow"
@@ -130,7 +132,7 @@ func main() {
 	}
 
 	// create the server
-	srv, err := server.NewServer(logger,
+	srv, err := evalhub.NewServer(logger,
 		serviceConfig,
 		authConfig,
 		storage,
@@ -162,7 +164,7 @@ func main() {
 	go func() {
 		if err := srv.Start(); err != nil {
 			// we do this as no point trying to continue
-			if errors.Is(err, &server.ServerClosedError{}) {
+			if errors.Is(err, &evalhub.ServerClosedError{}) {
 				logger.Info("Server closed gracefully")
 				return
 			}
@@ -206,7 +208,7 @@ func main() {
 }
 
 func startUpFailed(conf *config.Config, err error, msg string, logger *slog.Logger) {
-	termErr := server.SetTerminationMessage(server.GetTerminationFile(conf, logger), fmt.Sprintf("%s: %s", msg, err.Error()), logger)
+	termErr := servers.SetTerminationMessage(servers.GetTerminationFile(conf, logger), fmt.Sprintf("%s: %s", msg, err.Error()), logger)
 	if termErr != nil {
 		logger.Error("Failed to set termination message", "message", msg, "error", termErr.Error())
 		log.Println(termErr.Error())

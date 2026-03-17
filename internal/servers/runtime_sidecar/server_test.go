@@ -1,4 +1,4 @@
-package server_test
+package runtime_sidecar
 
 import (
 	"log/slog"
@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	sidecarServer "github.com/eval-hub/eval-hub/cmd/eval_runtime_sidecar/server"
 	"github.com/eval-hub/eval-hub/internal/config"
 )
 
@@ -15,7 +14,7 @@ func TestNewSidecarServer(t *testing.T) {
 
 	t.Run("returns error when logger is nil", func(t *testing.T) {
 		cfg := &config.Config{}
-		_, err := sidecarServer.NewSidecarServer(nil, cfg)
+		_, err := NewSidecarServer(nil, cfg)
 		if err == nil {
 			t.Fatal("expected error when logger is nil")
 		}
@@ -25,7 +24,7 @@ func TestNewSidecarServer(t *testing.T) {
 	})
 
 	t.Run("returns error when config is nil", func(t *testing.T) {
-		_, err := sidecarServer.NewSidecarServer(logger, nil)
+		_, err := NewSidecarServer(logger, nil)
 		if err == nil {
 			t.Fatal("expected error when config is nil")
 		}
@@ -36,7 +35,7 @@ func TestNewSidecarServer(t *testing.T) {
 
 	t.Run("uses default port 8080 when Sidecar is nil", func(t *testing.T) {
 		cfg := &config.Config{}
-		srv, err := sidecarServer.NewSidecarServer(logger, cfg)
+		srv, err := NewSidecarServer(logger, cfg)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -47,7 +46,7 @@ func TestNewSidecarServer(t *testing.T) {
 
 	t.Run("uses default port 8080 when Sidecar.Port is 0", func(t *testing.T) {
 		cfg := &config.Config{Sidecar: &config.SidecarConfig{}}
-		srv, err := sidecarServer.NewSidecarServer(logger, cfg)
+		srv, err := NewSidecarServer(logger, cfg)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -58,7 +57,7 @@ func TestNewSidecarServer(t *testing.T) {
 
 	t.Run("uses Sidecar.Port when set", func(t *testing.T) {
 		cfg := &config.Config{Sidecar: &config.SidecarConfig{Port: 9090}}
-		srv, err := sidecarServer.NewSidecarServer(logger, cfg)
+		srv, err := NewSidecarServer(logger, cfg)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -71,7 +70,7 @@ func TestNewSidecarServer(t *testing.T) {
 func TestSidecarServer_GetPort(t *testing.T) {
 	logger := slog.Default()
 	cfg := &config.Config{Sidecar: &config.SidecarConfig{Port: 3000}}
-	srv, err := sidecarServer.NewSidecarServer(logger, cfg)
+	srv, err := NewSidecarServer(logger, cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -89,7 +88,7 @@ func TestSidecarServer_SetupRoutes(t *testing.T) {
 			EvalHub: &config.EvalHubClientConfig{},
 		},
 	}
-	srv, err := sidecarServer.NewSidecarServer(logger, cfg)
+	srv, err := NewSidecarServer(logger, cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -107,7 +106,7 @@ func TestSidecarServer_SetupRoutes(t *testing.T) {
 }
 
 func TestServerClosedError(t *testing.T) {
-	err := &sidecarServer.ServerClosedError{}
+	err := &ServerClosedError{}
 	if err.Error() != "Server closed" {
 		t.Errorf("ServerClosedError.Error() = %q, want %q", err.Error(), "Server closed")
 	}

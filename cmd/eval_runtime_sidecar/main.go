@@ -14,12 +14,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
-	sidecarServer "github.com/eval-hub/eval-hub/cmd/eval_runtime_sidecar/server"
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/otel"
+	"github.com/eval-hub/eval-hub/internal/servers"
+	"github.com/eval-hub/eval-hub/internal/servers/runtime_sidecar"
 )
 
 var (
@@ -80,7 +80,7 @@ func main() {
 	}
 
 	// create the server
-	srv, err := sidecarServer.NewSidecarServer(logger, config)
+	srv, err := runtime_sidecar.NewSidecarServer(logger, config)
 	if err != nil {
 		startUpFailed(terminationFilePath(config, logger), err, "Failed to create sidecar server", logger)
 	}
@@ -104,7 +104,7 @@ func main() {
 	go func() {
 		if err := srv.Start(); err != nil {
 			// we do this as no point trying to continue
-			if errors.Is(err, &server.ServerClosedError{}) {
+			if errors.Is(err, &runtime_sidecar.ServerClosedError{}) {
 				logger.Info("Server closed gracefully")
 				return
 			}
@@ -153,7 +153,7 @@ func terminationFilePath(cfg *config.Config, logger *slog.Logger) string {
 }
 
 func startUpFailed(terminationFile string, err error, msg string, logger *slog.Logger) {
-	termErr := server.SetTerminationMessage(terminationFile, fmt.Sprintf("%s: %s", msg, err.Error()), logger)
+	termErr := servers.SetTerminationMessage(terminationFile, fmt.Sprintf("%s: %s", msg, err.Error()), logger)
 	if termErr != nil {
 		logger.Error("Failed to set termination message", "message", msg, "error", termErr.Error())
 		log.Println(termErr.Error())

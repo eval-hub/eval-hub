@@ -72,7 +72,7 @@ This project follows the standard Go project layout with a clear separation betw
 - **internal/handlers/** - HTTP request handlers
 - **internal/logging/** - Logger creation and request enhancement
 - **internal/metrics/** - Prometheus metrics and middleware
-- **cmd/eval_hub/server/** - Server setup and routing
+- **internal/servers/eval_hub_service/** - Server setup and routing
 - **api/** - OpenAPI 3.1.0 specification
 - **tests/features/** - BDD-style FVT tests using godog
 

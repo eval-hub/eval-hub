@@ -22,11 +22,12 @@ import (
 
 	"github.com/Jeffail/gabs/v2"
 	"github.com/PaesslerAG/jsonpath"
-	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
+
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/mlflow"
 	"github.com/eval-hub/eval-hub/internal/runtimes"
+	"github.com/eval-hub/eval-hub/internal/servers/eval_hub_service"
 	"github.com/eval-hub/eval-hub/internal/storage"
 	"github.com/eval-hub/eval-hub/internal/validation"
 	pkgapi "github.com/eval-hub/eval-hub/pkg/api"
@@ -53,7 +54,7 @@ var (
 
 type apiFeature struct {
 	baseURL    *url.URL
-	server     *server.Server
+	server     *eval_hub_service.Server
 	httpServer *http.Server
 	client     *http.Client
 }
@@ -226,7 +227,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 		return logError(fmt.Errorf("failed to create MLFlow client: %w", err))
 	}
 
-	a.server, err = server.NewServer(logger,
+	a.server, err = eval_hub_service.NewServer(logger,
 		serviceConfig,
 		nil,
 		storage,
@@ -267,7 +268,7 @@ func (a *apiFeature) cleanup(ctx context.Context, _ *godog.Scenario, _ error) (c
 }
 
 func (tc *scenarioConfig) logDebug(format string, a ...any) {
-	if v, exists := tc.reqHeaders[server.TRANSACTION_ID_HEADER]; exists && v != "" {
+	if v, exists := tc.reqHeaders[eval_hub_service.TRANSACTION_ID_HEADER]; exists && v != "" {
 		format = fmt.Sprintf("(%s) %s", v, format)
 	}
 	fmt.Printf(format, a...)
@@ -277,7 +278,7 @@ func (tc *scenarioConfig) logDebug(format string, a ...any) {
 func (tc *scenarioConfig) logError(err error, withStack ...bool) error {
 	var sb = strings.Builder{}
 	sb.WriteString("Error")
-	if reqId, exists := tc.reqHeaders[server.TRANSACTION_ID_HEADER]; exists && reqId != "" {
+	if reqId, exists := tc.reqHeaders[eval_hub_service.TRANSACTION_ID_HEADER]; exists && reqId != "" {
 		sb.WriteString(fmt.Sprintf(" (%s)", reqId))
 	}
 	sb.WriteString(": ")
@@ -470,7 +471,7 @@ func (tc *scenarioConfig) iUnsetHeader(paramName string) error {
 }
 
 func (tc *scenarioConfig) iSetTransactionIdTo(paramValue string) error {
-	return tc.iSetHeaderTo(server.TRANSACTION_ID_HEADER, paramValue)
+	return tc.iSetHeaderTo(eval_hub_service.TRANSACTION_ID_HEADER, paramValue)
 }
 
 func (tc *scenarioConfig) iSendARequestTo(method, path string) error {
@@ -757,7 +758,7 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 
 	defer func() {
 		// we do this for now as request ids are supposed to be unique per request
-		tc.iUnsetHeader(server.TRANSACTION_ID_HEADER)
+		tc.iUnsetHeader(eval_hub_service.TRANSACTION_ID_HEADER)
 	}()
 
 	tc.body, err = io.ReadAll(tc.response.Body)

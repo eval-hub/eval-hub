@@ -1,4 +1,4 @@
-package server
+package eval_hub_service
 
 import (
 	"context"
@@ -16,6 +16,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/handlers"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/runtimes/k8s"
+	"github.com/eval-hub/eval-hub/internal/servers"
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 	"github.com/go-playground/validator/v10"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -451,7 +452,7 @@ func (s *Server) Start() error {
 	}
 
 	s.logger.Info("Writing the server ready message", "file", s.serviceConfig.Service.ReadyFile)
-	err = SetReady(s.serviceConfig, s.logger)
+	err = servers.SetReady(s.serviceConfig, s.logger)
 	if err != nil {
 		return err
 	}

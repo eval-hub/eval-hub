@@ -1,17 +1,15 @@
-package server_test
+package eval_hub_service
 
 import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"testing"
-
-	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
 )
 
 func TestRequestWrapper(t *testing.T) {
 	httpRequest := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs?tags=test-tag-2&tags=test-tag-3", nil)
-	requestWrapper := server.NewRequestWrapper(httpRequest)
+	requestWrapper := NewRequestWrapper(httpRequest)
 
 	if requestWrapper.Method() != http.MethodGet {
 		t.Errorf("Expected method %s, got %s", http.MethodGet, requestWrapper.Method())

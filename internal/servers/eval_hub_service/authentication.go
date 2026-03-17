@@ -1,4 +1,4 @@
-package server
+package eval_hub_service
 
 import (
 	"log/slog"

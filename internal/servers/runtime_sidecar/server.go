@@ -1,4 +1,4 @@
-package server
+package runtime_sidecar
 
 import (
 	"context"
@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
-	handlers "github.com/eval-hub/eval-hub/eval_runtime_sidecar/handlers"
 	"github.com/eval-hub/eval-hub/internal/config"
+	"github.com/eval-hub/eval-hub/internal/servers"
+	"github.com/eval-hub/eval-hub/internal/servers/runtime_sidecar/handlers"
 )
 
 type SidecarServer struct {
@@ -89,7 +89,7 @@ func (s *SidecarServer) Start() error {
 		readyFile = s.config.Service.ReadyFile
 	}
 	s.logger.Info("Writing the server ready message", "file", readyFile)
-	err = server.SetReady(s.config, s.logger)
+	err = servers.SetReady(s.config, s.logger)
 	if err != nil {
 		return err
 	}

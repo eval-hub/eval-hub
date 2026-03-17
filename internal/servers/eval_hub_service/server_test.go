@@ -1,4 +1,4 @@
-package server_test
+package eval_hub_service
 
 import (
 	"context"
@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/logging"
@@ -237,7 +236,7 @@ func TestServerShutdown(t *testing.T) {
 		// Wait for server to stop
 		select {
 		case err := <-errChan:
-			if err != nil && !errors.Is(err, &server.ServerClosedError{}) {
+			if err != nil && !errors.Is(err, &ServerClosedError{}) {
 				t.Errorf("Server error: %v", err)
 			}
 		case <-time.After(3 * time.Second):
@@ -246,7 +245,7 @@ func TestServerShutdown(t *testing.T) {
 	})
 }
 
-func createServer(port int) (*server.Server, error) {
+func createServer(port int) (*Server, error) {
 	logger, _, err := logging.NewLogger()
 	if err != nil {
 		return nil, err
@@ -286,7 +285,7 @@ func createServer(port int) (*server.Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MLFlow client: %w", err)
 	}
-	return server.NewServer(logger, serviceConfig, nil, store, validate, runtime, mlflowClient)
+	return NewServer(logger, serviceConfig, nil, store, validate, runtime, mlflowClient)
 }
 
 func getKeyAsString(obj map[string]interface{}, key string) string {
