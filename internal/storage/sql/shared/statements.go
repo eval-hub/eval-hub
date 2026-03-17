@@ -31,7 +31,6 @@ type SQLStatementsFactory interface {
 	CreateCountEntitiesStatement(tenant api.Tenant, tableName string, filter map[string]any) (string, []any)
 	CreateListEntitiesStatement(tenant api.Tenant, tableName string, limit, offset int, filter map[string]any) (string, []any)
 	ScanRowForEntity(tenant api.Tenant, ableName string, rows *sql.Rows, query *EntityQuery) error
-	CreateCheckEntityExistsStatement(tenant api.Tenant, tableName string, id string) (string, []any)
 	CreateDeleteEntityStatement(tenant api.Tenant, tableName string, id string) (string, []any)
 	CreateUpdateEntityStatement(tenant api.Tenant, tableName, id string, entityJSON string, status *api.OverallState) (string, []any)
 }

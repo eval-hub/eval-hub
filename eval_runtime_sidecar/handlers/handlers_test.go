@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/config"
@@ -121,15 +122,15 @@ func TestHandlers_HandleProxyCall(t *testing.T) {
 	})
 
 	t.Run("registry path with nil OCI returns 400", func(t *testing.T) {
-		// h has no Sidecar.OCI, so /registry/ returns "oci proxy is not configured"
+		// h has no Sidecar.OCI, so ociRepository is empty; path without repository name does not match OCI -> unknown proxy call
 		req := httptest.NewRequest(http.MethodGet, "/registry/v2/", nil)
 		rw := httptest.NewRecorder()
 		h.HandleProxyCall(rw, req)
 		if rw.Code != http.StatusBadRequest {
-			t.Errorf("status = %d, want 400 (oci proxy not configured)", rw.Code)
+			t.Errorf("status = %d, want 400", rw.Code)
 		}
-		if body := rw.Body.String(); body != "oci proxy is not configured\n" {
-			t.Errorf("body = %q, want oci proxy is not configured", body)
+		if body := rw.Body.String(); !strings.Contains(body, "unknown proxy call") {
+			t.Errorf("body = %q, want unknown proxy call (OCI not configured, no repository to match)", body)
 		}
 	})
 }

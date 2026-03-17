@@ -23,7 +23,7 @@ type EvaluationJobEntity struct {
 // #######################################################################
 // Evaluation job operations
 // #######################################################################
-func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobResource) error {
+func (s *sqlStorage) CreateEvaluationJob(evaluation *api.EvaluationJobResource) error {
 	if err := s.verifyTenant(); err != nil {
 		return err
 	}
@@ -43,7 +43,7 @@ func (s *SQLStorage) CreateEvaluationJob(evaluation *api.EvaluationJobResource) 
 	})
 }
 
-func (s *SQLStorage) createEvaluationJobEntity(evaluation *api.EvaluationJobResource) ([]byte, error) {
+func (s *sqlStorage) createEvaluationJobEntity(evaluation *api.EvaluationJobResource) ([]byte, error) {
 	evaluationEntity := &EvaluationJobEntity{
 		Config:  &evaluation.EvaluationJobConfig,
 		Status:  evaluation.Status,
@@ -56,14 +56,14 @@ func (s *SQLStorage) createEvaluationJobEntity(evaluation *api.EvaluationJobReso
 	return evaluationJSON, nil
 }
 
-func (s *SQLStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, error) {
+func (s *sqlStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, error) {
 	if err := s.verifyTenant(); err != nil {
 		return nil, err
 	}
 	return s.getEvaluationJobTransactional(nil, id)
 }
 
-func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api.EvaluationJobResource, error) {
+func (s *sqlStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api.EvaluationJobResource, error) {
 	// Build the SELECT query
 	query := shared.EntityQuery{Resource: api.Resource{ID: id, Tenant: s.tenant}}
 	selectQuery, selectArgs, queryArgs := s.statementsFactory.CreateEvaluationGetEntityStatement(&query)
@@ -95,7 +95,7 @@ func (s *SQLStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 	return job, nil
 }
 
-func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
+func (s *sqlStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
 	if err := s.verifyTenant(); err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func (s *SQLStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstr
 	return listEntities[api.EvaluationJobResource](s, txn, shared.TABLE_EVALUATIONS, filter)
 }
 
-func (s *SQLStorage) DeleteEvaluationJob(id string) error {
+func (s *sqlStorage) DeleteEvaluationJob(id string) error {
 	if err := s.verifyTenant(); err != nil {
 		return err
 	}
@@ -112,15 +112,10 @@ func (s *SQLStorage) DeleteEvaluationJob(id string) error {
 	// we have to get the evaluation job and then update or delete the job so we need a transaction
 	err := s.withTransaction("delete evaluation job", id, func(txn *sql.Tx) error {
 		// check if the evaluation job exists, we do this otherwise we always return 204
-		selectQuery, args := s.statementsFactory.CreateCheckEntityExistsStatement(s.tenant, shared.TABLE_EVALUATIONS, id)
-		var dbID string
-		var statusStr string
-		err := s.queryRow(txn, selectQuery, args...).Scan(&dbID, &statusStr)
+		_, err := s.getEvaluationJobTransactional(txn, id)
 		if err != nil {
-			if err == sql.ErrNoRows {
-				return se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
-			}
-			return se.WithRollback(se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error()))
+			s.logger.Debug("Failed to get evaluation job", "error", err, "id", id)
+			return se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
 		}
 
 		// Build the DELETE query
@@ -140,7 +135,7 @@ func (s *SQLStorage) DeleteEvaluationJob(id string) error {
 	return err
 }
 
-func (s *SQLStorage) checkEvaluationJobState(evaluationJobID string, evaluationJobState api.OverallState, state api.OverallState) (bool, error) {
+func (s *sqlStorage) checkEvaluationJobState(evaluationJobID string, evaluationJobState api.OverallState, state api.OverallState) (bool, error) {
 	// check if the state is unchanged
 	if state == evaluationJobState {
 		// if the state is the same as the current state then we don't need to update the status
@@ -158,7 +153,7 @@ func (s *SQLStorage) checkEvaluationJobState(evaluationJobID string, evaluationJ
 	return false, nil
 }
 
-func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error {
+func (s *sqlStorage) UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error {
 	if err := s.verifyTenant(); err != nil {
 		return err
 	}
@@ -212,7 +207,7 @@ func (s *SQLStorage) UpdateEvaluationJobStatus(id string, state api.OverallState
 	return err
 }
 
-func (s *SQLStorage) updateEvaluationJobTxn(txn *sql.Tx, id string, status api.OverallState, evaluationJob *EvaluationJobEntity) error {
+func (s *sqlStorage) updateEvaluationJobTxn(txn *sql.Tx, id string, status api.OverallState, evaluationJob *EvaluationJobEntity) error {
 	entityJSON, err := json.Marshal(evaluationJob)
 	if err != nil {
 		// we should never get here
@@ -232,7 +227,7 @@ func (s *SQLStorage) updateEvaluationJobTxn(txn *sql.Tx, id string, status api.O
 }
 
 // validateBenchmarkExists checks that the event's benchmark is valid for the job (in job.Benchmarks or in the job's collection).
-func (s *SQLStorage) validateBenchmarkExists(job *api.EvaluationJobResource, runStatus *api.StatusEvent, getCollection evalcommon.GetCollectionFunc) error {
+func (s *sqlStorage) validateBenchmarkExists(job *api.EvaluationJobResource, runStatus *api.StatusEvent, getCollection evalcommon.GetCollectionFunc) error {
 	event := runStatus.BenchmarkStatusEvent
 	benchmarks, err := evalcommon.GetJobBenchmarks(job, getCollection)
 	if err != nil {
@@ -258,7 +253,7 @@ func (s *SQLStorage) validateBenchmarkExists(job *api.EvaluationJobResource, run
 }
 
 // UpdateEvaluationJobWithRunStatus runs in a transaction: fetches the job, merges RunStatusInternal into the entity, and persists.
-func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent, benchmarks []api.BenchmarkConfig) error {
+func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent, benchmarks []api.BenchmarkConfig) error {
 	if err := s.verifyTenant(); err != nil {
 		return err
 	}
@@ -348,7 +343,7 @@ func (s *SQLStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent, 
 	return err
 }
 
-func (s *SQLStorage) computeJobTestResult(job *api.EvaluationJobResource, getCollection evalcommon.GetCollectionFunc) {
+func (s *sqlStorage) computeJobTestResult(job *api.EvaluationJobResource, getCollection evalcommon.GetCollectionFunc) {
 	if job.Results == nil || job.Results.Benchmarks == nil || len(job.Results.Benchmarks) == 0 {
 		return
 	}
@@ -407,7 +402,7 @@ func (s *SQLStorage) computeJobTestResult(job *api.EvaluationJobResource, getCol
 	job.Results.Test = jobTest
 }
 
-func (s *SQLStorage) computeBenchmarkTestResult(job *api.EvaluationJobResource, benchmarkStatusEvent *api.BenchmarkStatusEvent, getCollection evalcommon.GetCollectionFunc) *api.BenchmarkTest {
+func (s *sqlStorage) computeBenchmarkTestResult(job *api.EvaluationJobResource, benchmarkStatusEvent *api.BenchmarkStatusEvent, getCollection evalcommon.GetCollectionFunc) *api.BenchmarkTest {
 	// job could have benchmarks array or it could have collection. If it has collection, we need to get the benchmarks from the collection
 	benchmarks, err := evalcommon.GetJobBenchmarks(job, getCollection)
 	if err != nil {

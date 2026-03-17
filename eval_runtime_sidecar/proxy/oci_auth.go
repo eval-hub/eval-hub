@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 )
 
 // TokenResponse is the JSON response from an OCI registry token endpoint.
@@ -38,34 +40,40 @@ type registryAuthConfig struct {
 	Auths map[string]registryAuthEntry `json:"auths"`
 }
 
-// GetRegistryHostFromAuthConfig reads the mounted registry auth config and returns the registry host (first key in auths).
-// For OCI target the hostname comes from this mounted file, unlike eval-hub/mlflow where it comes from env or config.
-func GetRegistryHostFromAuthConfig(configPath string) (string, error) {
-	data, err := os.ReadFile(configPath)
+// GetOCICoordinatesFromJobSpec reads the job spec at path (e.g. /meta/job.json) and returns the OCI registry host
+// and repository from exports.oci.coordinates using shared.JobSpec. Host is normalized to a URL (https:// if no scheme).
+// Returns ("", "", nil) when the file has no OCI exports; returns ("", "", err) on read/parse errors.
+func GetOCICoordinatesFromJobSpec(path string) (host, repository string, err error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return "", fmt.Errorf("read registry auth config: %w", err)
+		return "", "", fmt.Errorf("read job spec: %w", err)
 	}
-	var cfg registryAuthConfig
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return "", fmt.Errorf("parse registry auth config: %w", err)
+	var spec shared.JobSpec
+	if err := json.Unmarshal(data, &spec); err != nil {
+		return "", "", fmt.Errorf("parse job spec: %w", err)
 	}
-	if len(cfg.Auths) == 0 {
-		return "", fmt.Errorf("registry auth config: no auths")
+	if spec.Exports == nil || spec.Exports.OCI == nil {
+		return "", "", nil
 	}
-	for k := range cfg.Auths {
-		return k, nil
+	host = strings.TrimSpace(spec.Exports.OCI.Coordinates.OCIHost)
+	repository = strings.TrimSpace(spec.Exports.OCI.Coordinates.OCIRepository)
+	if host == "" {
+		return "", "", nil
 	}
-	return "", nil
+	if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
+		host = "https://" + host
+	}
+	return host, repository, nil
 }
 
-// LoadTokenProducerFromRegistryAuthConfig reads the registry auth config at configPath and builds a TokenProducer
+// LoadTokenProducerFromOCISecret reads the OCI secret (registry auth config) at ociSecretMountPath and builds a TokenProducer
 // for the given registry host. The file format is the same as Docker config.json and kubernetes.io/dockerconfigjson
 // (auths map with per-registry username/password or auth base64). RegistryHost should match the key in auths
 // (e.g. "https://registry:5000" or "registry:5000"). Repository is used as the scope in the token request; if empty, "default/repo" is used.
-func LoadTokenProducerFromRegistryAuthConfig(configPath, registryHost, repository string) (*TokenProducer, error) {
-	data, err := os.ReadFile(configPath)
+func LoadTokenProducerFromOCISecret(ociSecretMountPath, registryHost, repository string) (*TokenProducer, error) {
+	data, err := os.ReadFile(ociSecretMountPath)
 	if err != nil {
-		return nil, fmt.Errorf("read registry auth config: %w", err)
+		return nil, fmt.Errorf("read OCI secret: %w", err)
 	}
 	var cfg registryAuthConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {

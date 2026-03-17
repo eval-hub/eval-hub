@@ -16,6 +16,12 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+type allowedPatch struct {
+	Path   string
+	Op     api.PatchOp
+	Prefix bool
+}
+
 func CreatePage(ctx *executioncontext.ExecutionContext, total int, offset int, limit int, r http_wrappers.RequestWrapper) (*api.Page, error) {
 	// Calculate pagination info
 	hasNext := offset+limit < total
@@ -96,6 +102,28 @@ func GetParam[T string | int | bool](r http_wrappers.RequestWrapper, name string
 	}
 }
 
+func CheckScope(filter *abstractions.QueryFilter) error {
+	// owner and scope are mutually exclusive
+	mismatchedParams := []string{"owner", "scope"}
+	if filter.HasParams(mismatchedParams...) {
+		return serviceerrors.NewServiceError(messages.QueryParameterMismatch, "ParameterNames", strings.Join(mismatchedParams, ","))
+	}
+
+	// scope matches to other fields in the filter
+	// scope==system ==> owner EQ system
+	// scope==tenant ==> owner NE system
+	if scope, ok := filter.Params["scope"]; ok {
+		switch scope {
+		case abstractions.ScopeSystem, abstractions.ScopeTenant:
+			return nil
+		default:
+			return serviceerrors.NewServiceError(messages.QueryParameterValueInvalid, "ParameterName", "scope", "AllowedValues", strings.Join([]string{abstractions.ScopeSystem, abstractions.ScopeTenant}, "|"))
+		}
+	}
+
+	return nil
+}
+
 func CommonListFilters(r http_wrappers.RequestWrapper, extraParams ...string) (*abstractions.QueryFilter, error) {
 	// note that a user can not search by tenant
 	limit, err := GetParam(r, "limit", true, 50)
@@ -150,15 +178,6 @@ func CommonListFilters(r http_wrappers.RequestWrapper, extraParams ...string) (*
 		Offset: offset,
 		Params: params,
 	}, nil
-}
-
-func IncludeSystemDefined(r http_wrappers.RequestWrapper) bool {
-	systemDefinedParam := r.Query("system_defined")
-	systemDefined := true
-	if len(systemDefinedParam) > 0 {
-		systemDefined = systemDefinedParam[0] != "false"
-	}
-	return systemDefined
 }
 
 func getAllParams(r http_wrappers.RequestWrapper, allowedParams ...string) []string {

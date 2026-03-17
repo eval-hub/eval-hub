@@ -445,7 +445,7 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		})
 	}
 
-	// In non-local mode, mount OCI credentials on the sidecar so it can pull images if needed (e.g. proxy or tooling).
+	// In non-local mode, mount OCI credentials on the sidecar so it can proxy calls to the OCI registry.
 	// The volume is already on the pod from the runtime container; we only add the mount here.
 	if cfg.ociCredentialsSecret != "" {
 		volumes = append(volumes, corev1.Volume{

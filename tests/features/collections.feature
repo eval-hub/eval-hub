@@ -236,10 +236,11 @@ Feature: Collections Endpoint
     When I send a GET request to "/api/v1/evaluations/collections?offset=not-a-number"
     Then the response code should be 400
 
-  Scenario: Delete collection with non-existent id returns 204
+  Scenario: Delete collection with non-existent id returns 404
     Given the service is running
     When I send a DELETE request to "/api/v1/evaluations/collections/00000000-0000-0000-0000-000000000000?hard_delete=true"
-    Then the response code should be 204
+    Then the response code should be 404
+    And the response should contain the value "resource_not_found" at path "$.message_code"
 
   Scenario: List collections by tags and name and category
     Given the service is running
@@ -390,7 +391,7 @@ Feature: Collections Endpoint
   Scenario: List system defined collections with pagination
     Given the service is running
     And there are no user collections
-    When I send a GET request to "/api/v1/evaluations/collections?limit=50&offset=0&system_defined=only"
+    When I send a GET request to "/api/v1/evaluations/collections?limit=50&offset=0&scope=system"
     Then the response code should be 200
     And the response should contain the value "50" at path "$.limit"
     And the "total_count" field in the response should be saved as "value:num_collections"

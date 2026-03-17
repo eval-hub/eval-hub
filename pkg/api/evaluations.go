@@ -112,8 +112,8 @@ type BenchmarkConfig struct {
 
 // ExperimentTag represents a tag on an experiment
 type ExperimentTag struct {
-	Key   string `json:"key" validate:"required,max=250"`    // Keys can be up to 250 bytes in size (not characters)
-	Value string `json:"value" validate:"required,max=5000"` // Values can be up to 5000 bytes in size (not characters)
+	Key   string `json:"key" validate:"required,max=250"`    // Keys can be up to 250 bytes in size (not characters) in mlflow experiments
+	Value string `json:"value" validate:"required,max=5000"` // Values can be up to 5000 bytes in size (not characters) in mlflow experiments
 }
 
 // ExperimentConfig represents configuration for MLFlow experiment tracking

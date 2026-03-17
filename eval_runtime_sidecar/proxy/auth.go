@@ -14,9 +14,9 @@ type AuthTokenInput struct {
 	AuthToken         string
 	TokenCacheTimeout time.Duration
 	// OCI registry auth (when TargetEndpoint == "oci")
-	OCIAuthConfigPath string        // path to registry auth config file (OCI secret mount, same format as Docker config.json)
-	OCIHost           string        // registry host (optional; when set with OCITokenProducer, unused)
-	OCIRepository     string        // optional scope repository (e.g. namespace/repo)
+	OCIAuthConfigPath string         // path to registry auth config file (OCI secret mount, same format as Docker config.json)
+	OCIHost           string         // registry host (optional; when set with OCITokenProducer, unused)
+	OCIRepository     string         // optional scope repository (e.g. namespace/repo)
 	OCITokenProducer  *TokenProducer // optional; when set, reused for token resolution instead of building from config path
 }
 
@@ -28,14 +28,14 @@ type authCacheEntry struct {
 }
 
 var (
-	authTokenCache      = make(map[string]authCacheEntry)
-	authTokenCacheMu    sync.RWMutex
-	ociTokenRefreshMu   sync.Mutex // guards GetToken() on the shared OCI TokenProducer
+	authTokenCache    = make(map[string]authCacheEntry)
+	authTokenCacheMu  sync.RWMutex
+	ociTokenRefreshMu sync.Mutex // guards GetToken() on the shared OCI TokenProducer
 )
 
 // ResolveAuthToken returns the auth token to use for a request.
 // It switches on input.TargetEndpoint: eval-hub and mlflow use file/static token and cache;
-// oci (URL contains "/registry/") uses OCI secret-mounted registry auth config and invokes oci GetToken.
+// oci (URI contains repository name from job spec) uses OCI secret-mounted registry auth and invokes oci GetToken.
 func ResolveAuthToken(logger *slog.Logger, input AuthTokenInput) string {
 	switch input.TargetEndpoint {
 	case "oci":

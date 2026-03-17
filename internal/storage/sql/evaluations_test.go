@@ -40,7 +40,7 @@ func TestGetEvaluationJobs_TenantFilter(t *testing.T) {
 		"url":           getDBInMemoryURL(),
 		"database_name": "eval_hub_tenant_test",
 	}
-	store, err := storage.NewStorage(&databaseConfig, false, false, logger)
+	store, err := storage.NewStorage(&databaseConfig, nil, nil, false, false, logger)
 	if err != nil {
 		t.Fatalf("failed to create storage: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 		"url":           getDBInMemoryURL(),
 		"database_name": "eval_hub",
 	}
-	store, err := storage.NewStorage(&databaseConfig, false, false, logger)
+	store, err := storage.NewStorage(&databaseConfig, nil, nil, false, false, logger)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -272,7 +272,7 @@ func TestEvaluationsStorage(t *testing.T) {
 		databaseConfig["driver"] = "sqlite"
 		databaseConfig["url"] = getDBInMemoryURL()
 		databaseConfig["database_name"] = "eval_hub"
-		s, err := storage.NewStorage(&databaseConfig, false, false, logger)
+		s, err := storage.NewStorage(&databaseConfig, nil, nil, false, false, logger)
 		if err != nil {
 			t.Fatalf("Failed to create storage: %v", err)
 		}
@@ -846,9 +846,9 @@ func TestEvaluationsStorage(t *testing.T) {
 }
 
 func prettyPrint(v any) string {
-	json, err := json.MarshalIndent(v, "", "  ")
+	jsonBytes, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return fmt.Sprintf("%v", v)
 	}
-	return string(json)
+	return string(jsonBytes)
 }

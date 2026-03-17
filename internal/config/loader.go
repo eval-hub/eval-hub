@@ -99,9 +99,8 @@ func loadProvider(logger *slog.Logger, validate *validator.Validate, file string
 	}
 	res := &api.ProviderResource{
 		Resource: api.Resource{
-			ID:       providerConfig.ID,
-			ReadOnly: true,
-			Owner:    "system",
+			ID:    providerConfig.ID,
+			Owner: "system",
 		},
 		ProviderConfig: providerConfig.ProviderConfig,
 	}
@@ -130,9 +129,8 @@ func loadCollection(logger *slog.Logger, validate *validator.Validate, file stri
 	}
 	res := &api.CollectionResource{
 		Resource: api.Resource{
-			ID:       collectionConfig.ID,
-			ReadOnly: true,
-			Owner:    "system",
+			ID:    collectionConfig.ID,
+			Owner: "system",
 		},
 		CollectionConfig: collectionConfig.CollectionConfig,
 	}

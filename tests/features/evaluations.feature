@@ -70,13 +70,13 @@ Feature: Evaluations Endpoint
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_invalid_provider.json"
     Then the response code should be 400
-    And the response should contain the value "request_field_invalid" at path "$.message_code"
+    And the response should contain the value "resource_does_not_exist" at path "$.message_code"
 
   Scenario: Create evaluation job with invalid benchmark
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_invalid_benchmark.json"
     Then the response code should be 400
-    And the response should contain the value "request_field_invalid" at path "$.message_code"
+    And the response should contain the value "resource_does_not_exist" at path "$.message_code"
 
   Scenario: Create evaluation job missing benchmark id
     Given the service is running
@@ -335,13 +335,12 @@ Feature: Evaluations Endpoint
     And the response should contain the value "0.6" at path "$.results.benchmarks[?(@.id == &quot;pc_b2&quot;)].test.threshold"
     And the response should contain the value "0.84|0.85|0.86" at path "$.results.test.score"
     And the response should contain the value "true" at path "$.results.test.pass"
-
     And the response should contain the value "completed" at path "$.status.state"
-    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
-    Then the response code should be 204
     When I send a DELETE request to "/api/v1/evaluations/collections/{{value:collection_id}}"
     Then the response code should be 204
     When I send a DELETE request to "/api/v1/evaluations/providers/{{value:provider_id}}"
+    Then the response code should be 204
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
   Scenario: Cancel running evaluation job (soft delete)
