@@ -106,45 +106,53 @@ func (f *fakeStorage) Close() error { return nil }
 
 func (f *fakeStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 	return &fakeStorage{
-		logger:        logger,
-		ctx:           f.ctx,
-		runStatusChan: f.runStatusChan,
-		updateErr:     f.updateErr,
-		tenant:        f.tenant,
-		owner:         f.owner,
+		logger:            logger,
+		ctx:               f.ctx,
+		runStatusChan:     f.runStatusChan,
+		updateErr:         f.updateErr,
+		tenant:            f.tenant,
+		owner:             f.owner,
+		providerConfigs:   f.providerConfigs,
+		collectionConfigs: f.collectionConfigs,
 	}
 }
 
 func (f *fakeStorage) WithContext(ctx context.Context) abstractions.Storage {
 	return &fakeStorage{
-		logger:        f.logger,
-		ctx:           ctx,
-		runStatusChan: f.runStatusChan,
-		updateErr:     f.updateErr,
-		tenant:        f.tenant,
-		owner:         f.owner,
+		logger:            f.logger,
+		ctx:               ctx,
+		runStatusChan:     f.runStatusChan,
+		updateErr:         f.updateErr,
+		tenant:            f.tenant,
+		owner:             f.owner,
+		providerConfigs:   f.providerConfigs,
+		collectionConfigs: f.collectionConfigs,
 	}
 }
 
 func (f *fakeStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
 	return &fakeStorage{
-		logger:        f.logger,
-		ctx:           f.ctx,
-		runStatusChan: f.runStatusChan,
-		updateErr:     f.updateErr,
-		tenant:        tenant,
-		owner:         f.owner,
+		logger:            f.logger,
+		ctx:               f.ctx,
+		runStatusChan:     f.runStatusChan,
+		updateErr:         f.updateErr,
+		tenant:            tenant,
+		owner:             f.owner,
+		providerConfigs:   f.providerConfigs,
+		collectionConfigs: f.collectionConfigs,
 	}
 }
 
 func (f *fakeStorage) WithOwner(owner api.User) abstractions.Storage {
 	return &fakeStorage{
-		logger:        f.logger,
-		ctx:           f.ctx,
-		runStatusChan: f.runStatusChan,
-		updateErr:     f.updateErr,
-		tenant:        f.tenant,
-		owner:         owner,
+		logger:            f.logger,
+		ctx:               f.ctx,
+		runStatusChan:     f.runStatusChan,
+		updateErr:         f.updateErr,
+		tenant:            f.tenant,
+		owner:             owner,
+		providerConfigs:   f.providerConfigs,
+		collectionConfigs: f.collectionConfigs,
 	}
 }
 
