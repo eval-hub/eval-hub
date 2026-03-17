@@ -1,10 +1,12 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-all-platforms start-service stop-service lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-all-platforms start-service stop-service start-sidecar stop-sidecar lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report
 
 # Variables
 BINARY_NAME = eval-hub
 CMD_PATH = ./cmd/eval_hub
 INIT_BINARY_NAME = eval-hub-init
 INIT_CMD_PATH = ./cmd/eval_hub_init
+SIDECAR_BINARY_NAME = eval-hub-sidecar
+SIDECAR_CMD_PATH = ./cmd/eval_runtime_sidecar
 BIN_DIR = bin
 PORT ?= 8080
 
@@ -58,6 +60,9 @@ build-init: $(BIN_DIR) ## Build the init binary
 	@echo "Building $(INIT_BINARY_NAME) with ${LDFLAGS}"
 	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(INIT_BINARY_NAME) $(INIT_CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(INIT_BINARY_NAME)"
+	@echo "Building $(SIDECAR_BINARY_NAME) with ${LDFLAGS}"
+	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(SIDECAR_BINARY_NAME) $(SIDECAR_CMD_PATH)
+	@echo "Build complete: $(BIN_DIR)/$(SIDECAR_BINARY_NAME)"
 
 build: build-service build-init ## Build the binaries
 
@@ -68,6 +73,9 @@ build-coverage: $(BIN_DIR) ## Build the binaries with coverage
 	@echo "Building $(INIT_BINARY_NAME)-cov with -cover -covermode=atomic -ldflags ${LDFLAGS} "
 	@go build -race -cover -covermode=atomic -coverpkg=./... -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(INIT_BINARY_NAME)-cov $(INIT_CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(INIT_BINARY_NAME)-cov"
+	@echo "Building $(SIDECAR_BINARY_NAME)-cov with -cover -covermode=atomic -ldflags ${LDFLAGS} "
+	@go build -race -cover -covermode=atomic -coverpkg=./... -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(SIDECAR_BINARY_NAME)-cov $(SIDECAR_CMD_PATH)
+	@echo "Build complete: $(BIN_DIR)/$(SIDECAR_BINARY_NAME)-cov"
 
 SERVER_PID_FILE ?= $(BIN_DIR)/pid
 
@@ -87,6 +95,26 @@ start-service-coverage: ${SERVER_PID_FILE} build-coverage ## Run the application
 stop-service:
 	-./scripts/stop_server.sh "${SERVER_PID_FILE}"
 	! grep -i -F panic "${SERVICE_LOG}"
+
+# Sidecar (eval-runtime-sidecar) starter/stopper
+SIDECAR_PID_FILE ?= $(BIN_DIR)/sidecar.pid
+SIDECAR_LOG ?= $(BIN_DIR)/sidecar.log
+SIDECAR_PORT ?= 8081
+# Config dir for sidecar (repo config; set EVAL_HUB_CONFIG_DIR or pass --configdir to override at runtime)
+SIDECAR_CONFIG_DIR ?= config
+
+build-sidecar: $(BIN_DIR) ## Build only the sidecar binary
+	@echo "Building $(SIDECAR_BINARY_NAME) with ${LDFLAGS}"
+	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(SIDECAR_BINARY_NAME) $(SIDECAR_CMD_PATH)
+	@echo "Build complete: $(BIN_DIR)/$(SIDECAR_BINARY_NAME)"
+
+start-sidecar: build-sidecar ## Run the sidecar in background (port $(SIDECAR_PORT), config from $(SIDECAR_CONFIG_DIR))
+	@rm -f "${SIDECAR_PID_FILE}" && true
+	@echo "Running $(SIDECAR_BINARY_NAME) on port $(SIDECAR_PORT) (config: $(SIDECAR_CONFIG_DIR))..."
+	@SIDECAR_PORT="$(SIDECAR_PORT)" EVAL_HUB_CONFIG_DIR="$(SIDECAR_CONFIG_DIR)" ./scripts/start_sidecar.sh "${SIDECAR_PID_FILE}" "${BIN_DIR}/$(SIDECAR_BINARY_NAME)" "${SIDECAR_LOG}" "$(SIDECAR_PORT)" "$(SIDECAR_CONFIG_DIR)"
+
+stop-sidecar: ## Stop the sidecar
+	-./scripts/stop_server.sh "${SIDECAR_PID_FILE}"
 
 lint: ## Lint the code (runs go vet)
 	@echo "Linting code..."

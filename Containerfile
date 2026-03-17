@@ -19,12 +19,19 @@ ARG BUILD_NUMBER=0.3.0
 ARG BUILD_DATE
 ARG BUILD_PACKAGE=main
 
-# Build the binary with optimizations
+# Build eval-hub binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-w -s -X '${BUILD_PACKAGE}.Build=${BUILD_NUMBER}' -X '${BUILD_PACKAGE}.BuildDate=${BUILD_DATE}'" \
     -a -installsuffix cgo \
     -o eval-hub \
     ./cmd/eval_hub
+
+# Build eval-runtime-sidecar binary (same image can run either via container command override)
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-w -s -X '${BUILD_PACKAGE}.Build=${BUILD_NUMBER}' -X '${BUILD_PACKAGE}.BuildDate=${BUILD_DATE}'" \
+    -a -installsuffix cgo \
+    -o eval-runtime-sidecar \
+    ./cmd/eval_runtime_sidecar
 
 # Build the init container binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
@@ -42,8 +49,9 @@ RUN groupadd -g 1000 evalhub && \
     mkdir -p /app/config && \
     chown -R evalhub:evalhub /app
 
-# Copy binary from builder
+# Copy both binaries from builder
 COPY --from=builder --chown=evalhub:evalhub /build/eval-hub /app/eval-hub
+COPY --from=builder --chown=evalhub:evalhub /build/eval-runtime-sidecar /app/eval-runtime-sidecar
 COPY --from=builder --chown=evalhub:evalhub /build/eval-hub-init /app/eval-hub-init
 
 
@@ -55,8 +63,8 @@ COPY --chown=evalhub:evalhub config/collections /app/config/collections
 # Set working directory
 WORKDIR /app
 
-# Switch to non-root user
-USER evalhub
+# Switch to non-root user (numeric UID so Kubernetes runAsNonRoot can verify)
+USER 1000
 
 # Expose service port
 EXPOSE 8080

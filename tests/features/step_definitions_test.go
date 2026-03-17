@@ -741,6 +741,9 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 	if authToken := os.Getenv("AUTH_TOKEN"); authToken != "" {
 		req.Header.Set("Authorization", "Bearer "+authToken)
 	}
+	if tenant := os.Getenv("X_TENANT"); tenant != "" {
+		req.Header.Set("X-Tenant", tenant)
+	}
 
 	for k, v := range tc.reqHeaders {
 		req.Header.Set(k, v)

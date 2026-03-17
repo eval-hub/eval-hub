@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
+	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
@@ -163,6 +164,11 @@ func TestCreateBenchmarkResourcesSetsConfigMapOwner(t *testing.T) {
 	runtime := &K8sRuntime{
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper: &KubernetesHelper{clientset: clientset},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{
+				EvalInitImage: "eval-init-image",
+			},
+		},
 	}
 
 	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
@@ -204,6 +210,11 @@ func TestCreateBenchmarkResourcesSetsAnnotations(t *testing.T) {
 	runtime := &K8sRuntime{
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper: &KubernetesHelper{clientset: clientset},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{
+				EvalInitImage: "eval-init-image",
+			},
+		},
 	}
 
 	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
@@ -262,6 +273,11 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnv(t *testing.T) {
 	runtime := &K8sRuntime{
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper: &KubernetesHelper{clientset: clientset},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{
+				EvalInitImage: "eval-init-image",
+			},
+		},
 	}
 
 	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
@@ -333,9 +349,13 @@ func TestCreateBenchmarkResourcesAddsInitContainerForS3TestData(t *testing.T) {
 
 	clientset := fake.NewClientset()
 	runtime := &K8sRuntime{
-		logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
-		helper:    &KubernetesHelper{clientset: clientset},
-		initImage: "quay.io/evalhub/evalhub:test", // required when S3 test data is configured
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{
+				EvalInitImage: "eval-init-image",
+			},
+		},
 	}
 
 	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
@@ -430,6 +450,11 @@ func TestCreateBenchmarkResourcesDeletesConfigMapOnJobFailure(t *testing.T) {
 	runtime := &K8sRuntime{
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper: &KubernetesHelper{clientset: clientset},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{
+				EvalInitImage: "eval-init-image",
+			},
+		},
 	}
 
 	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
@@ -459,6 +484,11 @@ func TestRunEvaluationJobMarksBenchmarkFailedOnCreateError(t *testing.T) {
 		logger: logger,
 		helper: &KubernetesHelper{clientset: clientset},
 		ctx:    context.Background(),
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{
+				EvalInitImage: "eval-init-image",
+			},
+		},
 	}
 
 	statusCh := make(chan *api.StatusEvent, 1)
@@ -503,6 +533,11 @@ func TestRunEvaluationJobHandlesUpdateFailure(t *testing.T) {
 		logger: logger,
 		helper: &KubernetesHelper{clientset: clientset},
 		ctx:    context.Background(),
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{
+				EvalInitImage: "eval-init-image",
+			},
+		},
 	}
 
 	statusCh := make(chan *api.StatusEvent, 1)

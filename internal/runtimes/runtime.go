@@ -16,5 +16,5 @@ func NewRuntime(
 	if serviceConfig.Service.LocalMode {
 		return local.NewLocalRuntime(logger)
 	}
-	return k8s.NewK8sRuntime(logger, serviceConfig.Service.EvalInitImage)
+	return k8s.NewK8sRuntime(logger, serviceConfig)
 }
