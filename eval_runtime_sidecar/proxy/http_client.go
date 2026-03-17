@@ -114,3 +114,22 @@ func NewMLFlowHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logge
 	client := newHTTPClient(timeout, tlsConfig, isOTELEnabled, logger, "MLflow")
 	return client, nil
 }
+
+// NewOCIHTTPClient creates an HTTP client for the OCI registry from config.
+// Returns (nil, nil) when Sidecar.OCI is not configured or Host is empty.
+func NewOCIHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logger *slog.Logger) (*http.Client, error) {
+	if serviceConfig == nil || serviceConfig.Sidecar == nil || serviceConfig.Sidecar.OCI == nil || serviceConfig.Sidecar.OCI.Host == "" {
+		return nil, nil
+	}
+	ociConfig := serviceConfig.Sidecar.OCI
+	timeout := defaultHTTPTimeout
+	if ociConfig.HTTPTimeout > 0 {
+		timeout = ociConfig.HTTPTimeout
+	}
+	tlsConfig, err := buildTLSConfig(ociConfig.CACertPath, ociConfig.InsecureSkipVerify, logger, "OCI")
+	if err != nil {
+		return nil, err
+	}
+	client := newHTTPClient(timeout, tlsConfig, isOTELEnabled, logger, "OCI")
+	return client, nil
+}

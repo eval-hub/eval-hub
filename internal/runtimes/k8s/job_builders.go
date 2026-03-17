@@ -445,7 +445,24 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		})
 	}
 
-	// Sidecar does not need OCI credentials or model-auth volumes; those are for the adapter/runtime only.
+	// In non-local mode, mount OCI credentials on the sidecar so it can pull images if needed (e.g. proxy or tooling).
+	// The volume is already on the pod from the runtime container; we only add the mount here.
+	if cfg.ociCredentialsSecret != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name: ociCredentialsVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: cfg.ociCredentialsSecret,
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      ociCredentialsVolumeName,
+			MountPath: ociCredentialsMountPath,
+			SubPath:   ociCredentialsSubPath,
+			ReadOnly:  true,
+		})
+	}
 
 	return volumes, volumeMounts
 }
@@ -701,6 +718,15 @@ func buildSidecarEnvVars(cfg *jobConfig) []corev1.EnvVar {
 			Value: serviceCAMountPath + "/" + serviceCABundleFile,
 		})
 		seen[envMLFlowCertPathName] = true
+	}
+
+	// OCI proxy: path to docker config (OCI secret mount) for registry auth
+	if cfg.ociCredentialsSecret != "" {
+		env = append(env, corev1.EnvVar{
+			Name:  envOCIAuthConfigPathName,
+			Value: ociCredentialsMountPath,
+		})
+		seen[envOCIAuthConfigPathName] = true
 	}
 
 	return env

@@ -15,14 +15,19 @@ import (
 
 const ServiceAccountTokenPathDefault = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 const MLFlowTokenPathDefault = "/var/run/secrets/mlflow/token"
+// OCIAuthConfigPathDefault is the default path for the registry auth config file. Must match the OCI secret
+// mount path on adapter and sidecar: internal/runtimes/k8s/job_builders.go ociCredentialsMountPath.
+const OCIAuthConfigPathDefault = "/etc/evalhub/.docker/config.json"
 
 // Handlers holds service state for HTTP handlers.
 // Reverse proxies are created once at startup and reused for all requests.
 type Handlers struct {
-	logger        *slog.Logger
-	serviceConfig *config.Config
-	evalHubProxy  *httputil.ReverseProxy
-	mlflowProxy   *httputil.ReverseProxy
+	logger          *slog.Logger
+	serviceConfig   *config.Config
+	evalHubProxy    *httputil.ReverseProxy
+	mlflowProxy     *httputil.ReverseProxy
+	ociProxy        *httputil.ReverseProxy
+	ociTokenProducer *proxy.TokenProducer // created once at startup for OCI auth
 }
 
 func New(config *config.Config, logger *slog.Logger) (*Handlers, error) {
@@ -36,11 +41,18 @@ func New(config *config.Config, logger *slog.Logger) (*Handlers, error) {
 		return nil, err
 	}
 
+	ociProxy, ociTokenProducer, err := newOciProxy(config, logger)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Handlers{
-		logger:        logger,
-		serviceConfig: config,
-		evalHubProxy:  evalHubProxy,
-		mlflowProxy:   mlflowProxy,
+		logger:          logger,
+		serviceConfig:   config,
+		evalHubProxy:    evalHubProxy,
+		mlflowProxy:     mlflowProxy,
+		ociProxy:        ociProxy,
+		ociTokenProducer: ociTokenProducer,
 	}, nil
 }
 
@@ -81,6 +93,39 @@ func newEvalhubProxy(config *config.Config, logger *slog.Logger) (*httputil.Reve
 	return evalHubProxy, nil
 }
 
+func newOciProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseProxy, *proxy.TokenProducer, error) {
+	if config == nil || config.Sidecar == nil || config.Sidecar.OCI == nil {
+		return nil, nil, nil
+	}
+	ociAuthPath := os.Getenv("OCI_AUTH_CONFIG_PATH")
+	if ociAuthPath == "" {
+		ociAuthPath = OCIAuthConfigPathDefault
+	}
+	host, err := proxy.GetRegistryHostFromAuthConfig(ociAuthPath)
+	if err != nil {
+		logger.Error("failed to get OCI registry host from mounted auth config", "path", ociAuthPath, "error", err)
+		return nil, nil, fmt.Errorf("OCI registry host from auth config: %w", err)
+	}
+	if host == "" {
+		return nil, nil, fmt.Errorf("OCI registry auth config has no host")
+	}
+	tp, err := proxy.LoadTokenProducerFromRegistryAuthConfig(ociAuthPath, host, config.Sidecar.OCI.Repository)
+	if err != nil {
+		logger.Error("failed to create OCI token producer from auth config", "path", ociAuthPath, "error", err)
+		return nil, nil, fmt.Errorf("OCI token producer: %w", err)
+	}
+	ociHTTPClient, err := proxy.NewOCIHTTPClient(config, config.IsOTELEnabled(), logger)
+	if err != nil {
+		logger.Error("failed to create OCI HTTP client", "error", err)
+		return nil, nil, fmt.Errorf("failed to create OCI HTTP client: %w", err)
+	}
+	ociTarget, err := url.Parse(strings.TrimSuffix(host, "/"))
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid OCI registry host from auth config %q: %w", host, err)
+	}
+	return proxy.NewReverseProxy(ociTarget, ociHTTPClient, logger), tp, nil
+}
+
 func (h *Handlers) HandleProxyCall(w http.ResponseWriter, r *http.Request) {
 	proxyHandler, tokenParams, err := h.parseProxyCall(r)
 	if err != nil {
@@ -114,6 +159,18 @@ func (h *Handlers) parseProxyCall(r *http.Request) (*httputil.ReverseProxy, *pro
 			}, nil
 		}
 		return nil, nil, fmt.Errorf("mlflow proxy is not configured")
+
+	case strings.Contains(r.RequestURI, "/registry/"):
+		ociConfig := h.serviceConfig.Sidecar.OCI
+		if ociConfig != nil && h.ociProxy != nil {
+			// Reuse the TokenProducer created at startup; token cache and refresh in resolveOCIAuthToken.
+			return h.ociProxy, &proxy.AuthTokenInput{
+				TargetEndpoint:   "oci",
+				OCITokenProducer: h.ociTokenProducer,
+				OCIRepository:    ociConfig.Repository,
+			}, nil
+		}
+		return nil, nil, fmt.Errorf("oci proxy is not configured")
 	default:
 		return nil, nil, fmt.Errorf("unknown proxy call: %s", r.RequestURI)
 	}

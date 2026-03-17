@@ -119,4 +119,17 @@ func TestHandlers_HandleProxyCall(t *testing.T) {
 			t.Errorf("status = %d, want 400 (mlflow proxy not configured)", rw.Code)
 		}
 	})
+
+	t.Run("registry path with nil OCI returns 400", func(t *testing.T) {
+		// h has no Sidecar.OCI, so /registry/ returns "oci proxy is not configured"
+		req := httptest.NewRequest(http.MethodGet, "/registry/v2/", nil)
+		rw := httptest.NewRecorder()
+		h.HandleProxyCall(rw, req)
+		if rw.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want 400 (oci proxy not configured)", rw.Code)
+		}
+		if body := rw.Body.String(); body != "oci proxy is not configured\n" {
+			t.Errorf("body = %q, want oci proxy is not configured", body)
+		}
+	})
 }

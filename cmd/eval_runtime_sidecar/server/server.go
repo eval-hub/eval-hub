@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
@@ -32,8 +34,19 @@ func NewSidecarServer(logger *slog.Logger,
 	}
 
 	port := 8080
-	if config.Sidecar != nil && config.Sidecar.Port > 0 {
-		port = config.Sidecar.Port
+	err := error(nil)
+
+	if config.Sidecar != nil {
+		if baseURL := strings.TrimSpace(config.Sidecar.BaseURL); baseURL != "" {
+			if strings.Contains(baseURL, ":") {
+				parts := strings.Split(baseURL, ":")
+				portStr := parts[len(parts)-1]
+				port, err = strconv.Atoi(portStr)
+				if err != nil {
+					logger.Warn("invalid port in base URL, using default port 8080", "error", err)
+				}
+			}
+		}
 	}
 
 	return &SidecarServer{
