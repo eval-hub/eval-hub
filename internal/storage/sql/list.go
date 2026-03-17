@@ -28,11 +28,25 @@ func getTypeFromTableName(tableName string) string {
 	return "unknown"
 }
 
-func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.CollectionResource](s *SQLStorage, txn *sql.Tx, tableName string, filter *abstractions.QueryFilter) (*abstractions.QueryResults[T], error) {
+func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.CollectionResource](s *sqlStorage, txn *sql.Tx, tableName string, filter *abstractions.QueryFilter) (*abstractions.QueryResults[T], error) {
 	filter = filter.ExtractQueryParams()
 	params := filter.Params
 	limit := filter.Limit
 	offset := filter.Offset
+
+	tenant := s.tenant
+
+	if scope, ok := params["scope"]; ok {
+		switch scope {
+		case abstractions.ScopeSystem:
+			params["owner"] = abstractions.OwnerSystem
+			// we don't want to filter by tenant_id for system resources
+			tenant = ""
+		case abstractions.ScopeTenant:
+			params["owner"] = "!" + abstractions.OwnerSystem
+		}
+		delete(params, "scope")
+	}
 
 	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), s.statementsFactory.GetAllowedFilterColumns(tableName)); err != nil {
 		return nil, err
@@ -41,13 +55,13 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 	typeName := getTypeFromTableName(tableName)
 
 	// Get total count (with filter if provided)
-	totalCount, err := s.getTotalCount(txn, tableName, filter.Params, typeName)
+	totalCount, err := s.getTotalCount(txn, tenant, tableName, filter.Params, typeName)
 	if err != nil {
 		return nil, err
 	}
 
 	// Build the list query with pagination and filters
-	listQuery, listArgs := s.statementsFactory.CreateListEntitiesStatement(s.tenant, tableName, limit, offset, params)
+	listQuery, listArgs := s.statementsFactory.CreateListEntitiesStatement(tenant, tableName, limit, offset, params)
 	s.logger.Debug(fmt.Sprintf("List %s query", typeName), "query", listQuery, "args", listArgs, "params", params, "limit", limit, "offset", offset)
 
 	// Query the database
@@ -65,6 +79,7 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 		if err != nil {
 			return nil, err
 		}
+
 		if resource == nil {
 			totalCount--
 			continue
@@ -83,7 +98,7 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 	}, nil
 }
 
-func scanResource[T api.EvaluationJobResource | api.ProviderResource | api.CollectionResource](s *SQLStorage, rows *sql.Rows, tableName string) (*T, error) {
+func scanResource[T api.EvaluationJobResource | api.ProviderResource | api.CollectionResource](s *sqlStorage, rows *sql.Rows, tableName string) (*T, error) {
 	query := shared.EntityQuery{}
 	err := s.statementsFactory.ScanRowForEntity(s.tenant, tableName, rows, &query)
 	if err != nil {

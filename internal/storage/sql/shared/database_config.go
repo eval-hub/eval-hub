@@ -41,13 +41,12 @@ func (s *SQLDatabaseConfig) GetConnectionURL() (string, error) {
 }
 
 func (s *SQLDatabaseConfig) GetDatabaseName() string {
-	connectionURL, err := s.GetConnectionURL()
+	parsed, err := url.Parse(s.URL)
 	if err != nil {
 		return ""
 	}
-	parsed, err := url.Parse(connectionURL)
-	if err != nil {
-		return ""
+	if parsed.Scheme == "file" {
+		return strings.TrimSuffix(strings.TrimPrefix(parsed.Opaque, ":"), ":")
 	}
 	return strings.TrimPrefix(parsed.Path, "/")
 }

@@ -57,10 +57,10 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				return err
 			}
 			resolveProvider := func(providerID string) (*api.ProviderResource, error) {
-				return common.ResolveProvider(providerID, h.providerConfigs, storage)
+				return storage.GetProvider(providerID)
 			}
 			resolveCollection := func(id string) (*api.CollectionResource, error) {
-				return common.ResolveCollection(id, h.collectionConfigs, storage)
+				return storage.GetCollection(id)
 			}
 			return h.validateBenchmarkReferences(evaluation, resolveCollection, resolveProvider)
 		},
@@ -74,6 +74,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
+	// TODO this should be in a SPAN
 	mlflowExperimentID := ""
 	mlflowExperimentURL := ""
 	if h.mlflowClient != nil {
@@ -103,7 +104,6 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 						CreatedAt: time.Now(),
 						Owner:     ctx.User,
 						Tenant:    ctx.Tenant,
-						ReadOnly:  false,
 					},
 					MLFlowExperimentID: mlflowExperimentID,
 				},
@@ -205,16 +205,16 @@ func (h *Handlers) validateBenchmarkReferences(evaluation *api.EvaluationJobConf
 		provider, err := resolveProvider(benchmark.ProviderID)
 		if err != nil || provider == nil {
 			return serviceerrors.NewServiceError(
-				messages.RequestFieldInvalid,
-				"ParameterName", "provider_id",
-				"Value", benchmark.ProviderID,
+				messages.ResourceDoesNotExist,
+				"Type", "provider",
+				"ResourceID", benchmark.ProviderID,
 			)
 		}
 		if !benchmarkExists(provider.Benchmarks, benchmark.ID) {
 			return serviceerrors.NewServiceError(
-				messages.RequestFieldInvalid,
-				"ParameterName", "id",
-				"Value", benchmark.ID,
+				messages.ResourceDoesNotExist,
+				"Type", "benchmark",
+				"ResourceID", benchmark.ID,
 			)
 		}
 	}
@@ -340,7 +340,7 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 	getCollection := func(id string) (*api.CollectionResource, error) {
-		return common.ResolveCollection(id, h.collectionConfigs, storage)
+		return storage.GetCollection(id)
 	}
 	benchmarks, err := common.GetJobBenchmarks(job, getCollection)
 	if err != nil {

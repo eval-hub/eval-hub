@@ -3,13 +3,9 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"maps"
-	"slices"
 	"strings"
 	"time"
 
-	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/common"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
@@ -18,7 +14,6 @@ import (
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/serialization"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
-	"github.com/eval-hub/eval-hub/internal/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -48,12 +43,6 @@ var (
 		{Path: "/benchmarks", Op: api.PatchOpReplace, Prefix: true},
 	}
 )
-
-type allowedPatch struct {
-	Path   string
-	Op     api.PatchOp
-	Prefix bool
-}
 
 func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
@@ -98,7 +87,6 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 					CreatedAt: time.Now(),
 					Owner:     ctx.User,
 					Tenant:    ctx.Tenant,
-					ReadOnly:  false,
 				},
 				ProviderConfig: *request,
 			}
@@ -117,89 +105,11 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 	)
 }
 
-func (h *Handlers) filterSystemProviders(filter map[string]any) []api.ProviderResource {
-	// Filter keys relevant for system providers (owner, tenant_id, status are not applicable)
-	allowedKeys := []string{"name", "tags"}
-	filteredProviders := make([]api.ProviderResource, 0, len(h.providerConfigs))
-
-	// Iterate over sorted keys for deterministic ordering (map iteration is random)
-	for _, id := range slices.Sorted(maps.Keys(h.providerConfigs)) {
-		p := h.providerConfigs[id]
-		if len(filter) == 0 {
-			filteredProviders = append(filteredProviders, p)
-			continue
-		}
-		matchesAll := true
-		for _, key := range slices.Sorted(maps.Keys(filter)) {
-			if !slices.Contains(allowedKeys, key) {
-				continue
-			}
-			v := filter[key]
-			values, operator := shared.GetValues(key, v)
-			if !matchesProviderFilterKey(p, key, values, operator) {
-				matchesAll = false
-				break
-			}
-		}
-		if matchesAll {
-			filteredProviders = append(filteredProviders, p)
-		}
-	}
-	return filteredProviders
-}
-
-// matchesFilterKey returns true if the provider matches the filter key.
-// values and operator come from shared.GetValues (comma=AND, pipe=OR).
-func matchesProviderFilterKey(p api.ProviderResource, key string, values []any, operator string) bool {
-	getStr := func(v any) string {
-		if s, ok := v.(string); ok {
-			return s
-		}
-		return fmt.Sprintf("%v", v)
-	}
-	switch key {
-	case "name":
-		if operator == "OR" {
-			for _, val := range values {
-				if p.ProviderConfig.Name == getStr(val) {
-					return true
-				}
-			}
-			return false
-		}
-		// AND: name must equal all values (typically one value)
-		for _, val := range values {
-			if p.ProviderConfig.Name != getStr(val) {
-				return false
-			}
-		}
-		return true
-	case "tags":
-		if operator == "OR" {
-			for _, val := range values {
-				if slices.Contains(p.ProviderConfig.Tags, getStr(val)) {
-					return true
-				}
-			}
-			return false
-		}
-		// AND: provider must have all tags
-		for _, val := range values {
-			if !slices.Contains(p.ProviderConfig.Tags, getStr(val)) {
-				return false
-			}
-		}
-		return true
-	default:
-		return true
-	}
-}
-
 // HandleListProviders handles GET /api/v1/evaluations/providers
 func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
-	filter, err := CommonListFilters(req)
+	filter, err := CommonListFilters(req, "scope")
 
 	logging.LogRequestStarted(ctx, "filter", filter)
 
@@ -208,7 +118,13 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 		return
 	}
 
-	allowedParams := []string{"limit", "offset", "benchmarks", "name", "tags", "system_defined", "benchmarks", "owner"}
+	err = CheckScope(filter)
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+
+	allowedParams := []string{"limit", "offset", "benchmarks", "name", "tags", "owner", "scope"}
 	badParams := getAllParams(req, allowedParams...)
 	if len(badParams) > 0 {
 		// just report the first bad parameter
@@ -216,57 +132,10 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 		return
 	}
 
-	systemDefined, err := GetParam(req, "system_defined", true, "")
+	providers, err := storage.GetProviders(filter)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
-	}
-	isReadOnly := "only" == systemDefined
-
-	providers := []api.ProviderResource{}
-
-	if IncludeSystemDefined(req) {
-		providers = h.filterSystemProviders(filter.ExtractQueryParams().Params)
-		ctx.Logger.Info(fmt.Sprintf("Included %d system defined providers", len(providers)))
-	}
-
-	totalCount := len(providers)
-
-	// first check to see if the system providers are enough for the paging
-	if filter.Offset < len(providers) {
-		if len(providers) < filter.Limit {
-			if !isReadOnly {
-				userFilter := &abstractions.QueryFilter{
-					Limit:  max(0, filter.Limit-len(providers)),
-					Offset: max(0, filter.Offset-len(providers)),
-					Params: filter.Params,
-				}
-				ctx.Logger.Debug("Get providers", "filter", userFilter)
-				queryResults, err := storage.GetProviders(userFilter)
-				if err != nil {
-					w.Error(err, ctx.RequestID)
-					return
-				}
-				providers = append(providers[filter.Offset:], queryResults.Items...)
-				totalCount += queryResults.TotalCount
-			}
-		} else {
-			providers = providers[:filter.Limit]
-		}
-	} else if !isReadOnly {
-		userFilter := &abstractions.QueryFilter{
-			Limit:  filter.Limit,
-			Offset: max(0, filter.Offset-len(providers)),
-			Params: filter.Params,
-		}
-		ctx.Logger.Debug("Get providers", "filter", userFilter)
-		queryResults, err := storage.GetProviders(userFilter)
-		if err != nil {
-			w.Error(err, ctx.RequestID)
-			return
-		}
-		providers = queryResults.Items
-		totalCount += queryResults.TotalCount
 	}
 
 	// remove the benchmarks if requested
@@ -276,12 +145,12 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 		return
 	}
 	if !benchmarks {
-		for i := range providers {
-			providers[i].Benchmarks = []api.BenchmarkResource{}
+		for i := range providers.Items {
+			providers.Items[i].Benchmarks = []api.BenchmarkResource{}
 		}
 	}
 
-	page, err := CreatePage(ctx, totalCount, filter.Offset, filter.Limit, req)
+	page, err := CreatePage(ctx, providers.TotalCount, filter.Offset, filter.Limit, req)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
@@ -289,7 +158,7 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 
 	result := api.ProviderResourceList{
 		Page:  *page,
-		Items: providers[:min(len(providers), filter.Limit)],
+		Items: providers.Items,
 	}
 
 	w.WriteJSON(result, 200)
@@ -312,14 +181,6 @@ func isAllowedPatch(operation api.PatchOp, path string) bool {
 	return false
 }
 
-func (h *Handlers) getSystemProvider(providerId string) *api.ProviderResource {
-	provider, ok := h.providerConfigs[providerId]
-	if !ok {
-		return nil
-	}
-	return &provider
-}
-
 func (h *Handlers) HandleGetProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
@@ -334,14 +195,10 @@ func (h *Handlers) HandleGetProvider(ctx *executioncontext.ExecutionContext, req
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			provider := h.getSystemProvider(providerId)
-			if provider == nil {
-				userProvider, err := storage.GetProvider(providerId)
-				if err != nil {
-					w.Error(err, ctx.RequestID)
-					return err
-				}
-				provider = userProvider
+			provider, err := storage.GetProvider(providerId)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
 			}
 
 			w.WriteJSON(provider, 200)
@@ -369,10 +226,6 @@ func (h *Handlers) HandleUpdateProvider(ctx *executioncontext.ExecutionContext, 
 	err := h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			if h.getSystemProvider(providerId) != nil {
-				return serviceerrors.NewServiceError(messages.SystemProvider, "ProviderId", providerId)
-			}
-
 			// get the body bytes from the context
 			bodyBytes, err := req.BodyAsBytes()
 			if err != nil {
@@ -426,10 +279,6 @@ func (h *Handlers) HandlePatchProvider(ctx *executioncontext.ExecutionContext, r
 	err := h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			if h.getSystemProvider(providerId) != nil {
-				return serviceerrors.NewServiceError(messages.SystemProvider, "ProviderId", providerId)
-			}
-
 			bodyBytes, err := req.BodyAsBytes()
 			if err != nil {
 				return err

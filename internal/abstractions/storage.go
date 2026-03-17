@@ -10,6 +10,13 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+const (
+	ScopeSystem = "system"
+	ScopeTenant = "tenant"
+
+	OwnerSystem = "system"
+)
+
 type QueryResults[T any] struct {
 	Items      []T
 	TotalCount int
@@ -20,11 +27,9 @@ type QueryFilter struct {
 	Limit  int
 	Offset int
 	Params map[string]any
-	// Make tenant explicit because it is not a user parameter
-	Tenant api.Tenant
 }
 
-// Returns the limit, offset, and filtered params
+// ExtractQueryParams returns the limit, offset, and filtered params
 func (filter *QueryFilter) ExtractQueryParams() *QueryFilter {
 	params := maps.Clone(filter.Params)
 	// delete empty values
@@ -35,12 +40,22 @@ func (filter *QueryFilter) ExtractQueryParams() *QueryFilter {
 		Limit:  filter.Limit,
 		Offset: filter.Offset,
 		Params: params,
-		Tenant: filter.Tenant,
 	}
 }
 
+// HasParams returns true if all the given params are present in the filter and have non-empty values
+func (filter *QueryFilter) HasParams(params ...string) bool {
+	queryParams := filter.ExtractQueryParams().Params
+	for _, param := range params {
+		if _, exists := queryParams[param]; !exists {
+			return false
+		}
+	}
+	return true
+}
+
 func (filter *QueryFilter) String() string {
-	return fmt.Sprintf(`{"limit":%d,"offset":%d,"params":%v,"tenant":"%s"}`, filter.Limit, filter.Offset, filter.Params, filter.Tenant)
+	return fmt.Sprintf(`{"limit":%d,"offset":%d,"params":%v}`, filter.Limit, filter.Offset, filter.Params)
 }
 
 type Storage interface {

@@ -560,15 +560,18 @@
             "description": "Tags to search for"
           },
           {
-            "name": "system_defined",
+            "name": "scope",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "boolean",
-              "default": true,
-              "title": "System defined providers"
+              "type": "string",
+              "enum": [
+                "system",
+                "tenant"
+              ],
+              "title": "Scope of providers"
             },
-            "description": "Set to false to exclude system defined providers"
+            "description": "Set to `system` to get only system defined providers, or `tenant` to get only user defined providers. If `scope` is not provided, both system and user defined providers will be returned.\n"
           }
         ],
         "responses": {
@@ -904,15 +907,18 @@
             "description": "Tags to search for"
           },
           {
-            "name": "system_defined",
+            "name": "scope",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "boolean",
-              "default": true,
-              "title": "System defined collections"
+              "type": "string",
+              "enum": [
+                "system",
+                "tenant"
+              ],
+              "title": "Scope of collections"
             },
-            "description": "Set to false to exclude system defined collections"
+            "description": "Set to `system` to get only system defined collections, or `tenant` to get only user defined collections. If `scope` is not provided, both system and user defined collections will be returned.\n"
           }
         ],
         "responses": {
@@ -1288,10 +1294,6 @@
             "type": "string",
             "format": "date-time",
             "description": "Last update timestamp"
-          },
-          "read_only": {
-            "type": "boolean",
-            "description": "Whether the resource is read-only"
           },
           "owner": {
             "type": "string",

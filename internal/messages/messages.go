@@ -33,6 +33,12 @@ var (
 		"The query parameter '{{.ParameterName}}' is required.",
 		"query_parameter_required",
 	)
+	// QueryParameterValueInvalid The query parameter '{{.ParameterName}}' is not valid. Allowed values are: '{{.AllowedValues}}'.
+	QueryParameterValueInvalid = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The query parameter '{{.ParameterName}}' is not valid. Allowed values are: '{{.AllowedValues}}'.",
+		"query_parameter_value_invalid",
+	)
 	// QueryParameterInvalid The query parameter '{{.ParameterName}}' is not a valid {{.Type}}: '{{.Value}}'.
 	QueryParameterInvalid = createMessage(
 		constants.HTTPCodeBadRequest,
@@ -44,6 +50,12 @@ var (
 		constants.HTTPCodeBadRequest,
 		"The parameter '{{.ParameterName}}' is not a valid query parameter. Allowed parameters are: {{.AllowedParameters}}.",
 		"query_bad_parameter",
+	)
+	// QueryParameterMismatch The query parameters '{{.ParameterNames}}' are mutually exclusive.
+	QueryParameterMismatch = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The query parameters '{{.ParameterNames}}' are mutually exclusive.",
+		"query_parameter_mismatch",
 	)
 
 	// JobCanNotBeUpdated The job {{.Id}} can not be {{.NewStatus}} because it is '{{.Status}}'.
@@ -81,11 +93,11 @@ var (
 		"request_validation_failed",
 	)
 
-	// RequestFieldInvalid The request field '{{.ParameterName}}' is not valid: '{{.Value}}'.
-	RequestFieldInvalid = createMessage(
+	// ResourceDoesNotExist The {{.Type}} with id '{{.ResourceID}}' does not exist.
+	ResourceDoesNotExist = createMessage(
 		constants.HTTPCodeBadRequest,
-		"The request field '{{.ParameterName}}' is not valid: '{{.Value}}'.",
-		"request_field_invalid",
+		"The {{.Type}} with id '{{.ResourceID}}' does not exist.",
+		"resource_does_not_exist",
 	)
 
 	// LocalRuntimeNotEnabled Local runtime is not enabled for provider '{{.ProviderID}}'. Please configure a local runtime command for this provider and try again.
@@ -102,18 +114,18 @@ var (
 		"provider_id_not_unique",
 	)
 
-	// SystemProvider System provider '{{.ProviderID}}' cannot be modified or deleted.
-	SystemProvider = createMessage(
+	// ReadOnlyProvider Provider '{{.ProviderID}}' cannot be modified or deleted.
+	ReadOnlyProvider = createMessage(
 		constants.HTTPCodeBadRequest,
-		"System provider '{{.ProviderID}}' cannot be modified or deleted.",
-		"system_provider",
+		"Provider '{{.ProviderID}}' cannot be modified or deleted.",
+		"read_only_provider",
 	)
 
-	// SystemCollection System collection '{{.CollectionID}}' cannot be modified or deleted.
-	SystemCollection = createMessage(
+	// ReadOnlyCollection Collection '{{.CollectionID}}' cannot be modified or deleted.
+	ReadOnlyCollection = createMessage(
 		constants.HTTPCodeBadRequest,
-		"System collection '{{.CollectionID}}' cannot be modified or deleted.",
-		"system_collection",
+		"Collection '{{.CollectionID}}' cannot be modified or deleted.",
+		"read_only_collection",
 	)
 
 	// MLFlowRequiredForExperiment MLflow is required for experiment tracking. Please configure MLflow in the service configuration and try again.

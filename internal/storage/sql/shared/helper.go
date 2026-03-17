@@ -8,7 +8,6 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
-	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 func ValidateFilter(filter []string, allowedColumns []string) error {
@@ -54,7 +53,7 @@ func GetValues(key string, values any) ([]any, string) {
 // It validates each key against the table's allowlist, sorts keys deterministically,
 // and returns both the clause and args in matching order. Returns an error if any
 // filter key is not in the allowlist (fail closed).
-func CreateFilterStatement(tenant api.Tenant, s SQLStatementsFactory, filter map[string]any, orderBy string, limit int, offset int, tableName string) (string, []any) {
+func CreateFilterStatement(s SQLStatementsFactory, where string, whereArgs []any, filter map[string]any, orderBy string, limit int, offset int, tableName string) (string, []any) {
 	var args []any
 	var sb strings.Builder
 
@@ -63,17 +62,15 @@ func CreateFilterStatement(tenant api.Tenant, s SQLStatementsFactory, filter map
 	haveWhere := false
 	writtenFilterKey := false
 
-	// we must always filter by tenant_id if it exists
-	if !tenant.IsEmpty() {
+	if where != "" {
 		sb.WriteString(" WHERE ")
-		cond, condArgs := s.CreateEntityFilterCondition("tenant_id", tenant.String(), index, tableName)
-		index += len(condArgs)
-		sb.WriteString(cond)
-		args = append(args, condArgs...)
+		sb.WriteString(where)
+		args = append(args, whereArgs...)
+		index += len(whereArgs)
+		haveWhere = true
 		if len(filter) > 0 {
 			sb.WriteString(" AND ")
 		}
-		haveWhere = true
 	}
 
 	if len(filter) > 0 {

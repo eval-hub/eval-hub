@@ -17,16 +17,18 @@ func TestProviderStorage(t *testing.T) {
 		"url":           "file::memory:?mode=memory&cache=shared",
 		"database_name": "eval_hub",
 	}
-	store, err := storage.NewStorage(&databaseConfig, false, false, logger)
+	tenant := api.Tenant("tenant-1")
+	store, err := storage.NewStorage(&databaseConfig, nil, nil, false, false, logger)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
+	store = store.WithTenant(tenant)
 
 	provider := &api.ProviderResource{
 		Resource: api.Resource{
 			ID:        "provider-1",
 			CreatedAt: time.Now(),
-			Tenant:    api.Tenant("tenant-1"),
+			Tenant:    tenant,
 		},
 		ProviderConfig: api.ProviderConfig{
 			Name:        "Test Provider",
