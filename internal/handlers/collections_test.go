@@ -50,12 +50,22 @@ type listCollectionsStorage struct {
 	err         error
 }
 
-func (s *listCollectionsStorage) WithLogger(_ *slog.Logger) abstractions.Storage { return s }
-func (s *listCollectionsStorage) WithContext(_ context.Context) abstractions.Storage {
-	return s
+func (s *listCollectionsStorage) WithLogger(_ *slog.Logger) abstractions.Storage {
+	copy := *s
+	return &copy
 }
-func (s *listCollectionsStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
-func (s *listCollectionsStorage) WithOwner(_ api.User) abstractions.Storage    { return s }
+func (s *listCollectionsStorage) WithContext(_ context.Context) abstractions.Storage {
+	copy := *s
+	return &copy
+}
+func (s *listCollectionsStorage) WithTenant(_ api.Tenant) abstractions.Storage {
+	copy := *s
+	return &copy
+}
+func (s *listCollectionsStorage) WithOwner(_ api.User) abstractions.Storage {
+	copy := *s
+	return &copy
+}
 
 func (s *listCollectionsStorage) GetCollections(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
 	if s.err != nil {
@@ -73,12 +83,22 @@ type getCollectionStorage struct {
 	err        error
 }
 
-func (s *getCollectionStorage) WithLogger(_ *slog.Logger) abstractions.Storage { return s }
-func (s *getCollectionStorage) WithContext(_ context.Context) abstractions.Storage {
-	return s
+func (s *getCollectionStorage) WithLogger(_ *slog.Logger) abstractions.Storage {
+	copy := *s
+	return &copy
 }
-func (s *getCollectionStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
-func (s *getCollectionStorage) WithOwner(_ api.User) abstractions.Storage    { return s }
+func (s *getCollectionStorage) WithContext(_ context.Context) abstractions.Storage {
+	copy := *s
+	return &copy
+}
+func (s *getCollectionStorage) WithTenant(_ api.Tenant) abstractions.Storage {
+	copy := *s
+	return &copy
+}
+func (s *getCollectionStorage) WithOwner(_ api.User) abstractions.Storage {
+	copy := *s
+	return &copy
+}
 
 func (s *getCollectionStorage) GetCollection(id string) (*api.CollectionResource, error) {
 	if s.err != nil {
@@ -96,12 +116,22 @@ type createCollectionStorage struct {
 	err     error
 }
 
-func (s *createCollectionStorage) WithLogger(_ *slog.Logger) abstractions.Storage { return s }
-func (s *createCollectionStorage) WithContext(_ context.Context) abstractions.Storage {
-	return s
+func (s *createCollectionStorage) WithLogger(_ *slog.Logger) abstractions.Storage {
+	copy := *s
+	return &copy
 }
-func (s *createCollectionStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
-func (s *createCollectionStorage) WithOwner(_ api.User) abstractions.Storage    { return s }
+func (s *createCollectionStorage) WithContext(_ context.Context) abstractions.Storage {
+	copy := *s
+	return &copy
+}
+func (s *createCollectionStorage) WithTenant(_ api.Tenant) abstractions.Storage {
+	copy := *s
+	return &copy
+}
+func (s *createCollectionStorage) WithOwner(_ api.User) abstractions.Storage {
+	copy := *s
+	return &copy
+}
 
 func (s *createCollectionStorage) CreateCollection(c *api.CollectionResource) error {
 	if s.err != nil {

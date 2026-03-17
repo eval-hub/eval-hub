@@ -171,7 +171,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 		return err
 	}
 	validate := validation.NewValidator()
-	serviceConfig, err := config.LoadConfig(logger, "0.2.0", "local", time.Now().Format(time.RFC3339))
+	serviceConfig, err := config.LoadConfig(logger, "0.3.0", "local", time.Now().Format(time.RFC3339))
 	if err != nil {
 		return logError(fmt.Errorf("failed to load service config: %w", err))
 	}
@@ -216,7 +216,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 	}
 	logger.Info("Storage created.")
 
-	runtime, err := runtimes.NewRuntime(logger, serviceConfig, providerConfigs, collectionConfigs)
+	runtime, err := runtimes.NewRuntime(logger, serviceConfig)
 	if err != nil {
 		return logError(fmt.Errorf("failed to create runtime: %w", err))
 	}

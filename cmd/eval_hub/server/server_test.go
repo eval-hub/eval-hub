@@ -252,7 +252,7 @@ func createServer(port int) (*server.Server, error) {
 		return nil, err
 	}
 	validate := validation.NewValidator()
-	serviceConfig, err := config.LoadConfig(logger, "0.2.0", "local", time.Now().Format(time.RFC3339))
+	serviceConfig, err := config.LoadConfig(logger, "0.3.0", "local", time.Now().Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load service config: %w", err)
 	}

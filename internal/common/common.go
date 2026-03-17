@@ -14,11 +14,8 @@ func GUID() string {
 	return uuid.New().String()
 }
 
-// ResolveProvider returns the provider for providerID from the in-memory map, or from storage if not present and storage is non-nil.
-func ResolveProvider(providerID string, providers map[string]api.ProviderResource, storage abstractions.Storage) (*api.ProviderResource, error) {
-	if p, ok := providers[providerID]; ok {
-		return &p, nil
-	}
+// ResolveProvider returns the provider for providerID
+func ResolveProvider(providerID string, storage abstractions.Storage) (*api.ProviderResource, error) {
 	if storage != nil {
 		p, err := storage.GetProvider(providerID)
 		if err != nil {
@@ -31,11 +28,8 @@ func ResolveProvider(providerID string, providers map[string]api.ProviderResourc
 	return nil, fmt.Errorf("provider %q not found", providerID)
 }
 
-// ResolveCollection returns the collection for collectionID from the in-memory map, or from storage if not present and storage is non-nil.
-func ResolveCollection(collectionID string, collections map[string]api.CollectionResource, storage abstractions.Storage) (*api.CollectionResource, error) {
-	if c, ok := collections[collectionID]; ok {
-		return &c, nil
-	}
+// ResolveCollection returns the collection for collectionID
+func ResolveCollection(collectionID string, storage abstractions.Storage) (*api.CollectionResource, error) {
 	if storage != nil {
 		c, err := storage.GetCollection(collectionID)
 		if err != nil {
