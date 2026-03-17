@@ -55,9 +55,10 @@ get:
         enum:
           - system
           - tenant
-        default:
         title: Scope of collections
-      description: Set to `system` to get only system defined collections, or `tenant` to get only tenant defined collections.
+      description: >
+        Set to `system` to get only system defined collections, or `tenant` to get only user defined collections.
+        If `scope` is not provided, both system and user defined collections will be returned.
   responses:
     '200':
       description: Successful Response

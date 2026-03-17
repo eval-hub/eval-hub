@@ -58,8 +58,9 @@ get:
           - system
           - tenant
         title: Scope of providers
-      description: Set to `system` to get only system defined providers, or `tenant` to get only tenant defined providers.
-
+      description: >
+        Set to `system` to get only system defined providers, or `tenant` to get only user defined providers.
+        If `scope` is not provided, both system and user defined providers will be returned.
   responses:
     '200':
       description: Successful Response
