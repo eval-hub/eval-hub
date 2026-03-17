@@ -3,7 +3,7 @@
   "info": {
     "title": "Eval Hub",
     "description": "API REST server for evaluation backend orchestration",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "contact": {
       "name": "API Support"
     },
@@ -1683,26 +1683,6 @@
           }
         ]
       },
-      "CollectionRef": {
-        "type": "object",
-        "description": "Collection Reference",
-        "required": [
-          "id"
-        ],
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "Unique identifier"
-          },
-          "benchmarks": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BenchmarkConfig"
-            },
-            "description": "The benchmarks supported by this collection. If a benchmark is specified but is not supported by the collection, the evaluation job will fail. This is needed in order to allow overriding the collection benchmarks for a specific evaluation job."
-          }
-        }
-      },
       "ExperimentTag": {
         "type": "object",
         "description": "Tag on an experiment (e.g. MLFlow)",
@@ -1832,13 +1812,89 @@
         "additionalProperties": false,
         "title": "EvaluationExports"
       },
-      "EvaluationJobConfig": {
+      "EvaluationJobConfigBenchmarks": {
         "type": "object",
-        "title": "EvaluationJobConfig",
+        "title": "EvaluationJobConfigBenchmarks",
         "description": "The evaluation job request configuration.\n",
         "required": [
           "name",
-          "model"
+          "model",
+          "benchmarks"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The evaluation job name.\n"
+          },
+          "description": {
+            "type": "string",
+            "description": "The evaluation job description.\n"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The evaluation job tags.\n"
+          },
+          "model": {
+            "$ref": "#/components/schemas/ModelRef",
+            "description": "The model to evaluate.\n"
+          },
+          "benchmarks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BenchmarkConfig"
+            },
+            "description": "The evaluation benchmarks to run.\n"
+          },
+          "pass_criteria": {
+            "$ref": "#/components/schemas/PassCriteria",
+            "description": "The overall pass criteria for the evaluation job.\n"
+          },
+          "experiment": {
+            "$ref": "#/components/schemas/ExperimentConfig",
+            "description": "The MLFlow experiment configuration. When provided, the evaluation job will be tracked in MLFlow.\n"
+          },
+          "exports": {
+            "$ref": "#/components/schemas/EvaluationExports",
+            "description": "Optional exports configuration for the evaluation job. When provided, the evaluation job results will be exported to the specified location.\n"
+          },
+          "custom": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Custom request data. This can be used for user specific job data.\n"
+          }
+        }
+      },
+      "CollectionRef": {
+        "type": "object",
+        "description": "The collection to use for evaluation jobs.\n",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The unique identifier of the collection.\n"
+          },
+          "benchmarks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BenchmarkConfig"
+            },
+            "description": "The benchmarks supported by this collection. If a benchmark is specified but is not supported by the collection, the evaluation job will fail. This is needed in order to allow overriding the collection benchmarks for a specific evaluation job.\n"
+          }
+        }
+      },
+      "EvaluationJobConfigCollection": {
+        "type": "object",
+        "title": "EvaluationJobConfigCollection",
+        "description": "The evaluation job request configuration using a collection.\n",
+        "required": [
+          "name",
+          "model",
+          "collection"
         ],
         "properties": {
           "name": {
@@ -1861,15 +1917,7 @@
             "description": "The model to evaluate.\n"
           },
           "collection": {
-            "$ref": "#/components/schemas/CollectionRef",
-            "description": "Optional collection reference. When provided, the benchmarks will be taken from the collection. Either `benchmarks` or `collection` must be provided, but not both.\n"
-          },
-          "benchmarks": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BenchmarkConfig"
-            },
-            "description": "The evaluation benchmarks to run. Either `benchmarks` or `collection` must be provided, but not both.\n"
+            "$ref": "#/components/schemas/CollectionRef"
           },
           "pass_criteria": {
             "$ref": "#/components/schemas/PassCriteria",
@@ -1879,28 +1927,27 @@
             "$ref": "#/components/schemas/ExperimentConfig",
             "description": "The MLFlow experiment configuration. When provided, the evaluation job will be tracked in MLFlow.\n"
           },
+          "exports": {
+            "$ref": "#/components/schemas/EvaluationExports",
+            "description": "Optional exports configuration for the evaluation job. When provided, the evaluation job results will be exported to the specified location.\n"
+          },
           "custom": {
             "type": "object",
             "additionalProperties": true,
             "description": "Custom request data. This can be used for user specific job data.\n"
-          },
-          "exports": {
-            "$ref": "#/components/schemas/EvaluationExports",
-            "description": "Optional exports configuration for the evaluation job. When provided, the evaluation job results will be exported to the specified location.\n"
           }
-        },
+        }
+      },
+      "EvaluationJobConfig": {
+        "type": "object",
+        "title": "EvaluationJobConfig",
+        "description": "The evaluation job request configuration.\n",
         "oneOf": [
           {
-            "title": "Benchmarks",
-            "required": [
-              "benchmarks"
-            ]
+            "$ref": "#/components/schemas/EvaluationJobConfigBenchmarks"
           },
           {
-            "title": "Collection",
-            "required": [
-              "collection"
-            ]
+            "$ref": "#/components/schemas/EvaluationJobConfigCollection"
           }
         ]
       },
