@@ -18,14 +18,16 @@ import (
 )
 
 type fakeStorage struct {
-	logger        *slog.Logger
-	called        bool
-	ctx           context.Context
-	runStatus     *api.StatusEvent
-	runStatusChan chan *api.StatusEvent
-	updateErr     error
-	tenant        api.Tenant
-	owner         api.User
+	logger            *slog.Logger
+	called            bool
+	ctx               context.Context
+	runStatus         *api.StatusEvent
+	runStatusChan     chan *api.StatusEvent
+	updateErr         error
+	tenant            api.Tenant
+	owner             api.User
+	providerConfigs   map[string]api.ProviderResource
+	collectionConfigs map[string]api.CollectionResource
 }
 
 // UpdateEvaluationJob implements [abstractions.Storage].
@@ -61,8 +63,11 @@ func (f *fakeStorage) UpdateEvaluationJobStatus(_ string, _ api.OverallState, _ 
 func (f *fakeStorage) CreateCollection(_ *api.CollectionResource) error {
 	return nil
 }
-func (f *fakeStorage) GetCollection(_ string) (*api.CollectionResource, error) {
-	return nil, nil
+func (f *fakeStorage) GetCollection(id string) (*api.CollectionResource, error) {
+	if cr, ok := f.collectionConfigs[id]; ok {
+		return &cr, nil
+	}
+	return nil, fmt.Errorf("collection %q not found", id)
 }
 func (f *fakeStorage) GetCollections(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
 	return nil, nil
@@ -79,8 +84,11 @@ func (f *fakeStorage) DeleteCollection(_ string) error {
 func (f *fakeStorage) CreateProvider(_ *api.ProviderResource) error {
 	return nil
 }
-func (f *fakeStorage) GetProvider(_ string) (*api.ProviderResource, error) {
-	return nil, nil
+func (f *fakeStorage) GetProvider(id string) (*api.ProviderResource, error) {
+	if pr, ok := f.providerConfigs[id]; ok {
+		return &pr, nil
+	}
+	return nil, fmt.Errorf("provider %q not found", id)
 }
 func (f *fakeStorage) DeleteProvider(_ string) error {
 	return nil
@@ -98,45 +106,53 @@ func (f *fakeStorage) Close() error { return nil }
 
 func (f *fakeStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 	return &fakeStorage{
-		logger:        logger,
-		ctx:           f.ctx,
-		runStatusChan: f.runStatusChan,
-		updateErr:     f.updateErr,
-		tenant:        f.tenant,
-		owner:         f.owner,
+		logger:            logger,
+		ctx:               f.ctx,
+		runStatusChan:     f.runStatusChan,
+		updateErr:         f.updateErr,
+		tenant:            f.tenant,
+		owner:             f.owner,
+		providerConfigs:   f.providerConfigs,
+		collectionConfigs: f.collectionConfigs,
 	}
 }
 
 func (f *fakeStorage) WithContext(ctx context.Context) abstractions.Storage {
 	return &fakeStorage{
-		logger:        f.logger,
-		ctx:           ctx,
-		runStatusChan: f.runStatusChan,
-		updateErr:     f.updateErr,
-		tenant:        f.tenant,
-		owner:         f.owner,
+		logger:            f.logger,
+		ctx:               ctx,
+		runStatusChan:     f.runStatusChan,
+		updateErr:         f.updateErr,
+		tenant:            f.tenant,
+		owner:             f.owner,
+		providerConfigs:   f.providerConfigs,
+		collectionConfigs: f.collectionConfigs,
 	}
 }
 
 func (f *fakeStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
 	return &fakeStorage{
-		logger:        f.logger,
-		ctx:           f.ctx,
-		runStatusChan: f.runStatusChan,
-		updateErr:     f.updateErr,
-		tenant:        tenant,
-		owner:         f.owner,
+		logger:            f.logger,
+		ctx:               f.ctx,
+		runStatusChan:     f.runStatusChan,
+		updateErr:         f.updateErr,
+		tenant:            tenant,
+		owner:             f.owner,
+		providerConfigs:   f.providerConfigs,
+		collectionConfigs: f.collectionConfigs,
 	}
 }
 
 func (f *fakeStorage) WithOwner(owner api.User) abstractions.Storage {
 	return &fakeStorage{
-		logger:        f.logger,
-		ctx:           f.ctx,
-		runStatusChan: f.runStatusChan,
-		updateErr:     f.updateErr,
-		tenant:        f.tenant,
-		owner:         owner,
+		logger:            f.logger,
+		ctx:               f.ctx,
+		runStatusChan:     f.runStatusChan,
+		updateErr:         f.updateErr,
+		tenant:            f.tenant,
+		owner:             owner,
+		providerConfigs:   f.providerConfigs,
+		collectionConfigs: f.collectionConfigs,
 	}
 }
 
@@ -152,11 +168,10 @@ func TestCreateBenchmarkResourcesSetsConfigMapOwner(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 
-	clientset := fake.NewSimpleClientset()
+	clientset := fake.NewClientset()
 	runtime := &K8sRuntime{
-		logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
-		helper:    &KubernetesHelper{clientset: clientset},
-		providers: sampleProviders(providerID),
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
 		serviceConfig: &config.Config{
 			Service: &config.ServiceConfig{
 				EvalInitImage: "eval-init-image",
@@ -164,7 +179,8 @@ func TestCreateBenchmarkResourcesSetsConfigMapOwner(t *testing.T) {
 		},
 	}
 
-	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0)
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -198,11 +214,10 @@ func TestCreateBenchmarkResourcesSetsAnnotations(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 
-	clientset := fake.NewSimpleClientset()
+	clientset := fake.NewClientset()
 	runtime := &K8sRuntime{
-		logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
-		helper:    &KubernetesHelper{clientset: clientset},
-		providers: sampleProviders(providerID),
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
 		serviceConfig: &config.Config{
 			Service: &config.ServiceConfig{
 				EvalInitImage: "eval-init-image",
@@ -210,7 +225,8 @@ func TestCreateBenchmarkResourcesSetsAnnotations(t *testing.T) {
 		},
 	}
 
-	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0)
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -261,11 +277,10 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnv(t *testing.T) {
 	evaluation := sampleEvaluation(providerID)
 	evaluation.Model.Auth = &api.ModelAuth{SecretRef: "model-auth-secret"}
 
-	clientset := fake.NewSimpleClientset()
+	clientset := fake.NewClientset()
 	runtime := &K8sRuntime{
-		logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
-		helper:    &KubernetesHelper{clientset: clientset},
-		providers: sampleProviders(providerID),
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
 		serviceConfig: &config.Config{
 			Service: &config.ServiceConfig{
 				EvalInitImage: "eval-init-image",
@@ -273,7 +288,8 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnv(t *testing.T) {
 		},
 	}
 
-	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0)
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -339,11 +355,10 @@ func TestCreateBenchmarkResourcesAddsInitContainerForS3TestData(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset()
+	clientset := fake.NewClientset()
 	runtime := &K8sRuntime{
-		logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
-		helper:    &KubernetesHelper{clientset: clientset},
-		providers: sampleProviders(providerID),
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
 		serviceConfig: &config.Config{
 			Service: &config.ServiceConfig{
 				EvalInitImage: "eval-init-image",
@@ -351,7 +366,8 @@ func TestCreateBenchmarkResourcesAddsInitContainerForS3TestData(t *testing.T) {
 		},
 	}
 
-	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0)
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -434,15 +450,14 @@ func TestCreateBenchmarkResourcesDeletesConfigMapOnJobFailure(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 
-	clientset := fake.NewSimpleClientset()
+	clientset := fake.NewClientset()
 	clientset.PrependReactor("create", "jobs", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
 		return true, nil, fmt.Errorf("job create failed")
 	})
 
 	runtime := &K8sRuntime{
-		logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
-		helper:    &KubernetesHelper{clientset: clientset},
-		providers: sampleProviders(providerID),
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
 		serviceConfig: &config.Config{
 			Service: &config.ServiceConfig{
 				EvalInitImage: "eval-init-image",
@@ -450,7 +465,8 @@ func TestCreateBenchmarkResourcesDeletesConfigMapOnJobFailure(t *testing.T) {
 		},
 	}
 
-	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0)
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
@@ -473,10 +489,9 @@ func TestRunEvaluationJobMarksBenchmarkFailedOnCreateError(t *testing.T) {
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	runtime := &K8sRuntime{
-		logger:    logger,
-		helper:    &KubernetesHelper{clientset: clientset},
-		providers: sampleProviders(providerID),
-		ctx:       context.Background(),
+		logger: logger,
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
 		serviceConfig: &config.Config{
 			Service: &config.ServiceConfig{
 				EvalInitImage: "eval-init-image",
@@ -485,7 +500,7 @@ func TestRunEvaluationJobMarksBenchmarkFailedOnCreateError(t *testing.T) {
 	}
 
 	statusCh := make(chan *api.StatusEvent, 1)
-	storage := &fakeStorage{logger: logger, ctx: context.Background(), runStatusChan: statusCh}
+	storage := &fakeStorage{logger: logger, ctx: context.Background(), runStatusChan: statusCh, providerConfigs: sampleProviders(providerID)}
 	var store abstractions.Storage = storage
 
 	if err := runtime.RunEvaluationJob(evaluation, store); err != nil {
@@ -523,10 +538,9 @@ func TestRunEvaluationJobHandlesUpdateFailure(t *testing.T) {
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	runtime := &K8sRuntime{
-		logger:    logger,
-		helper:    &KubernetesHelper{clientset: clientset},
-		providers: sampleProviders(providerID),
-		ctx:       context.Background(),
+		logger: logger,
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
 		serviceConfig: &config.Config{
 			Service: &config.ServiceConfig{
 				EvalInitImage: "eval-init-image",
@@ -536,10 +550,11 @@ func TestRunEvaluationJobHandlesUpdateFailure(t *testing.T) {
 
 	statusCh := make(chan *api.StatusEvent, 1)
 	storage := &fakeStorage{
-		logger:        logger,
-		ctx:           context.Background(),
-		runStatusChan: statusCh,
-		updateErr:     fmt.Errorf("update failed"),
+		logger:          logger,
+		ctx:             context.Background(),
+		runStatusChan:   statusCh,
+		updateErr:       fmt.Errorf("update failed"),
+		providerConfigs: sampleProviders(providerID),
 	}
 	var store abstractions.Storage = storage
 
@@ -568,11 +583,9 @@ func TestRunEvaluationJobReturnsErrorWhenResolveBenchmarksFails(t *testing.T) {
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	runtime := &K8sRuntime{
-		logger:      logger,
-		helper:      &KubernetesHelper{clientset: fake.NewSimpleClientset()},
-		providers:   map[string]api.ProviderResource{},
-		collections: map[string]api.CollectionResource{},
-		ctx:         context.Background(),
+		logger: logger,
+		helper: &KubernetesHelper{clientset: fake.NewSimpleClientset()},
+		ctx:    context.Background(),
 	}
 	err := runtime.RunEvaluationJob(evaluation, nil)
 	if err == nil {

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"net/url"
@@ -189,4 +190,39 @@ func getAllParams(r http_wrappers.RequestWrapper, allowedParams ...string) []str
 	return slices.DeleteFunc(params, func(p string) bool {
 		return slices.Contains(allowedParams, p)
 	})
+}
+
+// isAllowedPatch returns true if the JSON Patch path targets a valid field.
+func isAllowedPatch(patches []allowedPatch, operation api.PatchOp, path string) bool {
+	// test exact matches first
+	for _, patch := range patches {
+		if patch.Path == path && patch.Op == operation {
+			return true
+		}
+	}
+	// test prefix matches next
+	for _, patch := range patches {
+		if (patch.Prefix && patch.Op == operation) && strings.HasPrefix(path, patch.Path+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *Handlers) verifyPatches(ctx context.Context, patches api.Patch, allowedPatches []allowedPatch) error {
+	for i := range patches {
+		if err := h.validate.StructCtx(ctx, &patches[i]); err != nil {
+			return serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error", err.Error())
+		}
+		if patches[i].Op != api.PatchOpReplace && patches[i].Op != api.PatchOpAdd && patches[i].Op != api.PatchOpRemove {
+			return serviceerrors.NewServiceError(messages.InvalidPatchOperation, "Operation", string(patches[i].Op), "AllowedOperations", strings.Join([]string{string(api.PatchOpReplace), string(api.PatchOpAdd), string(api.PatchOpRemove)}, ", "))
+		}
+		if patches[i].Path == "" {
+			return serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", "Invalid patch path")
+		}
+		if !isAllowedPatch(allowedPatches, patches[i].Op, patches[i].Path) {
+			return serviceerrors.NewServiceError(messages.UnallowedPatch, "Operation", patches[i].Op, "Path", patches[i].Path)
+		}
+	}
+	return nil
 }

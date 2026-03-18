@@ -21,18 +21,16 @@ type K8sRuntime struct {
 	logger        *slog.Logger
 	serviceConfig *config.Config
 	helper        *KubernetesHelper
-	providers     map[string]api.ProviderResource
-	collections   map[string]api.CollectionResource
 	ctx           context.Context
 }
 
 // NewK8sRuntime creates a Kubernetes runtime.
-func NewK8sRuntime(logger *slog.Logger, serviceConfig *config.Config, providerConfigs map[string]api.ProviderResource, collectionConfigs map[string]api.CollectionResource) (abstractions.Runtime, error) {
+func NewK8sRuntime(logger *slog.Logger, serviceConfig *config.Config) (abstractions.Runtime, error) {
 	helper, err := NewKubernetesHelper()
 	if err != nil {
 		return nil, err
 	}
-	return &K8sRuntime{logger: logger, serviceConfig: serviceConfig, helper: helper, providers: providerConfigs, collections: collectionConfigs}, nil
+	return &K8sRuntime{logger: logger, serviceConfig: serviceConfig, helper: helper}, nil
 }
 
 func (r *K8sRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
@@ -40,8 +38,6 @@ func (r *K8sRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
 		logger:        logger,
 		serviceConfig: r.serviceConfig,
 		helper:        r.helper,
-		providers:     r.providers,
-		collections:   r.collections,
 		ctx:           r.ctx,
 	}
 }
@@ -51,21 +47,19 @@ func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 		logger:        r.logger,
 		serviceConfig: r.serviceConfig,
 		helper:        r.helper,
-		providers:     r.providers,
-		collections:   r.collections,
 		ctx:           ctx,
 	}
 }
 
 func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, storage abstractions.Storage) error {
-	benchmarks, err := shared.ResolveBenchmarks(evaluation, r.collections, storage)
+	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
 	if err != nil {
 		return err
 	}
 	go func() {
 		for idx, bench := range benchmarks {
 			benchCtx := context.Background()
-			if err := r.createBenchmarkResources(benchCtx, r.logger, evaluation, &bench, idx); err != nil {
+			if err := r.createBenchmarkResources(benchCtx, r.logger, evaluation, &bench, idx, storage); err != nil {
 				r.logger.Error(
 					"kubernetes job creation failed",
 					"error", err,
@@ -145,11 +139,12 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 	logger *slog.Logger,
 	evaluation *api.EvaluationJobResource,
 	benchmark *api.BenchmarkConfig,
-	benchmarkIndex int) error {
-
+	benchmarkIndex int,
+	storage abstractions.Storage,
+) error {
 	benchmarkID := benchmark.ID
 	// Provider/benchmark validation should be handled during creation.
-	provider, err := common.ResolveProvider(benchmark.ProviderID, r.providers, nil)
+	provider, err := common.ResolveProvider(benchmark.ProviderID, storage)
 	if err != nil {
 		return err
 	}

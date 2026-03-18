@@ -9,10 +9,9 @@ import (
 )
 
 // ResolveBenchmarks returns the benchmarks to run: from the job's Collection when set, otherwise from the job's Benchmarks.
-// Collections are resolved first from the in-memory collectionConfigs, then from storage.
-func ResolveBenchmarks(evaluation *api.EvaluationJobResource, collectionConfigs map[string]api.CollectionResource, storage abstractions.Storage) ([]api.BenchmarkConfig, error) {
+func ResolveBenchmarks(evaluation *api.EvaluationJobResource, storage abstractions.Storage) ([]api.BenchmarkConfig, error) {
 	if evaluation.Collection != nil && evaluation.Collection.ID != "" {
-		collection, err := common.ResolveCollection(evaluation.Collection.ID, collectionConfigs, storage)
+		collection, err := common.ResolveCollection(evaluation.Collection.ID, storage)
 		if err != nil {
 			return nil, fmt.Errorf("get collection %s for job %s: %w", evaluation.Collection.ID, evaluation.Resource.ID, err)
 		}

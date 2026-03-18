@@ -13,10 +13,6 @@ import (
 )
 
 func (s *sqlStorage) CreateProvider(provider *api.ProviderResource) error {
-	if err := s.verifyTenant(); err != nil {
-		return err
-	}
-
 	return s.createProviderTxn(nil, provider)
 }
 
@@ -45,9 +41,6 @@ func (s *sqlStorage) createProviderEntity(provider *api.ProviderResource) ([]byt
 }
 
 func (s *sqlStorage) GetProvider(id string) (*api.ProviderResource, error) {
-	if err := s.verifyTenant(); err != nil {
-		return nil, err
-	}
 	return s.getUserProviderTransactional(nil, id)
 }
 
@@ -99,10 +92,6 @@ func (s *sqlStorage) deleteProviderTxn(txn *sql.Tx, id string) error {
 }
 
 func (s *sqlStorage) DeleteProvider(id string) error {
-	if err := s.verifyTenant(); err != nil {
-		return err
-	}
-
 	return s.withTransaction("delete provider", id, func(txn *sql.Tx) error {
 		persistedProvider, err := s.getUserProviderTransactional(txn, id)
 		if err != nil {
@@ -119,19 +108,11 @@ func (s *sqlStorage) DeleteProvider(id string) error {
 }
 
 func (s *sqlStorage) GetProviders(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.ProviderResource], error) {
-	//if err := s.verifyTenant(); err != nil {
-	//	return nil, err
-	//}
-
 	var txn *sql.Tx
 	return listEntities[api.ProviderResource](s, txn, shared.TABLE_PROVIDERS, filter)
 }
 
 func (s *sqlStorage) UpdateProvider(id string, providerConfig *api.ProviderConfig) (*api.ProviderResource, error) {
-	if err := s.verifyTenant(); err != nil {
-		return nil, err
-	}
-
 	var updated *api.ProviderResource
 	err := s.withTransaction("update provider", id, func(txn *sql.Tx) error {
 		persisted, err := s.getUserProviderTransactional(txn, id)
@@ -176,10 +157,6 @@ func (s *sqlStorage) updateProviderTransactional(txn *sql.Tx, providerID string,
 }
 
 func (s *sqlStorage) PatchProvider(id string, patches *api.Patch) (*api.ProviderResource, error) {
-	if err := s.verifyTenant(); err != nil {
-		return nil, err
-	}
-
 	var updated *api.ProviderResource
 	err := s.withTransaction("patch provider", id, func(txn *sql.Tx) error {
 		// TODO: verify the patches and return a validation error if they are on invalid fields

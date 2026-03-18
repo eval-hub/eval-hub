@@ -426,7 +426,6 @@ Feature: Providers Endpoint
     And the response should contain the value "unallowed_patch" at path "message_code"
     And the response should contain the value "The operation 'remove' is not allowed for the path '/name'" at path "message"
 
-  @focus
   Scenario: List providers by tags and name
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/providers" with body:

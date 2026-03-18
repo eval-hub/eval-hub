@@ -1,0 +1,9 @@
+allOf:
+  - $ref: ./EvaluationJobConfigCommon1.yaml
+  - type: object
+    required:
+      - collection
+    properties:
+      collection:
+        $ref: ./CollectionRef.yaml
+  - $ref: ./EvaluationJobConfigCommon2.yaml

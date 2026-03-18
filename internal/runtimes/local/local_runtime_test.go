@@ -19,12 +19,14 @@ import (
 
 // fakeStorage implements [abstractions.Storage] for testing.
 type fakeStorage struct {
-	logger        *slog.Logger
-	called        bool
-	ctx           context.Context
-	runStatus     *api.StatusEvent
-	runStatusChan chan *api.StatusEvent
-	updateErr     error
+	logger            *slog.Logger
+	called            bool
+	ctx               context.Context
+	runStatus         *api.StatusEvent
+	runStatusChan     chan *api.StatusEvent
+	updateErr         error
+	providerConfigs   map[string]api.ProviderResource
+	collectionConfigs map[string]api.CollectionResource
 }
 
 func (f *fakeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent, _ []api.BenchmarkConfig) error {
@@ -53,8 +55,11 @@ func (f *fakeStorage) UpdateEvaluationJobStatus(_ string, _ api.OverallState, _ 
 	return nil
 }
 func (f *fakeStorage) CreateCollection(_ *api.CollectionResource) error { return nil }
-func (f *fakeStorage) GetCollection(_ string) (*api.CollectionResource, error) {
-	return nil, nil
+func (f *fakeStorage) GetCollection(id string) (*api.CollectionResource, error) {
+	if cr, ok := f.collectionConfigs[id]; ok {
+		return &cr, nil
+	}
+	return nil, fmt.Errorf("collection %q not found", id)
 }
 func (f *fakeStorage) GetCollections(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
 	return nil, nil
@@ -68,9 +73,14 @@ func (f *fakeStorage) UpdateCollection(_ string, _ *api.CollectionConfig) (*api.
 func (f *fakeStorage) DeleteCollection(_ string) error { return nil }
 func (f *fakeStorage) Close() error                    { return nil }
 
-func (f *fakeStorage) CreateProvider(_ *api.ProviderResource) error        { return nil }
-func (f *fakeStorage) GetProvider(_ string) (*api.ProviderResource, error) { return nil, nil }
-func (f *fakeStorage) DeleteProvider(_ string) error                       { return nil }
+func (f *fakeStorage) CreateProvider(_ *api.ProviderResource) error { return nil }
+func (f *fakeStorage) GetProvider(id string) (*api.ProviderResource, error) {
+	if pr, ok := f.providerConfigs[id]; ok {
+		return &pr, nil
+	}
+	return nil, fmt.Errorf("provider %q not found", id)
+}
+func (f *fakeStorage) DeleteProvider(_ string) error { return nil }
 func (f *fakeStorage) GetProviders(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.ProviderResource], error) {
 	return nil, nil
 }
@@ -203,7 +213,7 @@ func TestLocalRuntimeName(t *testing.T) {
 }
 
 func TestNewLocalRuntime(t *testing.T) {
-	rt, err := NewLocalRuntime(discardLogger(), nil, nil)
+	rt, err := NewLocalRuntime(discardLogger())
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -221,13 +231,14 @@ func TestRunEvaluationJobWritesJobSpec(t *testing.T) {
 	cleanupDir(t, "job-1")
 
 	rt := &LocalRuntime{
-		logger:    discardLogger(),
-		ctx:       testContext(t),
-		providers: providers,
-		tracker:   newTracker(),
+		logger:  discardLogger(),
+		ctx:     testContext(t),
+		tracker: newTracker(),
 	}
 
-	err := rt.RunEvaluationJob(evaluation, nil)
+	storage := &fakeStorage{providerConfigs: providers}
+
+	err := rt.RunEvaluationJob(evaluation, storage)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -280,13 +291,14 @@ func TestRunEvaluationJobPassesEnvVar(t *testing.T) {
 	providers := sampleLocalProviders(providerID, command)
 
 	rt := &LocalRuntime{
-		logger:    discardLogger(),
-		ctx:       testContext(t),
-		providers: providers,
-		tracker:   newTracker(),
+		logger:  discardLogger(),
+		ctx:     testContext(t),
+		tracker: newTracker(),
 	}
 
-	err := rt.RunEvaluationJob(evaluation, nil)
+	storage := &fakeStorage{providerConfigs: providers}
+
+	err := rt.RunEvaluationJob(evaluation, storage)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -325,13 +337,14 @@ func TestRunEvaluationJobNoBenchmarks(t *testing.T) {
 	evaluation.Benchmarks = nil
 
 	rt := &LocalRuntime{
-		logger:    discardLogger(),
-		ctx:       context.Background(),
-		providers: sampleLocalProviders(providerID, "true"),
-		tracker:   newTracker(),
+		logger:  discardLogger(),
+		ctx:     context.Background(),
+		tracker: newTracker(),
 	}
 
-	err := rt.RunEvaluationJob(evaluation, nil)
+	storage := &fakeStorage{providerConfigs: sampleLocalProviders(providerID, "true")}
+
+	err := rt.RunEvaluationJob(evaluation, storage)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -352,10 +365,9 @@ func TestRunEvaluationJobProviderNotFound(t *testing.T) {
 
 	// Use empty providers map so provider is not found
 	rt := &LocalRuntime{
-		logger:    logger,
-		ctx:       tctx,
-		providers: map[string]api.ProviderResource{},
-		tracker:   newTracker(),
+		logger:  logger,
+		ctx:     tctx,
+		tracker: newTracker(),
 	}
 
 	err := rt.RunEvaluationJob(evaluation, store)
@@ -386,8 +398,6 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 	tctx := testContext(t)
 	logger := discardLogger()
 	statusCh := make(chan *api.StatusEvent, 1)
-	storage := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh}
-	var store abstractions.Storage = storage
 
 	// Provider with nil Local runtime
 	providers := map[string]api.ProviderResource{
@@ -399,14 +409,15 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 		},
 	}
 
+	storage := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh, providerConfigs: providers}
+
 	rt := &LocalRuntime{
-		logger:    logger,
-		ctx:       tctx,
-		providers: providers,
-		tracker:   newTracker(),
+		logger:  logger,
+		ctx:     tctx,
+		tracker: newTracker(),
 	}
 
-	err := rt.RunEvaluationJob(evaluation, store)
+	err := rt.RunEvaluationJob(evaluation, storage)
 	if err != nil {
 		t.Fatalf("expected no synchronous error, got %v", err)
 	}
@@ -428,8 +439,6 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 
 	// Also test with empty command
 	statusCh2 := make(chan *api.StatusEvent, 1)
-	storage2 := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh2}
-	var store2 abstractions.Storage = storage2
 
 	providers[providerID] = api.ProviderResource{
 		Resource: api.Resource{ID: providerID},
@@ -440,7 +449,9 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 		},
 	}
 
-	err = rt.RunEvaluationJob(evaluation, store2)
+	storage2 := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh2, providerConfigs: providers}
+
+	err = rt.RunEvaluationJob(evaluation, storage2)
 	if err != nil {
 		t.Fatalf("expected no synchronous error for empty command, got %v", err)
 	}
@@ -472,15 +483,15 @@ func TestRunEvaluationJobProcessFailureNoCallback(t *testing.T) {
 	tctx := testContext(t)
 	logger := discardLogger()
 	statusCh := make(chan *api.StatusEvent, 1)
-	storage := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh}
-	var store abstractions.Storage = storage
 
 	rt := &LocalRuntime{
-		logger:    logger,
-		ctx:       tctx,
-		providers: providers,
-		tracker:   newTracker(),
+		logger:  logger,
+		ctx:     tctx,
+		tracker: newTracker(),
 	}
+
+	storage := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh, providerConfigs: providers}
+	var store abstractions.Storage = storage
 
 	err := rt.RunEvaluationJob(evaluation, store)
 	if err != nil {
@@ -512,15 +523,15 @@ func TestRunEvaluationJobCancelledNoFailure(t *testing.T) {
 	tctx := testContext(t)
 	logger := discardLogger()
 	statusCh := make(chan *api.StatusEvent, 1)
-	storage := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh}
-	var store abstractions.Storage = storage
 
 	rt := &LocalRuntime{
-		logger:    logger,
-		ctx:       tctx,
-		providers: providers,
-		tracker:   newTracker(),
+		logger:  logger,
+		ctx:     tctx,
+		tracker: newTracker(),
 	}
+
+	storage := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh, providerConfigs: providers}
+	var store abstractions.Storage = storage
 
 	err := rt.RunEvaluationJob(evaluation, store)
 	if err != nil {
@@ -565,14 +576,18 @@ func TestRunEvaluationJobMultipleBenchmarks(t *testing.T) {
 	providers := sampleLocalProviders(providerID, command)
 	cleanupDir(t, "job-1")
 
+	tctx := testContext(t)
+	logger := discardLogger()
+
 	rt := &LocalRuntime{
-		logger:    discardLogger(),
-		ctx:       testContext(t),
-		providers: providers,
-		tracker:   newTracker(),
+		logger:  logger,
+		ctx:     tctx,
+		tracker: newTracker(),
 	}
 
-	err := rt.RunEvaluationJob(evaluation, nil)
+	storage := &fakeStorage{logger: logger, ctx: tctx, providerConfigs: providers}
+
+	err := rt.RunEvaluationJob(evaluation, storage)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -633,14 +648,13 @@ func TestRunEvaluationJobMultipleBenchmarksPartialFailure(t *testing.T) {
 	tctx := testContext(t)
 	logger := discardLogger()
 	statusCh := make(chan *api.StatusEvent, 2)
-	storage := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh}
+	storage := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh, providerConfigs: providers}
 	var store abstractions.Storage = storage
 
 	rt := &LocalRuntime{
-		logger:    logger,
-		ctx:       tctx,
-		providers: providers,
-		tracker:   newTracker(),
+		logger:  logger,
+		ctx:     tctx,
+		tracker: newTracker(),
 	}
 
 	err := rt.RunEvaluationJob(evaluation, store)
@@ -675,14 +689,18 @@ func TestRunEvaluationJobCallbackURL(t *testing.T) {
 
 	t.Setenv("SERVICE_URL", "http://localhost:8080")
 
+	tctx := testContext(t)
+	logger := discardLogger()
+
 	rt := &LocalRuntime{
-		logger:    discardLogger(),
-		ctx:       testContext(t),
-		providers: providers,
-		tracker:   newTracker(),
+		logger:  logger,
+		ctx:     tctx,
+		tracker: newTracker(),
 	}
 
-	err := rt.RunEvaluationJob(evaluation, nil)
+	storage := &fakeStorage{logger: logger, ctx: tctx, providerConfigs: providers}
+
+	err := rt.RunEvaluationJob(evaluation, storage)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -718,14 +736,18 @@ func TestRunEvaluationJobCallbackURLNotSet(t *testing.T) {
 	// Ensure SERVICE_URL is not set
 	t.Setenv("SERVICE_URL", "")
 
+	tctx := testContext(t)
+	logger := discardLogger()
+
 	rt := &LocalRuntime{
-		logger:    discardLogger(),
-		ctx:       testContext(t),
-		providers: providers,
-		tracker:   newTracker(),
+		logger:  logger,
+		ctx:     tctx,
+		tracker: newTracker(),
 	}
 
-	err := rt.RunEvaluationJob(evaluation, nil)
+	storage := &fakeStorage{logger: logger, ctx: tctx, providerConfigs: providers}
+
+	err := rt.RunEvaluationJob(evaluation, storage)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -755,14 +777,18 @@ func TestRunEvaluationJobCreatesLogFile(t *testing.T) {
 	providers := sampleLocalProviders(providerID, fmt.Sprintf("echo hello-stdout && echo hello-stderr >&2 && touch %s", sentinelPath))
 	cleanupDir(t, "job-1")
 
+	tctx := testContext(t)
+	logger := discardLogger()
+
 	rt := &LocalRuntime{
-		logger:    discardLogger(),
-		ctx:       testContext(t),
-		providers: providers,
-		tracker:   newTracker(),
+		logger:  logger,
+		ctx:     tctx,
+		tracker: newTracker(),
 	}
 
-	err := rt.RunEvaluationJob(evaluation, nil)
+	storage := &fakeStorage{logger: logger, ctx: tctx, providerConfigs: providers}
+
+	err := rt.RunEvaluationJob(evaluation, storage)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
