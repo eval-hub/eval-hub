@@ -46,13 +46,11 @@ make update-deps        # Update all dependencies to latest
 ```
 
 ### Database Setup
+
+SQLite in-memory is the default and requires no setup. For PostgreSQL, install and start the service manually, then set the `DB_URL` environment variable:
+
 ```bash
-make install-postgres   # Install PostgreSQL (macOS/Linux)
-make start-postgres     # Start PostgreSQL service
-make stop-postgres      # Stop PostgreSQL service
-make create-database    # Create eval_hub database
-make create-user        # Create eval_hub user
-make grant-permissions  # Grant permissions to user
+export DB_URL="postgres://user@localhost:5432/eval_hub"
 ```
 
 ### Cleanup
@@ -82,14 +80,14 @@ This project follows the standard Go project layout with a clear separation betw
 All evaluation-related handlers receive an `ExecutionContext` instead of raw `http.Request`:
 
 ```go
-func (h *Handlers) HandleCreateEvaluation(ctx *ExecutionContext, w http.ResponseWriter, r *http.Request)
+func (h *Handlers) HandleCreateEvaluation(ctx *ExecutionContext, req *ReqWrapper, resp *RespWrapper)
 ```
 
 The ExecutionContext:
 - Contains a request-scoped logger with enriched fields
 - Carries the service configuration
 - Holds evaluation-specific state (model info, timeouts, retries, metadata)
-- Is created in server route handlers via `executioncontext.NewExecutionContext(r, logger, config)`
+- Is created in server route handlers via `s.newExecutionContext(r)`, which internally calls `executioncontext.NewExecutionContext(ctx, requestID, logger, timeout, user, tenant)`
 
 This pattern enables:
 - Automatic request ID tracking (from `X-Global-Transaction-Id` header or auto-generated UUID)
@@ -109,13 +107,13 @@ Configuration supports:
 
 Example from config.yaml:
 ```yaml
-env:
-  mappings:
-    service.port: PORT
+env_mappings:
+  PORT: service.port
+  DB_URL: database.url
 secrets:
   dir: /tmp
   mappings:
-    database.password: db_password
+    # db_password: database.password
 ```
 
 #### Structured Logging with Request Enhancement
@@ -130,24 +128,26 @@ Loggers are enhanced per-request with:
 - **remote_user**: Authenticated user (from URL or Remote-User header)
 - **referer**: HTTP referer header
 
-Enhancement happens in `logging.LoggerWithRequest(logger, r)`, called when creating ExecutionContext.
+Enhancement happens in `s.loggerWithRequest(r)` (a Server method in `cmd/eval_hub/server/`), called when creating ExecutionContext.
 
 #### Routing Pattern
 Uses standard library `net/http.ServeMux` without a web framework:
 - Basic handlers (health, status, OpenAPI) receive `http.ResponseWriter, *http.Request`
-- Evaluation-related handlers receive `*ExecutionContext, http.ResponseWriter, *http.Request`
+- Evaluation-related handlers receive `*ExecutionContext, *ReqWrapper, *RespWrapper`
 - Routes manually switch on HTTP method in handler functions
 - ExecutionContext created at route level before calling handler
 
 Example:
 ```go
-router.HandleFunc("/api/v1/evaluations/jobs", func(w http.ResponseWriter, r *http.Request) {
-    ctx := executioncontext.NewExecutionContext(r, s.logger, s.serviceConfig)
+s.handleFunc(router, "/api/v1/evaluations/jobs", func(w http.ResponseWriter, r *http.Request) {
+    ctx := s.newExecutionContext(r)
+    resp := NewRespWrapper(w, ctx)
+    req := &ReqWrapper{Request: r}
     switch r.Method {
     case http.MethodPost:
-        h.HandleCreateEvaluation(ctx, w, r)
+        h.HandleCreateEvaluation(ctx, req, resp)
     case http.MethodGet:
-        h.HandleListEvaluations(ctx, w, r)
+        h.HandleListEvaluations(ctx, req, resp)
     }
 })
 ```
