@@ -8,7 +8,7 @@ import (
 )
 
 // marshalSidecarForJobPod builds sidecar_config.json for the job ConfigMap from server
-// sidecar YAML plus per-job fields (eval-hub URL, MLflow tracking URI, service CA paths).
+// sidecar YAML plus per-job fields. Omits sidecar_container (image/resources); that is only for job spec.
 func marshalSidecarForJobPod(cfg *config.Config, jc *jobConfig) ([]byte, error) {
 	if cfg != nil && cfg.Sidecar == nil && jc != nil && jc.evalHubURL == "" && jc.mlflowTrackingURI == "" {
 		return []byte("{}"), nil
@@ -76,21 +76,6 @@ func cloneSidecarConfig(sc *config.SidecarConfig) *config.SidecarConfig {
 		mf := *sc.MLFlow
 		out.MLFlow = &mf
 	}
-	if sc.SidecarContainer != nil {
-		scc := *sc.SidecarContainer
-		if sc.SidecarContainer.Resources != nil {
-			res := *sc.SidecarContainer.Resources
-			scc.Resources = &res
-			if sc.SidecarContainer.Resources.Requests != nil {
-				req := *sc.SidecarContainer.Resources.Requests
-				scc.Resources.Requests = &req
-			}
-			if sc.SidecarContainer.Resources.Limits != nil {
-				lim := *sc.SidecarContainer.Resources.Limits
-				scc.Resources.Limits = &lim
-			}
-		}
-		out.SidecarContainer = &scc
-	}
+	// SidecarContainer (image/resources) is for eval-hub job scheduling only, not the sidecar process.
 	return out
 }

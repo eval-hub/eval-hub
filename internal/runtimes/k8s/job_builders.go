@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/eval-hub/eval-hub/internal/config"
+
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -210,13 +212,14 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	}
 	if !cfg.localMode {
 		containers = append(containers, corev1.Container{
-			Name:            sidecarContainerName,
-			Image:           cfg.sidecarImage,
-			ImagePullPolicy: corev1.PullIfNotPresent,
-			Command:         []string{"/app/eval-runtime-sidecar"},
-			Resources:       cfg.sidecarResources,
-			SecurityContext: defaultSecurityContext(),
-			VolumeMounts:    sidecarContainerVolumeMounts,
+			Name:                   sidecarContainerName,
+			Image:                  cfg.sidecarImage,
+			ImagePullPolicy:        corev1.PullIfNotPresent,
+			Command:                []string{"/app/eval-runtime-sidecar"},
+			Resources:              cfg.sidecarResources,
+			SecurityContext:        defaultSecurityContext(),
+			VolumeMounts:           sidecarContainerVolumeMounts,
+			TerminationMessagePath: config.SidecarTerminationFilePath,
 		})
 	}
 
