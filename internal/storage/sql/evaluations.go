@@ -24,10 +24,6 @@ type EvaluationJobEntity struct {
 // Evaluation job operations
 // #######################################################################
 func (s *sqlStorage) CreateEvaluationJob(evaluation *api.EvaluationJobResource) error {
-	if err := s.verifyTenant(); err != nil {
-		return err
-	}
-
 	return s.withTransaction("create evaluation job", evaluation.Resource.ID, func(txn *sql.Tx) error {
 		evaluationJSON, err := s.createEvaluationJobEntity(evaluation)
 		if err != nil {
@@ -57,9 +53,6 @@ func (s *sqlStorage) createEvaluationJobEntity(evaluation *api.EvaluationJobReso
 }
 
 func (s *sqlStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, error) {
-	if err := s.verifyTenant(); err != nil {
-		return nil, err
-	}
 	return s.getEvaluationJobTransactional(nil, id)
 }
 
@@ -96,43 +89,32 @@ func (s *sqlStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 }
 
 func (s *sqlStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
-	if err := s.verifyTenant(); err != nil {
-		return nil, err
-	}
-
 	var txn *sql.Tx
 	return listEntities[api.EvaluationJobResource](s, txn, shared.TABLE_EVALUATIONS, filter)
 }
 
 func (s *sqlStorage) DeleteEvaluationJob(id string) error {
-	if err := s.verifyTenant(); err != nil {
-		return err
-	}
+	// Build the DELETE query
+	deleteQuery, args := s.statementsFactory.CreateDeleteEntityStatement(s.tenant, shared.TABLE_EVALUATIONS, id)
 
-	// we have to get the evaluation job and then update or delete the job so we need a transaction
-	err := s.withTransaction("delete evaluation job", id, func(txn *sql.Tx) error {
-		// check if the evaluation job exists, we do this otherwise we always return 204
-		_, err := s.getEvaluationJobTransactional(txn, id)
-		if err != nil {
-			s.logger.Debug("Failed to get evaluation job", "error", err, "id", id)
+	// Execute the DELETE query
+	result, err := s.exec(nil, deleteQuery, args...)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			s.logger.Debug("Evaluation job not found", "id", id)
 			return se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
 		}
+		s.logger.Error("Failed to delete evaluation job", "error", err, "id", id)
+		return se.WithRollback(se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error()))
+	}
+	if rows, err := result.RowsAffected(); ((err == nil) && (rows == 0)) || (err == sql.ErrNoRows) {
+		s.logger.Debug("Evaluation job not found", "id", id)
+		return se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
+	}
 
-		// Build the DELETE query
-		deleteQuery, args := s.statementsFactory.CreateDeleteEntityStatement(s.tenant, shared.TABLE_EVALUATIONS, id)
+	s.logger.Info("Deleted evaluation job", "id", id)
 
-		// Execute the DELETE query
-		_, err = s.exec(txn, deleteQuery, args...)
-		if err != nil {
-			s.logger.Error("Failed to delete evaluation job", "error", err, "id", id)
-			return se.WithRollback(se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error()))
-		}
-
-		s.logger.Info("Deleted evaluation job", "id", id)
-
-		return nil
-	})
-	return err
+	return nil
 }
 
 func (s *sqlStorage) checkEvaluationJobState(evaluationJobID string, evaluationJobState api.OverallState, state api.OverallState) (bool, error) {
@@ -154,10 +136,6 @@ func (s *sqlStorage) checkEvaluationJobState(evaluationJobID string, evaluationJ
 }
 
 func (s *sqlStorage) UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error {
-	if err := s.verifyTenant(); err != nil {
-		return err
-	}
-
 	// we have to get the evaluation job and update the status so we need a transaction
 	s.logger.Debug("Updating evaluation job status", "id", id, "state", state, "message", message)
 	err := s.withTransaction("update evaluation job status", id, func(txn *sql.Tx) error {
@@ -254,10 +232,6 @@ func (s *sqlStorage) validateBenchmarkExists(job *api.EvaluationJobResource, run
 
 // UpdateEvaluationJobWithRunStatus runs in a transaction: fetches the job, merges RunStatusInternal into the entity, and persists.
 func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent, benchmarks []api.BenchmarkConfig) error {
-	if err := s.verifyTenant(); err != nil {
-		return err
-	}
-
 	err := s.withTransaction("update evaluation job", id, func(txn *sql.Tx) error {
 		s.logger.Info("Updating evaluation job", "id", id, "status", runStatus.BenchmarkStatusEvent.Status, "runStatus", runStatus)
 

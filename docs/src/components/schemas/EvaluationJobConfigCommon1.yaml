@@ -1,0 +1,26 @@
+type: object
+title: EvaluationJobConfigCommon1
+description: >
+  The evaluation job request configuration.
+required:
+  - name
+  - model
+properties:
+  name:
+    type: string
+    description: >
+      The evaluation job name.
+  description:
+    type: string
+    description: >
+      The evaluation job description.
+  tags:
+    type: array
+    items:
+      type: string
+    description: >
+      The evaluation job tags.
+  model:
+    $ref: ./ModelRef.yaml
+    description: >
+      The model to evaluate.

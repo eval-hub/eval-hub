@@ -62,43 +62,33 @@ func (jr *pidTracker) cancelJob(jobID string) {
 }
 
 type LocalRuntime struct {
-	logger      *slog.Logger
-	ctx         context.Context
-	providers   map[string]api.ProviderResource
-	collections map[string]api.CollectionResource
-	tracker     jobTracker
+	logger  *slog.Logger
+	ctx     context.Context
+	tracker jobTracker
 }
 
 func NewLocalRuntime(
 	logger *slog.Logger,
-	providerConfigs map[string]api.ProviderResource,
-	collectionConfigs map[string]api.CollectionResource,
 ) (abstractions.Runtime, error) {
 	return &LocalRuntime{
-		logger:      logger,
-		providers:   providerConfigs,
-		collections: collectionConfigs,
-		tracker:     &pidTracker{pids: make(map[string][]int)},
+		logger:  logger,
+		tracker: &pidTracker{pids: make(map[string][]int)},
 	}, nil
 }
 
 func (r *LocalRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
 	return &LocalRuntime{
-		logger:      logger,
-		ctx:         r.ctx,
-		providers:   r.providers,
-		collections: r.collections,
-		tracker:     r.tracker,
+		logger:  logger,
+		ctx:     r.ctx,
+		tracker: r.tracker,
 	}
 }
 
 func (r *LocalRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 	return &LocalRuntime{
-		logger:      r.logger,
-		ctx:         ctx,
-		providers:   r.providers,
-		collections: r.collections,
-		tracker:     r.tracker,
+		logger:  r.logger,
+		ctx:     ctx,
+		tracker: r.tracker,
 	}
 }
 
@@ -111,7 +101,7 @@ func (r *LocalRuntime) RunEvaluationJob(
 		return fmt.Errorf("local runtime: nil context — WithContext must be called before RunEvaluationJob")
 	}
 
-	benchmarksToRun, err := shared.ResolveBenchmarks(evaluation, r.collections, storage)
+	benchmarksToRun, err := shared.ResolveBenchmarks(evaluation, storage)
 	if err != nil {
 		return err
 	}
@@ -158,7 +148,7 @@ func (r *LocalRuntime) runBenchmark(
 	callbackURL *string,
 	storage abstractions.Storage,
 ) error {
-	provider, err := common.ResolveProvider(bench.ProviderID, r.providers, storage)
+	provider, err := common.ResolveProvider(bench.ProviderID, storage)
 	if err != nil {
 		return err
 	}

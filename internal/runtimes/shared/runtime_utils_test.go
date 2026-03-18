@@ -16,7 +16,7 @@ func TestResolveBenchmarks_FromJobBenchmarks(t *testing.T) {
 			},
 		},
 	}
-	got, err := ResolveBenchmarks(eval, nil, nil)
+	got, err := ResolveBenchmarks(eval, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -32,7 +32,7 @@ func TestResolveBenchmarks_CollectionSetStorageNil_ReturnsError(t *testing.T) {
 			Collection: &api.CollectionRef{ID: "coll-1"},
 		},
 	}
-	_, err := ResolveBenchmarks(eval, nil, nil)
+	_, err := ResolveBenchmarks(eval, nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

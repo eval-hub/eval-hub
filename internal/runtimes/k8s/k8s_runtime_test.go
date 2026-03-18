@@ -66,19 +66,20 @@ func TestRunEvaluationJobCreatesResources(t *testing.T) {
 		logger: logger,
 		helper: helper,
 		ctx:    context.Background(),
-		providers: map[string]api.ProviderResource{
-			"lm_evaluation_harness": {
-				Resource: api.Resource{ID: "lm_evaluation_harness"},
-				ProviderConfig: api.ProviderConfig{
-					Runtime: &api.Runtime{
-						K8s: &api.K8sRuntime{
-							Image:       "docker.io/library/busybox:1.36",
-							Entrypoint:  []string{"/bin/sh", "-c", "echo hello"},
-							CPULimit:    "500m",
-							MemoryLimit: "1Gi",
-							Env: []api.EnvVar{
-								{Name: "VAR_NAME", Value: "VALUE"},
-							},
+	}
+
+	providers := map[string]api.ProviderResource{
+		"lm_evaluation_harness": {
+			Resource: api.Resource{ID: "lm_evaluation_harness"},
+			ProviderConfig: api.ProviderConfig{
+				Runtime: &api.Runtime{
+					K8s: &api.K8sRuntime{
+						Image:       "docker.io/library/busybox:1.36",
+						Entrypoint:  []string{"/bin/sh", "-c", "echo hello"},
+						CPULimit:    "500m",
+						MemoryLimit: "1Gi",
+						Env: []api.EnvVar{
+							{Name: "VAR_NAME", Value: "VALUE"},
 						},
 					},
 				},
@@ -118,7 +119,9 @@ func TestRunEvaluationJobCreatesResources(t *testing.T) {
 		},
 	}
 
-	if err := runtime.RunEvaluationJob(evaluation, nil); err != nil {
+	storage := &fakeStorage{providerConfigs: providers}
+
+	if err := runtime.RunEvaluationJob(evaluation, storage); err != nil {
 		t.Fatalf("RunEvaluationJob returned error: %v", err)
 	}
 
@@ -189,30 +192,31 @@ func TestCreateBenchmarkResourcesDuplicateBenchmarkIDDoesNotCollide(t *testing.T
 		logger: logger,
 		helper: helper,
 		ctx:    context.Background(),
-		providers: map[string]api.ProviderResource{
-			"lm_evaluation_harness": {
-				Resource: api.Resource{ID: "lm_evaluation_harness"},
-				ProviderConfig: api.ProviderConfig{
-					Runtime: &api.Runtime{
-						K8s: &api.K8sRuntime{
-							Image: "docker.io/library/busybox:1.36",
-						},
+	}
+
+	providers := map[string]api.ProviderResource{
+		"lm_evaluation_harness": {
+			Resource: api.Resource{ID: "lm_evaluation_harness"},
+			ProviderConfig: api.ProviderConfig{
+				Runtime: &api.Runtime{
+					K8s: &api.K8sRuntime{
+						Image: "docker.io/library/busybox:1.36",
 					},
 				},
 			},
-			"lighteval": {
-				Resource: api.Resource{ID: "lighteval"},
-				ProviderConfig: api.ProviderConfig{
-					Runtime: &api.Runtime{
-						K8s: &api.K8sRuntime{
-							Image: "docker.io/library/busybox:1.36",
-						},
+		},
+		"lighteval": {
+			Resource: api.Resource{ID: "lighteval"},
+			ProviderConfig: api.ProviderConfig{
+				Runtime: &api.Runtime{
+					K8s: &api.K8sRuntime{
+						Image: "docker.io/library/busybox:1.36",
 					},
 				},
 			},
 		},
 	}
-
+	storage := &fakeStorage{providerConfigs: providers}
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{ID: uuid.NewString()},
@@ -239,12 +243,12 @@ func TestCreateBenchmarkResourcesDuplicateBenchmarkIDDoesNotCollide(t *testing.T
 		_ = runtime.DeleteEvaluationJobResources(evaluation)
 	})
 
-	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[0], 0); err != nil {
+	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[0], 0, storage); err != nil {
 		t.Logf("first createBenchmarkResources error: %v", err)
 		t.Fatalf("unexpected error creating first benchmark resources: %v", err)
 	}
 
-	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[1], 1); err != nil {
+	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[1], 1, storage); err != nil {
 		t.Fatalf("unexpected error creating second benchmark resources: %v", err)
 	}
 
@@ -273,20 +277,21 @@ func TestCreateBenchmarkResourcesSetsAnnotationsIntegration(t *testing.T) {
 		logger: logger,
 		helper: helper,
 		ctx:    context.Background(),
-		providers: map[string]api.ProviderResource{
-			"lm_evaluation_harness": {
-				Resource: api.Resource{ID: "lm_evaluation_harness"},
-				ProviderConfig: api.ProviderConfig{
-					Runtime: &api.Runtime{
-						K8s: &api.K8sRuntime{
-							Image: "docker.io/library/busybox:1.36",
-						},
+	}
+
+	providers := map[string]api.ProviderResource{
+		"lm_evaluation_harness": {
+			Resource: api.Resource{ID: "lm_evaluation_harness"},
+			ProviderConfig: api.ProviderConfig{
+				Runtime: &api.Runtime{
+					K8s: &api.K8sRuntime{
+						Image: "docker.io/library/busybox:1.36",
 					},
 				},
 			},
 		},
 	}
-
+	storage := &fakeStorage{providerConfigs: providers}
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{ID: uuid.NewString()},
@@ -309,7 +314,7 @@ func TestCreateBenchmarkResourcesSetsAnnotationsIntegration(t *testing.T) {
 		_ = runtime.DeleteEvaluationJobResources(evaluation)
 	})
 
-	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[0], 0); err != nil {
+	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[0], 0, storage); err != nil {
 		t.Fatalf("unexpected error creating benchmark resources: %v", err)
 	}
 
@@ -368,20 +373,21 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnvIntegration(t *testing
 		logger: logger,
 		helper: helper,
 		ctx:    context.Background(),
-		providers: map[string]api.ProviderResource{
-			"lm_evaluation_harness": {
-				Resource: api.Resource{ID: "lm_evaluation_harness"},
-				ProviderConfig: api.ProviderConfig{
-					Runtime: &api.Runtime{
-						K8s: &api.K8sRuntime{
-							Image: "docker.io/library/busybox:1.36",
-						},
+	}
+
+	providers := map[string]api.ProviderResource{
+		"lm_evaluation_harness": {
+			Resource: api.Resource{ID: "lm_evaluation_harness"},
+			ProviderConfig: api.ProviderConfig{
+				Runtime: &api.Runtime{
+					K8s: &api.K8sRuntime{
+						Image: "docker.io/library/busybox:1.36",
 					},
 				},
 			},
 		},
 	}
-
+	storage := &fakeStorage{providerConfigs: providers}
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{ID: uuid.NewString()},
@@ -405,7 +411,7 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnvIntegration(t *testing
 		_ = runtime.DeleteEvaluationJobResources(evaluation)
 	})
 
-	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[0], 0); err != nil {
+	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[0], 0, storage); err != nil {
 		t.Fatalf("unexpected error creating benchmark resources: %v", err)
 	}
 
@@ -462,20 +468,21 @@ func TestCreateBenchmarkResourcesAddsInitContainerForS3TestDataIntegration(t *te
 		logger: logger,
 		helper: helper,
 		ctx:    context.Background(),
-		providers: map[string]api.ProviderResource{
-			"lm_evaluation_harness": {
-				Resource: api.Resource{ID: "lm_evaluation_harness"},
-				ProviderConfig: api.ProviderConfig{
-					Runtime: &api.Runtime{
-						K8s: &api.K8sRuntime{
-							Image: "docker.io/library/busybox:1.36",
-						},
+	}
+
+	providers := map[string]api.ProviderResource{
+		"lm_evaluation_harness": {
+			Resource: api.Resource{ID: "lm_evaluation_harness"},
+			ProviderConfig: api.ProviderConfig{
+				Runtime: &api.Runtime{
+					K8s: &api.K8sRuntime{
+						Image: "docker.io/library/busybox:1.36",
 					},
 				},
 			},
 		},
 	}
-
+	storage := &fakeStorage{providerConfigs: providers}
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{ID: uuid.NewString()},
@@ -505,7 +512,7 @@ func TestCreateBenchmarkResourcesAddsInitContainerForS3TestDataIntegration(t *te
 		_ = runtime.DeleteEvaluationJobResources(evaluation)
 	})
 
-	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[0], 0); err != nil {
+	if err := runtime.createBenchmarkResources(context.Background(), logger, evaluation, &evaluation.Benchmarks[0], 0, storage); err != nil {
 		t.Fatalf("unexpected error creating benchmark resources: %v", err)
 	}
 

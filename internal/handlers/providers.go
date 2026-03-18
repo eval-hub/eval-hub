@@ -19,7 +19,7 @@ import (
 
 var (
 	// these are the allowed patches for the user-defined provider config
-	allowedPatches = []allowedPatch{
+	allowedProviderPatches = []allowedPatch{
 		{Path: "/name", Op: api.PatchOpReplace, Prefix: false},
 
 		{Path: "/title", Op: api.PatchOpAdd, Prefix: false},
@@ -61,18 +61,14 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 			if err != nil {
 				return err
 			}
-			err = serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, request)
-			if err != nil {
-				return err
-			}
-			// TODO: do we need any extra validation for the provider config?
-			return nil
+			return serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, request)
 		},
 		"validation",
 		"validate-provider",
 		"provider.id", id,
 	)
 	if err != nil {
+		w.Error(err, ctx.RequestID)
 		return
 	}
 
@@ -164,23 +160,6 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 	w.WriteJSON(result, 200)
 }
 
-// isAllowedPatch returns true if the JSON Patch path targets a valid field.
-func isAllowedPatch(operation api.PatchOp, path string) bool {
-	// test exact matches first
-	for _, patch := range allowedPatches {
-		if patch.Path == path && patch.Op == operation {
-			return true
-		}
-	}
-	// test prefix matches next
-	for _, patch := range allowedPatches {
-		if (patch.Prefix && patch.Op == operation) && strings.HasPrefix(path, patch.Path+"/") {
-			return true
-		}
-	}
-	return false
-}
-
 func (h *Handlers) HandleGetProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
@@ -195,12 +174,11 @@ func (h *Handlers) HandleGetProvider(ctx *executioncontext.ExecutionContext, req
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			provider, err := storage.GetProvider(providerId)
+			provider, err := storage.WithContext(runtimeCtx).GetProvider(providerId)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
 			}
-
 			w.WriteJSON(provider, 200)
 			return nil
 		},
@@ -231,11 +209,7 @@ func (h *Handlers) HandleUpdateProvider(ctx *executioncontext.ExecutionContext, 
 			if err != nil {
 				return err
 			}
-			err = serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, request)
-			if err != nil {
-				return err
-			}
-			return nil
+			return serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, request)
 		},
 		"validation",
 		"validate-provider-update",
@@ -249,7 +223,7 @@ func (h *Handlers) HandleUpdateProvider(ctx *executioncontext.ExecutionContext, 
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			provider, err := storage.UpdateProvider(providerId, request)
+			provider, err := storage.WithContext(runtimeCtx).UpdateProvider(providerId, request)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -286,19 +260,8 @@ func (h *Handlers) HandlePatchProvider(ctx *executioncontext.ExecutionContext, r
 			if err = json.Unmarshal(bodyBytes, &patches); err != nil {
 				return serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", err.Error())
 			}
-			for i := range patches {
-				if err = h.validate.StructCtx(ctx.Ctx, &patches[i]); err != nil {
-					return serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error", err.Error())
-				}
-				if patches[i].Op != api.PatchOpReplace && patches[i].Op != api.PatchOpAdd && patches[i].Op != api.PatchOpRemove {
-					return serviceerrors.NewServiceError(messages.InvalidPatchOperation, "Operation", string(patches[i].Op), "AllowedOperations", strings.Join([]string{string(api.PatchOpReplace), string(api.PatchOpAdd), string(api.PatchOpRemove)}, ", "))
-				}
-				if patches[i].Path == "" {
-					return serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", "Invalid patch path")
-				}
-				if !isAllowedPatch(patches[i].Op, patches[i].Path) {
-					return serviceerrors.NewServiceError(messages.UnallowedPatch, "Operation", patches[i].Op, "Path", patches[i].Path)
-				}
+			if err := h.verifyPatches(runtimeCtx, patches, allowedProviderPatches); err != nil {
+				return err
 			}
 			return nil
 		},
@@ -314,7 +277,7 @@ func (h *Handlers) HandlePatchProvider(ctx *executioncontext.ExecutionContext, r
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			provider, err := storage.PatchProvider(providerId, &patches)
+			provider, err := storage.WithContext(runtimeCtx).PatchProvider(providerId, &patches)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -343,7 +306,7 @@ func (h *Handlers) HandleDeleteProvider(ctx *executioncontext.ExecutionContext, 
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			err := storage.DeleteProvider(providerId)
+			err := storage.WithContext(runtimeCtx).DeleteProvider(providerId)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err

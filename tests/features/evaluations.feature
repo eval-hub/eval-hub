@@ -66,6 +66,37 @@ Feature: Evaluations Endpoint
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_missing_model.json"
     Then the response code should be 400
 
+  Scenario: Create evaluation job missing benchmarks
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+    """
+    {
+      "name": "test-evaluation-job",
+      "model": {
+        "url": "http://test.com",
+        "name": "test"
+      },
+      "benchmarks": [
+      ]
+    }
+    """
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+    And the response should contain the value "minimum one benchmark" at path "$.message"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+    """
+    {
+      "name": "test-evaluation-job",
+      "model": {
+        "url": "http://test.com",
+        "name": "test"
+      }
+    }
+    """
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+    And the response should contain the value "minimum one benchmark" at path "$.message"
+
   Scenario: Create evaluation job with invalid provider
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_invalid_provider.json"
@@ -77,6 +108,31 @@ Feature: Evaluations Endpoint
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_invalid_benchmark.json"
     Then the response code should be 400
     And the response should contain the value "resource_does_not_exist" at path "$.message_code"
+
+  Scenario: Create evaluation job with invalid collection and benchmarks
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+    """
+    {
+      "name": "test-evaluation-job",
+      "model": {
+        "url": "http://test.com",
+        "name": "test"
+      },
+      "collection": {
+        "id": "id_not_checked"
+      },
+      "benchmarks": [
+        {
+          "id": "arc_easy",
+          "provider_id": "lm_evaluation_harness"
+        }
+      ]
+    }
+    """
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+    And the response should contain the value "benchmarks or collection" at path "$.message"
 
   Scenario: Create evaluation job missing benchmark id
     Given the service is running
@@ -94,7 +150,7 @@ Feature: Evaluations Endpoint
     Given the service is running
     When the mode is local or CI then skip this scenario
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
-    Then the response code should be 202
+    Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:collection_id"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_collection.json"
     Then the response code should be 202
@@ -305,7 +361,7 @@ Feature: Evaluations Endpoint
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:provider_id"
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_pass_criteria_from_provider_test.json"
-    Then the response code should be 202
+    Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:collection_id"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_pass_criteria_from_provider_test.json"
     Then the response code should be 202

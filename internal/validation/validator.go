@@ -45,14 +45,18 @@ func registerCustomValidators(instance *validator.Validate) {
 	instance.RegisterStructValidation(evaluationJobConfigBenchmarksMin, api.EvaluationJobConfig{})
 }
 
-// evaluationJobConfigBenchmarksMin ensures Benchmarks has at least one element when Collection is not present.
+// evaluationJobConfigBenchmarksMin ensures Benchmarks has at least one element when Collection is not present
+// and no benchmarks are provided when Collection is set.
 func evaluationJobConfigBenchmarksMin(sl validator.StructLevel) {
 	if cfg, ok := sl.Current().Interface().(api.EvaluationJobConfig); ok {
 		if cfg.Collection != nil && cfg.Collection.ID != "" {
+			if len(cfg.Benchmarks) > 0 {
+				sl.ReportError(cfg.Benchmarks, "benchmarks", "benchmarks", "benchmarks or collection", "collection")
+			}
 			return
 		}
 		if len(cfg.Benchmarks) < 1 {
-			sl.ReportError(cfg.Benchmarks, "benchmarks", "benchmarks", "min", "1")
+			sl.ReportError(cfg.Benchmarks, "benchmarks", "benchmarks", "minimum one benchmark", "1")
 		}
 	}
 }

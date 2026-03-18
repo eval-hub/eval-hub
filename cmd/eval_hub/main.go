@@ -26,7 +26,7 @@ import (
 
 var (
 	// Version can be set during the compilation
-	Version string = "0.2.0"
+	Version string = "0.3.0"
 	// Build is set during the compilation
 	Build string
 	// BuildDate is set during the compilation
@@ -95,8 +95,7 @@ func main() {
 		startUpFailed(serviceConfig, err, "Failed to create storage", logger)
 	}
 	// setup runtime
-	// TODO - remove providerConfigs and collectionConfigs from the runtime
-	runtime, err := runtimes.NewRuntime(logger, serviceConfig, providerConfigs, collectionConfigs)
+	runtime, err := runtimes.NewRuntime(logger, serviceConfig)
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create runtime", logger)

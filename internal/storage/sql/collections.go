@@ -18,10 +18,6 @@ import (
 //#######################################################################
 
 func (s *sqlStorage) CreateCollection(collection *api.CollectionResource) error {
-	if err := s.verifyTenant(); err != nil {
-		return err
-	}
-
 	return s.createCollectionTxn(nil, collection)
 }
 
@@ -50,10 +46,6 @@ func (s *sqlStorage) createCollectionEntity(collection *api.CollectionResource) 
 }
 
 func (s *sqlStorage) GetCollection(id string) (*api.CollectionResource, error) {
-	if err := s.verifyTenant(); err != nil {
-		return nil, err
-	}
-
 	return s.getCollectionTransactional(nil, id)
 }
 
@@ -93,20 +85,11 @@ func (s *sqlStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 }
 
 func (s *sqlStorage) GetCollections(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
-	// Disabling this check since GetCollections is called without a tenant to load system collections on startup.
-	//if err := s.verifyTenant(); err != nil {
-	//	return nil, err
-	//}
-
 	var txn *sql.Tx
 	return listEntities[api.CollectionResource](s, txn, shared.TABLE_COLLECTIONS, filter)
 }
 
 func (s *sqlStorage) UpdateCollection(id string, collection *api.CollectionConfig) (*api.CollectionResource, error) {
-	if err := s.verifyTenant(); err != nil {
-		return nil, err
-	}
-
 	var updated *api.CollectionResource
 
 	err := s.withTransaction("update collection", id, func(txn *sql.Tx) error {
@@ -161,10 +144,6 @@ func (s *sqlStorage) deleteCollectionTxn(txn *sql.Tx, id string) error {
 }
 
 func (s *sqlStorage) DeleteCollection(id string) error {
-	if err := s.verifyTenant(); err != nil {
-		return err
-	}
-
 	return s.withTransaction("delete collection", id, func(txn *sql.Tx) error {
 		persistedCollection, err := s.getCollectionTransactional(txn, id)
 		if err != nil {
@@ -181,10 +160,6 @@ func (s *sqlStorage) DeleteCollection(id string) error {
 }
 
 func (s *sqlStorage) PatchCollection(id string, patches *api.Patch) (*api.CollectionResource, error) {
-	if err := s.verifyTenant(); err != nil {
-		return nil, err
-	}
-
 	var updated *api.CollectionResource
 
 	err := s.withTransaction("patch collection", id, func(txn *sql.Tx) error {

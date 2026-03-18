@@ -2,62 +2,6 @@ type: object
 title: EvaluationJobConfig
 description: >
   The evaluation job request configuration.
-required:
-  - name
-  - model
-properties:
-  name:
-    type: string
-    description: >
-      The evaluation job name.
-  description:
-    type: string
-    description: >
-      The evaluation job description.
-  tags:
-    type: array
-    items:
-      type: string
-    description: >
-      The evaluation job tags.
-  model:
-    $ref: ./ModelRef.yaml
-    description: >
-      The model to evaluate.
-  collection:
-    $ref: ./CollectionRef.yaml
-    description: >
-      Optional collection reference. When provided, the benchmarks will be taken from the collection.
-      Either `benchmarks` or `collection` must be provided, but not both.
-  benchmarks:
-    type: array
-    items:
-      $ref: ./BenchmarkConfig.yaml
-    description: >
-      The evaluation benchmarks to run.
-      Either `benchmarks` or `collection` must be provided, but not both.
-  pass_criteria:
-    $ref: ./PassCriteria.yaml
-    description: >
-      The overall pass criteria for the evaluation job.
-  experiment:
-    $ref: ./ExperimentConfig.yaml
-    description: >
-      The MLFlow experiment configuration.
-      When provided, the evaluation job will be tracked in MLFlow.
-  custom:
-    type: object
-    additionalProperties: true
-    description: >
-      Custom request data. This can be used for user specific job data.
-  exports:
-    $ref: ./EvaluationExports.yaml
-    description: >
-      Optional exports configuration for the evaluation job.
-      When provided, the evaluation job results will be exported to the specified location.
-
 oneOf:
-  - title: Benchmarks
-    required: [benchmarks]
-  - title: Collection
-    required: [collection]
+  - $ref: ./EvaluationJobConfigBenchmarks.yaml
+  - $ref: ./EvaluationJobConfigCollection.yaml
