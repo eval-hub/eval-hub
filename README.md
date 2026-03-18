@@ -33,7 +33,13 @@ make build
 ./bin/eval-hub
 ```
 
-The API is available at `http://localhost:8080`. Interactive documentation is served at `/docs`.
+The API is available at `http://localhost:8080`. Verify it is running:
+
+```bash
+curl http://localhost:8080/api/v1/health
+```
+
+Interactive documentation is served at `/docs`.
 
 ### Run in a container
 
@@ -97,14 +103,11 @@ make build-wheel
 
 ### Database
 
-SQLite in-memory is the default. For PostgreSQL:
+SQLite in-memory is the default. For PostgreSQL, install and start PostgreSQL manually, then configure the connection:
 
 ```bash
-make install-postgres && make start-postgres
-make create-database && make create-user && make grant-permissions
+export DB_URL="postgres://eval_hub:password@localhost:5432/eval_hub?sslmode=disable"
 ```
-
-Then set `DB_URL` to a PostgreSQL connection string.
 
 ## Configuration
 
@@ -129,8 +132,9 @@ All endpoints are versioned under `/api/v1`. Full specification at [eval-hub.git
 | `/api/v1/evaluations/jobs` | POST, GET | Create or list evaluation jobs |
 | `/api/v1/evaluations/jobs/{id}` | GET, DELETE | Get status or cancel a job |
 | `/api/v1/evaluations/collections` | GET, POST | List or create benchmark collections |
-| `/api/v1/evaluations/providers` | GET | List registered providers |
-| `/api/v1/evaluations/benchmarks` | GET | List available benchmarks |
+| `/api/v1/evaluations/providers` | GET, POST | List or create providers |
+| `/api/v1/evaluations/providers/{id}` | GET, PUT, PATCH, DELETE | Manage a provider |
+| `/api/v1/evaluations/jobs/{id}/events` | POST | Submit job events |
 | `/api/v1/health` | GET | Health check |
 | `/metrics` | GET | Prometheus metrics |
 
