@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/common"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
@@ -105,59 +106,82 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
-	filter, err := CommonListFilters(req, "scope")
+	var ofilter *abstractions.QueryFilter
+	var benchmarks bool
 
-	logging.LogRequestStarted(ctx, "filter", filter)
+	err := h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			filter, err := CommonListFilters(req, "scope")
 
+			logging.LogRequestStarted(ctx, "filter", filter)
+
+			if err != nil {
+				return err
+			}
+
+			err = CheckScope(filter)
+			if err != nil {
+				return err
+			}
+
+			allowedParams := []string{"limit", "offset", "benchmarks", "name", "tags", "owner", "scope"}
+			badParams := getAllParams(req, allowedParams...)
+			if len(badParams) > 0 {
+				// just report the first bad parameter
+				return serviceerrors.NewServiceError(messages.QueryBadParameter, "ParameterName", badParams[0], "AllowedParameters", strings.Join(allowedParams, ", "))
+			}
+
+			// remove the benchmarks if requested
+			benchmarks, err = GetParam(req, "benchmarks", true, true)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+
+			ofilter = filter
+			return nil
+		},
+		"validation",
+		"validate-providers-filter",
+	)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
 
-	err = CheckScope(filter)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
+	_ = h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			providers, err := storage.WithContext(runtimeCtx).GetProviders(ofilter)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
 
-	allowedParams := []string{"limit", "offset", "benchmarks", "name", "tags", "owner", "scope"}
-	badParams := getAllParams(req, allowedParams...)
-	if len(badParams) > 0 {
-		// just report the first bad parameter
-		w.Error(serviceerrors.NewServiceError(messages.QueryBadParameter, "ParameterName", badParams[0], "AllowedParameters", strings.Join(allowedParams, ", ")), ctx.RequestID)
-		return
-	}
+			if !benchmarks {
+				for i := range providers.Items {
+					providers.Items[i].Benchmarks = []api.BenchmarkResource{}
+				}
+			}
 
-	providers, err := storage.GetProviders(filter)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
+			page, err := CreatePage(ctx, providers.TotalCount, ofilter.Offset, ofilter.Limit, req)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
 
-	// remove the benchmarks if requested
-	benchmarks, err := GetParam(req, "benchmarks", true, true)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-	if !benchmarks {
-		for i := range providers.Items {
-			providers.Items[i].Benchmarks = []api.BenchmarkResource{}
-		}
-	}
+			result := api.ProviderResourceList{
+				Page:  *page,
+				Items: providers.Items,
+			}
 
-	page, err := CreatePage(ctx, providers.TotalCount, filter.Offset, filter.Limit, req)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-
-	result := api.ProviderResourceList{
-		Page:  *page,
-		Items: providers.Items,
-	}
-
-	w.WriteJSON(result, 200)
+			w.WriteJSON(result, 200)
+			return nil
+		},
+		"storage",
+		"list-providers",
+	)
 }
 
 func (h *Handlers) HandleGetProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {

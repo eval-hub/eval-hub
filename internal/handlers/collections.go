@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/common"
 	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/executioncontext"
@@ -48,47 +49,68 @@ var (
 func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
-	filter, err := CommonListFilters(req, "category", "scope")
+	var ofilter *abstractions.QueryFilter
 
-	logging.LogRequestStarted(ctx, "filter", filter)
+	err := h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			filter, err := CommonListFilters(req, "category", "scope")
 
+			logging.LogRequestStarted(ctx, "filter", filter)
+
+			if err != nil {
+				return err
+			}
+
+			err = CheckScope(filter)
+			if err != nil {
+				return err
+			}
+
+			allowedParams := []string{"limit", "offset", "name", "category", "tags", "owner", "scope"}
+			badParams := getAllParams(req, allowedParams...)
+			if len(badParams) > 0 {
+				// just report the first bad parameter
+				return serviceerrors.NewServiceError(messages.QueryBadParameter, "ParameterName", badParams[0], "AllowedParameters", strings.Join(allowedParams, ", "))
+			}
+
+			ofilter = filter
+			return nil
+		},
+		"validation",
+		"validate-collections-filter",
+	)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
 
-	err = CheckScope(filter)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
+	_ = h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			collections, err := storage.WithContext(runtimeCtx).GetCollections(ofilter)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
 
-	allowedParams := []string{"limit", "offset", "name", "category", "tags", "owner", "scope"}
-	badParams := getAllParams(req, allowedParams...)
-	if len(badParams) > 0 {
-		// just report the first bad parameter
-		w.Error(serviceerrors.NewServiceError(messages.QueryBadParameter, "ParameterName", badParams[0], "AllowedParameters", strings.Join(allowedParams, ", ")), ctx.RequestID)
-		return
-	}
+			page, err := CreatePage(ctx, collections.TotalCount, ofilter.Offset, ofilter.Limit, req)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
 
-	collections, err := storage.GetCollections(filter)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
+			result := api.CollectionResourceList{
+				Page:  *page,
+				Items: collections.Items,
+			}
 
-	page, err := CreatePage(ctx, collections.TotalCount, filter.Offset, filter.Limit, req)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-
-	result := api.CollectionResourceList{
-		Page:  *page,
-		Items: collections.Items,
-	}
-
-	w.WriteJSON(result, 200)
+			w.WriteJSON(result, 200)
+			return nil
+		},
+		"storage",
+		"list-collections",
+	)
 }
 
 // HandleCreateCollection handles POST /api/v1/evaluations/collections
