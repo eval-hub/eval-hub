@@ -141,7 +141,7 @@ lighteval_component.py
 ## Dependencies
 
 **Python Packages**:
-- `lighteval>=0.4.0` (tested with 0.13.0)
+- `lighteval>=0.13.0`
 - `kfp>=2.7.0`
 - `openai>=1.0.0`
 - `litellm>=1.0.0`
