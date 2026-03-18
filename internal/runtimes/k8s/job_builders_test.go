@@ -54,14 +54,14 @@ func TestBuildConfigMap(t *testing.T) {
 
 func TestBuildConfigMapSidecarConfigJSONContent(t *testing.T) {
 	cfg := &jobConfig{
-		jobID:              "job-123",
-		benchmarkIndex:     0,
-		namespace:          "default",
-		providerID:         "provider-1",
-		benchmarkID:        "bench-1",
-		jobSpec:            shared.JobSpec{},
-		resourceGUID:       "guid-123",
-		sidecarConfigJSON:  "{\n  \"port\": 8081,\n  \"base_url\": \"http://localhost:8081\"\n}",
+		jobID:             "job-123",
+		benchmarkIndex:    0,
+		namespace:         "default",
+		providerID:        "provider-1",
+		benchmarkID:       "bench-1",
+		jobSpec:           shared.JobSpec{},
+		resourceGUID:      "guid-123",
+		sidecarConfigJSON: "{\n  \"port\": 8081,\n  \"base_url\": \"http://localhost:8081\"\n}",
 	}
 	cm, err := buildConfigMap(cfg)
 	if err != nil {
