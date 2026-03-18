@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"time"
@@ -14,6 +15,33 @@ import (
 	"github.com/eval-hub/eval-hub/internal/serialization"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
+)
+
+var (
+	// these are the allowed patches for the user-defined collection config
+	allowedCollectionPatches = []allowedPatch{
+		{Path: "/name", Op: api.PatchOpReplace, Prefix: false},
+
+		{Path: "/description", Op: api.PatchOpAdd, Prefix: false},
+		{Path: "/description", Op: api.PatchOpRemove, Prefix: false},
+		{Path: "/description", Op: api.PatchOpReplace, Prefix: false},
+
+		{Path: "/tags", Op: api.PatchOpAdd, Prefix: true},
+		{Path: "/tags", Op: api.PatchOpRemove, Prefix: true},
+		{Path: "/tags", Op: api.PatchOpReplace, Prefix: true},
+
+		{Path: "/custom", Op: api.PatchOpAdd, Prefix: true},
+		{Path: "/custom", Op: api.PatchOpRemove, Prefix: true},
+		{Path: "/custom", Op: api.PatchOpReplace, Prefix: true},
+
+		{Path: "/category", Op: api.PatchOpReplace, Prefix: true},
+
+		{Path: "/benchmarks", Op: api.PatchOpReplace, Prefix: true},
+
+		{Path: "/pass_criteria", Op: api.PatchOpAdd, Prefix: false},
+		{Path: "/pass_criteria", Op: api.PatchOpRemove, Prefix: false},
+		{Path: "/pass_criteria", Op: api.PatchOpReplace, Prefix: false},
+	}
 )
 
 // HandleListCollections handles GET /api/v1/evaluations/collections
@@ -69,34 +97,56 @@ func (h *Handlers) HandleCreateCollection(ctx *executioncontext.ExecutionContext
 
 	logging.LogRequestStarted(ctx)
 
-	// get the body bytes from the context
-	bodyBytes, err := req.BodyAsBytes()
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
+	id := common.GUID()
+
 	collection := &api.CollectionConfig{}
-	err = serialization.Unmarshal(h.validate, ctx, bodyBytes, collection)
+
+	err := h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			// get the body bytes from the context
+			bodyBytes, err := req.BodyAsBytes()
+			if err != nil {
+				return err
+			}
+			return serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, collection)
+		},
+		"validation",
+		"validate-collection",
+		"collection.id", id,
+	)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
 
-	collectionResource := &api.CollectionResource{
-		Resource: api.Resource{
-			ID:        common.GUID(),
-			CreatedAt: time.Now(),
-			Owner:     ctx.User,
-			Tenant:    ctx.Tenant,
+	var collectionResource *api.CollectionResource
+
+	_ = h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			collectionResource = &api.CollectionResource{
+				Resource: api.Resource{
+					ID:        id,
+					CreatedAt: time.Now(),
+					Owner:     ctx.User,
+					Tenant:    ctx.Tenant,
+				},
+				CollectionConfig: *collection,
+			}
+			err := storage.WithContext(runtimeCtx).CreateCollection(collectionResource)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			} else {
+				w.WriteJSON(collectionResource, 201)
+				return nil
+			}
 		},
-		CollectionConfig: *collection,
-	}
-	err = storage.CreateCollection(collectionResource)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-	w.WriteJSON(collectionResource, 202)
+		"storage",
+		"create-collection",
+		"collection.id", id,
+	)
 }
 
 // HandleGetCollection handles GET /api/v1/evaluations/collections/{collection_id}
@@ -112,13 +162,21 @@ func (h *Handlers) HandleGetCollection(ctx *executioncontext.ExecutionContext, r
 		return
 	}
 
-	response, err := storage.GetCollection(collectionID)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-
-	w.WriteJSON(response, 200)
+	_ = h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			response, err := storage.WithContext(runtimeCtx).GetCollection(collectionID)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			w.WriteJSON(response, 200)
+			return nil
+		},
+		"storage",
+		"get-collection",
+		"collection.id", collectionID,
+	)
 }
 
 // HandleUpdateCollection handles PUT /api/v1/evaluations/collections/{collection_id}
@@ -134,26 +192,43 @@ func (h *Handlers) HandleUpdateCollection(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	// get the body bytes from the context
-	bodyBytes, err := req.BodyAsBytes()
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-	collection := &api.CollectionConfig{}
-	err = serialization.Unmarshal(h.validate, ctx, bodyBytes, collection)
+	request := &api.CollectionConfig{}
+
+	err := h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			// get the body bytes from the context
+			// get the body bytes from the context
+			bodyBytes, err := req.BodyAsBytes()
+			if err != nil {
+				return err
+			}
+			return serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, request)
+		},
+		"validation",
+		"validate-collection-update",
+		"collection.id", collectionID,
+	)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
 
-	result, err := storage.UpdateCollection(collectionID, collection)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-
-	w.WriteJSON(result, 200)
+	_ = h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			result, err := storage.WithContext(runtimeCtx).UpdateCollection(collectionID, request)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			w.WriteJSON(result, 200)
+			return nil
+		},
+		"storage",
+		"update-collection",
+		"collection.id", collectionID,
+	)
 }
 
 // HandlePatchCollection handles PATCH /api/v1/evaluations/collections/{collection_id}
@@ -169,41 +244,49 @@ func (h *Handlers) HandlePatchCollection(ctx *executioncontext.ExecutionContext,
 		return
 	}
 
-	// get the body bytes from the context
-	bodyBytes, err := req.BodyAsBytes()
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
 	var patches api.Patch
-	if err = json.Unmarshal(bodyBytes, &patches); err != nil {
-		w.Error(serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", err.Error()), ctx.RequestID)
-		return
-	}
-	for i := range patches {
-		if err = h.validate.StructCtx(ctx.Ctx, &patches[i]); err != nil {
-			w.Error(serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error", err.Error()), ctx.RequestID)
-			return
-		}
-		//validate that the op is valid as per RFC 6902
-		if patches[i].Op != api.PatchOpReplace && patches[i].Op != api.PatchOpAdd && patches[i].Op != api.PatchOpRemove {
-			w.Error(serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", "Invalid patch operation"), ctx.RequestID)
-			return
-		}
-		//validate that the path is valid as per RFC 6902
-		if patches[i].Path == "" {
-			w.Error(serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", "Invalid patch path"), ctx.RequestID)
-			return
-		}
-	}
 
-	result, err := storage.PatchCollection(collectionID, &patches)
+	err := h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			// get the body bytes from the context
+			bodyBytes, err := req.BodyAsBytes()
+			if err != nil {
+				return err
+			}
+			if err = json.Unmarshal(bodyBytes, &patches); err != nil {
+				return serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", err.Error())
+			}
+			if err := h.verifyPatches(runtimeCtx, patches, allowedCollectionPatches); err != nil {
+				return err
+			}
+			return nil
+		},
+		"validation",
+		"validate-collection-patch",
+		"collection.id", collectionID,
+	)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
 
-	w.WriteJSON(result, 200)
+	_ = h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			result, err := storage.PatchCollection(collectionID, &patches)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+
+			w.WriteJSON(result, 200)
+			return nil
+		},
+		"storage",
+		"patch-collection",
+		"collection.id", collectionID,
+	)
 }
 
 // HandleDeleteCollection handles DELETE /api/v1/evaluations/collections/{collection_id}
@@ -219,11 +302,19 @@ func (h *Handlers) HandleDeleteCollection(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	err := storage.DeleteCollection(collectionID)
-	if err != nil {
-		ctx.Logger.Info("Failed to delete collection", "error", err.Error(), "id", collectionID)
-		w.Error(err, ctx.RequestID)
-		return
-	}
-	w.WriteJSON(nil, 204)
+	_ = h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			err := storage.WithContext(runtimeCtx).DeleteCollection(collectionID)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			w.WriteJSON(nil, 204)
+			return nil
+		},
+		"storage",
+		"delete-collection",
+		"collection.id", collectionID,
+	)
 }

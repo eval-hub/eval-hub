@@ -308,8 +308,8 @@ func TestHandleCreateCollection(t *testing.T) {
 
 	h.HandleCreateCollection(ctx, req, resp)
 
-	if recorder.Code != 202 {
-		t.Fatalf("expected status 202, got %d body %s", recorder.Code, recorder.Body.String())
+	if recorder.Code != 201 {
+		t.Fatalf("expected status 201, got %d body %s", recorder.Code, recorder.Body.String())
 	}
 	var got api.CollectionResource
 	if err := json.NewDecoder(recorder.Body).Decode(&got); err != nil {

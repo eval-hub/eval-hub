@@ -152,7 +152,7 @@ func TestServerSetupRoutes(t *testing.T) {
 		{http.MethodGet, "/api/v1/evaluations/jobs", http.StatusOK, ""},
 		{http.MethodGet, "/api/v1/evaluations/jobs/test-id", http.StatusNotFound, ""},
 		// Collections
-		{http.MethodPost, "/api/v1/evaluations/collections", http.StatusAccepted, `{"name": "test-benchmarks-collection", "description": "Collection of benchmarks for FVT", "category": "test", "benchmarks": [{"id": "arc_easy", "provider_id": "lm_evaluation_harness"}]}`},
+		{http.MethodPost, "/api/v1/evaluations/collections", http.StatusCreated, `{"name": "test-benchmarks-collection", "description": "Collection of benchmarks for FVT", "category": "test", "benchmarks": [{"id": "arc_easy", "provider_id": "lm_evaluation_harness"}]}`},
 		{http.MethodGet, "/api/v1/evaluations/collections", http.StatusOK, ""},
 		{http.MethodGet, "/api/v1/evaluations/collections/test-collection", http.StatusNotFound, ""},
 		// Providers

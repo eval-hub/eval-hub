@@ -361,7 +361,7 @@ Feature: Evaluations Endpoint
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:provider_id"
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_pass_criteria_from_provider_test.json"
-    Then the response code should be 202
+    Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:collection_id"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_pass_criteria_from_provider_test.json"
     Then the response code should be 202
