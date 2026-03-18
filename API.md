@@ -1,5 +1,7 @@
 ## Eval Control Plane API proposal
 
+> **Note:** This document is a **historical design proposal** from the project's planning phase. The actual implementation differs significantly — the service is written in Go (not FastAPI), and the API endpoints have different paths and schemas. For current API documentation, see the [OpenAPI spec](./docs/openapi.yaml) or the [live docs](https://eval-hub.github.io/eval-hub/).
+
 ### High-Level Summary
 
 The Thin API Router proposal creates a custom-built microservice focused solely on evaluation orchestration with minimal dependencies and maximum flexibility. This approach prioritizes lightweight operation and complete control over the orchestration logic. It offers optimal performance and customization at the cost of increased development effort.
