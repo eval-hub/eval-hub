@@ -7,7 +7,7 @@ This directory contains the OpenAPI specifications and related assets for the Ev
 - Public documentation:
   - [Redocly website](https://eval-hub.github.io/eval-hub/)
   - [Swagger editor](https://editor.swagger.io/?url=https://raw.githubusercontent.com/eval-hub/eval-hub/refs/heads/main/docs/openapi.yaml) - **Note:** When testing locally with the Swagger editor, ensure the server is started with `--local` to enable CORS headers middleware ([cors_middleware.go](../cmd/eval_hub/server/cors_middleware.go))
-- Internal documentation: [index-internal.html](index-internal.html)
+- Internal documentation: [index-private.html](index-private.html)
 
 ## Files
 
@@ -19,9 +19,9 @@ These are the files in the `docs` directory.
 | **redocly.yaml** | Redocly CLI config. Defines two API entry points (`internal@latest` and `external@latest`), both rooted at `src/openapi.yaml`. The external bundle uses the `remove-x-internal` decorator to strip internal-only content. This file might also include some rules to avoid warnings when using the redocly vscode plugin. |
 | **openapi.yaml/.json** | **Generated.** Public API bundle produced by `make generate-public-docs`. Built from `src/openapi.yaml` with internal-only paths/schemas removed. Served at `/openapi.yaml` and used by Swagger UI at `/docs`. |
 | **openapi-internal.yaml/.json** | **Generated.** Internal API bundle produced by `make generate-public-docs`. Full spec from `src/openapi.yaml` including `x-internal` content. For internal tooling and docs. |
-| **preview.html** | **Generated.** Static redoc UI page with the OpenAPI spec **inlined**. This generated page avoids CORS issues when loading a local file. |
-| **preview-internal.html** | **Generated.** Static redoc UI page with the OpenAPI spec **inlined**. This generated page avoids CORS issues when loading a local file. |
-| **old/openapi.yaml** / **old/openapi.json** | Legacy snapshots of the spec; kept for reference. Do not use for code generation or serving. |
+| **index-public.html** | **Generated.** Public Redoc docs page produced by `make generate-public-docs`. Copied to `index.html`. |
+| **index-private.html** | **Generated.** Internal Redoc docs page with `x-internal` content included. |
+| **3.4EA2/** | Legacy versioned snapshot of the spec (3.4 EA2 release); kept for reference. Do not use for code generation or serving. |
 
 ## Generating the public (and internal) docs
 
@@ -36,9 +36,9 @@ This target:
 1. Ensures the Redocly CLI is available (installs `@redocly/cli` via npm if needed).
 2. Runs **external** bundle to **openapi.yaml** and **openapi.json** (with `x-internal` content removed).
 3. Runs **internal** bundle to **openapi-internal.yaml** (full spec).
-4. Runs **build-standalone-html.js** to produce **index-standalone.html** (spec inlined for local file viewing).
+4. Runs `redocly build-docs` to produce **index-public.html** and **index-private.html**, then copies **index-public.html** to **index.html**.
 
-Run `make generate-public-docs` after editing **src/openapi.yaml** so that **openapi.yaml**, **openapi-internal.yaml**, and **index-standalone.html** stay in sync. The server serves **openapi.yaml** at `/openapi.yaml` and **index.html** at `/docs` (Swagger UI).
+Run `make generate-public-docs` after editing **src/openapi.yaml** so that **openapi.yaml**, **openapi-internal.yaml**, **index-public.html**, and **index-private.html** stay in sync. The server serves **openapi.yaml** at `/openapi.yaml` and **index.html** at `/docs` (Swagger UI).
 
 ## Viewing docs locally (avoiding CORS)
 
@@ -46,7 +46,7 @@ If you open **index.html** directly in the browser (`file:///path/to/docs/index.
 
 **Options:**
 
-1. **Use the standalone file** – Open **index-standalone.html** instead. It has the spec inlined, so no fetch and no CORS. Build it with `make generate-public-docs` (it is generated automatically).
+1. **Use the generated Redoc page** – Open **index-public.html** (or **index-private.html** for internal docs). These have the spec inlined, so no fetch and no CORS. Build them with `make generate-public-docs`.
 2. **Serve over HTTP** – Run a local server from this directory (e.g. `python3 -m http.server 8080` in `docs/`) and open `http://localhost:8080/` or `http://localhost:8080/index.html`. Then `openapi.yaml` is same-origin and loads correctly.
 3. **Use the running app** – If the Eval Hub server is running, open `http://127.0.0.1:8080/docs`; the server serves the same Swagger UI and spec.
 
