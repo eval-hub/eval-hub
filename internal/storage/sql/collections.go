@@ -93,9 +93,10 @@ func (s *sqlStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 }
 
 func (s *sqlStorage) GetCollections(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
-	if err := s.verifyTenant(); err != nil {
-		return nil, err
-	}
+	// Disabling this check since GetCollections is called without a tenant to load system collections on startup.
+	//if err := s.verifyTenant(); err != nil {
+	//	return nil, err
+	//}
 
 	var txn *sql.Tx
 	return listEntities[api.CollectionResource](s, txn, shared.TABLE_COLLECTIONS, filter)

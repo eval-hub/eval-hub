@@ -33,7 +33,7 @@ type Handlers struct {
 	mlflowProxy      *httputil.ReverseProxy
 	ociProxy         *httputil.ReverseProxy
 	ociTokenProducer *proxy.TokenProducer // created once at startup for OCI auth
-	ociRepository    string              // from job spec; used to route requests to /registry/{ociRepository}
+	ociRepository    string               // from job spec; used to route requests to /registry/{ociRepository}
 }
 
 func New(config *config.Config, logger *slog.Logger) (*Handlers, error) {
