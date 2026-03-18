@@ -96,9 +96,7 @@ func NewMLFlowHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logge
 		logger.Warn("MLFlow tracking URI is not set, skipping MLFlow client creation")
 		return nil, nil
 	}
-	// eval-hub service and sidecar share the same configmap. MLFlow config is already present in configmap
-	// under top level 'mlflow' key. So we are using the same config for both rather than replicating
-	// the same fields under sidecar.mlflow key.
+	// Job pod: MLFlow TLS/timeout come from sidecar_config.json (mlflow) merged into MLFlow at load.
 	mlflowConfig := serviceConfig.MLFlow
 
 	timeout := defaultHTTPTimeout

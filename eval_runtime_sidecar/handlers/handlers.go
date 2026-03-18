@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"strings"
 
 	"github.com/eval-hub/eval-hub/eval_runtime_sidecar/proxy"
@@ -45,22 +44,24 @@ func New(config *config.Config, logger *slog.Logger) (*Handlers, error) {
 }
 
 func newMlflowProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseProxy, error) {
+	mlflowTrackingURI := ""
+	if config.MLFlow != nil {
+		mlflowTrackingURI = strings.TrimSpace(config.MLFlow.TrackingURI)
+	}
+	if mlflowTrackingURI == "" {
+		logger.Warn("mlflow.tracking_uri is not set in sidecar config")
+		return nil, nil
+	}
 	mlflowHTTPClient, err := proxy.NewMLFlowHTTPClient(config, config.IsOTELEnabled(), logger)
 	if err != nil {
 		logger.Error("failed to create mlflow HTTP client", "error", err)
 		return nil, fmt.Errorf("failed to create mlflow HTTP client: %w", err)
 	}
-	mlflowTrackingURI := os.Getenv("MLFLOW_TRACKING_URI")
-	if mlflowTrackingURI == "" {
-		logger.Warn("MLFLOW_TRACKING_URI is not set")
-	}
 	mlflowTarget, err := url.Parse(strings.TrimSuffix(mlflowTrackingURI, "/"))
 	if err != nil {
-		return nil, fmt.Errorf("invalid MLFLOW_TRACKING_URI: %w", err)
+		return nil, fmt.Errorf("invalid mlflow.tracking_uri: %w", err)
 	}
-
-	mlflowProxy := proxy.NewReverseProxy(mlflowTarget, mlflowHTTPClient, logger)
-	return mlflowProxy, nil
+	return proxy.NewReverseProxy(mlflowTarget, mlflowHTTPClient, logger), nil
 }
 
 func newEvalhubProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseProxy, error) {
@@ -69,9 +70,12 @@ func newEvalhubProxy(config *config.Config, logger *slog.Logger) (*httputil.Reve
 		logger.Error("failed to create eval-hub HTTP client", "error", err)
 		return nil, fmt.Errorf("failed to create eval-hub HTTP client: %w", err)
 	}
-	evalHubBaseURL := os.Getenv("EVALHUB_URL")
+	evalHubBaseURL := ""
+	if config.Sidecar != nil && config.Sidecar.EvalHub != nil {
+		evalHubBaseURL = strings.TrimSpace(config.Sidecar.EvalHub.BaseURL)
+	}
 	if evalHubBaseURL == "" {
-		return nil, fmt.Errorf("EVALHUB_URL environment is not set")
+		return nil, fmt.Errorf("eval_hub.base_url is not set in sidecar config")
 	}
 	evalHubTarget, err := url.Parse(strings.TrimSuffix(evalHubBaseURL, "/"))
 	if err != nil {
@@ -106,11 +110,16 @@ func (h *Handlers) parseProxyCall(r *http.Request) (*httputil.ReverseProxy, *pro
 		return nil, nil, fmt.Errorf("eval-hub proxy is not configured")
 
 	case strings.Contains(r.RequestURI, "/mlflow/"):
-		mlflowClientConfig := h.serviceConfig.MLFlow
-		if mlflowClientConfig != nil && h.mlflowProxy != nil {
+		if h.serviceConfig.MLFlow != nil && strings.TrimSpace(h.serviceConfig.MLFlow.TrackingURI) != "" && h.mlflowProxy != nil {
+			tokenPath := MLFlowTokenPathDefault
+			if h.serviceConfig.Sidecar != nil && h.serviceConfig.Sidecar.MLFlow != nil {
+				if p := strings.TrimSpace(h.serviceConfig.Sidecar.MLFlow.TokenPath); p != "" {
+					tokenPath = p
+				}
+			}
 			return h.mlflowProxy, &proxy.AuthTokenInput{
 				TargetEndpoint: "mlflow",
-				AuthTokenPath:  MLFlowTokenPathDefault,
+				AuthTokenPath:  tokenPath,
 			}, nil
 		}
 		return nil, nil, fmt.Errorf("mlflow proxy is not configured")

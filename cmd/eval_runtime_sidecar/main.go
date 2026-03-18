@@ -17,9 +17,7 @@ import (
 	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
 	sidecarServer "github.com/eval-hub/eval-hub/cmd/eval_runtime_sidecar/server"
 	"github.com/eval-hub/eval-hub/internal/config"
-	"github.com/eval-hub/eval-hub/internal/constants"
 	"github.com/eval-hub/eval-hub/internal/logging"
-	"github.com/eval-hub/eval-hub/internal/otel"
 )
 
 var (
@@ -31,73 +29,44 @@ var (
 	BuildDate string
 )
 
-type Args struct {
-	ConfigDir string
-}
-
-func args() Args {
-	configDir := ""
-	dir := flag.String("configdir", configDir, "Directory to search for configuration files.")
+func sidecarConfigPath() string {
+	p := flag.String("sidecarconfig", "", "Path to sidecar_config.json (default: "+config.DefaultSidecarConfigPath+")")
 	flag.Parse()
-	configDir = *dir
-	if configDir == "" {
-		configDir = os.Getenv("EVAL_HUB_CONFIG_DIR")
+	if strings.TrimSpace(*p) != "" {
+		return strings.TrimSpace(*p)
 	}
-
-	return Args{
-		ConfigDir: configDir,
-	}
+	return config.DefaultSidecarConfigPath
 }
 
 func main() {
-	args := args()
+	cfgPath := sidecarConfigPath()
 
 	logger, logShutdown, err := logging.NewLogger()
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(terminationFilePath(nil, logger), err, "Failed to create service logger", logging.FallbackLogger())
 	}
-	defaultConfigDir := "/etc/evalhub/config"
-	if args.ConfigDir == "" {
-		args.ConfigDir = defaultConfigDir
-	}
-	config, err := config.LoadConfig(logger, Version, Build, BuildDate, args.ConfigDir)
+	svcConfig, err := config.LoadSidecarRuntimeConfig(cfgPath, Version, Build, BuildDate)
 	if err != nil {
-		// we do this as no point trying to continue
-		startUpFailed(terminationFilePath(nil, logger), err, "Failed to create service config", logger)
+		startUpFailed(terminationFilePath(nil, logger), err, "Failed to load sidecar config", logger)
 	}
 
-	// setup OTEL
-	var otelShutdown func(context.Context) error
-	if config.IsOTELEnabled() {
-		// TODO CHECK TO SEE WHY WE HAVE TO PASS IN A CONTEXT HERE
-		shutdown, err := otel.SetupOTEL(context.Background(), config.OTEL, logger)
-		if err != nil {
-			// we do this as no point trying to continue
-			startUpFailed(terminationFilePath(config, logger), err, "Failed to setup OTEL", logger)
-		}
-		otelShutdown = shutdown
-	}
-
-	// create the server
-	srv, err := sidecarServer.NewSidecarServer(logger, config)
+	srv, err := sidecarServer.NewSidecarServer(logger, svcConfig)
 	if err != nil {
-		startUpFailed(terminationFilePath(config, logger), err, "Failed to create sidecar server", logger)
+		startUpFailed(terminationFilePath(svcConfig, logger), err, "Failed to create sidecar server", logger)
 	}
 
-	// log the start up details
 	version, build, buildDate := "", "", ""
-	if config.Service != nil {
-		version, build, buildDate = config.Service.Version, config.Service.Build, config.Service.BuildDate
+	if svcConfig.Service != nil {
+		version, build, buildDate = svcConfig.Service.Version, svcConfig.Service.Build, svcConfig.Service.BuildDate
 	}
 	logger.Info("Server starting",
 		"server_port", srv.GetPort(),
+		"sidecar_config", cfgPath,
 		"version", version,
 		"build", build,
 		"build_date", buildDate,
-		"mlflow_tracking", config.MLFlow != nil && config.MLFlow.TrackingURI != "",
-		"otel", config.IsOTELEnabled(),
-		"prometheus", config.IsPrometheusEnabled(),
+		"mlflow_tracking", svcConfig.MLFlow != nil && svcConfig.MLFlow.TrackingURI != "",
 	)
 
 	// Start server in a goroutine
@@ -108,7 +77,7 @@ func main() {
 				logger.Info("Server closed gracefully")
 				return
 			}
-			startUpFailed(terminationFilePath(config, logger), err, "Server failed to start", logger)
+			startUpFailed(terminationFilePath(svcConfig, logger), err, "Server failed to start", logger)
 		}
 	}()
 
@@ -122,14 +91,6 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), waitForShutdown)
 	defer cancel()
 
-	// shutdown the otel tracing
-	if otelShutdown != nil {
-		logger.Info("Shutting down OTEL...")
-		if err := otelShutdown(shutdownCtx); err != nil {
-			logger.Error("Failed to shutdown OTEL", "error", err.Error())
-		}
-	}
-
 	// shutdown the logger
 	logger.Info("Shutting down server...")
 	if err := srv.Shutdown(shutdownCtx); err != nil {
@@ -141,15 +102,8 @@ func main() {
 	}
 }
 
-func terminationFilePath(cfg *config.Config, logger *slog.Logger) string {
-	if cfg != nil && cfg.Service != nil && strings.TrimSpace(cfg.Service.TerminationFile) != "" {
-		return strings.TrimSpace(cfg.Service.TerminationFile)
-	}
-	if tf := os.Getenv(constants.EnvVarTerminationFile); tf != "" {
-		logger.Info("Termination file set from environment variable", "env", constants.EnvVarTerminationFile, "file", tf)
-		return tf
-	}
-	return "/opt/evalhub/work/termination-log"
+func terminationFilePath(_ *config.Config, _ *slog.Logger) string {
+	return config.SidecarTerminationFilePath
 }
 
 func startUpFailed(terminationFile string, err error, msg string, logger *slog.Logger) {

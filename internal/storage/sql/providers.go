@@ -119,9 +119,9 @@ func (s *sqlStorage) DeleteProvider(id string) error {
 }
 
 func (s *sqlStorage) GetProviders(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.ProviderResource], error) {
-	if err := s.verifyTenant(); err != nil {
-		return nil, err
-	}
+	//if err := s.verifyTenant(); err != nil {
+	//	return nil, err
+	//}
 
 	var txn *sql.Tx
 	return listEntities[api.ProviderResource](s, txn, shared.TABLE_PROVIDERS, filter)

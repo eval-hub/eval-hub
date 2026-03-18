@@ -27,13 +27,12 @@ const (
 	serviceCAVolumeName             = "evalhub-service-ca"
 	jobSpecFileName                 = "job.json"
 	jobSpecMountPath                = "/meta/job.json"
+	sidecarConfigFileName           = "sidecar_config.json"
+	sidecarConfigMountPath          = "/meta/sidecar_config.json"
 	dataMountPath                   = "/data"
 	testDataMountPath               = "/test_data"
 	serviceCAMountPath              = "/etc/pki/ca-trust/source/anchors"
 	specSuffix                      = "-spec"
-	envEvalHubURLName               = "EVALHUB_URL"
-	envEvalHubCACertPathName        = "EVALHUB_CA_CERT_PATH"
-	envEvalHubInsecureSkipVerify    = "EVALHUB_INSECURE_SKIP_VERIFY"
 	envMLFlowTrackingURIName        = "MLFLOW_TRACKING_URI"
 	envMLFlowWorkspaceName          = "MLFLOW_WORKSPACE"
 	envMLFlowTokenPathName          = "MLFLOW_TRACKING_TOKEN_PATH"
@@ -42,9 +41,6 @@ const (
 	mlflowTokenFile                 = "token"
 	ociCredentialsVolumeName        = "oci-credentials"
 	ociCredentialsMountPath         = "/etc/evalhub/.docker/config.json"
-	evalHubConfigMapName            = "evalhub-config"
-	evalhubConfigmapVolumeName      = "evalhub-config-volume"
-	evalHubConfigMapMountPath       = "/etc/evalhub/config"
 	ociCredentialsSubPath           = ".dockerconfigjson"
 	envOCIAuthConfigPathName        = "OCI_AUTH_CONFIG_PATH"
 	modelAuthVolumeName             = "model-auth"
@@ -132,6 +128,10 @@ func buildConfigMap(cfg *jobConfig) (*corev1.ConfigMap, error) {
 	if err != nil {
 		return nil, fmt.Errorf("marshal job spec: %w", err)
 	}
+	sidecarJSON := cfg.sidecarConfigJSON
+	if sidecarJSON == "" {
+		sidecarJSON = "{}"
+	}
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
@@ -140,7 +140,8 @@ func buildConfigMap(cfg *jobConfig) (*corev1.ConfigMap, error) {
 			Annotations: annotations,
 		},
 		Data: map[string]string{
-			jobSpecFileName: string(specJSON),
+			jobSpecFileName:       string(specJSON),
+			sidecarConfigFileName: sidecarJSON,
 		},
 	}, nil
 }
@@ -184,10 +185,8 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 
 	var sidecarContainerVolumes []corev1.Volume
 	var sidecarContainerVolumeMounts []corev1.VolumeMount
-	var sidecarEnvVars []corev1.EnvVar
 	if !cfg.localMode {
 		sidecarContainerVolumes, sidecarContainerVolumeMounts = buildSidecarContainerVolumesAndMounts(configMap, cfg)
-		sidecarEnvVars = buildSidecarEnvVars(cfg)
 	}
 
 	initContainers, InitContainsVolumes, err := initContainerVolumesAndMounts(cfg)
@@ -215,7 +214,6 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 			Image:           cfg.sidecarImage,
 			ImagePullPolicy: corev1.PullIfNotPresent,
 			Command:         []string{"/app/eval-runtime-sidecar"},
-			Env:             sidecarEnvVars,
 			Resources:       cfg.sidecarResources,
 			SecurityContext: defaultSecurityContext(),
 			VolumeMounts:    sidecarContainerVolumeMounts,
@@ -376,14 +374,6 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 			},
 		},
 		{
-			Name: evalhubConfigmapVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{Name: evalHubConfigMapName},
-				},
-			},
-		},
-		{
 			Name: dataVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
@@ -400,8 +390,9 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 			ReadOnly:  true,
 		},
 		{
-			Name:      evalhubConfigmapVolumeName,
-			MountPath: evalHubConfigMapMountPath,
+			Name:      jobSpecVolumeName,
+			MountPath: sidecarConfigMountPath,
+			SubPath:   sidecarConfigFileName,
 			ReadOnly:  true,
 		},
 		{
@@ -657,52 +648,6 @@ func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 			Value: item.Value,
 		})
 	}
-	return env
-}
-
-// buildSidecarEnvVars builds environment variables for the sidecar container only (proxy-related).
-// It does not include OCI credentials path or provider defaultEnv; those are for the adapter/runtime.
-func buildSidecarEnvVars(cfg *jobConfig) []corev1.EnvVar {
-	var env []corev1.EnvVar
-	seen := map[string]bool{}
-
-	if cfg.evalHubURL != "" {
-		env = append(env, corev1.EnvVar{Name: envEvalHubURLName, Value: cfg.evalHubURL})
-		seen[envEvalHubURLName] = true
-		// Enable TLS verification for sidecar -> eval-hub when service CA is mounted
-		if cfg.serviceCAConfigMap != "" {
-			env = append(env, corev1.EnvVar{
-				Name:  envEvalHubCACertPathName,
-				Value: serviceCAMountPath + "/" + serviceCABundleFile,
-			})
-			seen[envEvalHubCACertPathName] = true
-			env = append(env, corev1.EnvVar{Name: envEvalHubInsecureSkipVerify, Value: "false"})
-			seen[envEvalHubInsecureSkipVerify] = true
-		}
-	}
-
-	if cfg.mlflowTrackingURI != "" {
-		env = append(env, corev1.EnvVar{Name: envMLFlowTrackingURIName, Value: cfg.mlflowTrackingURI})
-		seen[envMLFlowTrackingURIName] = true
-		env = append(env, corev1.EnvVar{
-			Name:  envMLFlowTokenPathName,
-			Value: mlflowTokenMountPath + "/" + mlflowTokenFile,
-		})
-		seen[envMLFlowTokenPathName] = true
-	}
-	if cfg.mlflowWorkspace != "" {
-		env = append(env, corev1.EnvVar{Name: envMLFlowWorkspaceName, Value: cfg.mlflowWorkspace})
-		seen[envMLFlowWorkspaceName] = true
-	}
-
-	if cfg.serviceCAConfigMap != "" && cfg.mlflowTrackingURI != "" {
-		env = append(env, corev1.EnvVar{
-			Name:  envMLFlowCertPathName,
-			Value: serviceCAMountPath + "/" + serviceCABundleFile,
-		})
-		seen[envMLFlowCertPathName] = true
-	}
-
 	return env
 }
 

@@ -21,7 +21,9 @@ Feature: Kubernetes Resources Validation
     And the ConfigMap should have label "provider_id" matching the provider ID
     And the ConfigMap should have label "benchmark_id" matching the benchmark ID
     And the ConfigMap should contain data key "job.json"
+    And the ConfigMap should contain data key "sidecar_config.json"
     And the ConfigMap data "job.json" should be valid JSON
+    And the ConfigMap data "sidecar_config.json" should be valid JSON
     And the ConfigMap data "job.json" should contain field "id" with the job ID
     And the ConfigMap data "job.json" should contain field "benchmark_id"
     And the ConfigMap data "job.json" should contain field "model.url"
@@ -76,6 +78,8 @@ Feature: Kubernetes Resources Validation
     And the container should have volumeMount "evalhub-service-ca" at path "/etc/pki/ca-trust/source/anchors"
     And the volumeMount "evalhub-service-ca" should be readOnly
     And the container should have environment variables from the provider configuration
+    And the Job pod template should have container named "sidecar"
+    And the sidecar container should have volumeMount "job-spec" at path "/meta/sidecar_config.json" with subPath "sidecar_config.json"
 
   Scenario: Job and ConfigMap specification (multi-benchmark)
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_multi_benchmark.json"

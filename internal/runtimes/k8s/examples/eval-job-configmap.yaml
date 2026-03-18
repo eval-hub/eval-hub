@@ -41,3 +41,11 @@ data:
       ],
       "callback_url": "http://eval-hub"
     }
+  sidecar_config.json: |
+    {
+      "port": 8081,
+      "base_url": "http://localhost:8081",
+      "eval_hub": {
+        "http_timeout": 30000000000
+      }
+    }

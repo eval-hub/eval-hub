@@ -62,6 +62,17 @@ spec:
             - name: evalhub-service-ca
               mountPath: /etc/pki/ca-trust/source/anchors
               readOnly: true
+        - name: sidecar
+          image: eval-runtime-sidecar:latest
+          volumeMounts:
+            - name: job-spec
+              mountPath: /meta/job.json
+              subPath: job.json
+              readOnly: true
+            - name: job-spec
+              mountPath: /meta/sidecar_config.json
+              subPath: sidecar_config.json
+              readOnly: true
       volumes:
         - name: job-spec
           configMap:

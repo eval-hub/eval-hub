@@ -188,6 +188,12 @@ When running locally:
 - Environment variables override file config
 - Secrets from files (if directory exists) override everything
 
+#### Eval runtime sidecar (Kubernetes job pods)
+- Loads **`sidecar_config.json`** only (default `/meta/sidecar_config.json`; local override via `--sidecarconfig`).
+- **No `evalhub-config` ConfigMap** on job pods; proxy targets and TLS live in JSON (`eval_hub.base_url`, `mlflow.tracking_uri`, `mlflow.token_path`, CA paths, optional `eval_hub.token`).
+- Ready and termination message paths are **fixed in the sidecar binary** (`/data/sidecar-ready`, `/data/termination-log`).
+- Local dev: `config/sidecar_runtime_local.json` or `make start-sidecar`.
+
 #### Request ID Tracking
 All requests are tagged with a request ID for distributed tracing:
 - Extracted from `X-Global-Transaction-Id` header if present
