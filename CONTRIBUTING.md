@@ -25,7 +25,7 @@ This project and everyone participating in it is governed by our Code of Conduct
 Eval Hub is an API REST server that serves as a routing and orchestration layer for evaluation backends. It supports flexible deployment options from local development to production Kubernetes/OpenShift clusters. Before contributing, familiarize yourself with:
 
 - **Architecture**: Read the [README.md](README.md) for project overview
-- **API Documentation**: Check [API.md](API.md) for endpoint specifications
+- **API Documentation**: See the [OpenAPI spec](./docs/openapi.yaml) or the [live docs](https://eval-hub.github.io/eval-hub/) for endpoint specifications
 - **Deployment Options**: Understand local development, Podman, and Kubernetes/OpenShift deployment models
 
 ### Prerequisites
@@ -58,9 +58,8 @@ Eval Hub is an API REST server that serves as a routing and orchestration layer 
 
 3. **Configure Environment**
    ```bash
-   cp .env.example .env
-   # Edit .env with your local configuration
-   # Or edit config/config.yaml directly
+   # Edit config/config.yaml with your local configuration
+   # Environment variables (e.g. PORT, DB_URL) override config file values
    ```
 
 4. **Install Pre-commit Hooks**
@@ -216,7 +215,7 @@ package handlers
 import (
 	"encoding/json"
 
-	"github.com/your-org/eval-hub/internal/executioncontext"
+	"github.com/eval-hub/eval-hub/internal/executioncontext"
 )
 
 // EvaluationRequest represents an evaluation request.
@@ -292,7 +291,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/your-org/eval-hub/internal/executioncontext"
+	"github.com/eval-hub/eval-hub/internal/executioncontext"
 )
 
 func TestHandleCreateEvaluation_Success(t *testing.T) {
@@ -431,7 +430,7 @@ For more detailed information on deployment and development workflows:
 
 2. **Run Full Test Suite**
    ```bash
-   pytest
+   make test-all
    pre-commit run --all-files
    ```
 
@@ -532,11 +531,14 @@ For feature requests, include:
 ### Building Documentation
 
 ```bash
-# The OpenAPI specification is maintained in docs/openapi.yaml
-# Update the spec as you add or modify endpoints
+# The OpenAPI spec source of truth is docs/src/openapi.yaml
+# After editing, regenerate the public docs:
+make generate-public-docs
 
-# To view the API documentation locally, you can use any OpenAPI viewer
-# or serve it through the running service at /api/v1/openapi
+# View the API docs:
+# - Running server: http://localhost:8080/docs
+# - OpenAPI spec: http://localhost:8080/openapi.yaml
+# - Published: https://eval-hub.github.io/eval-hub/
 ```
 
 ## Community
