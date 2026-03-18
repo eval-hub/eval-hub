@@ -130,7 +130,7 @@ All endpoints are versioned under `/api/v1`. Full specification at [eval-hub.git
 | `/api/v1/evaluations/jobs/{id}` | GET, DELETE | Get status or cancel a job |
 | `/api/v1/evaluations/collections` | GET, POST | List or create benchmark collections |
 | `/api/v1/evaluations/providers` | GET | List registered providers |
-| `/api/v1/evaluations/benchmarks` | GET | List available benchmarks |
+| `/api/v1/evaluations/jobs/{id}/events` | GET | Stream job status events |
 | `/api/v1/health` | GET | Health check |
 | `/metrics` | GET | Prometheus metrics |
 
@@ -176,7 +176,7 @@ eval-hub/
 │   ├── metrics/           # Prometheus instrumentation
 │   └── logging/           # Structured logging (zap)
 ├── config/                # config.yaml and provider definitions
-├── api/                   # OpenAPI 3.1.0 specification
+├── docs/src/              # OpenAPI 3.1.0 specification (source of truth)
 ├── tests/features/        # BDD tests (godog)
 ├── Containerfile          # Multi-stage UBI9 container build
 └── Makefile               # Build, test, and dev targets
@@ -186,7 +186,7 @@ eval-hub/
 
 - [API documentation](https://eval-hub.github.io/eval-hub/) -- full endpoint reference
 - [CONTRIBUTING.md](./CONTRIBUTING.md) -- contribution guidelines
-- [OpenAPI spec](./api/openapi.yaml) -- machine-readable API definition
+- [OpenAPI spec](./docs/openapi.yaml) -- machine-readable API definition
 
 ## Licence
 
