@@ -118,3 +118,41 @@ func resolveEvalHubOrMLflowToken(logger *slog.Logger, input AuthTokenInput) stri
 
 	return token
 }
+
+// cacheKeyForAuthInput returns the map key used for input in the auth token cache, or "" if not cacheable.
+func cacheKeyForAuthInput(input AuthTokenInput) string {
+	switch input.TargetEndpoint {
+	case "oci":
+		if input.OCITokenProducer == nil {
+			return ""
+		}
+		tp := input.OCITokenProducer
+		return "oci:" + tp.Registry + ":" + tp.Repository
+	default:
+		if input.TargetEndpoint == "" {
+			return ""
+		}
+		return input.TargetEndpoint
+	}
+}
+
+// UpdateAuthTokenCache stores token under the cache entry for input (same key as ResolveAuthToken).
+// TTL is input.TokenCacheTimeout or defaultAuthTokenCacheTTL. An empty token removes the cache entry.
+// For TargetEndpoint "oci", OCITokenProducer must be set to compute the key.
+func UpdateAuthTokenCache(input AuthTokenInput, token string) {
+	key := cacheKeyForAuthInput(input)
+	if key == "" {
+		return
+	}
+	authTokenCacheMu.Lock()
+	defer authTokenCacheMu.Unlock()
+	if token == "" {
+		delete(authTokenCache, key)
+		return
+	}
+	ttl := input.TokenCacheTimeout
+	if ttl <= 0 {
+		ttl = defaultAuthTokenCacheTTL
+	}
+	authTokenCache[key] = authCacheEntry{token: token, expiresAt: time.Now().Add(ttl)}
+}

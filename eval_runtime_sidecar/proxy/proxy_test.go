@@ -106,7 +106,7 @@ func TestNewReverseProxy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("url.Parse: %v", err)
 	}
-	proxy := NewReverseProxy(target, backend.Client(), logger)
+	proxy := NewReverseProxy(target, backend.Client(), logger, nil)
 	authInput := AuthTokenInput{
 		TargetEndpoint: "proxy-test",
 		AuthToken:      "test-token",
@@ -124,5 +124,62 @@ func TestNewReverseProxy(t *testing.T) {
 	}
 	if body := rw.Body.String(); body != "ok" {
 		t.Errorf("body = %q, want ok", body)
+	}
+}
+
+func TestContextWithOriginalRequest(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = "client.example:8443"
+	req.Header.Set("X-Forwarded-Proto", "https")
+	ctx := ContextWithOriginalRequest(context.Background(), req)
+	got, ok := OriginalRequestFromContext(ctx)
+	if !ok {
+		t.Fatal("expected OriginalRequest on context")
+	}
+	if got.Host != "client.example:8443" || got.Scheme != "https" {
+		t.Errorf("OriginalRequest = %+v, want Host client.example:8443 Scheme https", got)
+	}
+}
+
+func TestNewReverseProxyModifyResponseHook(t *testing.T) {
+	logger := slog.Default()
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Stripped", "gone")
+		w.Header().Set("Location", "https://registry.io/v2/")
+		w.WriteHeader(http.StatusTemporaryRedirect)
+	}))
+	defer backend.Close()
+
+	target, _ := url.Parse(strings.TrimSuffix(backend.URL, "/"))
+	client := backend.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	var sawOrig bool
+	p := NewReverseProxy(target, client, logger, func(resp *http.Response) error {
+		if o, ok := OriginalRequestFromContext(resp.Request.Context()); ok {
+			sawOrig = o.Host == "sidecar.local"
+			resp.Header.Del("X-Stripped")
+			ociRewriteLocationHeader(resp, o)
+		}
+		return nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/v2/repo/tags/list", nil)
+	req.Host = "sidecar.local"
+	ctx := ContextWithOriginalRequest(req.Context(), req)
+	req = req.WithContext(ctx)
+	rw := httptest.NewRecorder()
+	p.ServeHTTP(rw, req)
+
+	if !sawOrig {
+		t.Error("ModifyResponse should see OriginalRequest from context")
+	}
+	if rw.Header().Get("X-Stripped") != "" {
+		t.Errorf("hook should strip X-Stripped, got %q", rw.Header().Get("X-Stripped"))
+	}
+	wantLoc := "http://sidecar.local/v2/"
+	if got := rw.Header().Get("Location"); got != wantLoc {
+		t.Errorf("Location = %q, want %q", got, wantLoc)
 	}
 }

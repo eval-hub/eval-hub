@@ -97,3 +97,30 @@ func TestResolveAuthToken(t *testing.T) {
 		}
 	})
 }
+
+func TestUpdateAuthTokenCache(t *testing.T) {
+	ep := "eval-hub-" + t.Name()
+	input := AuthTokenInput{
+		TargetEndpoint:    ep,
+		TokenCacheTimeout: time.Hour,
+	}
+	UpdateAuthTokenCache(input, "injected")
+	got := ResolveAuthToken(slog.Default(), AuthTokenInput{
+		TargetEndpoint:    ep,
+		AuthTokenPath:     filepath.Join(t.TempDir(), "missing"),
+		AuthToken:         "would-read-if-not-cached",
+		TokenCacheTimeout: time.Hour,
+	})
+	if got != "injected" {
+		t.Errorf("after UpdateAuthTokenCache, ResolveAuthToken = %q, want injected", got)
+	}
+	UpdateAuthTokenCache(input, "")
+	got2 := ResolveAuthToken(slog.Default(), AuthTokenInput{
+		TargetEndpoint:    ep,
+		AuthToken:         "after-clear",
+		TokenCacheTimeout: time.Hour,
+	})
+	if got2 != "after-clear" {
+		t.Errorf("after clear, ResolveAuthToken = %q, want after-clear", got2)
+	}
+}

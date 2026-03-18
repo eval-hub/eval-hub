@@ -26,6 +26,43 @@ func AuthInputFromContext(ctx context.Context) (AuthTokenInput, bool) {
 	return a, ok
 }
 
+type contextKeyOriginalRequest struct{}
+
+// OriginalRequest captures the client-to-sidecar request Host and scheme at proxy entry.
+// Use with ContextWithOriginalRequest before ServeHTTP so ModifyResponse can rewrite redirects.
+type OriginalRequest struct {
+	Host   string
+	Scheme string // "http" or "https"
+}
+
+// ContextWithOriginalRequest records r's Host and client-facing scheme on ctx.
+func ContextWithOriginalRequest(ctx context.Context, r *http.Request) context.Context {
+	return context.WithValue(ctx, contextKeyOriginalRequest{}, OriginalRequest{
+		Host:   r.Host,
+		Scheme: clientScheme(r),
+	})
+}
+
+// OriginalRequestFromContext returns the OriginalRequest from ctx, if any.
+func OriginalRequestFromContext(ctx context.Context) (OriginalRequest, bool) {
+	v := ctx.Value(contextKeyOriginalRequest{})
+	if v == nil {
+		return OriginalRequest{}, false
+	}
+	o, ok := v.(OriginalRequest)
+	return o, ok
+}
+
+func clientScheme(r *http.Request) string {
+	if r.TLS != nil {
+		return "https"
+	}
+	if strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+		return "https"
+	}
+	return "http"
+}
+
 // headersForLog returns a copy of h suitable for logging, with Authorization values obfuscated.
 func headersForLog(h http.Header) http.Header {
 	out := h.Clone()
@@ -66,8 +103,9 @@ func SetAuthHeader(req *http.Request, token string) {
 
 // NewReverseProxy returns an httputil.ReverseProxy that forwards to target using client.
 // Per-request auth is read from the request context (ContextWithAuthInput). Logger is used for request/response logging.
+// If modifyResponse is non-nil, it runs before the built-in response log (same contract as httputil.ReverseProxy.ModifyResponse).
 // The returned proxy is safe to reuse for many requests.
-func NewReverseProxy(target *url.URL, client *http.Client, logger *slog.Logger) *httputil.ReverseProxy {
+func NewReverseProxy(target *url.URL, client *http.Client, logger *slog.Logger, modifyResponse func(*http.Response) error) *httputil.ReverseProxy {
 	transport := &roundTripperFromClient{client: client}
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	proxy.Transport = transport
@@ -87,6 +125,11 @@ func NewReverseProxy(target *url.URL, client *http.Client, logger *slog.Logger) 
 	}
 
 	proxy.ModifyResponse = func(resp *http.Response) error {
+		if modifyResponse != nil {
+			if err := modifyResponse(resp); err != nil {
+				return err
+			}
+		}
 		if resp.Request != nil {
 			logger.Info("Response from proxy", "method", resp.Request.Method, "url", resp.Request.URL.String(), "status", resp.StatusCode)
 		}

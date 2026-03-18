@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -276,4 +278,68 @@ func (tp *TokenProducer) GetToken() error {
 		return nil
 	}
 	return tp.token(nextURL)
+}
+
+// ModifyOCIRegistryResponse applies OCI/registry-specific response tweaks (same ideas as oci-proxy):
+// strip WWW-Authenticate; rewrite absolute redirect Location to the client-facing host; if the registry
+// returns a Bearer token in Authorization, store it on TokenProducer and cache, and strip from response.
+func ModifyOCIRegistryResponse(resp *http.Response, logger *slog.Logger, tp *TokenProducer) {
+	if resp == nil {
+		return
+	}
+	if resp.Header.Get("WWW-Authenticate") != "" {
+		resp.Header.Del("WWW-Authenticate")
+	}
+
+	if resp.Request != nil {
+		if orig, ok := OriginalRequestFromContext(resp.Request.Context()); ok {
+			ociRewriteLocationHeader(resp, orig)
+		}
+	}
+
+	ociConsumeResponseAuthorizationToken(resp, tp, logger)
+}
+
+func ociRewriteLocationHeader(resp *http.Response, client OriginalRequest) {
+	loc := resp.Header.Get("Location")
+	if loc == "" {
+		return
+	}
+	locURL, err := url.Parse(loc)
+	if err != nil || locURL.Host == "" {
+		return
+	}
+	locURL.Scheme = client.Scheme
+	locURL.Host = client.Host
+	resp.Header.Set("Location", locURL.String())
+}
+
+func ociConsumeResponseAuthorizationToken(resp *http.Response, tp *TokenProducer, logger *slog.Logger) {
+	if tp == nil || resp.Request == nil {
+		return
+	}
+	authz := strings.TrimSpace(resp.Header.Get("Authorization"))
+	if authz == "" {
+		return
+	}
+	const prefix = "Bearer "
+	if !strings.HasPrefix(authz, prefix) {
+		return
+	}
+	newTok := strings.TrimSpace(authz[len(prefix):])
+	if newTok == "" {
+		return
+	}
+	resp.Header.Del("Authorization")
+
+	ociTokenRefreshMu.Lock()
+	tp.Token = newTok
+	ociTokenRefreshMu.Unlock()
+
+	if input, ok := AuthInputFromContext(resp.Request.Context()); ok {
+		UpdateAuthTokenCache(input, newTok)
+	}
+	if logger != nil {
+		logger.Debug("OCI proxy: stored registry token from upstream Authorization response header")
+	}
 }

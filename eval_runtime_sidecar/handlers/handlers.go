@@ -78,7 +78,7 @@ func newMlflowProxy(config *config.Config, logger *slog.Logger) (*httputil.Rever
 		return nil, fmt.Errorf("invalid MLFLOW_TRACKING_URI: %w", err)
 	}
 
-	mlflowProxy := proxy.NewReverseProxy(mlflowTarget, mlflowHTTPClient, logger)
+	mlflowProxy := proxy.NewReverseProxy(mlflowTarget, mlflowHTTPClient, logger, nil)
 	return mlflowProxy, nil
 }
 
@@ -96,7 +96,7 @@ func newEvalhubProxy(config *config.Config, logger *slog.Logger) (*httputil.Reve
 	if err != nil {
 		return nil, fmt.Errorf("invalid EVALHUB_URL: %w", err)
 	}
-	evalHubProxy := proxy.NewReverseProxy(evalHubTarget, evalHubHTTPClient, logger)
+	evalHubProxy := proxy.NewReverseProxy(evalHubTarget, evalHubHTTPClient, logger, nil)
 	return evalHubProxy, nil
 }
 
@@ -129,7 +129,7 @@ func newOciProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseP
 	if ociSecretMountPath == "" {
 		ociSecretMountPath = OCIAuthConfigPathDefault
 	}
-	tp, err := proxy.LoadTokenProducerFromOCISecret(ociSecretMountPath, host, repository, ociHTTPClient)
+	tokenProducer, err := proxy.LoadTokenProducerFromOCISecret(ociSecretMountPath, host, repository, ociHTTPClient)
 	if err != nil {
 		logger.Error("failed to create OCI token producer from OCI secret", "path", ociSecretMountPath, "error", err)
 		return nil, nil, "", fmt.Errorf("OCI token producer: %w", err)
@@ -138,7 +138,11 @@ func newOciProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseP
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("invalid OCI registry host from job spec %q: %w", host, err)
 	}
-	return proxy.NewReverseProxy(ociTarget, ociHTTPClient, logger), tp, repository, nil
+	rp := proxy.NewReverseProxy(ociTarget, ociHTTPClient, logger, func(resp *http.Response) error {
+		proxy.ModifyOCIRegistryResponse(resp, logger, tokenProducer)
+		return nil
+	})
+	return rp, tokenProducer, repository, nil
 }
 
 func (h *Handlers) HandleProxyCall(w http.ResponseWriter, r *http.Request) {
@@ -147,7 +151,9 @@ func (h *Handlers) HandleProxyCall(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	r = r.WithContext(proxy.ContextWithAuthInput(r.Context(), *tokenParams))
+	ctx := proxy.ContextWithAuthInput(r.Context(), *tokenParams)
+	ctx = proxy.ContextWithOriginalRequest(ctx, r)
+	r = r.WithContext(ctx)
 	proxyHandler.ServeHTTP(w, r)
 }
 
