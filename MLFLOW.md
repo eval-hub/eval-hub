@@ -15,7 +15,7 @@ Concise guide for configuring MLFlow integration and understanding experiment tr
 
 **Podman/Container:**
 ```bash
-podman run -p 8000:8000 \
+podman run -p 8080:8080 \
   -e MLFLOW_TRACKING_URI=http://mlflow:5000 \
   eval-hub:latest
 ```
@@ -25,8 +25,6 @@ podman run -p 8000:8000 \
 env:
   - name: MLFLOW_TRACKING_URI
     value: "http://mlflow-service:5000"
-  - name: MLFLOW_EXPERIMENT_PREFIX
-    value: "production-eval"
 ```
 
 ## Experiment Configuration
@@ -147,7 +145,7 @@ env:
 
 ### CI/CD Pipeline
 ```bash
-curl -X POST "http://eval-hub:8000/api/v1/evaluations" \
+curl -X POST "http://eval-hub:8080/api/v1/evaluations/jobs" \
   -H "Content-Type: application/json" \
   -d '{
     "model": {"server": "vllm", "name": "my-model:v1.0"},
