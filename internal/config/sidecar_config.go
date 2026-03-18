@@ -16,8 +16,6 @@ type SidecarConfig struct {
 
 // SidecarOCIConfig holds sidecar OCI/registry proxy settings (host from configmap).
 type SidecarOCIConfig struct {
-	Host               string        `mapstructure:"host,omitempty"`                 // OCI registry host (e.g. https://registry.example.com:5000)
-	Repository         string        `mapstructure:"repository,omitempty"`           // optional scope repository (e.g. namespace/repo)
 	CACertPath         string        `mapstructure:"ca_cert_path,omitempty"`         // optional PEM CA for registry TLS
 	InsecureSkipVerify bool          `mapstructure:"insecure_skip_verify,omitempty"` // skip TLS verify for registry (e.g. self-signed)
 	HTTPTimeout        time.Duration `mapstructure:"http_timeout,omitempty"`         // HTTP client timeout for registry requests (e.g. 30s)

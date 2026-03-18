@@ -15,7 +15,6 @@ type AuthTokenInput struct {
 	TokenCacheTimeout time.Duration
 	// OCI registry auth (when TargetEndpoint == "oci")
 	OCIAuthConfigPath string         // path to registry auth config file (OCI secret mount, same format as Docker config.json)
-	OCIHost           string         // registry host (optional; when set with OCITokenProducer, unused)
 	OCIRepository     string         // optional scope repository (e.g. namespace/repo)
 	OCITokenProducer  *TokenProducer // optional; when set, reused for token resolution instead of building from config path
 }

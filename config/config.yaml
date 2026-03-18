@@ -27,7 +27,7 @@ env_mappings:
   EVALHUB_TOKEN_CACHE_TIMEOUT: sidecar.eval_hub.token_cache_timeout
   MLFLOW_TOKEN_CACHE_TIMEOUT: sidecar.mlflow.token_cache_timeout
   SIDECAR_PORT: sidecar.port
-  OCI_REGISTRY_HOST: sidecar.oci.host
+
 # Database configuration
 database:
   driver: sqlite
@@ -68,8 +68,6 @@ sidecar:
     # token_cache_timeout: 5m
   # OCI registry proxy (url contains /registry/). Host from configmap; credentials from OCI secret mount.
   # oci:
-  #   host: https://registry.example.com:5000
-  #   repository: namespace/repo  # optional scope for token
   #   ca_cert_path: /etc/pki/ca-trust/source/anchors/registry-ca.crt  # optional
   #   insecure_skip_verify: false
   sidecar_container:
