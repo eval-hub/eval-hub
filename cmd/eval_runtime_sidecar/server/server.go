@@ -34,16 +34,17 @@ func NewSidecarServer(logger *slog.Logger,
 	}
 
 	port := 8080
-	err := error(nil)
 
 	if config.Sidecar != nil {
 		if baseURL := strings.TrimSpace(config.Sidecar.BaseURL); baseURL != "" {
 			if strings.Contains(baseURL, ":") {
 				parts := strings.Split(baseURL, ":")
 				portStr := parts[len(parts)-1]
-				port, err = strconv.Atoi(portStr)
+				portInt, err := strconv.Atoi(portStr)
 				if err != nil {
 					logger.Warn("invalid port in base URL, using default port 8080", "error", err)
+				} else {
+					port = portInt
 				}
 			}
 		}

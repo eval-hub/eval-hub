@@ -134,3 +134,22 @@ func TestHandlers_HandleProxyCall(t *testing.T) {
 		}
 	})
 }
+
+func TestOciRouteMatch(t *testing.T) {
+	h := &Handlers{ociRepository: "org/repo"}
+	tests := []struct {
+		uri  string
+		want bool
+	}{
+		{"/v2/org/repo/manifests/latest", true},
+		{"/v2/ac/org/repo/manifests/latest", false},
+		{"/org/repo/tags/list", true},
+		{"/xorg/repo/tags/list", false},
+		{"/v2/org/repo2/tags/list", false},
+	}
+	for _, tt := range tests {
+		if got := h.ociRouteMatch(tt.uri); got != tt.want {
+			t.Errorf("ociRouteMatch(%q) = %v, want %v", tt.uri, got, tt.want)
+		}
+	}
+}

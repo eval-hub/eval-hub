@@ -117,19 +117,22 @@ func newOciProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseP
 		logger.Debug("OCI disabled: job spec has no OCI exports or oci_host", "path", jobSpecPath)
 		return nil, nil, "", nil
 	}
-	ociSecretMountPath := os.Getenv("OCI_AUTH_CONFIG_PATH")
-	if ociSecretMountPath == "" {
-		ociSecretMountPath = OCIAuthConfigPathDefault
-	}
-	tp, err := proxy.LoadTokenProducerFromOCISecret(ociSecretMountPath, host, repository)
-	if err != nil {
-		logger.Error("failed to create OCI token producer from OCI secret", "path", ociSecretMountPath, "error", err)
-		return nil, nil, "", fmt.Errorf("OCI token producer: %w", err)
-	}
 	ociHTTPClient, err := proxy.NewOCIHTTPClient(config, config.IsOTELEnabled(), logger)
 	if err != nil {
 		logger.Error("failed to create OCI HTTP client", "error", err)
 		return nil, nil, "", fmt.Errorf("failed to create OCI HTTP client: %w", err)
+	}
+	if ociHTTPClient == nil {
+		return nil, nil, "", fmt.Errorf("OCI HTTP client is required for OCI proxy")
+	}
+	ociSecretMountPath := os.Getenv("OCI_AUTH_CONFIG_PATH")
+	if ociSecretMountPath == "" {
+		ociSecretMountPath = OCIAuthConfigPathDefault
+	}
+	tp, err := proxy.LoadTokenProducerFromOCISecret(ociSecretMountPath, host, repository, ociHTTPClient)
+	if err != nil {
+		logger.Error("failed to create OCI token producer from OCI secret", "path", ociSecretMountPath, "error", err)
+		return nil, nil, "", fmt.Errorf("OCI token producer: %w", err)
 	}
 	ociTarget, err := url.Parse(strings.TrimSuffix(host, "/"))
 	if err != nil {
@@ -151,19 +154,29 @@ func (h *Handlers) HandleProxyCall(w http.ResponseWriter, r *http.Request) {
 // ociRouteMatch returns true if the request URI should be routed to the OCI proxy.
 // The URI need not have a /registry/ prefix: if it contains the repository name from
 // /meta/job.json as a path segment (e.g. "org/repo"), the request is routed to OCI.
-// Segment boundaries are enforced so "org/repo" does not match "org/repo2".
+// Left boundary: seg must be at path start, after '/', or immediately after the OCI
+// "/v2" prefix (so /v2/org/repo matches but /v2/ac/org/repo does not for repo "org/repo").
+// Right boundary: end of URI or next char is '/'.
 func (h *Handlers) ociRouteMatch(uri string) bool {
 	if h.ociRepository == "" {
 		return false
 	}
-	// Match repository as a path segment: ".../org/repo" or ".../org/repo/..." or "/org/repo"
 	seg := "/" + h.ociRepository
-	idx := strings.Index(uri, seg)
-	if idx < 0 {
-		return false
+	for searchStart := 0; ; {
+		idx := strings.Index(uri[searchStart:], seg)
+		if idx < 0 {
+			return false
+		}
+		idx += searchStart
+		prefix := uri[:idx]
+		leftOK := idx == 0 || uri[idx-1] == '/' || strings.HasSuffix(prefix, "/v2")
+		after := idx + len(seg)
+		rightOK := after == len(uri) || uri[after] == '/'
+		if leftOK && rightOK {
+			return true
+		}
+		searchStart = idx + 1
 	}
-	after := idx + len(seg)
-	return after == len(uri) || uri[after] == '/'
 }
 
 func (h *Handlers) parseProxyCall(r *http.Request) (*httputil.ReverseProxy, *proxy.AuthTokenInput, error) {

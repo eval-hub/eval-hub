@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -20,12 +19,15 @@ type TokenResponse struct {
 
 // TokenProducer holds credentials and registry context for obtaining an OCI registry token.
 // Values come from the OCI secret mounted on the container (registry auth config file).
+// Registry holds the registry host as passed to LoadTokenProducerFromOCISecret (may include
+// http:// or https://) so challenge() can use http when the job spec uses an http registry.
 type TokenProducer struct {
-	Username   string
-	Password   string
-	Registry   string
-	Repository string
-	Token      string
+	Username    string
+	Password    string
+	Registry    string
+	Repository  string
+	Token       string
+	HTTPClient  *http.Client // from NewOCIHTTPClient: TLS, timeout for challenge + token
 }
 
 // registryAuthEntry represents one registry entry in the auth config (format matches Docker config.json / kubernetes.io/dockerconfigjson).
@@ -67,10 +69,14 @@ func GetOCICoordinatesFromJobSpec(path string) (host, repository string, err err
 }
 
 // LoadTokenProducerFromOCISecret reads the OCI secret (registry auth config) at ociSecretMountPath and builds a TokenProducer
-// for the given registry host. The file format is the same as Docker config.json and kubernetes.io/dockerconfigjson
+// for the given registry host. httpClient must be non-nil (typically NewOCIHTTPClient) so challenge/token use configured TLS and timeout.
+// The file format is the same as Docker config.json and kubernetes.io/dockerconfigjson
 // (auths map with per-registry username/password or auth base64). RegistryHost should match the key in auths
 // (e.g. "https://registry:5000" or "registry:5000"). Repository is used as the scope in the token request; if empty, "default/repo" is used.
-func LoadTokenProducerFromOCISecret(ociSecretMountPath, registryHost, repository string) (*TokenProducer, error) {
+func LoadTokenProducerFromOCISecret(ociSecretMountPath, registryHost, repository string, httpClient *http.Client) (*TokenProducer, error) {
+	if httpClient == nil {
+		return nil, fmt.Errorf("oci http client is required")
+	}
 	data, err := os.ReadFile(ociSecretMountPath)
 	if err != nil {
 		return nil, fmt.Errorf("read OCI secret: %w", err)
@@ -127,8 +133,9 @@ func LoadTokenProducerFromOCISecret(ociSecretMountPath, registryHost, repository
 	return &TokenProducer{
 		Username:   username,
 		Password:   password,
-		Registry:   strings.TrimPrefix(strings.TrimPrefix(registryHost, "https://"), "http://"),
+		Registry:   strings.TrimSpace(registryHost),
 		Repository: repository,
+		HTTPClient: httpClient,
 	}, nil
 }
 
@@ -195,7 +202,11 @@ func (tp *TokenProducer) challenge() (string, error) {
 	}
 	host := strings.TrimPrefix(strings.TrimPrefix(tp.Registry, "https://"), "http://")
 	authURL := scheme + "://" + host + "/v2"
-	resp, err := http.Get(authURL)
+	req, err := http.NewRequest(http.MethodGet, authURL, nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := tp.HTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -230,12 +241,7 @@ func (tp *TokenProducer) token(nextURL string) error {
 	}
 	req.SetBasicAuth(tp.Username, tp.Password)
 
-	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}
-	resp, err := client.Do(req)
+	resp, err := tp.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
