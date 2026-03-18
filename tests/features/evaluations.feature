@@ -150,7 +150,7 @@ Feature: Evaluations Endpoint
     Given the service is running
     When the mode is local or CI then skip this scenario
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
-    Then the response code should be 202
+    Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:collection_id"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_collection.json"
     Then the response code should be 202
