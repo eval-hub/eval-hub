@@ -73,7 +73,7 @@ This project follows the standard Go project layout with a clear separation betw
 - **internal/logging/** - Logger creation and request enhancement
 - **internal/metrics/** - Prometheus metrics and middleware
 - **cmd/eval_hub/server/** - Server setup and routing
-- **api/** - OpenAPI 3.1.0 specification
+- **docs/src/** - OpenAPI 3.1.0 specification (source of truth)
 - **tests/features/** - BDD-style FVT tests using godog
 
 ### Key Architectural Patterns
