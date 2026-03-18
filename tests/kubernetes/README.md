@@ -8,7 +8,7 @@ These tests validate Kubernetes resources created by eval-hub in a real cluster.
 
 ### Prerequisites
 
-- Go 1.21+
+- Go 1.25+
 - A running eval-hub service that is configured with Kubernetes runtime
 - Access to the Kubernetes cluster where resources are created (read-only is sufficient)
 
