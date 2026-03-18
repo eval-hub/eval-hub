@@ -34,7 +34,7 @@ var (
 		{Path: "/custom", Op: api.PatchOpRemove, Prefix: true},
 		{Path: "/custom", Op: api.PatchOpReplace, Prefix: true},
 
-		{Path: "/category", Op: api.PatchOpReplace, Prefix: true},
+		{Path: "/category", Op: api.PatchOpReplace, Prefix: false},
 
 		{Path: "/benchmarks", Op: api.PatchOpReplace, Prefix: true},
 
