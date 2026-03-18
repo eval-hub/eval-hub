@@ -64,7 +64,7 @@ PORT=3000 go run cmd/eval_hub/main.go
 - `GET /api/v1/evaluations/jobs` - List Evaluations
 - `GET /api/v1/evaluations/jobs/{id}` - Get Evaluation Status
 - `DELETE /api/v1/evaluations/jobs/{id}` - Cancel Evaluation
-- `GET /api/v1/evaluations/jobs/{id}/summary` - Get Evaluation Summary
+- `GET /api/v1/evaluations/jobs/{id}/events` - Get Evaluation Events
 
 #### Collections
 - `GET /api/v1/evaluations/collections` - List Collections
@@ -267,18 +267,6 @@ go test -v ./tests/kubernetes/features
 Create a file called `export_test.go`:
 
 ```go
-// ------------------------------------------------------ {COPYRIGHT-TOP} ---
-// IBM Confidential
-// OCO Source Materials
-// IBM Watson Machine Learning Core
-//
-// Copyright IBM Corp. 2025. All Rights Reserved.
-//
-// The source code for this program is not published or otherwise
-// divested of its trade secrets, irrespective of what has been
-// deposited with the U.S. Copyright Office.
-// ------------------------------------------------------ {COPYRIGHT-END} ---
-
 package accessrules
 
 var EvaluateAccessGroup = evaluateAccessGroup
