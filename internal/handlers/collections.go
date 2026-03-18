@@ -197,11 +197,7 @@ func (h *Handlers) HandleUpdateCollection(ctx *executioncontext.ExecutionContext
 	err := h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-	err := h.withSpan(
-		ctx,
-		func(runtimeCtx context.Context) error {
 			// get the body bytes from the context
-			bodyBytes, err := req.BodyAsBytes()
 			bodyBytes, err := req.BodyAsBytes()
 			if err != nil {
 				return err
