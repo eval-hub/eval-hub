@@ -274,7 +274,7 @@ func (h *Handlers) HandlePatchCollection(ctx *executioncontext.ExecutionContext,
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			result, err := storage.PatchCollection(collectionID, &patches)
+			result, err := storage.WithContext(runtimeCtx).PatchCollection(collectionID, &patches)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
