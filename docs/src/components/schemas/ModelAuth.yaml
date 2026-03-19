@@ -1,0 +1,6 @@
+type: object
+description: The model authentication configuration
+properties:
+  secret_ref:
+    type: string
+    description: The reference to the secret containing the model authentication credentials

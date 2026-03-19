@@ -1,0 +1,18 @@
+type: object
+description: >
+  The collection to use for the evaluation job.
+required:
+  - id
+properties:
+  id:
+    type: string
+    description: >
+      The unique identifier of the collection.
+  benchmarks:
+    type: array
+    items:
+      $ref: ./BenchmarkConfig.yaml
+    description: >
+      The benchmarks supported by this collection. If a benchmark is specified
+      but is not supported by the collection, the evaluation job will fail. This is needed
+      in order to allow overriding the collection benchmarks for a specific evaluation job.

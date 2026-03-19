@@ -1,0 +1,14 @@
+type: object
+description: The test result for an evaluation
+properties:
+  score:
+    type: number
+    format: float
+    description: Evaluation score value
+  threshold:
+    type: number
+    format: float
+    description: Threshold value
+  pass:
+    type: boolean
+    description: Whether the entire evaluation passed

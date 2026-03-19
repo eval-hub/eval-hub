@@ -20,9 +20,7 @@ type KubernetesHelper struct {
 	clientset kubernetes.Interface
 }
 
-// NewKubernetesHelper builds a Kubernetes client (in-cluster config, then default kubeconfig)
-// and returns a KubernetesHelper. Call this when LocalMode is false.
-func NewKubernetesHelper() (*KubernetesHelper, error) {
+func NewKubernetesClient() (*kubernetes.Clientset, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -39,7 +37,17 @@ func NewKubernetesHelper() (*KubernetesHelper, error) {
 	if err != nil {
 		return nil, err
 	}
+	return clientset, nil
+}
 
+// NewKubernetesHelper builds a Kubernetes client (in-cluster config, then default kubeconfig)
+// and returns a KubernetesHelper. Call this when LocalMode is false.
+func NewKubernetesHelper() (*KubernetesHelper, error) {
+
+	clientset, err := NewKubernetesClient()
+	if err != nil {
+		return nil, err
+	}
 	return &KubernetesHelper{
 		clientset: clientset,
 	}, nil
@@ -97,6 +105,30 @@ func (h *KubernetesHelper) DeleteConfigMap(ctx context.Context, namespace, name 
 		return fmt.Errorf("namespace and name are required")
 	}
 	return h.clientset.CoreV1().ConfigMaps(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+}
+
+// ListJobs returns Jobs matching the label selector.
+func (h *KubernetesHelper) ListJobs(ctx context.Context, namespace, labelSelector string) ([]batchv1.Job, error) {
+	if namespace == "" {
+		return nil, fmt.Errorf("namespace is required")
+	}
+	list, err := h.clientset.BatchV1().Jobs(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+	if err != nil {
+		return nil, err
+	}
+	return list.Items, nil
+}
+
+// ListConfigMaps returns ConfigMaps matching the label selector.
+func (h *KubernetesHelper) ListConfigMaps(ctx context.Context, namespace, labelSelector string) ([]corev1.ConfigMap, error) {
+	if namespace == "" {
+		return nil, fmt.Errorf("namespace is required")
+	}
+	list, err := h.clientset.CoreV1().ConfigMaps(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+	if err != nil {
+		return nil, err
+	}
+	return list.Items, nil
 }
 
 // SetConfigMapOwner sets a single owner reference on the ConfigMap.

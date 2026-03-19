@@ -1,0 +1,11 @@
+type: object
+description: List of collection resources with pagination
+allOf:
+  - $ref: ./Page.yaml
+  - type: object
+    properties:
+      items:
+        type: array
+        items:
+          $ref: ./CollectionResource.yaml
+        description: Collection resources

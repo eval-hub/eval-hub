@@ -11,13 +11,13 @@ import (
 )
 
 func TestHandleHealth(t *testing.T) {
-	h := handlers.New(nil, nil, nil, nil, nil, nil)
+	h := handlers.New(nil, nil, nil, nil, nil)
 
 	t.Run("GET request returns healthy status", func(t *testing.T) {
 		r := createMockRequest("GET", "/health")
 		w := httptest.NewRecorder()
 		ctx := createExecutionContext()
-		h.HandleHealth(ctx, r, &MockResponseWrapper{w}, "0.0.1", time.Now().Format(time.RFC3339))
+		h.HandleHealth(ctx, r, &MockResponseWrapper{w}, "0.3.0", time.Now().Format(time.RFC3339))
 
 		if w.Code != 200 {
 			t.Errorf("Expected status code %d, got %d", 200, w.Code)

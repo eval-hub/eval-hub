@@ -1,26 +1,11 @@
-properties:
-  state:
-    type: string
-    title: State
-    description: Overall state of the request
-    enum:
-      - pending
-      - running
-      - completed
-      - partially_failed
-      - failed
-      - cancelled
-  message:
-    $ref: ./ErrorMessage.yaml
-  benchmarks:
-    items:
-      $ref: ./BenchmarkRunStatus.yaml
-    type: array
-    title: Benchmark run statuses
-    description: Status for each benchmark run
-additionalProperties: true
 type: object
-required:
-  - state
-title: Status
-description: Overall status for an evaluation request.
+description: Current status of an evaluation job
+allOf:
+  - $ref: ./EvaluationJobState.yaml
+  - type: object
+    properties:
+      benchmarks:
+        type: array
+        items:
+          $ref: ./BenchmarkStatus.yaml
+        description: Per-benchmark status

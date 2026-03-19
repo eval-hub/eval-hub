@@ -1,0 +1,7 @@
+type: object
+title: EvaluationJobConfig
+description: >
+  The evaluation job request configuration.
+oneOf:
+  - $ref: ./EvaluationJobConfigBenchmarks.yaml
+  - $ref: ./EvaluationJobConfigCollection.yaml

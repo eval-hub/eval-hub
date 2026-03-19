@@ -17,11 +17,11 @@ func Unmarshal(validate *validator.Validate, executionContext *executioncontext.
 	// now validate the unmarshalled data
 	err = validate.StructCtx(executionContext.Ctx, v)
 	if err != nil {
-		validationErrors := err.(validator.ValidationErrors) // TODO: rewrite with safe assertions
-		for _, validationError := range validationErrors {
-			executionContext.Logger.Info("Validation error", "field", validationError.Field(), "tag", validationError.Tag(), "value", validationError.Value())
+		if validationErrors, ok := err.(validator.ValidationErrors); ok {
+			for _, validationError := range validationErrors {
+				executionContext.Logger.Info("Validation error", "field", validationError.Field(), "tag", validationError.Tag(), "value", validationError.Value())
+			}
 		}
-		// TODO do we want to surface the raw validation errors to the user?
 		return serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error", err.Error())
 	}
 	// if the validation is successful, return nil

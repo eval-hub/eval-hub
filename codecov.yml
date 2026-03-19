@@ -1,0 +1,4 @@
+coverage:
+  range: 50..75 # The first number represents the cut-over from red to yellow, and the second represents the cut-over from yellow to green.
+  round: down # up, down, nearest
+  precision: 1 # 0 - 5

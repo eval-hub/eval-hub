@@ -2,63 +2,80 @@ package k8s
 
 // Contains the configuration logic that prepares the data needed by the builders
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/eval-hub/eval-hub/internal/config"
+	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	"github.com/google/uuid"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 const (
-	defaultCPURequest        = "250m"
-	defaultMemoryRequest     = "512Mi"
-	defaultCPULimit          = "1"
-	defaultMemoryLimit       = "2Gi"
-	defaultNamespace         = "default"
-	serviceURLEnv            = "SERVICE_URL"
-	evalHubInstanceNameEnv   = "EVALHUB_INSTANCE_NAME"
-	inClusterNamespaceFile   = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
-	serviceAccountNameSuffix = "-jobs"
-	serviceCAConfigMapSuffix = "-service-ca"
-	defaultEvalHubPort       = "8443"
+	defaultCPURequest           = "250m"
+	defaultMemoryRequest        = "512Mi"
+	defaultCPULimit             = "1"
+	defaultMemoryLimit          = "2Gi"
+	defaultSidecarImage         = "eval-runtime-sidecar:latest"
+	defaultSidecarCPURequest    = "100m"
+	defaultSidecarMemoryRequest = "128Mi"
+	defaultSidecarCPULimit      = "200m"
+	defaultSidecarMemoryLimit   = "256Mi"
+	defaultNamespace            = "default"
+	evalHubInstanceNameEnv      = "EVALHUB_INSTANCE_NAME"
+	mlflowTrackingURIEnv        = "MLFLOW_TRACKING_URI"
+	inClusterNamespaceFile      = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	serviceAccountNameSuffix    = "-job"
+	serviceCAConfigMapSuffix    = "-service-ca"
+	defaultTestDataInitCmd      = "/app/eval-hub-init"
+	defaultEvalHubPort          = "8443"
 )
 
 type jobConfig struct {
-	jobID               string
-	namespace           string
-	providerID          string
-	benchmarkID         string
-	retryAttempts       int
-	adapterImage        string
-	entrypoint          []string
-	defaultEnv          []api.EnvVar
-	cpuRequest          string
-	memoryRequest       string
-	cpuLimit            string
-	memoryLimit         string
-	jobSpecJSON         string
-	serviceAccountName  string
-	serviceCAConfigMap  string
-	evalHubURL          string
-	evalHubInstanceName string
+	jobID                string
+	resourceGUID         string
+	namespace            string
+	providerID           string
+	benchmarkID          string
+	benchmarkIndex       int
+	adapterImage         string
+	sidecarImage         string
+	entrypoint           []string
+	defaultEnv           []api.EnvVar
+	cpuRequest           string
+	memoryRequest        string
+	cpuLimit             string
+	memoryLimit          string
+	jobSpec              shared.JobSpec
+	serviceAccountName   string
+	serviceCAConfigMap   string
+	evalHubURL           string // in-cluster URL for sidecar to call eval-hub
+	sidecarBaseURL       string // base URL for adapter/runtime to call sidecar's proxy (config.Sidecar.BaseURL)
+	evalHubInstanceName  string
+	mlflowTrackingURI    string
+	mlflowWorkspace      string
+	ociCredentialsSecret string
+	modelAuthSecretRef   string
+	sidecarResources     corev1.ResourceRequirements
+	localMode            bool
+	testDataS3           s3TestDataConfig
+	testDataInitImage    string
+	sidecarConfigJSON    string // nested sidecar section JSON for ConfigMap key sidecar_config.json
 }
 
-type jobSpec struct {
-	JobID           string              `json:"id"`
-	BenchmarkID     string              `json:"benchmark_id"`
-	Model           api.ModelRef        `json:"model"`
-	NumExamples     *int                `json:"num_examples,omitempty"`
-	BenchmarkConfig map[string]any      `json:"benchmark_config"`
-	ExperimentName  string              `json:"experiment_name,omitempty"`
-	Tags            []api.ExperimentTag `json:"tags,omitempty"`
-	CallbackURL     *string             `json:"callback_url"`
+type s3TestDataConfig struct {
+	bucket    string
+	key       string
+	secretRef string
 }
 
-func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkID string) (*jobConfig, error) {
+func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkConfig *api.BenchmarkConfig, benchmarkIndex int, serviceConfig *config.Config) (*jobConfig, error) {
 	runtime := provider.Runtime
 	if runtime == nil || runtime.K8s == nil {
-		return nil, fmt.Errorf("provider %q missing runtime configuration", provider.ID)
+		return nil, fmt.Errorf("provider %q missing runtime configuration", provider.Resource.ID)
 	}
 
 	cpuRequest := defaultIfEmpty(runtime.K8s.CPURequest, defaultCPURequest)
@@ -72,67 +89,202 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	if evaluation.Model.URL == "" || evaluation.Model.Name == "" {
 		return nil, fmt.Errorf("model url and name are required")
 	}
-	serviceURL := strings.TrimSpace(os.Getenv(serviceURLEnv))
-	if serviceURL == "" {
-		return nil, fmt.Errorf("%s is required", serviceURLEnv)
+
+	sidecarBaseURL := "http://localhost:8080"
+	if serviceConfig != nil && serviceConfig.Sidecar != nil {
+		if baseURL := strings.TrimSpace(serviceConfig.Sidecar.BaseURL); baseURL != "" {
+			sidecarBaseURL = baseURL
+		}
 	}
 
-	namespace := resolveNamespace("")
-	benchmarkConfig, err := findBenchmarkConfig(evaluation, benchmarkID)
+	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
+	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, benchmarkConfig, benchmarkIndex, &sidecarBaseURL)
 	if err != nil {
 		return nil, err
-	}
-	benchmarkParams := copyParams(benchmarkConfig.Parameters)
-	numExamples := numExamplesFromParameters(benchmarkParams)
-	delete(benchmarkParams, "num_examples")
-	spec := jobSpec{
-		JobID:           evaluation.Resource.ID,
-		BenchmarkID:     benchmarkID,
-		Model:           evaluation.Model,
-		NumExamples:     numExamples,
-		BenchmarkConfig: benchmarkParams,
-		CallbackURL:     &serviceURL,
-	}
-	if evaluation.Experiment != nil {
-		spec.ExperimentName = evaluation.Experiment.Name
-		spec.Tags = evaluation.Experiment.Tags
-	}
-	specJSON, err := json.MarshalIndent(spec, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("marshal job spec: %w", err)
 	}
 
 	// Get EvalHub instance name from environment (set by operator in deployment)
 	evalHubInstanceName := strings.TrimSpace(os.Getenv(evalHubInstanceNameEnv))
 
-	// Build ServiceAccount name, ConfigMap name, and EvalHub URL if instance name is set
-	var serviceAccountName, serviceCAConfigMap, evalHubURL string
-	if evalHubInstanceName != "" {
-		serviceAccountName = evalHubInstanceName + serviceAccountNameSuffix
-		serviceCAConfigMap = evalHubInstanceName + serviceCAConfigMapSuffix
-		// EvalHub URL points to the kube-rbac-proxy HTTPS endpoint
-		evalHubURL = fmt.Sprintf("https://%s.%s.svc.cluster.local:%s",
-			evalHubInstanceName, namespace, defaultEvalHubPort)
+	// Get MLFlow configuration from environment (set by operator in deployment)
+	mlflowTrackingURI := strings.TrimSpace(os.Getenv(mlflowTrackingURIEnv))
+	// Job pod must send X-MLFLOW-WORKSPACE = tenant namespace so MLflow's kubernetes-auth
+	// checks RBAC in the correct namespace. Always use the job's namespace; the
+	// MLFLOW_WORKSPACE env var on EvalHub identifies EvalHub's own namespace,
+	// not the tenant's, so it must not be forwarded to job pods.
+	mlflowWorkspace := ""
+	if mlflowTrackingURI != "" {
+		mlflowWorkspace = namespace
 	}
 
-	return &jobConfig{
-		jobID:               evaluation.Resource.ID,
-		namespace:           namespace,
-		providerID:          provider.ID,
-		benchmarkID:         benchmarkID,
-		adapterImage:        runtime.K8s.Image,
-		entrypoint:          runtime.K8s.Entrypoint,
-		defaultEnv:          runtime.K8s.Env,
-		cpuRequest:          cpuRequest,
-		memoryRequest:       memoryRequest,
-		cpuLimit:            cpuLimit,
-		memoryLimit:         memoryLimit,
-		jobSpecJSON:         string(specJSON),
-		serviceAccountName:  serviceAccountName,
-		serviceCAConfigMap:  serviceCAConfigMap,
-		evalHubURL:          evalHubURL,
-		evalHubInstanceName: evalHubInstanceName,
-	}, nil
+	// Build ServiceAccount name and ConfigMap name if instance name is set.
+	// The SA name uses the instance namespace (not the tenant namespace) to match
+	// the operator's naming convention: <instance>-<instance-namespace>-job.
+	instanceNamespace := readInClusterNamespace()
+	var serviceAccountName, serviceCAConfigMap, evalHubURL string
+	if evalHubInstanceName != "" {
+		saNamespace := instanceNamespace
+		if saNamespace == "" {
+			saNamespace = namespace // fallback for local mode
+		}
+		serviceAccountName = evalHubInstanceName + "-" + saNamespace + serviceAccountNameSuffix
+		serviceCAConfigMap = evalHubInstanceName + serviceCAConfigMapSuffix
+		// EvalHub URL points to the kube-rbac-proxy HTTPS endpoint in the instance namespace.
+		// Use saNamespace (which has the local-mode fallback applied) to avoid a malformed host
+		// when instanceNamespace is empty.
+		// This is required by sidecar to call eval-hub API.
+		// This is different from job_spec.callback_url which is used by the adapter to call the sidecar
+		evalHubURL = fmt.Sprintf("https://%s.%s.svc.cluster.local:%s",
+			evalHubInstanceName, saNamespace, defaultEvalHubPort)
+	}
+
+	// Extract OCI credentials secret name from exports config (not forwarded to jobSpec)
+	var ociCredentialsSecret string
+	if evaluation.Exports != nil && evaluation.Exports.OCI != nil && evaluation.Exports.OCI.K8s != nil {
+		ociCredentialsSecret = evaluation.Exports.OCI.K8s.Connection
+	}
+
+	modelAuthSecretRef := ""
+	if evaluation.Model.Auth != nil {
+		modelAuthSecretRef = strings.TrimSpace(evaluation.Model.Auth.SecretRef)
+	}
+
+	sidecarImage, sidecarResources, err := sidecarImageAndResources(serviceConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	localMode := serviceConfig != nil && serviceConfig.Service != nil && serviceConfig.Service.LocalMode
+	var testDataS3Bucket, testDataS3Key, testDataS3SecretRef string
+	if benchmarkConfig.TestDataRef != nil && benchmarkConfig.TestDataRef.S3 != nil {
+		testDataS3Bucket = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.Bucket)
+		testDataS3Key = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.Key)
+		testDataS3SecretRef = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.SecretRef)
+	}
+
+	out := &jobConfig{
+		jobID:                evaluation.Resource.ID,
+		resourceGUID:         uuid.NewString(),
+		namespace:            namespace,
+		providerID:           provider.Resource.ID,
+		benchmarkID:          benchmarkConfig.ID,
+		adapterImage:         runtime.K8s.Image,
+		sidecarImage:         sidecarImage,
+		entrypoint:           runtime.K8s.Entrypoint,
+		defaultEnv:           runtime.K8s.Env,
+		cpuRequest:           cpuRequest,
+		memoryRequest:        memoryRequest,
+		cpuLimit:             cpuLimit,
+		memoryLimit:          memoryLimit,
+		jobSpec:              *spec,
+		serviceAccountName:   serviceAccountName,
+		serviceCAConfigMap:   serviceCAConfigMap,
+		evalHubInstanceName:  evalHubInstanceName,
+		mlflowTrackingURI:    mlflowTrackingURI,
+		mlflowWorkspace:      mlflowWorkspace,
+		ociCredentialsSecret: ociCredentialsSecret,
+		modelAuthSecretRef:   modelAuthSecretRef,
+		sidecarResources:     sidecarResources,
+		sidecarBaseURL:       sidecarBaseURL,
+		localMode:            localMode,
+		evalHubURL:           evalHubURL,
+		testDataS3: s3TestDataConfig{
+			bucket:    testDataS3Bucket,
+			key:       testDataS3Key,
+			secretRef: testDataS3SecretRef,
+		},
+	}
+	sidecarJSON, err := marshalSidecarForJobPod(serviceConfig, out)
+	if err != nil {
+		return nil, fmt.Errorf("sidecar config json: %w", err)
+	}
+	out.sidecarConfigJSON = string(sidecarJSON)
+	return out, nil
+}
+
+// sidecarImageAndResources returns image and resources for the sidecar container from
+// config.Sidecar.SidecarContainer (YAML key "sidecar"), or defaults when nil/empty.
+func sidecarImageAndResources(serviceConfig *config.Config) (image string, resources corev1.ResourceRequirements, err error) {
+	image = defaultSidecarImage
+	resources = defaultSidecarResourceRequirements()
+	if serviceConfig != nil && serviceConfig.Sidecar != nil && serviceConfig.Sidecar.SidecarContainer != nil {
+		sc := serviceConfig.Sidecar.SidecarContainer
+		if trimmed := strings.TrimSpace(sc.Image); trimmed != "" {
+			image = trimmed
+		}
+		if sc.Resources != nil {
+			resources, err = resourceRequirementsFromConfig(sc.Resources)
+			if err != nil {
+				return "", corev1.ResourceRequirements{}, err
+			}
+		}
+	}
+	return image, resources, nil
+}
+
+func defaultSidecarResourceRequirements() corev1.ResourceRequirements {
+	q := func(s string) resource.Quantity {
+		qu, _ := resource.ParseQuantity(s)
+		return qu
+	}
+	return corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    q(defaultSidecarCPURequest),
+			corev1.ResourceMemory: q(defaultSidecarMemoryRequest),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    q(defaultSidecarCPULimit),
+			corev1.ResourceMemory: q(defaultSidecarMemoryLimit),
+		},
+	}
+}
+
+// resourceRequirementsFromConfig converts config.ResourceRequirements to corev1.ResourceRequirements.
+// Empty strings are skipped (not set). Uses default sidecar quantities for any missing request/limit.
+func resourceRequirementsFromConfig(cfg *config.ResourceRequirements) (corev1.ResourceRequirements, error) {
+	out := defaultSidecarResourceRequirements()
+	if cfg == nil {
+		return out, nil
+	}
+	parse := func(s string) (resource.Quantity, error) {
+		if s == "" {
+			return resource.Quantity{}, nil
+		}
+		return resource.ParseQuantity(s)
+	}
+	if cfg.Requests != nil {
+		if cfg.Requests.CPU != "" {
+			q, err := parse(cfg.Requests.CPU)
+			if err != nil {
+				return corev1.ResourceRequirements{}, fmt.Errorf("sidecar resources.requests.cpu: %w", err)
+			}
+			out.Requests[corev1.ResourceCPU] = q
+		}
+		if cfg.Requests.Memory != "" {
+			q, err := parse(cfg.Requests.Memory)
+			if err != nil {
+				return corev1.ResourceRequirements{}, fmt.Errorf("sidecar resources.requests.memory: %w", err)
+			}
+			out.Requests[corev1.ResourceMemory] = q
+		}
+	}
+	if cfg.Limits != nil {
+		if cfg.Limits.CPU != "" {
+			q, err := parse(cfg.Limits.CPU)
+			if err != nil {
+				return corev1.ResourceRequirements{}, fmt.Errorf("sidecar resources.limits.cpu: %w", err)
+			}
+			out.Limits[corev1.ResourceCPU] = q
+		}
+		if cfg.Limits.Memory != "" {
+			q, err := parse(cfg.Limits.Memory)
+			if err != nil {
+				return corev1.ResourceRequirements{}, fmt.Errorf("sidecar resources.limits.memory: %w", err)
+			}
+			out.Limits[corev1.ResourceMemory] = q
+		}
+	}
+	return out, nil
 }
 
 func defaultIfEmpty(value string, fallback string) string {
@@ -159,50 +311,4 @@ func readInClusterNamespace() string {
 		return ""
 	}
 	return strings.TrimSpace(string(content))
-}
-
-func findBenchmarkConfig(evaluation *api.EvaluationJobResource, benchmarkID string) (*api.BenchmarkConfig, error) {
-	for i := range evaluation.Benchmarks {
-		benchmark := &evaluation.Benchmarks[i]
-		if benchmark.ID == benchmarkID {
-			return benchmark, nil
-		}
-	}
-	return nil, fmt.Errorf("benchmark config not found for %q", benchmarkID)
-}
-
-func copyParams(source map[string]any) map[string]any {
-	if len(source) == 0 {
-		return map[string]any{}
-	}
-	clone := make(map[string]any, len(source))
-	for key, value := range source {
-		clone[key] = value
-	}
-	return clone
-}
-
-func numExamplesFromParameters(parameters map[string]any) *int {
-	if parameters == nil {
-		return nil
-	}
-	value, ok := parameters["num_examples"]
-	if !ok {
-		return nil
-	}
-	switch typed := value.(type) {
-	case int:
-		return &typed
-	case int32:
-		converted := int(typed)
-		return &converted
-	case int64:
-		converted := int(typed)
-		return &converted
-	case float64:
-		converted := int(typed)
-		return &converted
-	default:
-		return nil
-	}
 }

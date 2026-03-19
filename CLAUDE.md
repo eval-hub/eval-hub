@@ -65,7 +65,7 @@ make clean              # Remove build artifacts and coverage files
 ### Project Structure
 This project follows the standard Go project layout with a clear separation between public entry points (`cmd/`) and private application code (`internal/`).
 
-- **cmd/eval_hub/** - Main application entry point 
+- **cmd/eval_hub/** - Main application entry point
 - **internal/config/** - Configuration loading with Viper
 - **internal/constants/** - Shared constants (log field names, etc.)
 - **internal/executioncontext/** - ExecutionContext pattern implementation
@@ -103,7 +103,7 @@ Configuration uses Viper with a sophisticated loading strategy:
 
 
 Configuration supports:
-- **Environment variable mapping**: Define in `env.mappings` (e.g., `PORT` → `service.port`)
+- **Environment variable mapping**: Define in `env_mappings` (e.g., `PORT` → `service.port`)
 - **Secrets from files**: Define in `secrets.mappings` with `secrets.dir` (e.g., `/tmp/db_password` → `database.password`)
 - Values cascade from config.yaml to env vars to secrets
 
@@ -187,6 +187,12 @@ When running locally:
 - Loads `config/config.yaml`
 - Environment variables override file config
 - Secrets from files (if directory exists) override everything
+
+#### Eval runtime sidecar (Kubernetes job pods)
+- Loads **`sidecar_config.json`** only (default `/meta/sidecar_config.json`; local override via `--sidecarconfig`).
+- **No `evalhub-config` ConfigMap** on job pods; proxy targets and TLS live in JSON (`eval_hub.base_url`, `mlflow.tracking_uri`, `mlflow.token_path`, CA paths, optional `eval_hub.token`).
+- Ready and termination message paths are **fixed in the sidecar binary** (`/data/sidecar-ready`, `/data/termination-log`).
+- Local dev: `config/sidecar_runtime_local.json` or `make start-sidecar`.
 
 #### Request ID Tracking
 All requests are tagged with a request ID for distributed tracing:

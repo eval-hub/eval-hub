@@ -1,13 +1,30 @@
 package api
 
-// Provider contains the configuration details for an evaluation provider.
-type ProviderResource struct {
-	ID          string              `mapstructure:"id" yaml:"id" json:"id"`
+type BenchmarkResource struct {
+	ID           string        `mapstructure:"id" yaml:"id" json:"id"`
+	Name         string        `mapstructure:"name" yaml:"name" json:"name"`
+	Description  string        `mapstructure:"description" yaml:"description" json:"description,omitempty" validate:"omitempty,max=1024,min=1"`
+	Category     string        `mapstructure:"category" yaml:"category" json:"category"`
+	Metrics      []string      `mapstructure:"metrics" yaml:"metrics" json:"metrics,omitempty"`
+	NumFewShot   int           `mapstructure:"num_few_shot" yaml:"num_few_shot" json:"num_few_shot"`
+	DatasetSize  int           `mapstructure:"dataset_size" yaml:"dataset_size" json:"dataset_size"`
+	Tags         []string      `mapstructure:"tags" yaml:"tags" json:"tags,omitempty"`
+	PrimaryScore *PrimaryScore `mapstructure:"primary_score" yaml:"primary_score" json:"primary_score,omitempty"`
+	PassCriteria *PassCriteria `mapstructure:"pass_criteria" yaml:"pass_criteria" json:"pass_criteria,omitempty"`
+}
+
+type ProviderConfig struct {
 	Name        string              `mapstructure:"name" yaml:"name" json:"name"`
-	Description string              `mapstructure:"description" yaml:"description" json:"description"`
-	Type        string              `mapstructure:"type" yaml:"type" json:"type"`
+	Description string              `mapstructure:"description" yaml:"description" json:"description,omitempty" validate:"omitempty,max=1024,min=1"`
+	Title       string              `mapstructure:"title" yaml:"title" json:"title"`
+	Tags        []string            `mapstructure:"tags" yaml:"tags" json:"tags,omitempty" validate:"omitempty,dive,tagname"`
 	Benchmarks  []BenchmarkResource `mapstructure:"benchmarks" yaml:"benchmarks" json:"benchmarks"`
-	Runtime     *Runtime            `mapstructure:"runtime" yaml:"runtime" json:"-"`
+	Runtime     *Runtime            `mapstructure:"runtime" yaml:"runtime" json:"runtime,omitempty"`
+}
+
+type ProviderResource struct {
+	Resource Resource `json:"resource"`
+	ProviderConfig
 }
 
 type Runtime struct {
@@ -41,10 +58,12 @@ type K8sRuntime struct {
 }
 
 type LocalRuntime struct {
+	Command string   `mapstructure:"command" yaml:"command" json:"command,omitempty"`
+	Env     []EnvVar `mapstructure:"env" yaml:"env" json:"env,omitempty"`
 }
 
 // ProviderResourceList represents response for listing providers
 type ProviderResourceList struct {
-	TotalCount int                `json:"total_count"`
-	Items      []ProviderResource `json:"items,omitempty"`
+	Page
+	Items []ProviderResource `json:"items"`
 }

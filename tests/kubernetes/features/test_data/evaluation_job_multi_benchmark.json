@@ -1,0 +1,25 @@
+{
+  "model": {
+    "url": "http://model-server.test.svc.cluster.local:8000/v1",
+    "name": "test-model"
+  },
+  "benchmarks": [
+    {
+      "id": "arc_easy",
+      "provider_id": "lm_evaluation_harness",
+      "parameters": {
+        "num_examples": 50,
+        "max_tokens": 128
+      }
+    },
+    {
+      "id": "hellaswag",
+      "provider_id": "lighteval",
+      "parameters": {}
+    },
+    {
+      "id": "blimp",
+      "provider_id": "lm_evaluation_harness"
+    }
+  ]
+}

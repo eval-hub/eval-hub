@@ -1,0 +1,10 @@
+{
+    "name":"Updated Provider Name",
+    "description":"Updated description for FVT",
+    "benchmarks":[
+        {
+            "id":"arc_easy",
+            "name":"lm_evaluation_harness"
+        }
+    ]
+}

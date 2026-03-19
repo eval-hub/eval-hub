@@ -34,22 +34,22 @@ echo "📦 Python version: $PYTHON_VERSION"
 check_python_version() {
     local version=$1
     local major minor patch
-    
+
     # Extract major, minor, and patch versions
     IFS='.' read -r major minor patch <<< "$version"
-    
+
     # Remove any non-numeric characters from patch (e.g., "3.10.0a1" -> "0")
     patch=$(echo "$patch" | sed 's/[^0-9].*//')
-    
+
     # Compare versions
     if [ "$major" -lt ${REQUESTED_PYTHON_MAJOR_VERSION} ]; then
         return 1
     fi
-    
+
     if [ "$major" -eq ${REQUESTED_PYTHON_MAJOR_VERSION} ] && [ "$minor" -lt ${REQUESTED_PYTHON_MINOR_VERSION} ]; then
         return 1
     fi
-    
+
     return 0
 }
 

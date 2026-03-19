@@ -1,0 +1,22 @@
+{
+    "model": {
+        "url": "{{env:MODEL_URL|http://test.com}}",
+        "name": "{{env:MODEL_NAME|test}}"
+    },
+    "collection": {
+        "id": "{{value:collection_id}}"
+    },
+    "pass_criteria": {
+        "threshold": 0.5
+    },
+    "experiment": {
+        "name": "pass-criteria-provider-test",
+        "tags": [
+            {
+                "key": "environment",
+                "value": "test"
+            }
+        ]
+    },
+    "name": "test-evaluation-job"
+}

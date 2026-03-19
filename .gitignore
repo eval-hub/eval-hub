@@ -187,6 +187,8 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file. However, if you prefer,
 #  you could uncomment the following to ignore the entire vscode folder
 # .vscode/
+# Keep .vscode/extensions.json
+.vscode/launch.json
 
 # Ruff stuff:
 .ruff_cache/
@@ -245,3 +247,8 @@ node_modules/
 mlflow.db
 mlruns/
 mlflow.log
+.idea/
+.serena/
+
+# Claude - for now this is ignored - later we may want to share this
+.claude/

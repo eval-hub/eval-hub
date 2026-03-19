@@ -1,9 +1,20 @@
+<<<<<<< agentready-bootstrap
 ## Description
 
 <!-- Provide a brief description of the changes in this PR -->
+=======
+## What and why
 
-## Type of Change
+<!-- What does this PR do and why? Link to related issues. -->
 
+Closes #
+
+Assisted-by: <!-- Cursor, Claude etc -->
+>>>>>>> main
+
+## Type
+
+<<<<<<< agentready-bootstrap
 - [ ] Bug fix (non-breaking change which fixes an issue)
 - [ ] New feature (non-breaking change which adds functionality)
 - [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
@@ -54,3 +65,19 @@ Relates to #
 ## Additional Notes
 
 <!-- Any additional information that reviewers should know -->
+=======
+- [ ] feat
+- [ ] fix
+- [ ] docs
+- [ ] refactor / chore
+- [ ] test / ci
+
+## Testing
+
+- [ ] Tests added or updated
+- [ ] Tested manually
+
+## Breaking changes
+
+<!-- If yes, describe migration path. Otherwise delete this section. -->
+>>>>>>> main

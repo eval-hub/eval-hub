@@ -42,3 +42,6 @@ htmlcov/
 # Binaries (will be populated during CI build)
 evalhub_server/binaries/*
 !evalhub_server/binaries/.gitkeep
+
+# Version file (copied from repo root at build time)
+VERSION

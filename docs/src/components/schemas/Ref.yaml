@@ -1,0 +1,8 @@
+type: object
+description: Reference by ID
+required:
+  - id
+properties:
+  id:
+    type: string
+    description: Unique identifier

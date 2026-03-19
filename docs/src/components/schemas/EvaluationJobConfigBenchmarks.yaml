@@ -1,0 +1,14 @@
+allOf:
+  - $ref: ./EvaluationJobConfigCommon1.yaml
+  - type: object
+    required:
+      - benchmarks
+    properties:
+      benchmarks:
+        type: array
+        items:
+          $ref: ./BenchmarkConfig.yaml
+        description: >
+          The evaluation benchmarks to run.
+  - $ref: ./EvaluationJobConfigCommon2.yaml
+title: EvaluationJobConfigBenchmarks

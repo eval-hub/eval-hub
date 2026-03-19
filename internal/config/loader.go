@@ -3,24 +3,21 @@ package config
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
+	"github.com/eval-hub/eval-hub/auth"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	"github.com/go-playground/validator/v10"
 	"github.com/spf13/viper"
 )
 
 var (
-	configLookup = []string{"config/providers", "./config/providers", "../../config/providers", "../../../config/providers"}
-
-	once        = sync.Once{}
-	isLocalMode = false
+	configLookup = []string{"config", "./config", "../../config", "../../../config"}
 )
 
 type EnvMap struct {
@@ -30,15 +27,6 @@ type EnvMap struct {
 type SecretMap struct {
 	Dir      string            `mapstructure:"dir,omitempty"`
 	Mappings map[string]string `mapstructure:"mappings,omitempty"`
-}
-
-func localMode() bool {
-	once.Do(func() {
-		localMode := flag.Bool("local", false, "Server operates in local mode or not.")
-		flag.Parse()
-		isLocalMode = *localMode
-	})
-	return isLocalMode
 }
 
 // readConfig locates and reads a configuration file using Viper. It searches for
@@ -95,20 +83,67 @@ func readConfig(logger *slog.Logger, name string, ext string, dirs ...string) (*
 	return configValues, err
 }
 
-func loadProvider(logger *slog.Logger, file string) (api.ProviderResource, error) {
-	providerConfig := api.ProviderResource{}
-	configValues, err := readConfig(logger, file, "yaml", configLookup...)
+func loadProvider(logger *slog.Logger, validate *validator.Validate, file string, dirs ...string) (*api.ProviderResource, error) {
+	type providerConfigInternal struct {
+		ID                 string `mapstructure:"id" yaml:"id" json:"id"`
+		api.ProviderConfig `mapstructure:",squash"`
+	}
+	providerConfig := providerConfigInternal{}
+	configValues, err := readConfig(logger, file, "yaml", dirs...)
 	if err != nil {
-		return providerConfig, err
+		return nil, err
 	}
 
 	if err := configValues.Unmarshal(&providerConfig); err != nil {
-		return providerConfig, err
+		return nil, err
 	}
-	return providerConfig, nil
+	res := &api.ProviderResource{
+		Resource: api.Resource{
+			ID:    providerConfig.ID,
+			Owner: "system",
+		},
+		ProviderConfig: providerConfig.ProviderConfig,
+	}
+
+	// validate the provider
+	if err := validate.Struct(res); err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
 
-func scanFolders(logger *slog.Logger, dirs ...string) ([]os.DirEntry, error) {
+func loadCollection(logger *slog.Logger, validate *validator.Validate, file string, dirs ...string) (*api.CollectionResource, error) {
+	type collectionConfigInternal struct {
+		ID                   string `mapstructure:"id"`
+		api.CollectionConfig `mapstructure:",squash"`
+	}
+	collectionConfig := collectionConfigInternal{}
+	configValues, err := readConfig(logger, file, "yaml", dirs...)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := configValues.Unmarshal(&collectionConfig); err != nil {
+		return nil, err
+	}
+	res := &api.CollectionResource{
+		Resource: api.Resource{
+			ID:    collectionConfig.ID,
+			Owner: "system",
+		},
+		CollectionConfig: collectionConfig.CollectionConfig,
+	}
+
+	// validate the collection
+	if err := validate.Struct(res); err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+func scanFolders(logger *slog.Logger, dirs ...string) ([]os.DirEntry, string, error) {
 	var dirsChecked []string
 	for _, dir := range dirs {
 		absDir, err := filepath.Abs(dir)
@@ -121,18 +156,29 @@ func scanFolders(logger *slog.Logger, dirs ...string) ([]os.DirEntry, error) {
 		if err != nil {
 			continue
 		}
-		return files, nil
+		return files, absDir, nil
 	}
-	logger.Warn("No providers found", "directories", dirsChecked)
-	return []os.DirEntry{}, nil
+	logger.Warn("No config files found", "directories", dirsChecked)
+	return []os.DirEntry{}, "", nil
 }
 
-func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.ProviderResource, error) {
-	if len(dirs) == 0 {
-		dirs = configLookup
+func hasExplicitConfigDir(dirs []string) bool {
+	return len(dirs) > 0 && dirs[0] != ""
+}
+
+func LoadProviderConfigs(logger *slog.Logger, validate *validator.Validate, dirs ...string) (map[string]api.ProviderResource, error) {
+	if !hasExplicitConfigDir(dirs) {
+		dirs = []string{}
+		for _, dir := range configLookup {
+			dirs = append(dirs, dir+"/providers")
+		}
+	} else {
+		dirs = []string{dirs[0] + "/providers"}
 	}
+
 	providerConfigs := make(map[string]api.ProviderResource)
-	files, err := scanFolders(logger, dirs...)
+
+	files, dir, err := scanFolders(logger, dirs...)
 	if err != nil {
 		return providerConfigs, err
 	}
@@ -141,21 +187,80 @@ func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.Pr
 			continue
 		}
 		name := strings.TrimSuffix(file.Name(), ".yaml")
-		providerConfig, err := loadProvider(logger, name)
+		providerConfig, err := loadProvider(logger, validate, name, dir)
 		if err != nil {
 			return nil, err
 		}
 
-		if providerConfig.ID == "" {
+		if providerConfig.Resource.ID == "" {
 			logger.Warn("Provider config missing id, skipping", "file", file.Name())
 			continue
 		}
 
-		providerConfigs[providerConfig.ID] = providerConfig
-		logger.Info("Provider loaded", "provider_id", providerConfig.ID)
+		providerConfigs[providerConfig.Resource.ID] = *providerConfig
+		logger.Info("Provider loaded", "provider_id", providerConfig.Resource.ID)
 	}
 
 	return providerConfigs, nil
+}
+
+func LoadCollectionConfigs(logger *slog.Logger, validate *validator.Validate, dirs ...string) (map[string]api.CollectionResource, error) {
+	if !hasExplicitConfigDir(dirs) {
+		dirs = []string{}
+		for _, dir := range configLookup {
+			dirs = append(dirs, dir+"/collections")
+		}
+	} else {
+		dirs = []string{dirs[0] + "/collections"}
+	}
+
+	collectionConfigs := make(map[string]api.CollectionResource)
+
+	files, dir, err := scanFolders(logger, dirs...)
+	if err != nil {
+		return collectionConfigs, err
+	}
+	for _, file := range files {
+		if file.IsDir() || !strings.HasSuffix(file.Name(), ".yaml") {
+			continue
+		}
+		name := strings.TrimSuffix(file.Name(), ".yaml")
+		collectionConfig, err := loadCollection(logger, validate, name, dir)
+		if err != nil {
+			return nil, err
+		}
+
+		if collectionConfig.Resource.ID == "" {
+			logger.Warn("Collection config missing id, skipping", "file", file.Name())
+			continue
+		}
+
+		collectionConfigs[collectionConfig.Resource.ID] = *collectionConfig
+		logger.Info("Collection loaded", "collection_id", collectionConfig.Resource.ID)
+	}
+
+	return collectionConfigs, nil
+}
+
+func LoadAuthConfig(logger *slog.Logger, dirs ...string) (*auth.AuthConfig, error) {
+	logger.Info("Start reading auth configuration", "dirs", dirs)
+
+	if !hasExplicitConfigDir(dirs) {
+		dirs = configLookup
+	}
+
+	v, err := readConfig(logger, "auth", "yaml", dirs...)
+	if err != nil {
+		logger.Error("Failed to read auth configuration", "error", err.Error())
+		return nil, err
+	}
+
+	var authConfig auth.AuthConfig
+	if err := v.Unmarshal(&authConfig); err != nil {
+		return nil, err
+	}
+
+	return authConfig.Optimize(), nil
 }
 
 // LoadConfig loads configuration using a two-tier system with Viper. This implements
@@ -164,11 +269,11 @@ func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.Pr
 //
 // Configuration loading order (later sources override earlier ones):
 //  1. config.yaml (config/config.yaml) - Configuration loaded first
-//  2. Environment variables - Mapped via env.mappings configuration
+//  2. Environment variables - Mapped via env_mappings configuration
 //  3. Secrets from files - Mapped via secrets.mappings with secrets.dir
 //
 // Configuration supports:
-//   - Environment variable mapping: Define in env.mappings (e.g., PORT → service.port)
+//   - Environment variable mapping: Define in env_mappings (e.g., PORT → service.port)
 //   - Secrets from files: Define in secrets.mappings with secrets.dir (e.g., /tmp/db_password → database.password)
 //   - Optional secrets: Append :optional to the secret file name to mark it as optional.
 //     If an optional secret file doesn't exist, no error is logged and the configuration
@@ -194,8 +299,8 @@ func LoadProviderConfigs(logger *slog.Logger, dirs ...string) (map[string]api.Pr
 func LoadConfig(logger *slog.Logger, version string, build string, buildDate string, dirs ...string) (*Config, error) {
 	logger.Info("Start reading configuration", "version", version, "build", build, "build_date", buildDate, "dirs", dirs)
 
-	if len(dirs) == 0 {
-		dirs = []string{"config", "./config", "../../config", "tests"} // tests is for running the service on a local machine (not local mode)
+	if !hasExplicitConfigDir(dirs) {
+		dirs = configLookup
 	}
 
 	configValues, err := readConfig(logger, "config", "yaml", dirs...)
@@ -265,7 +370,6 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 	conf.Service.Version = version
 	conf.Service.Build = build
 	conf.Service.BuildDate = buildDate
-	conf.Service.LocalMode = localMode()
 
 	logger.Info("End reading configuration", "config", RedactedJSON(conf, redactedFields))
 	return &conf, nil

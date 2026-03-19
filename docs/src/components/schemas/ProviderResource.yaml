@@ -1,0 +1,9 @@
+type: object
+description: Provider resource
+allOf:
+  - type: object
+    properties:
+      resource:
+        $ref: ./Resource.yaml
+        description: Resource metadata
+  - $ref: ./ProviderConfig.yaml

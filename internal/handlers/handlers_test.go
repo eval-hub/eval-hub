@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,14 +16,16 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	h := handlers.New(nil, nil, nil, nil, nil, nil)
+	h := handlers.New(nil, nil, nil, nil, nil)
 	if h == nil {
 		t.Error("New() returned nil")
 	}
 }
 
 func createExecutionContext() *executioncontext.ExecutionContext {
-	return &executioncontext.ExecutionContext{}
+	return &executioncontext.ExecutionContext{
+		Ctx: context.Background(),
+	}
 }
 
 func createMockRequest(method string, uri string) *MockRequest {
@@ -88,7 +91,10 @@ func (w MockResponseWrapper) DeleteHeader(key string) {
 }
 
 func (w MockResponseWrapper) Write(buf []byte) (int, error) {
-	return w.recorder.Write(buf)
+	if w.recorder.Code != 204 {
+		return w.recorder.Write(buf)
+	}
+	return len(buf), nil
 }
 
 func (w MockResponseWrapper) Error(err error, requestId string) {
@@ -106,10 +112,12 @@ func (w MockResponseWrapper) ErrorWithMessageCode(requestId string, messageCode 
 
 func (w MockResponseWrapper) WriteJSON(v any, code int) {
 	w.recorder.Code = code
-	w.recorder.Header().Set("Content-Type", "application/json")
-	w.recorder.WriteHeader(code)
-	err := json.NewEncoder(w.recorder).Encode(v)
-	if err != nil {
-		fmt.Printf("Failed to encode JSON: %v\n", err)
+	if code != 204 {
+		w.recorder.Header().Set("Content-Type", "application/json")
+		w.recorder.WriteHeader(code)
+		err := json.NewEncoder(w.recorder).Encode(v)
+		if err != nil {
+			fmt.Printf("Failed to encode JSON: %v\n", err)
+		}
 	}
 }

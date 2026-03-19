@@ -1,43 +1,112 @@
 package k8s
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
+	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 func TestBuildConfigMap(t *testing.T) {
+
 	cfg := &jobConfig{
-		jobID:       "job-123",
-		namespace:   "default",
-		providerID:  "provider-1",
-		benchmarkID: "bench-1",
-		jobSpecJSON: "{}",
+		jobID:          "job-123",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		jobSpec:        shared.JobSpec{},
+		resourceGUID:   "guid-123",
 	}
 
-	configMap := buildConfigMap(cfg)
-	expectedName := configMapName(cfg.jobID, cfg.benchmarkID)
+	configMap, err := buildConfigMap(cfg)
+	if err != nil {
+		t.Fatalf("buildConfigMap returned error: %v", err)
+	}
+	expectedName := configMapName(cfg.jobID, cfg.resourceGUID)
 	if configMap.Name != expectedName {
 		t.Fatalf("expected configmap name %s, got %s", expectedName, configMap.Name)
 	}
-	if configMap.Data[jobSpecFileName] != "{}" {
-		t.Fatalf("expected job spec data to be set")
+
+	annotations := configMap.Annotations
+	if annotations[annotationJobIDKey] != cfg.jobID {
+		t.Fatalf("expected job_id annotation %q, got %q", cfg.jobID, annotations[annotationJobIDKey])
+	}
+	if annotations[annotationProviderIDKey] != cfg.providerID {
+		t.Fatalf("expected provider_id annotation %q, got %q", cfg.providerID, annotations[annotationProviderIDKey])
+	}
+	if annotations[annotationBenchmarkIDKey] != cfg.benchmarkID {
+		t.Fatalf("expected benchmark_id annotation %q, got %q", cfg.benchmarkID, annotations[annotationBenchmarkIDKey])
+	}
+	if _, ok := configMap.Data[sidecarConfigFileName]; !ok {
+		t.Fatalf("expected ConfigMap data key %q", sidecarConfigFileName)
+	}
+	if configMap.Data[sidecarConfigFileName] == "" {
+		t.Fatalf("sidecar_config.json should be non-empty")
+	}
+	var sidecar map[string]any
+	if err := json.Unmarshal([]byte(configMap.Data[sidecarConfigFileName]), &sidecar); err != nil {
+		t.Fatalf("sidecar_config.json invalid JSON: %v", err)
+	}
+}
+
+func TestBuildConfigMapSidecarConfigJSONContent(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:             "job-123",
+		benchmarkIndex:    0,
+		namespace:         "default",
+		providerID:        "provider-1",
+		benchmarkID:       "bench-1",
+		jobSpec:           shared.JobSpec{},
+		resourceGUID:      "guid-123",
+		sidecarConfigJSON: "{\n  \"port\": 8081,\n  \"base_url\": \"http://localhost:8081\"\n}",
+	}
+	cm, err := buildConfigMap(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal([]byte(cm.Data[sidecarConfigFileName]), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["port"].(float64) != 8081 {
+		t.Fatalf("port: %v", m["port"])
 	}
 }
 
 func TestBuildK8sNameSanitizes(t *testing.T) {
-	name := buildK8sName("Job-123", "AraDiCE_boolq_lev", "")
-	if name != "eval-job-job-123-aradice-boolq-lev" {
-		t.Fatalf("expected sanitized name %q, got %q", "eval-job-job-123-aradice-boolq-lev", name)
+	name := buildK8sName("Job-123", "Guid-ABC", "")
+	if !strings.HasPrefix(name, "job-123-") {
+		t.Fatalf("expected sanitized name to start with %q, got %q", "job-123-", name)
+	}
+}
+
+func TestBuildK8sNameDiffersAcrossGUIDs(t *testing.T) {
+	jobID := "job-123"
+	name1 := buildK8sName(jobID, "guid-1", "")
+	name2 := buildK8sName(jobID, "guid-2", "")
+	if name1 == name2 {
+		t.Fatalf("expected different names for different GUIDs, got %q", name1)
+	}
+}
+
+func TestJobLabelsSanitizeBenchmarkID(t *testing.T) {
+	labels := jobLabels("job-123", "lighteval", "arc:easy")
+	if labels[labelBenchmarkIDKey] != "arc-easy" {
+		t.Fatalf("expected benchmark label to be sanitized, got %q", labels[labelBenchmarkIDKey])
 	}
 }
 
 func TestBuildJobRequiresAdapterImage(t *testing.T) {
 	cfg := &jobConfig{
-		jobID:       "job-123",
-		namespace:   "default",
-		providerID:  "provider-1",
-		benchmarkID: "bench-1",
+		jobID:          "job-123",
+		resourceGUID:   "guid-123",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
 	}
 
 	_, err := buildJob(cfg)
@@ -48,12 +117,14 @@ func TestBuildJobRequiresAdapterImage(t *testing.T) {
 
 func TestBuildJobSecurityContext(t *testing.T) {
 	cfg := &jobConfig{
-		jobID:        "job-123",
-		namespace:    "default",
-		providerID:   "provider-1",
-		benchmarkID:  "bench-1",
-		adapterImage: "adapter:latest",
-		defaultEnv:   []api.EnvVar{},
+		jobID:          "job-123",
+		resourceGUID:   "guid-123",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
 	}
 
 	job, err := buildJob(cfg)
@@ -89,6 +160,383 @@ func TestBuildJobSecurityContext(t *testing.T) {
 	}
 	if container.SecurityContext.SeccompProfile == nil || container.SecurityContext.SeccompProfile.Type == "" {
 		t.Fatalf("expected seccomp profile to be set")
+	}
+}
+
+func TestBuildJobAnnotations(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "job-123",
+		resourceGUID:   "guid-123",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
+	}
+
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	if job.Annotations[annotationJobIDKey] != cfg.jobID {
+		t.Fatalf("expected job_id annotation %q, got %q", cfg.jobID, job.Annotations[annotationJobIDKey])
+	}
+	if job.Annotations[annotationProviderIDKey] != cfg.providerID {
+		t.Fatalf("expected provider_id annotation %q, got %q", cfg.providerID, job.Annotations[annotationProviderIDKey])
+	}
+	if job.Annotations[annotationBenchmarkIDKey] != cfg.benchmarkID {
+		t.Fatalf("expected benchmark_id annotation %q, got %q", cfg.benchmarkID, job.Annotations[annotationBenchmarkIDKey])
+	}
+
+	podAnnotations := job.Spec.Template.Annotations
+	if podAnnotations[annotationJobIDKey] != cfg.jobID {
+		t.Fatalf("expected pod job_id annotation %q, got %q", cfg.jobID, podAnnotations[annotationJobIDKey])
+	}
+	if podAnnotations[annotationProviderIDKey] != cfg.providerID {
+		t.Fatalf("expected pod provider_id annotation %q, got %q", cfg.providerID, podAnnotations[annotationProviderIDKey])
+	}
+	if podAnnotations[annotationBenchmarkIDKey] != cfg.benchmarkID {
+		t.Fatalf("expected pod benchmark_id annotation %q, got %q", cfg.benchmarkID, podAnnotations[annotationBenchmarkIDKey])
+	}
+}
+
+func TestBuildJobWithOCICredentials(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:                "job-oci",
+		benchmarkIndex:       0,
+		resourceGUID:         "guid-oci",
+		namespace:            "default",
+		providerID:           "provider-1",
+		benchmarkID:          "bench-1",
+		adapterImage:         "adapter:latest",
+		defaultEnv:           []api.EnvVar{},
+		ociCredentialsSecret: "my-pull-secret",
+	}
+
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	// Check volume exists with correct secret name
+	var foundVolume bool
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == ociCredentialsVolumeName {
+			foundVolume = true
+			if v.VolumeSource.Secret == nil {
+				t.Fatalf("expected secret volume source for %s", ociCredentialsVolumeName)
+			}
+			if v.VolumeSource.Secret.SecretName != "my-pull-secret" {
+				t.Fatalf("expected secret name %q, got %q", "my-pull-secret", v.VolumeSource.Secret.SecretName)
+			}
+		}
+	}
+	if !foundVolume {
+		t.Fatalf("expected volume %s to be present", ociCredentialsVolumeName)
+	}
+
+	// Check volume mount exists with correct path and subPath
+	container := job.Spec.Template.Spec.Containers[0]
+	var foundMount bool
+	for _, m := range container.VolumeMounts {
+		if m.Name == ociCredentialsVolumeName {
+			foundMount = true
+			if m.MountPath != ociCredentialsMountPath {
+				t.Fatalf("expected mount path %q, got %q", ociCredentialsMountPath, m.MountPath)
+			}
+			if m.SubPath != ociCredentialsSubPath {
+				t.Fatalf("expected sub path %q, got %q", ociCredentialsSubPath, m.SubPath)
+			}
+			if !m.ReadOnly {
+				t.Fatalf("expected mount to be read-only")
+			}
+		}
+	}
+	if !foundMount {
+		t.Fatalf("expected volume mount %s to be present", ociCredentialsVolumeName)
+	}
+
+	// Check env var exists
+	var foundEnv bool
+	for _, e := range container.Env {
+		if e.Name == envOCIAuthConfigPathName {
+			foundEnv = true
+			if e.Value != ociCredentialsMountPath {
+				t.Fatalf("expected env value %q, got %q", ociCredentialsMountPath, e.Value)
+			}
+		}
+	}
+	if !foundEnv {
+		t.Fatalf("expected env var %s to be present", envOCIAuthConfigPathName)
+	}
+}
+
+func TestBuildJobSidecarDoesNotUseEvalhubConfigVolume(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "job-sidecar-vol",
+		resourceGUID:   "guid-sc",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
+	}
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob: %v", err)
+	}
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.ConfigMap != nil && v.ConfigMap.Name == "evalhub-config" {
+			t.Fatalf("job pod must not reference evalhub-config ConfigMap volume, got volume %q", v.Name)
+		}
+	}
+	if len(job.Spec.Template.Spec.Containers) < 2 {
+		t.Fatal("expected sidecar container")
+	}
+	sidecar := job.Spec.Template.Spec.Containers[1]
+	for _, m := range sidecar.VolumeMounts {
+		if m.MountPath == "/etc/evalhub/config" {
+			t.Fatalf("sidecar must not mount evalhub-config at /etc/evalhub/config")
+		}
+	}
+	if len(sidecar.Env) > 0 {
+		t.Fatalf("sidecar should have no env vars, got %d", len(sidecar.Env))
+	}
+}
+
+func TestBuildJobWithoutOCICredentials(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "job-no-oci",
+		resourceGUID:   "guid-no-oci",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
+	}
+
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == ociCredentialsVolumeName {
+			t.Fatalf("expected no %s volume when ociCredentialsSecret is empty", ociCredentialsVolumeName)
+		}
+	}
+	container := job.Spec.Template.Spec.Containers[0]
+	for _, e := range container.Env {
+		if e.Name == envOCIAuthConfigPathName {
+			t.Fatalf("expected no %s env var when ociCredentialsSecret is empty", envOCIAuthConfigPathName)
+		}
+	}
+}
+
+func TestBuildJobWithS3TestData(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:             "job-s3",
+		resourceGUID:      "guid-s3",
+		benchmarkIndex:    0,
+		namespace:         "default",
+		providerID:        "provider-1",
+		benchmarkID:       "bench-1",
+		adapterImage:      "adapter:latest",
+		defaultEnv:        []api.EnvVar{},
+		testDataInitImage: "quay.io/evalhub/evalhub:test",
+		testDataS3: s3TestDataConfig{
+			bucket:    "bucket-1",
+			key:       "/a/b",
+			secretRef: "s3-secret",
+		},
+	}
+
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	if len(job.Spec.Template.Spec.InitContainers) != 1 {
+		t.Fatalf("expected 1 init container, got %d", len(job.Spec.Template.Spec.InitContainers))
+	}
+	initContainer := job.Spec.Template.Spec.InitContainers[0]
+	if initContainer.Name != initContainerName {
+		t.Fatalf("expected init container name %q, got %q", initContainerName, initContainer.Name)
+	}
+	if initContainer.Image != "quay.io/evalhub/evalhub:test" {
+		t.Fatalf("expected init container image %q, got %q", "quay.io/evalhub/evalhub:test", initContainer.Image)
+	}
+	if len(initContainer.Command) != 1 || initContainer.Command[0] != defaultTestDataInitCmd {
+		t.Fatalf("expected init container command %q, got %v", defaultTestDataInitCmd, initContainer.Command)
+	}
+
+	var foundBucketEnv, foundKeyEnv bool
+	for _, env := range initContainer.Env {
+		if env.Name == envTestDataS3BucketName {
+			foundBucketEnv = true
+			if env.Value != "bucket-1" {
+				t.Fatalf("expected bucket env %q, got %q", "bucket-1", env.Value)
+			}
+		}
+		if env.Name == envTestDataS3KeyName {
+			foundKeyEnv = true
+			if env.Value != "a/b" {
+				t.Fatalf("expected key env %q, got %q", "a/b", env.Value)
+			}
+		}
+	}
+	if !foundBucketEnv || !foundKeyEnv {
+		t.Fatalf("expected bucket/key env vars on init container")
+	}
+
+	var foundTestDataVolume, foundSecretVolume bool
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == testDataVolumeName {
+			foundTestDataVolume = true
+		}
+		if v.Name == testDataSecretVolumeName {
+			foundSecretVolume = true
+			if v.VolumeSource.Secret == nil || v.VolumeSource.Secret.SecretName != "s3-secret" {
+				t.Fatalf("expected secret volume %q with secret %q", testDataSecretVolumeName, "s3-secret")
+			}
+		}
+	}
+	if !foundTestDataVolume || !foundSecretVolume {
+		t.Fatalf("expected test data and secret volumes to be present")
+	}
+
+	var foundTestDataMount bool
+	for _, m := range job.Spec.Template.Spec.Containers[0].VolumeMounts {
+		if m.Name == testDataVolumeName && m.MountPath == testDataMountPath {
+			foundTestDataMount = true
+		}
+	}
+	if !foundTestDataMount {
+		t.Fatalf("expected adapter to mount %s", testDataMountPath)
+	}
+}
+
+func TestBuildJobWithS3TestDataSkipsEmptyNormalizedKey(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "job-s3-empty",
+		resourceGUID:   "guid-s3-empty",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
+		testDataS3: s3TestDataConfig{
+			bucket:    "bucket-1",
+			key:       "/",
+			secretRef: "s3-secret",
+		},
+	}
+
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	if len(job.Spec.Template.Spec.InitContainers) != 0 {
+		t.Fatalf("expected no init containers when normalized key is empty")
+	}
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == testDataVolumeName || v.Name == testDataSecretVolumeName {
+			t.Fatalf("expected no test data volumes when normalized key is empty")
+		}
+	}
+}
+
+func TestBuildJobWithModelAuthSecret(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:              "job-auth",
+		benchmarkIndex:     0,
+		resourceGUID:       "guid-auth",
+		namespace:          "default",
+		providerID:         "provider-1",
+		benchmarkID:        "bench-1",
+		adapterImage:       "adapter:latest",
+		defaultEnv:         []api.EnvVar{},
+		modelAuthSecretRef: "model-auth-secret",
+	}
+
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	var foundVolume bool
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == modelAuthVolumeName {
+			foundVolume = true
+			if v.VolumeSource.Secret == nil {
+				t.Fatalf("expected secret volume source for %s", modelAuthVolumeName)
+			}
+			if v.VolumeSource.Secret.SecretName != "model-auth-secret" {
+				t.Fatalf("expected secret name %q, got %q", "model-auth-secret", v.VolumeSource.Secret.SecretName)
+			}
+		}
+	}
+	if !foundVolume {
+		t.Fatalf("expected volume %s to be present", modelAuthVolumeName)
+	}
+
+	container := job.Spec.Template.Spec.Containers[0]
+	var foundMount bool
+	for _, m := range container.VolumeMounts {
+		if m.Name == modelAuthVolumeName {
+			foundMount = true
+			if m.MountPath != modelAuthMountPath {
+				t.Fatalf("expected mount path %q, got %q", modelAuthMountPath, m.MountPath)
+			}
+			if !m.ReadOnly {
+				t.Fatalf("expected mount to be read-only")
+			}
+		}
+	}
+	if !foundMount {
+		t.Fatalf("expected volume mount %s to be present", modelAuthVolumeName)
+	}
+
+	for _, e := range container.Env {
+		if e.Name == "MODEL_AUTH_API_KEY_PATH" || e.Name == "MODEL_AUTH_CA_CERT_PATH" {
+			t.Fatalf("expected no model auth env vars, found %s", e.Name)
+		}
+	}
+}
+
+func TestBuildJobWithoutModelAuthSecret(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "job-no-auth",
+		resourceGUID:   "guid-no-auth",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
+	}
+
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == modelAuthVolumeName {
+			t.Fatalf("expected no %s volume when modelAuthSecretRef is empty", modelAuthVolumeName)
+		}
+	}
+	container := job.Spec.Template.Spec.Containers[0]
+	for _, e := range container.Env {
+		if e.Name == "MODEL_AUTH_API_KEY_PATH" || e.Name == "MODEL_AUTH_CA_CERT_PATH" {
+			t.Fatalf("expected no model auth env vars, found %s", e.Name)
+		}
 	}
 }
 

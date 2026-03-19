@@ -1,0 +1,9 @@
+type: object
+description: Collection resource
+allOf:
+  - type: object
+    properties:
+      resource:
+        $ref: ./Resource.yaml
+        description: Resource metadata
+  - $ref: ./CollectionConfig.yaml

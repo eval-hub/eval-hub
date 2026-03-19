@@ -1,0 +1,9 @@
+type: object
+description: Provider runtime configuration
+properties:
+  k8s:
+    $ref: ./K8sRuntime.yaml
+    description: Kubernetes runtime configuration
+  local:
+    $ref: ./LocalRuntime.yaml
+    description: Local runtime configuration

@@ -15,3 +15,7 @@ Feature: Health Check Endpoint
     Given the service is running
     When I send a POST request to "/api/v1/health"
     Then the response code should be 405
+    When I send a PUT request to "/api/v1/health"
+    Then the response code should be 405
+    When I send a DELETE request to "/api/v1/health"
+    Then the response code should be 405

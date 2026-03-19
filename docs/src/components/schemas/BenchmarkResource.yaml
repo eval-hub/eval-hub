@@ -1,0 +1,35 @@
+type: object
+description: Benchmark specification (from a provider)
+properties:
+  id:
+    type: string
+    description: Benchmark ID
+  name:
+    type: string
+    description: Benchmark name
+  description:
+    type: string
+    description: Benchmark description
+  category:
+    type: string
+    description: Category
+  metrics:
+    type: array
+    items:
+      type: string
+    description: Metric names
+  num_few_shot:
+    type: integer
+    description: Number of few-shot examples
+  dataset_size:
+    type: integer
+    description: Dataset size
+  tags:
+    type: array
+    items:
+      type: string
+    description: Tags
+  primary_score:
+    $ref: ./PrimaryScore.yaml
+  pass_criteria:
+    $ref: ./PassCriteria.yaml

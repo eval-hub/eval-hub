@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: eval-job-001-mmlu
+  name: eval-job-lm-evaluation-harness-mmlu-001-405ef22a
   namespace: evalhub
   labels:
     app: "evalhub"
@@ -9,8 +9,12 @@ metadata:
     job_id: "001"
     provider_id: "lm_evaluation_harness"
     benchmark_id: "mmlu"
+  annotations:
+    eval-hub.github.io/job_id: "001"
+    eval-hub.github.io/provider_id: "lm_evaluation_harness"
+    eval-hub.github.io/benchmark_id: "mmlu"
 spec:
-  backoffLimit: 2
+  backoffLimit: 3
   ttlSecondsAfterFinished: 3600
   template:
     metadata:
@@ -20,19 +24,19 @@ spec:
         job_id: "001"
         provider_id: "lm_evaluation_harness"
         benchmark_id: "mmlu"
+      annotations:
+        eval-hub.github.io/job_id: "001"
+        eval-hub.github.io/provider_id: "lm_evaluation_harness"
+        eval-hub.github.io/benchmark_id: "mmlu"
     spec:
+      serviceAccountName: evalhub-default-job
       restartPolicy: Never
       containers:
         - name: adapter
           image: quay.io/evalhub/adapter:latest
           imagePullPolicy: Always
           command: []
-          env:
-            - name: JOB_ID
-              value: "001"
-            # Optional when EVALHUB_INSTANCE_NAME is set
-            # - name: EVALHUB_URL
-            #   value: "https://<instance>.<namespace>.svc.cluster.local:8443"
+          env: []
           resources:
             requests:
               cpu: "250m"
@@ -55,16 +59,26 @@ spec:
               readOnly: true
             - name: data
               mountPath: /data
-            # Optional when EVALHUB_INSTANCE_NAME is set
-            # - name: evalhub-service-ca
-            #   mountPath: /etc/pki/ca-trust/source/anchors
+            - name: evalhub-service-ca
+              mountPath: /etc/pki/ca-trust/source/anchors
+              readOnly: true
+        - name: sidecar
+          image: eval-runtime-sidecar:latest
+          volumeMounts:
+            - name: job-spec
+              mountPath: /meta/job.json
+              subPath: job.json
+              readOnly: true
+            - name: job-spec
+              mountPath: /meta/sidecar_config.json
+              subPath: sidecar_config.json
+              readOnly: true
       volumes:
         - name: job-spec
           configMap:
-            name: eval-job-001-mmlu-spec
+            name: eval-job-lm-evaluation-harness-mmlu-001-405ef22a-spec
         - name: data
           emptyDir: {}
-        # Optional when EVALHUB_INSTANCE_NAME is set
-        # - name: evalhub-service-ca
-        #   configMap:
-        #     name: <instance>-service-ca
+        - name: evalhub-service-ca
+          configMap:
+            name: evalhub-service-ca

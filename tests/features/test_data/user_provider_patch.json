@@ -1,0 +1,12 @@
+[
+    {
+        "op": "replace",
+        "path": "/description",
+        "value": "Patched description for FVT"
+    },
+    {
+        "op": "replace",
+        "path": "/name",
+        "value": "Patched Provider Name"
+    }
+]

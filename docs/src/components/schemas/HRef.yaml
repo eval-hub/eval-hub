@@ -1,0 +1,6 @@
+type: object
+description: Hypermedia reference
+properties:
+  href:
+    type: string
+    description: URI reference

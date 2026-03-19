@@ -1,8 +1,10 @@
 service:
   port: 8080
+  host: "127.0.0.1"
   # These will be elsewhere on a cluster and coherent with the pod spec
   ready_file: "/tmp/repo-ready"
   termination_file: "/tmp/termination-log"
+  disable_auth: false
 # These are here so that the config can be loaded from the secrets directory when needed
 secrets:
   dir: /tmp
@@ -11,8 +13,20 @@ secrets:
 # These are here so that the config can be loaded from the environment variables when needed
 env_mappings:
   PORT: service.port
+  API_HOST: service.host
+  TLS_CERT_FILE: service.tls_cert_file
+  TLS_KEY_FILE: service.tls_key_file
   DB_URL: database.url
   MLFLOW_TRACKING_URI: mlflow.tracking_uri
+  MLFLOW_CA_CERT_PATH: mlflow.ca_cert_path
+  MLFLOW_INSECURE_SKIP_VERIFY: mlflow.insecure_skip_verify
+  MLFLOW_TOKEN_PATH: mlflow.token_path
+  MLFLOW_WORKSPACE: mlflow.workspace
+  EVALHUB_CA_CERT_PATH: sidecar.eval_hub.ca_cert_path
+  EVALHUB_INSECURE_SKIP_VERIFY: sidecar.eval_hub.insecure_skip_verify
+  EVALHUB_TOKEN_CACHE_TIMEOUT: sidecar.eval_hub.token_cache_timeout
+  MLFLOW_TOKEN_CACHE_TIMEOUT: sidecar.mlflow.token_cache_timeout
+  SIDECAR_PORT: sidecar.port
 # Database configuration
 database:
   driver: sqlite
@@ -21,4 +35,42 @@ database:
   # url: postgres://user@localhost:5432/eval_hub
 # MLFlow configuration
 mlflow:
-  #tracking_uri: http://localhost:5000
+  # tracking_uri: http://localhost:5000
+# This is an example of how to enable instrumentation in a cluster
+otel:
+  enabled: false
+  exporter_type: "otlp-grpc"
+  exporter_endpoint: "localhost:4317"
+  exporter_insecure: true
+  sampling_ratio: 1.0
+  enable_tracing: true
+  # enable_metrics: true
+  # enable_logs: true
+prometheus:
+  enabled: true
+
+sidecar:
+  base_url: http://localhost:8080  # URL for adapter/runtime to call sidecar proxy (cluster mode)
+  port: 8080
+  eval_hub:
+    # TLS for outbound calls to eval-hub (sidecar -> eval-hub API).
+    # On cluster: job pods inject EVALHUB_CA_CERT_PATH and EVALHUB_INSECURE_SKIP_VERIFY; sidecar reads
+    # sidecar_config.json (no evalhub-config ConfigMap on the job pod).
+    # ca_cert_path: path to PEM CA bundle that signed the eval-hub server cert (e.g. /etc/pki/ca-trust/source/anchors/service-ca.crt).
+    # insecure_skip_verify: set to true only for dev with self-signed certs; set false to verify server cert.
+    ca_cert_path: "/etc/pki/ca-trust/source/anchors/service-ca.crt"
+    insecure_skip_verify: false
+    # token_cache_timeout: TTL for in-memory auth token cache (e.g. "5m", "1h"). Empty/0 uses default (5m).
+    # token_cache_timeout: 5m
+  mlflow:
+    # token_cache_timeout: TTL for in-memory auth token cache for MLflow proxy (e.g. "5m", "1h"). Empty/0 uses default (5m).
+    # token_cache_timeout: 5m
+  sidecar_container:
+    image: quay.io/rh-ee-nbs/nbs-dev:eval-hub_v24
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi

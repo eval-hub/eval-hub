@@ -1,0 +1,15 @@
+{
+  "name": "Collection for pass_criteria from provider test",
+  "description": "References two benchmarks from provider",
+  "category": "test",
+  "benchmarks": [
+    {
+      "id": "pc_b1",
+      "provider_id": "{{value:provider_id}}"
+    },
+    {
+      "id": "pc_b2",
+      "provider_id": "{{value:provider_id}}"
+    }
+  ]
+}

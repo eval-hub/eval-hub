@@ -2,7 +2,7 @@ description: Conflict
 content:
   application/json:
     schema:
-      $ref: ../../components/schemas/APIError.yaml
+      $ref: ../../components/schemas/Error.yaml
     examples:
       ConflictError:
         $ref: ../../components/examples/ConflictError.yaml

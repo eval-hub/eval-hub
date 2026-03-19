@@ -11,7 +11,7 @@ import (
 
 type TransactionFunction func(*sql.Tx) error
 
-func (s *SQLStorage) withTransaction(name string, resourceID string, fn TransactionFunction) error {
+func (s *sqlStorage) withTransaction(name string, resourceID string, fn TransactionFunction) error {
 	txn, err := s.pool.BeginTx(s.ctx, nil)
 	if err != nil {
 		s.logger.Error("Failed to begin transaction", "name", fmt.Sprintf("begin transaction %s", name), "resource_id", resourceID, "error", err.Error())

@@ -1,0 +1,10 @@
+{
+    "name": "no-description-collection",
+    "category": "test",
+    "benchmarks": [
+        {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness"
+        }
+    ]
+}

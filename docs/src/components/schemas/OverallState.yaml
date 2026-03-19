@@ -1,0 +1,10 @@
+# OverallState represents the evaluation job overall state
+type: string
+enum:
+  - pending
+  - running
+  - completed
+  - failed
+  - cancelled
+  - partially_failed
+description: Overall evaluation job state

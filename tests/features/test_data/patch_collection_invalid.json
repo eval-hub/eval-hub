@@ -1,0 +1,7 @@
+[
+    {
+        "op": "invalid_op",
+        "path": "/name",
+        "value": "x"
+    }
+]

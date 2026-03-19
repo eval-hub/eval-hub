@@ -3,6 +3,7 @@ service:
   # These will be elsewhere on a cluster and coherent with the pod spec
   ready_file: "/tmp/repo-ready"
   termination_file: "/tmp/termination-log"
+  disable_auth: false
 # These are here so that the config can be loaded from the secrets directory when needed
 secrets:
   dir: /tmp
@@ -23,3 +24,12 @@ database:
 # MLFlow configuration
 mlflow:
   #tracking_uri: http://localhost:5000
+prometheus:
+  enabled: false
+otel:
+  enabled: true
+  exporter_type: "stdout"
+  enable_tracing: true
+  additional_attributes:
+    environment: "development"
+    service: "eval-hub"

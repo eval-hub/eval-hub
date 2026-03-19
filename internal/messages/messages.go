@@ -1,8 +1,8 @@
 package messages
 
 import (
-	"fmt"
-	"strings"
+	"bytes"
+	"text/template"
 
 	"github.com/eval-hub/eval-hub/internal/constants"
 )
@@ -33,18 +33,36 @@ var (
 		"The query parameter '{{.ParameterName}}' is required.",
 		"query_parameter_required",
 	)
+	// QueryParameterValueInvalid The query parameter '{{.ParameterName}}' is not valid. Allowed values are: '{{.AllowedValues}}'.
+	QueryParameterValueInvalid = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The query parameter '{{.ParameterName}}' is not valid. Allowed values are: '{{.AllowedValues}}'.",
+		"query_parameter_value_invalid",
+	)
 	// QueryParameterInvalid The query parameter '{{.ParameterName}}' is not a valid {{.Type}}: '{{.Value}}'.
 	QueryParameterInvalid = createMessage(
 		constants.HTTPCodeBadRequest,
 		"The query parameter '{{.ParameterName}}' is not a valid {{.Type}}: '{{.Value}}'.",
 		"query_parameter_invalid",
 	)
+	// QueryBadParameter The parameter '{{.ParameterName}}' is not a valid query parameter. Allowed parameters are: {{.AllowedParameters}}.
+	QueryBadParameter = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The parameter '{{.ParameterName}}' is not a valid query parameter. Allowed parameters are: {{.AllowedParameters}}.",
+		"query_bad_parameter",
+	)
+	// QueryParameterMismatch The query parameters '{{.ParameterNames}}' are mutually exclusive.
+	QueryParameterMismatch = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The query parameters '{{.ParameterNames}}' are mutually exclusive.",
+		"query_parameter_mismatch",
+	)
 
-	// JobCanNotBeCancelled The job {{.Id}} can not be cancelled because it is '{{.Status}}'.
-	JobCanNotBeCancelled = createMessage(
+	// JobCanNotBeUpdated The job {{.Id}} can not be {{.NewStatus}} because it is '{{.Status}}'.
+	JobCanNotBeUpdated = createMessage(
 		constants.HTTPCodeConflict,
-		"The job {{.Id}} can not be cancelled because it is '{{.Status}}'.",
-		"job_can_not_be_cancelled",
+		"The job {{.Id}} can not be {{.NewStatus}} because it is '{{.Status}}'.",
+		"job_can_not_be_updated",
 	)
 
 	// InvalidJSONRequest The request JSON is invalid: '{{.Error}}'. Please check the request and try again.
@@ -54,11 +72,60 @@ var (
 		"invalid_json_request",
 	)
 
+	// InvalidPatchOperation The patch operation '{{.Operation}}' is not valid. Allowed operations are: {{.AllowedOperations}}.
+	InvalidPatchOperation = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The patch operation '{{.Operation}}' is not valid. Allowed operations are: {{.AllowedOperations}}.",
+		"invalid_patch_operation",
+	)
+
+	// UnallowedPatch The operation '{{.Operation}}' is not allowed for the path '{{.Path}}'.
+	UnallowedPatch = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The operation '{{.Operation}}' is not allowed for the path '{{.Path}}'.",
+		"unallowed_patch",
+	)
+
 	// RequestValidationFailed The request validation failed: '{{.Error}}'. Please check the request and try again.
 	RequestValidationFailed = createMessage(
 		constants.HTTPCodeBadRequest,
 		"The request validation failed: '{{.Error}}'. Please check the request and try again.",
 		"request_validation_failed",
+	)
+
+	// ResourceDoesNotExist The {{.Type}} with id '{{.ResourceID}}' does not exist.
+	ResourceDoesNotExist = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The {{.Type}} with id '{{.ResourceID}}' does not exist.",
+		"resource_does_not_exist",
+	)
+
+	// LocalRuntimeNotEnabled Local runtime is not enabled for provider '{{.ProviderID}}'. Please configure a local runtime command for this provider and try again.
+	LocalRuntimeNotEnabled = createMessage(
+		constants.HTTPCodeBadRequest,
+		"Local runtime is not enabled for provider '{{.ProviderID}}'. Please configure a local runtime command for this provider and try again.",
+		"local_runtime_not_enabled",
+	)
+
+	// ProviderIDNotUnique The provider ID '{{.ProviderID}}' is not unique.
+	ProviderIDNotUnique = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The provider ID '{{.ProviderID}}' is not unique.",
+		"provider_id_not_unique",
+	)
+
+	// ReadOnlyProvider Provider '{{.ProviderID}}' cannot be modified or deleted.
+	ReadOnlyProvider = createMessage(
+		constants.HTTPCodeBadRequest,
+		"Provider '{{.ProviderID}}' cannot be modified or deleted.",
+		"read_only_provider",
+	)
+
+	// ReadOnlyCollection Collection '{{.CollectionID}}' cannot be modified or deleted.
+	ReadOnlyCollection = createMessage(
+		constants.HTTPCodeBadRequest,
+		"Collection '{{.CollectionID}}' cannot be modified or deleted.",
+		"read_only_collection",
 	)
 
 	// MLFlowRequiredForExperiment MLflow is required for experiment tracking. Please configure MLflow in the service configuration and try again.
@@ -109,6 +176,20 @@ var (
 		"query_failed",
 	)
 
+	// CollectionEmpty The collection {{.CollectionID}} does not have any benchmarks.
+	CollectionEmpty = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The collection {{.CollectionID}} does not have any benchmarks.",
+		"collection_empty",
+	)
+
+	// EvaluationJobEmpty The evaluation job {{.EvaluationJobID}} does not have any benchmarks.
+	EvaluationJobEmpty = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The evaluation job {{.EvaluationJobID}} does not have any benchmarks.",
+		"evaluation_job_empty",
+	)
+
 	// InternalServerError An internal server error occurred: '{{.Error}}'.
 	InternalServerError = createMessage(
 		constants.HTTPCodeInternalServerError,
@@ -135,6 +216,27 @@ var (
 		constants.HTTPCodeInternalServerError,
 		"An unknown error occurred: {{.Error}}.",
 		"unknown_error",
+	)
+
+	// Forbidden The request is not authorized.
+	Forbidden = createMessage(
+		constants.HTTPCodeForbidden,
+		"The request is not authorized.",
+		"forbidden",
+	)
+
+	// BadAuthorizationRequest Bad request: '{{.Error}}'.
+	BadAuthorizationRequest = createMessage(
+		constants.HTTPCodeBadRequest,
+		"Bad request: '{{.Error}}'.",
+		"unable_to_authorize_request",
+	)
+
+	// Unauthorized The request is not authenticated: '{{.Error}}'.
+	Unauthorized = createMessage(
+		constants.HTTPCodeUnauthorized,
+		"The request is not authenticated.",
+		"unauthorized",
 	)
 )
 
@@ -166,6 +268,7 @@ func createMessage(status int, one string, code string) *MessageCode {
 
 func GetErrorMessage(messageCode *MessageCode, messageParams ...any) string {
 	msg := messageCode.GetMessage()
+	params := make(map[string]any)
 	for i := 0; i < len(messageParams); i += 2 {
 		param := messageParams[i]
 		var paramValue any
@@ -174,7 +277,14 @@ func GetErrorMessage(messageCode *MessageCode, messageParams ...any) string {
 		} else {
 			paramValue = "NOT_DEFINED" // this is a placeholder for a missing parameter value - if you see this value then the code needs to be fixed
 		}
-		msg = strings.ReplaceAll(msg, fmt.Sprintf("{{.%v}}", param), fmt.Sprintf("%v", paramValue))
+		params[param.(string)] = paramValue
 	}
-	return msg
+
+	tmpl, _ := template.New("errmfs").Parse(msg)
+	out := bytes.NewBuffer(nil)
+	err := tmpl.Execute(out, params)
+	if err != nil {
+		return "INVALID TEMPLATE"
+	}
+	return out.String()
 }

@@ -8,102 +8,85 @@ import (
 	"log/slog"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
+	"github.com/eval-hub/eval-hub/internal/common"
+	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/constants"
+	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const maxBenchmarkWorkers = 5
-
 type K8sRuntime struct {
-	logger    *slog.Logger
-	helper    *KubernetesHelper
-	providers map[string]api.ProviderResource
-	ctx       context.Context
+	logger        *slog.Logger
+	serviceConfig *config.Config
+	helper        *KubernetesHelper
+	ctx           context.Context
 }
 
 // NewK8sRuntime creates a Kubernetes runtime.
-func NewK8sRuntime(logger *slog.Logger, providerConfigs map[string]api.ProviderResource) (abstractions.Runtime, error) {
+func NewK8sRuntime(logger *slog.Logger, serviceConfig *config.Config) (abstractions.Runtime, error) {
 	helper, err := NewKubernetesHelper()
 	if err != nil {
 		return nil, err
 	}
-	return &K8sRuntime{logger: logger, helper: helper, providers: providerConfigs}, nil
+	return &K8sRuntime{logger: logger, serviceConfig: serviceConfig, helper: helper}, nil
 }
 
 func (r *K8sRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
 	return &K8sRuntime{
-		logger:    logger,
-		helper:    r.helper,
-		providers: r.providers,
-		ctx:       r.ctx,
+		logger:        logger,
+		serviceConfig: r.serviceConfig,
+		helper:        r.helper,
+		ctx:           r.ctx,
 	}
 }
 
 func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 	return &K8sRuntime{
-		logger:    r.logger,
-		helper:    r.helper,
-		providers: r.providers,
-		ctx:       ctx,
+		logger:        r.logger,
+		serviceConfig: r.serviceConfig,
+		helper:        r.helper,
+		ctx:           ctx,
 	}
 }
 
-func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, storage *abstractions.Storage) error {
-	benchmarks := make(chan api.BenchmarkConfig, len(evaluation.Benchmarks))
-	for _, bench := range evaluation.Benchmarks {
-		benchmarks <- bench
+func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, storage abstractions.Storage) error {
+	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	if err != nil {
+		return err
 	}
-	close(benchmarks)
+	go func() {
+		for idx, bench := range benchmarks {
+			benchCtx := context.Background()
+			if err := r.createBenchmarkResources(benchCtx, r.logger, evaluation, &bench, idx, storage); err != nil {
+				r.logger.Error(
+					"kubernetes job creation failed",
+					"error", err,
+					"job_id", evaluation.Resource.ID,
+					"benchmark_id", bench.ID,
+				)
 
-	workerCount := maxBenchmarkWorkers
-	if len(evaluation.Benchmarks) < workerCount {
-		workerCount = len(evaluation.Benchmarks)
-	}
-
-	for i := 0; i < workerCount; i++ {
-		go func() {
-			for bench := range benchmarks {
-				select {
-				case <-r.ctx.Done():
-					r.logger.Warn(
-						"benchmark processing canceled",
-						"job_id", evaluation.Resource.ID,
-						"benchmark_id", bench.ID,
-					)
-					return
-				default:
-				}
-				if err := r.createBenchmarkResources(r.ctx, r.logger, evaluation, &bench); err != nil {
-					r.logger.Error(
-						"kubernetes job creation failed",
-						"error", err,
-						"job_id", evaluation.Resource.ID,
-						"benchmark_id", bench.ID,
-					)
-
-					if storage != nil && *storage != nil {
-						runStatus := buildBenchmarkFailureStatus(&bench, err)
-						if updateErr := (*storage).UpdateEvaluationJob(evaluation.Resource.ID, runStatus); updateErr != nil {
-							r.logger.Error(
-								"failed to update benchmark status",
-								"error", updateErr,
-								"job_id", evaluation.Resource.ID,
-								"benchmark_id", bench.ID,
-							)
-						}
+				if storage != nil {
+					runStatus := buildBenchmarkFailureStatus(&bench, idx, err)
+					if updateErr := storage.UpdateEvaluationJob(evaluation.Resource.ID, runStatus, benchmarks); updateErr != nil {
+						r.logger.Error(
+							"failed to update benchmark status",
+							"error", updateErr,
+							"job_id", evaluation.Resource.ID,
+							"benchmark_id", bench.ID,
+						)
 					}
 				}
 			}
-		}()
-	}
+		}
+	}()
 
 	return nil
 }
 
 func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobResource) error {
-	namespace := resolveNamespace("")
+	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
 	propagationPolicy := metav1.DeletePropagationBackground
 	deleteOptions := metav1.DeleteOptions{PropagationPolicy: &propagationPolicy}
 
@@ -114,48 +97,79 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 		"namespace", namespace,
 	)
 
+	labelSelector := fmt.Sprintf("%s=%s", labelJobIDKey, sanitizeLabelValue(evaluation.Resource.ID))
+	jobs, err := r.helper.ListJobs(r.ctx, namespace, labelSelector)
+	if err != nil {
+		return err
+	}
+	configMaps, err := r.helper.ListConfigMaps(r.ctx, namespace, labelSelector)
+	if err != nil {
+		return err
+	}
+
 	var deleteErr error
-	for _, bench := range evaluation.Benchmarks {
-		jobName := jobName(evaluation.Resource.ID, bench.ID)
-		configMapName := configMapName(evaluation.Resource.ID, bench.ID)
+	for _, job := range jobs {
 		r.logger.Info(
-			"deleting evaluation runtime resources for benchmark",
+			"deleting evaluation runtime job",
 			"job_id", evaluation.Resource.ID,
-			"benchmark_id", bench.ID,
-			"job_name", jobName,
-			"configmap_name", configMapName,
+			"job_name", job.Name,
 			"namespace", namespace,
 		)
-		if err := r.helper.DeleteJob(r.ctx, namespace, jobName, deleteOptions); err != nil && !apierrors.IsNotFound(err) {
+		if err := r.helper.DeleteJob(r.ctx, namespace, job.Name, deleteOptions); err != nil && !apierrors.IsNotFound(err) {
 			deleteErr = errors.Join(deleteErr, err)
 		}
-		// OwnerReferences should GC ConfigMaps when Jobs are deleted, but we delete explicitly
-		// to avoid orphans if the owner ref was never set or the job delete is delayed.
-		if err := r.helper.DeleteConfigMap(r.ctx, namespace, configMapName); err != nil && !apierrors.IsNotFound(err) {
+	}
+	// OwnerReferences should GC ConfigMaps when Jobs are deleted, but we delete explicitly
+	// to avoid orphans if the owner ref was never set or the job delete is delayed.
+	for _, configMap := range configMaps {
+		r.logger.Info(
+			"deleting evaluation runtime configmap",
+			"job_id", evaluation.Resource.ID,
+			"configmap_name", configMap.Name,
+			"namespace", namespace,
+		)
+		if err := r.helper.DeleteConfigMap(r.ctx, namespace, configMap.Name); err != nil && !apierrors.IsNotFound(err) {
 			deleteErr = errors.Join(deleteErr, err)
 		}
 	}
 	return deleteErr
 }
 
-func (r *K8sRuntime) createBenchmarkResources(ctx context.Context, logger *slog.Logger, evaluation *api.EvaluationJobResource, benchmark *api.BenchmarkConfig) error {
+func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
+	logger *slog.Logger,
+	evaluation *api.EvaluationJobResource,
+	benchmark *api.BenchmarkConfig,
+	benchmarkIndex int,
+	storage abstractions.Storage,
+) error {
 	benchmarkID := benchmark.ID
 	// Provider/benchmark validation should be handled during creation.
-	provider := r.providers[benchmark.ProviderID]
-	jobConfig, err := buildJobConfig(evaluation, &provider, benchmarkID)
+	provider, err := common.ResolveProvider(benchmark.ProviderID, storage)
+	if err != nil {
+		return err
+	}
+	jobConfig, err := buildJobConfig(evaluation, provider, benchmark, benchmarkIndex, r.serviceConfig)
 	if err != nil {
 		logger.Error("kubernetes job config error", "benchmark_id", benchmarkID, "error", err)
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
 	}
+	if r.serviceConfig == nil || r.serviceConfig.Service == nil {
+		return fmt.Errorf("service config is required")
+	}
+	jobConfig.testDataInitImage = r.serviceConfig.Service.EvalInitImage
 	logger.Info(
 		"kubernetes job config",
 		"job_id", evaluation.Resource.ID,
 		"benchmark_id", benchmarkID,
 		"service_account", jobConfig.serviceAccountName,
 		"service_ca_configmap", jobConfig.serviceCAConfigMap,
-		"evalhub_url", jobConfig.evalHubURL,
+		"eval_hub_url", jobConfig.evalHubURL,
 	)
-	configMap := buildConfigMap(jobConfig)
+	configMap, err := buildConfigMap(jobConfig)
+	if err != nil {
+		logger.Error("kubernetes configmap build error", "benchmark_id", benchmarkID, "error", err)
+		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
+	}
 	job, err := buildJob(jobConfig)
 	if err != nil {
 		logger.Error("kubernetes job build error", "benchmark_id", benchmarkID, "error", err)
@@ -222,13 +236,14 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context, logger *slog.
 	return nil
 }
 
-func buildBenchmarkFailureStatus(benchmark *api.BenchmarkConfig, runErr error) *api.StatusEvent {
+func buildBenchmarkFailureStatus(benchmark *api.BenchmarkConfig, benchmarkIndex int, runErr error) *api.StatusEvent {
 	return &api.StatusEvent{
 		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
-			ProviderID:   benchmark.ProviderID,
-			ID:           benchmark.ID,
-			Status:       api.StateFailed,
-			ErrorMessage: &api.MessageInfo{Message: runErr.Error(), MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED},
+			ProviderID:     benchmark.ProviderID,
+			ID:             benchmark.ID,
+			BenchmarkIndex: benchmarkIndex,
+			Status:         api.StateFailed,
+			ErrorMessage:   &api.MessageInfo{Message: runErr.Error(), MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED},
 		},
 	}
 }

@@ -72,17 +72,17 @@ wait_for_server() {
     local max_attempts=40  # 20 seconds with 0.5 second intervals
     local attempt=0
     local server_url="http://$HOST:$PORT"
-    
+
     RED='\033[0;31m'
     echo -e "${YELLOW}⏳ Waiting for server to be ready...${NC}"
-    
+
     while [ $attempt -lt $max_attempts ]; do
         # Check if process is still running
         if ! kill -0 "$MLFLOW_PID" 2>/dev/null; then
             echo -e "${RED}❌ MLflow server process died unexpectedly${NC}"
             return 1
         fi
-        
+
         # Try to connect to the health endpoint
         if command -v curl &> /dev/null; then
             if curl -s -f -o /dev/null "$server_url/health" 2>/dev/null; then
@@ -106,11 +106,11 @@ wait_for_server() {
                 fi
             fi
         fi
-        
+
         attempt=$((attempt + 1))
         sleep 0.5
     done
-    
+
     echo -e "${RED}❌ Timeout: Server did not become ready within 20 seconds${NC}"
     echo -e "${YELLOW}⚠️  Server process (PID: $MLFLOW_PID) may still be starting...${NC}"
     return 1

@@ -1,10 +1,10 @@
 id: lm_evaluation_harness
 name: LM Evaluation Harness
+title: LM Evaluation Harness
 description: Comprehensive evaluation framework for language models with 167 benchmarks
-type: builtin
 runtime:
   k8s:
-    image: quay.io/opendatahub/ta-lmes-job:odh-3.4
+    image: quay.io/opendatahub/ta-lmes-job:odh-3.4-ea2
     entrypoint:
       - /opt/app-root/bin/python
       - /opt/app-root/src/main.py
@@ -16,7 +16,9 @@ runtime:
       - name: VAR_NAME
         value: VALUE
   local:
-    # reserved for local runtime
+    # command is set to true for test-fvt-server-coverage as it runs in local mode.
+    # In actual custom provider configurations, it will be set to the actual command to run.
+    command: "true"
 
 benchmarks:
   - id: arc_easy
@@ -2037,4 +2039,103 @@ benchmarks:
     dataset_size: 1000
     tags:
       - code
+      - lm_eval
+  - id: leaderboard_ifeval
+    name: Leaderboard IFEval
+    description: >
+      IFEval is a key benchmark where instruction-tuned models show the greatest difference
+      relative to base models with fewer than 80 billion parameters. Qwen2.5-72B is currently the top
+      performer in the sub-80B category, scoring approximately 86. Generally, a score exceeding 65
+      indicates consistent adherence to instruction. Conversely, a score below 55 typically suggests
+      issues such as poor Supervised Fine-Tuning (SFT) or formatting or chat-template mismatches.
+
+    category: instruction_following
+    metrics:
+      - prompt_level_strict_acc
+      - inst_level_strict_acc
+      - prompt_level_loose_acc
+      - inst_level_loose_acc
+    num_few_shot: 0
+    tags:
+      - instruction_following
+      - lm_eval
+  - id: leaderboard_bbh
+    name: Leaderboard BBH
+    description: >
+      BBH benchmark measures the reasoning capabilities of Large Language Models (LLMs)
+      across 23-27 challenging, non-trivial tasks in which prior models failed to outperform average
+      human raters. BBH is relatively stable across models — most well-tuned 70B models land 55-68.
+      Phi-4 (14B) punches above its weight here (~65), suggesting its reasoning training is particularly strong.
+    category: reasoning
+    metrics:
+      - acc_norm
+    num_few_shot: 0
+    tags:
+      - reasoning
+      - science
+      - lm_eval
+  - id: leaderboard_gpqa
+    name: Leaderboard GPQa
+    description: >
+      GPQa benchmark measures the ability of AI models to answer extremely challenging, \
+      expert-level scientific questions in biology, physics, and chemistry. It evaluates deep reasoning,
+      multi-step synthesis, and scientific understanding. It is the hardest discriminator in this class.
+      GPQA is highly challenging — PhD experts achieve 65% accuracy, while skilled non-experts reach only 34%,
+      and even the strongest GPT-4-based baseline hit only 39% accuracy when GPQA was first released.
+      Most <80B models score only 20-40 (normalized). Phi-4 and Gemma-3-27B are standouts here.
+      Anything above 35 for a sub-80B model is strong.
+    category: reasoning
+    metrics:
+      - acc_norm
+    num_few_shot: 0
+    tags:
+      - reasoning
+      - science
+      - lm_eval
+  - id: leaderboard_mmlu_pro
+    name: Leaderboard Mmlu Pro
+    description: >
+      Mmlu Pro is an advanced, reasoning-centric benchmark designed to evaluate Large Language Models (LLMs)
+      across 12,000+ complex, graduate-level questions in 14+ domains (e.g., biology, law, chemistry).
+      A score above 55 is competitive; Gemma-3-27B and Phi-4 both land around 57-62 in this tier, making that
+      the reasonable "good" bar. Gemma 3 27B achieves MMLU-Pro 67.5 in Google's own evaluations, which is near
+      the top of the <30B class.
+    category: reasoning
+    metrics:
+      - acc_norm
+    num_few_shot: 0
+    tags:
+      - reasoning
+      - science
+      - lm_eval
+  - id: leaderboard_musr
+    name: Leaderboard MUSR
+    description: >
+      MUSR benchmark measures the ability of Large Language Models (LLMs) to perform complex,
+      multi-step logical reasoning within long-form natural language narratives, such as murder
+      mysteries. MuSR is notoriously noisy. Not many models can score better than random on MuSR.
+      Even the best <80B models often land in the 25–40 range. Qwen2.5-72B's 11.7 shows even flagship
+      70B models can struggle here; anything above 30 is solid.
+    category: reasoning
+    metrics:
+      - acc_norm
+    num_few_shot: 0
+    tags:
+      - reasoning
+      - lm_eval
+  - id: leaderboard_math_hard
+    name: Leaderboard Math Hard
+    description: >
+      Math Hard benchmark measures the advanced mathematical reasoning, problem-solving, and multi-step
+      logic capabilities of Large Language Models (LLMs) using the most challenging 1,324 questions from
+      the MATH dataset. This is where reasoning models and post-training quality shine. Phi-4 and Gemma-3-27B
+      score meaningfully higher per parameter here than Llama-3.1-70B, reflecting how much math-focused post-training
+      matters. A score above 40 is competitive; above 55 is excellent for <80B.
+    category: math
+    metrics:
+      - exact_match
+    num_few_shot: 0
+    tags:
+      - math
+      - science
       - lm_eval

@@ -26,7 +26,7 @@ jobs:
     - name: Format check
       run: |
         make fmt
-        git diff --exit-code || (echo "Code is not formatted. Run 'make fmt' locally." && exit 1)
+        git diff --exit-code -- '*.go' || (echo "Code is not formatted. Run 'make fmt' locally." && exit 1)
 
     - name: Run linter
       run: make lint
@@ -36,19 +36,20 @@ jobs:
 
     - name: Run all tests (unit and integration) with coverage
       run: |
-        make clean test-all-coverage
+        make clean build test-all-coverage
 
     - name: Upload coverage reports to Codecov
       continue-on-error: ${{ github.actor == 'dependabot[bot]' }}  # Don't fail CI on Dependabot PRs since they can't access secrets
       uses: codecov/codecov-action@v5
       with:
-        files: ./bin/coverage.out,./bin/coverage-fvt.out
+        files: ./bin/coverage.out,./bin/coverage-fvt.out,./bin/coverage-init.out
         disable_search: true
         fail_ci_if_error: true
         token: ${{ secrets.CODECOV_TOKEN }}
 
     - name: Build and verify the API documentation
       run: |
+        npm ci
         make documentation
         git diff --exit-code || (echo "API documentation is not generated. Run 'make documentation' locally." && exit 1)
 

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,13 +15,77 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
+	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/mlflow"
-	"github.com/eval-hub/eval-hub/internal/runtimes"
+	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 	"github.com/eval-hub/eval-hub/internal/storage"
 	"github.com/eval-hub/eval-hub/internal/validation"
+	"github.com/eval-hub/eval-hub/pkg/api"
 )
+
+// stubRuntime implements abstractions.Runtime without file writes or process spawning.
+// It validates that the JobSpec JSON can be built from the evaluation data.
+type stubRuntime struct {
+	logger    *slog.Logger
+	providers map[string]api.ProviderResource
+}
+
+func (r *stubRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
+	return &stubRuntime{logger: logger, providers: r.providers}
+}
+
+func (r *stubRuntime) WithContext(_ context.Context) abstractions.Runtime {
+	return r
+}
+
+func (r *stubRuntime) Name() string {
+	return "stub"
+}
+
+func (r *stubRuntime) RunEvaluationJob(
+	evaluation *api.EvaluationJobResource,
+	_ abstractions.Storage,
+) error {
+	if len(evaluation.Benchmarks) == 0 {
+		return fmt.Errorf("no benchmarks configured for job %s", evaluation.Resource.ID)
+	}
+
+	bench := evaluation.Benchmarks[0]
+	provider, ok := r.providers[bench.ProviderID]
+	if !ok {
+		return fmt.Errorf("provider %q not found", bench.ProviderID)
+	}
+
+	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, &bench, 0, nil)
+	if err != nil {
+		return fmt.Errorf("build job spec: %w", err)
+	}
+
+	if spec.JobID == "" {
+		return fmt.Errorf("job spec missing job ID")
+	}
+	if spec.BenchmarkID == "" {
+		return fmt.Errorf("job spec missing benchmark ID")
+	}
+	if spec.ProviderID == "" {
+		return fmt.Errorf("job spec missing provider ID")
+	}
+
+	r.logger.Info(
+		"stub runtime validated job spec",
+		"job_id", spec.JobID,
+		"benchmark_id", spec.BenchmarkID,
+		"provider_id", spec.ProviderID,
+	)
+
+	return nil
+}
+
+func (r *stubRuntime) DeleteEvaluationJobResources(_ *api.EvaluationJobResource) error {
+	return nil
+}
 
 func TestNewServer(t *testing.T) {
 	t.Run("creates server with default port", func(t *testing.T) {
@@ -80,28 +145,23 @@ func TestServerSetupRoutes(t *testing.T) {
 		body   string
 	}{
 		{http.MethodGet, "/api/v1/health", http.StatusOK, ""},
-		{http.MethodGet, "/metrics", http.StatusOK, ""},
 		{http.MethodGet, "/openapi.yaml", http.StatusOK, ""},
 		{http.MethodGet, "/docs", http.StatusOK, ""},
 		// Evaluation endpoints
-		{http.MethodPost, "/api/v1/evaluations/jobs", http.StatusAccepted, `{"model": {"url": "http://test.com", "name": "test"}, "benchmarks": [{"id": "bench-1", "provider_id": "garak"}]}`},
+		{http.MethodPost, "/api/v1/evaluations/jobs", http.StatusAccepted, `{"name": "test-evaluation-job", "model": {"url": "http://test.com", "name": "test"}, "benchmarks": [{"id": "arc_easy", "provider_id": "lm_evaluation_harness"}]}`},
 		{http.MethodGet, "/api/v1/evaluations/jobs", http.StatusOK, ""},
 		{http.MethodGet, "/api/v1/evaluations/jobs/test-id", http.StatusNotFound, ""},
-		// we can not delete because we have no id
-		// Benchmarks
-		{http.MethodGet, "/api/v1/evaluations/benchmarks", http.StatusOK, ""},
 		// Collections
-		{http.MethodGet, "/api/v1/evaluations/collections", http.StatusNotImplemented, ""},
-		{http.MethodPost, "/api/v1/evaluations/collections", http.StatusNotImplemented, ""},
-		{http.MethodGet, "/api/v1/evaluations/collections/test-collection", http.StatusNotImplemented, ""},
-		{http.MethodPut, "/api/v1/evaluations/collections/test-collection", http.StatusNotImplemented, ""},
-		{http.MethodPatch, "/api/v1/evaluations/collections/test-collection", http.StatusNotImplemented, ""},
-		{http.MethodDelete, "/api/v1/evaluations/collections/test-collection", http.StatusNotImplemented, ""},
+		{http.MethodPost, "/api/v1/evaluations/collections", http.StatusCreated, `{"name": "test-benchmarks-collection", "description": "Collection of benchmarks for FVT", "category": "test", "benchmarks": [{"id": "arc_easy", "provider_id": "lm_evaluation_harness"}]}`},
+		{http.MethodGet, "/api/v1/evaluations/collections", http.StatusOK, ""},
+		{http.MethodGet, "/api/v1/evaluations/collections/test-collection", http.StatusNotFound, ""},
 		// Providers
 		{http.MethodGet, "/api/v1/evaluations/providers", http.StatusOK, ""},
 		// Error cases
 		{http.MethodPost, "/api/v1/health", http.StatusMethodNotAllowed, ""},
 		{http.MethodGet, "/nonexistent", http.StatusNotFound, ""},
+
+		{http.MethodGet, "/metrics", http.StatusOK, ""},
 	}
 
 	var evaluationIds []string
@@ -118,19 +178,19 @@ func TestServerSetupRoutes(t *testing.T) {
 			handler.ServeHTTP(w, req)
 
 			if w.Code != tc.status {
-				t.Errorf("Expected status %d for %s %s, got %d with message %s", tc.status, tc.method, tc.path, w.Code, w.Body.String())
+				t.Fatalf("Expected status %d for %s %s, got %d with message %s", tc.status, tc.method, tc.path, w.Code, w.Body.String())
 			}
 
 			if (tc.method == http.MethodPost) && (w.Body.String() != "") && (strings.HasPrefix(tc.path, "/api/v1/evaluations/jobs")) {
 				var body map[string]interface{}
 				if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-					t.Errorf("Failed to unmarshal body: %v", err)
+					t.Fatalf("Failed to unmarshal body: %v", err)
 				}
 				id := getKeyAsString(body["resource"].(map[string]interface{}), "id")
 				if id != "" {
 					evaluationIds = append(evaluationIds, id)
 				} else {
-					t.Errorf("Failed to find id in response body: %s", w.Body.String())
+					t.Fatalf("Failed to find id in response body: %s", w.Body.String())
 				}
 			}
 		})
@@ -191,32 +251,42 @@ func createServer(port int) (*server.Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	validate, err := validation.NewValidator()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create validator: %w", err)
-	}
-	serviceConfig, err := config.LoadConfig(logger, "0.0.1", "local", time.Now().Format(time.RFC3339), "../../../tests")
+	validate := validation.NewValidator()
+	serviceConfig, err := config.LoadConfig(logger, "0.3.0", "local", time.Now().Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load service config: %w", err)
 	}
 	serviceConfig.Service.Port = port
-	storage, err := storage.NewStorage(serviceConfig.Database, logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create storage: %w", err)
+	if serviceConfig.Prometheus == nil {
+		serviceConfig.Prometheus = &config.PrometheusConfig{
+			Enabled: true,
+		}
+	} else {
+		serviceConfig.Prometheus.Enabled = true
 	}
+	serviceConfig.Service.LocalMode = true // set local mode for testing
 	// set up the provider configs
-	providerConfigs, err := config.LoadProviderConfigs(logger, "../../../config/providers", "../../../../config/providers", "../../../../../config/providers")
+	providerConfigs, err := config.LoadProviderConfigs(logger, validate)
 	if err != nil {
 		// we do this as no point trying to continue
 		return nil, fmt.Errorf("failed to load provider configs: %w", err)
 	}
-	serviceConfig.Service.LocalMode = true // set local mode for testing
-	runtime, err := runtimes.NewRuntime(logger, serviceConfig, providerConfigs)
+	collectionConfigs, err := config.LoadCollectionConfigs(logger, validate)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create runtime: %w", err)
+		// we do this as no point trying to continue
+		return nil, fmt.Errorf("failed to load collection configs: %w", err)
 	}
-	mlflowClient := mlflow.NewMLFlowClient(serviceConfig, logger)
-	return server.NewServer(logger, serviceConfig, providerConfigs, storage, validate, runtime, mlflowClient)
+	store, err := storage.NewStorage(serviceConfig.Database, collectionConfigs, providerConfigs, serviceConfig.IsOTELStorageScansEnabled(), logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create storage: %w", err)
+	}
+	// Use stub runtime to avoid file writes and process spawning during tests
+	runtime := &stubRuntime{logger: logger, providers: providerConfigs}
+	mlflowClient, err := mlflow.NewMLFlowClient(serviceConfig, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create MLFlow client: %w", err)
+	}
+	return server.NewServer(logger, serviceConfig, nil, store, validate, runtime, mlflowClient)
 }
 
 func getKeyAsString(obj map[string]interface{}, key string) string {

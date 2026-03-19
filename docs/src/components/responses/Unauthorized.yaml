@@ -2,7 +2,7 @@ description: Unauthorized
 content:
   application/json:
     schema:
-      $ref: ../../components/schemas/APIError.yaml
+      $ref: ../../components/schemas/Error.yaml
     examples:
       AuthenticationError:
         $ref: ../../components/examples/AuthenticationError.yaml

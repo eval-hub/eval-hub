@@ -1,0 +1,10 @@
+type: object
+description: Primary score metric configuration
+properties:
+  metric:
+    type: string
+    description: Metric name
+  lower_is_better:
+    type: boolean
+    default: false
+    description: Whether lower values indicate better performance

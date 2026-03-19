@@ -16,6 +16,12 @@ const (
 	StateCancelled State = "cancelled"
 )
 
+// IsBenchmarkTerminalState reports whether a benchmark state is terminal
+// (completed, failed, or cancelled) and should not be overwritten.
+func IsBenchmarkTerminalState(s State) bool {
+	return s == StateCompleted || s == StateFailed || s == StateCancelled
+}
+
 type OverallState string
 
 const (
@@ -29,6 +35,10 @@ const (
 
 func (o OverallState) String() string {
 	return string(o)
+}
+
+func (o OverallState) IsTerminalState() bool {
+	return o == OverallStateCompleted || o == OverallStateFailed || o == OverallStateCancelled || o == OverallStatePartiallyFailed
 }
 
 func GetOverallState(s string) (OverallState, error) {
@@ -52,8 +62,14 @@ func GetOverallState(s string) (OverallState, error) {
 
 // ModelRef represents model specification for evaluation requests
 type ModelRef struct {
-	URL  string `json:"url" validate:"required"`
-	Name string `json:"name" validate:"required"`
+	URL        string         `json:"url" validate:"required"`
+	Name       string         `json:"name" validate:"required"`
+	Auth       *ModelAuth     `json:"auth,omitempty"`
+	Parameters map[string]any `json:"parameters,omitempty"`
+}
+
+type ModelAuth struct {
+	SecretRef string `json:"secret_ref" validate:"required"`
 }
 
 // MessageInfo represents a message from a downstream service
@@ -62,17 +78,42 @@ type MessageInfo struct {
 	MessageCode string `json:"message_code"`
 }
 
+type PrimaryScore struct {
+	Metric        string `mapstructure:"metric" json:"metric" validate:"required"`
+	LowerIsBetter bool   `mapstructure:"lower_is_better" json:"lower_is_better,omitempty" validate:"omitempty,boolean"`
+}
+
+type PassCriteria struct {
+	Threshold float32 `mapstructure:"threshold" json:"threshold,omitempty" validate:"omitempty,number"`
+}
+
+// S3TestDataRef represents S3 source for test data.
+type S3TestDataRef struct {
+	Bucket    string `json:"bucket" validate:"required"`
+	Key       string `json:"key" validate:"required"`
+	SecretRef string `json:"secret_ref" validate:"required"`
+}
+
+// TestDataRef represents external test data sources.
+type TestDataRef struct {
+	S3 *S3TestDataRef `mapstructure:"s3" json:"s3,omitempty"`
+}
+
 // BenchmarkConfig represents a reference to a benchmark
 type BenchmarkConfig struct {
-	Ref
-	ProviderID string         `json:"provider_id" validate:"required"`
-	Parameters map[string]any `json:"parameters,omitempty"`
+	Ref          `mapstructure:",squash"`
+	ProviderID   string         `mapstructure:"provider_id" json:"provider_id" validate:"required"`
+	Weight       float32        `mapstructure:"weight" json:"weight,omitempty" validate:"omitempty,min=0,max=1"`
+	PrimaryScore *PrimaryScore  `mapstructure:"primary_score" json:"primary_score,omitempty"`
+	PassCriteria *PassCriteria  `mapstructure:"pass_criteria" json:"pass_criteria,omitempty"`
+	Parameters   map[string]any `mapstructure:"parameters" json:"parameters,omitempty"`
+	TestDataRef  *TestDataRef   `mapstructure:"test_data_ref" json:"test_data_ref,omitempty"`
 }
 
 // ExperimentTag represents a tag on an experiment
 type ExperimentTag struct {
-	Key   string `json:"key" validate:"required,max=250"`    // Keys can be up to 250 bytes in size (not characters)
-	Value string `json:"value" validate:"required,max=5000"` // Values can be up to 5000 bytes in size (not characters)
+	Key   string `json:"key" validate:"required,max=250"`    // Keys can be up to 250 bytes in size (not characters) in mlflow experiments
+	Value string `json:"value" validate:"required,max=5000"` // Values can be up to 5000 bytes in size (not characters) in mlflow experiments
 }
 
 // ExperimentConfig represents configuration for MLFlow experiment tracking
@@ -80,11 +121,6 @@ type ExperimentConfig struct {
 	Name             string          `json:"name,omitempty"`
 	Tags             []ExperimentTag `json:"tags,omitempty" validate:"omitempty,max=20,dive"`
 	ArtifactLocation string          `json:"artifact_location,omitempty"`
-}
-
-// BenchmarkStatusLogs represents logs information for benchmark status
-type BenchmarkStatusLogs struct {
-	Path string `json:"path,omitempty"`
 }
 
 // for marshalling and unmarshalling
@@ -100,26 +136,28 @@ func DateTimeFromString(date DateTime) (time.Time, error) {
 
 // BenchmarkStatus represents status of individual benchmark in evaluation
 type BenchmarkStatus struct {
-	ProviderID   string       `json:"provider_id"`
-	ID           string       `json:"id"`
-	Status       State        `json:"status,omitempty"`
-	ErrorMessage *MessageInfo `json:"error_message,omitempty"`
-	StartedAt    DateTime     `json:"started_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
-	CompletedAt  DateTime     `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
+	ProviderID     string       `json:"provider_id"`
+	ID             string       `json:"id"`
+	BenchmarkIndex int          `json:"benchmark_index"`
+	Status         State        `json:"status,omitempty"`
+	ErrorMessage   *MessageInfo `json:"error_message,omitempty"`
+	StartedAt      DateTime     `json:"started_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
+	CompletedAt    DateTime     `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
 }
 
 // BenchmarkStatusEvent is used when the job runtime needs to updated the status of a benchmark
 type BenchmarkStatusEvent struct {
-	ProviderID   string         `json:"provider_id"`
-	ID           string         `json:"id"`
-	Status       State          `json:"status,omitempty"`
-	Metrics      map[string]any `json:"metrics,omitempty"`
-	Artifacts    map[string]any `json:"artifacts,omitempty"`
-	ErrorMessage *MessageInfo   `json:"error_message,omitempty"`
-	StartedAt    DateTime       `json:"started_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
-	CompletedAt  DateTime       `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
-	MLFlowRunID  string         `json:"mlflow_run_id,omitempty"`
-	LogsPath     string         `json:"logs_path,omitempty"`
+	ProviderID     string         `json:"provider_id" validate:"required"`
+	ID             string         `json:"id" validate:"required"`
+	BenchmarkIndex int            `json:"benchmark_index"`
+	Status         State          `json:"status" validate:"required,oneof=pending running completed failed cancelled"`
+	Metrics        map[string]any `json:"metrics,omitempty"`
+	Artifacts      map[string]any `json:"artifacts,omitempty"`
+	ErrorMessage   *MessageInfo   `json:"error_message,omitempty"`
+	StartedAt      DateTime       `json:"started_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
+	CompletedAt    DateTime       `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
+	MLFlowRunID    string         `json:"mlflow_run_id,omitempty"`
+	LogsPath       string         `json:"logs_path,omitempty"`
 }
 
 type EvaluationJobState struct {
@@ -132,33 +170,74 @@ type StatusEvent struct {
 }
 
 type BenchmarkResult struct {
-	ID          string         `json:"id"`
-	ProviderID  string         `json:"provider_id"`
-	Metrics     map[string]any `json:"metrics,omitempty"`
-	Artifacts   map[string]any `json:"artifacts,omitempty"`
-	MLFlowRunID string         `json:"mlflow_run_id,omitempty"`
-	LogsPath    string         `json:"logs_path,omitempty"`
+	ID             string         `json:"id"`
+	ProviderID     string         `json:"provider_id"`
+	BenchmarkIndex int            `json:"benchmark_index"`
+	Metrics        map[string]any `json:"metrics,omitempty"`
+	Artifacts      map[string]any `json:"artifacts,omitempty"`
+	MLFlowRunID    string         `json:"mlflow_run_id,omitempty"`
+	LogsPath       string         `json:"logs_path,omitempty"`
+	Test           *BenchmarkTest `json:"test,omitempty"`
 }
 
 // EvaluationJobResults represents results section for EvaluationJobResource
 type EvaluationJobResults struct {
+	Test                *EvaluationTest   `json:"test,omitempty"`
 	Benchmarks          []BenchmarkResult `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 	MLFlowExperimentURL string            `json:"mlflow_experiment_url,omitempty"`
 }
 
+// OCICoordinates represents OCI artifact coordinates for persistence
+type OCICoordinates struct {
+	OCIHost       string            `json:"oci_host" validate:"required"`
+	OCIRepository string            `json:"oci_repository" validate:"required"`
+	OCITag        string            `json:"oci_tag,omitempty"`
+	OCISubject    string            `json:"oci_subject,omitempty"`
+	Annotations   map[string]string `json:"annotations,omitempty"`
+}
+
+// OCIConnectionConfig represents K8s connection configuration for OCI operations.
+// Connection must reference a Kubernetes Secret containing a ".dockerconfigjson" entry,
+// which provides standard Docker registry credentials for authenticating to the OCI registry.
+type OCIConnectionConfig struct {
+	// Connection is the name of a Kubernetes Secret (type kubernetes.io/dockerconfigjson)
+	// with a ".dockerconfigjson" entry used for OCI registry authentication.
+	Connection string `json:"connection" validate:"required"`
+}
+
+// EvaluationExportsOCI represents OCI export configuration
+type EvaluationExportsOCI struct {
+	Coordinates OCICoordinates       `json:"coordinates" validate:"required"`
+	K8s         *OCIConnectionConfig `json:"k8s,omitempty"`
+}
+
+// EvaluationExports represents optional exports configuration for an evaluation job
+type EvaluationExports struct {
+	OCI *EvaluationExportsOCI `json:"oci,omitempty"`
+}
+
+type CollectionRef struct {
+	ID         string            `mapstructure:"id" json:"id" validate:"required"`
+	Benchmarks []BenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,dive"`
+}
+
 // EvaluationJobConfig represents evaluation job request schema
 type EvaluationJobConfig struct {
-	Model      ModelRef          `json:"model" validate:"required"`
-	Benchmarks []BenchmarkConfig `json:"benchmarks" validate:"required,min=1,dive"`
-	Collection *Ref              `json:"collection,omitempty"`
-	Experiment *ExperimentConfig `json:"experiment,omitempty"`
-	Custom     map[string]any    `json:"custom,omitempty"`
+	Name         string             `json:"name" validate:"required"`
+	Description  *string            `json:"description,omitempty"`
+	Tags         []string           `json:"tags,omitempty" validate:"omitempty,dive,tagname"`
+	Model        ModelRef           `json:"model" validate:"required"`
+	PassCriteria *PassCriteria      `json:"pass_criteria,omitempty"`
+	Benchmarks   []BenchmarkConfig  `json:"benchmarks,omitempty" validate:"omitempty,required_without=Collection,dive"`
+	Collection   *CollectionRef     `json:"collection,omitempty" validate:"omitempty,required_without=Benchmarks"`
+	Experiment   *ExperimentConfig  `json:"experiment,omitempty"`
+	Custom       *map[string]any    `json:"custom,omitempty"`
+	Exports      *EvaluationExports `json:"exports,omitempty"`
 }
 
 type EvaluationResource struct {
 	Resource
-	MLFlowExperimentID string       `json:"mlflow_experiment_id,omitempty"`
-	Message            *MessageInfo `json:"message,omitempty"`
+	MLFlowExperimentID string `json:"mlflow_experiment_id,omitempty"`
 }
 
 type EvaluationJobStatus struct {
@@ -177,5 +256,18 @@ type EvaluationJobResource struct {
 // EvaluationJobResourceList represents list of evaluation job resources with pagination
 type EvaluationJobResourceList struct {
 	Page
-	Items []EvaluationJobResource `json:"items"`
+	Items  []EvaluationJobResource `json:"items"`
+	Errors []string                `json:"errors,omitempty"`
+}
+
+type EvaluationTest struct {
+	Score     float32 `json:"score"`
+	Threshold float32 `json:"threshold"`
+	Pass      bool    `json:"pass"`
+}
+
+type BenchmarkTest struct {
+	PrimaryScore float32 `json:"primary_score"`
+	Threshold    float32 `json:"threshold"`
+	Pass         bool    `json:"pass"`
 }

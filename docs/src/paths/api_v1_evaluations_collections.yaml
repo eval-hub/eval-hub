@@ -1,17 +1,71 @@
 get:
-  x-internal: true
   tags:
     - Collections
   summary: List Collections
   description: List all benchmark collections.
-  operationId: list_collections_api_v1_evaluations_collections_get
+  operationId: get_collections
+  parameters:
+    - name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        maximum: 100
+        minimum: 1
+        description: Maximum number of collections to return
+        default: 50
+        title: Limit
+      description: Maximum number of collections to return
+    - name: offset
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        description: Offset for pagination
+        default: 0
+        title: Offset
+      description: Offset for pagination
+    - name: name
+      in: query
+      required: false
+      schema:
+        type: string
+        title: Name
+      description: Name to search for
+    - name: category
+      in: query
+      required: false
+      schema:
+        type: string
+        title: Category
+      description: Category to search for
+    - name: tags
+      in: query
+      required: false
+      schema:
+        type: string
+        title: Tags
+      description: Tags to search for
+    - name: scope
+      in: query
+      required: false
+      schema:
+        type: string
+        enum:
+          - system
+          - tenant
+        title: Scope of collections
+      description: >
+        Set to `system` to get only system defined collections, or `tenant` to get only user defined collections.
+        If `scope` is not provided, both system and user defined collections will be returned.
   responses:
     '200':
       description: Successful Response
       content:
         application/json:
           schema:
-            $ref: ../components/schemas/PaginatedCollections.yaml
+            $ref: ../components/schemas/CollectionResourceList.yaml
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':
@@ -21,17 +75,16 @@ get:
     '404':
       $ref: ../components/responses/NotFound.yaml
 post:
-  x-internal: true
   tags:
     - Collections
   summary: Create Collection
   description: Create a new collection.
-  operationId: create_collection_api_v1_evaluations_collections_post
+  operationId: post_collections
   requestBody:
     content:
       application/json:
         schema:
-          $ref: ../components/schemas/CollectionCreationRequest.yaml
+          $ref: ../components/schemas/CollectionConfig.yaml
     required: true
   responses:
     '201':
@@ -39,7 +92,7 @@ post:
       content:
         application/json:
           schema:
-            $ref: ../components/schemas/Collection.yaml
+            $ref: ../components/schemas/CollectionResource.yaml
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':

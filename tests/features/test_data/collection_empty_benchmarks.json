@@ -1,0 +1,6 @@
+{
+    "name": "empty-benchmarks-collection",
+    "description": "Collection with empty benchmarks array",
+    "category": "test",
+    "benchmarks": []
+}

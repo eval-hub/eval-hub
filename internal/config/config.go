@@ -1,7 +1,26 @@
 package config
 
 type Config struct {
-	Service  *ServiceConfig  `mapstructure:"service"`
-	Database *map[string]any `mapstructure:"database"`
-	MLFlow   *MLFlowConfig   `mapstructure:"mlflow"`
+	Service    *ServiceConfig    `mapstructure:"service"`
+	Database   *map[string]any   `mapstructure:"database"`
+	MLFlow     *MLFlowConfig     `mapstructure:"mlflow,omitempty"`
+	OTEL       *OTELConfig       `mapstructure:"otel,omitempty"`
+	Prometheus *PrometheusConfig `mapstructure:"prometheus,omitempty"`
+	Sidecar    *SidecarConfig    `mapstructure:"sidecar,omitempty"`
+}
+
+func (c *Config) IsOTELEnabled() bool {
+	return (c != nil) && (c.OTEL != nil) && c.OTEL.Enabled
+}
+
+func (c *Config) IsOTELStorageScansEnabled() bool {
+	return c.IsOTELEnabled() && !c.OTEL.DisableDatabaseOTELScans
+}
+
+func (c *Config) IsPrometheusEnabled() bool {
+	return (c != nil) && (c.Prometheus != nil) && c.Prometheus.Enabled
+}
+
+func (c *Config) IsAuthenticationEnabled() bool {
+	return (c != nil) && (c.Service != nil) && !c.Service.DisableAuth && !c.Service.LocalMode
 }
