@@ -13,7 +13,7 @@ func ResolveBenchmarks(evaluation *api.EvaluationJobResource, storage abstractio
 	if evaluation.Collection != nil && evaluation.Collection.ID != "" {
 		collection, err := common.ResolveCollection(evaluation.Collection.ID, storage)
 		if err != nil {
-			return nil, serviceerrors.NewServiceError(messages.ResourceDoesNotExist, "Type", "collection", "ResourceID", evaluation.Collection.ID)
+			return nil, err
 		}
 		if collection == nil || len(collection.Benchmarks) == 0 {
 			return nil, serviceerrors.NewServiceError(messages.CollectionEmpty, "CollectionID", evaluation.Collection.ID)
