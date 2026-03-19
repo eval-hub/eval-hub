@@ -135,7 +135,6 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 			// remove the benchmarks if requested
 			benchmarks, err = GetParam(req, "benchmarks", true, true)
 			if err != nil {
-				w.Error(err, ctx.RequestID)
 				return err
 			}
 

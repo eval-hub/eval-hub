@@ -293,8 +293,9 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 				return err
 			}
 			result := api.EvaluationJobResourceList{
-				Page:  *page,
-				Items: res.Items,
+				Page:   *page,
+				Items:  res.Items,
+				Errors: res.Errors,
 			}
 			w.WriteJSON(result, 200)
 			return nil
