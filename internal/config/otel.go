@@ -30,7 +30,9 @@ type OTELConfig struct {
 	// Used to enable ECS resource detection
 	EnableECSResourceDetection bool `mapstructure:"enable_ecs_resource_detection,omitempty"`
 	// When true, OTEL SDK diagnostic logs are not redirected to the main logger
-	DoNotRedirectOTELLogs bool `mapstructure:"do_not_redirect_otel_logs,omitempty"`
+	DisableRedirectOTELLogs bool `mapstructure:"disable_redirect_otel_logs,omitempty"`
+	// When true, the database OTEL scan is disabled
+	DisableDatabaseOTELScan bool `mapstructure:"disable_database_otel_scan,omitempty"`
 	// The TLS config if running securely (that is not loaded from the config)
 	TLSConfig *tls.Config
 }

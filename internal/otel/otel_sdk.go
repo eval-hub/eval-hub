@@ -46,7 +46,7 @@ func SetupOTEL(ctx context.Context, config *config.OTELConfig, logger *slog.Logg
 		return nil, nil
 	}
 
-	if !config.DoNotRedirectOTELLogs {
+	if !config.DisableRedirectOTELLogs {
 		// have the OTEL SDK send its logs to our logger
 		lr := logr.FromSlogHandler(logger.Handler())
 		otel.SetLogger(lr)

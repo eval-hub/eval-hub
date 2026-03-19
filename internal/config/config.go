@@ -13,6 +13,10 @@ func (c *Config) IsOTELEnabled() bool {
 	return (c != nil) && (c.OTEL != nil) && c.OTEL.Enabled
 }
 
+func (c *Config) IsOTELStorageScansEnabled() bool {
+	return c.IsOTELEnabled() && !c.OTEL.DisableDatabaseOTELScan
+}
+
 func (c *Config) IsPrometheusEnabled() bool {
 	return (c != nil) && (c.Prometheus != nil) && c.Prometheus.Enabled
 }
