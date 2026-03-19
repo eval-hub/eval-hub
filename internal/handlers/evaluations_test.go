@@ -79,7 +79,7 @@ func (r *fakeRuntime) WithContext(_ context.Context) abstractions.Runtime {
 	return r
 }
 func (r *fakeRuntime) Name() string { return "fake" }
-func (r *fakeRuntime) RunEvaluationJob(_ *api.EvaluationJobResource, _ abstractions.Storage) error {
+func (r *fakeRuntime) RunEvaluationJob(_ *api.EvaluationJobResource, _ []api.BenchmarkConfig, _ abstractions.Storage) error {
 	r.called = true
 	return r.err
 }

@@ -1,8 +1,6 @@
 package common
 
 import (
-	"fmt"
-
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
@@ -16,30 +14,12 @@ func GUID() string {
 
 // ResolveProvider returns the provider for providerID
 func ResolveProvider(providerID string, storage abstractions.Storage) (*api.ProviderResource, error) {
-	if storage != nil {
-		p, err := storage.GetProvider(providerID)
-		if err != nil {
-			return nil, fmt.Errorf("get provider %s: %w", providerID, err)
-		}
-		if p != nil {
-			return p, nil
-		}
-	}
-	return nil, fmt.Errorf("provider %q not found", providerID)
+	return storage.GetProvider(providerID)
 }
 
 // ResolveCollection returns the collection for collectionID
 func ResolveCollection(collectionID string, storage abstractions.Storage) (*api.CollectionResource, error) {
-	if storage != nil {
-		c, err := storage.GetCollection(collectionID)
-		if err != nil {
-			return nil, fmt.Errorf("get collection %s: %w", collectionID, err)
-		}
-		if c != nil {
-			return c, nil
-		}
-	}
-	return nil, fmt.Errorf("collection %q not found", collectionID)
+	return storage.GetCollection(collectionID)
 }
 
 // GetCollectionFunc returns a collection by ID. Used to resolve job benchmarks from collection without depending on storage.

@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/abstractions"
 	"github.com/eval-hub/eval-hub/internal/config"
+	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
@@ -503,7 +503,12 @@ func TestRunEvaluationJobMarksBenchmarkFailedOnCreateError(t *testing.T) {
 	storage := &fakeStorage{logger: logger, ctx: context.Background(), runStatusChan: statusCh, providerConfigs: sampleProviders(providerID)}
 	var store abstractions.Storage = storage
 
-	if err := runtime.RunEvaluationJob(evaluation, store); err != nil {
+	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	if err != nil {
+		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
+	}
+
+	if err := runtime.RunEvaluationJob(evaluation, benchmarks, store); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
@@ -558,7 +563,12 @@ func TestRunEvaluationJobHandlesUpdateFailure(t *testing.T) {
 	}
 	var store abstractions.Storage = storage
 
-	if err := runtime.RunEvaluationJob(evaluation, store); err != nil {
+	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	if err != nil {
+		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
+	}
+
+	if err := runtime.RunEvaluationJob(evaluation, benchmarks, store); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
@@ -569,30 +579,6 @@ func TestRunEvaluationJobHandlesUpdateFailure(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("expected UpdateEvaluationJob to be called")
-	}
-}
-
-func TestRunEvaluationJobReturnsErrorWhenResolveBenchmarksFails(t *testing.T) {
-	evaluation := &api.EvaluationJobResource{
-		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
-		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model:      api.ModelRef{URL: "http://model.example", Name: "model-1"},
-			Collection: &api.CollectionRef{ID: "coll-1"},
-			Benchmarks: nil,
-		},
-	}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	runtime := &K8sRuntime{
-		logger: logger,
-		helper: &KubernetesHelper{clientset: fake.NewSimpleClientset()},
-		ctx:    context.Background(),
-	}
-	err := runtime.RunEvaluationJob(evaluation, nil)
-	if err == nil {
-		t.Fatal("expected error when ResolveBenchmarks fails (collection not found), got nil")
-	}
-	if !strings.Contains(err.Error(), `collection "coll-1" not found`) {
-		t.Fatalf("expected collection not found error, got %q", err.Error())
 	}
 }
 

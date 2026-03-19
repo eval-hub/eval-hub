@@ -94,6 +94,7 @@ func (r *LocalRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 
 func (r *LocalRuntime) RunEvaluationJob(
 	evaluation *api.EvaluationJobResource,
+	benchmarks []api.BenchmarkConfig,
 	storage abstractions.Storage,
 ) error {
 	if r.ctx == nil {
@@ -101,9 +102,8 @@ func (r *LocalRuntime) RunEvaluationJob(
 		return fmt.Errorf("local runtime: nil context — WithContext must be called before RunEvaluationJob")
 	}
 
-	benchmarksToRun, err := shared.ResolveBenchmarks(evaluation, storage)
-	if err != nil {
-		return err
+	if len(benchmarks) == 0 {
+		return serviceerrors.NewServiceError(messages.EvaluationJobEmpty, "EvaluationJobID", evaluation.Resource.ID)
 	}
 
 	// Capture job ID before launching goroutine to avoid a data race
@@ -117,7 +117,7 @@ func (r *LocalRuntime) RunEvaluationJob(
 		callbackURL = &serviceURL
 	}
 
-	for i, bench := range benchmarksToRun {
+	for i, bench := range benchmarks {
 		go func() {
 			if err := r.runBenchmark(jobID, bench, i, evaluation, callbackURL, storage); err != nil {
 				r.logger.Error(
@@ -128,7 +128,7 @@ func (r *LocalRuntime) RunEvaluationJob(
 					"benchmark_index", i,
 					"provider_id", bench.ProviderID,
 				)
-				r.failBenchmark(jobID, bench, i, benchmarksToRun, storage, err.Error())
+				r.failBenchmark(jobID, bench, i, benchmarks, storage, err.Error())
 			}
 		}()
 	}

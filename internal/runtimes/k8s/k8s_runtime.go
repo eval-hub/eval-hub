@@ -11,7 +11,8 @@ import (
 	"github.com/eval-hub/eval-hub/internal/common"
 	"github.com/eval-hub/eval-hub/internal/config"
 	"github.com/eval-hub/eval-hub/internal/constants"
-	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
+	"github.com/eval-hub/eval-hub/internal/messages"
+	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,11 +52,11 @@ func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 	}
 }
 
-func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, storage abstractions.Storage) error {
-	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
-	if err != nil {
-		return err
+func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, benchmarks []api.BenchmarkConfig, storage abstractions.Storage) error {
+	if len(benchmarks) == 0 {
+		return serviceerrors.NewServiceError(messages.EvaluationJobEmpty, "EvaluationJobID", evaluation.Resource.ID)
 	}
+
 	go func() {
 		for idx, bench := range benchmarks {
 			benchCtx := context.Background()
@@ -81,7 +82,6 @@ func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, sto
 			}
 		}
 	}()
-
 	return nil
 }
 

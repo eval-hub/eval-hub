@@ -238,7 +238,12 @@ func TestRunEvaluationJobWritesJobSpec(t *testing.T) {
 
 	storage := &fakeStorage{providerConfigs: providers}
 
-	err := rt.RunEvaluationJob(evaluation, storage)
+	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	if err != nil {
+		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
+	}
+
+	err = rt.RunEvaluationJob(evaluation, benchmarks, storage)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -298,7 +303,12 @@ func TestRunEvaluationJobPassesEnvVar(t *testing.T) {
 
 	storage := &fakeStorage{providerConfigs: providers}
 
-	err := rt.RunEvaluationJob(evaluation, storage)
+	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	if err != nil {
+		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
+	}
+
+	err = rt.RunEvaluationJob(evaluation, benchmarks, storage)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -344,12 +354,12 @@ func TestRunEvaluationJobNoBenchmarks(t *testing.T) {
 
 	storage := &fakeStorage{providerConfigs: sampleLocalProviders(providerID, "true")}
 
-	err := rt.RunEvaluationJob(evaluation, storage)
+	err := rt.RunEvaluationJob(evaluation, nil, storage)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "no benchmarks configured") {
-		t.Fatalf("expected error to contain %q, got %q", "no benchmarks configured", err.Error())
+	if !strings.Contains(err.Error(), "does not have any benchmarks") {
+		t.Fatalf("expected error to contain %q, got %q", "does not have any benchmarks", err.Error())
 	}
 }
 
@@ -370,7 +380,12 @@ func TestRunEvaluationJobProviderNotFound(t *testing.T) {
 		tracker: newTracker(),
 	}
 
-	err := rt.RunEvaluationJob(evaluation, store)
+	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	if err != nil {
+		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
+	}
+
+	err = rt.RunEvaluationJob(evaluation, benchmarks, store)
 	if err != nil {
 		t.Fatalf("expected no synchronous error, got %v", err)
 	}
@@ -417,7 +432,12 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 		tracker: newTracker(),
 	}
 
-	err := rt.RunEvaluationJob(evaluation, storage)
+	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	if err != nil {
+		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
+	}
+
+	err = rt.RunEvaluationJob(evaluation, benchmarks, storage)
 	if err != nil {
 		t.Fatalf("expected no synchronous error, got %v", err)
 	}
@@ -451,7 +471,12 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 
 	storage2 := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh2, providerConfigs: providers}
 
-	err = rt.RunEvaluationJob(evaluation, storage2)
+	benchmarks, err = shared.ResolveBenchmarks(evaluation, storage)
+	if err != nil {
+		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
+	}
+
+	err = rt.RunEvaluationJob(evaluation, benchmarks, storage2)
 	if err != nil {
 		t.Fatalf("expected no synchronous error for empty command, got %v", err)
 	}
@@ -493,7 +518,12 @@ func TestRunEvaluationJobProcessFailureNoCallback(t *testing.T) {
 	storage := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh, providerConfigs: providers}
 	var store abstractions.Storage = storage
 
-	err := rt.RunEvaluationJob(evaluation, store)
+	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	if err != nil {
+		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
+	}
+
+	err = rt.RunEvaluationJob(evaluation, benchmarks, store)
 	if err != nil {
 		t.Fatalf("expected no synchronous error, got %v", err)
 	}
@@ -533,7 +563,12 @@ func TestRunEvaluationJobCancelledNoFailure(t *testing.T) {
 	storage := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh, providerConfigs: providers}
 	var store abstractions.Storage = storage
 
-	err := rt.RunEvaluationJob(evaluation, store)
+	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	if err != nil {
+		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
+	}
+
+	err = rt.RunEvaluationJob(evaluation, benchmarks, store)
 	if err != nil {
 		t.Fatalf("expected no synchronous error, got %v", err)
 	}
@@ -587,7 +622,12 @@ func TestRunEvaluationJobMultipleBenchmarks(t *testing.T) {
 
 	storage := &fakeStorage{logger: logger, ctx: tctx, providerConfigs: providers}
 
-	err := rt.RunEvaluationJob(evaluation, storage)
+	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	if err != nil {
+		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
+	}
+
+	err = rt.RunEvaluationJob(evaluation, benchmarks, storage)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -657,7 +697,12 @@ func TestRunEvaluationJobMultipleBenchmarksPartialFailure(t *testing.T) {
 		tracker: newTracker(),
 	}
 
-	err := rt.RunEvaluationJob(evaluation, store)
+	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	if err != nil {
+		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
+	}
+
+	err = rt.RunEvaluationJob(evaluation, benchmarks, store)
 	if err != nil {
 		t.Fatalf("expected no synchronous error, got %v", err)
 	}
@@ -700,7 +745,12 @@ func TestRunEvaluationJobCallbackURL(t *testing.T) {
 
 	storage := &fakeStorage{logger: logger, ctx: tctx, providerConfigs: providers}
 
-	err := rt.RunEvaluationJob(evaluation, storage)
+	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	if err != nil {
+		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
+	}
+
+	err = rt.RunEvaluationJob(evaluation, benchmarks, storage)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -747,7 +797,12 @@ func TestRunEvaluationJobCallbackURLNotSet(t *testing.T) {
 
 	storage := &fakeStorage{logger: logger, ctx: tctx, providerConfigs: providers}
 
-	err := rt.RunEvaluationJob(evaluation, storage)
+	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	if err != nil {
+		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
+	}
+
+	err = rt.RunEvaluationJob(evaluation, benchmarks, storage)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -788,7 +843,12 @@ func TestRunEvaluationJobCreatesLogFile(t *testing.T) {
 
 	storage := &fakeStorage{logger: logger, ctx: tctx, providerConfigs: providers}
 
-	err := rt.RunEvaluationJob(evaluation, storage)
+	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	if err != nil {
+		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
+	}
+
+	err = rt.RunEvaluationJob(evaluation, benchmarks, storage)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
