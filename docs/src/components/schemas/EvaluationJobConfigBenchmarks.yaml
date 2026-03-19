@@ -11,3 +11,4 @@ allOf:
         description: >
           The evaluation benchmarks to run.
   - $ref: ./EvaluationJobConfigCommon2.yaml
+title: EvaluationJobConfigBenchmarks

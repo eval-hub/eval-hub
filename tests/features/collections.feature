@@ -4,12 +4,15 @@ Feature: Collections Endpoint
   I want to create collections of benchmarks
   So that I evaluate models on these collections
 
-  Scenario: Create a collection of benchmarks
+  Scenario: Create a collection of benchmarks and get by id
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
     Then the response code should be 201
     When I send a GET request to "/api/v1/evaluations/collections/{id}"
     Then the response code should be 200
+    And the response should contain "resource"
+    And the response should contain "name"
+    And the response should contain "benchmarks"
     And the array at path "benchmarks" in the response should have length 1
 
   Scenario: Create a collection without benchmarks field returns 400
@@ -47,17 +50,7 @@ Feature: Collections Endpoint
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_benchmark_no_provider_id.json"
     Then the response code should be 400
 
-  # GET collection by id - positive and negative (per OpenAPI: 200, 400, 404)
-  Scenario: Get collection by id returns 200
-    Given the service is running
-    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
-    Then the response code should be 201
-    When I send a GET request to "/api/v1/evaluations/collections/{id}"
-    Then the response code should be 200
-    And the response should contain "resource"
-    And the response should contain "name"
-    And the response should contain "benchmarks"
-
+  # GET collection by id - negative cases (per OpenAPI: 404)
   Scenario: Get collection by non-existent id returns 404
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/collections/00000000-0000-0000-0000-000000000000"
