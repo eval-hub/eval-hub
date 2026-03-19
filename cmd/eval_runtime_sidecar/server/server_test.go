@@ -81,12 +81,11 @@ func TestSidecarServer_GetPort(t *testing.T) {
 }
 
 func TestSidecarServer_SetupRoutes(t *testing.T) {
-	t.Setenv("EVALHUB_URL", "http://localhost:8080")
 	logger := slog.Default()
 	cfg := &config.Config{
 		Sidecar: &config.SidecarConfig{
 			Port:    8080,
-			EvalHub: &config.EvalHubClientConfig{},
+			EvalHub: &config.EvalHubClientConfig{BaseURL: "http://localhost:8080"},
 		},
 	}
 	srv, err := sidecarServer.NewSidecarServer(logger, cfg)

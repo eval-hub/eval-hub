@@ -27,6 +27,12 @@ type OTELConfig struct {
 	EnableLogs bool `mapstructure:"enable_logs,omitempty"`
 	// AdditionalAttributes are custom attributes to add to all traces
 	AdditionalAttributes map[string]string `mapstructure:"additional_attributes,omitempty"`
+	// Used to enable ECS resource detection
+	EnableECSResourceDetection bool `mapstructure:"enable_ecs_resource_detection,omitempty"`
+	// When true, OTEL SDK diagnostic logs are not redirected to the main logger
+	DisableRedirectOTELLogs bool `mapstructure:"disable_redirect_otel_logs,omitempty"`
+	// When true, the database OTEL scan is disabled
+	DisableDatabaseOTELScans bool `mapstructure:"disable_database_otel_scan,omitempty"`
 	// The TLS config if running securely (that is not loaded from the config)
 	TLSConfig *tls.Config
 }

@@ -63,6 +63,7 @@ type jobConfig struct {
 	localMode            bool
 	testDataS3           s3TestDataConfig
 	testDataInitImage    string
+	sidecarConfigJSON    string // nested sidecar section JSON for ConfigMap key sidecar_config.json
 }
 
 type s3TestDataConfig struct {
@@ -161,7 +162,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		testDataS3SecretRef = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.SecretRef)
 	}
 
-	return &jobConfig{
+	out := &jobConfig{
 		jobID:                evaluation.Resource.ID,
 		resourceGUID:         uuid.NewString(),
 		namespace:            namespace,
@@ -192,7 +193,13 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 			key:       testDataS3Key,
 			secretRef: testDataS3SecretRef,
 		},
-	}, nil
+	}
+	sidecarJSON, err := marshalSidecarForJobPod(serviceConfig, out)
+	if err != nil {
+		return nil, fmt.Errorf("sidecar config json: %w", err)
+	}
+	out.sidecarConfigJSON = string(sidecarJSON)
+	return out, nil
 }
 
 // sidecarImageAndResources returns image and resources for the sidecar container from

@@ -145,7 +145,7 @@ func injectEvaluationJobTags(jobId string, evaluation *api.EvaluationJobConfig) 
 	return []api.ExperimentTag{}
 }
 
-func GetExperimentID(mlflowClient *mlflowclient.Client, jobConfig *api.EvaluationJobConfig, jobId string) (experimentID string, experimentURL string, err error) {
+func GetOrCreateExperimentID(mlflowClient *mlflowclient.Client, jobConfig *api.EvaluationJobConfig, jobId string) (experimentID string, experimentURL string, err error) {
 	if jobConfig.Experiment == nil || jobConfig.Experiment.Name == "" {
 		return "", "", nil
 	}

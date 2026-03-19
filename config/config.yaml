@@ -55,8 +55,8 @@ sidecar:
   port: 8080
   eval_hub:
     # TLS for outbound calls to eval-hub (sidecar -> eval-hub API).
-    # On cluster: job pods inject EVALHUB_CA_CERT_PATH and EVALHUB_INSECURE_SKIP_VERIFY when service CA is
-    # mounted; ensure evalhub-config ConfigMap includes env_mappings for these so the sidecar uses TLS.
+    # On cluster: job pods inject EVALHUB_CA_CERT_PATH and EVALHUB_INSECURE_SKIP_VERIFY; sidecar reads
+    # sidecar_config.json (no evalhub-config ConfigMap on the job pod).
     # ca_cert_path: path to PEM CA bundle that signed the eval-hub server cert (e.g. /etc/pki/ca-trust/source/anchors/service-ca.crt).
     # insecure_skip_verify: set to true only for dev with self-signed certs; set false to verify server cert.
     ca_cert_path: "/etc/pki/ca-trust/source/anchors/service-ca.crt"
@@ -66,12 +66,12 @@ sidecar:
   mlflow:
     # token_cache_timeout: TTL for in-memory auth token cache for MLflow proxy (e.g. "5m", "1h"). Empty/0 uses default (5m).
     # token_cache_timeout: 5m
-  # OCI registry proxy (url contains /registry/). Host from configmap; credentials from OCI secret mount.
+  # OCI registry proxy
   # oci:
   #   ca_cert_path: /etc/pki/ca-trust/source/anchors/registry-ca.crt  # optional
   #   insecure_skip_verify: false
   sidecar_container:
-    image: quay.io/evalhub/evalhub:latest
+    image: quay.io/rh-ee-nbs/nbs-dev:eval-hub_v27
     resources:
       requests:
         cpu: 100m

@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/config"
+	"github.com/go-logr/logr"
+	"go.opentelemetry.io/contrib/detectors/aws/ecs"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -44,6 +46,12 @@ func SetupOTEL(ctx context.Context, config *config.OTELConfig, logger *slog.Logg
 		return nil, nil
 	}
 
+	if !config.DisableRedirectOTELLogs {
+		// have the OTEL SDK send its logs to our logger
+		lr := logr.FromSlogHandler(logger.Handler())
+		otel.SetLogger(lr)
+	}
+
 	var shutdownFuncs []func(context.Context) error
 	var err error
 
@@ -70,7 +78,7 @@ func SetupOTEL(ctx context.Context, config *config.OTELConfig, logger *slog.Logg
 
 	// Set up trace provider.
 	if config.EnableTracing {
-		tracerProvider, err := newTracerProvider(ctx, config)
+		tracerProvider, err := newTracerProvider(ctx, config, logger)
 		if err != nil {
 			handleErr(err)
 			return shutdown, err
@@ -120,7 +128,7 @@ func newPropagator() propagation.TextMapPropagator {
 	)
 }
 
-func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.TracerProvider, error) {
+func newTracerProvider(ctx context.Context, config *config.OTELConfig, logger *slog.Logger) (*trace.TracerProvider, error) {
 	// set default values for tracer timeout and batch interval
 	tracerTimeout := config.TracerTimeout
 	if tracerTimeout == 0 {
@@ -156,7 +164,7 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 		if err != nil {
 			return nil, err
 		}
-		res, err := createResource(config)
+		res, err := createResource(ctx, config, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -185,7 +193,7 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 		if err != nil {
 			return nil, err
 		}
-		res, err := createResource(config)
+		res, err := createResource(ctx, config, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -209,7 +217,7 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 	}
 }
 
-func createResource(config *config.OTELConfig) (*resource.Resource, error) {
+func createResource(ctx context.Context, config *config.OTELConfig, logger *slog.Logger) (*resource.Resource, error) {
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(ServiceName),
 		// semconv.ServiceVersion(config.ServiceVersion),
@@ -220,16 +228,35 @@ func createResource(config *config.OTELConfig) (*resource.Resource, error) {
 		attrs = append(attrs, attribute.String(key, value))
 	}
 
-	return resource.NewWithAttributes(semconv.SchemaURL, attrs...), nil
+	var res *resource.Resource = resource.Default()
+
+	pr, createErr := createProcessResource(ctx, config)
+	if pr != nil {
+		if newRes, mergeErr := resource.Merge(res, pr); mergeErr == nil {
+			res = newRes
+		}
+	}
+	if createErr != nil {
+		logger.Error("Process resource detector failed", "error", createErr)
+	}
+
+	return resource.Merge(
+		res,
+		resource.NewSchemaless(attrs...),
+	)
 }
 
-func CreateProcessResource(ctx context.Context) (*resource.Resource, error) {
-	return resource.New(ctx,
-		resource.WithProcess(),
-		resource.WithOS(),
-		resource.WithContainer(),
-		resource.WithHost(),
-	)
+func createProcessResource(ctx context.Context, config *config.OTELConfig) (*resource.Resource, error) {
+	var opts []resource.Option
+	opts = append(opts, resource.WithProcess())
+	opts = append(opts, resource.WithOS())
+	opts = append(opts, resource.WithHost())
+	if config.EnableECSResourceDetection {
+		opts = append(opts, resource.WithDetectors(ecs.NewResourceDetector()))
+	} else {
+		opts = append(opts, resource.WithContainer())
+	}
+	return resource.New(ctx, opts...)
 }
 
 func newMeterProvider(_ context.Context, _ *config.OTELConfig) (*metric.MeterProvider, error) {

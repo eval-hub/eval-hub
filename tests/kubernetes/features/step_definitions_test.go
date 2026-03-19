@@ -299,6 +299,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the Job pod template should have volume "([^"]*)" of type EmptyDir$`, tc.jobPodTemplateShouldHaveEmptyDirVolume)
 	ctx.Step(`^the volume "([^"]*)" should reference the ConfigMap with suffix "([^"]*)"$`, tc.volumeShouldReferenceConfigMap)
 	ctx.Step(`^the container should have volumeMount "([^"]*)" at path "([^"]*)"$`, tc.containerShouldHaveVolumeMount)
+	ctx.Step(`^the container should have volumeMount "([^"]*)" at path "([^"]*)" with subPath "([^"]*)"$`, tc.containerShouldHaveVolumeMountWithSubPath)
+	ctx.Step(`^the sidecar container should have volumeMount "([^"]*)" at path "([^"]*)" with subPath "([^"]*)"$`, tc.sidecarContainerShouldHaveVolumeMountWithSubPath)
 	ctx.Step(`^the volumeMount "([^"]*)" should have subPath "([^"]*)"$`, tc.volumeMountShouldHaveSubPath)
 	ctx.Step(`^the volumeMount "([^"]*)" should be readOnly$`, tc.volumeMountShouldBeReadOnly)
 
@@ -1636,6 +1638,44 @@ func (tc *testContext) containerShouldHaveVolumeMount(mountName, path string) er
 	}
 
 	return fmt.Errorf("Container %s does not have volumeMount %s at path %s", container.Name, mountName, path)
+}
+
+func (tc *testContext) containerShouldHaveVolumeMountWithSubPath(mountName, path, subPath string) error {
+	if tc.currentJob == nil {
+		return fmt.Errorf("no current Job")
+	}
+	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
+		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
+	}
+	container := tc.currentJob.Spec.Template.Spec.Containers[0]
+	for _, mount := range container.VolumeMounts {
+		if mount.Name == mountName && mount.MountPath == path && mount.SubPath == subPath {
+			return nil
+		}
+	}
+	return fmt.Errorf("Container %s does not have volumeMount %s at path %s with subPath %s", container.Name, mountName, path, subPath)
+}
+
+func (tc *testContext) sidecarContainerShouldHaveVolumeMountWithSubPath(mountName, path, subPath string) error {
+	if tc.currentJob == nil {
+		return fmt.Errorf("no current Job")
+	}
+	var sidecar *corev1.Container
+	for i := range tc.currentJob.Spec.Template.Spec.Containers {
+		if tc.currentJob.Spec.Template.Spec.Containers[i].Name == "sidecar" {
+			sidecar = &tc.currentJob.Spec.Template.Spec.Containers[i]
+			break
+		}
+	}
+	if sidecar == nil {
+		return fmt.Errorf("Job %s has no container named %q", tc.currentJob.Name, "sidecar")
+	}
+	for _, mount := range sidecar.VolumeMounts {
+		if mount.Name == mountName && mount.MountPath == path && mount.SubPath == subPath {
+			return nil
+		}
+	}
+	return fmt.Errorf("sidecar container does not have volumeMount %s at path %s with subPath %s", mountName, path, subPath)
 }
 
 func (tc *testContext) volumeMountShouldHaveSubPath(mountName, subPath string) error {

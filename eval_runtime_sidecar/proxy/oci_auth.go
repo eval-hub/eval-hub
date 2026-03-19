@@ -16,7 +16,8 @@ import (
 
 // TokenResponse is the JSON response from an OCI registry token endpoint.
 type TokenResponse struct {
-	Token string `json:"token"`
+	Token       string `json:"token,omitempty"`
+	AccessToken string `json:"access_token,omitempty"`
 }
 
 // TokenProducer holds credentials and registry context for obtaining an OCI registry token.
@@ -24,12 +25,12 @@ type TokenResponse struct {
 // Registry holds the registry host as passed to LoadTokenProducerFromOCISecret (may include
 // http:// or https://) so challenge() can use http when the job spec uses an http registry.
 type TokenProducer struct {
-	Username    string
-	Password    string
-	Registry    string
-	Repository  string
-	Token       string
-	HTTPClient  *http.Client // from NewOCIHTTPClient: TLS, timeout for challenge + token
+	Username   string
+	Password   string
+	Registry   string
+	Repository string
+	Token      string
+	HTTPClient *http.Client // from NewOCIHTTPClient: TLS, timeout for challenge + token
 }
 
 // registryAuthEntry represents one registry entry in the auth config (format matches Docker config.json / kubernetes.io/dockerconfigjson).
@@ -228,9 +229,9 @@ func (tp *TokenProducer) challenge() (string, error) {
 	// If scope was not in challenge, add default scope
 	if !strings.Contains(nextURL, "scope=") {
 		if strings.Contains(nextURL, "?") {
-			nextURL += "&scope=repository:" + tp.Repository + ":push,pull"
+			nextURL += "&scope=repository:" + tp.Repository + ":push"
 		} else {
-			nextURL += "?scope=repository:" + tp.Repository + ":push,pull"
+			nextURL += "?scope=repository:" + tp.Repository + ":push"
 		}
 	}
 	return nextURL, nil
@@ -264,7 +265,11 @@ func (tp *TokenProducer) token(nextURL string) error {
 		return err
 	}
 
-	tp.Token = tokenData.Token
+	if tokenData.Token != "" {
+		tp.Token = tokenData.Token
+	} else if tokenData.AccessToken != "" {
+		tp.Token = tokenData.AccessToken
+	}
 	return nil
 }
 

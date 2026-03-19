@@ -4,7 +4,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
@@ -14,26 +13,25 @@ import (
 func TestNew(t *testing.T) {
 	logger := slog.Default()
 
-	t.Run("returns error when EVALHUB_URL is not set", func(t *testing.T) {
-		os.Unsetenv("EVALHUB_URL")
+	t.Run("returns error when eval_hub.base_url is not set", func(t *testing.T) {
 		cfg := &config.Config{
 			Sidecar: &config.SidecarConfig{EvalHub: &config.EvalHubClientConfig{}},
 		}
 		_, err := New(cfg, logger)
 		if err == nil {
-			t.Fatal("expected error when EVALHUB_URL is not set")
+			t.Fatal("expected error when eval_hub.base_url is not set")
 		}
-		if err.Error() != "EVALHUB_URL environment is not set" {
+		if err.Error() != "eval_hub.base_url is not set in sidecar config" {
 			t.Errorf("unexpected error: %v", err)
 		}
 	})
 
-	t.Run("returns Handlers when EVALHUB_URL and MLFLOW_TRACKING_URI set and config valid", func(t *testing.T) {
-		t.Setenv("EVALHUB_URL", "http://localhost:8080")
-		t.Setenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+	t.Run("returns Handlers when eval_hub.base_url and mlflow set", func(t *testing.T) {
 		cfg := &config.Config{
-			Sidecar: &config.SidecarConfig{EvalHub: &config.EvalHubClientConfig{}},
-			MLFlow:  &config.MLFlowConfig{TrackingURI: "http://localhost:5000"},
+			Sidecar: &config.SidecarConfig{
+				EvalHub: &config.EvalHubClientConfig{BaseURL: "http://localhost:8080"},
+			},
+			MLFlow: &config.MLFlowConfig{TrackingURI: "http://localhost:5000"},
 		}
 		h, err := New(cfg, logger)
 		if err != nil {
@@ -52,12 +50,12 @@ func TestNew(t *testing.T) {
 }
 
 func TestHandlers_HandleProxyCall(t *testing.T) {
-	t.Setenv("EVALHUB_URL", "http://localhost:8080")
-	t.Setenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 	logger := slog.Default()
 	cfg := &config.Config{
-		Sidecar: &config.SidecarConfig{EvalHub: &config.EvalHubClientConfig{}},
-		MLFlow:  &config.MLFlowConfig{TrackingURI: "http://localhost:5000"},
+		Sidecar: &config.SidecarConfig{
+			EvalHub: &config.EvalHubClientConfig{BaseURL: "http://localhost:8080"},
+		},
+		MLFlow: &config.MLFlowConfig{TrackingURI: "http://localhost:5000"},
 	}
 	h, err := New(cfg, logger)
 	if err != nil {
@@ -77,13 +75,12 @@ func TestHandlers_HandleProxyCall(t *testing.T) {
 	})
 
 	t.Run("eval-hub path with nil EvalHub returns 400", func(t *testing.T) {
-		cfgNoEvalHub := &config.Config{
-			Sidecar: &config.SidecarConfig{},
-			MLFlow:  &config.MLFlowConfig{TrackingURI: "http://localhost:5000"},
-		}
-		h2, err := New(cfgNoEvalHub, logger)
-		if err != nil {
-			t.Fatalf("New() error: %v", err)
+		h2 := &Handlers{
+			logger: logger,
+			serviceConfig: &config.Config{
+				Sidecar: &config.SidecarConfig{EvalHub: nil},
+				MLFlow:  &config.MLFlowConfig{TrackingURI: "http://localhost:5000"},
+			},
 		}
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs", nil)
 		rw := httptest.NewRecorder()
@@ -97,17 +94,16 @@ func TestHandlers_HandleProxyCall(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs/123", nil)
 		rw := httptest.NewRecorder()
 		h.HandleProxyCall(rw, req)
-		// Should not be "unknown proxy call" (that would mean path didn't match)
 		if body := rw.Body.String(); body == "unknown proxy call: /api/v1/evaluations/jobs/123\n" {
 			t.Errorf("eval-hub path should match prefix; got unknown proxy call")
 		}
 	})
 
 	t.Run("mlflow path with nil MLFlow returns 400", func(t *testing.T) {
-		// Handlers with no MLFlow config: parseProxyCall returns error for mlflow path
 		cfgNoMLFlow := &config.Config{
-			Sidecar: &config.SidecarConfig{EvalHub: &config.EvalHubClientConfig{}},
-			// MLFlow intentionally nil
+			Sidecar: &config.SidecarConfig{
+				EvalHub: &config.EvalHubClientConfig{BaseURL: "http://localhost:8080"},
+			},
 		}
 		hNoMLFlow, err := New(cfgNoMLFlow, logger)
 		if err != nil {

@@ -35,15 +35,14 @@ const (
 )
 
 type sqlStorage struct {
-	sqlConfig             *shared.SQLDatabaseConfig
-	statementsFactory     shared.SQLStatementsFactory
-	pool                  *sql.DB
-	logger                *slog.Logger
-	ctx                   context.Context
-	tenant                api.Tenant
-	owner                 api.User
-	authenticationEnabled bool
-	maxArgLength          int
+	sqlConfig         *shared.SQLDatabaseConfig
+	statementsFactory shared.SQLStatementsFactory
+	pool              *sql.DB
+	logger            *slog.Logger
+	ctx               context.Context
+	tenant            api.Tenant
+	owner             api.User
+	maxArgLength      int
 }
 
 func NewStorage(
@@ -51,7 +50,6 @@ func NewStorage(
 	systemCollections map[string]api.CollectionResource,
 	systemProviders map[string]api.ProviderResource,
 	otelEnabled bool,
-	authenticationEnabled bool,
 	logger *slog.Logger,
 ) (abstractions.Storage, error) {
 	var sqlConfig shared.SQLDatabaseConfig
@@ -131,13 +129,12 @@ func NewStorage(
 	}
 
 	s := &sqlStorage{
-		sqlConfig:             &sqlConfig,
-		statementsFactory:     statementsFactory,
-		pool:                  pool,
-		logger:                logger,
-		ctx:                   context.Background(),
-		authenticationEnabled: authenticationEnabled,
-		maxArgLength:          512,
+		sqlConfig:         &sqlConfig,
+		statementsFactory: statementsFactory,
+		pool:              pool,
+		logger:            logger,
+		ctx:               context.Background(),
+		maxArgLength:      512,
 	}
 
 	// ping the database to verify the DSN provided by the user is valid and the server is accessible
@@ -294,56 +291,52 @@ func (s *sqlStorage) Close() error {
 
 func (s *sqlStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 	return &sqlStorage{
-		sqlConfig:             s.sqlConfig,
-		statementsFactory:     s.statementsFactory,
-		pool:                  s.pool,
-		logger:                logger,
-		ctx:                   s.ctx,
-		tenant:                s.tenant,
-		owner:                 s.owner,
-		authenticationEnabled: s.authenticationEnabled,
-		maxArgLength:          s.maxArgLength,
+		sqlConfig:         s.sqlConfig,
+		statementsFactory: s.statementsFactory,
+		pool:              s.pool,
+		logger:            logger,
+		ctx:               s.ctx,
+		tenant:            s.tenant,
+		owner:             s.owner,
+		maxArgLength:      s.maxArgLength,
 	}
 }
 
 func (s *sqlStorage) WithContext(ctx context.Context) abstractions.Storage {
 	return &sqlStorage{
-		sqlConfig:             s.sqlConfig,
-		statementsFactory:     s.statementsFactory,
-		pool:                  s.pool,
-		logger:                s.logger,
-		ctx:                   ctx,
-		tenant:                s.tenant,
-		owner:                 s.owner,
-		authenticationEnabled: s.authenticationEnabled,
-		maxArgLength:          s.maxArgLength,
+		sqlConfig:         s.sqlConfig,
+		statementsFactory: s.statementsFactory,
+		pool:              s.pool,
+		logger:            s.logger,
+		ctx:               ctx,
+		tenant:            s.tenant,
+		owner:             s.owner,
+		maxArgLength:      s.maxArgLength,
 	}
 }
 
 func (s *sqlStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
 	return &sqlStorage{
-		sqlConfig:             s.sqlConfig,
-		statementsFactory:     s.statementsFactory,
-		pool:                  s.pool,
-		logger:                s.logger,
-		ctx:                   s.ctx,
-		tenant:                tenant,
-		owner:                 s.owner,
-		authenticationEnabled: s.authenticationEnabled,
-		maxArgLength:          s.maxArgLength,
+		sqlConfig:         s.sqlConfig,
+		statementsFactory: s.statementsFactory,
+		pool:              s.pool,
+		logger:            s.logger,
+		ctx:               s.ctx,
+		tenant:            tenant,
+		owner:             s.owner,
+		maxArgLength:      s.maxArgLength,
 	}
 }
 
 func (s *sqlStorage) WithOwner(owner api.User) abstractions.Storage {
 	return &sqlStorage{
-		sqlConfig:             s.sqlConfig,
-		statementsFactory:     s.statementsFactory,
-		pool:                  s.pool,
-		logger:                s.logger,
-		ctx:                   s.ctx,
-		tenant:                s.tenant,
-		owner:                 owner,
-		authenticationEnabled: s.authenticationEnabled,
-		maxArgLength:          s.maxArgLength,
+		sqlConfig:         s.sqlConfig,
+		statementsFactory: s.statementsFactory,
+		pool:              s.pool,
+		logger:            s.logger,
+		ctx:               s.ctx,
+		tenant:            s.tenant,
+		owner:             owner,
+		maxArgLength:      s.maxArgLength,
 	}
 }

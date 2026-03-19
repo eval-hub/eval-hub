@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -38,6 +39,40 @@ func TestBuildConfigMap(t *testing.T) {
 	}
 	if annotations[annotationBenchmarkIDKey] != cfg.benchmarkID {
 		t.Fatalf("expected benchmark_id annotation %q, got %q", cfg.benchmarkID, annotations[annotationBenchmarkIDKey])
+	}
+	if _, ok := configMap.Data[sidecarConfigFileName]; !ok {
+		t.Fatalf("expected ConfigMap data key %q", sidecarConfigFileName)
+	}
+	if configMap.Data[sidecarConfigFileName] == "" {
+		t.Fatalf("sidecar_config.json should be non-empty")
+	}
+	var sidecar map[string]any
+	if err := json.Unmarshal([]byte(configMap.Data[sidecarConfigFileName]), &sidecar); err != nil {
+		t.Fatalf("sidecar_config.json invalid JSON: %v", err)
+	}
+}
+
+func TestBuildConfigMapSidecarConfigJSONContent(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:             "job-123",
+		benchmarkIndex:    0,
+		namespace:         "default",
+		providerID:        "provider-1",
+		benchmarkID:       "bench-1",
+		jobSpec:           shared.JobSpec{},
+		resourceGUID:      "guid-123",
+		sidecarConfigJSON: "{\n  \"port\": 8081,\n  \"base_url\": \"http://localhost:8081\"\n}",
+	}
+	cm, err := buildConfigMap(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal([]byte(cm.Data[sidecarConfigFileName]), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["port"].(float64) != 8081 {
+		t.Fatalf("port: %v", m["port"])
 	}
 }
 
@@ -235,6 +270,40 @@ func TestBuildJobWithOCICredentials(t *testing.T) {
 	}
 	if !foundEnv {
 		t.Fatalf("expected env var %s to be present", envOCIAuthConfigPathName)
+	}
+}
+
+func TestBuildJobSidecarDoesNotUseEvalhubConfigVolume(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "job-sidecar-vol",
+		resourceGUID:   "guid-sc",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
+	}
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob: %v", err)
+	}
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.ConfigMap != nil && v.ConfigMap.Name == "evalhub-config" {
+			t.Fatalf("job pod must not reference evalhub-config ConfigMap volume, got volume %q", v.Name)
+		}
+	}
+	if len(job.Spec.Template.Spec.Containers) < 2 {
+		t.Fatal("expected sidecar container")
+	}
+	sidecar := job.Spec.Template.Spec.Containers[1]
+	for _, m := range sidecar.VolumeMounts {
+		if m.MountPath == "/etc/evalhub/config" {
+			t.Fatalf("sidecar must not mount evalhub-config at /etc/evalhub/config")
+		}
+	}
+	if len(sidecar.Env) > 0 {
+		t.Fatalf("sidecar should have no env vars, got %d", len(sidecar.Env))
 	}
 }
 

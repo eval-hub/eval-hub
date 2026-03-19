@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime/debug"
-	"strconv"
 	"strings"
 	"time"
 
@@ -58,10 +57,10 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				return err
 			}
 			resolveProvider := func(providerID string) (*api.ProviderResource, error) {
-				return storage.GetProvider(providerID)
+				return storage.WithContext(runtimeCtx).GetProvider(providerID)
 			}
 			resolveCollection := func(id string) (*api.CollectionResource, error) {
-				return storage.GetCollection(id)
+				return storage.WithContext(runtimeCtx).GetCollection(id)
 			}
 			return h.validateBenchmarkReferences(evaluation, resolveCollection, resolveProvider)
 		},
@@ -75,18 +74,25 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	// TODO this should be in a SPAN
 	mlflowExperimentID := ""
 	mlflowExperimentURL := ""
 	if h.mlflowClient != nil {
-		client := h.mlflowClient.WithContext(ctx.Ctx).WithLogger(ctx.Logger)
-		// Experiments must be scoped to the tenant namespace so job pods running
-		// in that namespace can reach them with their own X-MLFLOW-WORKSPACE header.
-		if !ctx.Tenant.IsEmpty() {
-			client = client.WithWorkspace(ctx.Tenant.String())
-		}
-
-		mlflowExperimentID, mlflowExperimentURL, err = mlflow.GetExperimentID(client, evaluation, id)
+		err = h.withSpan(
+			ctx,
+			func(runtimeCtx context.Context) error {
+				client := h.mlflowClient.WithContext(runtimeCtx).WithLogger(ctx.Logger)
+				// Experiments must be scoped to the tenant namespace so job pods running
+				// in that namespace can reach them with their own X-MLFLOW-WORKSPACE header.
+				if !ctx.Tenant.IsEmpty() {
+					client = client.WithWorkspace(ctx.Tenant.String())
+				}
+				mlflowExperimentID, mlflowExperimentURL, err = mlflow.GetOrCreateExperimentID(client, evaluation, id)
+				return err
+			},
+			"mlflow",
+			"get-or-create-experiment",
+			"job.id", id,
+		)
 		if err != nil {
 			w.Error(err, ctx.RequestID)
 			return
@@ -138,7 +144,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 
 	_ = h.withSpan(
 		ctx,
-		func(runtimeCtx context.Context) (fnErr error) {
+		func(runtimeCtx context.Context) error {
 			if h.runtime != nil {
 				runErr := h.executeEvaluationJob(runtimeCtx, ctx.Logger, h.runtime, job, storage)
 				if runErr != nil {
@@ -148,7 +154,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 						Message:     runErr.Error(),
 						MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED,
 					}
-					if err := storage.UpdateEvaluationJobStatus(job.Resource.ID, state, message); err != nil {
+					if err := storage.WithContext(runtimeCtx).UpdateEvaluationJobStatus(job.Resource.ID, state, message); err != nil {
 						ctx.Logger.Error("Failed to update evaluation status", "error", err, "job_id", job.Resource.ID)
 					}
 					// return the first error encountered
@@ -235,54 +241,75 @@ func benchmarkExists(benchmarks []api.BenchmarkResource, id string) bool {
 func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
-	logging.LogRequestStarted(ctx)
+	var ofilter *abstractions.QueryFilter
 
-	allowedParams := []string{"limit", "offset", "status", "name", "tags", "owner", "experiment_id"}
-	badParams := getAllParams(req, allowedParams...)
-	if len(badParams) > 0 {
-		// just report the first bad parameter
-		w.Error(serviceerrors.NewServiceError(messages.QueryBadParameter, "ParameterName", badParams[0], "AllowedParameters", strings.Join(allowedParams, ", ")), ctx.RequestID)
+	err := h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			filter, err := CommonListFilters(req)
+			if err != nil {
+				return err
+			}
+
+			logging.LogRequestStarted(ctx, "filter", filter)
+
+			allowedParams := []string{"limit", "offset", "status", "name", "tags", "owner", "experiment_id"}
+			badParams := getAllParams(req, allowedParams...)
+			if len(badParams) > 0 {
+				// just report the first bad parameter
+				return serviceerrors.NewServiceError(messages.QueryBadParameter, "ParameterName", badParams[0], "AllowedParameters", strings.Join(allowedParams, ", "))
+			}
+
+			status, err := GetParam(req, "status", true, "")
+			if err != nil {
+				return err
+			}
+			if status != "" {
+				filter.Params["status"] = status
+			}
+			experimentID, err := GetParam(req, "experiment_id", true, "")
+			if err != nil {
+				return err
+			}
+			if experimentID != "" {
+				filter.Params["experiment_id"] = experimentID
+			}
+
+			ofilter = filter
+			return nil
+		},
+		"validation",
+		"validate-evaluation-jobs-filter",
+	)
+	if err != nil {
+		w.Error(err, ctx.RequestID)
 		return
 	}
 
-	filter, err := CommonListFilters(req)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-
-	status, err := GetParam(req, "status", true, "")
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-	if status != "" {
-		filter.Params["status"] = status
-	}
-	experimentID, err := GetParam(req, "experiment_id", true, "")
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-	if experimentID != "" {
-		filter.Params["experiment_id"] = experimentID
-	}
-
-	res, err := storage.GetEvaluationJobs(filter)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-	page, err := CreatePage(ctx, res.TotalCount, filter.Offset, filter.Limit, req)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-	w.WriteJSON(api.EvaluationJobResourceList{
-		Page:   *page,
-		Items:  res.Items,
-		Errors: res.Errors,
-	}, 200)
+	_ = h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			res, err := storage.WithContext(runtimeCtx).GetEvaluationJobs(ofilter)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			page, err := CreatePage(ctx, res.TotalCount, ofilter.Offset, ofilter.Limit, req)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			result := api.EvaluationJobResourceList{
+				Page:   *page,
+				Items:  res.Items,
+				Errors: res.Errors,
+			}
+			w.WriteJSON(result, 200)
+			return nil
+		},
+		"storage",
+		"list-evaluation-jobs",
+	)
 }
 
 // HandleGetEvaluation handles GET /api/v1/evaluations/jobs/{id}
@@ -300,11 +327,11 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 
 	_ = h.withSpan(
 		ctx,
-		func(runtimeCtx context.Context) (fnErr error) {
+		func(runtimeCtx context.Context) error {
 			response, err := storage.WithContext(runtimeCtx).GetEvaluationJob(evaluationJobID)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
-				return
+				return err
 			}
 			w.WriteJSON(response, 200)
 			return nil
@@ -327,43 +354,58 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	// get the body bytes from the context
-	bodyBytes, err := r.BodyAsBytes()
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-	status := &api.StatusEvent{}
-	err = serialization.Unmarshal(h.validate, ctx, bodyBytes, status)
+	var status = &api.StatusEvent{}
+
+	err := h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			// get the body bytes from the context
+			bodyBytes, err := r.BodyAsBytes()
+			if err != nil {
+				return err
+			}
+			return serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, status)
+		},
+		"validation",
+		"validate-evaluation-job",
+		"job.id", evaluationJobID,
+	)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
 
-	ctx.Logger.Info("Updating evaluation job", "id", evaluationJobID, "state", status.BenchmarkStatusEvent.Status, "status", status)
+	ctx.Logger.Debug("Updating evaluation job", "id", evaluationJobID, "state", status.BenchmarkStatusEvent.Status, "status", status)
 
-	// Resolve benchmarks at handler level so storage doesn't need collection configs
-	job, err := storage.GetEvaluationJob(evaluationJobID)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-	getCollection := func(id string) (*api.CollectionResource, error) {
-		return storage.GetCollection(id)
-	}
-	benchmarks, err := common.GetJobBenchmarks(job, getCollection)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-
-	err = storage.UpdateEvaluationJob(evaluationJobID, status, benchmarks)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-
-	w.WriteJSON(nil, 204)
+	_ = h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			// Resolve benchmarks at handler level so storage doesn't need collection configs
+			job, err := storage.WithContext(runtimeCtx).GetEvaluationJob(evaluationJobID)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			getCollection := func(id string) (*api.CollectionResource, error) {
+				return storage.WithContext(runtimeCtx).GetCollection(id)
+			}
+			benchmarks, err := common.GetJobBenchmarks(job, getCollection)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			err = storage.WithContext(runtimeCtx).UpdateEvaluationJob(evaluationJobID, status, benchmarks)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			w.WriteJSON(nil, 204)
+			return nil
+		},
+		"storage",
+		"update-evaluation-job",
+		"job.id", evaluationJobID,
+	)
 }
 
 // HandleCancelEvaluation handles DELETE /api/v1/evaluations/jobs/{id}
@@ -381,9 +423,9 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 
 	err := h.withSpan(
 		ctx,
-		func(runtimeCtx context.Context) (fnErr error) {
+		func(runtimeCtx context.Context) error {
 			if h.runtime != nil {
-				job, err := storage.GetEvaluationJob(evaluationJobID)
+				job, err := storage.WithContext(runtimeCtx).GetEvaluationJob(evaluationJobID)
 				if err != nil {
 					return err
 				}
@@ -403,7 +445,7 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 			return nil
 		},
 		"runtime",
-		"cancel-evaluation-job",
+		"delete-evaluation-job-resources",
 		"job.id", evaluationJobID,
 	)
 	if err != nil {
@@ -411,15 +453,19 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
+	operation := "cancel-evaluation-job"
 	hardDelete, err := GetParam(r, "hard_delete", true, false)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
+	if hardDelete {
+		operation = "delete-evaluation-job"
+	}
 
 	_ = h.withSpan(
 		ctx,
-		func(runtimeCtx context.Context) (fnErr error) {
+		func(runtimeCtx context.Context) error {
 			if hardDelete {
 				err = storage.WithContext(runtimeCtx).DeleteEvaluationJob(evaluationJobID)
 				if err != nil {
@@ -442,8 +488,7 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 			return nil
 		},
 		"storage",
-		"cancel-evaluation-job",
+		operation,
 		"job.id", evaluationJobID,
-		"hard_delete", strconv.FormatBool(hardDelete),
 	)
 }

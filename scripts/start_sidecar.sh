@@ -2,8 +2,8 @@
 
 # Start the eval-runtime-sidecar in the background.
 # Usage: start_sidecar.sh <PID_FILE> <EXE> <LOGFILE> <SIDECAR_PORT> <CONFIG_DIR>
-# SIDECAR_PORT is exported so config (env_mappings: SIDECAR_PORT -> sidecar.port) applies.
-# CONFIG_DIR is passed as --configdir and exported as EVAL_HUB_CONFIG_DIR.
+# CONFIG_DIR defaults to repo config/; uses sidecar_runtime_local.json if present,
+# else writes a minimal JSON using SIDECAR_PORT.
 
 PID_FILE="$1"
 EXE="$2"
@@ -17,8 +17,16 @@ if [[ ! -f "${EXE}" ]]; then
 fi
 
 export SIDECAR_PORT="${SIDECAR_PORT}"
-export EVAL_HUB_CONFIG_DIR="${CONFIG_DIR}"
-"${EXE}" --configdir "${CONFIG_DIR}" >> "${LOGFILE}" 2>&1 &
+SIDECAR_JSON="${CONFIG_DIR}/sidecar_runtime_local.json"
+if [[ -f "${SIDECAR_JSON}" ]]; then
+  :
+else
+  TMP_JSON="/tmp/sidecar_runtime_$$.json"
+  PORT="${SIDECAR_PORT:-8080}"
+  printf '{"port":%s,"base_url":"http://localhost:%s","eval_hub":{"base_url":"http://localhost:8080"},"mlflow":{"tracking_uri":"http://localhost:5000"}}\n' "${PORT}" "${PORT}" > "${TMP_JSON}"
+  SIDECAR_JSON="${TMP_JSON}"
+fi
+"${EXE}" --sidecarconfig "${SIDECAR_JSON}" >> "${LOGFILE}" 2>&1 &
 SERVICE_PID=$!
 echo "${SERVICE_PID}" > "${PID_FILE}"
 sleep 2
