@@ -18,7 +18,7 @@ func TestProviderStorage(t *testing.T) {
 		"database_name": "eval_hub",
 	}
 	tenant := api.Tenant("tenant-1")
-	store, err := storage.NewStorage(&databaseConfig, nil, nil, false, false, logger)
+	store, err := storage.NewStorage(&databaseConfig, nil, nil, false, logger)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}

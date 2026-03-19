@@ -276,7 +276,7 @@ func createServer(port int) (*server.Server, error) {
 		// we do this as no point trying to continue
 		return nil, fmt.Errorf("failed to load collection configs: %w", err)
 	}
-	store, err := storage.NewStorage(serviceConfig.Database, collectionConfigs, providerConfigs, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger)
+	store, err := storage.NewStorage(serviceConfig.Database, collectionConfigs, providerConfigs, serviceConfig.IsOTELStorageScansEnabled(), logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create storage: %w", err)
 	}
