@@ -175,6 +175,8 @@ test-fvt-server-coverage: start-service-coverage ## Run FVT tests using godog ag
 	@echo "Running FVT tests with coverage against a running server..."
 	@GOCOVERDIR="${BIN_DIR}" SERVER_URL="${SERVER_URL}" make test-fvt; status=$$?; make stop-service; exit $$status
 	go tool covdata textfmt -i ${BIN_DIR} -o ${BIN_DIR}/coverage-fvt.out
+	@go tool cover -html=$(BIN_DIR)/coverage-fvt.out -o $(BIN_DIR)/coverage-fvt.html
+	@echo "Coverage report generated: $(BIN_DIR)/coverage-fvt.html"
 
 test-all-coverage: test-coverage test-fvt-server-coverage ## Run all tests (unit + FVT) with coverage
 
