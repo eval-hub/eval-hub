@@ -46,6 +46,12 @@ func SetupOTEL(ctx context.Context, config *config.OTELConfig, logger *slog.Logg
 		return nil, nil
 	}
 
+	if !config.DoNotRedirectOTELLogs {
+		// have the OTEL SDK send its logs to our logger
+		lr := logr.FromSlogHandler(logger.Handler())
+		otel.SetLogger(lr)
+	}
+
 	var shutdownFuncs []func(context.Context) error
 	var err error
 
@@ -104,12 +110,6 @@ func SetupOTEL(ctx context.Context, config *config.OTELConfig, logger *slog.Logg
 		shutdownFuncs = append(shutdownFuncs, loggerProvider.Shutdown)
 		global.SetLoggerProvider(loggerProvider)
 		logger.Info("OTEL logger provider created")
-	}
-
-	if !config.DoNotRedirectOTELLogs {
-		// have the OTEL SDK send its logs to our logger
-		lr := logr.FromSlogHandler(logger.Handler())
-		otel.SetLogger(lr)
 	}
 
 	if err != nil {
