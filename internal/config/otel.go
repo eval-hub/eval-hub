@@ -32,7 +32,7 @@ type OTELConfig struct {
 	// When true, OTEL SDK diagnostic logs are not redirected to the main logger
 	DisableRedirectOTELLogs bool `mapstructure:"disable_redirect_otel_logs,omitempty"`
 	// When true, the database OTEL scan is disabled
-	DisableDatabaseOTELScan bool `mapstructure:"disable_database_otel_scan,omitempty"`
+	DisableDatabaseOTELScans bool `mapstructure:"disable_database_otel_scan,omitempty"`
 	// The TLS config if running securely (that is not loaded from the config)
 	TLSConfig *tls.Config
 }

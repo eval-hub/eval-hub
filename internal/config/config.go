@@ -14,7 +14,7 @@ func (c *Config) IsOTELEnabled() bool {
 }
 
 func (c *Config) IsOTELStorageScansEnabled() bool {
-	return c.IsOTELEnabled() && !c.OTEL.DisableDatabaseOTELScan
+	return c.IsOTELEnabled() && !c.OTEL.DisableDatabaseOTELScans
 }
 
 func (c *Config) IsPrometheusEnabled() bool {
