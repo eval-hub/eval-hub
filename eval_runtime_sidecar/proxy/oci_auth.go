@@ -91,26 +91,21 @@ func LoadTokenProducerFromOCISecret(ociSecretMountPath, registryHost, repository
 	if cfg.Auths == nil {
 		return nil, fmt.Errorf("registry auth config: no auths")
 	}
-	// Match registry: exact key, then normalized host, then single auth entry
-	normHost := normalizeRegistryKey(registryHost)
+	want := canonicalRegistryHost(registryHost)
+	if want == "" {
+		return nil, fmt.Errorf("registry auth config: empty or unparseable registry host")
+	}
 	var auth registryAuthEntry
 	var found bool
 	for k, v := range cfg.Auths {
-		if k == registryHost || normalizeRegistryKey(k) == normHost {
+		if canonicalRegistryHost(k) == want {
 			auth = v
 			found = true
 			break
 		}
 	}
-	if !found && len(cfg.Auths) == 1 {
-		for _, v := range cfg.Auths {
-			auth = v
-			found = true
-			break // one entry; map has no index by position, so range is the only way to get it
-		}
-	}
 	if !found {
-		return nil, fmt.Errorf("registry auth config: no auth for registry %s", registryHost)
+		return nil, fmt.Errorf("registry auth config: no auth for registry %s (no auths key matches canonical host %q)", registryHost, want)
 	}
 	username := auth.Username
 	password := auth.Password
@@ -142,9 +137,36 @@ func LoadTokenProducerFromOCISecret(ociSecretMountPath, registryHost, repository
 	}, nil
 }
 
-func normalizeRegistryKey(s string) string {
-	s = strings.TrimPrefix(s, "https://")
-	s = strings.TrimPrefix(s, "http://")
+// canonicalRegistryHost returns a comparable host form for matching dockerconfigjson auths keys
+// to the job-spec registry: lowercase, scheme stripped, path discarded (host only), trailing
+// slashes removed, and Docker Hub aliases (index.docker.io, registry-1.docker.io) mapped to docker.io.
+func canonicalRegistryHost(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	s = strings.ToLower(s)
+	raw := s
+	if !strings.Contains(s, "://") {
+		s = "https://" + s
+	}
+	u, err := url.Parse(s)
+	if err != nil || u.Host == "" {
+		s = raw
+		s = strings.TrimPrefix(s, "https://")
+		s = strings.TrimPrefix(s, "http://")
+		s = strings.Trim(s, "/")
+		if i := strings.IndexByte(s, '/'); i >= 0 {
+			s = s[:i]
+		}
+	} else {
+		s = u.Host
+	}
+	s = strings.TrimSuffix(s, "/")
+	switch s {
+	case "index.docker.io", "registry-1.docker.io":
+		s = "docker.io"
+	}
 	return s
 }
 

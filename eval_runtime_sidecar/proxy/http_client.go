@@ -135,7 +135,7 @@ func NewOCIHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logger *
 	if ociConfig != nil && ociConfig.HTTPTimeout > 0 {
 		timeout = ociConfig.HTTPTimeout
 	}
-	caCertPath := DefaultCACertPath
+	caCertPath := ""
 	if ociConfig != nil && ociConfig.CACertPath != "" {
 		caCertPath = ociConfig.CACertPath
 	}

@@ -57,7 +57,7 @@ func TestNewSidecarServer(t *testing.T) {
 	})
 
 	t.Run("uses Sidecar.Port when set", func(t *testing.T) {
-		cfg := &config.Config{Sidecar: &config.SidecarConfig{Port: 9090}}
+		cfg := &config.Config{Sidecar: &config.SidecarConfig{BaseURL: "http://localhost:9090"}}
 		srv, err := sidecarServer.NewSidecarServer(logger, cfg)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -70,7 +70,7 @@ func TestNewSidecarServer(t *testing.T) {
 
 func TestSidecarServer_GetPort(t *testing.T) {
 	logger := slog.Default()
-	cfg := &config.Config{Sidecar: &config.SidecarConfig{Port: 3000}}
+	cfg := &config.Config{Sidecar: &config.SidecarConfig{BaseURL: "http://localhost:3000"}}
 	srv, err := sidecarServer.NewSidecarServer(logger, cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

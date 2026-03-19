@@ -142,10 +142,29 @@ func TestOciRouteMatch(t *testing.T) {
 		{"/org/repo/tags/list", true},
 		{"/xorg/repo/tags/list", false},
 		{"/v2/org/repo2/tags/list", false},
+		// Query must not affect matching (path only).
+		{"/v2/org/repo/blobs/uploads?q=/v2/evil/org/repo/extra", true},
+		{"/v2/evil/blobs?q=org%2Frepo", false},
 	}
 	for _, tt := range tests {
 		if got := h.ociRouteMatch(tt.uri); got != tt.want {
 			t.Errorf("ociRouteMatch(%q) = %v, want %v", tt.uri, got, tt.want)
+		}
+	}
+}
+
+func TestRequestPathForOCIRouting(t *testing.T) {
+	tests := []struct {
+		in, want string
+	}{
+		{"/v2/a/b", "/v2/a/b"},
+		{"/v2/a/b?x=y", "/v2/a/b"},
+		{"/v2/a/b#frag", "/v2/a/b"},
+		{"/v2/a?b=c&d=e", "/v2/a"},
+	}
+	for _, tt := range tests {
+		if got := requestPathForOCIRouting(tt.in); got != tt.want {
+			t.Errorf("requestPathForOCIRouting(%q) = %q, want %q", tt.in, got, tt.want)
 		}
 	}
 }

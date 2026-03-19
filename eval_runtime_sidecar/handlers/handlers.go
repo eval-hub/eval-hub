@@ -164,32 +164,72 @@ func (h *Handlers) HandleProxyCall(w http.ResponseWriter, r *http.Request) {
 	proxyHandler.ServeHTTP(w, r)
 }
 
-// ociRouteMatch returns true if the request URI should be routed to the OCI proxy.
-// The URI need not have a /registry/ prefix: if it contains the repository name from
-// /meta/job.json as a path segment (e.g. "org/repo"), the request is routed to OCI.
-// Left boundary: seg must be at path start, after '/', or immediately after the OCI
-// "/v2" prefix (so /v2/org/repo matches but /v2/ac/org/repo does not for repo "org/repo").
-// Right boundary: end of URI or next char is '/'.
+// requestPathForOCIRouting returns the URL path only (no query or fragment) for OCI routing.
+func requestPathForOCIRouting(uri string) string {
+	if i := strings.IndexByte(uri, '?'); i >= 0 {
+		uri = uri[:i]
+	}
+	if i := strings.IndexByte(uri, '#'); i >= 0 {
+		uri = uri[:i]
+	}
+	return uri
+}
+
+func splitPathSegments(p string) []string {
+	p = strings.Trim(p, "/")
+	if p == "" {
+		return nil
+	}
+	parts := strings.Split(p, "/")
+	out := parts[:0]
+	for _, s := range parts {
+		if s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func pathSegmentsEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// ociRouteMatch returns true if the request should be routed to the OCI proxy.
+// Matching uses only the path (query and fragment are ignored). The job-spec repository
+// must appear as a full consecutive sequence of path segments, either at the start of
+// the path or immediately after a "v2" segment (OCI distribution API), e.g. /v2/org/repo/...
+// matches repo "org/repo" but /v2/ac/org/repo/... does not.
 func (h *Handlers) ociRouteMatch(uri string) bool {
 	if h.ociRepository == "" {
 		return false
 	}
-	seg := "/" + h.ociRepository
-	for searchStart := 0; ; {
-		idx := strings.Index(uri[searchStart:], seg)
-		if idx < 0 {
-			return false
+	path := requestPathForOCIRouting(uri)
+	repoParts := splitPathSegments(h.ociRepository)
+	if len(repoParts) == 0 {
+		return false
+	}
+	pathParts := splitPathSegments(path)
+	if len(pathParts) < len(repoParts) {
+		return false
+	}
+	n := len(repoParts)
+	for i := 0; i+n <= len(pathParts); i++ {
+		if !pathSegmentsEqual(pathParts[i:i+n], repoParts) {
+			continue
 		}
-		idx += searchStart
-		prefix := uri[:idx]
-		leftOK := idx == 0 || uri[idx-1] == '/' || strings.HasSuffix(prefix, "/v2")
-		after := idx + len(seg)
-		rightOK := after == len(uri) || uri[after] == '/'
-		if leftOK && rightOK {
+		if i == 0 || pathParts[i-1] == "v2" {
 			return true
 		}
-		searchStart = idx + 1
 	}
+	return false
 }
 
 func (h *Handlers) parseProxyCall(r *http.Request) (*httputil.ReverseProxy, *proxy.AuthTokenInput, error) {
