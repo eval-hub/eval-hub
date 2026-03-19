@@ -16,9 +16,9 @@ type SidecarConfig struct {
 
 // SidecarOCIConfig holds sidecar OCI/registry proxy settings (host from configmap).
 type SidecarOCIConfig struct {
-	CACertPath         string        `mapstructure:"ca_cert_path,omitempty" json:"ca_cert_path,omitempty"`         // optional PEM CA for registry TLS
+	CACertPath         string        `mapstructure:"ca_cert_path,omitempty" json:"ca_cert_path,omitempty"`                 // optional PEM CA for registry TLS
 	InsecureSkipVerify bool          `mapstructure:"insecure_skip_verify,omitempty" json:"insecure_skip_verify,omitempty"` // skip TLS verify for registry (e.g. self-signed)
-	HTTPTimeout        time.Duration `mapstructure:"http_timeout,omitempty" json:"http_timeout,omitempty"`         // HTTP client timeout for registry requests (e.g. 30s)
+	HTTPTimeout        time.Duration `mapstructure:"http_timeout,omitempty" json:"http_timeout,omitempty"`                 // HTTP client timeout for registry requests (e.g. 30s)
 }
 
 type EvalHubClientConfig struct {
