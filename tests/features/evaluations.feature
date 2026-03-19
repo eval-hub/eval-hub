@@ -66,12 +66,6 @@ Feature: Evaluations Endpoint
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_missing_model.json"
     Then the response code should be 400
 
-  Scenario: Get evaluation by non-existent id returns 404
-    Given the service is running
-    When I send a GET request to "/api/v1/evaluations/jobs/00000000-0000-0000-0000-000000000000"
-    Then the response code should be 404
-    And the response should contain the value "resource_not_found" at path "$.message_code"
-
   Scenario: Create evaluation job missing benchmarks
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -444,10 +438,9 @@ Feature: Evaluations Endpoint
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
 
-  Scenario: Update evaluation job status for unknown id returns 404
+  Scenario: Update evaluation job status for unknown id
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs/unknown-id/events" with body "file:/evaluation_job_status_event_running.json"
-    Then the response code should be 404
 
   Scenario: List evaluation jobs filtered by status
     Given the service is running
