@@ -57,10 +57,10 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				return err
 			}
 			resolveProvider := func(providerID string) (*api.ProviderResource, error) {
-				return storage.GetProvider(providerID)
+				return storage.WithContext(runtimeCtx).GetProvider(providerID)
 			}
 			resolveCollection := func(id string) (*api.CollectionResource, error) {
-				return storage.GetCollection(id)
+				return storage.WithContext(runtimeCtx).GetCollection(id)
 			}
 			return h.validateBenchmarkReferences(evaluation, resolveCollection, resolveProvider)
 		},
@@ -74,18 +74,28 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	// TODO this should be in a SPAN
 	mlflowExperimentID := ""
 	mlflowExperimentURL := ""
 	if h.mlflowClient != nil {
-		client := h.mlflowClient.WithContext(ctx.Ctx).WithLogger(ctx.Logger)
-		// Experiments must be scoped to the tenant namespace so job pods running
-		// in that namespace can reach them with their own X-MLFLOW-WORKSPACE header.
-		if !ctx.Tenant.IsEmpty() {
-			client = client.WithWorkspace(ctx.Tenant.String())
-		}
-
-		mlflowExperimentID, mlflowExperimentURL, err = mlflow.GetExperimentID(client, evaluation, id)
+		err = h.withSpan(
+			ctx,
+			func(runtimeCtx context.Context) error {
+				client := h.mlflowClient.WithContext(runtimeCtx).WithLogger(ctx.Logger)
+				// Experiments must be scoped to the tenant namespace so job pods running
+				// in that namespace can reach them with their own X-MLFLOW-WORKSPACE header.
+				if !ctx.Tenant.IsEmpty() {
+					client = client.WithWorkspace(ctx.Tenant.String())
+				}
+				mlflowExperimentID, mlflowExperimentURL, err = mlflow.GetOrCreateExperimentID(client, evaluation, id)
+				if err != nil {
+					return err
+				}
+				return nil
+			},
+			"mlflow",
+			"get-or-create-experiment",
+			"job.id", id,
+		)
 		if err != nil {
 			w.Error(err, ctx.RequestID)
 			return
