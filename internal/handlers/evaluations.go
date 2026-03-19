@@ -87,10 +87,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 					client = client.WithWorkspace(ctx.Tenant.String())
 				}
 				mlflowExperimentID, mlflowExperimentURL, err = mlflow.GetOrCreateExperimentID(client, evaluation, id)
-				if err != nil {
-					return err
-				}
-				return nil
+				return err
 			},
 			"mlflow",
 			"get-or-create-experiment",

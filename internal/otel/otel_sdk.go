@@ -78,7 +78,7 @@ func SetupOTEL(ctx context.Context, config *config.OTELConfig, logger *slog.Logg
 
 	// Set up trace provider.
 	if config.EnableTracing {
-		tracerProvider, err := newTracerProvider(ctx, config)
+		tracerProvider, err := newTracerProvider(ctx, config, logger)
 		if err != nil {
 			handleErr(err)
 			return shutdown, err
@@ -128,7 +128,7 @@ func newPropagator() propagation.TextMapPropagator {
 	)
 }
 
-func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.TracerProvider, error) {
+func newTracerProvider(ctx context.Context, config *config.OTELConfig, logger *slog.Logger) (*trace.TracerProvider, error) {
 	// set default values for tracer timeout and batch interval
 	tracerTimeout := config.TracerTimeout
 	if tracerTimeout == 0 {
@@ -164,7 +164,7 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 		if err != nil {
 			return nil, err
 		}
-		res, err := createResource(ctx, config)
+		res, err := createResource(ctx, config, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -193,7 +193,7 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 		if err != nil {
 			return nil, err
 		}
-		res, err := createResource(ctx, config)
+		res, err := createResource(ctx, config, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -217,7 +217,7 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig) (*trace.T
 	}
 }
 
-func createResource(ctx context.Context, config *config.OTELConfig) (*resource.Resource, error) {
+func createResource(ctx context.Context, config *config.OTELConfig, logger *slog.Logger) (*resource.Resource, error) {
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(ServiceName),
 		// semconv.ServiceVersion(config.ServiceVersion),
@@ -230,10 +230,14 @@ func createResource(ctx context.Context, config *config.OTELConfig) (*resource.R
 
 	var res *resource.Resource = resource.Default()
 
-	if pr, err := createProcessResource(ctx, config); err == nil {
-		if newRes, err := resource.Merge(res, pr); err == nil {
+	pr, createErr := createProcessResource(ctx, config)
+	if pr != nil {
+		if newRes, mergeErr := resource.Merge(res, pr); mergeErr == nil {
 			res = newRes
 		}
+	}
+	if createErr != nil {
+		logger.Error("Process resource detector failed", "error", createErr)
 	}
 
 	return resource.Merge(
