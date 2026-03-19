@@ -4,7 +4,20 @@ Feature: Providers Endpoint
   I want to query the supported providers
   So that I discover the service capabilities
 
-  Scenario: List providers returns 200 with response structure and pagination
+  Scenario: Get all providers
+    Given the service is running
+    When I send a GET request to "/api/v1/evaluations/providers"
+    Then the response code should be 200
+
+  Scenario: List providers returns 200 with response structure
+    Given the service is running
+    When I send a GET request to "/api/v1/evaluations/providers"
+    Then the response code should be 200
+    And the response should contain "items"
+    And the response should contain "limit"
+    And the response should contain "total_count"
+
+  Scenario: List providers with pagination params returns 200
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/providers?limit=5&offset=0"
     Then the response code should be 200
@@ -269,12 +282,12 @@ Feature: Providers Endpoint
     Then the response code should be 200
     And the response should contain the value "lm_evaluation_harness" at path "resource.id"
 
-  Scenario: List providers without benchmarks excludes benchmark data
+  Scenario: Get provider without benchmarks
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/providers?benchmarks=false"
     Then the response code should be 200
     And the response should not contain the value "0" at path "$.total_count"
-    And the response should contain the value "[]" at path "items[0].benchmarks"
+    Then the response should contain the value "[]" at path "items[0].benchmarks"
 
   Scenario: Create a user provider
     Given the service is running
