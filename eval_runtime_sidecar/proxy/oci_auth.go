@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 
 	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 )
@@ -20,17 +21,42 @@ type TokenResponse struct {
 	AccessToken string `json:"access_token,omitempty"`
 }
 
-// TokenProducer holds credentials and registry context for obtaining an OCI registry token.
+// OCITokenProducer holds credentials and registry context for obtaining an OCI registry token.
 // Values come from the OCI secret mounted on the container (registry auth config file).
 // Registry holds the registry host as passed to LoadTokenProducerFromOCISecret (may include
 // http:// or https://) so challenge() can use http when the job spec uses an http registry.
-type TokenProducer struct {
+type OCITokenProducer struct {
 	Username   string
 	Password   string
 	Registry   string
 	Repository string
-	Token      string
-	HTTPClient *http.Client // from NewOCIHTTPClient: TLS, timeout for challenge + token
+	token      atomic.Pointer[string] // OCI bearer token; use GetToken / SetToken
+	HTTPClient *http.Client           // from NewOCIHTTPClient: TLS, timeout for challenge + token
+}
+
+// GetToken returns the current OCI registry bearer token, or "" if none.
+func (tp *OCITokenProducer) GetToken() string {
+	if tp == nil {
+		return ""
+	}
+	p := tp.token.Load()
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
+// SetToken stores the OCI bearer token; empty s clears it.
+func (tp *OCITokenProducer) SetToken(s string) {
+	if tp == nil {
+		return
+	}
+	if s == "" {
+		tp.token.Store(nil)
+		return
+	}
+	copy := s
+	tp.token.Store(&copy)
 }
 
 // registryAuthEntry represents one registry entry in the auth config (format matches Docker config.json / kubernetes.io/dockerconfigjson).
@@ -76,7 +102,7 @@ func GetOCICoordinatesFromJobSpec(path string) (host, repository string, err err
 // The file format is the same as Docker config.json and kubernetes.io/dockerconfigjson
 // (auths map with per-registry username/password or auth base64). RegistryHost should match the key in auths
 // (e.g. "https://registry:5000" or "registry:5000"). Repository is used as the scope in the token request; if empty, "default/repo" is used.
-func LoadTokenProducerFromOCISecret(ociSecretMountPath, registryHost, repository string, httpClient *http.Client) (*TokenProducer, error) {
+func LoadTokenProducerFromOCISecret(ociSecretMountPath, registryHost, repository string, httpClient *http.Client) (*OCITokenProducer, error) {
 	if httpClient == nil {
 		return nil, fmt.Errorf("oci http client is required")
 	}
@@ -128,7 +154,7 @@ func LoadTokenProducerFromOCISecret(ociSecretMountPath, registryHost, repository
 	if repository == "" {
 		repository = "default/repo"
 	}
-	return &TokenProducer{
+	return &OCITokenProducer{
 		Username:   username,
 		Password:   password,
 		Registry:   strings.TrimSpace(registryHost),
@@ -220,7 +246,7 @@ func parseParam(s string) (key, value string, ok bool) {
 	return key, value, true
 }
 
-func (tp *TokenProducer) challenge() (string, error) {
+func (tp *OCITokenProducer) initiateChallenge() (string, error) {
 	scheme := "https"
 	if strings.HasPrefix(tp.Registry, "http://") {
 		scheme = "http"
@@ -259,7 +285,7 @@ func (tp *TokenProducer) challenge() (string, error) {
 	return nextURL, nil
 }
 
-func (tp *TokenProducer) token(nextURL string) error {
+func (tp *OCITokenProducer) createNewToken(nextURL string) error {
 	req, err := http.NewRequest(http.MethodGet, nextURL, nil)
 	if err != nil {
 		return err
@@ -288,29 +314,29 @@ func (tp *TokenProducer) token(nextURL string) error {
 	}
 
 	if tokenData.Token != "" {
-		tp.Token = tokenData.Token
+		tp.SetToken(tokenData.Token)
 	} else if tokenData.AccessToken != "" {
-		tp.Token = tokenData.AccessToken
+		tp.SetToken(tokenData.AccessToken)
 	}
 	return nil
 }
 
-// GetToken performs the OCI registry auth flow (challenge + token) and sets tp.Token.
-func (tp *TokenProducer) GetToken() error {
-	nextURL, err := tp.challenge()
+// RefreshToken performs the OCI registry auth flow (challenge + token) and stores the token atomically.
+func (tp *OCITokenProducer) RefreshToken() error {
+	nextURL, err := tp.initiateChallenge()
 	if err != nil {
 		return err
 	}
 	if nextURL == "" {
 		return nil
 	}
-	return tp.token(nextURL)
+	return tp.createNewToken(nextURL)
 }
 
 // ModifyOCIRegistryResponse applies OCI/registry-specific response tweaks (same ideas as oci-proxy):
 // strip WWW-Authenticate; rewrite absolute redirect Location to the client-facing host; if the registry
 // returns a Bearer token in Authorization, store it on TokenProducer and cache, and strip from response.
-func ModifyOCIRegistryResponse(resp *http.Response, logger *slog.Logger, tp *TokenProducer) {
+func ModifyOCIRegistryResponse(resp *http.Response, logger *slog.Logger, tokenProducer *OCITokenProducer) {
 	if resp == nil {
 		return
 	}
@@ -324,7 +350,7 @@ func ModifyOCIRegistryResponse(resp *http.Response, logger *slog.Logger, tp *Tok
 		}
 	}
 
-	ociConsumeResponseAuthorizationToken(resp, tp, logger)
+	ociConsumeResponseAuthorizationToken(resp, tokenProducer, logger)
 }
 
 func ociRewriteLocationHeader(resp *http.Response, client OriginalRequest) {
@@ -341,8 +367,8 @@ func ociRewriteLocationHeader(resp *http.Response, client OriginalRequest) {
 	resp.Header.Set("Location", locURL.String())
 }
 
-func ociConsumeResponseAuthorizationToken(resp *http.Response, tp *TokenProducer, logger *slog.Logger) {
-	if tp == nil || resp.Request == nil {
+func ociConsumeResponseAuthorizationToken(resp *http.Response, tokenProducer *OCITokenProducer, logger *slog.Logger) {
+	if tokenProducer == nil || resp.Request == nil {
 		return
 	}
 	authz := strings.TrimSpace(resp.Header.Get("Authorization"))
@@ -359,12 +385,10 @@ func ociConsumeResponseAuthorizationToken(resp *http.Response, tp *TokenProducer
 	}
 	resp.Header.Del("Authorization")
 
-	ociTokenRefreshMu.Lock()
-	tp.Token = newTok
-	ociTokenRefreshMu.Unlock()
+	tokenProducer.SetToken(newTok)
 
 	if input, ok := AuthInputFromContext(resp.Request.Context()); ok {
-		UpdateAuthTokenCache(input, newTok)
+		UpdateCachedToken(input, newTok)
 	}
 	if logger != nil {
 		logger.Debug("OCI proxy: stored registry token from upstream Authorization response header")

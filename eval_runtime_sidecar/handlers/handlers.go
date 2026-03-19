@@ -32,8 +32,8 @@ type Handlers struct {
 	evalHubProxy     *httputil.ReverseProxy
 	mlflowProxy      *httputil.ReverseProxy
 	ociProxy         *httputil.ReverseProxy
-	ociTokenProducer *proxy.TokenProducer // created once at startup for OCI auth
-	ociRepository    string               // from job spec; used to route requests to /registry/{ociRepository}
+	ociTokenProducer *proxy.OCITokenProducer // created once at startup for OCI auth
+	ociRepository    string                  // from job spec; used to route requests to /registry/{ociRepository}
 }
 
 func New(config *config.Config, logger *slog.Logger) (*Handlers, error) {
@@ -107,7 +107,7 @@ func newEvalhubProxy(config *config.Config, logger *slog.Logger) (*httputil.Reve
 	return evalHubProxy, nil
 }
 
-func newOciProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseProxy, *proxy.TokenProducer, string, error) {
+func newOciProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseProxy, *proxy.OCITokenProducer, string, error) {
 	if config == nil || config.Sidecar == nil || config.Sidecar.OCI == nil {
 		return nil, nil, "", nil
 	}

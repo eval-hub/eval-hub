@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -14,27 +14,42 @@ type AuthTokenInput struct {
 	AuthToken         string
 	TokenCacheTimeout time.Duration
 	// OCI registry auth (when TargetEndpoint == "oci")
-	OCIAuthConfigPath string         // path to registry auth config file (OCI secret mount, same format as Docker config.json)
-	OCIRepository     string         // optional scope repository (e.g. namespace/repo)
-	OCITokenProducer  *TokenProducer // optional; when set, reused for token resolution instead of building from config path
+	OCIAuthConfigPath string            // path to registry auth config file (OCI secret mount, same format as Docker config.json)
+	OCIRepository     string            // optional scope repository (e.g. namespace/repo)
+	OCITokenProducer  *OCITokenProducer // optional; when set, reused for token resolution instead of building from config path
 }
 
 const defaultAuthTokenCacheTTL = 5 * time.Minute
 
-type authCacheEntry struct {
-	token     string
-	expiresAt time.Time
+// TokenWithExpiry holds a token and when it should be treated as stale for caching.
+type TokenWithExpiry struct {
+	Token     string
+	ExpiresAt time.Time
 }
 
 var (
-	authTokenCache    = make(map[string]authCacheEntry)
-	authTokenCacheMu  sync.RWMutex
-	ociTokenRefreshMu sync.Mutex // guards GetToken() on the shared OCI TokenProducer
+	evalHubCachedToken atomic.Pointer[TokenWithExpiry]
+	mlflowCachedToken  atomic.Pointer[TokenWithExpiry]
+	ociCachedToken     atomic.Pointer[TokenWithExpiry]
 )
+
+// getTokenPointer returns the cache slot for a known proxy target, or nil if the endpoint is not cacheable.
+func getTokenPointer(targetEndpoint string) *atomic.Pointer[TokenWithExpiry] {
+	switch targetEndpoint {
+	case "eval-hub":
+		return &evalHubCachedToken
+	case "mlflow":
+		return &mlflowCachedToken
+	case "oci":
+		return &ociCachedToken
+	default:
+		return nil
+	}
+}
 
 // ResolveAuthToken returns the auth token to use for a request.
 // It switches on input.TargetEndpoint: eval-hub and mlflow use file/static token and cache;
-// oci (URI contains repository name from job spec) uses OCI secret-mounted registry auth and invokes oci GetToken.
+// oci (URI contains repository name from job spec) uses OCI secret-mounted registry auth and invokes oci RefreshToken.
 func ResolveAuthToken(logger *slog.Logger, input AuthTokenInput) string {
 	switch input.TargetEndpoint {
 	case "oci":
@@ -57,42 +72,34 @@ func resolveOCIAuthToken(logger *slog.Logger, input AuthTokenInput) string {
 // resolveOCIAuthTokenWithProducer uses the shared TokenProducer created at sidecar startup.
 func resolveOCIAuthTokenWithProducer(logger *slog.Logger, input AuthTokenInput) string {
 	tp := input.OCITokenProducer
-	cacheKey := "oci:" + tp.Registry + ":" + tp.Repository
-	authTokenCacheMu.RLock()
-	entry, ok := authTokenCache[cacheKey]
-	authTokenCacheMu.RUnlock()
-	if ok && time.Now().Before(entry.expiresAt) {
-		return entry.token
+	// getTokenPointer("oci") is always non-nil (address of ociCachedToken).
+	ociCache := getTokenPointer("oci")
+	if entry := ociCache.Load(); entry != nil && time.Now().Before(entry.ExpiresAt) {
+		return entry.Token
 	}
 
-	ociTokenRefreshMu.Lock()
-	err := tp.GetToken()
-	ociTokenRefreshMu.Unlock()
+	err := tp.RefreshToken()
 	if err != nil {
-		logger.Error("OCI GetToken failed", "error", err)
+		logger.Error("OCI RefreshToken failed", "error", err)
 		return ""
 	}
-	token := tp.Token
+	token := tp.GetToken()
 	if token != "" {
 		ttl := input.TokenCacheTimeout
 		if ttl <= 0 {
 			ttl = defaultAuthTokenCacheTTL
 		}
-		authTokenCacheMu.Lock()
-		authTokenCache[cacheKey] = authCacheEntry{token: token, expiresAt: time.Now().Add(ttl)}
-		authTokenCacheMu.Unlock()
+		ociCache.Store(&TokenWithExpiry{Token: token, ExpiresAt: time.Now().Add(ttl)})
 	}
 	return token
 }
 
 // resolveEvalHubOrMLflowToken implements the original file/static token + cache behavior for eval-hub and mlflow.
 func resolveEvalHubOrMLflowToken(logger *slog.Logger, input AuthTokenInput) string {
-	if input.TargetEndpoint != "" {
-		authTokenCacheMu.RLock()
-		entry, ok := authTokenCache[input.TargetEndpoint]
-		authTokenCacheMu.RUnlock()
-		if ok && time.Now().Before(entry.expiresAt) {
-			return entry.token
+	tokenPointer := getTokenPointer(input.TargetEndpoint)
+	if tokenPointer != nil {
+		if entry := tokenPointer.Load(); entry != nil && time.Now().Before(entry.ExpiresAt) {
+			return entry.Token
 		}
 	}
 
@@ -107,52 +114,31 @@ func resolveEvalHubOrMLflowToken(logger *slog.Logger, input AuthTokenInput) stri
 		}
 	}
 
-	if input.TargetEndpoint != "" && token != "" {
-		if input.TokenCacheTimeout <= 0 {
-			input.TokenCacheTimeout = defaultAuthTokenCacheTTL
+	if tokenPointer != nil && token != "" {
+		ttl := input.TokenCacheTimeout
+		if ttl <= 0 {
+			ttl = defaultAuthTokenCacheTTL
 		}
-		authTokenCacheMu.Lock()
-		authTokenCache[input.TargetEndpoint] = authCacheEntry{token: token, expiresAt: time.Now().Add(input.TokenCacheTimeout)}
-		authTokenCacheMu.Unlock()
+		tokenPointer.Store(&TokenWithExpiry{Token: token, ExpiresAt: time.Now().Add(ttl)})
 	}
 
 	return token
 }
 
-// cacheKeyForAuthInput returns the map key used for input in the auth token cache, or "" if not cacheable.
-func cacheKeyForAuthInput(input AuthTokenInput) string {
-	switch input.TargetEndpoint {
-	case "oci":
-		if input.OCITokenProducer == nil {
-			return ""
-		}
-		tp := input.OCITokenProducer
-		return "oci:" + tp.Registry + ":" + tp.Repository
-	default:
-		if input.TargetEndpoint == "" {
-			return ""
-		}
-		return input.TargetEndpoint
-	}
-}
-
-// UpdateAuthTokenCache stores token under the cache entry for input (same key as ResolveAuthToken).
-// TTL is input.TokenCacheTimeout or defaultAuthTokenCacheTTL. An empty token removes the cache entry.
-// For TargetEndpoint "oci", OCITokenProducer must be set to compute the key.
-func UpdateAuthTokenCache(input AuthTokenInput, token string) {
-	key := cacheKeyForAuthInput(input)
-	if key == "" {
+// UpdateCachedToken stores token for the target in input.TargetEndpoint (eval-hub, mlflow, or oci).
+// TTL is input.TokenCacheTimeout or defaultAuthTokenCacheTTL. An empty token clears the cache slot.
+func UpdateCachedToken(input AuthTokenInput, token string) {
+	tokenPointer := getTokenPointer(input.TargetEndpoint)
+	if tokenPointer == nil {
 		return
 	}
-	authTokenCacheMu.Lock()
-	defer authTokenCacheMu.Unlock()
 	if token == "" {
-		delete(authTokenCache, key)
+		tokenPointer.Store(nil)
 		return
 	}
 	ttl := input.TokenCacheTimeout
 	if ttl <= 0 {
 		ttl = defaultAuthTokenCacheTTL
 	}
-	authTokenCache[key] = authCacheEntry{token: token, expiresAt: time.Now().Add(ttl)}
+	tokenPointer.Store(&TokenWithExpiry{Token: token, ExpiresAt: time.Now().Add(ttl)})
 }
