@@ -72,6 +72,39 @@ Feature: Evaluations Endpoint
     Then the response code should be 404
     And the response should contain the value "resource_not_found" at path "$.message_code"
 
+  Scenario: List evaluation jobs with invalid limit returns 400
+    Given the service is running
+    When I send a GET request to "/api/v1/evaluations/jobs?limit=-1"
+    Then the response code should be 400
+    And the response should contain the value "query_parameter_invalid" at path "$.message_code"
+
+  Scenario: List evaluation jobs with invalid offset returns 400
+    Given the service is running
+    When I send a GET request to "/api/v1/evaluations/jobs?offset=not-a-number"
+    Then the response code should be 400
+    And the response should contain the value "query_parameter_invalid" at path "$.message_code"
+
+  Scenario: List evaluation jobs with non-numeric limit returns 400
+    Given the service is running
+    When I send a GET request to "/api/v1/evaluations/jobs?limit=invalid"
+    Then the response code should be 400
+    And the response should contain the value "query_parameter_invalid" at path "$.message_code"
+
+  Scenario: Delete evaluation job with non-existent id returns 404
+    Given the service is running
+    When I send a DELETE request to "/api/v1/evaluations/jobs/00000000-0000-0000-0000-000000000000?hard_delete=true"
+    Then the response code should be 404
+    And the response should contain the value "resource_not_found" at path "$.message_code"
+
+  Scenario: Create evaluation job with invalid JSON returns 400
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+    """
+    { not valid json
+    """
+    Then the response code should be 400
+    And the response should contain the value "invalid_json_request" at path "$.message_code"
+
   Scenario: Create evaluation job missing benchmarks
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:

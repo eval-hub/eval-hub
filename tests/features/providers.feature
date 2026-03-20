@@ -78,6 +78,12 @@ Feature: Providers Endpoint
     Then the response code should be 400
     And the response should contain the value "query_parameter_invalid" at path "message_code"
 
+  Scenario: List providers with invalid scope returns 400
+    Given the service is running
+    When I send a GET request to "/api/v1/evaluations/providers?scope=invalid"
+    Then the response code should be 400
+    And the response should contain the value "query_parameter_value_invalid" at path "$.message_code"
+
   Scenario: List system providers with pagination
     Given the service is running
     And there are system providers

@@ -229,6 +229,12 @@ Feature: Collections Endpoint
     When I send a GET request to "/api/v1/evaluations/collections?offset=not-a-number"
     Then the response code should be 400
 
+  Scenario: List collections with invalid scope returns 400
+    Given the service is running
+    When I send a GET request to "/api/v1/evaluations/collections?scope=invalid"
+    Then the response code should be 400
+    And the response should contain the value "query_parameter_value_invalid" at path "$.message_code"
+
   Scenario: Delete collection with non-existent id returns 404
     Given the service is running
     When I send a DELETE request to "/api/v1/evaluations/collections/00000000-0000-0000-0000-000000000000?hard_delete=true"
