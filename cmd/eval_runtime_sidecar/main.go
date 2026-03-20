@@ -14,9 +14,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
-	sidecarServer "github.com/eval-hub/eval-hub/cmd/eval_runtime_sidecar/server"
-	"github.com/eval-hub/eval-hub/internal/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
+	"github.com/eval-hub/eval-hub/internal/eval_runtime_sidecar/config"
+	sidecarServer "github.com/eval-hub/eval-hub/internal/eval_runtime_sidecar/server"
 	"github.com/eval-hub/eval-hub/internal/logging"
 )
 
@@ -44,16 +44,16 @@ func main() {
 	logger, logShutdown, err := logging.NewLogger()
 	if err != nil {
 		// we do this as no point trying to continue
-		startUpFailed(terminationFilePath(nil, logger), err, "Failed to create service logger", logging.FallbackLogger())
+		startUpFailed(terminationFilePath(), err, "Failed to create service logger", logging.FallbackLogger())
 	}
 	svcConfig, err := config.LoadSidecarRuntimeConfig(cfgPath, Version, Build, BuildDate)
 	if err != nil {
-		startUpFailed(terminationFilePath(nil, logger), err, "Failed to load sidecar config", logger)
+		startUpFailed(terminationFilePath(), err, "Failed to load sidecar config", logger)
 	}
 
 	srv, err := sidecarServer.NewSidecarServer(logger, svcConfig)
 	if err != nil {
-		startUpFailed(terminationFilePath(svcConfig, logger), err, "Failed to create sidecar server", logger)
+		startUpFailed(terminationFilePath(), err, "Failed to create sidecar server", logger)
 	}
 
 	version, build, buildDate := "", "", ""
@@ -77,7 +77,7 @@ func main() {
 				logger.Info("Server closed gracefully")
 				return
 			}
-			startUpFailed(terminationFilePath(svcConfig, logger), err, "Server failed to start", logger)
+			startUpFailed(terminationFilePath(), err, "Server failed to start", logger)
 		}
 	}()
 
@@ -102,7 +102,7 @@ func main() {
 	}
 }
 
-func terminationFilePath(_ *config.Config, _ *slog.Logger) string {
+func terminationFilePath() string {
 	return config.SidecarTerminationFilePath
 }
 

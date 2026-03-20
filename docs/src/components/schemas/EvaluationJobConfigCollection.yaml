@@ -7,3 +7,4 @@ allOf:
       collection:
         $ref: ./CollectionRef.yaml
   - $ref: ./EvaluationJobConfigCommon2.yaml
+title: EvaluationJobConfigCollection

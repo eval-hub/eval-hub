@@ -27,6 +27,7 @@ env_mappings:
   EVALHUB_TOKEN_CACHE_TIMEOUT: sidecar.eval_hub.token_cache_timeout
   MLFLOW_TOKEN_CACHE_TIMEOUT: sidecar.mlflow.token_cache_timeout
   SIDECAR_PORT: sidecar.port
+
 # Database configuration
 database:
   driver: sqlite
@@ -65,8 +66,12 @@ sidecar:
   mlflow:
     # token_cache_timeout: TTL for in-memory auth token cache for MLflow proxy (e.g. "5m", "1h"). Empty/0 uses default (5m).
     # token_cache_timeout: 5m
+  # OCI registry proxy
+  # oci:
+  #   ca_cert_path: /etc/pki/ca-trust/source/anchors/registry-ca.crt  # optional
+  #   insecure_skip_verify: false
   sidecar_container:
-    image: quay.io/rh-ee-nbs/nbs-dev:eval-hub_v24
+    image: quay.io/rh-ee-nbs/nbs-dev:eval-hub_v27
     resources:
       requests:
         cpu: 100m

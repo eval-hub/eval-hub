@@ -1,0 +1,302 @@
+package server_test
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/storage"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
+	"github.com/eval-hub/eval-hub/internal/logging"
+	"github.com/eval-hub/eval-hub/pkg/api"
+)
+
+// stubRuntime implements abstractions.Runtime without file writes or process spawning.
+// It validates that the JobSpec JSON can be built from the evaluation data.
+type stubRuntime struct {
+	logger    *slog.Logger
+	providers map[string]api.ProviderResource
+}
+
+func (r *stubRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
+	return &stubRuntime{logger: logger, providers: r.providers}
+}
+
+func (r *stubRuntime) WithContext(_ context.Context) abstractions.Runtime {
+	return r
+}
+
+func (r *stubRuntime) Name() string {
+	return "stub"
+}
+
+func (r *stubRuntime) RunEvaluationJob(
+	evaluation *api.EvaluationJobResource,
+	benchmarks []api.BenchmarkConfig,
+	_ abstractions.Storage,
+) error {
+	if len(benchmarks) == 0 {
+		return fmt.Errorf("no benchmarks configured for job %s", evaluation.Resource.ID)
+	}
+
+	bench := evaluation.Benchmarks[0]
+	provider, ok := r.providers[bench.ProviderID]
+	if !ok {
+		return fmt.Errorf("provider %q not found", bench.ProviderID)
+	}
+
+	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, &bench, 0, nil)
+	if err != nil {
+		return fmt.Errorf("build job spec: %w", err)
+	}
+
+	if spec.JobID == "" {
+		return fmt.Errorf("job spec missing job ID")
+	}
+	if spec.BenchmarkID == "" {
+		return fmt.Errorf("job spec missing benchmark ID")
+	}
+	if spec.ProviderID == "" {
+		return fmt.Errorf("job spec missing provider ID")
+	}
+
+	r.logger.Info(
+		"stub runtime validated job spec",
+		"job_id", spec.JobID,
+		"benchmark_id", spec.BenchmarkID,
+		"provider_id", spec.ProviderID,
+	)
+
+	return nil
+}
+
+func (r *stubRuntime) DeleteEvaluationJobResources(_ *api.EvaluationJobResource) error {
+	return nil
+}
+
+func TestNewServer(t *testing.T) {
+	t.Run("creates server with default port", func(t *testing.T) {
+		os.Unsetenv("PORT")
+		srv, err := createServer(8080)
+		if err != nil {
+			t.Fatalf("NewServer() returned error: %v", err)
+		}
+
+		if srv == nil {
+			t.Fatal("NewServer() returned nil")
+		}
+
+		if srv.GetPort() != 8080 {
+			t.Errorf("Expected default port 8080, got %d", srv.GetPort())
+		}
+	})
+
+	t.Run("creates server with custom port from environment", func(t *testing.T) {
+		//os.Setenv("PORT", "9000")
+		//defer os.Unsetenv("PORT")
+
+		srv, err := createServer(9000)
+		if err != nil {
+			t.Fatalf("NewServer() returned error: %v", err)
+		}
+
+		if srv.GetPort() != 9000 {
+			t.Errorf("Expected port 9000, got %d", srv.GetPort())
+		}
+	})
+}
+
+func TestServerSetupRoutes(t *testing.T) {
+	srv, err := createServer(8080)
+	if err != nil {
+		t.Fatalf("NewServer() returned error: %v", err)
+	}
+	handler, err := srv.SetupRoutes()
+	if err != nil {
+		t.Fatalf("SetupRoutes() returned error: %v", err)
+	}
+
+	if handler == nil {
+		t.Fatal("SetupRoutes() returned nil handler")
+	}
+
+	// NOTE: we do not want this code to become complex or
+	// hard to maintain. The real test of the API is done
+	// in the features tests (see the directory tests/features)
+
+	// Test that routes are registered
+	testCases := []struct {
+		method string
+		path   string
+		status int
+		body   string
+	}{
+		{http.MethodGet, "/api/v1/health", http.StatusOK, ""},
+		{http.MethodGet, "/openapi.yaml", http.StatusOK, ""},
+		{http.MethodGet, "/docs", http.StatusOK, ""},
+		// Evaluation endpoints
+		{http.MethodPost, "/api/v1/evaluations/jobs", http.StatusAccepted, `{"name": "test-evaluation-job", "model": {"url": "http://test.com", "name": "test"}, "benchmarks": [{"id": "arc_easy", "provider_id": "lm_evaluation_harness"}]}`},
+		{http.MethodGet, "/api/v1/evaluations/jobs", http.StatusOK, ""},
+		{http.MethodGet, "/api/v1/evaluations/jobs/test-id", http.StatusNotFound, ""},
+		// Collections
+		{http.MethodPost, "/api/v1/evaluations/collections", http.StatusCreated, `{"name": "test-benchmarks-collection", "description": "Collection of benchmarks for FVT", "category": "test", "benchmarks": [{"id": "arc_easy", "provider_id": "lm_evaluation_harness"}]}`},
+		{http.MethodGet, "/api/v1/evaluations/collections", http.StatusOK, ""},
+		{http.MethodGet, "/api/v1/evaluations/collections/test-collection", http.StatusNotFound, ""},
+		// Providers
+		{http.MethodGet, "/api/v1/evaluations/providers", http.StatusOK, ""},
+		// Error cases
+		{http.MethodPost, "/api/v1/health", http.StatusMethodNotAllowed, ""},
+		{http.MethodGet, "/nonexistent", http.StatusNotFound, ""},
+
+		{http.MethodGet, "/metrics", http.StatusOK, ""},
+	}
+
+	var evaluationIds []string
+
+	for _, tc := range testCases {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			var body io.Reader
+			if tc.body != "" {
+				body = strings.NewReader(tc.body)
+			}
+			req := httptest.NewRequest(tc.method, tc.path, body)
+			w := httptest.NewRecorder()
+
+			handler.ServeHTTP(w, req)
+
+			if w.Code != tc.status {
+				t.Fatalf("Expected status %d for %s %s, got %d with message %s", tc.status, tc.method, tc.path, w.Code, w.Body.String())
+			}
+
+			if (tc.method == http.MethodPost) && (w.Body.String() != "") && (strings.HasPrefix(tc.path, "/api/v1/evaluations/jobs")) {
+				var body map[string]interface{}
+				if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+					t.Fatalf("Failed to unmarshal body: %v", err)
+				}
+				id := getKeyAsString(body["resource"].(map[string]interface{}), "id")
+				if id != "" {
+					evaluationIds = append(evaluationIds, id)
+				} else {
+					t.Fatalf("Failed to find id in response body: %s", w.Body.String())
+				}
+			}
+		})
+	}
+
+	for _, id := range evaluationIds {
+		path := fmt.Sprintf("/api/v1/evaluations/jobs/%s", id)
+		req := httptest.NewRequest(http.MethodDelete, path, nil)
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNoContent {
+			t.Errorf("Expected status %d for %s when deleting evaluation job %s, got %d", http.StatusNoContent, path, id, w.Code)
+		}
+	}
+}
+
+func TestServerShutdown(t *testing.T) {
+	t.Run("shutdown works with running server", func(t *testing.T) {
+		srv, err := createServer(0) // Use random port for testing
+		if err != nil {
+			t.Fatalf("NewServer() returned error: %v", err)
+		}
+
+		// Start server in background
+		errChan := make(chan error, 1)
+		go func() {
+			errChan <- srv.Start()
+		}()
+
+		// Wait a bit for server to start
+		time.Sleep(100 * time.Millisecond)
+
+		// Shutdown
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		err = srv.Shutdown(ctx)
+		if err != nil {
+			t.Errorf("Shutdown failed: %v", err)
+		}
+
+		// Wait for server to stop
+		select {
+		case err := <-errChan:
+			if err != nil && !errors.Is(err, &server.ServerClosedError{}) {
+				t.Errorf("Server error: %v", err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Error("Server did not stop within timeout")
+		}
+	})
+}
+
+func createServer(port int) (*server.Server, error) {
+	logger, _, err := logging.NewLogger()
+	if err != nil {
+		return nil, err
+	}
+	validate := validation.NewValidator()
+	serviceConfig, err := config.LoadConfig(logger, "0.3.0", "local", time.Now().Format(time.RFC3339))
+	if err != nil {
+		return nil, fmt.Errorf("failed to load service config: %w", err)
+	}
+	serviceConfig.Service.Port = port
+	if serviceConfig.Prometheus == nil {
+		serviceConfig.Prometheus = &config.PrometheusConfig{
+			Enabled: true,
+		}
+	} else {
+		serviceConfig.Prometheus.Enabled = true
+	}
+	serviceConfig.Service.LocalMode = true // set local mode for testing
+	// set up the provider configs
+	providerConfigs, err := config.LoadProviderConfigs(logger, validate)
+	if err != nil {
+		// we do this as no point trying to continue
+		return nil, fmt.Errorf("failed to load provider configs: %w", err)
+	}
+	collectionConfigs, err := config.LoadCollectionConfigs(logger, validate)
+	if err != nil {
+		// we do this as no point trying to continue
+		return nil, fmt.Errorf("failed to load collection configs: %w", err)
+	}
+	store, err := storage.NewStorage(serviceConfig.Database, collectionConfigs, providerConfigs, serviceConfig.IsOTELStorageScansEnabled(), logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create storage: %w", err)
+	}
+	// Use stub runtime to avoid file writes and process spawning during tests
+	runtime := &stubRuntime{logger: logger, providers: providerConfigs}
+	mlflowClient, err := mlflow.NewMLFlowClient(serviceConfig, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create MLFlow client: %w", err)
+	}
+	return server.NewServer(logger, serviceConfig, nil, store, validate, runtime, mlflowClient)
+}
+
+func getKeyAsString(obj map[string]interface{}, key string) string {
+	value, ok := obj[key]
+	if !ok {
+		return ""
+	}
+	if v, isString := value.(string); isString {
+		return v
+	}
+	return ""
+}

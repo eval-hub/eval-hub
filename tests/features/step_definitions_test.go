@@ -22,13 +22,13 @@ import (
 
 	"github.com/Jeffail/gabs/v2"
 	"github.com/PaesslerAG/jsonpath"
-	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
-	"github.com/eval-hub/eval-hub/internal/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/storage"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/internal/logging"
-	"github.com/eval-hub/eval-hub/internal/mlflow"
-	"github.com/eval-hub/eval-hub/internal/runtimes"
-	"github.com/eval-hub/eval-hub/internal/storage"
-	"github.com/eval-hub/eval-hub/internal/validation"
 	pkgapi "github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/xeipuuv/gojsonschema"
 
@@ -210,7 +210,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 		return logError(fmt.Errorf("failed to load collection configs: %w", err))
 	}
 
-	storage, err := storage.NewStorage(serviceConfig.Database, collectionConfigs, providerConfigs, serviceConfig.IsOTELEnabled(), serviceConfig.IsAuthenticationEnabled(), logger)
+	storage, err := storage.NewStorage(serviceConfig.Database, collectionConfigs, providerConfigs, serviceConfig.IsOTELStorageScansEnabled(), logger)
 	if err != nil {
 		return logError(fmt.Errorf("failed to create storage: %w", err))
 	}

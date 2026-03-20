@@ -1701,7 +1701,8 @@
           {
             "$ref": "#/components/schemas/EvaluationJobConfigCommon2"
           }
-        ]
+        ],
+        "title": "EvaluationJobConfigBenchmarks"
       },
       "CollectionRef": {
         "type": "object",
@@ -1742,7 +1743,8 @@
           {
             "$ref": "#/components/schemas/EvaluationJobConfigCommon2"
           }
-        ]
+        ],
+        "title": "EvaluationJobConfigCollection"
       },
       "EvaluationJobConfig": {
         "type": "object",
