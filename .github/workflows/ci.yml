@@ -101,6 +101,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
@@ -114,6 +117,8 @@ jobs:
     - name: Docker metadata
       id: meta
       uses: docker/metadata-action@v5
+      env:
+        DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
       with:
         images: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}
         # Branch push: <branch>-<sha>, <branch>
@@ -124,20 +129,21 @@ jobs:
           type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
           type=semver,pattern={{version}}
           type=semver,pattern={{major}}.{{minor}}
+        labels: |
+          ${{ !startsWith(github.ref, 'refs/tags/') && 'quay.expires-after=12w' || '' }}
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v6
       with:
         context: .
         file: Containerfile
+        platforms: linux/amd64,linux/arm64
         push: true
-        load: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        annotations: |
-          ${{ steps.meta.outputs.annotations }}
-          ${{ !startsWith(github.ref, 'refs/tags/') && 'quay.expires-after=12w' || '' }}
+        annotations: ${{ steps.meta.outputs.annotations }}
 
     - name: Dry-run Docker image
       run: |
-        docker run --rm ${{ steps.meta.outputs.tags }} /app/eval-hub --help
+        docker pull ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ github.ref_name }}-${{ github.sha }}
+        docker run --rm ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ github.ref_name }}-${{ github.sha }} /app/eval-hub --local --help
