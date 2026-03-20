@@ -76,6 +76,10 @@ func cloneSidecarConfig(sc *config.SidecarConfig) *config.SidecarConfig {
 		mf := *sc.MLFlow
 		out.MLFlow = &mf
 	}
+	if sc.OCI != nil {
+		oci := *sc.OCI
+		out.OCI = &oci
+	}
 	// SidecarContainer (image/resources) is for eval-hub job scheduling only, not the sidecar process.
 	return out
 }

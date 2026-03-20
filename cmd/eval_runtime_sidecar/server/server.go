@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
@@ -32,8 +34,20 @@ func NewSidecarServer(logger *slog.Logger,
 	}
 
 	port := 8080
-	if config.Sidecar != nil && config.Sidecar.Port > 0 {
-		port = config.Sidecar.Port
+
+	if config.Sidecar != nil {
+		if baseURL := strings.TrimSpace(config.Sidecar.BaseURL); baseURL != "" {
+			if strings.Contains(baseURL, ":") {
+				parts := strings.Split(baseURL, ":")
+				portStr := parts[len(parts)-1]
+				portInt, err := strconv.Atoi(portStr)
+				if err != nil {
+					logger.Warn("invalid port in base URL, using default port 8080", "error", err)
+				} else {
+					port = portInt
+				}
+			}
+		}
 	}
 
 	return &SidecarServer{
@@ -62,8 +76,7 @@ func (s *SidecarServer) setupRoutes() (http.Handler, error) {
 }
 
 func (s *SidecarServer) setupSidecarProxyRoutes(h *handlers.Handlers, router *http.ServeMux) {
-	router.HandleFunc("/api/v1/evaluations/", h.HandleProxyCall)
-	router.HandleFunc("/api/2.0/mlflow/", h.HandleProxyCall)
+	router.HandleFunc("/", h.HandleProxyCall)
 }
 
 // SetupRoutes exposes the route setup for testing

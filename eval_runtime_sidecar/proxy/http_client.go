@@ -13,7 +13,9 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-const defaultHTTPTimeout = 30 * time.Second
+const DefaultCACertPath = "/etc/pki/ca-trust/source/anchors/service-ca.crt"
+const DefaultInsecureSkipVerify = false
+const DefaultHTTPTimeout = 30 * time.Second
 
 // NewHTTPClient creates an HTTP client with the given timeout and TLS config.
 // If isOTELEnabled is true, the transport is wrapped with OTEL instrumentation.
@@ -70,16 +72,24 @@ func NewEvalHubHTTPClient(config *config.Config, isOTELEnabled bool, logger *slo
 	}
 	cfg := config.Sidecar.EvalHub
 
-	timeout := defaultHTTPTimeout
-
+	timeout := DefaultHTTPTimeout
 	if cfg != nil && cfg.HTTPTimeout > 0 {
 		timeout = cfg.HTTPTimeout
+	}
+
+	caCertPath := DefaultCACertPath
+	if cfg != nil && cfg.CACertPath != "" {
+		caCertPath = cfg.CACertPath
+	}
+	insecureSkipVerify := DefaultInsecureSkipVerify
+	if cfg != nil && cfg.InsecureSkipVerify {
+		insecureSkipVerify = cfg.InsecureSkipVerify
 	}
 
 	var tlsConfig *tls.Config
 	var err error
 	if cfg != nil {
-		tlsConfig, err = buildTLSConfig(cfg.CACertPath, cfg.InsecureSkipVerify, logger, "EvalHub")
+		tlsConfig, err = buildTLSConfig(caCertPath, insecureSkipVerify, logger, "EvalHub")
 		if err != nil {
 			return nil, err
 		}
@@ -99,7 +109,7 @@ func NewMLFlowHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logge
 	// Job pod: MLFlow TLS/timeout come from sidecar_config.json (mlflow) merged into MLFlow at load.
 	mlflowConfig := serviceConfig.MLFlow
 
-	timeout := defaultHTTPTimeout
+	timeout := DefaultHTTPTimeout
 	if mlflowConfig.HTTPTimeout > 0 {
 		timeout = mlflowConfig.HTTPTimeout
 	}
@@ -110,5 +120,33 @@ func NewMLFlowHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logge
 	}
 
 	client := newHTTPClient(timeout, tlsConfig, isOTELEnabled, logger, "MLflow")
+	return client, nil
+}
+
+// NewOCIHTTPClient creates an HTTP client for the OCI registry from config (TLS, timeout).
+// Registry host comes from the job spec, not sidecar.oci.host; Host may be empty.
+// Returns (nil, nil) only when Sidecar.OCI is nil.
+func NewOCIHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logger *slog.Logger) (*http.Client, error) {
+	if serviceConfig == nil || serviceConfig.Sidecar == nil {
+		return nil, nil
+	}
+	ociConfig := serviceConfig.Sidecar.OCI
+	timeout := DefaultHTTPTimeout
+	if ociConfig != nil && ociConfig.HTTPTimeout > 0 {
+		timeout = ociConfig.HTTPTimeout
+	}
+	caCertPath := ""
+	if ociConfig != nil && ociConfig.CACertPath != "" {
+		caCertPath = ociConfig.CACertPath
+	}
+	insecureSkipVerify := DefaultInsecureSkipVerify
+	if ociConfig != nil && ociConfig.InsecureSkipVerify {
+		insecureSkipVerify = ociConfig.InsecureSkipVerify
+	}
+	tlsConfig, err := buildTLSConfig(caCertPath, insecureSkipVerify, logger, "OCI")
+	if err != nil {
+		return nil, err
+	}
+	client := newHTTPClient(timeout, tlsConfig, isOTELEnabled, logger, "OCI")
 	return client, nil
 }

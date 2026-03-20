@@ -58,3 +58,37 @@ func TestLoadSidecarRuntimeConfig_EmptyEvalHub(t *testing.T) {
 		t.Fatal("expected default EvalHub")
 	}
 }
+
+func TestLoadSidecarRuntimeConfig_OCISnakeCase(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sidecar_config.json")
+	// Snake_case keys as in /meta/sidecar_config.json on the pod
+	json := `{
+  "port": 8080,
+  "eval_hub": { "base_url": "https://eval.example" },
+  "oci": {
+    "ca_cert_path": "/etc/certs/ca.pem",
+    "insecure_skip_verify": true,
+    "http_timeout": 30000000000
+  }
+}`
+	if err := os.WriteFile(path, []byte(json), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadSidecarRuntimeConfig(path, "v1", "b1", "d1")
+	if err != nil {
+		t.Fatalf("LoadSidecarRuntimeConfig: %v", err)
+	}
+	if cfg.Sidecar.OCI == nil {
+		t.Fatal("expected OCI config")
+	}
+	if cfg.Sidecar.OCI.CACertPath != "/etc/certs/ca.pem" {
+		t.Errorf("oci.ca_cert_path = %q", cfg.Sidecar.OCI.CACertPath)
+	}
+	if !cfg.Sidecar.OCI.InsecureSkipVerify {
+		t.Error("oci.insecure_skip_verify should be true")
+	}
+	if cfg.Sidecar.OCI.HTTPTimeout != 30_000_000_000 {
+		t.Errorf("oci.http_timeout = %v", cfg.Sidecar.OCI.HTTPTimeout)
+	}
+}

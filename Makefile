@@ -64,7 +64,7 @@ build-init: $(BIN_DIR) ## Build the init binary
 	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(SIDECAR_BINARY_NAME) $(SIDECAR_CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(SIDECAR_BINARY_NAME)"
 
-build: build-service build-init ## Build the binaries
+build: build-service build-init build-sidecar ## Build the binaries
 
 build-coverage: $(BIN_DIR) ## Build the binaries with coverage
 	@echo "Building $(BINARY_NAME)-cov with -cover -covermode=atomic -ldflags ${LDFLAGS} "

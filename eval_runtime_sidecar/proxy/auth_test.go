@@ -8,14 +8,19 @@ import (
 	"time"
 )
 
+func resetAuthTokenCachesForTest() {
+	evalHubCachedToken.Store(nil)
+	mlflowCachedToken.Store(nil)
+	ociCachedToken.Store(nil)
+}
+
 func TestResolveAuthToken(t *testing.T) {
 	logger := slog.Default()
-	// Use unique target endpoints per test to avoid cache pollution
-	unique := func(s string) string { return s + "-" + t.Name() }
 
 	t.Run("returns static token when no path and token set", func(t *testing.T) {
+		resetAuthTokenCachesForTest()
 		input := AuthTokenInput{
-			TargetEndpoint: unique("static"),
+			TargetEndpoint: "eval-hub",
 			AuthTokenPath:  "",
 			AuthToken:      "my-token",
 		}
@@ -26,13 +31,14 @@ func TestResolveAuthToken(t *testing.T) {
 	})
 
 	t.Run("returns token from file when path exists and has content", func(t *testing.T) {
+		resetAuthTokenCachesForTest()
 		dir := t.TempDir()
 		tokenFile := filepath.Join(dir, "token")
 		if err := os.WriteFile(tokenFile, []byte(" file-token \n"), 0600); err != nil {
 			t.Fatal(err)
 		}
 		input := AuthTokenInput{
-			TargetEndpoint: unique("file"),
+			TargetEndpoint: "eval-hub",
 			AuthTokenPath:  tokenFile,
 			AuthToken:      "fallback",
 		}
@@ -43,8 +49,9 @@ func TestResolveAuthToken(t *testing.T) {
 	})
 
 	t.Run("falls back to static token when file missing", func(t *testing.T) {
+		resetAuthTokenCachesForTest()
 		input := AuthTokenInput{
-			TargetEndpoint: unique("file-missing"),
+			TargetEndpoint: "eval-hub",
 			AuthTokenPath:  filepath.Join(t.TempDir(), "nonexistent"),
 			AuthToken:      "fallback-token",
 		}
@@ -55,13 +62,14 @@ func TestResolveAuthToken(t *testing.T) {
 	})
 
 	t.Run("falls back to static token when file empty after trim", func(t *testing.T) {
+		resetAuthTokenCachesForTest()
 		dir := t.TempDir()
 		tokenFile := filepath.Join(dir, "empty")
 		if err := os.WriteFile(tokenFile, []byte("   \n"), 0600); err != nil {
 			t.Fatal(err)
 		}
 		input := AuthTokenInput{
-			TargetEndpoint: unique("file-empty"),
+			TargetEndpoint: "eval-hub",
 			AuthTokenPath:  tokenFile,
 			AuthToken:      "static",
 		}
@@ -72,8 +80,9 @@ func TestResolveAuthToken(t *testing.T) {
 	})
 
 	t.Run("cache returns same token on second call for same endpoint", func(t *testing.T) {
+		resetAuthTokenCachesForTest()
 		input := AuthTokenInput{
-			TargetEndpoint:    unique("cached"),
+			TargetEndpoint:    "mlflow",
 			AuthTokenPath:     "",
 			AuthToken:         "cached-token",
 			TokenCacheTimeout: time.Minute,
@@ -86,6 +95,7 @@ func TestResolveAuthToken(t *testing.T) {
 	})
 
 	t.Run("empty target endpoint does not use cache", func(t *testing.T) {
+		resetAuthTokenCachesForTest()
 		input := AuthTokenInput{
 			TargetEndpoint: "",
 			AuthTokenPath:  "",
@@ -96,4 +106,31 @@ func TestResolveAuthToken(t *testing.T) {
 			t.Errorf("ResolveAuthToken() = %q, want %q", got, "no-cache-token")
 		}
 	})
+}
+
+func TestUpdateCachedToken(t *testing.T) {
+	resetAuthTokenCachesForTest()
+	input := AuthTokenInput{
+		TargetEndpoint:    "eval-hub",
+		TokenCacheTimeout: time.Hour,
+	}
+	UpdateCachedToken(input, "injected")
+	got := ResolveAuthToken(slog.Default(), AuthTokenInput{
+		TargetEndpoint:    "eval-hub",
+		AuthTokenPath:     filepath.Join(t.TempDir(), "missing"),
+		AuthToken:         "would-read-if-not-cached",
+		TokenCacheTimeout: time.Hour,
+	})
+	if got != "injected" {
+		t.Errorf("after UpdateCachedToken, ResolveAuthToken = %q, want injected", got)
+	}
+	UpdateCachedToken(input, "")
+	got2 := ResolveAuthToken(slog.Default(), AuthTokenInput{
+		TargetEndpoint:    "eval-hub",
+		AuthToken:         "after-clear",
+		TokenCacheTimeout: time.Hour,
+	})
+	if got2 != "after-clear" {
+		t.Errorf("after clear, ResolveAuthToken = %q, want after-clear", got2)
+	}
 }

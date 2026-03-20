@@ -1316,6 +1316,7 @@ components:
               description: |
                 The evaluation benchmarks to run.
         - $ref: '#/components/schemas/EvaluationJobConfigCommon2'
+      title: EvaluationJobConfigBenchmarks
     CollectionRef:
       type: object
       description: |
@@ -1343,6 +1344,7 @@ components:
             collection:
               $ref: '#/components/schemas/CollectionRef'
         - $ref: '#/components/schemas/EvaluationJobConfigCommon2'
+      title: EvaluationJobConfigCollection
     EvaluationJobConfig:
       type: object
       title: EvaluationJobConfig

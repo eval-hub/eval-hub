@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/config"
@@ -115,4 +116,55 @@ func TestHandlers_HandleProxyCall(t *testing.T) {
 			t.Errorf("status = %d, want 400 (mlflow proxy not configured)", rw.Code)
 		}
 	})
+
+	t.Run("registry path with nil OCI returns 400", func(t *testing.T) {
+		// h has no Sidecar.OCI, so ociRepository is empty; path without repository name does not match OCI -> unknown proxy call
+		req := httptest.NewRequest(http.MethodGet, "/registry/v2/", nil)
+		rw := httptest.NewRecorder()
+		h.HandleProxyCall(rw, req)
+		if rw.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want 400", rw.Code)
+		}
+		if body := rw.Body.String(); !strings.Contains(body, "unknown proxy call") {
+			t.Errorf("body = %q, want unknown proxy call (OCI not configured, no repository to match)", body)
+		}
+	})
+}
+
+func TestOciRouteMatch(t *testing.T) {
+	h := &Handlers{ociRepository: "org/repo"}
+	tests := []struct {
+		uri  string
+		want bool
+	}{
+		{"/v2/org/repo/manifests/latest", true},
+		{"/v2/ac/org/repo/manifests/latest", false},
+		{"/org/repo/tags/list", true},
+		{"/xorg/repo/tags/list", false},
+		{"/v2/org/repo2/tags/list", false},
+		// Query must not affect matching (path only).
+		{"/v2/org/repo/blobs/uploads?q=/v2/evil/org/repo/extra", true},
+		{"/v2/evil/blobs?q=org%2Frepo", false},
+	}
+	for _, tt := range tests {
+		if got := h.ociRouteMatch(tt.uri); got != tt.want {
+			t.Errorf("ociRouteMatch(%q) = %v, want %v", tt.uri, got, tt.want)
+		}
+	}
+}
+
+func TestRequestPathForOCIRouting(t *testing.T) {
+	tests := []struct {
+		in, want string
+	}{
+		{"/v2/a/b", "/v2/a/b"},
+		{"/v2/a/b?x=y", "/v2/a/b"},
+		{"/v2/a/b#frag", "/v2/a/b"},
+		{"/v2/a?b=c&d=e", "/v2/a"},
+	}
+	for _, tt := range tests {
+		if got := requestPathForOCIRouting(tt.in); got != tt.want {
+			t.Errorf("requestPathForOCIRouting(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
 }
