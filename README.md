@@ -130,7 +130,6 @@ All endpoints are versioned under `/api/v1`. Full specification at [eval-hub.git
 | `/api/v1/evaluations/jobs/{id}` | GET, DELETE | Get status or cancel a job |
 | `/api/v1/evaluations/collections` | GET, POST | List or create benchmark collections |
 | `/api/v1/evaluations/providers` | GET | List registered providers |
-| `/api/v1/evaluations/jobs/{id}/events` | GET | Stream job status events |
 | `/api/v1/health` | GET | Health check |
 | `/metrics` | GET | Prometheus metrics |
 
