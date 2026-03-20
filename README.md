@@ -169,7 +169,7 @@ class MyAdapter(FrameworkAdapter):
         )
 ```
 
-Register the new provider by adding a YAML entry to the providers ConfigMap. No additional services or TCP listeners are required -- adapters run as jobs, not servers. Once registered, the provider and its benchmarks are available through the standard `/api/v1/evaluations/providers` and `/api/v1/evaluations/benchmarks` endpoints.
+Register the new provider by adding a YAML entry to the providers ConfigMap. No additional services or TCP listeners are required -- adapters run as jobs, not servers. Once registered, the provider and its benchmarks are available through the standard `/api/v1/evaluations/providers` endpoint.
 
 
 ## Project structure
