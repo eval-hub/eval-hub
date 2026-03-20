@@ -103,10 +103,17 @@ make build-wheel
 
 ### Database
 
-SQLite in-memory is the default. For PostgreSQL, install and start PostgreSQL manually, then configure the connection:
+SQLite in-memory is the default. For PostgreSQL, use the targets in `tests/postgres/Makefile`:
 
 ```bash
-export DB_URL="postgres://eval_hub:password@localhost:5432/eval_hub?sslmode=disable"
+make -C tests/postgres install-postgres && make -C tests/postgres start-postgres
+make -C tests/postgres create-database && make -C tests/postgres create-user && make -C tests/postgres grant-permissions
+```
+
+Then set `DB_URL` to a PostgreSQL connection string:
+
+```bash
+export DB_URL="postgres://user@localhost:5432/eval_hub"
 ```
 
 ## Configuration
