@@ -277,6 +277,60 @@ func TestBuildJobWithOCICredentials(t *testing.T) {
 	}
 }
 
+func TestBuildJobTerminationFileVolume(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "job-term-vol",
+		resourceGUID:   "guid-tv",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
+	}
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob: %v", err)
+	}
+	var foundVol bool
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == terminationFileVolumeName {
+			foundVol = true
+			if v.EmptyDir == nil {
+				t.Fatalf("expected EmptyDir for %s", terminationFileVolumeName)
+			}
+		}
+	}
+	if !foundVol {
+		t.Fatalf("expected volume %q", terminationFileVolumeName)
+	}
+	if len(job.Spec.Template.Spec.Containers) < 2 {
+		t.Fatal("expected adapter and sidecar")
+	}
+	adapter := job.Spec.Template.Spec.Containers[0]
+	var adapterMount bool
+	for _, m := range adapter.VolumeMounts {
+		if m.Name == terminationFileVolumeName && m.MountPath == adapterTerminationSharedMountPath {
+			adapterMount = true
+			break
+		}
+	}
+	if !adapterMount {
+		t.Fatalf("adapter should mount %q at %q", terminationFileVolumeName, adapterTerminationSharedMountPath)
+	}
+	sidecar := job.Spec.Template.Spec.Containers[1]
+	var sidecarMount bool
+	for _, m := range sidecar.VolumeMounts {
+		if m.Name == terminationFileVolumeName && m.MountPath == sidecarTerminationAdapterMountPath {
+			sidecarMount = true
+			break
+		}
+	}
+	if !sidecarMount {
+		t.Fatalf("sidecar should mount %q at %q", terminationFileVolumeName, sidecarTerminationAdapterMountPath)
+	}
+}
+
 func TestBuildJobSidecarDoesNotUseEvalhubConfigVolume(t *testing.T) {
 	cfg := &jobConfig{
 		jobID:          "job-sidecar-vol",

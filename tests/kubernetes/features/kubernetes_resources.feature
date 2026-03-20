@@ -53,6 +53,7 @@ Feature: Kubernetes Resources Validation
     And the Job pod template should have label "benchmark_id" matching the benchmark ID
     And the Job pod template should have volume "job-spec" of type ConfigMap
     And the Job pod template should have volume "data" of type EmptyDir
+    And the Job pod template should have volume "termination-file-volume" of type EmptyDir
     And the volume "job-spec" should reference the ConfigMap with suffix "-spec"
     And the Job pod template should have serviceAccountName derived from service account name
     And the Job pod template should have volume "evalhub-service-ca" of type ConfigMap
@@ -73,6 +74,7 @@ Feature: Kubernetes Resources Validation
     And the container should have memory limit set
     And the container should have volumeMount "job-spec" at path "/meta/job.json"
     And the container should have volumeMount "data" at path "/data"
+    And the container should have volumeMount "termination-file-volume" at path "/shared"
     And the volumeMount "job-spec" should have subPath "job.json"
     And the volumeMount "job-spec" should be readOnly
     And the container should have volumeMount "evalhub-service-ca" at path "/etc/pki/ca-trust/source/anchors"
@@ -80,6 +82,7 @@ Feature: Kubernetes Resources Validation
     And the container should have environment variables from the provider configuration
     And the Job pod template should have container named "sidecar"
     And the sidecar container should have volumeMount "job-spec" at path "/meta/sidecar_config.json" with subPath "sidecar_config.json"
+    And the sidecar container should have volumeMount "termination-file-volume" at path "/tmp/adapter"
 
   Scenario: Job and ConfigMap specification (multi-benchmark)
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_multi_benchmark.json"
