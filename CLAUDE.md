@@ -47,7 +47,14 @@ make update-deps        # Update all dependencies to latest
 
 ### Database Setup
 
-SQLite in-memory is the default and requires no setup. For PostgreSQL, install and start the service manually, then set the `DB_URL` environment variable:
+SQLite in-memory is the default and requires no setup. For PostgreSQL, use the targets in `tests/postgres/Makefile`:
+
+```bash
+make -C tests/postgres install-postgres && make -C tests/postgres start-postgres
+make -C tests/postgres create-database && make -C tests/postgres create-user && make -C tests/postgres grant-permissions
+```
+
+Then set `DB_URL` to a PostgreSQL connection string:
 
 ```bash
 export DB_URL="postgres://user@localhost:5432/eval_hub"
@@ -71,7 +78,7 @@ This project follows the standard Go project layout with a clear separation betw
 - **internal/logging/** - Logger creation and request enhancement
 - **internal/metrics/** - Prometheus metrics and middleware
 - **cmd/eval_hub/server/** - Server setup and routing
-- **api/** - OpenAPI 3.1.0 specification
+- **docs/src/** - OpenAPI 3.1.0 specification
 - **tests/features/** - BDD-style FVT tests using godog
 
 ### Key Architectural Patterns
