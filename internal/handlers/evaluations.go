@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"runtime/debug"
 	"strings"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/messages"
 	"github.com/eval-hub/eval-hub/internal/mlflow"
+	"github.com/eval-hub/eval-hub/internal/runtimes/shared"
 	"github.com/eval-hub/eval-hub/internal/serialization"
 	"github.com/eval-hub/eval-hub/internal/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -146,9 +146,8 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		ctx,
 		func(runtimeCtx context.Context) error {
 			if h.runtime != nil {
-				runErr := h.executeEvaluationJob(runtimeCtx, ctx.Logger, h.runtime, job, storage)
+				runErr := h.executeEvaluationJob(ctx.Logger, h.runtime, job, storage)
 				if runErr != nil {
-					ctx.Logger.Error("RunEvaluationJob failed", "error", runErr, "job_id", job.Resource.ID)
 					state := api.OverallStateFailed
 					message := &api.MessageInfo{
 						Message:     runErr.Error(),
@@ -173,29 +172,22 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 	)
 }
 
-func (h *Handlers) executeEvaluationJob(ctx context.Context, logger *slog.Logger, runtime abstractions.Runtime, job *api.EvaluationJobResource, storage abstractions.Storage) error {
+func (h *Handlers) executeEvaluationJob(logger *slog.Logger, runtime abstractions.Runtime, job *api.EvaluationJobResource, storage abstractions.Storage) error {
+	var err error
+
+	benchmarks, err := shared.ResolveBenchmarks(job, storage)
+	if err != nil {
+		return err
+	}
+
 	// Detach storage from the HTTP request context so that background
 	// goroutines inside the runtime can update job status after the
 	// request completes. This is the single transition point from
 	// request-scoped work to background runtime work, covering all
 	// runtime implementations (local, k8s, etc.).
-	if storage != nil {
-		detached := storage.WithContext(context.Background())
-		storage = detached
-	}
+	jobContext := context.Background()
 
-	var err error
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			logger.Error("panic in RunEvaluationJob", "panic", recovered, "stack", string(debug.Stack()), "job_id", job.Resource.ID)
-			runtimeErr := serviceerrors.NewServiceError(messages.InternalServerError, "Error", fmt.Sprint(recovered))
-			// return the runtime error if not already set
-			if err == nil {
-				err = runtimeErr
-			}
-		}
-	}()
-	err = runtime.WithLogger(logger).WithContext(ctx).RunEvaluationJob(job, storage)
+	err = runtime.WithLogger(logger).WithContext(jobContext).RunEvaluationJob(job, benchmarks, storage.WithContext(jobContext))
 	return err
 }
 

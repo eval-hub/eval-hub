@@ -15,8 +15,8 @@ type Runtime interface {
 	WithLogger(logger *slog.Logger) Runtime
 	WithContext(ctx context.Context) Runtime
 	Name() string
-	RunEvaluationJob(evaluation *api.EvaluationJobResource, storage Storage) error
+	RunEvaluationJob(evaluation *api.EvaluationJobResource, benchmarks []api.BenchmarkConfig, storage Storage) error
 	DeleteEvaluationJobResources(evaluation *api.EvaluationJobResource) error
 }
 
-// This intrerface must be decoupled from the service HTTP layer
+// This interface must be decoupled from the service HTTP layer
