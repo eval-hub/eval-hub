@@ -1,0 +1,488 @@
+package server
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"net"
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/eval-hub/eval-hub/auth"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/k8s"
+	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
+	"github.com/go-playground/validator/v10"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
+	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+type Server struct {
+	httpServer    *http.Server
+	port          int
+	logger        *slog.Logger
+	serviceConfig *config.Config
+	authConfig    *auth.AuthConfig
+	storage       abstractions.Storage
+	validate      *validator.Validate
+	runtime       abstractions.Runtime
+	mlflowClient  *mlflowclient.Client
+}
+
+func (s *Server) isOTELEnabled() bool {
+	return (s.serviceConfig != nil) && s.serviceConfig.IsOTELEnabled()
+}
+
+// NewServer creates a new HTTP server instance with the provided logger and configuration.
+// The server uses standard library net/http.ServeMux for routing without a web framework.
+//
+// The server implements the routing pattern where:
+//   - Basic handlers (health, status, OpenAPI) receive http.ResponseWriter, *http.Request
+//   - Evaluation-related handlers receive *ExecutionContext, http.ResponseWriter, *http.Request
+//   - ExecutionContext is created at the route level before calling handlers
+//   - Routes manually switch on HTTP method in handler functions
+//
+// All routes are wrapped with Prometheus metrics middleware for request duration and
+// status code tracking.
+//
+// Parameters:
+//   - logger: The structured logger for the server
+//   - serviceConfig: The service configuration containing port and other settings
+//
+// Returns:
+//   - *Server: A configured server instance
+//   - error: An error if logger or serviceConfig is nil
+func NewServer(logger *slog.Logger,
+	serviceConfig *config.Config,
+	authConfig *auth.AuthConfig,
+	storage abstractions.Storage,
+	validate *validator.Validate,
+	runtime abstractions.Runtime,
+	mlflowClient *mlflowclient.Client,
+) (*Server, error) {
+
+	if logger == nil {
+		return nil, fmt.Errorf("logger is required for the server")
+	}
+	if (serviceConfig == nil) || (serviceConfig.Service == nil) {
+		return nil, fmt.Errorf("service config is required for the server")
+	}
+	if storage == nil {
+		return nil, fmt.Errorf("storage is required for the server")
+	}
+	if validate == nil {
+		return nil, fmt.Errorf("validator is required for the server")
+	}
+
+	return &Server{
+		port:          serviceConfig.Service.Port,
+		logger:        logger,
+		serviceConfig: serviceConfig,
+		authConfig:    authConfig,
+		storage:       storage,
+		validate:      validate,
+		runtime:       runtime,
+		mlflowClient:  mlflowClient,
+	}, nil
+}
+
+func (s *Server) GetPort() int {
+	return s.port
+}
+
+// LoggerWithRequest enhances a logger with request-specific fields for distributed
+// tracing and structured logging. This function is called when creating an ExecutionContext
+// to automatically enrich all log entries for a given HTTP request with consistent metadata.
+//
+// The enhanced logger includes the following fields (when available):
+//   - request_id: Extracted from X-Global-Transaction-Id header, or auto-generated UUID if missing
+//   - method: HTTP method (GET, POST, etc.)
+//   - uri: Request path (from URL.Path or RequestURI)
+//   - user_agent: Client user agent from User-Agent header
+//   - remote_addr: Client IP address
+//   - remote_user: Authenticated user from URL user info or Remote-User header
+//   - referer: HTTP referer header
+//
+// This enables correlating logs across services using the request_id and provides
+// comprehensive request context in all log entries.
+//
+// Parameters:
+//   - logger: The base logger to enhance
+//   - r: The HTTP request to extract fields from
+//
+// Returns:
+//   - *slog.Logger: A new logger instance with request-specific fields attached
+func (s *Server) loggerWithRequest(r *http.Request) (string, *slog.Logger) {
+	requestID := r.Header.Get(TRANSACTION_ID_HEADER)
+	if requestID == "" {
+		requestID = uuid.New().String() // generate a UUID if not present
+	}
+
+	enhancedLogger := s.logger.With(constants.LOG_REQUEST_ID, requestID)
+
+	// Extract and add HTTP method and URI if they exist
+	method := r.Method
+	if method != "" {
+		enhancedLogger = enhancedLogger.With(constants.LOG_METHOD, method)
+	}
+
+	uri := ""
+	if r.URL != nil {
+		uri = r.URL.Path
+	}
+	if uri == "" {
+		uri = r.RequestURI
+	}
+	if uri != "" {
+		if r.URL.RawQuery != "" {
+			uri = fmt.Sprintf("%s?%s", uri, r.URL.RawQuery)
+		}
+		enhancedLogger = enhancedLogger.With(constants.LOG_URI, uri)
+	}
+
+	// Extract and add HTTP request fields to logger if they exist
+	userAgent := r.Header.Get("User-Agent")
+	if userAgent != "" {
+		enhancedLogger = enhancedLogger.With(constants.LOG_USER_AGENT, userAgent)
+	}
+
+	remoteAddr := r.RemoteAddr
+	if remoteAddr != "" {
+		enhancedLogger = enhancedLogger.With(constants.LOG_REMOTE_ADR, remoteAddr)
+	}
+
+	// Extract remote_user from URL user info or header
+	remoteUser := ""
+	if r.URL != nil && r.URL.User != nil {
+		remoteUser = r.URL.User.Username()
+	}
+	if remoteUser == "" {
+		remoteUser = r.Header.Get("Remote-User")
+	}
+	if remoteUser != "" {
+		enhancedLogger = enhancedLogger.With(constants.LOG_REMOTE_USER, remoteUser)
+	}
+
+	referer := r.Header.Get("Referer")
+	if referer != "" {
+		enhancedLogger = enhancedLogger.With(constants.LOG_REFERER, referer)
+	}
+
+	return requestID, enhancedLogger
+}
+
+func (s *Server) handleFunc(router *http.ServeMux, pattern string, handler func(http.ResponseWriter, *http.Request)) {
+	s.handle(router, pattern, http.HandlerFunc(handler))
+}
+
+func spanNameFormatter(operation string, r *http.Request) string {
+	return fmt.Sprintf("%s %s", r.Method, operation)
+}
+
+func (s *Server) handle(router *http.ServeMux, pattern string, handler http.Handler) {
+	if s.isOTELEnabled() {
+		handler = otelhttp.NewHandler(handler, pattern, otelhttp.WithSpanNameFormatter(spanNameFormatter))
+		s.logger.Info("Enabled OTEL handler", "pattern", pattern)
+	}
+	router.Handle(pattern, handler)
+	s.logger.Info("Registered API", "pattern", pattern)
+}
+
+func (s *Server) setupHealthRoutes(h *handlers.Handlers, router *http.ServeMux) {
+	s.handleFunc(router, "/api/v1/health", func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := NewRequestWrapper(r)
+		switch req.Method() {
+		case http.MethodGet:
+			h.HandleHealth(ctx, req, resp, s.serviceConfig.Service.Build, s.serviceConfig.Service.BuildDate)
+		default:
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
+		}
+	})
+}
+
+func (s *Server) setupEvaluationJobsRoutes(h *handlers.Handlers, router *http.ServeMux) {
+	s.handleFunc(router, "/api/v1/evaluations/jobs", func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := &ReqWrapper{Request: r}
+		switch r.Method {
+		case http.MethodPost:
+			h.HandleCreateEvaluation(ctx, req, resp)
+		case http.MethodGet:
+			h.HandleListEvaluations(ctx, req, resp)
+		default:
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
+		}
+	})
+}
+
+func (s *Server) setupEvaluationJobEventsRoutes(h *handlers.Handlers, router *http.ServeMux) {
+	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/jobs/{%s}/events", constants.PATH_PARAMETER_JOB_ID), func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := NewRequestWrapper(r)
+		switch r.Method {
+		case http.MethodPost:
+			h.HandleUpdateEvaluation(ctx, req, resp)
+		default:
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
+		}
+	})
+}
+
+func (s *Server) setupEvaluationJobRoutes(h *handlers.Handlers, router *http.ServeMux) {
+	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/jobs/{%s}", constants.PATH_PARAMETER_JOB_ID), func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := NewRequestWrapper(r)
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleGetEvaluation(ctx, req, resp)
+		case http.MethodDelete:
+			h.HandleCancelEvaluation(ctx, req, resp)
+		default:
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
+		}
+	})
+}
+
+func (s *Server) setupCollectionsRoutes(h *handlers.Handlers, router *http.ServeMux) {
+	s.handleFunc(router, "/api/v1/evaluations/collections", func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := NewRequestWrapper(r)
+		switch r.Method {
+		case http.MethodPost:
+			h.HandleCreateCollection(ctx, req, resp)
+		case http.MethodGet:
+			h.HandleListCollections(ctx, req, resp)
+		default:
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
+		}
+	})
+}
+
+func (s *Server) setupCollectionRoutes(h *handlers.Handlers, router *http.ServeMux) {
+	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/collections/{%s}", constants.PATH_PARAMETER_COLLECTION_ID), func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := NewRequestWrapper(r)
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleGetCollection(ctx, req, resp)
+		case http.MethodPut:
+			h.HandleUpdateCollection(ctx, req, resp)
+		case http.MethodPatch:
+			h.HandlePatchCollection(ctx, req, resp)
+		case http.MethodDelete:
+			h.HandleDeleteCollection(ctx, req, resp)
+		default:
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
+		}
+	})
+}
+
+func (s *Server) setupProvidersRoutes(h *handlers.Handlers, router *http.ServeMux) {
+	s.handleFunc(router, "/api/v1/evaluations/providers", func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := NewRequestWrapper(r)
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleListProviders(ctx, req, resp)
+		case http.MethodPost:
+			h.HandleCreateProvider(ctx, req, resp)
+		default:
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
+		}
+	})
+}
+
+func (s *Server) setupProviderRoutes(h *handlers.Handlers, router *http.ServeMux) {
+	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/providers/{%s}", constants.PATH_PARAMETER_PROVIDER_ID), func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := NewRequestWrapper(r)
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleGetProvider(ctx, req, resp)
+		case http.MethodPut:
+			h.HandleUpdateProvider(ctx, req, resp)
+		case http.MethodPatch:
+			h.HandlePatchProvider(ctx, req, resp)
+		case http.MethodDelete:
+			h.HandleDeleteProvider(ctx, req, resp)
+		default:
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
+		}
+	})
+}
+
+func (s *Server) setupOpenAPIRoutes(h *handlers.Handlers, router *http.ServeMux) {
+	s.handleFunc(router, "/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := NewRequestWrapper(r)
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleOpenAPI(ctx, req, resp)
+		default:
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
+		}
+	})
+}
+
+func (s *Server) setupDocsRoutes(h *handlers.Handlers, router *http.ServeMux) {
+	s.handleFunc(router, "/docs", func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := NewRequestWrapper(r)
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleDocs(ctx, req, resp)
+		default:
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
+		}
+
+	})
+}
+
+func (s *Server) setupRoutes() (http.Handler, error) {
+	router := http.NewServeMux()
+	h := handlers.New(s.storage, s.validate, s.runtime, s.mlflowClient, s.serviceConfig)
+
+	// Health
+	s.setupHealthRoutes(h, router)
+
+	// Evaluation jobs endpoints
+	s.setupEvaluationJobsRoutes(h, router)
+	s.setupEvaluationJobEventsRoutes(h, router)
+	s.setupEvaluationJobRoutes(h, router)
+
+	// Collections endpoints
+	s.setupCollectionsRoutes(h, router)
+	s.setupCollectionRoutes(h, router)
+
+	// Providers endpoints
+	s.setupProvidersRoutes(h, router)
+	s.setupProviderRoutes(h, router)
+
+	// OpenAPI documentation endpoints
+	s.setupOpenAPIRoutes(h, router)
+
+	s.setupDocsRoutes(h, router)
+
+	// Prometheus metrics endpoint
+	prometheusEnabled := s.serviceConfig.IsPrometheusEnabled()
+	if prometheusEnabled {
+		router.Handle("/metrics", promhttp.Handler())
+		s.logger.Info("Registered API", "pattern", "/metrics")
+	}
+
+	// Enable CORS in local mode only (for development/testing)
+	handler := http.Handler(router)
+	if s.serviceConfig.Service.LocalMode {
+		handler = CorsMiddleware(handler, s.serviceConfig)
+	}
+
+	// Wrap with metrics middleware (outermost for complete observability)
+	handler = Middleware(handler, prometheusEnabled, s.logger)
+	handler, err := s.setupAuth(handler)
+	if err != nil {
+		return nil, err
+	}
+	return handler, nil
+}
+
+func (s *Server) setupAuth(handler http.Handler) (http.Handler, error) {
+	if s.serviceConfig.IsAuthenticationEnabled() {
+		client, err := k8s.NewKubernetesClient()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
+		}
+
+		handler, err = WithAuthorization(handler, s.logger, client, s.authConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create authorization handler: %w", err)
+		}
+		handler, err = WithAuthentication(handler, s.logger, client, s.authConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create authentication handler: %w", err)
+		}
+		s.logger.Info("Authentication and authorization setup completed")
+	}
+	return handler, nil
+}
+
+// SetupRoutes exposes the route setup for testing
+func (s *Server) SetupRoutes() (http.Handler, error) {
+	return s.setupRoutes()
+}
+
+func (s *Server) Start() error {
+	if err := s.serviceConfig.Service.ValidateTLSConfig(); err != nil {
+		return err
+	}
+
+	handler, err := s.setupRoutes()
+	if err != nil {
+		return err
+	}
+	host := s.serviceConfig.Service.Host
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	addr := net.JoinHostPort(host, strconv.Itoa(s.port))
+	s.httpServer = &http.Server{
+		Addr:         addr,
+		Handler:      handler,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	s.logger.Info("Writing the server ready message", "file", s.serviceConfig.Service.ReadyFile)
+	err = SetReady(s.serviceConfig, s.logger)
+	if err != nil {
+		return err
+	}
+
+	tlsEnabled := s.serviceConfig.Service.TLSEnabled()
+	s.logger.Info("Server starting", "addr", addr, "tls", tlsEnabled)
+
+	if tlsEnabled {
+		err = s.httpServer.ListenAndServeTLS(
+			s.serviceConfig.Service.TLSCertFile,
+			s.serviceConfig.Service.TLSKeyFile,
+		)
+	} else {
+		err = s.httpServer.ListenAndServe()
+	}
+
+	if err == http.ErrServerClosed {
+		s.logger.Info("Server closed gracefully")
+		return &ServerClosedError{}
+	}
+	return err
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.logger.Info("Shutting down server gracefully...")
+	return s.httpServer.Shutdown(ctx)
+}
+
+type ServerClosedError struct {
+}
+
+func (e *ServerClosedError) Error() string {
+	return "Server closed"
+}

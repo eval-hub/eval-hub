@@ -14,14 +14,14 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/auth"
-	"github.com/eval-hub/eval-hub/cmd/eval_hub/server"
-	"github.com/eval-hub/eval-hub/internal/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/storage"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/internal/logging"
-	"github.com/eval-hub/eval-hub/internal/mlflow"
 	"github.com/eval-hub/eval-hub/internal/otel"
-	"github.com/eval-hub/eval-hub/internal/runtimes"
-	"github.com/eval-hub/eval-hub/internal/storage"
-	"github.com/eval-hub/eval-hub/internal/validation"
 )
 
 var (

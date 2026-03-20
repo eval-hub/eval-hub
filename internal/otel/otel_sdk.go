@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/eval-hub/eval-hub/internal/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/go-logr/logr"
 	"go.opentelemetry.io/contrib/detectors/aws/ecs"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
