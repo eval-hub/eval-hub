@@ -41,6 +41,7 @@ Feature: Evaluations Endpoint
     Then the response code should be 404
     And the response should contain the value "resource_not_found" at path "$.message_code"
 
+  @cluster
   Scenario: Create an evaluation job and wait for completion
     Given the service is running
     When the mode is local or CI then skip this scenario
@@ -185,6 +186,7 @@ Feature: Evaluations Endpoint
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
 
+  @cluster
   Scenario: Create evaluation job with Collection
     Given the service is running
     When the mode is local or CI then skip this scenario
