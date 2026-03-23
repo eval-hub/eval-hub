@@ -9,7 +9,6 @@ Concise guide for configuring MLFlow integration and understanding experiment tr
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
 | `MLFLOW_TRACKING_URI` | MLFlow server URL | `http://localhost:5000` | Yes |
-| `MLFLOW_EXPERIMENT_PREFIX` | Prefix for experiment names | `eval-hub` | No |
 
 ### Deployment Configuration
 
