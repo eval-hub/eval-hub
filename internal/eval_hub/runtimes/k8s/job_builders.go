@@ -28,43 +28,39 @@ const (
 	// RFC 1123: volume names must be lowercase DNS labels (no camelCase).
 	terminationFileVolumeName         = "termination-file-volume"
 	adapterTerminationSharedMountPath = "/shared"
-	// sidecarTerminationAdapterMountPath must match eval_runtime_sidecar/termination.AdapterTerminationWatchDir.
-	// The adapter signals shutdown by creating a regular file named "terminated" on the shared volume
-	// (adapter: adapterTerminationSharedMountPath + "/terminated").
-	sidecarTerminationAdapterMountPath = "/tmp/adapter"
-	testDataVolumeName                 = "test-data"
-	serviceCAVolumeName                = "evalhub-service-ca"
-	jobSpecFileName                    = "job.json"
-	jobSpecMountPath                   = "/meta/job.json"
-	sidecarConfigFileName              = "sidecar_config.json"
-	sidecarConfigMountPath             = "/meta/sidecar_config.json"
-	dataMountPath                      = "/data"
-	testDataMountPath                  = "/test_data"
-	serviceCAMountPath                 = "/etc/pki/ca-trust/source/anchors"
-	specSuffix                         = "-spec"
-	envMLFlowTrackingURIName           = "MLFLOW_TRACKING_URI"
-	envMLFlowWorkspaceName             = "MLFLOW_WORKSPACE"
-	envMLFlowTokenPathName             = "MLFLOW_TRACKING_TOKEN_PATH"
-	mlflowTokenVolumeName              = "mlflow-token"
-	mlflowTokenMountPath               = "/var/run/secrets/mlflow"
-	mlflowTokenFile                    = "token"
-	ociCredentialsVolumeName           = "oci-credentials"
-	ociCredentialsMountPath            = "/etc/evalhub/.docker/config.json"
-	ociCredentialsSubPath              = ".dockerconfigjson"
-	envOCIAuthConfigPathName           = "OCI_AUTH_CONFIG_PATH"
-	modelAuthVolumeName                = "model-auth"
-	modelAuthMountPath                 = "/var/run/secrets/model"
-	testDataSecretVolumeName           = "test-data-secret"
-	testDataSecretMountPath            = "/var/run/secrets/test-data"
-	serviceCABundleFile                = "service-ca.crt"
-	envMLFlowCertPathName              = "MLFLOW_TRACKING_SERVER_CERT_PATH"
-	envTestDataS3BucketName            = "TEST_DATA_S3_BUCKET"
-	envTestDataS3KeyName               = "TEST_DATA_S3_KEY"
-	defaultInitCPURequest              = "100m"
-	defaultInitCPULimit                = "500m"
-	defaultInitMemoryRequest           = "128Mi"
-	defaultInitMemoryLimit             = "512Mi"
-	defaultAllowPrivilegeEscalation    = false
+	testDataVolumeName                = "test-data"
+	serviceCAVolumeName               = "evalhub-service-ca"
+	jobSpecFileName                   = "job.json"
+	jobSpecMountPath                  = "/meta/job.json"
+	sidecarConfigFileName             = "sidecar_config.json"
+	sidecarConfigMountPath            = "/meta/sidecar_config.json"
+	dataMountPath                     = "/data"
+	testDataMountPath                 = "/test_data"
+	serviceCAMountPath                = "/etc/pki/ca-trust/source/anchors"
+	specSuffix                        = "-spec"
+	envMLFlowTrackingURIName          = "MLFLOW_TRACKING_URI"
+	envMLFlowWorkspaceName            = "MLFLOW_WORKSPACE"
+	envMLFlowTokenPathName            = "MLFLOW_TRACKING_TOKEN_PATH"
+	mlflowTokenVolumeName             = "mlflow-token"
+	mlflowTokenMountPath              = "/var/run/secrets/mlflow"
+	mlflowTokenFile                   = "token"
+	ociCredentialsVolumeName          = "oci-credentials"
+	ociCredentialsMountPath           = "/etc/evalhub/.docker/config.json"
+	ociCredentialsSubPath             = ".dockerconfigjson"
+	envOCIAuthConfigPathName          = "OCI_AUTH_CONFIG_PATH"
+	modelAuthVolumeName               = "model-auth"
+	modelAuthMountPath                = "/var/run/secrets/model"
+	testDataSecretVolumeName          = "test-data-secret"
+	testDataSecretMountPath           = "/var/run/secrets/test-data"
+	serviceCABundleFile               = "service-ca.crt"
+	envMLFlowCertPathName             = "MLFLOW_TRACKING_SERVER_CERT_PATH"
+	envTestDataS3BucketName           = "TEST_DATA_S3_BUCKET"
+	envTestDataS3KeyName              = "TEST_DATA_S3_KEY"
+	defaultInitCPURequest             = "100m"
+	defaultInitCPULimit               = "500m"
+	defaultInitMemoryRequest          = "128Mi"
+	defaultInitMemoryLimit            = "512Mi"
+	defaultAllowPrivilegeEscalation   = false
 	//defaultRunAsUser                = int64(1000)
 	//defaultRunAsGroup               = int64(1000)
 	labelAppKey              = "app"
@@ -432,7 +428,7 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		},
 		{
 			Name:      terminationFileVolumeName,
-			MountPath: sidecarTerminationAdapterMountPath,
+			MountPath: adapterTerminationSharedMountPath,
 		},
 	}
 
