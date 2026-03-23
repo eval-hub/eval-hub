@@ -35,12 +35,12 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -o eval-runtime-sidecar \
     ./cmd/eval_runtime_sidecar
 
-# Build the init container binary
+# Build the eval runtime init binary (S3 test-data download)
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s -X '${BUILD_PACKAGE}.Build=${BUILD_NUMBER}' -X '${BUILD_PACKAGE}.BuildDate=${BUILD_DATE}'" \
     -a -installsuffix cgo \
-    -o eval-hub-init \
-    ./cmd/eval_hub_init
+    -o eval-runtime-init \
+    ./cmd/eval_runtime_init
 
 # Runtime stage
 FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:latest
@@ -54,7 +54,7 @@ RUN groupadd -g 1000 evalhub && \
 # Copy both binaries from builder
 COPY --from=builder --chown=evalhub:evalhub /build/eval-hub /app/eval-hub
 COPY --from=builder --chown=evalhub:evalhub /build/eval-runtime-sidecar /app/eval-runtime-sidecar
-COPY --from=builder --chown=evalhub:evalhub /build/eval-hub-init /app/eval-hub-init
+COPY --from=builder --chown=evalhub:evalhub /build/eval-runtime-init /app/eval-runtime-init
 
 
 # The config file should not really be part of the image.
