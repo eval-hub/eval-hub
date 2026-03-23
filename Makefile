@@ -133,27 +133,6 @@ test: ## Run unit tests
 	@bash -c 'set -o pipefail; go test -v ./auth/... ./internal/... ./cmd/... | ${PWD}/scripts/grcat ${PWD}/.conf.go-test'
 	@echo "Unit tests complete"
 
-test-fvt: $(BIN_DIR) ## Run FVT (Functional Verification Tests) using godog
-	@echo "Running FVT tests..."
-	@bash -c 'set -o pipefail; go test -v -race ./tests/features/... | ${PWD}/scripts/grcat ${PWD}/.conf.go-integration-test'
-
-fvt-report: ## Generate HTML report for FVT tests
-	@echo "Generating FVT JSON report..."
-	@GODOG_FORMAT=cucumber GODOG_OUTPUT="$${PWD}/cucumber-fvt.json" go test -v -race ./tests/features/...; status=$$?; \
-	echo "Converting JSON report to HTML..."; \
-	node -e "require('cucumber-html-reporter').generate({theme:'bootstrap',jsonFile:'cucumber-fvt.json',output:'cucumber-report.html'})" 2>&1; \
-	report_status=$$?; \
-	if [ $$report_status -ne 0 ]; then echo "Report generation failed (see output above)."; fi; \
-	if [ -f cucumber-report.html ]; then echo "Report generated: cucumber-report.html"; else echo "Report not generated: cucumber-report.html"; fi; \
-	exit $$status
-
-test-all: test test-fvt test-fvt-server ## Run all tests (unit + FVT)
-
-SERVER_URL ?= http://localhost:8080
-
-test-fvt-server: start-service ## Run FVT tests using godog against a running server
-	@SERVER_URL="${SERVER_URL}" make test-fvt; status=$$?; make stop-service; exit $$status
-
 test-coverage: $(BIN_DIR) ## Run unit tests with coverage
 	@echo "Running unit tests with coverage..."
 	@go test -v -race -coverprofile=$(BIN_DIR)/coverage.out -covermode=atomic ./internal/... ./cmd/...
@@ -162,9 +141,29 @@ test-coverage: $(BIN_DIR) ## Run unit tests with coverage
 	@go tool cover -html=$(BIN_DIR)/coverage-init.out -o $(BIN_DIR)/coverage-init.html
 	@echo "Coverage report generated: $(BIN_DIR)/coverage.html and $(BIN_DIR)/coverage-init.html"
 
+test-all: test test-fvt test-fvt-server ## Run all tests (unit + FVT)
+
+SERVER_URL ?= http://localhost:8080
+
+## ------------------------------------------------------------------------------------------------
+## FVT tests (Functional Verification Tests) using godog
+## ------------------------------------------------------------------------------------------------
+
+SERVER_URL ?= http://localhost:8080
+
+FVT_TESTS ?= ./tests/features/...
+FVT_OUTPUT ?= --godog.format=junit:${PWD}/$(BIN_DIR)/junit-fvt-report.xml,pretty
+
+test-fvt: $(BIN_DIR) ## Run FVT (Functional Verification Tests) using godog
+	@echo "Running FVT tests..."
+	@bash -c 'set -o pipefail; go test ${FVT_TESTS} ${FVT_OUTPUT} -v -race | ${PWD}/scripts/grcat ${PWD}/.conf.go-integration-test'
+
+test-fvt-server: start-service ## Run FVT tests using godog against a running server
+	@SERVER_URL="${SERVER_URL}" make test-fvt; status=$$?; make stop-service; exit $$status
+
 test-fvt-coverage: $(BIN_DIR)## Run integration (FVT) tests with coverage
 	@echo "Running integration (FVT) tests with coverage..."
-	@go test -v -race -coverprofile=$(BIN_DIR)/coverage-fvt.out -covermode=atomic ./tests/features/...
+	@go test ${FVT_TESTS} ${FVT_OUTPUT} -v -race -coverprofile=$(BIN_DIR)/coverage-fvt.out -covermode=atomic
 	@go tool cover -html=$(BIN_DIR)/coverage-fvt.out -o $(BIN_DIR)/coverage-fvt.html
 	@echo "Coverage report generated: $(BIN_DIR)/coverage-fvt.html"
 
@@ -176,6 +175,20 @@ test-fvt-server-coverage: start-service-coverage ## Run FVT tests using godog ag
 	@echo "Coverage report generated: $(BIN_DIR)/coverage-fvt.html"
 
 test-all-coverage: test-coverage test-fvt-server-coverage ## Run all tests (unit + FVT) with coverage
+
+fvt-report: ## Generate HTML report for FVT tests
+	@echo "Generating FVT JSON report..."
+	@GODOG_FORMAT=cucumber GODOG_OUTPUT="$${PWD}/cucumber-fvt.json" go test -v -race ./tests/features/...; status=$$?; \
+	echo "Converting JSON report to HTML..."; \
+	node -e "require('cucumber-html-reporter').generate({theme:'bootstrap',jsonFile:'cucumber-fvt.json',output:'cucumber-report.html'})" 2>&1; \
+	report_status=$$?; \
+	if [ $$report_status -ne 0 ]; then echo "Report generation failed (see output above)."; fi; \
+	if [ -f cucumber-report.html ]; then echo "Report generated: cucumber-report.html"; else echo "Report not generated: cucumber-report.html"; fi; \
+	exit $$status
+
+## ------------------------------------------------------------------------------------------------
+## Dependencies
+## ------------------------------------------------------------------------------------------------
 
 install-deps: ## Install dependencies
 	@command -v python3 >/dev/null 2>&1 || { echo "Error: Python 3 is required for make test (scripts/grcat). Install python3 and retry."; exit 1; }
@@ -195,6 +208,10 @@ get-deps: ## Get all dependencies
 	@go get ./...
 	@go get -t ./...
 	@echo "Dependencies updated"
+
+## ------------------------------------------------------------------------------------------------
+## Cross-compilation
+## ------------------------------------------------------------------------------------------------
 
 # Cross-compilation variables
 CROSS_OUTPUT_SUFFIX = $(CROSS_GOOS)-$(CROSS_GOARCH)
