@@ -38,14 +38,18 @@ func newHTTPClient(timeout time.Duration, tlsConfig *tls.Config, isOTELEnabled b
 	return client
 }
 
-// BuildTLSConfig creates a TLS config from CA cert path and insecure flag.
-// Returns nil if both caCertPath is empty and insecureSkipVerify is false (default secure).
+// buildTLSConfig creates a TLS config from CA cert path and insecure flag.
+// When insecureSkipVerify is false and caCertPath is non-empty, the CA PEM is loaded into RootCAs
+// (production Eval Hub / MLflow / OCI behavior on cluster).
+// When insecureSkipVerify is true, custom CA files are not read: verification is off, so loading a CA
+// would not affect trust and skipping avoids failing on missing paths in local/test environments.
+// When caCertPath is empty and insecureSkipVerify is false, system roots are used (default *tls.Config).
 func buildTLSConfig(caCertPath string, insecureSkipVerify bool, logger *slog.Logger, certLabel string) (*tls.Config, error) {
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		MaxVersion: tls.VersionTLS13,
 	}
-	if caCertPath != "" {
+	if caCertPath != "" && !insecureSkipVerify {
 		caCert, err := os.ReadFile(caCertPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read %s CA certificate at %s: %w", certLabel, caCertPath, err)
