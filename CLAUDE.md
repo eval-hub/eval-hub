@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 make start-service                # Start service on default port 8080
 PORT=3000 make start-service      # Start service on custom port
 make stop-service                 # Stop service
-go run cmd/eval_hub/main.go       # Direct Go execution
+go run cmd/eval-hub/main.go       # Direct Go execution
 ```
 
 ### Building
@@ -26,7 +26,7 @@ make test-all           # Run all tests (unit + FVT)
 make test-coverage      # Generate coverage report (coverage.html)
 
 # Run specific unit test
-go test -v ./internal/handlers -run TestHandleName
+go test -v ./internal/eval_hub/handlers -run TestHandleName
 
 # Run specific FVT test
 go test -v ./tests/features -run TestFeatureName
@@ -65,14 +65,14 @@ make clean              # Remove build artifacts and coverage files
 ### Project Structure
 This project follows the standard Go project layout with a clear separation between public entry points (`cmd/`) and private application code (`internal/`).
 
-- **cmd/eval_hub/** - Main application entry point
-- **internal/config/** - Configuration loading with Viper
-- **internal/constants/** - Shared constants (log field names, etc.)
-- **internal/executioncontext/** - ExecutionContext pattern implementation
-- **internal/handlers/** - HTTP request handlers
+- **cmd/eval-hub/** - Main application entry point
+- **internal/eval_hub/config/** - Configuration loading with Viper
+- **internal/eval_hub/constants/** - Shared constants (log field names, etc.)
+- **internal/eval_hub/executioncontext/** - ExecutionContext pattern implementation
+- **internal/eval_hub/handlers/** - HTTP request handlers
 - **internal/logging/** - Logger creation and request enhancement
-- **internal/metrics/** - Prometheus metrics and middleware
-- **cmd/eval_hub/server/** - Server setup and routing
+- **internal/eval_hub/metrics/** - Prometheus metrics and middleware
+- **internal/eval_hub/server/** - Server setup and routing
 - **api/** - OpenAPI 3.1.0 specification
 - **tests/features/** - BDD-style FVT tests using godog
 
@@ -154,7 +154,7 @@ router.HandleFunc("/api/v1/evaluations/jobs", func(w http.ResponseWriter, r *htt
 
 #### Metrics Collection
 - Prometheus metrics exposed at `/metrics`
-- Custom middleware in `internal/metrics` wraps all routes
+- Custom middleware in `internal/eval_hub/metrics` wraps all routes
 - Metrics middleware records request duration and status codes
 
 ### Testing Strategy
@@ -163,7 +163,7 @@ router.HandleFunc("/api/v1/evaluations/jobs", func(w http.ResponseWriter, r *htt
 Located alongside code in `*_test.go` files:
 - Test individual handlers, middleware, server setup
 - Use standard library `testing` package
-- Found in: `internal/handlers/*_test.go`, `internal/metrics/*_test.go`, `cmd/eval_hub/server/*_test.go`
+- Found in: `internal/eval_hub/handlers/*_test.go`, `internal/eval_hub/server/*_test.go`, and other `internal/eval_hub/**/*_test.go` files
 
 #### FVT (Functional Verification Tests)
 BDD-style tests using godog in `tests/features/`:
@@ -173,7 +173,7 @@ BDD-style tests using godog in `tests/features/`:
 - Suite setup in `suite_test.go`
 
 ### Server Lifecycle
-Main function (cmd/eval_hub/main.go) implements graceful shutdown:
+Main function (cmd/eval-hub/main.go) implements graceful shutdown:
 1. Creates logger and loads config
 2. Creates server with `server.NewServer(logger, config)`
 3. Starts server in goroutine

@@ -2,11 +2,11 @@
 
 # Variables
 BINARY_NAME = eval-hub
-CMD_PATH = ./cmd/eval_hub
+CMD_PATH = ./cmd/eval-hub
 INIT_BINARY_NAME = eval-runtime-init
-INIT_CMD_PATH = ./cmd/eval_runtime_init
-SIDECAR_BINARY_NAME = eval-hub-sidecar
-SIDECAR_CMD_PATH = ./cmd/eval_runtime_sidecar
+INIT_CMD_PATH = ./cmd/eval-runtime-init
+SIDECAR_BINARY_NAME = eval-runtime-sidecar
+SIDECAR_CMD_PATH = ./cmd/eval-runtime-sidecar
 BIN_DIR = bin
 PORT ?= 8080
 
@@ -56,13 +56,10 @@ build-service: $(BIN_DIR) ## Build the service binary
 	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(BINARY_NAME) $(CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(BINARY_NAME)"
 
-build-init: $(BIN_DIR) ## Build the init binary
+build-init: $(BIN_DIR) ## Build the eval-runtime-init binary only
 	@echo "Building $(INIT_BINARY_NAME) with ${LDFLAGS}"
 	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(INIT_BINARY_NAME) $(INIT_CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(INIT_BINARY_NAME)"
-	@echo "Building $(SIDECAR_BINARY_NAME) with ${LDFLAGS}"
-	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(SIDECAR_BINARY_NAME) $(SIDECAR_CMD_PATH)
-	@echo "Build complete: $(BIN_DIR)/$(SIDECAR_BINARY_NAME)"
 
 build: build-service build-init build-sidecar ## Build the binaries
 
@@ -160,7 +157,7 @@ test-fvt-server: start-service ## Run FVT tests using godog against a running se
 test-coverage: $(BIN_DIR) ## Run unit tests with coverage
 	@echo "Running unit tests with coverage..."
 	@go test -v -race -coverprofile=$(BIN_DIR)/coverage.out -covermode=atomic ./internal/... ./cmd/...
-	@go test -v -race -coverprofile=$(BIN_DIR)/coverage-init.out -covermode=atomic ./cmd/eval_runtime_init
+	@go test -v -race -coverprofile=$(BIN_DIR)/coverage-init.out -covermode=atomic ./cmd/eval-runtime-init
 	@go tool cover -html=$(BIN_DIR)/coverage.out -o $(BIN_DIR)/coverage.html
 	@go tool cover -html=$(BIN_DIR)/coverage-init.out -o $(BIN_DIR)/coverage-init.html
 	@echo "Coverage report generated: $(BIN_DIR)/coverage.html and $(BIN_DIR)/coverage-init.html"
