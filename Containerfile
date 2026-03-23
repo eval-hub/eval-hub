@@ -1,6 +1,8 @@
 # Multi-stage build for the evaluation hub Go service
 # Build stage
-FROM registry.access.redhat.com/ubi9/go-toolset:1.25 AS builder
+FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:1.25 AS builder
+
+ARG TARGETARCH
 
 USER 0
 
@@ -14,34 +16,34 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build arguments for versioning
+# Build arguments for versioning, please ensure to modify also in the Runtime stage below
 ARG BUILD_NUMBER=0.3.0
 ARG BUILD_DATE
 ARG BUILD_PACKAGE=main
 
 # Build eval-hub binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s -X '${BUILD_PACKAGE}.Build=${BUILD_NUMBER}' -X '${BUILD_PACKAGE}.BuildDate=${BUILD_DATE}'" \
     -a -installsuffix cgo \
     -o eval-hub \
     ./cmd/eval_hub
 
 # Build eval-runtime-sidecar binary (same image can run either via container command override)
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s -X '${BUILD_PACKAGE}.Build=${BUILD_NUMBER}' -X '${BUILD_PACKAGE}.BuildDate=${BUILD_DATE}'" \
     -a -installsuffix cgo \
     -o eval-runtime-sidecar \
     ./cmd/eval_runtime_sidecar
 
 # Build the init container binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s -X '${BUILD_PACKAGE}.Build=${BUILD_NUMBER}' -X '${BUILD_PACKAGE}.BuildDate=${BUILD_DATE}'" \
     -a -installsuffix cgo \
     -o eval-hub-init \
     ./cmd/eval_hub_init
 
 # Runtime stage
-FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 # Create user and app directory
 RUN groupadd -g 1000 evalhub && \
@@ -72,6 +74,10 @@ EXPOSE 8080
 # Environment variables
 ENV PORT=8080 \
     TZ=UTC
+
+# Redeclare build ARGs for labels (ARGs don't cross stage boundaries)
+ARG BUILD_NUMBER=0.3.0
+ARG BUILD_DATE
 
 # Labels for metadata
 LABEL org.opencontainers.image.title="eval-hub" \
