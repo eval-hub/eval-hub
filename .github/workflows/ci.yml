@@ -134,6 +134,7 @@ jobs:
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v6
+      id: build
       with:
         context: .
         file: Containerfile
@@ -145,6 +146,6 @@ jobs:
 
     - name: Dry-run Docker image
       run: |
-        IMAGE_TAG=${{ startsWith(github.ref, 'refs/tags/') && 'latest' || format('{0}-{1}', github.ref_name, github.sha) }}
-        docker pull ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${IMAGE_TAG}
-        docker run --rm ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${IMAGE_TAG} /app/eval-hub --local --help
+        IMAGE_REF=${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}@${{ steps.build.outputs.digest }}
+        docker pull "${IMAGE_REF}"
+        docker run --rm "${IMAGE_REF}" /app/eval-hub --local --help
