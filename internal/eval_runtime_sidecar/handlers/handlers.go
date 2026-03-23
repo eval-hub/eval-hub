@@ -24,6 +24,13 @@ const OCIAuthConfigPathDefault = "/etc/evalhub/.docker/config.json"
 // internal/runtimes/k8s/job_builders.go jobSpecMountPath + subPath jobSpecFileName.
 const JobSpecPathDefault = "/meta/job.json"
 
+// mlflowAPIPathPrefix is the path prefix routed to the MLflow tracking proxy (any suffix allowed).
+const mlflowAPIPathPrefix = "/api/2.0/mlflow"
+
+func isMLflowProxyPath(path string) bool {
+	return strings.HasPrefix(path, mlflowAPIPathPrefix)
+}
+
 // Handlers holds service state for HTTP handlers.
 // Reverse proxies are created once at startup and reused for all requests.
 type Handlers struct {
@@ -164,8 +171,8 @@ func (h *Handlers) HandleProxyCall(w http.ResponseWriter, r *http.Request) {
 	proxyHandler.ServeHTTP(w, r)
 }
 
-// requestPathForOCIRouting returns the URL path only (no query or fragment) for OCI routing.
-func requestPathForOCIRouting(uri string) string {
+// requestPathForRouting returns the URL path only (no query or fragment) for proxy routing.
+func requestPathForRouting(uri string) string {
 	if i := strings.IndexByte(uri, '?'); i >= 0 {
 		uri = uri[:i]
 	}
@@ -211,7 +218,7 @@ func (h *Handlers) ociRouteMatch(uri string) bool {
 	if h.ociRepository == "" {
 		return false
 	}
-	path := requestPathForOCIRouting(uri)
+	path := requestPathForRouting(uri)
 	repoParts := splitPathSegments(h.ociRepository)
 	if len(repoParts) == 0 {
 		return false
@@ -246,7 +253,7 @@ func (h *Handlers) parseProxyCall(r *http.Request) (*httputil.ReverseProxy, *pro
 		}
 		return nil, nil, fmt.Errorf("eval-hub proxy is not configured")
 
-	case strings.Contains(r.RequestURI, "/mlflow/"):
+	case isMLflowProxyPath(requestPathForRouting(r.RequestURI)):
 		if h.serviceConfig.MLFlow != nil && strings.TrimSpace(h.serviceConfig.MLFlow.TrackingURI) != "" && h.mlflowProxy != nil {
 			tokenPath := MLFlowTokenPathDefault
 			if h.serviceConfig.Sidecar != nil && h.serviceConfig.Sidecar.MLFlow != nil {
