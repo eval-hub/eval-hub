@@ -1,37 +1,40 @@
-# Pre-commit configuration for eval-hub
 repos:
-  # Ruff linting and formatting (replaces black)
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.4
-    hooks:
-      - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
-        exclude: ^examples/api_examples\.ipynb$
-      - id: ruff-format
-        exclude: ^examples/api_examples\.ipynb$
-
-  # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
+    rev: v4.5.0
     hooks:
       - id: trailing-whitespace
         exclude: ^docs/.*\.(html|json)$
       - id: end-of-file-fixer
         exclude: ^docs/.*\.(html|json)$
       - id: check-yaml
-        args: [--allow-multiple-documents]
-      - id: check-json
-        exclude: ^(examples/api_examples\.ipynb|\.vscode/.*)$
-      - id: check-toml
-      - id: check-merge-conflict
       - id: check-added-large-files
-        args: [--maxkb=1000]
-      - id: debug-statements
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-json
+      - id: detect-private-key
 
-  - repo: https://github.com/commitizen-tools/commitizen
-    rev: v4.13.9
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
     hooks:
-      - id: commitizen
+      - id: go-fmt
+      - id: go-imports
+
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.55.2
+    hooks:
+      - id: golangci-lint
+        args: ['--fix']
+
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      - id: go-vet
+      - id: go-unit-tests
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.0.0
+    hooks:
+      - id: conventional-pre-commit
         stages: [commit-msg]
 
   # Local checks
