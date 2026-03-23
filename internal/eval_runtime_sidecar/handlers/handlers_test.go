@@ -11,12 +11,15 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	t.Skip("Skipping this test for now. FIX CA CERT FILES !")
 	logger := slog.Default()
 
 	t.Run("returns error when eval_hub.base_url is not set", func(t *testing.T) {
 		cfg := &config.Config{
-			Sidecar: &config.SidecarConfig{EvalHub: &config.EvalHubClientConfig{}},
+			Sidecar: &config.SidecarConfig{
+				EvalHub: &config.EvalHubClientConfig{
+					InsecureSkipVerify: true,
+				},
+			},
 		}
 		_, err := New(cfg, logger)
 		if err == nil {
@@ -30,7 +33,10 @@ func TestNew(t *testing.T) {
 	t.Run("returns Handlers when eval_hub.base_url and mlflow set", func(t *testing.T) {
 		cfg := &config.Config{
 			Sidecar: &config.SidecarConfig{
-				EvalHub: &config.EvalHubClientConfig{BaseURL: "http://localhost:8080"},
+				EvalHub: &config.EvalHubClientConfig{
+					BaseURL:            "http://localhost:8080",
+					InsecureSkipVerify: true,
+				},
 			},
 			MLFlow: &config.MLFlowConfig{TrackingURI: "http://localhost:5000"},
 		}
@@ -51,11 +57,13 @@ func TestNew(t *testing.T) {
 }
 
 func TestHandlers_HandleProxyCall(t *testing.T) {
-	t.Skip("Skipping this test for now. FIX CA CERT FILES !")
 	logger := slog.Default()
 	cfg := &config.Config{
 		Sidecar: &config.SidecarConfig{
-			EvalHub: &config.EvalHubClientConfig{BaseURL: "http://localhost:8080"},
+			EvalHub: &config.EvalHubClientConfig{
+				BaseURL:            "http://localhost:8080",
+				InsecureSkipVerify: true,
+			},
 		},
 		MLFlow: &config.MLFlowConfig{TrackingURI: "http://localhost:5000"},
 	}
@@ -104,7 +112,10 @@ func TestHandlers_HandleProxyCall(t *testing.T) {
 	t.Run("mlflow path with nil MLFlow returns 400", func(t *testing.T) {
 		cfgNoMLFlow := &config.Config{
 			Sidecar: &config.SidecarConfig{
-				EvalHub: &config.EvalHubClientConfig{BaseURL: "http://localhost:8080"},
+				EvalHub: &config.EvalHubClientConfig{
+					BaseURL:            "http://localhost:8080",
+					InsecureSkipVerify: true,
+				},
 			},
 		}
 		hNoMLFlow, err := New(cfgNoMLFlow, logger)

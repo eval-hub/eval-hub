@@ -8,7 +8,6 @@ import (
 )
 
 func TestNewEvalHubHTTPClient(t *testing.T) {
-	t.Skip("Skipping this test for now. FIX CA CERT FILES !")
 	logger := slog.Default()
 
 	t.Run("returns nil when config is nil", func(t *testing.T) {
@@ -35,7 +34,9 @@ func TestNewEvalHubHTTPClient(t *testing.T) {
 	t.Run("returns client when Sidecar and EvalHub set", func(t *testing.T) {
 		cfg := &config.Config{
 			Sidecar: &config.SidecarConfig{
-				EvalHub: &config.EvalHubClientConfig{},
+				EvalHub: &config.EvalHubClientConfig{
+					InsecureSkipVerify: true,
+				},
 			},
 		}
 		client, err := NewEvalHubHTTPClient(cfg, false, logger)

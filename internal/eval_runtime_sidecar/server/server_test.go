@@ -81,12 +81,14 @@ func TestSidecarServer_GetPort(t *testing.T) {
 }
 
 func TestSidecarServer_SetupRoutes(t *testing.T) {
-	t.Skip("Skipping this test for now. FIX CA CERT FILES !")
 	logger := slog.Default()
 	cfg := &config.Config{
 		Sidecar: &config.SidecarConfig{
-			Port:    8080,
-			EvalHub: &config.EvalHubClientConfig{BaseURL: "http://localhost:8080"},
+			Port: 8080,
+			EvalHub: &config.EvalHubClientConfig{
+				BaseURL:            "http://localhost:8080",
+				InsecureSkipVerify: true,
+			},
 		},
 	}
 	srv, err := sidecarServer.NewSidecarServer(logger, cfg)

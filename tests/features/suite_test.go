@@ -7,16 +7,34 @@ import (
 	"testing"
 
 	"github.com/cucumber/godog"
+	"github.com/cucumber/godog/colors"
+	"github.com/spf13/pflag"
 )
 
-func TestFeatures(t *testing.T) {
+var opts = godog.Options{
+	Output:   colors.Colored(os.Stdout),
+	Format:   "junit:../../bin/junit-fvt.xml", // can define default values
+	Strict:   true,
+	Tags:     "~@ignore",
+	Paths:    []string{"."},
+	TestingT: nil,
+}
+
+// func TestFeatures(t *testing.T) {
+func TestMain(m *testing.M) {
+	godog.BindCommandLineFlags("godog.", &opts)
+
+	pflag.Parse()
+	opts.Paths = pflag.Args()
+
 	if serverURL := os.Getenv("SERVER_URL"); serverURL != "" {
-		t.Logf("Running FVT tests against the server %s", serverURL)
+		// t.Logf("Running FVT tests against the server %s", serverURL)
 	}
+
 	// Get the absolute path to the features directory
 	// When running from project root, use "tests/features", when from features dir, use "."
 	workDir, _ := os.Getwd()
-	t.Log("Working directory:", workDir)
+	// t.Log("Working directory:", workDir)
 	var featuresPath string
 	if filepath.Base(workDir) == "features" {
 		featuresPath = "."
@@ -28,48 +46,23 @@ func TestFeatures(t *testing.T) {
 	if envPaths := os.Getenv("GODOG_PATHS"); envPaths != "" {
 		paths = normalizePaths(splitPaths(envPaths), workDir)
 	}
-
-	format := os.Getenv("GODOG_FORMAT")
-	if format == "" {
-		format = "pretty"
-	}
-
-	var outputFile *os.File
-	output := os.Stdout
-	if outputPath := os.Getenv("GODOG_OUTPUT"); outputPath != "" {
-		file, err := os.Create(outputPath)
-		if err != nil {
-			t.Fatalf("failed to create GODOG_OUTPUT file: %v", err)
-		}
-		outputFile = file
-		output = file
-	}
-	if outputFile != nil {
-		defer func() {
-			_ = outputFile.Close()
-		}()
-	}
+	opts.Paths = paths
 
 	tags := os.Getenv("GODOG_TAGS")
-	if tags == "" {
-		tags = "~@ignore"
+	if tags != "" {
+		opts.Tags = tags
 	}
 
 	suite := godog.TestSuite{
+		Name:                 "EvalHub Feature Tests",
 		TestSuiteInitializer: InitializeTestSuite,
 		ScenarioInitializer:  InitializeScenario,
-		Options: &godog.Options{
-			Format:   format,
-			Output:   output,
-			Paths:    paths,
-			TestingT: t,
-			Strict:   true,
-			Tags:     tags,
-		},
+		Options:              &opts,
 	}
 
-	if suite.Run() != 0 {
-		t.Fatal("non-zero status returned, failed to run feature tests")
+	if st := suite.Run(); st != 0 {
+		// t.Fatal("non-zero status returned, failed to run feature tests", st)
+		os.Exit(st)
 	}
 }
 
