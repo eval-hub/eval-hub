@@ -145,5 +145,6 @@ jobs:
 
     - name: Dry-run Docker image
       run: |
-        docker pull ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ github.ref_name }}-${{ github.sha }}
-        docker run --rm ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ github.ref_name }}-${{ github.sha }} /app/eval-hub --local --help
+        IMAGE_TAG=${{ startsWith(github.ref, 'refs/tags/') && 'latest' || format('{0}-{1}', github.ref_name, github.sha) }}
+        docker pull ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${IMAGE_TAG}
+        docker run --rm ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${IMAGE_TAG} /app/eval-hub --local --help
