@@ -321,13 +321,13 @@ func TestBuildJobTerminationFileVolume(t *testing.T) {
 	sidecar := job.Spec.Template.Spec.Containers[1]
 	var sidecarMount bool
 	for _, m := range sidecar.VolumeMounts {
-		if m.Name == terminationFileVolumeName && m.MountPath == sidecarTerminationAdapterMountPath {
+		if m.Name == terminationFileVolumeName && m.MountPath == adapterTerminationSharedMountPath {
 			sidecarMount = true
 			break
 		}
 	}
 	if !sidecarMount {
-		t.Fatalf("sidecar should mount %q at %q", terminationFileVolumeName, sidecarTerminationAdapterMountPath)
+		t.Fatalf("sidecar should mount %q at %q", terminationFileVolumeName, adapterTerminationSharedMountPath)
 	}
 }
 
