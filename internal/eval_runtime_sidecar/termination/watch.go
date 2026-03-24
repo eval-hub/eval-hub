@@ -11,9 +11,8 @@ import (
 )
 
 const (
-	// AdapterTerminationWatchDir is where the job pod mounts the shared termination emptyDir
-	// on the sidecar. Must match sidecarTerminationAdapterMountPath in job_builders.go.
-	AdapterTerminationWatchDir = "/tmp/adapter"
+	// adapterTerminationSharedMountPath is the mount path of the shared termination emptyDir on the sidecar.
+	adapterTerminationSharedMountPath = "/shared"
 	// AdapterTerminationSignalFile is created by the adapter on the shared volume to request sidecar shutdown.
 	AdapterTerminationSignalFile = "terminated"
 	defaultPollInterval          = 500 * time.Millisecond
@@ -57,7 +56,7 @@ func WatchAdapterTerminationSignal(ctx context.Context, dir, fileName string, po
 
 // WatchDefaultAdapterTermination uses AdapterTerminationWatchDir and AdapterTerminationSignalFile.
 func WatchDefaultAdapterTermination(ctx context.Context, logger *slog.Logger) <-chan struct{} {
-	return WatchAdapterTerminationSignal(ctx, AdapterTerminationWatchDir, AdapterTerminationSignalFile, defaultPollInterval, logger)
+	return WatchAdapterTerminationSignal(ctx, adapterTerminationSharedMountPath, AdapterTerminationSignalFile, defaultPollInterval, logger)
 }
 
 func fileExistsRegular(path string) bool {
