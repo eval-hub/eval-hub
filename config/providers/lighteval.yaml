@@ -8,10 +8,10 @@ runtime:
     entrypoint:
       - python
       - main.py
-    cpu_request: 100m
-    memory_request: 128Mi
-    cpu_limit: 500m
-    memory_limit: 1Gi
+    cpu_request: 500m
+    memory_request: 1Gi
+    cpu_limit: 4000m
+    memory_limit: 8Gi
   local:
     # command is set to true for test-fvt-server-coverage as it runs in local mode.
     # In actual custom provider configurations, it will be set to the actual command to run.
