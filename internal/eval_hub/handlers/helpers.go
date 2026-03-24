@@ -234,8 +234,7 @@ func GetJobBenchmarks(job *api.EvaluationJobResource, collection *api.Collection
 		if collection == nil {
 			return nil, serviceerrors.NewServiceError(
 				messages.InternalServerError,
-				"ParameterName", "Error",
-				"Value", fmt.Sprintf("Failed to resolve collection %s", job.Collection.ID),
+				"Error", fmt.Sprintf("Failed to resolve collection %s", job.Collection.ID),
 			)
 		}
 		if len(collection.Benchmarks) == 0 {
