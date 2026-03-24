@@ -164,7 +164,7 @@ Register the new provider by adding a YAML entry to the providers ConfigMap. No 
 
 ```
 eval-hub/
-├── cmd/eval-hub/          # Entry point (main binary)
+├── cmd/eval_hub/          # Entry point (main binary)
 ├── internal/
 │   ├── handlers/          # HTTP request handlers
 │   ├── storage/           # Database abstraction (SQLite, PostgreSQL)

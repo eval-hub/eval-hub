@@ -26,21 +26,21 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s -X '${BUILD_PACKAGE}.Build=${BUILD_NUMBER}' -X '${BUILD_PACKAGE}.BuildDate=${BUILD_DATE}'" \
     -a -installsuffix cgo \
     -o eval-hub \
-    ./cmd/eval-hub
+    ./cmd/eval_hub
 
 # Build eval-runtime-sidecar binary (same image can run either via container command override)
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s -X '${BUILD_PACKAGE}.Build=${BUILD_NUMBER}' -X '${BUILD_PACKAGE}.BuildDate=${BUILD_DATE}'" \
     -a -installsuffix cgo \
     -o eval-runtime-sidecar \
-    ./cmd/eval-runtime-sidecar
+    ./cmd/eval_runtime_sidecar
 
 # Build the eval runtime init binary (S3 test-data download)
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s -X '${BUILD_PACKAGE}.Build=${BUILD_NUMBER}' -X '${BUILD_PACKAGE}.BuildDate=${BUILD_DATE}'" \
     -a -installsuffix cgo \
     -o eval-runtime-init \
-    ./cmd/eval-runtime-init
+    ./cmd/eval_runtime_init
 
 # Runtime stage
 FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:latest

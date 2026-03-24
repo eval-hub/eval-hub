@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 make start-service                # Start service on default port 8080
 PORT=3000 make start-service      # Start service on custom port
 make stop-service                 # Stop service
-go run cmd/eval-hub/main.go       # Direct Go execution
+go run cmd/eval_hub/main.go       # Direct Go execution
 ```
 
 ### Building
@@ -65,7 +65,7 @@ make clean              # Remove build artifacts and coverage files
 ### Project Structure
 This project follows the standard Go project layout with a clear separation between public entry points (`cmd/`) and private application code (`internal/`).
 
-- **cmd/eval-hub/** - Main application entry point
+- **cmd/eval_hub/** - Main application entry point
 - **internal/eval_hub/config/** - Configuration loading with Viper
 - **internal/eval_hub/constants/** - Shared constants (log field names, etc.)
 - **internal/eval_hub/executioncontext/** - ExecutionContext pattern implementation
@@ -173,7 +173,7 @@ BDD-style tests using godog in `tests/features/`:
 - Suite setup in `suite_test.go`
 
 ### Server Lifecycle
-Main function (cmd/eval-hub/main.go) implements graceful shutdown:
+Main function (cmd/eval_hub/main.go) implements graceful shutdown:
 1. Creates logger and loads config
 2. Creates server with `server.NewServer(logger, config)`
 3. Starts server in goroutine

@@ -2,11 +2,11 @@
 
 # Variables
 BINARY_NAME = eval-hub
-CMD_PATH = ./cmd/eval-hub
+CMD_PATH = ./cmd/eval_hub
 INIT_BINARY_NAME = eval-runtime-init
-INIT_CMD_PATH = ./cmd/eval-runtime-init
+INIT_CMD_PATH = ./cmd/eval_runtime_init
 SIDECAR_BINARY_NAME = eval-runtime-sidecar
-SIDECAR_CMD_PATH = ./cmd/eval-runtime-sidecar
+SIDECAR_CMD_PATH = ./cmd/eval_runtime_sidecar
 BIN_DIR = bin
 PORT ?= 8080
 
@@ -136,7 +136,7 @@ test: ## Run unit tests
 test-coverage: $(BIN_DIR) ## Run unit tests with coverage
 	@echo "Running unit tests with coverage..."
 	@go test -v -race -coverprofile=$(BIN_DIR)/coverage.out -covermode=atomic ./internal/... ./cmd/...
-	@go test -v -race -coverprofile=$(BIN_DIR)/coverage-init.out -covermode=atomic ./cmd/eval-runtime-init
+	@go test -v -race -coverprofile=$(BIN_DIR)/coverage-init.out -covermode=atomic ./cmd/eval_runtime_init
 	@go tool cover -html=$(BIN_DIR)/coverage.out -o $(BIN_DIR)/coverage.html
 	@go tool cover -html=$(BIN_DIR)/coverage-init.out -o $(BIN_DIR)/coverage-init.html
 	@echo "Coverage report generated: $(BIN_DIR)/coverage.html and $(BIN_DIR)/coverage-init.html"
