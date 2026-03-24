@@ -173,13 +173,11 @@ func (h *Handlers) HandleProxyCall(w http.ResponseWriter, r *http.Request) {
 
 // requestPathForRouting returns the URL path only (no query or fragment) for proxy routing.
 func requestPathForRouting(uri string) string {
-	if i := strings.IndexByte(uri, '?'); i >= 0 {
-		uri = uri[:i]
+	u, err := url.Parse(uri)
+	if err != nil {
+		return uri
 	}
-	if i := strings.IndexByte(uri, '#'); i >= 0 {
-		uri = uri[:i]
-	}
-	return uri
+	return u.EscapedPath()
 }
 
 func splitPathSegments(p string) []string {

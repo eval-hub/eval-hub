@@ -229,6 +229,7 @@ func TestRequestPathForRouting(t *testing.T) {
 		{"/v2/a/b?x=y", "/v2/a/b"},
 		{"/v2/a/b#frag", "/v2/a/b"},
 		{"/v2/a?b=c&d=e", "/v2/a"},
+		{"/v2/foo%2Fbar/blobs?q=/v2/evil", "/v2/foo%2Fbar/blobs"},
 	}
 	for _, tt := range tests {
 		if got := requestPathForRouting(tt.in); got != tt.want {
