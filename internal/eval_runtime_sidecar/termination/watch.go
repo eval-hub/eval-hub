@@ -12,7 +12,7 @@ import (
 
 const (
 	// AdapterTerminationWatchDir is where the job pod mounts the shared termination emptyDir
-	// on the sidecar. Must match sidecarTerminationAdapterMountPath in job_builders.go.
+	// on the sidecar. Must match adapterTerminationSharedMountPath in job_builders.go.
 	AdapterTerminationWatchDir = "/shared"
 	// AdapterTerminationSignalFile is created by the adapter on the shared volume to request sidecar shutdown.
 	AdapterTerminationSignalFile = "terminated"
