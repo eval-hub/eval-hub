@@ -23,7 +23,7 @@ var (
 	// ResourceNotFound The {{.Type}} resource {{.ResourceId}} was not found.
 	ResourceNotFound = createMessage(
 		constants.HTTPCodeNotFound,
-		"The {{.Type}} resource {{.ResourceId}} was not found.",
+		"The {{.Type}} resource '{{.ResourceId}}' was not found.",
 		"resource_not_found",
 	)
 

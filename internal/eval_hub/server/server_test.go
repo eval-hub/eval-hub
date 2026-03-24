@@ -47,7 +47,7 @@ func (r *stubRuntime) Name() string {
 func (r *stubRuntime) RunEvaluationJob(
 	evaluation *api.EvaluationJobResource,
 	benchmarks []api.BenchmarkConfig,
-	_ abstractions.Storage,
+	_ abstractions.RuntimeStorage,
 ) error {
 	if len(benchmarks) == 0 {
 		return fmt.Errorf("no benchmarks configured for job %s", evaluation.Resource.ID)

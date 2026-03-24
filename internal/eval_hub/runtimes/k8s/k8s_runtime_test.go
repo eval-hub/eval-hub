@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/google/uuid"
 	batchv1 "k8s.io/api/batch/v1"
@@ -122,7 +122,7 @@ func TestRunEvaluationJobCreatesResources(t *testing.T) {
 
 	storage := &fakeStorage{providerConfigs: providers}
 
-	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	benchmarks, err := handlers.ResolveBenchmarks(evaluation, nil)
 	if err != nil {
 		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
 	}

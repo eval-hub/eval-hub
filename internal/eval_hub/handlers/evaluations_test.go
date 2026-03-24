@@ -3,8 +3,11 @@ package handlers_test
 import (
 	"context"
 	"log/slog"
+	"strings"
+	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -60,7 +63,7 @@ func (f *fakeStorage) GetEvaluationJobs(_ *abstractions.QueryFilter) (*abstracti
 	return &abstractions.QueryResults[api.EvaluationJobResource]{Items: []api.EvaluationJobResource{}, TotalCount: 0}, nil
 }
 
-func (f *fakeStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent, _ []api.BenchmarkConfig) error {
+func (f *fakeStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
 	return nil
 }
 
@@ -79,7 +82,11 @@ func (r *fakeRuntime) WithContext(_ context.Context) abstractions.Runtime {
 	return r
 }
 func (r *fakeRuntime) Name() string { return "fake" }
-func (r *fakeRuntime) RunEvaluationJob(_ *api.EvaluationJobResource, _ []api.BenchmarkConfig, _ abstractions.Storage) error {
+func (r *fakeRuntime) RunEvaluationJob(
+	_ *api.EvaluationJobResource,
+	_ []api.BenchmarkConfig,
+	_ abstractions.RuntimeStorage,
+) error {
 	r.called = true
 	return r.err
 }
@@ -140,7 +147,7 @@ func (s *updateEvaluationStorage) WithContext(_ context.Context) abstractions.St
 func (s *updateEvaluationStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
 func (s *updateEvaluationStorage) WithOwner(_ api.User) abstractions.Storage    { return s }
 
-func (s *updateEvaluationStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent, _ []api.BenchmarkConfig) error {
+func (s *updateEvaluationStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
 	return s.updateErr
 }
 
@@ -159,6 +166,52 @@ func (r *deleteRequest) Query(key string) []string {
 
 func (r *deleteRequest) PathValue(name string) string {
 	return r.pathValues[name]
+}
+
+func TestResolveProvider_FromMap(t *testing.T) {
+	providers := map[string]api.ProviderResource{
+		"p1": {Resource: api.Resource{ID: "p1"}},
+	}
+	storage := &fakeStorage{providerConfigs: providers}
+	got, err := storage.GetProvider("p1")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if got == nil || got.Resource.ID != "p1" {
+		t.Fatalf("expected provider p1, got %v", got)
+	}
+}
+
+func TestResolveProvider_NotFound(t *testing.T) {
+	storage := &fakeStorage{}
+	got, err := storage.GetProvider("missing")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if got != nil {
+		t.Fatalf("expected nil provider, got %v", got)
+	}
+	if !strings.Contains(err.Error(), "provider resource 'missing' was not found") {
+		t.Fatalf("expected: provider resource 'missing' was not found, got %q", err.Error())
+	}
+}
+
+func TestResolveBenchmarks_FromJobBenchmarks(t *testing.T) {
+	eval := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Benchmarks: []api.BenchmarkConfig{
+				{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"},
+			},
+		},
+	}
+	got, err := handlers.ResolveBenchmarks(eval, nil)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "b1" {
+		t.Fatalf("expected one benchmark b1, got %v", got)
+	}
 }
 
 /* TODO: Fix this test

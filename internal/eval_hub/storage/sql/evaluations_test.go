@@ -196,7 +196,7 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 		},
 	}
 
-	err = store.UpdateEvaluationJob(job.Resource.ID, statusUpdate, nil)
+	err = store.UpdateEvaluationJob(job.Resource.ID, statusUpdate)
 	if err != nil {
 		t.Fatalf("Failed to update job: %v", err)
 	}
@@ -224,7 +224,7 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 		},
 	}
 
-	err = store.UpdateEvaluationJob(job.Resource.ID, completionUpdate, nil)
+	err = store.UpdateEvaluationJob(job.Resource.ID, completionUpdate)
 	if err != nil {
 		t.Fatalf("Failed to update job with results: %v", err)
 	}
@@ -435,7 +435,7 @@ func TestEvaluationsStorage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to validate status: %v", err)
 		}
-		err = store.UpdateEvaluationJob(evaluationId, status, nil)
+		err = store.UpdateEvaluationJob(evaluationId, status)
 		if err != nil {
 			t.Fatalf("Failed to update evaluation job: %v", err)
 		}
@@ -562,7 +562,7 @@ func TestEvaluationsStorage(t *testing.T) {
 						ID: "b1", ProviderID: "p1", BenchmarkIndex: 0,
 						Status: api.StateCompleted,
 					},
-				}, nil); err != nil {
+				}); err != nil {
 					t.Fatalf("setup for %s: %v", terminalState, err)
 				}
 			case api.OverallStateFailed:
@@ -572,7 +572,7 @@ func TestEvaluationsStorage(t *testing.T) {
 						Status:       api.StateFailed,
 						ErrorMessage: &api.MessageInfo{Message: "err", MessageCode: "E"},
 					},
-				}, nil); err != nil {
+				}); err != nil {
 					t.Fatalf("setup for %s: %v", terminalState, err)
 				}
 			case api.OverallStateCancelled:
@@ -585,7 +585,7 @@ func TestEvaluationsStorage(t *testing.T) {
 						ID: "b1", ProviderID: "p1", BenchmarkIndex: 0,
 						Status: api.StateCompleted,
 					},
-				}, nil); err != nil {
+				}); err != nil {
 					t.Fatalf("setup for %s (b1): %v", terminalState, err)
 				}
 				if err := store.UpdateEvaluationJob(jobID, &api.StatusEvent{
@@ -594,7 +594,7 @@ func TestEvaluationsStorage(t *testing.T) {
 						Status:       api.StateFailed,
 						ErrorMessage: &api.MessageInfo{Message: "err", MessageCode: "E"},
 					},
-				}, nil); err != nil {
+				}); err != nil {
 					t.Fatalf("setup for %s (b2): %v", terminalState, err)
 				}
 			}
@@ -670,7 +670,7 @@ func TestEvaluationsStorage(t *testing.T) {
 				Status:  api.StateCompleted,
 				Metrics: map[string]any{"acc": 0.9},
 			},
-		}, nil); err != nil {
+		}); err != nil {
 			t.Fatalf("UpdateEvaluationJob completed: %v", err)
 		}
 		// Now run UpdateEvaluationJobStatus: running->cancelled not applicable (job is completed).
@@ -706,7 +706,7 @@ func TestEvaluationsStorage(t *testing.T) {
 				ID: "bx", ProviderID: "garak", BenchmarkIndex: 0,
 				Status: api.StateRunning,
 			},
-		}, nil); err != nil {
+		}); err != nil {
 			t.Fatalf("UpdateEvaluationJob job2 running: %v", err)
 		}
 		if err := store.UpdateEvaluationJobStatus(jobID2, api.OverallStateCancelled, &api.MessageInfo{Message: "cancelled", MessageCode: "C"}); err != nil {
@@ -769,7 +769,7 @@ func TestEvaluationsStorage(t *testing.T) {
 				ID: "b1", ProviderID: "prov1", BenchmarkIndex: 0,
 				Status: api.StateRunning,
 			},
-		}, nil); err != nil {
+		}); err != nil {
 			t.Fatalf("UpdateEvaluationJob b1 running: %v", err)
 		}
 		if err := store.UpdateEvaluationJob(jobID, &api.StatusEvent{
@@ -778,7 +778,7 @@ func TestEvaluationsStorage(t *testing.T) {
 				Status:  api.StateCompleted,
 				Metrics: map[string]any{"acc": 0.95},
 			},
-		}, nil); err != nil {
+		}); err != nil {
 			t.Fatalf("UpdateEvaluationJob b2 completed: %v", err)
 		}
 		if err := store.UpdateEvaluationJob(jobID, &api.StatusEvent{
@@ -786,7 +786,7 @@ func TestEvaluationsStorage(t *testing.T) {
 				ID: "b3", ProviderID: "prov3", BenchmarkIndex: 2,
 				Status: api.StatePending,
 			},
-		}, nil); err != nil {
+		}); err != nil {
 			t.Fatalf("UpdateEvaluationJob b3 pending: %v", err)
 		}
 

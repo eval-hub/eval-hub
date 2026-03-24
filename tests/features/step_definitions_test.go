@@ -304,7 +304,7 @@ func (tc *scenarioConfig) theServiceIsRunning(ctx context.Context) error {
 }
 
 func (tc *scenarioConfig) thereAreNoUserProviders(ctx context.Context) error {
-	if err := tc.iSendARequestTo("GET", "/api/v1/evaluations/providers?scope=tenant&limit=100"); err != nil {
+	if err := tc.iSendARequestImpl("GET", "/api/v1/evaluations/providers?scope=tenant&limit=100", "", "there are no user providers"); err != nil {
 		return err
 	}
 	if tc.response.StatusCode != 200 {
@@ -322,7 +322,7 @@ func (tc *scenarioConfig) thereAreNoUserProviders(ctx context.Context) error {
 	}
 	for _, item := range resp.Items {
 		if item.Resource.ID != "" {
-			if err := tc.iSendARequestTo("DELETE", "/api/v1/evaluations/providers/"+item.Resource.ID); err != nil {
+			if err := tc.iSendARequestImpl("DELETE", "/api/v1/evaluations/providers/"+item.Resource.ID, "", "there are no user providers"); err != nil {
 				return err
 			}
 			if tc.response != nil && tc.response.StatusCode != 204 {
@@ -334,7 +334,7 @@ func (tc *scenarioConfig) thereAreNoUserProviders(ctx context.Context) error {
 }
 
 func (tc *scenarioConfig) thereAreSystemProviders(ctx context.Context) error {
-	if err := tc.iSendARequestTo("GET", "/api/v1/evaluations/providers?scope=system&limit=100"); err != nil {
+	if err := tc.iSendARequestImpl("GET", "/api/v1/evaluations/providers?scope=system&limit=100", "", "there are system providers"); err != nil {
 		return err
 	}
 	if tc.response.StatusCode != 200 {
@@ -357,7 +357,7 @@ func (tc *scenarioConfig) thereAreSystemProviders(ctx context.Context) error {
 }
 
 func (tc *scenarioConfig) thereAreSystemCollections(ctx context.Context) error {
-	if err := tc.iSendARequestTo("GET", "/api/v1/evaluations/collections?scope=system&limit=100"); err != nil {
+	if err := tc.iSendARequestImpl("GET", "/api/v1/evaluations/collections?scope=system&limit=100", "", "there are system collections"); err != nil {
 		return err
 	}
 	if tc.response.StatusCode != 200 {
@@ -380,7 +380,7 @@ func (tc *scenarioConfig) thereAreSystemCollections(ctx context.Context) error {
 }
 
 func (tc *scenarioConfig) thereAreNoUserCollections(ctx context.Context) error {
-	if err := tc.iSendARequestTo("GET", "/api/v1/evaluations/collections?scope=tenant&limit=100"); err != nil {
+	if err := tc.iSendARequestImpl("GET", "/api/v1/evaluations/collections?scope=tenant&limit=100", "", "there are no user collections"); err != nil {
 		return err
 	}
 	if tc.response.StatusCode != 200 {
@@ -398,7 +398,7 @@ func (tc *scenarioConfig) thereAreNoUserCollections(ctx context.Context) error {
 	}
 	for _, item := range resp.Items {
 		if item.Resource.ID != "" {
-			if err := tc.iSendARequestTo("DELETE", "/api/v1/evaluations/collections/"+item.Resource.ID); err != nil {
+			if err := tc.iSendARequestImpl("DELETE", "/api/v1/evaluations/collections/"+item.Resource.ID, "", "there are no user collections"); err != nil {
 				return err
 			}
 			if tc.response != nil && tc.response.StatusCode != 204 {
@@ -410,7 +410,7 @@ func (tc *scenarioConfig) thereAreNoUserCollections(ctx context.Context) error {
 }
 
 func (tc *scenarioConfig) thereAreNoEvaluationJobs(ctx context.Context) error {
-	if err := tc.iSendARequestTo("GET", "/api/v1/evaluations/jobs?limit=100"); err != nil {
+	if err := tc.iSendARequestImpl("GET", "/api/v1/evaluations/jobs?limit=100", "", "there are no evaluation jobs"); err != nil {
 		return err
 	}
 	if tc.response.StatusCode != 200 {
@@ -428,7 +428,7 @@ func (tc *scenarioConfig) thereAreNoEvaluationJobs(ctx context.Context) error {
 	}
 	for _, item := range resp.Items {
 		if item.Resource.ID != "" {
-			if err := tc.iSendARequestTo("DELETE", "/api/v1/evaluations/jobs/"+item.Resource.ID+"?hard_delete=true"); err != nil {
+			if err := tc.iSendARequestImpl("DELETE", "/api/v1/evaluations/jobs/"+item.Resource.ID+"?hard_delete=true", "", "there are no evaluation jobs"); err != nil {
 				return err
 			}
 			if tc.response != nil && tc.response.StatusCode != 204 {
@@ -440,7 +440,7 @@ func (tc *scenarioConfig) thereAreNoEvaluationJobs(ctx context.Context) error {
 }
 
 func (tc *scenarioConfig) checkHealthEndpoint() error {
-	if err := tc.iSendARequestTo("GET", "/api/v1/health"); err != nil {
+	if err := tc.iSendARequestImpl("GET", "/api/v1/health", "", "check health endpoint"); err != nil {
 		return tc.logError(fmt.Errorf("failed to send health check request: %w for URL %s", err, tc.apiFeature.baseURL.String()))
 	}
 	if tc.response.StatusCode != 200 {
@@ -509,7 +509,7 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) err
 	deadline := time.Now().Add(2 * time.Minute)
 	var lastErr error
 	for time.Now().Before(deadline) {
-		if err := tc.iSendARequestTo(http.MethodGet, "/api/v1/evaluations/jobs/{id}"); err != nil {
+		if err := tc.iSendARequestImpl(http.MethodGet, "/api/v1/evaluations/jobs/{id}", "", "wait for evaluation job status"); err != nil {
 			lastErr = err
 			time.Sleep(1 * time.Second)
 			continue
@@ -564,6 +564,7 @@ func (tc *scenarioConfig) substituteValues(body string) (string, error) {
 				// Use the literal after mlflow: as the experiment name. When MLflow is configured,
 				// it could be resolved from MLflow; for tests without MLflow, this allows name-based
 				// search to match stored jobs.
+				tc.logDebug("Substituting value '%s' with '%s'\n", match[1], after)
 				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), after)
 			} else if raw, ok := strings.CutPrefix(match[1], envPrefix); ok {
 				envName, fallback, hasFallback := strings.Cut(raw, "|")
@@ -575,10 +576,12 @@ func (tc *scenarioConfig) substituteValues(body string) (string, error) {
 						value = ""
 					}
 				}
+				tc.logDebug("Substituting value '%s' with '%s'\n", match[1], value)
 				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), value)
 			} else if after1, ok := strings.CutPrefix(match[1], valuePrefix); ok {
 				n := after1
 				v := tc.values[n]
+				tc.logDebug("Substituting value '%s' with '%s'\n", match[1], v)
 				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), v)
 			} else {
 				return "", tc.logError(fmt.Errorf("unknown substitution value: %s", match[1]))
@@ -722,6 +725,10 @@ func (tc *scenarioConfig) iSendARequestToWithInlineBody(method, path string, bod
 }
 
 func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) error {
+	return tc.iSendARequestImpl(method, path, body, "")
+}
+
+func (tc *scenarioConfig) iSendARequestImpl(method, path, body, caller string) error {
 	endpoint, err := tc.getEndpoint(path)
 	if err != nil {
 		return err
@@ -732,7 +739,11 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 	if err != nil {
 		return err
 	}
-	tc.logDebug("Sending %s request to %s\n", method, endpoint)
+	if caller != "" {
+		tc.logDebug("Sending %s request to %s by %s\n", method, endpoint, caller)
+	} else {
+		tc.logDebug("Sending %s request to %s\n", method, endpoint)
+	}
 	req, err := http.NewRequest(method, endpoint, entity)
 	if err != nil {
 		tc.logDebug("Failed to create request: %v\n", err)
@@ -1124,7 +1135,9 @@ func (tc *scenarioConfig) theFieldShouldBeSaved(path string, name string) error 
 		}
 	}
 	if strings.HasPrefix(name, valuePrefix) {
-		tc.values[strings.TrimPrefix(name, valuePrefix)] = finalResult
+		realName := strings.TrimPrefix(name, valuePrefix)
+		tc.values[realName] = finalResult
+		tc.logDebug("Saved value %s as %s\n", realName, finalResult)
 	} else {
 		return tc.logError(fmt.Errorf("unexpected value %s, should start with '%s'", name, valuePrefix))
 	}
@@ -1145,21 +1158,29 @@ func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, 
 	//tc.assetsSync.Lock()
 	//defer tc.assetsSync.Unlock()
 	for assetName, ids := range tc.assets {
+		clonedIDs := slices.Clone(ids)
+		hardDelete := false
 		url := assetName
 		switch assetName {
 		case "evaluations":
 			url = "evaluations/jobs"
+			hardDelete = true
 		case "jobs":
 			url = "evaluations/jobs"
+			hardDelete = true
 		case "collections":
 			url = "evaluations/collections"
 		case "providers":
 			url = "evaluations/providers"
 		}
-		ids := slices.Clone(ids)
-		for _, id := range ids {
-			path := fmt.Sprintf("/api/v1/%s/%s?hard_delete=true", url, id)
-			err := tc.iSendARequestTo("DELETE", path)
+		for _, id := range clonedIDs {
+			var path string
+			if hardDelete {
+				path = fmt.Sprintf("/api/v1/%s/%s?hard_delete=true", url, id)
+			} else {
+				path = fmt.Sprintf("/api/v1/%s/%s", url, id)
+			}
+			err := tc.iSendARequestImpl("DELETE", path, "", "asset cleanup")
 			if err != nil {
 				return ctx, tc.logError(fmt.Errorf("failed to delete asset %s with id '%s': %w", assetName, id, err))
 			}
@@ -1198,7 +1219,7 @@ func waitForService() {
 	tc := createScenarioConfig(api)
 	for range 10 {
 		if err := tc.checkHealthEndpoint(); err != nil {
-			tc.logDebug("Error checking health endpoint: %v\n", err.Error())
+			tc.logDebug("Error checking health endpoint: %v\n", err)
 			time.Sleep(1 * time.Second)
 		} else {
 			return

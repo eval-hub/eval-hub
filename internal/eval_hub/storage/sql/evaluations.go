@@ -6,10 +6,11 @@ import (
 	"fmt"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
-	evalcommon "github.com/eval-hub/eval-hub/internal/eval_hub/common"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	se "github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
-	commonStorage "github.com/eval-hub/eval-hub/internal/eval_hub/storage/common"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -205,9 +206,9 @@ func (s *sqlStorage) updateEvaluationJobTxn(txn *sql.Tx, id string, status api.O
 }
 
 // validateBenchmarkExists checks that the event's benchmark is valid for the job (in job.Benchmarks or in the job's collection).
-func (s *sqlStorage) validateBenchmarkExists(job *api.EvaluationJobResource, runStatus *api.StatusEvent, getCollection evalcommon.GetCollectionFunc) error {
+func (s *sqlStorage) validateBenchmarkExists(job *api.EvaluationJobResource, runStatus *api.StatusEvent, collection *api.CollectionResource) error {
 	event := runStatus.BenchmarkStatusEvent
-	benchmarks, err := evalcommon.GetJobBenchmarks(job, getCollection)
+	benchmarks, err := handlers.GetJobBenchmarks(job, collection)
 	if err != nil {
 		s.logger.Error("Failed to get job benchmarks", "error", err, "job_id", job.Resource.ID)
 		return err
@@ -230,8 +231,125 @@ func (s *sqlStorage) validateBenchmarkExists(job *api.EvaluationJobResource, run
 	return nil
 }
 
+// GetOverallJobStatus returns overall state and message. getCollection is used to resolve job benchmark count when job has only a collection reference.
+func (s *sqlStorage) getOverallJobStatus(job *api.EvaluationJobResource) (api.OverallState, *api.MessageInfo, error) {
+	// to be safe - do an initial check to see if the job is finished
+	if job.Status.State.IsTerminalState() {
+		return job.Status.State, job.Status.Message, nil
+	}
+
+	// group all benchmarks by state
+	benchmarkStates := make(map[api.State]int)
+	failureMessage := ""
+	for _, benchmark := range job.Status.Benchmarks {
+		benchmarkStates[benchmark.Status]++
+		if benchmark.Status == api.StateFailed && benchmark.ErrorMessage != nil {
+			failureMessage += "Benchmark " + benchmark.ID + " failed with message: " + benchmark.ErrorMessage.Message + "\n"
+		}
+	}
+
+	// determine the overall job status (use resolved benchmark count for collection-only jobs)
+	var collection *api.CollectionResource
+	var err error
+	if job.Collection != nil && job.Collection.ID != "" {
+		collection, err = s.GetCollection(job.Collection.ID)
+		if err != nil {
+			return api.OverallStatePending, &api.MessageInfo{
+				Message:     "Evaluation job is pending",
+				MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
+			}, err
+		}
+	}
+	if err != nil {
+		return api.OverallStatePending, &api.MessageInfo{
+			Message:     "Evaluation job is pending",
+			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
+		}, err
+	}
+	benchmarks, err := handlers.GetJobBenchmarks(job, collection)
+	total := 0
+	if err != nil || len(benchmarks) == 0 {
+		return api.OverallStatePending, &api.MessageInfo{
+			Message:     "Evaluation job is pending",
+			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
+		}, err
+	}
+	total = len(benchmarks)
+	completed, failed, running, cancelled := benchmarkStates[api.StateCompleted], benchmarkStates[api.StateFailed], benchmarkStates[api.StateRunning], benchmarkStates[api.StateCancelled]
+
+	var overallState api.OverallState
+	var stateMessage string
+	switch {
+	case completed == total:
+		overallState, stateMessage = api.OverallStateCompleted, "Evaluation job is completed"
+	case failed == total:
+		overallState, stateMessage = api.OverallStateFailed, "Evaluation job is failed. \n"+failureMessage
+	case completed+failed == total:
+		overallState, stateMessage = api.OverallStatePartiallyFailed, "Some of the benchmarks failed. \n"+failureMessage
+	case cancelled == total:
+		overallState, stateMessage = api.OverallStateCancelled, "Evaluation job is cancelled"
+	case completed+failed+cancelled == total:
+		overallState, stateMessage = api.OverallStatePartiallyFailed, "Some of the benchmarks failed or cancelled. \n"+failureMessage
+	case running > 0, completed > 0, failed > 0, cancelled > 0: // if at least one benchmark has reported a state then the job is running
+		overallState, stateMessage = api.OverallStateRunning, "Evaluation job is running"
+	default:
+		overallState, stateMessage = api.OverallStatePending, "Evaluation job is pending"
+	}
+
+	s.logger.Debug("Overall job state", "state", overallState, "completed", completed, "failed", failed, "running", running, "cancelled", cancelled, "total", total)
+
+	return overallState, &api.MessageInfo{
+		Message:     stateMessage,
+		MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
+	}, nil
+}
+
+func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runStatus *api.StatusEvent, benchmarkStatus *api.BenchmarkStatus) {
+	if job.Status == nil {
+		job.Status = &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{
+				State: api.OverallStatePending,
+			},
+		}
+	}
+	if job.Status.Benchmarks == nil {
+		job.Status.Benchmarks = make([]api.BenchmarkStatus, 0)
+	}
+	for index, benchmark := range job.Status.Benchmarks {
+		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID &&
+			benchmark.ProviderID == runStatus.BenchmarkStatusEvent.ProviderID &&
+			benchmark.BenchmarkIndex == runStatus.BenchmarkStatusEvent.BenchmarkIndex {
+			job.Status.Benchmarks[index] = *benchmarkStatus
+			return
+		}
+	}
+	job.Status.Benchmarks = append(job.Status.Benchmarks, *benchmarkStatus)
+}
+
+func (s *sqlStorage) updateBenchmarkResults(job *api.EvaluationJobResource, runStatus *api.StatusEvent, result *api.BenchmarkResult) error {
+	if job.Results == nil {
+		job.Results = &api.EvaluationJobResults{}
+	}
+	if job.Results.Benchmarks == nil {
+		job.Results.Benchmarks = make([]api.BenchmarkResult, 0)
+	}
+
+	for _, benchmark := range job.Results.Benchmarks {
+		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID &&
+			benchmark.ProviderID == runStatus.BenchmarkStatusEvent.ProviderID &&
+			benchmark.BenchmarkIndex == runStatus.BenchmarkStatusEvent.BenchmarkIndex {
+			// we should never get here because the final result
+			// can not change, hence we treat this as an error for now
+			return serviceerrors.NewServiceError(messages.InternalServerError, "Error", fmt.Sprintf("Benchmark result already exists for benchmark[%d] %s in job %s", runStatus.BenchmarkStatusEvent.BenchmarkIndex, runStatus.BenchmarkStatusEvent.ID, job.Resource.ID))
+		}
+	}
+	job.Results.Benchmarks = append(job.Results.Benchmarks, *result)
+
+	return nil
+}
+
 // UpdateEvaluationJobWithRunStatus runs in a transaction: fetches the job, merges RunStatusInternal into the entity, and persists.
-func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent, benchmarks []api.BenchmarkConfig) error {
+func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
 	err := s.withTransaction("update evaluation job", id, func(txn *sql.Tx) error {
 		s.logger.Info("Updating evaluation job", "id", id, "status", runStatus.BenchmarkStatusEvent.Status, "runStatus", runStatus)
 
@@ -246,14 +364,17 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent, 
 			return err
 		}
 
-		// Wrap pre-resolved benchmarks so internal functions that expect getCollection keep working.
-		getCollection := func(_ string) (*api.CollectionResource, error) {
-			return &api.CollectionResource{
-				CollectionConfig: api.CollectionConfig{Benchmarks: benchmarks},
-			}, nil
+		var collection *api.CollectionResource
+		if job.Collection != nil && job.Collection.ID != "" {
+			collection, err = s.GetCollection(job.Collection.ID)
+			if err != nil {
+				return err
+			}
 		}
-
-		err = s.validateBenchmarkExists(job, runStatus, getCollection)
+		if err != nil {
+			return err
+		}
+		err = s.validateBenchmarkExists(job, runStatus, collection)
 		if err != nil {
 			return err
 		}
@@ -268,9 +389,9 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent, 
 			CompletedAt:    runStatus.BenchmarkStatusEvent.CompletedAt,
 			BenchmarkIndex: runStatus.BenchmarkStatusEvent.BenchmarkIndex,
 		}
-		commonStorage.UpdateBenchmarkStatus(job, runStatus, &benchmark)
+		s.updateBenchmarkStatus(job, runStatus, &benchmark)
 
-		outcome := s.computeBenchmarkTestResult(job, runStatus.BenchmarkStatusEvent, getCollection)
+		outcome := s.computeBenchmarkTestResult(job, runStatus.BenchmarkStatusEvent, collection)
 
 		// if the run status is terminal, we need to update the results
 		if api.IsBenchmarkTerminalState(runStatus.BenchmarkStatusEvent.Status) {
@@ -284,14 +405,14 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent, 
 				BenchmarkIndex: runStatus.BenchmarkStatusEvent.BenchmarkIndex,
 				Test:           outcome,
 			}
-			err := commonStorage.UpdateBenchmarkResults(job, runStatus, &result)
+			err := s.updateBenchmarkResults(job, runStatus, &result)
 			if err != nil {
 				return err
 			}
 		}
 
 		// get the overall job status
-		overallState, message, err := commonStorage.GetOverallJobStatus(s.logger, job, getCollection)
+		overallState, message, err := s.getOverallJobStatus(job)
 		if err != nil {
 			return err
 		}
@@ -302,7 +423,7 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent, 
 
 		// compute the job test result only if the job is completed
 		if overallState == api.OverallStateCompleted {
-			s.computeJobTestResult(job, getCollection)
+			s.computeJobTestResult(job, collection)
 		}
 
 		entity := EvaluationJobEntity{
@@ -317,13 +438,13 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent, 
 	return err
 }
 
-func (s *sqlStorage) computeJobTestResult(job *api.EvaluationJobResource, getCollection evalcommon.GetCollectionFunc) {
+func (s *sqlStorage) computeJobTestResult(job *api.EvaluationJobResource, collection *api.CollectionResource) {
 	if job.Results == nil || job.Results.Benchmarks == nil || len(job.Results.Benchmarks) == 0 {
 		return
 	}
 	var sumOfWeightedScores float32 = 0.0
 	var sumOfWeights float32 = 0.0
-	resolvedJobBenchmarks, err := evalcommon.GetJobBenchmarks(job, getCollection)
+	resolvedJobBenchmarks, err := handlers.GetJobBenchmarks(job, collection)
 	if err != nil {
 		s.logger.Error("Failed to get job benchmarks", "error", err, "job_id", job.Resource.ID)
 		return
@@ -376,9 +497,9 @@ func (s *sqlStorage) computeJobTestResult(job *api.EvaluationJobResource, getCol
 	job.Results.Test = jobTest
 }
 
-func (s *sqlStorage) computeBenchmarkTestResult(job *api.EvaluationJobResource, benchmarkStatusEvent *api.BenchmarkStatusEvent, getCollection evalcommon.GetCollectionFunc) *api.BenchmarkTest {
+func (s *sqlStorage) computeBenchmarkTestResult(job *api.EvaluationJobResource, benchmarkStatusEvent *api.BenchmarkStatusEvent, collection *api.CollectionResource) *api.BenchmarkTest {
 	// job could have benchmarks array or it could have collection. If it has collection, we need to get the benchmarks from the collection
-	benchmarks, err := evalcommon.GetJobBenchmarks(job, getCollection)
+	benchmarks, err := handlers.GetJobBenchmarks(job, collection)
 	if err != nil {
 		s.logger.Error("Failed to get job benchmarks", "error", err, "job_id", job.Resource.ID)
 		return nil

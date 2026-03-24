@@ -145,7 +145,7 @@ type BenchmarkStatus struct {
 	CompletedAt    DateTime     `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
 }
 
-// BenchmarkStatusEvent is used when the job runtime needs to updated the status of a benchmark
+// BenchmarkStatusEvent is used when the job runtime needs to update the status of a benchmark
 type BenchmarkStatusEvent struct {
 	ProviderID     string         `json:"provider_id" validate:"required"`
 	ID             string         `json:"id" validate:"required"`

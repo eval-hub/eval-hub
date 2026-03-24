@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -29,7 +30,7 @@ type fakeStorage struct {
 	collectionConfigs map[string]api.CollectionResource
 }
 
-func (f *fakeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent, _ []api.BenchmarkConfig) error {
+func (f *fakeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
 	f.called = true
 	f.runStatus = runStatus
 	if f.runStatusChan != nil {
@@ -238,7 +239,7 @@ func TestRunEvaluationJobWritesJobSpec(t *testing.T) {
 
 	storage := &fakeStorage{providerConfigs: providers}
 
-	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	benchmarks, err := handlers.ResolveBenchmarks(evaluation, nil)
 	if err != nil {
 		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
 	}
@@ -303,7 +304,7 @@ func TestRunEvaluationJobPassesEnvVar(t *testing.T) {
 
 	storage := &fakeStorage{providerConfigs: providers}
 
-	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	benchmarks, err := handlers.ResolveBenchmarks(evaluation, nil)
 	if err != nil {
 		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
 	}
@@ -380,7 +381,7 @@ func TestRunEvaluationJobProviderNotFound(t *testing.T) {
 		tracker: newTracker(),
 	}
 
-	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	benchmarks, err := handlers.ResolveBenchmarks(evaluation, nil)
 	if err != nil {
 		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
 	}
@@ -432,7 +433,7 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 		tracker: newTracker(),
 	}
 
-	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	benchmarks, err := handlers.ResolveBenchmarks(evaluation, nil)
 	if err != nil {
 		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
 	}
@@ -471,7 +472,7 @@ func TestRunEvaluationJobMissingLocalCommand(t *testing.T) {
 
 	storage2 := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh2, providerConfigs: providers}
 
-	benchmarks, err = shared.ResolveBenchmarks(evaluation, storage)
+	benchmarks, err = handlers.ResolveBenchmarks(evaluation, nil)
 	if err != nil {
 		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
 	}
@@ -518,7 +519,7 @@ func TestRunEvaluationJobProcessFailureNoCallback(t *testing.T) {
 	storage := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh, providerConfigs: providers}
 	var store abstractions.Storage = storage
 
-	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	benchmarks, err := handlers.ResolveBenchmarks(evaluation, nil)
 	if err != nil {
 		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
 	}
@@ -563,7 +564,7 @@ func TestRunEvaluationJobCancelledNoFailure(t *testing.T) {
 	storage := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh, providerConfigs: providers}
 	var store abstractions.Storage = storage
 
-	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	benchmarks, err := handlers.ResolveBenchmarks(evaluation, nil)
 	if err != nil {
 		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
 	}
@@ -622,7 +623,7 @@ func TestRunEvaluationJobMultipleBenchmarks(t *testing.T) {
 
 	storage := &fakeStorage{logger: logger, ctx: tctx, providerConfigs: providers}
 
-	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	benchmarks, err := handlers.ResolveBenchmarks(evaluation, nil)
 	if err != nil {
 		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
 	}
@@ -697,7 +698,7 @@ func TestRunEvaluationJobMultipleBenchmarksPartialFailure(t *testing.T) {
 		tracker: newTracker(),
 	}
 
-	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	benchmarks, err := handlers.ResolveBenchmarks(evaluation, nil)
 	if err != nil {
 		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
 	}
@@ -745,7 +746,7 @@ func TestRunEvaluationJobCallbackURL(t *testing.T) {
 
 	storage := &fakeStorage{logger: logger, ctx: tctx, providerConfigs: providers}
 
-	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	benchmarks, err := handlers.ResolveBenchmarks(evaluation, nil)
 	if err != nil {
 		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
 	}
@@ -797,7 +798,7 @@ func TestRunEvaluationJobCallbackURLNotSet(t *testing.T) {
 
 	storage := &fakeStorage{logger: logger, ctx: tctx, providerConfigs: providers}
 
-	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	benchmarks, err := handlers.ResolveBenchmarks(evaluation, nil)
 	if err != nil {
 		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
 	}
@@ -843,7 +844,7 @@ func TestRunEvaluationJobCreatesLogFile(t *testing.T) {
 
 	storage := &fakeStorage{logger: logger, ctx: tctx, providerConfigs: providers}
 
-	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	benchmarks, err := handlers.ResolveBenchmarks(evaluation, nil)
 	if err != nil {
 		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
 	}

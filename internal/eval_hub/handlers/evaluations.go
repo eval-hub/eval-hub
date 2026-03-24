@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
@@ -14,7 +16,6 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/http_wrappers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serialization"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/logging"
@@ -34,15 +35,59 @@ type BenchmarkSpec struct {
 	Config      map[string]interface{} `json:"config,omitempty"`
 }
 
+// runtimeStorage is a wrapper around the storage layer that is used to update the evaluation job status and benchmarks
+// and query providers. It is used to detach the storage layer from the HTTP request context so that background
+// goroutines inside the runtime can update job status after the request completes. This is the single transition point from
+// request-scoped work to background runtime work, covering all runtime implementations (local, k8s, etc.).
+
+type runtimeStorage struct {
+	apiContext    context.Context
+	jobContext    context.Context
+	logger        *slog.Logger
+	handlers      *Handlers
+	inCallContext atomic.Bool
+}
+
+func (s *runtimeStorage) getContext() context.Context {
+	if s.inCallContext.Load() {
+		return s.apiContext
+	}
+	return s.jobContext
+}
+
+func (s *runtimeStorage) GetProvider(id string) (*api.ProviderResource, error) {
+	provider, err := s.handlers.storage.WithLogger(s.logger).WithContext(s.getContext()).GetProvider(id)
+	if err != nil {
+		s.logger.Info("Failed to get provider from storage", "provider_id", id, "error", err)
+		return nil, err
+	}
+	return provider, nil
+}
+
+func (s *runtimeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
+	// TODO add validation to check that the job is in a valid state to be updated etc
+	err := s.handlers.storage.WithLogger(s.logger).WithContext(s.getContext()).UpdateEvaluationJob(id, runStatus)
+	if err != nil {
+		s.logger.Info("Failed to update evaluation job in storage", "job_id", id, "error", err)
+		return err
+	}
+	return nil
+}
+
+func (h *Handlers) getStorage(ctx *executioncontext.ExecutionContext) abstractions.Storage {
+	return h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
+}
+
 // HandleCreateEvaluation handles POST /api/v1/evaluations/jobs
 func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
+	storage := h.getStorage(ctx)
 
 	logging.LogRequestStarted(ctx)
 
 	id := common.GUID()
 
 	evaluation := &api.EvaluationJobConfig{}
+	var collection *api.CollectionResource
 
 	err := h.withSpan(
 		ctx,
@@ -56,13 +101,18 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 			if err != nil {
 				return err
 			}
-			resolveProvider := func(providerID string) (*api.ProviderResource, error) {
-				return storage.WithContext(runtimeCtx).GetProvider(providerID)
+			if evaluation.Collection != nil && evaluation.Collection.ID != "" {
+				collection, err = storage.GetCollection(evaluation.Collection.ID)
+				if err != nil {
+					return err
+				}
 			}
-			resolveCollection := func(id string) (*api.CollectionResource, error) {
-				return storage.WithContext(runtimeCtx).GetCollection(id)
+			jobForResolve := &api.EvaluationJobResource{EvaluationJobConfig: *evaluation}
+			benchmarks, err := GetJobBenchmarks(jobForResolve, collection)
+			if err != nil {
+				return err
 			}
-			return h.validateBenchmarkReferences(evaluation, resolveCollection, resolveProvider)
+			return h.validateBenchmarkReferences(ctx, benchmarks)
 		},
 		"validation",
 		"validate-evaluation-job",
@@ -146,7 +196,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		ctx,
 		func(runtimeCtx context.Context) error {
 			if h.runtime != nil {
-				runErr := h.executeEvaluationJob(ctx.Logger, h.runtime, job, storage)
+				runErr := h.executeEvaluationJob(ctx.WithContext(runtimeCtx), job, collection)
 				if runErr != nil {
 					state := api.OverallStateFailed
 					message := &api.MessageInfo{
@@ -160,6 +210,15 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 					w.Error(runErr, ctx.RequestID)
 					return runErr
 				}
+			} else {
+				state := job.Status.State
+				message := &api.MessageInfo{
+					Message:     "Evaluation job created but no runtime configured",
+					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
+				}
+				if err := storage.WithContext(runtimeCtx).UpdateEvaluationJobStatus(job.Resource.ID, state, message); err != nil {
+					ctx.Logger.Error("Failed to update evaluation status", "error", err, "job_id", job.Resource.ID)
+				}
 			}
 			w.WriteJSON(job, 202)
 			return nil
@@ -172,10 +231,35 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 	)
 }
 
-func (h *Handlers) executeEvaluationJob(logger *slog.Logger, runtime abstractions.Runtime, job *api.EvaluationJobResource, storage abstractions.Storage) error {
+// ResolveBenchmarks returns the benchmarks to run: from the job's Collection when set, otherwise from the job's Benchmarks.
+func ResolveBenchmarks(evaluation *api.EvaluationJobResource, collection *api.CollectionResource) ([]api.BenchmarkConfig, error) {
+	if evaluation.Collection != nil && evaluation.Collection.ID != "" {
+		if collection == nil || len(collection.Benchmarks) == 0 {
+			return nil, serviceerrors.NewServiceError(messages.CollectionEmpty, "CollectionID", evaluation.Collection.ID)
+		}
+		return collection.Benchmarks, nil
+	}
+	if len(evaluation.Benchmarks) == 0 {
+		return nil, serviceerrors.NewServiceError(messages.EvaluationJobEmpty, "EvaluationJobID", evaluation.Resource.ID)
+	}
+	return evaluation.Benchmarks, nil
+}
+
+func (h *Handlers) createRuntimeStorage(ctx *executioncontext.ExecutionContext, jobContext context.Context) *runtimeStorage {
+	runtimeStorage := &runtimeStorage{
+		apiContext: ctx.Ctx,
+		jobContext: jobContext,
+		logger:     ctx.Logger,
+		handlers:   h,
+	}
+	runtimeStorage.inCallContext.Store(true)
+	return runtimeStorage
+}
+
+func (h *Handlers) executeEvaluationJob(ctx *executioncontext.ExecutionContext, job *api.EvaluationJobResource, collection *api.CollectionResource) error {
 	var err error
 
-	benchmarks, err := shared.ResolveBenchmarks(job, storage)
+	benchmarks, err := ResolveBenchmarks(job, collection)
 	if err != nil {
 		return err
 	}
@@ -187,29 +271,29 @@ func (h *Handlers) executeEvaluationJob(logger *slog.Logger, runtime abstraction
 	// runtime implementations (local, k8s, etc.).
 	jobContext := context.Background()
 
-	err = runtime.WithLogger(logger).WithContext(jobContext).RunEvaluationJob(job, benchmarks, storage.WithContext(jobContext))
-	return err
+	runtimeStorage := h.createRuntimeStorage(ctx, jobContext)
+	defer func() {
+		runtimeStorage.inCallContext.Store(false)
+	}()
+
+	return h.runtime.WithLogger(ctx.Logger).WithContext(jobContext).RunEvaluationJob(job, benchmarks, runtimeStorage)
 }
 
-// ResolveProviderFunc resolves a provider by ID. Used by validateBenchmarkReferences so it does not depend on storage or context.
-type ResolveProviderFunc func(providerID string) (*api.ProviderResource, error)
+func (h *Handlers) validateBenchmarkReferences(ctx *executioncontext.ExecutionContext, benchmarks []api.BenchmarkConfig) error {
+	storage := h.getStorage(ctx)
 
-func (h *Handlers) validateBenchmarkReferences(evaluation *api.EvaluationJobConfig, getCollection common.GetCollectionFunc, resolveProvider ResolveProviderFunc) error {
-	jobForResolve := &api.EvaluationJobResource{EvaluationJobConfig: *evaluation}
-	benchmarks, err := common.GetJobBenchmarks(jobForResolve, getCollection)
-	if err != nil {
-		return err
-	}
 	for _, benchmark := range benchmarks {
-		provider, err := resolveProvider(benchmark.ProviderID)
+		provider, err := storage.GetProvider(benchmark.ProviderID)
 		if err != nil || provider == nil {
+			ctx.Logger.Debug("Failed to get provider whilst validating benchmark", "benchmark_id", benchmark.ID, "provider_id", benchmark.ProviderID, "error", err.Error())
 			return serviceerrors.NewServiceError(
 				messages.ResourceDoesNotExist,
 				"Type", "provider",
 				"ResourceID", benchmark.ProviderID,
 			)
 		}
-		if !benchmarkExists(provider.Benchmarks, benchmark.ID) {
+		if !slices.ContainsFunc(provider.Benchmarks, func(b api.BenchmarkResource) bool { return b.ID == benchmark.ID }) {
+			ctx.Logger.Debug("Benchmark does not exist in provider", "benchmark_id", benchmark.ID, "provider_id", benchmark.ProviderID)
 			return serviceerrors.NewServiceError(
 				messages.ResourceDoesNotExist,
 				"Type", "benchmark",
@@ -220,18 +304,9 @@ func (h *Handlers) validateBenchmarkReferences(evaluation *api.EvaluationJobConf
 	return nil
 }
 
-func benchmarkExists(benchmarks []api.BenchmarkResource, id string) bool {
-	for _, benchmark := range benchmarks {
-		if benchmark.ID == id {
-			return true
-		}
-	}
-	return false
-}
-
 // HandleListEvaluations handles GET /api/v1/evaluations/jobs
 func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
+	storage := h.getStorage(ctx)
 
 	var ofilter *abstractions.QueryFilter
 
@@ -306,7 +381,7 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 
 // HandleGetEvaluation handles GET /api/v1/evaluations/jobs/{id}
 func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
+	storage := h.getStorage(ctx)
 
 	logging.LogRequestStarted(ctx)
 
@@ -335,7 +410,7 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 }
 
 func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
+	storage := h.getStorage(ctx)
 
 	logging.LogRequestStarted(ctx)
 
@@ -372,21 +447,7 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			// Resolve benchmarks at handler level so storage doesn't need collection configs
-			job, err := storage.WithContext(runtimeCtx).GetEvaluationJob(evaluationJobID)
-			if err != nil {
-				w.Error(err, ctx.RequestID)
-				return err
-			}
-			getCollection := func(id string) (*api.CollectionResource, error) {
-				return storage.WithContext(runtimeCtx).GetCollection(id)
-			}
-			benchmarks, err := common.GetJobBenchmarks(job, getCollection)
-			if err != nil {
-				w.Error(err, ctx.RequestID)
-				return err
-			}
-			err = storage.WithContext(runtimeCtx).UpdateEvaluationJob(evaluationJobID, status, benchmarks)
+			err = storage.WithContext(runtimeCtx).UpdateEvaluationJob(evaluationJobID, status)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -402,7 +463,7 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 
 // HandleCancelEvaluation handles DELETE /api/v1/evaluations/jobs/{id}
 func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
+	storage := h.getStorage(ctx)
 
 	logging.LogRequestStarted(ctx)
 
