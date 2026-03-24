@@ -260,12 +260,6 @@ func (s *sqlStorage) getOverallJobStatus(job *api.EvaluationJobResource) (api.Ov
 			}, err
 		}
 	}
-	if err != nil {
-		return api.OverallStatePending, &api.MessageInfo{
-			Message:     "Evaluation job is pending",
-			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
-		}, err
-	}
 	benchmarks, err := handlers.GetJobBenchmarks(job, collection)
 	total := 0
 	if err != nil || len(benchmarks) == 0 {
