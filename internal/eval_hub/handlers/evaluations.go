@@ -45,6 +45,8 @@ type runtimeStorage struct {
 	jobContext    context.Context
 	logger        *slog.Logger
 	handlers      *Handlers
+	tenant        api.Tenant
+	owner         api.User
 	inCallContext atomic.Bool
 }
 
@@ -55,8 +57,13 @@ func (s *runtimeStorage) getContext() context.Context {
 	return s.jobContext
 }
 
+// scopedStorage matches getStorage scoping so background runtime work uses the same tenant/owner as the request.
+func (s *runtimeStorage) scopedStorage() abstractions.Storage {
+	return s.handlers.storage.WithLogger(s.logger).WithContext(s.getContext()).WithTenant(s.tenant).WithOwner(s.owner)
+}
+
 func (s *runtimeStorage) GetProvider(id string) (*api.ProviderResource, error) {
-	provider, err := s.handlers.storage.WithLogger(s.logger).WithContext(s.getContext()).GetProvider(id)
+	provider, err := s.scopedStorage().GetProvider(id)
 	if err != nil {
 		s.logger.Info("Failed to get provider from storage", "provider_id", id, "error", err)
 		return nil, err
@@ -66,7 +73,7 @@ func (s *runtimeStorage) GetProvider(id string) (*api.ProviderResource, error) {
 
 func (s *runtimeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
 	// TODO add validation to check that the job is in a valid state to be updated etc
-	err := s.handlers.storage.WithLogger(s.logger).WithContext(s.getContext()).UpdateEvaluationJob(id, runStatus)
+	err := s.scopedStorage().UpdateEvaluationJob(id, runStatus)
 	if err != nil {
 		s.logger.Info("Failed to update evaluation job in storage", "job_id", id, "error", err)
 		return err
@@ -251,6 +258,8 @@ func (h *Handlers) createRuntimeStorage(ctx *executioncontext.ExecutionContext, 
 		jobContext: jobContext,
 		logger:     ctx.Logger,
 		handlers:   h,
+		tenant:     ctx.Tenant,
+		owner:      ctx.User,
 	}
 	runtimeStorage.inCallContext.Store(true)
 	return runtimeStorage
