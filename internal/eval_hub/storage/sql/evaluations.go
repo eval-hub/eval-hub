@@ -365,9 +365,6 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 				return err
 			}
 		}
-		if err != nil {
-			return err
-		}
 		err = s.validateBenchmarkExists(job, runStatus, collection)
 		if err != nil {
 			return err

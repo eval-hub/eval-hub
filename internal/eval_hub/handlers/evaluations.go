@@ -109,7 +109,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				return err
 			}
 			if evaluation.Collection != nil && evaluation.Collection.ID != "" {
-				collection, err = storage.GetCollection(evaluation.Collection.ID)
+				collection, err = storage.WithContext(runtimeCtx).GetCollection(evaluation.Collection.ID)
 				if err != nil {
 					return err
 				}
