@@ -9,13 +9,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 make start-service                # Start service on default port 8080
 PORT=3000 make start-service      # Start service on custom port
 make stop-service                 # Stop service
-go run cmd/eval-hub/main.go       # Direct Go execution
+go run cmd/eval_hub/main.go       # Direct Go execution
 ```
 
 ### Building
 ```bash
-make build              # Build service, eval-runtime-init, and eval-runtime-sidecar into bin/
-./bin/eval-hub         # Run the API service binary
+make build              # Build service, eval_runtime_init, and eval_runtime_sidecar into bin/
+./bin/eval_hub         # Run the API service binary
 ```
 
 ### Testing
@@ -66,9 +66,9 @@ make clean              # Remove build artifacts and coverage files
 ### Project Structure
 This project follows the standard Go project layout with a clear separation between public entry points (`cmd/`) and private application code (`internal/`). See **ARCHITECTURE.md** for a concise layout and request flow.
 
-- **cmd/eval-hub/** - Main API service entry point
-- **cmd/eval-runtime-init/** - Init container for Kubernetes job pods
-- **cmd/eval-runtime-sidecar/** - Sidecar for job pods (proxy, readiness, termination log)
+- **cmd/eval_hub/** - Main API service entry point
+- **cmd/eval_runtime_init/** - Init container for Kubernetes job pods
+- **cmd/eval_runtime_sidecar/** - Sidecar for job pods (proxy, readiness, termination log)
 - **pkg/api/** - Shared API types (IDs, errors, request/response shapes)
 - **auth/** - Authentication configuration and HTTP middleware helpers
 - **internal/eval_hub/abstractions/** - `Storage`, `Runtime`, and related interfaces
@@ -185,7 +185,7 @@ BDD-style tests using godog in `tests/features/`:
 - Suite setup in `suite_test.go`
 
 ### Server Lifecycle
-Main function (`cmd/eval-hub/main.go`) implements graceful shutdown:
+Main function (`cmd/eval_hub/main.go`) implements graceful shutdown:
 1. Creates logger and loads config (and optional auth config when enabled)
 2. Wires storage, validator, runtime, and MLflow client
 3. Creates server with `server.NewServer(logger, serviceConfig, authConfig, storage, validate, runtime, mlflowClient)`
