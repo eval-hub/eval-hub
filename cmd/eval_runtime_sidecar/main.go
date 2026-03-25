@@ -74,7 +74,7 @@ func main() {
 	go func() {
 		if err := srv.Start(); err != nil {
 			// we do this as no point trying to continue
-			if errors.Is(err, &server.ServerClosedError{}) {
+			if errors.Is(err, &sidecarServer.ServerClosedError{}) {
 				logger.Info("Server closed gracefully")
 				return
 			}
