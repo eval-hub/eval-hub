@@ -1,5 +1,19 @@
 type: object
-description: S3 test data reference
+description: |
+  S3 (or S3-compatible) test data. Only applies when Eval Hub runs the benchmark as a
+  **Kubernetes Job** (cluster execution). It does not apply to local-only evaluation runs.
+
+  The test-data **init container** loads the Secret named **`secret_ref`** from the
+  job namespace. It expects these keys. **All values must be non-empty** or the init
+  container fails:
+
+  - **`AWS_ACCESS_KEY_ID`** — access key
+  - **`AWS_SECRET_ACCESS_KEY`** — secret key
+  - **`AWS_DEFAULT_REGION`** — region used for signing (for example `us-east-1`)
+  - **`AWS_S3_ENDPOINT`** — base URL of the S3 API (AWS regional endpoint or your
+    S3-compatible gateway)
+
+  These align with Secrets commonly produced by ODH/RHOAI when an S3 connection is created.
 required:
   - bucket
   - key
@@ -7,10 +21,19 @@ required:
 properties:
   bucket:
     type: string
-    description: S3 bucket name
+    description: S3 bucket name.
   key:
     type: string
-    description: S3 object key (path)
+    description: |
+      Object key or prefix within the bucket. Leading and trailing slashes are
+      normalized. The init container lists objects under this prefix and downloads
+      each into **`/test_data`**, keeping subdirectory structure relative to the prefix.
   secret_ref:
     type: string
-    description: Kubernetes Secret name containing S3 credentials
+    description: |
+      Name of a Kubernetes **`Secret`** in the evaluation job namespace, mounted
+      read-only into the test-data init container.
+example:
+  bucket: my-eval-bucket
+  key: datasets/benchmark-a/v1
+  secret_ref: my-s3-connection-secret

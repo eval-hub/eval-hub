@@ -25,4 +25,7 @@ allOf:
         description: Benchmark specific parameters
       test_data_ref:
         $ref: ./TestDataRef.yaml
-        description: Reference to the test data source for this benchmark
+        description: |
+          Optional external test data (e.g. **S3**). For **Kubernetes Job** runs, may
+          trigger a pre-run init container that downloads files to **`/test_data`** for
+          the adapter. Omit if the benchmark does not need mounted files.
