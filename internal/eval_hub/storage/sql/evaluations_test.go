@@ -466,14 +466,14 @@ func TestEvaluationsStorage(t *testing.T) {
 		}
 	})
 
-	t.Run("UpdateEvaluationJobStatus same-state is no-op", func(t *testing.T) {
-		noOpID := common.GUID()
+	t.Run("UpdateEvaluationJobStatus running to pending updates state", func(t *testing.T) {
+		jobID := common.GUID()
 		now := time.Now()
 
-		noOpJob := &api.EvaluationJobResource{
+		jobRes := &api.EvaluationJobResource{
 			Resource: api.EvaluationResource{
 				Resource: api.Resource{
-					ID:        noOpID,
+					ID:        jobID,
 					Tenant:    api.Tenant("tenant-1"),
 					CreatedAt: now,
 					UpdatedAt: now,
@@ -494,20 +494,109 @@ func TestEvaluationsStorage(t *testing.T) {
 				Benchmarks: []api.BenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
 			},
 		}
-		if err := store.CreateEvaluationJob(noOpJob); err != nil {
+		if err := store.CreateEvaluationJob(jobRes); err != nil {
 			t.Fatalf("CreateEvaluationJob: %v", err)
 		}
-		msg := &api.MessageInfo{Message: "no change", MessageCode: "test"}
-		err := store.UpdateEvaluationJobStatus(noOpID, api.OverallStatePending, msg)
+		msg := &api.MessageInfo{Message: "now pending", MessageCode: "test"}
+		err := store.UpdateEvaluationJobStatus(jobID, api.OverallStatePending, msg)
 		if err != nil {
-			t.Fatalf("UpdateEvaluationJobStatus same-state should not error: %v", err)
+			t.Fatalf("UpdateEvaluationJobStatus running->pending: %v", err)
 		}
-		job, err := store.GetEvaluationJob(noOpID)
+		got, err := store.GetEvaluationJob(jobID)
 		if err != nil {
 			t.Fatalf("GetEvaluationJob failed: %v", err)
 		}
-		if job.Status.State != api.OverallStatePending {
-			t.Errorf("state should remain pending, got %s", job.Status.State)
+		if got.Status.State != api.OverallStatePending {
+			t.Errorf("state should be pending, got %s", got.Status.State)
+		}
+	})
+
+	t.Run("UpdateEvaluationJobStatus same-state persists message when message changes", func(t *testing.T) {
+		jobID := common.GUID()
+		now := time.Now()
+		initialMsg := &api.MessageInfo{Message: "Evaluation job created", MessageCode: "created"}
+
+		j := &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{
+					ID:        jobID,
+					Tenant:    api.Tenant("tenant-1"),
+					CreatedAt: now,
+					UpdatedAt: now,
+				},
+				MLFlowExperimentID: "experiment-1",
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{
+					State:   api.OverallStatePending,
+					Message: initialMsg,
+				},
+			},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
+				Benchmarks: []api.BenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
+			},
+		}
+		if err := store.CreateEvaluationJob(j); err != nil {
+			t.Fatalf("CreateEvaluationJob: %v", err)
+		}
+		newMsg := &api.MessageInfo{
+			Message:     "Evaluation job created but no runtime configured",
+			MessageCode: "updated",
+		}
+		if err := store.UpdateEvaluationJobStatus(jobID, api.OverallStatePending, newMsg); err != nil {
+			t.Fatalf("UpdateEvaluationJobStatus same-state message: %v", err)
+		}
+		got, err := store.GetEvaluationJob(jobID)
+		if err != nil {
+			t.Fatalf("GetEvaluationJob: %v", err)
+		}
+		if got.Status.State != api.OverallStatePending {
+			t.Fatalf("state should stay pending, got %s", got.Status.State)
+		}
+		if got.Status.Message == nil || got.Status.Message.Message != newMsg.Message || got.Status.Message.MessageCode != newMsg.MessageCode {
+			t.Fatalf("message not updated: %+v", got.Status.Message)
+		}
+	})
+
+	t.Run("UpdateEvaluationJobStatus same-state nil message is no-op", func(t *testing.T) {
+		jobID := common.GUID()
+		now := time.Now()
+		keepMsg := &api.MessageInfo{Message: "unchanged", MessageCode: "K"}
+
+		j := &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{
+					ID:        jobID,
+					Tenant:    api.Tenant("tenant-1"),
+					CreatedAt: now,
+					UpdatedAt: now,
+				},
+				MLFlowExperimentID: "experiment-1",
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{
+					State:   api.OverallStatePending,
+					Message: keepMsg,
+				},
+			},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
+				Benchmarks: []api.BenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
+			},
+		}
+		if err := store.CreateEvaluationJob(j); err != nil {
+			t.Fatalf("CreateEvaluationJob: %v", err)
+		}
+		if err := store.UpdateEvaluationJobStatus(jobID, api.OverallStatePending, nil); err != nil {
+			t.Fatalf("UpdateEvaluationJobStatus: %v", err)
+		}
+		got, err := store.GetEvaluationJob(jobID)
+		if err != nil {
+			t.Fatalf("GetEvaluationJob: %v", err)
+		}
+		if got.Status.Message == nil || got.Status.Message.Message != keepMsg.Message {
+			t.Fatalf("message should be unchanged, got %+v", got.Status.Message)
 		}
 	})
 

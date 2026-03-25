@@ -136,6 +136,16 @@ func (s *sqlStorage) checkEvaluationJobState(evaluationJobID string, evaluationJ
 	return false, nil
 }
 
+func messageInfosEquivalent(a, b *api.MessageInfo) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Message == b.Message && a.MessageCode == b.MessageCode
+}
+
 func (s *sqlStorage) UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error {
 	// we have to get the evaluation job and update the status so we need a transaction
 	s.logger.Debug("Updating evaluation job status", "id", id, "state", state, "message", message)
@@ -152,9 +162,22 @@ func (s *sqlStorage) UpdateEvaluationJobStatus(id string, state api.OverallState
 			return err
 		}
 		if sameState {
-			// if the state is the same as the current state then we don't need to update the status
-			// we don't treat this as an error for now, we just return 204
-			return nil
+			if message == nil || messageInfosEquivalent(evaluationJob.Status.Message, message) {
+				return nil
+			}
+			benchmarks := evaluationJob.Status.Benchmarks
+			entity := EvaluationJobEntity{
+				Config: &evaluationJob.EvaluationJobConfig,
+				Status: &api.EvaluationJobStatus{
+					EvaluationJobState: api.EvaluationJobState{
+						State:   evaluationJob.Status.State,
+						Message: message,
+					},
+					Benchmarks: benchmarks,
+				},
+				Results: evaluationJob.Results,
+			}
+			return s.updateEvaluationJobTxn(txn, id, evaluationJob.Status.State, &entity)
 		}
 
 		benchmarks := evaluationJob.Status.Benchmarks
