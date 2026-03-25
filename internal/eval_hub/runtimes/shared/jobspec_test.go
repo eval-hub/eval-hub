@@ -1,9 +1,11 @@
-package shared
+package shared_test
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -43,49 +45,49 @@ func baseEvaluation() *api.EvaluationJobResource {
 // --- NumExamplesFromParameters ---
 
 func TestNumExamplesFromParametersNilMap(t *testing.T) {
-	result := NumExamplesFromParameters(nil)
+	result := shared.NumExamplesFromParameters(nil)
 	if result != nil {
 		t.Fatalf("expected nil, got %d", *result)
 	}
 }
 
 func TestNumExamplesFromParametersMissing(t *testing.T) {
-	result := NumExamplesFromParameters(map[string]any{"foo": "bar"})
+	result := shared.NumExamplesFromParameters(map[string]any{"foo": "bar"})
 	if result != nil {
 		t.Fatalf("expected nil, got %d", *result)
 	}
 }
 
 func TestNumExamplesFromParametersInt(t *testing.T) {
-	result := NumExamplesFromParameters(map[string]any{"num_examples": 10})
+	result := shared.NumExamplesFromParameters(map[string]any{"num_examples": 10})
 	if result == nil || *result != 10 {
 		t.Fatalf("expected 10, got %v", result)
 	}
 }
 
 func TestNumExamplesFromParametersInt32(t *testing.T) {
-	result := NumExamplesFromParameters(map[string]any{"num_examples": int32(20)})
+	result := shared.NumExamplesFromParameters(map[string]any{"num_examples": int32(20)})
 	if result == nil || *result != 20 {
 		t.Fatalf("expected 20, got %v", result)
 	}
 }
 
 func TestNumExamplesFromParametersInt64(t *testing.T) {
-	result := NumExamplesFromParameters(map[string]any{"num_examples": int64(30)})
+	result := shared.NumExamplesFromParameters(map[string]any{"num_examples": int64(30)})
 	if result == nil || *result != 30 {
 		t.Fatalf("expected 30, got %v", result)
 	}
 }
 
 func TestNumExamplesFromParametersFloat64(t *testing.T) {
-	result := NumExamplesFromParameters(map[string]any{"num_examples": float64(42)})
+	result := shared.NumExamplesFromParameters(map[string]any{"num_examples": float64(42)})
 	if result == nil || *result != 42 {
 		t.Fatalf("expected 42, got %v", result)
 	}
 }
 
 func TestNumExamplesFromParametersUnsupportedType(t *testing.T) {
-	result := NumExamplesFromParameters(map[string]any{"num_examples": "not-a-number"})
+	result := shared.NumExamplesFromParameters(map[string]any{"num_examples": "not-a-number"})
 	if result != nil {
 		t.Fatalf("expected nil for string type, got %d", *result)
 	}
@@ -94,7 +96,7 @@ func TestNumExamplesFromParametersUnsupportedType(t *testing.T) {
 // --- CopyParams ---
 
 func TestCopyParamsNil(t *testing.T) {
-	result := CopyParams(nil)
+	result := shared.CopyParams(nil)
 	if result == nil {
 		t.Fatal("expected non-nil empty map, got nil")
 	}
@@ -104,7 +106,7 @@ func TestCopyParamsNil(t *testing.T) {
 }
 
 func TestCopyParamsEmpty(t *testing.T) {
-	result := CopyParams(map[string]any{})
+	result := shared.CopyParams(map[string]any{})
 	if result == nil {
 		t.Fatal("expected non-nil empty map, got nil")
 	}
@@ -115,7 +117,7 @@ func TestCopyParamsEmpty(t *testing.T) {
 
 func TestCopyParamsShallowCopy(t *testing.T) {
 	source := map[string]any{"a": 1, "b": "two"}
-	result := CopyParams(source)
+	result := shared.CopyParams(source)
 
 	if len(result) != 2 {
 		t.Fatalf("expected 2 entries, got %d", len(result))
@@ -137,7 +139,7 @@ func TestBuildJobSpecJSONHappyPath(t *testing.T) {
 	eval := baseEvaluation()
 	callbackURL := "http://callback.example/status"
 
-	spec, err := BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, &callbackURL)
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, &callbackURL)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -181,7 +183,7 @@ func TestBuildJobSpecJSONHappyPath(t *testing.T) {
 func TestBuildJobSpecJSONNilCallbackURL(t *testing.T) {
 	eval := baseEvaluation()
 
-	spec, err := BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -195,7 +197,7 @@ func TestBuildJobSpecJSONNilExperiment(t *testing.T) {
 	eval := baseEvaluation()
 	eval.Experiment = nil
 
-	spec, err := BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -211,7 +213,7 @@ func TestBuildJobSpecJSONNilExperiment(t *testing.T) {
 func TestBuildJobSpecJSONNoNumExamples(t *testing.T) {
 	eval := baseEvaluation()
 	// Use bench-2 which has no num_examples
-	spec, err := BuildJobSpec(eval, "provider-2", &eval.Benchmarks[1], 0, nil)
+	spec, err := shared.BuildJobSpec(eval, "provider-2", &eval.Benchmarks[1], 0, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -223,7 +225,7 @@ func TestBuildJobSpecJSONNoNumExamples(t *testing.T) {
 
 func TestBuildJobSpecJSONBenchmarkNotProvided(t *testing.T) {
 	eval := baseEvaluation()
-	_, err := BuildJobSpec(eval, "provider-1", nil, 0, nil)
+	_, err := shared.BuildJobSpec(eval, "provider-1", nil, 0, nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -236,13 +238,73 @@ func TestBuildJobSpecJSONDoesNotMutateOriginalParams(t *testing.T) {
 	eval := baseEvaluation()
 	originalParams := eval.Benchmarks[0].Parameters
 
-	_, err := BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
+	_, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
 	// num_examples should still be in the original
 	if _, exists := originalParams["num_examples"]; !exists {
-		t.Fatal("BuildJobSpecJSON mutated the original parameters map")
+		t.Fatal("shared.BuildJobSpecJSON mutated the original parameters map")
+	}
+}
+
+func TestJobSpecSerialization(t *testing.T) {
+	// Create a minimal evaluation job for testing
+	callbackURL := "http://localhost:8080/callback"
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "test-job-001"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model.example.com",
+				Name: "test-model",
+			},
+			Benchmarks: []api.BenchmarkConfig{
+				{
+					Ref:        api.Ref{ID: "arc_easy"},
+					ProviderID: "lm_evaluation_harness",
+					Parameters: map[string]any{
+						"num_fewshot": 3,
+						"limit":       5,
+					},
+				},
+			},
+		},
+	}
+
+	// Build JobSpec using the same function the server uses
+	spec, err := shared.BuildJobSpec(
+		evaluation,
+		"lm_evaluation_harness",
+		&evaluation.Benchmarks[0],
+		0, // benchmark_index
+		&callbackURL,
+	)
+	if err != nil {
+		t.Fatalf("Error building JobSpec: %v\n", err)
+	}
+
+	// Serialize to JSON (pretty-printed)
+	jsonBytes, err := json.MarshalIndent(spec, "", "  ")
+	if err != nil {
+		t.Fatalf("Error marshaling JobSpec: %v\n", err)
+	}
+
+	// Output the JSON
+	// fmt.Println("Generated JobSpec JSON:")
+	// fmt.Println(string(jsonBytes))
+
+	// Check if benchmark_index is present
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(jsonBytes, &parsed); err != nil {
+		t.Fatalf("Error parsing JSON: %v\n", err)
+	}
+
+	if _, ok := parsed["benchmark_index"]; ok {
+		// fmt.Printf("\n✅ SUCCESS: benchmark_index field is present with value: %v\n", benchmarkIndex)
+	} else {
+		t.Fatal("❌ FAILURE: benchmark_index field is MISSING from serialized JSON")
 	}
 }
