@@ -38,7 +38,7 @@ The EvalHub container image is published to `quay.io/evalhub/evalhub`. The follo
 
 | Tag | When applied | Example |
 |-----|-------------|---------|
-| `latest` | Every push to `main` or a version tag | Always points to the most recent image pushed |
+| `latest` | Every push to GHA observed branches (`main`, `develop`, ...) or a version tag | Always points to the most recent image pushed |
 | `<branch>` | Branch push | `main`, `develop` |
 | `<branch>-<sha>` | Branch push | `main-a1b2c3d...` |
 | `<version>` | Tag push (`v1.2.3`) | `1.2.3` |
