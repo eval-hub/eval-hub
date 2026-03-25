@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -112,5 +113,8 @@ func TestServerClosedError(t *testing.T) {
 	err := &sidecarServer.ServerClosedError{}
 	if err.Error() != "Server closed" {
 		t.Errorf("ServerClosedError.Error() = %q, want %q", err.Error(), "Server closed")
+	}
+	if !errors.Is(err, &sidecarServer.ServerClosedError{}) {
+		t.Error("errors.Is should match two distinct ServerClosedError pointers")
 	}
 }
