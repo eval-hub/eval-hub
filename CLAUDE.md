@@ -9,20 +9,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 make start-service                # Start service on default port 8080
 PORT=3000 make start-service      # Start service on custom port
 make stop-service                 # Stop service
-go run cmd/eval_hub/main.go       # Direct Go execution
+go run cmd/eval-hub/main.go       # Direct Go execution
 ```
 
 ### Building
 ```bash
-make build              # Build binary to bin/eval-hub
-./bin/eval-hub  # Run the built binary
+make build              # Build service, eval-runtime-init, and eval-runtime-sidecar into bin/
+./bin/eval-hub         # Run the API service binary
 ```
 
 ### Testing
 ```bash
-make test               # Run unit tests (internal/...)
+make test               # Run unit tests (./auth/..., ./internal/..., ./cmd/...)
 make test-fvt           # Run FVT tests using godog (tests/features/...)
-make test-all           # Run all tests (unit + FVT)
+make test-all           # Run unit tests, FVT, then FVT against a started server (test-fvt-server)
 make test-coverage      # Generate coverage report (coverage.html)
 
 # Run specific unit test
@@ -46,6 +46,7 @@ make update-deps        # Update all dependencies to latest
 ```
 
 ### Database Setup
+Directory: `tests/postgres`
 ```bash
 make install-postgres   # Install PostgreSQL (macOS/Linux)
 make start-postgres     # Start PostgreSQL service
@@ -63,38 +64,47 @@ make clean              # Remove build artifacts and coverage files
 ## Architecture Overview
 
 ### Project Structure
-This project follows the standard Go project layout with a clear separation between public entry points (`cmd/`) and private application code (`internal/`).
+This project follows the standard Go project layout with a clear separation between public entry points (`cmd/`) and private application code (`internal/`). See **ARCHITECTURE.md** for a concise layout and request flow.
 
-- **cmd/eval_hub/** - Main application entry point
+- **cmd/eval-hub/** - Main API service entry point
+- **cmd/eval-runtime-init/** - Init container for Kubernetes job pods
+- **cmd/eval-runtime-sidecar/** - Sidecar for job pods (proxy, readiness, termination log)
+- **pkg/api/** - Shared API types (IDs, errors, request/response shapes)
+- **auth/** - Authentication configuration and HTTP middleware helpers
+- **internal/eval_hub/abstractions/** - `Storage`, `Runtime`, and related interfaces
 - **internal/eval_hub/config/** - Configuration loading with Viper
 - **internal/eval_hub/constants/** - Shared constants (log field names, etc.)
-- **internal/eval_hub/executioncontext/** - ExecutionContext pattern implementation
-- **internal/eval_hub/handlers/** - HTTP request handlers
-- **internal/logging/** - Logger creation and request enhancement
+- **internal/eval_hub/executioncontext/** - Per-request execution context (`Ctx`, logger, `User`, `Tenant`, etc.)
+- **internal/eval_hub/handlers/** - HTTP handlers (depend on `Handlers` for config, storage, runtime)
+- **internal/eval_hub/http_wrappers/** - `RequestWrapper` / `ResponseWrapper` abstractions for handlers
+- **internal/eval_hub/runtimes/** - Local and Kubernetes runtime implementations
+- **internal/eval_hub/storage/** - Persistence implementations (e.g. SQL)
+- **internal/logging/** - Logger creation (zap backend, `slog` API)
 - **internal/eval_hub/metrics/** - Prometheus metrics and middleware
-- **internal/eval_hub/server/** - Server setup and routing
+- **internal/eval_hub/server/** - Server setup, routing, auth wiring, `newExecutionContext`
 - **api/** - OpenAPI 3.1.0 specification
 - **tests/features/** - BDD-style FVT tests using godog
 
 ### Key Architectural Patterns
 
 #### ExecutionContext Pattern
-All evaluation-related handlers receive an `ExecutionContext` instead of raw `http.Request`:
+Evaluation-related handlers take `*executioncontext.ExecutionContext` plus HTTP wrappers instead of raw `*http.Request` / `http.ResponseWriter`:
 
 ```go
-func (h *Handlers) HandleCreateEvaluation(ctx *ExecutionContext, w http.ResponseWriter, r *http.Request)
+func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper)
 ```
 
-The ExecutionContext:
-- Contains a request-scoped logger with enriched fields
-- Carries the service configuration
-- Holds evaluation-specific state (model info, timeouts, retries, metadata)
-- Is created in server route handlers via `executioncontext.NewExecutionContext(r, logger, config)`
+Service configuration, storage, and runtime live on **`handlers.Handlers`** (constructed in `server.setupRoutes`), not on `ExecutionContext`.
+
+The `ExecutionContext`:
+- Carries `context.Context` (from the request, so OTEL spans propagate)
+- Holds request ID, request-scoped `*slog.Logger`, and `api.User` / `api.Tenant` (from `X-User` / `X-Tenant` when present)
+- Is created per route via **`Server.newExecutionContext`**, which calls `executioncontext.NewExecutionContext` with the enhanced logger from **`Server.loggerWithRequest`**
 
 This pattern enables:
 - Automatic request ID tracking (from `X-Global-Transaction-Id` header or auto-generated UUID)
 - Structured logging with consistent request metadata
-- Type-safe passing of configuration and state
+- Type-safe user/tenant and logger threading without passing raw `http.ResponseWriter` into business logic
 
 #### Two-Tier Configuration System
 Configuration uses Viper with a sophisticated loading strategy:
@@ -130,24 +140,26 @@ Loggers are enhanced per-request with:
 - **remote_user**: Authenticated user (from URL or Remote-User header)
 - **referer**: HTTP referer header
 
-Enhancement happens in `logging.LoggerWithRequest(logger, r)`, called when creating ExecutionContext.
+Enhancement happens in **`Server.loggerWithRequest`**, invoked from **`Server.newExecutionContext`**.
 
 #### Routing Pattern
 Uses standard library `net/http.ServeMux` without a web framework:
-- Basic handlers (health, status, OpenAPI) receive `http.ResponseWriter, *http.Request`
-- Evaluation-related handlers receive `*ExecutionContext, http.ResponseWriter, *http.Request`
+- Basic handlers (health, status, OpenAPI) still use `http.ResponseWriter, *http.Request` at the route closure boundary
+- Evaluation-related handlers receive `*executioncontext.ExecutionContext`, `http_wrappers.RequestWrapper`, and `http_wrappers.ResponseWrapper`
 - Routes manually switch on HTTP method in handler functions
-- ExecutionContext created at route level before calling handler
+- `ExecutionContext` and wrappers are created at the route level before calling the handler
 
-Example:
+Example (matches `setupEvaluationJobsRoutes`):
 ```go
-router.HandleFunc("/api/v1/evaluations/jobs", func(w http.ResponseWriter, r *http.Request) {
-    ctx := executioncontext.NewExecutionContext(r, s.logger, s.serviceConfig)
+s.handleFunc(router, "/api/v1/evaluations/jobs", func(w http.ResponseWriter, r *http.Request) {
+    ctx := s.newExecutionContext(r)
+    resp := NewRespWrapper(w, ctx)
+    req := NewRequestWrapper(r)
     switch r.Method {
     case http.MethodPost:
-        h.HandleCreateEvaluation(ctx, w, r)
+        h.HandleCreateEvaluation(ctx, req, resp)
     case http.MethodGet:
-        h.HandleListEvaluations(ctx, w, r)
+        h.HandleListEvaluations(ctx, req, resp)
     }
 })
 ```
@@ -163,7 +175,7 @@ router.HandleFunc("/api/v1/evaluations/jobs", func(w http.ResponseWriter, r *htt
 Located alongside code in `*_test.go` files:
 - Test individual handlers, middleware, server setup
 - Use standard library `testing` package
-- Found in: `internal/eval_hub/handlers/*_test.go`, `internal/eval_hub/server/*_test.go`, and other `internal/eval_hub/**/*_test.go` files
+- Found in: `auth/**/*_test.go`, `internal/**/*_test.go`, `cmd/**/*_test.go`
 
 #### FVT (Functional Verification Tests)
 BDD-style tests using godog in `tests/features/`:
@@ -173,12 +185,13 @@ BDD-style tests using godog in `tests/features/`:
 - Suite setup in `suite_test.go`
 
 ### Server Lifecycle
-Main function (cmd/eval_hub/main.go) implements graceful shutdown:
-1. Creates logger and loads config
-2. Creates server with `server.NewServer(logger, config)`
-3. Starts server in goroutine
-4. Waits for SIGINT/SIGTERM signal
-5. Gracefully shuts down with 30-second timeout
+Main function (`cmd/eval-hub/main.go`) implements graceful shutdown:
+1. Creates logger and loads config (and optional auth config when enabled)
+2. Wires storage, validator, runtime, and MLflow client
+3. Creates server with `server.NewServer(logger, serviceConfig, authConfig, storage, validate, runtime, mlflowClient)`
+4. Starts server in a goroutine
+5. Waits for SIGINT/SIGTERM
+6. Gracefully shuts down with a bounded timeout
 
 ### Important Implementation Notes
 
