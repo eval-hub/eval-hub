@@ -4,12 +4,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	se "github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -351,15 +351,18 @@ func (s *sqlStorage) updateBenchmarkResults(job *api.EvaluationJobResource, runS
 		job.Results.Benchmarks = make([]api.BenchmarkResult, 0)
 	}
 
-	for _, benchmark := range job.Results.Benchmarks {
+	for i, benchmark := range job.Results.Benchmarks {
 		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID &&
 			benchmark.ProviderID == runStatus.BenchmarkStatusEvent.ProviderID &&
 			benchmark.BenchmarkIndex == runStatus.BenchmarkStatusEvent.BenchmarkIndex {
-			// we should never get here because the final result
-			// can not change, hence we treat this as an error for now
-			return serviceerrors.NewServiceError(messages.InternalServerError, "Error", fmt.Sprintf("Benchmark result already exists for benchmark[%d] %s in job %s", runStatus.BenchmarkStatusEvent.BenchmarkIndex, runStatus.BenchmarkStatusEvent.ID, job.Resource.ID))
+			if reflect.DeepEqual(benchmark, *result) {
+				return nil
+			}
+			job.Results.Benchmarks[i] = *result
+			return nil
 		}
 	}
+
 	job.Results.Benchmarks = append(job.Results.Benchmarks, *result)
 
 	return nil
