@@ -32,6 +32,24 @@ The **Backwards Compatible** column indicates whether the EvalHub REST API is ba
 - Changing authentication or authorisation requirements
 - Removing support for a previously accepted query parameter
 
+## Container Image Tag Policy
+
+The EvalHub container image is published to `quay.io/evalhub/evalhub`. The following tags are produced by CI on every push:
+
+| Tag | When applied | Example |
+|-----|-------------|---------|
+| `latest` | Every push to `main` or a version tag | Always points to the most recent image pushed |
+| `<branch>` | Branch push | `main`, `develop` |
+| `<branch>-<sha>` | Branch push | `main-a1b2c3d...` |
+| `<version>` | Tag push (`v1.2.3`) | `1.2.3` |
+| `<major>.<minor>` | Tag push (`v1.2.3`) | `1.2` |
+
+### Production deployments
+
+Production environments should pin to a specific semver tag (e.g. `0.1.0`) rather than `latest`. 
+This is the case of `params.env` for ODH and RHOAI too.
+The `latest` tag is useful for development and testing but may point to an unreleased commit on `main`.
+
 ### What does not count as a breaking change
 
 - Adding new endpoints
