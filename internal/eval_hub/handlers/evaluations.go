@@ -205,14 +205,14 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 					return runErr
 				}
 			} else {
-				state := job.Status.State
 				message := &api.MessageInfo{
 					Message:     "Evaluation job created but no runtime configured",
 					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
 				}
-				if err := storage.WithContext(runtimeCtx).UpdateEvaluationJobStatus(job.Resource.ID, state, message); err != nil {
+				if err := storage.WithContext(runtimeCtx).UpdateEvaluationJobStatus(job.Resource.ID, job.Status.State, message); err != nil {
 					ctx.Logger.Error("Failed to update evaluation status", "error", err, "job_id", job.Resource.ID)
 				}
+				job.Status.Message = message
 			}
 			w.WriteJSON(job, 202)
 			return nil
