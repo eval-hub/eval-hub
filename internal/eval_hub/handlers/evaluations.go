@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
@@ -35,31 +34,19 @@ type BenchmarkSpec struct {
 	Config      map[string]interface{} `json:"config,omitempty"`
 }
 
-// runtimeStorage is a wrapper around the storage layer that is used to update the evaluation job status and benchmarks
-// and query providers. It is used to detach the storage layer from the HTTP request context so that background
-// goroutines inside the runtime can update job status after the request completes. This is the single transition point from
-// request-scoped work to background runtime work, covering all runtime implementations (local, k8s, etc.).
-
+// runtimeStorage wraps storage for RunEvaluationJob. Instances passed to a runtime use ctx (a detached job context)
+// for all GetProvider/UpdateEvaluationJob calls so work is not tied to the HTTP request deadline or cancellation.
 type runtimeStorage struct {
-	apiContext    context.Context
-	jobContext    context.Context
-	logger        *slog.Logger
-	handlers      *Handlers
-	tenant        api.Tenant
-	owner         api.User
-	inCallContext atomic.Bool
+	ctx      context.Context
+	logger   *slog.Logger
+	handlers *Handlers
+	tenant   api.Tenant
+	owner    api.User
 }
 
-func (s *runtimeStorage) getContext() context.Context {
-	if s.inCallContext.Load() {
-		return s.apiContext
-	}
-	return s.jobContext
-}
-
-// scopedStorage matches getStorage scoping so background runtime work uses the same tenant/owner as the request.
+// scopedStorage matches getStorage scoping (tenant/owner/logger) with the runtime job context.
 func (s *runtimeStorage) scopedStorage() abstractions.Storage {
-	return s.handlers.storage.WithLogger(s.logger).WithContext(s.getContext()).WithTenant(s.tenant).WithOwner(s.owner)
+	return s.handlers.storage.WithLogger(s.logger).WithContext(s.ctx).WithTenant(s.tenant).WithOwner(s.owner)
 }
 
 func (s *runtimeStorage) GetProvider(id string) (*api.ProviderResource, error) {
@@ -253,16 +240,13 @@ func ResolveBenchmarks(evaluation *api.EvaluationJobResource, collection *api.Co
 }
 
 func (h *Handlers) createRuntimeStorage(ctx *executioncontext.ExecutionContext, jobContext context.Context) *runtimeStorage {
-	runtimeStorage := &runtimeStorage{
-		apiContext: ctx.Ctx,
-		jobContext: jobContext,
-		logger:     ctx.Logger,
-		handlers:   h,
-		tenant:     ctx.Tenant,
-		owner:      ctx.User,
+	return &runtimeStorage{
+		ctx:      jobContext,
+		logger:   ctx.Logger,
+		handlers: h,
+		tenant:   ctx.Tenant,
+		owner:    ctx.User,
 	}
-	runtimeStorage.inCallContext.Store(true)
-	return runtimeStorage
 }
 
 func (h *Handlers) executeEvaluationJob(ctx *executioncontext.ExecutionContext, job *api.EvaluationJobResource, collection *api.CollectionResource) error {
@@ -280,12 +264,7 @@ func (h *Handlers) executeEvaluationJob(ctx *executioncontext.ExecutionContext, 
 	// runtime implementations (local, k8s, etc.).
 	jobContext := context.Background()
 
-	runtimeStorage := h.createRuntimeStorage(ctx, jobContext)
-	defer func() {
-		runtimeStorage.inCallContext.Store(false)
-	}()
-
-	return h.runtime.WithLogger(ctx.Logger).WithContext(jobContext).RunEvaluationJob(job, benchmarks, runtimeStorage)
+	return h.runtime.WithLogger(ctx.Logger).WithContext(jobContext).RunEvaluationJob(job, benchmarks, h.createRuntimeStorage(ctx, jobContext))
 }
 
 func (h *Handlers) validateBenchmarkReferences(ctx *executioncontext.ExecutionContext, benchmarks []api.BenchmarkConfig) error {
