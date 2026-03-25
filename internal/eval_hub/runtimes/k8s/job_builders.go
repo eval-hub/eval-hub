@@ -54,6 +54,7 @@ const (
 	testDataSecretMountPath           = "/var/run/secrets/test-data"
 	serviceCABundleFile               = "service-ca.crt"
 	envMLFlowCertPathName             = "MLFLOW_TRACKING_SERVER_CERT_PATH"
+	envEvalHubModeName                = "EVALHUB_MODE"
 	envTestDataS3BucketName           = "TEST_DATA_S3_BUCKET"
 	envTestDataS3KeyName              = "TEST_DATA_S3_KEY"
 	defaultInitCPURequest             = "100m"
@@ -633,6 +634,16 @@ func boolPtr(value bool) *bool {
 func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 	var env []corev1.EnvVar
 	seen := map[string]bool{}
+
+	mode := "k8s"
+	if cfg.localMode {
+		mode = "local"
+	}
+	env = append(env, corev1.EnvVar{
+		Name:  envEvalHubModeName,
+		Value: mode,
+	})
+	seen[envEvalHubModeName] = true
 
 	mlflowTrackingURI := cfg.mlflowTrackingURI
 	//When sidecar is at play, mlflow calls are proxied through the sidecar.
