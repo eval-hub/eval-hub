@@ -140,8 +140,8 @@ Feature: Evaluations Endpoint
   Scenario: Create evaluation job with invalid provider
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_invalid_provider.json"
-    Then the response code should be 400
-    And the response should contain the value "resource_does_not_exist" at path "$.message_code"
+    Then the response code should be 404
+    And the response should contain the value "resource_not_found" at path "$.message_code"
 
   Scenario: Create evaluation job with invalid benchmark
     Given the service is running

@@ -272,14 +272,12 @@ func (h *Handlers) validateBenchmarkReferences(ctx *executioncontext.ExecutionCo
 
 	for _, benchmark := range benchmarks {
 		provider, err := storage.GetProvider(benchmark.ProviderID)
-		if err != nil || provider == nil {
-			var errDetail string
-			if err != nil {
-				errDetail = err.Error()
-			} else {
-				errDetail = "nil provider"
-			}
-			ctx.Logger.Debug("Failed to get provider whilst validating benchmark", "benchmark_id", benchmark.ID, "provider_id", benchmark.ProviderID, "error", errDetail)
+		if err != nil {
+			ctx.Logger.Error("Failed to get provider whilst validating benchmark", "benchmark_id", benchmark.ID, "provider_id", benchmark.ProviderID, "error", err)
+			return err
+		}
+		if provider == nil {
+			ctx.Logger.Debug("Provider not found whilst validating benchmark", "benchmark_id", benchmark.ID, "provider_id", benchmark.ProviderID)
 			return serviceerrors.NewServiceError(
 				messages.ResourceDoesNotExist,
 				"Type", "provider",
