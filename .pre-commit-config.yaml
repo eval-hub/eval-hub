@@ -27,6 +27,9 @@ repos:
       - id: check-added-large-files
         args: [--maxkb=1000]
       - id: debug-statements
+      # prevent committing to main branch for admins
+      - id: no-commit-to-branch
+        args: [--branch, main]
 
   - repo: https://github.com/commitizen-tools/commitizen
     rev: v4.13.9
