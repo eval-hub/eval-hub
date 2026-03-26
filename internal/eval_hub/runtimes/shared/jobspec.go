@@ -8,17 +8,18 @@ import (
 
 // JobSpec is the JSON structure written to job.json for benchmark adapters to consume.
 type JobSpec struct {
-	JobID          string              `json:"id"`
-	ProviderID     string              `json:"provider_id"`
-	BenchmarkID    string              `json:"benchmark_id"`
-	BenchmarkIndex int                 `json:"benchmark_index"`
-	Model          api.ModelRef        `json:"model"`
-	NumExamples    *int                `json:"num_examples,omitempty"`
-	Parameters     map[string]any      `json:"parameters"`
-	ExperimentName string              `json:"experiment_name,omitempty"`
-	Tags           []api.ExperimentTag `json:"tags,omitempty"`
-	CallbackURL    *string             `json:"callback_url"`
-	Exports        *JobSpecExports     `json:"exports,omitempty"`
+	JobID              string              `json:"id"`
+	ProviderID         string              `json:"provider_id"`
+	BenchmarkID        string              `json:"benchmark_id"`
+	BenchmarkIndex     int                 `json:"benchmark_index"`
+	Model              api.ModelRef        `json:"model"`
+	NumExamples        *int                `json:"num_examples,omitempty"`
+	Parameters         map[string]any      `json:"parameters"`
+	ExperimentName     string              `json:"experiment_name,omitempty"`
+	MLFlowExperimentID string              `json:"mlflow_experiment_id,omitempty"`
+	Tags               []api.ExperimentTag `json:"tags,omitempty"`
+	CallbackURL        *string             `json:"callback_url"`
+	Exports            *JobSpecExports     `json:"exports,omitempty"`
 }
 
 // JobSpecExports is the subset of EvaluationExports serialized into the job spec (excludes k8s connection config).
@@ -47,14 +48,15 @@ func BuildJobSpec(
 	delete(benchmarkParams, "num_examples")
 
 	spec := JobSpec{
-		JobID:          evaluation.Resource.ID,
-		ProviderID:     providerID,
-		BenchmarkID:    benchmarkConfig.ID,
-		BenchmarkIndex: benchmarkIndex,
-		Model:          evaluation.Model,
-		NumExamples:    numExamples,
-		Parameters:     benchmarkParams,
-		CallbackURL:    callbackURL,
+		JobID:              evaluation.Resource.ID,
+		ProviderID:         providerID,
+		BenchmarkID:        benchmarkConfig.ID,
+		BenchmarkIndex:     benchmarkIndex,
+		Model:              evaluation.Model,
+		NumExamples:        numExamples,
+		Parameters:         benchmarkParams,
+		MLFlowExperimentID: evaluation.MLFlowExperimentID,
+		CallbackURL:        callbackURL,
 	}
 	if evaluation.Experiment != nil {
 		spec.ExperimentName = evaluation.Experiment.Name
