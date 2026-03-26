@@ -243,7 +243,12 @@ func GetJobBenchmarks(job *api.EvaluationJobResource, collection *api.Collection
 				"CollectionID", job.Collection.ID,
 			)
 		}
-		return collection.Benchmarks, nil
+		var mergedBenchmarks []api.BenchmarkConfig
+		for _, benchmark := range collection.Benchmarks {
+			benchmark := mergeBenchmarkParameters(benchmark, job.Benchmarks)
+			mergedBenchmarks = append(mergedBenchmarks, benchmark)
+		}
+		return mergedBenchmarks, nil
 	}
 	if len(job.Benchmarks) == 0 {
 		return nil, serviceerrors.NewServiceError(
@@ -252,4 +257,41 @@ func GetJobBenchmarks(job *api.EvaluationJobResource, collection *api.Collection
 		)
 	}
 	return job.Benchmarks, nil
+}
+
+func mergeBenchmarkParameters(benchmark api.BenchmarkConfig, jobBenchmarks []api.BenchmarkConfig) api.BenchmarkConfig {
+	parameters := map[string]any{}
+	for _, jobBenchmark := range jobBenchmarks {
+		if jobBenchmark.ProviderID == benchmark.ProviderID {
+			maps.Copy(parameters, jobBenchmark.Parameters)
+		}
+	}
+	for key, value := range benchmark.Parameters {
+		if isEmpty(value) {
+			delete(parameters, key)
+		} else {
+			parameters[key] = value
+		}
+	}
+	return api.BenchmarkConfig{
+		Ref:          benchmark.Ref,
+		ProviderID:   benchmark.ProviderID,
+		Weight:       benchmark.Weight,
+		PrimaryScore: benchmark.PrimaryScore,
+		PassCriteria: benchmark.PassCriteria,
+		TestDataRef:  benchmark.TestDataRef,
+		Parameters:   parameters,
+	}
+}
+
+// isEmpty returns true if the value is nil or empty so that it can be removed from the list of parameters.
+func isEmpty(value any) bool {
+	if value == nil {
+		return true
+	}
+	switch v := value.(type) {
+	case string:
+		return v == ""
+	}
+	return false
 }

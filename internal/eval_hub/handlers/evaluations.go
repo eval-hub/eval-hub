@@ -19,6 +19,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	"github.com/go-playground/validator/v10"
 )
 
 // BackendSpec represents the backend specification
@@ -42,6 +43,7 @@ type runtimeStorage struct {
 	handlers *Handlers
 	tenant   api.Tenant
 	owner    api.User
+	validate *validator.Validate
 }
 
 // scopedStorage matches getStorage scoping (tenant/owner/logger) with the runtime job context.
@@ -59,8 +61,12 @@ func (s *runtimeStorage) GetProvider(id string) (*api.ProviderResource, error) {
 }
 
 func (s *runtimeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
-	// TODO add validation to check that the job is in a valid state to be updated etc
-	err := s.scopedStorage().UpdateEvaluationJob(id, runStatus)
+	err := s.validate.Struct(runStatus)
+	if err != nil {
+		s.logger.Info("Failed to validate evaluation job status from the runtime`", "job_id", id, "error", err)
+		return err
+	}
+	err = s.scopedStorage().UpdateEvaluationJob(id, runStatus)
 	if err != nil {
 		s.logger.Info("Failed to update evaluation job in storage", "job_id", id, "error", err)
 		return err
@@ -246,6 +252,7 @@ func (h *Handlers) createRuntimeStorage(ctx *executioncontext.ExecutionContext, 
 		handlers: h,
 		tenant:   ctx.Tenant,
 		owner:    ctx.User,
+		validate: h.validate,
 	}
 }
 
