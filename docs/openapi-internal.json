@@ -1687,6 +1687,10 @@
                 "type": "string",
                 "description": "Evaluation provider ID"
               },
+              "url": {
+                "type": "string",
+                "description": "Benchmark URL from the provider definition (set by the server on read; omitted when unknown)"
+              },
               "weight": {
                 "type": "number",
                 "format": "float",
@@ -2171,6 +2175,10 @@
           "id": {
             "type": "string",
             "description": "Benchmark ID"
+          },
+          "url": {
+            "type": "string",
+            "description": "Optional documentation or info URL for this benchmark (from provider config)"
           },
           "name": {
             "type": "string",
