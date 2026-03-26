@@ -252,6 +252,61 @@ func TestHandleListCollections(t *testing.T) {
 	}
 }
 
+func TestHandleListCollections_EnrichesBenchmarkURLFromProvider(t *testing.T) {
+	collections := []api.CollectionResource{
+		{
+			Resource: api.Resource{ID: "coll-1"},
+			CollectionConfig: api.CollectionConfig{
+				Name:       "C",
+				Benchmarks: []api.BenchmarkConfig{{Ref: api.Ref{ID: "sweep"}, ProviderID: "guidellm"}},
+			},
+		},
+	}
+	storage := &listCollectionsStorage{
+		fakeStorage: &fakeStorage{
+			providerConfigs: map[string]api.ProviderResource{
+				"guidellm": {
+					Resource: api.Resource{ID: "guidellm"},
+					ProviderConfig: api.ProviderConfig{
+						Benchmarks: []api.BenchmarkResource{
+							{ID: "sweep", URL: "https://example.com/sweep"},
+						},
+					},
+				},
+			},
+		},
+		collections: collections,
+	}
+	validate := validation.NewValidator()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("GET", "/api/v1/evaluations/collections"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+
+	h.HandleListCollections(ctx, req, resp)
+
+	if recorder.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var got api.CollectionResourceList
+	if err := json.NewDecoder(recorder.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got.Items) != 1 || len(got.Items[0].Benchmarks) != 1 {
+		t.Fatalf("unexpected items: %+v", got.Items)
+	}
+	if got.Items[0].Benchmarks[0].URL != "https://example.com/sweep" {
+		t.Errorf("benchmark url = %q, want https://example.com/sweep", got.Items[0].Benchmarks[0].URL)
+	}
+}
+
 func TestHandleListCollections_StorageError(t *testing.T) {
 	storage := &listCollectionsStorage{
 		fakeStorage: &fakeStorage{},
