@@ -63,7 +63,7 @@ func (s *runtimeStorage) GetProvider(id string) (*api.ProviderResource, error) {
 func (s *runtimeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
 	err := s.validate.Struct(runStatus)
 	if err != nil {
-		s.logger.Info("Failed to validate evaluation job status from the runtime`", "job_id", id, "error", err)
+		s.logger.Info("Failed to validate evaluation job status from the runtime", "job_id", id, "error", err)
 		return err
 	}
 	err = s.scopedStorage().UpdateEvaluationJob(id, runStatus)
