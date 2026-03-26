@@ -129,3 +129,8 @@ type ServerClosedError struct {
 func (e *ServerClosedError) Error() string {
 	return "Server closed"
 }
+
+func (e *ServerClosedError) Is(target error) bool {
+	_, ok := target.(*ServerClosedError)
+	return ok
+}
