@@ -36,6 +36,7 @@ type fakeStorage struct {
 
 func (f *fakeStorage) WithLogger(_ *slog.Logger) abstractions.Storage {
 	return &fakeStorage{
+		Storage:           f.Storage,
 		lastStatusID:      f.lastStatusID,
 		lastStatus:        f.lastStatus,
 		job:               f.job,
@@ -46,6 +47,7 @@ func (f *fakeStorage) WithLogger(_ *slog.Logger) abstractions.Storage {
 }
 func (f *fakeStorage) WithContext(_ context.Context) abstractions.Storage {
 	return &fakeStorage{
+		Storage:           f.Storage,
 		lastStatusID:      f.lastStatusID,
 		lastStatus:        f.lastStatus,
 		job:               f.job,
@@ -56,6 +58,7 @@ func (f *fakeStorage) WithContext(_ context.Context) abstractions.Storage {
 }
 func (f *fakeStorage) WithTenant(_ api.Tenant) abstractions.Storage {
 	return &fakeStorage{
+		Storage:           f.Storage,
 		lastStatusID:      f.lastStatusID,
 		lastStatus:        f.lastStatus,
 		job:               f.job,
@@ -66,6 +69,7 @@ func (f *fakeStorage) WithTenant(_ api.Tenant) abstractions.Storage {
 }
 func (f *fakeStorage) WithOwner(_ api.User) abstractions.Storage {
 	return &fakeStorage{
+		Storage:           f.Storage,
 		lastStatusID:      f.lastStatusID,
 		lastStatus:        f.lastStatus,
 		job:               f.job,
