@@ -206,7 +206,7 @@ Feature: Evaluations Endpoint
     When I send a DELETE request to "/api/v1/evaluations/collections/{{value:collection_id}}"
     Then the response code should be 204
 
-  Scenario: List evaluation jobs with multiple users
+  Scenario: List evaluation jobs
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
