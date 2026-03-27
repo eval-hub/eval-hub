@@ -20,6 +20,7 @@ If the remote server requires authentication, set:
 
 ```bash
 export AUTH_TOKEN="your-token"
+export X_TENANT="tenant-namespace"
 ```
 
 ### Model Overrides (Required)
@@ -59,6 +60,7 @@ go test ./tests/features/...
 ```
 
 When running in local server mode, the tests will:
+
 1. Start the server in a background goroutine during test suite initialization
 2. Wait for the server to be ready by checking the health endpoint
 3. Automatically shut down the server after all tests complete
@@ -68,6 +70,25 @@ When running in local server mode, the tests will:
 - **Feature files** (`.feature`): Gherkin syntax test scenarios
 - **Step definitions** (`step_definitions_test.go`): Implementation of test steps
 - **Test suite** (`suite_test.go`): Test suite configuration and initialization
+
+## Test tags
+
+| Tag | Use |
+| --- | :-- |
+| @collections | Used to run just the collections tests |
+| @evaluations | Used to run just the evaluations tests |
+| @providers | Used to run just the providers tests |
+| @cluster | Tests that only work when run on a cluster |
+| @local | Tests that only work when running locally |
+| @ignore | Can be used to ignore a test |
+
+Note that if you want to run a single test you can add a tag to the test,
+such as `@focus` and then set the environment variable `GODOG_TAGS`:
+
+```shell
+export GODOG_TAGS=@focus
+make clean test-fvt-server
+```
 
 ## Running Tests
 
