@@ -2,6 +2,8 @@ module github.com/eval-hub/eval-hub
 
 go 1.25.0
 
+toolchain go1.25.8
+
 require (
 	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/aws/aws-sdk-go-v2 v1.41.4
