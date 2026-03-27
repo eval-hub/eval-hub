@@ -30,6 +30,7 @@ repos:
       # prevent committing to main branch for admins
       - id: no-commit-to-branch
         args: [--branch, main]
+        stages: [pre-push]
 
   - repo: https://github.com/commitizen-tools/commitizen
     rev: v4.13.9
