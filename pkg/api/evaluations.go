@@ -223,16 +223,16 @@ type CollectionRef struct {
 
 // EvaluationJobConfig represents evaluation job request schema
 type EvaluationJobConfig struct {
-	Name         string             `json:"name" validate:"required"`
-	Description  *string            `json:"description,omitempty"`
-	Tags         []string           `json:"tags,omitempty" validate:"omitempty,dive,tagname"`
-	Model        ModelRef           `json:"model" validate:"required"`
-	PassCriteria *PassCriteria      `json:"pass_criteria,omitempty"`
+	Name         string                      `json:"name" validate:"required"`
+	Description  *string                     `json:"description,omitempty"`
+	Tags         []string                    `json:"tags,omitempty" validate:"omitempty,dive,tagname"`
+	Model        ModelRef                    `json:"model" validate:"required"`
+	PassCriteria *PassCriteria               `json:"pass_criteria,omitempty"`
 	Benchmarks   []EvaluationBenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,required_without=Collection,dive"`
-	Collection   *CollectionRef     `json:"collection,omitempty" validate:"omitempty,required_without=Benchmarks"`
-	Experiment   *ExperimentConfig  `json:"experiment,omitempty"`
-	Custom       *map[string]any    `json:"custom,omitempty"`
-	Exports      *EvaluationExports `json:"exports,omitempty"`
+	Collection   *CollectionRef              `json:"collection,omitempty" validate:"omitempty,required_without=Benchmarks"`
+	Experiment   *ExperimentConfig           `json:"experiment,omitempty"`
+	Custom       *map[string]any             `json:"custom,omitempty"`
+	Exports      *EvaluationExports          `json:"exports,omitempty"`
 }
 
 type EvaluationResource struct {
