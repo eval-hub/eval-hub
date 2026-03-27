@@ -46,14 +46,14 @@ func (r *stubRuntime) Name() string {
 
 func (r *stubRuntime) RunEvaluationJob(
 	evaluation *api.EvaluationJobResource,
-	benchmarks []api.BenchmarkConfig,
+	benchmarks []api.EvaluationBenchmarkConfig,
 	_ abstractions.RuntimeStorage,
 ) error {
 	if len(benchmarks) == 0 {
 		return fmt.Errorf("no benchmarks configured for job %s", evaluation.Resource.ID)
 	}
 
-	bench := evaluation.Benchmarks[0]
+	bench := benchmarks[0]
 	provider, ok := r.providers[bench.ProviderID]
 	if !ok {
 		return fmt.Errorf("provider %q not found", bench.ProviderID)

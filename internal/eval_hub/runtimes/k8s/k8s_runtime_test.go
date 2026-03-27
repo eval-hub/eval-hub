@@ -97,7 +97,7 @@ func TestRunEvaluationJobCreatesResources(t *testing.T) {
 				URL:  "http://model",
 				Name: "model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref:        api.Ref{ID: benchmarkID},
 					ProviderID: "lm_evaluation_harness",
@@ -232,7 +232,7 @@ func TestCreateBenchmarkResourcesDuplicateBenchmarkIDDoesNotCollide(t *testing.T
 				URL:  "http://model",
 				Name: "model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref:        api.Ref{ID: "arc_easy"},
 					ProviderID: "lm_evaluation_harness",
@@ -307,7 +307,7 @@ func TestCreateBenchmarkResourcesSetsAnnotationsIntegration(t *testing.T) {
 				URL:  "http://model",
 				Name: "model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref:        api.Ref{ID: "arc_easy"},
 					ProviderID: "lm_evaluation_harness",
@@ -404,7 +404,7 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnvIntegration(t *testing
 				Name: "model",
 				Auth: &api.ModelAuth{SecretRef: "model-auth-secret"},
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref:        api.Ref{ID: "arc_easy"},
 					ProviderID: "lm_evaluation_harness",
@@ -498,7 +498,7 @@ func TestCreateBenchmarkResourcesAddsInitContainerForS3TestDataIntegration(t *te
 				URL:  "http://model",
 				Name: "model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref:        api.Ref{ID: "arc_easy"},
 					ProviderID: "lm_evaluation_harness",

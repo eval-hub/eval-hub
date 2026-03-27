@@ -9,7 +9,7 @@ import (
 
 func TestBuildJobConfigDefaults(t *testing.T) {
 	callbackURL := "http://localhost:8080"
-	benchmark := api.BenchmarkConfig{
+	benchmark := api.EvaluationBenchmarkConfig{
 		Ref: api.Ref{ID: "bench-1"},
 		Parameters: map[string]any{
 			"num_examples": 50,
@@ -27,7 +27,7 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 				URL:  "http://model",
 				Name: "model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				benchmark,
 			},
 		},
@@ -110,7 +110,7 @@ func TestBuildJobConfigModelAuthSecretRefPresent(t *testing.T) {
 				Name: "model",
 				Auth: &api.ModelAuth{SecretRef: "my-secret"},
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref: api.Ref{ID: "bench-1"},
 				},
@@ -147,7 +147,7 @@ func TestBuildJobConfigModelAuthSecretRefEmptyWhenNil(t *testing.T) {
 				URL:  "http://model",
 				Name: "model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref: api.Ref{ID: "bench-1"},
 				},
@@ -184,7 +184,7 @@ func TestBuildJobConfigTestDataS3(t *testing.T) {
 				URL:  "http://model",
 				Name: "model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref: api.Ref{ID: "bench-1"},
 					TestDataRef: &api.TestDataRef{
@@ -235,7 +235,7 @@ func TestBuildJobConfigAllowsNumExamplesOnly(t *testing.T) {
 				URL:  "http://model",
 				Name: "model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref:        api.Ref{ID: "bench-1"},
 					Parameters: map[string]any{"num_examples": 10},
@@ -292,7 +292,7 @@ func TestBuildJobConfigMissingRuntime(t *testing.T) {
 		},
 	}
 
-	_, err := buildJobConfig(evaluation, provider, &api.BenchmarkConfig{}, 0, nil)
+	_, err := buildJobConfig(evaluation, provider, &api.EvaluationBenchmarkConfig{}, 0, nil)
 	if err == nil {
 		t.Fatalf("expected error for missing runtime")
 	}
@@ -335,7 +335,7 @@ func TestBuildJobConfigAllowsEmptyBenchmarkConfig(t *testing.T) {
 				URL:  "http://model",
 				Name: "model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref: api.Ref{ID: "bench-1"},
 				},
@@ -376,7 +376,7 @@ func TestBuildJobConfigWithOCIExports(t *testing.T) {
 				URL:  "http://model",
 				Name: "model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref:        api.Ref{ID: "bench-1"},
 					Parameters: map[string]any{},
@@ -505,7 +505,7 @@ func TestBuildJobConfigUsesTenantNamespace(t *testing.T) {
 				URL:  "http://model",
 				Name: "model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{Ref: api.Ref{ID: "bench-1"}},
 			},
 		},
@@ -540,7 +540,7 @@ func TestBuildJobConfigEmptyTenantFallsBack(t *testing.T) {
 				URL:  "http://model",
 				Name: "model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{Ref: api.Ref{ID: "bench-1"}},
 			},
 		},

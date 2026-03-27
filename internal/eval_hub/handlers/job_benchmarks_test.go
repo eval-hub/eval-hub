@@ -15,7 +15,7 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 
 	t.Run("no job overrides copies collection parameters", func(t *testing.T) {
 		t.Parallel()
-		benchmark := api.BenchmarkConfig{
+		benchmark := api.CollectionBenchmarkConfig{
 			Ref:        api.Ref{ID: "bench-1"},
 			ProviderID: "prov-a",
 			Weight:     0.5,
@@ -32,12 +32,12 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 
 	t.Run("job matching provider adds parameters not in collection", func(t *testing.T) {
 		t.Parallel()
-		benchmark := api.BenchmarkConfig{
+		benchmark := api.CollectionBenchmarkConfig{
 			Ref:        api.Ref{ID: "bench-1"},
 			ProviderID: "prov-a",
 			Parameters: map[string]any{"from_collection": "x"},
 		}
-		job := []api.BenchmarkConfig{{
+		job := []api.EvaluationBenchmarkConfig{{
 			ProviderID: "prov-a",
 			Parameters: map[string]any{"from_job": "y"},
 		}}
@@ -50,11 +50,11 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 
 	t.Run("non-empty collection value overrides job for same key", func(t *testing.T) {
 		t.Parallel()
-		benchmark := api.BenchmarkConfig{
+		benchmark := api.CollectionBenchmarkConfig{
 			ProviderID: "prov-a",
 			Parameters: map[string]any{"k": "from_collection"},
 		}
-		job := []api.BenchmarkConfig{{
+		job := []api.EvaluationBenchmarkConfig{{
 			ProviderID: "prov-a",
 			Parameters: map[string]any{"k": "from_job"},
 		}}
@@ -66,11 +66,11 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 
 	t.Run("empty string in collection removes key including job-only keys", func(t *testing.T) {
 		t.Parallel()
-		benchmark := api.BenchmarkConfig{
+		benchmark := api.CollectionBenchmarkConfig{
 			ProviderID: "prov-a",
 			Parameters: map[string]any{"k": ""},
 		}
-		job := []api.BenchmarkConfig{{
+		job := []api.EvaluationBenchmarkConfig{{
 			ProviderID: "prov-a",
 			Parameters: map[string]any{"k": "job_val", "other": "keep"},
 		}}
@@ -83,11 +83,11 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 
 	t.Run("nil parameter value in collection removes key", func(t *testing.T) {
 		t.Parallel()
-		benchmark := api.BenchmarkConfig{
+		benchmark := api.CollectionBenchmarkConfig{
 			ProviderID: "prov-a",
 			Parameters: map[string]any{"k": nil},
 		}
-		job := []api.BenchmarkConfig{{
+		job := []api.EvaluationBenchmarkConfig{{
 			ProviderID: "prov-a",
 			Parameters: map[string]any{"k": "job_val"},
 		}}
@@ -99,11 +99,11 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 
 	t.Run("job entries with different provider are ignored", func(t *testing.T) {
 		t.Parallel()
-		benchmark := api.BenchmarkConfig{
+		benchmark := api.CollectionBenchmarkConfig{
 			ProviderID: "prov-other",
 			Parameters: map[string]any{"a": 1},
 		}
-		job := []api.BenchmarkConfig{{
+		job := []api.EvaluationBenchmarkConfig{{
 			ProviderID: "prov-a",
 			Parameters: map[string]any{"noise": true},
 		}}
@@ -115,11 +115,11 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 
 	t.Run("multiple job blocks same provider accumulate then collection overlays", func(t *testing.T) {
 		t.Parallel()
-		benchmark := api.BenchmarkConfig{
+		benchmark := api.CollectionBenchmarkConfig{
 			ProviderID: "prov-a",
 			Parameters: map[string]any{"third": "from_collection", "dup": "collection_wins"},
 		}
-		job := []api.BenchmarkConfig{
+		job := []api.EvaluationBenchmarkConfig{
 			{ProviderID: "prov-a", Parameters: map[string]any{"first": 1, "dup": "first"}},
 			{ProviderID: "prov-a", Parameters: map[string]any{"second": 2, "dup": "second"}},
 		}
@@ -150,7 +150,7 @@ func TestGetJobBenchmarks(t *testing.T) {
 		t.Parallel()
 		job := makeJob()
 		job.Collection = &api.CollectionRef{ID: "col-1"}
-		job.Benchmarks = []api.BenchmarkConfig{{ProviderID: "p", Ref: api.Ref{ID: "b"}}}
+		job.Benchmarks = []api.EvaluationBenchmarkConfig{{ProviderID: "p", Ref: api.Ref{ID: "b"}}}
 		_, err := GetJobBenchmarks(job, nil)
 		var se *serviceerrors.ServiceError
 		if !errors.As(err, &se) || se.MessageCode() != messages.InternalServerError {
@@ -165,7 +165,7 @@ func TestGetJobBenchmarks(t *testing.T) {
 		collection := &api.CollectionResource{
 			Resource: api.Resource{ID: "col-1"},
 			CollectionConfig: api.CollectionConfig{
-				Benchmarks: []api.BenchmarkConfig{},
+				Benchmarks: []api.CollectionBenchmarkConfig{},
 			},
 		}
 		_, err := GetJobBenchmarks(job, collection)
@@ -189,7 +189,7 @@ func TestGetJobBenchmarks(t *testing.T) {
 	t.Run("no collection returns job benchmarks unchanged", func(t *testing.T) {
 		t.Parallel()
 		job := makeJob()
-		want := []api.BenchmarkConfig{{ProviderID: "p", Ref: api.Ref{ID: "b1"}}}
+		want := []api.EvaluationBenchmarkConfig{{ProviderID: "p", Ref: api.Ref{ID: "b1"}}}
 		job.Benchmarks = want
 		got, err := GetJobBenchmarks(job, nil)
 		if err != nil {
@@ -204,7 +204,7 @@ func TestGetJobBenchmarks(t *testing.T) {
 		t.Parallel()
 		job := makeJob()
 		job.Collection = &api.CollectionRef{ID: ""}
-		want := []api.BenchmarkConfig{{ProviderID: "p", Ref: api.Ref{ID: "only-job"}}}
+		want := []api.EvaluationBenchmarkConfig{{ProviderID: "p", Ref: api.Ref{ID: "only-job"}}}
 		job.Benchmarks = want
 		got, err := GetJobBenchmarks(job, &api.CollectionResource{})
 		if err != nil {
@@ -219,7 +219,7 @@ func TestGetJobBenchmarks(t *testing.T) {
 		t.Parallel()
 		job := makeJob()
 		job.Collection = &api.CollectionRef{ID: "col-1"}
-		job.Benchmarks = []api.BenchmarkConfig{
+		job.Benchmarks = []api.EvaluationBenchmarkConfig{
 			{
 				ProviderID: "prov-a-ref",
 				Parameters: map[string]any{"shared": "from_job_a", "only_a": 1},
@@ -232,7 +232,7 @@ func TestGetJobBenchmarks(t *testing.T) {
 		collection := &api.CollectionResource{
 			Resource: api.Resource{ID: "col-1"},
 			CollectionConfig: api.CollectionConfig{
-				Benchmarks: []api.BenchmarkConfig{
+				Benchmarks: []api.CollectionBenchmarkConfig{
 					{
 						Ref:        api.Ref{ID: "a-ref"},
 						ProviderID: "prov-a-ref",

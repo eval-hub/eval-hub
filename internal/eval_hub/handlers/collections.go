@@ -104,6 +104,10 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 				Page:  *page,
 				Items: collections.Items,
 			}
+			scoped := storage.WithContext(runtimeCtx)
+			for i := range result.Items {
+				enrichCollectionResourceBenchmarkURLs(scoped, &result.Items[i])
+			}
 
 			w.WriteJSON(result, 200)
 			return nil
@@ -111,6 +115,43 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 		"storage",
 		"list-collections",
 	)
+}
+
+// enrichCollectionResourceBenchmarkURLs sets each benchmark's URL from the provider definition (e.g. config/providers/*.yaml) when present.
+func enrichCollectionResourceBenchmarkURLs(storage abstractions.Storage, collections ...*api.CollectionResource) {
+	loaded := make(map[string]*api.ProviderResource)
+	failed := make(map[string]struct{})
+	for _, coll := range collections {
+		if coll == nil {
+			continue
+		}
+		for j := range coll.Benchmarks {
+			b := &coll.Benchmarks[j]
+			pid, bid := b.ProviderID, b.ID
+			if pid == "" || bid == "" {
+				continue
+			}
+			if _, miss := failed[pid]; miss {
+				continue
+			}
+			p, ok := loaded[pid]
+			if !ok {
+				var err error
+				p, err = storage.GetProvider(pid)
+				if err != nil || p == nil {
+					failed[pid] = struct{}{}
+					continue
+				}
+				loaded[pid] = p
+			}
+			for k := range p.Benchmarks {
+				if p.Benchmarks[k].ID == bid && p.Benchmarks[k].URL != "" {
+					b.URL = p.Benchmarks[k].URL
+					break
+				}
+			}
+		}
+	}
 }
 
 // HandleCreateCollection handles POST /api/v1/evaluations/collections
@@ -187,11 +228,13 @@ func (h *Handlers) HandleGetCollection(ctx *executioncontext.ExecutionContext, r
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			response, err := storage.WithContext(runtimeCtx).GetCollection(collectionID)
+			scoped := storage.WithContext(runtimeCtx)
+			response, err := scoped.GetCollection(collectionID)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
 			}
+			enrichCollectionResourceBenchmarkURLs(scoped, response)
 			w.WriteJSON(response, 200)
 			return nil
 		},

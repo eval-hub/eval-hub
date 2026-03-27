@@ -1,5 +1,7 @@
 type: object
-description: Reference to a benchmark in a collection or evaluation
+description: |
+  Reference to a benchmark in an evaluation job (top-level benchmarks or collection override list).
+  Does not include a URL; URLs appear only on collection benchmark entries.
 allOf:
   - $ref: ./Ref.yaml
   - type: object

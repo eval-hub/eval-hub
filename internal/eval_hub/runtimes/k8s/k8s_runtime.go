@@ -53,7 +53,7 @@ func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 
 func (r *K8sRuntime) RunEvaluationJob(
 	evaluation *api.EvaluationJobResource,
-	benchmarks []api.BenchmarkConfig,
+	benchmarks []api.EvaluationBenchmarkConfig,
 	storage abstractions.RuntimeStorage,
 ) error {
 	if len(benchmarks) == 0 {
@@ -141,7 +141,7 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 	logger *slog.Logger,
 	evaluation *api.EvaluationJobResource,
-	benchmark *api.BenchmarkConfig,
+	benchmark *api.EvaluationBenchmarkConfig,
 	benchmarkIndex int,
 	storage abstractions.RuntimeStorage,
 ) error {
@@ -239,7 +239,7 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 	return nil
 }
 
-func buildBenchmarkFailureStatus(benchmark *api.BenchmarkConfig, benchmarkIndex int, runErr error) *api.StatusEvent {
+func buildBenchmarkFailureStatus(benchmark *api.EvaluationBenchmarkConfig, benchmarkIndex int, runErr error) *api.StatusEvent {
 	return &api.StatusEvent{
 		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 			ProviderID:     benchmark.ProviderID,

@@ -1119,9 +1119,9 @@ components:
       properties:
         s3:
           $ref: '#/components/schemas/TestDataRefS3'
-    BenchmarkConfig:
+    CollectionBenchmarkConfig:
       type: object
-      description: Reference to a benchmark in a collection or evaluation
+      description: Reference to a benchmark (collection entries and, in this API version, evaluation job benchmarks)
       allOf:
         - $ref: '#/components/schemas/Ref'
         - type: object
@@ -1282,7 +1282,7 @@ components:
         benchmarks:
           type: array
           items:
-            $ref: '#/components/schemas/BenchmarkConfig'
+            $ref: '#/components/schemas/CollectionBenchmarkConfig'
           description: |
             The evaluation benchmarks to run. Either `benchmarks` or `collection` must be provided, but not both.
         collection:
@@ -1596,7 +1596,7 @@ components:
         benchmarks:
           type: array
           items:
-            $ref: '#/components/schemas/BenchmarkConfig'
+            $ref: '#/components/schemas/CollectionBenchmarkConfig'
           description: Benchmarks in the collection
       required:
         - name

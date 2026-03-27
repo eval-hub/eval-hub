@@ -1675,9 +1675,9 @@
           }
         }
       },
-      "BenchmarkConfig": {
+      "EvaluationBenchmarkConfig": {
         "type": "object",
-        "description": "Reference to a benchmark in a collection or evaluation",
+        "description": "Reference to a benchmark in an evaluation job (top-level benchmarks or collection override list).\nDoes not include a URL; URLs appear only on collection benchmark entries.\n",
         "allOf": [
           {
             "$ref": "#/components/schemas/Ref"
@@ -1885,7 +1885,7 @@
               "benchmarks": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/BenchmarkConfig"
+                  "$ref": "#/components/schemas/EvaluationBenchmarkConfig"
                 },
                 "description": "The evaluation benchmarks to run.\n"
               }
@@ -1911,7 +1911,7 @@
           "benchmarks": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/BenchmarkConfig"
+              "$ref": "#/components/schemas/EvaluationBenchmarkConfig"
             },
             "description": "The benchmarks supported by this collection. If a benchmark is specified but is not supported by the collection, the evaluation job will fail. This is needed in order to allow overriding the collection benchmarks for a specific evaluation job.\n"
           }
@@ -2177,6 +2177,10 @@
             "type": "string",
             "description": "Benchmark ID"
           },
+          "url": {
+            "type": "string",
+            "description": "Optional documentation or info URL for this benchmark (from provider config)"
+          },
           "name": {
             "type": "string",
             "description": "Benchmark name"
@@ -2335,6 +2339,53 @@
           "path"
         ]
       },
+      "CollectionBenchmarkConfig": {
+        "type": "object",
+        "description": "Reference to a benchmark in a collection (create, update, list, or get collection).\nThe **url** field is set by the server on read when known; it is not used on evaluation jobs.\n",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Ref"
+          },
+          {
+            "type": "object",
+            "required": [
+              "provider_id"
+            ],
+            "properties": {
+              "provider_id": {
+                "type": "string",
+                "description": "Evaluation provider ID"
+              },
+              "url": {
+                "type": "string",
+                "description": "Benchmark URL from the provider definition (set by the server on read; omitted when unknown)"
+              },
+              "weight": {
+                "type": "number",
+                "format": "float",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "Weight of this benchmark"
+              },
+              "primary_score": {
+                "$ref": "#/components/schemas/PrimaryScore"
+              },
+              "pass_criteria": {
+                "$ref": "#/components/schemas/PassCriteria"
+              },
+              "parameters": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Benchmark specific parameters"
+              },
+              "test_data_ref": {
+                "$ref": "#/components/schemas/TestDataRef",
+                "description": "Optional external test data (e.g. **S3**). For **Kubernetes Job** runs, may\ntrigger a pre-run init container that downloads files to **`/test_data`** for\nthe adapter. Omit if the benchmark does not need mounted files.\n"
+              }
+            }
+          }
+        ]
+      },
       "CollectionConfig": {
         "type": "object",
         "description": "Request to create or update a collection",
@@ -2370,7 +2421,7 @@
           "benchmarks": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/BenchmarkConfig"
+              "$ref": "#/components/schemas/CollectionBenchmarkConfig"
             },
             "description": "Benchmarks in the collection"
           }

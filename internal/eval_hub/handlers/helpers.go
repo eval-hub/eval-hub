@@ -229,7 +229,7 @@ func (h *Handlers) verifyPatches(ctx context.Context, patches api.Patch, allowed
 
 // GetJobBenchmarks returns the effective benchmark list for a job:
 // from the job's collection when set, otherwise from job.Benchmarks.
-func GetJobBenchmarks(job *api.EvaluationJobResource, collection *api.CollectionResource) ([]api.BenchmarkConfig, error) {
+func GetJobBenchmarks(job *api.EvaluationJobResource, collection *api.CollectionResource) ([]api.EvaluationBenchmarkConfig, error) {
 	if job.Collection != nil && job.Collection.ID != "" {
 		if collection == nil {
 			return nil, serviceerrors.NewServiceError(
@@ -243,7 +243,7 @@ func GetJobBenchmarks(job *api.EvaluationJobResource, collection *api.Collection
 				"CollectionID", job.Collection.ID,
 			)
 		}
-		var mergedBenchmarks []api.BenchmarkConfig
+		var mergedBenchmarks []api.EvaluationBenchmarkConfig
 		for _, benchmark := range collection.Benchmarks {
 			benchmark := mergeBenchmarkParameters(benchmark, job.Benchmarks)
 			mergedBenchmarks = append(mergedBenchmarks, benchmark)
@@ -259,7 +259,7 @@ func GetJobBenchmarks(job *api.EvaluationJobResource, collection *api.Collection
 	return job.Benchmarks, nil
 }
 
-func mergeBenchmarkParameters(benchmark api.BenchmarkConfig, jobBenchmarks []api.BenchmarkConfig) api.BenchmarkConfig {
+func mergeBenchmarkParameters(benchmark api.CollectionBenchmarkConfig, jobBenchmarks []api.EvaluationBenchmarkConfig) api.EvaluationBenchmarkConfig {
 	parameters := map[string]any{}
 	for _, jobBenchmark := range jobBenchmarks {
 		if jobBenchmark.ProviderID == benchmark.ProviderID {
@@ -273,7 +273,7 @@ func mergeBenchmarkParameters(benchmark api.BenchmarkConfig, jobBenchmarks []api
 			parameters[key] = value
 		}
 	}
-	return api.BenchmarkConfig{
+	return api.EvaluationBenchmarkConfig{
 		Ref:          benchmark.Ref,
 		ProviderID:   benchmark.ProviderID,
 		Weight:       benchmark.Weight,
