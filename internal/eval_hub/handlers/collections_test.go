@@ -208,7 +208,7 @@ func TestHandleListCollections(t *testing.T) {
 			CollectionConfig: api.CollectionConfig{
 				Name:        "Collection 1",
 				Description: "Test collection",
-				Benchmarks:  []api.BenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+				Benchmarks:  []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
 			},
 		},
 	}
@@ -258,7 +258,7 @@ func TestHandleListCollections_EnrichesBenchmarkURLFromProvider(t *testing.T) {
 			Resource: api.Resource{ID: "coll-1"},
 			CollectionConfig: api.CollectionConfig{
 				Name:       "C",
-				Benchmarks: []api.BenchmarkConfig{{Ref: api.Ref{ID: "sweep"}, ProviderID: "guidellm"}},
+				Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "sweep"}, ProviderID: "guidellm"}},
 			},
 		},
 	}
@@ -312,7 +312,7 @@ func TestHandleGetCollection_EnrichesBenchmarkURLFromProvider(t *testing.T) {
 		Resource: api.Resource{ID: "coll-1"},
 		CollectionConfig: api.CollectionConfig{
 			Name:       "C",
-			Benchmarks: []api.BenchmarkConfig{{Ref: api.Ref{ID: "sweep"}, ProviderID: "guidellm"}},
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "sweep"}, ProviderID: "guidellm"}},
 		},
 	}
 	storage := &getCollectionStorage{
@@ -437,7 +437,7 @@ func TestHandleGetCollection(t *testing.T) {
 		CollectionConfig: api.CollectionConfig{
 			Name:        "Found Collection",
 			Description: "Test",
-			Benchmarks:  []api.BenchmarkConfig{},
+			Benchmarks:  []api.CollectionBenchmarkConfig{},
 		},
 	}
 	storage := &getCollectionStorage{fakeStorage: &fakeStorage{}, collection: coll}
@@ -498,7 +498,7 @@ func TestHandleUpdateCollection(t *testing.T) {
 			CollectionConfig: api.CollectionConfig{
 				Name:        "Original",
 				Description: "Original",
-				Benchmarks:  []api.BenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+				Benchmarks:  []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
 			},
 		},
 	}
@@ -550,7 +550,7 @@ func TestHandlePatchCollection(t *testing.T) {
 			CollectionConfig: api.CollectionConfig{
 				Name:        "Original",
 				Description: "Original",
-				Benchmarks:  []api.BenchmarkConfig{},
+				Benchmarks:  []api.CollectionBenchmarkConfig{},
 			},
 		},
 	}

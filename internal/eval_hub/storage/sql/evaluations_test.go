@@ -62,7 +62,7 @@ func TestGetEvaluationJobs_TenantFilter(t *testing.T) {
 			},
 			EvaluationJobConfig: api.EvaluationJobConfig{
 				Model:      api.ModelRef{URL: "http://model", Name: "m"},
-				Benchmarks: []api.BenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
+				Benchmarks: []api.EvaluationBenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
 			},
 		}
 	}
@@ -143,7 +143,7 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 			URL:  "http://test-model:8000",
 			Name: "test-model",
 		},
-		Benchmarks: []api.BenchmarkConfig{
+		Benchmarks: []api.EvaluationBenchmarkConfig{
 			{
 				Ref: api.Ref{
 					ID: "arc_easy",
@@ -262,7 +262,7 @@ func TestEvaluationsStorage(t *testing.T) {
 	var store abstractions.Storage
 	var evaluationId string
 
-	var benchmarkConfig = api.BenchmarkConfig{
+	var benchmarkConfig = api.EvaluationBenchmarkConfig{
 		Ref:        api.Ref{ID: "bench-1"},
 		ProviderID: "garak",
 	}
@@ -285,7 +285,7 @@ func TestEvaluationsStorage(t *testing.T) {
 				URL:  "http://test.com",
 				Name: "test",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref:        api.Ref{ID: "bench-1"},
 					ProviderID: "garak",
@@ -491,7 +491,7 @@ func TestEvaluationsStorage(t *testing.T) {
 			},
 			EvaluationJobConfig: api.EvaluationJobConfig{
 				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
-				Benchmarks: []api.BenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
+				Benchmarks: []api.EvaluationBenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
 			},
 		}
 		if err := store.CreateEvaluationJob(jobRes); err != nil {
@@ -534,7 +534,7 @@ func TestEvaluationsStorage(t *testing.T) {
 			},
 			EvaluationJobConfig: api.EvaluationJobConfig{
 				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
-				Benchmarks: []api.BenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
+				Benchmarks: []api.EvaluationBenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
 			},
 		}
 		if err := store.CreateEvaluationJob(j); err != nil {
@@ -582,7 +582,7 @@ func TestEvaluationsStorage(t *testing.T) {
 			},
 			EvaluationJobConfig: api.EvaluationJobConfig{
 				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
-				Benchmarks: []api.BenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
+				Benchmarks: []api.EvaluationBenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
 			},
 		}
 		if err := store.CreateEvaluationJob(j); err != nil {
@@ -611,12 +611,12 @@ func TestEvaluationsStorage(t *testing.T) {
 			jobID := common.GUID()
 			config := &api.EvaluationJobConfig{
 				Model: api.ModelRef{URL: "http://test.com", Name: "test"},
-				Benchmarks: []api.BenchmarkConfig{
+				Benchmarks: []api.EvaluationBenchmarkConfig{
 					{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"},
 				},
 			}
 			if terminalState == api.OverallStatePartiallyFailed {
-				config.Benchmarks = append(config.Benchmarks, api.BenchmarkConfig{Ref: api.Ref{ID: "b2"}, ProviderID: "p1"})
+				config.Benchmarks = append(config.Benchmarks, api.EvaluationBenchmarkConfig{Ref: api.Ref{ID: "b2"}, ProviderID: "p1"})
 			}
 			now := time.Now()
 			job := &api.EvaluationJobResource{
@@ -708,7 +708,7 @@ func TestEvaluationsStorage(t *testing.T) {
 		jobID := common.GUID()
 		config := &api.EvaluationJobConfig{
 			Model: api.ModelRef{URL: "http://test.com", Name: "test"},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{Ref: api.Ref{ID: "bx"}, ProviderID: "garak"},
 			},
 		}
@@ -826,7 +826,7 @@ func TestEvaluationsStorage(t *testing.T) {
 		jobID := common.GUID()
 		config := &api.EvaluationJobConfig{
 			Model: api.ModelRef{URL: "http://test.com", Name: "test"},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{Ref: api.Ref{ID: "b1"}, ProviderID: "prov1"},
 				{Ref: api.Ref{ID: "b2"}, ProviderID: "prov2"},
 				{Ref: api.Ref{ID: "b3"}, ProviderID: "prov3"},

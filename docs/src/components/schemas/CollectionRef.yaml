@@ -11,7 +11,7 @@ properties:
   benchmarks:
     type: array
     items:
-      $ref: ./BenchmarkConfig.yaml
+      $ref: ./EvaluationBenchmarkConfig.yaml
     description: >
       The benchmarks supported by this collection. If a benchmark is specified
       but is not supported by the collection, the evaluation job will fail. This is needed

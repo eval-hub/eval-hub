@@ -592,7 +592,7 @@ func sampleEvaluation(providerID string) *api.EvaluationJobResource {
 				URL:  "http://model.example",
 				Name: "model-1",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref: api.Ref{ID: "bench-1"},
 					Parameters: map[string]any{

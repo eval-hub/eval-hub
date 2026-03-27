@@ -1638,7 +1638,7 @@
           }
         }
       },
-      "BenchmarkConfig": {
+      "CollectionBenchmarkConfig": {
         "type": "object",
         "description": "Reference to a benchmark in a collection or evaluation",
         "allOf": [
@@ -1844,7 +1844,7 @@
           "benchmarks": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/BenchmarkConfig"
+              "$ref": "#/components/schemas/CollectionBenchmarkConfig"
             },
             "description": "The evaluation benchmarks to run. Either `benchmarks` or `collection` must be provided, but not both.\n"
           },
@@ -2286,7 +2286,7 @@
           "benchmarks": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/BenchmarkConfig"
+              "$ref": "#/components/schemas/CollectionBenchmarkConfig"
             },
             "description": "Benchmarks in the collection"
           }

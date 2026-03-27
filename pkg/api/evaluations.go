@@ -99,11 +99,10 @@ type TestDataRef struct {
 	S3 *S3TestDataRef `mapstructure:"s3" json:"s3,omitempty"`
 }
 
-// BenchmarkConfig represents a reference to a benchmark
-type BenchmarkConfig struct {
+// EvaluationBenchmarkConfig represents a benchmark reference in an evaluation job request or persisted job config.
+type EvaluationBenchmarkConfig struct {
 	Ref          `mapstructure:",squash"`
 	ProviderID   string         `mapstructure:"provider_id" json:"provider_id" validate:"required"`
-	URL          string         `mapstructure:"url,omitempty" json:"url,omitempty"`
 	Weight       float32        `mapstructure:"weight" json:"weight,omitempty" validate:"omitempty,min=0,max=1"`
 	PrimaryScore *PrimaryScore  `mapstructure:"primary_score" json:"primary_score,omitempty"`
 	PassCriteria *PassCriteria  `mapstructure:"pass_criteria" json:"pass_criteria,omitempty"`
@@ -218,8 +217,8 @@ type EvaluationExports struct {
 }
 
 type CollectionRef struct {
-	ID         string            `mapstructure:"id" json:"id" validate:"required"`
-	Benchmarks []BenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,dive"`
+	ID         string                      `mapstructure:"id" json:"id" validate:"required"`
+	Benchmarks []EvaluationBenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 }
 
 // EvaluationJobConfig represents evaluation job request schema
@@ -229,7 +228,7 @@ type EvaluationJobConfig struct {
 	Tags         []string           `json:"tags,omitempty" validate:"omitempty,dive,tagname"`
 	Model        ModelRef           `json:"model" validate:"required"`
 	PassCriteria *PassCriteria      `json:"pass_criteria,omitempty"`
-	Benchmarks   []BenchmarkConfig  `json:"benchmarks,omitempty" validate:"omitempty,required_without=Collection,dive"`
+	Benchmarks   []EvaluationBenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,required_without=Collection,dive"`
 	Collection   *CollectionRef     `json:"collection,omitempty" validate:"omitempty,required_without=Benchmarks"`
 	Experiment   *ExperimentConfig  `json:"experiment,omitempty"`
 	Custom       *map[string]any    `json:"custom,omitempty"`

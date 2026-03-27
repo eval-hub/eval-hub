@@ -145,7 +145,7 @@ func sampleEvaluation(providerID string) *api.EvaluationJobResource {
 				URL:  "http://model.example",
 				Name: "model-1",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref:        api.Ref{ID: "bench-1"},
 					ProviderID: providerID,
@@ -595,7 +595,7 @@ func TestRunEvaluationJobMultipleBenchmarks(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 	// Add a second benchmark
-	evaluation.Benchmarks = append(evaluation.Benchmarks, api.BenchmarkConfig{
+	evaluation.Benchmarks = append(evaluation.Benchmarks, api.EvaluationBenchmarkConfig{
 		Ref:        api.Ref{ID: "bench-2"},
 		ProviderID: providerID,
 		Parameters: map[string]any{"baz": "qux"},
@@ -676,7 +676,7 @@ func TestRunEvaluationJobMultipleBenchmarksPartialFailure(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 	// Add a second benchmark with a non-existent provider
-	evaluation.Benchmarks = append(evaluation.Benchmarks, api.BenchmarkConfig{
+	evaluation.Benchmarks = append(evaluation.Benchmarks, api.EvaluationBenchmarkConfig{
 		Ref:        api.Ref{ID: "bench-2"},
 		ProviderID: "no-such-provider",
 	})
@@ -910,7 +910,7 @@ func TestDeleteEvaluationJobResourcesNonExistent(t *testing.T) {
 			Resource: api.Resource{ID: "job-nonexistent"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref:        api.Ref{ID: "bench-nonexistent"},
 					ProviderID: providerID,
