@@ -194,6 +194,23 @@ Feature: Collections Endpoint
     And the response should contain "limit"
     And the response should contain "total_count"
 
+  @benchmark_url_custom_provider
+  Scenario: List and get collection include benchmark url from custom provider
+    Given the service is running
+    And I set the header "X-Tenant" to "test-tenant"
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider_benchmark_url.json"
+    Then the response code should be 201
+    And the "resource.id" field in the response should be saved as "value:custom_provider_id"
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_custom_provider_benchmark_url.json"
+    Then the response code should be 201
+    When I send a GET request to "/api/v1/evaluations/collections?name=fvt-benchmark-url-collection"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 1
+    And the response should contain the value "https://example.com/fvt-custom-provider-benchmark" at path "$.items[0].benchmarks[0].url"
+    When I send a GET request to "/api/v1/evaluations/collections/{id}"
+    Then the response code should be 200
+    And the response should contain the value "https://example.com/fvt-custom-provider-benchmark" at path "$.benchmarks[0].url"
+
   Scenario: List collections pagination returns next href and next page contains remaining item
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
