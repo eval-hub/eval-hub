@@ -34,15 +34,45 @@ type fakeStorage struct {
 	collectionConfigs map[string]api.CollectionResource
 }
 
-func (f *fakeStorage) WithLogger(_ *slog.Logger) abstractions.Storage { return f }
+func (f *fakeStorage) WithLogger(_ *slog.Logger) abstractions.Storage {
+	return &fakeStorage{
+		lastStatusID:      f.lastStatusID,
+		lastStatus:        f.lastStatus,
+		job:               f.job,
+		deleteID:          f.deleteID,
+		providerConfigs:   f.providerConfigs,
+		collectionConfigs: f.collectionConfigs,
+	}
+}
 func (f *fakeStorage) WithContext(_ context.Context) abstractions.Storage {
-	return f
+	return &fakeStorage{
+		lastStatusID:      f.lastStatusID,
+		lastStatus:        f.lastStatus,
+		job:               f.job,
+		deleteID:          f.deleteID,
+		providerConfigs:   f.providerConfigs,
+		collectionConfigs: f.collectionConfigs,
+	}
 }
 func (f *fakeStorage) WithTenant(_ api.Tenant) abstractions.Storage {
-	return f
+	return &fakeStorage{
+		lastStatusID:      f.lastStatusID,
+		lastStatus:        f.lastStatus,
+		job:               f.job,
+		deleteID:          f.deleteID,
+		providerConfigs:   f.providerConfigs,
+		collectionConfigs: f.collectionConfigs,
+	}
 }
 func (f *fakeStorage) WithOwner(_ api.User) abstractions.Storage {
-	return f
+	return &fakeStorage{
+		lastStatusID:      f.lastStatusID,
+		lastStatus:        f.lastStatus,
+		job:               f.job,
+		deleteID:          f.deleteID,
+		providerConfigs:   f.providerConfigs,
+		collectionConfigs: f.collectionConfigs,
+	}
 }
 
 func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobResource) error {
