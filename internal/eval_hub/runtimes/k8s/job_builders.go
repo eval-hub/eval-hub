@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
@@ -64,17 +65,21 @@ const (
 	defaultAllowPrivilegeEscalation   = false
 	//defaultRunAsUser                = int64(1000)
 	//defaultRunAsGroup               = int64(1000)
-	labelAppKey              = "app"
-	labelComponentKey        = "component"
-	labelJobIDKey            = "job_id"
-	labelProviderIDKey       = "provider_id"
-	labelBenchmarkIDKey      = "benchmark_id"
-	labelAppValue            = "evalhub"
-	labelComponentValue      = "evaluation-job"
-	capabilityDropAll        = "ALL"
-	annotationJobIDKey       = "eval-hub.github.io/job_id"
-	annotationProviderIDKey  = "eval-hub.github.io/provider_id"
-	annotationBenchmarkIDKey = "eval-hub.github.io/benchmark_id"
+	labelAppKey       = "app"
+	labelComponentKey = "component"
+	// EvalHub CR identity for operator consumers (e.g. failure watcher); values are DNS-label sanitized.
+	labelEvalHubInstanceNameKey      = "evalhub_instance_name"
+	labelEvalHubInstanceNamespaceKey = "evalhub_instance_namespace"
+	labelJobIDKey                    = "job_id"
+	labelProviderIDKey               = "provider_id"
+	labelBenchmarkIDKey              = "benchmark_id"
+	labelBenchmarkIndexKey           = "benchmark_index"
+	labelAppValue                    = "evalhub"
+	labelComponentValue              = "evaluation-job"
+	capabilityDropAll                = "ALL"
+	annotationJobIDKey               = "eval-hub.github.io/job_id"
+	annotationProviderIDKey          = "eval-hub.github.io/provider_id"
+	annotationBenchmarkIDKey         = "eval-hub.github.io/benchmark_id"
 )
 
 var (
@@ -126,7 +131,7 @@ func buildK8sName(jobID, resourceGUID, suffix string) string {
 }
 
 func buildConfigMap(cfg *jobConfig) (*corev1.ConfigMap, error) {
-	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID)
+	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID, cfg.benchmarkIndex, cfg.evalHubInstanceName, cfg.evalHubCRNamespace)
 	annotations := jobAnnotations(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	name := configMapName(cfg.jobID, cfg.resourceGUID)
 
@@ -177,7 +182,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	if cfg.adapterImage == "" {
 		return nil, fmt.Errorf("adapter image is required")
 	}
-	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID)
+	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID, cfg.benchmarkIndex, cfg.evalHubInstanceName, cfg.evalHubCRNamespace)
 	annotations := jobAnnotations(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	jobName := jobName(cfg.jobID, cfg.resourceGUID)
 	configMap := configMapName(cfg.jobID, cfg.resourceGUID)
@@ -760,14 +765,20 @@ func configMapName(jobID, resourceGUID string) string {
 	return buildK8sName(jobID, resourceGUID, specSuffix)
 }
 
-func jobLabels(jobID, providerID, benchmarkID string) map[string]string {
-	return map[string]string{
-		labelAppKey:         labelAppValue,
-		labelComponentKey:   labelComponentValue,
-		labelJobIDKey:       sanitizeLabelValue(jobID),
-		labelProviderIDKey:  sanitizeLabelValue(providerID),
-		labelBenchmarkIDKey: sanitizeLabelValue(benchmarkID),
+func jobLabels(jobID, providerID, benchmarkID string, benchmarkIndex int, evalHubInstanceName, evalHubCRNamespace string) map[string]string {
+	m := map[string]string{
+		labelAppKey:            labelAppValue,
+		labelComponentKey:      labelComponentValue,
+		labelJobIDKey:          sanitizeLabelValue(jobID),
+		labelProviderIDKey:     sanitizeLabelValue(providerID),
+		labelBenchmarkIDKey:    sanitizeLabelValue(benchmarkID),
+		labelBenchmarkIndexKey: sanitizeLabelValue(strconv.Itoa(benchmarkIndex)),
 	}
+	if evalHubInstanceName != "" && evalHubCRNamespace != "" {
+		m[labelEvalHubInstanceNameKey] = sanitizeLabelValue(evalHubInstanceName)
+		m[labelEvalHubInstanceNamespaceKey] = sanitizeLabelValue(evalHubCRNamespace)
+	}
+	return m
 }
 
 func jobAnnotations(jobID, providerID, benchmarkID string) map[string]string {
