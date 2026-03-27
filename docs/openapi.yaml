@@ -999,7 +999,21 @@ components:
           description: Threshold value
     TestDataRefS3:
       type: object
-      description: S3 test data reference
+      description: |
+        S3 (or S3-compatible) test data. Only applies when Eval Hub runs the benchmark as a
+        **Kubernetes Job** (cluster execution). It does not apply to local-only evaluation runs.
+
+        The test-data **init container** loads the Secret named **`secret_ref`** from the
+        job namespace. It expects these keys. **All values must be non-empty** or the init
+        container fails:
+
+        - **`AWS_ACCESS_KEY_ID`** — access key
+        - **`AWS_SECRET_ACCESS_KEY`** — secret key
+        - **`AWS_DEFAULT_REGION`** — region used for signing (for example `us-east-1`)
+        - **`AWS_S3_ENDPOINT`** — base URL of the S3 API (AWS regional endpoint or your
+          S3-compatible gateway)
+
+        These align with Secrets commonly produced by ODH/RHOAI when an S3 connection is created.
       required:
         - bucket
         - key
@@ -1007,16 +1021,40 @@ components:
       properties:
         bucket:
           type: string
-          description: S3 bucket name
+          description: S3 bucket name.
         key:
           type: string
-          description: S3 object key (path)
+          description: |
+            Object key or prefix within the bucket. Leading and trailing slashes are
+            normalized. The init container lists objects under this prefix and downloads
+            each into **`/test_data`**, keeping subdirectory structure relative to the prefix.
         secret_ref:
           type: string
-          description: Kubernetes Secret name containing S3 credentials
+          description: |
+            Name of a Kubernetes **`Secret`** in the evaluation job namespace, mounted
+            read-only into the test-data init container.
+      example:
+        bucket: my-eval-bucket
+        key: datasets/benchmark-a/v1
+        secret_ref: my-s3-connection-secret
     TestDataRef:
       type: object
-      description: Reference to external test data sources
+      description: |
+        Reference to external test data for a benchmark.
+
+        When the evaluation runs as a **Kubernetes Job**, setting `s3` makes Eval Hub schedule
+        an **init container** on the evaluation job pod before the adapter runs. That init container:
+
+        - Reads **`bucket`**, **`key`**, and **`secret_ref`** from the job spec (same JSON
+          mounted into the pod).
+        - Uses credentials from the Kubernetes **Secret** named by **`secret_ref`**
+          (read-only mount; typical sources include an ODH/RHOAI S3 connection Secret).
+        - Lists and downloads all objects under the **`key`** prefix into a shared
+          **`emptyDir`** volume at **`/test_data`**, preserving relative paths.
+        - Exits; the **adapter container** mounts `/test_data` and reads the files.
+
+        Do not put credentials in the Eval Hub API request body; only reference an existing
+        Secret via **`secret_ref`**.
       required:
         - s3
       properties:
@@ -1050,7 +1088,10 @@ components:
               description: Benchmark specific parameters
             test_data_ref:
               $ref: '#/components/schemas/TestDataRef'
-              description: Reference to the test data source for this benchmark
+              description: |
+                Optional external test data (e.g. **S3**). For **Kubernetes Job** runs, may
+                trigger a pre-run init container that downloads files to **`/test_data`** for
+                the adapter. Omit if the benchmark does not need mounted files.
     ExperimentTag:
       type: object
       description: Tag on an experiment (e.g. MLFlow)
