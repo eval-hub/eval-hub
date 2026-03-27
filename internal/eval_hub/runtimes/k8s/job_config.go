@@ -35,26 +35,28 @@ const (
 )
 
 type jobConfig struct {
-	jobID                string
-	resourceGUID         string
-	namespace            string
-	providerID           string
-	benchmarkID          string
-	benchmarkIndex       int
-	adapterImage         string
-	sidecarImage         string
-	entrypoint           []string
-	defaultEnv           []api.EnvVar
-	cpuRequest           string
-	memoryRequest        string
-	cpuLimit             string
-	memoryLimit          string
-	jobSpec              shared.JobSpec
-	serviceAccountName   string
-	serviceCAConfigMap   string
-	evalHubURL           string // in-cluster URL for sidecar to call eval-hub
-	sidecarBaseURL       string // base URL for adapter/runtime to call sidecar's proxy (config.Sidecar.BaseURL)
-	evalHubInstanceName  string
+	jobID               string
+	resourceGUID        string
+	namespace           string
+	providerID          string
+	benchmarkID         string
+	benchmarkIndex      int
+	adapterImage        string
+	sidecarImage        string
+	entrypoint          []string
+	defaultEnv          []api.EnvVar
+	cpuRequest          string
+	memoryRequest       string
+	cpuLimit            string
+	memoryLimit         string
+	jobSpec             shared.JobSpec
+	serviceAccountName  string
+	serviceCAConfigMap  string
+	evalHubURL          string // in-cluster URL for sidecar to call eval-hub
+	sidecarBaseURL      string // base URL for adapter/runtime to call sidecar's proxy (config.Sidecar.BaseURL)
+	evalHubInstanceName string
+	// evalHubCRNamespace is the namespace of the EvalHub CR (control plane); used for Job labels.
+	evalHubCRNamespace   string
 	mlflowTrackingURI    string
 	mlflowWorkspace      string
 	ociCredentialsSecret string
@@ -122,11 +124,13 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	// the operator's naming convention: <instance>-<instance-namespace>-job.
 	instanceNamespace := readInClusterNamespace()
 	var serviceAccountName, serviceCAConfigMap, evalHubURL string
+	var evalHubCRNamespace string
 	if evalHubInstanceName != "" {
 		saNamespace := instanceNamespace
 		if saNamespace == "" {
 			saNamespace = namespace // fallback for local mode
 		}
+		evalHubCRNamespace = saNamespace
 		serviceAccountName = evalHubInstanceName + "-" + saNamespace + serviceAccountNameSuffix
 		serviceCAConfigMap = evalHubInstanceName + serviceCAConfigMapSuffix
 		// EvalHub URL points to the kube-rbac-proxy HTTPS endpoint in the instance namespace.
@@ -180,6 +184,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		serviceAccountName:   serviceAccountName,
 		serviceCAConfigMap:   serviceCAConfigMap,
 		evalHubInstanceName:  evalHubInstanceName,
+		evalHubCRNamespace:   evalHubCRNamespace,
 		mlflowTrackingURI:    mlflowTrackingURI,
 		mlflowWorkspace:      mlflowWorkspace,
 		ociCredentialsSecret: ociCredentialsSecret,

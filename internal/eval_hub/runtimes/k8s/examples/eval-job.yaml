@@ -9,6 +9,9 @@ metadata:
     job_id: "001"
     provider_id: "lm_evaluation_harness"
     benchmark_id: "mmlu"
+    benchmark_index: "0"
+    evalhub_instance_name: "evalhub"
+    evalhub_instance_namespace: "evalhub"
   annotations:
     eval-hub.github.io/job_id: "001"
     eval-hub.github.io/provider_id: "lm_evaluation_harness"
@@ -24,6 +27,9 @@ spec:
         job_id: "001"
         provider_id: "lm_evaluation_harness"
         benchmark_id: "mmlu"
+        benchmark_index: "0"
+        evalhub_instance_name: "evalhub"
+        evalhub_instance_namespace: "evalhub"
       annotations:
         eval-hub.github.io/job_id: "001"
         eval-hub.github.io/provider_id: "lm_evaluation_harness"
