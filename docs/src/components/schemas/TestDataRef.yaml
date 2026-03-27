@@ -1,5 +1,20 @@
 type: object
-description: Reference to external test data sources
+description: |
+  Reference to external test data for a benchmark.
+
+  When the evaluation runs as a **Kubernetes Job**, setting `s3` makes Eval Hub schedule
+  an **init container** on the evaluation job pod before the adapter runs. That init container:
+
+  - Reads **`bucket`**, **`key`**, and **`secret_ref`** from the job spec (same JSON
+    mounted into the pod).
+  - Uses credentials from the Kubernetes **Secret** named by **`secret_ref`**
+    (read-only mount; typical sources include an ODH/RHOAI S3 connection Secret).
+  - Lists and downloads all objects under the **`key`** prefix into a shared
+    **`emptyDir`** volume at **`/test_data`**, preserving relative paths.
+  - Exits; the **adapter container** mounts `/test_data` and reads the files.
+
+  Do not put credentials in the Eval Hub API request body; only reference an existing
+  Secret via **`secret_ref`**.
 required:
   - s3
 properties:
