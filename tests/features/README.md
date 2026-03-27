@@ -22,7 +22,7 @@ If the remote server requires authentication, set:
 export AUTH_TOKEN="your-token"
 ```
 
-### Model Overrides (Required)
+### Model Overrides (Optional)
 
 Set the model fields in the test payloads using environment variables:
 
