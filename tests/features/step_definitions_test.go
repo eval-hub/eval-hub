@@ -456,7 +456,11 @@ func (tc *scenarioConfig) checkHealthEndpoint() error {
 }
 
 func (tc *scenarioConfig) iSetHeaderTo(paramName, paramValue string) error {
-	value, err := tc.getId(paramValue)
+	value, err := tc.substituteValues(paramValue)
+	if err != nil {
+		return err
+	}
+	value, err = tc.getId(value)
 	if err != nil {
 		return err
 	}
@@ -985,13 +989,12 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPathAtLeast(expectedValu
 }
 
 func (tc *scenarioConfig) theResponseShouldContainAtJSONPathImpl(expectedValue string, jsonPath string, match string) error {
-	if strings.Contains(expectedValue, "{{") {
-		expanded, err := tc.substituteValues(expectedValue)
-		if err != nil {
-			return err
-		}
-		expectedValue = expanded
+	expanded, err := tc.substituteValues(expectedValue)
+	if err != nil {
+		return err
 	}
+	expectedValue = expanded
+
 	foundValue, err := tc.getJsonPath(jsonPath)
 	if err != nil {
 		return tc.logError(err)
@@ -1285,6 +1288,13 @@ func InitializeTestSuite(ctx *godog.TestSuiteContext) {
 		MinVersion: tls.VersionTLS12,
 		//nolint:gosec
 		InsecureSkipVerify: true,
+	}
+
+	if authToken := os.Getenv("AUTH_TOKEN"); authToken != "" {
+		logDebug("Using Authorization header with token\n")
+	}
+	if tenant := os.Getenv("X_TENANT"); tenant != "" {
+		logDebug("Using X-Tenant header with value %s\n", tenant)
 	}
 
 	ctx.BeforeSuite(checkRegexes)
