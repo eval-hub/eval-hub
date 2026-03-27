@@ -211,10 +211,10 @@ Feature: Evaluations Endpoint
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.resource.tenant"
-    And I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.resource.tenant"
-    And I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.resource.tenant"
     When I send a GET request to "/api/v1/evaluations/jobs?limit=2"
@@ -298,12 +298,12 @@ Feature: Evaluations Endpoint
     And the response should contain the value "test-user-1" at path "$.resource.owner"
     And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.resource.tenant"
     And I set the header "X-User" to "test-user-2"
-    And I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the response should contain the value "test-user-2" at path "$.resource.owner"
     And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.resource.tenant"
     And I set the header "X-User" to "test-user-3"
-    And I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the response should contain the value "test-user-3" at path "$.resource.owner"
     And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.resource.tenant"
