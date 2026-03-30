@@ -2,12 +2,17 @@ package handlers_test
 
 import (
 	"context"
+	"io"
 	"log/slog"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -669,3 +674,42 @@ func TestHandleUpdateEvaluation(t *testing.T) {
 	}
 }
 */
+
+func TestHandleCreateEvaluationRejectsExperimentWhenMLflowDisabled(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	providerConfigs := map[string]api.ProviderResource{
+		"garak": {
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-1"},
+				},
+			},
+		},
+	}
+	storage := &fakeStorage{providerConfigs: providerConfigs}
+	runtime := &fakeRuntime{}
+	validate := validation.NewValidator()
+	h := handlers.New(storage, validate, runtime, nil, nil)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-mlflow-exp", logger, time.Second, "test-user", "test-tenant")
+
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+		body:        []byte(`{"name": "test-evaluation-job", "model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1","provider_id":"garak"}],"experiment":{"name":"my-experiment"}}`),
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCreateEvaluation(ctx, req, resp)
+
+	if runtime.called {
+		t.Fatalf("did not expect runtime when MLflow is disabled and experiment is set")
+	}
+	if recorder.Code == 202 {
+		t.Fatalf("expected error response, got 202")
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "mlflow_required_for_experiment") {
+		t.Fatalf("expected mlflow_required_for_experiment in body, got %q", body)
+	}
+}
