@@ -35,7 +35,7 @@
       }
     ],
     "experiment": {
-      "name": "string",
+      "name": "{{mlflow:my-test-experiment}}",
       "tags": [
         {
           "key": "key-a",

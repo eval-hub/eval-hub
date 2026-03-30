@@ -200,7 +200,6 @@ Feature: Collections Endpoint
   @benchmark_url_custom_provider
   Scenario: Create collection persists benchmark url; list and get return stored url
     Given the service is running
-    And I set the header "X-Tenant" to "test-tenant"
     When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider_benchmark_url.json"
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:custom_provider_id"

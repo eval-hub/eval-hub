@@ -568,8 +568,12 @@ func (tc *scenarioConfig) substituteValues(body string) (string, error) {
 				// Use the literal after mlflow: as the experiment name. When MLflow is configured,
 				// it could be resolved from MLflow; for tests without MLflow, this allows name-based
 				// search to match stored jobs.
-				tc.logDebug("Substituting value '%s' with '%s'\n", match[1], after)
-				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), after)
+				experimentName := after
+				if os.Getenv("MLFLOW_TRACKING_URI") == "" {
+					experimentName = ""
+				}
+				tc.logDebug("Substituting value '%s' with '%s'\n", match[1], experimentName)
+				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), experimentName)
 			} else if raw, ok := strings.CutPrefix(match[1], envPrefix); ok {
 				envName, fallback, hasFallback := strings.Cut(raw, "|")
 				value, ok := os.LookupEnv(envName)
@@ -744,9 +748,9 @@ func (tc *scenarioConfig) iSendARequestImpl(method, path, body, caller string) e
 		return err
 	}
 	if caller != "" {
-		tc.logDebug("Sending %s request to %s by %s\n", method, endpoint, caller)
+		tc.logDebug("Sending %s request to %s by %s with body %s\n", method, endpoint, caller, body)
 	} else {
-		tc.logDebug("Sending %s request to %s\n", method, endpoint)
+		tc.logDebug("Sending %s request to %s with body %s\n", method, endpoint, body)
 	}
 	req, err := http.NewRequest(method, endpoint, entity)
 	if err != nil {

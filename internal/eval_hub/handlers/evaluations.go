@@ -147,6 +147,10 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 			w.Error(err, ctx.RequestID)
 			return
 		}
+	} else if mlflow.HasExperimentName(evaluation) {
+		// MLflow not configured but experiment name provided in the input
+		w.Error(serviceerrors.NewServiceError(messages.MLFlowRequiredForExperiment), ctx.RequestID)
+		return
 	}
 
 	var job *api.EvaluationJobResource
