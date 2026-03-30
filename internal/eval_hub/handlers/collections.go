@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"regexp"
 	"strings"
 	"time"
 
@@ -44,6 +45,10 @@ var (
 		{Path: "/pass_criteria", Op: api.PatchOpReplace, Prefix: false},
 	}
 )
+
+// entireBenchmarkPatchPath matches JSON Patch paths that replace or add a whole benchmarks[] element
+// (e.g. /benchmarks/0, /benchmarks/-), not a field inside an element (e.g. /benchmarks/0/id).
+var entireBenchmarkPatchPath = regexp.MustCompile(`^/benchmarks/(-|\d+)$`)
 
 // HandleListCollections handles GET /api/v1/evaluations/collections
 func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
@@ -104,10 +109,6 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 				Page:  *page,
 				Items: collections.Items,
 			}
-			scoped := storage.WithContext(runtimeCtx)
-			for i := range result.Items {
-				enrichCollectionResourceBenchmarkURLs(scoped, &result.Items[i])
-			}
 
 			w.WriteJSON(result, 200)
 			return nil
@@ -117,8 +118,8 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 	)
 }
 
-// enrichCollectionResourceBenchmarkURLs sets each benchmark's URL from the provider definition when present.
-func enrichCollectionResourceBenchmarkURLs(storage abstractions.Storage, collections ...*api.CollectionResource) {
+// EnrichBenchmarkURLsFromProviders sets each collection benchmark's URL from the provider definition when present.
+func EnrichBenchmarkURLsFromProviders(storage abstractions.Storage, collections ...*api.CollectionResource) {
 	loaded := make(map[string]*api.ProviderResource)
 	failed := make(map[string]struct{})
 	for _, coll := range collections {
@@ -152,6 +153,47 @@ func enrichCollectionResourceBenchmarkURLs(storage abstractions.Storage, collect
 			}
 		}
 	}
+}
+
+// enrichEntireBenchmarkPatchValues rewrites patch operation values for full benchmark add/replace ops
+// so benchmark URLs are filled from the provider before the patch is applied in storage.
+func enrichEntireBenchmarkPatchValues(storage abstractions.Storage, patches *api.Patch) error {
+	for i := range *patches {
+		op := &(*patches)[i]
+		if op.Op != api.PatchOpReplace && op.Op != api.PatchOpAdd {
+			continue
+		}
+		if !entireBenchmarkPatchPath.MatchString(op.Path) {
+			continue
+		}
+		raw, err := json.Marshal(op.Value)
+		if err != nil {
+			return err
+		}
+		var b api.CollectionBenchmarkConfig
+		if err := json.Unmarshal(raw, &b); err != nil {
+			continue
+		}
+		if b.ProviderID == "" || b.ID == "" {
+			continue
+		}
+		tmp := &api.CollectionResource{
+			CollectionConfig: api.CollectionConfig{
+				Benchmarks: []api.CollectionBenchmarkConfig{b},
+			},
+		}
+		EnrichBenchmarkURLsFromProviders(storage, tmp)
+		enc, err := json.Marshal(tmp.Benchmarks[0])
+		if err != nil {
+			return err
+		}
+		var v any
+		if err := json.Unmarshal(enc, &v); err != nil {
+			return err
+		}
+		op.Value = v
+	}
+	return nil
 }
 
 // HandleCreateCollection handles POST /api/v1/evaluations/collections
@@ -188,6 +230,7 @@ func (h *Handlers) HandleCreateCollection(ctx *executioncontext.ExecutionContext
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
+			scoped := storage.WithContext(runtimeCtx)
 			collectionResource = &api.CollectionResource{
 				Resource: api.Resource{
 					ID:        id,
@@ -197,7 +240,8 @@ func (h *Handlers) HandleCreateCollection(ctx *executioncontext.ExecutionContext
 				},
 				CollectionConfig: *collection,
 			}
-			err := storage.WithContext(runtimeCtx).CreateCollection(collectionResource)
+			EnrichBenchmarkURLsFromProviders(scoped, collectionResource)
+			err := scoped.CreateCollection(collectionResource)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -234,7 +278,6 @@ func (h *Handlers) HandleGetCollection(ctx *executioncontext.ExecutionContext, r
 				w.Error(err, ctx.RequestID)
 				return err
 			}
-			enrichCollectionResourceBenchmarkURLs(scoped, response)
 			w.WriteJSON(response, 200)
 			return nil
 		},
@@ -281,7 +324,10 @@ func (h *Handlers) HandleUpdateCollection(ctx *executioncontext.ExecutionContext
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			result, err := storage.WithContext(runtimeCtx).UpdateCollection(collectionID, request)
+			scoped := storage.WithContext(runtimeCtx)
+			toUpdate := &api.CollectionResource{CollectionConfig: *request}
+			EnrichBenchmarkURLsFromProviders(scoped, toUpdate)
+			result, err := scoped.UpdateCollection(collectionID, &toUpdate.CollectionConfig)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -338,7 +384,12 @@ func (h *Handlers) HandlePatchCollection(ctx *executioncontext.ExecutionContext,
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			result, err := storage.WithContext(runtimeCtx).PatchCollection(collectionID, &patches)
+			scoped := storage.WithContext(runtimeCtx)
+			if err := enrichEntireBenchmarkPatchValues(scoped, &patches); err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			result, err := scoped.PatchCollection(collectionID, &patches)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err

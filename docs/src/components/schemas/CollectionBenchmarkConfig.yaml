@@ -1,7 +1,7 @@
 type: object
 description: |
   Reference to a benchmark in a collection (create, update, list, or get collection).
-  The **url** field is set by the server on read when known; it is not used on evaluation jobs.
+  The **url** field is set by the server from the provider definition when a collection is created (POST), fully replaced (PUT), or when a whole benchmark array element is added or replaced via PATCH (paths `/benchmarks/<index>` or `/benchmarks/-`), then stored and returned on list/get; omitted when unknown. Field-level benchmark patches (e.g. `/benchmarks/0/id`) do not trigger this. It is not used on evaluation jobs.
 allOf:
   - $ref: ./Ref.yaml
   - type: object
@@ -13,7 +13,7 @@ allOf:
         description: Evaluation provider ID.
       url:
         type: string
-        description: Benchmark URL from the provider definition (set by the server on read; omitted when unknown).
+        description: Benchmark URL from the provider definition (persisted on create, full collection replace, or whole-benchmark PATCH; omitted when unknown).
       weight:
         type: number
         format: float

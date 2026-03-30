@@ -1502,14 +1502,14 @@
             "properties": {
               "provider_id": {
                 "type": "string",
-                "description": "Evaluation provider ID"
+                "description": "Evaluation provider ID."
               },
               "weight": {
                 "type": "number",
                 "format": "float",
                 "minimum": 0,
                 "maximum": 1,
-                "description": "Weight of this benchmark"
+                "description": "Weight of this benchmark."
               },
               "primary_score": {
                 "$ref": "#/components/schemas/PrimaryScore"
@@ -1520,7 +1520,7 @@
               "parameters": {
                 "type": "object",
                 "additionalProperties": true,
-                "description": "Benchmark specific parameters"
+                "description": "Benchmark specific parameters."
               },
               "test_data_ref": {
                 "$ref": "#/components/schemas/TestDataRef",
@@ -1924,7 +1924,7 @@
           },
           "url": {
             "type": "string",
-            "description": "Optional documentation or info URL for this benchmark (from provider config)"
+            "description": "Optional documentation or info URL for this benchmark (from provider config)."
           },
           "name": {
             "type": "string",
@@ -2086,7 +2086,7 @@
       },
       "CollectionBenchmarkConfig": {
         "type": "object",
-        "description": "Reference to a benchmark in a collection (create, update, list, or get collection).\nThe **url** field is set by the server on read when known; it is not used on evaluation jobs.\n",
+        "description": "Reference to a benchmark in a collection (create, update, list, or get collection).\nThe **url** field is set by the server from the provider definition when a collection is created (POST), fully replaced (PUT), or when a whole benchmark array element is added or replaced via PATCH (paths `/benchmarks/<index>` or `/benchmarks/-`), then stored and returned on list/get; omitted when unknown. Field-level benchmark patches (e.g. `/benchmarks/0/id`) do not trigger this. It is not used on evaluation jobs.\n",
         "allOf": [
           {
             "$ref": "#/components/schemas/Ref"
@@ -2099,18 +2099,18 @@
             "properties": {
               "provider_id": {
                 "type": "string",
-                "description": "Evaluation provider ID"
+                "description": "Evaluation provider ID."
               },
               "url": {
                 "type": "string",
-                "description": "Benchmark URL from the provider definition (set by the server on read; omitted when unknown)"
+                "description": "Benchmark URL from the provider definition (persisted on create, full collection replace, or whole-benchmark PATCH; omitted when unknown)."
               },
               "weight": {
                 "type": "number",
                 "format": "float",
                 "minimum": 0,
                 "maximum": 1,
-                "description": "Weight of this benchmark"
+                "description": "Weight of this benchmark."
               },
               "primary_score": {
                 "$ref": "#/components/schemas/PrimaryScore"
@@ -2121,7 +2121,7 @@
               "parameters": {
                 "type": "object",
                 "additionalProperties": true,
-                "description": "Benchmark specific parameters"
+                "description": "Benchmark specific parameters."
               },
               "test_data_ref": {
                 "$ref": "#/components/schemas/TestDataRef",
@@ -2133,42 +2133,42 @@
       },
       "CollectionConfig": {
         "type": "object",
-        "description": "Request to create or update a collection",
+        "description": "Request to create or update a collection.",
         "properties": {
           "name": {
             "type": "string",
-            "description": "Collection name"
+            "description": "Collection name."
           },
           "category": {
             "type": "string",
-            "description": "Collection category"
+            "description": "Collection category."
           },
           "description": {
             "type": "string",
-            "description": "Optional description"
+            "description": "Optional description."
           },
           "tags": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "Tags"
+            "description": "Tags."
           },
           "custom": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Custom key-value data"
+            "description": "Custom key-value data."
           },
           "pass_criteria": {
             "$ref": "#/components/schemas/PassCriteria",
-            "description": "Pass criteria for the collection"
+            "description": "Pass criteria for the collection."
           },
           "benchmarks": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CollectionBenchmarkConfig"
             },
-            "description": "Benchmarks in the collection"
+            "description": "Benchmarks in the collection."
           }
         },
         "required": [
