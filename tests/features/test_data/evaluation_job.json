@@ -15,6 +15,15 @@
       }
     }
   ],
+  "experiment": {
+    "name": "{{mlflow:my-test-experiment}}",
+    "tags": [
+      {
+        "key": "environment",
+        "value": "test"
+      }
+    ]
+  },
   "name": "test-evaluation-job",
   "tags": [ "environment" ]
 }

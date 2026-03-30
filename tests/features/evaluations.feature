@@ -20,6 +20,8 @@ Feature: Evaluations Endpoint
     And the response should contain the value "3" at path "$.benchmarks[0].parameters.num_fewshot"
     And the response should contain the value "5" at path "$.benchmarks[0].parameters.limit"
     And the response should contain the value "google/flan-t5-small" at path "$.benchmarks[0].parameters.tokenizer"
+    And the response should contain the value "environment" at path "$.experiment.tags[0].key"
+    And the response should contain the value "test" at path "$.experiment.tags[0].value"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "pending" at path "$.status.state"
@@ -30,6 +32,8 @@ Feature: Evaluations Endpoint
     And the response should contain the value "3" at path "$.benchmarks[0].parameters.num_fewshot"
     And the response should contain the value "5" at path "$.benchmarks[0].parameters.limit"
     And the response should contain the value "google/flan-t5-small" at path "$.benchmarks[0].parameters.tokenizer"
+    And the response should contain the value "environment" at path "$.experiment.tags[0].key"
+    And the response should contain the value "test" at path "$.experiment.tags[0].value"
     And the response should not contain the value "collection" at path "$.collection"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
