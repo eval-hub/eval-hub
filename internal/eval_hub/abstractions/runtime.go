@@ -24,7 +24,7 @@ type Runtime interface {
 	WithLogger(logger *slog.Logger) Runtime
 	WithContext(ctx context.Context) Runtime
 	Name() string
-	RunEvaluationJob(evaluation *api.EvaluationJobResource, benchmarks []api.BenchmarkConfig, storage RuntimeStorage) error
+	RunEvaluationJob(evaluation *api.EvaluationJobResource, benchmarks []api.EvaluationBenchmarkConfig, storage RuntimeStorage) error
 	DeleteEvaluationJobResources(evaluation *api.EvaluationJobResource) error
 	QueueExists(namespace, name string) (bool, error)
 }

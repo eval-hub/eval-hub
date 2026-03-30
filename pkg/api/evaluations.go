@@ -99,8 +99,8 @@ type TestDataRef struct {
 	S3 *S3TestDataRef `mapstructure:"s3" json:"s3,omitempty"`
 }
 
-// BenchmarkConfig represents a reference to a benchmark
-type BenchmarkConfig struct {
+// EvaluationBenchmarkConfig represents a benchmark reference in an evaluation job request or persisted job config.
+type EvaluationBenchmarkConfig struct {
 	Ref          `mapstructure:",squash"`
 	ProviderID   string         `mapstructure:"provider_id" json:"provider_id" validate:"required"`
 	Weight       float32        `mapstructure:"weight" json:"weight,omitempty" validate:"omitempty,min=0,max=1"`
@@ -217,8 +217,8 @@ type EvaluationExports struct {
 }
 
 type CollectionRef struct {
-	ID         string            `mapstructure:"id" json:"id" validate:"required"`
-	Benchmarks []BenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,dive"`
+	ID         string                      `mapstructure:"id" json:"id" validate:"required"`
+	Benchmarks []EvaluationBenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 }
 
 // QueueConfig represents an optional scheduling queue for evaluation jobs.
@@ -229,17 +229,17 @@ type QueueConfig struct {
 
 // EvaluationJobConfig represents evaluation job request schema
 type EvaluationJobConfig struct {
-	Name         string             `json:"name" validate:"required"`
-	Description  *string            `json:"description,omitempty"`
-	Tags         []string           `json:"tags,omitempty" validate:"omitempty,dive,tagname"`
-	Model        ModelRef           `json:"model" validate:"required"`
-	PassCriteria *PassCriteria      `json:"pass_criteria,omitempty"`
-	Benchmarks   []BenchmarkConfig  `json:"benchmarks,omitempty" validate:"omitempty,required_without=Collection,dive"`
-	Collection   *CollectionRef     `json:"collection,omitempty" validate:"omitempty,required_without=Benchmarks"`
-	Experiment   *ExperimentConfig  `json:"experiment,omitempty"`
-	Custom       *map[string]any    `json:"custom,omitempty"`
-	Exports      *EvaluationExports `json:"exports,omitempty"`
-	Queue        *QueueConfig       `json:"queue,omitempty"`
+	Name         string                      `json:"name" validate:"required"`
+	Description  *string                     `json:"description,omitempty"`
+	Tags         []string                    `json:"tags,omitempty" validate:"omitempty,dive,tagname"`
+	Model        ModelRef                    `json:"model" validate:"required"`
+	PassCriteria *PassCriteria               `json:"pass_criteria,omitempty"`
+	Benchmarks   []EvaluationBenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,required_without=Collection,dive"`
+	Collection   *CollectionRef              `json:"collection,omitempty" validate:"omitempty,required_without=Benchmarks"`
+	Experiment   *ExperimentConfig           `json:"experiment,omitempty"`
+	Custom       *map[string]any             `json:"custom,omitempty"`
+	Exports      *EvaluationExports          `json:"exports,omitempty"`
+	Queue        *QueueConfig                `json:"queue,omitempty"`
 }
 
 type EvaluationResource struct {
