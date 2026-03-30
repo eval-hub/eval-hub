@@ -10,7 +10,7 @@
         "threshold": 0.5
     },
     "experiment": {
-        "name": "pass-criteria-provider-test",
+        "name": "{{mlflow:my-test-experiment}}",
         "tags": [
             {
                 "key": "environment",
