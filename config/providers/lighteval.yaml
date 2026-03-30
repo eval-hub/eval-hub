@@ -83,6 +83,34 @@ benchmarks:
       - lighteval
       - suite
 
+  - id: mathematical_reasoning
+    name: Mathematical Reasoning Suite
+    description: Competition-level mathematical reasoning benchmarks (aime24, aime25)
+    category: reasoning
+    metrics:
+      - exact_match
+      - accuracy
+    tags:
+      - reasoning
+      - math
+      - competition
+      - lighteval
+      - suite
+
+  - id: mathematical_reasoning
+    name: Mathematical Reasoning Suite
+    description: Competition-level mathematical reasoning benchmarks (aime24, aime25)
+    category: reasoning
+    metrics:
+      - exact_match
+      - accuracy
+    tags:
+      - reasoning
+      - math
+      - competition
+      - lighteval
+      - suite
+
   - id: knowledge
     name: Knowledge Suite
     description: Knowledge benchmarks (mmlu, triviaqa)
@@ -256,6 +284,36 @@ benchmarks:
     tags:
       - math
       - probability
+      - lighteval
+
+  - id: aime24
+    name: AIME 2024
+    description: American Invitational Mathematics Examination 2024 - competition-level mathematical reasoning
+    category: reasoning
+    metrics:
+      - exact_match
+      - accuracy
+    num_few_shot: 0
+    dataset_size: 30
+    tags:
+      - reasoning
+      - math
+      - competition
+      - lighteval
+
+  - id: aime25
+    name: AIME 2025
+    description: American Invitational Mathematics Examination 2025 - competition-level mathematical reasoning
+    category: reasoning
+    metrics:
+      - exact_match
+      - accuracy
+    num_few_shot: 0
+    dataset_size: 30
+    tags:
+      - reasoning
+      - math
+      - competition
       - lighteval
 
   - id: mmlu
