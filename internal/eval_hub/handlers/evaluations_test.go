@@ -89,7 +89,7 @@ func (r *fakeRuntime) WithContext(_ context.Context) abstractions.Runtime {
 func (r *fakeRuntime) Name() string { return "fake" }
 func (r *fakeRuntime) RunEvaluationJob(
 	_ *api.EvaluationJobResource,
-	_ []api.BenchmarkConfig,
+	_ []api.EvaluationBenchmarkConfig,
 	_ abstractions.RuntimeStorage,
 ) error {
 	r.called = true
@@ -201,24 +201,6 @@ func TestResolveProvider_NotFound(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "provider resource 'missing' was not found") {
 		t.Fatalf("expected: provider resource 'missing' was not found, got %q", err.Error())
-	}
-}
-
-func TestResolveBenchmarks_FromJobBenchmarks(t *testing.T) {
-	eval := &api.EvaluationJobResource{
-		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
-		EvaluationJobConfig: api.EvaluationJobConfig{
-			Benchmarks: []api.BenchmarkConfig{
-				{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"},
-			},
-		},
-	}
-	got, err := handlers.ResolveBenchmarks(eval, nil)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if len(got) != 1 || got[0].ID != "b1" {
-		t.Fatalf("expected one benchmark b1, got %v", got)
 	}
 }
 
@@ -647,7 +629,7 @@ func TestHandleUpdateEvaluation(t *testing.T) {
 	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{
 		job: &api.EvaluationJobResource{
 			EvaluationJobConfig: api.EvaluationJobConfig{
-				Benchmarks: []api.BenchmarkConfig{
+				Benchmarks: []api.EvaluationBenchmarkConfig{
 					{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"},
 				},
 			},

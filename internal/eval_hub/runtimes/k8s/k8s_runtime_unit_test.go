@@ -503,7 +503,7 @@ func TestRunEvaluationJobMarksBenchmarkFailedOnCreateError(t *testing.T) {
 	storage := &fakeStorage{logger: logger, ctx: context.Background(), runStatusChan: statusCh, providerConfigs: sampleProviders(providerID)}
 	var store abstractions.Storage = storage
 
-	benchmarks, err := handlers.ResolveBenchmarks(evaluation, nil)
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
 	if err != nil {
 		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
 	}
@@ -563,7 +563,7 @@ func TestRunEvaluationJobHandlesUpdateFailure(t *testing.T) {
 	}
 	var store abstractions.Storage = storage
 
-	benchmarks, err := handlers.ResolveBenchmarks(evaluation, nil)
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
 	if err != nil {
 		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
 	}
@@ -592,7 +592,7 @@ func sampleEvaluation(providerID string) *api.EvaluationJobResource {
 				URL:  "http://model.example",
 				Name: "model-1",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref: api.Ref{ID: "bench-1"},
 					Parameters: map[string]any{

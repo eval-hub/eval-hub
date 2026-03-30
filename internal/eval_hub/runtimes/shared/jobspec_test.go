@@ -19,7 +19,7 @@ func baseEvaluation() *api.EvaluationJobResource {
 				URL:  "http://model.example",
 				Name: "model-1",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref:        api.Ref{ID: "bench-1"},
 					ProviderID: "provider-1",
@@ -261,7 +261,7 @@ func TestJobSpecSerialization(t *testing.T) {
 				URL:  "http://model.example.com",
 				Name: "test-model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref:        api.Ref{ID: "arc_easy"},
 					ProviderID: "lm_evaluation_harness",

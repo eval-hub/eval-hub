@@ -7,7 +7,7 @@ allOf:
       benchmarks:
         type: array
         items:
-          $ref: ./BenchmarkConfig.yaml
+          $ref: ./EvaluationBenchmarkConfig.yaml
         description: >
           The evaluation benchmarks to run.
   - $ref: ./EvaluationJobConfigCommon2.yaml
