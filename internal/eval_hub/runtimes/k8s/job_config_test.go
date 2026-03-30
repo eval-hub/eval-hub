@@ -697,6 +697,51 @@ func TestBuildJobConfigKueueQueueNameWhenNoQueue(t *testing.T) {
 	}
 }
 
+func TestBuildJobConfigKueueQueueNameIgnoresNonKueueKind(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-other-kind"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}},
+			},
+			Queue: &api.QueueConfig{
+				Kind: "other",
+				Name: "my-queue",
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
+			},
+		},
+	}
+
+	serviceConfig := &config.Config{
+		Service: &config.ServiceConfig{
+			KueueEnabled: true,
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, serviceConfig)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.kueueQueueName != "" {
+		t.Fatalf("expected empty kueueQueueName for non-kueue kind, got %q", cfg.kueueQueueName)
+	}
+}
+
 func intPtr(value int) *int {
 	return &value
 }

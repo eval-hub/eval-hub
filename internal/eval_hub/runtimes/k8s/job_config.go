@@ -169,7 +169,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	}
 
 	var kueueQueueName string
-	if kueueEnabled && evaluation.Queue != nil && evaluation.Queue.Name != "" {
+	if kueueEnabled && evaluation.Queue != nil && evaluation.Queue.Kind == "kueue" && evaluation.Queue.Name != "" {
 		kueueQueueName = evaluation.Queue.Name
 	}
 
