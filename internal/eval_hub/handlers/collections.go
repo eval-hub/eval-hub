@@ -46,9 +46,10 @@ var (
 	}
 )
 
-// entireBenchmarkPatchPath matches JSON Patch paths that replace or add a whole benchmarks[] element
-// (e.g. /benchmarks/0, /benchmarks/-), not a field inside an element (e.g. /benchmarks/0/id).
-var entireBenchmarkPatchPath = regexp.MustCompile(`^/benchmarks/(-|\d+)$`)
+// entireBenchmarkPatchPath matches JSON Patch paths that replace or add the full benchmarks array (/benchmarks)
+// or a single array element (/benchmarks/<index> or /benchmarks/-). It does not match field-level paths
+// (e.g. /benchmarks/0/id).
+var entireBenchmarkPatchPath = regexp.MustCompile(`^/benchmarks(?:/(-|\d+))?$`)
 
 // HandleListCollections handles GET /api/v1/evaluations/collections
 func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
@@ -118,7 +119,8 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 	)
 }
 
-// EnrichBenchmarkURLsFromProviders sets each collection benchmark's URL from the provider definition when present.
+// EnrichBenchmarkURLsFromProviders clears each benchmark URL (when provider_id and id are set), then sets it
+// from the provider definition when a matching benchmark with a non-empty URL exists.
 func EnrichBenchmarkURLsFromProviders(storage abstractions.Storage, collections ...*api.CollectionResource) {
 	loaded := make(map[string]*api.ProviderResource)
 	failed := make(map[string]struct{})
@@ -132,6 +134,7 @@ func EnrichBenchmarkURLsFromProviders(storage abstractions.Storage, collections 
 			if pid == "" || bid == "" {
 				continue
 			}
+			b.URL = ""
 			if _, miss := failed[pid]; miss {
 				continue
 			}
@@ -155,8 +158,8 @@ func EnrichBenchmarkURLsFromProviders(storage abstractions.Storage, collections 
 	}
 }
 
-// enrichEntireBenchmarkPatchValues rewrites patch operation values for full benchmark add/replace ops
-// so benchmark URLs are filled from the provider before the patch is applied in storage.
+// enrichEntireBenchmarkPatchValues rewrites patch operation values for full benchmarks array or single-element
+// add/replace ops so benchmark URLs are filled from the provider before the patch is applied in storage.
 func enrichEntireBenchmarkPatchValues(storage abstractions.Storage, patches *api.Patch) error {
 	for i := range *patches {
 		op := &(*patches)[i]
@@ -169,6 +172,26 @@ func enrichEntireBenchmarkPatchValues(storage abstractions.Storage, patches *api
 		raw, err := json.Marshal(op.Value)
 		if err != nil {
 			return err
+		}
+		if op.Path == "/benchmarks" {
+			var benchmarks []api.CollectionBenchmarkConfig
+			if err := json.Unmarshal(raw, &benchmarks); err != nil {
+				continue
+			}
+			tmp := &api.CollectionResource{
+				CollectionConfig: api.CollectionConfig{Benchmarks: benchmarks},
+			}
+			EnrichBenchmarkURLsFromProviders(storage, tmp)
+			enc, err := json.Marshal(tmp.Benchmarks)
+			if err != nil {
+				return err
+			}
+			var v any
+			if err := json.Unmarshal(enc, &v); err != nil {
+				return err
+			}
+			op.Value = v
+			continue
 		}
 		var b api.CollectionBenchmarkConfig
 		if err := json.Unmarshal(raw, &b); err != nil {
