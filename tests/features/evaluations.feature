@@ -5,7 +5,7 @@ Feature: Evaluations Endpoint
   So that I evaluate models
 
   Background:
-    Given I set the header "X-Tenant" to "test-tenant"
+    Given I set the header "X-Tenant" to "{{env:X_TENANT|test-tenant}}"
 
   Scenario: Create an evaluation job
     Given the service is running
@@ -203,26 +203,110 @@ Feature: Evaluations Endpoint
     And I wait for the evaluation job status to be "completed"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
-    When I send a DELETE request to "/api/v1/evaluations/collections/{{value:collection_id}}?hard_delete=true"
+    When I send a DELETE request to "/api/v1/evaluations/collections/{{value:collection_id}}"
     Then the response code should be 204
 
   Scenario: List evaluation jobs
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    Then the response code should be 202
+    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.resource.tenant"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    Then the response code should be 202
+    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.resource.tenant"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    Then the response code should be 202
+    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.resource.tenant"
+    When I send a GET request to "/api/v1/evaluations/jobs?limit=2"
+    Then the response code should be 200
+    And the "next.href" field in the response should be saved as "value:next_url"
+    And the response should have schema as:
+    """
+      {
+        "properties": {
+            "first": {"type": "object"},
+            "next": {
+              "type": "object",
+              "properties": {
+                "href": {"type": "string"}
+              },
+              "required": ["href"]
+            },
+            "limit": {"type": "integer"},
+            "total_count": {
+              "type": "integer",
+              "minimum": 3
+            },
+            "items": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2
+            }
+        },
+        "required": ["limit", "first", "next", "total_count", "items"]
+      }
+    """
+    When I send a GET request to "{{value:next_url}}"
+    Then the response code should be 200
+    And the response should have schema as:
+    """
+      {
+        "properties": {
+            "first": {"type": "object"},
+            "next": {
+              "type": "object",
+              "properties": {
+                "href": {"type": "string"}
+              },
+              "required": ["href"]
+            },
+            "limit": {"type": "integer"},
+            "total_count": {
+              "type": "integer",
+              "minimum": 3
+            },
+            "items": {
+              "type": "array",
+              "minItems": 1
+            }
+        },
+        "required": ["limit", "first", "total_count", "items"]
+      }
+    """
+    When I send a GET request to "/api/v1/evaluations/jobs?owner=test-user-not-3"
+    Then the response code should be 200
+    And the response should have schema as:
+    """
+      {
+        "properties": {
+          "total_count": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 0
+          }
+        },
+        "required": ["total_count"]
+      }
+    """
+
+  @local
+  Scenario: List evaluation jobs with multiple users
     Given the service is running
     And I set the header "X-User" to "test-user-1"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the response should contain the value "test-user-1" at path "$.resource.owner"
-    And the response should contain the value "test-tenant" at path "$.resource.tenant"
+    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.resource.tenant"
     And I set the header "X-User" to "test-user-2"
-    And I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the response should contain the value "test-user-2" at path "$.resource.owner"
-    And the response should contain the value "test-tenant" at path "$.resource.tenant"
+    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.resource.tenant"
     And I set the header "X-User" to "test-user-3"
-    And I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the response should contain the value "test-user-3" at path "$.resource.owner"
-    And the response should contain the value "test-tenant" at path "$.resource.tenant"
+    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.resource.tenant"
     When I send a GET request to "/api/v1/evaluations/jobs?limit=2"
     Then the response code should be 200
     And the "next.href" field in the response should be saved as "value:next_url"
@@ -295,7 +379,7 @@ Feature: Evaluations Endpoint
       }
     """
     And the response should contain the value "test-user-1" at path "$.items[0].resource.owner"
-    And the response should contain the value "test-tenant" at path "$.items[0].resource.tenant"
+    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.items[0].resource.tenant"
     When I send a GET request to "/api/v1/evaluations/jobs?owner=test-user-2"
     Then the response code should be 200
     And the response should have schema as:
@@ -312,7 +396,7 @@ Feature: Evaluations Endpoint
       }
     """
     And the response should contain the value "test-user-2" at path "$.items[0].resource.owner"
-    And the response should contain the value "test-tenant" at path "$.items[0].resource.tenant"
+    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.items[0].resource.tenant"
     When I send a GET request to "/api/v1/evaluations/jobs?owner=test-user-3"
     Then the response code should be 200
     And the response should have schema as:
@@ -329,7 +413,7 @@ Feature: Evaluations Endpoint
       }
     """
     And the response should contain the value "test-user-3" at path "$.items[0].resource.owner"
-    And the response should contain the value "test-tenant" at path "$.items[0].resource.tenant"
+    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.items[0].resource.tenant"
     When I send a GET request to "/api/v1/evaluations/jobs?owner=test-user-not-3"
     Then the response code should be 200
     And the response should have schema as:
@@ -558,6 +642,55 @@ Feature: Evaluations Endpoint
     When I send a GET request to "/api/v1/evaluations/jobs"
     Then the response code should be 200
     And the response should contain the value "0" at path "$.total_count"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    Then the response code should be 202
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_running.json"
+    Then the response code should be 204
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    Then the response code should be 202
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_completed.json"
+    Then the response code should be 204
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    Then the response code should be 202
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    Then the response code should be 202
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_completed.json"
+    Then the response code should be 204
+    When I send a GET request to "/api/v1/evaluations/jobs"
+    Then the response code should be 200
+    And the response should contain the value "4" at path "$.total_count"
+    When I send a GET request to "/api/v1/evaluations/jobs?status=running&limit=10"
+    Then the response code should be 200
+    And the response should contain the value "running" at path "$.items[0].status.state"
+    And the response should contain the value "1" at path "$.total_count"
+    When I send a GET request to "/api/v1/evaluations/jobs?status=completed&limit=10"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.items[0].status.state"
+    And the response should contain the value "2" at path "$.total_count"
+    When I send a GET request to "/api/v1/evaluations/jobs?status=pending&limit=10"
+    Then the response code should be 200
+    And the response should contain the value "pending" at path "$.items[0].status.state"
+    And the response should contain the value "1" at path "$.total_count"
+    When I send a GET request to "/api/v1/evaluations/jobs?limit=10"
+    Then the response code should be 200
+    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.items[0].resource.tenant"
+    And the response should contain the value "4" at path "$.total_count"
+    When I set transaction-id to "search-user-and-tags"
+    When I send a GET request to "/api/v1/evaluations/jobs?tags=environment&limit=10"
+    Then the response code should be 200
+    And the response should contain the value "4" at path "$.total_count"
+    And the response should contain the value "environment" at path "$.items[0].tags[0]"
+    When I send a GET request to "/api/v1/evaluations/jobs?tags=doesnotexist&limit=10"
+    Then the response code should be 200
+    And the response should contain the value "0" at path "$.total_count"
+
+  @local
+  Scenario: List evaluation jobs with all search filters for multiple users
+    Given the service is running
+    And there are no evaluation jobs
+    When I send a GET request to "/api/v1/evaluations/jobs"
+    Then the response code should be 200
+    And the response should contain the value "0" at path "$.total_count"
     And I set the header "X-User" to "search-user-a"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
@@ -604,17 +737,17 @@ Feature: Evaluations Endpoint
     And the response should contain the value "2" at path "$.total_count"
     When I send a GET request to "/api/v1/evaluations/jobs?limit=10"
     Then the response code should be 200
-    And the response should contain the value "test-tenant" at path "$.items[0].resource.tenant"
+    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.items[0].resource.tenant"
     And the response should contain the value "4" at path "$.total_count"
     When I send a GET request to "/api/v1/evaluations/jobs?owner=search-user-a&limit=10"
     Then the response code should be 200
     And the response should contain the value "search-user-a" at path "$.items[0].resource.owner"
-    And the response should contain the value "test-tenant" at path "$.items[0].resource.tenant"
+    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.items[0].resource.tenant"
     And the response should contain the value "2" at path "$.total_count"
     When I send a GET request to "/api/v1/evaluations/jobs?owner=search-user-b&status=completed&limit=10"
     Then the response code should be 200
     And the response should contain the value "search-user-b" at path "$.items[0].resource.owner"
-    And the response should contain the value "test-tenant" at path "$.items[0].resource.tenant"
+    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.items[0].resource.tenant"
     And the response should contain the value "completed" at path "$.items[0].status.state"
     And the response should contain the value "1" at path "$.total_count"
     When I send a GET request to "/api/v1/evaluations/jobs?name=my-test-experiment&owner=search-user-a&limit=10"

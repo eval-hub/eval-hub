@@ -4,6 +4,9 @@ Feature: Collections Endpoint
   I want to create collections of benchmarks
   So that I evaluate models on these collections
 
+  Background:
+    Given I set the header "X-Tenant" to "{{env:X_TENANT|test-tenant}}"
+
   Scenario: Create a collection of benchmarks and get by id
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"

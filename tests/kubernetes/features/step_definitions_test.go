@@ -323,6 +323,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the number of ConfigMaps created should equal the number of benchmarks$`, tc.numberOfConfigMapsShouldEqualBenchmarks)
 	ctx.Step(`^each Job should have a unique benchmark_id label$`, tc.eachJobShouldHaveUniqueBenchmarkIDLabel)
 	ctx.Step(`^each ConfigMap should have a unique benchmark_id label$`, tc.eachConfigMapShouldHaveUniqueBenchmarkIDLabel)
+	ctx.Step(`^each Job should have a unique benchmark_index label$`, tc.eachJobShouldHaveUniqueBenchmarkIndexLabel)
+	ctx.Step(`^each ConfigMap should have a unique benchmark_index label$`, tc.eachConfigMapShouldHaveUniqueBenchmarkIndexLabel)
 	ctx.Step(`^the response should be returned immediately without waiting for Job creation$`, tc.responseShouldBeImmediate)
 	ctx.Step(`^Jobs should be created in the background$`, tc.jobsShouldBeCreatedInBackground)
 	ctx.Step(`^the job has (\d+) benchmarks? configured$`, tc.jobHasBenchmarksConfigured)
@@ -2042,6 +2044,50 @@ func (tc *testContext) eachConfigMapShouldHaveUniqueBenchmarkIDLabel() error {
 			return fmt.Errorf("duplicate benchmark_id label found: %s", benchID)
 		}
 		seen[benchID] = true
+	}
+	return nil
+}
+
+func (tc *testContext) eachJobShouldHaveUniqueBenchmarkIndexLabel() error {
+	jobs, err := tc.listJobsByJobID()
+	if err != nil {
+		return err
+	}
+	if len(jobs) == 0 {
+		return fmt.Errorf("no Jobs found for unique benchmark_index validation")
+	}
+	seen := map[string]bool{}
+	for _, job := range jobs {
+		idx := job.Labels["benchmark_index"]
+		if idx == "" {
+			return fmt.Errorf("Job %s missing benchmark_index label", job.Name)
+		}
+		if seen[idx] {
+			return fmt.Errorf("duplicate benchmark_index label found: %s", idx)
+		}
+		seen[idx] = true
+	}
+	return nil
+}
+
+func (tc *testContext) eachConfigMapShouldHaveUniqueBenchmarkIndexLabel() error {
+	configMaps, err := tc.listConfigMapsByJobID()
+	if err != nil {
+		return err
+	}
+	if len(configMaps) == 0 {
+		return fmt.Errorf("no ConfigMaps found for unique benchmark_index validation")
+	}
+	seen := map[string]bool{}
+	for _, cm := range configMaps {
+		idx := cm.Labels["benchmark_index"]
+		if idx == "" {
+			return fmt.Errorf("ConfigMap %s missing benchmark_index label", cm.Name)
+		}
+		if seen[idx] {
+			return fmt.Errorf("duplicate benchmark_index label found: %s", idx)
+		}
+		seen[idx] = true
 	}
 	return nil
 }
