@@ -88,6 +88,10 @@ func (r *stubRuntime) DeleteEvaluationJobResources(_ *api.EvaluationJobResource)
 	return nil
 }
 
+func (r *stubRuntime) QueueExists(_, _ string) (bool, error) {
+	return false, nil
+}
+
 func TestNewServer(t *testing.T) {
 	t.Run("creates server with default port", func(t *testing.T) {
 		os.Unsetenv("PORT")

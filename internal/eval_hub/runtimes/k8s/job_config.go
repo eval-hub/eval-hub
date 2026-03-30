@@ -66,6 +66,7 @@ type jobConfig struct {
 	testDataS3           s3TestDataConfig
 	testDataInitImage    string
 	sidecarConfig        *config.SidecarConfig
+	kueueQueueName       string
 }
 
 type s3TestDataConfig struct {
@@ -159,11 +160,17 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	}
 
 	localMode := serviceConfig != nil && serviceConfig.Service != nil && serviceConfig.Service.LocalMode
+	kueueEnabled := serviceConfig != nil && serviceConfig.Service != nil && serviceConfig.Service.KueueEnabled
 	var testDataS3Bucket, testDataS3Key, testDataS3SecretRef string
 	if benchmarkConfig.TestDataRef != nil && benchmarkConfig.TestDataRef.S3 != nil {
 		testDataS3Bucket = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.Bucket)
 		testDataS3Key = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.Key)
 		testDataS3SecretRef = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.SecretRef)
+	}
+
+	var kueueQueueName string
+	if kueueEnabled && evaluation.Queue != nil && evaluation.Queue.Name != "" {
+		kueueQueueName = evaluation.Queue.Name
 	}
 
 	out := &jobConfig{
@@ -193,6 +200,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		sidecarBaseURL:       sidecarBaseURL,
 		localMode:            localMode,
 		evalHubURL:           evalHubURL,
+		kueueQueueName:       kueueQueueName,
 		testDataS3: s3TestDataConfig{
 			bucket:    testDataS3Bucket,
 			key:       testDataS3Key,

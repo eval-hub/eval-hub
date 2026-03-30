@@ -327,6 +327,10 @@ func (r *LocalRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJo
 	return nil
 }
 
+func (r *LocalRuntime) QueueExists(namespace, name string) (bool, error) {
+	return false, fmt.Errorf("queue validation is not supported in local runtime")
+}
+
 func (r *LocalRuntime) Name() string {
 	return "local"
 }

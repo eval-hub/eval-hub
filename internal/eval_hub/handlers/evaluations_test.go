@@ -99,6 +99,9 @@ func (r *fakeRuntime) DeleteEvaluationJobResources(_ *api.EvaluationJobResource)
 	r.called = true
 	return r.err
 }
+func (r *fakeRuntime) QueueExists(_, _ string) (bool, error) {
+	return true, nil
+}
 
 type listEvaluationsRequest struct {
 	*MockRequest

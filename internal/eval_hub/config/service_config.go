@@ -13,6 +13,7 @@ type ServiceConfig struct {
 	EvalInitImage   string `mapstructure:"eval_init_image,omitempty"`
 	LocalMode       bool   `mapstructure:"local_mode,omitempty"`
 	DisableAuth     bool   `mapstructure:"disable_auth,omitempty"`
+	KueueEnabled    bool   `mapstructure:"kueue_enabled,omitempty"`
 	TLSCertFile     string `mapstructure:"tls_cert_file,omitempty"`
 	TLSKeyFile      string `mapstructure:"tls_key_file,omitempty"`
 }

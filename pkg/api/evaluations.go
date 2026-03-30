@@ -221,6 +221,12 @@ type CollectionRef struct {
 	Benchmarks []BenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 }
 
+// QueueConfig represents an optional scheduling queue for evaluation jobs.
+type QueueConfig struct {
+	Kind string `json:"kind" validate:"required,oneof=kueue"`
+	Name string `json:"name" validate:"required"`
+}
+
 // EvaluationJobConfig represents evaluation job request schema
 type EvaluationJobConfig struct {
 	Name         string             `json:"name" validate:"required"`
@@ -233,6 +239,7 @@ type EvaluationJobConfig struct {
 	Experiment   *ExperimentConfig  `json:"experiment,omitempty"`
 	Custom       *map[string]any    `json:"custom,omitempty"`
 	Exports      *EvaluationExports `json:"exports,omitempty"`
+	Queue        *QueueConfig       `json:"queue,omitempty"`
 }
 
 type EvaluationResource struct {

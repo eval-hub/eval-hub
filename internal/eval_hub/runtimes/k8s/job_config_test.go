@@ -3,6 +3,7 @@ package k8s
 import (
 	"testing"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -562,6 +563,137 @@ func TestBuildJobConfigEmptyTenantFallsBack(t *testing.T) {
 	}
 	if cfg.namespace == "" {
 		t.Fatalf("expected non-empty fallback namespace when tenant is empty")
+	}
+}
+
+func TestBuildJobConfigKueueQueueNameWhenEnabled(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-kueue"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.BenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}},
+			},
+			Queue: &api.QueueConfig{
+				Kind: "kueue",
+				Name: "my-queue",
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
+			},
+		},
+	}
+
+	serviceConfig := &config.Config{
+		Service: &config.ServiceConfig{
+			KueueEnabled: true,
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, serviceConfig)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.kueueQueueName != "my-queue" {
+		t.Fatalf("expected kueueQueueName %q, got %q", "my-queue", cfg.kueueQueueName)
+	}
+}
+
+func TestBuildJobConfigKueueQueueNameWhenDisabled(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-kueue-off"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.BenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}},
+			},
+			Queue: &api.QueueConfig{
+				Kind: "kueue",
+				Name: "my-queue",
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
+			},
+		},
+	}
+
+	serviceConfig := &config.Config{
+		Service: &config.ServiceConfig{
+			KueueEnabled: false,
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, serviceConfig)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.kueueQueueName != "" {
+		t.Fatalf("expected empty kueueQueueName when kueue disabled, got %q", cfg.kueueQueueName)
+	}
+}
+
+func TestBuildJobConfigKueueQueueNameWhenNoQueue(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-no-queue"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.BenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}},
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
+			},
+		},
+	}
+
+	serviceConfig := &config.Config{
+		Service: &config.ServiceConfig{
+			KueueEnabled: true,
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, serviceConfig)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.kueueQueueName != "" {
+		t.Fatalf("expected empty kueueQueueName when no queue specified, got %q", cfg.kueueQueueName)
 	}
 }
 

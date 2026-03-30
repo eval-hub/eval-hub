@@ -8,6 +8,8 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -17,7 +19,8 @@ import (
 // Keeping this abstraction in one place allows all call sites to stay unchanged if we switch
 // to a different underlying Kubernetes client implementation.
 type KubernetesHelper struct {
-	clientset kubernetes.Interface
+	clientset     kubernetes.Interface
+	dynamicClient dynamic.Interface
 }
 
 func NewKubernetesClient() (*kubernetes.Clientset, error) {
@@ -48,9 +51,30 @@ func NewKubernetesHelper() (*KubernetesHelper, error) {
 	if err != nil {
 		return nil, err
 	}
+	dynClient, err := newDynamicClient()
+	if err != nil {
+		return nil, err
+	}
 	return &KubernetesHelper{
-		clientset: clientset,
+		clientset:     clientset,
+		dynamicClient: dynClient,
 	}, nil
+}
+
+func newDynamicClient() (dynamic.Interface, error) {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+		configOverrides := &clientcmd.ConfigOverrides{}
+		config, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+			loadingRules,
+			configOverrides,
+		).ClientConfig()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return dynamic.NewForConfig(config)
 }
 
 // CreateConfigMap creates a ConfigMap in the given namespace.
@@ -143,6 +167,42 @@ func (h *KubernetesHelper) SetConfigMapOwner(ctx context.Context, namespace, nam
 	cm.OwnerReferences = []metav1.OwnerReference{owner}
 	_, err = h.clientset.CoreV1().ConfigMaps(namespace).Update(ctx, cm, metav1.UpdateOptions{})
 	return err
+}
+
+// QueueExists checks whether a Kueue LocalQueue with the given name exists in the specified namespace.
+func (h *KubernetesHelper) QueueExists(ctx context.Context, namespace, name string) (bool, error) {
+	if namespace == "" || name == "" {
+		return false, fmt.Errorf("namespace and name are required")
+	}
+	if h.dynamicClient == nil {
+		return false, fmt.Errorf("dynamic client is not initialized")
+	}
+	gvr := schema.GroupVersionResource{
+		Group:    "kueue.x-k8s.io",
+		Version:  "v1beta1",
+		Resource: "localqueues",
+	}
+	_, err := h.dynamicClient.Resource(gvr).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		if isNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+// isNotFound returns true when the error indicates a Kubernetes 404 Not Found.
+func isNotFound(err error) bool {
+	// Use the same check as apierrors.IsNotFound but without importing the package
+	// in this file; the status error interface is part of apimachinery.
+	type statusError interface {
+		Status() metav1.Status
+	}
+	if se, ok := err.(statusError); ok {
+		return se.Status().Code == 404
+	}
+	return false
 }
 
 // CreateConfigMapOptions holds optional metadata for CreateConfigMap.

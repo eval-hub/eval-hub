@@ -107,6 +107,11 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 					return err
 				}
 			}
+			if evaluation.Queue != nil && evaluation.Queue.Name != "" {
+				if err := h.validateQueue(ctx, evaluation.Queue.Name); err != nil {
+					return err
+				}
+			}
 			jobForResolve := &api.EvaluationJobResource{EvaluationJobConfig: *evaluation}
 			benchmarks, err := GetJobBenchmarks(jobForResolve, collection)
 			if err != nil {
@@ -276,6 +281,25 @@ func (h *Handlers) executeEvaluationJob(ctx *executioncontext.ExecutionContext, 
 	jobContext := context.Background()
 
 	return h.runtime.WithLogger(ctx.Logger).WithContext(jobContext).RunEvaluationJob(job, benchmarks, h.createRuntimeStorage(ctx, jobContext))
+}
+
+func (h *Handlers) validateQueue(ctx *executioncontext.ExecutionContext, queueName string) error {
+	if h.runtime == nil {
+		return nil
+	}
+	namespace := string(ctx.Tenant)
+	if namespace == "" {
+		namespace = "default"
+	}
+	exists, err := h.runtime.WithLogger(ctx.Logger).WithContext(ctx.Ctx).QueueExists(namespace, queueName)
+	if err != nil {
+		ctx.Logger.Error("Failed to validate queue", "queue_name", queueName, "namespace", namespace, "error", err)
+		return serviceerrors.NewServiceError(messages.QueueValidationFailed, "QueueName", queueName, "Error", err.Error())
+	}
+	if !exists {
+		return serviceerrors.NewServiceError(messages.QueueNotFound, "QueueName", queueName, "Namespace", namespace)
+	}
+	return nil
 }
 
 func (h *Handlers) validateBenchmarkReferences(ctx *executioncontext.ExecutionContext, benchmarks []api.BenchmarkConfig) error {

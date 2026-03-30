@@ -80,6 +80,7 @@ const (
 	annotationJobIDKey               = "eval-hub.github.io/job_id"
 	annotationProviderIDKey          = "eval-hub.github.io/provider_id"
 	annotationBenchmarkIDKey         = "eval-hub.github.io/benchmark_id"
+	labelKueueQueueNameKey           = "kueue.x-k8s.io/queue-name"
 )
 
 var (
@@ -131,7 +132,7 @@ func buildK8sName(jobID, resourceGUID, suffix string) string {
 }
 
 func buildConfigMap(cfg *jobConfig) (*corev1.ConfigMap, error) {
-	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID, cfg.benchmarkIndex, cfg.evalHubInstanceName, cfg.evalHubCRNamespace)
+	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID, cfg.benchmarkIndex, cfg.evalHubInstanceName, cfg.evalHubCRNamespace, cfg.kueueQueueName)
 	annotations := jobAnnotations(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	name := configMapName(cfg.jobID, cfg.resourceGUID)
 
@@ -182,7 +183,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	if cfg.adapterImage == "" {
 		return nil, fmt.Errorf("adapter image is required")
 	}
-	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID, cfg.benchmarkIndex, cfg.evalHubInstanceName, cfg.evalHubCRNamespace)
+	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID, cfg.benchmarkIndex, cfg.evalHubInstanceName, cfg.evalHubCRNamespace, cfg.kueueQueueName)
 	annotations := jobAnnotations(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	jobName := jobName(cfg.jobID, cfg.resourceGUID)
 	configMap := configMapName(cfg.jobID, cfg.resourceGUID)
@@ -765,7 +766,7 @@ func configMapName(jobID, resourceGUID string) string {
 	return buildK8sName(jobID, resourceGUID, specSuffix)
 }
 
-func jobLabels(jobID, providerID, benchmarkID string, benchmarkIndex int, evalHubInstanceName, evalHubCRNamespace string) map[string]string {
+func jobLabels(jobID, providerID, benchmarkID string, benchmarkIndex int, evalHubInstanceName, evalHubCRNamespace, kueueQueueName string) map[string]string {
 	m := map[string]string{
 		labelAppKey:            labelAppValue,
 		labelComponentKey:      labelComponentValue,
@@ -777,6 +778,9 @@ func jobLabels(jobID, providerID, benchmarkID string, benchmarkIndex int, evalHu
 	if evalHubInstanceName != "" && evalHubCRNamespace != "" {
 		m[labelEvalHubInstanceNameKey] = sanitizeLabelValue(evalHubInstanceName)
 		m[labelEvalHubInstanceNamespaceKey] = sanitizeLabelValue(evalHubCRNamespace)
+	}
+	if kueueQueueName != "" {
+		m[labelKueueQueueNameKey] = kueueQueueName
 	}
 	return m
 }

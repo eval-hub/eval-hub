@@ -128,6 +128,20 @@ var (
 		"read_only_collection",
 	)
 
+	// QueueNotFound The queue '{{.QueueName}}' was not found in namespace '{{.Namespace}}'.
+	QueueNotFound = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The queue '{{.QueueName}}' was not found in namespace '{{.Namespace}}'.",
+		"queue_not_found",
+	)
+
+	// QueueValidationFailed Failed to validate queue '{{.QueueName}}': '{{.Error}}'.
+	QueueValidationFailed = createMessage(
+		constants.HTTPCodeBadRequest,
+		"Failed to validate queue '{{.QueueName}}': '{{.Error}}'.",
+		"queue_validation_failed",
+	)
+
 	// MLFlowRequiredForExperiment MLflow is required for experiment tracking. Please configure MLflow in the service configuration and try again.
 	MLFlowRequiredForExperiment = createMessage(
 		constants.HTTPCodeBadRequest,

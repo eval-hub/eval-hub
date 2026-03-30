@@ -251,6 +251,10 @@ func buildBenchmarkFailureStatus(benchmark *api.BenchmarkConfig, benchmarkIndex 
 	}
 }
 
+func (r *K8sRuntime) QueueExists(namespace, name string) (bool, error) {
+	return r.helper.QueueExists(r.ctx, namespace, name)
+}
+
 func (r *K8sRuntime) Name() string {
 	return "kubernetes"
 }
