@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -193,24 +192,6 @@ func TestResolveProvider_NotFound(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "provider resource 'missing' was not found") {
 		t.Fatalf("expected: provider resource 'missing' was not found, got %q", err.Error())
-	}
-}
-
-func TestResolveBenchmarks_FromJobBenchmarks(t *testing.T) {
-	eval := &api.EvaluationJobResource{
-		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
-		EvaluationJobConfig: api.EvaluationJobConfig{
-			Benchmarks: []api.EvaluationBenchmarkConfig{
-				{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"},
-			},
-		},
-	}
-	got, err := handlers.ResolveBenchmarks(eval, nil)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if len(got) != 1 || got[0].ID != "b1" {
-		t.Fatalf("expected one benchmark b1, got %v", got)
 	}
 }
 

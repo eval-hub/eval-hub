@@ -122,7 +122,7 @@ func TestRunEvaluationJobCreatesResources(t *testing.T) {
 
 	storage := &fakeStorage{providerConfigs: providers}
 
-	benchmarks, err := handlers.ResolveBenchmarks(evaluation, nil)
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
 	if err != nil {
 		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
 	}

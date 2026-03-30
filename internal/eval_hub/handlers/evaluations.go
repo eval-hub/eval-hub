@@ -231,11 +231,6 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 	)
 }
 
-// ResolveBenchmarks returns the effective benchmarks to run (collection merged with job overrides when applicable).
-func ResolveBenchmarks(evaluation *api.EvaluationJobResource, collection *api.CollectionResource) ([]api.EvaluationBenchmarkConfig, error) {
-	return GetJobBenchmarks(evaluation, collection)
-}
-
 func (h *Handlers) createRuntimeStorage(ctx *executioncontext.ExecutionContext, jobContext context.Context) *runtimeStorage {
 	return &runtimeStorage{
 		ctx:      jobContext,
@@ -250,7 +245,7 @@ func (h *Handlers) createRuntimeStorage(ctx *executioncontext.ExecutionContext, 
 func (h *Handlers) executeEvaluationJob(ctx *executioncontext.ExecutionContext, job *api.EvaluationJobResource, collection *api.CollectionResource) error {
 	var err error
 
-	benchmarks, err := ResolveBenchmarks(job, collection)
+	benchmarks, err := GetJobBenchmarks(job, collection)
 	if err != nil {
 		return err
 	}

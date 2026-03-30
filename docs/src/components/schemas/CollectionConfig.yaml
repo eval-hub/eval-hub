@@ -1,32 +1,32 @@
 type: object
-description: Request to create or update a collection
+description: Request to create or update a collection.
 properties:
   name:
     type: string
-    description: Collection name
+    description: Collection name.
   category:
     type: string
-    description: Collection category
+    description: Collection category.
   description:
     type: string
-    description: Optional description
+    description: Optional description.
   tags:
     type: array
     items:
       type: string
-    description: Tags
+    description: Tags.
   custom:
     type: object
     additionalProperties: true
-    description: Custom key-value data
+    description: Custom key-value data.
   pass_criteria:
     $ref: ./PassCriteria.yaml
-    description: Pass criteria for the collection
+    description: Pass criteria for the collection.
   benchmarks:
     type: array
     items:
       $ref: ./CollectionBenchmarkConfig.yaml
-    description: Benchmarks in the collection
+    description: Benchmarks in the collection.
 required:
   - name
   - category

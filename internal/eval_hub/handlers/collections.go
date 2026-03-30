@@ -117,7 +117,7 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 	)
 }
 
-// enrichCollectionResourceBenchmarkURLs sets each benchmark's URL from the provider definition (e.g. config/providers/*.yaml) when present.
+// enrichCollectionResourceBenchmarkURLs sets each benchmark's URL from the provider definition when present.
 func enrichCollectionResourceBenchmarkURLs(storage abstractions.Storage, collections ...*api.CollectionResource) {
 	loaded := make(map[string]*api.ProviderResource)
 	failed := make(map[string]struct{})

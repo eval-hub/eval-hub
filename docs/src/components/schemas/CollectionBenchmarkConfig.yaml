@@ -10,16 +10,16 @@ allOf:
     properties:
       provider_id:
         type: string
-        description: Evaluation provider ID
+        description: Evaluation provider ID.
       url:
         type: string
-        description: Benchmark URL from the provider definition (set by the server on read; omitted when unknown)
+        description: Benchmark URL from the provider definition (set by the server on read; omitted when unknown).
       weight:
         type: number
         format: float
         minimum: 0
         maximum: 1
-        description: Weight of this benchmark
+        description: Weight of this benchmark.
       primary_score:
         $ref: ./PrimaryScore.yaml
       pass_criteria:
@@ -27,7 +27,7 @@ allOf:
       parameters:
         type: object
         additionalProperties: true
-        description: Benchmark specific parameters
+        description: Benchmark specific parameters.
       test_data_ref:
         $ref: ./TestDataRef.yaml
         description: |
