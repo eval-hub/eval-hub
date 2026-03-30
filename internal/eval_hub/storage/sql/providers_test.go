@@ -5,20 +5,12 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/storage"
-	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 func TestProviderStorage(t *testing.T) {
-	logger := logging.FallbackLogger()
-	databaseConfig := map[string]any{
-		"driver":        "sqlite",
-		"url":           "file::memory:?mode=memory&cache=shared",
-		"database_name": "eval_hub",
-	}
 	tenant := api.Tenant("tenant-1")
-	store, err := storage.NewStorage(&databaseConfig, nil, nil, false, logger)
+	store, err := getTestStorage(t, "sqlite")
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}

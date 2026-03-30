@@ -32,14 +32,17 @@ stop-postgres:
 	sudo systemctl stop postgresql
 endif
 
+POSTGRES_DATABASE_NAME ?= eval_hub
+POSTGRES_USER ?= eval_hub
+
 create-database:
-	createdb-${POSTGRES_VERSION} eval_hub
+	createdb-${POSTGRES_VERSION} ${POSTGRES_DATABASE_NAME}
 
 delete-database:
-	dropdb-${POSTGRES_VERSION} eval_hub
+	dropdb-${POSTGRES_VERSION} ${POSTGRES_DATABASE_NAME}
 
 create-user:
-	createuser-${POSTGRES_VERSION} -s -d -r eval_hub
+	createuser-${POSTGRES_VERSION} -s -d -r ${POSTGRES_USER}
 
 grant-permissions:
-	psql-${POSTGRES_VERSION} -c "GRANT ALL PRIVILEGES ON DATABASE eval_hub TO eval_hub;"
+	psql-${POSTGRES_VERSION} --dbname=${POSTGRES_DATABASE_NAME} -c "GRANT ALL ON ALL TABLES IN SCHEMA "public" TO ${POSTGRES_USER};"
