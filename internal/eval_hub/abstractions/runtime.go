@@ -26,7 +26,6 @@ type Runtime interface {
 	Name() string
 	RunEvaluationJob(evaluation *api.EvaluationJobResource, benchmarks []api.EvaluationBenchmarkConfig, storage RuntimeStorage) error
 	DeleteEvaluationJobResources(evaluation *api.EvaluationJobResource) error
-	QueueExists(namespace, name string) (bool, error)
 }
 
 // This interface must be decoupled from the service HTTP layer
