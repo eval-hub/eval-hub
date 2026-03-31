@@ -35,16 +35,17 @@ func TestEvaluationsStorage(t *testing.T) {
 }
 
 func TestGetEvaluationJobs_Postgres(t *testing.T) {
+	image := false
 	databaseName := getDBName()
 	user, err := getPostgresUser()
 	if err != nil {
 		t.Skipf("Failed to get Postgres user: %v", err)
 	}
-	startPostgres(t, databaseName, user)
+	startPostgres(t, databaseName, user, image)
 
 	// we need to stop postgres after the test finishes
 	t.Cleanup(func() {
-		stopPostgres(t, databaseName, user)
+		stopPostgres(t, databaseName, user, image)
 	})
 
 	testGetEvaluationJobs_TenantFilter(t, drivers[1], databaseName)

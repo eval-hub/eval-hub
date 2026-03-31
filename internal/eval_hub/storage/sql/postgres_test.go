@@ -37,74 +37,57 @@ func getPostgresURL(databaseName string) (string, error) {
 	return fmt.Sprintf("postgres://%s@localhost:5432/%s", user, databaseName), nil
 }
 
-func startPostgres(t *testing.T, databaseName string, user string) {
-	{
-		cmd, cancel, err := getMakeCommand(databaseName, user, "install-postgres", "start-postgres")
-		if err != nil {
-			t.Fatalf("Failed to get make command: %v", err)
-		}
-		defer cancel()
-
-		err = cmd.Run()
-		if err != nil {
-			t.Fatalf("Failed to install and start postgres: %v", err)
-		}
+func runMakeCommand(t *testing.T, databaseName string, user string, args ...string) error {
+	cmd, cancel, err := getMakeCommand(databaseName, user, args...)
+	if err != nil {
+		t.Fatalf("Failed to get make command: %v", err)
 	}
+	defer cancel()
 
-	// HACK wait for postgres to start
-	time.Sleep(15 * time.Second)
+	return cmd.Run()
+}
 
-	{
-		cmd, cancel, err := getMakeCommand(databaseName, user, "create-user")
+func startPostgres(t *testing.T, databaseName string, user string, image bool) {
+	if image {
+		_ = runMakeCommand(t, databaseName, user, "stop-postgres-container")
+		_ = runMakeCommand(t, databaseName, user, "delete-postgres-container")
+		err := runMakeCommand(t, databaseName, user, "start-postgres-container")
 		if err != nil {
-			t.Fatalf("Failed to get make command: %v", err)
+			t.Fatalf("Failed to start postgres: %v", err)
 		}
-		defer cancel()
-
-		err = cmd.Run()
+	} else {
+		err := runMakeCommand(t, databaseName, user, "install-postgres")
 		if err != nil {
-			// not a fatal error for now
-			t.Logf("Failed to create user: %v", err)
+			// skip the rest of the test if we can not install postgres
+			t.Skipf("Skipping because postgres installation failed: %v", err)
 		}
-	}
-
-	{
-		cmd, cancel, err := getMakeCommand(databaseName, user, "create-database")
+		err = runMakeCommand(t, databaseName, user, "start-postgres")
 		if err != nil {
-			t.Fatalf("Failed to get make command: %v", err)
+			t.Fatalf("Failed to start postgres: %v", err)
 		}
-		defer cancel()
+		// HACK to wait for the startup
+		time.Sleep(10 * time.Second)
 
-		err = cmd.Run()
-		if err != nil {
-			t.Logf("Failed to create database: %v", err)
-		}
-	}
-
-	{
-		cmd, cancel, err := getMakeCommand(databaseName, user, "grant-permissions")
-		if err != nil {
-			t.Fatalf("Failed to get make command: %v", err)
-		}
-		defer cancel()
-
-		err = cmd.Run()
+		_ = runMakeCommand(t, databaseName, user, "create-database")
+		_ = runMakeCommand(t, databaseName, user, "create-user")
+		err = runMakeCommand(t, databaseName, user, "grant-permissions")
 		if err != nil {
 			t.Fatalf("Failed to grant permissions: %v", err)
 		}
 	}
 }
 
-func stopPostgres(t *testing.T, databaseName string, user string) {
-	cmd, cancel, err := getMakeCommand(databaseName, user, "stop-postgres")
-	if err != nil {
-		t.Fatalf("Failed to get make command: %v", err)
-	}
-	defer cancel()
-
-	err = cmd.Run()
-	if err != nil {
-		t.Fatalf("Failed to stop postgres: %v", err)
+func stopPostgres(t *testing.T, databaseName string, user string, image bool) {
+	if image {
+		err := runMakeCommand(t, databaseName, user, "stop-postgres-container")
+		if err != nil {
+			t.Fatalf("Failed to stop postgres: %v", err)
+		}
+	} else {
+		err := runMakeCommand(t, databaseName, user, "stop-postgres")
+		if err != nil {
+			t.Fatalf("Failed to stop postgres: %v", err)
+		}
 	}
 }
 
