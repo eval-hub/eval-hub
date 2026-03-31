@@ -274,6 +274,11 @@ install-wheel-tools: venv ## Install Python wheel build tools using uv
 	@echo "Installing wheel build tools via uv..."
 	@uv pip install build wheel setuptools
 
+.PHONY: test-python-server
+test-python-server: ## Run python-server tests (you probably need `build-wheel` first, we use this target as-is in GHA/ci/cd)
+	@echo "Running python-server tests..."
+	@cd python-server && uv run --extra dev pytest
+
 .PHONY: clean-wheels
 clean-wheels: ## Clean Python wheel build artifacts
 	@echo "Cleaning wheel build artifacts..."
@@ -286,7 +291,8 @@ clean-wheels: ## Clean Python wheel build artifacts
 .PHONY: build-wheel
 build-wheel: ## Build Python wheel: make build-wheel WHEEL_PLATFORM=manylinux_2_17_x86_64 WHEEL_BINARY=eval-hub-linux-amd64
 	@if [ "$${GITHUB_ACTIONS}" != "true" ]; then \
-		echo "Downloading binary $(WHEEL_PLATFORM) $(WHEEL_BINARY)"; \
+		$(MAKE) cross-compile; \
+		echo "Copying binary $(WHEEL_PLATFORM) $(WHEEL_BINARY)"; \
 		mkdir -p python-server/evalhub_server/binaries/; \
 		find python-server/evalhub_server/binaries/ -type f ! -name '.gitkeep' -delete; \
 		cp bin/$(WHEEL_BINARY)* python-server/evalhub_server/binaries/; \
