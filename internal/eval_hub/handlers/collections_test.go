@@ -208,7 +208,7 @@ func TestHandleListCollections(t *testing.T) {
 			CollectionConfig: api.CollectionConfig{
 				Name:        "Collection 1",
 				Description: "Test collection",
-				Benchmarks:  []api.BenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+				Benchmarks:  []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
 			},
 		},
 	}
@@ -252,6 +252,169 @@ func TestHandleListCollections(t *testing.T) {
 	}
 }
 
+func TestEnrichBenchmarkURLsFromProviders(t *testing.T) {
+	t.Parallel()
+	t.Run("fills URL from provider", func(t *testing.T) {
+		t.Parallel()
+		storage := &fakeStorage{
+			providerConfigs: map[string]api.ProviderResource{
+				"prov": {
+					Resource: api.Resource{ID: "prov"},
+					ProviderConfig: api.ProviderConfig{
+						Benchmarks: []api.BenchmarkResource{{ID: "b1", URL: "https://u.example/b1"}},
+					},
+				},
+			},
+		}
+		coll := &api.CollectionResource{
+			CollectionConfig: api.CollectionConfig{
+				Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "prov"}},
+			},
+		}
+		handlers.EnrichBenchmarkURLsFromProviders(storage, coll)
+		if coll.Benchmarks[0].URL != "https://u.example/b1" {
+			t.Fatalf("URL = %q", coll.Benchmarks[0].URL)
+		}
+	})
+	t.Run("clears stale URL when provider missing", func(t *testing.T) {
+		t.Parallel()
+		storage := &fakeStorage{providerConfigs: map[string]api.ProviderResource{}}
+		coll := &api.CollectionResource{
+			CollectionConfig: api.CollectionConfig{
+				Benchmarks: []api.CollectionBenchmarkConfig{{
+					Ref:        api.Ref{ID: "b1"},
+					ProviderID: "missing",
+					URL:        "https://stale.example/old",
+				}},
+			},
+		}
+		handlers.EnrichBenchmarkURLsFromProviders(storage, coll)
+		if coll.Benchmarks[0].URL != "" {
+			t.Fatalf("want empty URL, got %q", coll.Benchmarks[0].URL)
+		}
+	})
+	t.Run("clears stale URL when benchmark not on provider", func(t *testing.T) {
+		t.Parallel()
+		storage := &fakeStorage{
+			providerConfigs: map[string]api.ProviderResource{
+				"prov": {
+					Resource: api.Resource{ID: "prov"},
+					ProviderConfig: api.ProviderConfig{
+						Benchmarks: []api.BenchmarkResource{{ID: "other", URL: "https://u.example/other"}},
+					},
+				},
+			},
+		}
+		coll := &api.CollectionResource{
+			CollectionConfig: api.CollectionConfig{
+				Benchmarks: []api.CollectionBenchmarkConfig{{
+					Ref:        api.Ref{ID: "b1"},
+					ProviderID: "prov",
+					URL:        "https://stale.example/old",
+				}},
+			},
+		}
+		handlers.EnrichBenchmarkURLsFromProviders(storage, coll)
+		if coll.Benchmarks[0].URL != "" {
+			t.Fatalf("want empty URL, got %q", coll.Benchmarks[0].URL)
+		}
+	})
+}
+
+func TestHandleListCollections_ReturnsStoredBenchmarkURL(t *testing.T) {
+	collections := []api.CollectionResource{
+		{
+			Resource: api.Resource{ID: "coll-1"},
+			CollectionConfig: api.CollectionConfig{
+				Name: "C",
+				Benchmarks: []api.CollectionBenchmarkConfig{{
+					Ref:        api.Ref{ID: "sweep"},
+					ProviderID: "guidellm",
+					URL:        "https://example.com/sweep",
+				}},
+			},
+		},
+	}
+	storage := &listCollectionsStorage{
+		fakeStorage: &fakeStorage{},
+		collections: collections,
+	}
+	validate := validation.NewValidator()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("GET", "/api/v1/evaluations/collections"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+
+	h.HandleListCollections(ctx, req, resp)
+
+	if recorder.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var got api.CollectionResourceList
+	if err := json.NewDecoder(recorder.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got.Items) != 1 || len(got.Items[0].Benchmarks) != 1 {
+		t.Fatalf("unexpected items: %+v", got.Items)
+	}
+	if got.Items[0].Benchmarks[0].URL != "https://example.com/sweep" {
+		t.Errorf("benchmark url = %q, want https://example.com/sweep", got.Items[0].Benchmarks[0].URL)
+	}
+}
+
+func TestHandleGetCollection_ReturnsStoredBenchmarkURL(t *testing.T) {
+	coll := &api.CollectionResource{
+		Resource: api.Resource{ID: "coll-1"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "C",
+			Benchmarks: []api.CollectionBenchmarkConfig{{
+				Ref:        api.Ref{ID: "sweep"},
+				ProviderID: "guidellm",
+				URL:        "https://example.com/sweep",
+			}},
+		},
+	}
+	storage := &getCollectionStorage{
+		fakeStorage: &fakeStorage{},
+		collection:  coll,
+	}
+	validate := validation.NewValidator()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("GET", "/api/v1/evaluations/collections/coll-1"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{constants.PATH_PARAMETER_COLLECTION_ID: "coll-1"},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+
+	h.HandleGetCollection(ctx, req, resp)
+
+	if recorder.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var got api.CollectionResource
+	if err := json.NewDecoder(recorder.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got.Benchmarks) != 1 {
+		t.Fatalf("unexpected benchmarks: %+v", got.Benchmarks)
+	}
+	if got.Benchmarks[0].URL != "https://example.com/sweep" {
+		t.Errorf("benchmark url = %q, want https://example.com/sweep", got.Benchmarks[0].URL)
+	}
+}
+
 func TestHandleListCollections_StorageError(t *testing.T) {
 	storage := &listCollectionsStorage{
 		fakeStorage: &fakeStorage{},
@@ -278,7 +441,16 @@ func TestHandleListCollections_StorageError(t *testing.T) {
 }
 
 func TestHandleCreateCollection(t *testing.T) {
-	storage := &createCollectionStorage{fakeStorage: &fakeStorage{}}
+	storage := &createCollectionStorage{fakeStorage: &fakeStorage{
+		providerConfigs: map[string]api.ProviderResource{
+			"p1": {
+				Resource: api.Resource{ID: "p1"},
+				ProviderConfig: api.ProviderConfig{
+					Benchmarks: []api.BenchmarkResource{{ID: "b1", URL: "https://example.com/b1"}},
+				},
+			},
+		},
+	}}
 	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
@@ -321,6 +493,12 @@ func TestHandleCreateCollection(t *testing.T) {
 	if got.Name != "My Collection" {
 		t.Errorf("expected name My Collection, got %s", got.Name)
 	}
+	if len(got.Benchmarks) != 1 {
+		t.Fatalf("expected 1 benchmark, got %d", len(got.Benchmarks))
+	}
+	if got.Benchmarks[0].URL != "https://example.com/b1" {
+		t.Errorf("benchmark url = %q, want https://example.com/b1", got.Benchmarks[0].URL)
+	}
 }
 
 func TestHandleGetCollection(t *testing.T) {
@@ -329,7 +507,7 @@ func TestHandleGetCollection(t *testing.T) {
 		CollectionConfig: api.CollectionConfig{
 			Name:        "Found Collection",
 			Description: "Test",
-			Benchmarks:  []api.BenchmarkConfig{},
+			Benchmarks:  []api.CollectionBenchmarkConfig{},
 		},
 	}
 	storage := &getCollectionStorage{fakeStorage: &fakeStorage{}, collection: coll}
@@ -384,13 +562,22 @@ func TestHandleGetCollection_MissingPathParam(t *testing.T) {
 
 func TestHandleUpdateCollection(t *testing.T) {
 	storage := &updatePatchDeleteCollectionStorage{
-		fakeStorage: &fakeStorage{},
+		fakeStorage: &fakeStorage{
+			providerConfigs: map[string]api.ProviderResource{
+				"p1": {
+					Resource: api.Resource{ID: "p1"},
+					ProviderConfig: api.ProviderConfig{
+						Benchmarks: []api.BenchmarkResource{{ID: "b1", URL: "https://example.com/b1"}},
+					},
+				},
+			},
+		},
 		collection: &api.CollectionResource{
 			Resource: api.Resource{ID: "coll-update"},
 			CollectionConfig: api.CollectionConfig{
 				Name:        "Original",
 				Description: "Original",
-				Benchmarks:  []api.BenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+				Benchmarks:  []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
 			},
 		},
 	}
@@ -432,6 +619,167 @@ func TestHandleUpdateCollection(t *testing.T) {
 	if got.Name != "Updated Name" {
 		t.Errorf("expected name Updated Name, got %s", got.Name)
 	}
+	if len(got.Benchmarks) != 1 || got.Benchmarks[0].URL != "https://example.com/b1" {
+		t.Errorf("expected benchmark URL from provider on update, got %+v", got.Benchmarks)
+	}
+}
+
+// patchReceivedHook holds the patch pointer last passed to PatchCollection (shared across WithContext copies).
+type patchReceivedHook struct {
+	patches *api.Patch
+}
+
+type patchCaptureCollectionStorage struct {
+	*fakeStorage
+	collection *api.CollectionResource
+	hook       *patchReceivedHook
+}
+
+func (s *patchCaptureCollectionStorage) WithLogger(_ *slog.Logger) abstractions.Storage {
+	c := *s
+	return &c
+}
+func (s *patchCaptureCollectionStorage) WithContext(_ context.Context) abstractions.Storage {
+	c := *s
+	return &c
+}
+func (s *patchCaptureCollectionStorage) WithTenant(_ api.Tenant) abstractions.Storage {
+	c := *s
+	return &c
+}
+func (s *patchCaptureCollectionStorage) WithOwner(_ api.User) abstractions.Storage {
+	c := *s
+	return &c
+}
+
+func (s *patchCaptureCollectionStorage) PatchCollection(_ string, patches *api.Patch) (*api.CollectionResource, error) {
+	if s.hook != nil {
+		s.hook.patches = patches
+	}
+	return s.collection, nil
+}
+
+func TestHandlePatchCollection_EnrichesFullBenchmarkElementBeforeStorage(t *testing.T) {
+	hook := &patchReceivedHook{}
+	storage := &patchCaptureCollectionStorage{
+		fakeStorage: &fakeStorage{
+			providerConfigs: map[string]api.ProviderResource{
+				"p1": {
+					Resource: api.Resource{ID: "p1"},
+					ProviderConfig: api.ProviderConfig{
+						Benchmarks: []api.BenchmarkResource{{ID: "b1", URL: "https://patch.example/b1"}},
+					},
+				},
+			},
+		},
+		collection: &api.CollectionResource{
+			Resource: api.Resource{ID: "coll-patch-url"},
+			CollectionConfig: api.CollectionConfig{
+				Name:     "n",
+				Category: "c",
+				Benchmarks: []api.CollectionBenchmarkConfig{
+					{Ref: api.Ref{ID: "b1"}, ProviderID: "p1", URL: "https://patch.example/b1"},
+				},
+			},
+		},
+		hook: hook,
+	}
+	validate := validation.NewValidator()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+
+	body := `[{"op":"replace","path":"/benchmarks/0","value":{"id":"b1","provider_id":"p1"}}]`
+	req := &providersRequest{
+		MockRequest: createMockRequest("PATCH", "/api/v1/evaluations/collections/coll-patch-url"),
+		pathValues:  map[string]string{constants.PATH_PARAMETER_COLLECTION_ID: "coll-patch-url"},
+	}
+	req.SetBody([]byte(body))
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+
+	h.HandlePatchCollection(ctx, req, resp)
+
+	if recorder.Code != 200 {
+		t.Fatalf("expected status 200, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+	if hook.patches == nil || len(*hook.patches) != 1 {
+		t.Fatalf("expected one patch passed to storage, got %#v", hook.patches)
+	}
+	m, ok := (*hook.patches)[0].Value.(map[string]any)
+	if !ok {
+		t.Fatalf("expected patch value map, got %T", (*hook.patches)[0].Value)
+	}
+	if m["url"] != "https://patch.example/b1" {
+		t.Fatalf("storage should receive enriched url, got %#v", m["url"])
+	}
+}
+
+func TestHandlePatchCollection_EnrichesFullBenchmarksArrayBeforeStorage(t *testing.T) {
+	hook := &patchReceivedHook{}
+	storage := &patchCaptureCollectionStorage{
+		fakeStorage: &fakeStorage{
+			providerConfigs: map[string]api.ProviderResource{
+				"p1": {
+					Resource: api.Resource{ID: "p1"},
+					ProviderConfig: api.ProviderConfig{
+						Benchmarks: []api.BenchmarkResource{{ID: "b1", URL: "https://patch.example/b1"}},
+					},
+				},
+				"p2": {
+					Resource: api.Resource{ID: "p2"},
+					ProviderConfig: api.ProviderConfig{
+						Benchmarks: []api.BenchmarkResource{{ID: "b2", URL: "https://patch.example/b2"}},
+					},
+				},
+			},
+		},
+		collection: &api.CollectionResource{
+			Resource: api.Resource{ID: "coll-patch-url-array"},
+			CollectionConfig: api.CollectionConfig{
+				Name:     "n",
+				Category: "c",
+				Benchmarks: []api.CollectionBenchmarkConfig{
+					{Ref: api.Ref{ID: "b1"}, ProviderID: "p1", URL: "https://patch.example/b1"},
+				},
+			},
+		},
+		hook: hook,
+	}
+	validate := validation.NewValidator()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+
+	body := `[{"op":"replace","path":"/benchmarks","value":[{"id":"b1","provider_id":"p1"},{"id":"b2","provider_id":"p2"}]}]`
+	req := &providersRequest{
+		MockRequest: createMockRequest("PATCH", "/api/v1/evaluations/collections/coll-patch-url-array"),
+		pathValues:  map[string]string{constants.PATH_PARAMETER_COLLECTION_ID: "coll-patch-url-array"},
+	}
+	req.SetBody([]byte(body))
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+
+	h.HandlePatchCollection(ctx, req, resp)
+
+	if recorder.Code != 200 {
+		t.Fatalf("expected status 200, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+	if hook.patches == nil || len(*hook.patches) != 1 {
+		t.Fatalf("expected one patch passed to storage, got %#v", hook.patches)
+	}
+	arr, ok := (*hook.patches)[0].Value.([]any)
+	if !ok {
+		t.Fatalf("expected patch value array, got %T", (*hook.patches)[0].Value)
+	}
+	if len(arr) != 2 {
+		t.Fatalf("expected two benchmarks in patch value, got %d", len(arr))
+	}
+	m0, _ := arr[0].(map[string]any)
+	m1, _ := arr[1].(map[string]any)
+	if m0["url"] != "https://patch.example/b1" || m1["url"] != "https://patch.example/b2" {
+		t.Fatalf("storage should receive enriched urls, got %#v and %#v", m0["url"], m1["url"])
+	}
 }
 
 func TestHandlePatchCollection(t *testing.T) {
@@ -442,7 +790,7 @@ func TestHandlePatchCollection(t *testing.T) {
 			CollectionConfig: api.CollectionConfig{
 				Name:        "Original",
 				Description: "Original",
-				Benchmarks:  []api.BenchmarkConfig{},
+				Benchmarks:  []api.CollectionBenchmarkConfig{},
 			},
 		},
 	}

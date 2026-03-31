@@ -2,12 +2,17 @@ package handlers_test
 
 import (
 	"context"
+	"io"
 	"log/slog"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -84,7 +89,7 @@ func (r *fakeRuntime) WithContext(_ context.Context) abstractions.Runtime {
 func (r *fakeRuntime) Name() string { return "fake" }
 func (r *fakeRuntime) RunEvaluationJob(
 	_ *api.EvaluationJobResource,
-	_ []api.BenchmarkConfig,
+	_ []api.EvaluationBenchmarkConfig,
 	_ abstractions.RuntimeStorage,
 ) error {
 	r.called = true
@@ -193,24 +198,6 @@ func TestResolveProvider_NotFound(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "provider resource 'missing' was not found") {
 		t.Fatalf("expected: provider resource 'missing' was not found, got %q", err.Error())
-	}
-}
-
-func TestResolveBenchmarks_FromJobBenchmarks(t *testing.T) {
-	eval := &api.EvaluationJobResource{
-		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
-		EvaluationJobConfig: api.EvaluationJobConfig{
-			Benchmarks: []api.BenchmarkConfig{
-				{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"},
-			},
-		},
-	}
-	got, err := handlers.ResolveBenchmarks(eval, nil)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if len(got) != 1 || got[0].ID != "b1" {
-		t.Fatalf("expected one benchmark b1, got %v", got)
 	}
 }
 
@@ -639,7 +626,7 @@ func TestHandleUpdateEvaluation(t *testing.T) {
 	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{
 		job: &api.EvaluationJobResource{
 			EvaluationJobConfig: api.EvaluationJobConfig{
-				Benchmarks: []api.BenchmarkConfig{
+				Benchmarks: []api.EvaluationBenchmarkConfig{
 					{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"},
 				},
 			},
@@ -669,3 +656,42 @@ func TestHandleUpdateEvaluation(t *testing.T) {
 	}
 }
 */
+
+func TestHandleCreateEvaluationRejectsExperimentWhenMLflowDisabled(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	providerConfigs := map[string]api.ProviderResource{
+		"garak": {
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-1"},
+				},
+			},
+		},
+	}
+	storage := &fakeStorage{providerConfigs: providerConfigs}
+	runtime := &fakeRuntime{}
+	validate := validation.NewValidator()
+	h := handlers.New(storage, validate, runtime, nil, nil)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-mlflow-exp", logger, time.Second, "test-user", "test-tenant")
+
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+		body:        []byte(`{"name": "test-evaluation-job", "model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1","provider_id":"garak"}],"experiment":{"name":"my-experiment"}}`),
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCreateEvaluation(ctx, req, resp)
+
+	if runtime.called {
+		t.Fatalf("did not expect runtime when MLflow is disabled and experiment is set")
+	}
+	if recorder.Code == 202 {
+		t.Fatalf("expected error response, got 202")
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "mlflow_required_for_experiment") {
+		t.Fatalf("expected mlflow_required_for_experiment in body, got %q", body)
+	}
+}

@@ -10,7 +10,7 @@ import (
 
 func TestProviderStorage(t *testing.T) {
 	tenant := api.Tenant("tenant-1")
-	store, err := getTestStorage(t, "sqlite")
+	store, err := getTestStorage(t, "sqlite", getDBName())
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}

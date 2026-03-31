@@ -93,7 +93,7 @@ func (r *LocalRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 
 func (r *LocalRuntime) RunEvaluationJob(
 	evaluation *api.EvaluationJobResource,
-	benchmarks []api.BenchmarkConfig,
+	benchmarks []api.EvaluationBenchmarkConfig,
 	storage abstractions.RuntimeStorage,
 ) error {
 	if r.ctx == nil {
@@ -141,7 +141,7 @@ func (r *LocalRuntime) RunEvaluationJob(
 // prevent zombies.
 func (r *LocalRuntime) runBenchmark(
 	jobID string,
-	bench api.BenchmarkConfig,
+	bench api.EvaluationBenchmarkConfig,
 	benchmarkIndex int,
 	evaluation *api.EvaluationJobResource,
 	callbackURL *string,
@@ -275,7 +275,7 @@ func (r *LocalRuntime) runBenchmark(
 // failBenchmark updates storage to mark a benchmark as failed.
 func (r *LocalRuntime) failBenchmark(
 	jobID string,
-	bench api.BenchmarkConfig,
+	bench api.EvaluationBenchmarkConfig,
 	benchmarkIndex int,
 	storage abstractions.RuntimeStorage,
 	errMsg string,

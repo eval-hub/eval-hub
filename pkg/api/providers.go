@@ -2,6 +2,7 @@ package api
 
 type BenchmarkResource struct {
 	ID           string        `mapstructure:"id" yaml:"id" json:"id"`
+	URL          string        `mapstructure:"url" yaml:"url" json:"url,omitempty"`
 	Name         string        `mapstructure:"name" yaml:"name" json:"name"`
 	Description  string        `mapstructure:"description" yaml:"description" json:"description,omitempty" validate:"omitempty,max=1024,min=1"`
 	Category     string        `mapstructure:"category" yaml:"category" json:"category"`

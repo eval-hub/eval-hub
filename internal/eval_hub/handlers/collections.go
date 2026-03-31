@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"regexp"
 	"strings"
 	"time"
 
@@ -44,6 +45,11 @@ var (
 		{Path: "/pass_criteria", Op: api.PatchOpReplace, Prefix: false},
 	}
 )
+
+// entireBenchmarkPatchPath matches JSON Patch paths that replace or add the full benchmarks array (/benchmarks)
+// or a single array element (/benchmarks/<index> or /benchmarks/-). It does not match field-level paths
+// (e.g. /benchmarks/0/id).
+var entireBenchmarkPatchPath = regexp.MustCompile(`^/benchmarks(?:/(-|\d+))?$`)
 
 // HandleListCollections handles GET /api/v1/evaluations/collections
 func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
@@ -113,6 +119,106 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 	)
 }
 
+// EnrichBenchmarkURLsFromProviders clears each benchmark URL (when provider_id and id are set), then sets it
+// from the provider definition when a matching benchmark with a non-empty URL exists.
+func EnrichBenchmarkURLsFromProviders(storage abstractions.Storage, collections ...*api.CollectionResource) {
+	loaded := make(map[string]*api.ProviderResource)
+	failed := make(map[string]struct{})
+	for _, coll := range collections {
+		if coll == nil {
+			continue
+		}
+		for j := range coll.Benchmarks {
+			b := &coll.Benchmarks[j]
+			pid, bid := b.ProviderID, b.ID
+			if pid == "" || bid == "" {
+				continue
+			}
+			b.URL = ""
+			if _, miss := failed[pid]; miss {
+				continue
+			}
+			p, ok := loaded[pid]
+			if !ok {
+				var err error
+				p, err = storage.GetProvider(pid)
+				if err != nil || p == nil {
+					failed[pid] = struct{}{}
+					continue
+				}
+				loaded[pid] = p
+			}
+			for k := range p.Benchmarks {
+				if p.Benchmarks[k].ID == bid && p.Benchmarks[k].URL != "" {
+					b.URL = p.Benchmarks[k].URL
+					break
+				}
+			}
+		}
+	}
+}
+
+// enrichEntireBenchmarkPatchValues rewrites patch operation values for full benchmarks array or single-element
+// add/replace ops so benchmark URLs are filled from the provider before the patch is applied in storage.
+func enrichEntireBenchmarkPatchValues(storage abstractions.Storage, patches *api.Patch) error {
+	for i := range *patches {
+		op := &(*patches)[i]
+		if op.Op != api.PatchOpReplace && op.Op != api.PatchOpAdd {
+			continue
+		}
+		if !entireBenchmarkPatchPath.MatchString(op.Path) {
+			continue
+		}
+		raw, err := json.Marshal(op.Value)
+		if err != nil {
+			return err
+		}
+		if op.Path == "/benchmarks" {
+			var benchmarks []api.CollectionBenchmarkConfig
+			if err := json.Unmarshal(raw, &benchmarks); err != nil {
+				continue
+			}
+			tmp := &api.CollectionResource{
+				CollectionConfig: api.CollectionConfig{Benchmarks: benchmarks},
+			}
+			EnrichBenchmarkURLsFromProviders(storage, tmp)
+			enc, err := json.Marshal(tmp.Benchmarks)
+			if err != nil {
+				return err
+			}
+			var v any
+			if err := json.Unmarshal(enc, &v); err != nil {
+				return err
+			}
+			op.Value = v
+			continue
+		}
+		var b api.CollectionBenchmarkConfig
+		if err := json.Unmarshal(raw, &b); err != nil {
+			continue
+		}
+		if b.ProviderID == "" || b.ID == "" {
+			continue
+		}
+		tmp := &api.CollectionResource{
+			CollectionConfig: api.CollectionConfig{
+				Benchmarks: []api.CollectionBenchmarkConfig{b},
+			},
+		}
+		EnrichBenchmarkURLsFromProviders(storage, tmp)
+		enc, err := json.Marshal(tmp.Benchmarks[0])
+		if err != nil {
+			return err
+		}
+		var v any
+		if err := json.Unmarshal(enc, &v); err != nil {
+			return err
+		}
+		op.Value = v
+	}
+	return nil
+}
+
 // HandleCreateCollection handles POST /api/v1/evaluations/collections
 func (h *Handlers) HandleCreateCollection(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
@@ -147,6 +253,7 @@ func (h *Handlers) HandleCreateCollection(ctx *executioncontext.ExecutionContext
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
+			scoped := storage.WithContext(runtimeCtx)
 			collectionResource = &api.CollectionResource{
 				Resource: api.Resource{
 					ID:        id,
@@ -156,7 +263,8 @@ func (h *Handlers) HandleCreateCollection(ctx *executioncontext.ExecutionContext
 				},
 				CollectionConfig: *collection,
 			}
-			err := storage.WithContext(runtimeCtx).CreateCollection(collectionResource)
+			EnrichBenchmarkURLsFromProviders(scoped, collectionResource)
+			err := scoped.CreateCollection(collectionResource)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -187,7 +295,8 @@ func (h *Handlers) HandleGetCollection(ctx *executioncontext.ExecutionContext, r
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			response, err := storage.WithContext(runtimeCtx).GetCollection(collectionID)
+			scoped := storage.WithContext(runtimeCtx)
+			response, err := scoped.GetCollection(collectionID)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -238,7 +347,10 @@ func (h *Handlers) HandleUpdateCollection(ctx *executioncontext.ExecutionContext
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			result, err := storage.WithContext(runtimeCtx).UpdateCollection(collectionID, request)
+			scoped := storage.WithContext(runtimeCtx)
+			toUpdate := &api.CollectionResource{CollectionConfig: *request}
+			EnrichBenchmarkURLsFromProviders(scoped, toUpdate)
+			result, err := scoped.UpdateCollection(collectionID, &toUpdate.CollectionConfig)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -295,7 +407,12 @@ func (h *Handlers) HandlePatchCollection(ctx *executioncontext.ExecutionContext,
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			result, err := storage.WithContext(runtimeCtx).PatchCollection(collectionID, &patches)
+			scoped := storage.WithContext(runtimeCtx)
+			if err := enrichEntireBenchmarkPatchValues(scoped, &patches); err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			result, err := scoped.PatchCollection(collectionID, &patches)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err

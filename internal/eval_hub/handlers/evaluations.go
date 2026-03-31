@@ -147,6 +147,10 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 			w.Error(err, ctx.RequestID)
 			return
 		}
+	} else if mlflow.HasExperimentName(evaluation) {
+		// MLflow not configured but experiment name provided in the input
+		w.Error(serviceerrors.NewServiceError(messages.MLFlowRequiredForExperiment), ctx.RequestID)
+		return
 	}
 
 	var job *api.EvaluationJobResource
@@ -231,20 +235,6 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 	)
 }
 
-// ResolveBenchmarks returns the benchmarks to run: from the job's Collection when set, otherwise from the job's Benchmarks.
-func ResolveBenchmarks(evaluation *api.EvaluationJobResource, collection *api.CollectionResource) ([]api.BenchmarkConfig, error) {
-	if evaluation.Collection != nil && evaluation.Collection.ID != "" {
-		if collection == nil || len(collection.Benchmarks) == 0 {
-			return nil, serviceerrors.NewServiceError(messages.CollectionEmpty, "CollectionID", evaluation.Collection.ID)
-		}
-		return collection.Benchmarks, nil
-	}
-	if len(evaluation.Benchmarks) == 0 {
-		return nil, serviceerrors.NewServiceError(messages.EvaluationJobEmpty, "EvaluationJobID", evaluation.Resource.ID)
-	}
-	return evaluation.Benchmarks, nil
-}
-
 func (h *Handlers) createRuntimeStorage(ctx *executioncontext.ExecutionContext, jobContext context.Context) *runtimeStorage {
 	return &runtimeStorage{
 		ctx:      jobContext,
@@ -259,7 +249,7 @@ func (h *Handlers) createRuntimeStorage(ctx *executioncontext.ExecutionContext, 
 func (h *Handlers) executeEvaluationJob(ctx *executioncontext.ExecutionContext, job *api.EvaluationJobResource, collection *api.CollectionResource) error {
 	var err error
 
-	benchmarks, err := ResolveBenchmarks(job, collection)
+	benchmarks, err := GetJobBenchmarks(job, collection)
 	if err != nil {
 		return err
 	}
@@ -274,7 +264,7 @@ func (h *Handlers) executeEvaluationJob(ctx *executioncontext.ExecutionContext, 
 	return h.runtime.WithLogger(ctx.Logger).WithContext(jobContext).RunEvaluationJob(job, benchmarks, h.createRuntimeStorage(ctx, jobContext))
 }
 
-func (h *Handlers) validateBenchmarkReferences(ctx *executioncontext.ExecutionContext, benchmarks []api.BenchmarkConfig) error {
+func (h *Handlers) validateBenchmarkReferences(ctx *executioncontext.ExecutionContext, benchmarks []api.EvaluationBenchmarkConfig) error {
 	storage := h.getStorage(ctx)
 
 	for _, benchmark := range benchmarks {

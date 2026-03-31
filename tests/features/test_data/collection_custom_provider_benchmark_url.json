@@ -1,0 +1,11 @@
+{
+  "name": "fvt-benchmark-url-collection",
+  "description": "Collection referencing custom provider benchmark with url",
+  "category": "test",
+  "benchmarks": [
+    {
+      "id": "bench_with_url",
+      "provider_id": "{{value:custom_provider_id}}"
+    }
+  ]
+}

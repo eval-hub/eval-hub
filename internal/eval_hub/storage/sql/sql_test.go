@@ -37,27 +37,25 @@ func TestSQLStorage(t *testing.T) {
 	})
 }
 
-func getTestStorage(t *testing.T, driver string) (abstractions.Storage, error) {
+func getTestStorage(t *testing.T, driver string, databaseName string) (abstractions.Storage, error) {
 	logger := logging.FallbackLogger()
-	dbName := getDBName()
 	switch driver {
 	case "sqlite":
 		databaseConfig := map[string]any{
 			"driver":        "sqlite",
-			"url":           getDBInMemoryURL(dbName),
-			"database_name": dbName,
+			"url":           getDBInMemoryURL(databaseName),
+			"database_name": databaseName,
 		}
 		return storage.NewStorage(&databaseConfig, nil, nil, false, logger)
 	case "postgres", "pgx":
-		url, user, err := getPostgresURL(dbName)
+		url, err := getPostgresURL(databaseName)
 		if err != nil {
 			t.Skipf("Failed to get Postgres URL: %v", err)
 		}
-		startPostgres(t, dbName, user)
 		databaseConfig := map[string]any{
 			"driver":        "pgx",
 			"url":           url,
-			"database_name": dbName,
+			"database_name": databaseName,
 		}
 		return storage.NewStorage(&databaseConfig, nil, nil, false, logger)
 	default:

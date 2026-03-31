@@ -8,84 +8,90 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/shared"
 )
 
 var (
 	timeout = 2 * time.Minute
 )
 
-func getPostgresURL(dbName string) (string, string, error) {
-	if dbURL := os.Getenv("POSTGRES_URL"); dbURL != "" {
-		dbConfig := shared.SQLDatabaseConfig{
-			URL: dbURL,
-		}
-		return dbURL, dbConfig.GetUser(), nil
-	}
+func getPostgresUser() (string, error) {
 	user := os.Getenv("USER")
 	if user == "" {
 		user = os.Getenv("LOGNAME")
 	}
 	if user == "" {
-		return "", "", fmt.Errorf("USER/LOGNAME is not set")
+		return "", fmt.Errorf("USER/LOGNAME is not set")
+	}
+	return user, nil
+}
+
+func getPostgresURL(databaseName string) (string, error) {
+	if dbURL := os.Getenv("POSTGRES_URL"); dbURL != "" {
+		return dbURL, nil
+	}
+	user, err := getPostgresUser()
+	if err != nil {
+		return "", err
 	}
 	// postgres://user@localhost:5432/eval_hub
-	return fmt.Sprintf("postgres://%s@localhost:5432/%s", user, dbName), user, nil
+	return fmt.Sprintf("postgres://%s@localhost:5432/%s", user, databaseName), nil
 }
 
 func startPostgres(t *testing.T, databaseName string, user string) {
-	// we need to stop postgres after the test finishes
-	t.Cleanup(func() {
-		// stopPostgres(t, databaseName, user)
-	})
+	{
+		cmd, cancel, err := getMakeCommand(databaseName, user, "install-postgres", "start-postgres")
+		if err != nil {
+			t.Fatalf("Failed to get make command: %v", err)
+		}
+		defer cancel()
 
-	cmd, cancel, err := getMakeCommand(databaseName, user, "install-postgres", "start-postgres")
-	if err != nil {
-		t.Fatalf("Failed to get make command: %v", err)
-	}
-	defer cancel()
-
-	err = cmd.Run()
-	if err != nil {
-		t.Fatalf("Failed to install and start postgres: %v", err)
+		err = cmd.Run()
+		if err != nil {
+			t.Fatalf("Failed to install and start postgres: %v", err)
+		}
 	}
 
-	// wait for postgres to start
+	// HACK wait for postgres to start
 	time.Sleep(15 * time.Second)
 
-	cmd, cancel, err = getMakeCommand(databaseName, user, "create-user")
-	if err != nil {
-		t.Fatalf("Failed to get make command: %v", err)
-	}
-	defer cancel()
+	{
+		cmd, cancel, err := getMakeCommand(databaseName, user, "create-user")
+		if err != nil {
+			t.Fatalf("Failed to get make command: %v", err)
+		}
+		defer cancel()
 
-	err = cmd.Run()
-	if err != nil {
-		// not a fatal error for now
-		t.Errorf("Failed to create user: %v", err)
-	}
-
-	cmd, cancel, err = getMakeCommand(databaseName, user, "create-database")
-	if err != nil {
-		t.Fatalf("Failed to get make command: %v", err)
-	}
-	defer cancel()
-
-	err = cmd.Run()
-	if err != nil {
-		t.Errorf("Failed to create database: %v", err)
+		err = cmd.Run()
+		if err != nil {
+			// not a fatal error for now
+			t.Logf("Failed to create user: %v", err)
+		}
 	}
 
-	cmd, cancel, err = getMakeCommand(databaseName, user, "grant-permissions")
-	if err != nil {
-		t.Fatalf("Failed to get make command: %v", err)
-	}
-	defer cancel()
+	{
+		cmd, cancel, err := getMakeCommand(databaseName, user, "create-database")
+		if err != nil {
+			t.Fatalf("Failed to get make command: %v", err)
+		}
+		defer cancel()
 
-	err = cmd.Run()
-	if err != nil {
-		t.Fatalf("Failed to grant permissions: %v", err)
+		err = cmd.Run()
+		if err != nil {
+			t.Logf("Failed to create database: %v", err)
+		}
+	}
+
+	{
+		cmd, cancel, err := getMakeCommand(databaseName, user, "grant-permissions")
+		if err != nil {
+			t.Fatalf("Failed to get make command: %v", err)
+		}
+		defer cancel()
+
+		err = cmd.Run()
+		if err != nil {
+			t.Fatalf("Failed to grant permissions: %v", err)
+		}
 	}
 }
 
