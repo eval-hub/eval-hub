@@ -83,34 +83,6 @@ benchmarks:
       - lighteval
       - suite
 
-  - id: mathematical_reasoning
-    name: Mathematical Reasoning Suite
-    description: Competition-level mathematical reasoning benchmarks (aime24, aime25)
-    category: reasoning
-    metrics:
-      - exact_match
-      - accuracy
-    tags:
-      - reasoning
-      - math
-      - competition
-      - lighteval
-      - suite
-
-  - id: mathematical_reasoning
-    name: Mathematical Reasoning Suite
-    description: Competition-level mathematical reasoning benchmarks (aime24, aime25)
-    category: reasoning
-    metrics:
-      - exact_match
-      - accuracy
-    tags:
-      - reasoning
-      - math
-      - competition
-      - lighteval
-      - suite
-
   - id: knowledge
     name: Knowledge Suite
     description: Knowledge benchmarks (mmlu, triviaqa)
