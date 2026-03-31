@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -37,13 +38,37 @@ func getPostgresURL(databaseName string) (string, error) {
 	return fmt.Sprintf("postgres://%s@localhost:5432/%s", user, databaseName), nil
 }
 
+// MakeCommandOpts configures an optional wait for text in make stdout. The zero value runs make
+// with the package default execution timeout and no stdout checks.
+type MakeCommandOpts struct {
+	// WaitStdoutContains, if non-empty, requires this substring to appear in combined stdout
+	// before WaitTimeout. Output is still copied to os.Stdout.
+	WaitStdoutContains string
+	// WaitStderrContains, if non-empty, requires this substring to appear in combined stderr
+	// before WaitTimeout. Output is still copied to os.Stderr.
+	WaitStderrContains string
+	// WaitTimeout bounds the wait for WaitStdoutContains or WaitStderrContains and the command.
+	// If zero, the package `timeout` constant is used.
+	WaitTimeout time.Duration
+}
+
+func (opts *MakeCommandOpts) matches(s string, checks string) bool {
+	ors := strings.SplitSeq(checks, "|")
+	for or := range ors {
+		o := strings.TrimSpace(or)
+		if o != "" && strings.Contains(s, o) {
+			return true
+		}
+	}
+	return false
+}
+
 func runMakeCommand(t *testing.T, databaseName string, user string, args ...string) error {
-	cmd, cancel, err := getMakeCommand(databaseName, user, args...)
+	cmd, cancel, err := getMakeCommandWithTimeout(databaseName, user, timeout, args...)
 	if err != nil {
 		t.Fatalf("Failed to get make command: %v", err)
 	}
 	defer cancel()
-
 	return cmd.Run()
 }
 
@@ -113,12 +138,15 @@ func getDirForMakefile() (string, error) {
 	return findDir(filepath.Join("tests", "postgres"), ".", "../..", "../../../..")
 }
 
-func getMakeCommand(databaseName string, user string, args ...string) (*exec.Cmd, context.CancelFunc, error) {
+func getMakeCommandWithTimeout(databaseName string, user string, cmdTimeout time.Duration, args ...string) (*exec.Cmd, context.CancelFunc, error) {
 	dir, err := getDirForMakefile()
 	if err != nil {
 		return nil, nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	if cmdTimeout == 0 {
+		cmdTimeout = timeout
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), cmdTimeout)
 
 	cmd := exec.CommandContext(ctx, "make", args...)
 	cmd.Dir = dir

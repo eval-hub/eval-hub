@@ -64,8 +64,8 @@ func getTestStorage(t *testing.T, driver string, databaseName string) (abstracti
 }
 
 func getDBName() string {
-	dbIndex.Add(1)
-	return fmt.Sprintf("eval_hub_tenant_test_%d", dbIndex.Load())
+	n := dbIndex.Add(1)
+	return fmt.Sprintf("eval_hub_tenant_test_%d", n)
 }
 
 func getDBInMemoryURL(dbName string) string {
