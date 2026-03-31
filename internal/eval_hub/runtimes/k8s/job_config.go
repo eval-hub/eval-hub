@@ -160,7 +160,6 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	}
 
 	localMode := serviceConfig != nil && serviceConfig.Service != nil && serviceConfig.Service.LocalMode
-	kueueEnabled := serviceConfig != nil && serviceConfig.Service != nil && serviceConfig.Service.KueueEnabled
 	var testDataS3Bucket, testDataS3Key, testDataS3SecretRef string
 	if benchmarkConfig.TestDataRef != nil && benchmarkConfig.TestDataRef.S3 != nil {
 		testDataS3Bucket = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.Bucket)
@@ -169,7 +168,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	}
 
 	var kueueQueueName string
-	if kueueEnabled && evaluation.Queue != nil && evaluation.Queue.Kind == "kueue" && evaluation.Queue.Name != "" {
+	if evaluation.Queue != nil && evaluation.Queue.Kind == "kueue" && evaluation.Queue.Name != "" {
 		kueueQueueName = evaluation.Queue.Name
 	}
 
