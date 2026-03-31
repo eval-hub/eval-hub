@@ -168,8 +168,10 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	}
 
 	var kueueQueueName string
-	if evaluation.Queue != nil && evaluation.Queue.Kind == "kueue" && evaluation.Queue.Name != "" {
-		kueueQueueName = evaluation.Queue.Name
+	if evaluation.Queue != nil && evaluation.Queue.Kind == "kueue" {
+		if trimmedName := strings.TrimSpace(evaluation.Queue.Name); trimmedName != "" {
+			kueueQueueName = trimmedName
+		}
 	}
 
 	out := &jobConfig{
