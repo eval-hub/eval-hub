@@ -32,7 +32,7 @@ def _free_port() -> int:
 
 def _get(base_url: str, path: str) -> dict:
     """GET *path* and return parsed JSON."""
-    with urllib.request.urlopen(f"{base_url}{path}") as resp:
+    with urllib.request.urlopen(f"{base_url}{path}", timeout=10) as resp:
         return json.loads(resp.read())
 
 
@@ -81,7 +81,11 @@ def server_url():
     yield base_url
 
     proc.send_signal(signal.SIGTERM)
-    proc.wait(timeout=5)
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
 
 
 # ---------------------------------------------------------------------------
