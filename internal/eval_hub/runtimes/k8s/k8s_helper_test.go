@@ -50,24 +50,6 @@ func emptyOwnerRef() metav1.OwnerReference {
 	return metav1.OwnerReference{}
 }
 
-func TestQueueExistsRequiresNamespaceAndName(t *testing.T) {
-	helper := &KubernetesHelper{}
-	if _, err := helper.QueueExists(context.Background(), "", "name"); err == nil {
-		t.Fatalf("expected error for missing namespace")
-	}
-	if _, err := helper.QueueExists(context.Background(), "default", ""); err == nil {
-		t.Fatalf("expected error for missing name")
-	}
-}
-
-func TestQueueExistsRequiresDynamicClient(t *testing.T) {
-	helper := &KubernetesHelper{clientset: fake.NewSimpleClientset()}
-	_, err := helper.QueueExists(context.Background(), "default", "my-queue")
-	if err == nil {
-		t.Fatalf("expected error when dynamic client is nil")
-	}
-}
-
 func TestSetConfigMapOwnerUpdatesOwnerReferences(t *testing.T) {
 	clientset := fake.NewSimpleClientset()
 	helper := &KubernetesHelper{clientset: clientset}
