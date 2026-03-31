@@ -255,7 +255,7 @@ use the GitHub credentials that are provided in the integrations section.
 Find any CVEs in the repository dependencies and create a PR with the proposed fix in the repository.
 
 Verify that there is not already an open `PR` that provides this fix, if an open `PR` already
-exists then report the `PR` number and stkip the rest.
+exists then report the `PR` number and skip the rest.
 
 #### Updating the golang version
 
