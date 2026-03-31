@@ -99,6 +99,7 @@ func (r *fakeRuntime) DeleteEvaluationJobResources(_ *api.EvaluationJobResource)
 	r.called = true
 	return r.err
 }
+
 type listEvaluationsRequest struct {
 	*MockRequest
 	queryValues map[string][]string
