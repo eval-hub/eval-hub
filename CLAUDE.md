@@ -249,9 +249,6 @@ All requests are tagged with a request ID for distributed tracing:
 
 ### Instructions for CVE fixing
 
-if running in Ambient code then
-use the GitHub credentials that are provided in the integrations section.
-
 Find any CVEs in the repository dependencies and create a PR with the proposed fix in the repository.
 
 Verify that there is not already an open `PR` that provides this fix, if an open `PR` already
@@ -268,3 +265,4 @@ If there are other files in the repository that require updating due to new gola
 
 If updating any dependencies related to `npm` then verify that the documentation
 build still works by running `make documentation`.
+If `make documentation` changes any files in the `docs` directory then add them to the `PR`.
