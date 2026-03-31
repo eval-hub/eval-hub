@@ -45,6 +45,8 @@ Feature: Evaluations Endpoint with live cluster
     And the response should contain the value "pending" at path "$.status.state"
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
     And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
     And the response should contain the value "completed" at path "$.status.state"
     And the array at path "results.benchmarks" in the response should have length 2
     And the response should contain the value "completed" at path "$.status.benchmarks[0].status"
