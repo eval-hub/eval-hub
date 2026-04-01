@@ -61,4 +61,3 @@ func (s *SQLDatabaseConfig) GetUser() string {
 	}
 	return parsed.User.Username()
 }
-}
