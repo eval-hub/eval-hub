@@ -132,7 +132,7 @@ func buildK8sName(jobID, resourceGUID, suffix string) string {
 }
 
 func buildConfigMap(cfg *jobConfig) (*corev1.ConfigMap, error) {
-	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID, cfg.benchmarkIndex, cfg.evalHubInstanceName, cfg.evalHubCRNamespace, cfg.kueueQueueName)
+	labels := jobLabels(cfg)
 	annotations := jobAnnotations(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	name := configMapName(cfg.jobID, cfg.resourceGUID)
 
@@ -183,7 +183,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	if cfg.adapterImage == "" {
 		return nil, fmt.Errorf("adapter image is required")
 	}
-	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID, cfg.benchmarkIndex, cfg.evalHubInstanceName, cfg.evalHubCRNamespace, cfg.kueueQueueName)
+	labels := jobLabels(cfg)
 	annotations := jobAnnotations(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	jobName := jobName(cfg.jobID, cfg.resourceGUID)
 	configMap := configMapName(cfg.jobID, cfg.resourceGUID)
@@ -766,21 +766,24 @@ func configMapName(jobID, resourceGUID string) string {
 	return buildK8sName(jobID, resourceGUID, specSuffix)
 }
 
-func jobLabels(jobID, providerID, benchmarkID string, benchmarkIndex int, evalHubInstanceName, evalHubCRNamespace, kueueQueueName string) map[string]string {
+func jobLabels(cfg *jobConfig) map[string]string {
+	if cfg == nil {
+		return map[string]string{}
+	}
 	m := map[string]string{
 		labelAppKey:            labelAppValue,
 		labelComponentKey:      labelComponentValue,
-		labelJobIDKey:          sanitizeLabelValue(jobID),
-		labelProviderIDKey:     sanitizeLabelValue(providerID),
-		labelBenchmarkIDKey:    sanitizeLabelValue(benchmarkID),
-		labelBenchmarkIndexKey: sanitizeLabelValue(strconv.Itoa(benchmarkIndex)),
+		labelJobIDKey:          sanitizeLabelValue(cfg.jobID),
+		labelProviderIDKey:     sanitizeLabelValue(cfg.providerID),
+		labelBenchmarkIDKey:    sanitizeLabelValue(cfg.benchmarkID),
+		labelBenchmarkIndexKey: sanitizeLabelValue(strconv.Itoa(cfg.benchmarkIndex)),
 	}
-	if evalHubInstanceName != "" && evalHubCRNamespace != "" {
-		m[labelEvalHubInstanceNameKey] = sanitizeLabelValue(evalHubInstanceName)
-		m[labelEvalHubInstanceNamespaceKey] = sanitizeLabelValue(evalHubCRNamespace)
+	if cfg.evalHubInstanceName != "" && cfg.evalHubCRNamespace != "" {
+		m[labelEvalHubInstanceNameKey] = sanitizeLabelValue(cfg.evalHubInstanceName)
+		m[labelEvalHubInstanceNamespaceKey] = sanitizeLabelValue(cfg.evalHubCRNamespace)
 	}
-	if kueueQueueName != "" {
-		m[labelKueueQueueNameKey] = kueueQueueName
+	if cfg.queueKind == "kueue" && cfg.queueName != "" {
+		m[labelKueueQueueNameKey] = cfg.queueName
 	}
 	return m
 }

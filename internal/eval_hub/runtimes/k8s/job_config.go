@@ -66,7 +66,9 @@ type jobConfig struct {
 	testDataS3           s3TestDataConfig
 	testDataInitImage    string
 	sidecarConfig        *config.SidecarConfig
-	kueueQueueName       string
+	// queueKind and queueName come from evaluation.Queue when set (empty kind defaults to kueue).
+	queueKind string
+	queueName string
 }
 
 type s3TestDataConfig struct {
@@ -167,9 +169,13 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		testDataS3SecretRef = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.SecretRef)
 	}
 
-	var kueueQueueName string
-	if evaluation.Queue != nil && evaluation.Queue.Kind == "kueue" && evaluation.Queue.Name != "" {
-		kueueQueueName = evaluation.Queue.Name
+	var queueKind, queueName string
+	if evaluation.Queue != nil {
+		queueName = evaluation.Queue.Name
+		queueKind = evaluation.Queue.Kind
+		if queueKind == "" {
+			queueKind = "kueue"
+		}
 	}
 
 	out := &jobConfig{
@@ -199,7 +205,8 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		sidecarBaseURL:       sidecarBaseURL,
 		localMode:            localMode,
 		evalHubURL:           evalHubURL,
-		kueueQueueName:       kueueQueueName,
+		queueKind:            queueKind,
+		queueName:            queueName,
 		testDataS3: s3TestDataConfig{
 			bucket:    testDataS3Bucket,
 			key:       testDataS3Key,

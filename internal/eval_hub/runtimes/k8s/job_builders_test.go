@@ -96,8 +96,15 @@ func TestBuildK8sNameDiffersAcrossGUIDs(t *testing.T) {
 	}
 }
 
+func TestJobLabelsNilConfig(t *testing.T) {
+	labels := jobLabels(nil)
+	if len(labels) != 0 {
+		t.Fatalf("expected empty labels for nil cfg, got %v", labels)
+	}
+}
+
 func TestJobLabelsSanitizeBenchmarkID(t *testing.T) {
-	labels := jobLabels("job-123", "lighteval", "arc:easy", 0, "", "", "")
+	labels := jobLabels(&jobConfig{jobID: "job-123", providerID: "lighteval", benchmarkID: "arc:easy", benchmarkIndex: 0})
 	if labels[labelBenchmarkIDKey] != "arc-easy" {
 		t.Fatalf("expected benchmark label to be sanitized, got %q", labels[labelBenchmarkIDKey])
 	}
@@ -107,27 +114,31 @@ func TestJobLabelsSanitizeBenchmarkID(t *testing.T) {
 }
 
 func TestJobLabelsEvalHubInstance(t *testing.T) {
-	labels := jobLabels("j", "p", "b", 0, "my-evalhub", "prod-ns", "")
+	labels := jobLabels(&jobConfig{jobID: "j", providerID: "p", benchmarkID: "b", benchmarkIndex: 0, evalHubInstanceName: "my-evalhub", evalHubCRNamespace: "prod-ns"})
 	if labels[labelEvalHubInstanceNameKey] != "my-evalhub" {
 		t.Fatalf("instance-name: got %q", labels[labelEvalHubInstanceNameKey])
 	}
 	if labels[labelEvalHubInstanceNamespaceKey] != "prod-ns" {
 		t.Fatalf("instance-namespace: got %q", labels[labelEvalHubInstanceNamespaceKey])
 	}
-	empty := jobLabels("j", "p", "b", 0, "", "", "")
+	empty := jobLabels(&jobConfig{jobID: "j", providerID: "p", benchmarkID: "b", benchmarkIndex: 0})
 	if _, ok := empty[labelEvalHubInstanceNameKey]; ok {
 		t.Fatal("expected no instance labels when name/namespace empty")
 	}
 }
 
 func TestJobLabelsKueueQueueName(t *testing.T) {
-	labels := jobLabels("j", "p", "b", 0, "", "", "my-queue")
+	labels := jobLabels(&jobConfig{jobID: "j", providerID: "p", benchmarkID: "b", benchmarkIndex: 0, queueKind: "kueue", queueName: "my-queue"})
 	if labels[labelKueueQueueNameKey] != "my-queue" {
 		t.Fatalf("expected kueue queue label %q, got %q", "my-queue", labels[labelKueueQueueNameKey])
 	}
-	noQueue := jobLabels("j", "p", "b", 0, "", "", "")
+	noQueue := jobLabels(&jobConfig{jobID: "j", providerID: "p", benchmarkID: "b", benchmarkIndex: 0})
 	if _, ok := noQueue[labelKueueQueueNameKey]; ok {
 		t.Fatal("expected no kueue queue label when queue name is empty")
+	}
+	nonKueue := jobLabels(&jobConfig{jobID: "j", providerID: "p", benchmarkID: "b", benchmarkIndex: 0, queueKind: "other", queueName: "my-queue"})
+	if _, ok := nonKueue[labelKueueQueueNameKey]; ok {
+		t.Fatal("expected no kueue queue label when queue kind is not kueue")
 	}
 }
 

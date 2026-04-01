@@ -1195,6 +1195,25 @@ components:
             The OCI artifact export configuration.
       additionalProperties: false
       title: EvaluationExports
+    QueueConfig:
+      type: object
+      title: QueueConfig
+      description: |
+        Optional workload scheduling queue for Kubernetes runtimes (e.g. Kueue LocalQueue).
+      required:
+        - name
+      properties:
+        kind:
+          type: string
+          enum:
+            - kueue
+          default: kueue
+          description: |
+            Queue integration to use. When omitted, the server behaves as if `kueue` was set. Only `kueue` is supported today.
+        name:
+          type: string
+          description: |
+            Queue resource name (for Kueue, the LocalQueue name). Set on the Job as label `kueue.x-k8s.io/queue-name`.
     EvaluationJobConfigCommon2:
       type: object
       title: EvaluationJobConfigCommon2
@@ -1213,6 +1232,10 @@ components:
           $ref: '#/components/schemas/EvaluationExports'
           description: |
             Optional exports configuration for the evaluation job. When provided, the evaluation job results will be exported to the specified location.
+        queue:
+          $ref: '#/components/schemas/QueueConfig'
+          description: |
+            Optional scheduling queue for Kubernetes-backed evaluation jobs (e.g. Kueue).
         custom:
           type: object
           additionalProperties: true
