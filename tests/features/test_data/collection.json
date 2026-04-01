@@ -5,7 +5,10 @@
   "benchmarks": [
     {
       "id": "arc_easy",
-      "provider_id": "lm_evaluation_harness"
+      "provider_id": "lm_evaluation_harness",
+      "parameters": {
+        "weight": 3
+      }
     }
   ]
 }
