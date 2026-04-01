@@ -56,5 +56,9 @@ func (s *SQLDatabaseConfig) GetUser() string {
 	if err != nil {
 		return ""
 	}
+	if parsed.User == nil {
+		return ""
+	}
 	return parsed.User.Username()
+}
 }
