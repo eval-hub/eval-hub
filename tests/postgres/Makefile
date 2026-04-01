@@ -9,7 +9,7 @@ install-postgres:
 	brew install postgresql@${POSTGRES_VERSION}
 else ifeq ($(UNAME), Linux)
 install-postgres:
-	sudo apt-get install postgresql-@${POSTGRES_VERSION}
+	sudo apt-get install postgresql-${POSTGRES_VERSION}
 else
 install-postgres:
 	echo "Unsupported platform: ${UNAME}"
