@@ -48,7 +48,7 @@ create-user: ; $(info POSTGRES_URL = ${POSTGRES_URL})
 	createuser-${POSTGRES_VERSION} -s -d -r ${POSTGRES_USER}
 
 grant-permissions:
-	psql-${POSTGRES_VERSION} --dbname=${POSTGRES_DATABASE_NAME} -c "GRANT ALL ON ALL TABLES IN SCHEMA "public" TO ${POSTGRES_USER};"
+	psql-${POSTGRES_VERSION} --dbname=${POSTGRES_DATABASE_NAME} -c "GRANT ALL ON ALL TABLES IN SCHEMA public TO ${POSTGRES_USER};"
 
 ### Run postgres in a container
 
