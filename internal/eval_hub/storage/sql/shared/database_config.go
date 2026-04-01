@@ -50,3 +50,14 @@ func (s *SQLDatabaseConfig) GetDatabaseName() string {
 	}
 	return strings.TrimPrefix(parsed.Path, "/")
 }
+
+func (s *SQLDatabaseConfig) GetUser() string {
+	parsed, err := url.Parse(s.URL)
+	if err != nil {
+		return ""
+	}
+	if parsed.User == nil {
+		return ""
+	}
+	return parsed.User.Username()
+}

@@ -32,11 +32,15 @@ dev = [
     "ruff>=0.14.14",
     "pytest>=8.0",
     "mypy>=1.0",
+    "pyyaml>=6.0",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["unit: unit tests"]
+markers = [
+    "unit: unit tests",
+    "integration: integration tests (require built binary)",
+]
 
 [project.urls]
 Homepage = "https://github.com/eval-hub/eval-hub"

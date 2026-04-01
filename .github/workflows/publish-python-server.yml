@@ -133,6 +133,11 @@ jobs:
           fi
           make build-wheel WHEEL_PLATFORM=${{ steps.platform.outputs.tag }} WHEEL_BINARY=${{ matrix.binary-name }} $DEV_SUFFIX_ARG
 
+      - name: Smoke test with python-server tests
+        if: matrix.platform == 'manylinux' && matrix.arch == 'x86_64'
+        continue-on-error: true
+        run: make test-python-server || echo "::warning::python-server smoke tests failed — wheel will still be published"
+
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:

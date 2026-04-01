@@ -12,7 +12,6 @@ A lightweight REST API service for orchestrating LLM evaluations across multiple
 
 ![Architecture](docs/images/architecture.svg)
 
-
 The service uses Go's standard `net/http` router, structured logging with zap, Prometheus metrics, and a pluggable storage layer (SQLite for development, PostgreSQL for production). Providers and benchmarks are declared in YAML configuration files shipped with the container image.
 
 ## Quick start
@@ -87,12 +86,21 @@ Run a single test:
 go test -v ./internal/handlers -run TestHandleName
 ```
 
-
 To create a Python wheel distribution of the server for local development and testing:
 
 ```sh
 make cross-compile
 make build-wheel
+```
+
+### Exposing private functions for tests
+
+Create a file called `export_test.go`:
+
+```go
+package auth
+
+var MatchEndpoint = matchEndpoint
 ```
 
 ### Database
@@ -111,7 +119,7 @@ Then set `DB_URL` to a PostgreSQL connection string.
 Configuration is loaded from `config/config.yaml`, overridden by environment variables and secret files.
 
 | Variable | Purpose | Default |
-|---|---|---|
+| --- | --- | --- |
 | `PORT` | API listen port | `8080` |
 | `DB_URL` | Database connection string | SQLite in-memory |
 | `MLFLOW_TRACKING_URI` | MLflow tracking server | `http://localhost:5000` |
@@ -125,7 +133,7 @@ Provider configurations live in `config/providers/` as YAML files. The default s
 All endpoints are versioned under `/api/v1`. Full specification at [eval-hub.github.io/eval-hub](https://eval-hub.github.io/eval-hub/).
 
 | Endpoint | Methods | Description |
-|---|---|---|
+| --- | --- | --- |
 | `/api/v1/evaluations/jobs` | POST, GET | Create or list evaluation jobs |
 | `/api/v1/evaluations/jobs/{id}` | GET, DELETE | Get status or cancel a job |
 | `/api/v1/evaluations/collections` | GET, POST | List or create benchmark collections |
@@ -159,10 +167,9 @@ class MyAdapter(FrameworkAdapter):
 
 Register the new provider by adding a YAML entry to the providers ConfigMap. No additional services or TCP listeners are required -- adapters run as jobs, not servers. Once registered, the provider and its benchmarks are available through the standard `/api/v1/evaluations/providers` and `/api/v1/evaluations/benchmarks` endpoints.
 
-
 ## Project structure
 
-```
+```text
 eval-hub/
 ├── cmd/eval_hub/          # Entry point (main binary)
 ├── internal/

@@ -17,6 +17,7 @@ Feature: Collections Endpoint
     And the response should contain "name"
     And the response should contain "benchmarks"
     And the array at path "benchmarks" in the response should have length 1
+    And the response should contain the value "3" at path "benchmarks[0].parameters.weight"
 
   Scenario: Create a collection without benchmarks field returns 400
     Given the service is running
