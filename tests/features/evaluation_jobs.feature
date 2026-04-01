@@ -1,6 +1,6 @@
 @evaluations @cluster 
 
-Feature: Evaluations Endpoint with live cluster
+Feature: Evaluation Jobs
   As a data scientist
   I want to create evaluation jobs
   So that I evaluate models
@@ -40,7 +40,7 @@ Feature: Evaluations Endpoint with live cluster
   Scenario: Evaluation job with multiple benchmarks from same provider
     Given the service is running
     When the mode is local or CI then skip this scenario
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_cluster_multiple_benchmark.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_multiple_benchmark.json"
     Then the response code should be 202
     And the response should contain the value "pending" at path "$.status.state"
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
@@ -113,7 +113,7 @@ Feature: Evaluations Endpoint with live cluster
           }
         ],
         "experiment": {
-          "name": "automation_shared_cluster_experiment"
+          "name": "automation_shared_experiment"
         }
       }
       """
@@ -139,7 +139,7 @@ Feature: Evaluations Endpoint with live cluster
           }
         ],
         "experiment": {
-          "name": "automation_shared_cluster_experiment"
+          "name": "automation_shared_experiment"
         }
       }
       """
@@ -154,7 +154,7 @@ Feature: Evaluations Endpoint with live cluster
   Scenario: Collection job completes successfully
     Given the service is running
     When the mode is local or CI then skip this scenario
-    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_cluster.json"
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:collection_id"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_collection.json"
@@ -229,7 +229,7 @@ Feature: Evaluations Endpoint with live cluster
   Scenario: Multiple jobs sharing same collection can be submitted
     Given the service is running
     When the mode is local or CI then skip this scenario
-    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_cluster.json"
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:collection_id"
     And I set the header "X-User" to "test-user-1"
@@ -256,7 +256,7 @@ Feature: Evaluations Endpoint with live cluster
   Scenario: Collection jobs share same MLflow experiments
     Given the service is running
     When the mode is local or CI then skip this scenario
-    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_cluster.json"
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:collection_id"
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -271,7 +271,7 @@ Feature: Evaluations Endpoint with live cluster
           "id": "{{value:collection_id}}"
         },
         "experiment": {
-          "name": "automation_shared_cluster_experiment"
+          "name": "automation_shared_experiment"
         }
       }
       """
@@ -290,7 +290,7 @@ Feature: Evaluations Endpoint with live cluster
           "id": "{{value:collection_id}}"
         },
         "experiment": {
-          "name": "automation_shared_cluster_experiment"
+          "name": "automation_shared_experiment"
         }
       }
       """
