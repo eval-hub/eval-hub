@@ -2,11 +2,73 @@ package sql_test
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/storage"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
+	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
+
+func TestCollections_PassCriteria(t *testing.T) {
+	logger := logging.FallbackLogger()
+
+	validate := validation.NewValidator()
+	// set up the collection configs
+	collectionConfigs, err := config.LoadCollectionConfigs(logger, validate, "../../../../config")
+	if err != nil {
+		t.Fatalf("failed to create collection configs: %v", err)
+	}
+	if len(collectionConfigs) == 0 {
+		t.Fatalf("no collection configs loaded")
+	}
+
+	databaseConfig := map[string]any{
+		"driver":        "sqlite",
+		"url":           getDBInMemoryURL("eval_hub_pass_criteria"),
+		"database_name": "eval_hub_pass_criteria",
+	}
+	store, err := storage.NewStorage(&databaseConfig, collectionConfigs, nil, false, logger)
+	if err != nil {
+		t.Fatalf("failed to create storage: %v", err)
+	}
+
+	filter := &abstractions.QueryFilter{Limit: 50, Offset: 0, Params: map[string]any{"scope": "system"}}
+
+	t.Run("get system collections and check pass criteria", func(t *testing.T) {
+		res, err := store.GetCollections(filter)
+		if err != nil {
+			t.Fatalf("GetCollections: %v", err)
+		}
+		if len(res.Items) < 2 {
+			t.Errorf("expected 2 collections, got %d", len(res.Items))
+		}
+		for _, coll := range res.Items {
+			passCriteria := coll.CollectionConfig.PassCriteria.Threshold
+			// calculate the weighted average score
+			weightedAverage := float32(0.0)
+			totalWeight := float32(0.0)
+			if passCriteria < 0.0 {
+				t.Errorf("expected pass criteria to be at least 0.0, got %f", passCriteria)
+			}
+			for _, benchmark := range coll.CollectionConfig.Benchmarks {
+				weightedAverage += benchmark.Weight * benchmark.PassCriteria.Threshold
+				totalWeight += benchmark.Weight
+			}
+			weightedAverage /= totalWeight
+			// +/- 0.001?
+			if math.Abs(float64(weightedAverage-passCriteria)) > 0.001 {
+				t.Errorf("expected weighted average to be %f, got %f", passCriteria, weightedAverage)
+			} else {
+				t.Logf("weighted average for collection %s is %f", coll.Resource.ID, weightedAverage)
+			}
+		}
+	})
+}
 
 func TestApplyPatches(t *testing.T) {
 	t.Run("nil patches returns document unchanged", func(t *testing.T) {
