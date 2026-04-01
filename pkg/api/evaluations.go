@@ -103,7 +103,7 @@ type TestDataRef struct {
 type EvaluationBenchmarkConfig struct {
 	Ref          `mapstructure:",squash"`
 	ProviderID   string         `mapstructure:"provider_id" json:"provider_id" validate:"required"`
-	Weight       float32        `mapstructure:"weight" json:"weight,omitempty" validate:"omitempty,min=0,max=1"`
+	Weight       float32        `mapstructure:"weight" json:"weight,omitempty" validate:"omitempty,min=0"`
 	PrimaryScore *PrimaryScore  `mapstructure:"primary_score" json:"primary_score,omitempty"`
 	PassCriteria *PassCriteria  `mapstructure:"pass_criteria" json:"pass_criteria,omitempty"`
 	Parameters   map[string]any `mapstructure:"parameters" json:"parameters,omitempty"`

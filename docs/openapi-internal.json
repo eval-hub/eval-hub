@@ -1696,7 +1696,6 @@
                 "type": "number",
                 "format": "float",
                 "minimum": 0,
-                "maximum": 1,
                 "description": "Weight of this benchmark."
               },
               "primary_score": {
@@ -2364,7 +2363,6 @@
                 "type": "number",
                 "format": "float",
                 "minimum": 0,
-                "maximum": 1,
                 "description": "Weight of this benchmark."
               },
               "primary_score": {
