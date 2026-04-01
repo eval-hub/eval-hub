@@ -7,14 +7,11 @@
       "id": "arc_easy",
       "provider_id": "lm_evaluation_harness",
       "parameters": {
-<<<<<<< add-tests
         "num_examples": 10,
         "num_fewshot": 3,
         "limit": 5,
-        "tokenizer": "google/flan-t5-small"
-=======
+        "tokenizer": "google/flan-t5-small",
         "weight": 3
->>>>>>> main
       }
     }
   ]
