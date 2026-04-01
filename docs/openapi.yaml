@@ -1078,7 +1078,6 @@ components:
               type: number
               format: float
               minimum: 0
-              maximum: 1
               description: Weight of this benchmark.
             primary_score:
               $ref: '#/components/schemas/PrimaryScore'
@@ -1509,7 +1508,6 @@ components:
               type: number
               format: float
               minimum: 0
-              maximum: 1
               description: Weight of this benchmark.
             primary_score:
               $ref: '#/components/schemas/PrimaryScore'

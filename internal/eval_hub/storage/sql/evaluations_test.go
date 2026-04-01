@@ -11,36 +11,52 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/common"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/storage"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
-	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 var (
-	dbIndex = 0
+	drivers = []string{"sqlite", "postgres"}
 )
-
-func getDBName() string {
-	dbIndex++
-	return fmt.Sprintf("eval_hub_tenant_test_%d", dbIndex)
-}
-
-func getDBInMemoryURL() string {
-	// we want each test to use a unique in-memory database
-	return fmt.Sprintf("file:%s?mode=memory&cache=shared", getDBName())
-}
 
 // TestGetEvaluationJobs_TenantFilter verifies that WithTenant scopes list results
 // to only the jobs belonging to that tenant.
 func TestGetEvaluationJobs_TenantFilter(t *testing.T) {
-	logger := logging.FallbackLogger()
-	databaseConfig := map[string]any{
-		"driver":        "sqlite",
-		"url":           getDBInMemoryURL(),
-		"database_name": "eval_hub_tenant_test",
+	testGetEvaluationJobs_TenantFilter(t, drivers[0], getDBName())
+}
+func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
+	testUpdateEvaluationJob_PreservesProviderID(t, drivers[0], getDBName())
+}
+
+// TestStorage tests the storage implementation and provides
+// a simple way to debug the storage implementation.
+func TestEvaluationsStorage(t *testing.T) {
+	testEvaluationsStorage(t, drivers[0], getDBName())
+}
+
+func TestGetEvaluationJobs_Postgres(t *testing.T) {
+	image := false
+	databaseName := getDBName()
+	user, err := getPostgresUser()
+	if err != nil {
+		t.Skipf("Failed to get Postgres user: %v", err)
 	}
-	store, err := storage.NewStorage(&databaseConfig, nil, nil, false, logger)
+	if err := startPostgres(t, databaseName, user, image); err != nil {
+		t.Skipf("Skipping postgres tests: %v", err)
+	}
+
+	// we need to stop postgres after the test finishes
+	t.Cleanup(func() {
+		stopPostgres(t, databaseName, user, image)
+	})
+
+	testGetEvaluationJobs_TenantFilter(t, drivers[1], databaseName)
+	testUpdateEvaluationJob_PreservesProviderID(t, drivers[1], databaseName)
+	testEvaluationsStorage(t, drivers[1], databaseName)
+}
+
+func testGetEvaluationJobs_TenantFilter(t *testing.T, driver string, databaseName string) {
+	store, err := getTestStorage(t, driver, databaseName)
 	if err != nil {
 		t.Fatalf("failed to create storage: %v", err)
 	}
@@ -67,53 +83,59 @@ func TestGetEvaluationJobs_TenantFilter(t *testing.T) {
 		}
 	}
 
-	if err := store.CreateEvaluationJob(makeJob("job-team-a-1", "team-a")); err != nil {
+	tenantA := getTenant("team-a")
+	tenantB := getTenant("team-b")
+
+	jobID1 := common.GUID()
+	if err := store.CreateEvaluationJob(makeJob(jobID1, tenantA)); err != nil {
 		t.Fatalf("create job-team-a-1: %v", err)
 	}
-	if err := store.CreateEvaluationJob(makeJob("job-team-a-2", "team-a")); err != nil {
+	jobID2 := common.GUID()
+	if err := store.CreateEvaluationJob(makeJob(jobID2, tenantA)); err != nil {
 		t.Fatalf("create job-team-a-2: %v", err)
 	}
-	if err := store.CreateEvaluationJob(makeJob("job-team-b-1", "team-b")); err != nil {
+	jobID3 := common.GUID()
+	if err := store.CreateEvaluationJob(makeJob(jobID3, tenantB)); err != nil {
 		t.Fatalf("create job-team-b-1: %v", err)
 	}
 
 	filter := &abstractions.QueryFilter{Limit: 50, Offset: 0, Params: map[string]any{}}
 
 	t.Run("team-a sees only its own jobs", func(t *testing.T) {
-		res, err := store.WithTenant(api.Tenant("team-a")).GetEvaluationJobs(filter)
+		res, err := store.WithTenant(api.Tenant(tenantA)).GetEvaluationJobs(filter)
 		if err != nil {
 			t.Fatalf("GetEvaluationJobs: %v", err)
 		}
 		if len(res.Items) != 2 {
-			t.Errorf("expected 2 jobs for team-a, got %d", len(res.Items))
+			t.Fatalf("expected 2 jobs for team-a, got %d", len(res.Items))
 		}
 		for _, j := range res.Items {
-			if j.Resource.Tenant != "team-a" {
-				t.Errorf("unexpected tenant %q in result", j.Resource.Tenant)
+			if j.Resource.Tenant.String() != tenantA {
+				t.Fatalf("unexpected tenant %q in result", j.Resource.Tenant)
 			}
 		}
 	})
 
 	t.Run("team-b sees only its own jobs", func(t *testing.T) {
-		res, err := store.WithTenant(api.Tenant("team-b")).GetEvaluationJobs(filter)
+		res, err := store.WithTenant(api.Tenant(tenantB)).GetEvaluationJobs(filter)
 		if err != nil {
 			t.Fatalf("GetEvaluationJobs: %v", err)
 		}
 		if len(res.Items) != 1 {
-			t.Errorf("expected 1 job for team-b, got %d", len(res.Items))
+			t.Fatalf("expected 1 job for team-b, got %d", len(res.Items))
 		}
-		if res.Items[0].Resource.ID != "job-team-b-1" {
-			t.Errorf("expected job-team-b-1, got %q", res.Items[0].Resource.ID)
+		if res.Items[0].Resource.ID != jobID3 {
+			t.Fatalf("expected job-team-b-1, got %q", res.Items[0].Resource.ID)
 		}
 	})
 
 	t.Run("unknown tenant sees no jobs", func(t *testing.T) {
-		res, err := store.WithTenant(api.Tenant("team-c")).GetEvaluationJobs(filter)
+		res, err := store.WithTenant(api.Tenant(getTenant("team-c"))).GetEvaluationJobs(filter)
 		if err != nil {
 			t.Fatalf("GetEvaluationJobs: %v", err)
 		}
 		if len(res.Items) != 0 {
-			t.Errorf("expected 0 jobs for team-c, got %d", len(res.Items))
+			t.Fatalf("expected 0 jobs for team-c, got %d", len(res.Items))
 		}
 	})
 }
@@ -123,15 +145,9 @@ func TestGetEvaluationJobs_TenantFilter(t *testing.T) {
 //
 // Regression test for: provider_id was empty in results because the fallback
 // path in findAndUpdateBenchmarkStatus didn't preserve it from the status event.
-func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
+func testUpdateEvaluationJob_PreservesProviderID(t *testing.T, driver string, databaseName string) {
 	// Setup storage
-	logger := logging.FallbackLogger()
-	databaseConfig := map[string]any{
-		"driver":        "sqlite",
-		"url":           getDBInMemoryURL(),
-		"database_name": "eval_hub",
-	}
-	store, err := storage.NewStorage(&databaseConfig, nil, nil, false, logger)
+	store, err := getTestStorage(t, driver, databaseName)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -154,11 +170,11 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 	}
 
 	now := time.Now()
-
+	jobID := common.GUID()
 	job := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{
-				ID:        "job-1",
+				ID:        jobID,
 				Tenant:    api.Tenant("tenant-1"),
 				CreatedAt: now,
 				UpdatedAt: now,
@@ -255,12 +271,10 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 	}
 }
 
-// TestStorage tests the storage implementation and provides
-// a simple way to debug the storage implementation.
-func TestEvaluationsStorage(t *testing.T) {
-	var logger = logging.FallbackLogger()
+func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 	var store abstractions.Storage
 	var evaluationId string
+	var tenant string
 
 	var benchmarkConfig = api.EvaluationBenchmarkConfig{
 		Ref:        api.Ref{ID: "bench-1"},
@@ -268,15 +282,11 @@ func TestEvaluationsStorage(t *testing.T) {
 	}
 
 	t.Run("NewStorage creates a new storage instance", func(t *testing.T) {
-		databaseConfig := map[string]any{}
-		databaseConfig["driver"] = "sqlite"
-		databaseConfig["url"] = getDBInMemoryURL()
-		databaseConfig["database_name"] = "eval_hub"
-		s, err := storage.NewStorage(&databaseConfig, nil, nil, false, logger)
+		s, err := getTestStorage(t, driver, databaseName)
 		if err != nil {
 			t.Fatalf("Failed to create storage: %v", err)
 		}
-		store = s.WithLogger(logger)
+		store = s
 	})
 
 	t.Run("CreateEvaluationJob creates a new evaluation job", func(t *testing.T) {
@@ -294,12 +304,14 @@ func TestEvaluationsStorage(t *testing.T) {
 		}
 
 		now := time.Now()
+		tenant = getTenant("tenant-1")
+		store = store.WithTenant(api.Tenant(tenant))
 
 		job := &api.EvaluationJobResource{
 			Resource: api.EvaluationResource{
 				Resource: api.Resource{
 					ID:        common.GUID(),
-					Tenant:    api.Tenant("tenant-1"),
+					Tenant:    api.Tenant(tenant),
 					CreatedAt: now,
 					UpdatedAt: now,
 				},
@@ -474,7 +486,7 @@ func TestEvaluationsStorage(t *testing.T) {
 			Resource: api.EvaluationResource{
 				Resource: api.Resource{
 					ID:        jobID,
-					Tenant:    api.Tenant("tenant-1"),
+					Tenant:    api.Tenant(tenant),
 					CreatedAt: now,
 					UpdatedAt: now,
 				},
@@ -520,7 +532,7 @@ func TestEvaluationsStorage(t *testing.T) {
 			Resource: api.EvaluationResource{
 				Resource: api.Resource{
 					ID:        jobID,
-					Tenant:    api.Tenant("tenant-1"),
+					Tenant:    api.Tenant(tenant),
 					CreatedAt: now,
 					UpdatedAt: now,
 				},
@@ -568,7 +580,7 @@ func TestEvaluationsStorage(t *testing.T) {
 			Resource: api.EvaluationResource{
 				Resource: api.Resource{
 					ID:        jobID,
-					Tenant:    api.Tenant("tenant-1"),
+					Tenant:    api.Tenant(tenant),
 					CreatedAt: now,
 					UpdatedAt: now,
 				},
@@ -623,7 +635,7 @@ func TestEvaluationsStorage(t *testing.T) {
 				Resource: api.EvaluationResource{
 					Resource: api.Resource{
 						ID:        jobID,
-						Tenant:    api.Tenant("tenant-1"),
+						Tenant:    api.Tenant(tenant),
 						CreatedAt: now,
 						UpdatedAt: now,
 					},
@@ -717,7 +729,7 @@ func TestEvaluationsStorage(t *testing.T) {
 			Resource: api.EvaluationResource{
 				Resource: api.Resource{
 					ID:        jobID,
-					Tenant:    api.Tenant("tenant-1"),
+					Tenant:    api.Tenant(tenant),
 					CreatedAt: now,
 					UpdatedAt: now,
 				},
@@ -770,7 +782,7 @@ func TestEvaluationsStorage(t *testing.T) {
 			Resource: api.EvaluationResource{
 				Resource: api.Resource{
 					ID:        jobID2,
-					Tenant:    api.Tenant("tenant-1"),
+					Tenant:    api.Tenant(tenant),
 					CreatedAt: now,
 					UpdatedAt: now,
 				},
@@ -837,7 +849,7 @@ func TestEvaluationsStorage(t *testing.T) {
 			Resource: api.EvaluationResource{
 				Resource: api.Resource{
 					ID:        jobID,
-					Tenant:    api.Tenant("tenant-1"),
+					Tenant:    api.Tenant(tenant),
 					CreatedAt: now,
 					UpdatedAt: now,
 				},
@@ -940,4 +952,8 @@ func prettyPrint(v any) string {
 		return fmt.Sprintf("%v", v)
 	}
 	return string(jsonBytes)
+}
+
+func getTenant(tenant string) string {
+	return tenant + common.GUID()
 }
