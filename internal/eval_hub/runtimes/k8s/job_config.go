@@ -171,8 +171,8 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 
 	var queueKind, queueName string
 	if evaluation.Queue != nil {
-		queueName = evaluation.Queue.Name
-		queueKind = evaluation.Queue.Kind
+		queueName = strings.TrimSpace(evaluation.Queue.Name)
+		queueKind = strings.TrimSpace(evaluation.Queue.Kind)
 		if queueKind == "" {
 			queueKind = "kueue"
 		}
