@@ -12,12 +12,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       with:
         fetch-depth: 0
 
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
       with:
         go-version: '1.25'
 
@@ -41,7 +41,7 @@ jobs:
 
     - name: Upload coverage reports to Codecov
       continue-on-error: ${{ github.actor == 'dependabot[bot]' }}  # Don't fail CI on Dependabot PRs since they can't access secrets
-      uses: codecov/codecov-action@v5
+      uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
       with:
         files: ./bin/coverage.out,./bin/coverage-fvt.out,./bin/coverage-init.out
         disable_search: true
@@ -63,27 +63,27 @@ jobs:
       actions: read
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
       with:
         go-version-file: "go.mod"
 
     - name: Run Gosec Security Scanner
-      uses: securego/gosec@v2.19.0
+      uses: securego/gosec@26e57d6b340778c2983cd61775bc7e8bb41d002a # v2.19.0
       with:
         args: '-no-fail -fmt sarif -out gosec-results.sarif ./...'
 
     - name: Upload SARIF file to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@5c8a8a642e79153f5d047b10ec1cba1d1cc65699 # v3
       if: always()
       with:
         sarif_file: gosec-results.sarif
         category: "gosec-security-scan"
 
     - name: Upload Gosec results as artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       if: always()
       with:
         name: gosec-results
@@ -99,16 +99,16 @@ jobs:
       IMAGE_REPOSITORY: evalhub/evalhub
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
     - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
+      uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
     - name: Log in to Quay.io
-      uses: docker/login-action@v3
+      uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
       with:
         registry: ${{ env.IMAGE_REGISTRY }}
         username: ${{ secrets.QUAY_USERNAME }}
@@ -116,7 +116,7 @@ jobs:
 
     - name: Docker metadata
       id: meta
-      uses: docker/metadata-action@v5
+      uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
       env:
         DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
       with:
@@ -131,7 +131,7 @@ jobs:
           type=semver,pattern={{major}}.{{minor}}
 
     - name: Build and push Docker image
-      uses: docker/build-push-action@v6
+      uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
       id: build
       with:
         context: .
