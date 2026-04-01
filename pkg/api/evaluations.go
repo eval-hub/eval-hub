@@ -222,7 +222,7 @@ type CollectionRef struct {
 }
 
 // QueueConfig represents an optional scheduling queue for evaluation jobs.
-// When Kind is empty, runtimes treat it as "kueue".
+// When Kind is empty, the evaluation job API handler normalizes it to "kueue" before persist/runtime.
 type QueueConfig struct {
 	Kind string `json:"kind,omitempty" validate:"omitempty,oneof=kueue"`
 	Name string `json:"name" validate:"required"`

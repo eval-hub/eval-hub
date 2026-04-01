@@ -235,6 +235,42 @@ func TestResolveProvider_NotFound(t *testing.T) {
 	}
 }
 
+func TestApplyEvaluationJobQueueDefaults(t *testing.T) {
+	t.Parallel()
+	t.Run("nil config", func(t *testing.T) {
+		t.Parallel()
+		handlers.ApplyEvaluationJobQueueDefaults(nil)
+	})
+	t.Run("nil queue", func(t *testing.T) {
+		t.Parallel()
+		cfg := &api.EvaluationJobConfig{}
+		handlers.ApplyEvaluationJobQueueDefaults(cfg)
+		if cfg.Queue != nil {
+			t.Fatal("expected Queue to stay nil")
+		}
+	})
+	t.Run("empty kind defaults to kueue", func(t *testing.T) {
+		t.Parallel()
+		cfg := &api.EvaluationJobConfig{
+			Queue: &api.QueueConfig{Name: "  q1  ", Kind: "  "},
+		}
+		handlers.ApplyEvaluationJobQueueDefaults(cfg)
+		if cfg.Queue.Kind != "kueue" || cfg.Queue.Name != "q1" {
+			t.Fatalf("got kind %q name %q", cfg.Queue.Kind, cfg.Queue.Name)
+		}
+	})
+	t.Run("preserves explicit kind", func(t *testing.T) {
+		t.Parallel()
+		cfg := &api.EvaluationJobConfig{
+			Queue: &api.QueueConfig{Name: "q", Kind: "other"},
+		}
+		handlers.ApplyEvaluationJobQueueDefaults(cfg)
+		if cfg.Queue.Kind != "other" {
+			t.Fatalf("got kind %q", cfg.Queue.Kind)
+		}
+	})
+}
+
 /* TODO: Fix this test
 
 func TestHandleCreateEvaluationMarksFailedWhenRuntimeErrors(t *testing.T) {

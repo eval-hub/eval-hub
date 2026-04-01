@@ -66,7 +66,7 @@ type jobConfig struct {
 	testDataS3           s3TestDataConfig
 	testDataInitImage    string
 	sidecarConfig        *config.SidecarConfig
-	// queueKind and queueName come from evaluation.Queue when set (empty kind defaults to kueue).
+	// queueKind and queueName come from evaluation.Queue when set (API layer normalizes empty kind to kueue).
 	queueKind string
 	queueName string
 }
@@ -173,9 +173,6 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	if evaluation.Queue != nil {
 		queueName = strings.TrimSpace(evaluation.Queue.Name)
 		queueKind = strings.TrimSpace(evaluation.Queue.Kind)
-		if queueKind == "" {
-			queueKind = "kueue"
-		}
 	}
 
 	out := &jobConfig{
