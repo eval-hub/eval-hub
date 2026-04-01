@@ -3,6 +3,9 @@
     "@redocly/cli": "^2.24.0",
     "cucumber-html-reporter": "^7.2.0"
   },
+  "overrides": {
+    "semver": "^7.5.2"
+  },
   "scripts": {
     "lint-openapi": "redocly lint docs/src/openapi.yaml",
     "verify-api-docs": "redocly lint docs/src/openapi.yaml"
