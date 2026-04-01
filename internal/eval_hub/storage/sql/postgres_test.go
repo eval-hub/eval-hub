@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -46,7 +47,7 @@ func runMakeCommand(t *testing.T, databaseName string, user string, args ...stri
 	return cmd.Run()
 }
 
-func startPostgres(t *testing.T, databaseName string, user string, image bool) {
+func startPostgres(t *testing.T, databaseName string, user string, image bool) error {
 	if image {
 		_ = runMakeCommand(t, databaseName, user, "stop-postgres-container")
 		_ = runMakeCommand(t, databaseName, user, "delete-postgres-container")
@@ -55,14 +56,15 @@ func startPostgres(t *testing.T, databaseName string, user string, image bool) {
 			t.Fatalf("Failed to start postgres: %v", err)
 		}
 	} else {
+		t.Logf("Installing postgres GOOS=%s GOARCH=%s", runtime.GOOS, runtime.GOARCH)
 		err := runMakeCommand(t, databaseName, user, "install-postgres")
 		if err != nil {
 			// skip the rest of the test if we can not install postgres
-			t.Skipf("Skipping because postgres installation failed: %v", err)
+			return fmt.Errorf("failed to install postgres: %w", err)
 		}
 		err = runMakeCommand(t, databaseName, user, "start-postgres")
 		if err != nil {
-			t.Fatalf("Failed to start postgres: %v", err)
+			return fmt.Errorf("failed to start postgres: %w", err)
 		}
 		// HACK to wait for the startup
 		time.Sleep(10 * time.Second)
@@ -71,9 +73,10 @@ func startPostgres(t *testing.T, databaseName string, user string, image bool) {
 		_ = runMakeCommand(t, databaseName, user, "create-user")
 		err = runMakeCommand(t, databaseName, user, "grant-permissions")
 		if err != nil {
-			t.Fatalf("Failed to grant permissions: %v", err)
+			return fmt.Errorf("failed to grant permissions: %w", err)
 		}
 	}
+	return nil
 }
 
 func stopPostgres(t *testing.T, databaseName string, user string, image bool) {

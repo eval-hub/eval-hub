@@ -10,6 +10,8 @@ install-postgres:
 else ifeq ($(UNAME), Linux)
 install-postgres:
 	sudo apt-get install postgresql
+	sudo postgresql-setup --initdb
+	sudo systemctl enable postgresql.service
 else
 install-postgres:
 	echo "Unsupported platform: ${UNAME}"
@@ -21,7 +23,7 @@ start-postgres:
 	brew services start postgresql@${POSTGRES_VERSION}
 else ifeq ($(UNAME), Linux)
 start-postgres:
-	sudo systemctl start postgresql
+	sudo systemctl start postgresql.service
 endif
 
 ifeq (${UNAME}, Darwin)
@@ -29,7 +31,7 @@ stop-postgres:
 	brew services stop postgresql@${POSTGRES_VERSION}
 else ifeq ($(UNAME), Linux)
 stop-postgres:
-	sudo systemctl stop postgresql
+	sudo systemctl stop postgresql.service
 endif
 
 POSTGRES_DATABASE_NAME ?= eval_hub

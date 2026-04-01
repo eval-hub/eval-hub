@@ -41,7 +41,9 @@ func TestGetEvaluationJobs_Postgres(t *testing.T) {
 	if err != nil {
 		t.Skipf("Failed to get Postgres user: %v", err)
 	}
-	startPostgres(t, databaseName, user, image)
+	if err := startPostgres(t, databaseName, user, image); err != nil {
+		t.Skipf("Skipping postgres tests: %v", err)
+	}
 
 	// we need to stop postgres after the test finishes
 	t.Cleanup(func() {
