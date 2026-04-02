@@ -2148,9 +2148,7 @@ benchmarks:
   - id: truthfulqa_mc1
     name: Truthfulness
     description: |-
-      Combined multiple-choice and generative tests of model truthfulness.
-
-      This task is TruthfulQA multiple-choice (mc1): single-answer accuracy on 817 questions measuring resistance to common misconceptions.
+      TruthfulQA multiple-choice (mc1): single-answer accuracy on 817 questions measuring resistance to common misconceptions.
     category: safety
     metrics:
       - mc1_acc
