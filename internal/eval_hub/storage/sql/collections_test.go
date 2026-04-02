@@ -49,12 +49,12 @@ func TestCollections_PassCriteria(t *testing.T) {
 		}
 		for _, coll := range res.Items {
 			passCriteria := coll.CollectionConfig.PassCriteria.Threshold
-			// calculate the weighted average score
-			weightedAverage := float32(0.0)
-			totalWeight := float32(0.0)
 			if passCriteria < 0.0 {
 				t.Errorf("expected pass criteria to be at least 0.0, got %f", passCriteria)
 			}
+			// calculate the weighted average score
+			weightedAverage := float32(0.0)
+			totalWeight := float32(0.0)
 			for _, benchmark := range coll.CollectionConfig.Benchmarks {
 				weightedAverage += benchmark.Weight * benchmark.PassCriteria.Threshold
 				totalWeight += benchmark.Weight
