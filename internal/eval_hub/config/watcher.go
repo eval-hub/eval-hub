@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
@@ -84,6 +85,10 @@ func (w *Watcher) Watch(ctx context.Context) error {
 		return nil
 	}
 
+	// reloadWg tracks in-flight reload goroutines spawned by time.AfterFunc.
+	// Watch waits for them before returning so that callers (e.g. main) can
+	// safely close storage after Watch returns without racing with reload().
+	var reloadWg sync.WaitGroup
 	var debounceTimer *time.Timer
 	for {
 		select {
@@ -92,10 +97,12 @@ func (w *Watcher) Watch(ctx context.Context) error {
 			if debounceTimer != nil {
 				debounceTimer.Stop()
 			}
+			reloadWg.Wait()
 			return nil
 
 		case event, ok := <-watcher.Events:
 			if !ok {
+				reloadWg.Wait()
 				return nil
 			}
 			if !isRelevantEvent(event) {
@@ -106,14 +113,21 @@ func (w *Watcher) Watch(ctx context.Context) error {
 			// Debounce: ConfigMap updates and file writes can trigger multiple
 			// events in rapid succession. Wait for events to settle.
 			if debounceTimer != nil {
-				debounceTimer.Stop()
+				if debounceTimer.Stop() {
+					// Timer was pending and has been stopped; the callback
+					// won't fire, so release the WaitGroup ticket.
+					reloadWg.Done()
+				}
 			}
+			reloadWg.Add(1)
 			debounceTimer = time.AfterFunc(w.debounce, func() {
+				defer reloadWg.Done()
 				w.reload()
 			})
 
 		case err, ok := <-watcher.Errors:
 			if !ok {
+				reloadWg.Wait()
 				return nil
 			}
 			w.logger.Error("Config watcher error", "error", err.Error())
