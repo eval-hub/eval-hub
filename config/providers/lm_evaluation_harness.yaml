@@ -2133,10 +2133,9 @@ benchmarks:
       - ethics
       - lm_eval
   - id: toxigen
-    name: Toxigen
+    name: Harmful Content Generation Detection
     description: >
-      Adversarial toxicity generation benchmark; non-toxic continuation rate (implicit hate across groups).
-
+      Measures whether the model generates hateful, abusive, or toxic language — including both explicit hate speech and subtle, implicit toxicity targeting individuals or minority groups.
     category: safety
     metrics:
       - toxicity_score
@@ -2147,10 +2146,11 @@ benchmarks:
       - toxicity
       - lm_eval
   - id: truthfulqa_mc1
-    name: Truthfulqa mc1
-    description: >
-      TruthfulQA multiple-choice (mc1): single-answer accuracy measuring resistance to common misconceptions.
+    name: Truthfulness
+    description: |-
+      Combined multiple-choice and generative tests of model truthfulness.
 
+      This task is TruthfulQA multiple-choice (mc1): single-answer accuracy on 817 questions measuring resistance to common misconceptions.
     category: safety
     metrics:
       - mc1_acc
@@ -2161,11 +2161,23 @@ benchmarks:
       - safety
       - truthfulness
       - lm_eval
+  - id: hhh_alignment
+    name: Helpfulness, Honesty & Harmlessness (HHH)
+    description: >
+      Tests whether the model selects responses that are helpful, honest, and harmless — evaluating alignment with core ethical principles across paired-response comparisons.
+    category: safety
+    metrics:
+      - hhh_acc
+    num_few_shot: 0
+    tags:
+      - safety
+      - alignment
+      - hhh
+      - lm_eval
   - id: winogender
     name: Winogender
     description: >
       WinoGender: coreference resolution bias across occupations and pronouns (gender bias score).
-
     category: safety
     metrics:
       - gender_bias_score

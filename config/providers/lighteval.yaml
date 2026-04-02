@@ -55,7 +55,7 @@ benchmarks:
       - lighteval
       - suite
   - id: truthfulness
-    name: "Honesty & hallucination suite"
+    name: Truthfulness
     description: Combined multiple-choice and generative tests of model truthfulness.
     category: safety
     metrics:

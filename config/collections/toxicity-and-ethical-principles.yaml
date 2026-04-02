@@ -1,11 +1,11 @@
 id: toxicity-and-ethical-principles
-name: Toxicity and Ethical Principles Evaluation Collection
+name: Toxicity and Ethical Principles
 category: safety
 description: >
-  Curated suite for model safety: truthfulness (resistance to common misconceptions via TruthfulQA mc1),
-  toxicity (implicit and explicit hate across demographic groups via ToxiGen), and ethical alignment
-  (helpfulness, honesty, harmlessness via Anthropic HH-style preference tasks). Benchmarks map to
-  LM Evaluation Harness task ids truthfulqa_mc1, toxigen, and hhh_alignment.
+  End-to-end safety assessment covering three dimensions: toxic content generation targeting individuals or groups,
+  tendency to produce false or misleading information, and alignment with ethical principles of helpfulness,
+  honesty, and harmlessness (HHH). Benchmarks map to LM Evaluation Harness task ids toxigen, truthfulqa_mc1,
+  and hhh_alignment.
 tags:
   - toxicity
   - safety
