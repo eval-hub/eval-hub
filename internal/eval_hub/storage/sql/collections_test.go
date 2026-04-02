@@ -56,8 +56,22 @@ func TestCollections_PassCriteria(t *testing.T) {
 			weightedAverage := float32(0.0)
 			totalWeight := float32(0.0)
 			for _, benchmark := range coll.CollectionConfig.Benchmarks {
-				weightedAverage += benchmark.Weight * benchmark.PassCriteria.Threshold
-				totalWeight += benchmark.Weight
+				if benchmark.PassCriteria == nil {
+					t.Fatalf("collection %s benchmark %s is missing pass criteria", coll.Resource.ID, benchmark.ID)
+				}
+				weight := benchmark.Weight
+				if weight == 0 {
+					weight = 1
+				}
+				threshold := benchmark.PassCriteria.Threshold
+				if benchmark.PrimaryScore != nil && benchmark.PrimaryScore.LowerIsBetter {
+					threshold = 1 - threshold
+				}
+				weightedAverage += weight * threshold
+				totalWeight += weight
+			}
+			if totalWeight == 0 {
+				t.Fatalf("collection %s has no effective benchmark weights", coll.Resource.ID)
 			}
 			weightedAverage /= totalWeight
 			// +/- 0.001?
@@ -65,6 +79,77 @@ func TestCollections_PassCriteria(t *testing.T) {
 				t.Logf("expected weighted average for collection %s to be %f, got %f", coll.Resource.ID, passCriteria, weightedAverage)
 			} else {
 				t.Logf("weighted average for collection %s is %f", coll.Resource.ID, weightedAverage)
+			}
+		}
+	})
+}
+
+func TestCollections_BenchmarksExist(t *testing.T) {
+	logger := logging.FallbackLogger()
+
+	validate := validation.NewValidator()
+	// set up the collection configs
+	collectionConfigs, err := config.LoadCollectionConfigs(logger, validate, "../../../../config")
+	if err != nil {
+		t.Fatalf("failed to create collection configs: %v", err)
+	}
+	if len(collectionConfigs) == 0 {
+		t.Fatalf("no collection configs loaded")
+	}
+	// set up the provider configs
+	providerConfigs, err := config.LoadProviderConfigs(logger, validate, "../../../../config")
+	if err != nil {
+		t.Fatalf("failed to create provider configs: %v", err)
+	}
+	if len(providerConfigs) == 0 {
+		t.Fatalf("no provider configs loaded")
+	}
+
+	databaseConfig := map[string]any{
+		"driver":        "sqlite",
+		"url":           getDBInMemoryURL("eval_hub_pass_criteria"),
+		"database_name": "eval_hub_pass_criteria",
+	}
+	store, err := storage.NewStorage(&databaseConfig, collectionConfigs, providerConfigs, false, logger)
+	if err != nil {
+		t.Fatalf("failed to create storage: %v", err)
+	}
+
+	filter := &abstractions.QueryFilter{Limit: 50, Offset: 0, Params: map[string]any{"scope": "system"}}
+
+	t.Run("get system collections and check pass criteria", func(t *testing.T) {
+		res, err := store.GetCollections(filter)
+		if err != nil {
+			t.Fatalf("GetCollections: %v", err)
+		}
+		if len(res.Items) < 2 {
+			t.Errorf("expected 2 collections, got %d", len(res.Items))
+		}
+		for _, coll := range res.Items {
+			for _, benchmark := range coll.CollectionConfig.Benchmarks {
+				if benchmark.ProviderID == "" {
+					t.Errorf("expected provider ID for benchmark %s", benchmark.ID)
+				}
+				provider, err := store.GetProvider(benchmark.ProviderID)
+				if err != nil {
+					t.Errorf("failed to get provider %s: %v", benchmark.ProviderID, err)
+				}
+				if provider == nil {
+					t.Errorf("expected provider %s, got nil", benchmark.ProviderID)
+				}
+				if len(provider.Benchmarks) == 0 {
+					t.Errorf("expected benchmarks for provider %s, got 0", benchmark.ProviderID)
+				}
+				found := false
+				for _, pbenchmark := range provider.Benchmarks {
+					if pbenchmark.ID == benchmark.ID {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("expected benchmark %s for provider %s, got none", benchmark.ID, benchmark.ProviderID)
+				}
 			}
 		}
 	})
