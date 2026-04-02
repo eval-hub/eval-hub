@@ -91,6 +91,10 @@ type Storage interface {
 	PatchProvider(id string, patches *api.Patch) (*api.ProviderResource, error)
 	DeleteProvider(id string) error
 
+	// LoadSystemResources reloads system-owned providers and collections into
+	// the database. Existing system resources are deleted and replaced.
+	LoadSystemResources(systemCollections map[string]api.CollectionResource, systemProviders map[string]api.ProviderResource) error
+
 	// Close the storage connection
 	Close() error
 }

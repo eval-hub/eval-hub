@@ -11,7 +11,10 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
-func (s *sqlStorage) loadSystemResources(systemCollections map[string]api.CollectionResource, systemProviders map[string]api.ProviderResource) error {
+// LoadSystemResources reloads system-owned providers and collections into the
+// database. It deletes all existing system resources and inserts the new ones,
+// preserving CreatedAt/UpdatedAt timestamps for resources that already existed.
+func (s *sqlStorage) LoadSystemResources(systemCollections map[string]api.CollectionResource, systemProviders map[string]api.ProviderResource) error {
 	if (len(systemCollections) > 0) || (len(systemProviders) > 0) {
 		// for now we don't use a transaction here
 		var txn *sql.Tx

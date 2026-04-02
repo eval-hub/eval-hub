@@ -103,6 +103,9 @@ func (f *fakeStorage) PatchProvider(_ string, _ *api.Patch) (*api.ProviderResour
 	return nil, nil
 }
 func (f *fakeStorage) Close() error { return nil }
+func (f *fakeStorage) LoadSystemResources(_ map[string]api.CollectionResource, _ map[string]api.ProviderResource) error {
+	return nil
+}
 
 func (f *fakeStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 	return &fakeStorage{

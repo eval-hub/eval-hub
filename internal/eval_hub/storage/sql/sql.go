@@ -151,7 +151,7 @@ func NewStorage(
 	}
 
 	// load any system resources
-	if err := s.loadSystemResources(systemCollections, systemProviders); err != nil {
+	if err := s.LoadSystemResources(systemCollections, systemProviders); err != nil {
 		return nil, err
 	}
 

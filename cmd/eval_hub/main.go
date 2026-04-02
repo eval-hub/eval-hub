@@ -157,6 +157,16 @@ func main() {
 		"authentication", serviceConfig.IsAuthenticationEnabled(),
 	)
 
+	// Start config watcher to reload system providers and collections on file changes
+	watcherCtx, watcherCancel := context.WithCancel(context.Background())
+	defer watcherCancel()
+	configWatcher := config.NewWatcher(logger, validate, storage, args.ConfigDir)
+	go func() {
+		if err := configWatcher.Watch(watcherCtx); err != nil {
+			logger.Error("Config watcher failed", "error", err.Error())
+		}
+	}()
+
 	// Start server in a goroutine
 	go func() {
 		if err := srv.Start(); err != nil {
@@ -173,6 +183,9 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
+
+	// Stop config watcher
+	watcherCancel()
 
 	// Create a context with timeout for graceful shutdown
 	waitForShutdown := 30 * time.Second
