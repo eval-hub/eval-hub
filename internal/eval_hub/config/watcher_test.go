@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/fsnotify/fsnotify"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 )
 
 // mockStorage implements abstractions.Storage for testing the watcher's reload

@@ -15,11 +15,13 @@ import (
 // database. It deletes all existing system resources and inserts the new ones,
 // preserving CreatedAt/UpdatedAt timestamps for resources that already existed.
 func (s *sqlStorage) LoadSystemResources(systemCollections map[string]api.CollectionResource, systemProviders map[string]api.ProviderResource) error {
-	if (len(systemCollections) > 0) || (len(systemProviders) > 0) {
-		// for now we don't use a transaction here
-		var txn *sql.Tx
+	if (len(systemCollections) == 0) && (len(systemProviders) == 0) {
+		return nil
+	}
 
-		s.logger.Info("Loading system resources")
+	s.logger.Info("Loading system resources")
+
+	return s.withTransaction("load-system-resources", "system", func(txn *sql.Tx) error {
 		// we take the simplest approach here:
 		// 1. delete all existing system resources
 		// 2. insert the new system resources
@@ -152,6 +154,6 @@ func (s *sqlStorage) LoadSystemResources(systemCollections map[string]api.Collec
 			s.logger.Info("Loaded system providers", "added", strings.Join(addedProviders, ","), "updated", strings.Join(updatedProviders, ","), "deleted", strings.Join(deletedProviders, ","))
 		}
 		s.logger.Info("Loaded system resources")
-	}
-	return nil
+		return nil
+	})
 }
