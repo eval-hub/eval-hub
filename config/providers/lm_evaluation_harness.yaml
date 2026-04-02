@@ -2093,7 +2093,6 @@ benchmarks:
     name: BBQ
     description: >
       Bias Benchmark for QA (BBQ): measures social bias in question answering across disambiguated and ambiguous contexts.
-
     category: safety
     metrics:
       - accuracy_disambig
@@ -2108,7 +2107,6 @@ benchmarks:
     name: CrowS-Pairs English
     description: >
       CrowS-Pairs: measures stereotypical bias via contrastive sentence pairs (English).
-
     category: safety
     metrics:
       - bias_score
@@ -2122,7 +2120,6 @@ benchmarks:
     name: Ethics CM
     description: >
       Consequentialist ethics multiple-choice benchmark (commonsense moral scenarios).
-
     category: safety
     metrics:
       - ethics_cm_acc
@@ -2136,7 +2133,6 @@ benchmarks:
     name: ToxiGen
     description: >
       Adversarial toxicity generation benchmark; non-toxic continuation rate (implicit hate across groups).
-
     category: safety
     metrics:
       - toxicity_score
@@ -2150,11 +2146,10 @@ benchmarks:
     name: TruthfulQA MC1
     description: >
       TruthfulQA multiple-choice (mc1): single-answer accuracy measuring resistance to common misconceptions.
-
     category: safety
     metrics:
       - mc1_acc
-      - mc2_acc
+      # - mc2_acc
     num_few_shot: 0
     dataset_size: 817
     tags:
@@ -2165,7 +2160,6 @@ benchmarks:
     name: WinoGender
     description: >
       WinoGender: coreference resolution bias across occupations and pronouns (gender bias score).
-
     category: safety
     metrics:
       - gender_bias_score
