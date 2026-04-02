@@ -460,7 +460,7 @@ func (tc *scenarioConfig) iSetHeaderTo(paramName, paramValue string) error {
 	if err != nil {
 		return err
 	}
-	value, err = tc.getId(value)
+	value, err = tc.getValue(value)
 	if err != nil {
 		return err
 	}
@@ -677,7 +677,7 @@ func (tc *scenarioConfig) getAssetDetails(path string) (string, string, string, 
 	return "", "", "", tc.logError(fmt.Errorf("no first path segment found in path %s", path))
 }
 
-func (tc *scenarioConfig) getId(id string) (string, error) {
+func (tc *scenarioConfig) getValue(id string) (string, error) {
 	if strings.HasPrefix(id, valuePrefix) {
 		n := strings.TrimPrefix(id, valuePrefix)
 		v := tc.values[n]
@@ -696,7 +696,7 @@ func (tc *scenarioConfig) getEndpoint(path string) (string, error) {
 			re := regexp.MustCompile(`\{\{([^}]*)\}\}`)
 			match := re.FindStringSubmatch(path)
 			if len(match) > 1 {
-				v, err := tc.getId(match[1])
+				v, err := tc.getValue(match[1])
 				if err != nil {
 					return "", tc.logError(fmt.Errorf("failed to substitute value: %s", err.Error()))
 				}
@@ -1071,7 +1071,7 @@ func (tc *scenarioConfig) theResponseShouldNotContainAtJSONPath(expectedValue st
 }
 
 func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLengthValue(jsonPath string, lengthValue string) error {
-	value, err := tc.getId(lengthValue)
+	value, err := tc.getValue(lengthValue)
 	if err != nil {
 		return tc.logError(err)
 	}
@@ -1098,9 +1098,13 @@ func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLength(jsonPath stri
 }
 
 func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLengthAtLeast(jsonPath string, minLengthStr string) error {
-	minLength, err := strconv.Atoi(minLengthStr)
+	value, err := tc.getValue(minLengthStr)
 	if err != nil {
-		return tc.logError(fmt.Errorf("expected integer min length, got %q: %w", minLengthStr, err))
+		return err
+	}
+	minLength, err := strconv.Atoi(value)
+	if err != nil {
+		return tc.logError(fmt.Errorf("expected integer min length, got %q: %w", value, err))
 	}
 	raw, err := tc.getJsonPathValue(jsonPath)
 	if err != nil {
@@ -1342,6 +1346,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLength)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length "([^"]*)"$`, tc.theArrayAtPathInResponseShouldHaveLengthValue)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
+	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least "([^"]*)"$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^I wait for the evaluation job status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatus)
 	ctx.Step(`^the mode is local or CI then skip this scenario$`, tc.whenTheModeIsLocalOrCIThenSkipThisScenario)
 	// Other steps

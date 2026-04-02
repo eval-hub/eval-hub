@@ -16,12 +16,12 @@ runtime:
     # command is set to true for test-fvt-server-coverage as it runs in local mode.
     # In actual custom provider configurations, it will be set to the actual command to run.
     command: "true"
-
 benchmarks:
   # Category benchmarks (these expand to multiple tasks)
   - id: commonsense_reasoning
-    name: Commonsense Reasoning Suite
-    description: Suite of commonsense reasoning benchmarks (hellaswag, winogrande, openbookqa, arc:easy)
+    name: Everyday reasoning suite
+    description: |-
+      Aggregated commonsense tests: activity completion, pronoun resolution, open-book QA, and science reasoning.
     category: reasoning
     metrics:
       - accuracy
@@ -31,10 +31,9 @@ benchmarks:
       - commonsense
       - lighteval
       - suite
-
   - id: scientific_reasoning
-    name: Scientific Reasoning Suite
-    description: Scientific reasoning benchmarks (arc:easy, arc:challenge)
+    name: Science reasoning suite
+    description: Combined easy and hard science question answering (ARC Easy + Challenge).
     category: reasoning
     metrics:
       - accuracy
@@ -44,10 +43,9 @@ benchmarks:
       - science
       - lighteval
       - suite
-
   - id: physical_commonsense
-    name: Physical Commonsense Suite
-    description: Physical commonsense reasoning (piqa)
+    name: Physical world understanding suite
+    description: Tests intuition about how everyday physical objects and actions work.
     category: reasoning
     metrics:
       - accuracy
@@ -56,10 +54,9 @@ benchmarks:
       - physical
       - lighteval
       - suite
-
   - id: truthfulness
-    name: Truthfulness Suite
-    description: Truthfulness and hallucination benchmarks (truthfulqa:mc, truthfulqa:generation)
+    name: "Honesty & hallucination suite"
+    description: Combined multiple-choice and generative tests of model truthfulness.
     category: safety
     metrics:
       - mc1
@@ -69,10 +66,9 @@ benchmarks:
       - truthfulness
       - lighteval
       - suite
-
   - id: math
-    name: Math Suite
-    description: Mathematical reasoning benchmarks (gsm8k, math:algebra, math:counting_and_probability)
+    name: Mathematical problem-solving suite
+    description: "Aggregated math benchmarks: grade-school word problems, algebra, and probability."
     category: math
     metrics:
       - exact_match
@@ -82,10 +78,9 @@ benchmarks:
       - reasoning
       - lighteval
       - suite
-
   - id: knowledge
-    name: Knowledge Suite
-    description: Knowledge benchmarks (mmlu, triviaqa)
+    name: Factual knowledge suite
+    description: Combined factual recall across 57 academic subjects and trivia.
     category: knowledge
     metrics:
       - accuracy
@@ -94,10 +89,9 @@ benchmarks:
       - knowledge
       - lighteval
       - suite
-
   - id: language_understanding
-    name: Language Understanding Suite
-    description: GLUE language understanding tasks (glue:cola, glue:sst2, glue:mrpc)
+    name: Language understanding suite
+    description: "Core NLU tasks: grammaticality, sentiment, and paraphrase detection (GLUE)."
     category: language_understanding
     metrics:
       - accuracy
@@ -108,11 +102,10 @@ benchmarks:
       - glue
       - lighteval
       - suite
-
   # Individual benchmarks
   - id: hellaswag
-    name: HellaSwag
-    description: Commonsense reasoning around everyday activities
+    name: Everyday activity completion
+    description: Picks the most plausible continuation of an everyday scenario (10,042 examples).
     category: reasoning
     metrics:
       - accuracy
@@ -123,10 +116,9 @@ benchmarks:
       - reasoning
       - commonsense
       - lighteval
-
   - id: winogrande
-    name: Winogrande
-    description: Commonsense reasoning with pronoun resolution
+    name: Pronoun common sense
+    description: Resolves ambiguous pronouns using real-world common sense (1,267 examples).
     category: reasoning
     metrics:
       - accuracy
@@ -136,10 +128,10 @@ benchmarks:
       - reasoning
       - commonsense
       - lighteval
-
   - id: openbookqa
-    name: OpenBookQA
-    description: Question answering with open book knowledge
+    name: Open-book science reasoning
+    description: |-
+      Answers science questions with access to core facts — tests multi-hop reasoning (500 examples).
     category: knowledge
     metrics:
       - accuracy
@@ -150,10 +142,9 @@ benchmarks:
       - knowledge
       - qa
       - lighteval
-
   - id: arc:easy
-    name: ARC Easy
-    description: AI2 Reasoning Challenge - Easy subset
+    name: "Basic science Q&A"
+    description: Easy grade-school science questions (2,376 examples).
     category: reasoning
     metrics:
       - accuracy
@@ -164,10 +155,9 @@ benchmarks:
       - reasoning
       - science
       - lighteval
-
   - id: arc:challenge
-    name: ARC Challenge
-    description: AI2 Reasoning Challenge - Challenge subset
+    name: "Hard science Q&A"
+    description: Difficult science questions requiring deeper reasoning than ARC Easy (1,172 examples).
     category: reasoning
     metrics:
       - accuracy
@@ -178,10 +168,9 @@ benchmarks:
       - reasoning
       - science
       - lighteval
-
   - id: piqa
-    name: PIQA
-    description: Physical Interaction QA - physical commonsense reasoning
+    name: Physical interaction intuition
+    description: Tests understanding of everyday physical actions and their outcomes (1,838 examples).
     category: reasoning
     metrics:
       - accuracy
@@ -191,10 +180,9 @@ benchmarks:
       - reasoning
       - physical
       - lighteval
-
   - id: truthfulqa:mc
-    name: TruthfulQA MC
-    description: Measures truthfulness with multiple choice format
+    name: Misconception resistance (multiple choice)
+    description: Tests whether the model avoids popular myths and common misconceptions (817 questions).
     category: safety
     metrics:
       - mc1
@@ -205,10 +193,9 @@ benchmarks:
       - safety
       - truthfulness
       - lighteval
-
   - id: truthfulqa:generation
-    name: TruthfulQA Generation
-    description: Measures truthfulness with generation format
+    name: Misconception resistance (generative)
+    description: Tests whether generated answers are truthful and non-misleading (817 questions).
     category: safety
     metrics:
       - bleu
@@ -219,10 +206,10 @@ benchmarks:
       - safety
       - truthfulness
       - lighteval
-
   - id: gsm8k
-    name: GSM8K
-    description: Grade School Math 8K - arithmetic reasoning
+    name: Grade-school math word problems
+    description: |-
+      Multi-step arithmetic word problems requiring 2-8 reasoning steps (8-shot, 1,319 examples).
     category: math
     metrics:
       - exact_match
@@ -233,10 +220,9 @@ benchmarks:
       - math
       - reasoning
       - lighteval
-
   - id: math:algebra
-    name: MATH Algebra
-    description: Mathematical reasoning - Algebra subset
+    name: Competition algebra
+    description: Competition-level algebra problems requiring symbolic manipulation and proof strategies.
     category: math
     metrics:
       - accuracy
@@ -245,10 +231,9 @@ benchmarks:
       - math
       - algebra
       - lighteval
-
   - id: math:counting_and_probability
-    name: MATH Counting & Probability
-    description: Mathematical reasoning - Counting and Probability subset
+    name: "Counting & probability problems"
+    description: Competition-level combinatorics and probability reasoning.
     category: math
     metrics:
       - accuracy
@@ -257,9 +242,8 @@ benchmarks:
       - math
       - probability
       - lighteval
-
   - id: aime24
-    name: AIME 2024
+    name: Aime 2024
     description: American Invitational Mathematics Examination 2024 - competition-level mathematical reasoning
     category: reasoning
     metrics:
@@ -272,9 +256,8 @@ benchmarks:
       - math
       - competition
       - lighteval
-
   - id: aime25
-    name: AIME 2025
+    name: Aime 2025
     description: American Invitational Mathematics Examination 2025 - competition-level mathematical reasoning
     category: reasoning
     metrics:
@@ -287,10 +270,10 @@ benchmarks:
       - math
       - competition
       - lighteval
-
   - id: mmlu
-    name: MMLU
-    description: Massive Multitask Language Understanding - 57 subjects
+    name: 57-Subject knowledge test
+    description: |-
+      Factual recall and reasoning across 57 academic subjects from STEM to humanities (5-shot, 15,908 examples).
     category: knowledge
     metrics:
       - accuracy
@@ -301,10 +284,9 @@ benchmarks:
       - knowledge
       - multitask
       - lighteval
-
   - id: triviaqa
-    name: TriviaQA
-    description: Large-scale question answering dataset
+    name: Trivia factual recall
+    description: Answers trivia questions using evidence from web pages and Wikipedia.
     category: knowledge
     metrics:
       - accuracy
@@ -314,10 +296,9 @@ benchmarks:
       - knowledge
       - qa
       - lighteval
-
   - id: glue:cola
-    name: GLUE CoLA
-    description: Corpus of Linguistic Acceptability
+    name: Grammatical acceptability
+    description: Judges whether English sentences are grammatically acceptable.
     category: language_understanding
     metrics:
       - matthews_correlation
@@ -326,10 +307,9 @@ benchmarks:
       - language_understanding
       - glue
       - lighteval
-
   - id: glue:sst2
-    name: GLUE SST-2
-    description: Stanford Sentiment Treebank
+    name: Sentiment classification
+    description: Classifies movie review sentences as positive or negative.
     category: language_understanding
     metrics:
       - accuracy
@@ -339,10 +319,9 @@ benchmarks:
       - glue
       - sentiment
       - lighteval
-
   - id: glue:mrpc
-    name: GLUE MRPC
-    description: Microsoft Research Paraphrase Corpus
+    name: Paraphrase detection
+    description: Determines whether two sentences express the same meaning.
     category: language_understanding
     metrics:
       - accuracy
