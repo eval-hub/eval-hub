@@ -19,7 +19,7 @@ runtime:
 benchmarks:
   # Execution profiles - comprehensive performance testing
   - id: sweep
-    name: Auto-Discover Optimal Load
+    name: Auto-discover optimal load
     description: |-
       Automatically sweeps from low to high concurrency to find the best throughput-latency tradeoff.
     category: performance
@@ -36,7 +36,7 @@ benchmarks:
       - guidellm
       - auto
   - id: throughput
-    name: Maximum Throughput Discovery
+    name: Maximum throughput discovery
     description: |-
       Finds the server's maximum requests-per-second by gradually increasing load until saturation.
     category: performance
@@ -52,7 +52,7 @@ benchmarks:
       - guidellm
       - saturation
   - id: concurrent
-    name: Fixed Concurrency Stress Test
+    name: Fixed concurrency stress test
     description: Measures latency and throughput under a fixed number of simultaneous requests.
     category: performance
     metrics:
@@ -66,7 +66,7 @@ benchmarks:
       - concurrency
       - guidellm
   - id: constant
-    name: Steady-State Load Test
+    name: Steady-state load test
     description: Measures performance under a sustained, constant request rate over time.
     category: performance
     metrics:
@@ -80,7 +80,7 @@ benchmarks:
       - constant_rate
       - guidellm
   - id: poisson
-    name: Realistic Traffic Simulation
+    name: Realistic traffic simulation
     description: Simulates real-world traffic patterns using Poisson-distributed request arrivals.
     category: performance
     metrics:
@@ -96,7 +96,7 @@ benchmarks:
       - guidellm
   # Pre-configured benchmark suites
   - id: quick_perf_test
-    name: Quick Performance Snapshot
+    name: Quick performance snapshot
     description: Fast sweep-based evaluation with limited samples for rapid performance assessment.
     category: performance
     metrics:
@@ -109,7 +109,7 @@ benchmarks:
       - guidellm
       - suite
   - id: comprehensive_perf_test
-    name: Full Performance Characterization
+    name: Full performance characterization
     description: End-to-end evaluation across all load profiles for complete performance understanding.
     category: performance
     metrics:

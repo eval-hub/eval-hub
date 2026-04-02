@@ -19,7 +19,7 @@ runtime:
 benchmarks:
   # Category benchmarks (these expand to multiple tasks)
   - id: commonsense_reasoning
-    name: Everyday Reasoning Suite
+    name: Everyday reasoning suite
     description: |-
       Aggregated commonsense tests: activity completion, pronoun resolution, open-book QA, and science reasoning.
     category: reasoning
@@ -32,7 +32,7 @@ benchmarks:
       - lighteval
       - suite
   - id: scientific_reasoning
-    name: Science Reasoning Suite
+    name: Science reasoning suite
     description: Combined easy and hard science question answering (ARC Easy + Challenge).
     category: reasoning
     metrics:
@@ -44,7 +44,7 @@ benchmarks:
       - lighteval
       - suite
   - id: physical_commonsense
-    name: Physical World Understanding Suite
+    name: Physical world understanding suite
     description: Tests intuition about how everyday physical objects and actions work.
     category: reasoning
     metrics:
@@ -55,7 +55,7 @@ benchmarks:
       - lighteval
       - suite
   - id: truthfulness
-    name: "Honesty & Hallucination Suite"
+    name: "Honesty & hallucination suite"
     description: Combined multiple-choice and generative tests of model truthfulness.
     category: safety
     metrics:
@@ -67,7 +67,7 @@ benchmarks:
       - lighteval
       - suite
   - id: math
-    name: Mathematical Problem-Solving Suite
+    name: Mathematical problem-solving suite
     description: "Aggregated math benchmarks: grade-school word problems, algebra, and probability."
     category: math
     metrics:
@@ -79,7 +79,7 @@ benchmarks:
       - lighteval
       - suite
   - id: knowledge
-    name: Factual Knowledge Suite
+    name: Factual knowledge suite
     description: Combined factual recall across 57 academic subjects and trivia.
     category: knowledge
     metrics:
@@ -90,7 +90,7 @@ benchmarks:
       - lighteval
       - suite
   - id: language_understanding
-    name: Language Understanding Suite
+    name: Language understanding suite
     description: "Core NLU tasks: grammaticality, sentiment, and paraphrase detection (GLUE)."
     category: language_understanding
     metrics:
@@ -104,7 +104,7 @@ benchmarks:
       - suite
   # Individual benchmarks
   - id: hellaswag
-    name: Everyday Activity Completion
+    name: Everyday activity completion
     description: Picks the most plausible continuation of an everyday scenario (10,042 examples).
     category: reasoning
     metrics:
@@ -117,7 +117,7 @@ benchmarks:
       - commonsense
       - lighteval
   - id: winogrande
-    name: Pronoun Common Sense
+    name: Pronoun common sense
     description: Resolves ambiguous pronouns using real-world common sense (1,267 examples).
     category: reasoning
     metrics:
@@ -129,7 +129,7 @@ benchmarks:
       - commonsense
       - lighteval
   - id: openbookqa
-    name: Open-Book Science Reasoning
+    name: Open-book science reasoning
     description: |-
       Answers science questions with access to core facts — tests multi-hop reasoning (500 examples).
     category: knowledge
@@ -143,7 +143,7 @@ benchmarks:
       - qa
       - lighteval
   - id: arc:easy
-    name: "Basic Science Q&A"
+    name: "Basic science Q&A"
     description: Easy grade-school science questions (2,376 examples).
     category: reasoning
     metrics:
@@ -156,7 +156,7 @@ benchmarks:
       - science
       - lighteval
   - id: arc:challenge
-    name: "Hard Science Q&A"
+    name: "Hard science Q&A"
     description: Difficult science questions requiring deeper reasoning than ARC Easy (1,172 examples).
     category: reasoning
     metrics:
@@ -169,7 +169,7 @@ benchmarks:
       - science
       - lighteval
   - id: piqa
-    name: Physical Interaction Intuition
+    name: Physical interaction intuition
     description: Tests understanding of everyday physical actions and their outcomes (1,838 examples).
     category: reasoning
     metrics:
@@ -181,7 +181,7 @@ benchmarks:
       - physical
       - lighteval
   - id: truthfulqa:mc
-    name: Misconception Resistance (Multiple Choice)
+    name: Misconception resistance (multiple choice)
     description: Tests whether the model avoids popular myths and common misconceptions (817 questions).
     category: safety
     metrics:
@@ -194,7 +194,7 @@ benchmarks:
       - truthfulness
       - lighteval
   - id: truthfulqa:generation
-    name: Misconception Resistance (Generative)
+    name: Misconception resistance (generative)
     description: Tests whether generated answers are truthful and non-misleading (817 questions).
     category: safety
     metrics:
@@ -207,7 +207,7 @@ benchmarks:
       - truthfulness
       - lighteval
   - id: gsm8k
-    name: Grade-School Math Word Problems
+    name: Grade-school math word problems
     description: |-
       Multi-step arithmetic word problems requiring 2-8 reasoning steps (8-shot, 1,319 examples).
     category: math
@@ -221,7 +221,7 @@ benchmarks:
       - reasoning
       - lighteval
   - id: math:algebra
-    name: Competition Algebra
+    name: Competition algebra
     description: Competition-level algebra problems requiring symbolic manipulation and proof strategies.
     category: math
     metrics:
@@ -232,7 +232,7 @@ benchmarks:
       - algebra
       - lighteval
   - id: math:counting_and_probability
-    name: "Counting & Probability Problems"
+    name: "Counting & probability problems"
     description: Competition-level combinatorics and probability reasoning.
     category: math
     metrics:
@@ -243,7 +243,7 @@ benchmarks:
       - probability
       - lighteval
   - id: aime24
-    name: AIME 2024
+    name: Aime 2024
     description: American Invitational Mathematics Examination 2024 - competition-level mathematical reasoning
     category: reasoning
     metrics:
@@ -257,7 +257,7 @@ benchmarks:
       - competition
       - lighteval
   - id: aime25
-    name: AIME 2025
+    name: Aime 2025
     description: American Invitational Mathematics Examination 2025 - competition-level mathematical reasoning
     category: reasoning
     metrics:
@@ -271,7 +271,7 @@ benchmarks:
       - competition
       - lighteval
   - id: mmlu
-    name: 57-Subject Knowledge Test
+    name: 57-Subject knowledge test
     description: |-
       Factual recall and reasoning across 57 academic subjects from STEM to humanities (5-shot, 15,908 examples).
     category: knowledge
@@ -285,7 +285,7 @@ benchmarks:
       - multitask
       - lighteval
   - id: triviaqa
-    name: Trivia Factual Recall
+    name: Trivia factual recall
     description: Answers trivia questions using evidence from web pages and Wikipedia.
     category: knowledge
     metrics:
@@ -297,7 +297,7 @@ benchmarks:
       - qa
       - lighteval
   - id: glue:cola
-    name: Grammatical Acceptability
+    name: Grammatical acceptability
     description: Judges whether English sentences are grammatically acceptable.
     category: language_understanding
     metrics:
@@ -308,7 +308,7 @@ benchmarks:
       - glue
       - lighteval
   - id: glue:sst2
-    name: Sentiment Classification
+    name: Sentiment classification
     description: Classifies movie review sentences as positive or negative.
     category: language_understanding
     metrics:
@@ -320,7 +320,7 @@ benchmarks:
       - sentiment
       - lighteval
   - id: glue:mrpc
-    name: Paraphrase Detection
+    name: Paraphrase detection
     description: Determines whether two sentences express the same meaning.
     category: language_understanding
     metrics:
