@@ -128,14 +128,14 @@ func TestCollections_BenchmarksExist(t *testing.T) {
 		for _, coll := range res.Items {
 			for _, benchmark := range coll.CollectionConfig.Benchmarks {
 				if benchmark.ProviderID == "" {
-					t.Errorf("expected provider ID for benchmark %s", benchmark.ID)
+					t.Fatalf("expected provider ID for benchmark %s", benchmark.ID)
 				}
 				provider, err := store.GetProvider(benchmark.ProviderID)
 				if err != nil {
-					t.Errorf("failed to get provider %s: %v", benchmark.ProviderID, err)
+					t.Fatalf("failed to get provider %s: %v", benchmark.ProviderID, err)
 				}
 				if provider == nil {
-					t.Errorf("expected provider %s, got nil", benchmark.ProviderID)
+					t.Fatalf("expected provider %s, got nil", benchmark.ProviderID)
 				}
 				if len(provider.Benchmarks) == 0 {
 					t.Errorf("expected benchmarks for provider %s, got 0", benchmark.ProviderID)
