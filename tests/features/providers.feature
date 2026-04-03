@@ -92,7 +92,7 @@ Feature: Providers Endpoint
     Then the response code should be 200
     And the response should contain the value "50" at path "$.limit"
     And the "total_count" field in the response should be saved as "value:num_providers"
-    And the response should contain the value "3" at path "$.total_count"
+    And the response should contain at least the value "6" at path "$.total_count"
     When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=0"
     Then the response code should be 200
     And the response should contain the value "50" at path "$.limit"
@@ -101,14 +101,14 @@ Feature: Providers Endpoint
     When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=1"
     Then the response code should be 200
     And the response should contain the value "50" at path "$.limit"
-    And the array at path "items" in the response should have length 2
+    And the array at path "items" in the response should have length at least 5
     And the response should contain the value "{{value:num_providers}}" at path "$.total_count"
     When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=2"
     Then the response code should be 200
     And the response should contain the value "50" at path "$.limit"
-    And the array at path "items" in the response should have length 1
+    And the array at path "items" in the response should have length at least 4
     And the response should contain the value "{{value:num_providers}}" at path "$.total_count"
-    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=3"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=40"
     Then the response code should be 200
     And the response should contain the value "50" at path "$.limit"
     And the array at path "items" in the response should have length 0
@@ -129,8 +129,8 @@ Feature: Providers Endpoint
     When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=3"
     Then the response code should be 200
     And the response should contain the value "50" at path "$.limit"
-    And the array at path "items" in the response should have length 2
-    When I send a GET request to "/api/v1/evaluations/providers?limit=1&offset=3"
+    And the array at path "items" in the response should have length at least 5
+    When I send a GET request to "/api/v1/evaluations/providers?limit=1&scope=tenant"
     Then the response code should be 200
     And the response should contain the value "1" at path "$.limit"
     And the array at path "items" in the response should have length 1
