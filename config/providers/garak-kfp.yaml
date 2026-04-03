@@ -1,0 +1,112 @@
+id: garak-kfp
+name: Garak KFP
+title: Garak KFP
+description: LLM vulnerability scanner and red-teaming framework with KFP execution mode
+runtime:
+  k8s:
+    image: quay.io/opendatahub/odh-trustyai-garak-lls-provider-dsp:odh-3.4
+    entrypoint:
+      - python
+      - -m
+      - llama_stack_provider_trustyai_garak.evalhub.kfp_adapter
+    cpu_request: 100m
+    memory_request: 128Mi
+    cpu_limit: 500m
+    memory_limit: 1Gi
+    env:
+      - name: KUBEFLOW_GARAK_BASE_IMAGE
+        value: quay.io/opendatahub/odh-trustyai-garak-lls-provider-dsp:odh-3.4
+  local: null
+benchmarks:
+  - id: intents
+    name: Context Aware Scan
+    description: Context Aware Scan with KFP execution mode
+    category: security
+    metrics:
+      - attack_success_rate
+    tags:
+      - security
+      - intents
+      - red_team
+  - id: owasp_llm_top10
+    name: OWASP LLM Top 10
+    description: OWASP Top 10 for Large Language Model Applications
+    category: security
+    metrics:
+      - attack_success_rate
+    tags:
+      - security
+      - owasp
+      - red_team
+  - id: avid
+    name: AVID Taxonomy
+    description: AI Vulnerability and Incident Database - All vulnerabilities
+    category: security
+    metrics:
+      - attack_success_rate
+    tags:
+      - security
+      - avid
+      - red_team
+  - id: avid_security
+    name: AVID Security Taxonomy
+    description: AI Vulnerability and Incident Database - Security vulnerabilities
+    category: security
+    metrics:
+      - attack_success_rate
+    tags:
+      - security
+      - avid
+      - red_team
+  - id: avid_ethics
+    name: AVID Ethics Taxonomy
+    description: AI Vulnerability and Incident Database - Ethical concerns
+    category: safety
+    metrics:
+      - attack_success_rate
+    tags:
+      - safety
+      - ethics
+      - avid
+      - red_team
+  - id: avid_performance
+    name: AVID Performance Taxonomy
+    description: AI Vulnerability and Incident Database - Performance issues
+    category: performance
+    metrics:
+      - attack_success_rate
+    tags:
+      - performance
+      - avid
+      - red_team
+  - id: quality
+    name: Quality Issues
+    description: Common quality issues like Violence, Profanity, Toxicity, Hate Speech, Integrity, etc.
+    category: safety
+    metrics:
+      - attack_success_rate
+    tags:
+      - safety
+      - quality
+      - toxicity
+      - red_team
+  - id: cwe
+    name: Common Weakness Enumeration
+    description: Common Weakness Enumeration - Software security weaknesses
+    category: security
+    metrics:
+      - attack_success_rate
+    tags:
+      - security
+      - cwe
+      - red_team
+  - id: quick
+    name: Quick Scan
+    description: Quick scan with a single probe for testing and validation
+    category: security
+    metrics:
+      - attack_success_rate
+    tags:
+      - security
+      - quick
+      - red_team
