@@ -63,10 +63,7 @@ Eval Hub is an API REST server that serves as a routing and orchestration layer 
 
 3. **Configure Environment**
 
-   ```bash
-   # Edit config/config.yaml and/or set environment variables (see env_mappings in config)
-   # There is no committed .env file; use your own local env vars or secrets as needed
-   ```
+   Local settings are layered from [config/config.yaml](config/config.yaml): you can set values directly in that file; override them with environment variables listed under the `env_mappings` key (each entry maps an env var name to a config path, for example `PORT` → `service.port`); and load sensitive values from files under `secrets.dir` using `secrets.mappings` (each entry maps a secret file basename in that directory to a config path). The repository does not include a committed `.env` file; use exported environment variables, secret files you place under `secrets.dir`, and/or edits to `config/config.yaml`, depending on what you need for local work or a cluster.
 
 4. **Install Pre-commit Hooks**
 
