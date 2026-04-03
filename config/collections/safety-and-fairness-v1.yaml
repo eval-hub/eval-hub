@@ -1,9 +1,7 @@
 id: safety-and-fairness-v1
-name: Safety & Fairness Evaluation Collection
+name: Safety & Fairness
 category: safety
-description: >
-  Comprehensive evaluation suite measuring model safety and fairness across
-  truthfulness, toxicity, gender bias, stereotypical bias, QA bias, and ethics.
+description: Evaluates model safety, bias, and fairness across diverse scenarios.
 tags:
   - safety
   - fairness

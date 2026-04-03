@@ -37,7 +37,7 @@ benchmarks:
       - science
       - lm_eval
   - id: AraDiCE_boolq_lev
-    name: Yes/no question answering (levantine arabic)
+    name: Yes/no question answering (Levantine Arabic)
     description: Boolean question answering in Levantine Arabic dialect.
     category: general
     metrics:
@@ -205,7 +205,7 @@ benchmarks:
       - general
       - lm_eval
   - id: AraDiCE_ArabicMMLU_egy
-    name: Academic knowledge (egyptian arabic)
+    name: Academic knowledge (Egyptian Arabic)
     description: Multitask knowledge recall across school and university subjects in Egyptian Arabic.
     category: knowledge
     metrics:
@@ -217,7 +217,7 @@ benchmarks:
       - knowledge
       - lm_eval
   - id: AraDiCE_ArabicMMLU_high_humanities_history_lev
-    name: History knowledge (high school, levantine)
+    name: History knowledge (high school, Levantine)
     description: High school-level history recall in Levantine Arabic.
     category: knowledge
     metrics:
@@ -229,7 +229,7 @@ benchmarks:
       - knowledge
       - lm_eval
   - id: AraDiCE_ArabicMMLU_high_humanities_philosophy_egy
-    name: Philosophy knowledge (high school, egyptian)
+    name: Philosophy knowledge (high school, Egyptian)
     description: High school-level philosophy recall in Egyptian Arabic.
     category: knowledge
     metrics:
@@ -241,7 +241,7 @@ benchmarks:
       - knowledge
       - lm_eval
   - id: AraDiCE_ArabicMMLU_high_language_arabic-language_lev
-    name: Arabic language proficiency (high school, levantine)
+    name: Arabic language proficiency (high school, Levantine)
     description: High school-level Arabic grammar and language skills in Levantine dialect.
     category: knowledge
     metrics:
@@ -253,7 +253,7 @@ benchmarks:
       - knowledge
       - lm_eval
   - id: AraDiCE_ArabicMMLU_lev
-    name: Academic knowledge (levantine arabic)
+    name: Academic knowledge (Levantine Arabic)
     description: Multitask knowledge recall across school and university subjects in Levantine Arabic.
     category: knowledge
     metrics:
@@ -265,7 +265,7 @@ benchmarks:
       - knowledge
       - lm_eval
   - id: AraDiCE_ArabicMMLU_middle_humanities_islamic-studies_egy
-    name: Islamic studies knowledge (middle school, egyptian)
+    name: Islamic studies knowledge (middle school, Egyptian)
     description: Middle school-level Islamic studies in Egyptian Arabic.
     category: knowledge
     metrics:
@@ -277,7 +277,7 @@ benchmarks:
       - knowledge
       - lm_eval
   - id: AraDiCE_ArabicMMLU_middle_language_arabic-language_lev
-    name: Arabic language proficiency (middle school, levantine)
+    name: Arabic language proficiency (middle school, Levantine)
     description: Middle school-level Arabic language skills in Levantine dialect.
     category: knowledge
     metrics:
@@ -289,7 +289,7 @@ benchmarks:
       - knowledge
       - lm_eval
   - id: AraDiCE_ArabicMMLU_na_humanities_islamic-studies_egy
-    name: Islamic studies knowledge (general, egyptian)
+    name: Islamic studies knowledge (general, Egyptian)
     description: General-level Islamic studies knowledge in Egyptian Arabic.
     category: knowledge
     metrics:
@@ -301,7 +301,7 @@ benchmarks:
       - knowledge
       - lm_eval
   - id: AraDiCE_ArabicMMLU_na_language_arabic-language-general_lev
-    name: General arabic proficiency (levantine)
+    name: General Arabic proficiency (Levantine)
     description: General Arabic language proficiency assessment in Levantine dialect.
     category: knowledge
     metrics:
@@ -313,7 +313,7 @@ benchmarks:
       - knowledge
       - lm_eval
   - id: AraDiCE_ArabicMMLU_na_other_driving-test_egy
-    name: Driving test knowledge (egyptian arabic)
+    name: Driving test knowledge (Egyptian Arabic)
     description: Practical driving test knowledge in Egyptian Arabic.
     category: knowledge
     metrics:
@@ -325,7 +325,7 @@ benchmarks:
       - knowledge
       - lm_eval
   - id: AraDiCE_ArabicMMLU_na_other_general-knowledge_lev
-    name: General knowledge trivia (levantine)
+    name: General knowledge trivia (Levantine)
     description: Broad general knowledge assessment in Levantine Arabic.
     category: knowledge
     metrics:
@@ -337,7 +337,7 @@ benchmarks:
       - knowledge
       - lm_eval
   - id: AraDiCE_ArabicMMLU_primary_humanities_islamic-studies_egy
-    name: Islamic studies knowledge (primary, egyptian)
+    name: Islamic studies knowledge (primary, Egyptian)
     description: Primary school-level Islamic studies in Egyptian Arabic.
     category: knowledge
     metrics:
@@ -349,7 +349,7 @@ benchmarks:
       - knowledge
       - lm_eval
   - id: AraDiCE_ArabicMMLU_primary_language_arabic-language_lev
-    name: Arabic language basics (primary, levantine)
+    name: Arabic language basics (primary, Levantine)
     description: Primary school-level Arabic language skills in Levantine dialect.
     category: knowledge
     metrics:
@@ -361,7 +361,7 @@ benchmarks:
       - knowledge
       - lm_eval
   - id: AraDiCE_ArabicMMLU_univ_other_management_egy
-    name: Business management knowledge (university, egyptian)
+    name: Business management knowledge (university, Egyptian)
     description: University-level management knowledge in Egyptian Arabic.
     category: knowledge
     metrics:
@@ -373,7 +373,7 @@ benchmarks:
       - knowledge
       - lm_eval
   - id: AraDiCE_openbookqa_eng
-    name: Open-book science reasoning (english)
+    name: Open-book science reasoning (English)
     description: "Multi-step reasoning over elementary science facts with access to a 'textbook.'"
     category: knowledge
     metrics:
@@ -387,7 +387,7 @@ benchmarks:
       - knowledge
       - lm_eval
   - id: arabic_leaderboard_arabic_mt_boolq
-    name: Yes/no comprehension in arabic
+    name: Yes/no comprehension in Arabic
     description: Boolean question answering machine-translated to Arabic.
     category: multilingual
     metrics:
@@ -398,7 +398,7 @@ benchmarks:
       - multilingual
       - lm_eval
   - id: arabic_leaderboard_arabic_mt_boolq_light
-    name: Yes/no comprehension in arabic (light)
+    name: Yes/no comprehension in Arabic (light)
     description: Lightweight boolean QA in machine-translated Arabic.
     category: multilingual
     metrics:
@@ -409,7 +409,7 @@ benchmarks:
       - multilingual
       - lm_eval
   - id: arabic_mt_boolq_light
-    name: Yes/no comprehension (arabic mt, light)
+    name: Yes/no comprehension (Arabic MT, light)
     description: Compact boolean QA with Arabic machine translation.
     category: multilingual
     metrics:
@@ -432,7 +432,7 @@ benchmarks:
       - multilingual
       - lm_eval
   - id: aclue_ancient_chinese_culture
-    name: Ancient chinese cultural knowledge
+    name: Ancient Chinese cultural knowledge
     description: Tests knowledge of classical Chinese culture, history, and literary traditions.
     category: multilingual
     metrics:
@@ -455,7 +455,7 @@ benchmarks:
       - multilingual
       - lm_eval
   - id: afrixnli-irokobench
-    name: Cross-lingual inference (african languages)
+    name: Cross-lingual inference (African languages)
     description: Tests whether text pairs agree, contradict, or are neutral across African languages.
     category: multilingual
     metrics:
@@ -466,7 +466,7 @@ benchmarks:
       - multilingual
       - lm_eval
   - id: afrixnli_amh_prompt_2
-    name: Textual inference in amharic (p2)
+    name: Textual inference in Amharic (p2)
     description: Natural language inference in Amharic using prompt variant 2.
     category: multilingual
     metrics:
@@ -477,7 +477,7 @@ benchmarks:
       - multilingual
       - lm_eval
   - id: afrixnli_amh_prompt_5
-    name: Textual inference in amharic (p5)
+    name: Textual inference in Amharic (p5)
     description: Natural language inference in Amharic using prompt variant 5.
     category: multilingual
     metrics:
@@ -488,7 +488,7 @@ benchmarks:
       - multilingual
       - lm_eval
   - id: afrixnli_en_direct_ewe
-    name: Textual inference in ewe
+    name: Textual inference in Ewe
     description: Cross-lingual natural language inference from English to Ewe.
     category: multilingual
     metrics:
@@ -499,7 +499,7 @@ benchmarks:
       - multilingual
       - lm_eval
   - id: afrixnli_en_direct_ibo
-    name: Textual inference in igbo
+    name: Textual inference in Igbo
     description: Cross-lingual natural language inference from English to Igbo.
     category: multilingual
     metrics:
@@ -510,7 +510,7 @@ benchmarks:
       - multilingual
       - lm_eval
   - id: afrixnli_en_direct_lug
-    name: Textual inference in luganda
+    name: Textual inference in Luganda
     description: Cross-lingual natural language inference from English to Luganda.
     category: multilingual
     metrics:
@@ -521,7 +521,7 @@ benchmarks:
       - multilingual
       - lm_eval
   - id: afrixnli_en_direct_sot
-    name: Textual inference in sesotho
+    name: Textual inference in Sesotho
     description: Cross-lingual natural language inference from English to Sesotho.
     category: multilingual
     metrics:
@@ -532,7 +532,7 @@ benchmarks:
       - multilingual
       - lm_eval
   - id: afrixnli_en_direct_wol
-    name: Textual inference in wolof
+    name: Textual inference in Wolof
     description: Cross-lingual natural language inference from English to Wolof.
     category: multilingual
     metrics:
@@ -543,7 +543,7 @@ benchmarks:
       - multilingual
       - lm_eval
   - id: afrixnli_en_direct_zul
-    name: Textual inference in zulu
+    name: Textual inference in Zulu
     description: Cross-lingual natural language inference from English to Zulu.
     category: multilingual
     metrics:
@@ -554,7 +554,7 @@ benchmarks:
       - multilingual
       - lm_eval
   - id: AraDiCE_ArabicMMLU_primary_stem_math_egy
-    name: Primary math skills (egyptian arabic)
+    name: Primary math skills (Egyptian Arabic)
     description: Primary school-level arithmetic and math in Egyptian Arabic.
     category: math
     metrics:
@@ -566,7 +566,7 @@ benchmarks:
       - math
       - lm_eval
   - id: arabic_leaderboard_arabic_mmlu_college_mathematics_light
-    name: College math in arabic (light)
+    name: College math in Arabic (light)
     description: Lightweight college-level mathematics evaluation in Arabic.
     category: math
     metrics:
@@ -578,7 +578,7 @@ benchmarks:
       - math
       - lm_eval
   - id: arabic_leaderboard_arabic_mmlu_high_school_mathematics
-    name: High school math in arabic
+    name: High school math in Arabic
     description: High school-level math problem-solving in Arabic.
     category: math
     metrics:
@@ -590,7 +590,7 @@ benchmarks:
       - math
       - lm_eval
   - id: cmmlu_college_mathematics
-    name: College math in chinese
+    name: College math in Chinese
     description: College-level mathematics evaluation in Chinese.
     category: math
     metrics:
@@ -602,7 +602,7 @@ benchmarks:
       - math
       - lm_eval
   - id: cmmlu_high_school_mathematics
-    name: High school math in chinese
+    name: High school math in Chinese
     description: High school-level mathematics evaluation in Chinese.
     category: math
     metrics:
@@ -614,7 +614,7 @@ benchmarks:
       - math
       - lm_eval
   - id: global_mmlu_full_am_high_school_mathematics
-    name: High school math in amharic
+    name: High school math in Amharic
     description: High school mathematics problem-solving in Amharic.
     category: math
     metrics:
@@ -626,7 +626,7 @@ benchmarks:
       - math
       - lm_eval
   - id: global_mmlu_full_ar_high_school_mathematics
-    name: High school math in arabic
+    name: High school math in Arabic
     description: High school mathematics problem-solving in Arabic.
     category: math
     metrics:
@@ -638,7 +638,7 @@ benchmarks:
       - math
       - lm_eval
   - id: global_mmlu_full_bn_high_school_mathematics
-    name: High school math in bengali
+    name: High school math in Bengali
     description: High school mathematics problem-solving in Bengali.
     category: math
     metrics:
@@ -650,7 +650,7 @@ benchmarks:
       - math
       - lm_eval
   - id: global_mmlu_full_cs_high_school_mathematics
-    name: High school math in czech
+    name: High school math in Czech
     description: High school mathematics problem-solving in Czech.
     category: math
     metrics:
@@ -662,7 +662,7 @@ benchmarks:
       - math
       - lm_eval
   - id: global_mmlu_full_de_high_school_mathematics
-    name: High school math in german
+    name: High school math in German
     description: High school mathematics problem-solving in German.
     category: math
     metrics:
@@ -674,7 +674,7 @@ benchmarks:
       - math
       - lm_eval
   - id: global_mmlu_full_el_high_school_mathematics
-    name: High school math in greek
+    name: High school math in Greek
     description: High school mathematics problem-solving in Greek.
     category: math
     metrics:
@@ -686,7 +686,7 @@ benchmarks:
       - math
       - lm_eval
   - id: global_mmlu_full_en_high_school_mathematics
-    name: High school math in english
+    name: High school math in English
     description: High school mathematics problem-solving in English.
     category: math
     metrics:
@@ -698,7 +698,7 @@ benchmarks:
       - math
       - lm_eval
   - id: global_mmlu_full_es_high_school_mathematics
-    name: High school math in spanish
+    name: High school math in Spanish
     description: High school mathematics problem-solving in Spanish.
     category: math
     metrics:
@@ -710,7 +710,7 @@ benchmarks:
       - math
       - lm_eval
   - id: global_mmlu_full_fa_high_school_mathematics
-    name: High school math in persian
+    name: High school math in Persian
     description: High school mathematics problem-solving in Persian.
     category: math
     metrics:
@@ -722,7 +722,7 @@ benchmarks:
       - math
       - lm_eval
   - id: global_mmlu_full_fil_high_school_mathematics
-    name: High school math in filipino
+    name: High school math in Filipino
     description: High school mathematics problem-solving in Filipino.
     category: math
     metrics:
@@ -734,7 +734,7 @@ benchmarks:
       - math
       - lm_eval
   - id: AraDiCE_piqa_lev
-    name: Physical intuition in levantine arabic
+    name: Physical intuition in Levantine Arabic
     description: Everyday physical commonsense reasoning in Levantine Arabic dialect.
     category: reasoning
     metrics:
@@ -748,7 +748,7 @@ benchmarks:
       - reasoning
       - lm_eval
   - id: AraDiCE_winogrande_eng
-    name: Pronoun resolution (english, aradice)
+    name: Pronoun resolution (English, AraDiCE)
     description: Commonsense pronoun coreference resolution from the AraDiCE suite.
     category: reasoning
     metrics:
@@ -759,7 +759,7 @@ benchmarks:
       - reasoning
       - lm_eval
   - id: arabic_leaderboard_arabic_mt_copa
-    name: "Cause & effect reasoning in arabic"
+    name: "Cause & effect reasoning in Arabic"
     description: Determines plausible causes or effects of everyday events in Arabic.
     category: reasoning
     metrics:
@@ -770,7 +770,7 @@ benchmarks:
       - reasoning
       - lm_eval
   - id: arabic_leaderboard_arabic_mt_copa_light
-    name: "Cause & effect reasoning in arabic (light)"
+    name: "Cause & effect reasoning in Arabic (light)"
     description: Lightweight causal reasoning evaluation in Arabic.
     category: reasoning
     metrics:
@@ -781,7 +781,7 @@ benchmarks:
       - reasoning
       - lm_eval
   - id: arabic_leaderboard_arabic_mt_hellaswag
-    name: Activity completion in arabic
+    name: Activity completion in Arabic
     description: Predicts the most likely continuation of everyday activities in Arabic.
     category: reasoning
     metrics:
@@ -793,7 +793,7 @@ benchmarks:
       - reasoning
       - lm_eval
   - id: arabic_leaderboard_arabic_mt_hellaswag_light
-    name: Activity completion in arabic (light)
+    name: Activity completion in Arabic (light)
     description: Lightweight everyday activity completion in Arabic.
     category: reasoning
     metrics:
@@ -805,7 +805,7 @@ benchmarks:
       - reasoning
       - lm_eval
   - id: arabic_leaderboard_arabic_mt_piqa
-    name: Physical intuition in arabic
+    name: Physical intuition in Arabic
     description: Tests understanding of how physical objects interact in Arabic.
     category: reasoning
     metrics:
@@ -819,7 +819,7 @@ benchmarks:
       - reasoning
       - lm_eval
   - id: arabic_leaderboard_arabic_mt_piqa_light
-    name: Physical intuition in arabic (light)
+    name: Physical intuition in Arabic (light)
     description: Lightweight physical commonsense reasoning in Arabic.
     category: reasoning
     metrics:
@@ -833,7 +833,7 @@ benchmarks:
       - reasoning
       - lm_eval
   - id: arabic_mt_hellaswag
-    name: Activity completion (arabic mt)
+    name: Activity completion (Arabic MT)
     description: Predicts likely continuations of everyday activities in machine-translated Arabic.
     category: reasoning
     metrics:
@@ -845,7 +845,7 @@ benchmarks:
       - reasoning
       - lm_eval
   - id: arabic_mt_piqa
-    name: Physical intuition (arabic mt)
+    name: Physical intuition (Arabic MT)
     description: Physical commonsense reasoning in machine-translated Arabic.
     category: reasoning
     metrics:
@@ -859,7 +859,7 @@ benchmarks:
       - reasoning
       - lm_eval
   - id: copa_ar
-    name: "Cause & effect reasoning (arabic)"
+    name: "Cause & effect reasoning (Arabic)"
     description: Selects the more plausible cause or effect from two alternatives in Arabic.
     category: reasoning
     metrics:
@@ -870,7 +870,7 @@ benchmarks:
       - reasoning
       - lm_eval
   - id: copal_id_colloquial
-    name: "Cause & effect reasoning (colloquial indonesian)"
+    name: "Cause & effect reasoning (colloquial Indonesian)"
     description: Causal reasoning in colloquial Indonesian language.
     category: reasoning
     metrics:
@@ -881,7 +881,7 @@ benchmarks:
       - reasoning
       - lm_eval
   - id: darijahellaswag
-    name: Activity completion in moroccan arabic
+    name: Activity completion in Moroccan Arabic
     description: Predicts likely continuations of everyday scenarios in Darija.
     category: reasoning
     metrics:
@@ -893,7 +893,7 @@ benchmarks:
       - reasoning
       - lm_eval
   - id: egyhellaswag
-    name: Activity completion in egyptian arabic
+    name: Activity completion in Egyptian Arabic
     description: Predicts likely continuations of everyday scenarios in Egyptian dialect.
     category: reasoning
     metrics:
@@ -905,7 +905,7 @@ benchmarks:
       - reasoning
       - lm_eval
   - id: hellaswag_ar
-    name: Activity completion in standard arabic
+    name: Activity completion in Standard Arabic
     description: Predicts likely continuations of everyday scenarios in Modern Standard Arabic.
     category: reasoning
     metrics:
@@ -917,7 +917,7 @@ benchmarks:
       - reasoning
       - lm_eval
   - id: arabic_leaderboard_arabic_mt_race
-    name: Passage comprehension in arabic
+    name: Passage comprehension in Arabic
     description: Reading comprehension from English exams, machine-translated to Arabic.
     category: reading_comprehension
     metrics:
@@ -928,7 +928,7 @@ benchmarks:
       - reading_comprehension
       - lm_eval
   - id: arabic_leaderboard_arabic_mt_race_light
-    name: Passage comprehension in arabic (light)
+    name: Passage comprehension in Arabic (light)
     description: Lightweight reading comprehension evaluation in Arabic.
     category: reading_comprehension
     metrics:
@@ -939,7 +939,7 @@ benchmarks:
       - reading_comprehension
       - lm_eval
   - id: arabic_mt_race_light
-    name: Passage comprehension (arabic mt, light)
+    name: Passage comprehension (Arabic MT, light)
     description: Compact reading comprehension with Arabic machine translation.
     category: reading_comprehension
     metrics:
@@ -973,7 +973,7 @@ benchmarks:
       - reading_comprehension
       - lm_eval
   - id: eus_reading
-    name: Reading comprehension in basque
+    name: Reading comprehension in Basque
     description: Tests passage understanding and information extraction in Basque (Euskara).
     category: reading_comprehension
     metrics:
@@ -1026,7 +1026,7 @@ benchmarks:
       - reading_comprehension
       - lm_eval
   - id: scrolls_qasper
-    name: Long-document comprehension (scrolls)
+    name: Long-document comprehension (SCROLLS)
     description: Question answering over lengthy scientific documents from the SCROLLS suite.
     category: reading_comprehension
     metrics:
@@ -1040,7 +1040,7 @@ benchmarks:
       - reading_comprehension
       - lm_eval
   - id: AraDiCE_ArabicMMLU_high_social-science_economics_egy
-    name: Economics knowledge (high school, egyptian)
+    name: Economics knowledge (high school, Egyptian)
     description: High school-level economics understanding in Egyptian Arabic.
     category: science
     metrics:
@@ -1052,7 +1052,7 @@ benchmarks:
       - science
       - lm_eval
   - id: AraDiCE_ArabicMMLU_high_social-science_geography_lev
-    name: Geography knowledge (high school, levantine)
+    name: Geography knowledge (high school, Levantine)
     description: High school-level geography understanding in Levantine Arabic.
     category: science
     metrics:
@@ -1064,7 +1064,7 @@ benchmarks:
       - science
       - lm_eval
   - id: AraDiCE_ArabicMMLU_high_stem_computer-science_egy
-    name: Computer science knowledge (high school, egyptian)
+    name: Computer science knowledge (high school, Egyptian)
     description: High school-level CS concepts in Egyptian Arabic.
     category: science
     metrics:
@@ -1076,7 +1076,7 @@ benchmarks:
       - science
       - lm_eval
   - id: AraDiCE_ArabicMMLU_high_stem_physics_lev
-    name: Physics knowledge (high school, levantine)
+    name: Physics knowledge (high school, Levantine)
     description: High school-level physics understanding in Levantine Arabic.
     category: science
     metrics:
@@ -1088,7 +1088,7 @@ benchmarks:
       - science
       - lm_eval
   - id: AraDiCE_ArabicMMLU_middle_social-science_civics_egy
-    name: Civics knowledge (middle school, egyptian)
+    name: Civics knowledge (middle school, Egyptian)
     description: Middle school-level civic education in Egyptian Arabic.
     category: science
     metrics:
@@ -1100,7 +1100,7 @@ benchmarks:
       - science
       - lm_eval
   - id: AraDiCE_ArabicMMLU_middle_social-science_economics_lev
-    name: Economics knowledge (middle school, levantine)
+    name: Economics knowledge (middle school, Levantine)
     description: Middle school-level economics in Levantine Arabic.
     category: science
     metrics:
@@ -1112,7 +1112,7 @@ benchmarks:
       - science
       - lm_eval
   - id: AraDiCE_ArabicMMLU_middle_social-science_social-science_egy
-    name: Social science knowledge (middle school, egyptian)
+    name: Social science knowledge (middle school, Egyptian)
     description: Middle school-level social science in Egyptian Arabic.
     category: science
     metrics:
@@ -1124,7 +1124,7 @@ benchmarks:
       - science
       - lm_eval
   - id: AraDiCE_ArabicMMLU_middle_stem_computer-science_lev
-    name: Computer science knowledge (middle school, levantine)
+    name: Computer science knowledge (middle school, Levantine)
     description: Middle school-level CS concepts in Levantine Arabic.
     category: science
     metrics:
@@ -1136,7 +1136,7 @@ benchmarks:
       - science
       - lm_eval
   - id: AraDiCE_ArabicMMLU_primary_social-science_geography_egy
-    name: Geography basics (primary, egyptian)
+    name: Geography basics (primary, Egyptian)
     description: Primary school-level geography in Egyptian Arabic.
     category: science
     metrics:
@@ -1148,7 +1148,7 @@ benchmarks:
       - science
       - lm_eval
   - id: AraDiCE_ArabicMMLU_primary_social-science_social-science_lev
-    name: Social science basics (primary, levantine)
+    name: Social science basics (primary, Levantine)
     description: Primary school-level social science in Levantine Arabic.
     category: science
     metrics:
@@ -1160,7 +1160,7 @@ benchmarks:
       - science
       - lm_eval
   - id: AraDiCE_ArabicMMLU_primary_stem_natural-science_lev
-    name: Natural science basics (primary, levantine)
+    name: Natural science basics (primary, Levantine)
     description: Primary school-level natural science in Levantine Arabic.
     category: science
     metrics:
@@ -1172,7 +1172,7 @@ benchmarks:
       - science
       - lm_eval
   - id: AraDiCE_ArabicMMLU_univ_social-science_accounting_lev
-    name: Accounting knowledge (university, levantine)
+    name: Accounting knowledge (university, Levantine)
     description: University-level accounting concepts in Levantine Arabic.
     category: science
     metrics:
@@ -1184,7 +1184,7 @@ benchmarks:
       - science
       - lm_eval
   - id: AraDiCE_ArabicMMLU_univ_social-science_political-science_egy
-    name: Political science knowledge (university, egyptian)
+    name: Political science knowledge (university, Egyptian)
     description: University-level political science in Egyptian Arabic.
     category: science
     metrics:
@@ -1196,7 +1196,7 @@ benchmarks:
       - science
       - lm_eval
   - id: AraDiCE_ArabicMMLU_univ_stem_computer-science_lev
-    name: Computer science knowledge (university, levantine)
+    name: Computer science knowledge (university, Levantine)
     description: University-level computer science in Levantine Arabic.
     category: science
     metrics:
@@ -1208,7 +1208,7 @@ benchmarks:
       - science
       - lm_eval
   - id: arabic_leaderboard_arabic_mmlu_college_biology_light
-    name: College biology in arabic (light)
+    name: College biology in Arabic (light)
     description: Lightweight college-level biology evaluation in Arabic.
     category: science
     metrics:
@@ -1220,7 +1220,7 @@ benchmarks:
       - science
       - lm_eval
   - id: agieval_logiqa_zh
-    name: Formal logic (chinese civil service)
+    name: Formal logic (Chinese civil service)
     description: |-
       Logic questions from Chinese civil service exams — tests deduction, syllogisms, and formal reasoning.
     category: logic_reasoning
@@ -1390,7 +1390,7 @@ benchmarks:
       - logic_reasoning
       - lm_eval
   - id: arabic_leaderboard_arabic_mmlu_anatomy
-    name: Human anatomy knowledge in arabic
+    name: Human anatomy knowledge in Arabic
     description: Medical anatomy questions in Arabic.
     category: medical
     metrics:
@@ -1402,7 +1402,7 @@ benchmarks:
       - medical
       - lm_eval
   - id: arabic_leaderboard_arabic_mmlu_clinical_knowledge
-    name: Clinical medicine knowledge in arabic
+    name: Clinical medicine knowledge in Arabic
     description: Practical clinical medicine questions in Arabic.
     category: medical
     metrics:
@@ -1414,7 +1414,7 @@ benchmarks:
       - medical
       - lm_eval
   - id: arabic_leaderboard_arabic_mmlu_medical_genetics
-    name: Medical genetics knowledge in arabic
+    name: Medical genetics knowledge in Arabic
     description: Genetics and hereditary disease questions in Arabic.
     category: medical
     metrics:
@@ -1426,7 +1426,7 @@ benchmarks:
       - medical
       - lm_eval
   - id: arabic_leaderboard_arabic_mmlu_professional_medicine
-    name: Professional medicine in arabic
+    name: Professional medicine in Arabic
     description: Board-exam-level medicine questions in Arabic.
     category: medical
     metrics:
@@ -1438,7 +1438,7 @@ benchmarks:
       - medical
       - lm_eval
   - id: cmmlu_professional_medicine
-    name: Professional medicine in chinese
+    name: Professional medicine in Chinese
     description: Board-exam-level medicine questions in Chinese.
     category: medical
     metrics:
@@ -1450,7 +1450,7 @@ benchmarks:
       - medical
       - lm_eval
   - id: cmmlu_traditional_chinese_medicine
-    name: Traditional chinese medicine
+    name: Traditional Chinese medicine
     description: Knowledge of TCM theory, diagnosis, and herbal treatments.
     category: medical
     metrics:
@@ -1462,7 +1462,7 @@ benchmarks:
       - medical
       - lm_eval
   - id: global_mmlu_full_am_anatomy
-    name: Human anatomy in amharic
+    name: Human anatomy in Amharic
     description: Medical anatomy knowledge in Amharic.
     category: medical
     metrics:
@@ -1474,7 +1474,7 @@ benchmarks:
       - medical
       - lm_eval
   - id: global_mmlu_full_am_clinical_knowledge
-    name: Clinical medicine in amharic
+    name: Clinical medicine in Amharic
     description: Clinical medicine knowledge in Amharic.
     category: medical
     metrics:
@@ -1486,7 +1486,7 @@ benchmarks:
       - medical
       - lm_eval
   - id: global_mmlu_full_am_medical_genetics
-    name: Medical genetics in amharic
+    name: Medical genetics in Amharic
     description: Medical genetics knowledge in Amharic.
     category: medical
     metrics:
@@ -1498,7 +1498,7 @@ benchmarks:
       - medical
       - lm_eval
   - id: global_mmlu_full_am_professional_medicine
-    name: Professional medicine in amharic
+    name: Professional medicine in Amharic
     description: Board-exam-level medicine in Amharic.
     category: medical
     metrics:
@@ -1510,7 +1510,7 @@ benchmarks:
       - medical
       - lm_eval
   - id: global_mmlu_full_ar_anatomy
-    name: Human anatomy in arabic
+    name: Human anatomy in Arabic
     description: Medical anatomy knowledge in Arabic.
     category: medical
     metrics:
@@ -1522,7 +1522,7 @@ benchmarks:
       - medical
       - lm_eval
   - id: global_mmlu_full_ar_clinical_knowledge
-    name: Clinical medicine in arabic
+    name: Clinical medicine in Arabic
     description: Clinical medicine knowledge in Arabic.
     category: medical
     metrics:
@@ -1534,7 +1534,7 @@ benchmarks:
       - medical
       - lm_eval
   - id: global_mmlu_full_ar_medical_genetics
-    name: Medical genetics in arabic
+    name: Medical genetics in Arabic
     description: Medical genetics knowledge in Arabic.
     category: medical
     metrics:
@@ -1546,7 +1546,7 @@ benchmarks:
       - medical
       - lm_eval
   - id: global_mmlu_full_ar_professional_medicine
-    name: Professional medicine in arabic
+    name: Professional medicine in Arabic
     description: Board-exam-level medicine in Arabic.
     category: medical
     metrics:
@@ -1558,7 +1558,7 @@ benchmarks:
       - medical
       - lm_eval
   - id: global_mmlu_full_bn_anatomy
-    name: Human anatomy in bengali
+    name: Human anatomy in Bengali
     description: Medical anatomy knowledge in Bengali.
     category: medical
     metrics:
@@ -1570,7 +1570,7 @@ benchmarks:
       - medical
       - lm_eval
   - id: lambada_openai
-    name: Final word prediction (english)
+    name: Final word prediction (English)
     description: Predicts the last word of passages that require understanding the full preceding context.
     category: language_modeling
     metrics:
@@ -1582,7 +1582,7 @@ benchmarks:
       - language_modeling
       - lm_eval
   - id: lambada_openai_mt_en
-    name: Final word prediction (english mt)
+    name: Final word prediction (English MT)
     description: Last-word prediction on machine-translated English passages.
     category: language_modeling
     metrics:
@@ -1594,7 +1594,7 @@ benchmarks:
       - language_modeling
       - lm_eval
   - id: lambada_openai_mt_it
-    name: Final word prediction (italian)
+    name: Final word prediction (Italian)
     description: Last-word prediction in machine-translated Italian.
     category: language_modeling
     metrics:
@@ -1606,7 +1606,7 @@ benchmarks:
       - language_modeling
       - lm_eval
   - id: lambada_openai_mt_stablelm_es
-    name: Final word prediction (spanish)
+    name: Final word prediction (Spanish)
     description: Last-word prediction in Spanish (StableLM translation).
     category: language_modeling
     metrics:
@@ -1618,7 +1618,7 @@ benchmarks:
       - language_modeling
       - lm_eval
   - id: lambada_openai_mt_stablelm_nl
-    name: Final word prediction (dutch)
+    name: Final word prediction (Dutch)
     description: Last-word prediction in Dutch (StableLM translation).
     category: language_modeling
     metrics:
@@ -1642,7 +1642,7 @@ benchmarks:
       - language_modeling
       - lm_eval
   - id: paloma_wikitext_103
-    name: Wikipedia text modeling (paloma)
+    name: Wikipedia text modeling (Paloma)
     description: Measures how well the model predicts Wikipedia article text.
     category: language_modeling
     metrics:
@@ -1744,7 +1744,7 @@ benchmarks:
       - language_modeling
       - lm_eval
   - id: AraDiCE_truthfulqa_mc1_lev
-    name: Truthfulness test (levantine arabic, mc)
+    name: Truthfulness test (Levantine Arabic, MC)
     description: Tests resistance to common misconceptions in Levantine Arabic (single correct answer).
     category: safety
     metrics:
@@ -1770,7 +1770,7 @@ benchmarks:
       - safety
       - lm_eval
   - id: nortruthfulqa_gen_nno_p0
-    name: Truthful generation (norwegian nynorsk, p0)
+    name: Truthful generation (Norwegian Nynorsk, p0)
     description: Tests whether the model generates honest answers in Nynorsk, prompt 0.
     category: safety
     metrics:
@@ -1784,7 +1784,7 @@ benchmarks:
       - safety
       - lm_eval
   - id: nortruthfulqa_gen_nno_p3
-    name: Truthful generation (norwegian nynorsk, p3)
+    name: Truthful generation (Norwegian Nynorsk, p3)
     description: Tests whether the model generates honest answers in Nynorsk, prompt 3.
     category: safety
     metrics:
@@ -1798,7 +1798,7 @@ benchmarks:
       - safety
       - lm_eval
   - id: nortruthfulqa_gen_nob_p1
-    name: Truthful generation (norwegian bokmål, p1)
+    name: Truthful generation (Norwegian Bokmål, p1)
     description: Tests whether the model generates honest answers in Bokmål, prompt 1.
     category: safety
     metrics:
@@ -1812,7 +1812,7 @@ benchmarks:
       - safety
       - lm_eval
   - id: nortruthfulqa_gen_nob_p4
-    name: Truthful generation (norwegian bokmål, p4)
+    name: Truthful generation (Norwegian Bokmål, p4)
     description: Tests whether the model generates honest answers in Bokmål, prompt 4.
     category: safety
     metrics:
@@ -1826,7 +1826,7 @@ benchmarks:
       - safety
       - lm_eval
   - id: nortruthfulqa_mc_nno_p2
-    name: Truthfulness test (norwegian nynorsk, mc)
+    name: Truthfulness test (Norwegian Nynorsk, MC)
     description: Multiple-choice truthfulness in Nynorsk, prompt 2.
     category: safety
     metrics:
@@ -1838,7 +1838,7 @@ benchmarks:
       - safety
       - lm_eval
   - id: nortruthfulqa_mc_nob_p0
-    name: Truthfulness test (norwegian bokmål, mc, p0)
+    name: Truthfulness test (Norwegian Bokmål, MC, p0)
     description: Multiple-choice truthfulness in Bokmål, prompt 0.
     category: safety
     metrics:
@@ -1850,7 +1850,7 @@ benchmarks:
       - safety
       - lm_eval
   - id: nortruthfulqa_mc_nob_p3
-    name: Truthfulness test (norwegian bokmål, mc, p3)
+    name: Truthfulness test (Norwegian Bokmål, MC, p3)
     description: Multiple-choice truthfulness in Bokmål, prompt 3.
     category: safety
     metrics:
@@ -1876,7 +1876,7 @@ benchmarks:
       - safety
       - lm_eval
   - id: truthfulqa-multi_gen_ca
-    name: Truthful generation (catalan)
+    name: Truthful generation (Catalan)
     description: Tests whether the model generates honest, non-misleading answers in Catalan.
     category: safety
     metrics:
@@ -1890,7 +1890,7 @@ benchmarks:
       - safety
       - lm_eval
   - id: truthfulqa-multi_gen_eu
-    name: Truthful generation (basque)
+    name: Truthful generation (Basque)
     description: Tests whether the model generates honest, non-misleading answers in Basque.
     category: safety
     metrics:
@@ -1904,7 +1904,7 @@ benchmarks:
       - safety
       - lm_eval
   - id: truthfulqa-multi_mc1_en
-    name: Truthfulness test (english, single answer)
+    name: Truthfulness test (English, single answer)
     description: Picks the single truthful answer from options — tests resistance to popular myths.
     category: safety
     metrics:
@@ -1916,7 +1916,7 @@ benchmarks:
       - safety
       - lm_eval
   - id: truthfulqa-multi_mc1_gl
-    name: Truthfulness test (galician, single answer)
+    name: Truthfulness test (Galician, single answer)
     description: Picks the single truthful answer in Galician.
     category: safety
     metrics:
@@ -1928,7 +1928,7 @@ benchmarks:
       - safety
       - lm_eval
   - id: truthfulqa-multi_mc2_es
-    name: Truthfulness test (spanish, multi-answer)
+    name: Truthfulness test (Spanish, multi-answer)
     description: Identifies all truthful answers from a set of options in Spanish.
     category: safety
     metrics:
@@ -1952,7 +1952,7 @@ benchmarks:
       - code
       - lm_eval
   - id: ceval-valid_college_programming
-    name: Programming concepts (chinese)
+    name: Programming concepts (Chinese)
     description: Tests college-level programming knowledge and CS fundamentals in Chinese.
     category: code
     metrics:
@@ -1963,7 +1963,7 @@ benchmarks:
       - code
       - lm_eval
   - id: code2text_javascript
-    name: Javascript code summarization
+    name: JavaScript code summarization
     description: Generates natural language descriptions explaining what JavaScript code does.
     category: code
     metrics:
@@ -2007,7 +2007,7 @@ benchmarks:
       - code
       - lm_eval
   - id: mbpp
-    name: Basic python problem solving
+    name: Basic Python problem solving
     description: Solves 974 entry-level Python programming tasks from crowd-sourced descriptions.
     category: code
     metrics:
@@ -2090,9 +2090,9 @@ benchmarks:
       - science
       - lm_eval
   - id: bbq
-    name: Bbq
+    name: Ambiguity & social bias Q&A
     description: >
-      Bias Benchmark for QA (BBQ): measures social bias in question answering across disambiguated and ambiguous contexts.
+      Tests whether the model defaults to social stereotypes when answering questions with ambiguous context — covers 11 bias categories including age, race, gender, religion, and disability.
 
     category: safety
     metrics:
@@ -2105,9 +2105,9 @@ benchmarks:
       - fairness
       - lm_eval
   - id: crows_pairs_english
-    name: Crows-pairs english
+    name: Social bias & stereotyping detection
     description: >
-      CrowS-Pairs: measures stereotypical bias via contrastive sentence pairs (English).
+      Measures whether the model prefers stereotypical over anti-stereotypical sentences across 9 bias dimensions (race, gender, religion, age, disability, nationality, sexual orientation, physical appearance, socioeconomic status).
 
     category: safety
     metrics:
@@ -2119,9 +2119,9 @@ benchmarks:
       - fairness
       - lm_eval
   - id: ethics_cm
-    name: Ethics cm
+    name: Commonsense moral judgment
     description: >
-      Consequentialist ethics multiple-choice benchmark (commonsense moral scenarios).
+      Tests whether the model can judge everyday actions as clearly ethical or unethical — based on simple, widely-agreed-upon moral scenarios (e.g., "I tipped the waiter" vs. "I stole from the store").
 
     category: safety
     metrics:
@@ -2133,9 +2133,9 @@ benchmarks:
       - ethics
       - lm_eval
   - id: toxigen
-    name: Harmful Content Generation Detection
+    name: Implicit toxicity detection
     description: >
-      Measures whether the model generates hateful, abusive, or toxic language — including both explicit hate speech and subtle, implicit toxicity targeting individuals or minority groups.
+      Tests whether the model generates subtle, adversarial toxic language targeting 13 minority groups—implicit hate speech that evades simple keyword filters—as well as explicit hateful or abusive language toward individuals and groups.
     category: safety
     metrics:
       - toxicity_score
@@ -2146,9 +2146,9 @@ benchmarks:
       - toxicity
       - lm_eval
   - id: truthfulqa_mc1
-    name: Truthfulness
+    name: Misconception resistance (multiple choice)
     description: |-
-      TruthfulQA multiple-choice (mc1): single-answer accuracy on 817 questions measuring resistance to common misconceptions.
+      Tests whether the model avoids popular myths and common misconceptions (817 questions).
     category: safety
     metrics:
       - mc1_acc
@@ -2160,7 +2160,7 @@ benchmarks:
       - truthfulness
       - lm_eval
   - id: hhh_alignment
-    name: Helpfulness, Honesty & Harmlessness (HHH)
+    name: Helpfulness, honesty & harmlessness (HHH)
     description: >
       Tests whether the model selects responses that are helpful, honest, and harmless — evaluating alignment with core ethical principles across paired-response comparisons.
     category: safety
@@ -2173,9 +2173,9 @@ benchmarks:
       - hhh
       - lm_eval
   - id: winogender
-    name: Winogender
+    name: Gender bias in pronoun resolution
     description: >
-      WinoGender: coreference resolution bias across occupations and pronouns (gender bias score).
+      Tests whether the model relies on gender stereotypes when resolving pronouns to occupations (e.g., assuming "nurse" is female or "engineer" is male).
     category: safety
     metrics:
       - gender_bias_score

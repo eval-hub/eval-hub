@@ -1,7 +1,7 @@
 id: leaderboard-v2
-name: leaderboard-v2
+name: Open LLM Leaderboard v2
 category: general
-description: Leaderboard v2
+description: Comprehensive evaluation suite for general-purpose language models.
 tags:
   - leaderboard
 pass_criteria:
