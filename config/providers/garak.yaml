@@ -4,7 +4,7 @@ title: Garak
 description: LLM vulnerability scanner and red-teaming framework
 runtime:
   k8s:
-    image: quay.io/trustyai/llama-stack-provider-trustyai-garak:latest
+    image: quay.io/trustyai/trustyai-garak-lls-provider-dsp:latest
     entrypoint:
       - python
       - -m
