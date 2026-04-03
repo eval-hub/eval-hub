@@ -25,50 +25,57 @@ This project and everyone participating in it is governed by our Code of Conduct
 Eval Hub is an API REST server that serves as a routing and orchestration layer for evaluation backends. It supports flexible deployment options from local development to production Kubernetes/OpenShift clusters. Before contributing, familiarize yourself with:
 
 - **Architecture**: Read the [README.md](README.md) for project overview
-- **API Documentation**: Check [API.md](API.md) for endpoint specifications
+- **API Documentation**: See the [OpenAPI spec](./docs/openapi.yaml) or the [live docs](https://eval-hub.github.io/eval-hub/) for endpoint specifications
 - **Deployment Options**: Understand local development, Podman, and Kubernetes/OpenShift deployment models
 
 ### Prerequisites
 
 **Required for All Development:**
+
 - Go 1.25.0+
 - [Make](https://www.gnu.org/software/make/) for build automation
 - Git
 
 **Optional for Container Testing:**
+
 - Podman (for containerization testing)
 
 **Optional for Cluster Integration Testing:**
+
 - Access to a Kubernetes/OpenShift cluster
 - kubectl or oc CLI tools
 
 ## Development Setup
 
 1. **Fork and Clone**
+
    ```bash
    git clone https://github.com/your-username/eval-hub.git
    cd eval-hub
    ```
 
 2. **Install Dependencies**
+
    ```bash
    # Download and tidy Go dependencies
    make install-deps
    ```
 
 3. **Configure Environment**
+
    ```bash
-   cp .env.example .env
    # Edit .env with your local configuration
    # Or edit config/config.yaml directly
    ```
 
 4. **Install Pre-commit Hooks**
+
    ```bash
    pre-commit install
    ```
 
 5. **Verify Setup**
+
    ```bash
    # Run tests to verify everything works
    make test
@@ -107,6 +114,7 @@ We welcome contributions in various forms:
 ### 1. Create an Issue
 
 Before starting work, create an issue to discuss:
+
 - **Bug Reports**: Describe the problem with reproduction steps
 - **Feature Requests**: Explain the use case and proposed solution
 - **Architectural Changes**: See special requirements below
@@ -115,6 +123,7 @@ Before starting work, create an issue to discuss:
 #### Architectural Changes
 
 **Definition**: Changes that affect system design, component interactions, or technology choices, including:
+
 - New backend executors or evaluation frameworks
 - API endpoint additions or modifications
 - Database schema changes
@@ -123,6 +132,7 @@ Before starting work, create an issue to discuss:
 - Performance or security architectural decisions
 
 **Required Process**:
+
 1. **Create Issue**: Use `kind/architecture` label
 2. **Discussion**: Allow community input and maintainer feedback in the issue
 3. **Approval**: Maintainers add `status/accepted` label after discussion
@@ -153,6 +163,7 @@ git checkout -b fix/issue-description
 ### 4. Commit Guidelines
 
 Use conventional commits:
+
 ```bash
 # Format: type(scope): description
 git commit -m "feat(api): add collection-based evaluation endpoint"
@@ -214,30 +225,30 @@ pre-commit run --all-files
 package handlers
 
 import (
-	"encoding/json"
+  "encoding/json"
 
-	"github.com/your-org/eval-hub/internal/executioncontext"
+  "github.com/your-org/eval-hub/internal/executioncontext"
 )
 
 // EvaluationRequest represents an evaluation request.
 type EvaluationRequest struct {
-	Model          string   `json:"model"`
-	Benchmarks     []string `json:"benchmarks"`
-	ExperimentName string   `json:"experiment_name,omitempty"`
+  Model          string   `json:"model"`
+  Benchmarks     []string `json:"benchmarks"`
+  ExperimentName string   `json:"experiment_name,omitempty"`
 }
 
 // HandleCreateEvaluation processes an evaluation request.
 // Returns evaluation results or an error.
 func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext, w http.ResponseWriter, r *http.Request) {
-	var req EvaluationRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		ctx.Logger.Error("Failed to decode request", "error", err)
-		http.Error(w, "Invalid request", http.StatusBadRequest)
-		return
-	}
+  var req EvaluationRequest
+  if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+    ctx.Logger.Error("Failed to decode request", "error", err)
+    http.Error(w, "Invalid request", http.StatusBadRequest)
+    return
+  }
 
-	ctx.Logger.Info("Processing evaluation", "model", req.Model)
-	// Implementation here
+  ctx.Logger.Info("Processing evaluation", "model", req.Model)
+  // Implementation here
 }
 ```
 
@@ -288,29 +299,29 @@ go test -v ./tests/features -run TestFeatureName
 package handlers
 
 import (
-	"net/http"
-	"net/http/httptest"
-	"testing"
+  "net/http"
+  "net/http/httptest"
+  "testing"
 
-	"github.com/your-org/eval-hub/internal/executioncontext"
+  "github.com/your-org/eval-hub/internal/executioncontext"
 )
 
 func TestHandleCreateEvaluation_Success(t *testing.T) {
-	// Arrange
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs", nil)
-	w := httptest.NewRecorder()
+  // Arrange
+  req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs", nil)
+  w := httptest.NewRecorder()
 
-	// Act
-	handler.HandleCreateEvaluation(ctx, w, req)
+  // Act
+  handler.HandleCreateEvaluation(ctx, w, req)
 
-	// Assert
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
-	}
+  // Assert
+  if w.Code != http.StatusOK {
+    t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
+  }
 }
 
 func TestHandleCreateEvaluation_Timeout(t *testing.T) {
-	// Test timeout handling
+  // Test timeout handling
 }
 ```
 
@@ -318,7 +329,7 @@ func TestHandleCreateEvaluation_Timeout(t *testing.T) {
 
 EvalHub can be deployed on OpenShift via the [TrustyAI operator](https://github.com/trustyai-explainability/trustyai-service-operator), which is included in [OpenDataHub](https://opendatahub.io/).
 
-### Prerequisites
+### Prerequisites for OpenShift
 
 - Access to an OpenShift cluster
 - Cluster admin permissions or sufficient RBAC permissions
@@ -413,6 +424,7 @@ EvalHub can be deployed on OpenShift via the [TrustyAI operator](https://github.
 ### Additional Resources
 
 For more detailed information on deployment and development workflows:
+
 - [TrustyAI Service Operator](https://github.com/trustyai-explainability/trustyai-service-operator)
 - [OpenDataHub Component Development Guide](https://github.com/opendatahub-io/opendatahub-operator/blob/main/hack/component-dev/README.md)
 - [OpenDataHub Documentation](https://opendatahub.io/)
@@ -422,6 +434,7 @@ For more detailed information on deployment and development workflows:
 ### Before Submitting
 
 1. **Rebase on Main**: Ensure your branch is up-to-date
+
    ```bash
    git checkout main
    git pull origin main
@@ -430,8 +443,9 @@ For more detailed information on deployment and development workflows:
    ```
 
 2. **Run Full Test Suite**
+
    ```bash
-   pytest
+   make clean test-all
    pre-commit run --all-files
    ```
 
@@ -441,26 +455,33 @@ For more detailed information on deployment and development workflows:
 
 When creating a pull request, include:
 
-**Description**
+```markdown
+**What and why**
+
 - Brief summary of changes
 - Link to related issue(s)
 
-**Type of Change**
-- [ ] Bug fix (non-breaking change)
-- [ ] New feature (non-breaking change)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] Documentation update
+Closes #
+
+Assisted-by: Cursor, Claude etc
+
+**Type**
+
+- [ ] feat
+- [ ] fix
+- [ ] docs
+- [ ] refactor / chore
+- [ ] test / ci
 
 **Testing**
-- [ ] Unit tests pass
-- [ ] Integration tests pass
-- [ ] New tests added for new functionality
 
-**Checklist**
-- [ ] Code follows project style guidelines
-- [ ] Self-review of code completed
-- [ ] Documentation updated
-- [ ] No new warnings introduced
+- [ ] Tests added or updated
+- [ ] Tested manually
+
+**Breaking changes**
+
+If yes, describe migration path. Otherwise delete this section.
+```
 
 ### Review Process
 
@@ -532,11 +553,14 @@ For feature requests, include:
 ### Building Documentation
 
 ```bash
-# The OpenAPI specification is maintained in docs/openapi.yaml
-# Update the spec as you add or modify endpoints
+# The OpenAPI spec source of truth is docs/src/openapi.yaml
+# After editing files in the docs/src directory, regenerate the public docs:
+make generate-public-docs
 
-# To view the API documentation locally, you can use any OpenAPI viewer
-# or serve it through the running service at /api/v1/openapi
+# View the API docs:
+# - Running server: http://localhost:8080/docs
+# - OpenAPI spec: http://localhost:8080/openapi.yaml
+# - Published: https://eval-hub.github.io/eval-hub/
 ```
 
 ## Community
@@ -557,6 +581,7 @@ For feature requests, include:
 ### Recognition
 
 Contributors are recognized in:
+
 - **Release Notes**: Major contributions highlighted
 - **Contributors**: GitHub automatically tracks contributors
 - **Acknowledgments**: Special recognition for significant contributions
