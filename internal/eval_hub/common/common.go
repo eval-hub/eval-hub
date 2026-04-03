@@ -1,63 +1,9 @@
 package common
 
 import (
-	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
-	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/google/uuid"
 )
 
 func GUID() string {
 	return uuid.New().String()
-}
-
-// ResolveProvider returns the provider for providerID
-func ResolveProvider(providerID string, storage abstractions.Storage) (*api.ProviderResource, error) {
-	return storage.GetProvider(providerID)
-}
-
-// ResolveCollection returns the collection for collectionID
-func ResolveCollection(collectionID string, storage abstractions.Storage) (*api.CollectionResource, error) {
-	return storage.GetCollection(collectionID)
-}
-
-// GetCollectionFunc returns a collection by ID. Used to resolve job benchmarks from collection without depending on storage.
-type GetCollectionFunc func(id string) (*api.CollectionResource, error)
-
-// GetJobBenchmarks returns the effective benchmark list for a job: from the job's collection when set, otherwise from job.Benchmarks.
-func GetJobBenchmarks(job *api.EvaluationJobResource, getCollection GetCollectionFunc) ([]api.BenchmarkConfig, error) {
-	if job != nil && job.Collection != nil && job.Collection.ID != "" {
-		if getCollection == nil {
-			return nil, serviceerrors.NewServiceError(
-				messages.InternalServerError,
-				"ParameterName", "Error",
-				"Value", "Error while fetching the collection",
-			)
-		}
-		coll, err := getCollection(job.Collection.ID)
-		if err != nil || coll == nil {
-			return nil, serviceerrors.NewServiceError(
-				messages.ResourceNotFound,
-				"ParameterName", "Type",
-				"Value", "Collection",
-				"ParameterName", "ResourceId",
-				"Value", job.Collection.ID,
-			)
-		}
-		if len(coll.Benchmarks) == 0 {
-			return nil, serviceerrors.NewServiceError(
-				messages.CollectionEmpty,
-				"CollectionID", job.Collection.ID,
-			)
-		}
-		return coll.Benchmarks, nil
-	}
-	if len(job.Benchmarks) == 0 {
-		return nil, serviceerrors.NewServiceError(
-			messages.EvaluationJobEmpty,
-			"EvaluationJobID", job.Resource.ID,
-		)
-	}
-	return job.Benchmarks, nil
 }

@@ -43,12 +43,18 @@ func (r *providersRequest) Query(key string) []string {
 func (f *fakeStorage) CreateProvider(_ *api.ProviderResource) error {
 	return nil
 }
+
 func (f *fakeStorage) GetProvider(id string) (*api.ProviderResource, error) {
+	if p, ok := f.providerConfigs[id]; ok {
+		return &p, nil
+	}
 	return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "provider", "ResourceId", id)
 }
+
 func (f *fakeStorage) DeleteProvider(_ string) error {
 	return nil
 }
+
 func (f *fakeStorage) UpdateProvider(id string, provider *api.ProviderConfig) (*api.ProviderResource, error) {
 	return &api.ProviderResource{
 		Resource: api.Resource{

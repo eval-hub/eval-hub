@@ -35,7 +35,7 @@ type JobSpecExportsOCI struct {
 func BuildJobSpec(
 	evaluation *api.EvaluationJobResource,
 	providerID string,
-	benchmarkConfig *api.BenchmarkConfig,
+	benchmarkConfig *api.EvaluationBenchmarkConfig,
 	benchmarkIndex int,
 	callbackURL *string,
 ) (*JobSpec, error) {

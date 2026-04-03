@@ -71,7 +71,7 @@ type Storage interface {
 	GetEvaluationJob(id string) (*api.EvaluationJobResource, error)
 	GetEvaluationJobs(filter *QueryFilter) (*QueryResults[api.EvaluationJobResource], error)
 	DeleteEvaluationJob(id string) error
-	UpdateEvaluationJob(id string, runStatus *api.StatusEvent, benchmarks []api.BenchmarkConfig) error
+	UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error
 	// UpdateEvaluationJobStatus is used to update the status of an evaluation job and is internal - do we need it here?
 	UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error
 
@@ -90,6 +90,10 @@ type Storage interface {
 	UpdateProvider(id string, providerConfig *api.ProviderConfig) (*api.ProviderResource, error)
 	PatchProvider(id string, patches *api.Patch) (*api.ProviderResource, error)
 	DeleteProvider(id string) error
+
+	// LoadSystemResources reloads system-owned providers and collections into
+	// the database. Existing system resources are deleted and replaced.
+	LoadSystemResources(systemCollections map[string]api.CollectionResource, systemProviders map[string]api.ProviderResource) error
 
 	// Close the storage connection
 	Close() error

@@ -1,4 +1,4 @@
-package auth
+package auth_test
 
 import (
 	"fmt"
@@ -9,13 +9,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eval-hub/eval-hub/auth"
 	"github.com/spf13/viper"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 )
 
 // loadAuthConfigFromYAML loads an RBAC config from a YAML file using Viper.
 // yamlName is the base name of the file (e.g. "rbac_jobs") under testdata/.
-func loadAuthConfigFromYAML(t *testing.T, yamlName string) *AuthConfig {
+func loadAuthConfigFromYAML(t *testing.T, yamlName string) *auth.AuthConfig {
 	t.Helper()
 	_, filename, _, _ := runtime.Caller(0)
 	dir := filepath.Dir(filename)
@@ -28,7 +29,7 @@ func loadAuthConfigFromYAML(t *testing.T, yamlName string) *AuthConfig {
 		t.Fatalf("ReadInConfig(%q): %v", configPath, err)
 	}
 
-	var cfg AuthConfig
+	var cfg auth.AuthConfig
 	if err := v.Unmarshal(&cfg); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
@@ -68,7 +69,6 @@ func (u *TestUser) GetExtra() map[string][]string {
 }
 
 func eq(got []authorizer.AttributesRecord, want []authorizer.AttributesRecord) bool {
-
 	if len(got) != len(want) {
 		return false
 	}
@@ -91,7 +91,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs", nil)
 		req.Header.Set("X-Tenant", "tenant-a")
 
-		atr, err := AttributesFromRequest(req, cfg, NewTestUser("test"))
+		atr, err := auth.AttributesFromRequest(req, cfg, NewTestUser("test"))
 		if err != nil {
 			t.Errorf("Got error = %+v, want nil", err)
 		}
@@ -122,7 +122,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs", nil)
 		req.Header.Set("X-Tenant", "my-ns")
 
-		atr, err := AttributesFromRequest(req, cfg, NewTestUser("test"))
+		atr, err := auth.AttributesFromRequest(req, cfg, NewTestUser("test"))
 		if err != nil {
 			t.Errorf("Got error = %+v, want nil", err)
 		}
@@ -146,7 +146,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/other", nil)
 		req.Header.Set("X-Tenant", "my-ns")
 
-		atr, err := AttributesFromRequest(req, cfg, NewTestUser("test"))
+		atr, err := auth.AttributesFromRequest(req, cfg, NewTestUser("test"))
 		if err != nil {
 			t.Errorf("Got error = %+v, want nil", err)
 		}
@@ -161,7 +161,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/namespaces?tenant=query-ns", nil)
 
-		atr, err := AttributesFromRequest(req, cfg, NewTestUser("test"))
+		atr, err := auth.AttributesFromRequest(req, cfg, NewTestUser("test"))
 		if err != nil {
 			t.Errorf("Got error = %+v, want nil", err)
 		}
@@ -185,7 +185,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/evaluations/collections", nil)
 		req.Header.Set("X-Tenant", "tenant-b")
 
-		atr, err := AttributesFromRequest(req, cfg, NewTestUser("test"))
+		atr, err := auth.AttributesFromRequest(req, cfg, NewTestUser("test"))
 		if err != nil {
 			t.Errorf("Got error = %+v, want nil", err)
 		}
@@ -207,7 +207,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req = httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/providers", nil)
 		req.Header.Set("X-Tenant", "tenant-b")
 
-		atr, err = AttributesFromRequest(req, cfg, NewTestUser("test"))
+		atr, err = auth.AttributesFromRequest(req, cfg, NewTestUser("test"))
 		if err != nil {
 			t.Errorf("Got error = %+v, want nil", err)
 		}
@@ -231,7 +231,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs", nil)
 
-		atr, err := AttributesFromRequest(req, cfg, NewTestUser("test"))
+		atr, err := auth.AttributesFromRequest(req, cfg, NewTestUser("test"))
 		if err == nil {
 			t.Errorf("Expected error = %+v, go %+v", err, atr)
 		}
@@ -243,7 +243,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs/2349872398472", nil)
 		req.Header.Set("X-Tenant", "my-ns")
 
-		atr, err := AttributesFromRequest(req, cfg, NewTestUser("test"))
+		atr, err := auth.AttributesFromRequest(req, cfg, NewTestUser("test"))
 		if err != nil {
 			t.Errorf("Got error = %+v, want nil", err)
 		}
@@ -268,7 +268,7 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs/2349872398472/events", nil)
 		req.Header.Set("X-Tenant", "my-ns")
 
-		atr, err := AttributesFromRequest(req, cfg, NewTestUser("test"))
+		atr, err := auth.AttributesFromRequest(req, cfg, NewTestUser("test"))
 		if err != nil {
 			t.Errorf("Got error = %+v, want nil", err)
 		}
@@ -304,15 +304,33 @@ func TestComputeResourceAttributesSuite(t *testing.T) {
 		}
 
 		for _, c := range cases {
-			e := Endpoint{
+			e := auth.Endpoint{
 				Path:      c.pattern,
 				PathParts: strings.Split(c.pattern, "/"),
 			}
-			match := matchEndpoint(c.path, e)
+			match := auth.MatchEndpoint(c.path, e)
 			if match != c.expectedMatch {
 				t.Errorf("MatchEndpoint(%s, %s) = %v, want %v", c.pattern, c.path, match, c.expectedMatch)
 			}
-			fmt.Printf("Pattern: %-15s Path: %-25s Match: %v\n", c.pattern, c.path, matchEndpoint(c.path, e))
+			fmt.Printf("Pattern: %-15s Path: %-25s Match: %v\n", c.pattern, c.path, auth.MatchEndpoint(c.path, e))
 		}
 	})
+}
+
+func TestHttpToKubeVerb(t *testing.T) {
+	cases := map[string]string{
+		http.MethodGet:     "get",
+		http.MethodPost:    "create",
+		http.MethodPut:     "update",
+		http.MethodDelete:  "delete",
+		http.MethodPatch:   "patch",
+		http.MethodOptions: "options",
+		http.MethodHead:    "head",
+		"UNKNOWN":          "",
+	}
+	for method, want := range cases {
+		if got := auth.HttpToKubeVerb(method); got != want {
+			t.Errorf("httpToKubeVerb(%q) = %q, want %q", method, got, want)
+		}
+	}
 }

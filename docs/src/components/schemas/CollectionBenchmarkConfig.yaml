@@ -1,0 +1,35 @@
+type: object
+description: |
+  Reference to a benchmark in a collection (create, update, list, or get collection).
+  The **url** field is set by the server from the provider definition when a collection is created (POST), fully replaced (PUT), or when a whole benchmark array element is added or replaced via PATCH (paths `/benchmarks/<index>` or `/benchmarks/-`), then stored and returned on list/get; omitted when unknown. Field-level benchmark patches (e.g. `/benchmarks/0/id`) do not trigger this. It is not used on evaluation jobs.
+allOf:
+  - $ref: ./Ref.yaml
+  - type: object
+    required:
+      - provider_id
+    properties:
+      provider_id:
+        type: string
+        description: Evaluation provider ID.
+      url:
+        type: string
+        description: Benchmark URL from the provider definition (persisted on create, full collection replace, or whole-benchmark PATCH; omitted when unknown).
+      weight:
+        type: number
+        format: float
+        minimum: 0
+        description: Weight of this benchmark.
+      primary_score:
+        $ref: ./PrimaryScore.yaml
+      pass_criteria:
+        $ref: ./PassCriteria.yaml
+      parameters:
+        type: object
+        additionalProperties: true
+        description: Benchmark specific parameters.
+      test_data_ref:
+        $ref: ./TestDataRef.yaml
+        description: |
+          Optional external test data (e.g. **S3**). For **Kubernetes Job** runs, may
+          trigger a pre-run init container that downloads files to **`/test_data`** for
+          the adapter. Omit if the benchmark does not need mounted files.

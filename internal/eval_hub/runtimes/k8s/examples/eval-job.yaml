@@ -9,6 +9,9 @@ metadata:
     job_id: "001"
     provider_id: "lm_evaluation_harness"
     benchmark_id: "mmlu"
+    benchmark_index: "0"
+    evalhub_instance_name: "evalhub"
+    evalhub_instance_namespace: "evalhub"
   annotations:
     eval-hub.github.io/job_id: "001"
     eval-hub.github.io/provider_id: "lm_evaluation_harness"
@@ -24,6 +27,9 @@ spec:
         job_id: "001"
         provider_id: "lm_evaluation_harness"
         benchmark_id: "mmlu"
+        benchmark_index: "0"
+        evalhub_instance_name: "evalhub"
+        evalhub_instance_namespace: "evalhub"
       annotations:
         eval-hub.github.io/job_id: "001"
         eval-hub.github.io/provider_id: "lm_evaluation_harness"
@@ -62,6 +68,8 @@ spec:
             - name: evalhub-service-ca
               mountPath: /etc/pki/ca-trust/source/anchors
               readOnly: true
+            - name: termination-file-volume
+              mountPath: /shared
         - name: sidecar
           image: eval-runtime-sidecar:latest
           volumeMounts:
@@ -73,6 +81,8 @@ spec:
               mountPath: /meta/sidecar_config.json
               subPath: sidecar_config.json
               readOnly: true
+            - name: termination-file-volume
+              mountPath: /tmp/adapter
       volumes:
         - name: job-spec
           configMap:
@@ -82,3 +92,5 @@ spec:
         - name: evalhub-service-ca
           configMap:
             name: evalhub-service-ca
+        - name: termination-file-volume
+          emptyDir: {}

@@ -17,6 +17,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
 	"github.com/eval-hub/eval-hub/internal/eval_runtime_sidecar/config"
 	sidecarServer "github.com/eval-hub/eval-hub/internal/eval_runtime_sidecar/server"
+	"github.com/eval-hub/eval-hub/internal/eval_runtime_sidecar/termination"
 	"github.com/eval-hub/eval-hub/internal/logging"
 )
 
@@ -73,7 +74,7 @@ func main() {
 	go func() {
 		if err := srv.Start(); err != nil {
 			// we do this as no point trying to continue
-			if errors.Is(err, &server.ServerClosedError{}) {
+			if errors.Is(err, &sidecarServer.ServerClosedError{}) {
 				logger.Info("Server closed gracefully")
 				return
 			}
@@ -81,10 +82,23 @@ func main() {
 		}
 	}()
 
-	// Wait for interrupt signal to gracefully shutdown the server
+	watchCtx, watchCancel := context.WithCancel(context.Background())
+	defer watchCancel()
+	adapterTerminated := termination.WatchDefaultAdapterTermination(watchCtx, logger)
+
+	// Wait for interrupt signal or adapter-created termination file (shared emptyDir) to shut down gracefully
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	select {
+	case sig := <-quit:
+		logger.Info("Received shutdown signal", "signal", sig.String())
+	case <-adapterTerminated:
+		logger.Info("Shutting down after adapter termination signal",
+			"watch_dir", termination.AdapterTerminationWatchDir,
+			"file", termination.AdapterTerminationSignalFile,
+		)
+	}
+	watchCancel()
 
 	// Create a context with timeout for graceful shutdown
 	waitForShutdown := 30 * time.Second

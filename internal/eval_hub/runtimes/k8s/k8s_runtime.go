@@ -8,7 +8,6 @@ import (
 	"log/slog"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/common"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
@@ -52,7 +51,11 @@ func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 	}
 }
 
-func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, benchmarks []api.BenchmarkConfig, storage abstractions.Storage) error {
+func (r *K8sRuntime) RunEvaluationJob(
+	evaluation *api.EvaluationJobResource,
+	benchmarks []api.EvaluationBenchmarkConfig,
+	storage abstractions.RuntimeStorage,
+) error {
 	if len(benchmarks) == 0 {
 		return serviceerrors.NewServiceError(messages.EvaluationJobEmpty, "EvaluationJobID", evaluation.Resource.ID)
 	}
@@ -70,7 +73,7 @@ func (r *K8sRuntime) RunEvaluationJob(evaluation *api.EvaluationJobResource, ben
 
 				if storage != nil {
 					runStatus := buildBenchmarkFailureStatus(&bench, idx, err)
-					if updateErr := storage.UpdateEvaluationJob(evaluation.Resource.ID, runStatus, benchmarks); updateErr != nil {
+					if updateErr := storage.UpdateEvaluationJob(evaluation.Resource.ID, runStatus); updateErr != nil {
 						r.logger.Error(
 							"failed to update benchmark status",
 							"error", updateErr,
@@ -138,13 +141,13 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 	logger *slog.Logger,
 	evaluation *api.EvaluationJobResource,
-	benchmark *api.BenchmarkConfig,
+	benchmark *api.EvaluationBenchmarkConfig,
 	benchmarkIndex int,
-	storage abstractions.Storage,
+	storage abstractions.RuntimeStorage,
 ) error {
 	benchmarkID := benchmark.ID
 	// Provider/benchmark validation should be handled during creation.
-	provider, err := common.ResolveProvider(benchmark.ProviderID, storage)
+	provider, err := storage.GetProvider(benchmark.ProviderID)
 	if err != nil {
 		return err
 	}
@@ -236,7 +239,7 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 	return nil
 }
 
-func buildBenchmarkFailureStatus(benchmark *api.BenchmarkConfig, benchmarkIndex int, runErr error) *api.StatusEvent {
+func buildBenchmarkFailureStatus(benchmark *api.EvaluationBenchmarkConfig, benchmarkIndex int, runErr error) *api.StatusEvent {
 	return &api.StatusEvent{
 		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 			ProviderID:     benchmark.ProviderID,

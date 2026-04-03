@@ -226,3 +226,72 @@ func (h *Handlers) verifyPatches(ctx context.Context, patches api.Patch, allowed
 	}
 	return nil
 }
+
+// GetJobBenchmarks returns the effective benchmark list for a job:
+// from the job's collection when set, otherwise from job.Benchmarks.
+func GetJobBenchmarks(job *api.EvaluationJobResource, collection *api.CollectionResource) ([]api.EvaluationBenchmarkConfig, error) {
+	if job.Collection != nil && job.Collection.ID != "" {
+		if collection == nil {
+			return nil, serviceerrors.NewServiceError(
+				messages.InternalServerError,
+				"Error", fmt.Sprintf("Failed to resolve collection %s", job.Collection.ID),
+			)
+		}
+		if len(collection.Benchmarks) == 0 {
+			return nil, serviceerrors.NewServiceError(
+				messages.CollectionEmpty,
+				"CollectionID", job.Collection.ID,
+			)
+		}
+		var mergedBenchmarks []api.EvaluationBenchmarkConfig
+		for _, benchmark := range collection.Benchmarks {
+			benchmark := mergeBenchmarkParameters(benchmark, job.Benchmarks)
+			mergedBenchmarks = append(mergedBenchmarks, benchmark)
+		}
+		return mergedBenchmarks, nil
+	}
+	if len(job.Benchmarks) == 0 {
+		return nil, serviceerrors.NewServiceError(
+			messages.EvaluationJobEmpty,
+			"EvaluationJobID", job.Resource.ID,
+		)
+	}
+	return job.Benchmarks, nil
+}
+
+func mergeBenchmarkParameters(benchmark api.CollectionBenchmarkConfig, jobBenchmarks []api.EvaluationBenchmarkConfig) api.EvaluationBenchmarkConfig {
+	parameters := map[string]any{}
+	for _, jobBenchmark := range jobBenchmarks {
+		if jobBenchmark.ProviderID == benchmark.ProviderID {
+			maps.Copy(parameters, jobBenchmark.Parameters)
+		}
+	}
+	for key, value := range benchmark.Parameters {
+		if isEmpty(value) {
+			delete(parameters, key)
+		} else {
+			parameters[key] = value
+		}
+	}
+	return api.EvaluationBenchmarkConfig{
+		Ref:          benchmark.Ref,
+		ProviderID:   benchmark.ProviderID,
+		Weight:       benchmark.Weight,
+		PrimaryScore: benchmark.PrimaryScore,
+		PassCriteria: benchmark.PassCriteria,
+		TestDataRef:  benchmark.TestDataRef,
+		Parameters:   parameters,
+	}
+}
+
+// isEmpty returns true if the value is nil or empty so that it can be removed from the list of parameters.
+func isEmpty(value any) bool {
+	if value == nil {
+		return true
+	}
+	switch v := value.(type) {
+	case string:
+		return v == ""
+	}
+	return false
+}

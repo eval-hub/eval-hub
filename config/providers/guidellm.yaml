@@ -16,12 +16,12 @@ runtime:
     # command is set to true for test-fvt-server-coverage as it runs in local mode.
     # In actual custom provider configurations, it will be set to the actual command to run.
     command: "true"
-
 benchmarks:
   # Execution profiles - comprehensive performance testing
   - id: sweep
-    name: Sweep Profile
-    description: Automatically finds optimal request rate by sweeping from low to high concurrency
+    name: Auto-discover optimal load
+    description: |-
+      Automatically sweeps from low to high concurrency to find the best throughput-latency tradeoff.
     category: performance
     metrics:
       - requests_per_second
@@ -35,10 +35,10 @@ benchmarks:
       - latency
       - guidellm
       - auto
-
   - id: throughput
-    name: Throughput Profile
-    description: Measures maximum throughput by gradually increasing request rate until saturation
+    name: Maximum throughput discovery
+    description: |-
+      Finds the server's maximum requests-per-second by gradually increasing load until saturation.
     category: performance
     metrics:
       - requests_per_second
@@ -51,10 +51,9 @@ benchmarks:
       - throughput
       - guidellm
       - saturation
-
   - id: concurrent
-    name: Concurrent Profile
-    description: Tests performance with fixed number of concurrent requests
+    name: Fixed concurrency stress test
+    description: Measures latency and throughput under a fixed number of simultaneous requests.
     category: performance
     metrics:
       - requests_per_second
@@ -66,10 +65,9 @@ benchmarks:
       - performance
       - concurrency
       - guidellm
-
   - id: constant
-    name: Constant Rate Profile
-    description: Maintains constant request rate throughout benchmark duration
+    name: Steady-state load test
+    description: Measures performance under a sustained, constant request rate over time.
     category: performance
     metrics:
       - requests_per_second
@@ -81,10 +79,9 @@ benchmarks:
       - performance
       - constant_rate
       - guidellm
-
   - id: poisson
-    name: Poisson Profile
-    description: Sends requests following Poisson distribution for realistic production simulation
+    name: Realistic traffic simulation
+    description: Simulates real-world traffic patterns using Poisson-distributed request arrivals.
     category: performance
     metrics:
       - requests_per_second
@@ -97,11 +94,10 @@ benchmarks:
       - poisson
       - realistic
       - guidellm
-
   # Pre-configured benchmark suites
   - id: quick_perf_test
-    name: Quick Performance Test
-    description: Fast performance evaluation with sweep profile and limited samples
+    name: Quick performance snapshot
+    description: Fast sweep-based evaluation with limited samples for rapid performance assessment.
     category: performance
     metrics:
       - requests_per_second
@@ -112,10 +108,9 @@ benchmarks:
       - quick
       - guidellm
       - suite
-
   - id: comprehensive_perf_test
-    name: Comprehensive Performance Test
-    description: Thorough performance evaluation across all profiles
+    name: Full performance characterization
+    description: End-to-end evaluation across all load profiles for complete performance understanding.
     category: performance
     metrics:
       - requests_per_second

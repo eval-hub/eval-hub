@@ -1637,7 +1637,7 @@
       },
       "TestDataRefS3": {
         "type": "object",
-        "description": "S3 test data reference",
+        "description": "S3 (or S3-compatible) test data. Only applies when Eval Hub runs the benchmark as a\n**Kubernetes Job** (cluster execution). It does not apply to local-only evaluation runs.\n\nThe test-data **init container** loads the Secret named **`secret_ref`** from the\njob namespace. It expects these keys. **All values must be non-empty** or the init\ncontainer fails:\n\n- **`AWS_ACCESS_KEY_ID`** — access key\n- **`AWS_SECRET_ACCESS_KEY`** — secret key\n- **`AWS_DEFAULT_REGION`** — region used for signing (for example `us-east-1`)\n- **`AWS_S3_ENDPOINT`** — base URL of the S3 API (AWS regional endpoint or your\n  S3-compatible gateway)\n\nThese align with Secrets commonly produced by ODH/RHOAI when an S3 connection is created.\n",
         "required": [
           "bucket",
           "key",
@@ -1646,21 +1646,26 @@
         "properties": {
           "bucket": {
             "type": "string",
-            "description": "S3 bucket name"
+            "description": "S3 bucket name."
           },
           "key": {
             "type": "string",
-            "description": "S3 object key (path)"
+            "description": "Object key or prefix within the bucket. Leading and trailing slashes are\nnormalized. The init container lists objects under this prefix and downloads\neach into **`/test_data`**, keeping subdirectory structure relative to the prefix.\n"
           },
           "secret_ref": {
             "type": "string",
-            "description": "Kubernetes Secret name containing S3 credentials"
+            "description": "Name of a Kubernetes **`Secret`** in the evaluation job namespace, mounted\nread-only into the test-data init container.\n"
           }
+        },
+        "example": {
+          "bucket": "my-eval-bucket",
+          "key": "datasets/benchmark-a/v1",
+          "secret_ref": "my-s3-connection-secret"
         }
       },
       "TestDataRef": {
         "type": "object",
-        "description": "Reference to external test data sources",
+        "description": "Reference to external test data for a benchmark.\n\nWhen the evaluation runs as a **Kubernetes Job**, setting `s3` makes Eval Hub schedule\nan **init container** on the evaluation job pod before the adapter runs. That init container:\n\n- Reads **`bucket`**, **`key`**, and **`secret_ref`** from the job spec (same JSON\n  mounted into the pod).\n- Uses credentials from the Kubernetes **Secret** named by **`secret_ref`**\n  (read-only mount; typical sources include an ODH/RHOAI S3 connection Secret).\n- Lists and downloads all objects under the **`key`** prefix into a shared\n  **`emptyDir`** volume at **`/test_data`**, preserving relative paths.\n- Exits; the **adapter container** mounts `/test_data` and reads the files.\n\nDo not put credentials in the Eval Hub API request body; only reference an existing\nSecret via **`secret_ref`**.\n",
         "required": [
           "s3"
         ],
@@ -1670,9 +1675,9 @@
           }
         }
       },
-      "BenchmarkConfig": {
+      "EvaluationBenchmarkConfig": {
         "type": "object",
-        "description": "Reference to a benchmark in a collection or evaluation",
+        "description": "Reference to a benchmark in an evaluation job (top-level benchmarks or collection override list).\nDoes not include a URL; URLs appear only on collection benchmark entries.\n",
         "allOf": [
           {
             "$ref": "#/components/schemas/Ref"
@@ -1685,14 +1690,13 @@
             "properties": {
               "provider_id": {
                 "type": "string",
-                "description": "Evaluation provider ID"
+                "description": "Evaluation provider ID."
               },
               "weight": {
                 "type": "number",
                 "format": "float",
                 "minimum": 0,
-                "maximum": 1,
-                "description": "Weight of this benchmark"
+                "description": "Weight of this benchmark."
               },
               "primary_score": {
                 "$ref": "#/components/schemas/PrimaryScore"
@@ -1703,11 +1707,11 @@
               "parameters": {
                 "type": "object",
                 "additionalProperties": true,
-                "description": "Benchmark specific parameters"
+                "description": "Benchmark specific parameters."
               },
               "test_data_ref": {
                 "$ref": "#/components/schemas/TestDataRef",
-                "description": "Reference to the test data source for this benchmark"
+                "description": "Optional external test data (e.g. **S3**). For **Kubernetes Job** runs, may\ntrigger a pre-run init container that downloads files to **`/test_data`** for\nthe adapter. Omit if the benchmark does not need mounted files.\n"
               }
             }
           }
@@ -1842,6 +1846,28 @@
         "additionalProperties": false,
         "title": "EvaluationExports"
       },
+      "QueueConfig": {
+        "type": "object",
+        "title": "QueueConfig",
+        "description": "Optional workload scheduling queue for Kubernetes runtimes (e.g. Kueue LocalQueue).\n",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "kueue"
+            ],
+            "default": "kueue",
+            "description": "Queue integration to use. When omitted, the server behaves as if `kueue` was set. Only `kueue` is supported today.\n"
+          },
+          "name": {
+            "type": "string",
+            "description": "Queue resource name (for Kueue, the LocalQueue name). Set on the Job as label `kueue.x-k8s.io/queue-name`.\n"
+          }
+        }
+      },
       "EvaluationJobConfigCommon2": {
         "type": "object",
         "title": "EvaluationJobConfigCommon2",
@@ -1858,6 +1884,10 @@
           "exports": {
             "$ref": "#/components/schemas/EvaluationExports",
             "description": "Optional exports configuration for the evaluation job. When provided, the evaluation job results will be exported to the specified location.\n"
+          },
+          "queue": {
+            "$ref": "#/components/schemas/QueueConfig",
+            "description": "Optional scheduling queue for Kubernetes-backed evaluation jobs (e.g. Kueue).\n"
           },
           "custom": {
             "type": "object",
@@ -1880,7 +1910,7 @@
               "benchmarks": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/BenchmarkConfig"
+                  "$ref": "#/components/schemas/EvaluationBenchmarkConfig"
                 },
                 "description": "The evaluation benchmarks to run.\n"
               }
@@ -1906,7 +1936,7 @@
           "benchmarks": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/BenchmarkConfig"
+              "$ref": "#/components/schemas/EvaluationBenchmarkConfig"
             },
             "description": "The benchmarks supported by this collection. If a benchmark is specified but is not supported by the collection, the evaluation job will fail. This is needed in order to allow overriding the collection benchmarks for a specific evaluation job.\n"
           }
@@ -2172,6 +2202,10 @@
             "type": "string",
             "description": "Benchmark ID"
           },
+          "url": {
+            "type": "string",
+            "description": "Optional documentation or info URL for this benchmark (from provider config)."
+          },
           "name": {
             "type": "string",
             "description": "Benchmark name"
@@ -2330,44 +2364,90 @@
           "path"
         ]
       },
+      "CollectionBenchmarkConfig": {
+        "type": "object",
+        "description": "Reference to a benchmark in a collection (create, update, list, or get collection).\nThe **url** field is set by the server from the provider definition when a collection is created (POST), fully replaced (PUT), or when a whole benchmark array element is added or replaced via PATCH (paths `/benchmarks/<index>` or `/benchmarks/-`), then stored and returned on list/get; omitted when unknown. Field-level benchmark patches (e.g. `/benchmarks/0/id`) do not trigger this. It is not used on evaluation jobs.\n",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Ref"
+          },
+          {
+            "type": "object",
+            "required": [
+              "provider_id"
+            ],
+            "properties": {
+              "provider_id": {
+                "type": "string",
+                "description": "Evaluation provider ID."
+              },
+              "url": {
+                "type": "string",
+                "description": "Benchmark URL from the provider definition (persisted on create, full collection replace, or whole-benchmark PATCH; omitted when unknown)."
+              },
+              "weight": {
+                "type": "number",
+                "format": "float",
+                "minimum": 0,
+                "description": "Weight of this benchmark."
+              },
+              "primary_score": {
+                "$ref": "#/components/schemas/PrimaryScore"
+              },
+              "pass_criteria": {
+                "$ref": "#/components/schemas/PassCriteria"
+              },
+              "parameters": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Benchmark specific parameters."
+              },
+              "test_data_ref": {
+                "$ref": "#/components/schemas/TestDataRef",
+                "description": "Optional external test data (e.g. **S3**). For **Kubernetes Job** runs, may\ntrigger a pre-run init container that downloads files to **`/test_data`** for\nthe adapter. Omit if the benchmark does not need mounted files.\n"
+              }
+            }
+          }
+        ]
+      },
       "CollectionConfig": {
         "type": "object",
-        "description": "Request to create or update a collection",
+        "description": "Request to create or update a collection.",
         "properties": {
           "name": {
             "type": "string",
-            "description": "Collection name"
+            "description": "Collection name."
           },
           "category": {
             "type": "string",
-            "description": "Collection category"
+            "description": "Collection category."
           },
           "description": {
             "type": "string",
-            "description": "Optional description"
+            "description": "Optional description."
           },
           "tags": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "Tags"
+            "description": "Tags."
           },
           "custom": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Custom key-value data"
+            "description": "Custom key-value data."
           },
           "pass_criteria": {
             "$ref": "#/components/schemas/PassCriteria",
-            "description": "Pass criteria for the collection"
+            "description": "Pass criteria for the collection."
           },
           "benchmarks": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/BenchmarkConfig"
+              "$ref": "#/components/schemas/CollectionBenchmarkConfig"
             },
-            "description": "Benchmarks in the collection"
+            "description": "Benchmarks in the collection."
           }
         },
         "required": [

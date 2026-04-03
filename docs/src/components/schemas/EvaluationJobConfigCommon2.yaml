@@ -17,6 +17,10 @@ properties:
     description: >
       Optional exports configuration for the evaluation job.
       When provided, the evaluation job results will be exported to the specified location.
+  queue:
+    $ref: ./QueueConfig.yaml
+    description: >
+      Optional scheduling queue for Kubernetes-backed evaluation jobs (e.g. Kueue).
   custom:
     type: object
     additionalProperties: true

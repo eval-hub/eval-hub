@@ -145,8 +145,13 @@ func injectEvaluationJobTags(jobId string, evaluation *api.EvaluationJobConfig) 
 	return []api.ExperimentTag{}
 }
 
+// HasExperimentName is true when the job config has a non-empty MLflow experiment name.
+func HasExperimentName(jobConfig *api.EvaluationJobConfig) bool {
+	return jobConfig.Experiment != nil && jobConfig.Experiment.Name != ""
+}
+
 func GetOrCreateExperimentID(mlflowClient *mlflowclient.Client, jobConfig *api.EvaluationJobConfig, jobId string) (experimentID string, experimentURL string, err error) {
-	if jobConfig.Experiment == nil || jobConfig.Experiment.Name == "" {
+	if !HasExperimentName(jobConfig) {
 		return "", "", nil
 	}
 

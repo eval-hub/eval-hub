@@ -1,0 +1,20 @@
+type: object
+title: QueueConfig
+description: >
+  Optional workload scheduling queue for Kubernetes runtimes (e.g. Kueue LocalQueue).
+required:
+  - name
+properties:
+  kind:
+    type: string
+    enum:
+      - kueue
+    default: kueue
+    description: >
+      Queue integration to use. When omitted, the server behaves as if `kueue` was set.
+      Only `kueue` is supported today.
+  name:
+    type: string
+    description: >
+      Queue resource name (for Kueue, the LocalQueue name). Set on the Job as label
+      `kueue.x-k8s.io/queue-name`.

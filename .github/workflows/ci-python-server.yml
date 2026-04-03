@@ -1,0 +1,36 @@
+name: CI python-server
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'python-server/**'
+      - 'config/**'
+      - 'cmd/eval_hub/**'
+      - 'internal/**'
+      - 'pkg/**'
+      - 'Makefile'
+      - '.github/workflows/ci-python-server.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.25'
+      - name: Set up uv python
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          python-version: '3.11'
+      - name: Build binary for this platform via cross-compile target
+        run: make cross-compile
+      - name: Copy binary to python-server manually (this is done usually by .github/workflows/publish-python-server.yml)
+        run: |
+          mkdir -p python-server/evalhub_server/binaries/
+          cp bin/eval-hub-* python-server/evalhub_server/binaries/
+          chmod +x python-server/evalhub_server/binaries/*
+      - name: Build wheel and run tests
+        run: make build-wheel test-python-server

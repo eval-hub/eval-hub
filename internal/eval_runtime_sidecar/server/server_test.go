@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -81,12 +82,14 @@ func TestSidecarServer_GetPort(t *testing.T) {
 }
 
 func TestSidecarServer_SetupRoutes(t *testing.T) {
-	t.Skip("Skipping this test for now. FIX CA CERT FILES !")
 	logger := slog.Default()
 	cfg := &config.Config{
 		Sidecar: &config.SidecarConfig{
-			Port:    8080,
-			EvalHub: &config.EvalHubClientConfig{BaseURL: "http://localhost:8080"},
+			Port: 8080,
+			EvalHub: &config.EvalHubClientConfig{
+				BaseURL:            "http://localhost:8080",
+				InsecureSkipVerify: true,
+			},
 		},
 	}
 	srv, err := sidecarServer.NewSidecarServer(logger, cfg)
@@ -110,5 +113,8 @@ func TestServerClosedError(t *testing.T) {
 	err := &sidecarServer.ServerClosedError{}
 	if err.Error() != "Server closed" {
 		t.Errorf("ServerClosedError.Error() = %q, want %q", err.Error(), "Server closed")
+	}
+	if !errors.Is(err, &sidecarServer.ServerClosedError{}) {
+		t.Error("errors.Is should match two distinct ServerClosedError pointers")
 	}
 }

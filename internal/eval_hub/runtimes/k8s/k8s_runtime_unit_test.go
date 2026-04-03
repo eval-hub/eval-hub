@@ -10,7 +10,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
@@ -31,7 +31,7 @@ type fakeStorage struct {
 }
 
 // UpdateEvaluationJob implements [abstractions.Storage].
-func (f *fakeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent, _ []api.BenchmarkConfig) error {
+func (f *fakeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
 	f.called = true
 	f.runStatus = runStatus
 	if f.runStatusChan != nil {
@@ -103,6 +103,9 @@ func (f *fakeStorage) PatchProvider(_ string, _ *api.Patch) (*api.ProviderResour
 	return nil, nil
 }
 func (f *fakeStorage) Close() error { return nil }
+func (f *fakeStorage) LoadSystemResources(_ map[string]api.CollectionResource, _ map[string]api.ProviderResource) error {
+	return nil
+}
 
 func (f *fakeStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 	return &fakeStorage{
@@ -503,7 +506,7 @@ func TestRunEvaluationJobMarksBenchmarkFailedOnCreateError(t *testing.T) {
 	storage := &fakeStorage{logger: logger, ctx: context.Background(), runStatusChan: statusCh, providerConfigs: sampleProviders(providerID)}
 	var store abstractions.Storage = storage
 
-	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
 	if err != nil {
 		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
 	}
@@ -563,7 +566,7 @@ func TestRunEvaluationJobHandlesUpdateFailure(t *testing.T) {
 	}
 	var store abstractions.Storage = storage
 
-	benchmarks, err := shared.ResolveBenchmarks(evaluation, storage)
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
 	if err != nil {
 		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
 	}
@@ -592,7 +595,7 @@ func sampleEvaluation(providerID string) *api.EvaluationJobResource {
 				URL:  "http://model.example",
 				Name: "model-1",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref: api.Ref{ID: "bench-1"},
 					Parameters: map[string]any{

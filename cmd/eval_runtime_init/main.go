@@ -35,10 +35,10 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
 	if err := run(); err != nil {
-		logger.Error("eval-hub-init failed", "error", err)
+		logger.Error("eval-runtime-init failed", "error", err)
 		os.Exit(1)
 	}
-	logger.Info("eval-hub-init completed")
+	logger.Info("eval-runtime-init completed")
 }
 
 func run() error {

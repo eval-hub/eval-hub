@@ -96,10 +96,49 @@ func TestBuildK8sNameDiffersAcrossGUIDs(t *testing.T) {
 	}
 }
 
+func TestJobLabelsNilConfig(t *testing.T) {
+	labels := jobLabels(nil)
+	if len(labels) != 0 {
+		t.Fatalf("expected empty labels for nil cfg, got %v", labels)
+	}
+}
+
 func TestJobLabelsSanitizeBenchmarkID(t *testing.T) {
-	labels := jobLabels("job-123", "lighteval", "arc:easy")
+	labels := jobLabels(&jobConfig{jobID: "job-123", providerID: "lighteval", benchmarkID: "arc:easy", benchmarkIndex: 0})
 	if labels[labelBenchmarkIDKey] != "arc-easy" {
 		t.Fatalf("expected benchmark label to be sanitized, got %q", labels[labelBenchmarkIDKey])
+	}
+	if labels[labelBenchmarkIndexKey] != "0" {
+		t.Fatalf("expected benchmark_index label %q, got %q", "0", labels[labelBenchmarkIndexKey])
+	}
+}
+
+func TestJobLabelsEvalHubInstance(t *testing.T) {
+	labels := jobLabels(&jobConfig{jobID: "j", providerID: "p", benchmarkID: "b", benchmarkIndex: 0, evalHubInstanceName: "my-evalhub", evalHubCRNamespace: "prod-ns"})
+	if labels[labelEvalHubInstanceNameKey] != "my-evalhub" {
+		t.Fatalf("instance-name: got %q", labels[labelEvalHubInstanceNameKey])
+	}
+	if labels[labelEvalHubInstanceNamespaceKey] != "prod-ns" {
+		t.Fatalf("instance-namespace: got %q", labels[labelEvalHubInstanceNamespaceKey])
+	}
+	empty := jobLabels(&jobConfig{jobID: "j", providerID: "p", benchmarkID: "b", benchmarkIndex: 0})
+	if _, ok := empty[labelEvalHubInstanceNameKey]; ok {
+		t.Fatal("expected no instance labels when name/namespace empty")
+	}
+}
+
+func TestJobLabelsKueueQueueName(t *testing.T) {
+	labels := jobLabels(&jobConfig{jobID: "j", providerID: "p", benchmarkID: "b", benchmarkIndex: 0, queueKind: "kueue", queueName: "my-queue"})
+	if labels[labelKueueQueueNameKey] != "my-queue" {
+		t.Fatalf("expected kueue queue label %q, got %q", "my-queue", labels[labelKueueQueueNameKey])
+	}
+	noQueue := jobLabels(&jobConfig{jobID: "j", providerID: "p", benchmarkID: "b", benchmarkIndex: 0})
+	if _, ok := noQueue[labelKueueQueueNameKey]; ok {
+		t.Fatal("expected no kueue queue label when queue name is empty")
+	}
+	nonKueue := jobLabels(&jobConfig{jobID: "j", providerID: "p", benchmarkID: "b", benchmarkIndex: 0, queueKind: "other", queueName: "my-queue"})
+	if _, ok := nonKueue[labelKueueQueueNameKey]; ok {
+		t.Fatal("expected no kueue queue label when queue kind is not kueue")
 	}
 }
 
@@ -117,6 +156,78 @@ func TestBuildJobRequiresAdapterImage(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for missing adapter image")
 	}
+}
+
+func TestBuildJobAdapterEvalHubModeEnv(t *testing.T) {
+	t.Run("k8s when not local mode", func(t *testing.T) {
+		cfg := &jobConfig{
+			jobID:          "job-mode",
+			resourceGUID:   "guid-mode",
+			benchmarkIndex: 0,
+			namespace:      "default",
+			providerID:     "provider-1",
+			benchmarkID:    "bench-1",
+			adapterImage:   "adapter:latest",
+			defaultEnv:     []api.EnvVar{},
+			localMode:      false,
+		}
+		job, err := buildJob(cfg)
+		if err != nil {
+			t.Fatalf("buildJob: %v", err)
+		}
+		adapter := job.Spec.Template.Spec.Containers[0]
+		var got string
+		var found bool
+		for _, e := range adapter.Env {
+			if e.Name == envEvalHubModeName {
+				found = true
+				got = e.Value
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("adapter missing env %q", envEvalHubModeName)
+		}
+		if got != "k8s" {
+			t.Fatalf("EVALHUB_MODE = %q, want k8s", got)
+		}
+	})
+	t.Run("local when local mode", func(t *testing.T) {
+		cfg := &jobConfig{
+			jobID:          "job-mode-local",
+			resourceGUID:   "guid-mode-l",
+			benchmarkIndex: 0,
+			namespace:      "default",
+			providerID:     "provider-1",
+			benchmarkID:    "bench-1",
+			adapterImage:   "adapter:latest",
+			defaultEnv:     []api.EnvVar{},
+			localMode:      true,
+		}
+		job, err := buildJob(cfg)
+		if err != nil {
+			t.Fatalf("buildJob: %v", err)
+		}
+		if len(job.Spec.Template.Spec.Containers) != 1 {
+			t.Fatalf("expected single adapter container in local mode, got %d", len(job.Spec.Template.Spec.Containers))
+		}
+		adapter := job.Spec.Template.Spec.Containers[0]
+		var got string
+		var found bool
+		for _, e := range adapter.Env {
+			if e.Name == envEvalHubModeName {
+				found = true
+				got = e.Value
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("adapter missing env %q", envEvalHubModeName)
+		}
+		if got != "local" {
+			t.Fatalf("EVALHUB_MODE = %q, want local", got)
+		}
+	})
 }
 
 func TestBuildJobSecurityContext(t *testing.T) {
@@ -274,6 +385,60 @@ func TestBuildJobWithOCICredentials(t *testing.T) {
 	}
 	if !foundEnv {
 		t.Fatalf("expected env var %s to be present", envOCIAuthConfigPathName)
+	}
+}
+
+func TestBuildJobTerminationFileVolume(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "job-term-vol",
+		resourceGUID:   "guid-tv",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
+	}
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob: %v", err)
+	}
+	var foundVol bool
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == terminationFileVolumeName {
+			foundVol = true
+			if v.EmptyDir == nil {
+				t.Fatalf("expected EmptyDir for %s", terminationFileVolumeName)
+			}
+		}
+	}
+	if !foundVol {
+		t.Fatalf("expected volume %q", terminationFileVolumeName)
+	}
+	if len(job.Spec.Template.Spec.Containers) < 2 {
+		t.Fatal("expected adapter and sidecar")
+	}
+	adapter := job.Spec.Template.Spec.Containers[0]
+	var adapterMount bool
+	for _, m := range adapter.VolumeMounts {
+		if m.Name == terminationFileVolumeName && m.MountPath == adapterTerminationSharedMountPath {
+			adapterMount = true
+			break
+		}
+	}
+	if !adapterMount {
+		t.Fatalf("adapter should mount %q at %q", terminationFileVolumeName, adapterTerminationSharedMountPath)
+	}
+	sidecar := job.Spec.Template.Spec.Containers[1]
+	var sidecarMount bool
+	for _, m := range sidecar.VolumeMounts {
+		if m.Name == terminationFileVolumeName && m.MountPath == adapterTerminationSharedMountPath {
+			sidecarMount = true
+			break
+		}
+	}
+	if !sidecarMount {
+		t.Fatalf("sidecar should mount %q at %q", terminationFileVolumeName, adapterTerminationSharedMountPath)
 	}
 }
 

@@ -300,6 +300,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the volume "([^"]*)" should reference the ConfigMap with suffix "([^"]*)"$`, tc.volumeShouldReferenceConfigMap)
 	ctx.Step(`^the container should have volumeMount "([^"]*)" at path "([^"]*)"$`, tc.containerShouldHaveVolumeMount)
 	ctx.Step(`^the container should have volumeMount "([^"]*)" at path "([^"]*)" with subPath "([^"]*)"$`, tc.containerShouldHaveVolumeMountWithSubPath)
+	ctx.Step(`^the sidecar container should have volumeMount "([^"]*)" at path "([^"]*)"$`, tc.sidecarContainerShouldHaveVolumeMount)
 	ctx.Step(`^the sidecar container should have volumeMount "([^"]*)" at path "([^"]*)" with subPath "([^"]*)"$`, tc.sidecarContainerShouldHaveVolumeMountWithSubPath)
 	ctx.Step(`^the volumeMount "([^"]*)" should have subPath "([^"]*)"$`, tc.volumeMountShouldHaveSubPath)
 	ctx.Step(`^the volumeMount "([^"]*)" should be readOnly$`, tc.volumeMountShouldBeReadOnly)
@@ -322,6 +323,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the number of ConfigMaps created should equal the number of benchmarks$`, tc.numberOfConfigMapsShouldEqualBenchmarks)
 	ctx.Step(`^each Job should have a unique benchmark_id label$`, tc.eachJobShouldHaveUniqueBenchmarkIDLabel)
 	ctx.Step(`^each ConfigMap should have a unique benchmark_id label$`, tc.eachConfigMapShouldHaveUniqueBenchmarkIDLabel)
+	ctx.Step(`^each Job should have a unique benchmark_index label$`, tc.eachJobShouldHaveUniqueBenchmarkIndexLabel)
+	ctx.Step(`^each ConfigMap should have a unique benchmark_index label$`, tc.eachConfigMapShouldHaveUniqueBenchmarkIndexLabel)
 	ctx.Step(`^the response should be returned immediately without waiting for Job creation$`, tc.responseShouldBeImmediate)
 	ctx.Step(`^Jobs should be created in the background$`, tc.jobsShouldBeCreatedInBackground)
 	ctx.Step(`^the job has (\d+) benchmarks? configured$`, tc.jobHasBenchmarksConfigured)
@@ -1656,6 +1659,28 @@ func (tc *testContext) containerShouldHaveVolumeMountWithSubPath(mountName, path
 	return fmt.Errorf("Container %s does not have volumeMount %s at path %s with subPath %s", container.Name, mountName, path, subPath)
 }
 
+func (tc *testContext) sidecarContainerShouldHaveVolumeMount(mountName, path string) error {
+	if tc.currentJob == nil {
+		return fmt.Errorf("no current Job")
+	}
+	var sidecar *corev1.Container
+	for i := range tc.currentJob.Spec.Template.Spec.Containers {
+		if tc.currentJob.Spec.Template.Spec.Containers[i].Name == "sidecar" {
+			sidecar = &tc.currentJob.Spec.Template.Spec.Containers[i]
+			break
+		}
+	}
+	if sidecar == nil {
+		return fmt.Errorf("Job %s has no container named %q", tc.currentJob.Name, "sidecar")
+	}
+	for _, mount := range sidecar.VolumeMounts {
+		if mount.Name == mountName && mount.MountPath == path {
+			return nil
+		}
+	}
+	return fmt.Errorf("sidecar container does not have volumeMount %s at path %s", mountName, path)
+}
+
 func (tc *testContext) sidecarContainerShouldHaveVolumeMountWithSubPath(mountName, path, subPath string) error {
 	if tc.currentJob == nil {
 		return fmt.Errorf("no current Job")
@@ -2019,6 +2044,50 @@ func (tc *testContext) eachConfigMapShouldHaveUniqueBenchmarkIDLabel() error {
 			return fmt.Errorf("duplicate benchmark_id label found: %s", benchID)
 		}
 		seen[benchID] = true
+	}
+	return nil
+}
+
+func (tc *testContext) eachJobShouldHaveUniqueBenchmarkIndexLabel() error {
+	jobs, err := tc.listJobsByJobID()
+	if err != nil {
+		return err
+	}
+	if len(jobs) == 0 {
+		return fmt.Errorf("no Jobs found for unique benchmark_index validation")
+	}
+	seen := map[string]bool{}
+	for _, job := range jobs {
+		idx := job.Labels["benchmark_index"]
+		if idx == "" {
+			return fmt.Errorf("Job %s missing benchmark_index label", job.Name)
+		}
+		if seen[idx] {
+			return fmt.Errorf("duplicate benchmark_index label found: %s", idx)
+		}
+		seen[idx] = true
+	}
+	return nil
+}
+
+func (tc *testContext) eachConfigMapShouldHaveUniqueBenchmarkIndexLabel() error {
+	configMaps, err := tc.listConfigMapsByJobID()
+	if err != nil {
+		return err
+	}
+	if len(configMaps) == 0 {
+		return fmt.Errorf("no ConfigMaps found for unique benchmark_index validation")
+	}
+	seen := map[string]bool{}
+	for _, cm := range configMaps {
+		idx := cm.Labels["benchmark_index"]
+		if idx == "" {
+			return fmt.Errorf("ConfigMap %s missing benchmark_index label", cm.Name)
+		}
+		if seen[idx] {
+			return fmt.Errorf("duplicate benchmark_index label found: %s", idx)
+		}
+		seen[idx] = true
 	}
 	return nil
 }

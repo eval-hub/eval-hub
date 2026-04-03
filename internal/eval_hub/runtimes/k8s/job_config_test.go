@@ -9,7 +9,7 @@ import (
 
 func TestBuildJobConfigDefaults(t *testing.T) {
 	callbackURL := "http://localhost:8080"
-	benchmark := api.BenchmarkConfig{
+	benchmark := api.EvaluationBenchmarkConfig{
 		Ref: api.Ref{ID: "bench-1"},
 		Parameters: map[string]any{
 			"num_examples": 50,
@@ -27,7 +27,7 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 				URL:  "http://model",
 				Name: "model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				benchmark,
 			},
 		},
@@ -110,7 +110,7 @@ func TestBuildJobConfigModelAuthSecretRefPresent(t *testing.T) {
 				Name: "model",
 				Auth: &api.ModelAuth{SecretRef: "my-secret"},
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref: api.Ref{ID: "bench-1"},
 				},
@@ -147,7 +147,7 @@ func TestBuildJobConfigModelAuthSecretRefEmptyWhenNil(t *testing.T) {
 				URL:  "http://model",
 				Name: "model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref: api.Ref{ID: "bench-1"},
 				},
@@ -184,7 +184,7 @@ func TestBuildJobConfigTestDataS3(t *testing.T) {
 				URL:  "http://model",
 				Name: "model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref: api.Ref{ID: "bench-1"},
 					TestDataRef: &api.TestDataRef{
@@ -235,7 +235,7 @@ func TestBuildJobConfigAllowsNumExamplesOnly(t *testing.T) {
 				URL:  "http://model",
 				Name: "model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref:        api.Ref{ID: "bench-1"},
 					Parameters: map[string]any{"num_examples": 10},
@@ -292,7 +292,7 @@ func TestBuildJobConfigMissingRuntime(t *testing.T) {
 		},
 	}
 
-	_, err := buildJobConfig(evaluation, provider, &api.BenchmarkConfig{}, 0, nil)
+	_, err := buildJobConfig(evaluation, provider, &api.EvaluationBenchmarkConfig{}, 0, nil)
 	if err == nil {
 		t.Fatalf("expected error for missing runtime")
 	}
@@ -335,7 +335,7 @@ func TestBuildJobConfigAllowsEmptyBenchmarkConfig(t *testing.T) {
 				URL:  "http://model",
 				Name: "model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref: api.Ref{ID: "bench-1"},
 				},
@@ -376,7 +376,7 @@ func TestBuildJobConfigWithOCIExports(t *testing.T) {
 				URL:  "http://model",
 				Name: "model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref:        api.Ref{ID: "bench-1"},
 					Parameters: map[string]any{},
@@ -505,7 +505,7 @@ func TestBuildJobConfigUsesTenantNamespace(t *testing.T) {
 				URL:  "http://model",
 				Name: "model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{Ref: api.Ref{ID: "bench-1"}},
 			},
 		},
@@ -540,7 +540,7 @@ func TestBuildJobConfigEmptyTenantFallsBack(t *testing.T) {
 				URL:  "http://model",
 				Name: "model",
 			},
-			Benchmarks: []api.BenchmarkConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{Ref: api.Ref{ID: "bench-1"}},
 			},
 		},
@@ -562,6 +562,119 @@ func TestBuildJobConfigEmptyTenantFallsBack(t *testing.T) {
 	}
 	if cfg.namespace == "" {
 		t.Fatalf("expected non-empty fallback namespace when tenant is empty")
+	}
+}
+
+func TestBuildJobConfigKueueQueueNameWhenSpecified(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-kueue"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}},
+			},
+			Queue: &api.QueueConfig{
+				Kind: "kueue",
+				Name: "my-queue",
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
+			},
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.queueKind != "kueue" || cfg.queueName != "my-queue" {
+		t.Fatalf("expected queueKind kueue and queueName my-queue, got kind %q name %q", cfg.queueKind, cfg.queueName)
+	}
+}
+
+func TestBuildJobConfigKueueQueueNameWhenNoQueue(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-no-queue"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}},
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
+			},
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.queueKind != "" || cfg.queueName != "" {
+		t.Fatalf("expected empty queue kind and name when no queue specified, got kind %q name %q", cfg.queueKind, cfg.queueName)
+	}
+}
+
+func TestBuildJobConfigKueueQueueNameIgnoresNonKueueKind(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-other-kind"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}},
+			},
+			Queue: &api.QueueConfig{
+				Kind: "other",
+				Name: "my-queue",
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
+			},
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.queueKind != "other" || cfg.queueName != "my-queue" {
+		t.Fatalf("expected queueKind other and queueName my-queue, got kind %q name %q", cfg.queueKind, cfg.queueName)
 	}
 }
 

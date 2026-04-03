@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
@@ -16,61 +17,70 @@ import (
 )
 
 const (
-	maxK8sNameLength                = 63
-	maxK8sLabelValueLength          = 63
-	defaultJobTTLSeconds            = int32(3600)
-	defaultJobBackoffLimit          = int32(3)
-	adapterContainerName            = "adapter"
-	sidecarContainerName            = "sidecar"
-	initContainerName               = "init"
-	jobSpecVolumeName               = "job-spec"
-	dataVolumeName                  = "data"
-	testDataVolumeName              = "test-data"
-	serviceCAVolumeName             = "evalhub-service-ca"
-	jobSpecFileName                 = "job.json"
-	jobSpecMountPath                = "/meta/job.json"
-	sidecarConfigFileName           = "sidecar_config.json"
-	sidecarConfigMountPath          = "/meta/sidecar_config.json"
-	dataMountPath                   = "/data"
-	testDataMountPath               = "/test_data"
-	serviceCAMountPath              = "/etc/pki/ca-trust/source/anchors"
-	specSuffix                      = "-spec"
-	envMLFlowTrackingURIName        = "MLFLOW_TRACKING_URI"
-	envMLFlowWorkspaceName          = "MLFLOW_WORKSPACE"
-	envMLFlowTokenPathName          = "MLFLOW_TRACKING_TOKEN_PATH"
-	mlflowTokenVolumeName           = "mlflow-token"
-	mlflowTokenMountPath            = "/var/run/secrets/mlflow"
-	mlflowTokenFile                 = "token"
-	ociCredentialsVolumeName        = "oci-credentials"
-	ociCredentialsMountPath         = "/etc/evalhub/.docker/config.json"
-	ociCredentialsSubPath           = ".dockerconfigjson"
-	envOCIAuthConfigPathName        = "OCI_AUTH_CONFIG_PATH"
-	modelAuthVolumeName             = "model-auth"
-	modelAuthMountPath              = "/var/run/secrets/model"
-	testDataSecretVolumeName        = "test-data-secret"
-	testDataSecretMountPath         = "/var/run/secrets/test-data"
-	serviceCABundleFile             = "service-ca.crt"
-	envMLFlowCertPathName           = "MLFLOW_TRACKING_SERVER_CERT_PATH"
-	envTestDataS3BucketName         = "TEST_DATA_S3_BUCKET"
-	envTestDataS3KeyName            = "TEST_DATA_S3_KEY"
-	defaultInitCPURequest           = "100m"
-	defaultInitCPULimit             = "500m"
-	defaultInitMemoryRequest        = "128Mi"
-	defaultInitMemoryLimit          = "512Mi"
-	defaultAllowPrivilegeEscalation = false
+	maxK8sNameLength       = 63
+	maxK8sLabelValueLength = 63
+	defaultJobTTLSeconds   = int32(3600)
+	defaultJobBackoffLimit = int32(3)
+	adapterContainerName   = "adapter"
+	sidecarContainerName   = "sidecar"
+	initContainerName      = "init"
+	jobSpecVolumeName      = "job-spec"
+	dataVolumeName         = "data"
+	// RFC 1123: volume names must be lowercase DNS labels (no camelCase).
+	terminationFileVolumeName         = "termination-file-volume"
+	adapterTerminationSharedMountPath = "/shared"
+	testDataVolumeName                = "test-data"
+	serviceCAVolumeName               = "evalhub-service-ca"
+	jobSpecFileName                   = "job.json"
+	jobSpecMountPath                  = "/meta/job.json"
+	sidecarConfigFileName             = "sidecar_config.json"
+	sidecarConfigMountPath            = "/meta/sidecar_config.json"
+	dataMountPath                     = "/data"
+	testDataMountPath                 = "/test_data"
+	serviceCAMountPath                = "/etc/pki/ca-trust/source/anchors"
+	specSuffix                        = "-spec"
+	envMLFlowTrackingURIName          = "MLFLOW_TRACKING_URI"
+	envMLFlowWorkspaceName            = "MLFLOW_WORKSPACE"
+	envMLFlowTokenPathName            = "MLFLOW_TRACKING_TOKEN_PATH"
+	mlflowTokenVolumeName             = "mlflow-token"
+	mlflowTokenMountPath              = "/var/run/secrets/mlflow"
+	mlflowTokenFile                   = "token"
+	ociCredentialsVolumeName          = "oci-credentials"
+	ociCredentialsMountPath           = "/etc/evalhub/.docker/config.json"
+	ociCredentialsSubPath             = ".dockerconfigjson"
+	envOCIAuthConfigPathName          = "OCI_AUTH_CONFIG_PATH"
+	modelAuthVolumeName               = "model-auth"
+	modelAuthMountPath                = "/var/run/secrets/model"
+	testDataSecretVolumeName          = "test-data-secret"
+	testDataSecretMountPath           = "/var/run/secrets/test-data"
+	serviceCABundleFile               = "service-ca.crt"
+	envMLFlowCertPathName             = "MLFLOW_TRACKING_SERVER_CERT_PATH"
+	envEvalHubModeName                = "EVALHUB_MODE"
+	envTestDataS3BucketName           = "TEST_DATA_S3_BUCKET"
+	envTestDataS3KeyName              = "TEST_DATA_S3_KEY"
+	defaultInitCPURequest             = "100m"
+	defaultInitCPULimit               = "500m"
+	defaultInitMemoryRequest          = "128Mi"
+	defaultInitMemoryLimit            = "512Mi"
+	defaultAllowPrivilegeEscalation   = false
 	//defaultRunAsUser                = int64(1000)
 	//defaultRunAsGroup               = int64(1000)
-	labelAppKey              = "app"
-	labelComponentKey        = "component"
-	labelJobIDKey            = "job_id"
-	labelProviderIDKey       = "provider_id"
-	labelBenchmarkIDKey      = "benchmark_id"
-	labelAppValue            = "evalhub"
-	labelComponentValue      = "evaluation-job"
-	capabilityDropAll        = "ALL"
-	annotationJobIDKey       = "eval-hub.github.io/job_id"
-	annotationProviderIDKey  = "eval-hub.github.io/provider_id"
-	annotationBenchmarkIDKey = "eval-hub.github.io/benchmark_id"
+	labelAppKey       = "app"
+	labelComponentKey = "component"
+	// EvalHub CR identity for operator consumers (e.g. failure watcher); values are DNS-label sanitized.
+	labelEvalHubInstanceNameKey      = "evalhub_instance_name"
+	labelEvalHubInstanceNamespaceKey = "evalhub_instance_namespace"
+	labelJobIDKey                    = "job_id"
+	labelProviderIDKey               = "provider_id"
+	labelBenchmarkIDKey              = "benchmark_id"
+	labelBenchmarkIndexKey           = "benchmark_index"
+	labelAppValue                    = "evalhub"
+	labelComponentValue              = "evaluation-job"
+	capabilityDropAll                = "ALL"
+	annotationJobIDKey               = "eval-hub.github.io/job_id"
+	annotationProviderIDKey          = "eval-hub.github.io/provider_id"
+	annotationBenchmarkIDKey         = "eval-hub.github.io/benchmark_id"
+	labelKueueQueueNameKey           = "kueue.x-k8s.io/queue-name"
 )
 
 var (
@@ -122,7 +132,7 @@ func buildK8sName(jobID, resourceGUID, suffix string) string {
 }
 
 func buildConfigMap(cfg *jobConfig) (*corev1.ConfigMap, error) {
-	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID)
+	labels := jobLabels(cfg)
 	annotations := jobAnnotations(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	name := configMapName(cfg.jobID, cfg.resourceGUID)
 
@@ -173,7 +183,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	if cfg.adapterImage == "" {
 		return nil, fmt.Errorf("adapter image is required")
 	}
-	labels := jobLabels(cfg.jobID, cfg.providerID, cfg.benchmarkID)
+	labels := jobLabels(cfg)
 	annotations := jobAnnotations(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	jobName := jobName(cfg.jobID, cfg.resourceGUID)
 	configMap := configMapName(cfg.jobID, cfg.resourceGUID)
@@ -274,6 +284,12 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		},
+		{
+			Name: terminationFileVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
 	}
 
 	// Build volume mounts list
@@ -287,6 +303,10 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		{
 			Name:      dataVolumeName,
 			MountPath: dataMountPath,
+		},
+		{
+			Name:      terminationFileVolumeName,
+			MountPath: adapterTerminationSharedMountPath,
 		},
 	}
 
@@ -387,6 +407,12 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		},
+		{
+			Name: terminationFileVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
 	}
 
 	// Build volume mounts list
@@ -406,6 +432,10 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		{
 			Name:      dataVolumeName,
 			MountPath: dataMountPath,
+		},
+		{
+			Name:      terminationFileVolumeName,
+			MountPath: adapterTerminationSharedMountPath,
 		},
 	}
 
@@ -611,6 +641,16 @@ func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 	var env []corev1.EnvVar
 	seen := map[string]bool{}
 
+	mode := "k8s"
+	if cfg.localMode {
+		mode = "local"
+	}
+	env = append(env, corev1.EnvVar{
+		Name:  envEvalHubModeName,
+		Value: mode,
+	})
+	seen[envEvalHubModeName] = true
+
 	mlflowTrackingURI := cfg.mlflowTrackingURI
 	//When sidecar is at play, mlflow calls are proxied through the sidecar.
 	if !cfg.localMode {
@@ -726,14 +766,26 @@ func configMapName(jobID, resourceGUID string) string {
 	return buildK8sName(jobID, resourceGUID, specSuffix)
 }
 
-func jobLabels(jobID, providerID, benchmarkID string) map[string]string {
-	return map[string]string{
-		labelAppKey:         labelAppValue,
-		labelComponentKey:   labelComponentValue,
-		labelJobIDKey:       sanitizeLabelValue(jobID),
-		labelProviderIDKey:  sanitizeLabelValue(providerID),
-		labelBenchmarkIDKey: sanitizeLabelValue(benchmarkID),
+func jobLabels(cfg *jobConfig) map[string]string {
+	if cfg == nil {
+		return map[string]string{}
 	}
+	m := map[string]string{
+		labelAppKey:            labelAppValue,
+		labelComponentKey:      labelComponentValue,
+		labelJobIDKey:          sanitizeLabelValue(cfg.jobID),
+		labelProviderIDKey:     sanitizeLabelValue(cfg.providerID),
+		labelBenchmarkIDKey:    sanitizeLabelValue(cfg.benchmarkID),
+		labelBenchmarkIndexKey: sanitizeLabelValue(strconv.Itoa(cfg.benchmarkIndex)),
+	}
+	if cfg.evalHubInstanceName != "" && cfg.evalHubCRNamespace != "" {
+		m[labelEvalHubInstanceNameKey] = sanitizeLabelValue(cfg.evalHubInstanceName)
+		m[labelEvalHubInstanceNamespaceKey] = sanitizeLabelValue(cfg.evalHubCRNamespace)
+	}
+	if cfg.queueKind == "kueue" && cfg.queueName != "" {
+		m[labelKueueQueueNameKey] = cfg.queueName
+	}
+	return m
 }
 
 func jobAnnotations(jobID, providerID, benchmarkID string) map[string]string {

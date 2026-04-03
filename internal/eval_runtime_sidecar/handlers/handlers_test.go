@@ -11,12 +11,15 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	t.Skip("Skipping this test for now. FIX CA CERT FILES !")
 	logger := slog.Default()
 
 	t.Run("returns error when eval_hub.base_url is not set", func(t *testing.T) {
 		cfg := &config.Config{
-			Sidecar: &config.SidecarConfig{EvalHub: &config.EvalHubClientConfig{}},
+			Sidecar: &config.SidecarConfig{
+				EvalHub: &config.EvalHubClientConfig{
+					InsecureSkipVerify: true,
+				},
+			},
 		}
 		_, err := New(cfg, logger)
 		if err == nil {
@@ -30,7 +33,10 @@ func TestNew(t *testing.T) {
 	t.Run("returns Handlers when eval_hub.base_url and mlflow set", func(t *testing.T) {
 		cfg := &config.Config{
 			Sidecar: &config.SidecarConfig{
-				EvalHub: &config.EvalHubClientConfig{BaseURL: "http://localhost:8080"},
+				EvalHub: &config.EvalHubClientConfig{
+					BaseURL:            "http://localhost:8080",
+					InsecureSkipVerify: true,
+				},
 			},
 			MLFlow: &config.MLFlowConfig{TrackingURI: "http://localhost:5000"},
 		}
@@ -51,11 +57,13 @@ func TestNew(t *testing.T) {
 }
 
 func TestHandlers_HandleProxyCall(t *testing.T) {
-	t.Skip("Skipping this test for now. FIX CA CERT FILES !")
 	logger := slog.Default()
 	cfg := &config.Config{
 		Sidecar: &config.SidecarConfig{
-			EvalHub: &config.EvalHubClientConfig{BaseURL: "http://localhost:8080"},
+			EvalHub: &config.EvalHubClientConfig{
+				BaseURL:            "http://localhost:8080",
+				InsecureSkipVerify: true,
+			},
 		},
 		MLFlow: &config.MLFlowConfig{TrackingURI: "http://localhost:5000"},
 	}
@@ -101,10 +109,45 @@ func TestHandlers_HandleProxyCall(t *testing.T) {
 		}
 	})
 
+	t.Run("mlflow API path with configured MLFlow matches", func(t *testing.T) {
+		for _, path := range []string{
+			"/api/2.0/mlflow",
+			"/api/2.0/mlflow/experiments/list",
+			"/api/2.0/mlflow/runs/create",
+			"/api/2.0/mlflow/experiments/search?max_results=1",
+			"/api/2.0/mlflow-artifacts",
+			"/api/2.0/mlflow-artifacts/artifact",
+			"/api/2.0/mlflow-artifacts/get-artifact?path=x",
+			"/api/2.0/mlflow-custom/endpoint",
+		} {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			rw := httptest.NewRecorder()
+			h.HandleProxyCall(rw, req)
+			if strings.Contains(rw.Body.String(), "unknown proxy call") {
+				t.Errorf("%q: expected mlflow route, got unknown proxy call", path)
+			}
+		}
+	})
+
+	t.Run("path with mlflow segment but not MLflow API prefix is unknown", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v1/foo/mlflow/bar", nil)
+		rw := httptest.NewRecorder()
+		h.HandleProxyCall(rw, req)
+		if rw.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want 400", rw.Code)
+		}
+		if body := rw.Body.String(); !strings.Contains(body, "unknown proxy call") {
+			t.Errorf("body = %q, want unknown proxy call", body)
+		}
+	})
+
 	t.Run("mlflow path with nil MLFlow returns 400", func(t *testing.T) {
 		cfgNoMLFlow := &config.Config{
 			Sidecar: &config.SidecarConfig{
-				EvalHub: &config.EvalHubClientConfig{BaseURL: "http://localhost:8080"},
+				EvalHub: &config.EvalHubClientConfig{
+					BaseURL:            "http://localhost:8080",
+					InsecureSkipVerify: true,
+				},
 			},
 		}
 		hNoMLFlow, err := New(cfgNoMLFlow, logger)
@@ -155,7 +198,30 @@ func TestOciRouteMatch(t *testing.T) {
 	}
 }
 
-func TestRequestPathForOCIRouting(t *testing.T) {
+func TestIsMLflowProxyPath(t *testing.T) {
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{"/api/2.0/mlflow", true},
+		{"/api/2.0/mlflow/", true},
+		{"/api/2.0/mlflow/experiments/list", true},
+		{"/api/2.0/mlflow-extra", true},
+		{"/api/2.0/mlflow-artifacts", true},
+		{"/api/2.0/mlflow-artifacts/", true},
+		{"/api/2.0/mlflow-artifacts/get-artifact", true},
+		{"/api/2.0/mlflow-artifactsmalicious", true},
+		{"/api/2.0/ml", false},
+		{"/prefix/api/2.0/mlflow/runs", false},
+	}
+	for _, tt := range tests {
+		if got := isMLflowProxyPath(tt.path); got != tt.want {
+			t.Errorf("isMLflowProxyPath(%q) = %v, want %v", tt.path, got, tt.want)
+		}
+	}
+}
+
+func TestRequestPathForRouting(t *testing.T) {
 	tests := []struct {
 		in, want string
 	}{
@@ -163,10 +229,11 @@ func TestRequestPathForOCIRouting(t *testing.T) {
 		{"/v2/a/b?x=y", "/v2/a/b"},
 		{"/v2/a/b#frag", "/v2/a/b"},
 		{"/v2/a?b=c&d=e", "/v2/a"},
+		{"/v2/foo%2Fbar/blobs?q=/v2/evil", "/v2/foo%2Fbar/blobs"},
 	}
 	for _, tt := range tests {
-		if got := requestPathForOCIRouting(tt.in); got != tt.want {
-			t.Errorf("requestPathForOCIRouting(%q) = %q, want %q", tt.in, got, tt.want)
+		if got := requestPathForRouting(tt.in); got != tt.want {
+			t.Errorf("requestPathForRouting(%q) = %q, want %q", tt.in, got, tt.want)
 		}
 	}
 }

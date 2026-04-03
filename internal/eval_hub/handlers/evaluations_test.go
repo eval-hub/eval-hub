@@ -2,9 +2,17 @@ package handlers_test
 
 import (
 	"context"
+	"io"
 	"log/slog"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -31,15 +39,49 @@ type fakeStorage struct {
 	collectionConfigs map[string]api.CollectionResource
 }
 
-func (f *fakeStorage) WithLogger(_ *slog.Logger) abstractions.Storage { return f }
+func (f *fakeStorage) WithLogger(_ *slog.Logger) abstractions.Storage {
+	return &fakeStorage{
+		Storage:           f.Storage,
+		lastStatusID:      f.lastStatusID,
+		lastStatus:        f.lastStatus,
+		job:               f.job,
+		deleteID:          f.deleteID,
+		providerConfigs:   f.providerConfigs,
+		collectionConfigs: f.collectionConfigs,
+	}
+}
 func (f *fakeStorage) WithContext(_ context.Context) abstractions.Storage {
-	return f
+	return &fakeStorage{
+		Storage:           f.Storage,
+		lastStatusID:      f.lastStatusID,
+		lastStatus:        f.lastStatus,
+		job:               f.job,
+		deleteID:          f.deleteID,
+		providerConfigs:   f.providerConfigs,
+		collectionConfigs: f.collectionConfigs,
+	}
 }
 func (f *fakeStorage) WithTenant(_ api.Tenant) abstractions.Storage {
-	return f
+	return &fakeStorage{
+		Storage:           f.Storage,
+		lastStatusID:      f.lastStatusID,
+		lastStatus:        f.lastStatus,
+		job:               f.job,
+		deleteID:          f.deleteID,
+		providerConfigs:   f.providerConfigs,
+		collectionConfigs: f.collectionConfigs,
+	}
 }
 func (f *fakeStorage) WithOwner(_ api.User) abstractions.Storage {
-	return f
+	return &fakeStorage{
+		Storage:           f.Storage,
+		lastStatusID:      f.lastStatusID,
+		lastStatus:        f.lastStatus,
+		job:               f.job,
+		deleteID:          f.deleteID,
+		providerConfigs:   f.providerConfigs,
+		collectionConfigs: f.collectionConfigs,
+	}
 }
 
 func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobResource) error {
@@ -60,7 +102,7 @@ func (f *fakeStorage) GetEvaluationJobs(_ *abstractions.QueryFilter) (*abstracti
 	return &abstractions.QueryResults[api.EvaluationJobResource]{Items: []api.EvaluationJobResource{}, TotalCount: 0}, nil
 }
 
-func (f *fakeStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent, _ []api.BenchmarkConfig) error {
+func (f *fakeStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
 	return nil
 }
 
@@ -79,7 +121,11 @@ func (r *fakeRuntime) WithContext(_ context.Context) abstractions.Runtime {
 	return r
 }
 func (r *fakeRuntime) Name() string { return "fake" }
-func (r *fakeRuntime) RunEvaluationJob(_ *api.EvaluationJobResource, _ []api.BenchmarkConfig, _ abstractions.Storage) error {
+func (r *fakeRuntime) RunEvaluationJob(
+	_ *api.EvaluationJobResource,
+	_ []api.EvaluationBenchmarkConfig,
+	_ abstractions.RuntimeStorage,
+) error {
 	r.called = true
 	return r.err
 }
@@ -140,7 +186,7 @@ func (s *updateEvaluationStorage) WithContext(_ context.Context) abstractions.St
 func (s *updateEvaluationStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
 func (s *updateEvaluationStorage) WithOwner(_ api.User) abstractions.Storage    { return s }
 
-func (s *updateEvaluationStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent, _ []api.BenchmarkConfig) error {
+func (s *updateEvaluationStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
 	return s.updateErr
 }
 
@@ -159,6 +205,70 @@ func (r *deleteRequest) Query(key string) []string {
 
 func (r *deleteRequest) PathValue(name string) string {
 	return r.pathValues[name]
+}
+
+func TestResolveProvider_FromMap(t *testing.T) {
+	providers := map[string]api.ProviderResource{
+		"p1": {Resource: api.Resource{ID: "p1"}},
+	}
+	storage := &fakeStorage{providerConfigs: providers}
+	got, err := storage.GetProvider("p1")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if got == nil || got.Resource.ID != "p1" {
+		t.Fatalf("expected provider p1, got %v", got)
+	}
+}
+
+func TestResolveProvider_NotFound(t *testing.T) {
+	storage := &fakeStorage{}
+	got, err := storage.GetProvider("missing")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if got != nil {
+		t.Fatalf("expected nil provider, got %v", got)
+	}
+	if !strings.Contains(err.Error(), "provider resource 'missing' was not found") {
+		t.Fatalf("expected: provider resource 'missing' was not found, got %q", err.Error())
+	}
+}
+
+func TestApplyEvaluationJobQueueDefaults(t *testing.T) {
+	t.Parallel()
+	t.Run("nil config", func(t *testing.T) {
+		t.Parallel()
+		handlers.ApplyEvaluationJobQueueDefaults(nil)
+	})
+	t.Run("nil queue", func(t *testing.T) {
+		t.Parallel()
+		cfg := &api.EvaluationJobConfig{}
+		handlers.ApplyEvaluationJobQueueDefaults(cfg)
+		if cfg.Queue != nil {
+			t.Fatal("expected Queue to stay nil")
+		}
+	})
+	t.Run("empty kind defaults to kueue", func(t *testing.T) {
+		t.Parallel()
+		cfg := &api.EvaluationJobConfig{
+			Queue: &api.QueueConfig{Name: "  q1  ", Kind: "  "},
+		}
+		handlers.ApplyEvaluationJobQueueDefaults(cfg)
+		if cfg.Queue.Kind != "kueue" || cfg.Queue.Name != "q1" {
+			t.Fatalf("got kind %q name %q", cfg.Queue.Kind, cfg.Queue.Name)
+		}
+	})
+	t.Run("preserves explicit kind", func(t *testing.T) {
+		t.Parallel()
+		cfg := &api.EvaluationJobConfig{
+			Queue: &api.QueueConfig{Name: "q", Kind: "other"},
+		}
+		handlers.ApplyEvaluationJobQueueDefaults(cfg)
+		if cfg.Queue.Kind != "other" {
+			t.Fatalf("got kind %q", cfg.Queue.Kind)
+		}
+	})
 }
 
 /* TODO: Fix this test
@@ -586,7 +696,7 @@ func TestHandleUpdateEvaluation(t *testing.T) {
 	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{
 		job: &api.EvaluationJobResource{
 			EvaluationJobConfig: api.EvaluationJobConfig{
-				Benchmarks: []api.BenchmarkConfig{
+				Benchmarks: []api.EvaluationBenchmarkConfig{
 					{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"},
 				},
 			},
@@ -616,3 +726,42 @@ func TestHandleUpdateEvaluation(t *testing.T) {
 	}
 }
 */
+
+func TestHandleCreateEvaluationRejectsExperimentWhenMLflowDisabled(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	providerConfigs := map[string]api.ProviderResource{
+		"garak": {
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-1"},
+				},
+			},
+		},
+	}
+	storage := &fakeStorage{providerConfigs: providerConfigs}
+	runtime := &fakeRuntime{}
+	validate := validation.NewValidator()
+	h := handlers.New(storage, validate, runtime, nil, nil)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-mlflow-exp", logger, time.Second, "test-user", "test-tenant")
+
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+		body:        []byte(`{"name": "test-evaluation-job", "model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1","provider_id":"garak"}],"experiment":{"name":"my-experiment"}}`),
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCreateEvaluation(ctx, req, resp)
+
+	if runtime.called {
+		t.Fatalf("did not expect runtime when MLflow is disabled and experiment is set")
+	}
+	if recorder.Code == 202 {
+		t.Fatalf("expected error response, got 202")
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "mlflow_required_for_experiment") {
+		t.Fatalf("expected mlflow_required_for_experiment in body, got %q", body)
+	}
+}

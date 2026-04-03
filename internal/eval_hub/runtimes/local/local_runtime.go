@@ -11,7 +11,6 @@ import (
 	"sync"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/common"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
@@ -94,8 +93,8 @@ func (r *LocalRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 
 func (r *LocalRuntime) RunEvaluationJob(
 	evaluation *api.EvaluationJobResource,
-	benchmarks []api.BenchmarkConfig,
-	storage abstractions.Storage,
+	benchmarks []api.EvaluationBenchmarkConfig,
+	storage abstractions.RuntimeStorage,
 ) error {
 	if r.ctx == nil {
 		r.logger.Error("RunEvaluationJob called with nil context; WithContext must be called before RunEvaluationJob")
@@ -128,7 +127,7 @@ func (r *LocalRuntime) RunEvaluationJob(
 					"benchmark_index", i,
 					"provider_id", bench.ProviderID,
 				)
-				r.failBenchmark(jobID, bench, i, benchmarks, storage, err.Error())
+				r.failBenchmark(jobID, bench, i, storage, err.Error())
 			}
 		}()
 	}
@@ -142,13 +141,13 @@ func (r *LocalRuntime) RunEvaluationJob(
 // prevent zombies.
 func (r *LocalRuntime) runBenchmark(
 	jobID string,
-	bench api.BenchmarkConfig,
+	bench api.EvaluationBenchmarkConfig,
 	benchmarkIndex int,
 	evaluation *api.EvaluationJobResource,
 	callbackURL *string,
-	storage abstractions.Storage,
+	storage abstractions.RuntimeStorage,
 ) error {
-	provider, err := common.ResolveProvider(bench.ProviderID, storage)
+	provider, err := storage.GetProvider(bench.ProviderID)
 	if err != nil {
 		return err
 	}
@@ -276,10 +275,9 @@ func (r *LocalRuntime) runBenchmark(
 // failBenchmark updates storage to mark a benchmark as failed.
 func (r *LocalRuntime) failBenchmark(
 	jobID string,
-	bench api.BenchmarkConfig,
+	bench api.EvaluationBenchmarkConfig,
 	benchmarkIndex int,
-	benchmarks []api.BenchmarkConfig,
-	storage abstractions.Storage,
+	storage abstractions.RuntimeStorage,
 	errMsg string,
 ) {
 	if storage == nil {
@@ -297,7 +295,7 @@ func (r *LocalRuntime) failBenchmark(
 			},
 		},
 	}
-	if updateErr := storage.UpdateEvaluationJob(jobID, runStatus, benchmarks); updateErr != nil {
+	if updateErr := storage.UpdateEvaluationJob(jobID, runStatus); updateErr != nil {
 		r.logger.Error(
 			"failed to update benchmark status",
 			"error", updateErr,

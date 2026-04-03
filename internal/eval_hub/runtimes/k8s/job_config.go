@@ -30,31 +30,33 @@ const (
 	inClusterNamespaceFile      = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 	serviceAccountNameSuffix    = "-job"
 	serviceCAConfigMapSuffix    = "-service-ca"
-	defaultTestDataInitCmd      = "/app/eval-hub-init"
+	defaultTestDataInitCmd      = "/app/eval-runtime-init"
 	defaultEvalHubPort          = "8443"
 )
 
 type jobConfig struct {
-	jobID                string
-	resourceGUID         string
-	namespace            string
-	providerID           string
-	benchmarkID          string
-	benchmarkIndex       int
-	adapterImage         string
-	sidecarImage         string
-	entrypoint           []string
-	defaultEnv           []api.EnvVar
-	cpuRequest           string
-	memoryRequest        string
-	cpuLimit             string
-	memoryLimit          string
-	jobSpec              shared.JobSpec
-	serviceAccountName   string
-	serviceCAConfigMap   string
-	evalHubURL           string // in-cluster URL for sidecar to call eval-hub
-	sidecarBaseURL       string // base URL for adapter/runtime to call sidecar's proxy (config.Sidecar.BaseURL)
-	evalHubInstanceName  string
+	jobID               string
+	resourceGUID        string
+	namespace           string
+	providerID          string
+	benchmarkID         string
+	benchmarkIndex      int
+	adapterImage        string
+	sidecarImage        string
+	entrypoint          []string
+	defaultEnv          []api.EnvVar
+	cpuRequest          string
+	memoryRequest       string
+	cpuLimit            string
+	memoryLimit         string
+	jobSpec             shared.JobSpec
+	serviceAccountName  string
+	serviceCAConfigMap  string
+	evalHubURL          string // in-cluster URL for sidecar to call eval-hub
+	sidecarBaseURL      string // base URL for adapter/runtime to call sidecar's proxy (config.Sidecar.BaseURL)
+	evalHubInstanceName string
+	// evalHubCRNamespace is the namespace of the EvalHub CR (control plane); used for Job labels.
+	evalHubCRNamespace   string
 	mlflowTrackingURI    string
 	mlflowWorkspace      string
 	ociCredentialsSecret string
@@ -64,6 +66,9 @@ type jobConfig struct {
 	testDataS3           s3TestDataConfig
 	testDataInitImage    string
 	sidecarConfig        *config.SidecarConfig
+	// queueKind and queueName come from evaluation.Queue when set (API layer normalizes empty kind to kueue).
+	queueKind string
+	queueName string
 }
 
 type s3TestDataConfig struct {
@@ -72,7 +77,7 @@ type s3TestDataConfig struct {
 	secretRef string
 }
 
-func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkConfig *api.BenchmarkConfig, benchmarkIndex int, serviceConfig *config.Config) (*jobConfig, error) {
+func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkConfig *api.EvaluationBenchmarkConfig, benchmarkIndex int, serviceConfig *config.Config) (*jobConfig, error) {
 	runtime := provider.Runtime
 	if runtime == nil || runtime.K8s == nil {
 		return nil, fmt.Errorf("provider %q missing runtime configuration", provider.Resource.ID)
@@ -122,11 +127,13 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	// the operator's naming convention: <instance>-<instance-namespace>-job.
 	instanceNamespace := readInClusterNamespace()
 	var serviceAccountName, serviceCAConfigMap, evalHubURL string
+	var evalHubCRNamespace string
 	if evalHubInstanceName != "" {
 		saNamespace := instanceNamespace
 		if saNamespace == "" {
 			saNamespace = namespace // fallback for local mode
 		}
+		evalHubCRNamespace = saNamespace
 		serviceAccountName = evalHubInstanceName + "-" + saNamespace + serviceAccountNameSuffix
 		serviceCAConfigMap = evalHubInstanceName + serviceCAConfigMapSuffix
 		// EvalHub URL points to the kube-rbac-proxy HTTPS endpoint in the instance namespace.
@@ -162,6 +169,12 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		testDataS3SecretRef = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.SecretRef)
 	}
 
+	var queueKind, queueName string
+	if evaluation.Queue != nil {
+		queueName = strings.TrimSpace(evaluation.Queue.Name)
+		queueKind = strings.TrimSpace(evaluation.Queue.Kind)
+	}
+
 	out := &jobConfig{
 		jobID:                evaluation.Resource.ID,
 		resourceGUID:         uuid.NewString(),
@@ -180,6 +193,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		serviceAccountName:   serviceAccountName,
 		serviceCAConfigMap:   serviceCAConfigMap,
 		evalHubInstanceName:  evalHubInstanceName,
+		evalHubCRNamespace:   evalHubCRNamespace,
 		mlflowTrackingURI:    mlflowTrackingURI,
 		mlflowWorkspace:      mlflowWorkspace,
 		ociCredentialsSecret: ociCredentialsSecret,
@@ -188,6 +202,8 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		sidecarBaseURL:       sidecarBaseURL,
 		localMode:            localMode,
 		evalHubURL:           evalHubURL,
+		queueKind:            queueKind,
+		queueName:            queueName,
 		testDataS3: s3TestDataConfig{
 			bucket:    testDataS3Bucket,
 			key:       testDataS3Key,

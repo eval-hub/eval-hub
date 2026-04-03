@@ -1,0 +1,32 @@
+type: object
+description: |
+  Reference to a benchmark in an evaluation job (top-level benchmarks or collection override list).
+  Does not include a URL; URLs appear only on collection benchmark entries.
+allOf:
+  - $ref: ./Ref.yaml
+  - type: object
+    required:
+      - provider_id
+    properties:
+      provider_id:
+        type: string
+        description: Evaluation provider ID.
+      weight:
+        type: number
+        format: float
+        minimum: 0
+        description: Weight of this benchmark.
+      primary_score:
+        $ref: ./PrimaryScore.yaml
+      pass_criteria:
+        $ref: ./PassCriteria.yaml
+      parameters:
+        type: object
+        additionalProperties: true
+        description: Benchmark specific parameters.
+      test_data_ref:
+        $ref: ./TestDataRef.yaml
+        description: |
+          Optional external test data (e.g. **S3**). For **Kubernetes Job** runs, may
+          trigger a pre-run init container that downloads files to **`/test_data`** for
+          the adapter. Omit if the benchmark does not need mounted files.

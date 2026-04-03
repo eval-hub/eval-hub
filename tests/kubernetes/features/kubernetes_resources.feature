@@ -20,6 +20,7 @@ Feature: Kubernetes Resources Validation
     And the ConfigMap should have label "job_id" matching the evaluation job ID
     And the ConfigMap should have label "provider_id" matching the provider ID
     And the ConfigMap should have label "benchmark_id" matching the benchmark ID
+    And the ConfigMap should have label "benchmark_index" with value "0"
     And the ConfigMap should contain data key "job.json"
     And the ConfigMap should contain data key "sidecar_config.json"
     And the ConfigMap data "job.json" should be valid JSON
@@ -39,6 +40,7 @@ Feature: Kubernetes Resources Validation
     And the Job should have label "job_id" matching the evaluation job ID
     And the Job should have label "provider_id" matching the provider ID
     And the Job should have label "benchmark_id" matching the benchmark ID
+    And the Job should have label "benchmark_index" with value "0"
     And the Job spec should have "backoffLimit" set to the configured retry attempts
     And the Job spec should have "ttlSecondsAfterFinished" set to 3600
     And the Job spec template should have "restartPolicy" set to "Never"
@@ -51,8 +53,10 @@ Feature: Kubernetes Resources Validation
     And the Job pod template should have label "job_id" matching the evaluation job ID
     And the Job pod template should have label "provider_id" matching the provider ID
     And the Job pod template should have label "benchmark_id" matching the benchmark ID
+    And the Job pod template should have label "benchmark_index" with value "0"
     And the Job pod template should have volume "job-spec" of type ConfigMap
     And the Job pod template should have volume "data" of type EmptyDir
+    And the Job pod template should have volume "termination-file-volume" of type EmptyDir
     And the volume "job-spec" should reference the ConfigMap with suffix "-spec"
     And the Job pod template should have serviceAccountName derived from service account name
     And the Job pod template should have volume "evalhub-service-ca" of type ConfigMap
@@ -73,6 +77,7 @@ Feature: Kubernetes Resources Validation
     And the container should have memory limit set
     And the container should have volumeMount "job-spec" at path "/meta/job.json"
     And the container should have volumeMount "data" at path "/data"
+    And the container should have volumeMount "termination-file-volume" at path "/shared"
     And the volumeMount "job-spec" should have subPath "job.json"
     And the volumeMount "job-spec" should be readOnly
     And the container should have volumeMount "evalhub-service-ca" at path "/etc/pki/ca-trust/source/anchors"
@@ -80,6 +85,7 @@ Feature: Kubernetes Resources Validation
     And the container should have environment variables from the provider configuration
     And the Job pod template should have container named "sidecar"
     And the sidecar container should have volumeMount "job-spec" at path "/meta/sidecar_config.json" with subPath "sidecar_config.json"
+    And the sidecar container should have volumeMount "termination-file-volume" at path "/tmp/adapter"
 
   Scenario: Job and ConfigMap specification (multi-benchmark)
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_multi_benchmark.json"
@@ -91,6 +97,8 @@ Feature: Kubernetes Resources Validation
     And the number of ConfigMaps created should equal the number of benchmarks
     And each Job should have a unique benchmark_id label
     And each ConfigMap should have a unique benchmark_id label
+    And each Job should have a unique benchmark_index label
+    And each ConfigMap should have a unique benchmark_index label
     And for benchmark "arc_easy" the ConfigMap data "job.json" should contain field "num_examples" with value from parameters
     And for benchmark "hellaswag" the ConfigMap data "job.json" field "parameters" should not contain "num_examples"
     And for benchmark "hellaswag" the ConfigMap data "job.json" should contain field "parameters" as empty object

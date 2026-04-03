@@ -21,7 +21,7 @@ func TestEvaluationJobConfigBenchmarksMin_WithCollection(t *testing.T) {
 		Name:       "test-evaluation-job",
 		Model:      api.ModelRef{URL: "http://test.com", Name: "model"},
 		Collection: &api.CollectionRef{ID: "coll-1"},
-		Benchmarks: []api.BenchmarkConfig{},
+		Benchmarks: []api.EvaluationBenchmarkConfig{},
 	}
 	err := validate.Struct(cfg)
 	if err != nil {
@@ -35,7 +35,7 @@ func TestEvaluationJobConfigBenchmarksMin_WithoutCollection_EmptyBenchmarks(t *t
 	cfg := api.EvaluationJobConfig{
 		Name:       "test-evaluation-job",
 		Model:      api.ModelRef{URL: "http://test.com", Name: "model"},
-		Benchmarks: []api.BenchmarkConfig{},
+		Benchmarks: []api.EvaluationBenchmarkConfig{},
 	}
 	err := validate.Struct(cfg)
 	if err == nil {
@@ -56,7 +56,7 @@ func TestEvaluationJobConfigBenchmarksMin_WithoutCollection_WithBenchmark(t *tes
 	cfg := api.EvaluationJobConfig{
 		Name:  "test-evaluation-job",
 		Model: api.ModelRef{URL: "http://test.com", Name: "model"},
-		Benchmarks: []api.BenchmarkConfig{
+		Benchmarks: []api.EvaluationBenchmarkConfig{
 			{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
 		},
 	}

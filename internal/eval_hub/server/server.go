@@ -213,7 +213,7 @@ func (s *Server) setupEvaluationJobsRoutes(h *handlers.Handlers, router *http.Se
 	s.handleFunc(router, "/api/v1/evaluations/jobs", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
-		req := &ReqWrapper{Request: r}
+		req := NewRequestWrapper(r)
 		switch r.Method {
 		case http.MethodPost:
 			h.HandleCreateEvaluation(ctx, req, resp)
@@ -485,4 +485,9 @@ type ServerClosedError struct {
 
 func (e *ServerClosedError) Error() string {
 	return "Server closed"
+}
+
+func (e *ServerClosedError) Is(target error) bool {
+	_, ok := target.(*ServerClosedError)
+	return ok
 }

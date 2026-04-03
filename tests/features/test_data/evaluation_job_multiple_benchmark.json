@@ -1,0 +1,37 @@
+{
+    "name": "automation_test_evaluation_multiple_benchmark_job",
+    "description": "This is a test job for automation using multiple benchmarks",
+    "tags": [
+        "evalhub",
+        "test"
+    ],
+    "model": {
+        "url": "{{env:MODEL_URL|http://test.com}}",
+        "name": "{{env:MODEL_NAME|test}}"
+    },
+    "benchmarks": [
+        {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+                "num_examples": 5,
+                "tokenizer": "google/flan-t5-small"
+            }
+        },
+        {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+                "num_examples": 10,
+                "tokenizer": "google/flan-t5-small"
+            }
+        }
+    ],
+    "pass_criteria": {
+        "threshold": 0.5
+    },
+    "experiment": {
+        "name": "automation_test_experiment"
+    },
+    "custom": {}
+}
