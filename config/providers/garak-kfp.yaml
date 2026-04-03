@@ -22,8 +22,8 @@ runtime:
     command: "true"
 benchmarks:
   - id: intents
-    name: Context Aware Scan
-    description: Context Aware Scan with KFP execution mode
+    name: Context-aware vulnerability scan
+    description: Probes for vulnerabilities using context-aware intent detection with KFP execution.
     category: security
     metrics:
       - attack_success_rate
@@ -32,8 +32,8 @@ benchmarks:
       - intents
       - red_team
   - id: owasp_llm_top10
-    name: OWASP LLM Top 10
-    description: OWASP Top 10 for Large Language Model Applications
+    name: OWASP LLM top 10 risk scan
+    description: Tests against the top 10 security risks specific to LLM applications (prompt injection, data leakage, etc.).
     category: security
     metrics:
       - attack_success_rate
@@ -42,8 +42,8 @@ benchmarks:
       - owasp
       - red_team
   - id: avid
-    name: AVID Taxonomy
-    description: AI Vulnerability and Incident Database - All vulnerabilities
+    name: Full AI vulnerability scan
+    description: Comprehensive scan across all security, ethics, and performance categories from the AVID taxonomy.
     category: security
     metrics:
       - attack_success_rate
@@ -52,8 +52,8 @@ benchmarks:
       - avid
       - red_team
   - id: avid_security
-    name: AVID Security Taxonomy
-    description: AI Vulnerability and Incident Database - Security vulnerabilities
+    name: AI security vulnerability scan
+    description: Probes for security-specific vulnerabilities (data poisoning, model theft, evasion attacks).
     category: security
     metrics:
       - attack_success_rate
@@ -62,8 +62,8 @@ benchmarks:
       - avid
       - red_team
   - id: avid_ethics
-    name: AVID Ethics Taxonomy
-    description: AI Vulnerability and Incident Database - Ethical concerns
+    name: AI ethics & bias scan
+    description: Probes for ethical concerns including bias, fairness, and harmful content generation.
     category: safety
     metrics:
       - attack_success_rate
@@ -73,8 +73,8 @@ benchmarks:
       - avid
       - red_team
   - id: avid_performance
-    name: AVID Performance Taxonomy
-    description: AI Vulnerability and Incident Database - Performance issues
+    name: AI performance degradation scan
+    description: Tests for performance issues like hallucination under load, context window failures, and degradation.
     category: performance
     metrics:
       - attack_success_rate
@@ -83,8 +83,8 @@ benchmarks:
       - avid
       - red_team
   - id: quality
-    name: Quality Issues
-    description: Common quality issues like Violence, Profanity, Toxicity, Hate Speech, Integrity, etc.
+    name: Toxic & harmful content scan
+    description: Scans for violence, profanity, toxicity, hate speech, and content integrity issues.
     category: safety
     metrics:
       - attack_success_rate
@@ -94,8 +94,8 @@ benchmarks:
       - toxicity
       - red_team
   - id: cwe
-    name: Common Weakness Enumeration
-    description: Common Weakness Enumeration - Software security weaknesses
+    name: Software weakness exploitation scan
+    description: Tests whether the model can be used to exploit Common Weakness Enumeration software vulnerabilities.
     category: security
     metrics:
       - attack_success_rate
@@ -104,8 +104,8 @@ benchmarks:
       - cwe
       - red_team
   - id: quick
-    name: Quick Scan
-    description: Quick scan with a single probe for testing and validation
+    name: Quick security smoke test
+    description: Single-probe rapid scan for quick validation that basic safeguards are working.
     category: security
     metrics:
       - attack_success_rate
