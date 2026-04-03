@@ -108,7 +108,7 @@ Feature: Providers Endpoint
     And the response should contain the value "50" at path "$.limit"
     And the array at path "items" in the response should have length at least 4
     And the response should contain the value "{{value:num_providers}}" at path "$.total_count"
-    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=40"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset={{value:num_providers}}"
     Then the response code should be 200
     And the response should contain the value "50" at path "$.limit"
     And the array at path "items" in the response should have length 0
