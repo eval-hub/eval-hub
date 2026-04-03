@@ -4,7 +4,7 @@ title: Garak KFP
 description: LLM vulnerability scanner and red-teaming framework with KFP execution mode
 runtime:
   k8s:
-    image: $(garak-provider-image)
+    image: quay.io/trustyai/trustyai-garak-lls-provider-dsp:latest
     entrypoint:
       - python
       - -m
@@ -15,7 +15,7 @@ runtime:
     memory_limit: 1Gi
     env:
       - name: KUBEFLOW_GARAK_BASE_IMAGE
-        value: $(garak-provider-image)
+        value: quay.io/trustyai/trustyai-garak-lls-provider-dsp:latest
   local:
     # command is set to true for test-fvt-server-coverage as it runs in local mode.
     # In actual custom provider configurations, it will be set to the actual command to run.
