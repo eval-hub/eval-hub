@@ -23,7 +23,7 @@ runtime:
 benchmarks:
   - id: intents
     name: Context-aware vulnerability scan
-    description: Probes for vulnerabilities using context-aware intent detection with KFP execution.
+    description: Risk assessment with a context-aware custom intent typology and probes of increasing complexity.
     category: security
     metrics:
       - attack_success_rate
@@ -105,7 +105,7 @@ benchmarks:
       - red_team
   - id: quick
     name: Quick security smoke test
-    description: Single-probe rapid scan for quick validation that basic safeguards are working.
+    description: Single-probe rapid scan for quick validation.
     category: security
     metrics:
       - attack_success_rate
