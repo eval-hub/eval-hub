@@ -147,15 +147,16 @@ func isRelevantEvent(event fsnotify.Event) bool {
 func (w *Watcher) reload() {
 	w.logger.Info("Reloading system providers and collections")
 
-	providerConfigs, err := LoadProviderConfigs(w.logger, w.validate, w.configDir)
-	if err != nil {
-		w.logger.Error("Failed to reload provider configs", "error", err.Error())
-		return
-	}
+	providerConfigs, providerErr := LoadProviderConfigs(w.logger, w.validate, w.configDir)
+	collectionConfigs, collectionErr := LoadCollectionConfigs(w.logger, w.validate, w.configDir)
 
-	collectionConfigs, err := LoadCollectionConfigs(w.logger, w.validate, w.configDir)
-	if err != nil {
-		w.logger.Error("Failed to reload collection configs", "error", err.Error())
+	if providerErr != nil || collectionErr != nil {
+		if providerErr != nil {
+			w.logger.Error("Failed to reload provider configs", "error", providerErr.Error())
+		}
+		if collectionErr != nil {
+			w.logger.Error("Failed to reload collection configs", "error", collectionErr.Error())
+		}
 		return
 	}
 
