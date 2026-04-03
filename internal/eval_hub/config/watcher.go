@@ -199,3 +199,18 @@ func (w *Watcher) resolveParentDir() string {
 	}
 	return ""
 }
+
+func SetupWatcher(logger *slog.Logger, validate *validator.Validate, storage abstractions.Storage, configDir string) context.CancelFunc {
+	// Start config watcher to reload system providers and collections on file changes
+	watcherCtx, watcherCancel := context.WithCancel(context.Background())
+	defer watcherCancel()
+
+	configWatcher := NewWatcher(logger, validate, storage, configDir)
+	go func() {
+		if err := configWatcher.Watch(watcherCtx); err != nil {
+			logger.Error("Config watcher failed", "error", err.Error())
+		}
+	}()
+
+	return watcherCancel
+}
