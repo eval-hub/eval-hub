@@ -201,16 +201,18 @@ func (w *Watcher) resolveParentDir() string {
 	return ""
 }
 
-func SetupWatcher(logger *slog.Logger, validate *validator.Validate, storage abstractions.Storage, configDir string) context.CancelFunc {
+func SetupWatcher(logger *slog.Logger, validate *validator.Validate, storage abstractions.Storage, configDir string) (chan struct{}, context.CancelFunc) {
 	// Start config watcher to reload system providers and collections on file changes
 	watcherCtx, watcherCancel := context.WithCancel(context.Background())
+	doneCh := make(chan struct{})
 
 	configWatcher := NewWatcher(logger, validate, storage, configDir)
 	go func() {
+		defer close(doneCh)
 		if err := configWatcher.Watch(watcherCtx); err != nil {
 			logger.Error("Config watcher failed", "error", err.Error())
 		}
 	}()
 
-	return watcherCancel
+	return doneCh, watcherCancel
 }

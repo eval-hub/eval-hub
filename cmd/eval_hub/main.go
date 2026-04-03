@@ -158,7 +158,7 @@ func main() {
 	)
 
 	// Start config watcher to reload system providers and collections on file changes
-	watcherCancel := config.SetupWatcher(logger, validate, storage, args.ConfigDir)
+	watcherDone, watcherCancel := config.SetupWatcher(logger, validate, storage, args.ConfigDir)
 
 	// Start server in a goroutine
 	go func() {
@@ -180,6 +180,7 @@ func main() {
 	// Stop config watcher
 	logger.Info("Shutting down config watcher...")
 	watcherCancel()
+	<-watcherDone // Wait for Watch() to fully complete
 
 	// Create a context with timeout for graceful shutdown
 	waitForShutdown := 30 * time.Second
