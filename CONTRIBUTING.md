@@ -25,7 +25,7 @@ This project and everyone participating in it is governed by our Code of Conduct
 Eval Hub is an API REST server that serves as a routing and orchestration layer for evaluation backends. It supports flexible deployment options from local development to production Kubernetes/OpenShift clusters. Before contributing, familiarize yourself with:
 
 - **Architecture**: Read the [README.md](README.md) for project overview
-- **API Documentation**: See the [OpenAPI spec](./docs/openapi.yaml) or the [live docs](https://eval-hub.github.io/eval-hub/) for endpoint specifications
+- **API Documentation**: See the bundled [OpenAPI spec](./docs/openapi.yaml) (generated from [docs/src/openapi.yaml](./docs/src/openapi.yaml)) or the [live docs](https://eval-hub.github.io/eval-hub/) for endpoint specifications
 - **Deployment Options**: Understand local development, Podman, and Kubernetes/OpenShift deployment models
 
 ### Prerequisites
@@ -64,8 +64,8 @@ Eval Hub is an API REST server that serves as a routing and orchestration layer 
 3. **Configure Environment**
 
    ```bash
-   # Edit .env with your local configuration
-   # Or edit config/config.yaml directly
+   # Edit config/config.yaml and/or set environment variables (see env_mappings in config)
+   # There is no committed .env file; use your own local env vars or secrets as needed
    ```
 
 4. **Install Pre-commit Hooks**
@@ -174,7 +174,7 @@ git commit -m "test(integration): add MLFlow integration tests"
 
 **Types**: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `ci`, `chore`
 
-PRs targeting `main` will fail CI if any commit message does not follow this format.
+PRs targeting `main` are checked by [commitlint](.github/workflows/commitlint.yml) (Commitizen). Messages should follow this format; CI also allows subjects prefixed with `EH` (project convention) or `Merge` / `merge:` for merge commits.
 
 If you have [pre-commit](https://pre-commit.com) installed, commit messages are also checked locally:
 
@@ -225,30 +225,19 @@ pre-commit run --all-files
 package handlers
 
 import (
-  "encoding/json"
-
-  "github.com/your-org/eval-hub/internal/executioncontext"
+  "github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
+  "github.com/eval-hub/eval-hub/internal/eval_hub/http_wrappers"
 )
 
-// EvaluationRequest represents an evaluation request.
-type EvaluationRequest struct {
-  Model          string   `json:"model"`
-  Benchmarks     []string `json:"benchmarks"`
-  ExperimentName string   `json:"experiment_name,omitempty"`
-}
-
-// HandleCreateEvaluation processes an evaluation request.
-// Returns evaluation results or an error.
-func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext, w http.ResponseWriter, r *http.Request) {
-  var req EvaluationRequest
-  if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-    ctx.Logger.Error("Failed to decode request", "error", err)
-    http.Error(w, "Invalid request", http.StatusBadRequest)
-    return
-  }
-
-  ctx.Logger.Info("Processing evaluation", "model", req.Model)
-  // Implementation here
+// HandleCreateEvaluation processes a create-evaluation request.
+// Evaluation handlers use ExecutionContext plus request/response wrappers (not raw http.ResponseWriter).
+func (h *Handlers) HandleCreateEvaluation(
+  ctx *executioncontext.ExecutionContext,
+  req http_wrappers.RequestWrapper,
+  w http_wrappers.ResponseWrapper,
+) {
+  ctx.Logger.Info("Processing evaluation")
+  // Parse body via req, call storage/runtime, write JSON via w
 }
 ```
 
@@ -263,24 +252,24 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 ### Running Tests
 
 ```bash
-# Run all tests (unit + FVT)
+# Run unit tests, FVT (godog), and FVT against a running server
 make test-all
 
 # Run only unit tests
 make test
 
-# Run only FVT tests
+# Run only FVT tests (no server)
 make test-fvt
 
 # Generate FVT HTML report (requires Node dev deps)
-npm install
+npm ci
 make fvt-report
 
 # Run tests with coverage
 make test-coverage
 
 # Run specific unit test
-go test -v ./internal/handlers -run TestHandleName
+go test -v ./internal/eval_hub/handlers -run TestHandleName
 
 # Run specific FVT test
 go test -v ./tests/features -run TestFeatureName
@@ -290,40 +279,12 @@ go test -v ./tests/features -run TestFeatureName
 
 1. **New Features**: Must include unit and integration tests
 2. **Bug Fixes**: Must include regression tests
-3. **Coverage**: Maintain >80% test coverage
-4. **Performance**: Include performance tests for critical paths
+3. **Coverage**: Aim for strong coverage; CI uploads reports to Codecov (`codecov.yml`). There is no hard minimum percentage enforced in the workflow today
+4. **Performance**: Include performance tests for critical paths when relevant
 
 ### Test Structure
 
-```go
-package handlers
-
-import (
-  "net/http"
-  "net/http/httptest"
-  "testing"
-
-  "github.com/your-org/eval-hub/internal/executioncontext"
-)
-
-func TestHandleCreateEvaluation_Success(t *testing.T) {
-  // Arrange
-  req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs", nil)
-  w := httptest.NewRecorder()
-
-  // Act
-  handler.HandleCreateEvaluation(ctx, w, req)
-
-  // Assert
-  if w.Code != http.StatusOK {
-    t.Errorf("expected status %d, got %d", http.StatusOK, w.Code)
-  }
-}
-
-func TestHandleCreateEvaluation_Timeout(t *testing.T) {
-  // Test timeout handling
-}
-```
+Use `httptest`, mocks, and test doubles as in `internal/eval_hub/handlers/*_test.go`. Handlers take `RequestWrapper` / `ResponseWrapper`, so tests typically build a `Handlers` instance and drive the wrapper types rather than calling `http.Handler` directly.
 
 ## OpenShift Deployment Testing
 
@@ -485,7 +446,7 @@ If yes, describe migration path. Otherwise delete this section.
 
 ### Review Process
 
-1. **Automated Checks**: CI must pass (tests, linting, type checking)
+1. **Automated Checks**: CI must pass (format check, `go vet`, tests with coverage, API doc generation). For `python-server/`, pre-commit may run mypy when Python files change; Go types are checked by the compiler during build and tests
 2. **OWNERS Assignment**: TBD - Project maintainers will be assigned as reviewers
 3. **Code Review**: Component experts and maintainer approval required
 4. **Testing**: Reviewers may test functionality manually
@@ -554,7 +515,11 @@ For feature requests, include:
 
 ```bash
 # The OpenAPI spec source of truth is docs/src/openapi.yaml
-# After editing files in the docs/src directory, regenerate the public docs:
+# After editing files under docs/src, regenerate public docs (same as CI):
+npm ci
+make documentation
+
+# Or only regenerate bundled OpenAPI/HTML without the full documentation target:
 make generate-public-docs
 
 # View the API docs:
