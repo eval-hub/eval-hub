@@ -9,10 +9,10 @@ runtime:
       - python
       - -m
       - llama_stack_provider_trustyai_garak.evalhub
-    cpu_request: 100m
-    memory_request: 128Mi
-    cpu_limit: 500m
-    memory_limit: 1Gi
+    cpu_request: 500m
+    memory_request: 512Mi
+    cpu_limit: 2000m
+    memory_limit: 4Gi
     env:
       - name: VAR_NAME
         value: VALUE
