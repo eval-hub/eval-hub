@@ -678,6 +678,37 @@ func TestBuildJobConfigKueueQueueNameIgnoresNonKueueKind(t *testing.T) {
 	}
 }
 
+func TestBuildJobConfigBenchmarkIndexPropagated(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-idx"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{URL: "http://model", Name: "m"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "b0"}},
+				{Ref: api.Ref{ID: "b1"}},
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "p"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{K8s: &api.K8sRuntime{Image: "img:latest"}},
+		},
+	}
+
+	for _, idx := range []int{0, 1, 5} {
+		cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], idx, nil)
+		if err != nil {
+			t.Fatalf("buildJobConfig(%d) error: %v", idx, err)
+		}
+		if cfg.benchmarkIndex != idx {
+			t.Fatalf("expected benchmarkIndex %d, got %d", idx, cfg.benchmarkIndex)
+		}
+	}
+}
+
 func intPtr(value int) *int {
 	return &value
 }

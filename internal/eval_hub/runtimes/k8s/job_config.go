@@ -181,6 +181,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		namespace:            namespace,
 		providerID:           provider.Resource.ID,
 		benchmarkID:          benchmarkConfig.ID,
+		benchmarkIndex:       benchmarkIndex,
 		adapterImage:         runtime.K8s.Image,
 		sidecarImage:         sidecarImage,
 		entrypoint:           runtime.K8s.Entrypoint,
