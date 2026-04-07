@@ -38,6 +38,7 @@ type Handlers struct {
 	serviceConfig    *config.Config
 	evalHubProxy     *httputil.ReverseProxy
 	mlflowProxy      *httputil.ReverseProxy
+	modelProxy       *httputil.ReverseProxy
 	ociProxy         *httputil.ReverseProxy
 	ociTokenProducer *proxy.OCITokenProducer // created once at startup for OCI auth
 	ociRepository    string                  // from job spec; used to route requests to /registry/{ociRepository}
@@ -54,6 +55,11 @@ func New(config *config.Config, logger *slog.Logger) (*Handlers, error) {
 		return nil, err
 	}
 
+	modelProxy, err := newModelProxy(config, logger)
+	if err != nil {
+		return nil, err
+	}
+
 	ociProxy, ociTokenProducer, ociRepository, err := newOciProxy(config, logger)
 	if err != nil {
 		return nil, err
@@ -64,6 +70,7 @@ func New(config *config.Config, logger *slog.Logger) (*Handlers, error) {
 		serviceConfig:    config,
 		evalHubProxy:     evalHubProxy,
 		mlflowProxy:      mlflowProxy,
+		modelProxy:       modelProxy,
 		ociProxy:         ociProxy,
 		ociTokenProducer: ociTokenProducer,
 		ociRepository:    ociRepository,
@@ -91,6 +98,39 @@ func newMlflowProxy(config *config.Config, logger *slog.Logger) (*httputil.Rever
 
 	mlflowProxy := proxy.NewReverseProxy(mlflowTarget, mlflowHTTPClient, logger, nil)
 	return mlflowProxy, nil
+}
+
+func sidecarModel(cfg *config.Config) *config.SidecarModelConfig {
+	if cfg == nil || cfg.Sidecar == nil {
+		return nil
+	}
+	return cfg.Sidecar.Model
+}
+
+func newModelProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseProxy, error) {
+	m := sidecarModel(config)
+	if m == nil || strings.TrimSpace(m.URL) == "" {
+		logger.Debug("model proxy is not configured (no model url)")
+		return nil, nil
+	}
+	raw := strings.TrimSpace(m.URL)
+	upstream, err := url.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("invalid model url: %w", err)
+	}
+	if upstream.Scheme == "" || upstream.Host == "" {
+		return nil, fmt.Errorf("model url must include scheme and host")
+	}
+	target := &url.URL{Scheme: upstream.Scheme, Host: upstream.Host}
+
+	httpClient, err := proxy.NewModelProxyHTTPClient(config, config.IsOTELEnabled(), logger)
+	if err != nil {
+		return nil, err
+	}
+	if httpClient == nil {
+		return nil, fmt.Errorf("model proxy HTTP client is required when model url is set")
+	}
+	return proxy.NewModelReverseProxy(target, httpClient, logger), nil
 }
 
 func newEvalhubProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseProxy, error) {
@@ -254,6 +294,21 @@ func (h *Handlers) parseProxyCall(r *http.Request) (*httputil.ReverseProxy, *pro
 			}, nil
 		}
 		return nil, nil, fmt.Errorf("eval-hub proxy is not configured")
+
+	case proxy.IsModelProxyPath(requestPathForRouting(r.RequestURI)):
+		mp := sidecarModel(h.serviceConfig)
+		if h.modelProxy != nil && mp != nil && strings.TrimSpace(mp.URL) != "" {
+			tokenPath := strings.TrimSpace(mp.AuthAPIKeyPath)
+			if tokenPath == "" {
+				tokenPath = ServiceAccountTokenPathDefault
+			}
+			return h.modelProxy, &proxy.AuthTokenInput{
+				TargetEndpoint:    "model",
+				AuthTokenPath:     tokenPath,
+				TokenCacheTimeout: mp.TokenCacheTimeout,
+			}, nil
+		}
+		return nil, nil, fmt.Errorf("model proxy is not configured")
 
 	case isMLflowProxyPath(requestPathForRouting(r.RequestURI)):
 		if h.serviceConfig.MLFlow != nil && strings.TrimSpace(h.serviceConfig.MLFlow.TrackingURI) != "" && h.mlflowProxy != nil {

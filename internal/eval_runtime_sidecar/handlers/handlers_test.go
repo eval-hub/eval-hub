@@ -53,6 +53,32 @@ func TestNew(t *testing.T) {
 		if h.mlflowProxy == nil {
 			t.Error("expected non-nil mlflowProxy")
 		}
+		if h.modelProxy != nil {
+			t.Error("expected nil modelProxy when model proxy not configured")
+		}
+	})
+
+	t.Run("returns Handlers with model proxy when model url set", func(t *testing.T) {
+		cfg := &config.Config{
+			Sidecar: &config.SidecarConfig{
+				EvalHub: &config.EvalHubClientConfig{
+					BaseURL:            "http://localhost:8080",
+					InsecureSkipVerify: true,
+				},
+				Model: &config.SidecarModelConfig{
+					URL:                "http://127.0.0.1:9999/v1",
+					InsecureSkipVerify: true,
+				},
+			},
+			MLFlow: &config.MLFlowConfig{TrackingURI: "http://localhost:5000"},
+		}
+		h, err := New(cfg, logger)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if h.modelProxy == nil {
+			t.Fatal("expected non-nil modelProxy")
+		}
 	})
 }
 

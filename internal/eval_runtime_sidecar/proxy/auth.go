@@ -30,6 +30,7 @@ type TokenWithExpiry struct {
 var (
 	evalHubCachedToken atomic.Pointer[TokenWithExpiry]
 	mlflowCachedToken  atomic.Pointer[TokenWithExpiry]
+	modelCachedToken   atomic.Pointer[TokenWithExpiry]
 	ociCachedToken     atomic.Pointer[TokenWithExpiry]
 )
 
@@ -40,6 +41,8 @@ func getTokenPointer(targetEndpoint string) *atomic.Pointer[TokenWithExpiry] {
 		return &evalHubCachedToken
 	case "mlflow":
 		return &mlflowCachedToken
+	case "model":
+		return &modelCachedToken
 	case "oci":
 		return &ociCachedToken
 	default:

@@ -12,6 +12,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	corev1 "k8s.io/api/core/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
@@ -302,7 +303,28 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnv(t *testing.T) {
 		t.Fatalf("expected 1 job, got %d", len(jobs))
 	}
 	job := jobs[0]
-	container := job.Spec.Template.Spec.Containers[0]
+	adapter := job.Spec.Template.Spec.Containers[0]
+	if len(job.Spec.Template.Spec.Containers) != 1 {
+		t.Fatalf("expected single adapter container, got %d", len(job.Spec.Template.Spec.Containers))
+	}
+	var sidecar corev1.Container
+	var foundSidecar bool
+	for _, c := range job.Spec.Template.Spec.InitContainers {
+		if c.Name == sidecarContainerName {
+			sidecar = c
+			foundSidecar = true
+			break
+		}
+	}
+	if !foundSidecar {
+		t.Fatalf("expected sidecar init container %q", sidecarContainerName)
+	}
+
+	for _, mount := range adapter.VolumeMounts {
+		if mount.Name == modelAuthVolumeName {
+			t.Fatalf("adapter must not mount model auth secret (sidecar-only)")
+		}
+	}
 
 	var foundVolume bool
 	for _, volume := range job.Spec.Template.Spec.Volumes {
@@ -318,7 +340,7 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnv(t *testing.T) {
 	}
 
 	var foundMount bool
-	for _, mount := range container.VolumeMounts {
+	for _, mount := range sidecar.VolumeMounts {
 		if mount.Name == modelAuthVolumeName {
 			foundMount = true
 			if mount.MountPath != modelAuthMountPath {
@@ -327,11 +349,11 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnv(t *testing.T) {
 		}
 	}
 	if !foundMount {
-		t.Fatalf("expected volume mount %s to be present", modelAuthVolumeName)
+		t.Fatalf("expected sidecar volume mount %s to be present", modelAuthVolumeName)
 	}
 
-	envKeys := make(map[string]struct{}, len(container.Env))
-	for _, env := range container.Env {
+	envKeys := make(map[string]struct{}, len(adapter.Env))
+	for _, env := range adapter.Env {
 		envKeys[env.Name] = struct{}{}
 	}
 	legacyModelAuthKeys := []string{

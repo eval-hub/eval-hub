@@ -58,7 +58,7 @@ Feature: Kubernetes Resources Validation
     And the Job pod template should have volume "data" of type EmptyDir
     And the Job pod template should have volume "termination-file-volume" of type EmptyDir
     And the volume "job-spec" should reference the ConfigMap with suffix "-spec"
-    And the Job pod template should have serviceAccountName derived from service account name
+    And the Job pod template should have evalhub_instance_name label when EvalHub instance is configured
     And the Job pod template should have volume "evalhub-service-ca" of type ConfigMap
     And the volume "evalhub-service-ca" should reference ConfigMap derived from service account name
     And the Job pod template should have container named "adapter"

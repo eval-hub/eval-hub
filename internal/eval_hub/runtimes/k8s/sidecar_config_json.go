@@ -1,13 +1,17 @@
 package k8s
 
 import (
+	"strings"
+
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 )
 
 // sidecarForJobPod builds sidecar_config.json for the job ConfigMap from server
 // sidecar YAML plus per-job fields. Omits sidecar_container (image/resources); that is only for job spec.
-func sidecarForJobPod(cfg *config.Config, jc *jobConfig) (*config.SidecarConfig, error) {
-	if cfg != nil && cfg.Sidecar == nil && jc != nil && jc.evalHubURL == "" && jc.mlflowTrackingURI == "" {
+// evaluationModelURL is the model endpoint from the evaluation request (upstream for the sidecar proxy).
+// jobSpec.Model.URL may be rewritten to the in-pod /model path for adapters; it is not used here.
+func sidecarForJobPod(cfg *config.Config, jc *jobConfig, evaluationModelURL string) (*config.SidecarConfig, error) {
+	if cfg != nil && cfg.Sidecar == nil && jc != nil && jc.evalHubURL == "" && jc.mlflowTrackingURI == "" && strings.TrimSpace(evaluationModelURL) == "" {
 		return nil, nil
 	}
 
@@ -51,6 +55,20 @@ func sidecarForJobPod(cfg *config.Config, jc *jobConfig) (*config.SidecarConfig,
 				export.MLFlow.CACertPath = serviceCAMountPath + "/" + serviceCABundleFile
 			}
 		}
+
+		if strings.TrimSpace(evaluationModelURL) != "" {
+			if export.Model == nil {
+				export.Model = &config.SidecarModelConfig{}
+			}
+			export.Model.URL = strings.TrimSpace(evaluationModelURL)
+			if jc.modelAuthSecretRef != "" {
+				export.Model.AuthAPIKeyPath = modelAuthMountPath + "/" + modelAuthSecretAPIKeyFile
+				export.Model.AuthCACertPath = modelAuthMountPath + "/" + modelAuthSecretCACertFile
+			}
+			if cfg != nil && cfg.MLFlow != nil && cfg.MLFlow.HTTPTimeout > 0 {
+				export.Model.HTTPTimeout = cfg.MLFlow.HTTPTimeout
+			}
+		}
 	}
 
 	return export, nil
@@ -68,6 +86,10 @@ func cloneSidecarConfig(sc *config.SidecarConfig) *config.SidecarConfig {
 	if sc.MLFlow != nil {
 		mf := *sc.MLFlow
 		out.MLFlow = &mf
+	}
+	if sc.Model != nil {
+		md := *sc.Model
+		out.Model = &md
 	}
 	if sc.OCI != nil {
 		oci := *sc.OCI

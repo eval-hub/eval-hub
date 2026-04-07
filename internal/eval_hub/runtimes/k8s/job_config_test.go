@@ -97,6 +97,12 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 	if callback == nil || *callback != callbackURL {
 		t.Fatalf("expected job spec json callback_url to be %q, got %v", callbackURL, callback)
 	}
+	if spec.Model.URL != "http://localhost:8080/model/v1" {
+		t.Fatalf("expected job spec model url to be sidecar proxy base, got %q", spec.Model.URL)
+	}
+	if cfg.sidecarConfig == nil || cfg.sidecarConfig.Model == nil || cfg.sidecarConfig.Model.URL != "http://model" {
+		t.Fatalf("expected sidecar_config model.url to be evaluation upstream, got %+v", cfg.sidecarConfig)
+	}
 }
 
 func TestBuildJobConfigModelAuthSecretRefPresent(t *testing.T) {
@@ -134,6 +140,12 @@ func TestBuildJobConfigModelAuthSecretRefPresent(t *testing.T) {
 	}
 	if cfg.modelAuthSecretRef != "my-secret" {
 		t.Fatalf("expected modelAuthSecretRef %q, got %q", "my-secret", cfg.modelAuthSecretRef)
+	}
+	if cfg.jobSpec.Model.Auth != nil {
+		t.Fatalf("expected auth omitted from job spec (handled by sidecar), got %+v", cfg.jobSpec.Model.Auth)
+	}
+	if cfg.sidecarConfig == nil || cfg.sidecarConfig.Model == nil || cfg.sidecarConfig.Model.AuthAPIKeyPath == "" {
+		t.Fatalf("expected sidecar model auth mount path when secret_ref set, got %+v", cfg.sidecarConfig)
 	}
 }
 
@@ -711,4 +723,22 @@ func TestBuildJobConfigBenchmarkIndexPropagated(t *testing.T) {
 
 func intPtr(value int) *int {
 	return &value
+}
+
+func TestSidecarModelProxyURL(t *testing.T) {
+	tests := []struct {
+		sidecarBase string
+		upstream    string
+		want        string
+	}{
+		{"http://localhost:8080", "https://vllm.example.com/v1", "http://localhost:8080/model/v1"},
+		{"http://localhost:8080", "http://model", "http://localhost:8080/model/v1"},
+		{"http://127.0.0.1:9090", "https://host/path/v1", "http://127.0.0.1:9090/model/path/v1"},
+	}
+	for _, tt := range tests {
+		got := sidecarModelProxyURL(tt.sidecarBase, tt.upstream)
+		if got != tt.want {
+			t.Errorf("sidecarModelProxyURL(%q, %q) = %q, want %q", tt.sidecarBase, tt.upstream, got, tt.want)
+		}
+	}
 }

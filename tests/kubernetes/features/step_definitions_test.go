@@ -291,7 +291,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the container should have memory request set$`, tc.containerShouldHaveMemoryRequestSet)
 	ctx.Step(`^the container should have CPU limit set$`, tc.containerShouldHaveCPULimitSet)
 	ctx.Step(`^the container should have memory limit set$`, tc.containerShouldHaveMemoryLimitSet)
-	ctx.Step(`^the Job pod template should have serviceAccountName derived from service account name$`, tc.jobPodTemplateShouldHaveServiceAccountFromSA)
+	ctx.Step(`^the Job pod template should have evalhub_instance_name label when EvalHub instance is configured$`, tc.jobPodTemplateShouldHaveEvalHubInstanceNameLabel)
 	ctx.Step(`^the volume "([^"]*)" should reference ConfigMap derived from service account name$`, tc.volumeShouldReferenceConfigMapFromSA)
 
 	// Volume & Mount Steps
@@ -1543,11 +1543,11 @@ func (tc *testContext) containerShouldHaveMemoryLimitSet() error {
 	return nil
 }
 
-func (tc *testContext) jobPodTemplateShouldHaveServiceAccountFromSA() error {
+func (tc *testContext) jobPodTemplateShouldHaveEvalHubInstanceNameLabel() error {
 	if tc.currentJob == nil {
 		return fmt.Errorf("no current Job")
 	}
-	_, err := tc.instanceNameFromServiceAccount()
+	_, err := tc.instanceNameFromJobTemplateLabels()
 	return err
 }
 
@@ -1555,7 +1555,7 @@ func (tc *testContext) volumeShouldReferenceConfigMapFromSA(volumeName string) e
 	if tc.currentJob == nil {
 		return fmt.Errorf("no current Job")
 	}
-	envValue, err := tc.instanceNameFromServiceAccount()
+	envValue, err := tc.instanceNameFromJobTemplateLabels()
 	if err != nil {
 		return err
 	}
@@ -1563,17 +1563,19 @@ func (tc *testContext) volumeShouldReferenceConfigMapFromSA(volumeName string) e
 	return tc.volumeShouldReferenceConfigMapByName(volumeName, expected)
 }
 
-func (tc *testContext) instanceNameFromServiceAccount() (string, error) {
+func (tc *testContext) instanceNameFromJobTemplateLabels() (string, error) {
 	if tc.currentJob == nil {
 		return "", fmt.Errorf("no current Job")
 	}
-	serviceAccount := tc.currentJob.Spec.Template.Spec.ServiceAccountName
-	// SA format is "{instanceName}-{namespace}-job"
-	suffix := "-" + tc.namespace + "-job"
-	if !strings.HasSuffix(serviceAccount, suffix) {
-		return "", fmt.Errorf("unable to derive instance name from serviceAccountName %q", serviceAccount)
+	labels := tc.currentJob.Spec.Template.Labels
+	if labels == nil {
+		return "", fmt.Errorf("pod template has no labels")
 	}
-	return strings.TrimSuffix(serviceAccount, suffix), nil
+	name := strings.TrimSpace(labels["evalhub_instance_name"])
+	if name == "" {
+		return "", fmt.Errorf("pod template missing label evalhub_instance_name (expected when EvalHub instance is configured)")
+	}
+	return name, nil
 }
 
 // ============================================================================

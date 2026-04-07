@@ -430,7 +430,17 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnvIntegration(t *testing
 		t.Fatalf("expected 1 job, got %d", len(jobs.Items))
 	}
 	job := jobs.Items[0]
-	container := job.Spec.Template.Spec.Containers[0]
+	adapter := job.Spec.Template.Spec.Containers[0]
+	if len(job.Spec.Template.Spec.Containers) < 2 {
+		t.Fatalf("expected adapter and sidecar containers")
+	}
+	sidecar := job.Spec.Template.Spec.Containers[1]
+
+	for _, mount := range adapter.VolumeMounts {
+		if mount.Name == modelAuthVolumeName {
+			t.Fatalf("adapter must not mount model auth secret (sidecar-only)")
+		}
+	}
 
 	var foundVolume bool
 	for _, volume := range job.Spec.Template.Spec.Volumes {
@@ -446,7 +456,7 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnvIntegration(t *testing
 	}
 
 	var foundMount bool
-	for _, mount := range container.VolumeMounts {
+	for _, mount := range sidecar.VolumeMounts {
 		if mount.Name == modelAuthVolumeName {
 			foundMount = true
 			if mount.MountPath != modelAuthMountPath {
@@ -455,7 +465,7 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnvIntegration(t *testing
 		}
 	}
 	if !foundMount {
-		t.Fatalf("expected volume mount %s to be present", modelAuthVolumeName)
+		t.Fatalf("expected sidecar volume mount %s to be present", modelAuthVolumeName)
 	}
 
 }
