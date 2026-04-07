@@ -71,7 +71,7 @@ jobs:
         go-version-file: "go.mod"
 
     - name: Run Gosec Security Scanner
-      uses: docker pull securego/gosec:sha-88835e86bba381290c2f60a1c73610995b1502eb # 2.24.6
+      uses: securego/gosec:sha-88835e86bba381290c2f60a1c73610995b1502eb # 2.24.6
       with:
         args: '-no-fail -fmt sarif -out gosec-results.sarif ./...'
 
