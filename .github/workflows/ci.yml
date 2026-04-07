@@ -12,12 +12,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         fetch-depth: 0
 
     - name: Set up Go
-      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
       with:
         go-version: '1.25'
 
@@ -41,7 +41,7 @@ jobs:
 
     - name: Upload coverage reports to Codecov
       continue-on-error: ${{ github.actor == 'dependabot[bot]' }}  # Don't fail CI on Dependabot PRs since they can't access secrets
-      uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+      uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
       with:
         files: ./bin/coverage.out,./bin/coverage-fvt.out,./bin/coverage-init.out
         disable_search: true
@@ -63,27 +63,27 @@ jobs:
       actions: read
     steps:
     - name: Checkout code
-      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
     - name: Set up Go
-      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
       with:
         go-version-file: "go.mod"
 
     - name: Run Gosec Security Scanner
-      uses: securego/gosec@26e57d6b340778c2983cd61775bc7e8bb41d002a # v2.19.0
+      uses: docker pull securego/gosec:sha-88835e86bba381290c2f60a1c73610995b1502eb # 2.24.6
       with:
         args: '-no-fail -fmt sarif -out gosec-results.sarif ./...'
 
     - name: Upload SARIF file to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@5c8a8a642e79153f5d047b10ec1cba1d1cc65699 # v3
+      uses: github/codeql-action/upload-sarif@e949a1676c32f4c215780f7429eb9f00ff18b225 # v2.25.1
       if: always()
       with:
         sarif_file: gosec-results.sarif
         category: "gosec-security-scan"
 
     - name: Upload Gosec results as artifact
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
       if: always()
       with:
         name: gosec-results
@@ -99,7 +99,7 @@ jobs:
       IMAGE_REPOSITORY: evalhub/evalhub
 
     steps:
-    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
     - name: Set up QEMU
       uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3

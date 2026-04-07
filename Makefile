@@ -1,5 +1,8 @@
 .PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-all-platforms start-service stop-service start-sidecar stop-sidecar lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report
 
+GOPATH := $(shell go env GOPATH)
+GOBIN := $(shell go env GOPATH)/bin
+
 # Variables
 BINARY_NAME = eval-hub
 CMD_PATH = ./cmd/eval_hub
@@ -41,6 +44,7 @@ clean: ## Remove build artifacts
 	@rm -rf $(BIN_DIR)
 	@rm -f $(BINARY_NAME)
 	@go clean ${CLEAN_OPTS}
+	@rm -f ${GOBIN}/go-cover-treemap && true
 	@echo "Clean complete"
 
 $(BIN_DIR):
@@ -185,6 +189,22 @@ fvt-report: ## Generate HTML report for FVT tests
 	if [ $$report_status -ne 0 ]; then echo "Report generation failed (see output above)."; fi; \
 	if [ -f cucumber-report.html ]; then echo "Report generated: cucumber-report.html"; else echo "Report not generated: cucumber-report.html"; fi; \
 	exit $$status
+
+${GOBIN}/go-cover-treemap:
+	go install github.com/nikolaydubina/go-cover-treemap@latest
+
+BIN_DIR_COVERAGE ?= $(BIN_DIR)/coverage
+
+TREEMAP_OPTIONS ?= -w 1080 -h 360 -percent
+
+coverage-treemap: ${GOBIN}/go-cover-treemap
+	@echo "Generating coverage treemap for $(BIN_DIR)/coverage.out and $(BIN_DIR)/coverage-fvt.out"
+	@rm -fr ${BIN_DIR_COVERAGE} && true
+	@mkdir -p ${BIN_DIR_COVERAGE}
+	go tool covdata merge -i=${BIN_DIR} -o=${BIN_DIR_COVERAGE}
+	go tool covdata textfmt -i ${BIN_DIR_COVERAGE} -o ${BIN_DIR_COVERAGE}/coverage.out
+	${GOBIN}/go-cover-treemap ${TREEMAP_OPTIONS} -coverprofile $(BIN_DIR_COVERAGE)/coverage.out > $(BIN_DIR_COVERAGE)/coverage.svg
+	@echo "Coverage treemap generated: $(BIN_DIR_COVERAGE)/coverage.svg"
 
 ## ------------------------------------------------------------------------------------------------
 ## Dependencies
