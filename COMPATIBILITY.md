@@ -46,7 +46,7 @@ The EvalHub container image is published to `quay.io/evalhub/evalhub`. The follo
 
 ### Production deployments
 
-Production environments should pin to a specific semver tag (e.g. `0.1.0`) rather than `latest`. 
+Production environments should pin to a specific semver tag (e.g. `0.1.0`) rather than `latest`.
 This is the case of `params.env` for ODH and RHOAI too.
 The `latest` tag is useful for development and testing but may point to an unreleased commit on `main`.
 

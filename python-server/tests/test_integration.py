@@ -23,6 +23,7 @@ CONFIG_DIR = REPO_ROOT / "config"
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _free_port() -> int:
     """Return an unused TCP port on localhost."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -48,6 +49,7 @@ def _load_yaml_field(directory: Path, field: str) -> set[str]:
 # ---------------------------------------------------------------------------
 # Fixture: running the real binary server
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="session")
 def server_url():
@@ -91,6 +93,7 @@ def server_url():
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 def test_health(server_url):

@@ -1,4 +1,4 @@
-@evaluations @cluster 
+@evaluations @cluster
 
 Feature: Evaluation Jobs
   As a data scientist
@@ -16,8 +16,8 @@ Feature: Evaluation Jobs
     And the response should contain the value "pending" at path "$.status.state"
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
     And I wait for the evaluation job status to be "completed"
-    When I send a GET request to "/api/v1/evaluations/jobs/{id}"                                                                                                                                                                                                              
-    Then the response code should be 200  
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
     And the response should contain the value "completed" at path "$.status.state"
     And the response should contain the value "completed" at path "$.status.benchmarks[0].status"
     And the response should contain the value "arc_easy" at path "$.status.benchmarks[0].id"
@@ -63,7 +63,7 @@ Feature: Evaluation Jobs
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
-  Scenario: Multiple jobs can be submitted 
+  Scenario: Multiple jobs can be submitted
     Given the service is running
     When the mode is local or CI then skip this scenario
     And I set the header "X-User" to "test-user-1"
@@ -171,7 +171,7 @@ Feature: Evaluation Jobs
     Then the response code should be 204
     When I send a DELETE request to "/api/v1/evaluations/collections/{{value:collection_id}}?hard_delete=true"
     Then the response code should be 204
-  
+
   Scenario: Evaluation job completes with multi-benchmark collection
     Given the service is running
     When the mode is local or CI then skip this scenario
