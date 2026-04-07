@@ -3,10 +3,6 @@ title: EvaluationJobConfigCommon2
 description: >
   The evaluation job request configuration.
 properties:
-  pass_criteria:
-    $ref: ./PassCriteria.yaml
-    description: >
-      The overall pass criteria for the evaluation job.
   experiment:
     $ref: ./ExperimentConfig.yaml
     description: >

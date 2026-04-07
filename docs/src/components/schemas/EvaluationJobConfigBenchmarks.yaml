@@ -10,5 +10,9 @@ allOf:
           $ref: ./EvaluationBenchmarkConfig.yaml
         description: >
           The evaluation benchmarks to run.
+      pass_criteria:
+        $ref: ./PassCriteriaWithDefault.yaml
+        description: >
+          The overall pass criteria for the evaluation job.
   - $ref: ./EvaluationJobConfigCommon2.yaml
 title: EvaluationJobConfigBenchmarks

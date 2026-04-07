@@ -6,5 +6,11 @@ allOf:
     properties:
       collection:
         $ref: ./CollectionRef.yaml
+      pass_criteria:
+        $ref: ./PassCriteria.yaml
+        description: >
+          The overall pass criteria for the evaluation job.
+
+          If this is not set then the collection pass criteria will be used.
   - $ref: ./EvaluationJobConfigCommon2.yaml
 title: EvaluationJobConfigCollection
