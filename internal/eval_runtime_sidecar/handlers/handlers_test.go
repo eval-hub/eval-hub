@@ -56,6 +56,20 @@ func TestNew(t *testing.T) {
 	})
 }
 
+func TestHandlers_HandleHealth(t *testing.T) {
+	h := &Handlers{logger: slog.Default()}
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rw := httptest.NewRecorder()
+	h.HandleHealth(rw, req)
+	if rw.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rw.Code)
+	}
+	if body := rw.Body.String(); body != "" {
+		t.Errorf("body = %q, want empty", body)
+	}
+}
+
 func TestHandlers_HandleProxyCall(t *testing.T) {
 	logger := slog.Default()
 	cfg := &config.Config{

@@ -109,6 +109,34 @@ func TestSidecarServer_SetupRoutes(t *testing.T) {
 	// Handler runs without panic; status may be 400/503 depending on config
 }
 
+func TestSidecarServer_HealthEndpoint(t *testing.T) {
+	logger := slog.Default()
+	cfg := &config.Config{
+		Sidecar: &config.SidecarConfig{
+			Port: 8080,
+			EvalHub: &config.EvalHubClientConfig{
+				BaseURL:            "http://localhost:8080",
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+	srv, err := sidecarServer.NewSidecarServer(logger, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	handler, err := srv.SetupRoutes()
+	if err != nil {
+		t.Skipf("SetupRoutes() failed (may need full env): %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rw := httptest.NewRecorder()
+	handler.ServeHTTP(rw, req)
+	if rw.Code != http.StatusOK {
+		t.Errorf("GET /health status = %d, want 200", rw.Code)
+	}
+}
+
 func TestServerClosedError(t *testing.T) {
 	err := &sidecarServer.ServerClosedError{}
 	if err.Error() != "Server closed" {

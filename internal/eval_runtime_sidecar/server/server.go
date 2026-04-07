@@ -68,11 +68,16 @@ func (s *SidecarServer) setupRoutes() (http.Handler, error) {
 		return nil, fmt.Errorf("failed to create handlers: %w", err)
 	}
 
+	s.setupHealthRoutes(h, router)
 	s.setupSidecarProxyRoutes(h, router)
 
 	handler := http.Handler(router)
 
 	return handler, nil
+}
+
+func (s *SidecarServer) setupHealthRoutes(h *handlers.Handlers, router *http.ServeMux) {
+	router.HandleFunc("GET /health", h.HandleHealth)
 }
 
 func (s *SidecarServer) setupSidecarProxyRoutes(h *handlers.Handlers, router *http.ServeMux) {

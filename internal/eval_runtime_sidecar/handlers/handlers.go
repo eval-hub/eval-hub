@@ -159,6 +159,10 @@ func newOciProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseP
 	return rp, tokenProducer, repository, nil
 }
 
+func (h *Handlers) HandleHealth(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+
 func (h *Handlers) HandleProxyCall(w http.ResponseWriter, r *http.Request) {
 	proxyHandler, tokenParams, err := h.parseProxyCall(r)
 	if err != nil {
