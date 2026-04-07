@@ -17,7 +17,6 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
 	"github.com/eval-hub/eval-hub/internal/eval_runtime_sidecar/config"
 	sidecarServer "github.com/eval-hub/eval-hub/internal/eval_runtime_sidecar/server"
-	"github.com/eval-hub/eval-hub/internal/eval_runtime_sidecar/termination"
 	"github.com/eval-hub/eval-hub/internal/logging"
 )
 
@@ -82,23 +81,11 @@ func main() {
 		}
 	}()
 
-	watchCtx, watchCancel := context.WithCancel(context.Background())
-	defer watchCancel()
-	adapterTerminated := termination.WatchDefaultAdapterTermination(watchCtx, logger)
-
-	// Wait for interrupt signal or adapter-created termination file (shared emptyDir) to shut down gracefully
+	// Wait for interrupt signal to shut down gracefully
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	select {
-	case sig := <-quit:
-		logger.Info("Received shutdown signal", "signal", sig.String())
-	case <-adapterTerminated:
-		logger.Info("Shutting down after adapter termination signal",
-			"watch_dir", termination.AdapterTerminationWatchDir,
-			"file", termination.AdapterTerminationSignalFile,
-		)
-	}
-	watchCancel()
+	sig := <-quit
+	logger.Info("Received shutdown signal", "signal", sig.String())
 
 	// Create a context with timeout for graceful shutdown
 	waitForShutdown := 30 * time.Second
