@@ -524,6 +524,28 @@ Feature: Evaluations Endpoint
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
+  Scenario: Aggregate pass criteria uses collection threshold when job omits pass_criteria
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/provider_pass_criteria_test.json"
+    Then the response code should be 201
+    And the "resource.id" field in the response should be saved as "value:provider_id"
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_pass_criteria_aggregate_from_collection_test.json"
+    Then the response code should be 201
+    And the "resource.id" field in the response should be saved as "value:collection_id"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_omit_pass_criteria_uses_collection_test.json"
+    Then the response code should be 202
+    And the response should contain the value "{{value:collection_id}}" at path "$.collection.id"
+    And the response should contain the value "pending" at path "$.status.state"
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_pass_criteria_provider_b1.json"
+    Then the response code should be 204
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_pass_criteria_provider_b2.json"
+    Then the response code should be 204
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "0.9" at path "$.results.test.threshold"
+    And the response should contain the value "false" at path "$.results.test.pass"
+    And the response should contain the value "0.84|0.85|0.86" at path "$.results.test.score"
+
   Scenario: Cancel running evaluation job (soft delete)
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"

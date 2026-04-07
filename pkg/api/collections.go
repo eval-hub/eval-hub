@@ -32,7 +32,7 @@ type CollectionConfig struct {
 	Category     string                      `mapstructure:"category" json:"category" validate:"required,max=128,min=1"`
 	Tags         []string                    `mapstructure:"tags" json:"tags,omitempty" validate:"omitempty,dive,tagname"`
 	Custom       *map[string]any             `mapstructure:"custom" json:"custom,omitempty"`
-	PassCriteria PassCriteria                `mapstructure:"pass_criteria" json:"pass_criteria,omitempty"`
+	PassCriteria *PassCriteria               `mapstructure:"pass_criteria" json:"pass_criteria,omitempty"`
 	Benchmarks   []CollectionBenchmarkConfig `mapstructure:"benchmarks" json:"benchmarks" validate:"required,min=1,dive"`
 }
 

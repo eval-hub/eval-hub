@@ -1,0 +1,18 @@
+{
+  "name": "Collection with pass_criteria for aggregate default test",
+  "description": "Two benchmarks; collection defines job-level pass_criteria threshold",
+  "category": "test",
+  "pass_criteria": {
+    "threshold": 0.9
+  },
+  "benchmarks": [
+    {
+      "id": "pc_b1",
+      "provider_id": "{{value:provider_id}}"
+    },
+    {
+      "id": "pc_b2",
+      "provider_id": "{{value:provider_id}}"
+    }
+  ]
+}

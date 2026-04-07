@@ -84,7 +84,7 @@ type PrimaryScore struct {
 }
 
 type PassCriteria struct {
-	Threshold float32 `mapstructure:"threshold" json:"threshold,omitempty" validate:"omitempty,number"`
+	Threshold float32 `mapstructure:"threshold" json:"threshold" validate:"required,number"`
 }
 
 // S3TestDataRef represents S3 source for test data.
