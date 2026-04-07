@@ -5,4 +5,4 @@ properties:
     type: number
     format: float
     description: Threshold value.
-    default: 0
+    default: 0.5
