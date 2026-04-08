@@ -527,12 +527,9 @@ func TestCreateBenchmarkResourcesAddsInitContainerForS3TestDataIntegration(t *te
 		t.Fatalf("expected 1 job, got %d", len(jobs))
 	}
 	job := jobs[0]
-	if len(job.Spec.Template.Spec.InitContainers) != 1 {
-		t.Fatalf("expected 1 init container, got %d", len(job.Spec.Template.Spec.InitContainers))
-	}
-	initContainer := job.Spec.Template.Spec.InitContainers[0]
-	if initContainer.Name != initContainerName {
-		t.Fatalf("expected init container name %q, got %q", initContainerName, initContainer.Name)
+	initContainer := findContainer(job.Spec.Template.Spec.InitContainers, initContainerName)
+	if initContainer == nil {
+		t.Fatal("expected test-data init container")
 	}
 
 	var foundBucketEnv, foundKeyEnv bool

@@ -37,6 +37,28 @@ spec:
     spec:
       serviceAccountName: evalhub-default-job
       restartPolicy: Never
+      initContainers:
+        - name: sidecar
+          image: eval-runtime-sidecar:latest
+          restartPolicy: Always
+          # Startup probe: max startup time = failureThreshold × periodSeconds = 30 × 2 = 60s
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            failureThreshold: 30
+            periodSeconds: 2
+          volumeMounts:
+            - name: job-spec
+              mountPath: /meta/job.json
+              subPath: job.json
+              readOnly: true
+            - name: job-spec
+              mountPath: /meta/sidecar_config.json
+              subPath: sidecar_config.json
+              readOnly: true
+            - name: termination-file-volume
+              mountPath: /shared
       containers:
         - name: adapter
           image: quay.io/evalhub/adapter:latest
@@ -70,19 +92,6 @@ spec:
               readOnly: true
             - name: termination-file-volume
               mountPath: /shared
-        - name: sidecar
-          image: eval-runtime-sidecar:latest
-          volumeMounts:
-            - name: job-spec
-              mountPath: /meta/job.json
-              subPath: job.json
-              readOnly: true
-            - name: job-spec
-              mountPath: /meta/sidecar_config.json
-              subPath: sidecar_config.json
-              readOnly: true
-            - name: termination-file-volume
-              mountPath: /tmp/adapter
       volumes:
         - name: job-spec
           configMap:

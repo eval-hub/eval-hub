@@ -14,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 const (
@@ -23,6 +24,7 @@ const (
 	defaultJobBackoffLimit = int32(3)
 	adapterContainerName   = "adapter"
 	sidecarContainerName   = "sidecar"
+	defaultSidecarPort     = int32(8080)
 	initContainerName      = "init"
 	jobSpecVolumeName      = "job-spec"
 	dataVolumeName         = "data"
@@ -226,14 +228,33 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 		},
 	}
 	if !cfg.localMode {
-		containers = append(containers, corev1.Container{
-			Name:                   sidecarContainerName,
-			Image:                  cfg.sidecarImage,
-			ImagePullPolicy:        corev1.PullIfNotPresent,
-			Command:                []string{"/app/eval-runtime-sidecar"},
-			Resources:              cfg.sidecarResources,
-			SecurityContext:        defaultSecurityContext(),
-			VolumeMounts:           sidecarContainerVolumeMounts,
+		probePort := defaultSidecarPort
+		if cfg.sidecarConfig != nil {
+			probePort = int32(cfg.sidecarConfig.Port)
+		}
+		// Sidecar is added as an init container with restartPolicy=Always to be
+		// promoted as a native sidecar container (KEP-753).
+		sidecarRestartPolicy := corev1.ContainerRestartPolicyAlways
+		initContainers = append(initContainers, corev1.Container{
+			Name:            sidecarContainerName,
+			Image:           cfg.sidecarImage,
+			ImagePullPolicy: corev1.PullIfNotPresent,
+			Command:         []string{"/app/eval-runtime-sidecar"},
+			Resources:       cfg.sidecarResources,
+			SecurityContext: defaultSecurityContext(),
+			VolumeMounts:    sidecarContainerVolumeMounts,
+			RestartPolicy:   &sidecarRestartPolicy,
+			// Startup probe: max startup time = failureThreshold × periodSeconds = 30 × 2 = 60s
+			StartupProbe: &corev1.Probe{
+				ProbeHandler: corev1.ProbeHandler{
+					HTTPGet: &corev1.HTTPGetAction{
+						Path: "/health",
+						Port: intstr.FromInt32(probePort),
+					},
+				},
+				FailureThreshold: 30,
+				PeriodSeconds:    2,
+			},
 			TerminationMessagePath: config.SidecarTerminationFilePath,
 		})
 	}

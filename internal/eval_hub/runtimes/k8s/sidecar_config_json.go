@@ -18,7 +18,7 @@ func sidecarForJobPod(cfg *config.Config, jc *jobConfig) (*config.SidecarConfig,
 		export = &config.SidecarConfig{}
 	}
 	if export.Port == 0 {
-		export.Port = 8080
+		export.Port = int(defaultSidecarPort)
 	}
 
 	if jc != nil {
