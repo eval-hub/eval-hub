@@ -200,20 +200,29 @@ func TestBuildJobAdapterEvalHubModeEnv(t *testing.T) {
 		if got != "k8s" {
 			t.Fatalf("EVALHUB_MODE = %q, want k8s", got)
 		}
-		var podNS string
-		var podNSFound bool
-		for _, e := range adapter.Env {
-			if e.Name == envPodNamespaceName {
-				podNSFound = true
-				podNS = e.Value
-				break
-			}
+		if job.Spec.Template.Spec.ServiceAccountName != "" {
+			t.Fatalf("expected empty ServiceAccountName when cfg.serviceAccountName is unset, got %q", job.Spec.Template.Spec.ServiceAccountName)
 		}
-		if !podNSFound {
-			t.Fatalf("adapter missing env %q (needed for X-Tenant when SA token is not automounted)", envPodNamespaceName)
+	})
+	t.Run("k8s sets ServiceAccountName when configured", func(t *testing.T) {
+		cfg := &jobConfig{
+			jobID:              "job-sa",
+			resourceGUID:       "guid-sa",
+			benchmarkIndex:     0,
+			namespace:          "tenant-ns",
+			providerID:         "provider-1",
+			benchmarkID:        "bench-1",
+			adapterImage:       "adapter:latest",
+			defaultEnv:         []api.EnvVar{},
+			localMode:          false,
+			serviceAccountName: "evalhub-inst-instns-job",
 		}
-		if podNS != "default" {
-			t.Fatalf("%s = %q, want default", envPodNamespaceName, podNS)
+		job, err := buildJob(cfg)
+		if err != nil {
+			t.Fatalf("buildJob: %v", err)
+		}
+		if job.Spec.Template.Spec.ServiceAccountName != "evalhub-inst-instns-job" {
+			t.Fatalf("ServiceAccountName = %q, want evalhub-inst-instns-job", job.Spec.Template.Spec.ServiceAccountName)
 		}
 	})
 	t.Run("local when local mode", func(t *testing.T) {
@@ -250,21 +259,6 @@ func TestBuildJobAdapterEvalHubModeEnv(t *testing.T) {
 		}
 		if got != "local" {
 			t.Fatalf("EVALHUB_MODE = %q, want local", got)
-		}
-		var podNS string
-		var podNSFound bool
-		for _, e := range adapter.Env {
-			if e.Name == envPodNamespaceName {
-				podNSFound = true
-				podNS = e.Value
-				break
-			}
-		}
-		if !podNSFound {
-			t.Fatalf("adapter missing env %q", envPodNamespaceName)
-		}
-		if podNS != "default" {
-			t.Fatalf("%s = %q, want default", envPodNamespaceName, podNS)
 		}
 	})
 }

@@ -170,8 +170,6 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	}
 
 	localMode := serviceConfig != nil && serviceConfig.Service != nil && serviceConfig.Service.LocalMode
-	// job.json model.url points at the sidecar /model path; the real upstream is still
-	// upstreamModelURL and is passed to sidecarForJobPod (not stored on jobConfig).
 	if upstreamModelURL != "" {
 		spec.Model.URL = sidecarModelProxyURL(sidecarBaseURL, upstreamModelURL)
 		spec.Model.Auth = nil

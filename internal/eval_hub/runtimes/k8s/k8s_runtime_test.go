@@ -430,11 +430,12 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnvIntegration(t *testing
 		t.Fatalf("expected 1 job, got %d", len(jobs.Items))
 	}
 	job := jobs.Items[0]
-	adapter := job.Spec.Template.Spec.Containers[0]
-	if len(job.Spec.Template.Spec.Containers) < 2 {
+	containers := job.Spec.Template.Spec.Containers
+	if len(containers) < 2 {
 		t.Fatalf("expected adapter and sidecar containers")
 	}
-	sidecar := job.Spec.Template.Spec.Containers[1]
+	adapter := containers[0]
+	sidecar := containers[1]
 
 	for _, mount := range adapter.VolumeMounts {
 		if mount.Name == modelAuthVolumeName {

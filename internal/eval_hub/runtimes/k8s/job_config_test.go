@@ -540,6 +540,9 @@ func TestBuildJobConfigUsesTenantNamespace(t *testing.T) {
 	if cfg.namespace != "team-a" {
 		t.Fatalf("expected namespace %q, got %q", "team-a", cfg.namespace)
 	}
+	if cfg.jobSpec.Tenant != "team-a" {
+		t.Fatalf("expected job spec tenant %q, got %q", "team-a", cfg.jobSpec.Tenant)
+	}
 }
 
 func TestBuildJobConfigEmptyTenantFallsBack(t *testing.T) {

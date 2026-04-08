@@ -35,7 +35,8 @@ func stripModelProxyPathPrefix(p string) string {
 
 // NewModelReverseProxy returns a reverse proxy to the model origin (scheme + host only).
 // It strips the /model prefix from the request path, then forwards. Authorization is set in the Director
-// using ResolveAuthToken from context (TargetEndpoint "model").
+// using ResolveAuthToken from context (TargetEndpoint "model"); when auth_api_key_path is unset, the pod
+// default service account token path is used (see handlers.ServiceAccountTokenPathDefault).
 func NewModelReverseProxy(target *url.URL, client *http.Client, logger *slog.Logger) *httputil.ReverseProxy {
 	transport := &roundTripperFromClient{client: client}
 	proxy := httputil.NewSingleHostReverseProxy(target)

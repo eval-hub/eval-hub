@@ -65,9 +65,6 @@ func sidecarForJobPod(cfg *config.Config, jc *jobConfig, evaluationModelURL stri
 				export.Model.AuthAPIKeyPath = modelAuthMountPath + "/" + modelAuthSecretAPIKeyFile
 				export.Model.AuthCACertPath = modelAuthMountPath + "/" + modelAuthSecretCACertFile
 			}
-			if cfg != nil && cfg.MLFlow != nil && cfg.MLFlow.HTTPTimeout > 0 {
-				export.Model.HTTPTimeout = cfg.MLFlow.HTTPTimeout
-			}
 		}
 	}
 

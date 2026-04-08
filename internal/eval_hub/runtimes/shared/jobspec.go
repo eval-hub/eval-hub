@@ -8,10 +8,12 @@ import (
 
 // JobSpec is the JSON structure written to job.json for benchmark adapters to consume.
 type JobSpec struct {
-	JobID          string              `json:"id"`
-	ProviderID     string              `json:"provider_id"`
-	BenchmarkID    string              `json:"benchmark_id"`
-	BenchmarkIndex int                 `json:"benchmark_index"`
+	JobID          string `json:"id"`
+	ProviderID     string `json:"provider_id"`
+	BenchmarkID    string `json:"benchmark_id"`
+	BenchmarkIndex int    `json:"benchmark_index"`
+	// Tenant is the API evaluation tenant (X-Tenant scope); adapters/SDKs should prefer this over inferring from the pod namespace.
+	Tenant         string              `json:"tenant,omitempty"`
 	Model          api.ModelRef        `json:"model"`
 	NumExamples    *int                `json:"num_examples,omitempty"`
 	Parameters     map[string]any      `json:"parameters"`
@@ -55,6 +57,9 @@ func BuildJobSpec(
 		NumExamples:    numExamples,
 		Parameters:     benchmarkParams,
 		CallbackURL:    callbackURL,
+	}
+	if !evaluation.Resource.Tenant.IsEmpty() {
+		spec.Tenant = evaluation.Resource.Tenant.String()
 	}
 	if evaluation.Experiment != nil {
 		spec.ExperimentName = evaluation.Experiment.Name

@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -199,6 +201,48 @@ func TestHandlers_HandleProxyCall(t *testing.T) {
 		hNoMLFlow.HandleProxyCall(rw, req)
 		if rw.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want 400 (mlflow proxy not configured)", rw.Code)
+		}
+	})
+
+	t.Run("model proxy with auth_api_key_path sends bearer from file", func(t *testing.T) {
+		dir := t.TempDir()
+		keyFile := filepath.Join(dir, "apikey")
+		if err := os.WriteFile(keyFile, []byte("secret-from-file\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		var gotAuth string
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotAuth = r.Header.Get("Authorization")
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(upstream.Close)
+
+		cfg := &config.Config{
+			Sidecar: &config.SidecarConfig{
+				EvalHub: &config.EvalHubClientConfig{
+					BaseURL:            "http://localhost:8080",
+					InsecureSkipVerify: true,
+				},
+				Model: &config.SidecarModelConfig{
+					URL:                upstream.URL + "/v1",
+					InsecureSkipVerify: true,
+					AuthAPIKeyPath:     keyFile,
+				},
+			},
+			MLFlow: &config.MLFlowConfig{TrackingURI: "http://localhost:5000"},
+		}
+		hm, err := New(cfg, logger)
+		if err != nil {
+			t.Fatalf("New() error: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodGet, "/model/v1/models", nil)
+		rw := httptest.NewRecorder()
+		hm.HandleProxyCall(rw, req)
+		if rw.Code != http.StatusOK {
+			t.Fatalf("status = %d, body = %q", rw.Code, rw.Body.String())
+		}
+		if gotAuth != "Bearer secret-from-file" {
+			t.Fatalf("Authorization = %q, want Bearer secret-from-file", gotAuth)
 		}
 	})
 

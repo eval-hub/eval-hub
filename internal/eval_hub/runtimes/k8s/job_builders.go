@@ -57,16 +57,13 @@ const (
 	sidecarSATokenMountPath           = "/var/run/secrets/kubernetes.io/serviceaccount"
 	sidecarSATokenFile                = "token"
 	// modelAuthSecretAPIKeyFile and modelAuthSecretCACertFile are Kubernetes Secret data keys (filenames under modelAuthMountPath).
-	modelAuthSecretAPIKeyFile = "api-key"
-	modelAuthSecretCACertFile = "ca_cert"
-	testDataSecretVolumeName  = "test-data-secret"
-	testDataSecretMountPath   = "/var/run/secrets/test-data"
-	serviceCABundleFile       = "service-ca.crt"
-	envMLFlowCertPathName     = "MLFLOW_TRACKING_SERVER_CERT_PATH"
-	envEvalHubModeName        = "EVALHUB_MODE"
-	// POD_NAMESPACE is read by eval-hub-sdk (adapter callbacks) to set X-Tenant when
-	// AutomountServiceAccountToken is false (no /var/run/.../namespace file in the adapter).
-	envPodNamespaceName             = "POD_NAMESPACE"
+	modelAuthSecretAPIKeyFile       = "api-key"
+	modelAuthSecretCACertFile       = "ca_cert"
+	testDataSecretVolumeName        = "test-data-secret"
+	testDataSecretMountPath         = "/var/run/secrets/test-data"
+	serviceCABundleFile             = "service-ca.crt"
+	envMLFlowCertPathName           = "MLFLOW_TRACKING_SERVER_CERT_PATH"
+	envEvalHubModeName              = "EVALHUB_MODE"
 	envTestDataS3BucketName         = "TEST_DATA_S3_BUCKET"
 	envTestDataS3KeyName            = "TEST_DATA_S3_KEY"
 	defaultInitCPURequest           = "100m"
@@ -268,10 +265,9 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 		Containers:     containers,
 		Volumes:        jobVolumes,
 	}
-	if !cfg.localMode {
-		automount := false
-		podSpec.AutomountServiceAccountToken = &automount
-	}
+	automount := false
+	podSpec.AutomountServiceAccountToken = &automount
+	podSpec.ServiceAccountName = cfg.serviceAccountName
 
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -684,7 +680,8 @@ func boolPtr(value bool) *bool {
 	return &value
 }
 
-// buildEnvVars builds environment variables for the adapter container.
+// buildEnvVars builds environment variables for a container. evalHubURLValue is the value for EVALHUB_URL
+// (adapter: cfg.evalHubURL in local mode, cfg.sidecarBaseURL otherwise; sidecar: always cfg.evalHubURL).
 func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 	var env []corev1.EnvVar
 	seen := map[string]bool{}
@@ -698,14 +695,6 @@ func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 		Value: evalHubMode,
 	})
 	seen[envEvalHubModeName] = true
-
-	if strings.TrimSpace(cfg.namespace) != "" {
-		env = append(env, corev1.EnvVar{
-			Name:  envPodNamespaceName,
-			Value: cfg.namespace,
-		})
-		seen[envPodNamespaceName] = true
-	}
 
 	mlflowTrackingURI := cfg.mlflowTrackingURI
 	// When sidecar is at play, mlflow calls are proxied through the sidecar.

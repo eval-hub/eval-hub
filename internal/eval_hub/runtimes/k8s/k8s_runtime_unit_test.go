@@ -12,7 +12,6 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/pkg/api"
-	corev1 "k8s.io/api/core/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
@@ -307,16 +306,8 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnv(t *testing.T) {
 	if len(job.Spec.Template.Spec.Containers) != 1 {
 		t.Fatalf("expected single adapter container, got %d", len(job.Spec.Template.Spec.Containers))
 	}
-	var sidecar corev1.Container
-	var foundSidecar bool
-	for _, c := range job.Spec.Template.Spec.InitContainers {
-		if c.Name == sidecarContainerName {
-			sidecar = c
-			foundSidecar = true
-			break
-		}
-	}
-	if !foundSidecar {
+	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
+	if sidecar == nil {
 		t.Fatalf("expected sidecar init container %q", sidecarContainerName)
 	}
 
