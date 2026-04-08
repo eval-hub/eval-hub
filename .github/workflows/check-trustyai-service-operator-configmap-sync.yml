@@ -3,7 +3,6 @@ name: Check ConfigMap trustyai-service-operator is in sync
 on:
   push:
     branches: [main]
-  pull_request: {}
   schedule:
     - cron: "0 2 * * *" # nightly at 2 AM UTC
   workflow_dispatch: {}
