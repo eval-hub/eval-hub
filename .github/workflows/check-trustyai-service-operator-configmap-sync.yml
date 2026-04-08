@@ -1,0 +1,19 @@
+name: Check ConfigMap trustyai-service-operator is in sync
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 2 * * *" # nightly at 2 AM UTC
+  workflow_dispatch: {}
+
+jobs:
+  check-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml requests
+      - run: python scripts/check_configmap_sync.py
