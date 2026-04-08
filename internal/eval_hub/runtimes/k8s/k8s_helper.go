@@ -41,7 +41,7 @@ func NewKubernetesClient() (*kubernetes.Clientset, error) {
 }
 
 // NewKubernetesHelper builds a Kubernetes client (in-cluster config, then default kubeconfig)
-// and returns a KubernetesHelper. Call this when LocalMode is false.
+// and returns a KubernetesHelper.
 func NewKubernetesHelper() (*KubernetesHelper, error) {
 
 	clientset, err := NewKubernetesClient()

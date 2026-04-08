@@ -202,11 +202,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	// Build runtimeContainerVolumes list
 	runtimeContainerVolumes, runtimeContainerVolumeMounts := buildRuntimeContainerVolumesAndMounts(configMap, cfg)
 
-	var sidecarContainerVolumes []corev1.Volume
-	var sidecarContainerVolumeMounts []corev1.VolumeMount
-	if !cfg.localMode {
-		sidecarContainerVolumes, sidecarContainerVolumeMounts = buildSidecarContainerVolumesAndMounts(configMap, cfg)
-	}
+	sidecarContainerVolumes, sidecarContainerVolumeMounts := buildSidecarContainerVolumesAndMounts(configMap, cfg)
 
 	initContainers, InitContainsVolumes, err := initContainerVolumesAndMounts(cfg)
 	if err != nil {
@@ -227,37 +223,35 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 			VolumeMounts:    runtimeContainerVolumeMounts,
 		},
 	}
-	if !cfg.localMode {
-		probePort := defaultSidecarPort
-		if cfg.sidecarConfig != nil {
-			probePort = int32(cfg.sidecarConfig.Port)
-		}
-		// Sidecar is added as an init container with restartPolicy=Always to be
-		// promoted as a native sidecar container (KEP-753).
-		sidecarRestartPolicy := corev1.ContainerRestartPolicyAlways
-		initContainers = append(initContainers, corev1.Container{
-			Name:            sidecarContainerName,
-			Image:           cfg.sidecarImage,
-			ImagePullPolicy: corev1.PullIfNotPresent,
-			Command:         []string{"/app/eval-runtime-sidecar"},
-			Resources:       cfg.sidecarResources,
-			SecurityContext: defaultSecurityContext(),
-			VolumeMounts:    sidecarContainerVolumeMounts,
-			RestartPolicy:   &sidecarRestartPolicy,
-			// Startup probe: max startup time = failureThreshold × periodSeconds = 30 × 2 = 60s
-			StartupProbe: &corev1.Probe{
-				ProbeHandler: corev1.ProbeHandler{
-					HTTPGet: &corev1.HTTPGetAction{
-						Path: "/health",
-						Port: intstr.FromInt32(probePort),
-					},
-				},
-				FailureThreshold: 30,
-				PeriodSeconds:    2,
-			},
-			TerminationMessagePath: config.SidecarTerminationFilePath,
-		})
+	probePort := defaultSidecarPort
+	if cfg.sidecarConfig != nil {
+		probePort = int32(cfg.sidecarConfig.Port)
 	}
+	// Sidecar is added as an init container with restartPolicy=Always to be
+	// promoted as a native sidecar container (KEP-753).
+	sidecarRestartPolicy := corev1.ContainerRestartPolicyAlways
+	initContainers = append(initContainers, corev1.Container{
+		Name:            sidecarContainerName,
+		Image:           cfg.sidecarImage,
+		ImagePullPolicy: corev1.PullIfNotPresent,
+		Command:         []string{"/app/eval-runtime-sidecar"},
+		Resources:       cfg.sidecarResources,
+		SecurityContext: defaultSecurityContext(),
+		VolumeMounts:    sidecarContainerVolumeMounts,
+		RestartPolicy:   &sidecarRestartPolicy,
+		// Startup probe: max startup time = failureThreshold × periodSeconds = 30 × 2 = 60s
+		StartupProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path: "/health",
+					Port: intstr.FromInt32(probePort),
+				},
+			},
+			FailureThreshold: 30,
+			PeriodSeconds:    2,
+		},
+		TerminationMessagePath: config.SidecarTerminationFilePath,
+	})
 
 	// Set ServiceAccount if configured
 	// applied below in template spec
@@ -495,7 +489,7 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		})
 	}
 
-	// In non-local mode, mount OCI credentials on the sidecar so it can proxy calls to the OCI registry.
+	// Mount OCI credentials on the sidecar so it can proxy calls to the OCI registry.
 	// The volume is already on the pod from the runtime container; we only add the mount here.
 	if cfg.ociCredentialsSecret != "" {
 		volumes = append(volumes, corev1.Volume{
@@ -656,27 +650,19 @@ func boolPtr(value bool) *bool {
 	return &value
 }
 
-// buildEnvVars builds environment variables for a container. evalHubURLValue is the value for EVALHUB_URL
-// (adapter: cfg.evalHubURL in local mode, cfg.sidecarBaseURL otherwise; sidecar: always cfg.evalHubURL).
+// buildEnvVars builds environment variables for the adapter container.
 func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 	var env []corev1.EnvVar
 	seen := map[string]bool{}
 
-	mode := "k8s"
-	if cfg.localMode {
-		mode = "local"
-	}
 	env = append(env, corev1.EnvVar{
 		Name:  envEvalHubModeName,
-		Value: mode,
+		Value: "k8s",
 	})
 	seen[envEvalHubModeName] = true
 
-	mlflowTrackingURI := cfg.mlflowTrackingURI
-	//When sidecar is at play, mlflow calls are proxied through the sidecar.
-	if !cfg.localMode {
-		mlflowTrackingURI = cfg.sidecarBaseURL
-	}
+	// When sidecar is at play, mlflow calls are proxied through the sidecar.
+	mlflowTrackingURI := cfg.sidecarBaseURL
 	// Add MLFlow environment variables if tracking is configured
 	if cfg.mlflowTrackingURI != "" {
 		env = append(env, corev1.EnvVar{
