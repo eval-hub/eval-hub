@@ -41,8 +41,17 @@ func register(instance *validator.Validate) {
 }
 
 func registerCustomValidators(instance *validator.Validate) {
+	instance.RegisterValidation("nonblank", nonblankString)
 	// Benchmarks min=1 only when Collection is not set (required_without handles presence; this enforces length)
 	instance.RegisterStructValidation(evaluationJobConfigBenchmarksMin, api.EvaluationJobConfig{})
+}
+
+func nonblankString(fl validator.FieldLevel) bool {
+	s, ok := fl.Field().Interface().(string)
+	if !ok {
+		return true
+	}
+	return strings.TrimSpace(s) != ""
 }
 
 // evaluationJobConfigBenchmarksMin ensures Benchmarks has at least one element when Collection is not present
