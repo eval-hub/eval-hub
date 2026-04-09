@@ -501,10 +501,9 @@ func (s *sqlStorage) computeJobTestResult(job *api.EvaluationJobResource, collec
 	}
 	weightedAvgJobScore := sumOfWeightedScores / sumOfWeights
 	s.logger.Info("Weighted average job score", "weighted_avg_job_score", weightedAvgJobScore, "sum_of_weighted_scores", sumOfWeightedScores, "sum_of_weights", sumOfWeights)
-	var jobTest *api.EvaluationTest = nil
 
 	threshold := s.getPassCriteriaThreshold(job, collection)
-	jobTest = &api.EvaluationTest{
+	jobTest := &api.EvaluationTest{
 		Score:     weightedAvgJobScore,
 		Threshold: threshold,
 		Pass:      weightedAvgJobScore >= threshold,
@@ -576,9 +575,10 @@ func (s *sqlStorage) computeBenchmarkTestResult(job *api.EvaluationJobResource, 
 					pass = primaryMetricValueFloat <= threshold
 				}
 				return &api.BenchmarkTest{
-					PrimaryScore: primaryMetricValueFloat,
-					Threshold:    threshold,
-					Pass:         pass,
+					PrimaryScore:       primaryMetricValueFloat,
+					PrimaryScoreMetric: primaryMetric,
+					Threshold:          threshold,
+					Pass:               pass,
 				}
 			}
 		}

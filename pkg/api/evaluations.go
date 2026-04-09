@@ -275,7 +275,8 @@ type EvaluationTest struct {
 }
 
 type BenchmarkTest struct {
-	PrimaryScore float32 `json:"primary_score"`
-	Threshold    float32 `json:"threshold"`
-	Pass         bool    `json:"pass"`
+	PrimaryScore       float32 `json:"primary_score"`
+	PrimaryScoreMetric string  `json:"primary_score_metric"`
+	Threshold          float32 `json:"threshold"`
+	Pass               bool    `json:"pass"`
 }
