@@ -34,15 +34,6 @@
         "weight": 0.4
       }
     ],
-    "experiment": {
-      "name": "{{mlflow:my-test-experiment}}",
-      "tags": [
-        {
-          "key": "key-a",
-          "value": "value-a"
-        }
-      ]
-    },
     "name": "test-evaluation-job",
     "timeout_minutes": 60,
     "retry_attempts": 3

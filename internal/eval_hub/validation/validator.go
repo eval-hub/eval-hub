@@ -6,6 +6,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/pkg/api"
 	validator "github.com/go-playground/validator/v10"
+	"github.com/go-playground/validator/v10/non-standard/validators"
 )
 
 var (
@@ -41,6 +42,8 @@ func register(instance *validator.Validate) {
 }
 
 func registerCustomValidators(instance *validator.Validate) {
+	// https://github.com/go-playground/validator/blob/v10.30.2/non-standard/validators/notblank.go
+	instance.RegisterValidation("notblank", validators.NotBlank)
 	// Benchmarks min=1 only when Collection is not set (required_without handles presence; this enforces length)
 	instance.RegisterStructValidation(evaluationJobConfigBenchmarksMin, api.EvaluationJobConfig{})
 }
