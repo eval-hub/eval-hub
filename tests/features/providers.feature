@@ -92,27 +92,32 @@ Feature: Providers Endpoint
     Then the response code should be 200
     And the response should contain the value "50" at path "$.limit"
     And the "total_count" field in the response should be saved as "value:num_providers"
-    And the response should contain at least the value "6" at path "$.total_count"
-    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=0"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=0&scope=system"
     Then the response code should be 200
     And the response should contain the value "50" at path "$.limit"
-    And the array at path "items" in the response should have length "value:num_providers"
+    And the array at path "items" in the response should have length "{{value:num_providers}}"
     And the response should contain the value "{{value:num_providers}}" at path "$.total_count"
-    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=1"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=1&scope=system"
     Then the response code should be 200
     And the response should contain the value "50" at path "$.limit"
-    And the array at path "items" in the response should have length at least 5
+    And the array at path "items" in the response should have length at least "{{value:num_providers}}-1"
     And the response should contain the value "{{value:num_providers}}" at path "$.total_count"
-    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=2"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=2&scope=system"
     Then the response code should be 200
     And the response should contain the value "50" at path "$.limit"
-    And the array at path "items" in the response should have length at least 4
+    And the array at path "items" in the response should have length at least "{{value:num_providers}}-2"
     And the response should contain the value "{{value:num_providers}}" at path "$.total_count"
-    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset={{value:num_providers}}"
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset={{value:num_providers}}&scope=system"
     Then the response code should be 200
     And the response should contain the value "50" at path "$.limit"
     And the array at path "items" in the response should have length 0
     And the response should contain the value "{{value:num_providers}}" at path "$.total_count"
+
+  Scenario: List user providers with pagination
+    Given the service is running
+    When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=0&scope=system"
+    Then the response code should be 200
+    And the "total_count" field in the response should be saved as "value:num_providers"
     When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider.json"
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:provider1_id"
@@ -129,7 +134,7 @@ Feature: Providers Endpoint
     When I send a GET request to "/api/v1/evaluations/providers?limit=50&offset=3"
     Then the response code should be 200
     And the response should contain the value "50" at path "$.limit"
-    And the array at path "items" in the response should have length at least 5
+    And the array at path "items" in the response should have length "{{value:num_providers}} - 1"
     When I send a GET request to "/api/v1/evaluations/providers?limit=1&scope=tenant"
     Then the response code should be 200
     And the response should contain the value "1" at path "$.limit"

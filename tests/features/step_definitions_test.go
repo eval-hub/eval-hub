@@ -456,11 +456,7 @@ func (tc *scenarioConfig) checkHealthEndpoint() error {
 }
 
 func (tc *scenarioConfig) iSetHeaderTo(paramName, paramValue string) error {
-	value, err := tc.substituteValues(paramValue)
-	if err != nil {
-		return err
-	}
-	value, err = tc.getValue(value)
+	value, err := tc.getValue(paramValue)
 	if err != nil {
 		return err
 	}
@@ -677,7 +673,28 @@ func (tc *scenarioConfig) getAssetDetails(path string) (string, string, string, 
 	return "", "", "", tc.logError(fmt.Errorf("no first path segment found in path %s", path))
 }
 
+var valueExpression = regexp.MustCompile(`^(.*)[\s]*([+-])[\s]*(\d+)$`)
+
+func (tc *scenarioConfig) getValueExpression(id string) (string, int, error) {
+	matches := valueExpression.FindStringSubmatch(id)
+	if len(matches) >= 4 {
+		v, err := strconv.Atoi(matches[3])
+		if err != nil {
+			return "", 0, err
+		}
+		if matches[2] == "+" {
+			return strings.TrimRight(matches[1], " "), v, nil
+		}
+		return strings.TrimRight(matches[1], " "), -v, nil
+	}
+	return id, 0, nil
+}
+
 func (tc *scenarioConfig) getValue(id string) (string, error) {
+	// start with the full substitution
+	if value, err := tc.substituteValues(id); err == nil {
+		id = value
+	}
 	if strings.HasPrefix(id, valuePrefix) {
 		n := strings.TrimPrefix(id, valuePrefix)
 		v := tc.values[n]
@@ -1070,24 +1087,25 @@ func (tc *scenarioConfig) theResponseShouldNotContainAtJSONPath(expectedValue st
 	return nil
 }
 
-func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLengthValue(jsonPath string, lengthValue string) error {
-	value, err := tc.getValue(lengthValue)
+func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLength(jsonPath string, lengthStr string) error {
+	value, add, err := tc.getValueExpression(lengthStr)
+	if err != nil {
+		return err
+	}
+	value, err = tc.getValue(value)
 	if err != nil {
 		return tc.logError(err)
 	}
-	return tc.theArrayAtPathInResponseShouldHaveLength(jsonPath, value)
-}
-
-func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLength(jsonPath string, lengthStr string) error {
-	length, err := strconv.Atoi(lengthStr)
+	length, err := strconv.Atoi(value)
 	if err != nil {
-		return tc.logError(fmt.Errorf("expected integer length, got %q: %w", lengthStr, err))
+		return tc.logError(fmt.Errorf("expected integer length, got %q: %w", value, err))
 	}
+	length += add
 	raw, err := tc.getJsonPathValue(jsonPath)
 	if err != nil {
 		return err
 	}
-	arr, ok := raw.([]interface{})
+	arr, ok := raw.([]any)
 	if !ok {
 		return tc.logError(fmt.Errorf("value at path %s is not an array, got %T", jsonPath, raw))
 	}
@@ -1098,7 +1116,11 @@ func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLength(jsonPath stri
 }
 
 func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLengthAtLeast(jsonPath string, minLengthStr string) error {
-	value, err := tc.getValue(minLengthStr)
+	value, add, err := tc.getValueExpression(minLengthStr)
+	if err != nil {
+		return err
+	}
+	value, err = tc.getValue(value)
 	if err != nil {
 		return err
 	}
@@ -1106,6 +1128,7 @@ func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLengthAtLeast(jsonPa
 	if err != nil {
 		return tc.logError(fmt.Errorf("expected integer min length, got %q: %w", value, err))
 	}
+	minLength += add
 	raw, err := tc.getJsonPathValue(jsonPath)
 	if err != nil {
 		return err
@@ -1289,6 +1312,25 @@ func checkRegexes() {
 			panic(tc.logError(fmt.Errorf("expected asset id %s for path %s, got %s", path[3], path[0], id)))
 		}
 	}
+
+	values := [][]string{
+		{"{{value:num_providers}}+2", "{{value:num_providers}}", "2"},
+		{"{{value:num_providers}} + 2", "{{value:num_providers}}", "2"},
+		{"{{value:num_providers}}-2", "{{value:num_providers}}", "-2"},
+		{"{{value:num_providers}} - 2", "{{value:num_providers}}", "-2"},
+	}
+	for _, value := range values {
+		v, count, err := tc.getValueExpression(value[0])
+		if err != nil {
+			panic(tc.logError(fmt.Errorf("failed to parse value expression %s: %v", value[0], err)))
+		}
+		if v != value[1] {
+			panic(tc.logError(fmt.Errorf("expected value '%s' for value expression '%s', got '%s'", value[1], value[0], v)))
+		}
+		if fmt.Sprintf("%d", count) != value[2] {
+			panic(tc.logError(fmt.Errorf("expected count %s for value expression %s, got %d", value[1], value[0], count)))
+		}
+	}
 }
 
 func InitializeTestSuite(ctx *godog.TestSuiteContext) {
@@ -1345,7 +1387,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the response should contain at least the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldContainAtJSONPathAtLeast)
 	ctx.Step(`^the response should not contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldNotContainAtJSONPath)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLength)
-	ctx.Step(`^the array at path "([^"]*)" in the response should have length "([^"]*)"$`, tc.theArrayAtPathInResponseShouldHaveLengthValue)
+	ctx.Step(`^the array at path "([^"]*)" in the response should have length "([^"]*)"$`, tc.theArrayAtPathInResponseShouldHaveLength)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least "([^"]*)"$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^I wait for the evaluation job status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatus)
