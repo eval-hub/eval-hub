@@ -477,34 +477,6 @@ func (tc *scenarioConfig) iSendARequestTo(method, path string) error {
 	return tc.iSendARequestToWithBody(method, path, "")
 }
 
-// isLocalOrCIMode returns true when the test cannot reliably wait for evaluation job
-// completion (e.g. GitHub Actions, localhost, or in-process server). Scenarios that
-// require waiting for job completion should use the explicit step "When the mode is local or CI then skip this scenario" at the start.
-func (tc *scenarioConfig) isLocalOrCIMode() bool {
-	githubActions := os.Getenv("GITHUB_ACTIONS")
-	serverURL := os.Getenv("SERVER_URL")
-	isLocalhost := false
-	if serverURL != "" {
-		host := serverURL
-		if parsed, err := url.Parse(serverURL); err == nil && parsed.Hostname() != "" {
-			host = parsed.Hostname()
-		}
-		isLocalhost = host == "localhost" || host == "127.0.0.1" || host == "::1"
-	}
-	isLocalMode := serverURL == "" || (tc.apiFeature != nil && tc.apiFeature.server != nil)
-	return githubActions == "true" || isLocalhost || isLocalMode
-}
-
-// whenTheModeIsLocalOrCIThenSkipThisScenario skips the scenario when running in local or CI
-// mode so that scenarios requiring job completion are explicitly skipped instead of failing or timing out.
-func (tc *scenarioConfig) whenTheModeIsLocalOrCIThenSkipThisScenario() error {
-	if tc.isLocalOrCIMode() {
-		tc.logDebug("Skipping scenario: mode is local or CI (cannot wait for job completion)\n")
-		return godog.ErrSkip
-	}
-	return nil
-}
-
 func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) error {
 	deadline := time.Now().Add(2 * time.Minute)
 	var lastErr error
@@ -1391,7 +1363,6 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least "([^"]*)"$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^I wait for the evaluation job status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatus)
-	ctx.Step(`^the mode is local or CI then skip this scenario$`, tc.whenTheModeIsLocalOrCIThenSkipThisScenario)
 	// Other steps
 	ctx.Step(`^fix this step$`, tc.fixThisStep)
 }

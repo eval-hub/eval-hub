@@ -157,18 +157,18 @@ SERVER_URL ?= http://localhost:8080
 
 FVT_TESTS ?= ./tests/features/...
 FVT_OUTPUT ?= --godog.format=junit:${PWD}/$(BIN_DIR)/junit-fvt-report.xml,pretty
-FVT_TAGS ?= --godog.tags=~@ignore && ~@mlflow
+FVT_TAGS ?= "--godog.tags=~@ignore && ~@mlflow && ~@cluster"
 
 test-fvt: $(BIN_DIR) ## Run FVT (Functional Verification Tests) using godog
 	@echo "Running FVT tests..."
-	@bash -c 'set -o pipefail; go test ${FVT_TESTS} ${FVT_OUTPUT} "${FVT_TAGS}" -v -race | ${PWD}/scripts/grcat ${PWD}/.conf.go-integration-test'
+	@bash -c 'set -o pipefail; go test ${FVT_TESTS} ${FVT_OUTPUT} ${FVT_TAGS} -v -race | ${PWD}/scripts/grcat ${PWD}/.conf.go-integration-test'
 
 test-fvt-server: start-service ## Run FVT tests using godog against a running server
 	@SERVER_URL="${SERVER_URL}" make test-fvt; status=$$?; make stop-service; exit $$status
 
 test-fvt-coverage: $(BIN_DIR)## Run integration (FVT) tests with coverage
 	@echo "Running integration (FVT) tests with coverage..."
-	@go test ${FVT_TESTS} ${FVT_OUTPUT} "${FVT_TAGS}" -v -race -coverprofile=$(BIN_DIR)/coverage-fvt.out -covermode=atomic
+	@go test ${FVT_TESTS} ${FVT_OUTPUT} ${FVT_TAGS} -v -race -coverprofile=$(BIN_DIR)/coverage-fvt.out -covermode=atomic
 	@go tool cover -html=$(BIN_DIR)/coverage-fvt.out -o $(BIN_DIR)/coverage-fvt.html
 	@echo "Coverage report generated: $(BIN_DIR)/coverage-fvt.html"
 
