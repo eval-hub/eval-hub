@@ -260,6 +260,7 @@ Before updating to a new golang version check that this version is supported in 
 The PR should also update the major golang version, if needed, in the Containerfile.
 
 If there are other files in the repository that require updating due to new golang version then mention them in the PR.
+Use `go-version-file: "go.mod"` in the github actions where possible.
 
 #### npm devDependencies
 
