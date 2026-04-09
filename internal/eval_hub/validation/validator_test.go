@@ -66,7 +66,37 @@ func TestEvaluationJobConfigBenchmarksMin_WithoutCollection_WithBenchmark(t *tes
 	}
 }
 
-func TestEvaluationJobConfig_ExperimentRequiresNonblankNameWhenSet(t *testing.T) {
+func TestEvaluationJobConfig_ExperimentWithoutNameFails(t *testing.T) {
+	validate := NewValidator()
+	cfg := api.EvaluationJobConfig{
+		Name:  "test-evaluation-job",
+		Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+		Benchmarks: []api.EvaluationBenchmarkConfig{
+			{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
+		},
+		Experiment: &api.ExperimentConfig{},
+	}
+	err := validate.Struct(cfg)
+	if err == nil {
+		t.Fatal("expected validation error when experiment is set but name is omitted")
+	}
+	valErr, ok := err.(validator.ValidationErrors)
+	if !ok || len(valErr) == 0 {
+		t.Fatalf("expected validator.ValidationErrors, got %T: %v", err, err)
+	}
+	found := false
+	for _, e := range valErr {
+		if e.Field() == "name" && e.Tag() == "notblank" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected notblank error on experiment name, got: %v", err)
+	}
+}
+
+func TestEvaluationJobConfig_ExperimentNameEmptyStringFails(t *testing.T) {
 	validate := NewValidator()
 	cfg := api.EvaluationJobConfig{
 		Name:  "test-evaluation-job",
@@ -78,7 +108,7 @@ func TestEvaluationJobConfig_ExperimentRequiresNonblankNameWhenSet(t *testing.T)
 	}
 	err := validate.Struct(cfg)
 	if err == nil {
-		t.Fatal("expected validation error when experiment is set with empty name")
+		t.Fatal("expected validation error when experiment name is present but empty")
 	}
 	valErr, ok := err.(validator.ValidationErrors)
 	if !ok || len(valErr) == 0 {
@@ -86,13 +116,44 @@ func TestEvaluationJobConfig_ExperimentRequiresNonblankNameWhenSet(t *testing.T)
 	}
 	found := false
 	for _, e := range valErr {
-		if e.Field() == "name" && e.Tag() == "nonblank" {
+		if e.Field() == "name" && e.Tag() == "notblank" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatalf("expected nonblank error on experiment name, got: %v", err)
+		t.Fatalf("expected notblank error on experiment name, got: %v", err)
+	}
+}
+
+func TestEvaluationJobConfig_ExperimentNameWhitespaceOnlyFails(t *testing.T) {
+	validate := NewValidator()
+	ws := " \t "
+	cfg := api.EvaluationJobConfig{
+		Name:  "test-evaluation-job",
+		Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+		Benchmarks: []api.EvaluationBenchmarkConfig{
+			{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
+		},
+		Experiment: &api.ExperimentConfig{Name: ws},
+	}
+	err := validate.Struct(cfg)
+	if err == nil {
+		t.Fatal("expected validation error when experiment name is only whitespace")
+	}
+	valErr, ok := err.(validator.ValidationErrors)
+	if !ok || len(valErr) == 0 {
+		t.Fatalf("expected validator.ValidationErrors, got %T: %v", err, err)
+	}
+	found := false
+	for _, e := range valErr {
+		if e.Field() == "name" && e.Tag() == "notblank" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected notblank error on experiment name, got: %v", err)
 	}
 }
 

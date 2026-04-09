@@ -157,6 +157,9 @@ SERVER_URL ?= http://localhost:8080
 
 FVT_TESTS ?= ./tests/features/...
 FVT_OUTPUT ?= --godog.format=junit:${PWD}/$(BIN_DIR)/junit-fvt-report.xml,pretty
+# This will be picked up by the test code as the tags to run (or skip)
+GODOG_TAGS ?= "~@ignore && ~@mlflow"
+export GODOG_TAGS
 
 test-fvt: $(BIN_DIR) ## Run FVT (Functional Verification Tests) using godog
 	@echo "Running FVT tests..."

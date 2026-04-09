@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
@@ -147,7 +148,7 @@ func injectEvaluationJobTags(jobId string, evaluation *api.EvaluationJobConfig) 
 
 // HasExperimentName is true when the job config has a non-empty MLflow experiment name.
 func HasExperimentName(jobConfig *api.EvaluationJobConfig) bool {
-	return jobConfig.Experiment != nil && jobConfig.Experiment.Name != ""
+	return jobConfig.Experiment != nil && strings.TrimSpace(jobConfig.Experiment.Name) != ""
 }
 
 func GetOrCreateExperimentID(mlflowClient *mlflowclient.Client, jobConfig *api.EvaluationJobConfig, jobId string) (experimentID string, experimentURL string, err error) {

@@ -40,7 +40,6 @@ Feature: Evaluations Endpoint
   @mlflow
   Scenario: Create an evaluation job with MLflow experiment
     Given the service is running
-    When MLflow tracking URI is not set then skip this scenario
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_mlflow_experiment.json"
     Then the response code should be 202
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"

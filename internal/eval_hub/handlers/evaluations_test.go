@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -796,8 +797,8 @@ func TestHandleCreateEvaluationRejectsEmptyExperimentName(t *testing.T) {
 	if runtime.called {
 		t.Fatalf("did not expect runtime when experiment name is empty")
 	}
-	if recorder.Code == 202 {
-		t.Fatalf("expected error response, got 202")
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request for empty experiment name, got %d", recorder.Code)
 	}
 	body := recorder.Body.String()
 	if !strings.Contains(body, "request_validation_failed") {

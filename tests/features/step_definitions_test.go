@@ -509,16 +509,6 @@ func (tc *scenarioConfig) whenTheModeIsLocalOrCIThenSkipThisScenario() error {
 	return nil
 }
 
-// whenMLflowTrackingURIIsNotSetThenSkipThisScenario skips MLflow-specific scenarios when the
-// tracking URI is unset so default FVT does not require a running MLflow server.
-func (tc *scenarioConfig) whenMLflowTrackingURIIsNotSetThenSkipThisScenario() error {
-	if strings.TrimSpace(os.Getenv("MLFLOW_TRACKING_URI")) == "" {
-		tc.logDebug("Skipping scenario: MLFLOW_TRACKING_URI is not set\n")
-		return godog.ErrSkip
-	}
-	return nil
-}
-
 func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) error {
 	deadline := time.Now().Add(2 * time.Minute)
 	var lastErr error
@@ -1360,7 +1350,6 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least "([^"]*)"$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^I wait for the evaluation job status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatus)
 	ctx.Step(`^the mode is local or CI then skip this scenario$`, tc.whenTheModeIsLocalOrCIThenSkipThisScenario)
-	ctx.Step(`^MLflow tracking URI is not set then skip this scenario$`, tc.whenMLflowTrackingURIIsNotSetThenSkipThisScenario)
 	// Other steps
 	ctx.Step(`^fix this step$`, tc.fixThisStep)
 }
