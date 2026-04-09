@@ -1,6 +1,7 @@
 package features
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,7 +29,7 @@ func TestMain(m *testing.M) {
 	opts.Paths = pflag.Args()
 
 	if serverURL := os.Getenv("SERVER_URL"); serverURL != "" {
-		// t.Logf("Running FVT tests against the server %s", serverURL)
+		fmt.Printf("Running FVT tests against the server %s\n", serverURL)
 	}
 
 	// Get the absolute path to the features directory
@@ -52,6 +53,8 @@ func TestMain(m *testing.M) {
 	if tags != "" {
 		opts.Tags = tags
 	}
+
+	fmt.Printf("Running FVT tests with tags=%s and paths=%s from args %s\n", opts.Tags, opts.Paths, os.Args[1:])
 
 	suite := godog.TestSuite{
 		Name:                 "EvalHub Feature Tests",
