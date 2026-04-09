@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log/slog"
 	"net"
@@ -448,6 +449,7 @@ func (s *Server) Start() error {
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
+		TLSConfig:    &tls.Config{MinVersion: tls.VersionTLS12},
 	}
 
 	s.logger.Info("Writing the server ready message", "file", s.serviceConfig.Service.ReadyFile)
