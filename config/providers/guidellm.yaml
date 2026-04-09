@@ -35,6 +35,11 @@ benchmarks:
       - latency
       - guidellm
       - auto
+    primary_score:
+      metric: output_tokens_per_second
+      lower_is_better: false
+    pass_criteria:
+      threshold: 10.0
   - id: throughput
     name: Maximum throughput discovery
     description: |-
@@ -51,6 +56,11 @@ benchmarks:
       - throughput
       - guidellm
       - saturation
+    primary_score:
+      metric: output_tokens_per_second
+      lower_is_better: false
+    pass_criteria:
+      threshold: 10.0
   - id: concurrent
     name: Fixed concurrency stress test
     description: Measures latency and throughput under a fixed number of simultaneous requests.
@@ -65,6 +75,11 @@ benchmarks:
       - performance
       - concurrency
       - guidellm
+    primary_score:
+      metric: output_tokens_per_second
+      lower_is_better: false
+    pass_criteria:
+      threshold: 10.0
   - id: constant
     name: Steady-state load test
     description: Measures performance under a sustained, constant request rate over time.
@@ -79,6 +94,11 @@ benchmarks:
       - performance
       - constant_rate
       - guidellm
+    primary_score:
+      metric: output_tokens_per_second
+      lower_is_better: false
+    pass_criteria:
+      threshold: 10.0
   - id: poisson
     name: Realistic traffic simulation
     description: Simulates real-world traffic patterns using Poisson-distributed request arrivals.
@@ -95,6 +115,11 @@ benchmarks:
       - realistic
       - guidellm
   # Pre-configured benchmark suites
+    primary_score:
+      metric: output_tokens_per_second
+      lower_is_better: false
+    pass_criteria:
+      threshold: 10.0
   - id: quick_perf_test
     name: Quick performance snapshot
     description: Fast sweep-based evaluation with limited samples for rapid performance assessment.
@@ -108,6 +133,11 @@ benchmarks:
       - quick
       - guidellm
       - suite
+    primary_score:
+      metric: requests_per_second
+      lower_is_better: false
+    pass_criteria:
+      threshold: 1.0
   - id: comprehensive_perf_test
     name: Full performance characterization
     description: End-to-end evaluation across all load profiles for complete performance understanding.
@@ -123,3 +153,8 @@ benchmarks:
       - comprehensive
       - guidellm
       - suite
+    primary_score:
+      metric: output_tokens_per_second
+      lower_is_better: false
+    pass_criteria:
+      threshold: 10.0

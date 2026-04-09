@@ -33,3 +33,8 @@ benchmarks:
     tags:
       - erroranalysis
       - ibmclear
+    primary_score:
+      metric: average_score
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.5
