@@ -1294,6 +1294,7 @@ func checkRegexes() {
 func InitializeTestSuite(ctx *godog.TestSuiteContext) {
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{
 		MinVersion: tls.VersionTLS12,
+		MaxVersion: tls.VersionTLS13,
 		//nolint:gosec
 		InsecureSkipVerify: true,
 	}

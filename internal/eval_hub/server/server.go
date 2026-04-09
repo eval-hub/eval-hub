@@ -17,6 +17,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/k8s"
+	"github.com/eval-hub/eval-hub/internal/platform"
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 	"github.com/go-playground/validator/v10"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -449,7 +450,14 @@ func (s *Server) Start() error {
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
-		TLSConfig:    &tls.Config{MinVersion: tls.VersionTLS12},
+		TLSConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			MaxVersion: tls.VersionTLS13,
+		},
+	}
+
+	if platform.IsFIPS() && s.httpServer.TLSConfig.InsecureSkipVerify {
+		return fmt.Errorf("FIPS mode enabled, but TLS certificate verification is required")
 	}
 
 	s.logger.Info("Writing the server ready message", "file", s.serviceConfig.Service.ReadyFile)

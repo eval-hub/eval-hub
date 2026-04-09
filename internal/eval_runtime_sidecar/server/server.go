@@ -101,7 +101,10 @@ func (s *SidecarServer) Start() error {
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
-		TLSConfig:    &tls.Config{MinVersion: tls.VersionTLS12},
+		TLSConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			MaxVersion: tls.VersionTLS13,
+		},
 	}
 
 	readyFile := ""
