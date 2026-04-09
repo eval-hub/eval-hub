@@ -345,7 +345,7 @@ Feature: Evaluation Jobs
     When I send a DELETE request to "/api/v1/evaluations/collections/{{value:collection_id}}?hard_delete=true"
     Then the response code should be 204
 
-  Scenario: Collection job with threshold zero
+  Scenario: Create threshold-zero collection then submit job and verify completion
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body:
     """
@@ -392,6 +392,14 @@ Feature: Evaluation Jobs
         ]
     }
     """
+    Then the response code should be 201
+    And the "resource.id" field in the response should be saved as "value:collection_id"
+    And the response should contain the value "test-benchmarks-collection-threshold-zero" at path "$.name"
+    And the response should contain the value "test" at path "$.category"
+    And the response should contain the value "Collection of benchmarks for FVT" at path "$.description"
+    And the response should contain the value "0" at path "$.pass_criteria.threshold"
+    And the array at path "$.benchmarks" in the response should have length 2
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_collection.json"
     Then the response code should be 202
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
     And the response should contain the value "pending" at path "$.status.state"
