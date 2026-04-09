@@ -1,14 +1,9 @@
 package platform
 
-import "os"
-
-var (
-	fipsEnabled = readFile("/proc/sys/crypto/fips_enabled") == "1"
+import (
+	"os"
+	"strings"
 )
-
-func IsFIPS() bool {
-	return fipsEnabled
-}
 
 func readFile(path string) string {
 	content, err := os.ReadFile(path)
@@ -16,4 +11,14 @@ func readFile(path string) string {
 		return ""
 	}
 	return string(content)
+}
+
+func isFIPSFromPath(path string) bool {
+	return strings.TrimSpace(readFile(path)) == "1"
+}
+
+var fipsEnabled = isFIPSFromPath("/proc/sys/crypto/fips_enabled")
+
+func IsFIPS() bool {
+	return fipsEnabled
 }
