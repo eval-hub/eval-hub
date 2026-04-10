@@ -218,15 +218,17 @@ func TestGetJobBenchmarks(t *testing.T) {
 	t.Run("collection resolves and merges job parameters per benchmark", func(t *testing.T) {
 		t.Parallel()
 		job := makeJob()
-		job.Collection = &api.CollectionRef{ID: "col-1"}
-		job.Benchmarks = []api.EvaluationBenchmarkConfig{
-			{
-				ProviderID: "prov-a-ref",
-				Parameters: map[string]any{"shared": "from_job_a", "only_a": 1},
-			},
-			{
-				ProviderID: "prov-b-ref",
-				Parameters: map[string]any{"shared": "from_job_b"},
+		job.Collection = &api.CollectionRef{
+			ID: "col-1",
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{
+					ProviderID: "prov-a-ref",
+					Parameters: map[string]any{"shared": "from_job_a", "only_a": 1},
+				},
+				{
+					ProviderID: "prov-b-ref",
+					Parameters: map[string]any{"shared": "from_job_b"},
+				},
 			},
 		}
 		collection := &api.CollectionResource{

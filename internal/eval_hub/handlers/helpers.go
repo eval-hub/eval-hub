@@ -245,7 +245,7 @@ func GetJobBenchmarks(job *api.EvaluationJobResource, collection *api.Collection
 		}
 		var mergedBenchmarks []api.EvaluationBenchmarkConfig
 		for _, benchmark := range collection.Benchmarks {
-			benchmark := mergeBenchmarkParameters(benchmark, job.Benchmarks)
+			benchmark := mergeBenchmarkParameters(benchmark, job.Collection.Benchmarks)
 			mergedBenchmarks = append(mergedBenchmarks, benchmark)
 		}
 		return mergedBenchmarks, nil
