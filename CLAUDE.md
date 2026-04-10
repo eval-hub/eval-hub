@@ -259,6 +259,8 @@ exists then report the `PR` number and skip the rest.
 Before updating to a new golang version check that this version is supported in the go-toolset that can be found here `registry.access.redhat.com/ubi9/go-toolset`. If the new golang version is not yet supported in `registry.access.redhat.com/ubi9/go-toolset` then move to the latest supported version, if possible, and report that the desired version is not yet supported by go-toolset.
 The PR should also update the major golang version, if needed, in the Containerfile.
 
+The go.mod must not be updated until the same version exists in go-toolset.
+
 If there are other files in the repository that require updating due to new golang version then mention them in the PR.
 Use `go-version-file: "go.mod"` in the github actions where possible.
 
