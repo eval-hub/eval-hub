@@ -419,3 +419,58 @@ Feature: Collections Endpoint
     And the response should contain the value "{{value:num_collections}}" at path "$.limit"
     And the array at path "items" in the response should have length "{{value:num_collections}}"
     And the response should contain at least the value "{{value:num_collections}}" at path "$.total_count"
+
+  Scenario: Create threshold-zero collection
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/collections" with body:
+    """
+    {
+        "name": "test-benchmarks-collection-threshold-zero",
+        "category": "test",
+        "description": "Collection of benchmarks for FVT",
+        "pass_criteria": {
+            "threshold": 0
+        },
+        "benchmarks": [
+            {
+                "id": "arc_easy",
+                "provider_id": "lm_evaluation_harness",
+                "primary_score": {
+                    "metric": "acc_norm",
+                    "lower_is_better": false
+                },
+                "pass_criteria": {
+                    "threshold": 0.5
+                },
+                "parameters": {
+                    "limit": 10,
+                    "num_fewshot": 0,
+                    "tokenizer": "google/flan-t5-small"
+                }
+            },
+            {
+                "id": "arc_easy",
+                "provider_id": "lm_evaluation_harness",
+                "primary_score": {
+                    "metric": "acc_norm",
+                    "lower_is_better": false
+                },
+                "pass_criteria": {
+                    "threshold": 0.5
+                },
+                "parameters": {
+                    "limit": 10,
+                    "num_fewshot": 0,
+                    "tokenizer": "google/flan-t5-small"
+                }
+            }
+        ]
+    }
+    """
+    Then the response code should be 201
+    And the "resource.id" field in the response should be saved as "value:collection_id"
+    And the response should contain the value "test-benchmarks-collection-threshold-zero" at path "$.name"
+    And the response should contain the value "test" at path "$.category"
+    And the response should contain the value "Collection of benchmarks for FVT" at path "$.description"
+    And the response should contain the value "0" at path "$.pass_criteria.threshold"
+    And the array at path "$.benchmarks" in the response should have length 2

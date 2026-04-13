@@ -5,3 +5,5 @@ properties:
     type: number
     format: float
     description: Threshold value.
+required:
+  - threshold

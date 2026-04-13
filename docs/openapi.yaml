@@ -996,6 +996,8 @@ components:
           type: number
           format: float
           description: Threshold value.
+      required:
+        - threshold
     TestDataRefS3:
       type: object
       description: |

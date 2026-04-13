@@ -84,7 +84,8 @@ type PrimaryScore struct {
 }
 
 type PassCriteria struct {
-	Threshold float32 `mapstructure:"threshold" json:"threshold" validate:"required,number"`
+	// The *float32 is a hack to avoid validation failure when threshold=0
+	Threshold *float32 `mapstructure:"threshold" json:"threshold" validate:"required"`
 }
 
 // S3TestDataRef represents S3 source for test data.
