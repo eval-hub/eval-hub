@@ -48,7 +48,7 @@ func TestCollections_PassCriteria(t *testing.T) {
 			t.Errorf("expected 2 collections, got %d", len(res.Items))
 		}
 		for _, coll := range res.Items {
-			if coll.CollectionConfig.PassCriteria == nil {
+			if coll.CollectionConfig.PassCriteria == nil || coll.CollectionConfig.PassCriteria.Threshold == nil {
 				t.Fatalf("collection %s is missing pass criteria", coll.Resource.ID)
 			}
 			passCriteria := *coll.CollectionConfig.PassCriteria.Threshold
