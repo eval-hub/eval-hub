@@ -78,8 +78,8 @@ When running in local server mode, the tests will:
 | @collections | Used to run just the collections tests |
 | @evaluations | Used to run just the evaluations tests |
 | @providers | Used to run just the providers tests |
-| @cluster | Tests that only work when run on a cluster |
-| @local | Tests that only work when running locally |
+| @cluster | Tests that only work when run on a cluster or with a working runtime |
+| @mlflow | Tests that only work when running with a configured mlflow service |
 | @ignore | Can be used to ignore a test |
 
 Note that if you want to run a single test you can add a tag to the test,
