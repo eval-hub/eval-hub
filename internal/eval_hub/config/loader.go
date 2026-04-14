@@ -83,7 +83,7 @@ func readConfig(logger *slog.Logger, name string, ext string, dirs ...string) (*
 	return configValues, err
 }
 
-func loadProvider(logger *slog.Logger, validate *validator.Validate, file string, dirs ...string) (*api.ProviderResource, error) {
+func loadProvider(logger *slog.Logger, validate *validator.Validate, file string, dirs ...string) (*api.ProviderResource, string, error) {
 	type providerConfigInternal struct {
 		ID                 string `mapstructure:"id" yaml:"id" json:"id"`
 		api.ProviderConfig `mapstructure:",squash"`
@@ -91,11 +91,11 @@ func loadProvider(logger *slog.Logger, validate *validator.Validate, file string
 	providerConfig := providerConfigInternal{}
 	configValues, err := readConfig(logger, file, "yaml", dirs...)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	if err := configValues.Unmarshal(&providerConfig); err != nil {
-		return nil, err
+		return nil, configValues.ConfigFileUsed(), err
 	}
 	res := &api.ProviderResource{
 		Resource: api.Resource{
@@ -107,13 +107,13 @@ func loadProvider(logger *slog.Logger, validate *validator.Validate, file string
 
 	// validate the provider
 	if err := validate.Struct(res); err != nil {
-		return nil, err
+		return nil, configValues.ConfigFileUsed(), err
 	}
 
-	return res, nil
+	return res, configValues.ConfigFileUsed(), nil
 }
 
-func loadCollection(logger *slog.Logger, validate *validator.Validate, file string, dirs ...string) (*api.CollectionResource, error) {
+func loadCollection(logger *slog.Logger, validate *validator.Validate, file string, dirs ...string) (*api.CollectionResource, string, error) {
 	type collectionConfigInternal struct {
 		ID                   string `mapstructure:"id"`
 		api.CollectionConfig `mapstructure:",squash"`
@@ -121,11 +121,11 @@ func loadCollection(logger *slog.Logger, validate *validator.Validate, file stri
 	collectionConfig := collectionConfigInternal{}
 	configValues, err := readConfig(logger, file, "yaml", dirs...)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	if err := configValues.Unmarshal(&collectionConfig); err != nil {
-		return nil, err
+		return nil, configValues.ConfigFileUsed(), err
 	}
 	res := &api.CollectionResource{
 		Resource: api.Resource{
@@ -137,10 +137,10 @@ func loadCollection(logger *slog.Logger, validate *validator.Validate, file stri
 
 	// validate the collection
 	if err := validate.Struct(res); err != nil {
-		return nil, err
+		return nil, configValues.ConfigFileUsed(), err
 	}
 
-	return res, nil
+	return res, configValues.ConfigFileUsed(), nil
 }
 
 func scanFolders(logger *slog.Logger, dirs ...string) ([]os.DirEntry, string, error) {
@@ -187,18 +187,22 @@ func LoadProviderConfigs(logger *slog.Logger, validate *validator.Validate, dirs
 			continue
 		}
 		name := strings.TrimSuffix(file.Name(), ".yaml")
-		providerConfig, err := loadProvider(logger, validate, name, dir)
+		providerConfig, fileUsed, err := loadProvider(logger, validate, name, dir)
 		if err != nil {
 			return nil, err
 		}
 
+		fileName := fileUsed
+		if fileName == "" {
+			fileName = file.Name()
+		}
 		if providerConfig.Resource.ID == "" {
-			logger.Warn("Provider config missing id, skipping", "file", file.Name())
+			logger.Warn("Provider config missing id, skipping", "file", fileName)
 			continue
 		}
 
 		providerConfigs[providerConfig.Resource.ID] = *providerConfig
-		logger.Info("Provider loaded", "provider_id", providerConfig.Resource.ID)
+		logger.Info("Provider loaded", "provider_id", providerConfig.Resource.ID, "file", fileName)
 	}
 
 	return providerConfigs, nil
@@ -225,18 +229,21 @@ func LoadCollectionConfigs(logger *slog.Logger, validate *validator.Validate, di
 			continue
 		}
 		name := strings.TrimSuffix(file.Name(), ".yaml")
-		collectionConfig, err := loadCollection(logger, validate, name, dir)
+		collectionConfig, fileUsed, err := loadCollection(logger, validate, name, dir)
 		if err != nil {
 			return nil, err
 		}
-
+		fileName := fileUsed
+		if fileName == "" {
+			fileName = file.Name()
+		}
 		if collectionConfig.Resource.ID == "" {
-			logger.Warn("Collection config missing id, skipping", "file", file.Name())
+			logger.Warn("Collection config missing id, skipping", "file", fileName)
 			continue
 		}
 
 		collectionConfigs[collectionConfig.Resource.ID] = *collectionConfig
-		logger.Info("Collection loaded", "collection_id", collectionConfig.Resource.ID)
+		logger.Info("Collection loaded", "collection_id", collectionConfig.Resource.ID, "file", fileName)
 	}
 
 	return collectionConfigs, nil

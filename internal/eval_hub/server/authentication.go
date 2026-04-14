@@ -23,7 +23,7 @@ func WithAuthentication(next http.Handler, logger *slog.Logger, client *kubernet
 		logger.Info("Authenticating request", "path", r.URL.Path, "method", r.Method)
 		rules := auth.FindRules(r, config)
 		if len(rules) == 0 {
-			logger.Info("No rules found for request", "path", r.URL.Path, "method", r.Method)
+			logger.Debug("No rules found for request", "path", r.URL.Path, "method", r.Method)
 			// If the endpoint and method is not mentioned in the authorization config,
 			// we skip authentication as well. Authorization will get no user info.
 			next.ServeHTTP(w, r)
