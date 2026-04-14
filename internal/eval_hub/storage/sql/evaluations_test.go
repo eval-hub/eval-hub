@@ -11,6 +11,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/common"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -24,6 +25,7 @@ var (
 func TestGetEvaluationJobs_TenantFilter(t *testing.T) {
 	testGetEvaluationJobs_TenantFilter(t, drivers[0], getDBName())
 }
+
 func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 	testUpdateEvaluationJob_PreservesProviderID(t, drivers[0], getDBName())
 }
@@ -956,4 +958,97 @@ func prettyPrint(v any) string {
 
 func getTenant(tenant string) string {
 	return tenant + common.GUID()
+}
+
+func TestGetEvaluationJobs_PassCriteria(t *testing.T) {
+	zero := float32(0)
+	point5 := float32(0.5)
+	point9 := float32(0.9)
+	// this is the default if nothing is set
+	if err := testGetEvaluationJobs_PassCriteria(nil, nil, 0.5); err != nil {
+		t.Fatalf("Pass criteria threshold test failed: %v", err)
+	}
+	// make sure that we can explicitly set 0
+	if err := testGetEvaluationJobs_PassCriteria(&zero, nil, 0); err != nil {
+		t.Fatalf("Pass criteria threshold test failed: %v", err)
+	}
+	if err := testGetEvaluationJobs_PassCriteria(nil, &zero, 0); err != nil {
+		t.Fatalf("Pass criteria threshold test failed: %v", err)
+	}
+	// make sure that we can explicitly set a non-zero and non-default value
+	if err := testGetEvaluationJobs_PassCriteria(&point9, nil, 0.9); err != nil {
+		t.Fatalf("Pass criteria threshold test failed: %v", err)
+	}
+	if err := testGetEvaluationJobs_PassCriteria(nil, &point9, 0.9); err != nil {
+		t.Fatalf("Pass criteria threshold test failed: %v", err)
+	}
+	// other checks
+	if err := testGetEvaluationJobs_PassCriteria(&point9, &point9, 0.9); err != nil {
+		t.Fatalf("Pass criteria threshold test failed: %v", err)
+	}
+	if err := testGetEvaluationJobs_PassCriteria(&zero, &point9, 0); err != nil {
+		t.Fatalf("Pass criteria threshold test failed: %v", err)
+	}
+	if err := testGetEvaluationJobs_PassCriteria(&point9, &zero, 0.9); err != nil {
+		t.Fatalf("Pass criteria threshold test failed: %v", err)
+	}
+	if err := testGetEvaluationJobs_PassCriteria(&point5, &point5, 0.5); err != nil {
+		t.Fatalf("Pass criteria threshold test failed: %v", err)
+	}
+	if err := testGetEvaluationJobs_PassCriteria(&zero, &point5, 0); err != nil {
+		t.Fatalf("Pass criteria threshold test failed: %v", err)
+	}
+	if err := testGetEvaluationJobs_PassCriteria(&point5, &zero, 0.5); err != nil {
+		t.Fatalf("Pass criteria threshold test failed: %v", err)
+	}
+	if err := testGetEvaluationJobs_PassCriteria(&zero, &zero, 0); err != nil {
+		t.Fatalf("Pass criteria threshold test failed: %v", err)
+	}
+}
+
+func testGetEvaluationJobs_PassCriteria(jobThreshold *float32, collectionThreshold *float32, result float32) error {
+	config := api.EvaluationJobConfig{
+		Model: api.ModelRef{URL: "http://test.com", Name: "test"},
+		Benchmarks: []api.EvaluationBenchmarkConfig{
+			{
+				Ref:        api.Ref{ID: "b1"},
+				ProviderID: "prov1",
+			},
+		},
+		PassCriteria: &api.PassCriteria{
+			Threshold: jobThreshold,
+		},
+	}
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{
+				ID:        common.GUID(),
+				Tenant:    api.Tenant("tenant1"),
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			},
+		},
+		EvaluationJobConfig: config,
+	}
+	var collection *api.CollectionResource
+	if collectionThreshold != nil {
+		collection = &api.CollectionResource{
+			Resource: api.Resource{
+				ID:        common.GUID(),
+				Tenant:    api.Tenant("tenant1"),
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			},
+			CollectionConfig: api.CollectionConfig{
+				PassCriteria: &api.PassCriteria{
+					Threshold: collectionThreshold,
+				},
+			},
+		}
+	}
+	v := sql.GetPassCriteriaThreshold(job, collection)
+	if v != result {
+		return fmt.Errorf("Expected threshold to be %v, got %v", result, v)
+	}
+	return nil
 }
