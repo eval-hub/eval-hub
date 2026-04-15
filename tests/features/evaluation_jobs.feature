@@ -88,6 +88,7 @@ Feature: Evaluation Jobs
     When I send a DELETE request to "/api/v1/evaluations/jobs/{{value:job3_id}}?hard_delete=true"
     Then the response code should be 204
 
+  @mlflow
   Scenario: Multiple jobs share same MLflow experiment
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -246,6 +247,7 @@ Feature: Evaluation Jobs
     When I send a DELETE request to "/api/v1/evaluations/collections/{{value:collection_id}}?hard_delete=true"
     Then the response code should be 204
 
+  @mlflow
   Scenario: Collection jobs share same MLflow experiments
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
