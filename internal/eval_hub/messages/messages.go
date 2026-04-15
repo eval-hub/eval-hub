@@ -232,11 +232,18 @@ var (
 		"unable_to_authorize_request",
 	)
 
-	// Unauthorized The request is not authenticated: '{{.Error}}'.
+	// Unauthorized The request is not authenticated.'.
 	Unauthorized = createMessage(
 		constants.HTTPCodeUnauthorized,
 		"The request is not authenticated.",
 		"unauthorized",
+	)
+
+	// MissingAuthenticationHeader The request is not authenticated. Please provide a non-empty authentication header {{.Header}}.
+	MissingAuthenticationHeader = createMessage(
+		constants.HTTPCodeUnauthorized,
+		"The request is not authenticated. Please provide a non-empty authentication header {{.Header}}.",
+		"missing_authentication_header",
 	)
 )
 
