@@ -17,7 +17,7 @@ RUN go mod download
 COPY . .
 
 # Build arguments for versioning, please ensure to modify also in the Runtime stage below
-ARG BUILD_NUMBER=0.3.0
+ARG BUILD_NUMBER=0.4.0
 ARG BUILD_DATE
 ARG BUILD_PACKAGE=main
 
@@ -76,7 +76,7 @@ ENV PORT=8080 \
     TZ=UTC
 
 # Redeclare build ARGs for labels (ARGs don't cross stage boundaries)
-ARG BUILD_NUMBER=0.3.0
+ARG BUILD_NUMBER=0.4.0
 ARG BUILD_DATE
 
 # Labels for metadata
