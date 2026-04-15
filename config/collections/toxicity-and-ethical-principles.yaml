@@ -4,7 +4,7 @@ category: safety
 description: >
   End-to-end safety assessment covering three dimensions: toxic content generation targeting individuals or groups,
   tendency to produce false or misleading information, and alignment with ethical principles of helpfulness,
-  honesty, and harmlessness (HHH). Uses LM Evaluation Harness benchmarks toxigen, truthfulqa_mc1, and hhh_alignment.
+  honesty, and harmlessness (HHH). Uses LM Evaluation Harness benchmarks toxigen, truthfulqa_mc1, and bigbench_hhh_alignment_multiple_choice.
 tags:
   - toxicity
   - safety
@@ -42,7 +42,7 @@ benchmarks:
       # Optional secondary metric — not required to pass
       secondary_metric: mc2_acc
       secondary_threshold: 0.70
-  - id: hhh_alignment
+  - id: bigbench_hhh_alignment_multiple_choice
     provider_id: lm_evaluation_harness
     weight: 3 # High weight — safety-critical benchmark
     primary_score:

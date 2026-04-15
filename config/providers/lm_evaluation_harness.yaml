@@ -3054,7 +3054,7 @@ benchmarks:
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
-  - id: hhh_alignment
+  - id: bigbench_hhh_alignment_multiple_choice
     name: Helpfulness, honesty & harmlessness (HHH)
     description: >
       Tests whether the model selects responses that are helpful, honest, and harmless — evaluating alignment with core ethical principles across paired-response comparisons.
