@@ -30,7 +30,7 @@ eval-hub-server = "evalhub_server.main:main"
 [project.optional-dependencies]
 dev = [
     "ruff>=0.14.14",
-    "pytest>=8.0",
+    "pytest>=9.0.3",
     "mypy>=1.0",
     "pyyaml>=6.0",
     "types-PyYAML>=6.0",
