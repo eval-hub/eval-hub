@@ -11,6 +11,7 @@ const (
 	HTTPCodeNotFound            = 404
 	HTTPCodeMethodNotAllowed    = 405
 	HTTPCodeConflict            = 409
+	HTTPCodePayloadTooLarge     = 413
 	HTTPCodeInternalServerError = 500
 	HTTPCodeNotImplemented      = 501
 )

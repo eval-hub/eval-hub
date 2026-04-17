@@ -15,6 +15,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/http_wrappers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/k8s"
 	"github.com/eval-hub/eval-hub/internal/platform"
@@ -180,6 +181,10 @@ func (s *Server) loggerWithRequest(r *http.Request) (string, *slog.Logger) {
 	return requestID, enhancedLogger
 }
 
+func (s *Server) newRequestWrapper(w http.ResponseWriter, r *http.Request) http_wrappers.RequestWrapper {
+	return NewRequestWrapper(w, r, s.serviceConfig.Service.EffectiveMaxRequestBodyBytes())
+}
+
 func (s *Server) handleFunc(router *http.ServeMux, pattern string, handler func(http.ResponseWriter, *http.Request)) {
 	s.handle(router, pattern, http.HandlerFunc(handler))
 }
@@ -201,7 +206,7 @@ func (s *Server) setupHealthRoutes(h *handlers.Handlers, router *http.ServeMux) 
 	s.handleFunc(router, "/api/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
-		req := NewRequestWrapper(r)
+		req := s.newRequestWrapper(w, r)
 		switch req.Method() {
 		case http.MethodGet:
 			h.HandleHealth(ctx, req, resp, s.serviceConfig.Service.Build, s.serviceConfig.Service.BuildDate)
@@ -215,7 +220,7 @@ func (s *Server) setupEvaluationJobsRoutes(h *handlers.Handlers, router *http.Se
 	s.handleFunc(router, "/api/v1/evaluations/jobs", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
-		req := NewRequestWrapper(r)
+		req := s.newRequestWrapper(w, r)
 		switch r.Method {
 		case http.MethodPost:
 			h.HandleCreateEvaluation(ctx, req, resp)
@@ -231,7 +236,7 @@ func (s *Server) setupEvaluationJobEventsRoutes(h *handlers.Handlers, router *ht
 	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/jobs/{%s}/events", constants.PATH_PARAMETER_JOB_ID), func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
-		req := NewRequestWrapper(r)
+		req := s.newRequestWrapper(w, r)
 		switch r.Method {
 		case http.MethodPost:
 			h.HandleUpdateEvaluation(ctx, req, resp)
@@ -245,7 +250,7 @@ func (s *Server) setupEvaluationJobRoutes(h *handlers.Handlers, router *http.Ser
 	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/jobs/{%s}", constants.PATH_PARAMETER_JOB_ID), func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
-		req := NewRequestWrapper(r)
+		req := s.newRequestWrapper(w, r)
 		switch r.Method {
 		case http.MethodGet:
 			h.HandleGetEvaluation(ctx, req, resp)
@@ -261,7 +266,7 @@ func (s *Server) setupCollectionsRoutes(h *handlers.Handlers, router *http.Serve
 	s.handleFunc(router, "/api/v1/evaluations/collections", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
-		req := NewRequestWrapper(r)
+		req := s.newRequestWrapper(w, r)
 		switch r.Method {
 		case http.MethodPost:
 			h.HandleCreateCollection(ctx, req, resp)
@@ -277,7 +282,7 @@ func (s *Server) setupCollectionRoutes(h *handlers.Handlers, router *http.ServeM
 	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/collections/{%s}", constants.PATH_PARAMETER_COLLECTION_ID), func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
-		req := NewRequestWrapper(r)
+		req := s.newRequestWrapper(w, r)
 		switch r.Method {
 		case http.MethodGet:
 			h.HandleGetCollection(ctx, req, resp)
@@ -297,7 +302,7 @@ func (s *Server) setupProvidersRoutes(h *handlers.Handlers, router *http.ServeMu
 	s.handleFunc(router, "/api/v1/evaluations/providers", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
-		req := NewRequestWrapper(r)
+		req := s.newRequestWrapper(w, r)
 		switch r.Method {
 		case http.MethodGet:
 			h.HandleListProviders(ctx, req, resp)
@@ -313,7 +318,7 @@ func (s *Server) setupProviderRoutes(h *handlers.Handlers, router *http.ServeMux
 	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/providers/{%s}", constants.PATH_PARAMETER_PROVIDER_ID), func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
-		req := NewRequestWrapper(r)
+		req := s.newRequestWrapper(w, r)
 		switch r.Method {
 		case http.MethodGet:
 			h.HandleGetProvider(ctx, req, resp)
@@ -333,7 +338,7 @@ func (s *Server) setupOpenAPIRoutes(h *handlers.Handlers, router *http.ServeMux)
 	s.handleFunc(router, "/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
-		req := NewRequestWrapper(r)
+		req := s.newRequestWrapper(w, r)
 		switch r.Method {
 		case http.MethodGet:
 			h.HandleOpenAPI(ctx, req, resp)
@@ -347,7 +352,7 @@ func (s *Server) setupDocsRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, "/docs", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
-		req := NewRequestWrapper(r)
+		req := s.newRequestWrapper(w, r)
 		switch r.Method {
 		case http.MethodGet:
 			h.HandleDocs(ctx, req, resp)
@@ -431,6 +436,9 @@ func (s *Server) SetupRoutes() (http.Handler, error) {
 }
 
 func (s *Server) Start() error {
+	if err := s.serviceConfig.Service.ValidateHTTPConfig(); err != nil {
+		return err
+	}
 	if err := s.serviceConfig.Service.ValidateTLSConfig(); err != nil {
 		return err
 	}
@@ -445,11 +453,12 @@ func (s *Server) Start() error {
 	}
 	addr := net.JoinHostPort(host, strconv.Itoa(s.port))
 	s.httpServer = &http.Server{
-		Addr:         addr,
-		Handler:      handler,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:              addr,
+		Handler:           handler,
+		ReadTimeout:       15 * time.Second,
+		ReadHeaderTimeout: s.serviceConfig.Service.EffectiveReadHeaderTimeout(),
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 		TLSConfig: &tls.Config{
 			MinVersion: tls.VersionTLS12,
 			MaxVersion: tls.VersionTLS13,

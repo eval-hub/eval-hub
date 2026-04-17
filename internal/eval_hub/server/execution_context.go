@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/http_wrappers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -70,7 +72,12 @@ type ReqWrapper struct {
 	Request *http.Request
 }
 
-func NewRequestWrapper(req *http.Request) http_wrappers.RequestWrapper {
+// NewRequestWrapper wraps the request. When maxBodyBytes is >= 0, the body is limited with
+// [http.MaxBytesReader]. Pass -1 for maxBodyBytes to disable the limit.
+func NewRequestWrapper(w http.ResponseWriter, req *http.Request, maxBodyBytes int64) http_wrappers.RequestWrapper {
+	if maxBodyBytes >= 0 {
+		req.Body = http.MaxBytesReader(w, req.Body, maxBodyBytes)
+	}
 	return &ReqWrapper{
 		Request: req,
 	}
@@ -103,6 +110,10 @@ func (r *ReqWrapper) Header(key string) string {
 func (r *ReqWrapper) BodyAsBytes() ([]byte, error) {
 	bodyBytes, err := io.ReadAll(r.Request.Body)
 	if err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			return nil, serviceerrors.NewServiceError(messages.RequestBodyTooLarge, "Limit", maxErr.Limit)
+		}
 		return nil, err
 	}
 

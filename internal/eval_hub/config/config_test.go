@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 )
@@ -147,6 +148,50 @@ func TestServiceConfig_TLS(t *testing.T) {
 		}
 		if err := (&config.ServiceConfig{TLSKeyFile: "/k"}).ValidateTLSConfig(); err == nil {
 			t.Error("key only: want error")
+		}
+	})
+}
+
+func TestServiceConfig_HTTP(t *testing.T) {
+	t.Run("EffectiveReadHeaderTimeout default", func(t *testing.T) {
+		var c *config.ServiceConfig
+		if got := c.EffectiveReadHeaderTimeout(); got != 15*time.Second {
+			t.Errorf("nil ServiceConfig: got %v", got)
+		}
+		if got := (&config.ServiceConfig{}).EffectiveReadHeaderTimeout(); got != 15*time.Second {
+			t.Errorf("empty: got %v", got)
+		}
+	})
+	t.Run("EffectiveReadHeaderTimeout explicit", func(t *testing.T) {
+		c := &config.ServiceConfig{ReadHeaderTimeout: 3 * time.Second}
+		if got := c.EffectiveReadHeaderTimeout(); got != 3*time.Second {
+			t.Errorf("got %v", got)
+		}
+	})
+	t.Run("EffectiveMaxRequestBodyBytes", func(t *testing.T) {
+		var c *config.ServiceConfig
+		if got := c.EffectiveMaxRequestBodyBytes(); got != config.DefaultMaxRequestBodyBytes {
+			t.Errorf("nil: got %d", got)
+		}
+		if got := (&config.ServiceConfig{}).EffectiveMaxRequestBodyBytes(); got != config.DefaultMaxRequestBodyBytes {
+			t.Errorf("zero: got %d", got)
+		}
+		if got := (&config.ServiceConfig{MaxRequestBodyBytes: -1}).EffectiveMaxRequestBodyBytes(); got != -1 {
+			t.Errorf("unlimited: got %d", got)
+		}
+		if got := (&config.ServiceConfig{MaxRequestBodyBytes: 1024}).EffectiveMaxRequestBodyBytes(); got != 1024 {
+			t.Errorf("explicit: got %d", got)
+		}
+	})
+	t.Run("ValidateHTTPConfig", func(t *testing.T) {
+		if err := (&config.ServiceConfig{}).ValidateHTTPConfig(); err != nil {
+			t.Errorf("empty: %v", err)
+		}
+		if err := (&config.ServiceConfig{ReadHeaderTimeout: -1}).ValidateHTTPConfig(); err == nil {
+			t.Error("negative readheader: want error")
+		}
+		if err := (&config.ServiceConfig{MaxRequestBodyBytes: -2}).ValidateHTTPConfig(); err == nil {
+			t.Error("max body < -1: want error")
 		}
 	})
 }
