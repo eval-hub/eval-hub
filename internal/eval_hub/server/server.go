@@ -13,6 +13,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/http_wrappers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
@@ -220,6 +221,9 @@ func (s *Server) setupEvaluationJobsRoutes(h *handlers.Handlers, router *http.Se
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
 		req := s.newRequestWrapper(w, r)
+		if !s.canContinueRequest(ctx, resp) {
+			return
+		}
 		switch r.Method {
 		case http.MethodPost:
 			h.HandleCreateEvaluation(ctx, req, resp)
@@ -236,6 +240,9 @@ func (s *Server) setupEvaluationJobEventsRoutes(h *handlers.Handlers, router *ht
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
 		req := s.newRequestWrapper(w, r)
+		if !s.canContinueRequest(ctx, resp) {
+			return
+		}
 		switch r.Method {
 		case http.MethodPost:
 			h.HandleUpdateEvaluation(ctx, req, resp)
@@ -250,6 +257,9 @@ func (s *Server) setupEvaluationJobRoutes(h *handlers.Handlers, router *http.Ser
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
 		req := s.newRequestWrapper(w, r)
+		if !s.canContinueRequest(ctx, resp) {
+			return
+		}
 		switch r.Method {
 		case http.MethodGet:
 			h.HandleGetEvaluation(ctx, req, resp)
@@ -266,6 +276,9 @@ func (s *Server) setupCollectionsRoutes(h *handlers.Handlers, router *http.Serve
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
 		req := s.newRequestWrapper(w, r)
+		if !s.canContinueRequest(ctx, resp) {
+			return
+		}
 		switch r.Method {
 		case http.MethodPost:
 			h.HandleCreateCollection(ctx, req, resp)
@@ -302,6 +315,9 @@ func (s *Server) setupProvidersRoutes(h *handlers.Handlers, router *http.ServeMu
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
 		req := s.newRequestWrapper(w, r)
+		if !s.canContinueRequest(ctx, resp) {
+			return
+		}
 		switch r.Method {
 		case http.MethodGet:
 			h.HandleListProviders(ctx, req, resp)
@@ -318,6 +334,9 @@ func (s *Server) setupProviderRoutes(h *handlers.Handlers, router *http.ServeMux
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
 		req := s.newRequestWrapper(w, r)
+		if !s.canContinueRequest(ctx, resp) {
+			return
+		}
 		switch r.Method {
 		case http.MethodGet:
 			h.HandleGetProvider(ctx, req, resp)
@@ -360,6 +379,14 @@ func (s *Server) setupDocsRoutes(h *handlers.Handlers, router *http.ServeMux) {
 		}
 
 	})
+}
+
+func (s *Server) canContinueRequest(ctx *executioncontext.ExecutionContext, resp RespWrapper) bool {
+	if s.serviceConfig.IsAuthenticationEnabled() && ctx.Tenant == "" {
+		resp.ErrorWithMessageCode(ctx.RequestID, messages.MissingAuthenticationHeader, "Header", TENANT_HEADER)
+		return false
+	}
+	return true
 }
 
 func (s *Server) setupRoutes() (http.Handler, error) {
