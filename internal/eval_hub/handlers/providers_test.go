@@ -172,7 +172,7 @@ func TestHandleListProviders_ReturnsSystemProviders(t *testing.T) {
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleListProviders(ctx, req, resp)
 
@@ -222,7 +222,7 @@ func TestHandleListProviders_AppliesPaginationWhenLimitLessThanSystemProviders(t
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleListProviders(ctx, req, resp)
 
@@ -311,7 +311,7 @@ func TestHandleListProviders_FilterSystemProvidersWithCommaAndPipe(t *testing.T)
 			}
 			recorder := httptest.NewRecorder()
 			resp := MockResponseWrapper{recorder: recorder}
-			ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+			ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 			h.HandleListProviders(ctx, req, resp)
 
@@ -359,7 +359,7 @@ func TestHandleListProviders_ExcludesSystemProvidersWhenParamFalse(t *testing.T)
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleListProviders(ctx, req, resp)
 
@@ -398,7 +398,7 @@ func TestHandleListProviders_ExcludesBenchmarksWhenParamFalse(t *testing.T) {
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleListProviders(ctx, req, resp)
 
@@ -437,7 +437,7 @@ func TestHandleListProviders_ReturnsUserProvidersFromStorage(t *testing.T) {
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleListProviders(ctx, req, resp)
 
@@ -477,7 +477,7 @@ func TestHandleListProviders_ReturnsErrorWhenStorageFails(t *testing.T) {
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleListProviders(ctx, req, resp)
 
@@ -497,7 +497,7 @@ func TestHandleListProviders_Returns400WhenInvalidLimit(t *testing.T) {
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleListProviders(ctx, req, resp)
 
@@ -526,7 +526,7 @@ func TestHandleListProvidersReturnsEmptyForInvalidProviderID(t *testing.T) {
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleGetProvider(ctx, req, resp)
 
@@ -563,7 +563,7 @@ func TestHandleUpdateProvider(t *testing.T) {
 	req.SetBody([]byte(body))
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleUpdateProvider(ctx, req, resp)
 
@@ -601,7 +601,7 @@ func TestHandleUpdateProviderRejectsSystemProvider(t *testing.T) {
 	req.SetBody([]byte(body))
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleUpdateProvider(ctx, req, resp)
 
@@ -635,7 +635,7 @@ func TestHandlePatchProvider(t *testing.T) {
 	req.SetBody([]byte(body))
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandlePatchProvider(ctx, req, resp)
 
@@ -676,7 +676,7 @@ func TestHandlePatchProviderRejectsImmutablePaths(t *testing.T) {
 		req.SetBody([]byte(body))
 		recorder := httptest.NewRecorder()
 		resp := MockResponseWrapper{recorder: recorder}
-		ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+		ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 		h.HandlePatchProvider(ctx, req, resp)
 		if recorder.Code != 400 {
 			t.Errorf("path %q: expected 400, got %d body %s", path, recorder.Code, recorder.Body.String())
@@ -705,7 +705,7 @@ func TestHandlePatchProviderRejectsSystemProvider(t *testing.T) {
 	req.SetBody([]byte(body))
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandlePatchProvider(ctx, req, resp)
 
@@ -729,7 +729,7 @@ func TestHandleCreateProvider(t *testing.T) {
 	req.SetBody([]byte(body))
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleCreateProvider(ctx, req, resp)
 
@@ -760,7 +760,7 @@ func TestHandleDeleteProvider(t *testing.T) {
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleDeleteProvider(ctx, req, resp)
 
@@ -781,7 +781,7 @@ func TestHandleDeleteProvider_MissingPathParam(t *testing.T) {
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleDeleteProvider(ctx, req, resp)
 

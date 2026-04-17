@@ -14,7 +14,7 @@ import (
 //
 // The ExecutionContext contains:
 //   - Logger: A request-scoped logger with enriched fields (request_id, method, uri, etc.)
-//   - Evaluation-specific state: model info, timeouts, retries, metadata
+//   - User and tenant from the request when present
 type ExecutionContext struct {
 	Ctx       context.Context
 	RequestID string
@@ -29,7 +29,6 @@ func NewExecutionContext(
 	ctx context.Context,
 	requestID string,
 	logger *slog.Logger,
-	timeout time.Duration,
 	user api.User,
 	tenant api.Tenant,
 ) *ExecutionContext {

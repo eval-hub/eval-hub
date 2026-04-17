@@ -24,10 +24,8 @@ const (
 // is called at the route level before invoking evaluation-related handlers to set up
 // request-scoped context.
 //
-// The function automatically:
-//   - Enhances the logger with request-specific fields via logging.LoggerWithRequest
-//   - Sets default timeout (60 minutes) and retry attempts (3)
-//   - Initializes an empty metadata map
+// The function automatically enhances the logger with request-specific fields via
+// logging.LoggerWithRequest.
 //
 // This enables automatic request ID tracking (from X-Global-Transaction-Id header or
 // auto-generated UUID) and structured logging with consistent request metadata.
@@ -60,7 +58,6 @@ func (s *Server) newExecutionContext(r *http.Request) *executioncontext.Executio
 		r.Context(),
 		requestID,
 		enhancedLogger,
-		3,
 		api.User(user),
 		api.Tenant(tenant))
 }

@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
@@ -227,7 +226,7 @@ func TestHandleListCollections(t *testing.T) {
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleListCollections(ctx, req, resp)
 
@@ -350,7 +349,7 @@ func TestHandleListCollections_ReturnsStoredBenchmarkURL(t *testing.T) {
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleListCollections(ctx, req, resp)
 
@@ -396,7 +395,7 @@ func TestHandleGetCollection_ReturnsStoredBenchmarkURL(t *testing.T) {
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleGetCollection(ctx, req, resp)
 
@@ -431,7 +430,7 @@ func TestHandleListCollections_StorageError(t *testing.T) {
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleListCollections(ctx, req, resp)
 
@@ -476,7 +475,7 @@ func TestHandleCreateCollection(t *testing.T) {
 	req.SetBody([]byte(body))
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleCreateCollection(ctx, req, resp)
 
@@ -522,7 +521,7 @@ func TestHandleGetCollection(t *testing.T) {
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleGetCollection(ctx, req, resp)
 
@@ -551,7 +550,7 @@ func TestHandleGetCollection_MissingPathParam(t *testing.T) {
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleGetCollection(ctx, req, resp)
 
@@ -605,7 +604,7 @@ func TestHandleUpdateCollection(t *testing.T) {
 	req.SetBody([]byte(body))
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleUpdateCollection(ctx, req, resp)
 
@@ -696,7 +695,7 @@ func TestHandlePatchCollection_EnrichesFullBenchmarkElementBeforeStorage(t *test
 	req.SetBody([]byte(body))
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandlePatchCollection(ctx, req, resp)
 
@@ -758,7 +757,7 @@ func TestHandlePatchCollection_EnrichesFullBenchmarksArrayBeforeStorage(t *testi
 	req.SetBody([]byte(body))
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandlePatchCollection(ctx, req, resp)
 
@@ -806,7 +805,7 @@ func TestHandlePatchCollection(t *testing.T) {
 	req.SetBody([]byte(body))
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandlePatchCollection(ctx, req, resp)
 
@@ -827,7 +826,7 @@ func TestHandleDeleteCollection(t *testing.T) {
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "test-user", "test-tenant")
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 
 	h.HandleDeleteCollection(ctx, req, resp)
 
@@ -946,7 +945,7 @@ func TestCollectionHandlers_PropagateTenantAndOwner(t *testing.T) {
 			}
 			recorder := httptest.NewRecorder()
 			resp := MockResponseWrapper{recorder: recorder}
-			ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, time.Second, "my-user", "my-tenant")
+			ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "my-user", "my-tenant")
 
 			tt.handler(h, ctx, req, resp)
 
