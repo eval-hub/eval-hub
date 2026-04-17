@@ -20,12 +20,6 @@ secrets:
 env_mappings:
   PORT: service.port
   API_HOST: service.host
-  READ_TIMEOUT: service.read_timeout
-  WRITE_TIMEOUT: service.write_timeout
-  IDLE_TIMEOUT: service.idle_timeout
-  READ_HEADER_TIMEOUT: service.read_header_timeout
-  MAX_HEADER_BYTES: service.max_header_bytes
-  MAX_REQUEST_BODY_BYTES: service.max_request_body_bytes
   TLS_CERT_FILE: service.tls_cert_file
   TLS_KEY_FILE: service.tls_key_file
   DB_URL: database.url
