@@ -168,6 +168,38 @@ func TestServiceConfig_HTTP(t *testing.T) {
 			t.Errorf("got %v", got)
 		}
 	})
+	t.Run("EffectiveReadWriteIdleTimeout defaults", func(t *testing.T) {
+		var c *config.ServiceConfig
+		if got := c.EffectiveReadTimeout(); got != 15*time.Second {
+			t.Errorf("ReadTimeout nil: got %v", got)
+		}
+		if got := c.EffectiveWriteTimeout(); got != 15*time.Second {
+			t.Errorf("WriteTimeout nil: got %v", got)
+		}
+		if got := c.EffectiveIdleTimeout(); got != 60*time.Second {
+			t.Errorf("IdleTimeout nil: got %v", got)
+		}
+		empty := &config.ServiceConfig{}
+		if got := empty.EffectiveReadTimeout(); got != 15*time.Second {
+			t.Errorf("ReadTimeout empty: got %v", got)
+		}
+		if got := empty.EffectiveWriteTimeout(); got != 15*time.Second {
+			t.Errorf("WriteTimeout empty: got %v", got)
+		}
+		if got := empty.EffectiveIdleTimeout(); got != 60*time.Second {
+			t.Errorf("IdleTimeout empty: got %v", got)
+		}
+	})
+	t.Run("EffectiveReadWriteIdleTimeout explicit", func(t *testing.T) {
+		c := &config.ServiceConfig{
+			ReadTimeout:  30 * time.Second,
+			WriteTimeout: 45 * time.Second,
+			IdleTimeout:  120 * time.Second,
+		}
+		if c.EffectiveReadTimeout() != 30*time.Second || c.EffectiveWriteTimeout() != 45*time.Second || c.EffectiveIdleTimeout() != 120*time.Second {
+			t.Errorf("got read=%v write=%v idle=%v", c.EffectiveReadTimeout(), c.EffectiveWriteTimeout(), c.EffectiveIdleTimeout())
+		}
+	})
 	t.Run("EffectiveMaxRequestBodyBytes", func(t *testing.T) {
 		var c *config.ServiceConfig
 		if got := c.EffectiveMaxRequestBodyBytes(); got != config.DefaultMaxRequestBodyBytes {
@@ -186,6 +218,15 @@ func TestServiceConfig_HTTP(t *testing.T) {
 	t.Run("ValidateHTTPConfig", func(t *testing.T) {
 		if err := (&config.ServiceConfig{}).ValidateHTTPConfig(); err != nil {
 			t.Errorf("empty: %v", err)
+		}
+		if err := (&config.ServiceConfig{ReadTimeout: -1}).ValidateHTTPConfig(); err == nil {
+			t.Error("negative read_timeout: want error")
+		}
+		if err := (&config.ServiceConfig{WriteTimeout: -1}).ValidateHTTPConfig(); err == nil {
+			t.Error("negative write_timeout: want error")
+		}
+		if err := (&config.ServiceConfig{IdleTimeout: -1}).ValidateHTTPConfig(); err == nil {
+			t.Error("negative idle_timeout: want error")
 		}
 		if err := (&config.ServiceConfig{ReadHeaderTimeout: -1}).ValidateHTTPConfig(); err == nil {
 			t.Error("negative readheader: want error")

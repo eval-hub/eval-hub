@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/eval-hub/eval-hub/auth"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
@@ -455,10 +454,10 @@ func (s *Server) Start() error {
 	s.httpServer = &http.Server{
 		Addr:              addr,
 		Handler:           handler,
-		ReadTimeout:       15 * time.Second,
+		ReadTimeout:       s.serviceConfig.Service.EffectiveReadTimeout(),
 		ReadHeaderTimeout: s.serviceConfig.Service.EffectiveReadHeaderTimeout(),
-		WriteTimeout:      15 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		WriteTimeout:      s.serviceConfig.Service.EffectiveWriteTimeout(),
+		IdleTimeout:       s.serviceConfig.Service.EffectiveIdleTimeout(),
 		TLSConfig: &tls.Config{
 			MinVersion: tls.VersionTLS12,
 			MaxVersion: tls.VersionTLS13,

@@ -21,6 +21,12 @@ type ServiceConfig struct {
 	DisableAuth     bool   `mapstructure:"disable_auth,omitempty"`
 	TLSCertFile     string `mapstructure:"tls_cert_file,omitempty"`
 	TLSKeyFile      string `mapstructure:"tls_key_file,omitempty"`
+	// ReadTimeout is http.Server ReadTimeout (entire request read). Zero uses default (15s).
+	ReadTimeout time.Duration `mapstructure:"read_timeout,omitempty"`
+	// WriteTimeout is http.Server WriteTimeout. Zero uses default (15s).
+	WriteTimeout time.Duration `mapstructure:"write_timeout,omitempty"`
+	// IdleTimeout is http.Server IdleTimeout. Zero uses default (60s).
+	IdleTimeout time.Duration `mapstructure:"idle_timeout,omitempty"`
 	// ReadHeaderTimeout is the HTTP server ReadHeaderTimeout (time to read request headers).
 	// Zero means use the default (15s), matching the server read timeout.
 	ReadHeaderTimeout time.Duration `mapstructure:"read_header_timeout,omitempty"`
@@ -43,7 +49,36 @@ func (c *ServiceConfig) ValidateTLSConfig() error {
 	return nil
 }
 
-const defaultReadHeaderTimeout = 15 * time.Second
+const (
+	defaultReadTimeout       = 15 * time.Second
+	defaultWriteTimeout      = 15 * time.Second
+	defaultIdleTimeout       = 60 * time.Second
+	defaultReadHeaderTimeout = 15 * time.Second
+)
+
+// EffectiveReadTimeout returns http.Server ReadTimeout. When unset or non-positive, returns 15s.
+func (c *ServiceConfig) EffectiveReadTimeout() time.Duration {
+	if c == nil || c.ReadTimeout <= 0 {
+		return defaultReadTimeout
+	}
+	return c.ReadTimeout
+}
+
+// EffectiveWriteTimeout returns http.Server WriteTimeout. When unset or non-positive, returns 15s.
+func (c *ServiceConfig) EffectiveWriteTimeout() time.Duration {
+	if c == nil || c.WriteTimeout <= 0 {
+		return defaultWriteTimeout
+	}
+	return c.WriteTimeout
+}
+
+// EffectiveIdleTimeout returns http.Server IdleTimeout. When unset or non-positive, returns 60s.
+func (c *ServiceConfig) EffectiveIdleTimeout() time.Duration {
+	if c == nil || c.IdleTimeout <= 0 {
+		return defaultIdleTimeout
+	}
+	return c.IdleTimeout
+}
 
 // EffectiveReadHeaderTimeout returns the HTTP server ReadHeaderTimeout. When unset or
 // non-positive, it matches the default read timeout used by the server (15s).
@@ -72,6 +107,15 @@ func (c *ServiceConfig) EffectiveMaxRequestBodyBytes() int64 {
 func (c *ServiceConfig) ValidateHTTPConfig() error {
 	if c == nil {
 		return nil
+	}
+	if c.ReadTimeout < 0 {
+		return fmt.Errorf("service.read_timeout must not be negative")
+	}
+	if c.WriteTimeout < 0 {
+		return fmt.Errorf("service.write_timeout must not be negative")
+	}
+	if c.IdleTimeout < 0 {
+		return fmt.Errorf("service.idle_timeout must not be negative")
 	}
 	if c.ReadHeaderTimeout < 0 {
 		return fmt.Errorf("service.read_header_timeout must not be negative")
