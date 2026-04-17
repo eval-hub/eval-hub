@@ -3,7 +3,7 @@
   "info": {
     "title": "Eval Hub",
     "description": "API REST server for evaluation backend orchestration",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "contact": {
       "name": "API Support"
     },
