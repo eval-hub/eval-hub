@@ -1,7 +1,9 @@
 package config_test
 
 import (
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 )
@@ -147,6 +149,106 @@ func TestServiceConfig_TLS(t *testing.T) {
 		}
 		if err := (&config.ServiceConfig{TLSKeyFile: "/k"}).ValidateTLSConfig(); err == nil {
 			t.Error("key only: want error")
+		}
+	})
+}
+
+func TestServiceConfig_HTTP(t *testing.T) {
+	t.Run("EffectiveReadHeaderTimeout default", func(t *testing.T) {
+		var c *config.ServiceConfig
+		if got := c.EffectiveReadHeaderTimeout(); got != 15*time.Second {
+			t.Errorf("nil ServiceConfig: got %v", got)
+		}
+		if got := (&config.ServiceConfig{}).EffectiveReadHeaderTimeout(); got != 15*time.Second {
+			t.Errorf("empty: got %v", got)
+		}
+	})
+	t.Run("EffectiveReadHeaderTimeout explicit", func(t *testing.T) {
+		c := &config.ServiceConfig{ReadHeaderTimeout: 3 * time.Second}
+		if got := c.EffectiveReadHeaderTimeout(); got != 3*time.Second {
+			t.Errorf("got %v", got)
+		}
+	})
+	t.Run("EffectiveReadWriteIdleTimeout defaults", func(t *testing.T) {
+		var c *config.ServiceConfig
+		if got := c.EffectiveReadTimeout(); got != 15*time.Second {
+			t.Errorf("ReadTimeout nil: got %v", got)
+		}
+		if got := c.EffectiveWriteTimeout(); got != 15*time.Second {
+			t.Errorf("WriteTimeout nil: got %v", got)
+		}
+		if got := c.EffectiveIdleTimeout(); got != 60*time.Second {
+			t.Errorf("IdleTimeout nil: got %v", got)
+		}
+		empty := &config.ServiceConfig{}
+		if got := empty.EffectiveReadTimeout(); got != 15*time.Second {
+			t.Errorf("ReadTimeout empty: got %v", got)
+		}
+		if got := empty.EffectiveWriteTimeout(); got != 15*time.Second {
+			t.Errorf("WriteTimeout empty: got %v", got)
+		}
+		if got := empty.EffectiveIdleTimeout(); got != 60*time.Second {
+			t.Errorf("IdleTimeout empty: got %v", got)
+		}
+	})
+	t.Run("EffectiveReadWriteIdleTimeout explicit", func(t *testing.T) {
+		c := &config.ServiceConfig{
+			ReadTimeout:  30 * time.Second,
+			WriteTimeout: 45 * time.Second,
+			IdleTimeout:  120 * time.Second,
+		}
+		if c.EffectiveReadTimeout() != 30*time.Second || c.EffectiveWriteTimeout() != 45*time.Second || c.EffectiveIdleTimeout() != 120*time.Second {
+			t.Errorf("got read=%v write=%v idle=%v", c.EffectiveReadTimeout(), c.EffectiveWriteTimeout(), c.EffectiveIdleTimeout())
+		}
+	})
+	t.Run("EffectiveMaxHeaderBytes", func(t *testing.T) {
+		var c *config.ServiceConfig
+		if got := c.EffectiveMaxHeaderBytes(); got != http.DefaultMaxHeaderBytes {
+			t.Errorf("nil: got %d want %d", got, http.DefaultMaxHeaderBytes)
+		}
+		if got := (&config.ServiceConfig{}).EffectiveMaxHeaderBytes(); got != http.DefaultMaxHeaderBytes {
+			t.Errorf("empty: got %d want %d", got, http.DefaultMaxHeaderBytes)
+		}
+		if got := (&config.ServiceConfig{MaxHeaderBytes: 8192}).EffectiveMaxHeaderBytes(); got != 8192 {
+			t.Errorf("explicit: got %d", got)
+		}
+	})
+	t.Run("EffectiveMaxRequestBodyBytes", func(t *testing.T) {
+		var c *config.ServiceConfig
+		if got := c.EffectiveMaxRequestBodyBytes(); got != config.DefaultMaxRequestBodyBytes {
+			t.Errorf("nil: got %d", got)
+		}
+		if got := (&config.ServiceConfig{}).EffectiveMaxRequestBodyBytes(); got != config.DefaultMaxRequestBodyBytes {
+			t.Errorf("zero: got %d", got)
+		}
+		if got := (&config.ServiceConfig{MaxRequestBodyBytes: -1}).EffectiveMaxRequestBodyBytes(); got != -1 {
+			t.Errorf("unlimited: got %d", got)
+		}
+		if got := (&config.ServiceConfig{MaxRequestBodyBytes: 1024}).EffectiveMaxRequestBodyBytes(); got != 1024 {
+			t.Errorf("explicit: got %d", got)
+		}
+	})
+	t.Run("ValidateHTTPConfig", func(t *testing.T) {
+		if err := (&config.ServiceConfig{}).ValidateHTTPConfig(); err != nil {
+			t.Errorf("empty: %v", err)
+		}
+		if err := (&config.ServiceConfig{ReadTimeout: -1}).ValidateHTTPConfig(); err == nil {
+			t.Error("negative read_timeout: want error")
+		}
+		if err := (&config.ServiceConfig{WriteTimeout: -1}).ValidateHTTPConfig(); err == nil {
+			t.Error("negative write_timeout: want error")
+		}
+		if err := (&config.ServiceConfig{IdleTimeout: -1}).ValidateHTTPConfig(); err == nil {
+			t.Error("negative idle_timeout: want error")
+		}
+		if err := (&config.ServiceConfig{ReadHeaderTimeout: -1}).ValidateHTTPConfig(); err == nil {
+			t.Error("negative readheader: want error")
+		}
+		if err := (&config.ServiceConfig{MaxHeaderBytes: -1}).ValidateHTTPConfig(); err == nil {
+			t.Error("negative max_header_bytes: want error")
+		}
+		if err := (&config.ServiceConfig{MaxRequestBodyBytes: -2}).ValidateHTTPConfig(); err == nil {
+			t.Error("max body < -1: want error")
 		}
 	})
 }

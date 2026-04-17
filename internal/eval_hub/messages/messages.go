@@ -65,6 +65,13 @@ var (
 		"job_can_not_be_updated",
 	)
 
+	// RequestBodyTooLarge The request body exceeds the maximum allowed size of {{.Limit}} bytes.
+	RequestBodyTooLarge = createMessage(
+		constants.HTTPCodePayloadTooLarge,
+		"The request body exceeds the maximum allowed size of {{.Limit}} bytes.",
+		"request_body_too_large",
+	)
+
 	// InvalidJSONRequest The request JSON is invalid: '{{.Error}}'. Please check the request and try again.
 	InvalidJSONRequest = createMessage(
 		constants.HTTPCodeBadRequest,

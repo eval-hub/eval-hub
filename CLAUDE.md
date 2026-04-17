@@ -69,6 +69,17 @@ make grant-permissions  # Grant permissions to user
 make clean              # Remove build artifacts and coverage files
 ```
 
+## Git commits
+
+Use [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, etc., with an optional scope (e.g. `feat(http): …`).
+
+When a change is assisted by Cursor, add these lines to the **end** of the commit message body (after the subject and any description), as Git trailers:
+
+```
+Assisted-by: Cursor
+Made-with: Cursor
+```
+
 ## Architecture Overview
 
 ### Project Structure
@@ -172,7 +183,7 @@ Example (matches `setupEvaluationJobsRoutes`):
 s.handleFunc(router, "/api/v1/evaluations/jobs", func(w http.ResponseWriter, r *http.Request) {
     ctx := s.newExecutionContext(r)
     resp := NewRespWrapper(w, ctx)
-    req := NewRequestWrapper(r)
+    req := s.newRequestWrapper(w, r)
     switch r.Method {
     case http.MethodPost:
         h.HandleCreateEvaluation(ctx, req, resp)
