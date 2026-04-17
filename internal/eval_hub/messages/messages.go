@@ -232,7 +232,7 @@ var (
 		"unable_to_authorize_request",
 	)
 
-	// Unauthorized The request is not authenticated.'.
+	// Unauthorized The request is not authenticated.
 	Unauthorized = createMessage(
 		constants.HTTPCodeUnauthorized,
 		"The request is not authenticated.",
