@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"net/http"
 	"testing"
 	"time"
 
@@ -200,6 +201,18 @@ func TestServiceConfig_HTTP(t *testing.T) {
 			t.Errorf("got read=%v write=%v idle=%v", c.EffectiveReadTimeout(), c.EffectiveWriteTimeout(), c.EffectiveIdleTimeout())
 		}
 	})
+	t.Run("EffectiveMaxHeaderBytes", func(t *testing.T) {
+		var c *config.ServiceConfig
+		if got := c.EffectiveMaxHeaderBytes(); got != http.DefaultMaxHeaderBytes {
+			t.Errorf("nil: got %d want %d", got, http.DefaultMaxHeaderBytes)
+		}
+		if got := (&config.ServiceConfig{}).EffectiveMaxHeaderBytes(); got != http.DefaultMaxHeaderBytes {
+			t.Errorf("empty: got %d want %d", got, http.DefaultMaxHeaderBytes)
+		}
+		if got := (&config.ServiceConfig{MaxHeaderBytes: 8192}).EffectiveMaxHeaderBytes(); got != 8192 {
+			t.Errorf("explicit: got %d", got)
+		}
+	})
 	t.Run("EffectiveMaxRequestBodyBytes", func(t *testing.T) {
 		var c *config.ServiceConfig
 		if got := c.EffectiveMaxRequestBodyBytes(); got != config.DefaultMaxRequestBodyBytes {
@@ -230,6 +243,9 @@ func TestServiceConfig_HTTP(t *testing.T) {
 		}
 		if err := (&config.ServiceConfig{ReadHeaderTimeout: -1}).ValidateHTTPConfig(); err == nil {
 			t.Error("negative readheader: want error")
+		}
+		if err := (&config.ServiceConfig{MaxHeaderBytes: -1}).ValidateHTTPConfig(); err == nil {
+			t.Error("negative max_header_bytes: want error")
 		}
 		if err := (&config.ServiceConfig{MaxRequestBodyBytes: -2}).ValidateHTTPConfig(); err == nil {
 			t.Error("max body < -1: want error")

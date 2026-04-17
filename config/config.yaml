@@ -9,6 +9,7 @@ service:
   # write_timeout: 15s      # http.Server WriteTimeout; omit or 0 for default (15s)
   # idle_timeout: 60s       # http.Server IdleTimeout; omit or 0 for default (60s)
   # read_header_timeout: 15s   # HTTP server ReadHeaderTimeout; omit or 0 for default (15s)
+  # max_header_bytes: 1048576    # http.Server MaxHeaderBytes; omit or 0 for default (1 MiB, net/http default)
   # max_request_body_bytes: 10485760  # default 10 MiB when omitted or 0; use -1 to disable the limit
 # These are here so that the config can be loaded from the secrets directory when needed
 secrets:
@@ -23,6 +24,7 @@ env_mappings:
   WRITE_TIMEOUT: service.write_timeout
   IDLE_TIMEOUT: service.idle_timeout
   READ_HEADER_TIMEOUT: service.read_header_timeout
+  MAX_HEADER_BYTES: service.max_header_bytes
   MAX_REQUEST_BODY_BYTES: service.max_request_body_bytes
   TLS_CERT_FILE: service.tls_cert_file
   TLS_KEY_FILE: service.tls_key_file

@@ -458,6 +458,7 @@ func (s *Server) Start() error {
 		ReadHeaderTimeout: s.serviceConfig.Service.EffectiveReadHeaderTimeout(),
 		WriteTimeout:      s.serviceConfig.Service.EffectiveWriteTimeout(),
 		IdleTimeout:       s.serviceConfig.Service.EffectiveIdleTimeout(),
+		MaxHeaderBytes:    s.serviceConfig.Service.EffectiveMaxHeaderBytes(),
 		TLSConfig: &tls.Config{
 			MinVersion: tls.VersionTLS12,
 			MaxVersion: tls.VersionTLS13,

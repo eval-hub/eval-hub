@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/http"
 	"time"
 )
 
@@ -30,6 +31,9 @@ type ServiceConfig struct {
 	// ReadHeaderTimeout is the HTTP server ReadHeaderTimeout (time to read request headers).
 	// Zero means use the default (15s), matching the server read timeout.
 	ReadHeaderTimeout time.Duration `mapstructure:"read_header_timeout,omitempty"`
+	// MaxHeaderBytes is http.Server MaxHeaderBytes (bytes allowed for request headers). Zero uses
+	// [http.DefaultMaxHeaderBytes] (1 MiB), matching the net/http default when unset.
+	MaxHeaderBytes int `mapstructure:"max_header_bytes,omitempty"`
 	// MaxRequestBodyBytes limits incoming request bodies via http.MaxBytesReader.
 	// Zero or unset uses DefaultMaxRequestBodyBytes. -1 disables the limit.
 	MaxRequestBodyBytes int64 `mapstructure:"max_request_body_bytes,omitempty"`
@@ -89,6 +93,15 @@ func (c *ServiceConfig) EffectiveReadHeaderTimeout() time.Duration {
 	return c.ReadHeaderTimeout
 }
 
+// EffectiveMaxHeaderBytes returns http.Server MaxHeaderBytes. When unset or non-positive, returns
+// [http.DefaultMaxHeaderBytes] (1 MiB).
+func (c *ServiceConfig) EffectiveMaxHeaderBytes() int {
+	if c == nil || c.MaxHeaderBytes <= 0 {
+		return http.DefaultMaxHeaderBytes
+	}
+	return c.MaxHeaderBytes
+}
+
 // EffectiveMaxRequestBodyBytes returns the limit for http.MaxBytesReader; -1 means no limit.
 func (c *ServiceConfig) EffectiveMaxRequestBodyBytes() int64 {
 	if c == nil {
@@ -119,6 +132,9 @@ func (c *ServiceConfig) ValidateHTTPConfig() error {
 	}
 	if c.ReadHeaderTimeout < 0 {
 		return fmt.Errorf("service.read_header_timeout must not be negative")
+	}
+	if c.MaxHeaderBytes < 0 {
+		return fmt.Errorf("service.max_header_bytes must not be negative")
 	}
 	if c.MaxRequestBodyBytes < -1 {
 		return fmt.Errorf("service.max_request_body_bytes must be -1 (unlimited) or >= 0")
