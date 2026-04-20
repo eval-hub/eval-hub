@@ -143,6 +143,25 @@ func TestHandleDocs(t *testing.T) {
 		}
 	})
 
+	t.Run("SWAGGER_VERSION header can not insert malicious code", func(t *testing.T) {
+		badScript := `<script>alert("Hello, world!");</script>`
+		ctx := createExecutionContext()
+		req := createMockRequest("GET", "/docs")
+		req.SetHeader("SWAGGER_VERSION", badScript)
+		w := httptest.NewRecorder()
+
+		h.HandleDocs(ctx, req, &MockResponseWrapper{w})
+
+		body := w.Body.String()
+		if !strings.Contains(body, "swagger-ui-dist@&lt;script&gt;") {
+			snippet := body
+			if len(snippet) > 200 {
+				snippet = snippet[:200]
+			}
+			t.Fatalf("expected custom Swagger UI version in HTML, got body snippet: %s", snippet)
+		}
+	})
+
 	t.Run("base URL strips request path for spec URL", func(t *testing.T) {
 		ctx := createExecutionContext()
 		req := &MockRequest{
