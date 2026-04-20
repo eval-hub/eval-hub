@@ -39,6 +39,7 @@ func createMockRequest(method string, uri string) *MockRequest {
 type MockRequest struct {
 	TestMethod string
 	TestURI    string
+	TestPath   string
 	headers    map[string]string
 }
 
@@ -51,6 +52,9 @@ func (r *MockRequest) URI() string {
 }
 
 func (r *MockRequest) Path() string {
+	if r.TestPath != "" {
+		return r.TestPath
+	}
 	return ""
 }
 
