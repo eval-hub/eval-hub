@@ -10,13 +10,22 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 )
 
-func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+var (
+	noCacheHeaders = map[string]string{
+		"Cache-Control": "no-cache, no-store, must-revalidate",
+		"Pragma":        "no-cache",
+		"Expires":       "0",
+	}
+)
 
+func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	// Determine content type based on Accept header
+	file := "openapi.yaml"
 	accept := r.Header("Accept")
 	contentType := "application/yaml"
 	if strings.Contains(accept, "application/json") {
 		contentType = "application/json"
+		file = "openapi.json"
 	}
 
 	w.SetHeader("Content-Type", contentType)
@@ -24,10 +33,10 @@ func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_
 	// Find the OpenAPI spec file relative to the working directory
 	// Try multiple possible locations
 	possiblePaths := []string{
-		filepath.Join("docs", "openapi.yaml"),
-		filepath.Join("..", "docs", "openapi.yaml"),
-		filepath.Join("..", "..", "docs", "openapi.yaml"),
-		filepath.Join("..", "..", "..", "docs", "openapi.yaml"),
+		filepath.Join("docs", file),
+		filepath.Join("..", "docs", file),
+		filepath.Join("..", "..", "docs", file),
+		filepath.Join("..", "..", "..", "docs", file),
 	}
 
 	var paths []string
@@ -51,7 +60,7 @@ func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_
 		exePath, _ := os.Executable()
 		if exePath != "" {
 			exeDir := filepath.Dir(exePath)
-			specPath := filepath.Join(exeDir, "docs", "openapi.yaml")
+			specPath := filepath.Join(exeDir, "docs", file)
 			paths = append(paths, specPath)
 			spec, err = os.ReadFile(specPath)
 		}
@@ -67,15 +76,19 @@ func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_
 }
 
 func (h *Handlers) HandleDocs(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+	// Get the base URL for the OpenAPI spec (so without the "/docs" path)
+	baseURL := strings.TrimSuffix(r.URI(), r.Path())
 
-	// Get the base URL for the OpenAPI spec
-	baseURL := r.URI()
+	swaggerVersion := "5.32.4"
+	if r.Header("SWAGGER_VERSION") != "" {
+		swaggerVersion = r.Header("SWAGGER_VERSION")
+	}
 
 	html := `<!DOCTYPE html>
 <html>
 <head>
-  <title>Eval Hub Backend Service API Documentation</title>
-  <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css" />
+  <title>Eval Hub API Documentation</title>
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@` + swaggerVersion + `/swagger-ui.css" />
   <style>
     html {
       box-sizing: border-box;
@@ -93,8 +106,8 @@ func (h *Handlers) HandleDocs(ctx *executioncontext.ExecutionContext, r http_wra
 </head>
 <body>
   <div id="swagger-ui"></div>
-  <script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-bundle.js"></script>
-  <script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-standalone-preset.js"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@` + swaggerVersion + `/swagger-ui-bundle.js"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@` + swaggerVersion + `/swagger-ui-standalone-preset.js"></script>
   <script>
     window.onload = function() {
       const ui = SwaggerUIBundle({
@@ -115,6 +128,9 @@ func (h *Handlers) HandleDocs(ctx *executioncontext.ExecutionContext, r http_wra
 </body>
 </html>`
 
+	for key, value := range noCacheHeaders {
+		w.SetHeader(key, value)
+	}
 	w.SetHeader("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(html))
 }

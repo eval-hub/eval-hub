@@ -48,7 +48,7 @@ FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:late
 # Create user and app directory
 RUN groupadd -g 1000 evalhub && \
     useradd -u 1000 -g evalhub -s /bin/bash -m evalhub && \
-    mkdir -p /app/config && \
+    mkdir -p /app/docs && \
     chown -R evalhub:evalhub /app
 
 # Copy both binaries from builder
@@ -56,11 +56,8 @@ COPY --from=builder --chown=evalhub:evalhub /build/eval-hub /app/eval-hub
 COPY --from=builder --chown=evalhub:evalhub /build/eval-runtime-sidecar /app/eval-runtime-sidecar
 COPY --from=builder --chown=evalhub:evalhub /build/eval-runtime-init /app/eval-runtime-init
 
-
-# The config file should not really be part of the image.
-COPY --chown=evalhub:evalhub config/config.yaml /app/config/config.yaml
-COPY --chown=evalhub:evalhub config/providers /app/config/providers
-COPY --chown=evalhub:evalhub config/collections /app/config/collections
+# The swagger source files required for the openapi.yaml and docs
+COPY --chown=evalhub:evalhub docs/openapi.* /app/docs/
 
 # Set working directory
 WORKDIR /app
@@ -88,6 +85,7 @@ LABEL org.opencontainers.image.title="eval-hub" \
       org.opencontainers.image.vendor="eval-hub"
 
 # Health check removed - wget not available without package installation
+HEALTHCHECK NONE
 
 # Run the binary
 CMD ["/app/eval-hub"]
