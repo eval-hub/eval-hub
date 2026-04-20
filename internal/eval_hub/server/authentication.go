@@ -33,7 +33,7 @@ func WithAuthentication(next http.Handler, logger *slog.Logger, client *kubernet
 		resp, ok, err := authn.AuthenticateRequest(r)
 		if err != nil {
 			logger.Error("Error authenticating request", "error", err)
-			writeError(w, messages.Unauthorized, "Error", err.Error())
+			writeError(w, messages.Unauthorized)
 			return
 		}
 		if !ok {
