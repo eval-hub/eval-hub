@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"html/template"
 	"os"
 	"path/filepath"
 	"strings"
@@ -83,6 +84,7 @@ func (h *Handlers) HandleDocs(ctx *executioncontext.ExecutionContext, r http_wra
 	if r.Header("SWAGGER_VERSION") != "" {
 		swaggerVersion = r.Header("SWAGGER_VERSION")
 	}
+	swaggerVersion = template.HTMLEscapeString(swaggerVersion)
 
 	html := `<!DOCTYPE html>
 <html>
