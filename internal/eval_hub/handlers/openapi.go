@@ -22,14 +22,12 @@ var (
 func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	// Determine content type based on Accept header
 	file := "openapi.yaml"
-	accept := r.Header("Accept")
 	contentType := "application/yaml"
-	if strings.Contains(accept, "application/json") {
-		contentType = "application/json"
-		file = "openapi.json"
-	}
 
-	w.SetHeader("Content-Type", contentType)
+	if strings.Contains(r.Header("Accept"), "application/json") {
+		file = "openapi.json"
+		contentType = "application/json"
+	}
 
 	// Find the OpenAPI spec file relative to the working directory
 	// Try multiple possible locations
@@ -71,6 +69,11 @@ func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_
 		ctx.Logger.Error("Failed to read OpenAPI spec", "paths", paths, "error", err.Error())
 		w.ErrorWithMessageCode(ctx.RequestID, messages.InternalServerError, "Error", err.Error())
 		return
+	}
+
+	w.SetHeader("Content-Type", contentType)
+	for key, value := range noCacheHeaders {
+		w.SetHeader(key, value)
 	}
 
 	w.Write(spec)
