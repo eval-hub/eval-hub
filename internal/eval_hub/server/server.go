@@ -295,6 +295,9 @@ func (s *Server) setupCollectionRoutes(h *handlers.Handlers, router *http.ServeM
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
 		req := s.newRequestWrapper(w, r)
+		if !s.canContinueRequest(ctx, resp) {
+			return
+		}
 		switch r.Method {
 		case http.MethodGet:
 			h.HandleGetCollection(ctx, req, resp)
