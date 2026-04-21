@@ -66,6 +66,19 @@ func sidecarForJobPod(cfg *config.Config, jc *jobConfig, evaluationModelURL stri
 				export.Model.AuthCACertPath = modelAuthMountPath + "/" + modelAuthSecretCACertFile
 			}
 		}
+
+		// Hugging Face Hub proxy: default public Hub URL; optional hf-token from model.auth.secret_ref (gated assets).
+		if strings.TrimSpace(evaluationModelURL) != "" || jc.modelAuthSecretRef != "" {
+			if export.HuggingFace == nil {
+				export.HuggingFace = &config.SidecarHuggingFaceConfig{}
+			}
+			if strings.TrimSpace(export.HuggingFace.URL) == "" {
+				export.HuggingFace.URL = "https://huggingface.co"
+			}
+			if jc.modelAuthSecretRef != "" {
+				export.HuggingFace.TokenPath = modelAuthMountPath + "/" + modelAuthSecretHFTokenFile
+			}
+		}
 	}
 
 	return export, nil
@@ -87,6 +100,10 @@ func cloneSidecarConfig(sc *config.SidecarConfig) *config.SidecarConfig {
 	if sc.Model != nil {
 		md := *sc.Model
 		out.Model = &md
+	}
+	if sc.HuggingFace != nil {
+		hf := *sc.HuggingFace
+		out.HuggingFace = &hf
 	}
 	if sc.OCI != nil {
 		oci := *sc.OCI

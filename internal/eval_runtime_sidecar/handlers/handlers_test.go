@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_runtime_sidecar/proxy"
 )
 
 func TestNew(t *testing.T) {
@@ -80,6 +81,31 @@ func TestNew(t *testing.T) {
 		}
 		if h.modelProxy == nil {
 			t.Fatal("expected non-nil modelProxy")
+		}
+		if h.huggingFaceProxy != nil {
+			t.Error("expected nil huggingFaceProxy when Hugging Face proxy not configured")
+		}
+	})
+
+	t.Run("returns Handlers with Hugging Face proxy when sidecar.huggingface set", func(t *testing.T) {
+		cfg := &config.Config{
+			Sidecar: &config.SidecarConfig{
+				EvalHub: &config.EvalHubClientConfig{
+					BaseURL:            "http://localhost:8080",
+					InsecureSkipVerify: true,
+				},
+				HuggingFace: &config.SidecarHuggingFaceConfig{
+					InsecureSkipVerify: true,
+				},
+			},
+			MLFlow: &config.MLFlowConfig{TrackingURI: "http://localhost:5000"},
+		}
+		h, err := New(cfg, logger)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if h.huggingFaceProxy == nil {
+			t.Fatal("expected non-nil huggingFaceProxy")
 		}
 	})
 }
@@ -243,6 +269,89 @@ func TestHandlers_HandleProxyCall(t *testing.T) {
 		}
 		if gotAuth != "Bearer secret-from-file" {
 			t.Fatalf("Authorization = %q, want Bearer secret-from-file", gotAuth)
+		}
+	})
+
+	t.Run("Hugging Face proxy with token_path sends bearer from file", func(t *testing.T) {
+		dir := t.TempDir()
+		keyFile := filepath.Join(dir, "hftoken")
+		if err := os.WriteFile(keyFile, []byte("hf-secret\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		var gotAuth string
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotAuth = r.Header.Get("Authorization")
+			if r.URL.Path != "/api/models" {
+				t.Errorf("upstream path = %q, want /api/models", r.URL.Path)
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(upstream.Close)
+
+		u := upstream.URL
+		cfg := &config.Config{
+			Sidecar: &config.SidecarConfig{
+				EvalHub: &config.EvalHubClientConfig{
+					BaseURL:            "http://localhost:8080",
+					InsecureSkipVerify: true,
+				},
+				HuggingFace: &config.SidecarHuggingFaceConfig{
+					URL:                u,
+					InsecureSkipVerify: true,
+					TokenPath:          keyFile,
+				},
+			},
+			MLFlow: &config.MLFlowConfig{TrackingURI: "http://localhost:5000"},
+		}
+		hhf, err := New(cfg, logger)
+		if err != nil {
+			t.Fatalf("New() error: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodGet, "/huggingface/api/models", nil)
+		rw := httptest.NewRecorder()
+		hhf.HandleProxyCall(rw, req)
+		if rw.Code != http.StatusOK {
+			t.Fatalf("status = %d, body = %q", rw.Code, rw.Body.String())
+		}
+		if gotAuth != "Bearer hf-secret" {
+			t.Fatalf("Authorization = %q, want Bearer hf-secret", gotAuth)
+		}
+	})
+
+	t.Run("Hugging Face proxy without token_path sends no authorization", func(t *testing.T) {
+		proxy.UpdateCachedToken(proxy.AuthTokenInput{TargetEndpoint: "huggingface"}, "")
+		var gotAuth string
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotAuth = r.Header.Get("Authorization")
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(upstream.Close)
+
+		cfg := &config.Config{
+			Sidecar: &config.SidecarConfig{
+				EvalHub: &config.EvalHubClientConfig{
+					BaseURL:            "http://localhost:8080",
+					InsecureSkipVerify: true,
+				},
+				HuggingFace: &config.SidecarHuggingFaceConfig{
+					URL:                upstream.URL,
+					InsecureSkipVerify: true,
+				},
+			},
+			MLFlow: &config.MLFlowConfig{TrackingURI: "http://localhost:5000"},
+		}
+		hhf, err := New(cfg, logger)
+		if err != nil {
+			t.Fatalf("New() error: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodGet, "/huggingface/api/models", nil)
+		rw := httptest.NewRecorder()
+		hhf.HandleProxyCall(rw, req)
+		if rw.Code != http.StatusOK {
+			t.Fatalf("status = %d, body = %q", rw.Code, rw.Body.String())
+		}
+		if gotAuth != "" {
+			t.Fatalf("Authorization = %q, want empty for anonymous Hub access", gotAuth)
 		}
 	})
 

@@ -103,6 +103,12 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 	if cfg.sidecarConfig == nil || cfg.sidecarConfig.Model == nil || cfg.sidecarConfig.Model.URL != "http://model" {
 		t.Fatalf("expected sidecar_config model.url to be evaluation upstream, got %+v", cfg.sidecarConfig)
 	}
+	if cfg.sidecarConfig.HuggingFace == nil || cfg.sidecarConfig.HuggingFace.URL != "https://huggingface.co" {
+		t.Fatalf("expected sidecar huggingface default url, got %+v", cfg.sidecarConfig.HuggingFace)
+	}
+	if cfg.sidecarConfig.HuggingFace.TokenPath != "" {
+		t.Fatalf("expected no huggingface token_path without model auth secret, got %q", cfg.sidecarConfig.HuggingFace.TokenPath)
+	}
 }
 
 func TestBuildJobConfigModelAuthSecretRefPresent(t *testing.T) {
@@ -146,6 +152,13 @@ func TestBuildJobConfigModelAuthSecretRefPresent(t *testing.T) {
 	}
 	if cfg.sidecarConfig == nil || cfg.sidecarConfig.Model == nil || cfg.sidecarConfig.Model.AuthAPIKeyPath == "" {
 		t.Fatalf("expected sidecar model auth mount path when secret_ref set, got %+v", cfg.sidecarConfig)
+	}
+	if cfg.sidecarConfig.HuggingFace == nil || cfg.sidecarConfig.HuggingFace.URL != "https://huggingface.co" {
+		t.Fatalf("expected sidecar huggingface default url, got %+v", cfg.sidecarConfig.HuggingFace)
+	}
+	wantHFToken := modelAuthMountPath + "/" + modelAuthSecretHFTokenFile
+	if cfg.sidecarConfig.HuggingFace.TokenPath != wantHFToken {
+		t.Fatalf("expected sidecar huggingface token_path %q, got %q", wantHFToken, cfg.sidecarConfig.HuggingFace.TokenPath)
 	}
 }
 

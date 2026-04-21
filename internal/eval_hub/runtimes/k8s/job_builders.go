@@ -56,14 +56,17 @@ const (
 	sidecarSATokenVolumeName          = "sidecar-sa-token"
 	sidecarSATokenMountPath           = "/var/run/secrets/kubernetes.io/serviceaccount"
 	sidecarSATokenFile                = "token"
-	// modelAuthSecretAPIKeyFile and modelAuthSecretCACertFile are Kubernetes Secret data keys (filenames under modelAuthMountPath).
+	// modelAuthSecretAPIKeyFile, modelAuthSecretCACertFile, and modelAuthSecretHFTokenFile are Kubernetes Secret
+	// data keys (filenames under modelAuthMountPath). hf-token is used for Hugging Face Hub gated assets (see lm-evaluation-harness).
 	modelAuthSecretAPIKeyFile       = "api-key"
 	modelAuthSecretCACertFile       = "ca_cert"
+	modelAuthSecretHFTokenFile      = "hf-token"
 	testDataSecretVolumeName        = "test-data-secret"
 	testDataSecretMountPath         = "/var/run/secrets/test-data"
 	serviceCABundleFile             = "service-ca.crt"
 	envMLFlowCertPathName           = "MLFLOW_TRACKING_SERVER_CERT_PATH"
-	envEvalHubModeName              = "EVALHUB_MODE"
+	envHFEndpointName  = "HF_ENDPOINT" // huggingface_hub Hub API base; adapter targets eval-runtime-sidecar /huggingface
+	envEvalHubModeName = "EVALHUB_MODE"
 	envTestDataS3BucketName         = "TEST_DATA_S3_BUCKET"
 	envTestDataS3KeyName            = "TEST_DATA_S3_KEY"
 	defaultInitCPURequest           = "100m"
@@ -695,6 +698,19 @@ func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 		Value: evalHubMode,
 	})
 	seen[envEvalHubModeName] = true
+
+	// Hugging Face Hub traffic (tokenizers, datasets) via eval-runtime-sidecar /huggingface proxy.
+	// Uses cfg.sidecarBaseURL — same origin as the /model proxy — not model.url (job spec field).
+	if !cfg.localMode {
+		base := strings.TrimSuffix(strings.TrimSpace(cfg.sidecarBaseURL), "/")
+		if base != "" {
+			env = append(env, corev1.EnvVar{
+				Name:  envHFEndpointName,
+				Value: base + "/huggingface",
+			})
+			seen[envHFEndpointName] = true
+		}
+	}
 
 	mlflowTrackingURI := cfg.mlflowTrackingURI
 	// When sidecar is at play, mlflow calls are proxied through the sidecar.

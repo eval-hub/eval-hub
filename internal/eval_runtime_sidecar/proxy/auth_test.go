@@ -12,6 +12,7 @@ func resetAuthTokenCachesForTest() {
 	evalHubCachedToken.Store(nil)
 	mlflowCachedToken.Store(nil)
 	modelCachedToken.Store(nil)
+	huggingfaceCachedToken.Store(nil)
 	ociCachedToken.Store(nil)
 }
 

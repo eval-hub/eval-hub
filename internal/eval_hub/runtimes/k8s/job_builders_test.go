@@ -204,6 +204,65 @@ func TestBuildJobAdapterEvalHubModeEnv(t *testing.T) {
 			t.Fatalf("expected empty ServiceAccountName when cfg.serviceAccountName is unset, got %q", job.Spec.Template.Spec.ServiceAccountName)
 		}
 	})
+	t.Run("k8s sets HF_ENDPOINT to sidecar huggingface proxy from sidecarBaseURL", func(t *testing.T) {
+		cfg := &jobConfig{
+			jobID:          "job-hf",
+			resourceGUID:   "guid-hf",
+			benchmarkIndex: 0,
+			namespace:      "default",
+			providerID:     "provider-1",
+			benchmarkID:    "bench-1",
+			adapterImage:   "adapter:latest",
+			defaultEnv:     []api.EnvVar{},
+			sidecarBaseURL: "http://127.0.0.1:8080",
+			localMode:      false,
+		}
+		job, err := buildJob(cfg)
+		if err != nil {
+			t.Fatalf("buildJob: %v", err)
+		}
+		adapter := job.Spec.Template.Spec.Containers[0]
+		var got string
+		var found bool
+		for _, e := range adapter.Env {
+			if e.Name == envHFEndpointName {
+				found = true
+				got = e.Value
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("adapter missing env %q", envHFEndpointName)
+		}
+		want := "http://127.0.0.1:8080/huggingface"
+		if got != want {
+			t.Fatalf("HF_ENDPOINT = %q, want %q", got, want)
+		}
+	})
+	t.Run("local mode does not set HF_ENDPOINT", func(t *testing.T) {
+		cfg := &jobConfig{
+			jobID:          "job-hf-local",
+			resourceGUID:   "guid-hf-l",
+			benchmarkIndex: 0,
+			namespace:      "default",
+			providerID:     "provider-1",
+			benchmarkID:    "bench-1",
+			adapterImage:   "adapter:latest",
+			defaultEnv:     []api.EnvVar{},
+			sidecarBaseURL: "http://127.0.0.1:8080",
+			localMode:      true,
+		}
+		job, err := buildJob(cfg)
+		if err != nil {
+			t.Fatalf("buildJob: %v", err)
+		}
+		adapter := job.Spec.Template.Spec.Containers[0]
+		for _, e := range adapter.Env {
+			if e.Name == envHFEndpointName {
+				t.Fatalf("did not want HF_ENDPOINT in local mode, got %q", e.Value)
+			}
+		}
+	})
 	t.Run("k8s sets ServiceAccountName when configured", func(t *testing.T) {
 		cfg := &jobConfig{
 			jobID:              "job-sa",

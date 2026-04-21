@@ -39,6 +39,31 @@ func newHTTPClient(timeout time.Duration, tlsConfig *tls.Config, isOTELEnabled b
 	return client
 }
 
+// newHuggingFaceUpstreamHTTPClient builds the HTTP client used by the Hugging Face reverse proxy to call
+// huggingface.co. DisableCompression is true so the Hub response body matches Content-Length / x-linked-size
+// metadata that huggingface_hub uses for consistency checks; automatic gzip decompression can otherwise
+// make written file size disagree with expected_size from HEAD/metadata (e.g. 264 vs 2539 for tokenizer_config.json).
+func newHuggingFaceUpstreamHTTPClient(timeout time.Duration, tlsConfig *tls.Config, isOTELEnabled bool, logger *slog.Logger) *http.Client {
+	transport := &http.Transport{
+		DisableCompression: true,
+	}
+	if tlsConfig != nil {
+		transport.TLSClientConfig = tlsConfig
+	}
+	client := &http.Client{
+		Timeout:   timeout,
+		Transport: transport,
+	}
+	if isOTELEnabled {
+		client = &http.Client{
+			Transport: otelhttp.NewTransport(client.Transport),
+			Timeout:   client.Timeout,
+		}
+		logger.Info("Enabled OTEL transport", "label", "HuggingFace")
+	}
+	return client
+}
+
 // buildTLSConfig creates a TLS config from CA cert path and insecure flag.
 // When insecureSkipVerify is false and caCertPath is non-empty, the CA PEM is loaded into RootCAs
 // (production Eval Hub / MLflow / OCI behavior on cluster).
@@ -196,5 +221,34 @@ func NewModelProxyHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, l
 	}
 
 	client := newHTTPClient(timeout, tlsConfig, isOTELEnabled, logger, "Model")
+	return client, nil
+}
+
+// NewHuggingFaceProxyHTTPClient builds an HTTP client for the Hugging Face Hub upstream (TLS, timeout).
+// Returns (nil, nil) when sidecar.huggingface is not set. Hub uses public CAs unless insecure_skip_verify is set.
+// The client uses http.ErrUseLastResponse so 3xx responses are returned to ModifyResponse on the reverse proxy,
+// which rewrites Location to a relative /huggingface/... path (see rewriteHuggingFaceRedirectLocation).
+// Absolute Location URLs would prevent huggingface_hub's HEAD handler from following redirects; relative URLs
+// preserve correct Content-Length metadata for the resolved file.
+func NewHuggingFaceProxyHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logger *slog.Logger) (*http.Client, error) {
+	if serviceConfig == nil || serviceConfig.Sidecar == nil || serviceConfig.Sidecar.HuggingFace == nil {
+		return nil, nil
+	}
+	hf := serviceConfig.Sidecar.HuggingFace
+
+	timeout := DefaultHTTPTimeout
+	if hf.HTTPTimeout > 0 {
+		timeout = hf.HTTPTimeout
+	}
+
+	tlsConfig, err := buildTLSConfig("", hf.InsecureSkipVerify, logger, "HuggingFace")
+	if err != nil {
+		return nil, err
+	}
+
+	client := newHuggingFaceUpstreamHTTPClient(timeout, tlsConfig, isOTELEnabled, logger)
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
 	return client, nil
 }
