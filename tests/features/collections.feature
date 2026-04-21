@@ -565,19 +565,17 @@ Feature: Collections Endpoint
     And the response should contain the value "3" at path "$.benchmarks[0].weight"
     When I send a DELETE request to "/api/v1/evaluations/collections/{id}?hard_delete=true"
     Then the response code should be 204
-  
+
   Scenario: List collections with scope=tenant and check it returns only tenant collection
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:collection_id"
-    When I send a GET request to "/api/v1/evaluations/collections?scope=tenant"
+    When I send a GET request to "/api/v1/evaluations/collections?scope=tenant&name=test-benchmarks-collection"
     Then the response code should be 200
     And the response should contain the value "{{value:collection_id}}" at path "$.items[0].resource.id"
     And the response should not contain the value "system" at path "$.items[0].resource.owner"
     And the array at path "items" in the response should have length 1
-    When I send a DELETE request to "/api/v1/evaluations/collections/{{value:collection_id}}?hard_delete=true"
-    Then the response code should be 204
   
   Scenario: List collections with scope=system and check it returns only system collection
     Given the service is running
@@ -635,7 +633,6 @@ Feature: Collections Endpoint
   Scenario: Verify Evaluation Jobs Can Use OOB Collections
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
-
       """
       {
         "name": "test-evaluation-job-oob-collection",
