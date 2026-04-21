@@ -14,7 +14,7 @@ func NewRuntime(
 	serviceConfig *config.Config,
 ) (abstractions.Runtime, error) {
 	if serviceConfig.Service.LocalMode {
-		return local.NewLocalRuntime(logger)
+		return local.NewLocalRuntime(logger, serviceConfig)
 	}
 	return k8s.NewK8sRuntime(logger, serviceConfig)
 }

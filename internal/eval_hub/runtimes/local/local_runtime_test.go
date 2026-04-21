@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -216,8 +217,42 @@ func TestLocalRuntimeName(t *testing.T) {
 	}
 }
 
+func TestBuildCallbackURL(t *testing.T) {
+	tests := []struct {
+		name   string
+		config *config.Config
+		want   *string
+	}{
+		{name: "nil config", config: nil, want: nil},
+		{name: "nil service", config: &config.Config{}, want: nil},
+		{name: "zero port", config: &config.Config{Service: &config.ServiceConfig{Port: 0}}, want: nil},
+		{name: "host and port", config: &config.Config{Service: &config.ServiceConfig{Host: "myhost", Port: 9090}}, want: strPtr("http://myhost:9090")},
+		{name: "empty host defaults to localhost", config: &config.Config{Service: &config.ServiceConfig{Port: 8080}}, want: strPtr("http://localhost:8080")},
+		{name: "tls enabled", config: &config.Config{Service: &config.ServiceConfig{Host: "myhost", Port: 443, TLSCertFile: "/cert", TLSKeyFile: "/key"}}, want: strPtr("https://myhost:443")},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := buildCallbackURL(tc.config)
+			if tc.want == nil {
+				if got != nil {
+					t.Fatalf("expected nil, got %q", *got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatalf("expected %q, got nil", *tc.want)
+			}
+			if *got != *tc.want {
+				t.Fatalf("expected %q, got %q", *tc.want, *got)
+			}
+		})
+	}
+}
+
+func strPtr(s string) *string { return &s }
+
 func TestNewLocalRuntime(t *testing.T) {
-	rt, err := NewLocalRuntime(discardLogger())
+	rt, err := NewLocalRuntime(discardLogger(), nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -736,15 +771,15 @@ func TestRunEvaluationJobCallbackURL(t *testing.T) {
 	providers := sampleLocalProviders(providerID, fmt.Sprintf("touch %s", sentinelPath))
 	cleanupDir(t, "job-1")
 
-	t.Setenv("SERVICE_URL", "http://localhost:8080")
-
 	tctx := testContext(t)
 	logger := discardLogger()
 
+	callbackURL := "http://localhost:8080"
 	rt := &LocalRuntime{
-		logger:  logger,
-		ctx:     tctx,
-		tracker: newTracker(),
+		logger:      logger,
+		ctx:         tctx,
+		tracker:     newTracker(),
+		callbackURL: &callbackURL,
 	}
 
 	storage := &fakeStorage{logger: logger, ctx: tctx, providerConfigs: providers}
@@ -786,9 +821,6 @@ func TestRunEvaluationJobCallbackURLNotSet(t *testing.T) {
 	sentinelPath := filepath.Join(dirName, "done")
 	providers := sampleLocalProviders(providerID, fmt.Sprintf("touch %s", sentinelPath))
 	cleanupDir(t, "job-1")
-
-	// Ensure SERVICE_URL is not set
-	t.Setenv("SERVICE_URL", "")
 
 	tctx := testContext(t)
 	logger := discardLogger()

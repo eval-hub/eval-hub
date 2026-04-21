@@ -167,7 +167,6 @@ func TestK8sRuntimeName(t *testing.T) {
 }
 
 func TestCreateBenchmarkResourcesSetsConfigMapOwner(t *testing.T) {
-	t.Setenv("SERVICE_URL", "http://service.example")
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 
@@ -213,7 +212,6 @@ func TestCreateBenchmarkResourcesSetsConfigMapOwner(t *testing.T) {
 }
 
 func TestCreateBenchmarkResourcesSetsAnnotations(t *testing.T) {
-	t.Setenv("SERVICE_URL", "http://service.example")
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 
@@ -275,7 +273,6 @@ func TestCreateBenchmarkResourcesSetsAnnotations(t *testing.T) {
 }
 
 func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnv(t *testing.T) {
-	t.Setenv("SERVICE_URL", "http://service.example")
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 	evaluation.Model.Auth = &api.ModelAuth{SecretRef: "model-auth-secret"}
@@ -346,8 +343,6 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnv(t *testing.T) {
 }
 
 func TestCreateBenchmarkResourcesAddsInitContainerForS3TestData(t *testing.T) {
-
-	t.Setenv("SERVICE_URL", "http://service.example")
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 	evaluation.Benchmarks[0].TestDataRef = &api.TestDataRef{
@@ -445,7 +440,6 @@ func TestCreateBenchmarkResourcesAddsInitContainerForS3TestData(t *testing.T) {
 }
 
 func TestCreateBenchmarkResourcesDeletesConfigMapOnJobFailure(t *testing.T) {
-	t.Setenv("SERVICE_URL", "http://service.example")
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 
@@ -477,7 +471,6 @@ func TestCreateBenchmarkResourcesDeletesConfigMapOnJobFailure(t *testing.T) {
 }
 
 func TestRunEvaluationJobMarksBenchmarkFailedOnCreateError(t *testing.T) {
-	t.Setenv("SERVICE_URL", "http://service.example")
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 
@@ -531,7 +524,6 @@ func TestRunEvaluationJobMarksBenchmarkFailedOnCreateError(t *testing.T) {
 }
 
 func TestRunEvaluationJobHandlesUpdateFailure(t *testing.T) {
-	t.Setenv("SERVICE_URL", "http://service.example")
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 

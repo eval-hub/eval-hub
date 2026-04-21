@@ -54,7 +54,7 @@ func TestRunEvaluationJobCreatesResources(t *testing.T) {
 		t.Skip("set K8S_INTEGRATION_TEST=1 to run against a real cluster")
 	}
 	const apiTimeout = 15 * time.Second
-	t.Setenv("SERVICE_URL", "http://eval-hub")
+
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	helper, err := NewKubernetesHelper()
 	if err != nil {
@@ -188,7 +188,6 @@ func TestCreateBenchmarkResourcesDuplicateBenchmarkIDDoesNotCollide(t *testing.T
 	if os.Getenv("K8S_INTEGRATION_TEST") != "1" {
 		t.Skip("set K8S_INTEGRATION_TEST=1 to run against a real cluster")
 	}
-	t.Setenv("SERVICE_URL", "http://eval-hub")
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	helper, err := NewKubernetesHelper()
 	if err != nil {
@@ -273,7 +272,7 @@ func TestCreateBenchmarkResourcesSetsAnnotationsIntegration(t *testing.T) {
 	if os.Getenv("K8S_INTEGRATION_TEST") != "1" {
 		t.Skip("set K8S_INTEGRATION_TEST=1 to run against a real cluster")
 	}
-	t.Setenv("SERVICE_URL", "http://eval-hub")
+
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	helper, err := NewKubernetesHelper()
 	if err != nil {
@@ -369,7 +368,7 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnvIntegration(t *testing
 	if os.Getenv("K8S_INTEGRATION_TEST") != "1" {
 		t.Skip("set K8S_INTEGRATION_TEST=1 to run against a real cluster")
 	}
-	t.Setenv("SERVICE_URL", "http://eval-hub")
+
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	helper, err := NewKubernetesHelper()
 	if err != nil {
@@ -464,7 +463,7 @@ func TestCreateBenchmarkResourcesAddsInitContainerForS3TestDataIntegration(t *te
 	if os.Getenv("K8S_INTEGRATION_TEST") != "1" {
 		t.Skip("set K8S_INTEGRATION_TEST=1 to run against a real cluster")
 	}
-	t.Setenv("SERVICE_URL", "http://eval-hub")
+
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	helper, err := NewKubernetesHelper()
 	if err != nil {

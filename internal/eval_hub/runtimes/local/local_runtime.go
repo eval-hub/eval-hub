@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
@@ -74,16 +75,19 @@ func (jr *pidTracker) isCancelled(jobID string) bool {
 }
 
 type LocalRuntime struct {
-	logger  *slog.Logger
-	ctx     context.Context
-	tracker jobTracker
+	logger      *slog.Logger
+	ctx         context.Context
+	tracker     jobTracker
+	callbackURL *string
 }
 
 func NewLocalRuntime(
 	logger *slog.Logger,
+	serviceConfig *config.Config,
 ) (abstractions.Runtime, error) {
 	return &LocalRuntime{
-		logger: logger,
+		logger:      logger,
+		callbackURL: buildCallbackURL(serviceConfig),
 		tracker: &pidTracker{
 			pids:      make(map[string][]int),
 			cancelled: make(map[string]bool),
@@ -91,19 +95,37 @@ func NewLocalRuntime(
 	}, nil
 }
 
+func buildCallbackURL(serviceConfig *config.Config) *string {
+	if serviceConfig == nil || serviceConfig.Service == nil || serviceConfig.Service.Port <= 0 {
+		return nil
+	}
+	host := serviceConfig.Service.Host
+	if host == "" {
+		host = "localhost"
+	}
+	scheme := "http"
+	if serviceConfig.Service.TLSEnabled() {
+		scheme = "https"
+	}
+	u := fmt.Sprintf("%s://%s:%d", scheme, host, serviceConfig.Service.Port)
+	return &u
+}
+
 func (r *LocalRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
 	return &LocalRuntime{
-		logger:  logger,
-		ctx:     r.ctx,
-		tracker: r.tracker,
+		logger:      logger,
+		ctx:         r.ctx,
+		tracker:     r.tracker,
+		callbackURL: r.callbackURL,
 	}
 }
 
 func (r *LocalRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 	return &LocalRuntime{
-		logger:  r.logger,
-		ctx:     ctx,
-		tracker: r.tracker,
+		logger:      r.logger,
+		ctx:         ctx,
+		tracker:     r.tracker,
+		callbackURL: r.callbackURL,
 	}
 }
 
@@ -127,14 +149,9 @@ func (r *LocalRuntime) RunEvaluationJob(
 
 	r.tracker.registerJob(jobID)
 
-	var callbackURL *string
-	if serviceURL := os.Getenv("SERVICE_URL"); serviceURL != "" {
-		callbackURL = &serviceURL
-	}
-
 	for i, bench := range benchmarks {
 		go func() {
-			if err := r.runBenchmark(jobID, bench, i, evaluation, callbackURL, storage); err != nil {
+			if err := r.runBenchmark(jobID, bench, i, evaluation, r.callbackURL, storage); err != nil {
 				r.logger.Error(
 					"local runtime benchmark launch failed",
 					"error", err,
