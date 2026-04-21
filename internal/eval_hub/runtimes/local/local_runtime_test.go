@@ -126,7 +126,7 @@ func discardLogger() *slog.Logger {
 }
 
 func newTracker() jobTracker {
-	return &pidTracker{pids: make(map[string][]int)}
+	return &pidTracker{pids: make(map[string][]int), cancelled: make(map[string]bool)}
 }
 
 // testContext returns a context with a 10-second deadline tied to t.Cleanup.

@@ -25,12 +25,14 @@ type jobTracker interface {
 	registerJob(jobID string)
 	addPID(jobID string, pid int)
 	cancelJob(jobID string)
+	isCancelled(jobID string) bool
 }
 
 // pidTracker tracks running subprocess PIDs per job so they can be killed on cancel.
 type pidTracker struct {
-	mu   sync.Mutex
-	pids map[string][]int // jobID -> list of PIDs
+	mu        sync.Mutex
+	pids      map[string][]int // jobID -> list of PIDs
+	cancelled map[string]bool  // jobs cancelled before all PIDs arrived
 }
 
 func (jr *pidTracker) registerJob(jobID string) {
@@ -42,22 +44,33 @@ func (jr *pidTracker) registerJob(jobID string) {
 func (jr *pidTracker) addPID(jobID string, pid int) {
 	jr.mu.Lock()
 	defer jr.mu.Unlock()
+	if jr.cancelled[jobID] {
+		_ = killProcessGroup(pid)
+		return
+	}
 	jr.pids[jobID] = append(jr.pids[jobID], pid)
 }
 
 // cancelJob sends SIGKILL to the process group of every tracked PID for the
-// job and removes the job's entry from the tracker. It is idempotent: calling
-// it for an unknown or already-cancelled job is a no-op.
+// job and removes the job's entry from the tracker. Any PIDs registered after
+// this call via addPID will be killed immediately. Calling cancelJob for an
+// unknown or already-cancelled job is a no-op.
 func (jr *pidTracker) cancelJob(jobID string) {
 	jr.mu.Lock()
 	defer jr.mu.Unlock()
 	if pids, ok := jr.pids[jobID]; ok {
 		for _, pid := range pids {
-			// Kill the entire process group (negative PID).
 			_ = killProcessGroup(pid)
 		}
 		delete(jr.pids, jobID)
 	}
+	jr.cancelled[jobID] = true
+}
+
+func (jr *pidTracker) isCancelled(jobID string) bool {
+	jr.mu.Lock()
+	defer jr.mu.Unlock()
+	return jr.cancelled[jobID]
 }
 
 type LocalRuntime struct {
@@ -70,8 +83,11 @@ func NewLocalRuntime(
 	logger *slog.Logger,
 ) (abstractions.Runtime, error) {
 	return &LocalRuntime{
-		logger:  logger,
-		tracker: &pidTracker{pids: make(map[string][]int)},
+		logger: logger,
+		tracker: &pidTracker{
+			pids:      make(map[string][]int),
+			cancelled: make(map[string]bool),
+		},
 	}, nil
 }
 
@@ -153,6 +169,10 @@ func (r *LocalRuntime) runBenchmark(
 	}
 	if provider.Runtime == nil || provider.Runtime.Local == nil || provider.Runtime.Local.Command == "" {
 		return serviceerrors.NewServiceError(messages.LocalRuntimeNotEnabled, "ProviderID", bench.ProviderID)
+	}
+
+	if r.tracker.isCancelled(jobID) {
+		return nil
 	}
 
 	// Build job spec JSON using shared logic
@@ -268,6 +288,13 @@ func (r *LocalRuntime) runBenchmark(
 	// in the same way. Until a common cross-platform approach is found for Linux,
 	// macOS, and Windows, cmd.Wait() serves as the portable solution.
 	_ = cmd.Wait()
+
+	// If the job was cancelled while this goroutine was running, the directory
+	// may have been recreated after DeleteEvaluationJobResources already
+	// cleaned it up. Remove it now to prevent orphaned directories.
+	if r.tracker.isCancelled(jobID) {
+		_ = os.RemoveAll(filepath.Join(localJobsBaseDir, jobID))
+	}
 
 	return nil
 }
