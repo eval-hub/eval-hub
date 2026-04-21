@@ -500,21 +500,21 @@ Feature: Collections Endpoint
           {
             "id": "arc_easy",
             "provider_id": "lm_evaluation_harness",
+            "weight": 3,
             "parameters": {
               "num_examples": 10,
               "num_fewshot": 3,
               "limit": 5,
-              "tokenizer": "google/flan-t5-small",
-              "weight": 3
+              "tokenizer": "google/flan-t5-small"
             }
           },
           {
             "id": "arc_easy",
             "provider_id": "lm_evaluation_harness",
+            "weight": 2,
             "parameters": {
               "num_examples": 5,
-              "tokenizer": "google/flan-t5-small",
-              "weight": 2
+              "tokenizer": "google/flan-t5-small"
             }
           }
         ]
@@ -522,12 +522,12 @@ Feature: Collections Endpoint
       """
     Then the response code should be 201
     And the array at path "$.benchmarks" in the response should have length 2
-    And the response should contain the value "3" at path "$.benchmarks[0].parameters.weight"
-    And the response should contain the value "2" at path "$.benchmarks[1].parameters.weight"
+    And the response should contain the value "3" at path "$.benchmarks[0].weight"
+    And the response should contain the value "2" at path "$.benchmarks[1].weight"
     When I send a GET request to "/api/v1/evaluations/collections/{id}"
     Then the response code should be 200
-    And the response should contain the value "3" at path "$.benchmarks[0].parameters.weight"
-    And the response should contain the value "2" at path "$.benchmarks[1].parameters.weight"
+    And the response should contain the value "3" at path "$.benchmarks[0].weight"
+    And the response should contain the value "2" at path "$.benchmarks[1].weight"
     When I send a DELETE request to "/api/v1/evaluations/collections/{id}?hard_delete=true"
     Then the response code should be 204
   
@@ -572,7 +572,7 @@ Feature: Collections Endpoint
     When I send a DELETE request to "/api/v1/evaluations/collections/leaderboard-v2?hard_delete=true"
     Then the response code should be 400
     And the response should contain the value "read_only_collection" at path "$.message_code"
-    And the response should contain the value "Collection 'leaderboard-v2' cannot be modified or deleted" at path "$.message"
+    And the response should contain the value "Collection 'leaderboard-v2' cannot be modified or deleted." at path "$.message"
   
   Scenario: Verify Evaluation Jobs Can Use OOB Collections
     Given the service is running
@@ -592,3 +592,4 @@ Feature: Collections Endpoint
       """
     Then the response code should be 202
     And the response should contain the value "toxicity-and-ethical-principles" at path "$.collection.id"
+    
