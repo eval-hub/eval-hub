@@ -474,3 +474,121 @@ Feature: Collections Endpoint
     And the response should contain the value "Collection of benchmarks for FVT" at path "$.description"
     And the response should contain the value "0" at path "$.pass_criteria.threshold"
     And the array at path "$.benchmarks" in the response should have length 2
+
+  Scenario: Verify soft delete of collection
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
+    Then the response code should be 201
+    When I send a GET request to "/api/v1/evaluations/collections/{id}"
+    Then the response code should be 200
+    When I send a DELETE request to "/api/v1/evaluations/collections/{id}"
+    Then the response code should be 204
+    When I send a GET request to "/api/v1/evaluations/collections/{id}"
+    Then the response code should be 404
+    When I send a DELETE request to "/api/v1/evaluations/collections/{id}"
+    Then the response code should be 404
+  
+  Scenario: Create collection with weighted benchmarks
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/collections" with body:
+      """
+      {
+        "name": "test-multiple-benchmarks-collection",
+        "description": "Collection of benchmarks for FVT",
+        "category": "test",
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+              "num_examples": 10,
+              "num_fewshot": 3,
+              "limit": 5,
+              "tokenizer": "google/flan-t5-small",
+              "weight": 3
+            }
+          },
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+              "num_examples": 5,
+              "tokenizer": "google/flan-t5-small",
+              "weight": 2
+            }
+          }
+        ]
+      }
+      """
+    Then the response code should be 201
+    And the array at path "$.benchmarks" in the response should have length 2
+    And the response should contain the value "3" at path "$.benchmarks[0].parameters.weight"
+    And the response should contain the value "2" at path "$.benchmarks[1].parameters.weight"
+    When I send a GET request to "/api/v1/evaluations/collections/{id}"
+    Then the response code should be 200
+    And the response should contain the value "3" at path "$.benchmarks[0].parameters.weight"
+    And the response should contain the value "2" at path "$.benchmarks[1].parameters.weight"
+    When I send a DELETE request to "/api/v1/evaluations/collections/{id}?hard_delete=true"
+    Then the response code should be 204
+  
+  Scenario: List collections with scope=tenant
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
+    Then the response code should be 201
+    And the "resource.id" field in the response should be saved as "value:collection_id"
+    When I send a GET request to "/api/v1/evaluations/collections?scope=tenant"
+    Then the response code should be 200
+    And the response should contain the value "{{value:collection_id}}" at path "$.items[0].resource.id"
+    And the response should not contain the value "system" at path "$.items[0].resource.owner"
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/collections?scope=system"
+    Then the response code should be 200
+    And the response should contain the value "system" at path "$.items[0].resource.owner"
+    And the array at path "items" in the response should have length at least 1
+    When I send a DELETE request to "/api/v1/evaluations/collections/{{value:collection_id}}?hard_delete=true"
+    Then the response code should be 204
+  
+  Scenario: Verify out of box collection retrieval by id
+    Given the service is running
+    When I send a GET request to "/api/v1/evaluations/collections/safety-and-fairness-v1"
+    Then the response code should be 200
+    And the response should contain "name" with value "Safety & Fairness"
+    And the response should contain "category" with value "safety"
+    And the response should contain "benchmarks"
+    And the array at path "benchmarks" in the response should have length 6
+    And the response should contain the value "0.758" at path "$.pass_criteria.threshold"
+    And the response should contain the value "truthfulqa_mc1" at path "$.benchmarks[0].id"
+    And the response should contain the value "toxigen" at path "$.benchmarks[1].id"
+    And the response should contain the value "winogender" at path "$.benchmarks[2].id"
+    And the response should contain the value "crows_pairs_english" at path "$.benchmarks[3].id"
+    And the response should contain the value "bbq" at path "$.benchmarks[4].id"
+    And the response should contain the value "ethics_cm" at path "$.benchmarks[5].id"
+    And the response should contain the value "2" at path "$.benchmarks[0].weight"
+    And the response should contain the value "1" at path "$.benchmarks[3].weight"
+    And the response should contain the value "3" at path "$.benchmarks[5].weight"
+ 
+  Scenario: Verify OOB Collections Are Immutable
+    Given the service is running
+    When I send a DELETE request to "/api/v1/evaluations/collections/leaderboard-v2?hard_delete=true"
+    Then the response code should be 400
+    And the response should contain the value "read_only_collection" at path "$.message_code"
+    And the response should contain the value "Collection 'leaderboard-v2' cannot be modified or deleted" at path "$.message"
+  
+  Scenario: Verify Evaluation Jobs Can Use OOB Collections
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+
+      """
+      {
+        "name": "test-evaluation-job-oob-collection",
+        "collection": {
+          "id": "toxicity-and-ethical-principles"
+        },
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}"
+        }
+      }
+      """
+    Then the response code should be 202
+    And the response should contain the value "toxicity-and-ethical-principles" at path "$.collection.id"
