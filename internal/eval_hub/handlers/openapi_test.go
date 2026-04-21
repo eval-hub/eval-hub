@@ -67,21 +67,16 @@ func TestHandleOpenAPI_SpecNotFound(t *testing.T) {
 	if err := os.MkdirAll(deep, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(oldWd) })
-	if err := os.Chdir(deep); err != nil {
-		t.Fatal(err)
-	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll(base)
+	})
 
 	ctx := &executioncontext.ExecutionContext{
 		Ctx:    context.Background(),
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 	w := httptest.NewRecorder()
-	h.HandleOpenAPI(ctx, createMockRequest("GET", "/openapi.yaml"), &MockResponseWrapper{w})
+	h.HandleOpenAPI(ctx, createMockRequest("GET", "/openapi.yaml"), &MockResponseWrapper{w}, deep)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, w.Code)

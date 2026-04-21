@@ -19,64 +19,62 @@ var (
 	}
 )
 
-func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper, dirs ...string) {
+	found := func(contents []byte, contentType string) {
+		w.SetHeader("Content-Type", contentType)
+		for key, value := range noCacheHeaders {
+			w.SetHeader(key, value)
+		}
+		w.Write(contents)
+	}
+
 	// Determine content type based on Accept header
 	file := "openapi.yaml"
 	contentType := "application/yaml"
-
 	if strings.Contains(r.Header("Accept"), "application/json") {
 		file = "openapi.json"
 		contentType = "application/json"
 	}
 
-	// Find the OpenAPI spec file relative to the working directory
-	// Try multiple possible locations
-	possiblePaths := []string{
-		filepath.Join("docs", file),
-		filepath.Join("..", "docs", file),
-		filepath.Join("..", "..", "docs", file),
-		filepath.Join("..", "..", "..", "docs", file),
+	// start by trying to find it relative to the executable (when running in a cluster)
+	exePath, _ := os.Executable()
+	if exePath != "" {
+		exeDir := filepath.Dir(exePath)
+		specPath := filepath.Join(exeDir, "docs", file)
+		contents, err := os.ReadFile(specPath)
+		if err == nil {
+			found(contents, contentType)
+			return
+		}
 	}
 
+	if len(dirs) == 0 {
+		dirs = []string{
+			filepath.Join("docs"),
+			filepath.Join("..", "docs"),
+			filepath.Join("..", "..", "docs"),
+			filepath.Join("..", "..", "..", "docs"),
+		}
+	}
+
+	// Find the OpenAPI spec file relative to the working directory
 	var paths []string
-	var spec []byte
-	var err error
-	for _, path := range possiblePaths {
-		absPath, aerr := filepath.Abs(path)
+	for _, dir := range dirs {
+		absPath, aerr := filepath.Abs(filepath.Join(dir, file))
 		if aerr != nil {
-			ctx.Logger.Error("Failed to get absolute path for OpenAPI spec", "path", path, "error", aerr.Error())
+			ctx.Logger.Error("Failed to get absolute path for OpenAPI spec", "path", absPath, "error", aerr.Error())
 			continue
 		}
 		paths = append(paths, absPath)
-		spec, err = os.ReadFile(absPath)
+		contents, err := os.ReadFile(absPath)
 		if err == nil {
-			break
+			found(contents, contentType)
+			return
 		}
 	}
 
-	if err != nil {
-		// If file not found, try to find it relative to the executable
-		exePath, _ := os.Executable()
-		if exePath != "" {
-			exeDir := filepath.Dir(exePath)
-			specPath := filepath.Join(exeDir, "docs", file)
-			paths = append(paths, specPath)
-			spec, err = os.ReadFile(specPath)
-		}
-	}
-
-	if err != nil {
-		ctx.Logger.Error("Failed to read OpenAPI spec", "paths", paths, "error", err.Error())
-		w.ErrorWithMessageCode(ctx.RequestID, messages.InternalServerError, "Error", err.Error())
-		return
-	}
-
-	w.SetHeader("Content-Type", contentType)
-	for key, value := range noCacheHeaders {
-		w.SetHeader(key, value)
-	}
-
-	w.Write(spec)
+	ctx.Logger.Error("Failed to read OpenAPI spec", "paths", strings.Join(paths, ", "))
+	w.ErrorWithMessageCode(ctx.RequestID, messages.InternalServerError, "Error", "Failed to read OpenAPI spec")
 }
 
 func (h *Handlers) HandleDocs(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
