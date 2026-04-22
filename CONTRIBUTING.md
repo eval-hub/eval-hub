@@ -35,6 +35,7 @@ Eval Hub is an API REST server that serves as a routing and orchestration layer 
 - Go 1.25.0+
 - [Make](https://www.gnu.org/software/make/) for build automation
 - Git
+- [uv](https://docs.astral.sh/uv/) for Python virtual environment management (required by `make test-fvt`, `make start-service`, and pre-commit hooks)
 
 **Optional for Container Testing:**
 

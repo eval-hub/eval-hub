@@ -14,7 +14,7 @@ import (
 
 var opts = godog.Options{
 	Output:   colors.Colored(os.Stdout),
-	Format:   "junit:../../bin/junit-fvt.xml", // can define default values
+	Format:   "junit:bin/junit-fvt.xml",
 	Strict:   true,
 	Tags:     "~@ignore",
 	Paths:    []string{"."},
@@ -32,16 +32,18 @@ func TestMain(m *testing.M) {
 		fmt.Printf("Running FVT tests against the server %s\n", serverURL)
 	}
 
-	// Get the absolute path to the features directory
-	// When running from project root, use "tests/features", when from features dir, use "."
-	workDir, _ := os.Getwd()
-	// t.Log("Working directory:", workDir)
-	var featuresPath string
-	if filepath.Base(workDir) == "features" {
-		featuresPath = "."
-	} else {
-		featuresPath = filepath.Join(workDir, "tests", "features")
+	workDir, err := os.Getwd()
+	if err != nil {
+		panic(fmt.Sprintf("failed to get working directory: %v", err))
 	}
+	if filepath.Base(workDir) == "features" {
+		projectRoot := filepath.Join(workDir, "..", "..")
+		if err := os.Chdir(projectRoot); err != nil {
+			panic(fmt.Sprintf("failed to chdir to project root: %v", err))
+		}
+		workDir = projectRoot
+	}
+	featuresPath := filepath.Join(workDir, "tests", "features")
 
 	paths := []string{featuresPath}
 	if envPaths := os.Getenv("GODOG_PATHS"); envPaths != "" {

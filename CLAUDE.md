@@ -48,6 +48,7 @@ make fmt                # Format code with go fmt
 ```bash
 make install-deps       # Download and tidy dependencies (requires Python 3 for test color output via scripts/grcat)
 make update-deps        # Update all dependencies to latest
+# Note: uv (https://docs.astral.sh/uv/) is required for `make test-fvt` and `make start-service` (manages Python venv and test dependencies)
 ```
 
 ### Database Setup

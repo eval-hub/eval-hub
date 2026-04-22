@@ -85,13 +85,13 @@ ${SERVER_PID_FILE}:
 
 SERVICE_LOG ?= $(BIN_DIR)/service.log
 
-start-service: ${SERVER_PID_FILE} build-service ## Run the application in background
+start-service: test-setup ${SERVER_PID_FILE} build-service ## Run the application in background
 	@echo "Running $(BINARY_NAME) on port $(PORT)..."
-	@./scripts/start_server.sh "${SERVER_PID_FILE}" "${BIN_DIR}/$(BINARY_NAME)" "${SERVICE_LOG}" ${PORT} ""
+	@. $(VENV_DIR)/bin/activate && ./scripts/start_server.sh "${SERVER_PID_FILE}" "${BIN_DIR}/$(BINARY_NAME)" "${SERVICE_LOG}" ${PORT} ""
 
-start-service-coverage: ${SERVER_PID_FILE} build-coverage ## Run the application in background
+start-service-coverage: test-setup ${SERVER_PID_FILE} build-coverage ## Run the application in background
 	@echo "Running $(BINARY_NAME)-cov on port $(PORT)..."
-	@./scripts/start_server.sh "${SERVER_PID_FILE}" "${BIN_DIR}/$(BINARY_NAME)-cov" "${SERVICE_LOG}" ${PORT} "${BIN_DIR}"
+	@. $(VENV_DIR)/bin/activate && ./scripts/start_server.sh "${SERVER_PID_FILE}" "${BIN_DIR}/$(BINARY_NAME)-cov" "${SERVICE_LOG}" ${PORT} "${BIN_DIR}"
 
 stop-service:
 	-./scripts/stop_server.sh "${SERVER_PID_FILE}"
@@ -159,9 +159,13 @@ FVT_TESTS ?= ./tests/features/...
 FVT_OUTPUT ?= --godog.format=junit:${PWD}/$(BIN_DIR)/junit-fvt-report.xml,pretty
 FVT_TAGS ?= "--godog.tags=~@ignore && ~@mlflow && ~@cluster"
 
-test-fvt: $(BIN_DIR) ## Run FVT (Functional Verification Tests) using godog
+.PHONY: test-setup
+test-setup: venv ## Set up Python test environment (venv + eval-hub-sdk adapter)
+	@uv pip install "eval-hub-sdk[adapter]>=0.1.5"
+
+test-fvt: $(BIN_DIR) test-setup ## Run FVT (Functional Verification Tests) using godog
 	@echo "Running FVT tests..."
-	@bash -c 'set -o pipefail; go test ${FVT_TESTS} ${FVT_OUTPUT} ${FVT_TAGS} -v -race | ${PWD}/scripts/grcat ${PWD}/.conf.go-integration-test'
+	@. $(VENV_DIR)/bin/activate && bash -c 'set -o pipefail; go test ${FVT_TESTS} ${FVT_OUTPUT} ${FVT_TAGS} -v -race | ${PWD}/scripts/grcat ${PWD}/.conf.go-integration-test'
 
 test-fvt-server: start-service ## Run FVT tests using godog against a running server
 	@SERVER_URL="${SERVER_URL}" make test-fvt; status=$$?; make stop-service; exit $$status
@@ -261,7 +265,7 @@ VENV_PYTHON = $(VENV_DIR)/bin/python
 venv: ## Create Python virtual environment using uv
 	@if [ ! -d "$(VENV_DIR)" ]; then \
 		echo "Creating uv virtual environment..."; \
-		uv venv $(VENV_DIR); \
+		uv venv $(VENV_DIR) --python 3.12; \
 		echo "Virtual environment created at $(VENV_DIR)"; \
 	else \
 		echo "Virtual environment already exists at $(VENV_DIR)"; \

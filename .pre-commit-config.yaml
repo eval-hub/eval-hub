@@ -43,9 +43,8 @@ repos:
     hooks:
       - id: mypy-check
         name: mypy type checking
-        #  run with uv
         entry: uv
-        args: [run, mypy, --exclude, "python-server/(build|setup\\.py)", python-server/]
+        args: [run, --project, python-server, --extra, dev, mypy, --exclude, "python-server/(build|setup\\.py)", python-server/]
         language: system
         types: [python]
         pass_filenames: false
@@ -54,7 +53,7 @@ repos:
       - id: pytest-unit
         name: unit tests
         entry: bash
-        args: [-c, 'if [ -d python-server/tests ]; then uv run pytest python-server/tests/ -m "unit" --tb=short -q; else echo "Skipping: python-server/tests/ not found"; fi']
+        args: [-c, 'if [ -d python-server/tests ]; then uv run --project python-server --extra dev pytest python-server/tests/ -m "unit" --tb=short -q; else echo "Skipping: python-server/tests/ not found"; fi']
         language: system
         types: [python]
         pass_filenames: false

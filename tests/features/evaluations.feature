@@ -31,6 +31,7 @@ Feature: Evaluations Endpoint
     And the response should contain the value "5" at path "$.benchmarks[0].parameters.limit"
     And the response should contain the value "google/flan-t5-small" at path "$.benchmarks[0].parameters.tokenizer"
     And the response should not contain the value "collection" at path "$.collection"
+    And I wait for the evaluation job status to be "completed"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"

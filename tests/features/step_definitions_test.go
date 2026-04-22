@@ -81,7 +81,7 @@ type scenarioConfig struct {
 func getLogger() *log.Logger {
 	once.Do(func() {
 		if logger == nil {
-			path := filepath.Join("..", "..", "bin", "tests.log")
+			path := filepath.Join("bin", "tests.log")
 			path, err := filepath.Abs(path)
 			if err != nil {
 				panic(logError(fmt.Errorf("Failed to get absolute path: %v", err)))
@@ -190,8 +190,6 @@ func (a *apiFeature) startLocalServer(port int) error {
 	}
 
 	logger.Info("Providers loaded.")
-	// Override local runtime commands for testing so subprocesses
-	// Exit cleanly instead of failing with "command not found".
 	for key := range providerConfigs {
 		providerCfg := providerConfigs[key]
 		if providerCfg.Runtime == nil {
@@ -200,7 +198,6 @@ func (a *apiFeature) startLocalServer(port int) error {
 		if providerCfg.Runtime.Local == nil {
 			providerCfg.Runtime.Local = &pkgapi.LocalRuntime{}
 		}
-		providerCfg.Runtime.Local.Command = "true"
 		providerConfigs[key] = providerCfg
 	}
 
@@ -507,7 +504,7 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) err
 }
 
 func (tc *scenarioConfig) findFile(fileName string) (string, error) {
-	file := filepath.Join("test_data", fileName)
+	file := filepath.Join("tests", "features", "test_data", fileName)
 	if _, err := os.Stat(file); os.IsNotExist(err) {
 		path, _ := os.Getwd()
 		return "", tc.logError(fmt.Errorf("test file %s not found in directory %s", fileName, path))

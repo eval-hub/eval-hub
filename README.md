@@ -22,6 +22,7 @@ The service uses Go's standard `net/http` router, structured logging with zap, P
 - Go 1.25+
 - Make
 - Python 3 (for `make test`; used by scripts/grcat for colored output)
+- [uv](https://docs.astral.sh/uv/) (manages the Python venv required by `make start-service` and FVT tests; run `make venv` to create it)
 - Podman (for container builds)
 - Access to an OpenShift or Kubernetes cluster (for deployment)
 
