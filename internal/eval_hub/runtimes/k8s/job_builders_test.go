@@ -169,36 +169,157 @@ func TestBuildJobRequiresAdapterImage(t *testing.T) {
 }
 
 func TestBuildJobAdapterEvalHubModeEnv(t *testing.T) {
-	cfg := &jobConfig{
-		jobID:          "job-mode",
-		resourceGUID:   "guid-mode",
-		benchmarkIndex: 0,
-		namespace:      "default",
-		providerID:     "provider-1",
-		benchmarkID:    "bench-1",
-		adapterImage:   "adapter:latest",
-		defaultEnv:     []api.EnvVar{},
-	}
-	job, err := buildJob(cfg)
-	if err != nil {
-		t.Fatalf("buildJob: %v", err)
-	}
-	adapter := job.Spec.Template.Spec.Containers[0]
-	var got string
-	var found bool
-	for _, e := range adapter.Env {
-		if e.Name == envEvalHubModeName {
-			found = true
-			got = e.Value
-			break
+	t.Run("k8s when not local mode", func(t *testing.T) {
+		cfg := &jobConfig{
+			jobID:          "job-mode",
+			resourceGUID:   "guid-mode",
+			benchmarkIndex: 0,
+			namespace:      "default",
+			providerID:     "provider-1",
+			benchmarkID:    "bench-1",
+			adapterImage:   "adapter:latest",
+			defaultEnv:     []api.EnvVar{},
 		}
-	}
-	if !found {
-		t.Fatalf("adapter missing env %q", envEvalHubModeName)
-	}
-	if got != "k8s" {
-		t.Fatalf("EVALHUB_MODE = %q, want k8s", got)
-	}
+		job, err := buildJob(cfg)
+		if err != nil {
+			t.Fatalf("buildJob: %v", err)
+		}
+		adapter := job.Spec.Template.Spec.Containers[0]
+		var got string
+		var found bool
+		for _, e := range adapter.Env {
+			if e.Name == envEvalHubModeName {
+				found = true
+				got = e.Value
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("adapter missing env %q", envEvalHubModeName)
+		}
+		if got != "k8s" {
+			t.Fatalf("EVALHUB_MODE = %q, want k8s", got)
+		}
+		if job.Spec.Template.Spec.ServiceAccountName != "" {
+			t.Fatalf("expected empty ServiceAccountName when cfg.serviceAccountName is unset, got %q", job.Spec.Template.Spec.ServiceAccountName)
+		}
+	})
+	t.Run("k8s sets HF_ENDPOINT to sidecar huggingface proxy from sidecarBaseURL", func(t *testing.T) {
+		cfg := &jobConfig{
+			jobID:          "job-hf",
+			resourceGUID:   "guid-hf",
+			benchmarkIndex: 0,
+			namespace:      "default",
+			providerID:     "provider-1",
+			benchmarkID:    "bench-1",
+			adapterImage:   "adapter:latest",
+			defaultEnv:     []api.EnvVar{},
+			sidecarBaseURL: "http://127.0.0.1:8080",
+			localMode:      false,
+		}
+		job, err := buildJob(cfg)
+		if err != nil {
+			t.Fatalf("buildJob: %v", err)
+		}
+		adapter := job.Spec.Template.Spec.Containers[0]
+		var got string
+		var found bool
+		for _, e := range adapter.Env {
+			if e.Name == envHFEndpointName {
+				found = true
+				got = e.Value
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("adapter missing env %q", envHFEndpointName)
+		}
+		want := "http://127.0.0.1:8080/huggingface"
+		if got != want {
+			t.Fatalf("HF_ENDPOINT = %q, want %q", got, want)
+		}
+	})
+	t.Run("local mode does not set HF_ENDPOINT", func(t *testing.T) {
+		cfg := &jobConfig{
+			jobID:          "job-hf-local",
+			resourceGUID:   "guid-hf-l",
+			benchmarkIndex: 0,
+			namespace:      "default",
+			providerID:     "provider-1",
+			benchmarkID:    "bench-1",
+			adapterImage:   "adapter:latest",
+			defaultEnv:     []api.EnvVar{},
+			sidecarBaseURL: "http://127.0.0.1:8080",
+			localMode:      true,
+		}
+		job, err := buildJob(cfg)
+		if err != nil {
+			t.Fatalf("buildJob: %v", err)
+		}
+		adapter := job.Spec.Template.Spec.Containers[0]
+		for _, e := range adapter.Env {
+			if e.Name == envHFEndpointName {
+				t.Fatalf("did not want HF_ENDPOINT in local mode, got %q", e.Value)
+			}
+		}
+	})
+	t.Run("k8s sets ServiceAccountName when configured", func(t *testing.T) {
+		cfg := &jobConfig{
+			jobID:              "job-sa",
+			resourceGUID:       "guid-sa",
+			benchmarkIndex:     0,
+			namespace:          "tenant-ns",
+			providerID:         "provider-1",
+			benchmarkID:        "bench-1",
+			adapterImage:       "adapter:latest",
+			defaultEnv:         []api.EnvVar{},
+			localMode:          false,
+			serviceAccountName: "evalhub-inst-instns-job",
+		}
+		job, err := buildJob(cfg)
+		if err != nil {
+			t.Fatalf("buildJob: %v", err)
+		}
+		if job.Spec.Template.Spec.ServiceAccountName != "evalhub-inst-instns-job" {
+			t.Fatalf("ServiceAccountName = %q, want evalhub-inst-instns-job", job.Spec.Template.Spec.ServiceAccountName)
+		}
+	})
+	t.Run("local when local mode", func(t *testing.T) {
+		cfg := &jobConfig{
+			jobID:          "job-mode-local",
+			resourceGUID:   "guid-mode-l",
+			benchmarkIndex: 0,
+			namespace:      "default",
+			providerID:     "provider-1",
+			benchmarkID:    "bench-1",
+			adapterImage:   "adapter:latest",
+			defaultEnv:     []api.EnvVar{},
+			localMode:      true,
+		}
+		job, err := buildJob(cfg)
+		if err != nil {
+			t.Fatalf("buildJob: %v", err)
+		}
+		if len(job.Spec.Template.Spec.Containers) != 1 {
+			t.Fatalf("expected single adapter container in local mode, got %d", len(job.Spec.Template.Spec.Containers))
+		}
+		adapter := job.Spec.Template.Spec.Containers[0]
+		var got string
+		var found bool
+		for _, e := range adapter.Env {
+			if e.Name == envEvalHubModeName {
+				found = true
+				got = e.Value
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("adapter missing env %q", envEvalHubModeName)
+		}
+		if got != "local" {
+			t.Fatalf("EVALHUB_MODE = %q, want local", got)
+		}
+	})
 }
 
 func TestBuildJobSecurityContext(t *testing.T) {
@@ -396,6 +517,11 @@ func TestBuildJobTerminationFileVolume(t *testing.T) {
 	}
 	if !adapterMount {
 		t.Fatalf("adapter should mount %q at %q", terminationFileVolumeName, adapterTerminationSharedMountPath)
+	}
+	for _, m := range adapter.VolumeMounts {
+		if m.MountPath == sidecarConfigMountPath {
+			t.Fatalf("adapter must not mount sidecar config at %q (model proxy base comes from job.json callback_url)", sidecarConfigMountPath)
+		}
 	}
 	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
 	if sidecar == nil {
@@ -625,20 +751,44 @@ func TestBuildJobWithModelAuthSecret(t *testing.T) {
 	}
 
 	container := job.Spec.Template.Spec.Containers[0]
-	var foundMount bool
 	for _, m := range container.VolumeMounts {
 		if m.Name == modelAuthVolumeName {
-			foundMount = true
-			if m.MountPath != modelAuthMountPath {
-				t.Fatalf("expected mount path %q, got %q", modelAuthMountPath, m.MountPath)
-			}
-			if !m.ReadOnly {
-				t.Fatalf("expected mount to be read-only")
+			t.Fatalf("adapter must not mount %s (sidecar-only)", modelAuthVolumeName)
+		}
+	}
+
+	if job.Spec.Template.Spec.AutomountServiceAccountToken == nil || *job.Spec.Template.Spec.AutomountServiceAccountToken {
+		t.Fatalf("expected AutomountServiceAccountToken false on adapter+sidecar jobs")
+	}
+
+	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
+	if sidecar == nil {
+		t.Fatalf("expected sidecar init container %q", sidecarContainerName)
+	}
+	var sidecarModelMount bool
+	for _, m := range sidecar.VolumeMounts {
+		if m.Name == modelAuthVolumeName {
+			sidecarModelMount = true
+			if m.MountPath != modelAuthMountPath || !m.ReadOnly {
+				t.Fatalf("sidecar: expected read-only model auth mount at %q", modelAuthMountPath)
 			}
 		}
 	}
-	if !foundMount {
-		t.Fatalf("expected volume mount %s to be present", modelAuthVolumeName)
+	if !sidecarModelMount {
+		t.Fatalf("expected sidecar to mount volume %s for model proxy auth", modelAuthVolumeName)
+	}
+
+	var sidecarSATokenMount bool
+	for _, m := range sidecar.VolumeMounts {
+		if m.Name == sidecarSATokenVolumeName {
+			sidecarSATokenMount = true
+			if m.MountPath != sidecarSATokenMountPath || !m.ReadOnly {
+				t.Fatalf("sidecar: expected read-only SA token mount at %q", sidecarSATokenMountPath)
+			}
+		}
+	}
+	if !sidecarSATokenMount {
+		t.Fatalf("expected sidecar to mount %s for eval-hub / model SA token fallback", sidecarSATokenVolumeName)
 	}
 
 	for _, e := range container.Env {

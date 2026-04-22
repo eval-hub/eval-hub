@@ -53,18 +53,27 @@ const (
 	envOCIAuthConfigPathName          = "OCI_AUTH_CONFIG_PATH"
 	modelAuthVolumeName               = "model-auth"
 	modelAuthMountPath                = "/var/run/secrets/model"
-	testDataSecretVolumeName          = "test-data-secret"
-	testDataSecretMountPath           = "/var/run/secrets/test-data"
-	serviceCABundleFile               = "service-ca.crt"
-	envMLFlowCertPathName             = "MLFLOW_TRACKING_SERVER_CERT_PATH"
-	envEvalHubModeName                = "EVALHUB_MODE"
-	envTestDataS3BucketName           = "TEST_DATA_S3_BUCKET"
-	envTestDataS3KeyName              = "TEST_DATA_S3_KEY"
-	defaultInitCPURequest             = "100m"
-	defaultInitCPULimit               = "500m"
-	defaultInitMemoryRequest          = "128Mi"
-	defaultInitMemoryLimit            = "512Mi"
-	defaultAllowPrivilegeEscalation   = false
+	sidecarSATokenVolumeName          = "sidecar-sa-token"
+	sidecarSATokenMountPath           = "/var/run/secrets/kubernetes.io/serviceaccount"
+	sidecarSATokenFile                = "token"
+	// modelAuthSecretAPIKeyFile, modelAuthSecretCACertFile, and modelAuthSecretHFTokenFile are Kubernetes Secret
+	// data keys (filenames under modelAuthMountPath). hf-token is used for Hugging Face Hub gated assets (see lm-evaluation-harness).
+	modelAuthSecretAPIKeyFile       = "api-key"
+	modelAuthSecretCACertFile       = "ca_cert"
+	modelAuthSecretHFTokenFile      = "hf-token"
+	testDataSecretVolumeName        = "test-data-secret"
+	testDataSecretMountPath         = "/var/run/secrets/test-data"
+	serviceCABundleFile             = "service-ca.crt"
+	envMLFlowCertPathName           = "MLFLOW_TRACKING_SERVER_CERT_PATH"
+	envHFEndpointName  = "HF_ENDPOINT" // huggingface_hub Hub API base; adapter targets eval-runtime-sidecar /huggingface
+	envEvalHubModeName = "EVALHUB_MODE"
+	envTestDataS3BucketName         = "TEST_DATA_S3_BUCKET"
+	envTestDataS3KeyName            = "TEST_DATA_S3_KEY"
+	defaultInitCPURequest           = "100m"
+	defaultInitCPULimit             = "500m"
+	defaultInitMemoryRequest        = "128Mi"
+	defaultInitMemoryLimit          = "512Mi"
+	defaultAllowPrivilegeEscalation = false
 	//defaultRunAsUser                = int64(1000)
 	//defaultRunAsGroup               = int64(1000)
 	labelAppKey       = "app"
@@ -253,8 +262,15 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 		TerminationMessagePath: config.SidecarTerminationFilePath,
 	})
 
-	// Set ServiceAccount if configured
-	// applied below in template spec
+	podSpec := corev1.PodSpec{
+		RestartPolicy:  corev1.RestartPolicyNever,
+		InitContainers: initContainers,
+		Containers:     containers,
+		Volumes:        jobVolumes,
+	}
+	automount := false
+	podSpec.AutomountServiceAccountToken = &automount
+	podSpec.ServiceAccountName = cfg.serviceAccountName
 
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -271,13 +287,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 					Labels:      labels,
 					Annotations: annotations,
 				},
-				Spec: corev1.PodSpec{
-					RestartPolicy:      corev1.RestartPolicyNever,
-					InitContainers:     initContainers,
-					Containers:         containers,
-					Volumes:            jobVolumes,
-					ServiceAccountName: cfg.serviceAccountName,
-				},
+				Spec: podSpec,
 			},
 		},
 	}, nil
@@ -374,23 +384,6 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 			Name:      ociCredentialsVolumeName,
 			MountPath: ociCredentialsMountPath,
 			SubPath:   ociCredentialsSubPath,
-			ReadOnly:  true,
-		})
-	}
-
-	// Add model auth secret when configured.
-	if cfg.modelAuthSecretRef != "" {
-		volumes = append(volumes, corev1.Volume{
-			Name: modelAuthVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: cfg.modelAuthSecretRef,
-				},
-			},
-		})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      modelAuthVolumeName,
-			MountPath: modelAuthMountPath,
 			ReadOnly:  true,
 		})
 	}
@@ -504,6 +497,46 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 			Name:      ociCredentialsVolumeName,
 			MountPath: ociCredentialsMountPath,
 			SubPath:   ociCredentialsSubPath,
+			ReadOnly:  true,
+		})
+	}
+
+	// Project a pod ServiceAccount token at the default path for eval-hub / model-proxy (adapter does not mount it).
+	expSeconds := int64(3600)
+	volumes = append(volumes, corev1.Volume{
+		Name: sidecarSATokenVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			Projected: &corev1.ProjectedVolumeSource{
+				Sources: []corev1.VolumeProjection{
+					{
+						ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+							Path:              sidecarSATokenFile,
+							ExpirationSeconds: &expSeconds,
+						},
+					},
+				},
+			},
+		},
+	})
+	volumeMounts = append(volumeMounts, corev1.VolumeMount{
+		Name:      sidecarSATokenVolumeName,
+		MountPath: sidecarSATokenMountPath,
+		ReadOnly:  true,
+	})
+
+	// Mount model auth secret on the sidecar only (not on the adapter).
+	if cfg.modelAuthSecretRef != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name: modelAuthVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: cfg.modelAuthSecretRef,
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      modelAuthVolumeName,
+			MountPath: modelAuthMountPath,
 			ReadOnly:  true,
 		})
 	}
@@ -650,19 +683,40 @@ func boolPtr(value bool) *bool {
 	return &value
 }
 
-// buildEnvVars builds environment variables for the adapter container.
+// buildEnvVars builds environment variables for a container. evalHubURLValue is the value for EVALHUB_URL
+// (adapter: cfg.evalHubURL in local mode, cfg.sidecarBaseURL otherwise; sidecar: always cfg.evalHubURL).
 func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 	var env []corev1.EnvVar
 	seen := map[string]bool{}
 
+	evalHubMode := "k8s"
+	if cfg.localMode {
+		evalHubMode = "local"
+	}
 	env = append(env, corev1.EnvVar{
 		Name:  envEvalHubModeName,
-		Value: "k8s",
+		Value: evalHubMode,
 	})
 	seen[envEvalHubModeName] = true
 
+	// Hugging Face Hub traffic (tokenizers, datasets) via eval-runtime-sidecar /huggingface proxy.
+	// Uses cfg.sidecarBaseURL — same origin as the /model proxy — not model.url (job spec field).
+	if !cfg.localMode {
+		base := strings.TrimSuffix(strings.TrimSpace(cfg.sidecarBaseURL), "/")
+		if base != "" {
+			env = append(env, corev1.EnvVar{
+				Name:  envHFEndpointName,
+				Value: base + "/huggingface",
+			})
+			seen[envHFEndpointName] = true
+		}
+	}
+
+	mlflowTrackingURI := cfg.mlflowTrackingURI
 	// When sidecar is at play, mlflow calls are proxied through the sidecar.
-	mlflowTrackingURI := cfg.sidecarBaseURL
+	if !cfg.localMode {
+		mlflowTrackingURI = cfg.sidecarBaseURL
+	}
 	// Add MLFlow environment variables if tracking is configured
 	if cfg.mlflowTrackingURI != "" {
 		env = append(env, corev1.EnvVar{

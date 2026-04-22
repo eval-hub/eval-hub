@@ -3,6 +3,7 @@ package k8s
 // Contains the configuration logic that prepares the data needed by the builders
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
@@ -68,6 +69,8 @@ type jobConfig struct {
 	// queueKind and queueName come from evaluation.Queue when set (API layer normalizes empty kind to kueue).
 	queueKind string
 	queueName string
+	// localMode is true when the service is configured for local execution (see config.Service.LocalMode).
+	localMode bool
 }
 
 type s3TestDataConfig struct {
@@ -93,6 +96,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	if evaluation.Model.URL == "" || evaluation.Model.Name == "" {
 		return nil, fmt.Errorf("model url and name are required")
 	}
+	upstreamModelURL := strings.TrimSpace(evaluation.Model.URL)
 
 	port := defaultSidecarPort
 	sidecarBaseURL := ""
@@ -165,6 +169,12 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		return nil, err
 	}
 
+	localMode := serviceConfig != nil && serviceConfig.Service != nil && serviceConfig.Service.LocalMode
+	if upstreamModelURL != "" {
+		spec.Model.URL = sidecarModelProxyURL(sidecarBaseURL, upstreamModelURL)
+		spec.Model.Auth = nil
+	}
+
 	var testDataS3Bucket, testDataS3Key, testDataS3SecretRef string
 	if benchmarkConfig.TestDataRef != nil && benchmarkConfig.TestDataRef.S3 != nil {
 		testDataS3Bucket = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.Bucket)
@@ -207,13 +217,14 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		evalHubURL:           evalHubURL,
 		queueKind:            queueKind,
 		queueName:            queueName,
+		localMode:            localMode,
 		testDataS3: s3TestDataConfig{
 			bucket:    testDataS3Bucket,
 			key:       testDataS3Key,
 			secretRef: testDataS3SecretRef,
 		},
 	}
-	sidecarJSON, err := sidecarForJobPod(serviceConfig, out)
+	sidecarJSON, err := sidecarForJobPod(serviceConfig, out, upstreamModelURL)
 	if err != nil {
 		return nil, fmt.Errorf("sidecar config json: %w", err)
 	}
@@ -330,4 +341,20 @@ func readInClusterNamespace() string {
 		return ""
 	}
 	return strings.TrimSpace(string(content))
+}
+
+// sidecarModelProxyURL is the model base URL written to job.json for in-cluster runs: the adapter
+// talks to the sidecar, which forwards to the upstream from sidecar_config.json model.url.
+// Format: {sidecarBase}/model{path} where path comes from the evaluation URL (e.g. /v1), defaulting to /v1.
+func sidecarModelProxyURL(sidecarBase, upstreamModelURL string) string {
+	base := strings.TrimRight(strings.TrimSpace(sidecarBase), "/")
+	u, err := url.Parse(strings.TrimSpace(upstreamModelURL))
+	if err != nil {
+		return base + "/model/v1"
+	}
+	path := u.Path
+	if path == "" || path == "/" {
+		path = "/v1"
+	}
+	return base + "/model" + path
 }

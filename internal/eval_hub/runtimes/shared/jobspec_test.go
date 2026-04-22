@@ -178,6 +178,22 @@ func TestBuildJobSpecJSONHappyPath(t *testing.T) {
 	if spec.CallbackURL == nil || *spec.CallbackURL != callbackURL {
 		t.Fatalf("expected CallbackURL %q, got %v", callbackURL, spec.CallbackURL)
 	}
+	if spec.Tenant != "" {
+		t.Fatalf("expected empty Tenant when evaluation has no tenant, got %q", spec.Tenant)
+	}
+}
+
+func TestBuildJobSpecIncludesTenant(t *testing.T) {
+	eval := baseEvaluation()
+	eval.Resource.Tenant = "team-a"
+	callbackURL := "http://callback.example/status"
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, &callbackURL)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if spec.Tenant != "team-a" {
+		t.Fatalf("expected Tenant %q, got %q", "team-a", spec.Tenant)
+	}
 }
 
 func TestBuildJobSpecJSONNilCallbackURL(t *testing.T) {

@@ -28,9 +28,11 @@ type TokenWithExpiry struct {
 }
 
 var (
-	evalHubCachedToken atomic.Pointer[TokenWithExpiry]
-	mlflowCachedToken  atomic.Pointer[TokenWithExpiry]
-	ociCachedToken     atomic.Pointer[TokenWithExpiry]
+	evalHubCachedToken     atomic.Pointer[TokenWithExpiry]
+	mlflowCachedToken      atomic.Pointer[TokenWithExpiry]
+	modelCachedToken       atomic.Pointer[TokenWithExpiry]
+	huggingfaceCachedToken atomic.Pointer[TokenWithExpiry]
+	ociCachedToken         atomic.Pointer[TokenWithExpiry]
 )
 
 // getTokenPointer returns the cache slot for a known proxy target, or nil if the endpoint is not cacheable.
@@ -40,6 +42,10 @@ func getTokenPointer(targetEndpoint string) *atomic.Pointer[TokenWithExpiry] {
 		return &evalHubCachedToken
 	case "mlflow":
 		return &mlflowCachedToken
+	case "model":
+		return &modelCachedToken
+	case "huggingface":
+		return &huggingfaceCachedToken
 	case "oci":
 		return &ociCachedToken
 	default:
@@ -125,7 +131,7 @@ func resolveEvalHubOrMLflowToken(logger *slog.Logger, input AuthTokenInput) stri
 	return token
 }
 
-// UpdateCachedToken stores token for the target in input.TargetEndpoint (eval-hub, mlflow, or oci).
+// UpdateCachedToken stores token for the target in input.TargetEndpoint (eval-hub, mlflow, model, huggingface, or oci).
 // TTL is input.TokenCacheTimeout or defaultAuthTokenCacheTTL. An empty token clears the cache slot.
 func UpdateCachedToken(input AuthTokenInput, token string) {
 	tokenPointer := getTokenPointer(input.TargetEndpoint)
