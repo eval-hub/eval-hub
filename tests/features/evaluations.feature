@@ -7,6 +7,7 @@ Feature: Evaluations Endpoint
   Background:
     Given I set the header "X-Tenant" to "{{env:X_TENANT|test-tenant}}"
 
+  @cluster
   Scenario: Create an evaluation job
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"

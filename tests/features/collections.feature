@@ -630,6 +630,7 @@ Feature: Collections Endpoint
     And the response should contain the value "read_only_collection" at path "$.message_code"
     And the response should contain the value "Collection 'leaderboard-v2' cannot be modified or deleted." at path "$.message"
 
+  @cluster
   Scenario: Verify Evaluation Jobs Can Use OOB Collections
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
