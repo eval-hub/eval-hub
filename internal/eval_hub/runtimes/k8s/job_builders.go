@@ -21,7 +21,7 @@ const (
 	maxK8sNameLength       = 63
 	maxK8sLabelValueLength = 63
 	defaultJobTTLSeconds   = int32(3600)
-	defaultJobBackoffLimit = int32(3)
+	defaultJobBackoffLimit = int32(0)
 	adapterContainerName   = "adapter"
 	sidecarContainerName   = "sidecar"
 	defaultSidecarPort     = int32(8080)

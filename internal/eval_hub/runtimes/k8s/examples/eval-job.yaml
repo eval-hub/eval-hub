@@ -17,7 +17,7 @@ metadata:
     eval-hub.github.io/provider_id: "lm_evaluation_harness"
     eval-hub.github.io/benchmark_id: "mmlu"
 spec:
-  backoffLimit: 3
+  backoffLimit: 0
   ttlSecondsAfterFinished: 3600
   template:
     metadata:
