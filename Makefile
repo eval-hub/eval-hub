@@ -265,7 +265,7 @@ VENV_PYTHON = $(VENV_DIR)/bin/python
 venv: ## Create Python virtual environment using uv
 	@if [ ! -d "$(VENV_DIR)" ]; then \
 		echo "Creating uv virtual environment..."; \
-		uv venv $(VENV_DIR) --python 3.12; \
+		uv venv $(VENV_DIR) --python 3.11; \
 		echo "Virtual environment created at $(VENV_DIR)"; \
 	else \
 		echo "Virtual environment already exists at $(VENV_DIR)"; \

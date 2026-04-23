@@ -11,6 +11,10 @@ on:
         description: 'Publish to TestPyPI'
         type: boolean
         default: true
+      validate-wheels:
+        description: 'Run wheel validation on real runners before publishing'
+        type: boolean
+        default: true
 
 jobs:
   build-binaries:
@@ -145,9 +149,67 @@ jobs:
           path: python-server/dist/*.whl
           retention-days: 7
 
+  validate-wheels:
+    name: Validate wheel (${{ matrix.os }})
+    needs: build-wheels
+    if: inputs.validate-wheels || inputs.validate-wheels == null
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            wheel-artifact: wheel-manylinux-x86_64
+          - os: ubuntu-24.04-arm
+            wheel-artifact: wheel-manylinux-aarch64
+          # Commenting out x86_64 macos as it is hard to come by a runner in GHA
+          # - os: macos-13
+          #   wheel-artifact: wheel-macosx-x86_64
+          - os: macos-latest
+            wheel-artifact: wheel-macosx-arm64
+          - os: windows-latest
+            wheel-artifact: wheel-win-amd64
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout VERSION file
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          sparse-checkout: VERSION
+
+      - name: Set up uv python
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          python-version: "3.11"
+
+      - name: Download wheel
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ matrix.wheel-artifact }}
+          path: dist/
+
+      - name: Create venv and install wheel
+        shell: bash
+        run: |
+          uv venv .venv
+          uv pip install --python .venv dist/*.whl
+
+      - name: Validate --version
+        shell: bash
+        run: |
+          if [ -f .venv/bin/eval-hub-server ]; then
+            EVAL_HUB=.venv/bin/eval-hub-server
+          else
+            EVAL_HUB=.venv/Scripts/eval-hub-server
+          fi
+          EXPECTED=$(tr -d '\r\n' < VERSION)
+          ACTUAL=$($EVAL_HUB --version | tr -d '\r')
+          echo "Expected: eval-hub-server ${EXPECTED}"
+          echo "Actual:   ${ACTUAL}"
+          echo "${ACTUAL}" | grep -qF "${EXPECTED}"
+
   publish:
     name: Publish to PyPI
-    needs: build-wheels
+    needs: [build-wheels, validate-wheels]
     # Publish clean versions to PyPI only on actual tag pushes.
     # The event_name check prevents workflow_dispatch targeting a tag ref from triggering this.
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
@@ -174,7 +236,7 @@ jobs:
 
   publish-test-pypi:
     name: Publish to TestPyPI
-    needs: build-wheels
+    needs: [build-wheels, validate-wheels]
     # TestPyPI only receives devX versions. Tag refs are excluded so that
     # workflow_dispatch against a tag cannot publish a clean release version here.
     if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/') && inputs.publish-test-pypi)
