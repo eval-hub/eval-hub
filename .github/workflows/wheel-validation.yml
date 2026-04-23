@@ -117,8 +117,9 @@ jobs:
             wheel-artifact: wheel-manylinux-x86_64
           - os: ubuntu-24.04-arm
             wheel-artifact: wheel-manylinux-aarch64
-          - os: macos-13
-            wheel-artifact: wheel-macosx-x86_64
+          # Commenting out x86_64 macos as it is hard to come by a runner in GHA
+          # - os: macos-13
+          #   wheel-artifact: wheel-macosx-x86_64
           - os: macos-latest
             wheel-artifact: wheel-macosx-arm64
           - os: windows-latest
