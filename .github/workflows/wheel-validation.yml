@@ -122,15 +122,22 @@ jobs:
           name: ${{ matrix.wheel-artifact }}
           path: dist/
 
-      - name: Install wheel
+      - name: Create venv and install wheel
         shell: bash
-        run: uv pip install --system dist/*.whl
+        run: |
+          uv venv .venv
+          uv pip install --python .venv dist/*.whl
 
       - name: Validate --version
         shell: bash
         run: |
-          EXPECTED=$(tr -d '\n' < VERSION)
-          ACTUAL=$(eval-hub-server --version)
+          if [ -f .venv/bin/eval-hub-server ]; then
+            EVAL_HUB=.venv/bin/eval-hub-server
+          else
+            EVAL_HUB=.venv/Scripts/eval-hub-server
+          fi
+          EXPECTED=$(tr -d '\r\n' < VERSION)
+          ACTUAL=$($EVAL_HUB --version | tr -d '\r')
           echo "Expected: eval-hub-server ${EXPECTED}"
           echo "Actual:   ${ACTUAL}"
           echo "${ACTUAL}" | grep -qF "${EXPECTED}"
