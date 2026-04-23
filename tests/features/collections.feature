@@ -597,8 +597,9 @@ Feature: Collections Endpoint
     And the "resource.id" field in the response should be saved as "value:collection_id"
     When I send a GET request to "/api/v1/evaluations/collections?scope=tenant&name=test-benchmarks-collection"
     Then the response code should be 200
-    And the response should contain the value "{{value:collection_id}}" at path "$.items[0].resource.id"
-    And the response should not contain the value "system" at path "$.items[0].resource.owner"
+    And the response should equal the value "{{value:collection_id}}" at path "$.items[0].resource.id"
+    # Not that a tenant owner can be 'system:serviceaccount:tenant:tenant-user' so we must check for equals and not contains
+    And the response should not equal the value "system" at path "$.items[0].resource.owner"
     And the array at path "items" in the response should have length 1
   
   Scenario: List collections with scope=system and check it returns only system collection
@@ -606,7 +607,7 @@ Feature: Collections Endpoint
     And there are system collections
     When I send a GET request to "/api/v1/evaluations/collections?scope=system"
     Then the response code should be 200
-    And the response should contain the value "system" at path "$.items[0].resource.owner"
+    And the response should equal the value "system" at path "$.items[0].resource.owner"
     And the array at path "items" in the response should have length at least 1
   
   Scenario: Verify out of box collection retrieval by id
