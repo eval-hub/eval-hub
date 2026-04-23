@@ -1022,37 +1022,41 @@ func (tc *scenarioConfig) getJsonPathValue(jsonPath string) (interface{}, error)
 }
 
 func (tc *scenarioConfig) theResponseShouldContainAtJSONPath(expectedValue string, jsonPath string) error {
-	return tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "contains")
+	_, err := tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "contains")
+	return err
 }
 
 func (tc *scenarioConfig) theResponseShouldEqualAtJSONPath(expectedValue string, jsonPath string) error {
-	return tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "==")
+	_, err := tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "==")
+	return err
 }
 
 func (tc *scenarioConfig) theResponseShouldContainAtJSONPathAtLeast(expectedValue string, jsonPath string) error {
-	return tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, ">=")
+	_, err := tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, ">=")
+	return err
 }
 
-func (tc *scenarioConfig) theResponseShouldContainAtJSONPathImpl(expectedValue string, jsonPath string, match string) error {
+func (tc *scenarioConfig) theResponseShouldContainAtJSONPathImpl(expectedValue string, jsonPath string, match string) (bool, error) {
 	expanded, err := tc.substituteValues(expectedValue)
 	if err != nil {
-		return err
+		return false, err
 	}
 	expectedValue = expanded
 
 	foundValue, err := tc.getJsonPath(jsonPath)
 	if err != nil {
-		return tc.logError(err)
+		// true because the path is not found
+		return true, tc.logError(err)
 	}
 
 	if rawExpr, ok := strings.CutPrefix(expectedValue, regexpPrefix); ok {
 		expr, err := regexp.Compile(rawExpr)
 		if err != nil {
-			return tc.logError(fmt.Errorf("invalid regex %q: %w", rawExpr, err))
+			return false, tc.logError(fmt.Errorf("invalid regex %q: %w", rawExpr, err))
 		}
 		if expr.MatchString(foundValue) {
 			tc.logDebug("Value %s matches regex %s in path %s", foundValue, rawExpr, jsonPath)
-			return nil
+			return false, nil
 		}
 	}
 
@@ -1061,51 +1065,59 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPathImpl(expectedValue s
 		switch match {
 		case "==", "equals":
 			if foundValue == strings.TrimSpace(value) {
-				return nil
+				return false, nil
 			}
 		case "<=":
 			fv, err := strconv.ParseFloat(foundValue, 64)
 			if err != nil {
-				return tc.logError(fmt.Errorf("failed to parse found value %s as float: %w", foundValue, err))
+				return false, tc.logError(fmt.Errorf("failed to parse found value %s as float: %w", foundValue, err))
 			}
 			ex, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
 			if err != nil {
-				return tc.logError(fmt.Errorf("failed to parse expected value %s as float: %w", value, err))
+				return false, tc.logError(fmt.Errorf("failed to parse expected value %s as float: %w", value, err))
 			}
 			if fv <= ex {
-				return nil
+				return false, nil
 			}
 		case ">=":
 			fv, err := strconv.ParseFloat(foundValue, 64)
 			if err != nil {
-				return tc.logError(fmt.Errorf("failed to parse found value %s as float: %w", foundValue, err))
+				return false, tc.logError(fmt.Errorf("failed to parse found value %s as float: %w", foundValue, err))
 			}
 			ex, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
 			if err != nil {
-				return tc.logError(fmt.Errorf("failed to parse expected value %s as float: %w", value, err))
+				return false, tc.logError(fmt.Errorf("failed to parse expected value %s as float: %w", value, err))
 			}
 			if fv >= ex {
-				return nil
+				return false, nil
 			}
 		case "contains":
 			if strings.Contains(foundValue, strings.TrimSpace(value)) {
-				return nil
+				return false, nil
 			}
 		}
 	}
 
-	return tc.logError(fmt.Errorf("expected %s to be %s but was %s in %s", jsonPath, expectedValue, foundValue, asPrettyJson(string(tc.body))))
+	return true, tc.logError(fmt.Errorf("expected %s to be %s but was %s in %s", jsonPath, expectedValue, foundValue, asPrettyJson(string(tc.body))))
 }
 
 func (tc *scenarioConfig) theResponseShouldNotContainAtJSONPath(expectedValue string, jsonPath string) error {
-	if tc.theResponseShouldContainAtJSONPath(expectedValue, jsonPath) == nil {
+	notFound, err := tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "contains")
+	if !notFound {
+		if err != nil {
+			return err
+		}
 		return tc.logError(fmt.Errorf("expected %s to not contain %s but it did in %s", jsonPath, expectedValue, asPrettyJson(string(tc.body))))
 	}
 	return nil
 }
 
 func (tc *scenarioConfig) theResponseShouldNotEqualAtJSONPath(expectedValue string, jsonPath string) error {
-	if tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "==") == nil {
+	notFound, err := tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "==")
+	if !notFound {
+		if err != nil {
+			return err
+		}
 		return tc.logError(fmt.Errorf("expected %s to not equal %s but it did in %s", jsonPath, expectedValue, asPrettyJson(string(tc.body))))
 	}
 	return nil
