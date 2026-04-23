@@ -11,6 +11,7 @@ Feature: Health Check Endpoint
     And the response should contain "status" with value "healthy"
     And the response should contain "timestamp"
 
+  @negative
   Scenario: Health endpoint rejects non-GET methods
     Given the service is running
     When I send a POST request to "/api/v1/health"

@@ -80,6 +80,7 @@ When running in local server mode, the tests will:
 | @providers | Used to run just the providers tests |
 | @cluster | Tests that only work when run on a cluster or with a working runtime |
 | @local | Tests that only work when running locally (so without a working runtime) |
+| @negative | Used to mark this as a negative test |
 | @mlflow | Tests that only work when running with a configured mlflow service |
 | @ignore | Can be used to ignore a test |
 
@@ -99,6 +100,12 @@ The recommended way to run the feature tests is using the Make target:
 
 ```bash
 make test-fvt
+```
+
+or
+
+```bash
+make test-fvt-server
 ```
 
 This runs the tests with verbose output enabled.

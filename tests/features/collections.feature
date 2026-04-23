@@ -19,21 +19,25 @@ Feature: Collections Endpoint
     And the array at path "benchmarks" in the response should have length 1
     And the response should contain the value "3" at path "benchmarks[0].parameters.weight"
 
+  @negative
   Scenario: Create a collection without benchmarks field returns 400
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_no_benchmarks.json"
     Then the response code should be 400
 
+  @negative
   Scenario: Create a collection with empty benchmarks array returns 400
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_empty_benchmarks.json"
     Then the response code should be 400
 
+  @negative
   Scenario: Create a collection without name field returns 400
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_no_name.json"
     Then the response code should be 400
 
+  @negative
   Scenario: Create a collection without category field returns 400
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_no_category.json"
@@ -44,22 +48,26 @@ Feature: Collections Endpoint
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_no_description.json"
     Then the response code should be 201
 
+  @negative
   Scenario: Create a collection with a benchmark that does not contain 'id' returns 400
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_benchmark_no_id.json"
     Then the response code should be 400
 
+  @negative
   Scenario: Create a collection with a benchmark that does not contain 'provider_id' returns 400
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_benchmark_no_provider_id.json"
     Then the response code should be 400
 
   # GET collection by id - negative cases (per OpenAPI: 404)
+  @negative
   Scenario: Get collection by non-existent id returns 404
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/collections/00000000-0000-0000-0000-000000000000"
     Then the response code should be 404
 
+  @negative
   Scenario: Get collection with empty id returns 404
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/collections/"
@@ -78,16 +86,19 @@ Feature: Collections Endpoint
     And the response should contain "name" with value "updated-collection-name"
     And the response should contain "description" with value "Updated description for FVT"
 
+  @negative
   Scenario: Update collection with non-existent id returns 404
     Given the service is running
     When I send a PUT request to "/api/v1/evaluations/collections/00000000-0000-0000-0000-000000000000" with body "file:/collection_update.json"
     Then the response code should be 404
 
+  @negative
   Scenario: Update collection with empty id returns 404
     Given the service is running
     When I send a PUT request to "/api/v1/evaluations/collections/" with body "file:/collection_update.json"
     Then the response code should be 404
 
+  @negative
   Scenario: Update collection without name in body returns 400
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
@@ -102,6 +113,7 @@ Feature: Collections Endpoint
     When I send a PUT request to "/api/v1/evaluations/collections/{id}" with body "file:/collection_no_description.json"
     Then the response code should be 200
 
+  @negative
   Scenario: Update collection without benchmarks in body returns 400
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
@@ -109,6 +121,7 @@ Feature: Collections Endpoint
     When I send a PUT request to "/api/v1/evaluations/collections/{id}" with body "file:/collection_no_benchmarks.json"
     Then the response code should be 400
 
+  @negative
   Scenario: Update collection with empty benchmarks in body returns 400
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
@@ -116,6 +129,7 @@ Feature: Collections Endpoint
     When I send a PUT request to "/api/v1/evaluations/collections/{id}" with body "file:/collection_empty_benchmarks.json"
     Then the response code should be 400
 
+  @negative
   Scenario: Update collection with benchmark missing id in body returns 400
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
@@ -123,6 +137,7 @@ Feature: Collections Endpoint
     When I send a PUT request to "/api/v1/evaluations/collections/{id}" with body "file:/collection_benchmark_no_id.json"
     Then the response code should be 400
 
+  @negative
   Scenario: Update collection with benchmark missing provider_id in body returns 400
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
@@ -164,16 +179,19 @@ Feature: Collections Endpoint
     And the response should contain the value "other_provider" at path "benchmarks[0].provider_id"
     And the array at path "benchmarks" in the response should have length 1
 
+  @negative
   Scenario: Patch collection with non-existent id returns 404
     Given the service is running
     When I send a PATCH request to "/api/v1/evaluations/collections/00000000-0000-0000-0000-000000000000" with body "file:/patch_collection_name.json"
     Then the response code should be 404
 
+  @negative
   Scenario: Patch collection with empty id returns 404
     Given the service is running
     When I send a PATCH request to "/api/v1/evaluations/collections/" with body "file:/patch_collection_name.json"
     Then the response code should be 404
 
+  @negative
   Scenario: Patch collection with invalid body returns 400
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
@@ -240,22 +258,26 @@ Feature: Collections Endpoint
     When I send a DELETE request to "/api/v1/evaluations/collections/{id}?hard_delete=true"
     Then the response code should be 204
 
+  @negative
   Scenario: List collections with invalid limit returns 400
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/collections?limit=invalid"
     Then the response code should be 400
 
+  @negative
   Scenario: List collections with invalid offset returns 400
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/collections?offset=not-a-number"
     Then the response code should be 400
 
+  @negative
   Scenario: List collections with invalid scope returns 400
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/collections?scope=invalid"
     Then the response code should be 400
     And the response should contain the value "query_parameter_value_invalid" at path "$.message_code"
 
+  @negative
   Scenario: Delete collection with non-existent id returns 404
     Given the service is running
     When I send a DELETE request to "/api/v1/evaluations/collections/00000000-0000-0000-0000-000000000000?hard_delete=true"
@@ -482,6 +504,7 @@ Feature: Collections Endpoint
     When I send a DELETE request to "/api/v1/evaluations/collections/{id}"
     Then the response code should be 204
   
+  @negative
   Scenario: Verify soft deleted collection returns 404 on GET
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
@@ -491,6 +514,7 @@ Feature: Collections Endpoint
     When I send a GET request to "/api/v1/evaluations/collections/{id}"
     Then the response code should be 404
   
+  @negative
   Scenario: Verify DELETE on a deleted collection returns 404
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
@@ -579,6 +603,7 @@ Feature: Collections Endpoint
   
   Scenario: List collections with scope=system and check it returns only system collection
     Given the service is running
+    And there are system collections
     When I send a GET request to "/api/v1/evaluations/collections?scope=system"
     Then the response code should be 200
     And the response should contain the value "system" at path "$.items[0].resource.owner"
@@ -586,24 +611,27 @@ Feature: Collections Endpoint
   
   Scenario: Verify out of box collection retrieval by id
     Given the service is running
-    When I send a GET request to "/api/v1/evaluations/collections/safety-and-fairness-v1"
+    And there are system collections
+    When I send a GET request to "/api/v1/evaluations/collections/{{value:collection0:id}}"
     Then the response code should be 200
   
   Scenario: Verify out of box collection retrieval - name and category
     Given the service is running
-    When I send a GET request to "/api/v1/evaluations/collections/safety-and-fairness-v1"
+    And there are system collections
+    When I send a GET request to "/api/v1/evaluations/collections/{{value:collection0:id}}"
     Then the response code should be 200
-    And the response should contain "name" with value "Safety & Fairness"
-    And the response should contain "category" with value "safety"
+    And the response should contain "name" with value "{{value:collection0:name}}"
 
   Scenario: Verify out of box collection retrieval - threshold 
     Given the service is running
+    And there is a system collection with id "safety-and-fairness-v1"
     When I send a GET request to "/api/v1/evaluations/collections/safety-and-fairness-v1"
     Then the response code should be 200
     And the response should contain the value "0.758" at path "$.pass_criteria.threshold"
 
   Scenario: Verify out of box collection retrieval - benchmarks
     Given the service is running
+    And there is a system collection with id "safety-and-fairness-v1"
     When I send a GET request to "/api/v1/evaluations/collections/safety-and-fairness-v1"
     Then the response code should be 200
     And the response should contain "benchmarks"
@@ -617,6 +645,7 @@ Feature: Collections Endpoint
 
   Scenario: Verify out of box collection retrieval - weights 
     Given the service is running
+    And there is a system collection with id "safety-and-fairness-v1"
     When I send a GET request to "/api/v1/evaluations/collections/safety-and-fairness-v1"
     Then the response code should be 200
     And the response should contain the value "2" at path "$.benchmarks[0].weight"
@@ -625,26 +654,8 @@ Feature: Collections Endpoint
 
   Scenario: Verify OOB Collections Are Immutable
     Given the service is running
-    When I send a DELETE request to "/api/v1/evaluations/collections/leaderboard-v2?hard_delete=true"
+    And there are system collections
+    When I send a DELETE request to "/api/v1/evaluations/collections/{{value:collection0:id}}?hard_delete=true"
     Then the response code should be 400
     And the response should contain the value "read_only_collection" at path "$.message_code"
-    And the response should contain the value "Collection 'leaderboard-v2' cannot be modified or deleted." at path "$.message"
-
-  @cluster
-  Scenario: Verify Evaluation Jobs Can Use OOB Collections
-    Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body:
-      """
-      {
-        "name": "test-evaluation-job-oob-collection",
-        "collection": {
-          "id": "toxicity-and-ethical-principles"
-        },
-        "model": {
-          "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}"
-        }
-      }
-      """
-    Then the response code should be 202
-    And the response should contain the value "toxicity-and-ethical-principles" at path "$.collection.id"
+    And the response should contain the value "cannot be modified or deleted." at path "$.message"

@@ -1,5 +1,5 @@
-@evaluations
 @cluster
+@evaluations
 Feature: Evaluation Jobs
   As a data scientist
   I want to create evaluation jobs against a running cluster
@@ -442,3 +442,21 @@ Feature: Evaluation Jobs
     And the response should contain the value "resource_not_found" at path "$.message_code"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 404
+
+  Scenario: Verify Evaluation Jobs Can Use OOB Collections
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+      """
+      {
+        "name": "test-evaluation-job-oob-collection",
+        "collection": {
+          "id": "toxicity-and-ethical-principles"
+        },
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}"
+        }
+      }
+      """
+    Then the response code should be 202
+    And the response should contain the value "toxicity-and-ethical-principles" at path "$.collection.id"

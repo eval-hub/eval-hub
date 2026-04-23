@@ -54,47 +54,55 @@ Feature: Evaluations Endpoint
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
+  @negative
   Scenario: Create evaluation job missing name
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_missing_name.json"
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
 
+  @negative
   Scenario: Create evaluation job missing model
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_missing_model.json"
     Then the response code should be 400
 
+  @negative
   Scenario: Get evaluation by non-existent id returns 404
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/jobs/00000000-0000-0000-0000-000000000000"
     Then the response code should be 404
     And the response should contain the value "resource_not_found" at path "$.message_code"
 
+  @negative
   Scenario: List evaluation jobs with invalid limit returns 400
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/jobs?limit=-1"
     Then the response code should be 400
     And the response should contain the value "query_parameter_invalid" at path "$.message_code"
 
+  @negative
   Scenario: List evaluation jobs with invalid offset returns 400
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/jobs?offset=not-a-number"
     Then the response code should be 400
     And the response should contain the value "query_parameter_invalid" at path "$.message_code"
 
+  @negative
   Scenario: List evaluation jobs with non-numeric limit returns 400
     Given the service is running
     When I send a GET request to "/api/v1/evaluations/jobs?limit=invalid"
     Then the response code should be 400
     And the response should contain the value "query_parameter_invalid" at path "$.message_code"
 
+  @negative
   Scenario: Delete evaluation job with non-existent id returns 404
     Given the service is running
     When I send a DELETE request to "/api/v1/evaluations/jobs/00000000-0000-0000-0000-000000000000?hard_delete=true"
     Then the response code should be 404
     And the response should contain the value "resource_not_found" at path "$.message_code"
 
+  @negative
   Scenario: Create evaluation job with invalid JSON returns 400
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -104,6 +112,7 @@ Feature: Evaluations Endpoint
     Then the response code should be 400
     And the response should contain the value "invalid_json_request" at path "$.message_code"
 
+  @negative
   Scenario: Create evaluation job missing benchmarks
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -135,18 +144,21 @@ Feature: Evaluations Endpoint
     And the response should contain the value "request_validation_failed" at path "$.message_code"
     And the response should contain the value "minimum one benchmark" at path "$.message"
 
+  @negative
   Scenario: Create evaluation job with invalid provider
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_invalid_provider.json"
     Then the response code should be 404
     And the response should contain the value "resource_not_found" at path "$.message_code"
 
+  @negative
   Scenario: Create evaluation job with invalid benchmark
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_invalid_benchmark.json"
     Then the response code should be 400
     And the response should contain the value "resource_does_not_exist" at path "$.message_code"
 
+  @negative
   Scenario: Create evaluation job with invalid collection and benchmarks
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -172,12 +184,14 @@ Feature: Evaluations Endpoint
     And the response should contain the value "request_validation_failed" at path "$.message_code"
     And the response should contain the value "benchmarks or collection" at path "$.message"
 
+  @negative
   Scenario: Create evaluation job missing benchmark id
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_missing_benchmark_id.json"
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
 
+  @negative
   Scenario: Create evaluation job missing benchmark provider_id
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_missing_provider_id.json"
@@ -544,6 +558,7 @@ Feature: Evaluations Endpoint
     And the response should contain the value "Evaluation job cancelled" at path "$.status.benchmarks[0].error_message.message"
     And the response should contain the value "evaluation_job_cancelled" at path "$.status.benchmarks[0].error_message.message_code"
 
+  @negative
   Scenario: Cancel evaluation job with invalid hard_delete query
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
@@ -552,6 +567,7 @@ Feature: Evaluations Endpoint
     Then the response code should be 400
     And the response should contain the value "query_parameter_invalid" at path "$.message_code"
 
+  @negative
   Scenario: Update evaluation job status with invalid payload
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
@@ -560,6 +576,7 @@ Feature: Evaluations Endpoint
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
 
+  @negative
   Scenario: Update evaluation job status missing provider_id
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
@@ -568,6 +585,7 @@ Feature: Evaluations Endpoint
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
 
+  @negative
   Scenario: Update evaluation job status for unknown id returns 404
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs/unknown-id/events" with body "file:/evaluation_job_status_event_running.json"
@@ -766,6 +784,7 @@ Feature: Evaluations Endpoint
     Then the response code should be 200
     And the response should contain the value "0" at path "$.total_count"
 
+  @negative
   Scenario: Evaluation endpoints reject unsupported methods
     Given the service is running
     When I send a PUT request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
