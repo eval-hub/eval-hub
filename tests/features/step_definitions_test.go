@@ -526,6 +526,9 @@ func (tc *scenarioConfig) iSetWaitDeadlineTo(paramValue string) error {
 	if err != nil {
 		return tc.logError(fmt.Errorf("failed to parse duration %q: %w", value, err))
 	}
+	if tc.waitDeadline <= 0 {
+		return tc.logError(fmt.Errorf("wait deadline must be positive, got %q (%v)", value, tc.waitDeadline))
+	}
 	return nil
 }
 
