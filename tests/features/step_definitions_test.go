@@ -1025,6 +1025,10 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPath(expectedValue strin
 	return tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "contains")
 }
 
+func (tc *scenarioConfig) theResponseShouldEqualAtJSONPath(expectedValue string, jsonPath string) error {
+	return tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "==")
+}
+
 func (tc *scenarioConfig) theResponseShouldContainAtJSONPathAtLeast(expectedValue string, jsonPath string) error {
 	return tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, ">=")
 }
@@ -1055,7 +1059,7 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPathImpl(expectedValue s
 	values := strings.SplitSeq(expectedValue, "|")
 	for value := range values {
 		switch match {
-		case "==":
+		case "==", "equals":
 			if foundValue == strings.TrimSpace(value) {
 				return nil
 			}
@@ -1102,7 +1106,21 @@ func (tc *scenarioConfig) theResponseShouldNotContainAtJSONPath(expectedValue st
 		expectedValue = expanded
 	}
 	if tc.theResponseShouldContainAtJSONPath(expectedValue, jsonPath) == nil {
-		return tc.logError(fmt.Errorf("expected %s to not contain %s but it did", jsonPath, expectedValue))
+		return tc.logError(fmt.Errorf("expected %s to not contain %s but it did in %s", jsonPath, expectedValue, asPrettyJson(string(tc.body))))
+	}
+	return nil
+}
+
+func (tc *scenarioConfig) theResponseShouldNotEqualAtJSONPath(expectedValue string, jsonPath string) error {
+	if strings.Contains(expectedValue, "{{") {
+		expanded, err := tc.substituteValues(expectedValue)
+		if err != nil {
+			return err
+		}
+		expectedValue = expanded
+	}
+	if tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "==") == nil {
+		return tc.logError(fmt.Errorf("expected %s to not equal %s but it did in %s", jsonPath, expectedValue, asPrettyJson(string(tc.body))))
 	}
 	return nil
 }
@@ -1405,8 +1423,10 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the response should have schema as:$`, tc.theResponseShouldHaveSchemaAs)
 	ctx.Step(`^the "([^"]*)" field in the response should be saved as "([^"]*)"$`, tc.theFieldShouldBeSaved)
 	ctx.Step(`^the response should contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldContainAtJSONPath)
+	ctx.Step(`^the response should equal the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldEqualAtJSONPath)
 	ctx.Step(`^the response should contain at least the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldContainAtJSONPathAtLeast)
 	ctx.Step(`^the response should not contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldNotContainAtJSONPath)
+	ctx.Step(`^the response should not equal the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldNotEqualAtJSONPath)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLength)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length "([^"]*)"$`, tc.theArrayAtPathInResponseShouldHaveLength)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
