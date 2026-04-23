@@ -1098,13 +1098,6 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPathImpl(expectedValue s
 }
 
 func (tc *scenarioConfig) theResponseShouldNotContainAtJSONPath(expectedValue string, jsonPath string) error {
-	if strings.Contains(expectedValue, "{{") {
-		expanded, err := tc.substituteValues(expectedValue)
-		if err != nil {
-			return err
-		}
-		expectedValue = expanded
-	}
 	if tc.theResponseShouldContainAtJSONPath(expectedValue, jsonPath) == nil {
 		return tc.logError(fmt.Errorf("expected %s to not contain %s but it did in %s", jsonPath, expectedValue, asPrettyJson(string(tc.body))))
 	}
@@ -1112,13 +1105,6 @@ func (tc *scenarioConfig) theResponseShouldNotContainAtJSONPath(expectedValue st
 }
 
 func (tc *scenarioConfig) theResponseShouldNotEqualAtJSONPath(expectedValue string, jsonPath string) error {
-	if strings.Contains(expectedValue, "{{") {
-		expanded, err := tc.substituteValues(expectedValue)
-		if err != nil {
-			return err
-		}
-		expectedValue = expanded
-	}
 	if tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "==") == nil {
 		return tc.logError(fmt.Errorf("expected %s to not equal %s but it did in %s", jsonPath, expectedValue, asPrettyJson(string(tc.body))))
 	}
