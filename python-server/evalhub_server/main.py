@@ -26,12 +26,12 @@ def main(args=None):
     if args is None:
         args = sys.argv[1:]
 
+    # Get the path to the binary
+    binary_path = get_binary_path()
+
     if "--version" in args or "-V" in args:
         print(f"eval-hub-server {__version__}")
         sys.exit(0)
-
-    # Get the path to the binary
-    binary_path = get_binary_path()
 
     # Pass all command-line arguments to the binary
     result = subprocess.run([binary_path] + args)

@@ -69,7 +69,8 @@ def test_binary_exit_code_propagated(mock_exit, mock_run, mock_path):
 
 
 @pytest.mark.unit
-def test_version_flag_prints_version(capsys):
+@patch("evalhub_server.main.get_binary_path", return_value="/fake/eval-hub")
+def test_version_flag_prints_version(mock_path, capsys):
     with pytest.raises(SystemExit) as exc_info:
         main(["--version"])
     assert exc_info.value.code == 0
@@ -78,7 +79,8 @@ def test_version_flag_prints_version(capsys):
 
 
 @pytest.mark.unit
-def test_version_short_flag(capsys):
+@patch("evalhub_server.main.get_binary_path", return_value="/fake/eval-hub")
+def test_version_short_flag(mock_path, capsys):
     with pytest.raises(SystemExit) as exc_info:
         main(["-V"])
     assert exc_info.value.code == 0
@@ -87,8 +89,9 @@ def test_version_short_flag(capsys):
 
 
 @pytest.mark.unit
-@patch("evalhub_server.main.get_binary_path")
-def test_version_flag_does_not_invoke_binary(mock_path):
+@patch("evalhub_server.main.get_binary_path", return_value="/fake/eval-hub")
+@patch("evalhub_server.main.subprocess.run")
+def test_version_flag_does_not_run_binary(mock_run, mock_path):
     with pytest.raises(SystemExit):
         main(["--version"])
-    mock_path.assert_not_called()
+    mock_run.assert_not_called()
