@@ -1,9 +1,14 @@
 """eval-hub server binary provider."""
 
-__version__ = "0.1.0a0"
-
 import platform
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 from pathlib import Path
+
+try:
+    __version__ = _pkg_version("eval-hub-server")
+except PackageNotFoundError:
+    __version__ = "0.0.0"
 
 
 def get_binary_path():
@@ -48,4 +53,4 @@ def get_binary_path():
     return str(binary_path)
 
 
-__all__ = ["get_binary_path"]
+__all__ = ["__version__", "get_binary_path"]
