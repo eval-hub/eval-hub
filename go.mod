@@ -13,7 +13,7 @@ require (
 	github.com/go-playground/validator/v10 v10.30.2
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/google/uuid v1.6.0
-	github.com/jackc/pgx/v5 v5.9.1
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/prometheus/client_golang v1.23.2
 	github.com/uptrace/opentelemetry-go-extra/otelsql v0.3.2
 	github.com/xeipuuv/gojsonschema v1.2.0
