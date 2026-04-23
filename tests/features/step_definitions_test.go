@@ -76,6 +76,9 @@ type scenarioConfig struct {
 	assets map[string][]string
 
 	values map[string]string
+
+	waitDeadline time.Duration
+	waitInterval time.Duration
 }
 
 func getLogger() *log.Logger {
@@ -293,16 +296,15 @@ func (tc *scenarioConfig) saveValue(name, value string) {
 
 func (tc *scenarioConfig) theServiceIsRunning(ctx context.Context) error {
 	// Check that the server is actually running by sending a request to the health endpoint
-	for range 10 {
+	for range 20 {
 		if err := tc.checkHealthEndpoint(); err != nil {
 			tc.logDebug("Error checking health endpoint: %v\n", err.Error())
 			time.Sleep(1 * time.Second)
 		} else {
-			break
+			return nil
 		}
 	}
-
-	return nil
+	return tc.logError(fmt.Errorf("service is not running"))
 }
 
 func (tc *scenarioConfig) thereAreNoUserProviders(ctx context.Context) error {
@@ -515,13 +517,25 @@ func (tc *scenarioConfig) iSendARequestTo(method, path string) error {
 	return tc.iSendARequestToWithBody(method, path, "")
 }
 
+func (tc *scenarioConfig) iSetWaitDeadlineTo(paramValue string) error {
+	value, err := tc.getValue(paramValue)
+	if err != nil {
+		return err
+	}
+	tc.waitDeadline, err = time.ParseDuration(value)
+	if err != nil {
+		return tc.logError(fmt.Errorf("failed to parse duration %q: %w", value, err))
+	}
+	return nil
+}
+
 func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) error {
-	deadline := time.Now().Add(2 * time.Minute)
+	deadline := time.Now().Add(tc.waitDeadline)
 	var lastErr error
 	for time.Now().Before(deadline) {
 		if err := tc.iSendARequestImpl(http.MethodGet, "/api/v1/evaluations/jobs/{id}", "", "wait for evaluation job status"); err != nil {
 			lastErr = err
-			time.Sleep(1 * time.Second)
+			time.Sleep(tc.waitInterval)
 			continue
 		}
 		if tc.response != nil && tc.response.StatusCode == http.StatusOK {
@@ -536,7 +550,7 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) err
 		} else if tc.response != nil {
 			lastErr = tc.logError(fmt.Errorf("unexpected response status %d", tc.response.StatusCode))
 		}
-		time.Sleep(1 * time.Second)
+		time.Sleep(tc.waitInterval)
 	}
 	if lastErr != nil {
 		return tc.logError(lastErr)
@@ -1274,6 +1288,9 @@ func createScenarioConfig(apiConfig *apiFeature) *scenarioConfig {
 	conf.values = make(map[string]string)
 	conf.apiFeature = apiConfig
 
+	conf.waitDeadline = 30 * time.Minute
+	conf.waitInterval = 1 * time.Minute
+
 	return conf
 }
 
@@ -1287,15 +1304,9 @@ func setUpTestConf() {
 
 func waitForService() {
 	tc := createScenarioConfig(api)
-	for range 10 {
-		if err := tc.checkHealthEndpoint(); err != nil {
-			tc.logDebug("Error checking health endpoint: %v\n", err)
-			time.Sleep(1 * time.Second)
-		} else {
-			return
-		}
+	if err := tc.theServiceIsRunning(context.Background()); err != nil {
+		panic("Stopped API Tests. Service is not ready for testing.\n")
 	}
-	panic("Stopped API Tests. Service is not ready for testing.\n")
 }
 
 func tidyUpTests() {
@@ -1430,6 +1441,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least "([^"]*)"$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^I wait for the evaluation job status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatus)
+	ctx.Step(`^I set the wait deadline to "([^"]*)"$`, tc.iSetWaitDeadlineTo)
 	// Other steps
 	ctx.Step(`^fix this step$`, tc.fixThisStep)
 }

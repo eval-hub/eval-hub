@@ -459,11 +459,11 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 		if err != nil {
 			t.Fatalf("Failed to get evaluation job: %v", err)
 		}
-		js, err := json.MarshalIndent(job, "", "  ")
+		/* js */ _, err = json.MarshalIndent(job, "", "  ")
 		if err != nil {
 			t.Fatalf("Failed to marshal job: %v", err)
 		}
-		t.Logf("Job: %s\n", string(js))
+		// t.Logf("Job: %s\n", string(js))
 		if len(job.Results.Benchmarks) == 0 {
 			t.Fatalf("No benchmarks found")
 		}

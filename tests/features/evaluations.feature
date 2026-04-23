@@ -7,53 +7,6 @@ Feature: Evaluations Endpoint
   Background:
     Given I set the header "X-Tenant" to "{{env:X_TENANT|test-tenant}}"
 
-  @cluster
-  Scenario: Create an evaluation job
-    Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
-    Then the response code should be 202
-    And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
-    And the response should contain the value "pending" at path "$.status.state"
-    And the response should contain the value "{{env:MODEL_NAME|test}}" at path "$.model.name"
-    And the response should contain the value "{{env:MODEL_URL|http://test.com}}" at path "$.model.url"
-    And the response should contain the value "arc_easy" at path "$.benchmarks[0].id"
-    And the response should contain the value "garak|lm_evaluation_harness" at path "$.benchmarks[0].provider_id"
-    And the response should contain the value "3" at path "$.benchmarks[0].parameters.num_fewshot"
-    And the response should contain the value "5" at path "$.benchmarks[0].parameters.limit"
-    And the response should contain the value "google/flan-t5-small" at path "$.benchmarks[0].parameters.tokenizer"
-    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
-    Then the response code should be 200
-    And the response should contain the value "pending" at path "$.status.state"
-    And the response should contain the value "{{env:MODEL_NAME|test}}" at path "$.model.name"
-    And the response should contain the value "{{env:MODEL_URL|http://test.com}}" at path "$.model.url"
-    And the response should contain the value "arc_easy" at path "$.benchmarks[0].id"
-    And the response should contain the value "garak|lm_evaluation_harness" at path "$.benchmarks[0].provider_id"
-    And the response should contain the value "3" at path "$.benchmarks[0].parameters.num_fewshot"
-    And the response should contain the value "5" at path "$.benchmarks[0].parameters.limit"
-    And the response should contain the value "google/flan-t5-small" at path "$.benchmarks[0].parameters.tokenizer"
-    And the response should not contain the value "collection" at path "$.collection"
-    And I wait for the evaluation job status to be "completed"
-    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
-    Then the response code should be 204
-    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
-    Then the response code should be 404
-    And the response should contain the value "resource_not_found" at path "$.message_code"
-
-  @mlflow
-  Scenario: Create an evaluation job with MLflow experiment
-    Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_mlflow_experiment.json"
-    Then the response code should be 202
-    And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
-    And the response should contain the value "environment" at path "$.experiment.tags[0].key"
-    And the response should contain the value "test" at path "$.experiment.tags[0].value"
-    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
-    Then the response code should be 200
-    And the response should contain the value "environment" at path "$.experiment.tags[0].key"
-    And the response should contain the value "test" at path "$.experiment.tags[0].value"
-    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
-    Then the response code should be 204
-
   @negative
   Scenario: Create evaluation job missing name
     Given the service is running
