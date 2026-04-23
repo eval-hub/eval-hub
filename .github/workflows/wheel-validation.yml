@@ -13,6 +13,12 @@ jobs:
           - goos: linux
             goarch: amd64
             output: bin/eval-hub-linux-amd64
+          - goos: linux
+            goarch: arm64
+            output: bin/eval-hub-linux-arm64
+          - goos: darwin
+            goarch: amd64
+            output: bin/eval-hub-darwin-amd64
           - goos: darwin
             goarch: arm64
             output: bin/eval-hub-darwin-arm64
@@ -51,6 +57,16 @@ jobs:
             binary-artifact: binary-linux-amd64
             binary-name: eval-hub-linux-amd64
             wheel-tag: manylinux_2_17_x86_64
+          - platform: manylinux
+            arch: aarch64
+            binary-artifact: binary-linux-arm64
+            binary-name: eval-hub-linux-arm64
+            wheel-tag: manylinux_2_17_aarch64
+          - platform: macosx
+            arch: x86_64
+            binary-artifact: binary-darwin-amd64
+            binary-name: eval-hub-darwin-amd64
+            wheel-tag: macosx_10_9_x86_64
           - platform: macosx
             arch: arm64
             binary-artifact: binary-darwin-arm64
@@ -99,6 +115,10 @@ jobs:
         include:
           - os: ubuntu-latest
             wheel-artifact: wheel-manylinux-x86_64
+          - os: ubuntu-24.04-arm
+            wheel-artifact: wheel-manylinux-aarch64
+          - os: macos-13
+            wheel-artifact: wheel-macosx-x86_64
           - os: macos-latest
             wheel-artifact: wheel-macosx-arm64
           - os: windows-latest
