@@ -102,7 +102,10 @@ The recommended way to run the feature tests is using the Make target:
 make test-fvt
 ```
 
-or
+or run the FVT tests against a running server,
+the make target will run up the server and stop it after the tests,
+this target is useful when you want to look at the service logs
+which will be stored in the `bin` directory:
 
 ```bash
 make test-fvt-server

@@ -286,10 +286,9 @@ func (tc *scenarioConfig) logError(err error, withStack ...bool) error {
 	return fmt.Errorf("%s%v", sb.String(), err)
 }
 
-func (tc *scenarioConfig) saveValue(name, value string) error {
+func (tc *scenarioConfig) saveValue(name, value string) {
 	tc.values[name] = value
 	tc.logDebug("Saved value %s: %s\n", name, value)
-	return nil
 }
 
 func (tc *scenarioConfig) theServiceIsRunning(ctx context.Context) error {
