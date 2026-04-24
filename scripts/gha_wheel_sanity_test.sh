@@ -3,8 +3,8 @@ set -euo pipefail
 
 BINARY="eval-hub-server"
 CONFIG_DIR="./config"
-PORT="${1:-8080}"
-FVT_TAGS="${2:---godog.tags=@gha-wheel-sanity}"
+PORT=8080
+FVT_TAGS="${1:---godog.tags=@gha-wheel-sanity}"
 
 LOGFILE=$(mktemp)
 
