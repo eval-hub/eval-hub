@@ -14,7 +14,9 @@ type SidecarConfig struct {
 	SidecarContainer *SidecarContainerConfig `mapstructure:"sidecar_container,omitempty" json:"sidecar_container,omitempty"`
 }
 
-// SidecarOCIConfig holds sidecar OCI/registry proxy settings (host from configmap).
+// SidecarOCIConfig holds optional TLS/timeout overrides for the OCI registry HTTP client.
+// Whether the OCI reverse proxy runs is determined from the job spec (exports.oci), not from
+// the presence of this block; when nil, the sidecar uses defaults for registry TLS.
 type SidecarOCIConfig struct {
 	CACertPath         string        `mapstructure:"ca_cert_path,omitempty" json:"ca_cert_path,omitempty"`                 // optional PEM CA for registry TLS
 	InsecureSkipVerify bool          `mapstructure:"insecure_skip_verify,omitempty" json:"insecure_skip_verify,omitempty"` // skip TLS verify for registry (e.g. self-signed)

@@ -87,11 +87,11 @@ SERVICE_LOG ?= $(BIN_DIR)/service.log
 
 start-service: test-setup ${SERVER_PID_FILE} build-service ## Run the application in background
 	@echo "Running $(BINARY_NAME) on port $(PORT)..."
-	@. $(VENV_DIR)/bin/activate && ./scripts/start_server.sh "${SERVER_PID_FILE}" "${BIN_DIR}/$(BINARY_NAME)" "${SERVICE_LOG}" ${PORT} ""
+	@if [ -f $(VENV_DIR)/bin/activate ]; then . $(VENV_DIR)/bin/activate; else . $(VENV_DIR)/Scripts/activate; fi && ./scripts/start_server.sh "${SERVER_PID_FILE}" "${BIN_DIR}/$(BINARY_NAME)" "${SERVICE_LOG}" ${PORT} ""
 
 start-service-coverage: test-setup ${SERVER_PID_FILE} build-coverage ## Run the application in background
 	@echo "Running $(BINARY_NAME)-cov on port $(PORT)..."
-	@. $(VENV_DIR)/bin/activate && ./scripts/start_server.sh "${SERVER_PID_FILE}" "${BIN_DIR}/$(BINARY_NAME)-cov" "${SERVICE_LOG}" ${PORT} "${BIN_DIR}"
+	@if [ -f $(VENV_DIR)/bin/activate ]; then . $(VENV_DIR)/bin/activate; else . $(VENV_DIR)/Scripts/activate; fi && ./scripts/start_server.sh "${SERVER_PID_FILE}" "${BIN_DIR}/$(BINARY_NAME)-cov" "${SERVICE_LOG}" ${PORT} "${BIN_DIR}"
 
 stop-service:
 	-./scripts/stop_server.sh "${SERVER_PID_FILE}"
@@ -166,7 +166,7 @@ test-setup: venv ## Set up Python test environment (venv + eval-hub-sdk adapter)
 
 test-fvt: $(BIN_DIR) test-setup ## Run FVT (Functional Verification Tests) using godog
 	@echo "Running FVT tests..."
-	@. $(VENV_DIR)/bin/activate && bash -c 'set -o pipefail; go test ${FVT_TESTS} ${FVT_OUTPUT} "${FVT_TAGS}" --test.v -race --godog.concurrency=${FVT_CONCURRENCY} | ${PWD}/scripts/grcat ${PWD}/.conf.go-integration-test'
+	@if [ -f $(VENV_DIR)/bin/activate ]; then . $(VENV_DIR)/bin/activate; else . $(VENV_DIR)/Scripts/activate; fi && bash -c 'set -o pipefail; go test ${FVT_TESTS} ${FVT_OUTPUT} ${FVT_TAGS} -v -race | ${PWD}/scripts/grcat ${PWD}/.conf.go-integration-test'
 
 test-fvt-server: start-service ## Run FVT tests using godog against a running server
 	@SERVER_URL="${SERVER_URL}" make test-fvt; status=$$?; make stop-service; exit $$status
