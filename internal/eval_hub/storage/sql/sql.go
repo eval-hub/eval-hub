@@ -129,6 +129,8 @@ func NewStorage(
 		}
 	}
 
+	_, isolationLevel := sqlConfig.GetIsolationLevel()
+
 	s := &sqlStorage{
 		sqlConfig:         &sqlConfig,
 		statementsFactory: statementsFactory,
@@ -136,7 +138,7 @@ func NewStorage(
 		logger:            logger,
 		ctx:               context.Background(),
 		maxArgLength:      512,
-		isolationLevel:    sql.LevelSerializable,
+		isolationLevel:    isolationLevel,
 	}
 
 	// ping the database to verify the DSN provided by the user is valid and the server is accessible
