@@ -301,6 +301,7 @@ func (s *sqlStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 		tenant:            s.tenant,
 		owner:             s.owner,
 		maxArgLength:      s.maxArgLength,
+		isolationLevel:    s.isolationLevel,
 	}
 }
 
@@ -314,6 +315,7 @@ func (s *sqlStorage) WithContext(ctx context.Context) abstractions.Storage {
 		tenant:            s.tenant,
 		owner:             s.owner,
 		maxArgLength:      s.maxArgLength,
+		isolationLevel:    s.isolationLevel,
 	}
 }
 
@@ -327,6 +329,7 @@ func (s *sqlStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
 		tenant:            tenant,
 		owner:             s.owner,
 		maxArgLength:      s.maxArgLength,
+		isolationLevel:    s.isolationLevel,
 	}
 }
 
@@ -340,5 +343,6 @@ func (s *sqlStorage) WithOwner(owner api.User) abstractions.Storage {
 		tenant:            s.tenant,
 		owner:             owner,
 		maxArgLength:      s.maxArgLength,
+		isolationLevel:    s.isolationLevel,
 	}
 }
