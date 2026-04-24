@@ -1,6 +1,7 @@
 package shared_test
 
 import (
+	"database/sql"
 	"strings"
 	"testing"
 	"time"
@@ -158,6 +159,114 @@ func TestSQLDatabaseConfig_GetUser(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSQLDatabaseConfig_GetIsolationLevel(t *testing.T) {
+	t.Parallel()
+
+	knownLevels := []struct {
+		input string
+		want  sql.IsolationLevel
+	}{
+		{"Read Uncommitted", sql.LevelReadUncommitted},
+		{"read uncommitted", sql.LevelReadUncommitted},
+		{"READ UNCOMMITTED", sql.LevelReadUncommitted},
+		{"Read Committed", sql.LevelReadCommitted},
+		{"read committed", sql.LevelReadCommitted},
+		{"Write Committed", sql.LevelWriteCommitted},
+		{"write committed", sql.LevelWriteCommitted},
+		{"Repeatable Read", sql.LevelRepeatableRead},
+		{"repeatable read", sql.LevelRepeatableRead},
+		{"Snapshot", sql.LevelSnapshot},
+		{"SNAPSHOT", sql.LevelSnapshot},
+		{"Serializable", sql.LevelSerializable},
+		{"serializable", sql.LevelSerializable},
+		{"Linearizable", sql.LevelLinearizable},
+		{"linearizable", sql.LevelLinearizable},
+	}
+
+	for _, tc := range knownLevels {
+		t.Run(strings.ReplaceAll(tc.input, " ", "_"), func(t *testing.T) {
+			t.Parallel()
+			cfg := shared.SQLDatabaseConfig{IsolationLevel: tc.input}
+			ok, got := cfg.GetIsolationLevel()
+			if !ok {
+				t.Fatalf("GetIsolationLevel() ok = false for input %q", tc.input)
+			}
+			if got != tc.want {
+				t.Fatalf("GetIsolationLevel() level = %v, want %v", got, tc.want)
+			}
+		})
+	}
+
+	t.Run("trims surrounding whitespace on input", func(t *testing.T) {
+		t.Parallel()
+		cfg := shared.SQLDatabaseConfig{IsolationLevel: "  Read Committed  "}
+		ok, got := cfg.GetIsolationLevel()
+		if !ok || got != sql.LevelReadCommitted {
+			t.Fatalf("got ok=%v level=%v, want ok=true level=%v", ok, got, sql.LevelReadCommitted)
+		}
+	})
+
+	t.Run("empty string falls back to Serializable with ok false", func(t *testing.T) {
+		t.Parallel()
+		cfg := shared.SQLDatabaseConfig{IsolationLevel: ""}
+		ok, got := cfg.GetIsolationLevel()
+		if ok {
+			t.Fatal("GetIsolationLevel() ok = true, want false for empty")
+		}
+		if got != sql.LevelSerializable {
+			t.Errorf("level = %v, want %v", got, sql.LevelSerializable)
+		}
+	})
+
+	t.Run("whitespace only falls back", func(t *testing.T) {
+		t.Parallel()
+		cfg := shared.SQLDatabaseConfig{IsolationLevel: "   \t  "}
+		ok, got := cfg.GetIsolationLevel()
+		if ok {
+			t.Fatal("expected ok false for whitespace-only isolation_level")
+		}
+		if got != sql.LevelSerializable {
+			t.Errorf("level = %v, want %v", got, sql.LevelSerializable)
+		}
+	})
+
+	t.Run("unknown label falls back with ok false", func(t *testing.T) {
+		t.Parallel()
+		cfg := shared.SQLDatabaseConfig{IsolationLevel: "ChaosMonkey"}
+		ok, got := cfg.GetIsolationLevel()
+		if ok {
+			t.Fatal("expected ok false for unknown isolation level name")
+		}
+		if got != sql.LevelSerializable {
+			t.Errorf("level = %v, want %v", got, sql.LevelSerializable)
+		}
+	})
+
+	t.Run("partial name does not match", func(t *testing.T) {
+		t.Parallel()
+		cfg := shared.SQLDatabaseConfig{IsolationLevel: "Read"}
+		ok, got := cfg.GetIsolationLevel()
+		if ok {
+			t.Fatal("partial prefix must not match a full level name")
+		}
+		if got != sql.LevelSerializable {
+			t.Errorf("level = %v, want %v", got, sql.LevelSerializable)
+		}
+	})
+
+	t.Run("LevelDefault name is not in supported list", func(t *testing.T) {
+		t.Parallel()
+		cfg := shared.SQLDatabaseConfig{IsolationLevel: "Default"}
+		ok, got := cfg.GetIsolationLevel()
+		if ok {
+			t.Fatal("Default is not a configurable match; expected ok false")
+		}
+		if got != sql.LevelSerializable {
+			t.Errorf("level = %v, want %v", got, sql.LevelSerializable)
+		}
+	})
 }
 
 func TestDatabaseConfig_structTags(t *testing.T) {

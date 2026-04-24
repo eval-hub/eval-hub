@@ -43,6 +43,7 @@ type sqlStorage struct {
 	tenant            api.Tenant
 	owner             api.User
 	maxArgLength      int
+	isolationLevel    sql.IsolationLevel
 }
 
 func NewStorage(
@@ -135,6 +136,7 @@ func NewStorage(
 		logger:            logger,
 		ctx:               context.Background(),
 		maxArgLength:      512,
+		isolationLevel:    sql.LevelSerializable,
 	}
 
 	// ping the database to verify the DSN provided by the user is valid and the server is accessible

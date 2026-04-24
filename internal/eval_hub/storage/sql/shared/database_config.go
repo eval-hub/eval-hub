@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"database/sql"
 	"fmt"
 	"net/url"
 	"strings"
@@ -19,6 +20,7 @@ type SQLDatabaseConfig struct {
 	MaxIdleConns    *int           `mapstructure:"max_idle_conns,omitempty"`
 	MaxOpenConns    *int           `mapstructure:"max_open_conns,omitempty"`
 	Fallback        bool           `mapstructure:"fallback,omitempty"`
+	IsolationLevel  string         `mapstructure:"isolation_level,omitempty"`
 
 	// Other map[string]any `mapstructure:",remain"`
 }
@@ -60,4 +62,24 @@ func (s *SQLDatabaseConfig) GetUser() string {
 		return ""
 	}
 	return parsed.User.Username()
+}
+
+func (s *SQLDatabaseConfig) GetIsolationLevel() (bool, sql.IsolationLevel) {
+	if strings.TrimSpace(s.IsolationLevel) != "" {
+		for _, level := range []sql.IsolationLevel{
+			sql.LevelReadUncommitted,
+			sql.LevelReadCommitted,
+			sql.LevelWriteCommitted,
+			sql.LevelRepeatableRead,
+			sql.LevelSnapshot,
+			sql.LevelSerializable,
+			sql.LevelLinearizable,
+		} {
+			name := strings.TrimSuffix(strings.TrimPrefix(level.String(), "IsolationLevel("), ")")
+			if strings.EqualFold(strings.TrimSpace(s.IsolationLevel), name) {
+				return true, level
+			}
+		}
+	}
+	return false, sql.LevelSerializable
 }
