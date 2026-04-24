@@ -548,8 +548,8 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) err
 			} else if status == expectedStatus {
 				return nil
 			} else {
-				// Check for terminal failure states and fail fast instead of continuing to poll
-				if status == "failed" || status == "cancelled" || status == "partially_failed" {
+				// Fail fast when the job has reached any terminal state other than the expected one.
+				if pkgapi.OverallState(status).IsTerminalState() {
 					// Get additional error context from the response for better diagnostics
 					message, _ := tc.getJsonPath("$.status.message.message")
 					if message != "" {
