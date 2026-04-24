@@ -387,7 +387,8 @@ update-redocly-cli:
 # Local image build (same Containerfile and BUILD_DATE arg as .github/workflows/ci.yml docker-build-push; CI also sets multi-arch push and registry tags).
 DOCKER_IMAGE_LOCAL ?= eval-hub:local
 DOCKER_BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-DOCKER ?= podman # or docker
+# Container build tool: podman or docker
+DOCKER ?= podman
 
 docker-image-local: ## Build the eval-hub Docker image locally from Containerfile
 	$(DOCKER) build -f Containerfile --build-arg "BUILD_DATE=$(DOCKER_BUILD_DATE)" -t "$(DOCKER_IMAGE_LOCAL)" .
