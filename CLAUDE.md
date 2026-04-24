@@ -219,6 +219,14 @@ BDD-style tests using godog in `tests/features/`:
 - Tests run against actual HTTP server
 - Suite setup in `suite_test.go`
 
+##### FVT Tags
+
+- `@cluster` — tests that require a Kubernetes cluster
+- `@local` — tests that only run locally (excluded from CI)
+- `@mlflow` — tests requiring MLflow integration
+- `@negative` — negative/error-path tests
+- `@gha-wheel-sanity` — subset run during GHA wheel validation (`scripts/gha_wheel_sanity_test.sh`); the script starts the wheel-installed binary, waits for health, then runs `make test-fvt` with this tag
+
 ### Server Lifecycle
 
 Main function (`cmd/eval_hub/main.go`) implements graceful shutdown:
