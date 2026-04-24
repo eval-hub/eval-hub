@@ -548,6 +548,15 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) err
 			} else if status == expectedStatus {
 				return nil
 			} else {
+				// Check for terminal failure states and fail fast instead of continuing to poll
+				if status == "failed" || status == "cancelled" || status == "partially_failed" {
+					// Get additional error context from the response for better diagnostics
+					message, _ := tc.getJsonPath("$.status.message.message")
+					if message != "" {
+						return tc.logError(fmt.Errorf("evaluation job reached terminal state %q (expected %q): %s", status, expectedStatus, message))
+					}
+					return tc.logError(fmt.Errorf("evaluation job reached terminal state %q (expected %q)", status, expectedStatus))
+				}
 				lastErr = fmt.Errorf("expected status %q but got %q", expectedStatus, status)
 			}
 		} else if tc.response != nil {
