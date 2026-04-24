@@ -307,36 +307,6 @@ func (tc *scenarioConfig) theServiceIsRunning(ctx context.Context) error {
 	return tc.logError(fmt.Errorf("service is not running"))
 }
 
-func (tc *scenarioConfig) thereAreNoUserProviders(ctx context.Context) error {
-	if err := tc.iSendARequestImpl("GET", "/api/v1/evaluations/providers?scope=tenant&limit=100", "", "there are no user providers"); err != nil {
-		return err
-	}
-	if tc.response.StatusCode != 200 {
-		return tc.logError(fmt.Errorf("expected 200 listing user providers, got %d: %s", tc.response.StatusCode, string(tc.body)))
-	}
-	var resp struct {
-		Items []struct {
-			Resource struct {
-				ID string `json:"id"`
-			} `json:"resource"`
-		} `json:"items"`
-	}
-	if err := json.Unmarshal(tc.body, &resp); err != nil {
-		return tc.logError(fmt.Errorf("failed to parse providers list: %w", err))
-	}
-	for _, item := range resp.Items {
-		if item.Resource.ID != "" {
-			if err := tc.iSendARequestImpl("DELETE", "/api/v1/evaluations/providers/"+item.Resource.ID, "", "there are no user providers"); err != nil {
-				return err
-			}
-			if tc.response != nil && tc.response.StatusCode != 204 {
-				return tc.logError(fmt.Errorf("failed to delete provider %s: status %d", item.Resource.ID, tc.response.StatusCode))
-			}
-		}
-	}
-	return nil
-}
-
 func (tc *scenarioConfig) thereAreSystemProviders(ctx context.Context) error {
 	if err := tc.iSendARequestImpl("GET", "/api/v1/evaluations/providers?scope=system&limit=100", "", "there are system providers"); err != nil {
 		return err
@@ -416,66 +386,6 @@ func (tc *scenarioConfig) thereIsASystemCollectionWithId(ctx context.Context, id
 	}
 	tc.saveValue("collection:name", nameStr)
 
-	return nil
-}
-
-func (tc *scenarioConfig) thereAreNoUserCollections(ctx context.Context) error {
-	if err := tc.iSendARequestImpl("GET", "/api/v1/evaluations/collections?scope=tenant&limit=100", "", "there are no user collections"); err != nil {
-		return err
-	}
-	if tc.response.StatusCode != 200 {
-		return tc.logError(fmt.Errorf("expected 200 listing user collections, got %d: %s", tc.response.StatusCode, string(tc.body)))
-	}
-	var resp struct {
-		Items []struct {
-			Resource struct {
-				ID string `json:"id"`
-			} `json:"resource"`
-		} `json:"items"`
-	}
-	if err := json.Unmarshal(tc.body, &resp); err != nil {
-		return tc.logError(fmt.Errorf("failed to parse collections list: %w", err))
-	}
-	for _, item := range resp.Items {
-		if item.Resource.ID != "" {
-			if err := tc.iSendARequestImpl("DELETE", "/api/v1/evaluations/collections/"+item.Resource.ID, "", "there are no user collections"); err != nil {
-				return err
-			}
-			if tc.response != nil && tc.response.StatusCode != 204 {
-				return tc.logError(fmt.Errorf("failed to delete collection %s: status %d", item.Resource.ID, tc.response.StatusCode))
-			}
-		}
-	}
-	return nil
-}
-
-func (tc *scenarioConfig) thereAreNoEvaluationJobs(ctx context.Context) error {
-	if err := tc.iSendARequestImpl("GET", "/api/v1/evaluations/jobs?limit=100", "", "there are no evaluation jobs"); err != nil {
-		return err
-	}
-	if tc.response.StatusCode != 200 {
-		return tc.logError(fmt.Errorf("expected 200 listing evaluation jobs, got %d: %s", tc.response.StatusCode, string(tc.body)))
-	}
-	var resp struct {
-		Items []struct {
-			Resource struct {
-				ID string `json:"id"`
-			} `json:"resource"`
-		} `json:"items"`
-	}
-	if err := json.Unmarshal(tc.body, &resp); err != nil {
-		return tc.logError(fmt.Errorf("failed to parse evaluation jobs list: %w", err))
-	}
-	for _, item := range resp.Items {
-		if item.Resource.ID != "" {
-			if err := tc.iSendARequestImpl("DELETE", "/api/v1/evaluations/jobs/"+item.Resource.ID+"?hard_delete=true", "", "there are no evaluation jobs"); err != nil {
-				return err
-			}
-			if tc.response != nil && tc.response.StatusCode != 204 {
-				return tc.logError(fmt.Errorf("failed to delete evaluation job %s: status %d", item.Resource.ID, tc.response.StatusCode))
-			}
-		}
-	}
 	return nil
 }
 
@@ -1048,41 +958,41 @@ func (tc *scenarioConfig) getJsonPathValue(jsonPath string) (interface{}, error)
 }
 
 func (tc *scenarioConfig) theResponseShouldContainAtJSONPath(expectedValue string, jsonPath string) error {
-	_, err := tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "contains")
+	_, _, err := tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "contains")
 	return err
 }
 
 func (tc *scenarioConfig) theResponseShouldEqualAtJSONPath(expectedValue string, jsonPath string) error {
-	_, err := tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "==")
+	_, _, err := tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "==")
 	return err
 }
 
 func (tc *scenarioConfig) theResponseShouldContainAtJSONPathAtLeast(expectedValue string, jsonPath string) error {
-	_, err := tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, ">=")
+	_, _, err := tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, ">=")
 	return err
 }
 
-func (tc *scenarioConfig) theResponseShouldContainAtJSONPathImpl(expectedValue string, jsonPath string, match string) (bool, error) {
+func (tc *scenarioConfig) theResponseShouldContainAtJSONPathImpl(expectedValue string, jsonPath string, match string) (bool, string, error) {
 	expanded, err := tc.substituteValues(expectedValue)
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 	expectedValue = expanded
 
 	foundValue, err := tc.getJsonPath(jsonPath)
 	if err != nil {
 		// true because the path is not found
-		return true, tc.logError(err)
+		return true, foundValue, tc.logError(err)
 	}
 
 	if rawExpr, ok := strings.CutPrefix(expectedValue, regexpPrefix); ok {
 		expr, err := regexp.Compile(rawExpr)
 		if err != nil {
-			return false, tc.logError(fmt.Errorf("invalid regex %q: %w", rawExpr, err))
+			return false, foundValue, tc.logError(fmt.Errorf("invalid regex %q: %w", rawExpr, err))
 		}
 		if expr.MatchString(foundValue) {
 			tc.logDebug("Value %s matches regex %s in path %s", foundValue, rawExpr, jsonPath)
-			return false, nil
+			return false, foundValue, nil
 		}
 	}
 
@@ -1091,60 +1001,54 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPathImpl(expectedValue s
 		switch match {
 		case "==", "equals":
 			if foundValue == strings.TrimSpace(value) {
-				return false, nil
+				return false, foundValue, nil
 			}
 		case "<=":
 			fv, err := strconv.ParseFloat(foundValue, 64)
 			if err != nil {
-				return false, tc.logError(fmt.Errorf("failed to parse found value %s as float: %w", foundValue, err))
+				return false, foundValue, tc.logError(fmt.Errorf("failed to parse found value %s as float: %w", foundValue, err))
 			}
 			ex, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
 			if err != nil {
-				return false, tc.logError(fmt.Errorf("failed to parse expected value %s as float: %w", value, err))
+				return false, foundValue, tc.logError(fmt.Errorf("failed to parse expected value %s as float: %w", value, err))
 			}
 			if fv <= ex {
-				return false, nil
+				return false, foundValue, nil
 			}
 		case ">=":
 			fv, err := strconv.ParseFloat(foundValue, 64)
 			if err != nil {
-				return false, tc.logError(fmt.Errorf("failed to parse found value %s as float: %w", foundValue, err))
+				return false, foundValue, tc.logError(fmt.Errorf("failed to parse found value %s as float: %w", foundValue, err))
 			}
 			ex, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
 			if err != nil {
-				return false, tc.logError(fmt.Errorf("failed to parse expected value %s as float: %w", value, err))
+				return false, foundValue, tc.logError(fmt.Errorf("failed to parse expected value %s as float: %w", value, err))
 			}
 			if fv >= ex {
-				return false, nil
+				return false, foundValue, nil
 			}
 		case "contains":
 			if strings.Contains(foundValue, strings.TrimSpace(value)) {
-				return false, nil
+				return false, foundValue, nil
 			}
 		}
 	}
 
-	return true, tc.logError(fmt.Errorf("expected %s to be %s but was %s in %s", jsonPath, expectedValue, foundValue, asPrettyJson(string(tc.body))))
+	return true, foundValue, tc.logError(fmt.Errorf("expected %s to be %s but was %s in %s", jsonPath, expectedValue, foundValue, asPrettyJson(string(tc.body))))
 }
 
 func (tc *scenarioConfig) theResponseShouldNotContainAtJSONPath(expectedValue string, jsonPath string) error {
-	notFound, err := tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "contains")
-	if !notFound {
-		if err != nil {
-			return err
-		}
-		return tc.logError(fmt.Errorf("expected %s to not contain %s but it did in %s", jsonPath, expectedValue, asPrettyJson(string(tc.body))))
+	_, found, _ := tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "contains")
+	if strings.Contains(strings.TrimSpace(found), strings.TrimSpace(expectedValue)) {
+		return tc.logError(fmt.Errorf("expected %s to not contain %s but found %s in %s", jsonPath, expectedValue, found, asPrettyJson(string(tc.body))))
 	}
 	return nil
 }
 
 func (tc *scenarioConfig) theResponseShouldNotEqualAtJSONPath(expectedValue string, jsonPath string) error {
-	notFound, err := tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "==")
-	if !notFound {
-		if err != nil {
-			return err
-		}
-		return tc.logError(fmt.Errorf("expected %s to not equal %s but it did in %s", jsonPath, expectedValue, asPrettyJson(string(tc.body))))
+	_, found, _ := tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "==")
+	if strings.TrimSpace(found) == strings.TrimSpace(expectedValue) {
+		return tc.logError(fmt.Errorf("expected %s to not equal %s but found %s in %s", jsonPath, expectedValue, found, asPrettyJson(string(tc.body))))
 	}
 	return nil
 }
@@ -1421,10 +1325,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.After(tc.assetCleanup)
 
 	ctx.Step(`^the service is running$`, tc.theServiceIsRunning)
-	ctx.Step(`^there are no evaluation jobs$`, tc.thereAreNoEvaluationJobs)
-	ctx.Step(`^there are no user providers$`, tc.thereAreNoUserProviders)
 	ctx.Step(`^there are system providers$`, tc.thereAreSystemProviders)
-	ctx.Step(`^there are no user collections$`, tc.thereAreNoUserCollections)
 	ctx.Step(`^there are system collections$`, tc.thereAreSystemCollections)
 	ctx.Step(`^there is a system collection with id "([^"]*)"$`, tc.thereIsASystemCollectionWithId)
 	ctx.Step(`^I set the header "([^"]*)" to "([^"]*)"$`, tc.iSetHeaderTo)
