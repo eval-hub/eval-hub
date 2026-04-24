@@ -166,7 +166,7 @@ test-setup: venv ## Set up Python test environment (venv + eval-hub-sdk adapter)
 
 test-fvt: $(BIN_DIR) test-setup ## Run FVT (Functional Verification Tests) using godog
 	@echo "Running FVT tests..."
-	@if [ -f $(VENV_DIR)/bin/activate ]; then . $(VENV_DIR)/bin/activate; else . $(VENV_DIR)/Scripts/activate; fi && bash -c 'set -o pipefail; go test ${FVT_TESTS} ${FVT_OUTPUT} ${FVT_TAGS} -v -race | ${PWD}/scripts/grcat ${PWD}/.conf.go-integration-test'
+	@if [ -f $(VENV_DIR)/bin/activate ]; then . $(VENV_DIR)/bin/activate; else . $(VENV_DIR)/Scripts/activate; fi && bash -c 'set -o pipefail; go test ${FVT_TESTS} ${FVT_OUTPUT} "${FVT_TAGS}" -v -race | ${PWD}/scripts/grcat ${PWD}/.conf.go-integration-test'
 
 test-fvt-server: start-service ## Run FVT tests using godog against a running server
 	@SERVER_URL="${SERVER_URL}" make test-fvt; status=$$?; make stop-service; exit $$status
