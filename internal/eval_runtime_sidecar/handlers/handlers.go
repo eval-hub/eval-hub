@@ -115,7 +115,7 @@ func newEvalhubProxy(config *config.Config, logger *slog.Logger) (*httputil.Reve
 }
 
 func newOciProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseProxy, *proxy.OCITokenProducer, string, error) {
-	if config == nil || config.Sidecar == nil || config.Sidecar.OCI == nil {
+	if config == nil || config.Sidecar == nil {
 		return nil, nil, "", nil
 	}
 	jobSpecPath := os.Getenv("JOB_SPEC_PATH")
@@ -124,13 +124,16 @@ func newOciProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseP
 	}
 	host, repository, err := proxy.GetOCICoordinatesFromJobSpec(jobSpecPath)
 	if err != nil {
-		logger.Debug("OCI disabled: could not read job spec for OCI coordinates", "path", jobSpecPath, "error", err)
+		logger.Debug("OCI proxy disabled: could not read job spec for OCI coordinates", "path", jobSpecPath, "error", err)
 		return nil, nil, "", nil
 	}
 	if host == "" {
-		logger.Debug("OCI disabled: job spec has no OCI exports or oci_host", "path", jobSpecPath)
+		logger.Debug("OCI proxy disabled: job spec has no exports.oci with registry host", "path", jobSpecPath)
 		return nil, nil, "", nil
 	}
+	// OCI reverse proxy is enabled from job spec (exports.oci + coordinates), not from eval-hub
+	// service YAML sidecar.oci. sidecar_config.json "oci" is optional: TLS/timeout overrides only
+	// (see NewOCIHTTPClient).
 	ociHTTPClient, err := proxy.NewOCIHTTPClient(config, config.IsOTELEnabled(), logger)
 	if err != nil {
 		logger.Error("failed to create OCI HTTP client", "error", err)
@@ -156,6 +159,11 @@ func newOciProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseP
 		proxy.ModifyOCIRegistryResponse(resp, logger, tokenProducer)
 		return nil
 	})
+	logger.Info("OCI registry proxy enabled",
+		"registry_host", host,
+		"oci_repository", repository,
+		"job_spec", jobSpecPath,
+	)
 	return rp, tokenProducer, repository, nil
 }
 
@@ -271,8 +279,7 @@ func (h *Handlers) parseProxyCall(r *http.Request) (*httputil.ReverseProxy, *pro
 		return nil, nil, fmt.Errorf("mlflow proxy is not configured")
 
 	case h.ociRouteMatch(r.RequestURI):
-		ociConfig := h.serviceConfig.Sidecar.OCI
-		if ociConfig != nil && h.ociProxy != nil {
+		if h.ociProxy != nil {
 			// Reuse the TokenProducer created at startup; token cache and refresh in resolveOCIAuthToken.
 			return h.ociProxy, &proxy.AuthTokenInput{
 				TargetEndpoint:   "oci",

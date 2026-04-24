@@ -177,7 +177,7 @@ func TestHandlers_HandleProxyCall(t *testing.T) {
 	})
 
 	t.Run("registry path with nil OCI returns 400", func(t *testing.T) {
-		// h has no Sidecar.OCI, so ociRepository is empty; path without repository name does not match OCI -> unknown proxy call
+		// h has no ociRepository (as when job spec has no OCI); path without repository name does not match OCI -> unknown proxy call
 		req := httptest.NewRequest(http.MethodGet, "/registry/v2/", nil)
 		rw := httptest.NewRecorder()
 		h.HandleProxyCall(rw, req)
