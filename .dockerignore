@@ -29,7 +29,10 @@ coverage.xml
 .hypothesis
 
 # Documentation
+# we need to copy the final swagger files to the container
 docs/
+!docs/openapi.yaml
+!docs/openapi.json
 
 # CI/CD
 .github/
@@ -57,6 +60,7 @@ tests/
 # Build
 build/
 dist/
+bin/
 *.egg-info/
 
 # Development
@@ -78,3 +82,9 @@ containers
 
 # Documentation
 examples
+
+scripts/
+node_modules/
+package*.json
+package.json
+redocly.yaml

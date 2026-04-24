@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-all-platforms start-service stop-service start-sidecar stop-sidecar lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-all-platforms start-service stop-service start-sidecar stop-sidecar lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report docker-image-local
 
 GOPATH := $(shell go env GOPATH)
 GOBIN := $(shell go env GOPATH)/bin
@@ -383,3 +383,11 @@ documentation: check-unused-components generate-public-docs verify-api-docs
 update-redocly-cli:
 	rm -f package-lock.json
 	npm install @redocly/cli@latest
+
+# Local image build (same Containerfile and BUILD_DATE arg as .github/workflows/ci.yml docker-build-push; CI also sets multi-arch push and registry tags).
+DOCKER_IMAGE_LOCAL ?= eval-hub:local
+DOCKER_BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+DOCKER ?= podman # or docker
+
+docker-image-local: ## Build the eval-hub Docker image locally from Containerfile
+	$(DOCKER) build -f Containerfile --build-arg "BUILD_DATE=$(DOCKER_BUILD_DATE)" -t "$(DOCKER_IMAGE_LOCAL)" .
