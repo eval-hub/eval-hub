@@ -43,6 +43,15 @@ const (
 	regexpPrefix = "regex:"
 )
 
+// modelEndpointStatus captures preflight outcome from checkModelEndpoint for steps that gate on connectivity.
+type modelEndpointStatus int
+
+const (
+	modelEndpointUnchecked modelEndpointStatus = iota
+	modelEndpointUnreachable
+	modelEndpointReachable
+)
+
 var (
 	// testConfig to be used throughout all the test suites
 	// for the global configuration
@@ -51,8 +60,7 @@ var (
 	once   sync.Once
 	logger *log.Logger
 
-	modelEndpointChecked   bool
-	modelEndpointReachable bool
+	modelEndpointConnectivity modelEndpointStatus
 )
 
 type apiFeature struct {
@@ -1269,23 +1277,26 @@ func checkModelEndpoint() {
 		}
 		logDebug("WARNING: Model endpoint %s is not reachable: %v\n", modelURL, err)
 		logDebug("Evaluation job scenarios will be skipped.\n")
-		modelEndpointChecked = true
-		modelEndpointReachable = false
+		modelEndpointConnectivity = modelEndpointUnreachable
 		return
 	}
 	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
 
 	logDebug("Model endpoint %s is reachable (status: %d)\n", modelURL, resp.StatusCode)
-	modelEndpointChecked = true
-	modelEndpointReachable = true
+	modelEndpointConnectivity = modelEndpointReachable
 }
 
 func (tc *scenarioConfig) theModelEndpointIsReachable() error {
-	if modelEndpointChecked && !modelEndpointReachable {
+	switch modelEndpointConnectivity {
+	case modelEndpointUnreachable:
 		logDebug("Model endpoint is not reachable, skipping evaluation job scenario %s\n", tc.scenarioName)
 		return godog.ErrSkip
+	case modelEndpointUnchecked, modelEndpointReachable:
+		return nil
+	default:
+		return nil
 	}
-	return nil
 }
 
 // A bit of a hack to have some checks that the regexes are working as expected
