@@ -36,6 +36,24 @@ func TestDeleteConfigMapRequiresNamespaceAndName(t *testing.T) {
 	}
 }
 
+func TestGetPodLogsRequiresNamespaceAndPodName(t *testing.T) {
+	helper := &KubernetesHelper{}
+	stream, err := helper.GetPodLogs(context.Background(), "", "pod", nil)
+	if stream != nil {
+		defer stream.Close()
+	}
+	if err == nil {
+		t.Fatalf("expected error for missing namespace")
+	}
+	stream, err = helper.GetPodLogs(context.Background(), "default", "", nil)
+	if stream != nil {
+		defer stream.Close()
+	}
+	if err == nil {
+		t.Fatalf("expected error for missing pod name")
+	}
+}
+
 func TestSetConfigMapOwnerRequiresNamespaceAndName(t *testing.T) {
 	helper := &KubernetesHelper{}
 	if err := helper.SetConfigMapOwner(context.Background(), "", "name", emptyOwnerRef()); err == nil {

@@ -4,6 +4,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"io"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -43,7 +44,6 @@ func NewKubernetesClient() (*kubernetes.Clientset, error) {
 // NewKubernetesHelper builds a Kubernetes client (in-cluster config, then default kubeconfig)
 // and returns a KubernetesHelper.
 func NewKubernetesHelper() (*KubernetesHelper, error) {
-
 	clientset, err := NewKubernetesClient()
 	if err != nil {
 		return nil, err
@@ -129,6 +129,20 @@ func (h *KubernetesHelper) ListConfigMaps(ctx context.Context, namespace, labelS
 		return nil, err
 	}
 	return list.Items, nil
+}
+
+// GetPodLogs reads the full log stream for a pod container, it is the responsibility of the caller to close the stream.
+// opts may be nil (equivalent to empty PodLogOptions); set Container on opts when the pod has multiple containers.
+func (h *KubernetesHelper) GetPodLogs(ctx context.Context, namespace, podName string, opts *corev1.PodLogOptions) (io.ReadCloser, error) {
+	if namespace == "" || podName == "" {
+		return nil, fmt.Errorf("namespace and pod name are required")
+	}
+	opt := opts
+	if opt == nil {
+		opt = &corev1.PodLogOptions{}
+	}
+	req := h.clientset.CoreV1().Pods(namespace).GetLogs(podName, opt)
+	return req.Stream(ctx)
 }
 
 // SetConfigMapOwner sets a single owner reference on the ConfigMap.

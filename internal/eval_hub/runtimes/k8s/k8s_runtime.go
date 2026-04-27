@@ -5,7 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"slices"
+	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
@@ -13,6 +16,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	batchv1 "k8s.io/api/batch/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -112,6 +116,30 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 
 	var deleteErr error
 	for _, job := range jobs {
+		if r.logPodLogs(evaluation, job) {
+			logs, err := r.helper.GetPodLogs(r.ctx, namespace, job.Name, nil)
+			if err == nil {
+				defer logs.Close()
+				buf := new(strings.Builder)
+				_, err = io.Copy(buf, logs)
+				if err == nil {
+					r.logger.Info("pod logs",
+						"job_id", evaluation.Resource.ID,
+						"job_name", job.Name,
+						"namespace", namespace,
+						"logs", buf.String(),
+					)
+				}
+			}
+			if err != nil {
+				r.logger.Info("failed to copy pod logs",
+					"job_id", evaluation.Resource.ID,
+					"job_name", job.Name,
+					"namespace", namespace,
+					"error", err,
+				)
+			}
+		}
 		r.logger.Info(
 			"deleting evaluation runtime job",
 			"job_id", evaluation.Resource.ID,
@@ -136,6 +164,16 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 		}
 	}
 	return deleteErr
+}
+
+func (r *K8sRuntime) logPodLogs(evaluation *api.EvaluationJobResource, _ batchv1.Job) bool {
+	// This is a hack to log pod logs on failure.
+	// TODO: This should be removed once we have a better way to save pod logs.
+	logPodLogs := "::log-pod-logs-on-failure::"
+	if evaluation.Status.State == api.OverallStateFailed || evaluation.Status.State == api.OverallStatePartiallyFailed {
+		return slices.Contains(evaluation.Tags, logPodLogs)
+	}
+	return false
 }
 
 func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
