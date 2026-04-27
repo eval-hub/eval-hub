@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"strings"
 	"time"
 
 	// import the postgres driver - "pgx"
@@ -129,7 +131,10 @@ func NewStorage(
 		}
 	}
 
-	_, isolationLevel := sqlConfig.GetIsolationLevel()
+	isolationLevel, err := getIsolationLevel(&sqlConfig, logger)
+	if err != nil {
+		return nil, err
+	}
 
 	s := &sqlStorage{
 		sqlConfig:         &sqlConfig,
@@ -161,6 +166,39 @@ func NewStorage(
 
 	success = true
 	return s, nil
+}
+
+func getIsolationLevel(config *shared.SQLDatabaseConfig, logger *slog.Logger) (sql.IsolationLevel, error) {
+	// for testing purposes only
+	isolationLevel := strings.TrimSpace(os.Getenv("DEBUG_SQL_ISOLATION_LEVEL"))
+	if isolationLevel != "" {
+		levels := []sql.IsolationLevel{
+			sql.LevelDefault,
+			sql.LevelReadUncommitted,
+			sql.LevelReadCommitted,
+			sql.LevelWriteCommitted,
+			sql.LevelRepeatableRead,
+			sql.LevelSnapshot,
+			sql.LevelSerializable,
+			sql.LevelLinearizable,
+		}
+		for _, level := range levels {
+			if strings.EqualFold(isolationLevel, level.String()) {
+				return level, nil
+			}
+		}
+		logger.Error("Invalid isolation level", "isolation_level", isolationLevel)
+		return sql.LevelDefault, fmt.Errorf("Invalid isolation level: %s", isolationLevel)
+	}
+
+	switch config.Driver {
+	case SQLITE_DRIVER:
+		return sql.LevelDefault, nil
+	case POSTGRES_DRIVER:
+		return sql.LevelSerializable, nil
+	default:
+		return sql.LevelDefault, nil
+	}
 }
 
 // Ping the database to verify DSN provided by the user is valid and the
