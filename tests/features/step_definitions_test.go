@@ -51,7 +51,7 @@ var (
 	once   sync.Once
 	logger *log.Logger
 
-	modelEndpointChecked  bool
+	modelEndpointChecked   bool
 	modelEndpointReachable bool
 )
 
@@ -1264,24 +1264,25 @@ func checkModelEndpoint() {
 	if err != nil {
 		var dnsErr *net.DNSError
 		if errors.As(err, &dnsErr) {
-			fmt.Printf("WARNING: Cannot resolve model endpoint DNS for %s (test runner may be outside the cluster), proceeding with tests\n", modelURL)
+			logDebug("WARNING: Cannot resolve model endpoint DNS for %s (test runner may be outside the cluster), proceeding with tests\n", modelURL)
 			return
 		}
-		fmt.Printf("WARNING: Model endpoint %s is not reachable: %v\n", modelURL, err)
-		fmt.Printf("Evaluation job scenarios will be skipped.\n")
+		logDebug("WARNING: Model endpoint %s is not reachable: %v\n", modelURL, err)
+		logDebug("Evaluation job scenarios will be skipped.\n")
 		modelEndpointChecked = true
 		modelEndpointReachable = false
 		return
 	}
 	defer resp.Body.Close()
 
-	fmt.Printf("Model endpoint %s is reachable (status: %d)\n", modelURL, resp.StatusCode)
+	logDebug("Model endpoint %s is reachable (status: %d)\n", modelURL, resp.StatusCode)
 	modelEndpointChecked = true
 	modelEndpointReachable = true
 }
 
 func (tc *scenarioConfig) theModelEndpointIsReachable() error {
 	if modelEndpointChecked && !modelEndpointReachable {
+		logDebug("Model endpoint is not reachable, skipping evaluation job scenario %s\n", tc.scenarioName)
 		return godog.ErrSkip
 	}
 	return nil
