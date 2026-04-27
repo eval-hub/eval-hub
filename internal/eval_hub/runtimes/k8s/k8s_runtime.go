@@ -119,7 +119,6 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 		if r.logPodLogs(evaluation, job) {
 			logs, err := r.helper.GetPodLogs(r.ctx, namespace, job.Name, nil)
 			if err == nil {
-				defer logs.Close()
 				buf := new(strings.Builder)
 				_, err = io.Copy(buf, logs)
 				if err == nil {
@@ -130,6 +129,9 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 						"logs", buf.String(),
 					)
 				}
+			}
+			if logs != nil {
+				logs.Close()
 			}
 			if err != nil {
 				r.logger.Info("failed to copy pod logs",
