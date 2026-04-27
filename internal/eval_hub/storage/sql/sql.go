@@ -131,7 +131,7 @@ func NewStorage(
 		}
 	}
 
-	isolationLevel, err := getIsolationLevel(&sqlConfig, logger)
+	isolationLevel, err := getIsolationLevel(os.Getenv("DEBUG_SQL_ISOLATION_LEVEL"), &sqlConfig, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -168,9 +168,9 @@ func NewStorage(
 	return s, nil
 }
 
-func getIsolationLevel(config *shared.SQLDatabaseConfig, logger *slog.Logger) (sql.IsolationLevel, error) {
+func getIsolationLevel(isolationLevel string, config *shared.SQLDatabaseConfig, logger *slog.Logger) (sql.IsolationLevel, error) {
 	// for testing purposes only
-	isolationLevel := strings.TrimSpace(os.Getenv("DEBUG_SQL_ISOLATION_LEVEL"))
+	isolationLevel = strings.TrimSpace(isolationLevel)
 	if isolationLevel != "" {
 		levels := []sql.IsolationLevel{
 			sql.LevelDefault,
