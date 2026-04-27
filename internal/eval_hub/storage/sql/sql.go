@@ -188,7 +188,7 @@ func getIsolationLevel(config *shared.SQLDatabaseConfig, logger *slog.Logger) (s
 			}
 		}
 		logger.Error("Invalid isolation level", "isolation_level", isolationLevel)
-		return sql.LevelDefault, fmt.Errorf("Invalid isolation level: %s", isolationLevel)
+		return sql.LevelDefault, fmt.Errorf("invalid isolation level: %s", isolationLevel)
 	}
 
 	switch config.Driver {

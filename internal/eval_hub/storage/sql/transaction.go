@@ -33,12 +33,12 @@ func (s *sqlStorage) withTransaction(name string, resourceID string, fn Transact
 	if commit {
 		if txnErr := txn.Commit(); txnErr != nil {
 			s.logger.Error("Failed to commit transaction", "name", fmt.Sprintf("commit transaction %s", name), "resource_id", resourceID, "error", txnErr.Error())
-			return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", fmt.Sprintf("commit transaction %s", name), "ResourceId", resourceID, "Error", txnErr.Error())
+			return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", fmt.Sprintf("commit transaction %s", name), "ResourceId", resourceID, "isolation_level", s.isolationLevel.String(), "Error", txnErr.Error())
 		}
 	} else {
 		if txnErr := txn.Rollback(); txnErr != nil {
 			s.logger.Error("Failed to rollback transaction", "name", fmt.Sprintf("rollback transaction %s", name), "resource_id", resourceID, "error", txnErr.Error())
-			return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", fmt.Sprintf("rollback transaction %s", name), "ResourceId", resourceID, "Error", txnErr.Error())
+			return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", fmt.Sprintf("rollback transaction %s", name), "ResourceId", resourceID, "isolation_level", s.isolationLevel.String(), "Error", txnErr.Error())
 		}
 	}
 	// this is the error from the code function
