@@ -74,11 +74,12 @@ make clean              # Remove build artifacts and coverage files
 
 Use [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, etc., with an optional scope (e.g. `feat(http): …`).
 
-When a change is assisted by Cursor, add these lines to the **end** of the commit message body (after the subject and any description), as Git trailers:
+When a change is assisted by Cursor, add one of these lines, as appropriate, to the **end** of the commit message body (after the subject and any description), as Git trailers:
 
-```
+```text
 Assisted-by: Cursor
 Made-with: Cursor
+Generated with: Claude Code
 ```
 
 ## Architecture Overview
@@ -285,6 +286,8 @@ If there are other files in the repository that require updating due to new gola
 Use `go-version-file: "go.mod"` in the github actions where possible.
 
 #### npm devDependencies
+
+Ensure that version pinning is correct, regenerate package-lock.json by running npm install after modifying the overrides in package.json.
 
 If updating any dependencies related to `npm` then verify that the documentation
 build still works by running `make documentation`.
