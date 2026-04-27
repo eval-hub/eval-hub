@@ -172,7 +172,7 @@ func (r *K8sRuntime) logPodLogs(evaluation *api.EvaluationJobResource, _ batchv1
 	// This is a hack to log pod logs on failure.
 	// TODO: This should be removed once we have a better way to save pod logs.
 	logPodLogs := "::log-pod-logs-on-failure::"
-	if evaluation.Status.State == api.OverallStateFailed || evaluation.Status.State == api.OverallStatePartiallyFailed {
+	if (evaluation.Status != nil) && ((evaluation.Status.State == api.OverallStateFailed) || (evaluation.Status.State == api.OverallStatePartiallyFailed)) {
 		return slices.Contains(evaluation.Tags, logPodLogs)
 	}
 	return false
