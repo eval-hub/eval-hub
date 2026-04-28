@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -1012,8 +1013,18 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPathImpl(expectedValue s
 	for value := range values {
 		switch match {
 		case "==", "equals":
+			// first try an exact string match
 			if foundValue == strings.TrimSpace(value) {
 				return false, foundValue, nil
+			}
+			// then try a float match
+			if fv, err := strconv.ParseFloat(foundValue, 64); err == nil {
+				if ex, err := strconv.ParseFloat(strings.TrimSpace(value), 64); err == nil {
+					// compare the floats to 15 decimal places
+					if math.Abs(fv-ex) < 0.0000000000000001 {
+						return false, foundValue, nil
+					}
+				}
 			}
 		case "<=":
 			fv, err := strconv.ParseFloat(foundValue, 64)
