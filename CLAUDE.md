@@ -287,7 +287,8 @@ Use `go-version-file: "go.mod"` in the github actions where possible.
 
 #### npm devDependencies
 
-Ensure that version pinning is correct, regenerate package-lock.json by running npm install after modifying the overrides in package.json.
+Ensure that version pinning is correct and pins to a **single version**,
+regenerate package-lock.json by running npm install after modifying the overrides in package.json.
 
 If updating any dependencies related to `npm` then verify that the documentation
 build still works by running `make documentation`.
