@@ -170,7 +170,7 @@ Feature: Providers Endpoint
     And the response should contain the value "100" at path "$.limit"
     When I send a GET request to "/api/v1/evaluations/providers?benchmarks=false&limit=5"
     Then the response code should be 200
-    And the response should not contain the value "0" at path "$.total_count"
+    And the response should not equal the value "0" at path "$.total_count"
     And the response should contain the value "[]" at path "items[0].benchmarks"
     When I send a GET request to "/api/v1/evaluations/providers?tags=nonexistent-tag&limit=10"
     Then the response code should be 200
@@ -247,7 +247,7 @@ Feature: Providers Endpoint
     When I send a GET request to "/api/v1/evaluations/providers?benchmarks=false&limit=5"
     Then the response code should be 200
     And the array at path "items" in the response should have length at least 3
-    And the response should not contain the value "0" at path "$.total_count"
+    And the response should not equal the value "0" at path "$.total_count"
     And the response should contain the value "[]" at path "items[0].benchmarks"
     When I send a GET request to "/api/v1/evaluations/providers?benchmarks=true&limit=5"
     Then the response code should be 200
@@ -256,7 +256,7 @@ Feature: Providers Endpoint
     Then the response code should be 200
     And the response should contain the value "2" at path "$.limit"
     And the array at path "items" in the response should have length at least 1
-    And the response should not contain the value "0" at path "$.total_count"
+    And the response should not equal the value "0" at path "$.total_count"
     And the response should contain the value "[]" at path "items[0].benchmarks"
     And the response should contain the value "Test Provider" at path "$.items[0].name"
     When I send a DELETE request to "/api/v1/evaluations/providers/{{value:list_prov1_id}}"
