@@ -133,6 +133,9 @@ func TestHandlers_HandleProxyCall(t *testing.T) {
 			"/api/2.0/mlflow-artifacts/artifact",
 			"/api/2.0/mlflow-artifacts/get-artifact?path=x",
 			"/api/2.0/mlflow-custom/endpoint",
+			"/api/3.0/mlflow/traces/search",
+			"/api/3.0/mlflow/traces/tr-abc123",
+			"/api/3.0/mlflow/server-info",
 		} {
 			req := httptest.NewRequest(http.MethodGet, path, nil)
 			rw := httptest.NewRecorder()
@@ -227,6 +230,10 @@ func TestIsMLflowProxyPath(t *testing.T) {
 		{"/api/2.0/mlflow-artifactsmalicious", true},
 		{"/api/2.0/ml", false},
 		{"/prefix/api/2.0/mlflow/runs", false},
+		{"/api/3.0/mlflow/server-info", true},
+		{"/api/3.0/mlflow/traces/search", true},
+		{"/api/3.0/ml", false},
+		{"/prefix/api/3.0/mlflow/server-info", false},
 	}
 	for _, tt := range tests {
 		if got := isMLflowProxyPath(tt.path); got != tt.want {

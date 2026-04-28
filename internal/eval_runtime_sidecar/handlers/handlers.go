@@ -24,11 +24,14 @@ const OCIAuthConfigPathDefault = "/etc/evalhub/.docker/config.json"
 // internal/runtimes/k8s/job_builders.go jobSpecMountPath + subPath jobSpecFileName.
 const JobSpecPathDefault = "/meta/job.json"
 
-// mlflowAPIPathPrefix is the path prefix routed to the MLflow tracking proxy (any suffix allowed).
-const mlflowAPIPathPrefix = "/api/2.0/mlflow"
+// /api/2.0|3.0/mlflow/* proxied to mlflow.tracking_uri.
+const (
+	mlflowAPIv2PathPrefix = "/api/2.0/mlflow"
+	mlflowAPIv3PathPrefix = "/api/3.0/mlflow"
+)
 
 func isMLflowProxyPath(path string) bool {
-	return strings.HasPrefix(path, mlflowAPIPathPrefix)
+	return strings.HasPrefix(path, mlflowAPIv2PathPrefix) || strings.HasPrefix(path, mlflowAPIv3PathPrefix)
 }
 
 // Handlers holds service state for HTTP handlers.
