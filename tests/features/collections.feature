@@ -494,7 +494,7 @@ Feature: Collections Endpoint
     And the response should contain the value "test-benchmarks-collection-threshold-zero" at path "$.name"
     And the response should contain the value "test" at path "$.category"
     And the response should contain the value "Collection of benchmarks for FVT" at path "$.description"
-    And the response should contain the value "0" at path "$.pass_criteria.threshold"
+    And the response should equal the value "0.0" at path "$.pass_criteria.threshold"
     And the array at path "$.benchmarks" in the response should have length 2
   
   Scenario: Verify soft delete of collection returns 204
