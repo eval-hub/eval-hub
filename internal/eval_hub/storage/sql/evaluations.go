@@ -376,11 +376,6 @@ func (s *sqlStorage) updateBenchmarkResults(job *api.EvaluationJobResource, runS
 //
 //	SQLITE_BUSY  (5) → "database is locked (5) (SQLITE_BUSY)"
 //	SQLITE_LOCKED(6) → "database table is locked: database is deadlocked (6)"
-//
-// PostgreSQL error strings come from pgx/v5 pgconn.PgError.Error():
-//
-//	serialization_failure → "ERROR: could not serialize access ... (SQLSTATE 40001)"
-//	deadlock_detected     → "ERROR: deadlock detected (SQLSTATE 40P01)"
 func isRetryableDBError(err error) bool {
 	if err == nil {
 		return false
@@ -388,9 +383,7 @@ func isRetryableDBError(err error) bool {
 	msg := err.Error()
 	return strings.Contains(msg, "database is locked") ||
 		strings.Contains(msg, "database is deadlocked") ||
-		strings.Contains(msg, "database table is locked") ||
-		strings.Contains(msg, "SQLSTATE 40001") ||
-		strings.Contains(msg, "SQLSTATE 40P01")
+		strings.Contains(msg, "database table is locked")
 }
 
 // UpdateEvaluationJobWithRunStatus runs in a transaction: fetches the job, merges RunStatusInternal into the entity, and persists.
