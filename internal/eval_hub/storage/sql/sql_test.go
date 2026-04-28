@@ -4,16 +4,69 @@ import (
 	"fmt"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/internal/logging"
+	"github.com/go-viper/mapstructure/v2"
 )
 
 var (
 	dbIndex = atomic.Int32{}
 )
+
+func TestTxRetryConfig(t *testing.T) {
+	t.Run("defaults when unset", func(t *testing.T) {
+		cfg := shared.SQLDatabaseConfig{}
+		if cfg.GetTxRetryMax() != shared.DefaultTxRetryMax {
+			t.Errorf("want %d, got %d", shared.DefaultTxRetryMax, cfg.GetTxRetryMax())
+		}
+		if cfg.GetTxRetryInterval() != shared.DefaultTxRetryInterval {
+			t.Errorf("want %v, got %v", shared.DefaultTxRetryInterval, cfg.GetTxRetryInterval())
+		}
+	})
+
+	t.Run("custom values", func(t *testing.T) {
+		cfg := shared.SQLDatabaseConfig{
+			TxRetryMax:      5,
+			TxRetryInterval: 200 * time.Millisecond,
+		}
+		if cfg.GetTxRetryMax() != 5 {
+			t.Errorf("want 5, got %d", cfg.GetTxRetryMax())
+		}
+		if cfg.GetTxRetryInterval() != 200*time.Millisecond {
+			t.Errorf("want 200ms, got %v", cfg.GetTxRetryInterval())
+		}
+	})
+
+	t.Run("mapstructure decodes duration strings", func(t *testing.T) {
+		config := map[string]any{
+			"driver":            "sqlite",
+			"url":               "file::test:?mode=memory&cache=shared",
+			"tx_retry_max":      7,
+			"tx_retry_interval": "5s",
+		}
+		var sqlConfig shared.SQLDatabaseConfig
+		decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+			DecodeHook: mapstructure.StringToTimeDurationHookFunc(),
+			Result:     &sqlConfig,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if err = decoder.Decode(config); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if sqlConfig.GetTxRetryMax() != 7 {
+			t.Errorf("want 7, got %d", sqlConfig.GetTxRetryMax())
+		}
+		if sqlConfig.GetTxRetryInterval() != 5*time.Second {
+			t.Errorf("want 5s, got %v", sqlConfig.GetTxRetryInterval())
+		}
+	})
+}
 
 func TestSQLStorage(t *testing.T) {
 	t.Run("Check database name is extracted correctly", func(t *testing.T) {

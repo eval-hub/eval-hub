@@ -390,12 +390,13 @@ func isRetryableDBError(err error) bool {
 // Concurrent benchmark status events for the same job can cause lock contention;
 // the transaction is retried on retryable database errors.
 func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
-	const maxRetries = 3
+	maxRetries := s.sqlConfig.GetTxRetryMax()
+	retryInterval := s.sqlConfig.GetTxRetryInterval()
 	var err error
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			s.logger.Info("Retrying evaluation job update after lock contention", "id", id, "attempt", attempt)
-			time.Sleep(time.Duration(attempt) * 50 * time.Millisecond)
+			time.Sleep(time.Duration(attempt) * retryInterval)
 		}
 		err = s.withTransaction("update evaluation job", id, func(txn *sql.Tx) error {
 			s.logger.Info("Updating evaluation job", "id", id, "status", runStatus.BenchmarkStatusEvent.Status, "runStatus", runStatus)

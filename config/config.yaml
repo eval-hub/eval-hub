@@ -38,6 +38,8 @@ env_mappings:
 database:
   driver: sqlite
   url: file::eval_hub:?mode=memory&cache=shared
+  tx_retry_max: 3
+  tx_retry_interval: 50ms
   # driver: pgx
   # url: postgres://user@localhost:5432/eval_hub
 # MLFlow configuration
