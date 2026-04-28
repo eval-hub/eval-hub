@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
@@ -368,90 +370,122 @@ func (s *sqlStorage) updateBenchmarkResults(job *api.EvaluationJobResource, runS
 	return nil
 }
 
+// String-matched because ServiceError does not preserve the original driver error.
+// SQLite error strings come from the C library via modernc.org/sqlite conn.errstr()
+// (sqlite3_errstr + sqlite3_errmsg), not from the ErrorCodeString map in error.go:
+//   SQLITE_BUSY  (5) → "database is locked (5) (SQLITE_BUSY)"
+//   SQLITE_LOCKED(6) → "database table is locked: database is deadlocked (6)"
+// PostgreSQL error strings come from pgx/v5 pgconn.PgError.Error():
+//   serialization_failure → "ERROR: could not serialize access ... (SQLSTATE 40001)"
+//   deadlock_detected     → "ERROR: deadlock detected (SQLSTATE 40P01)"
+func isRetryableDBError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "database is locked") ||
+		strings.Contains(msg, "database is deadlocked") ||
+		strings.Contains(msg, "database table is locked") ||
+		strings.Contains(msg, "SQLSTATE 40001") ||
+		strings.Contains(msg, "SQLSTATE 40P01")
+}
+
 // UpdateEvaluationJobWithRunStatus runs in a transaction: fetches the job, merges RunStatusInternal into the entity, and persists.
+// Concurrent benchmark status events for the same job can cause lock contention;
+// the transaction is retried on retryable database errors.
 func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
-	err := s.withTransaction("update evaluation job", id, func(txn *sql.Tx) error {
-		s.logger.Info("Updating evaluation job", "id", id, "status", runStatus.BenchmarkStatusEvent.Status, "runStatus", runStatus)
-
-		job, err := s.getEvaluationJobTransactional(txn, id)
-		if err != nil {
-			return err
+	const maxRetries = 3
+	var err error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			s.logger.Info("Retrying evaluation job update after lock contention", "id", id, "attempt", attempt)
+			time.Sleep(time.Duration(attempt) * 50 * time.Millisecond)
 		}
+		err = s.withTransaction("update evaluation job", id, func(txn *sql.Tx) error {
+			s.logger.Info("Updating evaluation job", "id", id, "status", runStatus.BenchmarkStatusEvent.Status, "runStatus", runStatus)
 
-		// Guard: reject benchmark updates if job is already in a terminal state.
-		// We pass OverallStateRunning as the target to leverage checkEvaluationJobState's terminal-state check.
-		if _, err := s.checkEvaluationJobState(job.Resource.ID, job.Status.State, api.OverallStateRunning); err != nil {
-			return err
-		}
-
-		var collection *api.CollectionResource
-		if job.Collection != nil && job.Collection.ID != "" {
-			collection, err = s.GetCollection(job.Collection.ID)
+			job, err := s.getEvaluationJobTransactional(txn, id)
 			if err != nil {
 				return err
 			}
-		}
-		err = s.validateBenchmarkExists(job, runStatus, collection)
-		if err != nil {
-			return err
-		}
 
-		// first we store the benchmark status
-		benchmark := api.BenchmarkStatus{
-			ProviderID:     runStatus.BenchmarkStatusEvent.ProviderID,
-			ID:             runStatus.BenchmarkStatusEvent.ID,
-			Status:         runStatus.BenchmarkStatusEvent.Status,
-			ErrorMessage:   runStatus.BenchmarkStatusEvent.ErrorMessage,
-			StartedAt:      runStatus.BenchmarkStatusEvent.StartedAt,
-			CompletedAt:    runStatus.BenchmarkStatusEvent.CompletedAt,
-			BenchmarkIndex: runStatus.BenchmarkStatusEvent.BenchmarkIndex,
-		}
-		s.updateBenchmarkStatus(job, runStatus, &benchmark)
+			// Guard: reject benchmark updates if job is already in a terminal state.
+			// We pass OverallStateRunning as the target to leverage checkEvaluationJobState's terminal-state check.
+			if _, err := s.checkEvaluationJobState(job.Resource.ID, job.Status.State, api.OverallStateRunning); err != nil {
+				return err
+			}
 
-		outcome := s.computeBenchmarkTestResult(job, runStatus.BenchmarkStatusEvent, collection)
+			var collection *api.CollectionResource
+			if job.Collection != nil && job.Collection.ID != "" {
+				collection, err = s.GetCollection(job.Collection.ID)
+				if err != nil {
+					return err
+				}
+			}
+			err = s.validateBenchmarkExists(job, runStatus, collection)
+			if err != nil {
+				return err
+			}
 
-		// if the run status is terminal, we need to update the results
-		if api.IsBenchmarkTerminalState(runStatus.BenchmarkStatusEvent.Status) {
-			result := api.BenchmarkResult{
-				ID:             runStatus.BenchmarkStatusEvent.ID,
+			// first we store the benchmark status
+			benchmark := api.BenchmarkStatus{
 				ProviderID:     runStatus.BenchmarkStatusEvent.ProviderID,
-				Metrics:        runStatus.BenchmarkStatusEvent.Metrics,
-				Artifacts:      runStatus.BenchmarkStatusEvent.Artifacts,
-				MLFlowRunID:    runStatus.BenchmarkStatusEvent.MLFlowRunID,
-				LogsPath:       runStatus.BenchmarkStatusEvent.LogsPath,
+				ID:             runStatus.BenchmarkStatusEvent.ID,
+				Status:         runStatus.BenchmarkStatusEvent.Status,
+				ErrorMessage:   runStatus.BenchmarkStatusEvent.ErrorMessage,
+				StartedAt:      runStatus.BenchmarkStatusEvent.StartedAt,
+				CompletedAt:    runStatus.BenchmarkStatusEvent.CompletedAt,
 				BenchmarkIndex: runStatus.BenchmarkStatusEvent.BenchmarkIndex,
-				Test:           outcome,
 			}
-			err := s.updateBenchmarkResults(job, runStatus, &result)
+			s.updateBenchmarkStatus(job, runStatus, &benchmark)
+
+			outcome := s.computeBenchmarkTestResult(job, runStatus.BenchmarkStatusEvent, collection)
+
+			// if the run status is terminal, we need to update the results
+			if api.IsBenchmarkTerminalState(runStatus.BenchmarkStatusEvent.Status) {
+				result := api.BenchmarkResult{
+					ID:             runStatus.BenchmarkStatusEvent.ID,
+					ProviderID:     runStatus.BenchmarkStatusEvent.ProviderID,
+					Metrics:        runStatus.BenchmarkStatusEvent.Metrics,
+					Artifacts:      runStatus.BenchmarkStatusEvent.Artifacts,
+					MLFlowRunID:    runStatus.BenchmarkStatusEvent.MLFlowRunID,
+					LogsPath:       runStatus.BenchmarkStatusEvent.LogsPath,
+					BenchmarkIndex: runStatus.BenchmarkStatusEvent.BenchmarkIndex,
+					Test:           outcome,
+				}
+				err := s.updateBenchmarkResults(job, runStatus, &result)
+				if err != nil {
+					return err
+				}
+			}
+
+			// get the overall job status
+			overallState, message, err := s.getOverallJobStatus(job)
 			if err != nil {
 				return err
 			}
-		}
+			job.Status.State = overallState
+			job.Status.Message = message
 
-		// get the overall job status
-		overallState, message, err := s.getOverallJobStatus(job)
-		if err != nil {
+			s.logger.Info("Calculated overall job status", "id", id, "overall_state", overallState, "status", runStatus.BenchmarkStatusEvent.Status)
+
+			// compute the job test result only if the job is completed
+			if overallState == api.OverallStateCompleted {
+				s.computeJobTestResult(job, collection)
+			}
+
+			entity := EvaluationJobEntity{
+				Config:  &job.EvaluationJobConfig,
+				Status:  job.Status,
+				Results: job.Results,
+			}
+
+			return s.updateEvaluationJobTxn(txn, id, overallState, &entity)
+		})
+		if err == nil || !isRetryableDBError(err) {
 			return err
 		}
-		job.Status.State = overallState
-		job.Status.Message = message
-
-		s.logger.Info("Calculated overall job status", "id", id, "overall_state", overallState, "status", runStatus.BenchmarkStatusEvent.Status)
-
-		// compute the job test result only if the job is completed
-		if overallState == api.OverallStateCompleted {
-			s.computeJobTestResult(job, collection)
-		}
-
-		entity := EvaluationJobEntity{
-			Config:  &job.EvaluationJobConfig,
-			Status:  job.Status,
-			Results: job.Results,
-		}
-
-		return s.updateEvaluationJobTxn(txn, id, overallState, &entity)
-	})
-
+	}
 	return err
 }
 
