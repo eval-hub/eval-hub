@@ -373,11 +373,14 @@ func (s *sqlStorage) updateBenchmarkResults(job *api.EvaluationJobResource, runS
 // String-matched because ServiceError does not preserve the original driver error.
 // SQLite error strings come from the C library via modernc.org/sqlite conn.errstr()
 // (sqlite3_errstr + sqlite3_errmsg), not from the ErrorCodeString map in error.go:
-//   SQLITE_BUSY  (5) → "database is locked (5) (SQLITE_BUSY)"
-//   SQLITE_LOCKED(6) → "database table is locked: database is deadlocked (6)"
+//
+//	SQLITE_BUSY  (5) → "database is locked (5) (SQLITE_BUSY)"
+//	SQLITE_LOCKED(6) → "database table is locked: database is deadlocked (6)"
+//
 // PostgreSQL error strings come from pgx/v5 pgconn.PgError.Error():
-//   serialization_failure → "ERROR: could not serialize access ... (SQLSTATE 40001)"
-//   deadlock_detected     → "ERROR: deadlock detected (SQLSTATE 40P01)"
+//
+//	serialization_failure → "ERROR: could not serialize access ... (SQLSTATE 40001)"
+//	deadlock_detected     → "ERROR: deadlock detected (SQLSTATE 40P01)"
 func isRetryableDBError(err error) bool {
 	if err == nil {
 		return false
