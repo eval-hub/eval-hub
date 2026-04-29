@@ -3,6 +3,7 @@ package evalhub_client
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -46,8 +47,10 @@ func newCapturingServer(t *testing.T, status int, respBody []byte) (*httptest.Se
 		capture.query = r.URL.RawQuery
 		capture.headers = r.Header.Clone()
 
-		b := make([]byte, r.ContentLength)
-		r.Body.Read(b) //nolint:errcheck
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("reading request body: %v", err)
+		}
 		capture.body = b
 
 		w.Header().Set("Content-Type", "application/json")
