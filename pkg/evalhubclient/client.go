@@ -19,6 +19,7 @@ import (
 const (
 	defaultTimeout    = 30 * time.Second
 	defaultMaxRetries = 3
+	defaultRetryDelay = 500 * time.Millisecond
 
 	apiBasePath = "/api/v1/evaluations"
 	healthPath  = "/api/v1/health"
@@ -58,6 +59,7 @@ type Client struct {
 	httpClient *http.Client
 	logger     *slog.Logger
 	maxRetries int
+	retryDelay time.Duration
 }
 
 // NewClient creates a new eval-hub API client. Trailing slashes in baseURL are stripped.
@@ -70,6 +72,7 @@ func NewClient(baseURL string) *Client {
 		},
 		logger:     slog.New(slog.DiscardHandler),
 		maxRetries: defaultMaxRetries,
+		retryDelay: defaultRetryDelay,
 	}
 }
 
@@ -85,6 +88,7 @@ func (c *Client) clone() *Client {
 		httpClient: c.httpClient,
 		logger:     c.logger,
 		maxRetries: c.maxRetries,
+		retryDelay: c.retryDelay,
 	}
 }
 
@@ -203,7 +207,7 @@ func (c *Client) doRequest(method, path string, body any, queryParams url.Values
 
 	for attempt := 0; attempt <= c.maxRetries; attempt++ {
 		if attempt > 0 {
-			time.Sleep(time.Duration(1<<(attempt-1)) * 500 * time.Millisecond)
+			time.Sleep(time.Duration(1<<(attempt-1)) * c.retryDelay)
 		}
 
 		var reqBody io.Reader
