@@ -160,6 +160,14 @@ func (c *Client) WithMaxRetries(n int) *Client {
 	return cp
 }
 
+// WithRetryDelay returns a copy of the client with the given base delay between retries.
+// The actual delay doubles on each successive attempt (exponential backoff).
+func (c *Client) WithRetryDelay(d time.Duration) *Client {
+	cp := c.clone()
+	cp.retryDelay = d
+	return cp
+}
+
 // WithHTTPClient returns a copy of the client using the given http.Client (useful for testing).
 func (c *Client) WithHTTPClient(httpClient *http.Client) *Client {
 	cp := c.clone()
