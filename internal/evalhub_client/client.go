@@ -128,7 +128,7 @@ func (c *Client) WithInsecureSkipVerify() *Client {
 
 	if transport.TLSClientConfig != nil {
 		tlsCfg := *transport.TLSClientConfig // copy so we don't mutate the original
-		tlsCfg.InsecureSkipVerify = true      // #nosec G402
+		tlsCfg.InsecureSkipVerify = true     // #nosec G402
 		transport.TLSClientConfig = &tlsCfg
 	} else {
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // #nosec G402
