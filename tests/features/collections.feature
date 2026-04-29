@@ -623,7 +623,7 @@ Feature: Collections Endpoint
     Then the response code should be 200
     And the response should contain "name" with value "{{value:collection0:name}}"
 
-  Scenario: Verify out of box collection retrieval - threshold 
+  Scenario: Verify out of box collection retrieval - threshold
     Given the service is running
     And there is a system collection with id "safety-and-fairness-v1"
     When I send a GET request to "/api/v1/evaluations/collections/safety-and-fairness-v1"
@@ -644,14 +644,14 @@ Feature: Collections Endpoint
     And the response should contain the value "bbq" at path "$.benchmarks[4].id"
     And the response should contain the value "ethics_cm" at path "$.benchmarks[5].id"
 
-  Scenario: Verify out of box collection retrieval - weights 
+  Scenario: Verify out of box collection retrieval - weights
     Given the service is running
     And there is a system collection with id "safety-and-fairness-v1"
     When I send a GET request to "/api/v1/evaluations/collections/safety-and-fairness-v1"
     Then the response code should be 200
-    And the response should contain the value "2" at path "$.benchmarks[0].weight"
-    And the response should contain the value "1" at path "$.benchmarks[3].weight"
-    And the response should contain the value "3" at path "$.benchmarks[5].weight"
+    And the response should equal the value "2" at path "$.benchmarks[0].weight"
+    And the response should equal the value "1" at path "$.benchmarks[3].weight"
+    And the response should equal the value "3" at path "$.benchmarks[5].weight"
 
   Scenario: Verify OOB Collections Are Immutable
     Given the service is running
@@ -660,3 +660,141 @@ Feature: Collections Endpoint
     Then the response code should be 400
     And the response should contain the value "read_only_collection" at path "$.message_code"
     And the response should contain the value "cannot be modified or deleted." at path "$.message"
+
+  Scenario: Verify out of box collection retrieval - name - safety-and-fairness-v1
+    Given the service is running
+    And there is a system collection with id "safety-and-fairness-v1"
+    When I send a GET request to "/api/v1/evaluations/collections/safety-and-fairness-v1"
+    Then the response code should be 200
+    And the response should contain "name" with value "Safety & Fairness"
+
+  Scenario: Verify out of box collection retrieval - category - safety-and-fairness-v1
+    Given the service is running
+    And there is a system collection with id "safety-and-fairness-v1"
+    When I send a GET request to "/api/v1/evaluations/collections/safety-and-fairness-v1"
+    Then the response code should be 200
+    And the response should contain "category" with value "safety"
+
+  Scenario: Verify out of box collection retrieval - benchmarks thresholds - safety-and-fairness-v1
+    Given the service is running
+    And there is a system collection with id "safety-and-fairness-v1"
+    When I send a GET request to "/api/v1/evaluations/collections/safety-and-fairness-v1"
+    Then the response code should be 200
+    And the response should contain "benchmarks"
+    And the array at path "benchmarks" in the response should have length 6
+    And the response should equal the value "0.6" at path "$.benchmarks[0].pass_criteria.threshold"
+    And the response should equal the value "0.85" at path "$.benchmarks[1].pass_criteria.threshold"
+    And the response should equal the value "0.8" at path "$.benchmarks[2].pass_criteria.threshold"
+    And the response should equal the value "0.5" at path "$.benchmarks[3].pass_criteria.threshold"
+    And the response should equal the value "0.9" at path "$.benchmarks[4].pass_criteria.threshold"
+    And the response should equal the value "0.75" at path "$.benchmarks[5].pass_criteria.threshold"
+
+  Scenario: Verify out of box collection retrieval - name - leaderboard-v2
+    Given the service is running
+    And there is a system collection with id "leaderboard-v2"
+    When I send a GET request to "/api/v1/evaluations/collections/leaderboard-v2"
+    Then the response code should be 200
+    And the response should contain "name" with value "Open LLM Leaderboard v2"
+
+  Scenario: Verify out of box collection retrieval - category - leaderboard-v2
+    Given the service is running
+    And there is a system collection with id "leaderboard-v2"
+    When I send a GET request to "/api/v1/evaluations/collections/leaderboard-v2"
+    Then the response code should be 200
+    And the response should contain "category" with value "general"
+
+  Scenario: Verify out of box collection retrieval - threshold - leaderboard-v2
+    Given the service is running
+    And there is a system collection with id "leaderboard-v2"
+    When I send a GET request to "/api/v1/evaluations/collections/leaderboard-v2"
+    Then the response code should be 200
+    And the response should equal the value "38" at path "$.pass_criteria.threshold"
+
+  Scenario: Verify out of box collection retrieval - benchmarks - leaderboard-v2
+    Given the service is running
+    And there is a system collection with id "leaderboard-v2"
+    When I send a GET request to "/api/v1/evaluations/collections/leaderboard-v2"
+    Then the response code should be 200
+    And the response should contain "benchmarks"
+    And the array at path "benchmarks" in the response should have length 6
+    And the response should contain the value "leaderboard_ifeval" at path "$.benchmarks[0].id"
+    And the response should contain the value "leaderboard_bbh" at path "$.benchmarks[1].id"
+    And the response should contain the value "leaderboard_gpqa" at path "$.benchmarks[2].id"
+    And the response should contain the value "leaderboard_mmlu_pro" at path "$.benchmarks[3].id"
+    And the response should contain the value "leaderboard_musr" at path "$.benchmarks[4].id"
+    And the response should contain the value "leaderboard_math_hard" at path "$.benchmarks[5].id"
+
+  Scenario: Verify out of box collection retrieval - benchmarks thresholds - leaderboard-v2
+    Given the service is running
+    And there is a system collection with id "leaderboard-v2"
+    When I send a GET request to "/api/v1/evaluations/collections/leaderboard-v2"
+    Then the response code should be 200
+    And the response should contain "benchmarks"
+    And the array at path "benchmarks" in the response should have length 6
+    And the response should equal the value "80" at path "$.benchmarks[0].pass_criteria.threshold"
+    And the response should equal the value "68" at path "$.benchmarks[1].pass_criteria.threshold"
+    And the response should equal the value "40" at path "$.benchmarks[2].pass_criteria.threshold"
+    And the response should equal the value "60" at path "$.benchmarks[3].pass_criteria.threshold"
+    And the response should equal the value "38" at path "$.benchmarks[4].pass_criteria.threshold"
+    And the response should equal the value "55" at path "$.benchmarks[5].pass_criteria.threshold"
+
+  Scenario: Verify out of box collection retrieval - weights - leaderboard-v2
+    Given the service is running
+    And there is a system collection with id "leaderboard-v2"
+    When I send a GET request to "/api/v1/evaluations/collections/leaderboard-v2"
+    Then the response code should be 200
+    And the response should equal the value "1" at path "$.benchmarks[1].weight"
+    And the response should equal the value "1" at path "$.benchmarks[2].weight"
+    And the response should equal the value "1" at path "$.benchmarks[4].weight"
+
+  Scenario: Verify out of box collection retrieval - name - toxicity-and-ethical-principles
+    Given the service is running
+    And there is a system collection with id "toxicity-and-ethical-principles"
+    When I send a GET request to "/api/v1/evaluations/collections/toxicity-and-ethical-principles"
+    Then the response code should be 200
+    And the response should contain "name" with value "Toxicity and Ethical Principles"
+
+  Scenario: Verify out of box collection retrieval - category - toxicity-and-ethical-principles
+    Given the service is running
+    And there is a system collection with id "toxicity-and-ethical-principles"
+    When I send a GET request to "/api/v1/evaluations/collections/toxicity-and-ethical-principles"
+    Then the response code should be 200
+    And the response should contain "category" with value "safety"
+
+  Scenario: Verify out of box collection retrieval - threshold - toxicity-and-ethical-principles
+    Given the service is running
+    And there is a system collection with id "toxicity-and-ethical-principles"
+    When I send a GET request to "/api/v1/evaluations/collections/toxicity-and-ethical-principles"
+    Then the response code should be 200
+    And the response should equal the value "0.75" at path "$.pass_criteria.threshold"
+
+  Scenario: Verify out of box collection retrieval - benchmarks - toxicity-and-ethical-principles
+    Given the service is running
+    And there is a system collection with id "toxicity-and-ethical-principles"
+    When I send a GET request to "/api/v1/evaluations/collections/toxicity-and-ethical-principles"
+    Then the response code should be 200
+    And the response should contain "benchmarks"
+    And the array at path "benchmarks" in the response should have length 3
+    And the response should contain the value "toxigen" at path "$.benchmarks[0].id"
+    And the response should contain the value "truthfulqa_mc1" at path "$.benchmarks[1].id"
+    And the response should contain the value "bigbench_hhh_alignment_multiple_choice" at path "$.benchmarks[2].id"
+
+  Scenario: Verify out of box collection retrieval - benchmarks thresholds - toxicity-and-ethical-principles
+    Given the service is running
+    And there is a system collection with id "toxicity-and-ethical-principles"
+    When I send a GET request to "/api/v1/evaluations/collections/toxicity-and-ethical-principles"
+    Then the response code should be 200
+    And the response should contain "benchmarks"
+    And the array at path "benchmarks" in the response should have length 3
+    And the response should equal the value "0.85" at path "$.benchmarks[0].pass_criteria.threshold"
+    And the response should equal the value "0.6" at path "$.benchmarks[1].pass_criteria.threshold"
+    And the response should equal the value "0.75" at path "$.benchmarks[2].pass_criteria.threshold"
+
+  Scenario: Verify out of box collection retrieval - weights - toxicity-and-ethical-principles
+    Given the service is running
+    And there is a system collection with id "toxicity-and-ethical-principles"
+    When I send a GET request to "/api/v1/evaluations/collections/toxicity-and-ethical-principles"
+    Then the response code should be 200
+    And the response should equal the value "3" at path "$.benchmarks[0].weight"
+    And the response should equal the value "2" at path "$.benchmarks[1].weight"
+    And the response should equal the value "3" at path "$.benchmarks[2].weight"
