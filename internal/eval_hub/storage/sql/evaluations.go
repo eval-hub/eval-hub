@@ -257,7 +257,7 @@ func (s *sqlStorage) validateBenchmarkExists(job *api.EvaluationJobResource, run
 }
 
 // GetOverallJobStatus returns overall state and message. getCollection is used to resolve job benchmark count when job has only a collection reference.
-func (s *sqlStorage) getOverallJobStatus(job *api.EvaluationJobResource) (api.OverallState, *api.MessageInfo, error) {
+func (s *sqlStorage) getOverallJobStatus(txn *sql.Tx, job *api.EvaluationJobResource) (api.OverallState, *api.MessageInfo, error) {
 	// to be safe - do an initial check to see if the job is finished
 	if job.Status.State.IsTerminalState() {
 		return job.Status.State, job.Status.Message, nil
@@ -277,7 +277,7 @@ func (s *sqlStorage) getOverallJobStatus(job *api.EvaluationJobResource) (api.Ov
 	var collection *api.CollectionResource
 	var err error
 	if job.Collection != nil && job.Collection.ID != "" {
-		collection, err = s.GetCollection(job.Collection.ID)
+		collection, err = s.getCollectionTransactional(txn, job.Collection.ID)
 		if err != nil {
 			return api.OverallStatePending, &api.MessageInfo{
 				Message:     "Evaluation job is pending",
@@ -414,7 +414,7 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 
 			var collection *api.CollectionResource
 			if job.Collection != nil && job.Collection.ID != "" {
-				collection, err = s.GetCollection(job.Collection.ID)
+				collection, err = s.getCollectionTransactional(txn, job.Collection.ID)
 				if err != nil {
 					return err
 				}
@@ -436,7 +436,7 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 			}
 			s.updateBenchmarkStatus(job, runStatus, &benchmark)
 
-			outcome := s.computeBenchmarkTestResult(job, runStatus.BenchmarkStatusEvent, collection)
+			outcome := s.computeBenchmarkTestResult(txn, job, runStatus.BenchmarkStatusEvent, collection)
 
 			// if the run status is terminal, we need to update the results
 			if api.IsBenchmarkTerminalState(runStatus.BenchmarkStatusEvent.Status) {
@@ -457,7 +457,7 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 			}
 
 			// get the overall job status
-			overallState, message, err := s.getOverallJobStatus(job)
+			overallState, message, err := s.getOverallJobStatus(txn, job)
 			if err != nil {
 				return err
 			}
@@ -554,7 +554,7 @@ func getPassCriteriaThreshold(job *api.EvaluationJobResource, collection *api.Co
 	return 0.5
 }
 
-func (s *sqlStorage) computeBenchmarkTestResult(job *api.EvaluationJobResource, benchmarkStatusEvent *api.BenchmarkStatusEvent, collection *api.CollectionResource) *api.BenchmarkTest {
+func (s *sqlStorage) computeBenchmarkTestResult(txn *sql.Tx, job *api.EvaluationJobResource, benchmarkStatusEvent *api.BenchmarkStatusEvent, collection *api.CollectionResource) *api.BenchmarkTest {
 	// job could have benchmarks array or it could have collection. If it has collection, we need to get the benchmarks from the collection
 	benchmarks, err := handlers.GetJobBenchmarks(job, collection)
 	if err != nil {
@@ -572,7 +572,7 @@ func (s *sqlStorage) computeBenchmarkTestResult(job *api.EvaluationJobResource, 
 		var providerBench *api.BenchmarkResource
 		// if the primary score is not defined, we need to get the primary score from the provider
 		if (primaryScore == nil || primaryScore.Metric == "") && benchmark.ProviderID != "" {
-			provider, err := s.GetProvider(benchmark.ProviderID)
+			provider, err := s.getUserProviderTransactional(txn, benchmark.ProviderID)
 			if err == nil && provider != nil {
 				for i := range provider.Benchmarks {
 					if provider.Benchmarks[i].ID == benchmark.ID {

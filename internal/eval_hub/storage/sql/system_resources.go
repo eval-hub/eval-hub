@@ -37,7 +37,7 @@ func (s *sqlStorage) LoadSystemResources(systemCollections map[string]api.Collec
 					Offset: offset,
 					Params: map[string]any{},
 				}
-				collections, err := s.GetCollections(&filter)
+				collections, err := s.getCollectionsTransactional(txn, &filter)
 				if err != nil {
 					return serviceerrors.WithRollback(err)
 				}
@@ -101,7 +101,7 @@ func (s *sqlStorage) LoadSystemResources(systemCollections map[string]api.Collec
 					Offset: offset,
 					Params: map[string]any{},
 				}
-				providers, err := s.GetProviders(&filter)
+				providers, err := s.getProvidersTransactional(txn, &filter)
 				if err != nil {
 					return serviceerrors.WithRollback(err)
 				}

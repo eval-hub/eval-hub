@@ -85,7 +85,10 @@ func (s *sqlStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 }
 
 func (s *sqlStorage) GetCollections(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
-	var txn *sql.Tx
+	return s.getCollectionsTransactional(nil, filter)
+}
+
+func (s *sqlStorage) getCollectionsTransactional(txn *sql.Tx, filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
 	return listEntities[api.CollectionResource](s, txn, shared.TABLE_COLLECTIONS, filter)
 }
 

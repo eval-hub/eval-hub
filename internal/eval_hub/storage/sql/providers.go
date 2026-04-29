@@ -108,7 +108,10 @@ func (s *sqlStorage) DeleteProvider(id string) error {
 }
 
 func (s *sqlStorage) GetProviders(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.ProviderResource], error) {
-	var txn *sql.Tx
+	return s.getProvidersTransactional(nil, filter)
+}
+
+func (s *sqlStorage) getProvidersTransactional(txn *sql.Tx, filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.ProviderResource], error) {
 	return listEntities[api.ProviderResource](s, txn, shared.TABLE_PROVIDERS, filter)
 }
 

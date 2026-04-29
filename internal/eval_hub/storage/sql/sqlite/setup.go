@@ -10,9 +10,9 @@ import (
 )
 
 func Setup(logger *slog.Logger, pool *sql.DB, config *shared.SQLDatabaseConfig) (shared.SQLStatementsFactory, error) {
-	// SQLite only supports one writer at a time; serializing access through
-	// a single connection eliminates lock contention and deadlocks.
-	pool.SetMaxOpenConns(5)
+	// SQLite only supports one writer at a time; a single connection
+	// serializes all access and eliminates lock contention.
+	pool.SetMaxOpenConns(1)
 	if _, err := pool.Exec("PRAGMA busy_timeout = 5000"); err != nil {
 		return nil, fmt.Errorf("failed to set busy_timeout: %w", err)
 	}
