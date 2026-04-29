@@ -113,13 +113,30 @@ func (c *Client) WithTimeout(timeout time.Duration) *Client {
 
 // WithInsecureSkipVerify returns a copy of the client that skips TLS certificate verification.
 // Use only in development or test environments.
+// If the underlying transport is a *http.Transport it is shallow-cloned so that
+// existing dial settings, proxies, and connection-pool tuning are preserved.
 func (c *Client) WithInsecureSkipVerify() *Client {
 	cp := *c
+
+	var transport *http.Transport
+	if existing, ok := cp.httpClient.Transport.(*http.Transport); ok {
+		cloned := *existing // shallow copy — preserves dial settings, proxies, pools
+		transport = &cloned
+	} else {
+		transport = &http.Transport{}
+	}
+
+	if transport.TLSClientConfig != nil {
+		tlsCfg := *transport.TLSClientConfig // copy so we don't mutate the original
+		tlsCfg.InsecureSkipVerify = true      // #nosec G402
+		transport.TLSClientConfig = &tlsCfg
+	} else {
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // #nosec G402
+	}
+
 	cp.httpClient = &http.Client{
-		Timeout: cp.httpClient.Timeout,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // #nosec G402
-		},
+		Timeout:   cp.httpClient.Timeout,
+		Transport: transport,
 	}
 	return &cp
 }
