@@ -664,10 +664,10 @@ func TestAPIErrorString(t *testing.T) {
 
 func TestAPIErrorHelpers(t *testing.T) {
 	cases := []struct {
-		status      int
-		notFound    bool
+		status       int
+		notFound     bool
 		unauthorized bool
-		forbidden   bool
+		forbidden    bool
 	}{
 		{http.StatusNotFound, true, false, false},
 		{http.StatusUnauthorized, false, true, false},
