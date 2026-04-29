@@ -73,54 +73,69 @@ func NewClient(baseURL string) *Client {
 	}
 }
 
+// clone returns a new Client with every field explicitly copied.
+// All With* methods call this so that adding a field to Client forces
+// a compile-time update here rather than silently inheriting a zero value.
+func (c *Client) clone() *Client {
+	return &Client{
+		ctx:        c.ctx,
+		baseURL:    c.baseURL,
+		token:      c.token,
+		tenant:     c.tenant,
+		httpClient: c.httpClient,
+		logger:     c.logger,
+		maxRetries: c.maxRetries,
+	}
+}
+
 // WithContext returns a copy of the client that uses ctx for all subsequent requests.
 func (c *Client) WithContext(ctx context.Context) *Client {
-	cp := *c
+	cp := c.clone()
 	cp.ctx = ctx
-	return &cp
+	return cp
 }
 
 // WithToken returns a copy of the client that sends token as a Bearer Authorization header.
 func (c *Client) WithToken(token string) *Client {
-	cp := *c
+	cp := c.clone()
 	cp.token = token
-	return &cp
+	return cp
 }
 
 // WithTenant returns a copy of the client that sends the X-Tenant header on every request.
 func (c *Client) WithTenant(tenant string) *Client {
-	cp := *c
+	cp := c.clone()
 	cp.tenant = tenant
-	return &cp
+	return cp
 }
 
 // WithLogger returns a copy of the client that uses logger for structured request logging.
 func (c *Client) WithLogger(logger *slog.Logger) *Client {
-	cp := *c
+	cp := c.clone()
 	cp.logger = logger
-	return &cp
+	return cp
 }
 
 // WithTimeout returns a copy of the client with the given HTTP request timeout.
 func (c *Client) WithTimeout(timeout time.Duration) *Client {
-	cp := *c
+	cp := c.clone()
 	cp.httpClient = &http.Client{
 		Timeout:   timeout,
-		Transport: cp.httpClient.Transport,
+		Transport: c.httpClient.Transport,
 	}
-	return &cp
+	return cp
 }
 
 // WithInsecureSkipVerify returns a copy of the client that skips TLS certificate verification.
 // Use only in development or test environments.
 func (c *Client) WithInsecureSkipVerify() *Client {
-	cp := *c
+	cp := c.clone()
 
 	// http.Transport contains a sync.Mutex and cannot be copied by value, so we
 	// always build a fresh transport. We do carry over any existing TLSClientConfig
 	// via its own safe Clone() so caller-configured cipher suites etc. are kept.
 	var tlsCfg *tls.Config
-	if existing, ok := cp.httpClient.Transport.(*http.Transport); ok && existing.TLSClientConfig != nil {
+	if existing, ok := c.httpClient.Transport.(*http.Transport); ok && existing.TLSClientConfig != nil {
 		tlsCfg = existing.TLSClientConfig.Clone()
 	} else {
 		tlsCfg = &tls.Config{} //nolint:gosec
@@ -128,24 +143,24 @@ func (c *Client) WithInsecureSkipVerify() *Client {
 	tlsCfg.InsecureSkipVerify = true // #nosec G402
 
 	cp.httpClient = &http.Client{
-		Timeout:   cp.httpClient.Timeout,
+		Timeout:   c.httpClient.Timeout,
 		Transport: &http.Transport{TLSClientConfig: tlsCfg},
 	}
-	return &cp
+	return cp
 }
 
 // WithMaxRetries returns a copy of the client that retries up to n times on transient failures.
 func (c *Client) WithMaxRetries(n int) *Client {
-	cp := *c
+	cp := c.clone()
 	cp.maxRetries = n
-	return &cp
+	return cp
 }
 
 // WithHTTPClient returns a copy of the client using the given http.Client (useful for testing).
 func (c *Client) WithHTTPClient(httpClient *http.Client) *Client {
-	cp := *c
+	cp := c.clone()
 	cp.httpClient = httpClient
-	return &cp
+	return cp
 }
 
 func (c *Client) setHeaders(req *http.Request) {
