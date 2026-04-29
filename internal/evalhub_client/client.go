@@ -294,7 +294,7 @@ func (c *Client) ListProviders(opts ...ListOption) (*api.ProviderResourceList, e
 
 // GetProvider returns the provider with the given ID.
 func (c *Client) GetProvider(id string) (*api.ProviderResource, error) {
-	body, _, err := c.doRequest(http.MethodGet, apiBasePath+"/providers/"+id, nil, nil)
+	body, _, err := c.doRequest(http.MethodGet, apiBasePath+"/providers/"+url.PathEscape(id), nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -400,7 +400,7 @@ func (c *Client) ListCollections(opts ...ListOption) (*api.CollectionResourceLis
 
 // GetCollection returns the collection with the given ID.
 func (c *Client) GetCollection(id string) (*api.CollectionResource, error) {
-	body, _, err := c.doRequest(http.MethodGet, apiBasePath+"/collections/"+id, nil, nil)
+	body, _, err := c.doRequest(http.MethodGet, apiBasePath+"/collections/"+url.PathEscape(id), nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -420,7 +420,7 @@ func (c *Client) ListJobs(opts ...ListOption) (*api.EvaluationJobResourceList, e
 
 // GetJob returns the evaluation job with the given ID.
 func (c *Client) GetJob(id string) (*api.EvaluationJobResource, error) {
-	body, _, err := c.doRequest(http.MethodGet, apiBasePath+"/jobs/"+id, nil, nil)
+	body, _, err := c.doRequest(http.MethodGet, apiBasePath+"/jobs/"+url.PathEscape(id), nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -444,7 +444,7 @@ func (c *Client) CreateJob(config api.EvaluationJobConfig) (*api.EvaluationJobRe
 
 // CancelJob cancels the evaluation job with the given ID.
 func (c *Client) CancelJob(id string) error {
-	_, _, err := c.doRequest(http.MethodDelete, apiBasePath+"/jobs/"+id, nil, nil)
+	_, _, err := c.doRequest(http.MethodDelete, apiBasePath+"/jobs/"+url.PathEscape(id), nil, nil)
 	return err
 }
 
