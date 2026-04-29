@@ -18,7 +18,7 @@ type Config struct {
 	Insecure  bool   `mapstructure:"insecure"`
 	Transport string `mapstructure:"transport" validate:"required,oneof=stdio http"`
 	Host      string `mapstructure:"host"      validate:"required"`
-	Port      int    `mapstructure:"port"      validate:"min=0,max=65535"`
+	Port      int    `mapstructure:"port"      validate:"omitempty,min=1,max=65535"`
 }
 
 type ProfileConfig struct {
@@ -80,17 +80,12 @@ func Load(flags *Flags) (*Config, error) {
 	return cfg, nil
 }
 
-// Validate checks the Config using go-playground/validator struct tags and
-// additional transport-specific rules.
+// Validate checks the Config using go-playground/validator struct tags.
 func Validate(cfg *Config) error {
 	validate := validator.New(validator.WithRequiredStructEnabled())
 
 	if err := validate.Struct(cfg); err != nil {
 		return fmt.Errorf("config validation failed: %w", err)
-	}
-
-	if cfg.Transport == "http" && (cfg.Port < 1 || cfg.Port > 65535) {
-		return fmt.Errorf("invalid port %d for http transport: must be between 1 and 65535", cfg.Port)
 	}
 
 	return nil

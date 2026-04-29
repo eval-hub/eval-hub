@@ -239,12 +239,12 @@ func TestValidateTransport(t *testing.T) {
 	}
 }
 
-func TestValidateHTTPPort(t *testing.T) {
+func TestValidatePort(t *testing.T) {
 	tests := []struct {
 		port    int
 		wantErr bool
 	}{
-		{0, true},
+		{0, false},
 		{1, false},
 		{3001, false},
 		{65535, false},
