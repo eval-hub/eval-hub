@@ -3,8 +3,10 @@ package server
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/evalhub_mcp/config"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -57,6 +59,12 @@ func runHTTP(ctx context.Context, srv *mcp.Server, cfg *config.Config) error {
 		}
 		return fmt.Errorf("HTTP server error: %w", err)
 	case <-ctx.Done():
-		return httpServer.Close()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := httpServer.Shutdown(shutdownCtx); err != nil {
+			log.Printf("HTTP server graceful shutdown failed: %v", err)
+			return httpServer.Close()
+		}
+		return nil
 	}
 }
