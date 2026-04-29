@@ -6,33 +6,11 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_runtime_sidecar/proxy"
 )
-
-const ServiceAccountTokenPathDefault = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-const MLFlowTokenPathDefault = "/var/run/secrets/mlflow/token"
-
-// OCIAuthConfigPathDefault is the default path for the registry auth config file. Must match the OCI secret
-// mount path on adapter and sidecar: internal/runtimes/k8s/job_builders.go ociCredentialsMountPath.
-const OCIAuthConfigPathDefault = "/etc/evalhub/.docker/config.json"
-
-// JobSpecPathDefault is the default path for the job spec file. Must match the job-spec mount on the sidecar:
-// internal/runtimes/k8s/job_builders.go jobSpecMountPath + subPath jobSpecFileName.
-const JobSpecPathDefault = "/meta/job.json"
-
-// /api/2.0|3.0/mlflow/* proxied to mlflow.tracking_uri.
-const (
-	mlflowAPIv2PathPrefix = "/api/2.0/mlflow"
-	mlflowAPIv3PathPrefix = "/api/3.0/mlflow"
-)
-
-func isMLflowProxyPath(path string) bool {
-	return strings.HasPrefix(path, mlflowAPIv2PathPrefix) || strings.HasPrefix(path, mlflowAPIv3PathPrefix)
-}
 
 // Handlers holds service state for HTTP handlers.
 // Reverse proxies are created once at startup and reused for all requests.
@@ -46,6 +24,7 @@ type Handlers struct {
 	ociRepository    string                  // from job spec; used to route requests to /registry/{ociRepository}
 }
 
+// New creates handlers and builds reverse proxies for eval-hub, MLflow, and optionally OCI.
 func New(config *config.Config, logger *slog.Logger) (*Handlers, error) {
 	evalHubProxy, err := newEvalhubProxy(config, logger)
 	if err != nil {
@@ -73,107 +52,12 @@ func New(config *config.Config, logger *slog.Logger) (*Handlers, error) {
 	}, nil
 }
 
-func newMlflowProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseProxy, error) {
-	mlflowTrackingURI := ""
-	if config.MLFlow != nil {
-		mlflowTrackingURI = strings.TrimSpace(config.MLFlow.TrackingURI)
-	}
-	if mlflowTrackingURI == "" {
-		logger.Warn("mlflow.tracking_uri is not set in sidecar config")
-		return nil, nil
-	}
-	mlflowHTTPClient, err := proxy.NewMLFlowHTTPClient(config, config.IsOTELEnabled(), logger)
-	if err != nil {
-		logger.Error("failed to create mlflow HTTP client", "error", err)
-		return nil, fmt.Errorf("failed to create mlflow HTTP client: %w", err)
-	}
-	mlflowTarget, err := url.Parse(strings.TrimSuffix(mlflowTrackingURI, "/"))
-	if err != nil {
-		return nil, fmt.Errorf("invalid mlflow.tracking_uri: %w", err)
-	}
-
-	mlflowProxy := proxy.NewReverseProxy(mlflowTarget, mlflowHTTPClient, logger, nil)
-	return mlflowProxy, nil
-}
-
-func newEvalhubProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseProxy, error) {
-	evalHubHTTPClient, err := proxy.NewEvalHubHTTPClient(config, config.IsOTELEnabled(), logger)
-	if err != nil {
-		logger.Error("failed to create eval-hub HTTP client", "error", err)
-		return nil, fmt.Errorf("failed to create eval-hub HTTP client: %w", err)
-	}
-	evalHubBaseURL := ""
-	if config.Sidecar != nil && config.Sidecar.EvalHub != nil {
-		evalHubBaseURL = strings.TrimSpace(config.Sidecar.EvalHub.BaseURL)
-	}
-	if evalHubBaseURL == "" {
-		return nil, fmt.Errorf("eval_hub.base_url is not set in sidecar config")
-	}
-	evalHubTarget, err := url.Parse(strings.TrimSuffix(evalHubBaseURL, "/"))
-	if err != nil {
-		return nil, fmt.Errorf("invalid EVALHUB_URL: %w", err)
-	}
-	evalHubProxy := proxy.NewReverseProxy(evalHubTarget, evalHubHTTPClient, logger, nil)
-	return evalHubProxy, nil
-}
-
-func newOciProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseProxy, *proxy.OCITokenProducer, string, error) {
-	if config == nil || config.Sidecar == nil {
-		return nil, nil, "", nil
-	}
-	jobSpecPath := os.Getenv("JOB_SPEC_PATH")
-	if jobSpecPath == "" {
-		jobSpecPath = JobSpecPathDefault
-	}
-	host, repository, err := proxy.GetOCICoordinatesFromJobSpec(jobSpecPath)
-	if err != nil {
-		logger.Debug("OCI proxy disabled: could not read job spec for OCI coordinates", "path", jobSpecPath, "error", err)
-		return nil, nil, "", nil
-	}
-	if host == "" {
-		logger.Debug("OCI proxy disabled: job spec has no exports.oci with registry host", "path", jobSpecPath)
-		return nil, nil, "", nil
-	}
-	// OCI reverse proxy is enabled from job spec (exports.oci + coordinates), not from eval-hub
-	// service YAML sidecar.oci. sidecar_config.json "oci" is optional: TLS/timeout overrides only
-	// (see NewOCIHTTPClient).
-	ociHTTPClient, err := proxy.NewOCIHTTPClient(config, config.IsOTELEnabled(), logger)
-	if err != nil {
-		logger.Error("failed to create OCI HTTP client", "error", err)
-		return nil, nil, "", fmt.Errorf("failed to create OCI HTTP client: %w", err)
-	}
-	if ociHTTPClient == nil {
-		return nil, nil, "", fmt.Errorf("OCI HTTP client is required for OCI proxy")
-	}
-	ociSecretMountPath := os.Getenv("OCI_AUTH_CONFIG_PATH")
-	if ociSecretMountPath == "" {
-		ociSecretMountPath = OCIAuthConfigPathDefault
-	}
-	tokenProducer, err := proxy.LoadTokenProducerFromOCISecret(ociSecretMountPath, host, repository, ociHTTPClient)
-	if err != nil {
-		logger.Error("failed to create OCI token producer from OCI secret", "path", ociSecretMountPath, "error", err)
-		return nil, nil, "", fmt.Errorf("OCI token producer: %w", err)
-	}
-	ociTarget, err := url.Parse(strings.TrimSuffix(host, "/"))
-	if err != nil {
-		return nil, nil, "", fmt.Errorf("invalid OCI registry host from job spec %q: %w", host, err)
-	}
-	rp := proxy.NewReverseProxy(ociTarget, ociHTTPClient, logger, func(resp *http.Response) error {
-		proxy.ModifyOCIRegistryResponse(resp, logger, tokenProducer)
-		return nil
-	})
-	logger.Info("OCI registry proxy enabled",
-		"registry_host", host,
-		"oci_repository", repository,
-		"job_spec", jobSpecPath,
-	)
-	return rp, tokenProducer, repository, nil
-}
-
+// HandleHealth responds OK for liveness.
 func (h *Handlers) HandleHealth(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// HandleProxyCall routes the request to the correct reverse proxy (Eval Hub API, MLflow, or OCI).
 func (h *Handlers) HandleProxyCall(w http.ResponseWriter, r *http.Request) {
 	proxyHandler, tokenParams, err := h.parseProxyCall(r)
 	if err != nil {
@@ -193,63 +77,6 @@ func requestPathForRouting(uri string) string {
 		return uri
 	}
 	return u.EscapedPath()
-}
-
-func splitPathSegments(p string) []string {
-	p = strings.Trim(p, "/")
-	if p == "" {
-		return nil
-	}
-	parts := strings.Split(p, "/")
-	out := parts[:0]
-	for _, s := range parts {
-		if s != "" {
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
-func pathSegmentsEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// ociRouteMatch returns true if the request should be routed to the OCI proxy.
-// Matching uses only the path (query and fragment are ignored). The job-spec repository
-// must appear as a full consecutive sequence of path segments, either at the start of
-// the path or immediately after a "v2" segment (OCI distribution API), e.g. /v2/org/repo/...
-// matches repo "org/repo" but /v2/ac/org/repo/... does not.
-func (h *Handlers) ociRouteMatch(uri string) bool {
-	if h.ociRepository == "" {
-		return false
-	}
-	path := requestPathForRouting(uri)
-	repoParts := splitPathSegments(h.ociRepository)
-	if len(repoParts) == 0 {
-		return false
-	}
-	pathParts := splitPathSegments(path)
-	if len(pathParts) < len(repoParts) {
-		return false
-	}
-	n := len(repoParts)
-	for i := 0; i+n <= len(pathParts); i++ {
-		if !pathSegmentsEqual(pathParts[i:i+n], repoParts) {
-			continue
-		}
-		if i == 0 || pathParts[i-1] == "v2" {
-			return true
-		}
-	}
-	return false
 }
 
 func (h *Handlers) parseProxyCall(r *http.Request) (*httputil.ReverseProxy, *proxy.AuthTokenInput, error) {

@@ -132,7 +132,6 @@ func TestHandlers_HandleProxyCall(t *testing.T) {
 			"/api/2.0/mlflow-artifacts",
 			"/api/2.0/mlflow-artifacts/artifact",
 			"/api/2.0/mlflow-artifacts/get-artifact?path=x",
-			"/api/2.0/mlflow-custom/endpoint",
 			"/api/3.0/mlflow/traces/search",
 			"/api/3.0/mlflow/traces/tr-abc123",
 			"/api/3.0/mlflow/server-info",
@@ -142,6 +141,24 @@ func TestHandlers_HandleProxyCall(t *testing.T) {
 			h.HandleProxyCall(rw, req)
 			if strings.Contains(rw.Body.String(), "unknown proxy call") {
 				t.Errorf("%q: expected mlflow route, got unknown proxy call", path)
+			}
+		}
+	})
+
+	t.Run("paths that look like mlflow but are not the MLflow API roots are unknown", func(t *testing.T) {
+		for _, path := range []string{
+			"/api/2.0/mlflowx/anything",
+			"/api/3.0/mlflowx/anything",
+			"/api/2.0/mlflow-custom/endpoint",
+		} {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			rw := httptest.NewRecorder()
+			h.HandleProxyCall(rw, req)
+			if rw.Code != http.StatusBadRequest {
+				t.Errorf("%q: status = %d, want 400", path, rw.Code)
+			}
+			if !strings.Contains(rw.Body.String(), "unknown proxy call") {
+				t.Errorf("%q: expected unknown proxy call", path)
 			}
 		}
 	})
@@ -223,15 +240,18 @@ func TestIsMLflowProxyPath(t *testing.T) {
 		{"/api/2.0/mlflow", true},
 		{"/api/2.0/mlflow/", true},
 		{"/api/2.0/mlflow/experiments/list", true},
-		{"/api/2.0/mlflow-extra", true},
+		{"/api/2.0/mlflowx", false},
+		{"/api/2.0/mlflowx/", false},
+		{"/api/2.0/mlflow-extra", false},
 		{"/api/2.0/mlflow-artifacts", true},
 		{"/api/2.0/mlflow-artifacts/", true},
 		{"/api/2.0/mlflow-artifacts/get-artifact", true},
-		{"/api/2.0/mlflow-artifactsmalicious", true},
+		{"/api/2.0/mlflow-artifactsmalicious", false},
 		{"/api/2.0/ml", false},
 		{"/prefix/api/2.0/mlflow/runs", false},
 		{"/api/3.0/mlflow/server-info", true},
 		{"/api/3.0/mlflow/traces/search", true},
+		{"/api/3.0/mlflowx", false},
 		{"/api/3.0/ml", false},
 		{"/prefix/api/3.0/mlflow/server-info", false},
 	}
