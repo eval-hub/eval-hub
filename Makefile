@@ -134,12 +134,12 @@ vet: ## Run go vet
 
 test: ## Run unit tests
 	@echo "Running unit tests..."
-	@bash -c 'set -o pipefail; go test -v ./auth/... ./internal/... ./cmd/... | ${PWD}/scripts/grcat ${PWD}/.conf.go-test'
+	@bash -c 'set -o pipefail; go test -v ./auth/... ./internal/... ./cmd/... ./pkg/... | ${PWD}/scripts/grcat ${PWD}/.conf.go-test'
 	@echo "Unit tests complete"
 
 test-coverage: $(BIN_DIR) ## Run unit tests with coverage
 	@echo "Running unit tests with coverage..."
-	@go test -v -race -coverprofile=$(BIN_DIR)/coverage.out -covermode=atomic ./auth/... ./internal/... ./cmd/...
+	@go test -v -race -coverprofile=$(BIN_DIR)/coverage.out -covermode=atomic ./auth/... ./internal/... ./cmd/... ./pkg/...
 	@go test -v -race -coverprofile=$(BIN_DIR)/coverage-init.out -covermode=atomic ./cmd/eval_runtime_init
 	@go tool cover -html=$(BIN_DIR)/coverage.out -o $(BIN_DIR)/coverage.html
 	@go tool cover -html=$(BIN_DIR)/coverage-init.out -o $(BIN_DIR)/coverage-init.html
