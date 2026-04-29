@@ -18,7 +18,7 @@ type Config struct {
 	Insecure  bool   `mapstructure:"insecure"`
 	Transport string `mapstructure:"transport" validate:"required,oneof=stdio http"`
 	Host      string `mapstructure:"host"      validate:"required"`
-	Port      int    `mapstructure:"port"      validate:"omitempty,min=1,max=65535"`
+	Port      int    `mapstructure:"port,omitempty" validate:"omitempty,min=1,max=65535"`
 }
 
 type ProfileConfig struct {
