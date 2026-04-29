@@ -320,6 +320,89 @@ profiles:
 	}
 }
 
+func TestLoadDefaultProfileFallback(t *testing.T) {
+	clearEnv(t)
+
+	configFile := writeConfig(t, `
+profiles:
+  default:
+    base_url: http://fallback:8080
+    token: fallback-token
+`)
+
+	cfg, err := Load(&Flags{ConfigPath: configFile})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.BaseURL != "http://fallback:8080" {
+		t.Errorf("expected fallback to 'default' profile, got base_url %q", cfg.BaseURL)
+	}
+	if cfg.Token != "fallback-token" {
+		t.Errorf("expected fallback token, got %q", cfg.Token)
+	}
+}
+
+func TestLoadProfilePartialFields(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("EVALHUB_BASE_URL", "http://env:9090")
+	t.Setenv("EVALHUB_TOKEN", "env-token")
+	t.Setenv("EVALHUB_TENANT", "env-tenant")
+
+	configFile := writeConfig(t, `
+default_profile: sparse
+profiles:
+  sparse:
+    tenant: yaml-tenant
+`)
+
+	cfg, err := Load(&Flags{ConfigPath: configFile})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.BaseURL != "http://env:9090" {
+		t.Errorf("expected env base_url preserved, got %q", cfg.BaseURL)
+	}
+	if cfg.Token != "env-token" {
+		t.Errorf("expected env token preserved, got %q", cfg.Token)
+	}
+	if cfg.Tenant != "yaml-tenant" {
+		t.Errorf("expected yaml tenant override, got %q", cfg.Tenant)
+	}
+}
+
+func TestLoadNoConfigHomeMissing(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("HOME", t.TempDir())
+
+	cfg, err := Load(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Transport != "stdio" {
+		t.Errorf("expected default transport, got %q", cfg.Transport)
+	}
+}
+
+func TestLoadNilFlags(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("EVALHUB_TOKEN", "tok")
+
+	cfg, err := Load(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Token != "tok" {
+		t.Errorf("expected env token, got %q", cfg.Token)
+	}
+}
+
+func TestValidateEmptyHost(t *testing.T) {
+	cfg := &Config{Transport: "http", Host: "", Port: 3001}
+	if err := Validate(cfg); err == nil {
+		t.Error("expected validation error for empty host")
+	}
+}
+
 // helpers
 
 func clearEnv(t *testing.T) {

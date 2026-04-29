@@ -1,47 +1,92 @@
 package main
 
 import (
+	"bytes"
+	"log"
 	"os"
-	"os/exec"
-	"strings"
 	"testing"
 )
 
 func TestVersionFlag(t *testing.T) {
-	cmd := exec.Command("go", "run", ".", "--version")
-	cmd.Dir = findCmdDir(t)
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
 
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("--version failed: %v\noutput: %s", err, out)
+	code := run([]string{"--version"})
+
+	w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
 	}
-
-	output := string(out)
-	if !strings.Contains(output, "evalhub-mcp version") {
+	if !bytes.Contains([]byte(output), []byte("evalhub-mcp version")) {
 		t.Errorf("expected version output, got: %s", output)
 	}
 }
 
-func TestInvalidTransportFlag(t *testing.T) {
-	cmd := exec.Command("go", "run", ".", "--transport", "grpc")
-	cmd.Dir = findCmdDir(t)
+func TestVersionFlagWithBuildInfo(t *testing.T) {
+	origBuild, origDate := Build, BuildDate
+	Build = "abc123"
+	BuildDate = "2026-01-01"
+	t.Cleanup(func() {
+		Build = origBuild
+		BuildDate = origDate
+	})
 
-	out, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatal("expected error for invalid transport")
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	code := run([]string{"--version"})
+
+	w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
 	}
-
-	output := string(out)
-	if !strings.Contains(output, "Transport") && !strings.Contains(output, "invalid transport") {
-		t.Errorf("expected transport validation error in output, got: %s", output)
+	if !bytes.Contains([]byte(output), []byte("build: abc123")) {
+		t.Errorf("expected build info in output, got: %s", output)
+	}
+	if !bytes.Contains([]byte(output), []byte("built: 2026-01-01")) {
+		t.Errorf("expected build date in output, got: %s", output)
 	}
 }
 
-func findCmdDir(t *testing.T) string {
-	t.Helper()
-	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getting working directory: %v", err)
+func TestInvalidFlag(t *testing.T) {
+	code := run([]string{"--nonexistent"})
+	if code != 1 {
+		t.Fatalf("expected exit code 1 for invalid flag, got %d", code)
 	}
-	return dir
+}
+
+func TestInvalidTransportFlag(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	code := run([]string{"--transport", "grpc"})
+	if code != 1 {
+		t.Fatalf("expected exit code 1 for invalid transport, got %d", code)
+	}
+}
+
+func TestConfigLoadError(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	code := run([]string{"--config", "/nonexistent/config.yaml"})
+	if code != 1 {
+		t.Fatalf("expected exit code 1 for missing config, got %d", code)
+	}
 }

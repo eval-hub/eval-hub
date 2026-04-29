@@ -40,6 +40,26 @@ func TestRunHTTPStartsAndStops(t *testing.T) {
 	}
 }
 
+func TestRunHTTPPortInUse(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("setting up listener: %v", err)
+	}
+	defer l.Close()
+	port := l.Addr().(*net.TCPAddr).Port
+
+	cfg := &config.Config{
+		Transport: "http",
+		Host:      "127.0.0.1",
+		Port:      port,
+	}
+
+	err = Run(context.Background(), cfg, "test")
+	if err == nil {
+		t.Fatal("expected error when port is in use")
+	}
+}
+
 func TestRunInvalidTransport(t *testing.T) {
 	cfg := &config.Config{
 		Transport: "grpc",

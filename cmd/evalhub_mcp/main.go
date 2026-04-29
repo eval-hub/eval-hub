@@ -20,10 +20,10 @@ var (
 )
 
 func main() {
-	os.Exit(run())
+	os.Exit(run(os.Args[1:]))
 }
 
-func run() int {
+func run(args []string) int {
 	fs := flag.NewFlagSet("evalhub-mcp", flag.ContinueOnError)
 
 	transport := fs.String("transport", "stdio", "Transport mode: stdio or http")
@@ -33,7 +33,7 @@ func run() int {
 	insecure := fs.Bool("insecure", false, "Disable TLS certificate verification")
 	version := fs.Bool("version", false, "Print version information and exit")
 
-	if err := fs.Parse(os.Args[1:]); err != nil {
+	if err := fs.Parse(args); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 1
 	}
