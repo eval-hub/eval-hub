@@ -63,7 +63,9 @@ func defaultConfigPath() string {
 func Load(flags *Flags) (*Config, error) {
 	cfg := DefaultConfig()
 
-	applyEnvVars(cfg)
+	if err := applyEnvVars(cfg); err != nil {
+		return nil, err
+	}
 
 	configPath := defaultConfigPath()
 	if flags != nil && flags.ConfigPath != "" {
@@ -91,7 +93,7 @@ func Validate(cfg *Config) error {
 	return nil
 }
 
-func applyEnvVars(cfg *Config) {
+func applyEnvVars(cfg *Config) error {
 	if v := os.Getenv("EVALHUB_BASE_URL"); v != "" {
 		cfg.BaseURL = v
 	}
@@ -102,10 +104,13 @@ func applyEnvVars(cfg *Config) {
 		cfg.Tenant = v
 	}
 	if v := os.Getenv("EVALHUB_INSECURE"); v != "" {
-		if b, err := strconv.ParseBool(v); err == nil {
-			cfg.Insecure = b
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("invalid value for EVALHUB_INSECURE=%q: must be a boolean (true/false, 1/0)", v)
 		}
+		cfg.Insecure = b
 	}
+	return nil
 }
 
 // applyYAMLConfig reads a YAML config file using Viper and applies the active

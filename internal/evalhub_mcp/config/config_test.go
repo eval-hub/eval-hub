@@ -297,12 +297,9 @@ func TestEnvVarInsecureInvalidValue(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("EVALHUB_INSECURE", "not-a-bool")
 
-	cfg, err := Load(nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.Insecure {
-		t.Error("invalid EVALHUB_INSECURE value should leave default (false)")
+	_, err := Load(nil)
+	if err == nil {
+		t.Fatal("expected error for invalid EVALHUB_INSECURE value")
 	}
 }
 
