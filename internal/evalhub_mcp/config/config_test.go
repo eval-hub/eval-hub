@@ -230,7 +230,7 @@ func TestValidateTransport(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.transport, func(t *testing.T) {
-			cfg := &Config{Transport: tt.transport, Port: 3001}
+			cfg := &Config{Transport: tt.transport, Host: "localhost", Port: 3001}
 			err := Validate(cfg)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Validate(transport=%q) error = %v, wantErr %v", tt.transport, err, tt.wantErr)
@@ -254,7 +254,7 @@ func TestValidateHTTPPort(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
-			cfg := &Config{Transport: "http", Port: tt.port}
+			cfg := &Config{Transport: "http", Host: "localhost", Port: tt.port}
 			err := Validate(cfg)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Validate(port=%d) error = %v, wantErr %v", tt.port, err, tt.wantErr)
@@ -264,10 +264,33 @@ func TestValidateHTTPPort(t *testing.T) {
 }
 
 func TestValidateStdioIgnoresPort(t *testing.T) {
-	cfg := &Config{Transport: "stdio", Port: 0}
+	cfg := &Config{Transport: "stdio", Host: "localhost", Port: 0}
 	if err := Validate(cfg); err != nil {
 		t.Errorf("stdio transport should not validate port, got: %v", err)
 	}
+}
+
+func TestValidateBaseURL(t *testing.T) {
+	t.Run("valid URL passes", func(t *testing.T) {
+		cfg := &Config{Transport: "stdio", Host: "localhost", BaseURL: "http://example.com:8080"}
+		if err := Validate(cfg); err != nil {
+			t.Errorf("expected valid URL to pass, got: %v", err)
+		}
+	})
+
+	t.Run("empty URL passes (omitempty)", func(t *testing.T) {
+		cfg := &Config{Transport: "stdio", Host: "localhost"}
+		if err := Validate(cfg); err != nil {
+			t.Errorf("expected empty URL to pass, got: %v", err)
+		}
+	})
+
+	t.Run("invalid URL fails", func(t *testing.T) {
+		cfg := &Config{Transport: "stdio", Host: "localhost", BaseURL: "not-a-url"}
+		if err := Validate(cfg); err == nil {
+			t.Error("expected invalid URL to fail validation")
+		}
+	})
 }
 
 func TestEnvVarInsecureInvalidValue(t *testing.T) {

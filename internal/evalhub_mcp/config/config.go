@@ -7,29 +7,30 @@ import (
 	"strconv"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"github.com/go-playground/validator/v10"
+	"github.com/spf13/viper"
 )
 
 type Config struct {
-	BaseURL   string
-	Token     string
-	Tenant    string
-	Insecure  bool
-	Transport string
-	Host      string
-	Port      int
+	BaseURL   string `mapstructure:"base_url"  validate:"omitempty,url"`
+	Token     string `mapstructure:"token"`
+	Tenant    string `mapstructure:"tenant"`
+	Insecure  bool   `mapstructure:"insecure"`
+	Transport string `mapstructure:"transport" validate:"required,oneof=stdio http"`
+	Host      string `mapstructure:"host"      validate:"required"`
+	Port      int    `mapstructure:"port"      validate:"min=0,max=65535"`
 }
 
 type ProfileConfig struct {
-	DefaultProfile string              `yaml:"default_profile"`
-	Profiles       map[string]*Profile `yaml:"profiles"`
+	DefaultProfile string              `mapstructure:"default_profile"`
+	Profiles       map[string]*Profile `mapstructure:"profiles"`
 }
 
 type Profile struct {
-	BaseURL  string `yaml:"base_url"`
-	Token    string `yaml:"token"`
-	Tenant   string `yaml:"tenant"`
-	Insecure *bool  `yaml:"insecure,omitempty"`
+	BaseURL  string `mapstructure:"base_url"`
+	Token    string `mapstructure:"token"`
+	Tenant   string `mapstructure:"tenant"`
+	Insecure *bool  `mapstructure:"insecure,omitempty"`
 }
 
 type Flags struct {
@@ -56,6 +57,9 @@ func defaultConfigPath() string {
 	return filepath.Join(home, ".evalhub", "config.yaml")
 }
 
+// Load builds a Config using the precedence: CLI flags > YAML config > env vars.
+// Environment variables are applied first as the base layer, YAML config values
+// override them, and CLI flags (when explicitly set) override everything.
 func Load(flags *Flags) (*Config, error) {
 	cfg := DefaultConfig()
 
@@ -76,17 +80,17 @@ func Load(flags *Flags) (*Config, error) {
 	return cfg, nil
 }
 
+// Validate checks the Config using go-playground/validator struct tags and
+// additional transport-specific rules.
 func Validate(cfg *Config) error {
-	switch cfg.Transport {
-	case "stdio", "http":
-	default:
-		return fmt.Errorf("invalid transport %q: must be \"stdio\" or \"http\"", cfg.Transport)
+	validate := validator.New(validator.WithRequiredStructEnabled())
+
+	if err := validate.Struct(cfg); err != nil {
+		return fmt.Errorf("config validation failed: %w", err)
 	}
 
-	if cfg.Transport == "http" {
-		if cfg.Port < 1 || cfg.Port > 65535 {
-			return fmt.Errorf("invalid port %d: must be between 1 and 65535", cfg.Port)
-		}
+	if cfg.Transport == "http" && (cfg.Port < 1 || cfg.Port > 65535) {
+		return fmt.Errorf("invalid port %d for http transport: must be between 1 and 65535", cfg.Port)
 	}
 
 	return nil
@@ -109,24 +113,36 @@ func applyEnvVars(cfg *Config) {
 	}
 }
 
+// applyYAMLConfig reads a YAML config file using Viper and applies the active
+// profile's values over the current config. Missing default config files are
+// silently ignored; explicitly specified files that don't exist produce an error.
 func applyYAMLConfig(cfg *Config, path string, flags *Flags) error {
 	if path == "" {
 		return nil
 	}
 
-	data, err := os.ReadFile(path)
-	if err != nil {
+	v := viper.New()
+	v.SetConfigFile(path)
+
+	if err := v.ReadInConfig(); err != nil {
 		if os.IsNotExist(err) {
 			if flags != nil && flags.ConfigPath != "" {
 				return fmt.Errorf("config file not found: %s", path)
 			}
 			return nil
 		}
-		return fmt.Errorf("reading config file: %w", err)
+		// Viper wraps file-not-found in its own type
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			if flags != nil && flags.ConfigPath != "" {
+				return fmt.Errorf("config file not found: %s", path)
+			}
+			return nil
+		}
+		return fmt.Errorf("reading config file %s: %w", path, err)
 	}
 
 	var profileCfg ProfileConfig
-	if err := yaml.Unmarshal(data, &profileCfg); err != nil {
+	if err := v.Unmarshal(&profileCfg); err != nil {
 		return fmt.Errorf("parsing config file %s: %w", path, err)
 	}
 

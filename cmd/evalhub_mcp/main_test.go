@@ -32,8 +32,8 @@ func TestInvalidTransportFlag(t *testing.T) {
 	}
 
 	output := string(out)
-	if !strings.Contains(output, "invalid transport") {
-		t.Errorf("expected 'invalid transport' in error output, got: %s", output)
+	if !strings.Contains(output, "Transport") && !strings.Contains(output, "invalid transport") {
+		t.Errorf("expected transport validation error in output, got: %s", output)
 	}
 }
 
