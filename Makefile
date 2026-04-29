@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-all-platforms start-service stop-service start-sidecar stop-sidecar lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report docker-image-local
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms start-service stop-service start-sidecar stop-sidecar lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report docker-image-local
 
 GOPATH := $(shell go env GOPATH)
 GOBIN := $(shell go env GOPATH)/bin
@@ -10,6 +10,8 @@ INIT_BINARY_NAME = eval-runtime-init
 INIT_CMD_PATH = ./cmd/eval_runtime_init
 SIDECAR_BINARY_NAME = eval-runtime-sidecar
 SIDECAR_CMD_PATH = ./cmd/eval_runtime_sidecar
+MCP_BINARY_NAME = evalhub-mcp
+MCP_CMD_PATH = ./cmd/evalhub_mcp
 BIN_DIR = bin
 PORT ?= 8080
 
@@ -65,7 +67,7 @@ build-init: $(BIN_DIR) ## Build the eval-runtime-init binary only
 	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(INIT_BINARY_NAME) $(INIT_CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(INIT_BINARY_NAME)"
 
-build: build-service build-init build-sidecar ## Build the binaries
+build: build-service build-init build-sidecar build-mcp ## Build the binaries
 
 build-coverage: $(BIN_DIR) ## Build the binaries with coverage
 	@echo "Building $(BINARY_NAME)-cov with -cover -covermode=atomic -ldflags ${LDFLAGS} "
@@ -108,6 +110,11 @@ build-sidecar: $(BIN_DIR) ## Build only the sidecar binary
 	@echo "Building $(SIDECAR_BINARY_NAME) with ${LDFLAGS}"
 	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(SIDECAR_BINARY_NAME) $(SIDECAR_CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(SIDECAR_BINARY_NAME)"
+
+build-mcp: $(BIN_DIR) ## Build the evalhub-mcp MCP server binary
+	@echo "Building $(MCP_BINARY_NAME) with ${LDFLAGS}"
+	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(MCP_BINARY_NAME) $(MCP_CMD_PATH)
+	@echo "Build complete: $(BIN_DIR)/$(MCP_BINARY_NAME)"
 
 start-sidecar: build-sidecar ## Run the sidecar in background (port $(SIDECAR_PORT), config from $(SIDECAR_CONFIG_DIR))
 	@rm -f "${SIDECAR_PID_FILE}" && true
