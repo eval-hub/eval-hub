@@ -409,7 +409,6 @@ func clearEnv(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{"EVALHUB_BASE_URL", "EVALHUB_TOKEN", "EVALHUB_TENANT", "EVALHUB_INSECURE"} {
 		t.Setenv(key, "")
-		os.Unsetenv(key)
 	}
 }
 

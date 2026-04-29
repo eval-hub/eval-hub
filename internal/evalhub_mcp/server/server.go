@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -61,9 +62,12 @@ func runHTTP(ctx context.Context, srv *mcp.Server, cfg *config.Config) error {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := httpServer.Shutdown(shutdownCtx); err != nil {
-			log.Printf("HTTP server graceful shutdown failed: %v", err)
-			return httpServer.Close()
+		if shutdownErr := httpServer.Shutdown(shutdownCtx); shutdownErr != nil {
+			log.Printf("HTTP server graceful shutdown failed: %v", shutdownErr)
+			if closeErr := httpServer.Close(); closeErr != nil {
+				return errors.Join(shutdownErr, closeErr)
+			}
+			return shutdownErr
 		}
 		return nil
 	}
