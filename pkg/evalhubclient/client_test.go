@@ -576,6 +576,57 @@ func TestCancelJob(t *testing.T) {
 	}
 }
 
+// ─── Content-Type / Accept header conditionals ───────────────────────────────
+
+func TestContentTypeSetWhenBodyPresent(t *testing.T) {
+	cfg := api.EvaluationJobConfig{Name: "j", Model: api.ModelRef{URL: "http://m", Name: "m"}}
+	srv, capture := newCapturingServer(t, http.StatusAccepted, mustMarshal(t, api.EvaluationJobResource{}))
+
+	_, err := newTestClient(srv).CreateJob(cfg)
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+	if got := capture.headers.Get("Content-Type"); got != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json for request with body", got)
+	}
+}
+
+func TestContentTypeAbsentWhenNoBody(t *testing.T) {
+	srv, capture := newCapturingServer(t, http.StatusOK, mustMarshal(t, api.HealthResponse{Status: "ok"}))
+
+	_, err := newTestClient(srv).GetHealth()
+	if err != nil {
+		t.Fatalf("GetHealth: %v", err)
+	}
+	if got := capture.headers.Get("Content-Type"); got != "" {
+		t.Errorf("Content-Type = %q, want absent for request without body", got)
+	}
+}
+
+func TestAcceptSetForNonDeleteRequest(t *testing.T) {
+	srv, capture := newCapturingServer(t, http.StatusOK, mustMarshal(t, api.HealthResponse{Status: "ok"}))
+
+	_, err := newTestClient(srv).GetHealth()
+	if err != nil {
+		t.Fatalf("GetHealth: %v", err)
+	}
+	if got := capture.headers.Get("Accept"); got != "application/json" {
+		t.Errorf("Accept = %q, want application/json for GET request", got)
+	}
+}
+
+func TestAcceptAbsentForDeleteRequest(t *testing.T) {
+	srv, capture := newCapturingServer(t, http.StatusNoContent, nil)
+
+	err := newTestClient(srv).CancelJob("job-xyz")
+	if err != nil {
+		t.Fatalf("CancelJob: %v", err)
+	}
+	if got := capture.headers.Get("Accept"); got != "" {
+		t.Errorf("Accept = %q, want absent for DELETE request", got)
+	}
+}
+
 // ─── Retry logic ──────────────────────────────────────────────────────────────
 
 func TestRetryOn5xx(t *testing.T) {

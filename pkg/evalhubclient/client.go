@@ -164,8 +164,12 @@ func (c *Client) WithHTTPClient(httpClient *http.Client) *Client {
 }
 
 func (c *Client) setHeaders(req *http.Request) {
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
+	if req.Body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if req.Method != http.MethodDelete {
+		req.Header.Set("Accept", "application/json")
+	}
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
