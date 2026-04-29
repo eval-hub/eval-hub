@@ -1,4 +1,4 @@
-package evalhub_client
+package evalhubclient
 
 import (
 	"bytes"
