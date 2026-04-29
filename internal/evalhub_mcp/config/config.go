@@ -12,7 +12,7 @@ import (
 )
 
 type Config struct {
-	BaseURL   string `mapstructure:"base_url"  validate:"omitempty,url"`
+	BaseURL   string `mapstructure:"base_url,omitempty" validate:"omitempty,url"`
 	Token     string `mapstructure:"token"`
 	Tenant    string `mapstructure:"tenant"`
 	Insecure  bool   `mapstructure:"insecure"`
