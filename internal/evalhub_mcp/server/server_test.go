@@ -17,6 +17,7 @@ var discardLogger = slog.New(slog.DiscardHandler)
 // --- ServerInfo ---
 
 func TestVersionString(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		info *ServerInfo
 		want string
@@ -35,6 +36,7 @@ func TestVersionString(t *testing.T) {
 // --- NewEvalHubClient ---
 
 func TestNewEvalHubClientNilWhenNoBaseURL(t *testing.T) {
+	t.Parallel()
 	cfg := &config.Config{}
 	client := NewEvalHubClient(cfg, discardLogger)
 	if client != nil {
@@ -43,6 +45,7 @@ func TestNewEvalHubClientNilWhenNoBaseURL(t *testing.T) {
 }
 
 func TestNewEvalHubClientCreated(t *testing.T) {
+	t.Parallel()
 	cfg := &config.Config{
 		BaseURL:  "http://localhost:8080",
 		Token:    "test-token",
@@ -58,6 +61,7 @@ func TestNewEvalHubClientCreated(t *testing.T) {
 // --- MCP server via in-memory transport ---
 
 func TestInitializeHandshake(t *testing.T) {
+	t.Parallel()
 	info := &ServerInfo{Version: "0.1.0", Build: "test123"}
 	srv := New(info, discardLogger)
 
@@ -81,6 +85,7 @@ func TestInitializeHandshake(t *testing.T) {
 }
 
 func TestServerMetadata(t *testing.T) {
+	t.Parallel()
 	info := &ServerInfo{Version: "0.2.0", Build: "deadbeef"}
 	srv := New(info, discardLogger)
 
@@ -115,6 +120,7 @@ func TestServerMetadata(t *testing.T) {
 }
 
 func TestCapabilitiesAdvertised(t *testing.T) {
+	t.Parallel()
 	info := &ServerInfo{Version: "0.1.0"}
 	srv := New(info, discardLogger)
 
@@ -156,6 +162,7 @@ func TestCapabilitiesAdvertised(t *testing.T) {
 }
 
 func TestToolsListEmpty(t *testing.T) {
+	t.Parallel()
 	info := &ServerInfo{Version: "0.1.0"}
 	srv := New(info, discardLogger)
 
@@ -187,6 +194,7 @@ func TestToolsListEmpty(t *testing.T) {
 }
 
 func TestResourcesListEmpty(t *testing.T) {
+	t.Parallel()
 	info := &ServerInfo{Version: "0.1.0"}
 	srv := New(info, discardLogger)
 
@@ -218,6 +226,7 @@ func TestResourcesListEmpty(t *testing.T) {
 }
 
 func TestPromptsListEmpty(t *testing.T) {
+	t.Parallel()
 	info := &ServerInfo{Version: "0.1.0"}
 	srv := New(info, discardLogger)
 
@@ -251,6 +260,7 @@ func TestPromptsListEmpty(t *testing.T) {
 // --- Transport selection ---
 
 func TestRunHTTPStartsAndStops(t *testing.T) {
+	t.Parallel()
 	port := freePort(t)
 
 	cfg := &config.Config{
@@ -282,6 +292,7 @@ func TestRunHTTPStartsAndStops(t *testing.T) {
 }
 
 func TestRunHTTPPortInUse(t *testing.T) {
+	t.Parallel()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("setting up listener: %v", err)
@@ -303,6 +314,7 @@ func TestRunHTTPPortInUse(t *testing.T) {
 }
 
 func TestRunInvalidTransport(t *testing.T) {
+	t.Parallel()
 	cfg := &config.Config{
 		Transport: "grpc",
 	}

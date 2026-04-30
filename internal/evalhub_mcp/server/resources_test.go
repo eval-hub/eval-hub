@@ -274,6 +274,7 @@ func readResourceJSON[T any](t *testing.T, ctx context.Context, cs *mcp.ClientSe
 // --- resources/list ---
 
 func TestResourcesListIncludesProvidersAndBenchmarks(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	result, err := cs.ListResources(ctx, nil)
@@ -300,6 +301,7 @@ func TestResourcesListIncludesProvidersAndBenchmarks(t *testing.T) {
 }
 
 func TestResourceTemplatesListIncludesExpected(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	result, err := cs.ListResourceTemplates(ctx, nil)
@@ -330,6 +332,7 @@ func TestResourceTemplatesListIncludesExpected(t *testing.T) {
 // --- providers ---
 
 func TestListProviders(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	providers := readResourceJSON[[]api.ProviderResource](t, ctx, cs, "evalhub://providers")
@@ -345,6 +348,7 @@ func TestListProviders(t *testing.T) {
 }
 
 func TestGetProviderByID(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	provider := readResourceJSON[api.ProviderResource](t, ctx, cs, "evalhub://providers/lighteval")
@@ -357,6 +361,7 @@ func TestGetProviderByID(t *testing.T) {
 }
 
 func TestGetProviderNotFound(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	_, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: "evalhub://providers/nonexistent"})
@@ -368,6 +373,7 @@ func TestGetProviderNotFound(t *testing.T) {
 // --- benchmarks ---
 
 func TestListBenchmarks(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	benchmarks := readResourceJSON[[]api.BenchmarkResource](t, ctx, cs, "evalhub://benchmarks")
@@ -377,6 +383,7 @@ func TestListBenchmarks(t *testing.T) {
 }
 
 func TestGetBenchmarkByID(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	benchmark := readResourceJSON[api.BenchmarkResource](t, ctx, cs, "evalhub://benchmarks/hellaswag")
@@ -389,6 +396,7 @@ func TestGetBenchmarkByID(t *testing.T) {
 }
 
 func TestGetBenchmarkNotFound(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	_, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: "evalhub://benchmarks/nonexistent"})
@@ -400,6 +408,7 @@ func TestGetBenchmarkNotFound(t *testing.T) {
 // --- label filtering ---
 
 func TestListBenchmarksSingleLabel(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	benchmarks := readResourceJSON[[]api.BenchmarkResource](t, ctx, cs, "evalhub://benchmarks?label=rag")
@@ -412,6 +421,7 @@ func TestListBenchmarksSingleLabel(t *testing.T) {
 }
 
 func TestListBenchmarksMultipleLabels(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	benchmarks := readResourceJSON[[]api.BenchmarkResource](t, ctx, cs, "evalhub://benchmarks?label=rag&label=safety")
@@ -424,6 +434,7 @@ func TestListBenchmarksMultipleLabels(t *testing.T) {
 }
 
 func TestListBenchmarksNonExistentLabel(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	benchmarks := readResourceJSON[[]api.BenchmarkResource](t, ctx, cs, "evalhub://benchmarks?label=nonexistent")
@@ -433,6 +444,7 @@ func TestListBenchmarksNonExistentLabel(t *testing.T) {
 }
 
 func TestListBenchmarksSafetyLabel(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	benchmarks := readResourceJSON[[]api.BenchmarkResource](t, ctx, cs, "evalhub://benchmarks?label=safety")
@@ -451,6 +463,7 @@ func TestListBenchmarksSafetyLabel(t *testing.T) {
 // --- empty results ---
 
 func TestListProvidersEmpty(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, emptyDataSource())
 
 	providers := readResourceJSON[[]api.ProviderResource](t, ctx, cs, "evalhub://providers")
@@ -463,6 +476,7 @@ func TestListProvidersEmpty(t *testing.T) {
 }
 
 func TestListBenchmarksEmpty(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, emptyDataSource())
 
 	benchmarks := readResourceJSON[[]api.BenchmarkResource](t, ctx, cs, "evalhub://benchmarks")
@@ -477,6 +491,7 @@ func TestListBenchmarksEmpty(t *testing.T) {
 // --- MIME type ---
 
 func TestResourceContentType(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	result, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: "evalhub://providers"})
@@ -494,6 +509,7 @@ func TestResourceContentType(t *testing.T) {
 // --- URI edge cases ---
 
 func TestReadResourceInvalidURI(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	_, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: "evalhub://unknown/resource"})
@@ -505,6 +521,7 @@ func TestReadResourceInvalidURI(t *testing.T) {
 // --- collections ---
 
 func TestListCollections(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	collections := readResourceJSON[[]api.CollectionResource](t, ctx, cs, "evalhub://collections")
@@ -520,6 +537,7 @@ func TestListCollections(t *testing.T) {
 }
 
 func TestGetCollectionByID(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	collection := readResourceJSON[api.CollectionResource](t, ctx, cs, "evalhub://collections/safety-suite")
@@ -538,6 +556,7 @@ func TestGetCollectionByID(t *testing.T) {
 }
 
 func TestGetCollectionNotFound(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	_, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: "evalhub://collections/nonexistent"})
@@ -547,6 +566,7 @@ func TestGetCollectionNotFound(t *testing.T) {
 }
 
 func TestListCollectionsEmpty(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, emptyDataSource())
 
 	collections := readResourceJSON[[]api.CollectionResource](t, ctx, cs, "evalhub://collections")
@@ -561,6 +581,7 @@ func TestListCollectionsEmpty(t *testing.T) {
 // --- jobs ---
 
 func TestListJobs(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	jobs := readResourceJSON[[]api.EvaluationJobResource](t, ctx, cs, "evalhub://jobs")
@@ -570,6 +591,7 @@ func TestListJobs(t *testing.T) {
 }
 
 func TestGetJobByID(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	job := readResourceJSON[api.EvaluationJobResource](t, ctx, cs, "evalhub://jobs/job-2")
@@ -582,6 +604,7 @@ func TestGetJobByID(t *testing.T) {
 }
 
 func TestGetJobByIDFullStatus(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	job := readResourceJSON[api.EvaluationJobResource](t, ctx, cs, "evalhub://jobs/job-1")
@@ -603,6 +626,7 @@ func TestGetJobByIDFullStatus(t *testing.T) {
 }
 
 func TestGetJobNotFound(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	_, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: "evalhub://jobs/nonexistent"})
@@ -612,6 +636,7 @@ func TestGetJobNotFound(t *testing.T) {
 }
 
 func TestListJobsFilterByStatusRunning(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	jobs := readResourceJSON[[]api.EvaluationJobResource](t, ctx, cs, "evalhub://jobs?status=running")
@@ -624,6 +649,7 @@ func TestListJobsFilterByStatusRunning(t *testing.T) {
 }
 
 func TestListJobsFilterByStatusCompleted(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	jobs := readResourceJSON[[]api.EvaluationJobResource](t, ctx, cs, "evalhub://jobs?status=completed")
@@ -640,6 +666,7 @@ func TestListJobsFilterByStatusCompleted(t *testing.T) {
 }
 
 func TestListJobsFilterByInvalidStatus(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, testDataSource())
 
 	_, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: "evalhub://jobs?status=invalid"})
@@ -649,6 +676,7 @@ func TestListJobsFilterByInvalidStatus(t *testing.T) {
 }
 
 func TestListJobsEmpty(t *testing.T) {
+	t.Parallel()
 	ctx, cs := connectWithResources(t, emptyDataSource())
 
 	jobs := readResourceJSON[[]api.EvaluationJobResource](t, ctx, cs, "evalhub://jobs")
@@ -663,6 +691,7 @@ func TestListJobsEmpty(t *testing.T) {
 // --- RegisterHandlers nil client ---
 
 func TestRegisterHandlersNilClient(t *testing.T) {
+	t.Parallel()
 	info := &ServerInfo{Version: "test"}
 	srv := New(info, discardLogger)
 	RegisterHandlers(srv, nil, info, discardLogger)
@@ -690,9 +719,9 @@ func TestRegisterHandlersNilClient(t *testing.T) {
 		t.Fatalf("ListResources failed: %v", err)
 	}
 	if len(result.Resources) != 1 {
-		t.Errorf("expected 1 resource (server/version) with nil client, got %d", len(result.Resources))
+		t.Fatalf("expected 1 resource (server/version) with nil client, got %d", len(result.Resources))
 	}
-	if len(result.Resources) > 0 && result.Resources[0].URI != "evalhub://server/version" {
+	if result.Resources[0].URI != "evalhub://server/version" {
 		t.Errorf("expected server/version resource, got %q", result.Resources[0].URI)
 	}
 }

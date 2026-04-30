@@ -11,14 +11,8 @@ import (
 
 // --- test helpers ---
 
-func connectWithVersion(t *testing.T, info *ServerInfo) (context.Context, *mcp.ClientSession) {
+func connectClient(t *testing.T, ctx context.Context, srv *mcp.Server) *mcp.ClientSession {
 	t.Helper()
-
-	srv := New(info, discardLogger)
-	registerVersionResource(srv, info, discardLogger)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	t.Cleanup(cancel)
 
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 
@@ -35,12 +29,26 @@ func connectWithVersion(t *testing.T, info *ServerInfo) (context.Context, *mcp.C
 	}
 	t.Cleanup(func() { clientSession.Close() })
 
-	return ctx, clientSession
+	return clientSession
+}
+
+func connectWithVersion(t *testing.T, info *ServerInfo) (context.Context, *mcp.ClientSession) {
+	t.Helper()
+
+	srv := New(info, discardLogger)
+	registerVersionResource(srv, info, discardLogger)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+
+	return ctx, connectClient(t, ctx, srv)
 }
 
 // --- version resource ---
 
 func TestVersionResourceJSONStructure(t *testing.T) {
+	t.Parallel()
+
 	info := &ServerInfo{
 		Version:   "0.4.0",
 		Build:     "abc123",
@@ -72,6 +80,8 @@ func TestVersionResourceJSONStructure(t *testing.T) {
 }
 
 func TestVersionResourceMatchesBuildValues(t *testing.T) {
+	t.Parallel()
+
 	info := &ServerInfo{
 		Version:   "1.2.3",
 		Build:     "deadbeef",
@@ -94,6 +104,8 @@ func TestVersionResourceMatchesBuildValues(t *testing.T) {
 }
 
 func TestVersionResourceMatchesRuntime(t *testing.T) {
+	t.Parallel()
+
 	info := &ServerInfo{Version: "0.1.0"}
 
 	ctx, cs := connectWithVersion(t, info)
@@ -112,6 +124,8 @@ func TestVersionResourceMatchesRuntime(t *testing.T) {
 }
 
 func TestVersionResourceAvailableWithoutBackend(t *testing.T) {
+	t.Parallel()
+
 	info := &ServerInfo{Version: "0.1.0"}
 	srv := New(info, discardLogger)
 	RegisterHandlers(srv, nil, info, discardLogger)
@@ -119,20 +133,7 @@ func TestVersionResourceAvailableWithoutBackend(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	t.Cleanup(cancel)
 
-	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-
-	serverSession, err := srv.Connect(ctx, serverTransport, nil)
-	if err != nil {
-		t.Fatalf("server.Connect failed: %v", err)
-	}
-	t.Cleanup(func() { serverSession.Close() })
-
-	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v0.0.1"}, nil)
-	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	if err != nil {
-		t.Fatalf("client.Connect failed: %v", err)
-	}
-	t.Cleanup(func() { clientSession.Close() })
+	clientSession := connectClient(t, ctx, srv)
 
 	result, err := clientSession.ListResources(ctx, nil)
 	if err != nil {
@@ -157,6 +158,8 @@ func TestVersionResourceAvailableWithoutBackend(t *testing.T) {
 }
 
 func TestVersionResourceInResourcesList(t *testing.T) {
+	t.Parallel()
+
 	info := &ServerInfo{Version: "0.3.0", Build: "test"}
 
 	ctx, cs := connectWithVersion(t, info)
@@ -185,26 +188,15 @@ func TestVersionResourceInResourcesList(t *testing.T) {
 }
 
 func TestVersionResourceNilInfo(t *testing.T) {
+	t.Parallel()
+
 	srv := New(nil, discardLogger)
 	registerVersionResource(srv, nil, discardLogger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	t.Cleanup(cancel)
 
-	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-
-	serverSession, err := srv.Connect(ctx, serverTransport, nil)
-	if err != nil {
-		t.Fatalf("server.Connect failed: %v", err)
-	}
-	t.Cleanup(func() { serverSession.Close() })
-
-	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v0.0.1"}, nil)
-	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	if err != nil {
-		t.Fatalf("client.Connect failed: %v", err)
-	}
-	t.Cleanup(func() { clientSession.Close() })
+	clientSession := connectClient(t, ctx, srv)
 
 	resp := readResourceJSON[VersionResponse](t, ctx, clientSession, "evalhub://server/version")
 	if resp.Version != "" {

@@ -58,6 +58,9 @@ func mcpLibraryVersion() string {
 	}
 	for _, dep := range bi.Deps {
 		if dep.Path == mcpLibraryPath {
+			if dep.Replace != nil {
+				return dep.Replace.Version
+			}
 			return dep.Version
 		}
 	}
