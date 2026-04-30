@@ -97,7 +97,7 @@ func getProviderHandler(ds EvalHubDataSource, logger *slog.Logger) mcp.ResourceH
 func listBenchmarksHandler(ds EvalHubDataSource, logger *slog.Logger) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		logger.Debug("reading resource", "uri", req.Params.URI)
-		labels := extractLabels(req.Params.URI)
+		labels := extractLabels(req.Params.URI, logger)
 
 		var benchmarks []api.BenchmarkResource
 		var err error
@@ -146,9 +146,10 @@ func extractPathID(rawURI, kind string) (string, error) {
 	return id, nil
 }
 
-func extractLabels(rawURI string) []string {
+func extractLabels(rawURI string, logger *slog.Logger) []string {
 	u, err := url.Parse(rawURI)
 	if err != nil {
+		logger.Error("failed to parse resource URI", "uri", rawURI, "error", err)
 		return nil
 	}
 	return u.Query()["label"]
