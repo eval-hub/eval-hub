@@ -19,29 +19,8 @@ type SQLDatabaseConfig struct {
 	MaxIdleConns    *int           `mapstructure:"max_idle_conns,omitempty"`
 	MaxOpenConns    *int           `mapstructure:"max_open_conns,omitempty"`
 	Fallback        bool           `mapstructure:"fallback,omitempty"`
-	TxRetryMax      int            `mapstructure:"tx_retry_max,omitempty"`
-	TxRetryInterval time.Duration  `mapstructure:"tx_retry_interval,omitempty"`
 
 	// Other map[string]any `mapstructure:",remain"`
-}
-
-const (
-	DefaultTxRetryMax      = 3
-	DefaultTxRetryInterval = 50 * time.Millisecond
-)
-
-func (s *SQLDatabaseConfig) GetTxRetryMax() int {
-	if s.TxRetryMax <= 0 {
-		return DefaultTxRetryMax
-	}
-	return s.TxRetryMax
-}
-
-func (s *SQLDatabaseConfig) GetTxRetryInterval() time.Duration {
-	if s.TxRetryInterval <= 0 {
-		return DefaultTxRetryInterval
-	}
-	return s.TxRetryInterval
 }
 
 func (s *SQLDatabaseConfig) GetDriverName() string {
