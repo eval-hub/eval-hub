@@ -663,8 +663,9 @@ func TestListJobsEmpty(t *testing.T) {
 // --- RegisterHandlers nil client ---
 
 func TestRegisterHandlersNilClient(t *testing.T) {
-	srv := New(&ServerInfo{Version: "test"}, discardLogger)
-	RegisterHandlers(srv, nil, discardLogger)
+	info := &ServerInfo{Version: "test"}
+	srv := New(info, discardLogger)
+	RegisterHandlers(srv, nil, info, discardLogger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -688,7 +689,10 @@ func TestRegisterHandlersNilClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListResources failed: %v", err)
 	}
-	if len(result.Resources) != 0 {
-		t.Errorf("expected 0 resources with nil client, got %d", len(result.Resources))
+	if len(result.Resources) != 1 {
+		t.Errorf("expected 1 resource (server/version) with nil client, got %d", len(result.Resources))
+	}
+	if len(result.Resources) > 0 && result.Resources[0].URI != "evalhub://server/version" {
+		t.Errorf("expected server/version resource, got %q", result.Resources[0].URI)
 	}
 }
