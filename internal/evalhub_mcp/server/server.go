@@ -31,10 +31,14 @@ func (s *ServerInfo) VersionString() string {
 // resources, and prompts. The returned server is ready to be connected to a
 // transport via Run, or used directly with in-memory transports for testing.
 func New(info *ServerInfo, logger *slog.Logger) *mcp.Server {
+	version := "unknown"
+	if info != nil {
+		version = info.VersionString()
+	}
 	return mcp.NewServer(
 		&mcp.Implementation{
 			Name:    "evalhub-mcp",
-			Version: info.VersionString(),
+			Version: version,
 		},
 		&mcp.ServerOptions{
 			Logger: logger,
