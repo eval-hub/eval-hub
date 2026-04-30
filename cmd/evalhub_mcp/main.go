@@ -24,6 +24,13 @@ func main() {
 }
 
 func run(args []string) int {
+	logger, shutdown, err := logging.NewLogger()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize logger: %v\n", err)
+		return 1
+	}
+	defer shutdown() //nolint:errcheck
+
 	fs := flag.NewFlagSet("evalhub-mcp", flag.ContinueOnError)
 
 	transport := fs.String("transport", "stdio", "Transport mode: stdio or http")
@@ -34,7 +41,7 @@ func run(args []string) int {
 	version := fs.Bool("version", false, "Print version information and exit")
 
 	if err := fs.Parse(args); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		logger.Error("failed to parse flags", "error", err)
 		return 1
 	}
 
@@ -42,13 +49,6 @@ func run(args []string) int {
 		printVersion()
 		return 0
 	}
-
-	logger, shutdown, err := logging.NewLogger()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to initialize logger: %v\n", err)
-		return 1
-	}
-	defer shutdown() //nolint:errcheck
 
 	flags := &config.Flags{
 		ConfigPath: *configPath,
