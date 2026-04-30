@@ -84,8 +84,12 @@ func Run(ctx context.Context, cfg *config.Config, info *ServerInfo, logger *slog
 	srv := New(info, logger)
 	RegisterHandlers(srv, client, logger)
 
+	version := "unknown"
+	if info != nil {
+		version = info.VersionString()
+	}
 	logger.Info("starting evalhub-mcp server",
-		"version", info.VersionString(),
+		"version", version,
 		"transport", cfg.Transport,
 	)
 
