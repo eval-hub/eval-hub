@@ -177,7 +177,10 @@ func getBenchmarkHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceH
 func listCollectionsHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		logger.Debug("reading resource", "uri", req.Params.URI)
-		opts := extractPagination(req.Params.URI)
+		opts, err := extractPagination(req.Params.URI)
+		if err != nil {
+			return nil, err
+		}
 		list, err := ds.ListCollections(opts...)
 		if err != nil {
 			return nil, fmt.Errorf("listing collections: %w", err)
@@ -212,7 +215,10 @@ func listJobsHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHandl
 		if err != nil {
 			return nil, err
 		}
-		opts := extractPagination(req.Params.URI)
+		opts, pErr := extractPagination(req.Params.URI)
+		if pErr != nil {
+			return nil, pErr
+		}
 
 		var list *api.EvaluationJobResourceList
 		if hasStatus {
@@ -286,23 +292,31 @@ func extractStatus(rawURI string) (api.OverallState, bool, error) {
 	return state, true, nil
 }
 
-func extractPagination(rawURI string) []evalhubclient.ListOption {
+func extractPagination(rawURI string) ([]evalhubclient.ListOption, error) {
 	u, err := url.Parse(rawURI)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	var opts []evalhubclient.ListOption
 	if v := u.Query().Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid limit %q: must be a positive integer", v)
+		}
+		if n > 0 {
 			opts = append(opts, evalhubclient.WithLimit(n))
 		}
 	}
 	if v := u.Query().Get("offset"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid offset %q: must be a non-negative integer", v)
+		}
+		if n >= 0 {
 			opts = append(opts, evalhubclient.WithOffset(n))
 		}
 	}
-	return opts
+	return opts, nil
 }
 
 func toMCPError(uri string, err error) error {
