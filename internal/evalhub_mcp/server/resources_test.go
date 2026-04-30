@@ -182,8 +182,8 @@ func TestResourceTemplatesListIncludesExpected(t *testing.T) {
 	}
 
 	wantTemplates := map[string]bool{
-		"evalhub://providers/{id}":     false,
-		"evalhub://benchmarks/{id}":    false,
+		"evalhub://providers/{id}":      false,
+		"evalhub://benchmarks/{id}":     false,
 		"evalhub://benchmarks{?label*}": false,
 	}
 	for _, rt := range result.ResourceTemplates {
