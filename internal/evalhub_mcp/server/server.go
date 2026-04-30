@@ -75,8 +75,9 @@ func NewEvalHubClient(cfg *config.Config, logger *slog.Logger) *evalhubclient.Cl
 // server. The EvalHub client is captured by handler closures so that every
 // handler has access to the API without global state.
 func RegisterHandlers(srv *mcp.Server, client *evalhubclient.Client, logger *slog.Logger) {
-	// Handlers will be registered here by subsequent tickets.
-	// The client and logger are available to all handler closures added below.
+	if client != nil {
+		registerResources(srv, client, logger)
+	}
 }
 
 func Run(ctx context.Context, cfg *config.Config, info *ServerInfo, logger *slog.Logger) error {
