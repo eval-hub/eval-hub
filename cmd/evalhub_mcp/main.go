@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/eval-hub/eval-hub/internal/evalhub_mcp/config"
 	mcpserver "github.com/eval-hub/eval-hub/internal/evalhub_mcp/server"
+	"github.com/eval-hub/eval-hub/internal/logging"
 	flag "github.com/spf13/pflag"
 )
 
@@ -43,6 +43,13 @@ func run(args []string) int {
 		return 0
 	}
 
+	logger, shutdown, err := logging.NewLogger()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize logger: %v\n", err)
+		return 1
+	}
+	defer shutdown() //nolint:errcheck
+
 	flags := &config.Flags{
 		ConfigPath: *configPath,
 	}
@@ -61,12 +68,12 @@ func run(args []string) int {
 
 	cfg, err := config.Load(flags)
 	if err != nil {
-		log.Printf("Failed to load configuration: %v", err)
+		logger.Error("failed to load configuration", "error", err)
 		return 1
 	}
 
 	if err := config.Validate(cfg); err != nil {
-		log.Printf("Invalid configuration: %v", err)
+		logger.Error("invalid configuration", "error", err)
 		return 1
 	}
 
@@ -81,8 +88,14 @@ func run(args []string) int {
 		cancel()
 	}()
 
-	if err := mcpserver.Run(ctx, cfg, Version); err != nil {
-		log.Printf("Server error: %v", err)
+	info := &mcpserver.ServerInfo{
+		Version:   Version,
+		Build:     Build,
+		BuildDate: BuildDate,
+	}
+
+	if err := mcpserver.Run(ctx, cfg, info, logger); err != nil {
+		logger.Error("server error", "error", err)
 		return 1
 	}
 
@@ -99,3 +112,4 @@ func printVersion() {
 	}
 	fmt.Println()
 }
+

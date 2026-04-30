@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"log"
 	"os"
 	"testing"
 )
@@ -70,10 +69,6 @@ func TestInvalidFlag(t *testing.T) {
 }
 
 func TestInvalidTransportFlag(t *testing.T) {
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
-	t.Cleanup(func() { log.SetOutput(os.Stderr) })
-
 	code := run([]string{"--transport", "grpc"})
 	if code != 1 {
 		t.Fatalf("expected exit code 1 for invalid transport, got %d", code)
@@ -81,10 +76,6 @@ func TestInvalidTransportFlag(t *testing.T) {
 }
 
 func TestConfigLoadError(t *testing.T) {
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
-	t.Cleanup(func() { log.SetOutput(os.Stderr) })
-
 	code := run([]string{"--config", "/nonexistent/config.yaml"})
 	if code != 1 {
 		t.Fatalf("expected exit code 1 for missing config, got %d", code)
