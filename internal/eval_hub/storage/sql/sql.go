@@ -56,8 +56,14 @@ func NewStorage(
 	logger *slog.Logger,
 ) (abstractions.Storage, error) {
 	var sqlConfig shared.SQLDatabaseConfig
-	merr := mapstructure.Decode(config, &sqlConfig)
+	decoder, merr := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		DecodeHook: mapstructure.StringToTimeDurationHookFunc(),
+		Result:     &sqlConfig,
+	})
 	if merr != nil {
+		return nil, merr
+	}
+	if merr = decoder.Decode(config); merr != nil {
 		return nil, merr
 	}
 

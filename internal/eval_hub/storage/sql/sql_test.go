@@ -15,6 +15,35 @@ var (
 	dbIndex = atomic.Int32{}
 )
 
+func TestNewStorageConnMaxLifetime(t *testing.T) {
+	logger := logging.FallbackLogger()
+
+	t.Run("accepts conn_max_lifetime as duration string", func(t *testing.T) {
+		config := map[string]any{
+			"driver":            "sqlite",
+			"url":               getDBInMemoryURL(getDBName()),
+			"conn_max_lifetime": "30m",
+		}
+		s, err := storage.NewStorage(&config, nil, nil, false, logger)
+		if err != nil {
+			t.Fatalf("NewStorage failed with duration string: %v", err)
+		}
+		s.Close()
+	})
+
+	t.Run("accepts config without conn_max_lifetime", func(t *testing.T) {
+		config := map[string]any{
+			"driver": "sqlite",
+			"url":    getDBInMemoryURL(getDBName()),
+		}
+		s, err := storage.NewStorage(&config, nil, nil, false, logger)
+		if err != nil {
+			t.Fatalf("NewStorage failed without conn_max_lifetime: %v", err)
+		}
+		s.Close()
+	})
+}
+
 func TestSQLStorage(t *testing.T) {
 	t.Run("Check database name is extracted correctly", func(t *testing.T) {
 		data := [][]string{
