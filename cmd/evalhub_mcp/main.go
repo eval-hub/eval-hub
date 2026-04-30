@@ -112,4 +112,3 @@ func printVersion() {
 	}
 	fmt.Println()
 }
-
