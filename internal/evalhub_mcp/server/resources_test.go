@@ -107,7 +107,7 @@ func emptyDataSource() *mockDataSource {
 
 // --- test helpers ---
 
-func connectWithResources(t *testing.T, ds EvalHubDataSource) (context.Context, *mcp.ClientSession) {
+func connectWithResources(t *testing.T, ds EvalHubTool) (context.Context, *mcp.ClientSession) {
 	t.Helper()
 
 	srv := New(&ServerInfo{Version: "test"}, discardLogger)

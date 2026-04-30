@@ -14,10 +14,10 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// EvalHubDataSource is the subset of evalhubclient.Client methods used by MCP
+// EvalHubTool is the subset of evalhubclient.Client methods used by MCP
 // resource handlers. Accepting an interface keeps handlers testable without a
 // running eval-hub backend.
-type EvalHubDataSource interface {
+type EvalHubTool interface {
 	ListProviders(opts ...evalhubclient.ListOption) (*api.ProviderResourceList, error)
 	GetProvider(id string) (*api.ProviderResource, error)
 	ListBenchmarks() ([]api.BenchmarkResource, error)
@@ -25,7 +25,7 @@ type EvalHubDataSource interface {
 	ListBenchmarksByLabel(labels []string) ([]api.BenchmarkResource, error)
 }
 
-func registerResources(srv *mcp.Server, ds EvalHubDataSource, logger *slog.Logger) {
+func registerResources(srv *mcp.Server, ds EvalHubTool, logger *slog.Logger) {
 	benchmarksHandler := listBenchmarksHandler(ds, logger)
 
 	srv.AddResource(&mcp.Resource{
@@ -64,7 +64,7 @@ func registerResources(srv *mcp.Server, ds EvalHubDataSource, logger *slog.Logge
 	}, getBenchmarkHandler(ds, logger))
 }
 
-func listProvidersHandler(ds EvalHubDataSource, logger *slog.Logger) mcp.ResourceHandler {
+func listProvidersHandler(ds EvalHubTool, logger *slog.Logger) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		logger.Debug("reading resource", "uri", req.Params.URI)
 		list, err := ds.ListProviders()
@@ -79,7 +79,7 @@ func listProvidersHandler(ds EvalHubDataSource, logger *slog.Logger) mcp.Resourc
 	}
 }
 
-func getProviderHandler(ds EvalHubDataSource, logger *slog.Logger) mcp.ResourceHandler {
+func getProviderHandler(ds EvalHubTool, logger *slog.Logger) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		id, err := extractPathID(req.Params.URI, "providers")
 		if err != nil {
@@ -94,7 +94,7 @@ func getProviderHandler(ds EvalHubDataSource, logger *slog.Logger) mcp.ResourceH
 	}
 }
 
-func listBenchmarksHandler(ds EvalHubDataSource, logger *slog.Logger) mcp.ResourceHandler {
+func listBenchmarksHandler(ds EvalHubTool, logger *slog.Logger) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		logger.Debug("reading resource", "uri", req.Params.URI)
 		labels := extractLabels(req.Params.URI, logger)
@@ -116,7 +116,7 @@ func listBenchmarksHandler(ds EvalHubDataSource, logger *slog.Logger) mcp.Resour
 	}
 }
 
-func getBenchmarkHandler(ds EvalHubDataSource, logger *slog.Logger) mcp.ResourceHandler {
+func getBenchmarkHandler(ds EvalHubTool, logger *slog.Logger) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		id, err := extractPathID(req.Params.URI, "benchmarks")
 		if err != nil {
