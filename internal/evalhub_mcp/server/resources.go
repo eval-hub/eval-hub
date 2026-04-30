@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -23,6 +24,11 @@ type EvalHubDiscovery interface {
 	ListBenchmarks() ([]api.BenchmarkResource, error)
 	GetBenchmark(id string) (*api.BenchmarkResource, error)
 	ListBenchmarksByLabel(labels []string) ([]api.BenchmarkResource, error)
+	ListCollections(opts ...evalhubclient.ListOption) (*api.CollectionResourceList, error)
+	GetCollection(id string) (*api.CollectionResource, error)
+	ListJobs(opts ...evalhubclient.ListOption) (*api.EvaluationJobResourceList, error)
+	GetJob(id string) (*api.EvaluationJobResource, error)
+	ListJobsByStatus(status api.OverallState, opts ...evalhubclient.ListOption) (*api.EvaluationJobResourceList, error)
 }
 
 func registerResources(srv *mcp.Server, ds EvalHubDiscovery, logger *slog.Logger) {
@@ -62,6 +68,43 @@ func registerResources(srv *mcp.Server, ds EvalHubDiscovery, logger *slog.Logger
 		MIMEType:    "application/json",
 		URITemplate: "evalhub://benchmarks/{id}",
 	}, getBenchmarkHandler(ds, logger))
+
+	srv.AddResource(&mcp.Resource{
+		Name:        "collections",
+		Description: "List all benchmark collections",
+		MIMEType:    "application/json",
+		URI:         "evalhub://collections",
+	}, listCollectionsHandler(ds, logger))
+
+	srv.AddResourceTemplate(&mcp.ResourceTemplate{
+		Name:        "collection",
+		Description: "Get a benchmark collection by ID",
+		MIMEType:    "application/json",
+		URITemplate: "evalhub://collections/{id}",
+	}, getCollectionHandler(ds, logger))
+
+	jobsHandler := listJobsHandler(ds, logger)
+
+	srv.AddResource(&mcp.Resource{
+		Name:        "jobs",
+		Description: "List all evaluation jobs",
+		MIMEType:    "application/json",
+		URI:         "evalhub://jobs",
+	}, jobsHandler)
+
+	srv.AddResourceTemplate(&mcp.ResourceTemplate{
+		Name:        "jobs-by-status",
+		Description: "Filter evaluation jobs by status (pending, running, completed, failed, cancelled, partially_failed)",
+		MIMEType:    "application/json",
+		URITemplate: "evalhub://jobs{?status}",
+	}, jobsHandler)
+
+	srv.AddResourceTemplate(&mcp.ResourceTemplate{
+		Name:        "job",
+		Description: "Get an evaluation job by ID (includes full status detail and per-benchmark progress)",
+		MIMEType:    "application/json",
+		URITemplate: "evalhub://jobs/{id}",
+	}, getJobHandler(ds, logger))
 }
 
 func listProvidersHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHandler {
@@ -131,6 +174,78 @@ func getBenchmarkHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceH
 	}
 }
 
+func listCollectionsHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHandler {
+	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		logger.Debug("reading resource", "uri", req.Params.URI)
+		opts := extractPagination(req.Params.URI)
+		list, err := ds.ListCollections(opts...)
+		if err != nil {
+			return nil, fmt.Errorf("listing collections: %w", err)
+		}
+		items := list.Items
+		if items == nil {
+			items = []api.CollectionResource{}
+		}
+		return jsonResult(items)
+	}
+}
+
+func getCollectionHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHandler {
+	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		id, err := extractPathID(req.Params.URI, "collections")
+		if err != nil {
+			return nil, err
+		}
+		logger.Debug("reading resource", "uri", req.Params.URI, "id", id)
+		collection, err := ds.GetCollection(id)
+		if err != nil {
+			return nil, toMCPError(req.Params.URI, err)
+		}
+		return jsonResult(collection)
+	}
+}
+
+func listJobsHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHandler {
+	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		logger.Debug("reading resource", "uri", req.Params.URI)
+		status, hasStatus, err := extractStatus(req.Params.URI)
+		if err != nil {
+			return nil, err
+		}
+		opts := extractPagination(req.Params.URI)
+
+		var list *api.EvaluationJobResourceList
+		if hasStatus {
+			list, err = ds.ListJobsByStatus(status, opts...)
+		} else {
+			list, err = ds.ListJobs(opts...)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("listing jobs: %w", err)
+		}
+		items := list.Items
+		if items == nil {
+			items = []api.EvaluationJobResource{}
+		}
+		return jsonResult(items)
+	}
+}
+
+func getJobHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHandler {
+	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		id, err := extractPathID(req.Params.URI, "jobs")
+		if err != nil {
+			return nil, err
+		}
+		logger.Debug("reading resource", "uri", req.Params.URI, "id", id)
+		job, err := ds.GetJob(id)
+		if err != nil {
+			return nil, toMCPError(req.Params.URI, err)
+		}
+		return jsonResult(job)
+	}
+}
+
 func extractPathID(rawURI, kind string) (string, error) {
 	u, err := url.Parse(rawURI)
 	if err != nil {
@@ -153,6 +268,41 @@ func extractLabels(rawURI string, logger *slog.Logger) []string {
 		return nil
 	}
 	return u.Query()["label"]
+}
+
+func extractStatus(rawURI string) (api.OverallState, bool, error) {
+	u, err := url.Parse(rawURI)
+	if err != nil {
+		return "", false, nil
+	}
+	s := u.Query().Get("status")
+	if s == "" {
+		return "", false, nil
+	}
+	state, err := api.GetOverallState(s)
+	if err != nil {
+		return "", true, fmt.Errorf("invalid job status %q: valid values are pending, running, completed, failed, cancelled, partially_failed", s)
+	}
+	return state, true, nil
+}
+
+func extractPagination(rawURI string) []evalhubclient.ListOption {
+	u, err := url.Parse(rawURI)
+	if err != nil {
+		return nil
+	}
+	var opts []evalhubclient.ListOption
+	if v := u.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			opts = append(opts, evalhubclient.WithLimit(n))
+		}
+	}
+	if v := u.Query().Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			opts = append(opts, evalhubclient.WithOffset(n))
+		}
+	}
+	return opts
 }
 
 func toMCPError(uri string, err error) error {
