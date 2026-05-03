@@ -5,7 +5,7 @@
   },
   "overrides": {
     "semver": "7.7.4",
-    "postcss": "8.5.12",
+    "postcss": "8.5.13",
     "uuid": "14.0.0"
   },
   "scripts": {
