@@ -60,7 +60,7 @@ func main() {
 	if svcConfig.Service != nil {
 		version, build, buildDate = svcConfig.Service.Version, svcConfig.Service.Build, svcConfig.Service.BuildDate
 	}
-	logger.Info("Server starting",
+	logger.Info("Sidecar server starting",
 		"server_port", srv.GetPort(),
 		"sidecar_config", cfgPath,
 		"version", version,
@@ -74,10 +74,10 @@ func main() {
 		if err := srv.Start(); err != nil {
 			// we do this as no point trying to continue
 			if errors.Is(err, &sidecarServer.ServerClosedError{}) {
-				logger.Info("Server closed gracefully")
+				logger.Info("Sidecar server closed gracefully")
 				return
 			}
-			startUpFailed(terminationFilePath(), err, "Server failed to start", logger)
+			startUpFailed(terminationFilePath(), err, "Sidecar server failed to start", logger)
 		}
 	}()
 
@@ -93,12 +93,12 @@ func main() {
 	defer cancel()
 
 	// shutdown the logger
-	logger.Info("Shutting down server...")
+	logger.Info("Shutting down sidecar server...")
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		logger.Error("Server forced to shutdown", "error", err.Error(), "timeout", waitForShutdown)
+		logger.Error("Sidecar server forced to shutdown", "error", err.Error(), "timeout", waitForShutdown)
 		_ = logShutdown() // ignore the error
 	} else {
-		logger.Info("Server shutdown gracefully")
+		logger.Info("Sidecar server shutdown gracefully")
 		_ = logShutdown() // ignore the error
 	}
 }

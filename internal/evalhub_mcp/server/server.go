@@ -124,7 +124,7 @@ func runHTTP(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *s
 
 	errCh := make(chan error, 1)
 	go func() {
-		logger.Info("HTTP transport listening", "addr", addr)
+		logger.Info("MCP HTTP Server listening", "addr", addr)
 		errCh <- httpServer.ListenAndServe()
 	}()
 
@@ -133,18 +133,18 @@ func runHTTP(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *s
 		if err == http.ErrServerClosed {
 			return nil
 		}
-		return fmt.Errorf("HTTP server error: %w", err)
+		return fmt.Errorf("MCP HTTP Server error: %w", err)
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if shutdownErr := httpServer.Shutdown(shutdownCtx); shutdownErr != nil {
-			logger.Error("HTTP server graceful shutdown failed", "error", shutdownErr)
+			logger.Error("MCP HTTP Server graceful shutdown failed", "error", shutdownErr)
 			if closeErr := httpServer.Close(); closeErr != nil {
 				return errors.Join(shutdownErr, closeErr)
 			}
 			return shutdownErr
 		}
-		logger.Info("HTTP server stopped gracefully")
+		logger.Info("MCP HTTP Server stopped gracefully")
 		return nil
 	}
 }

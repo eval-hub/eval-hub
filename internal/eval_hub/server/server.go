@@ -499,14 +499,14 @@ func (s *Server) Start() error {
 		return fmt.Errorf("FIPS mode enabled, but TLS certificate verification is required")
 	}
 
-	s.logger.Info("Writing the server ready message", "file", s.serviceConfig.Service.ReadyFile)
+	s.logger.Info("Writing the API server ready message", "file", s.serviceConfig.Service.ReadyFile)
 	err = SetReady(s.serviceConfig, s.logger)
 	if err != nil {
 		return err
 	}
 
 	tlsEnabled := s.serviceConfig.Service.TLSEnabled()
-	s.logger.Info("Server starting", "addr", addr, "tls", tlsEnabled)
+	s.logger.Info("API Server starting", "addr", addr, "tls", tlsEnabled)
 
 	if tlsEnabled {
 		err = s.httpServer.ListenAndServeTLS(
@@ -518,14 +518,14 @@ func (s *Server) Start() error {
 	}
 
 	if err == http.ErrServerClosed {
-		s.logger.Info("Server closed gracefully")
+		s.logger.Info("API Server closed gracefully")
 		return &ServerClosedError{}
 	}
 	return err
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
-	s.logger.Info("Shutting down server gracefully...")
+	s.logger.Info("Shutting down API server gracefully...")
 	return s.httpServer.Shutdown(ctx)
 }
 
@@ -533,7 +533,7 @@ type ServerClosedError struct {
 }
 
 func (e *ServerClosedError) Error() string {
-	return "Server closed"
+	return "API Server closed"
 }
 
 func (e *ServerClosedError) Is(target error) bool {

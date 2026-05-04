@@ -139,11 +139,11 @@ func main() {
 
 	if err != nil {
 		// we do this as no point trying to continue
-		startUpFailed(serviceConfig, err, "Failed to create server", logger)
+		startUpFailed(serviceConfig, err, "Failed to create API server", logger)
 	}
 
 	// log the start up details
-	logger.Info("Server starting",
+	logger.Info("API Server starting",
 		"server_port", srv.GetPort(),
 		"version", serviceConfig.Service.Version,
 		"build", serviceConfig.Service.Build,
@@ -165,10 +165,10 @@ func main() {
 		if err := srv.Start(); err != nil {
 			// we do this as no point trying to continue
 			if errors.Is(err, &server.ServerClosedError{}) {
-				logger.Info("Server closed gracefully")
+				logger.Info("API Server closed gracefully")
 				return
 			}
-			startUpFailed(serviceConfig, err, "Server failed to start", logger)
+			startUpFailed(serviceConfig, err, "API Server failed to start", logger)
 		}
 	}()
 
@@ -178,7 +178,7 @@ func main() {
 	<-quit
 
 	// Stop config watcher
-	logger.Info("Shutting down config watcher...")
+	logger.Info("Shutting down API config watcher...")
 	watcherCancel()
 	<-watcherDone // Wait for Watch() to fully complete
 
@@ -188,26 +188,26 @@ func main() {
 	defer cancel()
 
 	// shutdown the storage
-	logger.Info("Shutting down storage...")
+	logger.Info("Shutting down API storage...")
 	if err := storage.Close(); err != nil {
-		logger.Error("Failed to close storage", "error", err.Error())
+		logger.Error("Failed to close API storage", "error", err.Error())
 	}
 
 	// shutdown the otel tracing
 	if otelShutdown != nil {
-		logger.Info("Shutting down OTEL...")
+		logger.Info("Shutting down API OTEL...")
 		if err := otelShutdown(shutdownCtx); err != nil {
-			logger.Error("Failed to shutdown OTEL", "error", err.Error())
+			logger.Error("Failed to shutdown API OTEL", "error", err.Error())
 		}
 	}
 
 	// shutdown the logger
-	logger.Info("Shutting down server...")
+	logger.Info("Shutting down API server...")
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		logger.Error("Server forced to shutdown", "error", err.Error(), "timeout", waitForShutdown)
+		logger.Error("API Server forced to shutdown", "error", err.Error(), "timeout", waitForShutdown)
 		_ = logShutdown() // ignore the error
 	} else {
-		logger.Info("Server shutdown gracefully")
+		logger.Info("API Server shutdown gracefully")
 		_ = logShutdown() // ignore the error
 	}
 }

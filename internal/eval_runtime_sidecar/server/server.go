@@ -111,17 +111,17 @@ func (s *SidecarServer) Start() error {
 	if s.config.Service != nil {
 		readyFile = s.config.Service.ReadyFile
 	}
-	s.logger.Info("Writing the server ready message", "file", readyFile)
+	s.logger.Info("Writing the sidecar server ready message", "file", readyFile)
 	err = server.SetReady(s.config, s.logger)
 	if err != nil {
 		return err
 	}
 
-	s.logger.Info("Server starting", "port", s.port)
+	s.logger.Info("Sidecar server starting", "port", s.port)
 	err = s.httpServer.ListenAndServe()
 
 	if err == http.ErrServerClosed {
-		s.logger.Info("Server closed gracefully")
+		s.logger.Info("Sidecar server closed gracefully")
 		return &ServerClosedError{}
 	}
 	return err
@@ -129,7 +129,7 @@ func (s *SidecarServer) Start() error {
 
 func (s *SidecarServer) Shutdown(ctx context.Context) error {
 	//TODO: Explore sending metrics on sidecar shutdown
-	s.logger.Info("Shutting down server gracefully...")
+	s.logger.Info("Shutting down sidecar server gracefully...")
 	return s.httpServer.Shutdown(ctx)
 }
 
@@ -137,7 +137,7 @@ type ServerClosedError struct {
 }
 
 func (e *ServerClosedError) Error() string {
-	return "Server closed"
+	return "Sidecar server closed"
 }
 
 func (e *ServerClosedError) Is(target error) bool {

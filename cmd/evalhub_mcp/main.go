@@ -95,7 +95,7 @@ func run(args []string) int {
 	}
 
 	if err := mcpserver.Run(ctx, cfg, info, logger); err != nil {
-		logger.Error("server error", "error", err)
+		logger.Error("MCP Server error", "error", err)
 		return 1
 	}
 
