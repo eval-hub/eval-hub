@@ -124,7 +124,9 @@ func (cp *completionProvider) cachedFetch(key string, fetch func() []string) []s
 		return values
 	}
 	values := fetch()
-	cp.cache.set(key, values)
+	if values != nil {
+		cp.cache.set(key, values)
+	}
 	return values
 }
 

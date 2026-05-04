@@ -337,6 +337,38 @@ func TestCompletionAPIErrorLabels(t *testing.T) {
 	}
 }
 
+func TestCompletionAPIErrorNotCached(t *testing.T) {
+	t.Parallel()
+
+	calls := 0
+	ds := &switchableDataSource{
+		listProvidersFn: func() (*api.ProviderResourceList, error) {
+			calls++
+			if calls == 1 {
+				return nil, &evalhubclient.APIError{StatusCode: http.StatusInternalServerError, Message: "transient"}
+			}
+			return &api.ProviderResourceList{
+				Items: []api.ProviderResource{{Resource: api.Resource{ID: "recovered"}}},
+				Page:  api.Page{TotalCount: 1},
+			}, nil
+		},
+	}
+	cp := newCompletionProvider(ds, discardLogger)
+
+	got := cp.resolveValues("evalhub://providers/{id}", "id")
+	if len(got) != 0 {
+		t.Fatalf("expected empty on first (errored) call, got %v", got)
+	}
+
+	got = cp.resolveValues("evalhub://providers/{id}", "id")
+	if len(got) != 1 || got[0] != "recovered" {
+		t.Fatalf("expected [recovered] on retry, got %v", got)
+	}
+	if calls != 2 {
+		t.Errorf("expected 2 API calls (error not cached), got %d", calls)
+	}
+}
+
 // --- empty data source ---
 
 func TestCompletionEmptyDataSource(t *testing.T) {
@@ -471,9 +503,45 @@ func (d *errorDataSource) ListJobsByStatus(_ api.OverallState, _ ...evalhubclien
 	return nil, &evalhubclient.APIError{StatusCode: http.StatusInternalServerError, Message: "server error"}
 }
 
+// switchableDataSource delegates ListProviders to a caller-supplied function,
+// allowing tests to change behavior between calls (e.g. error then success).
+type switchableDataSource struct {
+	listProvidersFn func() (*api.ProviderResourceList, error)
+}
+
+func (d *switchableDataSource) ListProviders(_ ...evalhubclient.ListOption) (*api.ProviderResourceList, error) {
+	return d.listProvidersFn()
+}
+func (d *switchableDataSource) GetProvider(_ string) (*api.ProviderResource, error) {
+	return nil, &evalhubclient.APIError{StatusCode: http.StatusNotFound}
+}
+func (d *switchableDataSource) ListBenchmarks() ([]api.BenchmarkResource, error) { return nil, nil }
+func (d *switchableDataSource) GetBenchmark(_ string) (*api.BenchmarkResource, error) {
+	return nil, &evalhubclient.APIError{StatusCode: http.StatusNotFound}
+}
+func (d *switchableDataSource) ListBenchmarksByLabel(_ []string) ([]api.BenchmarkResource, error) {
+	return nil, nil
+}
+func (d *switchableDataSource) ListCollections(_ ...evalhubclient.ListOption) (*api.CollectionResourceList, error) {
+	return nil, nil
+}
+func (d *switchableDataSource) GetCollection(_ string) (*api.CollectionResource, error) {
+	return nil, &evalhubclient.APIError{StatusCode: http.StatusNotFound}
+}
+func (d *switchableDataSource) ListJobs(_ ...evalhubclient.ListOption) (*api.EvaluationJobResourceList, error) {
+	return nil, nil
+}
+func (d *switchableDataSource) GetJob(_ string) (*api.EvaluationJobResource, error) {
+	return nil, &evalhubclient.APIError{StatusCode: http.StatusNotFound}
+}
+func (d *switchableDataSource) ListJobsByStatus(_ api.OverallState, _ ...evalhubclient.ListOption) (*api.EvaluationJobResourceList, error) {
+	return nil, nil
+}
+
 // Verify errorDataSource implements EvalHubDiscovery at compile time.
 var _ EvalHubDiscovery = (*errorDataSource)(nil)
 var _ EvalHubDiscovery = (*callCountDataSource)(nil)
+var _ EvalHubDiscovery = (*switchableDataSource)(nil)
 
 // --- filterByPrefix unit tests ---
 
