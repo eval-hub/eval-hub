@@ -35,8 +35,9 @@ func TestDefaultConfig(t *testing.T) {
 
 func TestLoadNoConfig(t *testing.T) {
 	clearEnv(t)
+	defer clearEnv(t)
 
-	cfg, err := Load(nil)
+	cfg, err := Load(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -47,17 +48,19 @@ func TestLoadNoConfig(t *testing.T) {
 
 func TestLoadEnvVars(t *testing.T) {
 	clearEnv(t)
+	defer clearEnv(t)
 	t.Setenv("EVALHUB_BASE_URL", "http://env-host:9090")
 	t.Setenv("EVALHUB_TOKEN", "env-token")
 	t.Setenv("EVALHUB_TENANT", "env-tenant")
 	t.Setenv("EVALHUB_INSECURE", "true")
 
-	cfg, err := Load(nil)
+	cfg, err := Load(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	if cfg.BaseURL != "http://env-host:9090" {
+
 		t.Errorf("expected base_url from env, got %q", cfg.BaseURL)
 	}
 	if cfg.Token != "env-token" {
@@ -71,30 +74,28 @@ func TestLoadEnvVars(t *testing.T) {
 	}
 }
 
-func TestLoadYAMLOverridesEnv(t *testing.T) {
+func TestLoadEnvVarsOverridesYAML(t *testing.T) {
 	clearEnv(t)
+	defer clearEnv(t)
 	t.Setenv("EVALHUB_BASE_URL", "http://env-host:9090")
 	t.Setenv("EVALHUB_TOKEN", "env-token")
 
 	configFile := writeConfig(t, `
-default_profile: dev
-profiles:
-  dev:
     base_url: http://yaml-host:8080
     token: yaml-token
     tenant: yaml-tenant
 `)
 
 	flags := &Flags{ConfigPath: configFile}
-	cfg, err := Load(flags)
+	cfg, err := Load(flags, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if cfg.BaseURL != "http://yaml-host:8080" {
+	if cfg.BaseURL != "http://env-host:9090" {
 		t.Errorf("expected YAML base_url to override env, got %q", cfg.BaseURL)
 	}
-	if cfg.Token != "yaml-token" {
+	if cfg.Token != "env-token" {
 		t.Errorf("expected YAML token to override env, got %q", cfg.Token)
 	}
 	if cfg.Tenant != "yaml-tenant" {
@@ -104,12 +105,10 @@ profiles:
 
 func TestLoadCLIFlagsOverrideYAMLAndEnv(t *testing.T) {
 	clearEnv(t)
+	defer clearEnv(t)
 	t.Setenv("EVALHUB_BASE_URL", "http://env-host:9090")
 
 	configFile := writeConfig(t, `
-default_profile: default
-profiles:
-  default:
     base_url: http://yaml-host:8080
     insecure: false
 `)
@@ -126,7 +125,7 @@ profiles:
 		Port:       &port,
 		Insecure:   &insecure,
 	}
-	cfg, err := Load(flags)
+	cfg, err := Load(flags, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -143,15 +142,15 @@ profiles:
 	if !cfg.Insecure {
 		t.Error("expected CLI insecure=true to override YAML")
 	}
-	if cfg.BaseURL != "http://yaml-host:8080" {
+	if cfg.BaseURL != "http://env-host:9090" {
 		t.Errorf("expected YAML base_url (not env), got %q", cfg.BaseURL)
 	}
 }
 
 func TestLoadMissingDefaultConfigFile(t *testing.T) {
 	clearEnv(t)
-
-	cfg, err := Load(&Flags{})
+	defer clearEnv(t)
+	cfg, err := Load(&Flags{}, nil)
 	if err != nil {
 		t.Fatalf("missing default config file should not error, got: %v", err)
 	}
@@ -162,8 +161,8 @@ func TestLoadMissingDefaultConfigFile(t *testing.T) {
 
 func TestLoadMissingExplicitConfigFile(t *testing.T) {
 	clearEnv(t)
-
-	_, err := Load(&Flags{ConfigPath: "/nonexistent/config.yaml"})
+	defer clearEnv(t)
+	_, err := Load(&Flags{ConfigPath: "/nonexistent/config.yaml"}, nil)
 	if err == nil {
 		t.Fatal("expected error for missing explicit config file")
 	}
@@ -171,48 +170,45 @@ func TestLoadMissingExplicitConfigFile(t *testing.T) {
 
 func TestLoadMalformedYAML(t *testing.T) {
 	clearEnv(t)
-
+	defer clearEnv(t)
 	configFile := writeConfig(t, `{{{not valid yaml`)
 
-	_, err := Load(&Flags{ConfigPath: configFile})
+	_, err := Load(&Flags{ConfigPath: configFile}, nil)
 	if err == nil {
 		t.Fatal("expected error for malformed YAML")
 	}
 }
 
-func TestLoadMissingProfile(t *testing.T) {
-	clearEnv(t)
-
-	configFile := writeConfig(t, `
-default_profile: nonexistent
-profiles:
-  dev:
-    base_url: http://localhost:8080
-`)
-
-	_, err := Load(&Flags{ConfigPath: configFile})
-	if err == nil {
-		t.Fatal("expected error for missing profile")
-	}
-}
-
 func TestLoadProfileInsecurePointer(t *testing.T) {
-	clearEnv(t)
-	t.Setenv("EVALHUB_INSECURE", "true")
-
 	configFile := writeConfig(t, `
-default_profile: secure
-profiles:
-  secure:
     base_url: http://localhost:8080
     insecure: false
 `)
 
-	cfg, err := Load(&Flags{ConfigPath: configFile})
+	cfg, err := Load(&Flags{ConfigPath: configFile}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if cfg.Insecure {
+		t.Error("expected YAML insecure=false to override env insecure=true")
+	}
+}
+
+func TestLoadProfileInsecurePointerWithEnvOverride(t *testing.T) {
+	clearEnv(t)
+	defer clearEnv(t)
+	t.Setenv("EVALHUB_INSECURE", "true")
+
+	configFile := writeConfig(t, `
+    base_url: http://localhost:8080
+    insecure: false
+`)
+
+	cfg, err := Load(&Flags{ConfigPath: configFile}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.Insecure {
 		t.Error("expected YAML insecure=false to override env insecure=true")
 	}
 }
@@ -307,7 +303,7 @@ func TestEnvVarInsecureInvalidValue(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("EVALHUB_INSECURE", "not-a-bool")
 
-	_, err := Load(nil)
+	_, err := Load(nil, nil)
 	if err == nil {
 		t.Fatal("expected error for invalid EVALHUB_INSECURE value")
 	}
@@ -315,13 +311,13 @@ func TestEnvVarInsecureInvalidValue(t *testing.T) {
 
 func TestLoadEmptyProfilesSection(t *testing.T) {
 	clearEnv(t)
-
+	defer clearEnv(t)
 	configFile := writeConfig(t, `
 default_profile: dev
 profiles:
 `)
 
-	cfg, err := Load(&Flags{ConfigPath: configFile})
+	cfg, err := Load(&Flags{ConfigPath: configFile}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -332,15 +328,13 @@ profiles:
 
 func TestLoadDefaultProfileFallback(t *testing.T) {
 	clearEnv(t)
-
+	defer clearEnv(t)
 	configFile := writeConfig(t, `
-profiles:
-  default:
     base_url: http://fallback:8080
     token: fallback-token
 `)
 
-	cfg, err := Load(&Flags{ConfigPath: configFile})
+	cfg, err := Load(&Flags{ConfigPath: configFile}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -354,37 +348,36 @@ profiles:
 
 func TestLoadProfilePartialFields(t *testing.T) {
 	clearEnv(t)
-	t.Setenv("EVALHUB_BASE_URL", "http://env:9090")
-	t.Setenv("EVALHUB_TOKEN", "env-token")
+	defer clearEnv(t)
 	t.Setenv("EVALHUB_TENANT", "env-tenant")
 
 	configFile := writeConfig(t, `
-default_profile: sparse
-profiles:
-  sparse:
     tenant: yaml-tenant
+    base_url: http://yaml-host:8080
+    token: yaml-token
 `)
 
-	cfg, err := Load(&Flags{ConfigPath: configFile})
+	cfg, err := Load(&Flags{ConfigPath: configFile}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.BaseURL != "http://env:9090" {
+	if cfg.BaseURL != "http://yaml-host:8080" {
 		t.Errorf("expected env base_url preserved, got %q", cfg.BaseURL)
 	}
-	if cfg.Token != "env-token" {
+	if cfg.Token != "yaml-token" {
 		t.Errorf("expected env token preserved, got %q", cfg.Token)
 	}
-	if cfg.Tenant != "yaml-tenant" {
+	if cfg.Tenant != "env-tenant" {
 		t.Errorf("expected yaml tenant override, got %q", cfg.Tenant)
 	}
 }
 
 func TestLoadNoConfigHomeMissing(t *testing.T) {
 	clearEnv(t)
+	defer clearEnv(t)
 	t.Setenv("HOME", t.TempDir())
 
-	cfg, err := Load(nil)
+	cfg, err := Load(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -395,9 +388,10 @@ func TestLoadNoConfigHomeMissing(t *testing.T) {
 
 func TestLoadNilFlags(t *testing.T) {
 	clearEnv(t)
+	defer clearEnv(t)
 	t.Setenv("EVALHUB_TOKEN", "tok")
 
-	cfg, err := Load(nil)
+	cfg, err := Load(nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -411,6 +405,23 @@ func TestValidateEmptyHost(t *testing.T) {
 	cfg := &Config{Transport: "http", Host: "", Port: 3001}
 	if err := Validate(cfg); err == nil {
 		t.Error("expected validation error for empty host")
+	}
+}
+
+func TestLoadConfigFile(t *testing.T) {
+	t.Parallel()
+	cfg, err := Load(&Flags{ConfigPath: "../../../config/mcp_local.yaml"}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Transport != "http" {
+		t.Errorf("expected transport http, got %q", cfg.Transport)
+	}
+	if cfg.Host != "localhost" {
+		t.Errorf("expected host localhost, got %q", cfg.Host)
+	}
+	if cfg.Port != 3001 {
+		t.Errorf("expected port 3001, got %d", cfg.Port)
 	}
 }
 
