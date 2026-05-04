@@ -446,11 +446,6 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	if status.BenchmarkStatusEvent.Status == api.StateCancelled {
-		w.Error(serviceerrors.NewServiceError(messages.CancelledStatusNotAllowed), ctx.RequestID)
-		return
-	}
-
 	ctx.Logger.Debug("Updating evaluation job", "id", evaluationJobID, "state", status.BenchmarkStatusEvent.Status, "status", status)
 
 	_ = h.withSpan(
