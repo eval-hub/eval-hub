@@ -231,7 +231,7 @@ func emptyDataSource() *mockDataSource {
 func connectWithResources(t *testing.T, ds EvalHubDiscovery) (context.Context, *mcp.ClientSession) {
 	t.Helper()
 
-	srv := New(&ServerInfo{Version: "test"}, discardLogger)
+	srv := New(&ServerInfo{Version: "test"}, discardLogger, nil)
 	registerResources(srv, ds, discardLogger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -693,7 +693,7 @@ func TestListJobsEmpty(t *testing.T) {
 func TestRegisterHandlersNilClient(t *testing.T) {
 	t.Parallel()
 	info := &ServerInfo{Version: "test"}
-	srv := New(info, discardLogger)
+	srv := New(info, discardLogger, nil)
 	RegisterHandlers(srv, nil, info, discardLogger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

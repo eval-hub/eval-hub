@@ -63,7 +63,7 @@ func TestNewEvalHubClientCreated(t *testing.T) {
 func TestInitializeHandshake(t *testing.T) {
 	t.Parallel()
 	info := &ServerInfo{Version: "0.1.0", Build: "test123"}
-	srv := New(info, discardLogger)
+	srv := New(info, discardLogger, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -87,7 +87,7 @@ func TestInitializeHandshake(t *testing.T) {
 func TestServerMetadata(t *testing.T) {
 	t.Parallel()
 	info := &ServerInfo{Version: "0.2.0", Build: "deadbeef"}
-	srv := New(info, discardLogger)
+	srv := New(info, discardLogger, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -122,7 +122,7 @@ func TestServerMetadata(t *testing.T) {
 func TestCapabilitiesAdvertised(t *testing.T) {
 	t.Parallel()
 	info := &ServerInfo{Version: "0.1.0"}
-	srv := New(info, discardLogger)
+	srv := New(info, discardLogger, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -164,7 +164,7 @@ func TestCapabilitiesAdvertised(t *testing.T) {
 func TestToolsListEmpty(t *testing.T) {
 	t.Parallel()
 	info := &ServerInfo{Version: "0.1.0"}
-	srv := New(info, discardLogger)
+	srv := New(info, discardLogger, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -196,7 +196,7 @@ func TestToolsListEmpty(t *testing.T) {
 func TestResourcesListEmpty(t *testing.T) {
 	t.Parallel()
 	info := &ServerInfo{Version: "0.1.0"}
-	srv := New(info, discardLogger)
+	srv := New(info, discardLogger, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -228,7 +228,7 @@ func TestResourcesListEmpty(t *testing.T) {
 func TestPromptsListEmpty(t *testing.T) {
 	t.Parallel()
 	info := &ServerInfo{Version: "0.1.0"}
-	srv := New(info, discardLogger)
+	srv := New(info, discardLogger, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

@@ -35,7 +35,7 @@ func connectClient(t *testing.T, ctx context.Context, srv *mcp.Server) *mcp.Clie
 func connectWithVersion(t *testing.T, info *ServerInfo) (context.Context, *mcp.ClientSession) {
 	t.Helper()
 
-	srv := New(info, discardLogger)
+	srv := New(info, discardLogger, nil)
 	registerVersionResource(srv, info, discardLogger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -127,7 +127,7 @@ func TestVersionResourceAvailableWithoutBackend(t *testing.T) {
 	t.Parallel()
 
 	info := &ServerInfo{Version: "0.1.0"}
-	srv := New(info, discardLogger)
+	srv := New(info, discardLogger, nil)
 	RegisterHandlers(srv, nil, info, discardLogger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -190,7 +190,7 @@ func TestVersionResourceInResourcesList(t *testing.T) {
 func TestVersionResourceNilInfo(t *testing.T) {
 	t.Parallel()
 
-	srv := New(nil, discardLogger)
+	srv := New(nil, discardLogger, nil)
 	registerVersionResource(srv, nil, discardLogger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

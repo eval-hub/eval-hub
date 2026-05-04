@@ -30,7 +30,7 @@ func (s *ServerInfo) VersionString() string {
 // New creates a configured MCP server with capabilities advertised for tools,
 // resources, and prompts. The returned server is ready to be connected to a
 // transport via Run, or used directly with in-memory transports for testing.
-func New(info *ServerInfo, logger *slog.Logger, opts ...ServerOption) *mcp.Server {
+func New(info *ServerInfo, logger *slog.Logger, serverOption *ServerOption) *mcp.Server {
 	version := "unknown"
 	if info != nil {
 		version = info.VersionString()
@@ -44,8 +44,8 @@ func New(info *ServerInfo, logger *slog.Logger, opts ...ServerOption) *mcp.Serve
 			Prompts:   &mcp.PromptCapabilities{ListChanged: true},
 		},
 	}
-	for _, o := range opts {
-		o(serverOpts)
+	if serverOption != nil {
+		serverOption.apply(serverOpts)
 	}
 	return mcp.NewServer(
 		&mcp.Implementation{
@@ -57,7 +57,15 @@ func New(info *ServerInfo, logger *slog.Logger, opts ...ServerOption) *mcp.Serve
 }
 
 // ServerOption configures the MCP server options.
-type ServerOption func(*mcp.ServerOptions)
+type ServerOption struct {
+	applyFn func(*mcp.ServerOptions)
+}
+
+func (o *ServerOption) apply(opts *mcp.ServerOptions) {
+	if o.applyFn != nil {
+		o.applyFn(opts)
+	}
+}
 
 // NewEvalHubClient creates an EvalHub API client from the MCP server configuration.
 // Returns nil when no BaseURL is configured.
@@ -91,15 +99,15 @@ func RegisterHandlers(srv *mcp.Server, client *evalhubclient.Client, info *Serve
 }
 
 // CompletionHandlerOption returns a ServerOption that installs a completion handler
-// backed by the given data source. If ds is nil the option is a no-op.
-func CompletionHandlerOption(ds EvalHubDiscovery, logger *slog.Logger) ServerOption {
-	return func(opts *mcp.ServerOptions) {
-		if ds == nil {
-			return
-		}
-		cp := newCompletionProvider(ds, logger)
-		opts.CompletionHandler = cp.handle
+// backed by the given data source. Returns nil when ds is nil.
+func CompletionHandlerOption(ds EvalHubDiscovery, logger *slog.Logger) *ServerOption {
+	if ds == nil {
+		return nil
 	}
+	cp := newCompletionProvider(ds, logger)
+	return &ServerOption{applyFn: func(opts *mcp.ServerOptions) {
+		opts.CompletionHandler = cp.handle
+	}}
 }
 
 func Run(ctx context.Context, cfg *config.Config, info *ServerInfo, logger *slog.Logger) error {
