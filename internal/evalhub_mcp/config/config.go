@@ -40,9 +40,10 @@ func DefaultConfig() *Config {
 	}
 }
 
-// Load builds a Config using the precedence: CLI flags > YAML config > env vars.
-// Environment variables are applied first as the base layer, YAML config values
-// override them, and CLI flags (when explicitly set) override everything.
+// Load builds a Config by merging DefaultConfig, optional YAML at flags.ConfigPath,
+// and bound EVALHUB_* environment variables using Viper (for each key, env overrides
+// the YAML file and defaults). Finally, any CLI fields that were explicitly set on
+// flags override the merged result.
 func Load(flags *Flags, logger *slog.Logger) (*Config, error) {
 	configPath := ""
 	if flags != nil && flags.ConfigPath != "" {
@@ -75,9 +76,10 @@ func Validate(cfg *Config) error {
 	return nil
 }
 
-// applyYAMLConfig reads a YAML config file using Viper and applies the active
-// profile's values over the current config. Missing default config files are
-// silently ignored; explicitly specified files that don't exist produce an error.
+// applyYAMLConfig seeds Viper with cfg, binds EVALHUB_* env vars, then merges an
+// optional YAML file when path is non-empty (env still overrides merged values per
+// Viper precedence). When path is empty, only defaults and environment apply. When
+// path is set but the file does not exist, returns an error.
 func applyYAMLConfig(cfg *Config, path string) (*Config, error) {
 	v := viper.New()
 	err := v.BindEnv("base_url", "EVALHUB_BASE_URL")
