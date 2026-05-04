@@ -30,27 +30,34 @@ func (s *ServerInfo) VersionString() string {
 // New creates a configured MCP server with capabilities advertised for tools,
 // resources, and prompts. The returned server is ready to be connected to a
 // transport via Run, or used directly with in-memory transports for testing.
-func New(info *ServerInfo, logger *slog.Logger) *mcp.Server {
+func New(info *ServerInfo, logger *slog.Logger, opts ...ServerOption) *mcp.Server {
 	version := "unknown"
 	if info != nil {
 		version = info.VersionString()
+	}
+	serverOpts := &mcp.ServerOptions{
+		Logger: logger,
+		Capabilities: &mcp.ServerCapabilities{
+			Logging:   &mcp.LoggingCapabilities{},
+			Tools:     &mcp.ToolCapabilities{ListChanged: true},
+			Resources: &mcp.ResourceCapabilities{ListChanged: true},
+			Prompts:   &mcp.PromptCapabilities{ListChanged: true},
+		},
+	}
+	for _, o := range opts {
+		o(serverOpts)
 	}
 	return mcp.NewServer(
 		&mcp.Implementation{
 			Name:    "evalhub-mcp",
 			Version: version,
 		},
-		&mcp.ServerOptions{
-			Logger: logger,
-			Capabilities: &mcp.ServerCapabilities{
-				Logging:   &mcp.LoggingCapabilities{},
-				Tools:     &mcp.ToolCapabilities{ListChanged: true},
-				Resources: &mcp.ResourceCapabilities{ListChanged: true},
-				Prompts:   &mcp.PromptCapabilities{ListChanged: true},
-			},
-		},
+		serverOpts,
 	)
 }
+
+// ServerOption configures the MCP server options.
+type ServerOption func(*mcp.ServerOptions)
 
 // NewEvalHubClient creates an EvalHub API client from the MCP server configuration.
 // Returns nil when no BaseURL is configured.
@@ -74,7 +81,8 @@ func NewEvalHubClient(cfg *config.Config, logger *slog.Logger) *evalhubclient.Cl
 // RegisterHandlers wires tool, resource, and prompt handlers into the MCP
 // server. The server version resource is always registered. The EvalHub client
 // is captured by handler closures so that every handler has access to the API
-// without global state.
+// without global state. Returns any ServerOptions that should be applied when
+// constructing the server (e.g. completion handler).
 func RegisterHandlers(srv *mcp.Server, client *evalhubclient.Client, info *ServerInfo, logger *slog.Logger) {
 	registerVersionResource(srv, info, logger)
 	if client != nil {
@@ -82,9 +90,21 @@ func RegisterHandlers(srv *mcp.Server, client *evalhubclient.Client, info *Serve
 	}
 }
 
+// CompletionHandlerOption returns a ServerOption that installs a completion handler
+// backed by the given data source. If ds is nil the option is a no-op.
+func CompletionHandlerOption(ds EvalHubDiscovery, logger *slog.Logger) ServerOption {
+	return func(opts *mcp.ServerOptions) {
+		if ds == nil {
+			return
+		}
+		cp := newCompletionProvider(ds, logger)
+		opts.CompletionHandler = cp.handle
+	}
+}
+
 func Run(ctx context.Context, cfg *config.Config, info *ServerInfo, logger *slog.Logger) error {
 	client := NewEvalHubClient(cfg, logger)
-	srv := New(info, logger)
+	srv := New(info, logger, CompletionHandlerOption(client, logger))
 	RegisterHandlers(srv, client, info, logger)
 
 	version := "unknown"
