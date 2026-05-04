@@ -7,6 +7,7 @@ import (
 )
 
 func TestDefaultConfig(t *testing.T) {
+	t.Parallel()
 	cfg := DefaultConfig()
 
 	if cfg.Transport != "stdio" {
@@ -217,6 +218,7 @@ profiles:
 }
 
 func TestValidateTransport(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		transport string
 		wantErr   bool
@@ -230,6 +232,7 @@ func TestValidateTransport(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.transport, func(t *testing.T) {
+			t.Parallel()
 			cfg := &Config{Transport: tt.transport, Host: "localhost", Port: 3001}
 			err := Validate(cfg)
 			if (err != nil) != tt.wantErr {
@@ -240,6 +243,7 @@ func TestValidateTransport(t *testing.T) {
 }
 
 func TestValidatePort(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		port    int
 		wantErr bool
@@ -254,6 +258,7 @@ func TestValidatePort(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
+			t.Parallel()
 			cfg := &Config{Transport: "http", Host: "localhost", Port: tt.port}
 			err := Validate(cfg)
 			if (err != nil) != tt.wantErr {
@@ -264,6 +269,7 @@ func TestValidatePort(t *testing.T) {
 }
 
 func TestValidateStdioIgnoresPort(t *testing.T) {
+	t.Parallel()
 	cfg := &Config{Transport: "stdio", Host: "localhost", Port: 0}
 	if err := Validate(cfg); err != nil {
 		t.Errorf("stdio transport should not validate port, got: %v", err)
@@ -271,7 +277,9 @@ func TestValidateStdioIgnoresPort(t *testing.T) {
 }
 
 func TestValidateBaseURL(t *testing.T) {
+	t.Parallel()
 	t.Run("valid URL passes", func(t *testing.T) {
+		t.Parallel()
 		cfg := &Config{Transport: "stdio", Host: "localhost", BaseURL: "http://example.com:8080"}
 		if err := Validate(cfg); err != nil {
 			t.Errorf("expected valid URL to pass, got: %v", err)
@@ -279,6 +287,7 @@ func TestValidateBaseURL(t *testing.T) {
 	})
 
 	t.Run("empty URL passes (omitempty)", func(t *testing.T) {
+		t.Parallel()
 		cfg := &Config{Transport: "stdio", Host: "localhost"}
 		if err := Validate(cfg); err != nil {
 			t.Errorf("expected empty URL to pass, got: %v", err)
@@ -286,6 +295,7 @@ func TestValidateBaseURL(t *testing.T) {
 	})
 
 	t.Run("invalid URL fails", func(t *testing.T) {
+		t.Parallel()
 		cfg := &Config{Transport: "stdio", Host: "localhost", BaseURL: "not-a-url"}
 		if err := Validate(cfg); err == nil {
 			t.Error("expected invalid URL to fail validation")
@@ -397,6 +407,7 @@ func TestLoadNilFlags(t *testing.T) {
 }
 
 func TestValidateEmptyHost(t *testing.T) {
+	t.Parallel()
 	cfg := &Config{Transport: "http", Host: "", Port: 3001}
 	if err := Validate(cfg); err == nil {
 		t.Error("expected validation error for empty host")

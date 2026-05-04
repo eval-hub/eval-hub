@@ -224,6 +224,7 @@ Located alongside code in `*_test.go` files:
 - Use standard library `testing` package
 - Found in: `auth/**/*_test.go`, `internal/**/*_test.go`, `cmd/**/*_test.go`, `pkg/**/*_test.go`
 - MCP server tests use `mcp.NewInMemoryTransports()` for in-process initialize handshake and capability verification
+- Add `t.Parallel()` to new tests where safe — avoid it when the test mutates process-wide state (e.g. `t.Setenv`, `os.Stdout`, package-level globals)
 
 #### FVT (Functional Verification Tests)
 
