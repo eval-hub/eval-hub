@@ -124,6 +124,21 @@ start-sidecar: build-sidecar ## Run the sidecar in background (port $(SIDECAR_PO
 stop-sidecar: ## Stop the sidecar
 	-./scripts/stop_server.sh "${SIDECAR_PID_FILE}"
 
+MCP_PID_FILE  ?= $(BIN_DIR)/mcp.pid
+MCP_LOG ?= $(BIN_DIR)/mcp.log
+MCP_PORT ?= 3001
+MCP_CONFIG_FILE ?= config/mcp_local.yaml
+
+start-mcp: build-mcp ## Run the MCP server in background
+	@echo "Running $(MCP_BINARY_NAME) on port $(MCP_PORT)..."
+	@./scripts/start_mcp.sh "${MCP_PID_FILE}" "${BIN_DIR}/$(MCP_BINARY_NAME)" "${MCP_LOG}" "$(MCP_PORT)" "$(MCP_CONFIG_FILE)"
+
+stop-mcp: ## Stop the MCP server
+	-./scripts/stop_server.sh "${MCP_PID_FILE}"
+
+start-inspector-mcp:
+	npx @modelcontextprotocol/inspector
+
 lint: ## Lint the code (runs go vet)
 	@echo "Linting code..."
 	@go vet ./...

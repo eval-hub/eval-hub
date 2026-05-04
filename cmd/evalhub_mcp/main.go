@@ -66,7 +66,7 @@ func run(args []string) int {
 		flags.Insecure = insecure
 	}
 
-	cfg, err := config.Load(flags)
+	cfg, err := config.Load(flags, logger)
 	if err != nil {
 		logger.Error("failed to load configuration", "error", err)
 		return 1

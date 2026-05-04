@@ -2,6 +2,8 @@ package logging
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 	"runtime"
@@ -123,4 +125,12 @@ func LogRequestFailed(ctx *executioncontext.ExecutionContext, code int, errorMes
 
 func LogRequestSuccess(ctx *executioncontext.ExecutionContext, code int, response any) {
 	LogWithCallerSkip(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request successful", "code", code, "duration", time.Since(ctx.StartedAt))
+}
+
+func AsPrettyJson(s any) string {
+	ns, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("%v", s)
+	}
+	return string(ns)
 }
