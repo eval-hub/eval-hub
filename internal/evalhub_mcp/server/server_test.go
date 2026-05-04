@@ -14,6 +14,17 @@ import (
 
 var discardLogger = slog.New(slog.DiscardHandler)
 
+func connectServer(t *testing.T, info *ServerInfo) (context.Context, *mcp.ClientSession) {
+	t.Helper()
+
+	srv := New(info, discardLogger, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+
+	return ctx, connectClient(t, ctx, srv)
+}
+
 // --- ServerInfo ---
 
 func TestVersionString(t *testing.T) {
@@ -62,52 +73,14 @@ func TestNewEvalHubClientCreated(t *testing.T) {
 
 func TestInitializeHandshake(t *testing.T) {
 	t.Parallel()
-	info := &ServerInfo{Version: "0.1.0", Build: "test123"}
-	srv := New(info, discardLogger)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-
-	serverSession, err := srv.Connect(ctx, serverTransport, nil)
-	if err != nil {
-		t.Fatalf("server.Connect failed: %v", err)
-	}
-	defer serverSession.Close()
-
-	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v0.0.1"}, nil)
-	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	if err != nil {
-		t.Fatalf("client.Connect failed: %v", err)
-	}
-	defer clientSession.Close()
+	connectServer(t, &ServerInfo{Version: "0.1.0", Build: "test123"})
 }
 
 func TestServerMetadata(t *testing.T) {
 	t.Parallel()
-	info := &ServerInfo{Version: "0.2.0", Build: "deadbeef"}
-	srv := New(info, discardLogger)
+	_, cs := connectServer(t, &ServerInfo{Version: "0.2.0", Build: "deadbeef"})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-
-	serverSession, err := srv.Connect(ctx, serverTransport, nil)
-	if err != nil {
-		t.Fatalf("server.Connect failed: %v", err)
-	}
-	defer serverSession.Close()
-
-	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v0.0.1"}, nil)
-	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	if err != nil {
-		t.Fatalf("client.Connect failed: %v", err)
-	}
-	defer clientSession.Close()
-
-	initResult := clientSession.InitializeResult()
+	initResult := cs.InitializeResult()
 	if initResult == nil {
 		t.Fatal("InitializeResult is nil")
 	}
@@ -121,28 +94,9 @@ func TestServerMetadata(t *testing.T) {
 
 func TestCapabilitiesAdvertised(t *testing.T) {
 	t.Parallel()
-	info := &ServerInfo{Version: "0.1.0"}
-	srv := New(info, discardLogger)
+	_, cs := connectServer(t, &ServerInfo{Version: "0.1.0"})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-
-	serverSession, err := srv.Connect(ctx, serverTransport, nil)
-	if err != nil {
-		t.Fatalf("server.Connect failed: %v", err)
-	}
-	defer serverSession.Close()
-
-	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v0.0.1"}, nil)
-	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	if err != nil {
-		t.Fatalf("client.Connect failed: %v", err)
-	}
-	defer clientSession.Close()
-
-	initResult := clientSession.InitializeResult()
+	initResult := cs.InitializeResult()
 	if initResult == nil {
 		t.Fatal("InitializeResult is nil")
 	}
@@ -163,28 +117,9 @@ func TestCapabilitiesAdvertised(t *testing.T) {
 
 func TestToolsListEmpty(t *testing.T) {
 	t.Parallel()
-	info := &ServerInfo{Version: "0.1.0"}
-	srv := New(info, discardLogger)
+	ctx, cs := connectServer(t, &ServerInfo{Version: "0.1.0"})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-
-	serverSession, err := srv.Connect(ctx, serverTransport, nil)
-	if err != nil {
-		t.Fatalf("server.Connect failed: %v", err)
-	}
-	defer serverSession.Close()
-
-	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v0.0.1"}, nil)
-	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	if err != nil {
-		t.Fatalf("client.Connect failed: %v", err)
-	}
-	defer clientSession.Close()
-
-	toolsResult, err := clientSession.ListTools(ctx, nil)
+	toolsResult, err := cs.ListTools(ctx, nil)
 	if err != nil {
 		t.Fatalf("ListTools failed: %v", err)
 	}
@@ -195,28 +130,9 @@ func TestToolsListEmpty(t *testing.T) {
 
 func TestResourcesListEmpty(t *testing.T) {
 	t.Parallel()
-	info := &ServerInfo{Version: "0.1.0"}
-	srv := New(info, discardLogger)
+	ctx, cs := connectServer(t, &ServerInfo{Version: "0.1.0"})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-
-	serverSession, err := srv.Connect(ctx, serverTransport, nil)
-	if err != nil {
-		t.Fatalf("server.Connect failed: %v", err)
-	}
-	defer serverSession.Close()
-
-	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v0.0.1"}, nil)
-	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	if err != nil {
-		t.Fatalf("client.Connect failed: %v", err)
-	}
-	defer clientSession.Close()
-
-	resourcesResult, err := clientSession.ListResources(ctx, nil)
+	resourcesResult, err := cs.ListResources(ctx, nil)
 	if err != nil {
 		t.Fatalf("ListResources failed: %v", err)
 	}
@@ -227,28 +143,9 @@ func TestResourcesListEmpty(t *testing.T) {
 
 func TestPromptsListEmpty(t *testing.T) {
 	t.Parallel()
-	info := &ServerInfo{Version: "0.1.0"}
-	srv := New(info, discardLogger)
+	ctx, cs := connectServer(t, &ServerInfo{Version: "0.1.0"})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-
-	serverSession, err := srv.Connect(ctx, serverTransport, nil)
-	if err != nil {
-		t.Fatalf("server.Connect failed: %v", err)
-	}
-	defer serverSession.Close()
-
-	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v0.0.1"}, nil)
-	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	if err != nil {
-		t.Fatalf("client.Connect failed: %v", err)
-	}
-	defer clientSession.Close()
-
-	promptsResult, err := clientSession.ListPrompts(ctx, nil)
+	promptsResult, err := cs.ListPrompts(ctx, nil)
 	if err != nil {
 		t.Fatalf("ListPrompts failed: %v", err)
 	}
