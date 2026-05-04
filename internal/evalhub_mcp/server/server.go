@@ -89,8 +89,7 @@ func NewEvalHubClient(cfg *config.Config, logger *slog.Logger) *evalhubclient.Cl
 // RegisterHandlers wires tool, resource, and prompt handlers into the MCP
 // server. The server version resource is always registered. The EvalHub client
 // is captured by handler closures so that every handler has access to the API
-// without global state. Returns any ServerOptions that should be applied when
-// constructing the server (e.g. completion handler).
+// without global state.
 func RegisterHandlers(srv *mcp.Server, client *evalhubclient.Client, info *ServerInfo, logger *slog.Logger) {
 	registerVersionResource(srv, info, logger)
 	if client != nil {
