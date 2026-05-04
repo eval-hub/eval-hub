@@ -727,6 +727,15 @@ func TestHandleUpdateEvaluation(t *testing.T) {
 }
 */
 
+type updateEvaluationRequest struct {
+	*bodyRequest
+	pathValues map[string]string
+}
+
+func (r *updateEvaluationRequest) PathValue(name string) string {
+	return r.pathValues[name]
+}
+
 func TestHandleUpdateEvaluationRejectsCancelledStatus(t *testing.T) {
 	storage := &fakeStorage{}
 	validate := validation.NewValidator()
