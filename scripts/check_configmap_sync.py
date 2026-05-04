@@ -15,11 +15,17 @@ import yaml
 
 OPERATOR_REPO = "trustyai-explainability/trustyai-service-operator"
 CONFIGMAP_PATH = "config/configmaps/evalhub"
-GITHUB_API = f"https://api.github.com/repos/{OPERATOR_REPO}/contents/{CONFIGMAP_PATH}?ref=main"
+GITHUB_API = (
+    f"https://api.github.com/repos/{OPERATOR_REPO}/contents/{CONFIGMAP_PATH}?ref=main"
+)
 RAW_BASE = f"https://raw.githubusercontent.com/{OPERATOR_REPO}/main/{CONFIGMAP_PATH}"
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 KUSTOMIZE_VAR = re.compile(r"^\$\(.*\)$")
+
+IGNORED_PATHS = {
+    "runtime.local.command",
+}
 
 
 def fetch_remote_files():
@@ -63,6 +69,9 @@ def diff_yaml(remote, local, path=""):
     Yields human-readable diff strings. Skips remote leaf values that
     are Kustomize substitution variables like $(image-name).
     """
+    if path in IGNORED_PATHS:
+        return
+
     if isinstance(remote, dict) and isinstance(local, dict):
         all_keys = set(remote) | set(local)
         for key in sorted(all_keys):
@@ -85,7 +94,7 @@ def diff_yaml(remote, local, path=""):
     else:
         # leaf content check
         if isinstance(remote, str) and KUSTOMIZE_VAR.match(remote):
-            # if trustyai-service-operator leaf is a string and it's a Kustomize variable, skip. 
+            # if trustyai-service-operator leaf is a string and it's a Kustomize variable, skip.
             return
         if remote != local:
             yield f"  ~ {path}: remote={remote!r}  local={local!r}"
@@ -106,7 +115,9 @@ def main():
 
         local_content = load_local(config_type, local_filename)
         if local_content is None:
-            errors.append(f"{filename}: local file config/{config_type}/{local_filename} not found")
+            errors.append(
+                f"{filename}: local file config/{config_type}/{local_filename} not found"
+            )
             continue
 
         diffs = list(diff_yaml(remote_content, local_content))
