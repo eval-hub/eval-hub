@@ -65,6 +65,13 @@ var (
 		"job_can_not_be_updated",
 	)
 
+	// CancelledStatusNotAllowed The 'cancelled' status cannot be set via the events endpoint. Use the cancellation endpoint instead.
+	CancelledStatusNotAllowed = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The 'cancelled' status cannot be set via the events endpoint. Use the cancellation endpoint instead.",
+		"cancelled_status_not_allowed",
+	)
+
 	// RequestBodyTooLarge The request body exceeds the maximum allowed size of {{.Limit}} bytes.
 	RequestBodyTooLarge = createMessage(
 		constants.HTTPCodePayloadTooLarge,
