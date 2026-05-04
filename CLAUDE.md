@@ -81,7 +81,7 @@ make clean              # Remove build artifacts and coverage files
 
 ## Git commits
 
-Use [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, etc., with an optional scope (e.g. `feat(http): …`).
+Use [Conventional Commits](https://www.conventionalcommits.org/) with an optional scope (e.g. `feat(http): …`). Accepted type prefixes: `build`, `bump`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`.
 
 When a change is assisted by Cursor, add one of these lines, as appropriate, to the **end** of the commit message body (after the subject and any description), as Git trailers:
 
