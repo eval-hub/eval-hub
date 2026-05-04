@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"sort"
 	"testing"
@@ -640,6 +639,3 @@ func TestCompleteStatusPrefixComp(t *testing.T) {
 		t.Errorf("expected 'completed', got %q", result.Completion.Values[0])
 	}
 }
-
-// Silence unused import warning for fmt.
-var _ = fmt.Sprint
