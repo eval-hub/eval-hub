@@ -26,7 +26,7 @@ disable-model-invocation: true
 1. **Ask the user for a url to the failing tests**: this will normally be a JUnit XML test report, if there are multiple failing tests ask the user if he or she wants to focus on a specific failing test
 2. **Read the full test output log**: you will need to prompt the user to get the log file
 3. **Read the pod logs if they are available**: you will need to prompt the user to get the pod logs. If you detect problems related to the execution of the jobs, such as `connection error` then ask for the pod logs
-4. **Ask for the oc login command**: as a last resort, ask the user for the oc login command in order to read the pod logs, no other oc commands can be run without explicit agreement from the user
+4. **Ask for the oc login command**: as a last resort, ask the user for the oc login command to read the pod logs, no other oc commands can be run without explicit agreement from the user
 5. **Source repositories**: use the source code and the OpenAPI repositories that are mentioned in the `Additional resources` section, normally the `main` branch will be used but the user may specify a branch to use
 6. **Provide a full root cause analysis**: describe in detail the problem that is causing the failures
 7. **Provide a PR to fix the issue**: if a fix is possible ask the user if you should propose a PR. The fix can either be in the server code, or the python sdk code, or in the FVT test code, then create a PR using conventional commit format with a detailed description of the fix

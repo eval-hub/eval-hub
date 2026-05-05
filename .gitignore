@@ -252,3 +252,5 @@ mlflow.log
 
 # Claude - for now this is ignored - later we may want to share this
 .claude/settings.local.json
+
+.agentready/
