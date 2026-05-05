@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -243,6 +244,7 @@ func buildJobStatusOutput(job *api.EvaluationJobResource) GetJobStatusOutput {
 	out := GetJobStatusOutput{
 		JobID:     job.Resource.ID,
 		CreatedAt: job.Resource.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		State:     "pending",
 	}
 
 	if job.Status != nil {
@@ -279,10 +281,22 @@ func computeProgress(benchmarks []api.BenchmarkStatus) int {
 }
 
 func earliestStart(benchmarks []api.BenchmarkStatus) string {
+	var earliestTime time.Time
 	var earliest string
 	for _, b := range benchmarks {
 		s := string(b.StartedAt)
 		if s != "" && (earliest == "" || s < earliest) {
+			earliest = s
+		}
+		if s == "" {
+			continue
+		}
+		t, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			continue
+		}
+		if earliest == "" || t.Before(earliestTime) {
+			earliestTime = t
 			earliest = s
 		}
 	}

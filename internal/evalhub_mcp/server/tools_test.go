@@ -560,12 +560,11 @@ func TestGetJobStatusEmptyID(t *testing.T) {
 
 // --- RegisterHandlers with tools ---
 
-func TestRegisterHandlersIncludesTools(t *testing.T) {
+func TestRegisterHandlersWithNilClientHasNoTools(t *testing.T) {
 	t.Parallel()
 	info := &ServerInfo{Version: "test"}
 	srv := New(info, discardLogger, nil)
 
-	ds := testDataSource()
 	RegisterHandlers(srv, nil, info, discardLogger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -580,6 +579,4 @@ func TestRegisterHandlersIncludesTools(t *testing.T) {
 	if len(toolsResult.Tools) != 0 {
 		t.Errorf("expected 0 tools with nil client, got %d", len(toolsResult.Tools))
 	}
-
-	_ = ds
 }
