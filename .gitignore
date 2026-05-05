@@ -251,4 +251,4 @@ mlflow.log
 .serena/
 
 # Claude - for now this is ignored - later we may want to share this
-.claude/
+.claude/settings.local.json
