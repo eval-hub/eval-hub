@@ -180,6 +180,9 @@ func TestLoadMalformedYAML(t *testing.T) {
 }
 
 func TestLoadProfileInsecurePointer(t *testing.T) {
+	clearEnv(t)
+	defer clearEnv(t)
+
 	configFile := writeConfig(t, `
     base_url: http://localhost:8080
     insecure: false
