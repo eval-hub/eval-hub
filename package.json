@@ -6,7 +6,8 @@
   "overrides": {
     "semver": "7.7.4",
     "postcss": "8.5.13",
-    "uuid": "14.0.0"
+    "uuid": "14.0.0",
+    "fast-xml-parser": "5.7.3"
   },
   "scripts": {
     "lint-openapi": "redocly lint docs/src/openapi.yaml",
