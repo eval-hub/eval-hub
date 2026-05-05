@@ -11,7 +11,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/go-playground/validator/v10"
 	"github.com/spf13/viper"
-	"go.yaml.in/yaml/v2"
+	"go.yaml.in/yaml/v4"
 )
 
 type Config struct {

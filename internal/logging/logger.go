@@ -136,7 +136,8 @@ func AsPrettyJson(s any, mask ...string) string {
 		obj := make(map[string]any)
 		err = json.Unmarshal(ns, &obj)
 		if err != nil {
-			return fmt.Sprintf("%v", s)
+			// Masking requested but structure doesn't support it - return safe fallback
+			return "[masking failed: unsupported structure]"
 		}
 		for _, m := range mask {
 			obj[m] = "*************"

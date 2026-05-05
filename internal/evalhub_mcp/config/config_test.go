@@ -93,10 +93,10 @@ func TestLoadEnvVarsOverridesYAML(t *testing.T) {
 	}
 
 	if cfg.BaseURL != "http://env-host:9090" {
-		t.Errorf("expected YAML base_url to override env, got %q", cfg.BaseURL)
+		t.Errorf("expected env base_url to override YAML, got %q", cfg.BaseURL)
 	}
 	if cfg.Token != "env-token" {
-		t.Errorf("expected YAML token to override env, got %q", cfg.Token)
+		t.Errorf("expected env token to override YAML, got %q", cfg.Token)
 	}
 	if cfg.Tenant != "yaml-tenant" {
 		t.Errorf("expected tenant from YAML, got %q", cfg.Tenant)
@@ -365,13 +365,13 @@ func TestLoadProfilePartialFields(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if cfg.BaseURL != "http://yaml-host:8080" {
-		t.Errorf("expected env base_url preserved, got %q", cfg.BaseURL)
+		t.Errorf("expected YAML base_url, got %q", cfg.BaseURL)
 	}
 	if cfg.Token != "yaml-token" {
-		t.Errorf("expected env token preserved, got %q", cfg.Token)
+		t.Errorf("expected YAML token, got %q", cfg.Token)
 	}
 	if cfg.Tenant != "env-tenant" {
-		t.Errorf("expected yaml tenant override, got %q", cfg.Tenant)
+		t.Errorf("expected env tenant to override YAML, got %q", cfg.Tenant)
 	}
 }
 

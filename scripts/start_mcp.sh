@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Start the evalhub-mcp MCP server in the background.
-# Usage: start_mcp.sh <PID_FILE> <EXE> <LOGFILE> <MCP_PORT>
+# Usage: start_mcp.sh <PID_FILE> <EXE> <LOGFILE> <MCP_PORT> [CONFIG_FILE]
 
 PID_FILE="$1"
 EXE="$2"
