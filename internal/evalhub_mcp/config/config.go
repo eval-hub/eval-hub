@@ -59,7 +59,7 @@ func Load(flags *Flags, logger *slog.Logger) (*Config, error) {
 	}
 
 	if logger != nil {
-		logger.Info("Loaded configuration", "config", logging.AsPrettyJson(conf), "config_path", configPath)
+		logger.Info("Loaded configuration", "config", logging.AsPrettyJson(conf, "token"), "config_path", configPath)
 	}
 
 	return conf, nil
