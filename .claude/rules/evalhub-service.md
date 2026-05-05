@@ -19,7 +19,7 @@ paths:
 - Build coverage: `make build-coverage`
 - Test all coverage: `make test-coverage`
 - Lint: `make lint`
-- Formatting: `make fmt vet`
+- Formatting: `make fmt` and `make vet`
 
 ## Key Conventions
 
