@@ -105,8 +105,8 @@ func TestAsPrettyJson_nonObjectRootWithMask_fallsBackToString(t *testing.T) {
 	out := AsPrettyJson(in, "x")
 
 	// json.Unmarshal into map fails for arrays; implementation falls back to fmt.Sprintf("%v", s)
-	if out != "[1 2 3]" {
-		t.Fatalf("expected fmt fallback for non-object root, got %q", out)
+	if out != "[masking failed: unsupported structure]" {
+		t.Fatalf("expected fmt failure for non-object root, got %q", out)
 	}
 }
 
