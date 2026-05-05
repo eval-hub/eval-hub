@@ -16,13 +16,13 @@ if [[ ! -f "${EXE}" ]]; then
 fi
 
 if [[ "${CONFIG_FILE}" != "" ]]; then
-  "${EXE}" --transport ${TRANSPORT} --port ${MCP_PORT} --config "${CONFIG_FILE}" >> "${LOGFILE}" 2>&1 &
+  "${EXE}" --transport "${TRANSPORT}" --port "${MCP_PORT}" --config "${CONFIG_FILE}" >> "${LOGFILE}" 2>&1 &
   SERVICE_PID=$!
 else
-  "${EXE}" --transport ${TRANSPORT} --port ${MCP_PORT} >> "${LOGFILE}" 2>&1 &
+  "${EXE}" --transport "${TRANSPORT}" --port "${MCP_PORT}" >> "${LOGFILE}" 2>&1 &
   SERVICE_PID=$!
 fi
 
 echo "${SERVICE_PID}" > "${PID_FILE}"
 sleep 2
-echo "Started the MCP server with PID ${SERVICE_PID} (port ${MCP_PORT}), PID file ${PID_FILE}, log ${LOGFILE}" config "${CONFIG_FILE}"
+echo "Started the MCP server with PID ${SERVICE_PID} (port ${MCP_PORT}), PID file ${PID_FILE}, log ${LOGFILE} config ${CONFIG_FILE}"
