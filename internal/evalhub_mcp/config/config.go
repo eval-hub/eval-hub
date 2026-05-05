@@ -1,9 +1,7 @@
 package config
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -11,7 +9,6 @@ import (
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/go-playground/validator/v10"
 	"github.com/spf13/viper"
-	"go.yaml.in/yaml/v4"
 )
 
 type Config struct {
@@ -76,48 +73,44 @@ func Validate(cfg *Config) error {
 	return nil
 }
 
+func bindEnvs(v *viper.Viper, envs ...string) error {
+	for i := 0; i < len(envs); i += 2 {
+		err := v.BindEnv(envs[i], envs[i+1])
+		if err != nil {
+			return fmt.Errorf("binding environment variable %s: %w", envs[i], err)
+		}
+	}
+	return nil
+}
+
 // applyYAMLConfig seeds Viper with cfg, binds EVALHUB_* env vars, then merges an
 // optional YAML file when path is non-empty (env still overrides merged values per
 // Viper precedence). When path is empty, only defaults and environment apply. When
 // path is set but the file does not exist, returns an error.
 func applyYAMLConfig(cfg *Config, path string) (*Config, error) {
 	v := viper.New()
-	err := v.BindEnv("base_url", "EVALHUB_BASE_URL")
+	err := bindEnvs(
+		v,
+		"base_url", "EVALHUB_BASE_URL",
+		"token", "EVALHUB_TOKEN",
+		"tenant", "EVALHUB_TENANT",
+		"insecure", "EVALHUB_INSECURE",
+		"transport", "EVALHUB_TRANSPORT",
+		"host", "EVALHUB_HOST",
+		"port", "EVALHUB_PORT",
+	)
 	if err != nil {
-		return nil, fmt.Errorf("binding environment variable EVALHUB_BASE_URL: %w", err)
-	}
-	err = v.BindEnv("token", "EVALHUB_TOKEN")
-	if err != nil {
-		return nil, fmt.Errorf("binding environment variable EVALHUB_TOKEN: %w", err)
-	}
-	err = v.BindEnv("tenant", "EVALHUB_TENANT")
-	if err != nil {
-		return nil, fmt.Errorf("binding environment variable EVALHUB_TENANT: %w", err)
-	}
-	err = v.BindEnv("insecure", "EVALHUB_INSECURE")
-	if err != nil {
-		return nil, fmt.Errorf("binding environment variable EVALHUB_INSECURE: %w", err)
-	}
-	err = v.BindEnv("transport", "EVALHUB_TRANSPORT")
-	if err != nil {
-		return nil, fmt.Errorf("binding environment variable EVALHUB_TRANSPORT: %w", err)
-	}
-	err = v.BindEnv("host", "EVALHUB_HOST")
-	if err != nil {
-		return nil, fmt.Errorf("binding environment variable EVALHUB_HOST: %w", err)
-	}
-	err = v.BindEnv("port", "EVALHUB_PORT")
-	if err != nil {
-		return nil, fmt.Errorf("binding environment variable EVALHUB_PORT: %w", err)
+		return nil, err
 	}
 
-	data, err := yaml.Marshal(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("marshalling default config: %w", err)
-	}
-	v.SetConfigType("yaml")
-	if err := v.ReadConfig(io.Reader(bytes.NewReader(data))); err != nil {
-		return nil, fmt.Errorf("parsing default config: %w", err)
+	if cfg != nil {
+		v.SetDefault("base_url", cfg.BaseURL)
+		v.SetDefault("token", cfg.Token)
+		v.SetDefault("tenant", cfg.Tenant)
+		v.SetDefault("insecure", cfg.Insecure)
+		v.SetDefault("transport", cfg.Transport)
+		v.SetDefault("host", cfg.Host)
+		v.SetDefault("port", cfg.Port)
 	}
 
 	if path == "" {
@@ -133,6 +126,7 @@ func applyYAMLConfig(cfg *Config, path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to get absolute path for config file: %w", err)
 	}
 	path = absPath
+	v.SetConfigType("yaml")
 	v.SetConfigFile(path)
 
 	if err := v.MergeInConfig(); err != nil {
