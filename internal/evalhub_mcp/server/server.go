@@ -92,6 +92,7 @@ func NewEvalHubClient(cfg *config.Config, logger *slog.Logger) *evalhubclient.Cl
 // without global state.
 func RegisterHandlers(srv *mcp.Server, client *evalhubclient.Client, info *ServerInfo, logger *slog.Logger) {
 	registerVersionResource(srv, info, logger)
+	registerPrompts(srv, logger)
 	if client != nil {
 		registerResources(srv, client, logger)
 		registerTools(srv, client, logger)
