@@ -94,6 +94,7 @@ func RegisterHandlers(srv *mcp.Server, client *evalhubclient.Client, info *Serve
 	registerVersionResource(srv, info, logger)
 	if client != nil {
 		registerResources(srv, client, logger)
+		registerTools(srv, client, logger)
 	}
 }
 
