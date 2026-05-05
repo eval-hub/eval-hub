@@ -34,6 +34,15 @@ make build
 ./bin/eval-hub
 ```
 
+Note that in some cases it may be necessary to exclude certain (newer) dependencies,
+this can be done as shown below in the `go.mod` file:
+
+```mod
+exclude (
+  k8s.io/api v0.36.0
+)
+```
+
 The API is available at `http://localhost:8080`. Verify it is running:
 
 ```bash
