@@ -158,11 +158,12 @@ func evaluateModelHandler(logger *slog.Logger) mcp.PromptHandler {
 func compareRunsHandler(logger *slog.Logger) mcp.PromptHandler {
 	return func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 		jobIDsRaw := req.Params.Arguments["job_ids"]
+		jobIDs := parseJobIDs(jobIDsRaw)
 		logger.Debug("compare_runs called", "job_ids", jobIDsRaw)
 
 		var messages []*mcp.PromptMessage
 
-		if jobIDsRaw == "" {
+		if len(jobIDs) == 0 {
 			messages = append(messages, &mcp.PromptMessage{
 				Role:    "user",
 				Content: &mcp.TextContent{Text: "I want to compare evaluation results across multiple runs."},
@@ -176,7 +177,6 @@ func compareRunsHandler(logger *slog.Logger) mcp.PromptHandler {
 					"Select two or more job IDs to proceed."},
 			})
 		} else {
-			jobIDs := parseJobIDs(jobIDsRaw)
 			messages = append(messages, &mcp.PromptMessage{
 				Role:    "user",
 				Content: &mcp.TextContent{Text: fmt.Sprintf("I want to compare evaluation jobs: %s", strings.Join(jobIDs, ", "))},

@@ -379,6 +379,23 @@ func TestCompareRunsWithoutJobIDs(t *testing.T) {
 	}
 }
 
+func TestCompareRunsWhitespaceOnlyJobIDs(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithPrompts(t)
+
+	result := getPrompt(t, ctx, cs, "compare_runs", map[string]string{
+		"job_ids": "   \t  ",
+	})
+
+	text := allMessageText(result.Messages)
+	if !containsCI(text, "across multiple runs") {
+		t.Error("whitespace-only job_ids should use the no-job-id intro (selection guidance)")
+	}
+	if strings.Contains(text, "I want to compare evaluation jobs:") {
+		t.Error("whitespace-only job_ids must not use the with-ids user message")
+	}
+}
+
 func TestCompareRunsWithJobIDs(t *testing.T) {
 	t.Parallel()
 	ctx, cs := connectWithPrompts(t)
