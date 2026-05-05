@@ -315,7 +315,7 @@ func TestEvaluateModelWithModelURL(t *testing.T) {
 	if !strings.Contains(text, modelURL) {
 		t.Error("prompt with model_url should reference the provided URL")
 	}
-	if containsCI(text, "provide the URL") || containsCI(text, "provide the url") {
+	if containsCI(text, "provide the URL") {
 		t.Error("prompt with model_url should skip the collection step")
 	}
 	if !containsCI(text, "benchmark") {
@@ -460,7 +460,7 @@ func TestRegisterHandlersIncludesPrompts(t *testing.T) {
 	RegisterHandlers(srv, nil, info, discardLogger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	t.Cleanup(cancel)
 
 	cs := connectClient(t, ctx, srv)
 
@@ -482,7 +482,7 @@ func TestRegisterHandlersPromptsAvailableWithoutBackend(t *testing.T) {
 	RegisterHandlers(srv, nil, info, discardLogger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	t.Cleanup(cancel)
 
 	cs := connectClient(t, ctx, srv)
 
