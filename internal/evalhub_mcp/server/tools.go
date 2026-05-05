@@ -285,9 +285,6 @@ func earliestStart(benchmarks []api.BenchmarkStatus) string {
 	var earliest string
 	for _, b := range benchmarks {
 		s := string(b.StartedAt)
-		if s != "" && (earliest == "" || s < earliest) {
-			earliest = s
-		}
 		if s == "" {
 			continue
 		}
@@ -295,7 +292,7 @@ func earliestStart(benchmarks []api.BenchmarkStatus) string {
 		if err != nil {
 			continue
 		}
-		if earliest == "" || t.Before(earliestTime) {
+		if earliestTime.IsZero() || t.Before(earliestTime) {
 			earliestTime = t
 			earliest = s
 		}
