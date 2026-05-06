@@ -1,0 +1,115 @@
+name: CI MCP
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'cmd/evalhub_mcp/**'
+      - 'internal/evalhub_mcp/**'
+      - 'pkg/evalhubclient/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Makefile'
+      - 'Containerfile.mcp'
+      - '.github/workflows/ci-mcp.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'cmd/evalhub_mcp/**'
+      - 'internal/evalhub_mcp/**'
+      - 'pkg/evalhubclient/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Makefile'
+      - 'Containerfile.mcp'
+      - '.github/workflows/ci-mcp.yml'
+
+jobs:
+  quality-checks:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+    - name: Set up Go
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+      with:
+        go-version-file: "go.mod"
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Format check
+      run: |
+        gofmt -l ./cmd/evalhub_mcp/ ./internal/evalhub_mcp/ ./pkg/evalhubclient/
+        if [ -n "$(gofmt -l ./cmd/evalhub_mcp/ ./internal/evalhub_mcp/ ./pkg/evalhubclient/)" ]; then
+          echo "Code is not formatted. Run 'gofmt -w' locally."
+          exit 1
+        fi
+
+    - name: Run vet
+      run: go vet ./cmd/evalhub_mcp/... ./internal/evalhub_mcp/... ./pkg/evalhubclient/...
+
+    - name: Run unit tests
+      run: go test -v -race ./cmd/evalhub_mcp/... ./internal/evalhub_mcp/... ./pkg/evalhubclient/...
+
+  build-platforms:
+    runs-on: ubuntu-latest
+    needs: [quality-checks]
+
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+    - name: Set up Go
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+      with:
+        go-version-file: "go.mod"
+
+    - name: Build all platforms
+      run: make build-all-platforms-mcp
+
+    - name: Upload binaries
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+      with:
+        name: evalhub-mcp-binaries
+        path: bin/evalhub-mcp-*
+
+  container-build:
+    runs-on: ubuntu-latest
+    needs: [quality-checks]
+
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+    - name: Build MCP container image
+      uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+      id: build
+      with:
+        context: .
+        file: Containerfile.mcp
+        platforms: linux/amd64
+        push: false
+        load: true
+        build-args: |
+          BUILD_DATE=${{ github.event.head_commit.timestamp }}
+          GIT_HASH=${{ github.sha }}
+        tags: evalhub-mcp:ci
+
+    - name: Verify container starts in HTTP mode
+      run: |
+        docker run --rm -d --name mcp-test -p 3001:3001 evalhub-mcp:ci
+        sleep 3
+        if docker ps --filter name=mcp-test --format '{{.Names}}' | grep -q mcp-test; then
+          echo "Container started successfully"
+          docker stop mcp-test
+        else
+          echo "Container failed to start"
+          docker logs mcp-test || true
+          exit 1
+        fi

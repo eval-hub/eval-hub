@@ -1,0 +1,37 @@
+name: Release MCP
+
+on:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+      with:
+        go-version-file: "go.mod"
+
+    - name: Build all platforms
+      run: make build-all-platforms-mcp
+
+    - name: Generate checksums
+      run: cd bin && sha256sum evalhub-mcp-* > checksums-sha256.txt
+
+    - name: Create GitHub Release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release create "${{ github.ref_name }}" \
+          --generate-notes \
+          bin/evalhub-mcp-* \
+          bin/checksums-sha256.txt
