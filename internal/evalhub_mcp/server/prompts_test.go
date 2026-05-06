@@ -15,7 +15,9 @@ func connectWithPrompts(t *testing.T) (context.Context, *mcp.ClientSession) {
 	t.Helper()
 
 	srv := New(&ServerInfo{Version: "test"}, discardLogger, nil)
-	registerPrompts(srv, discardLogger)
+	if err := registerPrompts(srv, discardLogger); err != nil {
+		t.Fatalf("registerPrompts failed: %v", err)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	t.Cleanup(cancel)
@@ -457,7 +459,9 @@ func TestRegisterHandlersIncludesPrompts(t *testing.T) {
 	info := &ServerInfo{Version: "test"}
 	srv := New(info, discardLogger, nil)
 
-	RegisterHandlers(srv, nil, info, discardLogger)
+	if err := RegisterHandlers(srv, nil, info, discardLogger); err != nil {
+		t.Fatalf("RegisterHandlers: %v", err)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	t.Cleanup(cancel)
@@ -479,7 +483,9 @@ func TestRegisterHandlersPromptsAvailableWithoutBackend(t *testing.T) {
 	info := &ServerInfo{Version: "test"}
 	srv := New(info, discardLogger, nil)
 
-	RegisterHandlers(srv, nil, info, discardLogger)
+	if err := RegisterHandlers(srv, nil, info, discardLogger); err != nil {
+		t.Fatalf("RegisterHandlers: %v", err)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	t.Cleanup(cancel)

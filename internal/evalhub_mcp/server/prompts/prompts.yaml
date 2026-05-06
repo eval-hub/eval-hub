@@ -1,0 +1,130 @@
+edd_workflow:
+  description: "Structured guidance for the Evaluation-Driven Development cycle (Define → Measure → Iterate), tailored to a specific application type."
+  arguments:
+    application_type:
+      description: "The type of application to evaluate: rag, agent, safety, or classifier."
+      required: true
+  result:
+    description: "Evaluation-Driven Development workflow for {application_type} applications."
+    messages:
+      any:
+        user: "I want to follow an Evaluation-Driven Development (EDD) workflow for my {application_type} application."
+        assistant: |
+          I'll guide you through the Evaluation-Driven Development cycle for your {application_type} application. EDD follows three phases: **Define → Measure → Iterate**.
+
+          ## Phase 1: Define
+          {define}
+
+          ## Phase 2: Measure
+          {measure}
+
+          ## Phase 3: Iterate
+          {iterate}
+
+          Let's start with Phase 1. {starting_prompt}
+evaluate_model:
+  description: "Step-by-step model evaluation workflow."
+  arguments:
+    model_url:
+      description: "URL of the model inference endpoint (skips the model collection step if provided)."
+    benchmark_preferences:
+      description: "Preferences for benchmark selection such as category or focus area (e.g. reasoning, safety, general)."
+  result:
+    description: "The evaluation job configuration and results."
+    messages:
+      no_model:
+        user: "I want to evaluate a model. Help me through the process step by step."
+        assistant: |
+          I'll guide you through the model evaluation process.
+
+          **Step 1: Identify your model**
+          Please provide the URL of the model inference endpoint you want to evaluate.
+          This should be the API endpoint where the model is serving predictions (e.g. http://my-model:8080/v1).
+      with_model:
+        user: "I want to evaluate the model at {model_url}. Help me through the process step by step."
+        assistant: |
+          I'll guide you through evaluating the model at `{model_url}`.
+          Model URL confirmed. Let's proceed to benchmark selection.
+      benchmark_selection_no_preferences:
+        user: "What's next?"
+        assistant: |
+          **Step 2: Select benchmarks**
+          Choose which benchmarks to run against your model.
+          Use the `evalhub://benchmarks` resource to browse available benchmarks,
+          or `evalhub://collections` for curated benchmark suites.
+          You can filter benchmarks by label (e.g. `evalhub://benchmarks?label=safety`).
+          
+          **Step 3: Configure experiment**
+          Optionally set up MLflow experiment tracking with a name and tags for organizing your evaluation results.
+
+          **Step 4: Submit evaluation job**
+          Once benchmarks are selected, use the `submit_evaluation` tool to create the evaluation job.
+          Provide the model URL, selected benchmarks or collection, and optional experiment configuration.
+
+          **Step 5: Monitor results**
+          After submission, use `get_job_status` to track progress.
+          The job will report per-benchmark status and overall completion percentage.
+          Once complete, review the results to understand your model's performance.
+      benchmark_selection_with_preferences:
+        user: "What's next?"
+        assistant: |
+          **Step 2: Select benchmarks**
+          Choose which benchmarks to run against your model.
+          Based on your preferences ({benchmark_preferences}), I'll help narrow down the options.
+          Use the `evalhub://benchmarks` resource to browse available benchmarks,
+          or `evalhub://collections` for curated benchmark suites.
+          You can filter benchmarks by label (e.g. `evalhub://benchmarks?label=safety`).
+          
+          **Step 3: Configure experiment**
+          Optionally set up MLflow experiment tracking with a name and tags for organizing your evaluation results.
+
+          **Step 4: Submit evaluation job**
+          Once benchmarks are selected, use the `submit_evaluation` tool to create the evaluation job.
+          Provide the model URL, selected benchmarks or collection, and optional experiment configuration.
+
+          **Step 5: Monitor results**
+          After submission, use `get_job_status` to track progress.
+          The job will report per-benchmark status and overall completion percentage.
+          Once complete, review the results to understand your model's performance.
+compare_runs:
+  description: "Guidance for comparing two or more evaluation jobs: select jobs, fetch results, compare metrics, and summarize findings."
+  arguments:
+    job_ids:
+      description: "Comma-separated list of evaluation job IDs to compare (skips the job selection step if provided)."
+  result:
+    description: "Evaluation job comparison workflow."
+    messages:
+      no_jobs:
+        user: "I want to compare evaluation results across multiple runs. Help me through the process step by step."
+        assistant: |
+          I'll guide you through the evaluation job comparison process.
+
+          **Step 1: Select jobs to compare**
+          First, let's identify which evaluation jobs you want to compare.
+          Use the `evalhub://jobs` resource to list available jobs,
+          or filter by status with `evalhub://jobs?status=completed` to see only finished evaluations.
+          Select two or more job IDs to proceed.  
+      with_jobs:
+        user: "I want to compare evaluation jobs: {job_ids}. Help me through the process step by step."
+        assistant: |
+          I'll guide you through the evaluation job comparison process for jobs: {job_ids}.
+
+          **Step 1: Fetch results**
+          Let me retrieve the results for each job. Use the `evalhub://jobs/{id}` resource
+          for each job to get detailed status and benchmark results.
+          Once the results are fetched, let's proceed to the comparison.
+      comparison:
+        user: "How should I analyze the comparison?"
+        assistant: |
+          **Step 2: Compare metrics**
+          For each shared benchmark across the selected jobs, compare the key metrics:
+          - Identify which model performed better on each benchmark
+          - Look for significant differences vs. marginal ones
+          - Note any benchmarks where one model failed but another succeeded
+
+          **Step 3: Summarize findings**
+          Synthesize the comparison into actionable insights:
+          - Overall winner based on aggregate performance
+          - Category-level strengths (e.g. one model may excel at reasoning while another at safety)
+          - Recommendations for which model to use based on your priorities
+          - Areas where both models underperform, suggesting need for further iteration

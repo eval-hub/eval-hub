@@ -1,0 +1,85 @@
+rag:
+  define: |
+    Define what success looks like for your RAG pipeline:
+    - Identify the types of questions your system must answer
+    - Define expected retrieval quality (precision, recall of relevant documents)
+    - Set accuracy targets for generated answers (faithfulness, relevance)
+    - Establish latency and throughput requirements
+  measure: |
+    Select and run benchmarks that evaluate RAG-specific capabilities:
+    - Read evalhub://benchmarks?label=rag to find retrieval and generation benchmarks
+    - Or browse evalhub://collections for a curated RAG evaluation suite
+    - Key metrics to look for: faithfulness, answer relevance, completeness
+    - Submit the evaluation via POST /api/v1/evaluations/jobs with your model URL and selected benchmarks
+  iterate: |
+    Improve your RAG pipeline based on evaluation results:
+    - Tune retrieval parameters (chunk size, top-k, similarity thresholds)
+    - Adjust the generation prompt template or embedding model
+    - After each change, re-run the same benchmarks and read evalhub://jobs/{id} to track progress
+    - Use the compare_runs prompt to compare before/after results side by side
+  starting_prompt: >
+    What types of questions does your RAG system need to handle, and what are your quality targets?
+agent:
+  define: |
+    Define evaluation criteria for your agent:
+    - Identify the tasks your agent must accomplish
+    - Define success criteria for tool use (correct tool selection, parameter accuracy)
+    - Set expectations for multi-step reasoning and planning
+    - Establish safety boundaries (actions the agent must never take)
+  measure: |
+    Select and run benchmarks that evaluate agent capabilities:
+    - Read evalhub://benchmarks?label=agents to find tool-use and reasoning benchmarks
+    - Key metrics: task completion rate, tool selection accuracy, step efficiency
+    - Submit the evaluation via POST /api/v1/evaluations/jobs with your model URL and selected benchmarks
+    - Monitor progress via evalhub://jobs/{id}
+  iterate: |
+    Improve your agent and re-evaluate:
+    - Refine tool descriptions and parameter schemas
+    - Adjust the system prompt to improve planning behavior
+    - Add guardrails for identified failure modes
+    - Re-run the same benchmarks after each change
+    - Use the compare_runs prompt to verify improvements
+  starting_prompt: >
+    What tasks does your agent need to perform, and what tools does it have access to?
+safety:
+  define: |
+    Define safety requirements for your model:
+    - Identify the types of harmful content your model must avoid generating
+    - Define compliance requirements (regulatory, organizational policies)
+    - Set thresholds for acceptable false positive rates
+    - Establish categories of concern (toxicity, bias, privacy, misinformation)
+  measure: |
+    Select and run safety-specific benchmarks:
+    - Read evalhub://benchmarks?label=safety for safety evaluation benchmarks
+    - Read evalhub://providers to find providers like Garak for specialized security testing
+    - Key metrics: toxicity rates, bias scores, jailbreak resistance
+    - Submit the evaluation via POST /api/v1/evaluations/jobs and track via evalhub://jobs/{id}
+  iterate: |
+    Improve model safety and re-evaluate:
+    - Add safety-specific system prompts and guardrails
+    - Implement content filtering or output sanitization layers
+    - Re-run the same safety benchmarks after each change
+    - Use the compare_runs prompt to confirm safety improved without degrading utility
+  starting_prompt: >
+    What are the primary safety concerns for your deployment, and what compliance requirements apply?
+classifier:
+  define: |
+    Define evaluation criteria for your classifier:
+    - Identify the classification task and target classes
+    - Define per-class accuracy and precision/recall requirements
+    - Set thresholds for edge cases and ambiguous inputs
+    - Establish requirements for confidence calibration
+  measure: |
+    Select and run classification benchmarks:
+    - Read evalhub://benchmarks and filter for benchmarks aligned with your classification domain
+    - Key metrics: accuracy, precision, recall, F1, confidence calibration
+    - Test across class imbalances and input variations
+    - Submit the evaluation via POST /api/v1/evaluations/jobs and track via evalhub://jobs/{id}
+  iterate: |
+    Improve your classifier and re-evaluate:
+    - Adjust classification prompts or add few-shot examples for underperforming classes
+    - Implement confidence thresholds and fallback strategies
+    - Re-run the same benchmarks after each change
+    - Use the compare_runs prompt to compare before/after performance
+  starting_prompt: >
+    What is the classification task, and what are the target classes?

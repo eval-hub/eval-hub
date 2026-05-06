@@ -188,7 +188,8 @@ cython_debug/
 #  you could uncomment the following to ignore the entire vscode folder
 # .vscode/
 # Keep .vscode/extensions.json
-.vscode/launch.json
+.vscode/
+!.vscode/extensions.json
 
 # Ruff stuff:
 .ruff_cache/
