@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms start-service stop-service start-sidecar stop-sidecar lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report docker-image-local
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp start-service stop-service start-sidecar stop-sidecar lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report docker-image-local
 
 GOPATH := $(shell go env GOPATH)
 GOBIN := $(shell go env GOPATH)/bin
@@ -24,6 +24,7 @@ CROSS_GOOS ?= $(shell go env GOOS)
 CROSS_GOARCH ?= $(shell go env GOARCH)
 
 DATE ?= $(shell date +%FT%T%z)
+GIT_HASH ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
 help: ## Display this help message
 	@echo "Available targets:"
@@ -54,7 +55,7 @@ $(BIN_DIR):
 
 BUILD_PACKAGE ?= main
 FULL_BUILD_NUMBER ?= $(shell cat VERSION)
-LDFLAGS_X = -X "${BUILD_PACKAGE}.Build=${FULL_BUILD_NUMBER}" -X "${BUILD_PACKAGE}.BuildDate=$(DATE)"
+LDFLAGS_X = -X "${BUILD_PACKAGE}.Build=${FULL_BUILD_NUMBER}" -X "${BUILD_PACKAGE}.BuildDate=$(DATE)" -X "${BUILD_PACKAGE}.GitHash=${GIT_HASH}"
 LDFLAGS = -buildmode=exe ${LDFLAGS_X}
 
 build-service: $(BIN_DIR) ## Build the service binary
@@ -279,6 +280,24 @@ build-all-platforms: ## Build for all supported platforms
 	@$(MAKE) cross-compile CROSS_GOOS=darwin CROSS_GOARCH=amd64
 	@$(MAKE) cross-compile CROSS_GOOS=darwin CROSS_GOARCH=arm64
 	@$(MAKE) cross-compile CROSS_GOOS=windows CROSS_GOARCH=amd64
+
+# MCP cross-compilation
+MCP_CROSS_OUTPUT = bin/evalhub-mcp-$(CROSS_GOOS)-$(CROSS_GOARCH)$(if $(filter windows,$(CROSS_GOOS)),.exe,)
+
+.PHONY: cross-compile-mcp
+cross-compile-mcp: ## Build MCP for specific platform: make cross-compile-mcp CROSS_GOOS=linux CROSS_GOARCH=amd64
+	@echo "Cross-compiling MCP for $(CROSS_GOOS)/$(CROSS_GOARCH)..."
+	@mkdir -p $(BIN_DIR)
+	GOOS=$(CROSS_GOOS) GOARCH=$(CROSS_GOARCH) CGO_ENABLED=0 go build -o $(MCP_CROSS_OUTPUT) -ldflags="-s -w ${LDFLAGS_X}" $(MCP_CMD_PATH)
+	@echo "Built: $(MCP_CROSS_OUTPUT)"
+
+.PHONY: build-all-platforms-mcp
+build-all-platforms-mcp: ## Build MCP for all supported platforms
+	@$(MAKE) cross-compile-mcp CROSS_GOOS=linux CROSS_GOARCH=amd64
+	@$(MAKE) cross-compile-mcp CROSS_GOOS=linux CROSS_GOARCH=arm64
+	@$(MAKE) cross-compile-mcp CROSS_GOOS=darwin CROSS_GOARCH=amd64
+	@$(MAKE) cross-compile-mcp CROSS_GOOS=darwin CROSS_GOARCH=arm64
+	@$(MAKE) cross-compile-mcp CROSS_GOOS=windows CROSS_GOARCH=amd64
 
 # Python virtual environment - expects uv venv
 VENV_DIR = .venv

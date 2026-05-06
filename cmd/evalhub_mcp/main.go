@@ -17,6 +17,7 @@ var (
 	Version   string = "0.1.0"
 	Build     string
 	BuildDate string
+	GitHash   string
 )
 
 func main() {
@@ -92,6 +93,7 @@ func run(args []string) int {
 		Version:   Version,
 		Build:     Build,
 		BuildDate: BuildDate,
+		GitHash:   GitHash,
 	}
 
 	if err := mcpserver.Run(ctx, cfg, info, logger); err != nil {
@@ -106,6 +108,9 @@ func printVersion() {
 	fmt.Printf("evalhub-mcp version %s", Version)
 	if Build != "" {
 		fmt.Printf(" (build: %s)", Build)
+	}
+	if GitHash != "" {
+		fmt.Printf(" (commit: %s)", GitHash)
 	}
 	if BuildDate != "" {
 		fmt.Printf(" (built: %s)", BuildDate)

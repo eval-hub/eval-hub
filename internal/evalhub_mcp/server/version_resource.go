@@ -41,7 +41,7 @@ func versionHandler(info *ServerInfo, logger *slog.Logger) mcp.ResourceHandler {
 	}
 	if info != nil {
 		resp.Version = info.Version
-		resp.GitHash = info.Build
+		resp.GitHash = info.GitHash
 		resp.BuildDate = info.BuildDate
 	}
 

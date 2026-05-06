@@ -18,6 +18,7 @@ type ServerInfo struct {
 	Version   string
 	Build     string
 	BuildDate string
+	GitHash   string
 }
 
 func (s *ServerInfo) VersionString() string {

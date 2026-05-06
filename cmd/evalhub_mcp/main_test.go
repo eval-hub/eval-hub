@@ -29,12 +29,14 @@ func TestVersionFlag(t *testing.T) {
 }
 
 func TestVersionFlagWithBuildInfo(t *testing.T) {
-	origBuild, origDate := Build, BuildDate
+	origBuild, origDate, origHash := Build, BuildDate, GitHash
 	Build = "abc123"
 	BuildDate = "2026-01-01"
+	GitHash = "def456"
 	t.Cleanup(func() {
 		Build = origBuild
 		BuildDate = origDate
+		GitHash = origHash
 	})
 
 	old := os.Stdout
@@ -55,6 +57,9 @@ func TestVersionFlagWithBuildInfo(t *testing.T) {
 	}
 	if !bytes.Contains([]byte(output), []byte("build: abc123")) {
 		t.Errorf("expected build info in output, got: %s", output)
+	}
+	if !bytes.Contains([]byte(output), []byte("commit: def456")) {
+		t.Errorf("expected git hash in output, got: %s", output)
 	}
 	if !bytes.Contains([]byte(output), []byte("built: 2026-01-01")) {
 		t.Errorf("expected build date in output, got: %s", output)
