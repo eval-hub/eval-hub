@@ -87,9 +87,14 @@ func (p *promptResultConfig) ToMCPPromptMessages(group string, args ...string) [
 		return nil
 	}
 	messages := make([]*mcp.PromptMessage, 0, len(messageConfigs))
-	for role, content := range messageConfigs {
+	for _, roleName := range []string{"user", "assistant"} {
+		content, present := messageConfigs[roleName]
+		if !present {
+			// this should never happen, but we'll handle it gracefully
+			continue
+		}
 		messages = append(messages, &mcp.PromptMessage{
-			Role:    mcp.Role(role),
+			Role:    mcp.Role(roleName),
 			Content: &mcp.TextContent{Text: replaceTemplateVariables(content, args...)},
 		})
 	}
