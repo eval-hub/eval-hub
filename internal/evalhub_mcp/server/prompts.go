@@ -178,8 +178,8 @@ func eddWorkflowHandler(result *promptResultConfig, eddGuidance map[string]eddPh
 
 func evaluateModelHandler(result *promptResultConfig, logger *slog.Logger) mcp.PromptHandler {
 	return func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		modelURL := req.Params.Arguments[ArgNameModelURL]
-		benchmarkPrefs := req.Params.Arguments[ArgNameBenchmarkPreferences]
+		modelURL := strings.TrimSpace(req.Params.Arguments[ArgNameModelURL])
+		benchmarkPrefs := strings.TrimSpace(req.Params.Arguments[ArgNameBenchmarkPreferences])
 		logger.Debug(fmt.Sprintf("%s called", PromptNameEvaluateModel), ArgNameModelURL, modelURL, ArgNameBenchmarkPreferences, benchmarkPrefs)
 
 		var messages []*mcp.PromptMessage
