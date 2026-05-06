@@ -30,7 +30,7 @@ coverage.xml
 
 # Documentation
 # we need to copy the final swagger files to the container
-docs/
+docs/*
 !docs/openapi.yaml
 !docs/openapi.json
 
