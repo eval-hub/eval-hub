@@ -151,7 +151,7 @@ type BenchmarkStatusEvent struct {
 	ProviderID     string         `json:"provider_id" validate:"required"`
 	ID             string         `json:"id" validate:"required"`
 	BenchmarkIndex int            `json:"benchmark_index"`
-	Status         State          `json:"status" validate:"required,oneof=pending running completed failed cancelled"`
+	Status         State          `json:"status" validate:"required,oneof=pending running completed failed"`
 	Metrics        map[string]any `json:"metrics,omitempty"`
 	Artifacts      map[string]any `json:"artifacts,omitempty"`
 	ErrorMessage   *MessageInfo   `json:"error_message,omitempty"`
