@@ -123,8 +123,8 @@ func LogRequestFailed(ctx *executioncontext.ExecutionContext, code int, errorMes
 	LogWithCallerSkip(ctx.Ctx, ctx.Logger, slog.LevelInfo, skipCount, "Request failed", "error", errorMessage, "code", code, "duration", time.Since(ctx.StartedAt))
 }
 
-func LogRequestSuccess(ctx *executioncontext.ExecutionContext, code int, response any) {
-	LogWithCallerSkip(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request successful", "code", code, "duration", time.Since(ctx.StartedAt))
+func LogRequestSuccess(ctx *executioncontext.ExecutionContext, code int, response any, arguments ...any) {
+	LogWithCallerSkip(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request successful", append([]any{"code", code, "duration", time.Since(ctx.StartedAt)}, arguments...)...)
 }
 
 func AsPrettyJson(s any, mask ...string) string {

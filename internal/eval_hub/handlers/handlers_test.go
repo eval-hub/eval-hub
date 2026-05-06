@@ -114,7 +114,7 @@ func (w MockResponseWrapper) ErrorWithMessageCode(requestId string, messageCode 
 	w.WriteJSON(api.Error{Message: messages.GetErrorMessage(messageCode, messageParams...), MessageCode: messageCode.GetCode(), Trace: requestId}, messageCode.GetStatusCode())
 }
 
-func (w MockResponseWrapper) WriteJSON(v any, code int) {
+func (w MockResponseWrapper) WriteJSON(v any, code int, _ ...any) {
 	w.recorder.Code = code
 	if code != 204 {
 		w.recorder.Header().Set("Content-Type", "application/json")

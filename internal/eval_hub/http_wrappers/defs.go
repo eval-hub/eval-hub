@@ -22,5 +22,5 @@ type ResponseWrapper interface {
 	DeleteHeader(key string)
 	SetStatusCode(code int)
 	Write(buf []byte) (n int, err error)
-	WriteJSON(v any, code int)
+	WriteJSON(v any, code int, arguments ...any)
 }
