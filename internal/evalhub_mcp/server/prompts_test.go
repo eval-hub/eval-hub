@@ -454,7 +454,7 @@ func TestCompareRunsIncludesComparisonSteps(t *testing.T) {
 
 // --- RegisterHandlers with prompts ---
 
-func TestRegisterHandlersIncludesPrompts(t *testing.T) {
+func TestRegisterHandlersIncludesPromptsWithoutBackend(t *testing.T) {
 	t.Parallel()
 	info := &ServerInfo{Version: "test"}
 	srv := New(info, discardLogger, nil)
@@ -473,12 +473,12 @@ func TestRegisterHandlersIncludesPrompts(t *testing.T) {
 		t.Fatalf("ListPrompts failed: %v", err)
 	}
 
-	if len(result.Prompts) != 3 {
-		t.Errorf("expected 3 prompts, got %d", len(result.Prompts))
+	if len(result.Prompts) != 0 {
+		t.Errorf("expected 0 prompts, got %d", len(result.Prompts))
 	}
 }
 
-func TestRegisterHandlersPromptsAvailableWithoutBackend(t *testing.T) {
+func TestRegisterHandlersPromptsUnavailableWithoutBackend(t *testing.T) {
 	t.Parallel()
 	info := &ServerInfo{Version: "test"}
 	srv := New(info, discardLogger, nil)
@@ -492,11 +492,15 @@ func TestRegisterHandlersPromptsAvailableWithoutBackend(t *testing.T) {
 
 	cs := connectClient(t, ctx, srv)
 
-	result := getPrompt(t, ctx, cs, "edd_workflow", map[string]string{
-		"application_type": "rag",
+	result, err := cs.GetPrompt(ctx, &mcp.GetPromptParams{
+		Name:      "edd_workflow",
+		Arguments: map[string]string{"application_type": "rag"},
 	})
-	if len(result.Messages) == 0 {
-		t.Error("expected prompt messages even without backend")
+	if err == nil {
+		t.Fatalf("GetPrompt succeeded when it should fail!")
+	}
+	if (result != nil) && (len(result.Messages) > 0) {
+		t.Error("unexpected prompt messages without backend")
 	}
 }
 
