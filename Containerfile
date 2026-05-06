@@ -20,6 +20,7 @@ COPY . .
 ARG BUILD_NUMBER=0.4.0
 ARG BUILD_DATE
 ARG BUILD_PACKAGE=main
+ARG GIT_HASH
 
 # Build eval-hub binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
@@ -42,6 +43,13 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -o eval-runtime-init \
     ./cmd/eval_runtime_init
 
+# Build evalhub-mcp binary
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
+    -ldflags="-w -s -X '${BUILD_PACKAGE}.Build=${BUILD_NUMBER}' -X '${BUILD_PACKAGE}.BuildDate=${BUILD_DATE}' -X '${BUILD_PACKAGE}.GitHash=${GIT_HASH}'" \
+    -a -installsuffix cgo \
+    -o evalhub-mcp \
+    ./cmd/evalhub_mcp
+
 # Runtime stage
 FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
@@ -55,6 +63,7 @@ RUN groupadd -g 1000 evalhub && \
 COPY --from=builder --chown=evalhub:evalhub /build/eval-hub /app/eval-hub
 COPY --from=builder --chown=evalhub:evalhub /build/eval-runtime-sidecar /app/eval-runtime-sidecar
 COPY --from=builder --chown=evalhub:evalhub /build/eval-runtime-init /app/eval-runtime-init
+COPY --from=builder --chown=evalhub:evalhub /build/evalhub-mcp /app/evalhub-mcp
 
 # The swagger source files required for the openapi.yaml and docs
 COPY --chown=evalhub:evalhub docs/openapi.* /app/docs/
@@ -89,3 +98,6 @@ HEALTHCHECK NONE
 
 # Run the binary
 CMD ["/app/eval-hub"]
+
+# Run MCP server in HTTP mode by default
+# CMD ["/app/evalhub-mcp", "--transport", "http", "--host", "0.0.0.0", "--port", "3001"]
