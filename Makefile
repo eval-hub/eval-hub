@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp start-service stop-service start-sidecar stop-sidecar lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report docker-image-local
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp start-service stop-service start-sidecar stop-sidecar lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report docker-image-local docker-mcp-version
 
 GOPATH := $(shell go env GOPATH)
 GOBIN := $(shell go env GOPATH)/bin
@@ -426,11 +426,17 @@ update-redocly-cli:
 	rm -f package-lock.json
 	npm install @redocly/cli@latest
 
-# Local image build (same Containerfile and BUILD_DATE arg as .github/workflows/ci.yml docker-build-push; CI also sets multi-arch push and registry tags).
+# Local image build (same Containerfile and BUILD_DATE as .github/workflows/ci.yml docker-build-push; pass GIT_HASH for embedded evalhub-mcp metadata).
 DOCKER_IMAGE_LOCAL ?= eval-hub:local
 DOCKER_BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 # Container build tool: podman or docker
 DOCKER ?= podman
 
 docker-image-local: ## Build the eval-hub Docker image locally from Containerfile
-	$(DOCKER) build -f Containerfile --build-arg "BUILD_DATE=$(DOCKER_BUILD_DATE)" -t "$(DOCKER_IMAGE_LOCAL)" .
+	$(DOCKER) build -f Containerfile \
+		--build-arg "BUILD_DATE=$(DOCKER_BUILD_DATE)" \
+		--build-arg "GIT_HASH=$(GIT_HASH)" \
+		-t "$(DOCKER_IMAGE_LOCAL)" .
+
+docker-mcp-version: ## Run evalhub-mcp --version in the local Docker image (build with docker-image-local first)
+	$(DOCKER) run --rm "$(DOCKER_IMAGE_LOCAL)" /app/evalhub-mcp --version

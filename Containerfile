@@ -94,7 +94,7 @@ LABEL org.opencontainers.image.title="eval-hub" \
       org.opencontainers.image.vendor="eval-hub"
 
 # Health check removed - wget not available without package installation
-HEALTHCHECK NONE
+# HEALTHCHECK NONE
 
 # Run the binary
 CMD ["/app/eval-hub"]
