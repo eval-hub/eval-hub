@@ -123,7 +123,7 @@ func LogRequestFailed(ctx *executioncontext.ExecutionContext, code int, errorMes
 	LogWithCallerSkip(ctx.Ctx, ctx.Logger, slog.LevelInfo, skipCount, "Request failed", "error", errorMessage, "code", code, "duration", time.Since(ctx.StartedAt))
 }
 
-func LogRequestSuccess(ctx *executioncontext.ExecutionContext, code int, response any, arguments ...any) {
+func LogRequestSuccess(ctx *executioncontext.ExecutionContext, code int, _ any, arguments ...any) {
 	LogWithCallerSkip(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request successful", append([]any{"code", code, "duration", time.Since(ctx.StartedAt)}, arguments...)...)
 }
 
