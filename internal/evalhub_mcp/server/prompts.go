@@ -234,6 +234,8 @@ func compareRunsHandler(result *promptResultConfig, logger *slog.Logger) mcp.Pro
 			if messages == nil {
 				return nil, fmt.Errorf("no messages found for group %q", "no_jobs")
 			}
+		} else if len(jobIDs) < 2 {
+			return nil, fmt.Errorf("%s must contain at least two job IDs", ArgNameJobIds)
 		} else {
 			messages = result.ToMCPPromptMessages(
 				"with_jobs",
