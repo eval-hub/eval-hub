@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"time"
 
@@ -149,6 +150,9 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 		return
 	}
 
+	var count int
+	var totalCount int
+
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
@@ -175,11 +179,15 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 				Items: providers.Items,
 			}
 
-			w.WriteJSON(result, 200)
+			count = len(providers.Items)
+			totalCount = providers.TotalCount
+			w.WriteJSON(result, 200, "count", strconv.Itoa(count), "total_count", strconv.Itoa(totalCount))
 			return nil
 		},
 		"storage",
 		"list-providers",
+		"count", strconv.Itoa(count),
+		"total_count", strconv.Itoa(totalCount),
 	)
 }
 

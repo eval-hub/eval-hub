@@ -149,7 +149,7 @@ func (r RespWrapper) Write(buf []byte) (int, error) {
 	return r.Response.Write(buf)
 }
 
-func (r RespWrapper) WriteJSON(v any, code int) {
+func (r RespWrapper) WriteJSON(v any, code int, arguments ...any) {
 	r.SetHeader("Content-Type", "application/json")
 	if r.ctx.RequestID != "" {
 		r.SetHeader(TRANSACTION_ID_HEADER, r.ctx.RequestID)
@@ -163,7 +163,9 @@ func (r RespWrapper) WriteJSON(v any, code int) {
 			return
 		}
 	}
-	logging.LogRequestSuccess(r.ctx, code, v)
+	// Copy variadic args before re-expansion so key/value pairs are not dropped when
+	// forwarding ...any into LogRequestSuccess (see handlers TestHandleListEvaluations_WriteJSON_logsExtraArgs).
+	logging.LogRequestSuccess(r.ctx, code, v, append([]any(nil), arguments...)...)
 }
 
 func (r RespWrapper) SetStatusCode(code int) {

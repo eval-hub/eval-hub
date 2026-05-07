@@ -1,10 +1,16 @@
 package logging
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 )
 
 func TestAsPrettyJson_noMask(t *testing.T) {
@@ -118,5 +124,41 @@ func TestAsPrettyJson_marshalError_fallsBackToString(t *testing.T) {
 	want := fmt.Sprintf("%v", ch)
 	if out != want {
 		t.Fatalf("marshal failure should fall back to %%v: got %q want %q", out, want)
+	}
+}
+
+func TestLogRequestSuccess_additionalArgsInOutput(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+	ctx := &executioncontext.ExecutionContext{
+		Ctx:       context.Background(),
+		RequestID: "req-extra-args",
+		Logger:    logger,
+		StartedAt: time.Now().Add(-50 * time.Millisecond),
+	}
+
+	LogRequestSuccess(ctx, 201, map[string]string{"ignored": "response is not logged"}, "extra_key", "extra_value", "count", 42)
+
+	var payload map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &payload); err != nil {
+		t.Fatalf("log output is not valid JSON: %v\n%s", err, buf.String())
+	}
+	if payload["msg"] != "Request successful" {
+		t.Fatalf("msg: got %v want Request successful", payload["msg"])
+	}
+	if code, ok := payload["code"].(float64); !ok || code != 201 {
+		t.Fatalf("code: got %v want 201", payload["code"])
+	}
+	if payload["extra_key"] != "extra_value" {
+		t.Fatalf("extra_key: got %v want extra_value", payload["extra_key"])
+	}
+	if n, ok := payload["count"].(float64); !ok || n != 42 {
+		t.Fatalf("count: got %v want 42", payload["count"])
+	}
+	if _, ok := payload["duration"]; !ok {
+		t.Fatalf("expected duration field in log output: %v", payload)
 	}
 }

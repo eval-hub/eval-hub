@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -91,6 +92,9 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 		return
 	}
 
+	var count int
+	var totalCount int
+
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
@@ -111,11 +115,15 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 				Items: collections.Items,
 			}
 
-			w.WriteJSON(result, 200)
+			count = len(collections.Items)
+			totalCount = collections.TotalCount
+			w.WriteJSON(result, 200, "count", strconv.Itoa(count), "total_count", strconv.Itoa(totalCount))
 			return nil
 		},
 		"storage",
 		"list-collections",
+		"count", strconv.Itoa(count),
+		"total_count", strconv.Itoa(totalCount),
 	)
 }
 

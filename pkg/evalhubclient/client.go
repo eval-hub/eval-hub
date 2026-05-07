@@ -23,6 +23,9 @@ const (
 
 	apiBasePath = "/api/v1/evaluations"
 	healthPath  = "/api/v1/health"
+
+	// maxLoggedBodyBytes caps JSON logged for request/response bodies (aligned with eval-hub handler visibility).
+	maxLoggedBodyBytes = 8192
 )
 
 // APIError represents a typed error returned by the eval-hub API.
@@ -175,6 +178,48 @@ func (c *Client) WithHTTPClient(httpClient *http.Client) *Client {
 	return cp
 }
 
+func truncateBodyForLog(b []byte) string {
+	if len(b) == 0 {
+		return ""
+	}
+	if len(b) <= maxLoggedBodyBytes {
+		return string(b)
+	}
+	return string(b[:maxLoggedBodyBytes]) + "… (truncated)"
+}
+
+// shouldLogBody returns true if the body should be logged based on the logger level (DEBUG level) and the body length (greater than zero).
+func (c *Client) shouldLogBody(b []byte) bool {
+	return c.logger.Enabled(c.ctx, slog.LevelDebug) && (len(b) > 0)
+}
+
+func (c *Client) logEvalHubRequestStarted(method, fullURL string, bodyBytes []byte) {
+	args := []any{"method", method, "uri", fullURL}
+	if c.tenant != "" {
+		args = append(args, "tenant", c.tenant)
+	}
+	if c.shouldLogBody(bodyBytes) {
+		args = append(args, "request", truncateBodyForLog(bodyBytes))
+	}
+	c.logger.Info("Request started", args...)
+}
+
+func (c *Client) logEvalHubRequestFailed(start time.Time, code int, errMsg string, respBody []byte) {
+	args := []any{"error", errMsg, "code", code, "duration", time.Since(start)}
+	if c.shouldLogBody(respBody) {
+		args = append(args, "response", truncateBodyForLog(respBody))
+	}
+	c.logger.Info("Request failed", args...)
+}
+
+func (c *Client) logEvalHubRequestSuccessful(start time.Time, code int, respBody []byte) {
+	args := []any{"code", code, "duration", time.Since(start)}
+	if c.shouldLogBody(respBody) {
+		args = append(args, "response", truncateBodyForLog(respBody))
+	}
+	c.logger.Info("Request successful", args...)
+}
+
 func (c *Client) setHeaders(req *http.Request) {
 	if req.Body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -207,6 +252,9 @@ func (c *Client) doRequest(method, path string, body any, queryParams url.Values
 		}
 	}
 
+	start := time.Now()
+	c.logEvalHubRequestStarted(method, fullURL, bodyBytes)
+
 	var (
 		respBody   []byte
 		statusCode int
@@ -225,11 +273,11 @@ func (c *Client) doRequest(method, path string, body any, queryParams url.Values
 
 		req, err := http.NewRequestWithContext(c.ctx, method, fullURL, reqBody)
 		if err != nil {
-			return nil, 0, fmt.Errorf("failed to create request: %w", err)
+			wrapped := fmt.Errorf("failed to create request: %w", err)
+			c.logEvalHubRequestFailed(start, 0, wrapped.Error(), nil)
+			return nil, 0, wrapped
 		}
 		c.setHeaders(req)
-
-		c.logger.Debug("eval-hub request", "method", method, "path", path, "attempt", attempt+1)
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
@@ -238,6 +286,7 @@ func (c *Client) doRequest(method, path string, body any, queryParams url.Values
 				c.logger.Warn("eval-hub request failed, retrying", "method", method, "path", path, "attempt", attempt+1, "error", err)
 				continue
 			}
+			c.logEvalHubRequestFailed(start, 0, lastErr.Error(), nil)
 			return nil, 0, lastErr
 		}
 
@@ -245,7 +294,9 @@ func (c *Client) doRequest(method, path string, body any, queryParams url.Values
 		respBody, err = io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
-			return nil, statusCode, fmt.Errorf("failed to read response body: %w", err)
+			wrapped := fmt.Errorf("failed to read response body: %w", err)
+			c.logEvalHubRequestFailed(start, statusCode, wrapped.Error(), nil)
+			return nil, statusCode, wrapped
 		}
 
 		// Retry server errors; propagate client errors immediately.
@@ -260,13 +311,16 @@ func (c *Client) doRequest(method, path string, body any, queryParams url.Values
 	}
 
 	if lastErr != nil {
+		c.logEvalHubRequestFailed(start, statusCode, lastErr.Error(), respBody)
 		return nil, statusCode, lastErr
 	}
 	if statusCode < 200 || statusCode >= 300 {
-		return nil, statusCode, c.parseAPIError(statusCode, respBody)
+		apiErr := c.parseAPIError(statusCode, respBody)
+		c.logEvalHubRequestFailed(start, statusCode, apiErr.Error(), respBody)
+		return nil, statusCode, apiErr
 	}
 
-	c.logger.Debug("eval-hub request succeeded", "method", method, "path", path, "status", statusCode)
+	c.logEvalHubRequestSuccessful(start, statusCode, respBody)
 	return respBody, statusCode, nil
 }
 

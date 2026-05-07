@@ -1,9 +1,11 @@
 package evalhubclient
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -739,6 +741,59 @@ func TestAPIErrorHelpers(t *testing.T) {
 		if e.IsForbidden() != tc.forbidden {
 			t.Errorf("IsForbidden() for %d = %v, want %v", tc.status, e.IsForbidden(), tc.forbidden)
 		}
+	}
+}
+
+// ─── Request / response logging (MCP and other callers use WithLogger) ─────────
+
+func TestClient_logsRequestLifecycle_success(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	srv, _ := newCapturingServer(t, http.StatusOK, mustMarshal(t, api.HealthResponse{Status: "ok"}))
+
+	_, err := NewClient(srv.URL).WithLogger(logger).WithTenant("ns1").GetHealth()
+	if err != nil {
+		t.Fatalf("GetHealth: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, `"msg":"Request started"`) {
+		t.Fatalf("expected Request started in logs:\n%s", out)
+	}
+	if !strings.Contains(out, `"msg":"Request successful"`) {
+		t.Fatalf("expected Request successful in logs:\n%s", out)
+	}
+	if !strings.Contains(out, `"tenant":"ns1"`) {
+		t.Fatalf("expected tenant in logs:\n%s", out)
+	}
+	if !strings.Contains(out, `"method":"GET"`) {
+		t.Fatalf("expected method in logs:\n%s", out)
+	}
+}
+
+func TestClient_logsRequestLifecycle_apiError(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	errBody := mustMarshal(t, api.Error{Message: "nope", MessageCode: "test.bad"})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write(errBody)
+	}))
+	t.Cleanup(srv.Close)
+
+	_, err := NewClient(srv.URL).WithLogger(logger).WithMaxRetries(0).GetHealth()
+	if err == nil {
+		t.Fatal("expected API error")
+	}
+	out := buf.String()
+	if !strings.Contains(out, `"msg":"Request started"`) {
+		t.Fatalf("expected Request started in logs:\n%s", out)
+	}
+	if !strings.Contains(out, `"msg":"Request failed"`) {
+		t.Fatalf("expected Request failed in logs:\n%s", out)
+	}
+	if !strings.Contains(out, `"code":400`) {
+		t.Fatalf("expected HTTP 400 in logs:\n%s", out)
 	}
 }
 

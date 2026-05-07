@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -357,6 +358,9 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 		return
 	}
 
+	var count int
+	var totalCount int
+
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
@@ -375,11 +379,15 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 				Items:  res.Items,
 				Errors: res.Errors,
 			}
-			w.WriteJSON(result, 200)
+			count = len(res.Items)
+			totalCount = res.TotalCount
+			w.WriteJSON(result, 200, "count", count, "total_count", totalCount)
 			return nil
 		},
 		"storage",
 		"list-evaluation-jobs",
+		"count", strconv.Itoa(count),
+		"total_count", strconv.Itoa(totalCount),
 	)
 }
 
