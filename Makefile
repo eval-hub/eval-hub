@@ -664,7 +664,7 @@ test-mcp-brew-uninstall: ## Uninstall evalhub-mcp and remove local tap
 	-@rm -f formula/evalhub-mcp-local.rb
 	@echo "PASS: evalhub-mcp uninstalled and local tap removed"
 
-test-mcp-cross-platform: test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-checksums test-mcp-formula-syntax ## Run all cross-platform build tests (CI-safe, no brew)
+test-mcp-cross-platform: test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax ## Run all cross-platform build tests (CI-safe, no brew)
 	@echo ""
 	@echo "========================================"
 	@echo "  All cross-platform build tests PASSED"
