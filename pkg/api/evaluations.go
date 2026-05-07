@@ -69,7 +69,7 @@ type ModelRef struct {
 }
 
 type ModelAuth struct {
-	SecretRef string `json:"secret_ref,omitempty"` // not required so that the FVT tests can pass "" if no auth is needed
+	SecretRef string `json:"secret_ref" validate:"required"`
 }
 
 // MessageInfo represents a message from a downstream service
