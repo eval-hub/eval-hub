@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp start-service stop-service start-sidecar stop-sidecar lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report docker-image-local docker-mcp-version
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp start-service stop-service start-sidecar stop-sidecar lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform
 
 GOPATH := $(shell go env GOPATH)
 GOBIN := $(shell go env GOPATH)/bin
@@ -440,3 +440,232 @@ docker-image-local: ## Build the eval-hub Docker image locally from Containerfil
 
 docker-mcp-version: ## Run evalhub-mcp --version in the local Docker image (build with docker-image-local first)
 	$(DOCKER) run --rm "$(DOCKER_IMAGE_LOCAL)" /app/evalhub-mcp --version
+
+## ------------------------------------------------------------------------------------------------
+## Cross-Platform Build Tests (RHOAIENG-60352)
+## See tests/cross-platform-build/TEST_PLAN.md for full test plan.
+## ------------------------------------------------------------------------------------------------
+
+MCP_TEST_IMAGE ?= evalhub-mcp-test:latest
+MCP_TEST_CONTAINER ?= evalhub-mcp-test
+MCP_TEST_PORT ?= 3001
+
+MCP_PLATFORMS = linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64
+
+test-mcp-build-all: ## Build all 5 MCP platform binaries and verify they exist
+	@echo "=== test-mcp-build-all ==="
+	@$(MAKE) build-all-platforms-mcp
+	@echo "Verifying all platform binaries exist..."
+	@fail=0; \
+	for p in $(MCP_PLATFORMS); do \
+		bin="bin/evalhub-mcp-$$p"; \
+		if [ "$$p" = "windows-amd64" ]; then bin="$${bin}.exe"; fi; \
+		if [ ! -f "$$bin" ]; then echo "FAIL: missing $$bin"; fail=1; else echo "OK: $$bin"; fi; \
+	done; \
+	if [ $$fail -ne 0 ]; then echo "FAIL: not all binaries present"; exit 1; fi
+	@echo "PASS: all 5 platform binaries built successfully"
+
+test-mcp-binary-info: ## Verify each binary has the correct file type and architecture
+	@echo "=== test-mcp-binary-info ==="
+	@fail=0; \
+	check() { \
+		if echo "$$2" | grep -qE "$$3"; then echo "OK: $$1 -> $$3"; else echo "FAIL: $$1 expected '$$3', got '$$2'"; fail=1; fi; \
+	}; \
+	info=$$(file bin/evalhub-mcp-linux-amd64 2>/dev/null); \
+	echo "$$info" | grep -qE "ELF 64-bit.*x86-64" || { echo "FAIL: linux-amd64: $$info"; fail=1; }; \
+	echo "$$info" | grep -qE "ELF 64-bit.*x86-64" && echo "OK: linux-amd64 is ELF 64-bit x86-64"; \
+	info=$$(file bin/evalhub-mcp-linux-arm64 2>/dev/null); \
+	echo "$$info" | grep -qiE "ELF 64-bit.*(aarch64|ARM aarch64)" || { echo "FAIL: linux-arm64: $$info"; fail=1; }; \
+	echo "$$info" | grep -qiE "ELF 64-bit.*(aarch64|ARM aarch64)" && echo "OK: linux-arm64 is ELF 64-bit aarch64"; \
+	info=$$(file bin/evalhub-mcp-darwin-amd64 2>/dev/null); \
+	echo "$$info" | grep -qiE "Mach-O.*x86_64" || { echo "FAIL: darwin-amd64: $$info"; fail=1; }; \
+	echo "$$info" | grep -qiE "Mach-O.*x86_64" && echo "OK: darwin-amd64 is Mach-O x86_64"; \
+	info=$$(file bin/evalhub-mcp-darwin-arm64 2>/dev/null); \
+	echo "$$info" | grep -qiE "Mach-O.*arm64" || { echo "FAIL: darwin-arm64: $$info"; fail=1; }; \
+	echo "$$info" | grep -qiE "Mach-O.*arm64" && echo "OK: darwin-arm64 is Mach-O arm64"; \
+	info=$$(file bin/evalhub-mcp-windows-amd64.exe 2>/dev/null); \
+	echo "$$info" | grep -qiE "PE32\+.*x86-64" || { echo "FAIL: windows-amd64: $$info"; fail=1; }; \
+	echo "$$info" | grep -qiE "PE32\+.*x86-64" && echo "OK: windows-amd64 is PE32+ x86-64"; \
+	if [ $$fail -ne 0 ]; then exit 1; fi
+	@echo "PASS: all binaries have correct file type and architecture"
+
+test-mcp-binary-naming: ## Verify binaries follow the evalhub-mcp-{OS}-{ARCH} naming convention
+	@echo "=== test-mcp-binary-naming ==="
+	@count=$$(ls -1 bin/evalhub-mcp-* 2>/dev/null | wc -l); \
+	if [ "$$count" -ne 5 ]; then echo "FAIL: expected 5 platform binaries, found $$count"; exit 1; fi
+	@fail=0; \
+	for p in $(MCP_PLATFORMS); do \
+		bin="bin/evalhub-mcp-$$p"; \
+		if [ "$$p" = "windows-amd64" ]; then bin="$${bin}.exe"; fi; \
+		if [ ! -f "$$bin" ]; then echo "FAIL: missing $$bin"; fail=1; else echo "OK: $$bin matches naming convention"; fi; \
+	done; \
+	if [ $$fail -ne 0 ]; then exit 1; fi
+	@echo "PASS: all binaries follow naming convention"
+
+test-mcp-version: ## Verify --version outputs correct build metadata
+	@echo "=== test-mcp-version ==="
+	@echo "Building native MCP binary for version test..."
+	@$(MAKE) build-mcp
+	@expected_version=$$(cat VERSION); \
+	output=$$(bin/evalhub-mcp --version 2>&1); \
+	echo "Version output: $$output"; \
+	fail=0; \
+	echo "$$output" | grep -q "evalhub-mcp version" || { echo "FAIL: missing 'evalhub-mcp version' prefix"; fail=1; }; \
+	echo "$$output" | grep -q "$$expected_version" || { echo "FAIL: version '$$expected_version' not found in output"; fail=1; }; \
+	echo "$$output" | grep -q "build:" || { echo "FAIL: missing build info"; fail=1; }; \
+	echo "$$output" | grep -q "commit:" || { echo "FAIL: missing commit hash"; fail=1; }; \
+	echo "$$output" | grep -q "built:" || { echo "FAIL: missing build date"; fail=1; }; \
+	if [ $$fail -ne 0 ]; then exit 1; fi
+	@echo "PASS: --version outputs correct build metadata"
+
+test-mcp-no-runtime-deps: ## Verify Linux binaries are statically linked
+	@echo "=== test-mcp-no-runtime-deps ==="
+	@fail=0; \
+	for arch in amd64 arm64; do \
+		bin="bin/evalhub-mcp-linux-$$arch"; \
+		if [ ! -f "$$bin" ]; then echo "SKIP: $$bin not found (run test-mcp-build-all first)"; continue; fi; \
+		info=$$(file "$$bin"); \
+		echo "$$info" | grep -q "statically linked" || { echo "FAIL: $$bin is not statically linked: $$info"; fail=1; }; \
+		echo "$$info" | grep -q "statically linked" && echo "OK: $$bin is statically linked"; \
+	done; \
+	if [ $$fail -ne 0 ]; then exit 1; fi
+	@echo "PASS: Linux binaries are statically linked (no external runtime deps)"
+
+test-mcp-container-build: ## Build and verify container image
+	@echo "=== test-mcp-container-build ==="
+	$(DOCKER) build -f Containerfile \
+		--build-arg "BUILD_DATE=$(DOCKER_BUILD_DATE)" \
+		--build-arg "GIT_HASH=$(GIT_HASH)" \
+		-t "$(MCP_TEST_IMAGE)" .
+	@echo "Verifying evalhub-mcp binary exists in image..."
+	@$(DOCKER) run --rm "$(MCP_TEST_IMAGE)" test -x /app/evalhub-mcp || { echo "FAIL: /app/evalhub-mcp not found or not executable"; exit 1; }
+	@echo "PASS: container image builds successfully and contains evalhub-mcp"
+
+test-mcp-container-http: ## Start container in HTTP mode and test MCP initialize
+	@echo "=== test-mcp-container-http ==="
+	-@$(DOCKER) rm -f $(MCP_TEST_CONTAINER) 2>/dev/null || true
+	@echo "Starting container in HTTP mode on port $(MCP_TEST_PORT)..."
+	@$(DOCKER) run -d --name $(MCP_TEST_CONTAINER) \
+		-p $(MCP_TEST_PORT):3001 \
+		"$(MCP_TEST_IMAGE)" /app/evalhub-mcp --transport http --host 0.0.0.0 --port 3001
+	@echo "Waiting for server to start..."
+	@sleep 3
+	@echo "Sending MCP initialize request..."
+	@response=$$(curl -sf -X POST http://localhost:$(MCP_TEST_PORT)/mcp \
+		-H "Content-Type: application/json" \
+		-d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"0.0.1"}}}' 2>&1) || \
+		{ echo "FAIL: MCP initialize request failed"; $(DOCKER) logs $(MCP_TEST_CONTAINER); $(DOCKER) rm -f $(MCP_TEST_CONTAINER); exit 1; }; \
+	echo "Response: $$response"; \
+	echo "$$response" | grep -q "serverInfo" || \
+		{ echo "FAIL: response missing serverInfo"; $(DOCKER) rm -f $(MCP_TEST_CONTAINER); exit 1; }
+	@$(DOCKER) rm -f $(MCP_TEST_CONTAINER)
+	@echo "PASS: container starts in HTTP mode and responds to MCP initialize"
+
+test-mcp-checksums: ## Generate SHA256 checksums and verify they match binaries
+	@echo "=== test-mcp-checksums ==="
+	@if command -v sha256sum >/dev/null 2>&1; then \
+		CMD="sha256sum"; \
+	else \
+		CMD="shasum -a 256"; \
+	fi; \
+	cd bin && $$CMD evalhub-mcp-* > checksums-sha256.txt
+	@echo "Generated checksums:"
+	@cat bin/checksums-sha256.txt
+	@entry_count=$$(wc -l < bin/checksums-sha256.txt); \
+	if [ "$$entry_count" -lt 5 ]; then echo "FAIL: expected at least 5 checksum entries, found $$entry_count"; exit 1; fi
+	@if command -v sha256sum >/dev/null 2>&1; then \
+		cd bin && sha256sum --check checksums-sha256.txt; \
+	else \
+		cd bin && shasum -a 256 -c checksums-sha256.txt; \
+	fi || { echo "FAIL: checksum verification failed"; exit 1; }
+	@echo "PASS: SHA256 checksums generated and verified for all binaries"
+
+test-mcp-formula-syntax: ## Validate Homebrew formula is syntactically valid Ruby
+	@echo "=== test-mcp-formula-syntax ==="
+	@if command -v ruby >/dev/null 2>&1; then \
+		ruby -c formula/evalhub-mcp.rb || { echo "FAIL: formula syntax error"; exit 1; }; \
+	else \
+		echo "SKIP: ruby not available, checking formula content directly"; \
+	fi
+	@echo "Checking formula references all platforms..."
+	@fail=0; \
+	grep -q "darwin-amd64" formula/evalhub-mcp.rb || { echo "FAIL: missing darwin-amd64"; fail=1; }; \
+	grep -q "darwin-arm64" formula/evalhub-mcp.rb || { echo "FAIL: missing darwin-arm64"; fail=1; }; \
+	grep -q "linux-amd64" formula/evalhub-mcp.rb || { echo "FAIL: missing linux-amd64"; fail=1; }; \
+	grep -q "linux-arm64" formula/evalhub-mcp.rb || { echo "FAIL: missing linux-arm64"; fail=1; }; \
+	grep -q "\-\-version" formula/evalhub-mcp.rb || { echo "FAIL: formula test block missing --version check"; fail=1; }; \
+	if [ $$fail -ne 0 ]; then exit 1; fi
+	@echo "PASS: Homebrew formula is valid and references all platforms"
+
+## ------------------------------------------------------------------------------------------------
+## Homebrew Integration Tests (macOS/Linux only)
+## Run on a Mac laptop: make test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall
+## ------------------------------------------------------------------------------------------------
+
+BREW_TAP ?= eval-hub/evalhub
+
+test-mcp-native-smoke: ## Build and run --version on native-platform MCP binary
+	@echo "=== test-mcp-native-smoke ==="
+	@native_os=$$(go env GOOS); native_arch=$$(go env GOARCH); \
+	echo "Building evalhub-mcp for native platform $$native_os/$$native_arch..."; \
+	$(MAKE) cross-compile-mcp CROSS_GOOS=$$native_os CROSS_GOARCH=$$native_arch; \
+	bin="bin/evalhub-mcp-$${native_os}-$${native_arch}"; \
+	if [ "$$native_os" = "windows" ]; then bin="$${bin}.exe"; fi; \
+	chmod +x "$$bin"; \
+	echo "Running $$bin --version..."; \
+	output=$$("$$bin" --version 2>&1); \
+	echo "$$output"; \
+	echo "$$output" | grep -q "evalhub-mcp version" || { echo "FAIL: unexpected --version output"; exit 1; }
+	@echo "PASS: native binary runs and reports version correctly"
+
+test-mcp-brew-install: ## Install evalhub-mcp via local Homebrew tap (macOS/Linux)
+	@echo "=== test-mcp-brew-install ==="
+	@command -v brew >/dev/null 2>&1 || { echo "FAIL: brew not found — install Homebrew first"; exit 1; }
+	@native_os=$$(go env GOOS); native_arch=$$(go env GOARCH); \
+	echo "Building binary for $$native_os/$$native_arch..."; \
+	$(MAKE) cross-compile-mcp CROSS_GOOS=$$native_os CROSS_GOARCH=$$native_arch
+	@echo "Patching formula with local binary..."
+	@native_os=$$(go env GOOS); native_arch=$$(go env GOARCH); \
+	bin="bin/evalhub-mcp-$${native_os}-$${native_arch}"; \
+	if command -v shasum >/dev/null 2>&1; then \
+		sha=$$(shasum -a 256 "$$bin" | awk '{print $$1}'); \
+	else \
+		sha=$$(sha256sum "$$bin" | awk '{print $$1}'); \
+	fi; \
+	echo "SHA256: $$sha"; \
+	abs_bin=$$(cd "$$(dirname $$bin)" && pwd)/$$(basename $$bin); \
+	sed \
+		-e 's|version ".*"|version "$(FULL_BUILD_NUMBER)"|' \
+		-e 's|sha256 "PLACEHOLDER"|sha256 "'$$sha'"|g' \
+		-e 's|url "https://.*"|url "file://'"$$abs_bin"'"|g' \
+		formula/evalhub-mcp.rb > formula/evalhub-mcp-local.rb; \
+	echo "Patched formula written to formula/evalhub-mcp-local.rb"
+	@echo "Installing local tap..."
+	@tap_dir=$$(brew --repository)/Library/Taps/eval-hub/homebrew-evalhub; \
+	mkdir -p "$$tap_dir"; \
+	cp formula/evalhub-mcp-local.rb "$$tap_dir/evalhub-mcp.rb"
+	@brew install --formula $(BREW_TAP)/evalhub-mcp || brew reinstall --formula $(BREW_TAP)/evalhub-mcp
+	@echo "Verifying installation..."
+	@which evalhub-mcp || { echo "FAIL: evalhub-mcp not found in PATH after install"; exit 1; }
+	@evalhub-mcp --version
+	@echo "PASS: evalhub-mcp installed via Homebrew local tap"
+
+test-mcp-brew-test: ## Run brew test on the installed evalhub-mcp formula
+	@echo "=== test-mcp-brew-test ==="
+	@command -v brew >/dev/null 2>&1 || { echo "FAIL: brew not found"; exit 1; }
+	@brew test $(BREW_TAP)/evalhub-mcp || { echo "FAIL: brew test failed"; exit 1; }
+	@echo "PASS: brew test evalhub-mcp passed"
+
+test-mcp-brew-uninstall: ## Uninstall evalhub-mcp and remove local tap
+	@echo "=== test-mcp-brew-uninstall ==="
+	@command -v brew >/dev/null 2>&1 || { echo "SKIP: brew not found"; exit 0; }
+	-@brew uninstall $(BREW_TAP)/evalhub-mcp 2>/dev/null
+	-@brew untap $(BREW_TAP) 2>/dev/null
+	-@rm -f formula/evalhub-mcp-local.rb
+	@echo "PASS: evalhub-mcp uninstalled and local tap removed"
+
+test-mcp-cross-platform: test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax ## Run all cross-platform build tests (CI-safe, no brew)
+	@echo ""
+	@echo "========================================"
+	@echo "  All cross-platform build tests PASSED"
+	@echo "========================================"
