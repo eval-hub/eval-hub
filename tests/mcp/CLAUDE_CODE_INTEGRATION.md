@@ -305,7 +305,7 @@ This is the "golden path" integration test. In a single Claude Code conversation
 brew install evalhub-mcp
 
 # Or download binary from GitHub Releases
-# https://github.com/<org>/evalhub-mcp/releases/latest
+# https://github.com/eval-hub/evalhub-hub/releases/latest
 
 # Configure environment
 export EVALHUB_BASE_URL="https://<your-evalhub-instance>"
