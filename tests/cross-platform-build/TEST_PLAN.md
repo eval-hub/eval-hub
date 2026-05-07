@@ -42,7 +42,11 @@ make test-mcp-cross-platform
 | 7 | `test-mcp-container-http`     | Container starts in HTTP mode and responds to MCP initialize | Automated |
 | 8 | `test-mcp-checksums`          | SHA256 checksums are generated and match binaries  | Automated |
 | 9 | `test-mcp-formula-syntax`     | Homebrew formula is valid Ruby                     | Automated |
-| 10 | `test-mcp-cross-platform`    | Runs all tests 1-9 in sequence                     | Automated |
+| 10 | `test-mcp-native-smoke`      | Build and run `--version` on native platform       | Automated |
+| 11 | `test-mcp-brew-install`      | Install via local Homebrew tap (macOS/Linux)       | Manual    |
+| 12 | `test-mcp-brew-test`         | Run `brew test` on the installed formula           | Manual    |
+| 13 | `test-mcp-brew-uninstall`    | Uninstall and remove local tap (cleanup)           | Manual    |
+| 14 | `test-mcp-cross-platform`    | Runs all CI-safe tests (1-9) in sequence           | Automated |
 
 ---
 
@@ -201,16 +205,108 @@ make test-mcp-formula-syntax
 
 ---
 
-### 10. test-mcp-cross-platform (combined)
+### 10. test-mcp-native-smoke
 
-**Purpose:** Run all automated tests in sequence.
+**Purpose:** Build a binary for the current host platform and verify `--version` runs correctly. This is the quickest way to validate the binary works on your machine without Homebrew.
+
+**Procedure:**
+```bash
+make test-mcp-native-smoke
+```
+
+**Pass Criteria:**
+- Binary for the native OS/architecture builds successfully
+- `--version` outputs `evalhub-mcp version` followed by build metadata
+
+---
+
+### 11. test-mcp-brew-install
+
+**Purpose:** Install `evalhub-mcp` via a local Homebrew tap using a locally-built binary. This validates the full Homebrew install flow without needing a published GitHub Release.
+
+**Prerequisites:** Homebrew installed, Go toolchain, Python 3
+
+**Procedure:**
+```bash
+make test-mcp-brew-install
+```
+
+**What it does:**
+1. Builds the MCP binary for the native platform
+2. Computes SHA256 of the local binary
+3. Creates a patched copy of the formula (`evalhub-mcp-local.rb`) with `file://` URL and correct SHA256
+4. Installs to a local Homebrew tap (`eval-hub/evalhub`)
+5. Runs `evalhub-mcp --version` to verify the installed binary
+
+**Pass Criteria:**
+- `brew install` completes without error
+- `which evalhub-mcp` resolves to the Homebrew-installed binary
+- `evalhub-mcp --version` prints correct version output
+
+---
+
+### 12. test-mcp-brew-test
+
+**Purpose:** Run the formula's built-in test block via `brew test`.
+
+**Prerequisites:** `make test-mcp-brew-install` must have been run first.
+
+**Procedure:**
+```bash
+make test-mcp-brew-test
+```
+
+**Pass Criteria:**
+- `brew test eval-hub/evalhub/evalhub-mcp` exits with code 0
+- The formula's `assert_match "evalhub-mcp version"` assertion passes
+
+---
+
+### 13. test-mcp-brew-uninstall
+
+**Purpose:** Clean up after Homebrew testing. Uninstalls the formula and removes the local tap.
+
+**Procedure:**
+```bash
+make test-mcp-brew-uninstall
+```
+
+**Pass Criteria:**
+- `evalhub-mcp` is uninstalled from Homebrew
+- The local tap `eval-hub/evalhub` is removed
+- Temporary formula file `evalhub-mcp-local.rb` is deleted
+
+---
+
+### Homebrew Quick Reference (macOS)
+
+Run the full Homebrew integration test cycle on a Mac:
+
+```bash
+# Full cycle: install, test, uninstall
+make test-mcp-brew-install
+make test-mcp-brew-test
+make test-mcp-brew-uninstall
+```
+
+Or just do a quick smoke test without Homebrew:
+
+```bash
+make test-mcp-native-smoke
+```
+
+---
+
+### 14. test-mcp-cross-platform (combined)
+
+**Purpose:** Run all CI-safe automated tests in sequence (excludes Homebrew install targets which require `brew`).
 
 **Procedure:**
 ```bash
 make test-mcp-cross-platform
 ```
 
-**Pass Criteria:** All individual tests pass.
+**Pass Criteria:** All individual tests (1-9) pass.
 
 ---
 

@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp start-service stop-service start-sidecar stop-sidecar lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-cross-platform
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp start-service stop-service start-sidecar stop-sidecar lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform
 
 GOPATH := $(shell go env GOPATH)
 GOBIN := $(shell go env GOPATH)/bin
@@ -588,7 +588,94 @@ test-mcp-formula-syntax: ## Validate Homebrew formula is syntactically valid Rub
 	if [ $$fail -ne 0 ]; then exit 1; fi
 	@echo "PASS: Homebrew formula is valid and references all platforms"
 
-test-mcp-cross-platform: test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-checksums test-mcp-formula-syntax ## Run all cross-platform build tests
+## ------------------------------------------------------------------------------------------------
+## Homebrew Integration Tests (macOS/Linux only)
+## Run on a Mac laptop: make test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall
+## ------------------------------------------------------------------------------------------------
+
+BREW_TAP ?= eval-hub/evalhub
+BREW_TAP_DIR = $(shell brew --repository 2>/dev/null)/Library/Taps/eval-hub/homebrew-evalhub
+
+test-mcp-native-smoke: ## Build and run --version on native-platform MCP binary
+	@echo "=== test-mcp-native-smoke ==="
+	@native_os=$$(go env GOOS); native_arch=$$(go env GOARCH); \
+	echo "Building evalhub-mcp for native platform $$native_os/$$native_arch..."; \
+	$(MAKE) cross-compile-mcp CROSS_GOOS=$$native_os CROSS_GOARCH=$$native_arch; \
+	bin="bin/evalhub-mcp-$${native_os}-$${native_arch}"; \
+	if [ "$$native_os" = "windows" ]; then bin="$${bin}.exe"; fi; \
+	chmod +x "$$bin"; \
+	echo "Running $$bin --version..."; \
+	output=$$("$$bin" --version 2>&1); \
+	echo "$$output"; \
+	echo "$$output" | grep -q "evalhub-mcp version" || { echo "FAIL: unexpected --version output"; exit 1; }
+	@echo "PASS: native binary runs and reports version correctly"
+
+test-mcp-brew-install: ## Install evalhub-mcp via local Homebrew tap (macOS/Linux)
+	@echo "=== test-mcp-brew-install ==="
+	@command -v brew >/dev/null 2>&1 || { echo "FAIL: brew not found — install Homebrew first"; exit 1; }
+	@native_os=$$(go env GOOS); native_arch=$$(go env GOARCH); \
+	echo "Building binary for $$native_os/$$native_arch..."; \
+	$(MAKE) cross-compile-mcp CROSS_GOOS=$$native_os CROSS_GOARCH=$$native_arch
+	@echo "Patching formula SHA256 with local binary checksum..."
+	@native_os=$$(go env GOOS); native_arch=$$(go env GOARCH); \
+	bin="bin/evalhub-mcp-$${native_os}-$${native_arch}"; \
+	sha=$$(shasum -a 256 "$$bin" | awk '{print $$1}'); \
+	echo "SHA256: $$sha"; \
+	cp formula/evalhub-mcp.rb formula/evalhub-mcp-local.rb; \
+	if [ "$$native_os" = "darwin" ] && [ "$$native_arch" = "arm64" ]; then \
+		block="on_arm"; \
+	elif [ "$$native_os" = "darwin" ] && [ "$$native_arch" = "amd64" ]; then \
+		block="on_intel"; \
+	elif [ "$$native_os" = "linux" ] && [ "$$native_arch" = "arm64" ]; then \
+		block="on_arm"; \
+	else \
+		block="on_intel"; \
+	fi; \
+	abs_bin=$$(cd "$$(dirname $$bin)" && pwd)/$$(basename $$bin); \
+	sed -i.bak \
+		-e 's|version ".*"|version "$(FULL_BUILD_NUMBER)"|' \
+		formula/evalhub-mcp-local.rb; \
+	python3 -c " \
+import re, sys; \
+text = open('formula/evalhub-mcp-local.rb').read(); \
+os_label = 'macos' if '$$native_os' == 'darwin' else 'linux'; \
+arch_label = '$$block'; \
+in_os = False; in_arch = False; lines = text.split('\n'); out = []; \
+for line in lines: \
+    if 'on_macos' in line: in_os = (os_label == 'macos') \
+    elif 'on_linux' in line: in_os = (os_label == 'linux') \
+    if in_os and arch_label in line: in_arch = True \
+    if in_arch and 'url ' in line: \
+        line = re.sub(r'url \".*\"', 'url \"file://$$abs_bin\"', line) \
+    if in_arch and 'sha256 ' in line: \
+        line = re.sub(r'sha256 \".*\"', 'sha256 \"$$sha\"', line); in_arch = False \
+    out.append(line); \
+open('formula/evalhub-mcp-local.rb','w').write('\n'.join(out)); \
+	"
+	@echo "Installing local tap..."
+	@mkdir -p "$(BREW_TAP_DIR)"
+	@cp formula/evalhub-mcp-local.rb "$(BREW_TAP_DIR)/evalhub-mcp.rb"
+	@brew install --formula $(BREW_TAP)/evalhub-mcp || brew reinstall --formula $(BREW_TAP)/evalhub-mcp
+	@echo "Verifying installation..."
+	@which evalhub-mcp || { echo "FAIL: evalhub-mcp not found in PATH after install"; exit 1; }
+	@evalhub-mcp --version
+	@echo "PASS: evalhub-mcp installed via Homebrew local tap"
+
+test-mcp-brew-test: ## Run brew test on the installed evalhub-mcp formula
+	@echo "=== test-mcp-brew-test ==="
+	@command -v brew >/dev/null 2>&1 || { echo "FAIL: brew not found"; exit 1; }
+	@brew test $(BREW_TAP)/evalhub-mcp || { echo "FAIL: brew test failed"; exit 1; }
+	@echo "PASS: brew test evalhub-mcp passed"
+
+test-mcp-brew-uninstall: ## Uninstall evalhub-mcp and remove local tap
+	@echo "=== test-mcp-brew-uninstall ==="
+	@command -v brew >/dev/null 2>&1 || { echo "SKIP: brew not found"; exit 0; }
+	-@brew uninstall $(BREW_TAP)/evalhub-mcp 2>/dev/null
+	-@brew untap $(BREW_TAP) 2>/dev/null
+	-@rm -f formula/evalhub-mcp-local.rb formula/evalhub-mcp-local.rb.bak
+	@echo "PASS: evalhub-mcp uninstalled and local tap removed"
+
+test-mcp-cross-platform: test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-checksums test-mcp-formula-syntax ## Run all cross-platform build tests (CI-safe, no brew)
 	@echo ""
 	@echo "========================================"
 	@echo "  All cross-platform build tests PASSED"
