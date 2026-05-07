@@ -563,12 +563,21 @@ test-mcp-container-http: ## Start container in HTTP mode and test MCP initialize
 
 test-mcp-checksums: ## Generate SHA256 checksums and verify they match binaries
 	@echo "=== test-mcp-checksums ==="
-	@cd bin && sha256sum evalhub-mcp-* > checksums-sha256.txt
+	@if command -v sha256sum >/dev/null 2>&1; then \
+		CMD="sha256sum"; \
+	else \
+		CMD="shasum -a 256"; \
+	fi; \
+	cd bin && $$CMD evalhub-mcp-* > checksums-sha256.txt
 	@echo "Generated checksums:"
 	@cat bin/checksums-sha256.txt
 	@entry_count=$$(wc -l < bin/checksums-sha256.txt); \
 	if [ "$$entry_count" -lt 5 ]; then echo "FAIL: expected at least 5 checksum entries, found $$entry_count"; exit 1; fi
-	@cd bin && sha256sum --check checksums-sha256.txt || { echo "FAIL: checksum verification failed"; exit 1; }
+	@if command -v sha256sum >/dev/null 2>&1; then \
+		cd bin && sha256sum --check checksums-sha256.txt; \
+	else \
+		cd bin && shasum -a 256 -c checksums-sha256.txt; \
+	fi || { echo "FAIL: checksum verification failed"; exit 1; }
 	@echo "PASS: SHA256 checksums generated and verified for all binaries"
 
 test-mcp-formula-syntax: ## Validate Homebrew formula is syntactically valid Ruby
