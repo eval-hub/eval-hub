@@ -46,7 +46,7 @@ make test-mcp-cross-platform
 | 11 | `test-mcp-brew-install`      | Install via local Homebrew tap (macOS/Linux)       | Manual    |
 | 12 | `test-mcp-brew-test`         | Run `brew test` on the installed formula           | Manual    |
 | 13 | `test-mcp-brew-uninstall`    | Uninstall and remove local tap (cleanup)           | Manual    |
-| 14 | `test-mcp-cross-platform`    | Runs all CI-safe tests (1-9) in sequence           | Automated |
+| 14 | `test-mcp-cross-platform`    | Runs CI-safe tests (1-5, 8-9) in sequence          | Automated |
 
 ---
 
@@ -326,7 +326,7 @@ make test-mcp-native-smoke
 
 ### 14. test-mcp-cross-platform (combined)
 
-**Purpose:** Run all CI-safe automated tests in sequence (excludes Homebrew install targets which require `brew`).
+**Purpose:** Run CI-safe automated tests in sequence (currently tests 1-5 and 8-9; excludes container and Homebrew install targets).
 
 **Procedure:**
 
@@ -334,7 +334,7 @@ make test-mcp-native-smoke
 make test-mcp-cross-platform
 ```
 
-**Pass Criteria:** All individual tests (1-9) pass.
+**Pass Criteria:** All individual tests run by this target (1-5, 8-9) pass.
 
 ---
 
