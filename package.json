@@ -5,7 +5,7 @@
   },
   "overrides": {
     "semver": "7.7.4",
-    "postcss": "8.5.13",
+    "postcss": "8.5.14",
     "uuid": "14.0.0",
     "fast-xml-parser": "5.7.3"
   },
