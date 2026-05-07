@@ -594,7 +594,6 @@ test-mcp-formula-syntax: ## Validate Homebrew formula is syntactically valid Rub
 ## ------------------------------------------------------------------------------------------------
 
 BREW_TAP ?= eval-hub/evalhub
-BREW_TAP_DIR = $(shell brew --repository 2>/dev/null)/Library/Taps/eval-hub/homebrew-evalhub
 
 test-mcp-native-smoke: ## Build and run --version on native-platform MCP binary
 	@echo "=== test-mcp-native-smoke ==="
@@ -616,45 +615,26 @@ test-mcp-brew-install: ## Install evalhub-mcp via local Homebrew tap (macOS/Linu
 	@native_os=$$(go env GOOS); native_arch=$$(go env GOARCH); \
 	echo "Building binary for $$native_os/$$native_arch..."; \
 	$(MAKE) cross-compile-mcp CROSS_GOOS=$$native_os CROSS_GOARCH=$$native_arch
-	@echo "Patching formula SHA256 with local binary checksum..."
+	@echo "Patching formula with local binary..."
 	@native_os=$$(go env GOOS); native_arch=$$(go env GOARCH); \
 	bin="bin/evalhub-mcp-$${native_os}-$${native_arch}"; \
-	sha=$$(shasum -a 256 "$$bin" | awk '{print $$1}'); \
-	echo "SHA256: $$sha"; \
-	cp formula/evalhub-mcp.rb formula/evalhub-mcp-local.rb; \
-	if [ "$$native_os" = "darwin" ] && [ "$$native_arch" = "arm64" ]; then \
-		block="on_arm"; \
-	elif [ "$$native_os" = "darwin" ] && [ "$$native_arch" = "amd64" ]; then \
-		block="on_intel"; \
-	elif [ "$$native_os" = "linux" ] && [ "$$native_arch" = "arm64" ]; then \
-		block="on_arm"; \
+	if command -v shasum >/dev/null 2>&1; then \
+		sha=$$(shasum -a 256 "$$bin" | awk '{print $$1}'); \
 	else \
-		block="on_intel"; \
+		sha=$$(sha256sum "$$bin" | awk '{print $$1}'); \
 	fi; \
+	echo "SHA256: $$sha"; \
 	abs_bin=$$(cd "$$(dirname $$bin)" && pwd)/$$(basename $$bin); \
-	sed -i.bak \
+	sed \
 		-e 's|version ".*"|version "$(FULL_BUILD_NUMBER)"|' \
-		formula/evalhub-mcp-local.rb; \
-	python3 -c " \
-import re, sys; \
-text = open('formula/evalhub-mcp-local.rb').read(); \
-os_label = 'macos' if '$$native_os' == 'darwin' else 'linux'; \
-arch_label = '$$block'; \
-in_os = False; in_arch = False; lines = text.split('\n'); out = []; \
-for line in lines: \
-    if 'on_macos' in line: in_os = (os_label == 'macos') \
-    elif 'on_linux' in line: in_os = (os_label == 'linux') \
-    if in_os and arch_label in line: in_arch = True \
-    if in_arch and 'url ' in line: \
-        line = re.sub(r'url \".*\"', 'url \"file://$$abs_bin\"', line) \
-    if in_arch and 'sha256 ' in line: \
-        line = re.sub(r'sha256 \".*\"', 'sha256 \"$$sha\"', line); in_arch = False \
-    out.append(line); \
-open('formula/evalhub-mcp-local.rb','w').write('\n'.join(out)); \
-	"
+		-e 's|sha256 "PLACEHOLDER"|sha256 "'$$sha'"|g' \
+		-e 's|url "https://.*"|url "file://'"$$abs_bin"'"|g' \
+		formula/evalhub-mcp.rb > formula/evalhub-mcp-local.rb; \
+	echo "Patched formula written to formula/evalhub-mcp-local.rb"
 	@echo "Installing local tap..."
-	@mkdir -p "$(BREW_TAP_DIR)"
-	@cp formula/evalhub-mcp-local.rb "$(BREW_TAP_DIR)/evalhub-mcp.rb"
+	@tap_dir=$$(brew --repository)/Library/Taps/eval-hub/homebrew-evalhub; \
+	mkdir -p "$$tap_dir"; \
+	cp formula/evalhub-mcp-local.rb "$$tap_dir/evalhub-mcp.rb"
 	@brew install --formula $(BREW_TAP)/evalhub-mcp || brew reinstall --formula $(BREW_TAP)/evalhub-mcp
 	@echo "Verifying installation..."
 	@which evalhub-mcp || { echo "FAIL: evalhub-mcp not found in PATH after install"; exit 1; }
@@ -672,7 +652,7 @@ test-mcp-brew-uninstall: ## Uninstall evalhub-mcp and remove local tap
 	@command -v brew >/dev/null 2>&1 || { echo "SKIP: brew not found"; exit 0; }
 	-@brew uninstall $(BREW_TAP)/evalhub-mcp 2>/dev/null
 	-@brew untap $(BREW_TAP) 2>/dev/null
-	-@rm -f formula/evalhub-mcp-local.rb formula/evalhub-mcp-local.rb.bak
+	-@rm -f formula/evalhub-mcp-local.rb
 	@echo "PASS: evalhub-mcp uninstalled and local tap removed"
 
 test-mcp-cross-platform: test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-checksums test-mcp-formula-syntax ## Run all cross-platform build tests (CI-safe, no brew)
