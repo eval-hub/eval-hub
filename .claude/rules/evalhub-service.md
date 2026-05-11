@@ -160,8 +160,9 @@ BDD-style tests using godog in `tests/features/`:
 
 #### FVT Tags
 
-- `@cluster` — tests that require a Kubernetes cluster
-- `@local` — tests that only run locally (excluded from CI)
+- `@cluster` — tests that require a Kubernetes cluster (excluded from default FVT via `~@cluster`)
+- `@local_runtime` — scenarios that require a fully functional local evaluation runtime (`--local` / FVT embedded server local mode; local job execution). **Excluded** from default `make test-fvt` / CI FVT via `~@local_runtime`; override `FVT_TAGS` or `GODOG_TAGS` to run them
+- `@local` — still appears on some evaluation scenarios; prefer `@local_runtime` for new tests that need full local job/runtime behavior
 - `@mlflow` — tests requiring MLflow integration
 - `@negative` — negative/error-path tests
 - `@gha-wheel-sanity` — subset run during GHA wheel validation (`scripts/gha_wheel_sanity_test.sh`); the script starts the wheel-installed binary, waits for health, then runs `make test-fvt` with this tag
