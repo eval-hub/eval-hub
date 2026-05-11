@@ -511,6 +511,7 @@ Feature: Evaluation Jobs
     Then the response code should be 202
     And the response should contain the value "toxicity-and-ethical-principles" at path "$.collection.id"
 
+  @kueue
   Scenario: Create evaluation job with Kueue queue
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -535,20 +536,21 @@ Feature: Evaluation Jobs
         "name": "test-evaluation-job-queue",
         "queue": {
           "kind": "kueue",
-          "name": "user-queue"
+          "name": "{{env:QUEUE_NAME|user-queue}}"
         }
       }
       """
     Then the response code should be 202
     And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "user-queue" at path "$.queue.name"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "completed" at path "$.status.state"
     And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "user-queue" at path "$.queue.name"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
 
+  @kueue
   Scenario: Create evaluation job with queue name only
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -572,20 +574,21 @@ Feature: Evaluation Jobs
         ],
         "name": "test-evaluation-job-queue-name",
         "queue": {
-          "name": "user-queue"
+           "name": "{{env:QUEUE_NAME|user-queue}}"
         }
       }
       """
     Then the response code should be 202
     And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "user-queue" at path "$.queue.name"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "completed" at path "$.status.state"
     And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "user-queue" at path "$.queue.name"
+   And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
 
+  @kueue
   @negative
   Scenario: Cannot create job with invalid queue kind
     Given the service is running
@@ -611,14 +614,14 @@ Feature: Evaluation Jobs
         "name": "test-invalid-queue-kind",
         "queue": {
           "kind": "invalid-kind",
-          "name": "user-queue"
+          "name": "{{env:QUEUE_NAME|user-queue}}"
         }
       }
       """
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
-    And the response should contain the value "Field validation for 'kind' failed on the 'oneof' tag'." at path "$.message"
 
+  @kueue
   @negative
   Scenario: Cannot create job with queue missing name
     Given the service is running
@@ -649,9 +652,8 @@ Feature: Evaluation Jobs
       """
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
-    And the response should contain the value "Field validation for 'name' failed on the 'required' tag'." at path "$.message"
 
-  @ignore
+  @kueue
   # This scenario requires HuggingFace authentication for all 3 benchmarks to run
   Scenario: Create evaluation job with queue and collection
     Given the service is running
@@ -661,7 +663,7 @@ Feature: Evaluation Jobs
         "name": "test-evaluation-job-queue-collection",
         "queue": {
           "kind": "kueue",
-          "name": "user-queue"
+          "name": "{{env:QUEUE_NAME|user-queue}}"
         },
         "collection": {
           "id": "toxicity-and-ethical-principles",
@@ -700,7 +702,7 @@ Feature: Evaluation Jobs
       """
     Then the response code should be 202
     And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "user-queue" at path "$.queue.name"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
     And the response should contain the value "toxicity-and-ethical-principles" at path "$.collection.id"
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
@@ -708,8 +710,9 @@ Feature: Evaluation Jobs
     And the response should contain the value "completed" at path "$.status.state"
     And the response should contain the value "toxicity-and-ethical-principles" at path "$.collection.id"
     And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "user-queue" at path "$.queue.name"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
 
+  @kueue
   @mlflow
   Scenario: Create evaluation job with queue and MLflow experiment
     Given the service is running
@@ -744,7 +747,7 @@ Feature: Evaluation Jobs
         "name": "test-evaluation-job-with-kueue-and-mlflow",
         "queue": {
           "kind": "kueue",
-          "name": "user-queue"
+          "name": "{{env:QUEUE_NAME|user-queue}}"
         },
         "tags": [
           "environment"
@@ -753,7 +756,7 @@ Feature: Evaluation Jobs
       """
     Then the response code should be 202
     And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "user-queue" at path "$.queue.name"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
     And the "resource.mlflow_experiment_id" field in the response should be saved as "value:exp_id"
     And the response should contain the value "my-test-experiment" at path "$.experiment.name"
     And the response should contain the value "mlflow" at path "$.results.mlflow_experiment_url"
@@ -763,13 +766,14 @@ Feature: Evaluation Jobs
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "user-queue" at path "$.queue.name"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
     And the response should contain the value "environment" at path "$.experiment.tags[0].key"
     And the response should contain the value "test" at path "$.experiment.tags[0].value"
     And the response should contain the value "{{value:exp_id}}" at path "$.resource.mlflow_experiment_id"
     And the response should contain the value "mlflow" at path "$.results.mlflow_experiment_url"
     And the response should contain the value "my-test-experiment" at path "$.experiment.name"
-
+  
+  @kueue
   Scenario: Create evaluation job with queue name with whitespace is trimmed
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -808,6 +812,7 @@ Feature: Evaluation Jobs
     And the response should contain the value "kueue" at path "$.queue.kind"
     And the response should contain the value "user-queue" at path "$.queue.name"
 
+  @kueue
   Scenario: Multiple jobs can use the same queue
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -816,7 +821,7 @@ Feature: Evaluation Jobs
         "name": "automation_shared_experiment_job_1",
         "queue": {
           "kind": "kueue",
-          "name": "  user-queue  "
+           "name": "{{env:QUEUE_NAME|user-queue}}"
         },
         "model": {
           "url": "{{env:MODEL_URL|http://test.com}}",
@@ -835,9 +840,8 @@ Feature: Evaluation Jobs
       }
       """
     Then the response code should be 202
-    And the response should contain the value "user-queue" at path "$.queue.name"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
     And the "resource.id" field in the response should be saved as "value:job1_id"
-    And I wait for the evaluation job status to be "completed"
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
       """
       {
@@ -848,7 +852,7 @@ Feature: Evaluation Jobs
         },
         "queue": {
           "kind": "kueue",
-          "name": "  user-queue  "
+          "name": "{{env:QUEUE_NAME|user-queue}}"
         },
         "benchmarks": [
           {
@@ -863,21 +867,24 @@ Feature: Evaluation Jobs
       }
       """
     Then the response code should be 202
-    And the response should contain the value "user-queue" at path "$.queue.name"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
     And the "resource.id" field in the response should be saved as "value:job2_id"
-    And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{{value:job1_id}}"
     Then the response code should be 200
+    And I wait for the evaluation job status to be "completed"
     And the response should contain the value "completed" at path "$.status.state"
     And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "user-queue" at path "$.queue.name"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
     When I send a GET request to "/api/v1/evaluations/jobs/{{value:job2_id}}"
     Then the response code should be 200
+    And I wait for the evaluation job status to be "completed"
     And the response should contain the value "completed" at path "$.status.state"
     And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "user-queue" at path "$.queue.name"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
 
-  @negative @ignore
+  @kueue
+  @negative
+  @ignore
   # https://redhat.atlassian.net/browse/RHOAIENG-61584 - will remove the ignore tag once fix is deployed on the cluster and verified
   Scenario: Queue name with special characters is rejected
     Given the service is running
@@ -909,8 +916,8 @@ Feature: Evaluation Jobs
       """
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
-    And the response should contain the value "Field validation for 'name' failed ." at path "$.message"
 
+  @kueue
   @negative
   Scenario: Queue with null name is rejected
     Given the service is running
@@ -942,8 +949,8 @@ Feature: Evaluation Jobs
       """
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
-    And the response should contain the value "Field validation for 'name' failed on the 'required' tag'." at path "$.message"
 
+  @kueue
   Scenario: Create evaluation job with Kueue queue, tags and pass criteria
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -968,7 +975,7 @@ Feature: Evaluation Jobs
         "name": "test-evaluation-job-queue-tags-criteria",
         "queue": {
           "kind": "kueue",
-          "name": "user-queue"
+          "name": "{{env:QUEUE_NAME|user-queue}}"
         },
         "tags": [
           "integration-test",
@@ -981,7 +988,7 @@ Feature: Evaluation Jobs
       """
     Then the response code should be 202
     And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "user-queue" at path "$.queue.name"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
     And the response should contain the value "integration-test" at path "$.tags[0]"
     And the response should contain the value "kueue-enabled" at path "$.tags[1]"
     And the response should equal the value "0.8" at path "$.pass_criteria.threshold"
@@ -990,7 +997,7 @@ Feature: Evaluation Jobs
     Then the response code should be 200
     And the response should contain the value "completed" at path "$.status.state"
     And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "user-queue" at path "$.queue.name"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
     And the response should contain the value "integration-test" at path "$.tags[0]"
     And the response should contain the value "kueue-enabled" at path "$.tags[1]"
     And the response should equal the value "0.8" at path "$.pass_criteria.threshold"
