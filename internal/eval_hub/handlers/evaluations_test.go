@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -584,6 +585,45 @@ func TestHandleCreateEvaluationRejectsInvalidBenchmarkID(t *testing.T) {
 
 	if recorder.Code != 400 {
 		t.Fatalf("expected status 400, got %d", recorder.Code)
+	}
+}
+
+func TestHandleCreateEvaluationRejectsInvalidQueueName(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	storage := &fakeStorage{}
+	runtime := &fakeRuntime{}
+	validate := validation.NewValidator()
+	h := handlers.New(storage, validate, runtime, nil, nil)
+
+	invalidNames := []string{
+		"user-queue!@#$%",
+		"-starts-with-dash",
+		"ends-with-dash-",
+		"has spaces",
+		".starts-with-dot",
+	}
+	for _, name := range invalidNames {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			body := fmt.Sprintf(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"b","provider_id":"p"}],"queue":{"name":%q}}`, name)
+			req := &bodyRequest{
+				MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+				body:        []byte(body),
+			}
+			ctx := executioncontext.NewExecutionContext(context.Background(), "req-invalid-queue", logger, "test-user", "test-tenant")
+			recorder := httptest.NewRecorder()
+			resp := MockResponseWrapper{recorder: recorder}
+
+			h.HandleCreateEvaluation(ctx, req, resp)
+
+			if runtime.called {
+				t.Fatalf("did not expect runtime to be invoked for queue name %q", name)
+			}
+			if recorder.Code != 400 {
+				t.Fatalf("expected status 400 for queue name %q, got %d", name, recorder.Code)
+			}
+		})
 	}
 }
 

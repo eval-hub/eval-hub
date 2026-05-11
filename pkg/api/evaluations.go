@@ -226,7 +226,7 @@ type CollectionRef struct {
 // When Kind is empty, the evaluation job API handler normalizes it to "kueue" before persist/runtime.
 type QueueConfig struct {
 	Kind string `json:"kind,omitempty" validate:"omitempty,oneof=kueue"`
-	Name string `json:"name" validate:"required"`
+	Name string `json:"name" validate:"required,k8s_label_value"`
 }
 
 // EvaluationJobConfig represents evaluation job request schema

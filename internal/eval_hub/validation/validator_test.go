@@ -157,6 +157,57 @@ func TestEvaluationJobConfig_ExperimentNameWhitespaceOnlyFails(t *testing.T) {
 	}
 }
 
+func TestQueueConfig_InvalidNameRejected(t *testing.T) {
+	validate := NewValidator()
+	invalid := []string{
+		"user-queue!@#$%",
+		"-starts-with-dash",
+		"ends-with-dash-",
+		"has spaces",
+		".starts-with-dot",
+		"ends-with-dot.",
+	}
+	for _, name := range invalid {
+		cfg := api.EvaluationJobConfig{
+			Name:  "test-job",
+			Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
+			},
+			Queue: &api.QueueConfig{Kind: "kueue", Name: name},
+		}
+		err := validate.Struct(cfg)
+		if err == nil {
+			t.Errorf("expected validation error for queue name %q", name)
+		}
+	}
+}
+
+func TestQueueConfig_ValidNameAccepted(t *testing.T) {
+	validate := NewValidator()
+	valid := []string{
+		"my-queue",
+		"queue1",
+		"A",
+		"my_queue.v2",
+		"Queue-Name.1_2",
+	}
+	for _, name := range valid {
+		cfg := api.EvaluationJobConfig{
+			Name:  "test-job",
+			Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
+			},
+			Queue: &api.QueueConfig{Kind: "kueue", Name: name},
+		}
+		err := validate.Struct(cfg)
+		if err != nil {
+			t.Errorf("expected no error for queue name %q, got: %v", name, err)
+		}
+	}
+}
+
 func TestEvaluationJobConfig_ExperimentOmittedOk(t *testing.T) {
 	validate := NewValidator()
 	cfg := api.EvaluationJobConfig{
