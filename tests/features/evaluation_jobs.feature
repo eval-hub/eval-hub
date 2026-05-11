@@ -480,6 +480,19 @@ Feature: Evaluation Jobs
     When I send a DELETE request to "/api/v1/evaluations/collections/{{value:collection_id}}"
     Then the response code should be 204
 
+  Scenario: Create an evaluation job and wait for completion
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_auth.json"
+    Then the response code should be 202
+    And I wait for the evaluation job status to be "completed"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 404
+    And the response should contain the value "resource_not_found" at path "$.message_code"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 404
+
   Scenario: Verify Evaluation Jobs Can Use OOB Collections
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
