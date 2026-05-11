@@ -17,13 +17,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Windows GHA runners lack /tmp; the Go binary resolves it to \tmp on the
-# current drive (e.g. D:\tmp) which differs from Git Bash's MSYS2 /tmp
-if [[ "$OSTYPE" == msys* ]]; then
-    echo "Windows detected (OSTYPE=${OSTYPE}): creating \\tmp via cmd"
+if [[ -n "${WINDIR:-}" ]]; then
+    echo "Windows detected: creating \\tmp via cmd"
     cmd //c "mkdir \\tmp 2>nul" || true
 else
-    echo "Unix detected (OSTYPE=${OSTYPE}): ensuring /tmp exists"
+    echo "Unix detected: ensuring /tmp exists"
     mkdir -p /tmp
 fi
 
