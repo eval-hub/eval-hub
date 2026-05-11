@@ -3,7 +3,7 @@
     "url": "{{env:MODEL_URL|http://test.com}}",
     "name": "{{env:MODEL_NAME|test}}",
     "auth": {
-      "secret_ref": "{{env:MODEL_AUTH_SECRET_REF| }}"
+      "secret_ref": "{{env:MODEL_AUTH_SECRET_REF|test}}"
     }
   },
   "benchmarks": [
