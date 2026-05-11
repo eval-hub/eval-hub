@@ -16,7 +16,7 @@ var opts = godog.Options{
 	Output:   colors.Colored(os.Stdout),
 	Format:   "junit:bin/junit-fvt.xml",
 	Strict:   true,
-	Tags:     "~@ignore && ~@mlflow && ~@cluster && ~@local_runtime",
+	Tags:     "~@ignore",
 	Paths:    []string{"."},
 	TestingT: nil,
 }
