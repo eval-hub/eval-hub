@@ -15,8 +15,8 @@ runtime:
     cpu_limit: 500m
     memory_limit: 4Gi
     env:
-      - name: HF_DATASETS_TRUST_REMOTE_CODE
-        value: "true"
+      - name: VAR_NAME
+        value: VALUE
   local:
     # used for local mode tests (FVT)
     command: python tests/features/test_data/runtime/main.py
