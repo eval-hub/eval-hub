@@ -29,12 +29,12 @@ Before starting integration verification, ensure:
 ### Step 1 — Register the MCP Server in Claude Code (stdio)
 
 ```bash
-claude mcp add evalhub --transport stdio -- /path/to/evalhub-mcp mcp
+claude mcp add evalhub --transport stdio -- /path/to/evalhub-mcp
 ```
 
 > Replace `/path/to/evalhub-mcp` with the actual binary path (e.g., `$HOME/bin/evalhub-mcp`, or just `evalhub-mcp` if it's on `PATH`).
 
-**What this does**: Tells Claude Code to launch `evalhub-mcp mcp` as a subprocess using stdio transport whenever it needs the evalhub MCP server. Claude Code manages the process lifecycle.
+**What this does**: Tells Claude Code to launch `evalhub-mcp` as a subprocess using stdio transport whenever it needs the evalhub MCP server. Claude Code manages the process lifecycle.
 
 ### Step 2 — Verify Server Launches Correctly
 
@@ -47,7 +47,7 @@ claude mcp list
 If issues occur, verify the binary works standalone:
 
 ```bash
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0.1"}}}' | /path/to/evalhub-mcp mcp
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0.1"}}}' | /path/to/evalhub-mcp
 ```
 
 This should return a JSON-RPC response with server capabilities (tools, resources, prompts).
@@ -156,7 +156,7 @@ In a Claude Code conversation, type a partial resource URI and verify that autoc
 In a separate terminal:
 
 ```bash
-evalhub-mcp mcp --transport http --host localhost --port 3001
+evalhub-mcp --transport http --host localhost --port 3001
 ```
 
 **Expected**: Server starts and logs indicate it is listening on `http://localhost:3001`.
@@ -164,7 +164,7 @@ evalhub-mcp mcp --transport http --host localhost --port 3001
 If using a dev environment with self-signed certs to the EvalHub backend:
 
 ```bash
-evalhub-mcp mcp --transport http --host localhost --port 3001 --insecure
+evalhub-mcp --transport http --host localhost --port 3001 --insecure
 ```
 
 ### Step 8 — Register the MCP Server in Claude Code (HTTP)
@@ -305,7 +305,7 @@ This is the "golden path" integration test. In a single Claude Code conversation
 brew install evalhub-mcp
 
 # Or download binary from GitHub Releases
-# https://github.com/eval-hub/evalhub-hub/releases/latest
+# https://github.com/<org>/evalhub-mcp/releases/latest
 
 # Configure environment
 export EVALHUB_BASE_URL="https://<your-evalhub-instance>"
@@ -313,7 +313,7 @@ export EVALHUB_TOKEN="<your-token>"
 export EVALHUB_TENANT="<your-tenant>"
 
 # Register with Claude Code
-claude mcp add evalhub --transport stdio -- evalhub-mcp mcp
+claude mcp add evalhub --transport stdio -- evalhub-mcp
 
 # Verify
 claude mcp list
@@ -323,7 +323,7 @@ claude mcp list
 
 ```bash
 # Start the MCP server
-evalhub-mcp mcp --transport http --host localhost --port 3001
+evalhub-mcp --transport http --host localhost --port 3001
 
 # In another terminal, register with Claude Code
 claude mcp add evalhub --transport http http://localhost:3001
