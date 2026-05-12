@@ -82,7 +82,7 @@ const (
 	annotationJobIDKey               = "eval-hub.github.io/job_id"
 	annotationProviderIDKey          = "eval-hub.github.io/provider_id"
 	annotationBenchmarkIDKey         = "eval-hub.github.io/benchmark_id"
-	labelKueueQueueNameKey           = "kueue.x-k8s.io/queue-name"
+	labelKueueQueueNameKey = "kueue.x-k8s.io/queue-name"
 )
 
 var (
@@ -273,6 +273,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyNever,
+					NodeSelector:       cfg.nodeSelector,
 					InitContainers:     initContainers,
 					Containers:         containers,
 					Volumes:            jobVolumes,
@@ -755,6 +756,15 @@ func buildResources(cfg *jobConfig) (corev1.ResourceRequirements, error) {
 			return corev1.ResourceRequirements{}, fmt.Errorf("parse memory limit: %w", err)
 		}
 		resources.Limits[corev1.ResourceMemory] = quantity
+	}
+	if cfg.gpuCount > 0 && cfg.gpuResource != "" {
+		gpuQty, err := resource.ParseQuantity(fmt.Sprintf("%d", cfg.gpuCount))
+		if err != nil {
+			return corev1.ResourceRequirements{}, fmt.Errorf("parse gpu count: %w", err)
+		}
+		// Kubernetes requires requests == limits for GPU extended resources.
+		resources.Requests[corev1.ResourceName(cfg.gpuResource)] = gpuQty
+		resources.Limits[corev1.ResourceName(cfg.gpuResource)] = gpuQty
 	}
 	if len(resources.Requests) == 0 {
 		resources.Requests = nil

@@ -694,3 +694,146 @@ func TestContainerCommandTrimsEmptyItems(t *testing.T) {
 		t.Fatalf("unexpected command: %v", command)
 	}
 }
+
+func TestBuildResourcesGPURequest(t *testing.T) {
+	cfg := &jobConfig{
+		cpuRequest:    "250m",
+		memoryRequest: "512Mi",
+		cpuLimit:      "1",
+		memoryLimit:   "2Gi",
+		gpuResource:   "nvidia.com/gpu",
+		gpuCount:      2,
+	}
+	resources, err := buildResources(cfg)
+	if err != nil {
+		t.Fatalf("buildResources returned error: %v", err)
+	}
+	gpu, ok := resources.Requests[corev1.ResourceName("nvidia.com/gpu")]
+	if !ok {
+		t.Fatalf("expected GPU resource %q in requests", "nvidia.com/gpu")
+	}
+	if gpu.Value() != 2 {
+		t.Fatalf("expected GPU request 2, got %v", gpu.Value())
+	}
+	gpuLimit, ok := resources.Limits[corev1.ResourceName("nvidia.com/gpu")]
+	if !ok {
+		t.Fatalf("expected GPU resource %q in limits", "nvidia.com/gpu")
+	}
+	if gpuLimit.Value() != 2 {
+		t.Fatalf("expected GPU limit 2 (must equal request), got %v", gpuLimit.Value())
+	}
+}
+
+func TestBuildResourcesAMDGPURequest(t *testing.T) {
+	cfg := &jobConfig{
+		cpuRequest:    "250m",
+		memoryRequest: "512Mi",
+		cpuLimit:      "1",
+		memoryLimit:   "2Gi",
+		gpuResource:   "amd.com/gpu",
+		gpuCount:      1,
+	}
+	resources, err := buildResources(cfg)
+	if err != nil {
+		t.Fatalf("buildResources returned error: %v", err)
+	}
+	if _, ok := resources.Requests[corev1.ResourceName("amd.com/gpu")]; !ok {
+		t.Fatalf("expected amd.com/gpu in requests")
+	}
+	if _, ok := resources.Requests[corev1.ResourceName("nvidia.com/gpu")]; ok {
+		t.Fatalf("expected no nvidia.com/gpu when amd.com/gpu specified")
+	}
+}
+
+func TestBuildResourcesNoGPURequest(t *testing.T) {
+	cfg := &jobConfig{
+		cpuRequest:    "250m",
+		memoryRequest: "512Mi",
+		cpuLimit:      "1",
+		memoryLimit:   "2Gi",
+		gpuResource:   "",
+		gpuCount:      0,
+	}
+	resources, err := buildResources(cfg)
+	if err != nil {
+		t.Fatalf("buildResources returned error: %v", err)
+	}
+	for name := range resources.Requests {
+		if strings.HasSuffix(string(name), "/gpu") || strings.HasSuffix(string(name), ".gpu") {
+			t.Fatalf("expected no GPU resource in requests, found %q", name)
+		}
+	}
+}
+
+func TestBuildJobGPUResourcesPropagated(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "gpu-job",
+		resourceGUID:   "guid-gpu",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "gpu-provider",
+		benchmarkID:    "bench-gpu",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
+		gpuResource:    "nvidia.com/gpu",
+		gpuCount:       1,
+	}
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob: %v", err)
+	}
+	adapter := findContainer(job.Spec.Template.Spec.Containers, adapterContainerName)
+	if adapter == nil {
+		t.Fatalf("adapter container not found")
+	}
+	if _, ok := adapter.Resources.Requests[corev1.ResourceName("nvidia.com/gpu")]; !ok {
+		t.Fatalf("expected nvidia.com/gpu in adapter container requests")
+	}
+	if _, ok := adapter.Resources.Limits[corev1.ResourceName("nvidia.com/gpu")]; !ok {
+		t.Fatalf("expected nvidia.com/gpu in adapter container limits")
+	}
+}
+
+func TestBuildJobNodeSelector(t *testing.T) {
+	sel := map[string]string{"nvidia.com/gpu.product": "NVIDIA-H100-SXM5-80GB"}
+	cfg := &jobConfig{
+		jobID:          "ns-job",
+		resourceGUID:   "guid-ns",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "p",
+		benchmarkID:    "b",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
+		gpuResource:    "nvidia.com/gpu",
+		gpuCount:       1,
+		nodeSelector:   sel,
+	}
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob: %v", err)
+	}
+	if job.Spec.Template.Spec.NodeSelector["nvidia.com/gpu.product"] != "NVIDIA-H100-SXM5-80GB" {
+		t.Errorf("pod NodeSelector = %v, want H100 label", job.Spec.Template.Spec.NodeSelector)
+	}
+}
+
+func TestBuildJobNoNodeSelectorWhenAbsent(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "no-ns-job",
+		resourceGUID:   "guid-no-ns",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "p",
+		benchmarkID:    "b",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
+	}
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob: %v", err)
+	}
+	if len(job.Spec.Template.Spec.NodeSelector) != 0 {
+		t.Errorf("expected empty NodeSelector, got %v", job.Spec.Template.Spec.NodeSelector)
+	}
+}

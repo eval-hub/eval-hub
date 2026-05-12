@@ -6,4 +6,8 @@ const (
 	MESSAGE_CODE_EVALUATION_JOB_CANCELLED = "evaluation_job_cancelled"
 	MESSAGE_CODE_EVALUATION_JOB_FAILED    = "evaluation_job_failed"
 	MESSAGE_CODE_EVALUATION_JOB_UPDATED   = "evaluation_job_updated"
+
+	// MESSAGE_CODE_GPU_UNAVAILABLE is set when an evaluation job's Kueue workload is inadmissible
+	// because the requested queue does not have sufficient GPU capacity.
+	MESSAGE_CODE_GPU_UNAVAILABLE = "gpu_unavailable"
 )

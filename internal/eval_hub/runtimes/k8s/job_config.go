@@ -30,8 +30,11 @@ const (
 	inClusterNamespaceFile      = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 	serviceAccountNameSuffix    = "-job"
 	serviceCAConfigMapSuffix    = "-service-ca"
-	defaultTestDataInitCmd      = "/app/eval-runtime-init"
-	defaultEvalHubPort          = "8443"
+	defaultTestDataInitCmd = "/app/eval-runtime-init"
+	defaultEvalHubPort     = "8443"
+	// defaultGPUResource is the Kubernetes extended resource name used when a GPUConfig omits
+	// the Resource field. Aligns with NVIDIA GPU naming used by other RHOAI workloads.
+	defaultGPUResource = "nvidia.com/gpu"
 )
 
 type jobConfig struct {
@@ -49,6 +52,9 @@ type jobConfig struct {
 	memoryRequest       string
 	cpuLimit            string
 	memoryLimit         string
+	gpuResource         string            // Kubernetes extended resource name (e.g. "nvidia.com/gpu")
+	gpuCount            int               // number of GPU units to request (0 = CPU-only)
+	nodeSelector        map[string]string // pod nodeSelector from GPU config; nil when queue is set
 	jobSpec             shared.JobSpec
 	serviceAccountName  string
 	serviceCAConfigMap  string
@@ -178,6 +184,16 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		queueKind = strings.TrimSpace(evaluation.Queue.Kind)
 	}
 
+	// GPU resource requests/limits are always propagated to the pod spec so that Kueue can
+	// account for GPU quota. When a queue is specified, nodeSelector is omitted — Kueue's
+	// admission controller selects the appropriate ResourceFlavor (which encodes node labels)
+	// and mutates the pod at admission time.
+	gpuResource, gpuCount := resolveGPUConfig(runtime.K8s.GPU)
+	var nodeSelector map[string]string
+	if queueName == "" {
+		nodeSelector = resolveNodeSelector(runtime.K8s.GPU)
+	}
+
 	out := &jobConfig{
 		jobID:                evaluation.Resource.ID,
 		resourceGUID:         uuid.NewString(),
@@ -193,6 +209,9 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		memoryRequest:        memoryRequest,
 		cpuLimit:             cpuLimit,
 		memoryLimit:          memoryLimit,
+		gpuResource:          gpuResource,
+		gpuCount:             gpuCount,
+		nodeSelector:         nodeSelector,
 		jobSpec:              *spec,
 		serviceAccountName:   serviceAccountName,
 		serviceCAConfigMap:   serviceCAConfigMap,
@@ -304,6 +323,32 @@ func resourceRequirementsFromConfig(cfg *config.ResourceRequirements) (corev1.Re
 		}
 	}
 	return out, nil
+}
+
+// resolveNodeSelector returns the node selector map from a GPUConfig, or nil when absent.
+func resolveNodeSelector(gpu *api.GPUConfig) map[string]string {
+	if gpu == nil || len(gpu.NodeSelector) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(gpu.NodeSelector))
+	for k, v := range gpu.NodeSelector {
+		out[k] = v
+	}
+	return out
+}
+
+// resolveGPUConfig returns the Kubernetes extended resource name and count from a GPUConfig.
+// When gpu is nil or Count is 0, both return values are zero-valued (no GPU scheduled).
+// When Resource is empty the NVIDIA default is used, aligning with other RHOAI workloads.
+func resolveGPUConfig(gpu *api.GPUConfig) (resource string, count int) {
+	if gpu == nil || gpu.Count <= 0 {
+		return "", 0
+	}
+	r := strings.TrimSpace(gpu.Resource)
+	if r == "" {
+		r = defaultGPUResource
+	}
+	return r, gpu.Count
 }
 
 func defaultIfEmpty(value string, fallback string) string {

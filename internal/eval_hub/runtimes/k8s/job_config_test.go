@@ -712,3 +712,190 @@ func TestBuildJobConfigBenchmarkIndexPropagated(t *testing.T) {
 func intPtr(value int) *int {
 	return &value
 }
+
+func TestResolveGPUConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		gpu         *api.GPUConfig
+		wantRes     string
+		wantCount   int
+	}{
+		{
+			name:      "nil gpu config yields no GPU",
+			gpu:       nil,
+			wantRes:   "",
+			wantCount: 0,
+		},
+		{
+			name:      "zero count yields no GPU",
+			gpu:       &api.GPUConfig{Resource: "nvidia.com/gpu", Count: 0},
+			wantRes:   "",
+			wantCount: 0,
+		},
+		{
+			name:      "nvidia gpu with explicit resource",
+			gpu:       &api.GPUConfig{Resource: "nvidia.com/gpu", Count: 2},
+			wantRes:   "nvidia.com/gpu",
+			wantCount: 2,
+		},
+		{
+			name:      "amd gpu with explicit resource",
+			gpu:       &api.GPUConfig{Resource: "amd.com/gpu", Count: 1},
+			wantRes:   "amd.com/gpu",
+			wantCount: 1,
+		},
+		{
+			name:      "empty resource defaults to nvidia.com/gpu",
+			gpu:       &api.GPUConfig{Resource: "", Count: 1},
+			wantRes:   defaultGPUResource,
+			wantCount: 1,
+		},
+		{
+			name:      "whitespace-only resource defaults to nvidia.com/gpu",
+			gpu:       &api.GPUConfig{Resource: "  ", Count: 1},
+			wantRes:   defaultGPUResource,
+			wantCount: 1,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			res, count := resolveGPUConfig(tc.gpu)
+			if res != tc.wantRes {
+				t.Errorf("resource = %q, want %q", res, tc.wantRes)
+			}
+			if count != tc.wantCount {
+				t.Errorf("count = %d, want %d", count, tc.wantCount)
+			}
+		})
+	}
+}
+
+func TestBuildJobConfigGPU(t *testing.T) {
+	benchmark := api.EvaluationBenchmarkConfig{Ref: api.Ref{ID: "bench-1"}}
+	newEvaluation := func(queue *api.QueueConfig) *api.EvaluationJobResource {
+		return &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-gpu"}},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Model:      api.ModelRef{URL: "http://model", Name: "model"},
+				Benchmarks: []api.EvaluationBenchmarkConfig{benchmark},
+				Queue:      queue,
+			},
+		}
+	}
+	gpuProvider := &api.ProviderResource{
+		Resource: api.Resource{ID: "gpu-provider"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+					GPU: &api.GPUConfig{
+						Resource:     "nvidia.com/gpu",
+						Count:        2,
+						NodeSelector: map[string]string{"nvidia.com/gpu.product": "NVIDIA-H100-SXM5-80GB"},
+					},
+				},
+			},
+		},
+	}
+	cpuProvider := &api.ProviderResource{
+		Resource: api.Resource{ID: "cpu-provider"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{Image: "adapter:latest"},
+			},
+		},
+	}
+
+	t.Run("gpu config and node_selector propagated when no queue", func(t *testing.T) {
+		cfg, err := buildJobConfig(newEvaluation(nil), gpuProvider, &benchmark, 0, nil)
+		if err != nil {
+			t.Fatalf("buildJobConfig: %v", err)
+		}
+		if cfg.gpuResource != "nvidia.com/gpu" {
+			t.Errorf("gpuResource = %q, want nvidia.com/gpu", cfg.gpuResource)
+		}
+		if cfg.gpuCount != 2 {
+			t.Errorf("gpuCount = %d, want 2", cfg.gpuCount)
+		}
+		if cfg.nodeSelector["nvidia.com/gpu.product"] != "NVIDIA-H100-SXM5-80GB" {
+			t.Errorf("nodeSelector = %v, want H100 label", cfg.nodeSelector)
+		}
+	})
+
+	t.Run("node_selector suppressed when queue is set but GPU resources remain", func(t *testing.T) {
+		q := &api.QueueConfig{Kind: "kueue", Name: "gpu-queue"}
+		cfg, err := buildJobConfig(newEvaluation(q), gpuProvider, &benchmark, 0, nil)
+		if err != nil {
+			t.Fatalf("buildJobConfig: %v", err)
+		}
+		// GPU resource requests must be preserved so Kueue can account for GPU quota.
+		if cfg.gpuResource != "nvidia.com/gpu" {
+			t.Errorf("gpuResource = %q, want nvidia.com/gpu (GPU must be set even with queue)", cfg.gpuResource)
+		}
+		if cfg.gpuCount != 2 {
+			t.Errorf("gpuCount = %d, want 2 (GPU must be set even with queue)", cfg.gpuCount)
+		}
+		// nodeSelector must be suppressed — Kueue ResourceFlavors govern node selection.
+		if len(cfg.nodeSelector) != 0 {
+			t.Errorf("expected no nodeSelector when queue set, got %v", cfg.nodeSelector)
+		}
+		if cfg.queueName != "gpu-queue" {
+			t.Errorf("queueName = %q, want gpu-queue", cfg.queueName)
+		}
+	})
+
+	t.Run("nil gpu config leaves jobConfig without GPU", func(t *testing.T) {
+		cfg, err := buildJobConfig(newEvaluation(nil), cpuProvider, &benchmark, 0, nil)
+		if err != nil {
+			t.Fatalf("buildJobConfig: %v", err)
+		}
+		if cfg.gpuResource != "" || cfg.gpuCount != 0 {
+			t.Errorf("expected no GPU for CPU-only provider, got resource=%q count=%d", cfg.gpuResource, cfg.gpuCount)
+		}
+		if len(cfg.nodeSelector) != 0 {
+			t.Errorf("expected no nodeSelector for CPU-only provider, got %v", cfg.nodeSelector)
+		}
+	})
+}
+
+func TestResolveNodeSelector(t *testing.T) {
+	tests := []struct {
+		name string
+		gpu  *api.GPUConfig
+		want map[string]string
+	}{
+		{
+			name: "nil gpu returns nil",
+			gpu:  nil,
+			want: nil,
+		},
+		{
+			name: "empty node_selector returns nil",
+			gpu:  &api.GPUConfig{Count: 1},
+			want: nil,
+		},
+		{
+			name: "node_selector copied",
+			gpu:  &api.GPUConfig{Count: 1, NodeSelector: map[string]string{"nvidia.com/gpu.product": "NVIDIA-H100-SXM5-80GB"}},
+			want: map[string]string{"nvidia.com/gpu.product": "NVIDIA-H100-SXM5-80GB"},
+		},
+		{
+			name: "multiple labels copied",
+			gpu:  &api.GPUConfig{Count: 1, NodeSelector: map[string]string{"k1": "v1", "k2": "v2"}},
+			want: map[string]string{"k1": "v1", "k2": "v2"},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := resolveNodeSelector(tc.gpu)
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %v, want %v", got, tc.want)
+			}
+			for k, v := range tc.want {
+				if got[k] != v {
+					t.Errorf("key %q: got %q, want %q", k, got[k], v)
+				}
+			}
+		})
+	}
+}
