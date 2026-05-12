@@ -248,6 +248,42 @@ jobs:
       id-token: write
 
     steps:
+      - name: Cleanup old TestPyPI dev releases
+        env:
+          PYPI_CLEANUP_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
+        run: |
+          KEEP=20
+          REGEX=$(python3 -c "
+          import json, re, urllib.request, sys
+          try:
+              data = json.loads(urllib.request.urlopen(
+                  'https://test.pypi.org/pypi/eval-hub-server/json', timeout=30).read())
+          except Exception as e:
+              print(f'::warning::Could not query TestPyPI: {e}', file=sys.stderr)
+              sys.exit(0)
+          dev = {}
+          for ver, files in data.get('releases', {}).items():
+              if re.search(r'dev\d+$', ver) and files:
+                  dev[ver] = max(f['upload_time'] for f in files)
+          keep = int('${KEEP}')
+          if len(dev) <= keep:
+              print(f'Only {len(dev)} dev releases found, nothing to clean up', file=sys.stderr)
+              sys.exit(0)
+          to_delete = sorted(dev, key=lambda v: dev[v])[:-keep]
+          print(f'Deleting {len(to_delete)} old dev releases, keeping {keep}', file=sys.stderr)
+          print('|'.join(re.escape(v) for v in to_delete))
+          ")
+          if [ -n "$REGEX" ]; then
+            pip install pypi-cleanup==0.1.10
+            pypi-cleanup \
+              --host https://test.pypi.org/ \
+              --username __token__ \
+              --package eval-hub-server \
+              --version-regex "$REGEX" \
+              --do-it \
+              --yes || echo "::warning::TestPyPI cleanup failed — continuing with publish"
+          fi
+
       - name: Download all wheels
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
