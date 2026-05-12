@@ -155,13 +155,13 @@ init_http_session() {
 ###############################################################################
 header "Prerequisites"
 
-# build the MCP server binary if it doesn't exist
-if ! command -v "$EVALHUB_MCP_BIN" &>/dev/null; then
+# build the MCP server binary if missing or not executable (supports relative paths, e.g. bin/evalhub-mcp)
+if [[ ! -x "$EVALHUB_MCP_BIN" ]]; then
     make build-mcp
 fi
 
-if ! command -v "$EVALHUB_MCP_BIN" &>/dev/null; then
-    fail "Binary '${EVALHUB_MCP_BIN}' not found on PATH."
+if [[ ! -x "$EVALHUB_MCP_BIN" ]]; then
+    fail "MCP binary '${EVALHUB_MCP_BIN}' was not found or is not executable."
     exit 1
 fi
 pass "evalhub-mcp binary found"

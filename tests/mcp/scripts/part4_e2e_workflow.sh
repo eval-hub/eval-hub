@@ -135,6 +135,7 @@ extract_json_field() {
     local field="$2"
     echo "$json" | python3 -c "
 import sys, json
+field = sys.argv[1]
 data = sys.stdin.read().strip()
 found = None
 for line in data.split('\n'):
@@ -148,15 +149,15 @@ for line in data.split('\n'):
         if 'result' in msg:
             result = msg['result']
             if isinstance(result, dict):
-                if '${field}' in result:
-                    found = result['${field}']
+                if field in result:
+                    found = result[field]
                     break
                 for item in result.get('content', []):
                     if isinstance(item, dict) and 'text' in item:
                         try:
                             inner = json.loads(item['text'])
-                            if '${field}' in inner:
-                                found = inner['${field}']
+                            if field in inner:
+                                found = inner[field]
                         except Exception: pass
                     if found is not None:
                         break
@@ -164,7 +165,7 @@ for line in data.split('\n'):
                 break
     except Exception: pass
 print(found if found is not None else '')
-" 2>/dev/null
+" "$field" 2>/dev/null
 }
 
 ###############################################################################
@@ -173,11 +174,11 @@ print(found if found is not None else '')
 header "Prerequisites"
 
 # build the MCP server binary if it doesn't exist
-if ! command -v "$EVALHUB_MCP_BIN" &>/dev/null; then
+if [[ ! -x "$EVALHUB_MCP_BIN" ]]; then
     make build-mcp
 fi
 
-if ! command -v "$EVALHUB_MCP_BIN" &>/dev/null; then
+if [[ ! -x "$EVALHUB_MCP_BIN" ]]; then
     fail "Binary '${EVALHUB_MCP_BIN}' not found. Set EVALHUB_MCP_BIN."
     exit 1
 fi
@@ -441,6 +442,7 @@ print(status or 'unknown')
 
     if [[ "$JOB_COMPLETED" == true ]]; then
         pass "14c — Job completed successfully (status: ${CURRENT_STATUS})"
+        pass "14c — get_job_status tool works for polling"
     elif echo "$LAST_STATUS" | grep -qiE "fail|error"; then
         fail "14c — Job failed (status: ${LAST_STATUS})"
     elif echo "$LAST_STATUS" | grep -qiE "cancel"; then
@@ -449,8 +451,6 @@ print(status or 'unknown')
         log "Job still running after ${POLL_MAX_ATTEMPTS} polls. Last status: ${LAST_STATUS}"
         skip "14c — Job did not complete within polling window (not necessarily a failure)"
     fi
-
-    pass "14c — get_job_status tool works for polling"
 else
     skip "14c — No job ID available to poll"
 fi

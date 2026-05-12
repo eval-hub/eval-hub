@@ -670,11 +670,13 @@ test-mcp-cross-platform: test-mcp-build-all test-mcp-binary-info test-mcp-binary
 	@echo "  All cross-platform build tests PASSED"
 	@echo "========================================"
 
-test-mcp-e2e: start-service## Run end-to-end MCP tests
+test-mcp-e2e: start-service ## Run end-to-end MCP tests
 	@echo "Running end-to-end MCP tests..."
-	@./tests/mcp/scripts/part1_stdio_transport.sh
-	@./tests/mcp/scripts/part2_http_transport.sh
-	@./tests/mcp/scripts/part3_error_scenarios.sh
-	@./tests/mcp/scripts/part4_e2e_workflow.sh
-	@echo "End-to-end MCP tests complete"
-	@$(MAKE) stop-service
+	@./tests/mcp/scripts/part1_stdio_transport.sh && \
+	./tests/mcp/scripts/part2_http_transport.sh && \
+	./tests/mcp/scripts/part3_error_scenarios.sh && \
+	./tests/mcp/scripts/part4_e2e_workflow.sh; \
+	status=$$?; \
+	echo "End-to-end MCP tests complete"; \
+	$(MAKE) stop-service; \
+	exit $$status

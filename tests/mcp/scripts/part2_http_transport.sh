@@ -101,16 +101,16 @@ post_notification() {
 header "Prerequisites"
 
 # build the MCP server binary if it doesn't exist
-if ! command -v "$EVALHUB_MCP_BIN" &>/dev/null; then
+if [[ ! -x "$EVALHUB_MCP_BIN" ]]; then
     make build-mcp
 fi
 
-if ! command -v "$EVALHUB_MCP_BIN" &>/dev/null; then
-    fail "Binary '${EVALHUB_MCP_BIN}' not found on PATH. Set EVALHUB_MCP_BIN to the absolute path."
+if [[ ! -x "$EVALHUB_MCP_BIN" ]]; then
+    fail "Binary '${EVALHUB_MCP_BIN}' not found or not executable."
     echo -e "${RED}Cannot continue without the evalhub-mcp binary. Exiting.${NC}"
     exit 1
 fi
-pass "evalhub-mcp binary found: $(command -v "$EVALHUB_MCP_BIN")"
+pass "evalhub-mcp binary found: ${EVALHUB_MCP_BIN}"
 
 if ! command -v curl &>/dev/null; then
     fail "curl is required for HTTP transport testing"
