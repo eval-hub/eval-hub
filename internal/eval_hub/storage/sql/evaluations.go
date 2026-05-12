@@ -254,6 +254,23 @@ func (s *sqlStorage) validateBenchmarkExists(job *api.EvaluationJobResource, run
 	return nil
 }
 
+// messageCodeForOverallState maps aggregate job state to a stable API message_code.
+// Non-terminal states (pending, running) use evaluation_job_updated.
+func messageCodeForOverallState(state api.OverallState) string {
+	switch state {
+	case api.OverallStateFailed:
+		return constants.MESSAGE_CODE_EVALUATION_JOB_FAILED
+	case api.OverallStatePartiallyFailed:
+		return constants.MESSAGE_CODE_EVALUATION_JOB_PARTIALLY_FAILED
+	case api.OverallStateCompleted:
+		return constants.MESSAGE_CODE_EVALUATION_JOB_COMPLETED
+	case api.OverallStateCancelled:
+		return constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED
+	default:
+		return constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED
+	}
+}
+
 // GetOverallJobStatus returns overall state and message. getCollection is used to resolve job benchmark count when job has only a collection reference.
 func (s *sqlStorage) getOverallJobStatus(txn *sql.Tx, job *api.EvaluationJobResource) (api.OverallState, *api.MessageInfo, error) {
 	// to be safe - do an initial check to see if the job is finished
@@ -317,7 +334,7 @@ func (s *sqlStorage) getOverallJobStatus(txn *sql.Tx, job *api.EvaluationJobReso
 
 	return overallState, &api.MessageInfo{
 		Message:     stateMessage,
-		MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
+		MessageCode: messageCodeForOverallState(overallState),
 	}, nil
 }
 

@@ -395,7 +395,7 @@ Feature: Evaluations Endpoint
     And the response should contain the value "can not be cancelled because" at path "$.message"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    And the response should contain the value "evaluation_job_updated" at path "$.status.message.message_code"
+    And the response should contain the value "evaluation_job_completed" at path "$.status.message.message_code"
     And the response should contain the value "completed" at path "$.status.benchmarks[0].status"
     And the response should contain the value "arc_easy" at path "$.status.benchmarks[0].id"
     And the response should contain the value "arc_easy" at path "$.results.benchmarks[0].id"
