@@ -2,6 +2,7 @@ package validation
 
 import (
 	"reflect"
+	"regexp"
 	"strings"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -16,6 +17,8 @@ var (
 		// this is the definition for id validation for a uuid - system resources are not uuid's
 		"resource_id": "required,min=1,max=36",
 	}
+
+	k8sLabelValueRegex = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9_.\-]*[A-Za-z0-9])?$`)
 )
 
 func NewValidator() *validator.Validate {
@@ -44,8 +47,13 @@ func register(instance *validator.Validate) {
 func registerCustomValidators(instance *validator.Validate) {
 	// https://github.com/go-playground/validator/blob/v10.30.2/non-standard/validators/notblank.go
 	instance.RegisterValidation("notblank", validators.NotBlank)
+	instance.RegisterValidation("k8s_label_value", validateK8sLabelValue)
 	// Benchmarks min=1 only when Collection is not set (required_without handles presence; this enforces length)
 	instance.RegisterStructValidation(evaluationJobConfigBenchmarksMin, api.EvaluationJobConfig{})
+}
+
+func validateK8sLabelValue(fl validator.FieldLevel) bool {
+	return k8sLabelValueRegex.MatchString(fl.Field().String())
 }
 
 // evaluationJobConfigBenchmarksMin ensures Benchmarks has at least one element when Collection is not present

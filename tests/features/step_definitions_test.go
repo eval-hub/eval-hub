@@ -402,6 +402,17 @@ func (tc *scenarioConfig) thereIsASystemCollectionWithId(ctx context.Context, id
 	return nil
 }
 
+func (tc *scenarioConfig) theValueIsSet(ctx context.Context, name string) error {
+	value, err := tc.getValue(name)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(value) == "" {
+		return tc.logError(fmt.Errorf("value %s is not set", name))
+	}
+	return nil
+}
+
 func (tc *scenarioConfig) checkHealthEndpoint() error {
 	if err := tc.iSendARequestImpl("GET", "/api/v1/health", "", "check health endpoint"); err != nil {
 		return tc.logError(fmt.Errorf("failed to send health check request: %w for URL %s", err, tc.apiFeature.baseURL.String()))
@@ -1403,6 +1414,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^there are system providers$`, tc.thereAreSystemProviders)
 	ctx.Step(`^there are system collections$`, tc.thereAreSystemCollections)
 	ctx.Step(`^there is a system collection with id "([^"]*)"$`, tc.thereIsASystemCollectionWithId)
+	ctx.Step(`^the value "([^"]*)" is not empty$`, tc.theValueIsSet)
 	ctx.Step(`^I set the header "([^"]*)" to "([^"]*)"$`, tc.iSetHeaderTo)
 	ctx.Step(`^I unset the header "([^"]*)"$`, tc.iUnsetHeader)
 	ctx.Step(`^I set transaction-id to "([^"]*)"$`, tc.iSetTransactionIdTo)

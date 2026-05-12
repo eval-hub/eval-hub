@@ -44,6 +44,8 @@ go test -v ./internal/eval_hub/handlers -run TestHandleName
 go test -v ./tests/features -run TestFeatureName
 ```
 
+FVT scenarios use godog tags (for example `@local_runtime` for a full local job runtime, `@cluster` for Kubernetes-only). Default `make test-fvt` excludes `@local_runtime`, `@cluster`, and `@mlflow` via `FVT_TAGS`; see **tests/features/README.md**.
+
 ### Code Quality
 
 ```bash

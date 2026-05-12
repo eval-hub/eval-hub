@@ -9,10 +9,12 @@ Feature: Evaluation Jobs
     Given I set the header "X-Tenant" to "{{env:X_TENANT|test-tenant}}"
     And I set the wait deadline to "{{env:WAIT_DEADLINE|30m}}"
     And the model endpoint is reachable
+    # This is mandatory for the tests to run successfully
+    And the value "{{env:MODEL_AUTH_SECRET_REF}}" is not empty
 
   Scenario: Verifying results returned for Evaluation job
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_auth.json"
     Then the response code should be 202
     And the response should contain the value "pending" at path "$.status.state"
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
@@ -40,7 +42,7 @@ Feature: Evaluation Jobs
 
   Scenario: Create an evaluation job
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_auth.json"
     Then the response code should be 202
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
     And the response should contain the value "pending" at path "$.status.state"
@@ -112,15 +114,15 @@ Feature: Evaluation Jobs
   Scenario: Multiple jobs can be submitted
     Given the service is running
     And I set the header "X-User" to "test-user-1"
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_auth.json"
     Then the response code should be 202
     And the "resource.id" field in the response should be saved as "value:job1_id"
     And I set the header "X-User" to "test-user-2"
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_auth.json"
     Then the response code should be 202
     And the "resource.id" field in the response should be saved as "value:job2_id"
     And I set the header "X-User" to "test-user-3"
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_auth.json"
     Then the response code should be 202
     And the "resource.id" field in the response should be saved as "value:job3_id"
     When I send a GET request to "/api/v1/evaluations/jobs/{{value:job1_id}}"
@@ -478,10 +480,9 @@ Feature: Evaluation Jobs
     When I send a DELETE request to "/api/v1/evaluations/collections/{{value:collection_id}}"
     Then the response code should be 204
 
-  @gha-wheel-sanity
   Scenario: Create an evaluation job and wait for completion
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_auth.json"
     Then the response code should be 202
     And I wait for the evaluation job status to be "completed"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
@@ -509,3 +510,494 @@ Feature: Evaluation Jobs
       """
     Then the response code should be 202
     And the response should contain the value "toxicity-and-ethical-principles" at path "$.collection.id"
+
+  @kueue
+  Scenario: Create evaluation job with Kueue queue
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+      """
+      {
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}"
+        },
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+              "num_examples": 10,
+              "num_fewshot": 3,
+              "limit": 5,
+              "tokenizer": "google/flan-t5-small"
+            }
+          }
+        ],
+        "name": "test-evaluation-job-queue",
+        "queue": {
+          "kind": "kueue",
+          "name": "{{env:QUEUE_NAME|user-queue}}"
+        }
+      }
+      """
+    Then the response code should be 202
+    And the response should contain the value "kueue" at path "$.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    And the response should contain the value "kueue" at path "$.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+
+  @kueue
+  Scenario: Create evaluation job with queue name only
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+      """
+      {
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}"
+        },
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+              "num_examples": 10,
+              "num_fewshot": 3,
+              "limit": 5,
+              "tokenizer": "google/flan-t5-small"
+            }
+          }
+        ],
+        "name": "test-evaluation-job-queue-name",
+        "queue": {
+           "name": "{{env:QUEUE_NAME|user-queue}}"
+        }
+      }
+      """
+    Then the response code should be 202
+    And the response should contain the value "kueue" at path "$.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    And the response should contain the value "kueue" at path "$.queue.kind"
+   And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+
+  @kueue
+  @negative
+  Scenario: Cannot create job with invalid queue kind
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+      """
+      {
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}"
+        },
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+              "num_examples": 10,
+              "num_fewshot": 3,
+              "limit": 5,
+              "tokenizer": "google/flan-t5-small"
+            }
+          }
+        ],
+        "name": "test-invalid-queue-kind",
+        "queue": {
+          "kind": "invalid-kind",
+          "name": "{{env:QUEUE_NAME|user-queue}}"
+        }
+      }
+      """
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+
+  @kueue
+  @negative
+  Scenario: Cannot create job with queue missing name
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+      """
+      {
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}"
+        },
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+              "num_examples": 10,
+              "num_fewshot": 3,
+              "limit": 5,
+              "tokenizer": "google/flan-t5-small"
+            }
+          }
+        ],
+        "name": "missing-queue-name",
+        "queue": {
+          "kind": "kueue"
+        }
+      }
+      """
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+
+  @kueue
+  # This scenario requires HuggingFace authentication for all 3 benchmarks to run
+  Scenario: Create evaluation job with queue and collection
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+      """
+      {
+        "name": "test-evaluation-job-queue-collection",
+        "queue": {
+          "kind": "kueue",
+          "name": "{{env:QUEUE_NAME|user-queue}}"
+        },
+        "collection": {
+          "id": "toxicity-and-ethical-principles",
+          "benchmarks": [
+            {
+              "id": "toxigen",
+              "provider_id": "lm_evaluation_harness",
+              "parameters": {
+                "limit": 4
+              }
+            },
+            {
+              "id": "truthfulqa_mc1",
+              "provider_id": "lm_evaluation_harness",
+              "parameters": {
+                "limit": 3
+              }
+            },
+            {
+              "id": "bigbench_hhh_alignment_multiple_choice",
+              "provider_id": "lm_evaluation_harness",
+              "parameters": {
+                "limit": 1
+              }
+            }
+          ]
+        },
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}",
+          "auth": {
+            "secret_ref": "{{env:MODEL_AUTH_SECRET_REF| }}"
+          }
+        }
+      }
+      """
+    Then the response code should be 202
+    And the response should contain the value "kueue" at path "$.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the response should contain the value "toxicity-and-ethical-principles" at path "$.collection.id"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    And the response should contain the value "toxicity-and-ethical-principles" at path "$.collection.id"
+    And the response should contain the value "kueue" at path "$.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+
+  @kueue
+  @mlflow
+  Scenario: Create evaluation job with queue and MLflow experiment
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+      """
+      {
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}"
+        },
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+              "num_examples": 10,
+              "num_fewshot": 3,
+              "limit": 5,
+              "tokenizer": "google/flan-t5-small"
+            }
+          }
+        ],
+        "experiment": {
+          "name": "{{mlflow:my-test-experiment}}",
+          "tags": [
+            {
+              "key": "environment",
+              "value": "test"
+            }
+          ]
+        },
+        "name": "test-evaluation-job-with-kueue-and-mlflow",
+        "queue": {
+          "kind": "kueue",
+          "name": "{{env:QUEUE_NAME|user-queue}}"
+        },
+        "tags": [
+          "environment"
+        ]
+      }
+      """
+    Then the response code should be 202
+    And the response should contain the value "kueue" at path "$.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the "resource.mlflow_experiment_id" field in the response should be saved as "value:exp_id"
+    And the response should contain the value "my-test-experiment" at path "$.experiment.name"
+    And the response should contain the value "mlflow" at path "$.results.mlflow_experiment_url"
+    And the response should contain the value "environment" at path "$.experiment.tags[0].key"
+    And the response should contain the value "test" at path "$.experiment.tags[0].value"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "kueue" at path "$.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the response should contain the value "environment" at path "$.experiment.tags[0].key"
+    And the response should contain the value "test" at path "$.experiment.tags[0].value"
+    And the response should contain the value "{{value:exp_id}}" at path "$.resource.mlflow_experiment_id"
+    And the response should contain the value "mlflow" at path "$.results.mlflow_experiment_url"
+    And the response should contain the value "my-test-experiment" at path "$.experiment.name"
+  
+  @kueue
+  Scenario: Create evaluation job with queue name with whitespace is trimmed
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+      """
+      {
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}"
+        },
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+              "num_examples": 10,
+              "num_fewshot": 3,
+              "limit": 5,
+              "tokenizer": "google/flan-t5-small"
+            }
+          }
+        ],
+        "name": "test-evaluation-job-queue",
+        "queue": {
+          "kind": "kueue",
+          "name": "  user-queue  "
+        }
+      }
+      """
+    Then the response code should be 202
+    And the response should contain the value "kueue" at path "$.queue.kind"
+    And the response should contain the value "user-queue" at path "$.queue.name"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    And the response should contain the value "kueue" at path "$.queue.kind"
+    And the response should contain the value "user-queue" at path "$.queue.name"
+
+  @kueue
+  Scenario: Multiple jobs can use the same queue
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+      """
+      {
+        "name": "automation_shared_experiment_job_1",
+        "queue": {
+          "kind": "kueue",
+           "name": "{{env:QUEUE_NAME|user-queue}}"
+        },
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}"
+        },
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+              "num_examples": 3,
+              "tokenizer": "google/flan-t5-small"
+            }
+          }
+        ]
+      }
+      """
+    Then the response code should be 202
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the "resource.id" field in the response should be saved as "value:job1_id"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+      """
+      {
+        "name": "automation_shared_experiment_job_2",
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}"
+        },
+        "queue": {
+          "kind": "kueue",
+          "name": "{{env:QUEUE_NAME|user-queue}}"
+        },
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+              "num_examples": 3,
+              "tokenizer": "google/flan-t5-small"
+            }
+          }
+        ]
+      }
+      """
+    Then the response code should be 202
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the "resource.id" field in the response should be saved as "value:job2_id"
+    When I send a GET request to "/api/v1/evaluations/jobs/{{value:job1_id}}"
+    Then the response code should be 200
+    And I wait for the evaluation job status to be "completed"
+    And the response should contain the value "completed" at path "$.status.state"
+    And the response should contain the value "kueue" at path "$.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    When I send a GET request to "/api/v1/evaluations/jobs/{{value:job2_id}}"
+    Then the response code should be 200
+    And I wait for the evaluation job status to be "completed"
+    And the response should contain the value "completed" at path "$.status.state"
+    And the response should contain the value "kueue" at path "$.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+
+  @kueue
+  @negative
+  @ignore
+  # https://redhat.atlassian.net/browse/RHOAIENG-61584 - will remove the ignore tag once fix is deployed on the cluster and verified
+  Scenario: Queue name with special characters is rejected
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+      """
+      {
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}"
+        },
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+              "num_examples": 10,
+              "num_fewshot": 3,
+              "limit": 5,
+              "tokenizer": "google/flan-t5-small"
+            }
+          }
+        ],
+        "name": "test-job-special-chars-queue",
+        "queue": {
+          "kind": "kueue",
+          "name": "user-queue!@#$%"
+        }
+      }
+      """
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+
+  @kueue
+  @negative
+  Scenario: Queue with null name is rejected
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+      """
+      {
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}"
+        },
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+              "num_examples": 10,
+              "num_fewshot": 3,
+              "limit": 5,
+              "tokenizer": "google/flan-t5-small"
+            }
+          }
+        ],
+        "name": "test-job-null-queue",
+        "queue": {
+          "kind": "kueue",
+          "name": null
+        }
+      }
+      """
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+
+  @kueue
+  Scenario: Create evaluation job with Kueue queue, tags and pass criteria
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+      """
+      {
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}"
+        },
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+              "num_examples": 10,
+              "num_fewshot": 3,
+              "limit": 5,
+              "tokenizer": "google/flan-t5-small"
+            }
+          }
+        ],
+        "name": "test-evaluation-job-queue-tags-criteria",
+        "queue": {
+          "kind": "kueue",
+          "name": "{{env:QUEUE_NAME|user-queue}}"
+        },
+        "tags": [
+          "integration-test",
+          "kueue-enabled"
+        ],
+        "pass_criteria": {
+          "threshold": 0.8
+        }
+      }
+      """
+    Then the response code should be 202
+    And the response should contain the value "kueue" at path "$.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the response should contain the value "integration-test" at path "$.tags[0]"
+    And the response should contain the value "kueue-enabled" at path "$.tags[1]"
+    And the response should equal the value "0.8" at path "$.pass_criteria.threshold"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    And the response should contain the value "kueue" at path "$.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the response should contain the value "integration-test" at path "$.tags[0]"
+    And the response should contain the value "kueue-enabled" at path "$.tags[1]"
+    And the response should equal the value "0.8" at path "$.pass_criteria.threshold"

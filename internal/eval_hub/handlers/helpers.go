@@ -273,13 +273,24 @@ func mergeBenchmarkParameters(benchmark api.CollectionBenchmarkConfig, jobBenchm
 			parameters[key] = value
 		}
 	}
+	// pick up TestDataRef from the job override if provided
+	testDataRef := benchmark.TestDataRef
+
+	for _, jobBenchmark := range jobBenchmarks {
+		if jobBenchmark.ID == benchmark.ID && jobBenchmark.ProviderID == benchmark.ProviderID {
+			if jobBenchmark.TestDataRef != nil {
+				testDataRef = jobBenchmark.TestDataRef
+			}
+			break
+		}
+	}
 	return api.EvaluationBenchmarkConfig{
 		Ref:          benchmark.Ref,
 		ProviderID:   benchmark.ProviderID,
 		Weight:       benchmark.Weight,
 		PrimaryScore: benchmark.PrimaryScore,
 		PassCriteria: benchmark.PassCriteria,
-		TestDataRef:  benchmark.TestDataRef,
+		TestDataRef:  testDataRef,
 		Parameters:   parameters,
 	}
 }

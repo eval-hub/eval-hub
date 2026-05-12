@@ -244,7 +244,7 @@ func (h *Handlers) HandleCreateEvaluation(
 ### Test Categories
 
 - **Unit Tests**: Test individual functions and packages (in `internal/`)
-- **FVT (Functional Verification Tests)**: BDD-style tests using godog (in `tests/features/`). Scenarios are tagged (`@local`, `@cluster`, `@mlflow`, `@negative`, `@gha-wheel-sanity`) to control which run in each context. The `@gha-wheel-sanity` tag marks scenarios executed during GHA wheel validation via `scripts/gha_wheel_sanity_test.sh`.
+- **FVT (Functional Verification Tests)**: BDD-style tests using godog (in `tests/features/`). Scenarios are tagged (`@local_runtime`, `@local`, `@cluster`, `@mlflow`, `@negative`, `@gha-wheel-sanity`) to control which run in each context. The `@local_runtime` tag marks scenarios that need a fully functional local evaluation runtime (local mode / job execution, not Kubernetes); those scenarios are **skipped in the default FVT run** (`~@local_runtime` in `FVT_TAGS`). Opt in by overriding `FVT_TAGS` / `GODOG_TAGS` as documented in `tests/features/README.md`. The `@gha-wheel-sanity` tag marks scenarios executed during GHA wheel validation via `scripts/gha_wheel_sanity_test.sh` (that job passes its own `FVT_TAGS`, so it is unaffected by the default `~@local_runtime`). See `tests/features/README.md` for all tags and examples.
 - **Integration Tests**: Test component interactions
 
 ### Running Tests
