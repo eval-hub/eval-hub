@@ -27,6 +27,8 @@ MSG_DELAY="${MSG_DELAY:-0.1}"
 POLL_INTERVAL="${POLL_INTERVAL:-10}"
 POLL_MAX_ATTEMPTS="${POLL_MAX_ATTEMPTS:-30}"
 COMPARE_JOB_ID="${COMPARE_JOB_ID:-}"
+# Default collection must exist on the eval-hub instance (see config/collections/*.yaml).
+E2E_COLLECTION_ID="${E2E_COLLECTION_ID:-leaderboard-v2}"
 RESULTS_DIR="${RESULTS_DIR:-${BIN_DIR}/test-results}"
 RESULTS_FILE="${RESULTS_DIR}/part4_e2e_results.txt"
 
@@ -107,35 +109,61 @@ mcp_call() {
     fi
 }
 
+extract_response() {
+    local all_output="$1"
+    local target_id="$2"
+    echo "$all_output" | python3 -c "
+import sys, json
+target = int(sys.argv[1])
+for line in sys.stdin:
+    line = line.strip()
+    if line.startswith('data: '):
+        line = line[6:]
+    if not line:
+        continue
+    try:
+        msg = json.loads(line)
+        if msg.get('id') == target:
+            print(line)
+            break
+    except Exception: pass
+" "$target_id" 2>/dev/null
+}
+
 extract_json_field() {
     local json="$1"
     local field="$2"
     echo "$json" | python3 -c "
 import sys, json
 data = sys.stdin.read().strip()
+found = None
 for line in data.split('\n'):
     line = line.strip()
-    if not line: continue
+    if line.startswith('data: '):
+        line = line[6:]
+    if not line:
+        continue
     try:
         msg = json.loads(line)
         if 'result' in msg:
             result = msg['result']
             if isinstance(result, dict):
-                # Direct field
                 if '${field}' in result:
-                    print(result['${field}'])
-                    sys.exit(0)
-                # Nested in content
+                    found = result['${field}']
+                    break
                 for item in result.get('content', []):
                     if isinstance(item, dict) and 'text' in item:
                         try:
                             inner = json.loads(item['text'])
                             if '${field}' in inner:
-                                print(inner['${field}'])
-                                sys.exit(0)
-                        except: pass
-    except: pass
-print('')
+                                found = inner['${field}']
+                        except Exception: pass
+                    if found is not None:
+                        break
+            if found is not None:
+                break
+    except Exception: pass
+print(found if found is not None else '')
 " 2>/dev/null
 }
 
@@ -155,7 +183,11 @@ if ! command -v "$EVALHUB_MCP_BIN" &>/dev/null; then
 fi
 pass "evalhub-mcp binary found"
 
+export EVALHUB_BASE_URL
+export EVALHUB_TENANT
+
 log "Transport: ${TRANSPORT}"
+log "submit_evaluation collection id: ${E2E_COLLECTION_ID} (override with E2E_COLLECTION_ID)"
 
 if [[ "$TRANSPORT" == "http" ]]; then
     log "Starting HTTP server..."
@@ -197,26 +229,15 @@ fi
 ###############################################################################
 header "Step 14a: Discover — List RAG Benchmarks"
 
-log "Reading benchmarks resource with rag filter..."
-BENCHMARKS_RESP=$(mcp_call "resources/read" '{"uri":"evalhub://benchmarks"}' 10)
+log "Reading RAG benchmarks via label-filtered URI..."
+BENCHMARKS_RAW=$(mcp_call "resources/read" '{"uri":"evalhub://benchmarks?label=rag"}' 10)
+BENCHMARKS_RESP=$(extract_response "$BENCHMARKS_RAW" 10)
 
-if echo "$BENCHMARKS_RESP" | grep -q '"result"'; then
-    pass "14a — Benchmarks resource readable"
-
-    if echo "$BENCHMARKS_RESP" | grep -qiE "rag"; then
-        pass "14a — RAG benchmarks found in response"
-    else
-        log "No explicit 'rag' label found; trying label-filtered URI..."
-        BENCHMARKS_RAG=$(mcp_call "resources/read" '{"uri":"evalhub://benchmarks?label=rag"}' 11)
-        if echo "$BENCHMARKS_RAG" | grep -q '"result"'; then
-            pass "14a — Label-filtered benchmarks URI works"
-        else
-            skip "14a — RAG label filtering could not be verified (may need different URI pattern)"
-        fi
-    fi
+if [[ -n "$BENCHMARKS_RESP" ]] && echo "$BENCHMARKS_RESP" | grep -q '"result"'; then
+    pass "14a — RAG benchmarks resource readable"
 else
-    fail "14a — Failed to read benchmarks resource"
-    log "Response: $(echo "$BENCHMARKS_RESP" | head -3)"
+    fail "14a — Failed to read RAG benchmarks resource"
+    log "Response: $(echo "$BENCHMARKS_RAW" | head -3)"
 fi
 
 ###############################################################################
@@ -224,15 +245,15 @@ fi
 ###############################################################################
 header "Step 14b: Submit — Submit Evaluation Job"
 
-SUBMIT_PARAMS=$(cat <<'JSON'
+SUBMIT_PARAMS=$(cat <<JSON
 {
     "name": "tools/call",
     "arguments": {
         "name": "submit_evaluation",
         "arguments": {
             "name": "edd-e2e-integration-test",
-            "model": "https://my-model.example.com/v1",
-            "collection": "rag",
+            "model": {"url": "https://my-model.example.com/v1", "name": "edd-e2e-model"},
+            "collection": {"id": "${E2E_COLLECTION_ID}"},
             "description": "E2E integration test from Part 4 script",
             "tags": ["integration-test", "e2e", "automated"]
         }
@@ -241,46 +262,78 @@ SUBMIT_PARAMS=$(cat <<'JSON'
 JSON
 )
 
-SUBMIT_RESP=$(mcp_call "tools/call" \
-    '{"name":"submit_evaluation","arguments":{"name":"edd-e2e-integration-test","model":"https://my-model.example.com/v1","collection":"rag","description":"E2E integration test from Part 4 script","tags":["integration-test","e2e","automated"]}}' \
+SUBMIT_RAW=$(mcp_call "tools/call" \
+    "{\"name\":\"submit_evaluation\",\"arguments\":{\"name\":\"edd-e2e-integration-test\",\"model\":{\"url\":\"https://my-model.example.com/v1\",\"name\":\"edd-e2e-model\"},\"collection\":{\"id\":\"${E2E_COLLECTION_ID}\"},\"description\":\"E2E integration test from Part 4 script\",\"tags\":[\"integration-test\",\"e2e\",\"automated\"]}}" \
     20)
+SUBMIT_RESP=$(extract_response "$SUBMIT_RAW" 20)
 
-if echo "$SUBMIT_RESP" | grep -q '"result"'; then
+if [[ -n "$SUBMIT_RESP" ]] && echo "$SUBMIT_RESP" | grep -q '"result"' && ! echo "$SUBMIT_RESP" | grep -q '"isError":true'; then
     pass "14b — submit_evaluation tool call succeeded"
 
     SUBMITTED_JOB_ID=$(echo "$SUBMIT_RESP" | python3 -c "
-import sys, json
+import sys, json, re
 data = sys.stdin.read().strip()
+job_id = None
 for line in data.split('\n'):
     line = line.strip()
-    if not line: continue
+    if line.startswith('data: '):
+        line = line[6:]
+    if not line:
+        continue
     try:
         msg = json.loads(line)
-        if 'result' in msg:
-            result = msg['result']
-            # Try direct fields
+        if 'result' not in msg:
+            continue
+        result = msg['result']
+        # MCP tool results often expose machine-readable fields here
+        sc = result.get('structuredContent')
+        if isinstance(sc, dict):
             for key in ['job_id', 'id', 'jobId']:
-                if key in result:
-                    print(result[key])
-                    sys.exit(0)
-            # Try in content array
-            for item in result.get('content', []):
-                if isinstance(item, dict) and 'text' in item:
-                    try:
-                        inner = json.loads(item['text'])
-                        for key in ['job_id', 'id', 'jobId']:
-                            if key in inner:
-                                print(inner[key])
-                                sys.exit(0)
-                    except: pass
-    except: pass
-print('')
+                if key in sc and sc[key]:
+                    job_id = str(sc[key])
+                    break
+        if job_id:
+            break
+        # Try direct fields
+        for key in ['job_id', 'id', 'jobId']:
+            if key in result:
+                job_id = str(result[key])
+                break
+        if job_id:
+            break
+        # Try in content array (MCP tool call response format)
+        for item in result.get('content', []):
+            if not isinstance(item, dict) or 'text' not in item:
+                continue
+            text = item['text']
+            # Try parsing content text as JSON
+            try:
+                inner = json.loads(text)
+                for key in ['job_id', 'id', 'jobId']:
+                    if key in inner:
+                        job_id = str(inner[key])
+                        break
+            except Exception:
+                pass
+            # Try regex extraction from plain text
+            if not job_id:
+                m = re.search(r'(?:job.id|id)[\":\s]+([a-f0-9-]{8,})', text, re.IGNORECASE)
+                if m:
+                    job_id = m.group(1)
+            if job_id:
+                break
+        if job_id:
+            break
+    except Exception:
+        pass
+print(job_id or '')
 " 2>/dev/null)
 
     if [[ -n "$SUBMITTED_JOB_ID" ]]; then
         pass "14b — Job submitted with ID: ${SUBMITTED_JOB_ID}"
     else
-        log "Could not extract job ID from response. Continuing with manual ID if needed."
+        log "Could not extract job ID from response."
+        log "Response (debug): $(echo "$SUBMIT_RESP" | head -10)"
         skip "14b — Job ID extraction (response format may differ)"
     fi
 else
@@ -303,36 +356,63 @@ if [[ -n "$SUBMITTED_JOB_ID" ]]; then
     JOB_COMPLETED=false
     LAST_STATUS=""
     for i in $(seq 1 "$POLL_MAX_ATTEMPTS"); do
-        STATUS_RESP=$(mcp_call "tools/call" \
+        STATUS_RAW=$(mcp_call "tools/call" \
             "{\"name\":\"get_job_status\",\"arguments\":{\"job_id\":\"${SUBMITTED_JOB_ID}\"}}" \
             30)
+        STATUS_RESP=$(extract_response "$STATUS_RAW" 30)
 
-        if echo "$STATUS_RESP" | grep -q '"result"'; then
+        if [[ -n "$STATUS_RESP" ]] && echo "$STATUS_RESP" | grep -q '"result"'; then
             CURRENT_STATUS=$(echo "$STATUS_RESP" | python3 -c "
-import sys, json
+import sys, json, re
 data = sys.stdin.read().strip()
+status = None
 for line in data.split('\n'):
     line = line.strip()
-    if not line: continue
+    if line.startswith('data: '):
+        line = line[6:]
+    if not line:
+        continue
     try:
         msg = json.loads(line)
-        if 'result' in msg:
-            result = msg['result']
-            for key in ['status', 'state']:
-                if key in result:
-                    print(result[key])
-                    sys.exit(0)
+        if 'result' not in msg:
+            continue
+        result = msg['result']
+        sc = result.get('structuredContent')
+        if isinstance(sc, dict):
+            for key in ('state', 'status'):
+                v = sc.get(key)
+                if v is not None and str(v).strip() != '':
+                    status = str(v)
+                    break
+        if not status:
+            for key in ('status', 'state'):
+                if key in result and result[key] is not None and str(result[key]).strip() != '':
+                    status = str(result[key])
+                    break
+        if not status:
             for item in result.get('content', []):
-                if isinstance(item, dict) and 'text' in item:
-                    try:
-                        inner = json.loads(item['text'])
-                        for key in ['status', 'state']:
-                            if key in inner:
-                                print(inner[key])
-                                sys.exit(0)
-                    except: pass
-    except: pass
-print('unknown')
+                if not isinstance(item, dict) or 'text' not in item:
+                    continue
+                text = item['text']
+                try:
+                    inner = json.loads(text)
+                    for key in ('status', 'state'):
+                        if key in inner and inner[key] is not None and str(inner[key]).strip() != '':
+                            status = str(inner[key])
+                            break
+                except Exception:
+                    pass
+                if not status:
+                    m = re.search(r'Job\\s+[^:]+:\\s*(\\S+)\\s*\\(', text)
+                    if m:
+                        status = m.group(1)
+                if status:
+                    break
+        if status:
+            break
+    except Exception:
+        pass
+print(status or 'unknown')
 " 2>/dev/null)
 
             if [[ "$CURRENT_STATUS" != "$LAST_STATUS" ]]; then
@@ -376,24 +456,30 @@ else
 fi
 
 ###############################################################################
-# Step 14d — Review: Read experiment results
+# Step 14d — Review: Read job resource (includes evaluation results)
 ###############################################################################
-header "Step 14d: Review — Read Experiment Results"
+header "Step 14d: Review — Read Job Resource"
 
 if [[ -n "$SUBMITTED_JOB_ID" ]]; then
-    log "Reading experiment results for job ${SUBMITTED_JOB_ID}..."
-    RESULTS_RESP=$(mcp_call "resources/read" \
-        "{\"uri\":\"evalhub://experiments/${SUBMITTED_JOB_ID}/results\"}" 40)
+    # MCP exposes evalhub://jobs/{id} for full job detail including results.
+    log "Reading evalhub://jobs/${SUBMITTED_JOB_ID} (includes results and experiment links)..."
+    RESULTS_RAW=$(mcp_call "resources/read" \
+        "{\"uri\":\"evalhub://jobs/${SUBMITTED_JOB_ID}\"}" 40)
+    RESULTS_RESP=$(extract_response "$RESULTS_RAW" 40)
 
-    if echo "$RESULTS_RESP" | grep -q '"result"'; then
-        pass "14d — Experiment results readable for job ${SUBMITTED_JOB_ID}"
-    else
-        if echo "$RESULTS_RESP" | grep -qiE "not.found|not.ready|pending"; then
+    if [[ -n "$RESULTS_RESP" ]] && echo "$RESULTS_RESP" | grep -q '"result"'; then
+        pass "14d — Job resource readable (includes results) for ${SUBMITTED_JOB_ID}"
+    elif echo "$RESULTS_RESP" | grep -q '"error"'; then
+        # Only skip on likely-transient errors, not unknown URI / auth noise.
+        if echo "$RESULTS_RESP" | grep -qiE "not ready|not yet available|results not available"; then
             skip "14d — Results not yet available (job may not be complete)"
         else
-            fail "14d — Failed to read experiment results"
-            log "Response: $(echo "$RESULTS_RESP" | head -3)"
+            fail "14d — Failed to read job resource"
+            log "Response: $(echo "$RESULTS_RAW" | head -5)"
         fi
+    else
+        fail "14d — Failed to read job resource (no JSON-RPC result)"
+        log "Response: $(echo "$RESULTS_RAW" | head -5)"
     fi
 else
     skip "14d — No job ID available for results review"
@@ -407,22 +493,24 @@ header "Step 14e: Compare — Compare Evaluation Runs"
 if [[ -n "$SUBMITTED_JOB_ID" ]] && [[ -n "$COMPARE_JOB_ID" ]]; then
     log "Comparing jobs: ${SUBMITTED_JOB_ID} vs ${COMPARE_JOB_ID}..."
 
-    COMPARE_RESP=$(mcp_call "prompts/get" \
+    COMPARE_RAW=$(mcp_call "prompts/get" \
         "{\"name\":\"compare_runs\",\"arguments\":{\"job_ids\":\"${SUBMITTED_JOB_ID},${COMPARE_JOB_ID}\"}}" \
         50)
+    COMPARE_RESP=$(extract_response "$COMPARE_RAW" 50)
 
-    if echo "$COMPARE_RESP" | grep -q '"messages"'; then
+    if [[ -n "$COMPARE_RESP" ]] && echo "$COMPARE_RESP" | grep -q '"messages"'; then
         pass "14e — compare_runs prompt returned guidance for two jobs"
     else
         fail "14e — compare_runs prompt did not return messages"
     fi
 elif [[ -n "$SUBMITTED_JOB_ID" ]]; then
     log "No COMPARE_JOB_ID set; testing compare_runs prompt with single job..."
-    COMPARE_RESP=$(mcp_call "prompts/get" \
+    COMPARE_RAW=$(mcp_call "prompts/get" \
         "{\"name\":\"compare_runs\",\"arguments\":{\"job_ids\":\"${SUBMITTED_JOB_ID}\"}}" \
         50)
+    COMPARE_RESP=$(extract_response "$COMPARE_RAW" 50)
 
-    if echo "$COMPARE_RESP" | grep -q '"messages"'; then
+    if [[ -n "$COMPARE_RESP" ]] && echo "$COMPARE_RESP" | grep -q '"messages"'; then
         pass "14e — compare_runs prompt returns messages (single job)"
     else
         skip "14e — compare_runs needs two jobs. Set COMPARE_JOB_ID to a previous job ID."
@@ -438,16 +526,17 @@ header "Step 14f: Clean Up — Cancel Job"
 
 if [[ -n "$SUBMITTED_JOB_ID" ]]; then
     log "Cancelling job ${SUBMITTED_JOB_ID}..."
-    CANCEL_RESP=$(mcp_call "tools/call" \
+    CANCEL_RAW=$(mcp_call "tools/call" \
         "{\"name\":\"cancel_job\",\"arguments\":{\"job_id\":\"${SUBMITTED_JOB_ID}\"}}" 60)
+    CANCEL_RESP=$(extract_response "$CANCEL_RAW" 60)
 
-    if echo "$CANCEL_RESP" | grep -q '"result"'; then
+    if [[ -n "$CANCEL_RESP" ]] && echo "$CANCEL_RESP" | grep -q '"result"'; then
         pass "14f — cancel_job tool call succeeded"
     elif echo "$CANCEL_RESP" | grep -qiE "already.*complete|already.*cancel|not.*found|cannot.*cancel"; then
         pass "14f — cancel_job correctly reports job already finished/cancelled"
     else
         fail "14f — cancel_job tool call failed"
-        log "Response: $(echo "$CANCEL_RESP" | head -3)"
+        log "Response: $(echo "$CANCEL_RAW" | head -3)"
     fi
 else
     skip "14f — No job to cancel"
