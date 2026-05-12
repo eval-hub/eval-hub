@@ -84,6 +84,7 @@ func NewEvalHubClient(cfg *config.Config, logger *slog.Logger) *evalhubclient.Cl
 	if cfg.Insecure {
 		client = client.WithInsecureSkipVerify()
 	}
+	logger.Info("EvalHub client created", "baseURL", cfg.BaseURL, "tenant", cfg.Tenant, "insecure", cfg.Insecure)
 	return client
 }
 
@@ -127,7 +128,7 @@ func Run(ctx context.Context, cfg *config.Config, info *ServerInfo, logger *slog
 	if info != nil {
 		version = info.VersionString()
 	}
-	logger.Info("starting evalhub-mcp server",
+	logger.Info("Starting evalhub-mcp server",
 		"version", version,
 		"transport", cfg.Transport,
 	)
