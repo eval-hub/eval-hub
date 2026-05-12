@@ -35,7 +35,8 @@ type Runtime struct {
 
 // GPUConfig declares the GPU resources required by an adapter.
 // Resource is the Kubernetes extended resource name (e.g. "nvidia.com/gpu", "amd.com/gpu").
-// When Resource is omitted it defaults to "nvidia.com/gpu".
+// When Resource is omitted, no specific GPU resource is requested in the pod spec —
+// node selection is left to Kueue ResourceFlavors or cluster defaults.
 // Count is the number of GPU units to request; must be ≥ 1 when GPU is specified.
 //
 // Kubernetes requires requests == limits for GPU extended resources, so both are set to Count.
@@ -64,7 +65,7 @@ type GPUConfig struct {
 //	  cpu_limit: "1"
 //	  memory_limit: "2Gi"
 //	  gpu:
-//	    resource: nvidia.com/gpu         # defaults to nvidia.com/gpu when omitted
+//	    resource: nvidia.com/gpu         # omit to leave GPU resource unspecified (any GPU)
 //	    count: 1
 //	    node_selector:                   # optional; ignored when a queue is specified
 //	      nvidia.com/gpu.product: NVIDIA-H100-SXM5-80GB

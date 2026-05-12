@@ -745,15 +745,15 @@ func TestResolveGPUConfig(t *testing.T) {
 			wantCount: 1,
 		},
 		{
-			name:      "empty resource defaults to nvidia.com/gpu",
+			name:      "empty resource leaves resource empty",
 			gpu:       &api.GPUConfig{Resource: "", Count: 1},
-			wantRes:   defaultGPUResource,
+			wantRes:   "",
 			wantCount: 1,
 		},
 		{
-			name:      "whitespace-only resource defaults to nvidia.com/gpu",
+			name:      "whitespace-only resource leaves resource empty",
 			gpu:       &api.GPUConfig{Resource: "  ", Count: 1},
-			wantRes:   defaultGPUResource,
+			wantRes:   "",
 			wantCount: 1,
 		},
 	}

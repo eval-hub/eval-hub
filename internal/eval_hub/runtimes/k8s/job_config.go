@@ -32,9 +32,6 @@ const (
 	serviceCAConfigMapSuffix    = "-service-ca"
 	defaultTestDataInitCmd = "/app/eval-runtime-init"
 	defaultEvalHubPort     = "8443"
-	// defaultGPUResource is the Kubernetes extended resource name used when a GPUConfig omits
-	// the Resource field. Aligns with NVIDIA GPU naming used by other RHOAI workloads.
-	defaultGPUResource = "nvidia.com/gpu"
 )
 
 type jobConfig struct {
@@ -339,16 +336,13 @@ func resolveNodeSelector(gpu *api.GPUConfig) map[string]string {
 
 // resolveGPUConfig returns the Kubernetes extended resource name and count from a GPUConfig.
 // When gpu is nil or Count is 0, both return values are zero-valued (no GPU scheduled).
-// When Resource is empty the NVIDIA default is used, aligning with other RHOAI workloads.
+// When Resource is empty it is left empty — the caller (buildResources) skips the GPU
+// resource request, leaving node selection to Kueue or cluster defaults.
 func resolveGPUConfig(gpu *api.GPUConfig) (resource string, count int) {
 	if gpu == nil || gpu.Count <= 0 {
 		return "", 0
 	}
-	r := strings.TrimSpace(gpu.Resource)
-	if r == "" {
-		r = defaultGPUResource
-	}
-	return r, gpu.Count
+	return strings.TrimSpace(gpu.Resource), gpu.Count
 }
 
 func defaultIfEmpty(value string, fallback string) string {
