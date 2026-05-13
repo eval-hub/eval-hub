@@ -1,0 +1,25 @@
+[project]
+name = "eval-hub-local-demo"
+version = "0.0.1"
+requires-python = ">=3.12"
+dependencies = [
+    "eval-hub-server>=0.4.0.dev363",
+]
+
+[project.optional-dependencies]
+demo = [
+    "mlflow>=3.11.1",
+    # demo notebook dependencies
+    "ipykernel>=7.2.0",
+    "ipywidgets>=8.1.8",
+    "oras>=0.2.41",
+    "eval-hub-sdk[client]>=0.1.7",
+]
+
+[tool.uv.sources]
+eval-hub-server = { index = "testpypi" }
+
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+explicit = true
