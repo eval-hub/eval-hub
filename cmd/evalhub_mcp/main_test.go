@@ -86,4 +86,3 @@ func TestConfigLoadError(t *testing.T) {
 		t.Fatalf("expected exit code 1 for missing config, got %d", code)
 	}
 }
-
