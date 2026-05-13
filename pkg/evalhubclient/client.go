@@ -375,6 +375,19 @@ func decode[T any](body []byte) (*T, error) {
 	return &result, nil
 }
 
+func (c *Client) logTruncatedListPage(endpoint string, page api.Page) {
+	if page.Limit <= 0 {
+		return
+	}
+	if page.TotalCount > page.Limit {
+		c.logger.Error("eval-hub list response has more items than returned on this page (total_count > limit); fetch additional pages with offset if needed",
+			"endpoint", endpoint,
+			"total_count", page.TotalCount,
+			"limit", page.Limit,
+		)
+	}
+}
+
 // ─── Health ──────────────────────────────────────────────────────────────────
 
 // GetHealth returns the current health status of the eval-hub service.
@@ -390,11 +403,22 @@ func (c *Client) GetHealth() (*api.HealthResponse, error) {
 
 // ListProviders returns all registered evaluation providers. Use WithLimit/WithOffset for pagination.
 func (c *Client) ListProviders(opts ...ListOption) (*api.ProviderResourceList, error) {
+	return c.fetchProviderList(opts, true)
+}
+
+func (c *Client) fetchProviderList(opts []ListOption, logTruncation bool) (*api.ProviderResourceList, error) {
 	body, _, err := c.doRequest(http.MethodGet, apiBasePath+"/providers", nil, applyListOptions(opts))
 	if err != nil {
 		return nil, err
 	}
-	return decode[api.ProviderResourceList](body)
+	list, err := decode[api.ProviderResourceList](body)
+	if err != nil {
+		return nil, err
+	}
+	if logTruncation {
+		c.logTruncatedListPage(apiBasePath+"/providers", list.Page)
+	}
+	return list, nil
 }
 
 // GetProvider returns the provider with the given ID.
@@ -447,7 +471,7 @@ func (c *Client) allProviders() ([]api.ProviderResource, error) {
 	pageSize := c.effectiveListPageLimit()
 	var all []api.ProviderResource
 	for offset := 0; ; offset += pageSize {
-		list, err := c.ListProviders(WithLimit(pageSize), WithOffset(offset))
+		list, err := c.fetchProviderList([]ListOption{WithLimit(pageSize), WithOffset(offset)}, false)
 		if err != nil {
 			return nil, err
 		}
@@ -500,7 +524,12 @@ func (c *Client) ListCollections(opts ...ListOption) (*api.CollectionResourceLis
 	if err != nil {
 		return nil, err
 	}
-	return decode[api.CollectionResourceList](body)
+	list, err := decode[api.CollectionResourceList](body)
+	if err != nil {
+		return nil, err
+	}
+	c.logTruncatedListPage(apiBasePath+"/collections", list.Page)
+	return list, nil
 }
 
 // GetCollection returns the collection with the given ID.
@@ -520,7 +549,12 @@ func (c *Client) ListJobs(opts ...ListOption) (*api.EvaluationJobResourceList, e
 	if err != nil {
 		return nil, err
 	}
-	return decode[api.EvaluationJobResourceList](body)
+	list, err := decode[api.EvaluationJobResourceList](body)
+	if err != nil {
+		return nil, err
+	}
+	c.logTruncatedListPage(apiBasePath+"/jobs", list.Page)
+	return list, nil
 }
 
 // GetJob returns the evaluation job with the given ID.
