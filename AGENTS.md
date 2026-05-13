@@ -56,6 +56,8 @@ make vet                # Run go vet (same as lint)
 
 **Always run `make fmt lint` after file changes and before committing.** This ensures consistent formatting and catches issues early.
 
+If a `.pre-commit-config.yaml` file exists, run `pre-commit install && pre-commit install --hook-type commit-msg` before making any commits. This automatically enforces formatting, linting, and commit message conventions on every commit.
+
 ### Go Version
 
 **Do not modify the Go version in `go.mod`.** The version specified there is the source of truth. If your local Go toolchain is older, use `GOTOOLCHAIN=auto` to let Go automatically download the required version. Never downgrade `go.mod` to match a locally installed toolchain.
