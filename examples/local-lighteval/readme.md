@@ -87,7 +87,7 @@ curl -s http://localhost:11434/v1/chat/completions \
     "model": "llama3.2:3b-instruct-q4_K_M",
     "messages": [{"role": "user", "content": "Why is the sky blue?"}],
     "max_tokens": 100
-  }' | jq "."
+  }'
 ```
 
 ## 6. Configure eval-hub-server

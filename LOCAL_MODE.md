@@ -47,7 +47,7 @@ When an evaluation job is submitted in local mode, for each benchmark the server
 4. Tracks subprocess PIDs for cancellation (kills the entire process group on cancel)
 5. The adapter reads the job spec, runs the benchmark, and reports results back via the callback URL
 
-```
+```text
                       ┌──────────────────────┐
                       │   eval-hub-server     │
                       │   (--local flag)      │
@@ -83,7 +83,7 @@ MLflow and OCI registry are optional — the server and adapters function withou
 
 ### Job file layout
 
-```
+```text
 /tmp/evalhub-jobs/
 └── <job_id>/
     └── <benchmark_index>/
