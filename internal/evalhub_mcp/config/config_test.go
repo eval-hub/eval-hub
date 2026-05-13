@@ -246,6 +246,8 @@ func TestValidateTransport(t *testing.T) {
 	}{
 		{"stdio", false},
 		{"http", false},
+		{"http-sse", false},
+		{"streamable-http", false},
 		{"grpc", true},
 		{"websocket", true},
 		{"", true},
@@ -477,9 +479,118 @@ func TestLoadConfigFile(t *testing.T) {
 
 // helpers
 
+func TestValidateTLSPairing(t *testing.T) {
+	t.Parallel()
+	t.Run("both set passes", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{Transport: "http", Host: "localhost", Port: 8443, TLSCertFile: "/tls/cert.pem", TLSKeyFile: "/tls/key.pem"}
+		if err := Validate(cfg); err != nil {
+			t.Errorf("expected both TLS fields set to pass, got: %v", err)
+		}
+	})
+	t.Run("neither set passes", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{Transport: "http", Host: "localhost", Port: 3001}
+		if err := Validate(cfg); err != nil {
+			t.Errorf("expected no TLS fields to pass, got: %v", err)
+		}
+	})
+	t.Run("only cert fails", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{Transport: "http", Host: "localhost", Port: 8443, TLSCertFile: "/tls/cert.pem"}
+		if err := Validate(cfg); err == nil {
+			t.Error("expected validation error when only tls_cert_file is set")
+		}
+	})
+	t.Run("only key fails", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{Transport: "http", Host: "localhost", Port: 8443, TLSKeyFile: "/tls/key.pem"}
+		if err := Validate(cfg); err == nil {
+			t.Error("expected validation error when only tls_key_file is set")
+		}
+	})
+}
+
+func TestTLSEnabled(t *testing.T) {
+	t.Parallel()
+	t.Run("both set", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{TLSCertFile: "/cert.pem", TLSKeyFile: "/key.pem"}
+		if !cfg.TLSEnabled() {
+			t.Error("expected TLSEnabled() = true")
+		}
+	})
+	t.Run("neither set", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{}
+		if cfg.TLSEnabled() {
+			t.Error("expected TLSEnabled() = false")
+		}
+	})
+}
+
+func TestIsHTTPTransport(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		transport string
+		want      bool
+	}{
+		{"http", true},
+		{"http-sse", true},
+		{"streamable-http", true},
+		{"stdio", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.transport, func(t *testing.T) {
+			t.Parallel()
+			cfg := &Config{Transport: tt.transport}
+			if got := cfg.IsHTTPTransport(); got != tt.want {
+				t.Errorf("IsHTTPTransport(%q) = %v, want %v", tt.transport, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoadEnvTLS(t *testing.T) {
+	clearEnv(t)
+	defer clearEnv(t)
+	t.Setenv("EVALHUB_TLS_CERT_FILE", "/tls/cert.pem")
+	t.Setenv("EVALHUB_TLS_KEY_FILE", "/tls/key.pem")
+
+	cfg, err := Load(nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.TLSCertFile != "/tls/cert.pem" {
+		t.Errorf("expected TLSCertFile from env, got %q", cfg.TLSCertFile)
+	}
+	if cfg.TLSKeyFile != "/tls/key.pem" {
+		t.Errorf("expected TLSKeyFile from env, got %q", cfg.TLSKeyFile)
+	}
+}
+
+func TestLoadFlagsTLS(t *testing.T) {
+	clearEnv(t)
+	defer clearEnv(t)
+
+	cert := "/flag/cert.pem"
+	key := "/flag/key.pem"
+	flags := &Flags{TLSCertFile: &cert, TLSKeyFile: &key}
+	cfg, err := Load(flags, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.TLSCertFile != "/flag/cert.pem" {
+		t.Errorf("expected TLSCertFile from flags, got %q", cfg.TLSCertFile)
+	}
+	if cfg.TLSKeyFile != "/flag/key.pem" {
+		t.Errorf("expected TLSKeyFile from flags, got %q", cfg.TLSKeyFile)
+	}
+}
+
 func clearEnv(t *testing.T) {
 	t.Helper()
-	for _, key := range []string{"EVALHUB_BASE_URL", "EVALHUB_TOKEN", "EVALHUB_TENANT", "EVALHUB_INSECURE", "EVALHUB_LIST_PAGE_LIMIT"} {
+	for _, key := range []string{"EVALHUB_BASE_URL", "EVALHUB_TOKEN", "EVALHUB_TENANT", "EVALHUB_INSECURE", "EVALHUB_LIST_PAGE_LIMIT", "EVALHUB_TLS_CERT_FILE", "EVALHUB_TLS_KEY_FILE"} {
 		t.Setenv(key, "")
 	}
 }

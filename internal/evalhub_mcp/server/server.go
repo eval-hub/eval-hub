@@ -136,8 +136,10 @@ func Run(ctx context.Context, cfg *config.Config, info *ServerInfo, logger *slog
 	switch cfg.Transport {
 	case "stdio":
 		return runStdio(ctx, srv)
-	case "http":
+	case "http", "streamable-http":
 		return runHTTP(ctx, srv, cfg, logger)
+	case "http-sse":
+		return runHTTPSSE(ctx, srv, cfg, logger)
 	default:
 		return fmt.Errorf("unsupported transport: %s", cfg.Transport)
 	}
@@ -152,17 +154,40 @@ func runHTTP(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *s
 		func(r *http.Request) *mcp.Server { return srv },
 		nil,
 	)
+	return serveHTTP(ctx, handler, cfg, logger)
+}
+
+func runHTTPSSE(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *slog.Logger) error {
+	handler := mcp.NewSSEHandler(
+		func(r *http.Request) *mcp.Server { return srv },
+		nil,
+	)
+	return serveHTTP(ctx, handler, cfg, logger)
+}
+
+func serveHTTP(ctx context.Context, mcpHandler http.Handler, cfg *config.Config, logger *slog.Logger) error {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"status":"ok"}`)
+	})
+	mux.Handle("/", mcpHandler)
 
 	addr := net.JoinHostPort(cfg.Host, fmt.Sprintf("%d", cfg.Port))
 	httpServer := &http.Server{
 		Addr:    addr,
-		Handler: handler,
+		Handler: mux,
 	}
 
 	errCh := make(chan error, 1)
 	go func() {
-		logger.Info("MCP HTTP Server listening", "addr", addr)
-		errCh <- httpServer.ListenAndServe()
+		logger.Info("MCP HTTP Server listening", "addr", addr, "tls", cfg.TLSEnabled())
+		if cfg.TLSEnabled() {
+			errCh <- httpServer.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile)
+		} else {
+			errCh <- httpServer.ListenAndServe()
+		}
 	}()
 
 	select {
