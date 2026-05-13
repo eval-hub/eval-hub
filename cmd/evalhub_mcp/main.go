@@ -32,12 +32,6 @@ func run(args []string) int {
 	}
 	defer shutdown() //nolint:errcheck
 
-	// Strip optional "serve" subcommand for operator compatibility
-	// (e.g. evalhub-mcp serve --transport http-sse).
-	if len(args) > 0 && args[0] == "serve" {
-		args = args[1:]
-	}
-
 	fs := flag.NewFlagSet("evalhub-mcp", flag.ContinueOnError)
 
 	transport := fs.String("transport", "stdio", "Transport mode: stdio, http, or http-sse")

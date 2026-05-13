@@ -87,31 +87,3 @@ func TestConfigLoadError(t *testing.T) {
 	}
 }
 
-func TestServeSubcommandVersion(t *testing.T) {
-	old := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	code := run([]string{"serve", "--version"})
-
-	w.Close()
-	os.Stdout = old
-
-	var buf bytes.Buffer
-	buf.ReadFrom(r)
-	output := buf.String()
-
-	if code != 0 {
-		t.Fatalf("expected exit code 0, got %d", code)
-	}
-	if !bytes.Contains([]byte(output), []byte("evalhub-mcp version")) {
-		t.Errorf("expected version output with serve subcommand, got: %s", output)
-	}
-}
-
-func TestServeSubcommandInvalidTransport(t *testing.T) {
-	code := run([]string{"serve", "--transport", "grpc"})
-	if code != 1 {
-		t.Fatalf("expected exit code 1 for invalid transport with serve subcommand, got %d", code)
-	}
-}
