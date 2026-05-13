@@ -193,6 +193,46 @@ func TestExtractPagination(t *testing.T) {
 	}
 }
 
+func TestListOptsFromResourceURI(t *testing.T) {
+	t.Parallel()
+	t.Run("uses default when limit absent", func(t *testing.T) {
+		t.Parallel()
+		opts, err := listOptsFromResourceURI("evalhub://collections", 42)
+		if err != nil {
+			t.Fatalf("listOptsFromResourceURI: %v", err)
+		}
+		v := collectPaginationParams(opts)
+		if g, w := v.Get("limit"), "42"; g != w {
+			t.Fatalf("limit = %q, want %q", g, w)
+		}
+	})
+	t.Run("keeps uri limit", func(t *testing.T) {
+		t.Parallel()
+		opts, err := listOptsFromResourceURI("evalhub://collections?limit=9", 42)
+		if err != nil {
+			t.Fatalf("listOptsFromResourceURI: %v", err)
+		}
+		v := collectPaginationParams(opts)
+		if g, w := v.Get("limit"), "9"; g != w {
+			t.Fatalf("limit = %q, want %q", g, w)
+		}
+	})
+	t.Run("default with offset", func(t *testing.T) {
+		t.Parallel()
+		opts, err := listOptsFromResourceURI("evalhub://jobs?offset=3", 100)
+		if err != nil {
+			t.Fatalf("listOptsFromResourceURI: %v", err)
+		}
+		v := collectPaginationParams(opts)
+		if g, w := v.Get("limit"), "100"; g != w {
+			t.Fatalf("limit = %q, want %q", g, w)
+		}
+		if g, w := v.Get("offset"), "3"; g != w {
+			t.Fatalf("offset = %q, want %q", g, w)
+		}
+	})
+}
+
 func TestEmptyResult(t *testing.T) {
 	t.Parallel()
 	r := emptyResult()

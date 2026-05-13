@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -459,7 +460,7 @@ func TestRegisterHandlersIncludesPromptsWithoutBackend(t *testing.T) {
 	info := &ServerInfo{Version: "test"}
 	srv := New(info, discardLogger, nil)
 
-	if err := RegisterHandlers(srv, nil, info, discardLogger); err != nil {
+	if err := RegisterHandlers(srv, nil, info, discardLogger, evalhubclient.DefaultListPageLimit); err != nil {
 		t.Fatalf("RegisterHandlers: %v", err)
 	}
 
@@ -483,7 +484,7 @@ func TestRegisterHandlersPromptsUnavailableWithoutBackend(t *testing.T) {
 	info := &ServerInfo{Version: "test"}
 	srv := New(info, discardLogger, nil)
 
-	if err := RegisterHandlers(srv, nil, info, discardLogger); err != nil {
+	if err := RegisterHandlers(srv, nil, info, discardLogger, evalhubclient.DefaultListPageLimit); err != nil {
 		t.Fatalf("RegisterHandlers: %v", err)
 	}
 

@@ -7,18 +7,20 @@ import (
 	"path/filepath"
 
 	"github.com/eval-hub/eval-hub/internal/logging"
+	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
 	"github.com/go-playground/validator/v10"
 	"github.com/spf13/viper"
 )
 
 type Config struct {
-	BaseURL   string `mapstructure:"base_url,omitempty" validate:"omitempty,url"`
-	Token     string `mapstructure:"token"`
-	Tenant    string `mapstructure:"tenant"`
-	Insecure  bool   `mapstructure:"insecure"`
-	Transport string `mapstructure:"transport" validate:"required,oneof=stdio http"`
-	Host      string `mapstructure:"host"      validate:"required"`
-	Port      int    `mapstructure:"port,omitempty" validate:"omitempty,min=1,max=65535"`
+	BaseURL       string `mapstructure:"base_url,omitempty" validate:"omitempty,url"`
+	Token         string `mapstructure:"token"`
+	Tenant        string `mapstructure:"tenant"`
+	Insecure      bool   `mapstructure:"insecure"`
+	Transport     string `mapstructure:"transport" validate:"required,oneof=stdio http"`
+	Host          string `mapstructure:"host"      validate:"required"`
+	Port          int    `mapstructure:"port,omitempty" validate:"omitempty,min=1,max=65535"`
+	ListPageLimit int    `mapstructure:"list_page_limit,omitempty" validate:"omitempty,min=1,max=2000"`
 }
 
 type Flags struct {
@@ -31,9 +33,10 @@ type Flags struct {
 
 func DefaultConfig() *Config {
 	return &Config{
-		Transport: "stdio",
-		Host:      "localhost",
-		Port:      3001,
+		Transport:     "stdio",
+		Host:          "localhost",
+		Port:          3001,
+		ListPageLimit: evalhubclient.DefaultListPageLimit,
 	}
 }
 
@@ -55,6 +58,8 @@ func Load(flags *Flags, logger *slog.Logger) (*Config, error) {
 		applyFlags(conf, flags)
 	}
 
+	normalizeListPageLimit(conf)
+
 	if logger != nil {
 		logger.Info("Loaded configuration", "config", logging.AsPrettyJson(conf, "token"), "config_path", configPath)
 	}
@@ -62,8 +67,18 @@ func Load(flags *Flags, logger *slog.Logger) (*Config, error) {
 	return conf, nil
 }
 
+func normalizeListPageLimit(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	if cfg.ListPageLimit == 0 {
+		cfg.ListPageLimit = evalhubclient.DefaultListPageLimit
+	}
+}
+
 // Validate checks the Config using go-playground/validator struct tags.
 func Validate(cfg *Config) error {
+	normalizeListPageLimit(cfg)
 	validate := validator.New(validator.WithRequiredStructEnabled())
 
 	if err := validate.Struct(cfg); err != nil {
@@ -98,6 +113,7 @@ func applyYAMLConfig(cfg *Config, path string) (*Config, error) {
 		"transport", "EVALHUB_TRANSPORT",
 		"host", "EVALHUB_HOST",
 		"port", "EVALHUB_PORT",
+		"list_page_limit", "EVALHUB_LIST_PAGE_LIMIT",
 	)
 	if err != nil {
 		return nil, err
@@ -111,6 +127,7 @@ func applyYAMLConfig(cfg *Config, path string) (*Config, error) {
 		v.SetDefault("transport", cfg.Transport)
 		v.SetDefault("host", cfg.Host)
 		v.SetDefault("port", cfg.Port)
+		v.SetDefault("list_page_limit", cfg.ListPageLimit)
 	}
 
 	if path == "" {

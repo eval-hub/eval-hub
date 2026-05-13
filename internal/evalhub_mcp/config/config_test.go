@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -31,6 +33,9 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Insecure {
 		t.Error("expected default insecure to be false")
 	}
+	if cfg.ListPageLimit != evalhubclient.DefaultListPageLimit {
+		t.Errorf("expected default list_page_limit %d, got %d", evalhubclient.DefaultListPageLimit, cfg.ListPageLimit)
+	}
 }
 
 func TestLoadNoConfig(t *testing.T) {
@@ -43,6 +48,9 @@ func TestLoadNoConfig(t *testing.T) {
 	}
 	if cfg.Transport != "stdio" {
 		t.Errorf("expected transport \"stdio\", got %q", cfg.Transport)
+	}
+	if cfg.ListPageLimit != evalhubclient.DefaultListPageLimit {
+		t.Errorf("expected list_page_limit %d, got %d", evalhubclient.DefaultListPageLimit, cfg.ListPageLimit)
 	}
 }
 
@@ -71,6 +79,20 @@ func TestLoadEnvVars(t *testing.T) {
 	}
 	if !cfg.Insecure {
 		t.Error("expected insecure=true from env")
+	}
+}
+
+func TestLoadEnvListPageLimit(t *testing.T) {
+	clearEnv(t)
+	defer clearEnv(t)
+	t.Setenv("EVALHUB_LIST_PAGE_LIMIT", "99")
+
+	cfg, err := Load(nil, nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.ListPageLimit != 99 {
+		t.Errorf("ListPageLimit = %d, want 99", cfg.ListPageLimit)
 	}
 }
 
@@ -275,6 +297,31 @@ func TestValidateStdioIgnoresPort(t *testing.T) {
 	}
 }
 
+func TestValidateListPageLimit(t *testing.T) {
+	t.Parallel()
+	t.Run("too large fails", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{Transport: "stdio", Host: "localhost", ListPageLimit: 5000}
+		if err := Validate(cfg); err == nil {
+			t.Fatal("expected validation error for list_page_limit > 2000")
+		}
+	})
+	t.Run("negative fails", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{Transport: "stdio", Host: "localhost", ListPageLimit: -1}
+		if err := Validate(cfg); err == nil {
+			t.Fatal("expected validation error for negative list_page_limit")
+		}
+	})
+	t.Run("valid custom passes", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{Transport: "stdio", Host: "localhost", ListPageLimit: 400}
+		if err := Validate(cfg); err != nil {
+			t.Fatalf("Validate: %v", err)
+		}
+	})
+}
+
 func TestValidateBaseURL(t *testing.T) {
 	t.Parallel()
 	t.Run("valid URL passes", func(t *testing.T) {
@@ -432,7 +479,7 @@ func TestLoadConfigFile(t *testing.T) {
 
 func clearEnv(t *testing.T) {
 	t.Helper()
-	for _, key := range []string{"EVALHUB_BASE_URL", "EVALHUB_TOKEN", "EVALHUB_TENANT", "EVALHUB_INSECURE"} {
+	for _, key := range []string{"EVALHUB_BASE_URL", "EVALHUB_TOKEN", "EVALHUB_TENANT", "EVALHUB_INSECURE", "EVALHUB_LIST_PAGE_LIMIT"} {
 		t.Setenv(key, "")
 	}
 }

@@ -17,8 +17,8 @@ import (
 func connectWithCompletions(t *testing.T, ds EvalHubDiscovery) (context.Context, *mcp.ClientSession) {
 	t.Helper()
 
-	srv := New(&ServerInfo{Version: "test"}, discardLogger, CompletionHandlerOption(ds, discardLogger))
-	registerResources(srv, ds, discardLogger)
+	srv := New(&ServerInfo{Version: "test"}, discardLogger, CompletionHandlerOption(ds, discardLogger, evalhubclient.DefaultListPageLimit))
+	registerResources(srv, ds, discardLogger, evalhubclient.DefaultListPageLimit)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	t.Cleanup(cancel)
@@ -278,7 +278,7 @@ func TestCompletionCacheExpiry(t *testing.T) {
 	t.Parallel()
 
 	ds := &callCountDataSource{inner: testDataSource()}
-	cp := newCompletionProvider(ds, discardLogger)
+	cp := newCompletionProvider(ds, discardLogger, evalhubclient.DefaultListPageLimit)
 
 	now := time.Now()
 	cp.cache.now = func() time.Time { return now }
@@ -352,7 +352,7 @@ func TestCompletionAPIErrorNotCached(t *testing.T) {
 			}, nil
 		},
 	}
-	cp := newCompletionProvider(ds, discardLogger)
+	cp := newCompletionProvider(ds, discardLogger, evalhubclient.DefaultListPageLimit)
 
 	got := cp.resolveValues("evalhub://providers/{id}", "id")
 	if len(got) != 0 {

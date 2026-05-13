@@ -308,6 +308,22 @@ func TestListProvidersPagination(t *testing.T) {
 	}
 }
 
+func TestListBenchmarksUsesListPageLimitForProviderPages(t *testing.T) {
+	resp := api.ProviderResourceList{
+		Page:  api.Page{TotalCount: 1, Limit: 2},
+		Items: []api.ProviderResource{{ProviderConfig: api.ProviderConfig{Name: "p1", Benchmarks: []api.BenchmarkResource{{ID: "b1"}}}}},
+	}
+	srv, capture := newCapturingServer(t, http.StatusOK, mustMarshal(t, resp))
+
+	_, err := newTestClient(srv).WithListPageLimit(2).ListBenchmarks()
+	if err != nil {
+		t.Fatalf("ListBenchmarks: %v", err)
+	}
+	if !strings.Contains(capture.query, "limit=2") {
+		t.Errorf("query %q should include limit=2 for provider paging", capture.query)
+	}
+}
+
 func TestGetProvider(t *testing.T) {
 	want := api.ProviderResource{ProviderConfig: api.ProviderConfig{Name: "ragas"}}
 	srv, capture := newCapturingServer(t, http.StatusOK, mustMarshal(t, want))

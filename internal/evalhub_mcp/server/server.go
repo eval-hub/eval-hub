@@ -74,7 +74,7 @@ func NewEvalHubClient(cfg *config.Config, logger *slog.Logger) *evalhubclient.Cl
 	if cfg.BaseURL == "" {
 		return nil
 	}
-	client := evalhubclient.NewClient(cfg.BaseURL).WithLogger(logger)
+	client := evalhubclient.NewClient(cfg.BaseURL).WithListPageLimit(cfg.ListPageLimit).WithLogger(logger)
 	if cfg.Token != "" {
 		client = client.WithToken(cfg.Token)
 	}
@@ -89,17 +89,17 @@ func NewEvalHubClient(cfg *config.Config, logger *slog.Logger) *evalhubclient.Cl
 }
 
 // RegisterHandlers wires tool, resource, and prompt handlers into the MCP
-// server. The server version resource is always registered. The EvalHub client
-// is captured by handler closures so that every handler has access to the API
-// without global state.
-func RegisterHandlers(srv *mcp.Server, client *evalhubclient.Client, info *ServerInfo, logger *slog.Logger) error {
+// server. listPageLimit is the default maximum number of items requested from
+// eval-hub list endpoints (providers, collections, jobs, and completion caches);
+// resource URIs may still set an explicit "limit" query parameter for collections and jobs.
+func RegisterHandlers(srv *mcp.Server, client *evalhubclient.Client, info *ServerInfo, logger *slog.Logger, listPageLimit int) error {
 	registerVersionResource(srv, info, logger)
 	// should we error if no client is provided?
 	if client != nil {
 		if err := registerPrompts(srv, logger); err != nil {
 			return err
 		}
-		registerResources(srv, client, logger)
+		registerResources(srv, client, logger, listPageLimit)
 		registerTools(srv, client, logger)
 	}
 	return nil
@@ -107,11 +107,11 @@ func RegisterHandlers(srv *mcp.Server, client *evalhubclient.Client, info *Serve
 
 // CompletionHandlerOption returns a ServerOption that installs a completion handler
 // backed by the given data source. Returns nil when ds is nil.
-func CompletionHandlerOption(ds EvalHubDiscovery, logger *slog.Logger) *ServerOption {
+func CompletionHandlerOption(ds EvalHubDiscovery, logger *slog.Logger, listPageLimit int) *ServerOption {
 	if ds == nil {
 		return nil
 	}
-	cp := newCompletionProvider(ds, logger)
+	cp := newCompletionProvider(ds, logger, listPageLimit)
 	return &ServerOption{applyFn: func(opts *mcp.ServerOptions) {
 		opts.CompletionHandler = cp.handle
 	}}
@@ -119,8 +119,8 @@ func CompletionHandlerOption(ds EvalHubDiscovery, logger *slog.Logger) *ServerOp
 
 func Run(ctx context.Context, cfg *config.Config, info *ServerInfo, logger *slog.Logger) error {
 	client := NewEvalHubClient(cfg, logger)
-	srv := New(info, logger, CompletionHandlerOption(client, logger))
-	if err := RegisterHandlers(srv, client, info, logger); err != nil {
+	srv := New(info, logger, CompletionHandlerOption(client, logger, cfg.ListPageLimit))
+	if err := RegisterHandlers(srv, client, info, logger, cfg.ListPageLimit); err != nil {
 		return err
 	}
 

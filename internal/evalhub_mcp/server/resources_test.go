@@ -232,7 +232,7 @@ func connectWithResources(t *testing.T, ds EvalHubDiscovery) (context.Context, *
 	t.Helper()
 
 	srv := New(&ServerInfo{Version: "test"}, discardLogger, nil)
-	registerResources(srv, ds, discardLogger)
+	registerResources(srv, ds, discardLogger, evalhubclient.DefaultListPageLimit)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	t.Cleanup(cancel)
@@ -694,7 +694,7 @@ func TestRegisterHandlersNilClient(t *testing.T) {
 	t.Parallel()
 	info := &ServerInfo{Version: "test"}
 	srv := New(info, discardLogger, nil)
-	if err := RegisterHandlers(srv, nil, info, discardLogger); err != nil {
+	if err := RegisterHandlers(srv, nil, info, discardLogger, evalhubclient.DefaultListPageLimit); err != nil {
 		t.Fatalf("RegisterHandlers: %v", err)
 	}
 
