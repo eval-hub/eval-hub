@@ -247,7 +247,6 @@ func TestValidateTransport(t *testing.T) {
 		{"stdio", false},
 		{"http", false},
 		{"http-sse", false},
-		{"streamable-http", false},
 		{"grpc", true},
 		{"websocket", true},
 		{"", true},
@@ -537,7 +536,6 @@ func TestIsHTTPTransport(t *testing.T) {
 	}{
 		{"http", true},
 		{"http-sse", true},
-		{"streamable-http", true},
 		{"stdio", false},
 	}
 	for _, tt := range tests {

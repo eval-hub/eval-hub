@@ -40,7 +40,7 @@ func run(args []string) int {
 
 	fs := flag.NewFlagSet("evalhub-mcp", flag.ContinueOnError)
 
-	transport := fs.String("transport", "stdio", "Transport mode: stdio, http, http-sse, or streamable-http")
+	transport := fs.String("transport", "stdio", "Transport mode: stdio, http, or http-sse")
 	host := fs.String("host", "localhost", "Host to bind HTTP server to")
 	port := fs.Int("port", 3001, "Port for HTTP server")
 	configPath := fs.String("config", "", "Path to configuration file")

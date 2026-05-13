@@ -189,37 +189,6 @@ func TestRunHTTPStartsAndStops(t *testing.T) {
 	}
 }
 
-func TestRunStreamableHTTPAlias(t *testing.T) {
-	t.Parallel()
-	port := freePort(t)
-
-	cfg := &config.Config{
-		Transport: "streamable-http",
-		Host:      "127.0.0.1",
-		Port:      port,
-	}
-	info := &ServerInfo{Version: "test"}
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- Run(ctx, cfg, info, discardLogger)
-	}()
-
-	waitForPort(t, cfg.Host, port, 3*time.Second)
-	cancel()
-
-	select {
-	case err := <-errCh:
-		if err != nil {
-			t.Fatalf("unexpected error after shutdown: %v", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("server did not shut down within 5 seconds")
-	}
-}
-
 func TestRunHTTPSSEStartsAndStops(t *testing.T) {
 	t.Parallel()
 	port := freePort(t)

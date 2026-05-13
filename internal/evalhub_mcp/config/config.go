@@ -17,7 +17,7 @@ type Config struct {
 	Token         string `mapstructure:"token"`
 	Tenant        string `mapstructure:"tenant"`
 	Insecure      bool   `mapstructure:"insecure"`
-	Transport     string `mapstructure:"transport" validate:"required,oneof=stdio http http-sse streamable-http"`
+	Transport     string `mapstructure:"transport" validate:"required,oneof=stdio http http-sse"`
 	Host          string `mapstructure:"host"      validate:"required"`
 	Port          int    `mapstructure:"port,omitempty" validate:"omitempty,min=1,max=65535"`
 	ListPageLimit int    `mapstructure:"list_page_limit,omitempty" validate:"omitempty,min=1,max=2000"`
@@ -87,7 +87,7 @@ func (c *Config) TLSEnabled() bool {
 
 // IsHTTPTransport returns true for any HTTP-based transport mode.
 func (c *Config) IsHTTPTransport() bool {
-	return c.Transport == "http" || c.Transport == "http-sse" || c.Transport == "streamable-http"
+	return c.Transport == "http" || c.Transport == "http-sse"
 }
 
 // Validate checks the Config using go-playground/validator struct tags.

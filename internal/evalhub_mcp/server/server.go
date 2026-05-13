@@ -136,7 +136,7 @@ func Run(ctx context.Context, cfg *config.Config, info *ServerInfo, logger *slog
 	switch cfg.Transport {
 	case "stdio":
 		return runStdio(ctx, srv)
-	case "http", "streamable-http":
+	case "http":
 		return runHTTP(ctx, srv, cfg, logger)
 	case "http-sse":
 		return runHTTPSSE(ctx, srv, cfg, logger)
