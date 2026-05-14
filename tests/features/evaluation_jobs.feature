@@ -535,6 +535,8 @@ Feature: Evaluation Jobs
     Then the response code should be 202
     And the response should contain the value "toxicity-and-ethical-principles" at path "$.collection.id"
     And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
     And the response should contain the value "toxicity-and-ethical-principles" at path "$.collection.id"
     And the response should contain the value "Evaluation job is completed" at path "$.status.message.message"
     And the response should contain the value "completed" at path "$.status.benchmarks[0].status"
@@ -613,6 +615,8 @@ Feature: Evaluation Jobs
     Then the response code should be 202
     And the response should contain the value "leaderboard-v2" at path "$.collection.id"
     And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
     And the response should contain the value "leaderboard-v2" at path "$.collection.id"
     And the response should contain the value "Evaluation job is completed" at path "$.status.message.message"
     And the response should contain the value "completed" at path "$.status.benchmarks[0].status"
@@ -699,6 +703,8 @@ Feature: Evaluation Jobs
     Then the response code should be 202
     And the response should contain the value "safety-and-fairness-v1" at path "$.collection.id"
     And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
     And the response should contain the value "safety-and-fairness-v1" at path "$.collection.id"
     And the response should contain the value "Evaluation job is completed" at path "$.status.message.message"
     And the response should contain the value "completed" at path "$.status.benchmarks[0].status"
