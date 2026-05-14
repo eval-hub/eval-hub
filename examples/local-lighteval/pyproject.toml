@@ -1,5 +1,5 @@
 [project]
-name = "eval-hub-local-demo"
+name = "local-lighteval"
 version = "0.0.1"
 requires-python = ">=3.12"
 dependencies = [

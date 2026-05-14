@@ -211,9 +211,14 @@ eval-hub/
 └── Makefile               # Build, test, and dev targets
 ```
 
+## Local mode
+
+EvalHub can run evaluations locally without a Kubernetes cluster. See the [local mode guide](https://eval-hub.github.io/guides/local-mode/) for configuration, architecture details, and troubleshooting, and the [local mode tutorial](https://eval-hub.github.io/guides/local-mode-tutorial/) for a step-by-step walkthrough. A self-contained [LightEval example](examples/local-lighteval/) is included in this repository.
+
 ## Further reading
 
 - [API documentation](https://eval-hub.github.io/eval-hub/) -- full endpoint reference
+- [Local mode guide](https://eval-hub.github.io/guides/local-mode/) -- running evaluations without Kubernetes
 - [CONTRIBUTING.md](./CONTRIBUTING.md) -- contribution guidelines
 - [OpenAPI spec](./docs/openapi.yaml) -- machine-readable API definition
 
