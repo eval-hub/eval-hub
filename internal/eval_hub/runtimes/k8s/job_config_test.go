@@ -715,10 +715,10 @@ func intPtr(value int) *int {
 
 func TestResolveGPUConfig(t *testing.T) {
 	tests := []struct {
-		name        string
-		gpu         *api.GPUConfig
-		wantRes     string
-		wantCount   int
+		name      string
+		gpu       *api.GPUConfig
+		wantRes   string
+		wantCount int
 	}{
 		{
 			name:      "nil gpu config yields no GPU",

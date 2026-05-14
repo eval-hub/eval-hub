@@ -30,8 +30,8 @@ const (
 	inClusterNamespaceFile      = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 	serviceAccountNameSuffix    = "-job"
 	serviceCAConfigMapSuffix    = "-service-ca"
-	defaultTestDataInitCmd = "/app/eval-runtime-init"
-	defaultEvalHubPort     = "8443"
+	defaultTestDataInitCmd      = "/app/eval-runtime-init"
+	defaultEvalHubPort          = "8443"
 )
 
 type jobConfig struct {

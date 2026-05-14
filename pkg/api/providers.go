@@ -73,12 +73,12 @@ type GPUConfig struct {
 //	    - name: FOO
 //	      value: "bar"
 type K8sRuntime struct {
-	Image         string     `mapstructure:"image" yaml:"image"`
-	Entrypoint    []string   `mapstructure:"entrypoint" yaml:"entrypoint"`
-	CPURequest    string     `mapstructure:"cpu_request" yaml:"cpu_request"`
-	MemoryRequest string     `mapstructure:"memory_request" yaml:"memory_request"`
-	CPULimit      string     `mapstructure:"cpu_limit" yaml:"cpu_limit"`
-	MemoryLimit   string     `mapstructure:"memory_limit" yaml:"memory_limit"`
+	Image         string   `mapstructure:"image" yaml:"image"`
+	Entrypoint    []string `mapstructure:"entrypoint" yaml:"entrypoint"`
+	CPURequest    string   `mapstructure:"cpu_request" yaml:"cpu_request"`
+	MemoryRequest string   `mapstructure:"memory_request" yaml:"memory_request"`
+	CPULimit      string   `mapstructure:"cpu_limit" yaml:"cpu_limit"`
+	MemoryLimit   string   `mapstructure:"memory_limit" yaml:"memory_limit"`
 	// GPU declares the GPU resource requirement for this adapter. Omit entirely for CPU-only
 	// adapters — existing adapters are unaffected.
 	GPU *GPUConfig `mapstructure:"gpu" yaml:"gpu" json:"gpu,omitempty"`

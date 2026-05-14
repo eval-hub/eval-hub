@@ -82,7 +82,7 @@ const (
 	annotationJobIDKey               = "eval-hub.github.io/job_id"
 	annotationProviderIDKey          = "eval-hub.github.io/provider_id"
 	annotationBenchmarkIDKey         = "eval-hub.github.io/benchmark_id"
-	labelKueueQueueNameKey = "kueue.x-k8s.io/queue-name"
+	labelKueueQueueNameKey           = "kueue.x-k8s.io/queue-name"
 )
 
 var (

@@ -17,7 +17,7 @@ import (
 type gpuTestResources struct {
 	resourceFlavorsCreated []string
 	clusterQueuesCreated   []string
-	localQueuesCreated     map[string][]string // namespace -> queue names
+	localQueuesCreated     map[string][]string          // namespace -> queue names
 	nodeLabelsAdded        map[string]map[string]string // node -> label key -> original value
 }
 
@@ -28,35 +28,22 @@ var (
 	}
 )
 
-// setupGPUTestResources creates Kueue resources for GPU testing
-func setupGPUTestResources(namespace string) error {
-	logDebug("Setting up GPU test resources in namespace: %s\n", namespace)
-
-	// Check if Kueue is installed
-	cmd := exec.Command("oc", "get", "crd", "clusterqueues.kueue.x-k8s.io")
-	if err := cmd.Run(); err != nil {
-		logDebug("Kueue not installed, skipping GPU resource setup\n")
-		return nil
-	}
-
-	// Get GPU product from environment variable (skip nodeSelector tests if not set)
-	gpuProduct := os.Getenv("GPU_PRODUCT")
-	if gpuProduct == "" {
-		logDebug("GPU_PRODUCT environment variable not set, skipping GPU nodeSelector tests\n")
-		// Still create default flavor without nodeSelector
-		if err := applyYAML(`
+// setupBasicGPUResources creates ResourceFlavors and ClusterQueues without GPU-specific nodeLabels
+func setupBasicGPUResources() error {
+	// Create default flavor without nodeSelector
+	if err := applyYAML(`
 apiVersion: kueue.x-k8s.io/v1beta1
 kind: ResourceFlavor
 metadata:
   name: default-flavor
 spec: {}
 `); err != nil {
-			return fmt.Errorf("failed to create default-flavor ResourceFlavor: %w", err)
-		}
-		gpuResources.resourceFlavorsCreated = append(gpuResources.resourceFlavorsCreated, "default-flavor")
+		return fmt.Errorf("failed to create default-flavor ResourceFlavor: %w", err)
+	}
+	gpuResources.resourceFlavorsCreated = append(gpuResources.resourceFlavorsCreated, "default-flavor")
 
-		// Create basic ClusterQueue without GPU-specific nodeLabels
-		if err := applyYAML(`
+	// Create basic ClusterQueue without GPU-specific nodeLabels
+	if err := applyYAML(`
 apiVersion: kueue.x-k8s.io/v1beta1
 kind: ClusterQueue
 metadata:
@@ -75,15 +62,37 @@ spec:
       - name: "nvidia.com/gpu"
         nominalQuota: 4
 `); err != nil {
-			return fmt.Errorf("failed to create gpu-cluster-queue ClusterQueue: %w", err)
-		}
-		gpuResources.clusterQueuesCreated = append(gpuResources.clusterQueuesCreated, "gpu-cluster-queue")
-
-		// Skip to creating LocalQueues
-		goto createLocalQueues
+		return fmt.Errorf("failed to create gpu-cluster-queue ClusterQueue: %w", err)
 	}
-	logDebug("Using GPU product from environment: %s\n", gpuProduct)
+	gpuResources.clusterQueuesCreated = append(gpuResources.clusterQueuesCreated, "gpu-cluster-queue")
 
+	// Create CPU-only ClusterQueue
+	if err := applyYAML(`
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ClusterQueue
+metadata:
+  name: cpu-only-cluster-queue
+spec:
+  namespaceSelector: {}
+  resourceGroups:
+  - coveredResources: ["cpu", "memory"]
+    flavors:
+    - name: default-flavor
+      resources:
+      - name: "cpu"
+        nominalQuota: 100
+      - name: "memory"
+        nominalQuota: 200Gi
+`); err != nil {
+		return fmt.Errorf("failed to create cpu-only-cluster-queue ClusterQueue: %w", err)
+	}
+	gpuResources.clusterQueuesCreated = append(gpuResources.clusterQueuesCreated, "cpu-only-cluster-queue")
+
+	return nil
+}
+
+// setupGPUResourcesWithNodeSelector creates ResourceFlavors and ClusterQueues with GPU-specific nodeLabels
+func setupGPUResourcesWithNodeSelector(gpuProduct string) error {
 	// Create ResourceFlavor for detected GPU
 	resourceFlavorYAML := fmt.Sprintf(`
 apiVersion: kueue.x-k8s.io/v1beta1
@@ -157,7 +166,37 @@ spec:
 	}
 	gpuResources.clusterQueuesCreated = append(gpuResources.clusterQueuesCreated, "cpu-only-cluster-queue")
 
-createLocalQueues:
+	return nil
+}
+
+// setupGPUTestResources creates Kueue resources for GPU testing
+func setupGPUTestResources(namespace string) error {
+	logDebug("Setting up GPU test resources in namespace: %s\n", namespace)
+
+	// Check if Kueue is installed
+	cmd := exec.Command("oc", "get", "crd", "clusterqueues.kueue.x-k8s.io")
+	if err := cmd.Run(); err != nil {
+		logDebug("Kueue not installed, skipping GPU resource setup\n")
+		return nil
+	}
+
+	// Get GPU product from environment variable (skip nodeSelector tests if not set)
+	gpuProduct := os.Getenv("GPU_PRODUCT")
+
+	// Create ResourceFlavors and ClusterQueues based on GPU_PRODUCT setting
+	if gpuProduct == "" {
+		logDebug("GPU_PRODUCT environment variable not set, skipping GPU nodeSelector tests\n")
+		// Create basic resources without GPU-specific nodeLabels
+		if err := setupBasicGPUResources(); err != nil {
+			return err
+		}
+	} else {
+		logDebug("Using GPU product from environment: %s\n", gpuProduct)
+		// Create resources with GPU-specific nodeLabels
+		if err := setupGPUResourcesWithNodeSelector(gpuProduct); err != nil {
+			return err
+		}
+	}
 	// Create namespace if needed
 	cmd = exec.Command("oc", "create", "namespace", namespace, "--dry-run=client", "-o", "yaml")
 	out, _ := cmd.Output()
@@ -628,9 +667,9 @@ func (tc *scenarioConfig) iWaitForSchedulingError(duration string) error {
 func (tc *scenarioConfig) responseShouldContainGPUErrorMessage() error {
 	bodyStr := string(tc.body)
 	if !strings.Contains(strings.ToLower(bodyStr), "gpu") &&
-	   !strings.Contains(strings.ToLower(bodyStr), "unavailable") &&
-	   !strings.Contains(strings.ToLower(bodyStr), "not available") &&
-	   !strings.Contains(strings.ToLower(bodyStr), "scheduling") {
+		!strings.Contains(strings.ToLower(bodyStr), "unavailable") &&
+		!strings.Contains(strings.ToLower(bodyStr), "not available") &&
+		!strings.Contains(strings.ToLower(bodyStr), "scheduling") {
 		return tc.logError(fmt.Errorf("response does not contain error message about GPU availability: %s", bodyStr))
 	}
 	logDebug("Response contains GPU error message\n")
@@ -640,8 +679,8 @@ func (tc *scenarioConfig) responseShouldContainGPUErrorMessage() error {
 func (tc *scenarioConfig) responseShouldContainQueueGPUErrorMessage() error {
 	bodyStr := string(tc.body)
 	if !strings.Contains(strings.ToLower(bodyStr), "gpu") &&
-	   !strings.Contains(strings.ToLower(bodyStr), "queue") &&
-	   !strings.Contains(strings.ToLower(bodyStr), "unavailable") {
+		!strings.Contains(strings.ToLower(bodyStr), "queue") &&
+		!strings.Contains(strings.ToLower(bodyStr), "unavailable") {
 		return tc.logError(fmt.Errorf("response does not contain error message about GPU availability in queue: %s", bodyStr))
 	}
 	logDebug("Response contains queue GPU error message\n")
@@ -792,7 +831,7 @@ func (tc *scenarioConfig) gpuTestProviderIsLoaded() error {
 	}
 
 	// Check if GPU provider exists and has GPU configuration
-	cmd := exec.Command("curl", "-s", "-f",
+	cmd := exec.Command("curl", "-s", "-f", "-k",
 		"-H", fmt.Sprintf("Authorization: Bearer %s", token),
 		"-H", fmt.Sprintf("X-Tenant: %s", tenant),
 		fmt.Sprintf("%s/api/v1/evaluations/providers/gpu_test_provider", baseURL))
