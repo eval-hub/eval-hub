@@ -742,7 +742,6 @@ Feature: Evaluation Jobs
     And the response should contain the value "resource_not_found" at path "$.message_code"
     And the response should contain the value "was not found." at path "$.message"
 
-  @zahra
   Scenario: Multiple jobs can reference different OOB collection
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -791,7 +790,6 @@ Feature: Evaluation Jobs
     Then the response code should be 202
     And the response should contain the value "leaderboard-v2" at path "$.collection.id"
 
-  @zahra
   Scenario: Multiple jobs can reference same OOB collection
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -893,7 +891,6 @@ Feature: Evaluation Jobs
 
   @negative 
   Scenario: Verify Evaluation Jobs require either benchmarks or collection
-
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
       """
