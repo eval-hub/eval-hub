@@ -1,0 +1,20 @@
+{
+  "model": {
+    "url": "{{env:MODEL_URL|http://test.com}}",
+    "name": "{{env:MODEL_NAME|test}}",
+    "auth": {
+      "secret_ref": "{{env:MODEL_AUTH_SECRET_REF|test}}"
+    }
+  },
+  "benchmarks": [
+    {
+      "id": "arc_easy",
+      "provider_id": "gpu_test_provider_a100",
+      "parameters": {
+        "num_examples": 10
+      }
+    }
+  ],
+  "name": "gpu-test-no-queue-h100-selector",
+  "tags": ["gpu", "test", "scenario-1c", "h100", "unavailable"]
+}

@@ -1,0 +1,44 @@
+id: gpu_test_provider_l4
+name: GPU Test Provider L4
+title: GPU Test Provider with L4 nodeSelector
+description: >
+  GPU test provider with L4 nodeSelector for testing GPU node selection
+
+runtime:
+  k8s:
+    image: quay.io/opendatahub/ta-lmes-job:odh-3.4-ea2
+    entrypoint:
+      - /opt/app-root/bin/python
+      - /opt/app-root/src/main.py
+    cpu_request: 100m
+    memory_request: 128Mi
+    cpu_limit: 500m
+    memory_limit: 4Gi
+    gpu:
+      resource: nvidia.com/gpu
+      count: 1
+      node_selector:
+        nvidia.com/gpu.product: NVIDIA-L4
+  local:
+    command: python tests/features/test_data/runtime/main.py
+
+benchmarks:
+  - id: arc_easy
+    name: "Basic science Q&A (GPU test)"
+    description: |-
+      Grade-school science questions testing basic reasoning and scientific knowledge (AI2 Reasoning Challenge, easy split).
+    category: reasoning
+    metrics:
+      - acc
+      - acc_norm
+    num_few_shot: 0
+    dataset_size: 2376
+    tags:
+      - reasoning
+      - science
+      - gpu_test
+    primary_score:
+      metric: acc_norm
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.25

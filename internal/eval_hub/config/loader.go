@@ -13,6 +13,7 @@ import (
 	"github.com/eval-hub/eval-hub/auth"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/go-playground/validator/v10"
+	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 )
 
@@ -83,6 +84,59 @@ func readConfig(logger *slog.Logger, name string, ext string, dirs ...string) (*
 	return configValues, err
 }
 
+// flattenNestedMap recursively flattens a nested map structure into a single-level map with dotted keys.
+// For example: {"nvidia": {"com/gpu": {"product": "A100"}}} becomes {"nvidia.com/gpu.product": "A100"}
+func flattenNestedMap(m map[string]interface{}, prefix string) map[string]string {
+	result := make(map[string]string)
+	for k, v := range m {
+		key := k
+		if prefix != "" {
+			key = prefix + "." + k
+		}
+		switch val := v.(type) {
+		case map[string]interface{}:
+			for nestedK, nestedV := range flattenNestedMap(val, key) {
+				result[nestedK] = nestedV
+			}
+		case string:
+			result[key] = val
+		}
+	}
+	return result
+}
+
+// fixNodeSelectorInSettings finds and flattens node_selector maps that Viper incorrectly nested.
+// This specifically targets runtime.k8s.gpu.node_selector to preserve Kubernetes label keys with dots.
+func fixNodeSelectorInSettings(settings map[string]interface{}) {
+	// Navigate to runtime.k8s.gpu.node_selector
+	runtime, ok := settings["runtime"].(map[string]interface{})
+	if !ok {
+		return
+	}
+	k8s, ok := runtime["k8s"].(map[string]interface{})
+	if !ok {
+		return
+	}
+	gpu, ok := k8s["gpu"].(map[string]interface{})
+	if !ok {
+		return
+	}
+	nodeSelector, ok := gpu["node_selector"].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	// Flatten the nested structure back to dotted keys
+	flattened := flattenNestedMap(nodeSelector, "")
+
+	// Convert to map[string]interface{} for Viper
+	fixed := make(map[string]interface{})
+	for k, v := range flattened {
+		fixed[k] = v
+	}
+	gpu["node_selector"] = fixed
+}
+
 func loadProvider(logger *slog.Logger, validate *validator.Validate, file string, dirs ...string) (*api.ProviderResource, string, error) {
 	type providerConfigInternal struct {
 		ID                 string `mapstructure:"id" yaml:"id" json:"id"`
@@ -94,7 +148,21 @@ func loadProvider(logger *slog.Logger, validate *validator.Validate, file string
 		return nil, "", err
 	}
 
-	if err := configValues.Unmarshal(&providerConfig); err != nil {
+	// Fix node_selector maps that Viper incorrectly split on dots
+	settings := configValues.AllSettings()
+	fixNodeSelectorInSettings(settings)
+
+	// Use custom decoder config with string slice hook
+	decoderConfig := &mapstructure.DecoderConfig{
+		DecodeHook: mapstructure.StringToSliceHookFunc(","),
+		Result:     &providerConfig,
+		TagName:    "mapstructure",
+	}
+	decoder, err := mapstructure.NewDecoder(decoderConfig)
+	if err != nil {
+		return nil, configValues.ConfigFileUsed(), err
+	}
+	if err := decoder.Decode(settings); err != nil {
 		return nil, configValues.ConfigFileUsed(), err
 	}
 	res := &api.ProviderResource{
@@ -124,7 +192,17 @@ func loadCollection(logger *slog.Logger, validate *validator.Validate, file stri
 		return nil, "", err
 	}
 
-	if err := configValues.Unmarshal(&collectionConfig); err != nil {
+	// Use custom decoder config to preserve dotted keys in maps
+	decoderConfig := &mapstructure.DecoderConfig{
+		DecodeHook: mapstructure.StringToSliceHookFunc(","),
+		Result:     &collectionConfig,
+		TagName:    "mapstructure",
+	}
+	decoder, err := mapstructure.NewDecoder(decoderConfig)
+	if err != nil {
+		return nil, configValues.ConfigFileUsed(), err
+	}
+	if err := decoder.Decode(configValues.AllSettings()); err != nil {
 		return nil, configValues.ConfigFileUsed(), err
 	}
 	res := &api.CollectionResource{

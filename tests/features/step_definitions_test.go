@@ -1444,4 +1444,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I set the wait deadline to "([^"]*)"$`, tc.iSetWaitDeadlineTo)
 	// Other steps
 	ctx.Step(`^fix this step$`, tc.fixThisStep)
+
+	// GPU-specific steps
+	InitializeGPUSteps(ctx, tc)
 }
