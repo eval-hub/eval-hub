@@ -12,12 +12,20 @@ import (
 	"github.com/spf13/viper"
 )
 
+// Transport mode names. Use TransportHTTP for remote clients; TransportHTTPSSE is
+// legacy HTTP+SSE (MCP 2024-11-05) and should only be enabled for older clients.
+const (
+	TransportStdio   = "stdio"
+	TransportHTTP    = "http"
+	TransportHTTPSSE = "http-sse"
+)
+
 type Config struct {
 	BaseURL       string `mapstructure:"base_url,omitempty" validate:"omitempty,url"`
 	Token         string `mapstructure:"token"`
 	Tenant        string `mapstructure:"tenant"`
 	Insecure      bool   `mapstructure:"insecure"`
-	Transport     string `mapstructure:"transport" validate:"required,oneof=stdio http http-sse"`
+	Transport     string `mapstructure:"transport" validate:"required,oneof=stdio http http-sse"` // default stdio; use http for remote
 	Host          string `mapstructure:"host"      validate:"required"`
 	Port          int    `mapstructure:"port,omitempty" validate:"omitempty,min=1,max=65535"`
 	ListPageLimit int    `mapstructure:"list_page_limit,omitempty" validate:"omitempty,min=1,max=2000"`
@@ -37,7 +45,7 @@ type Flags struct {
 
 func DefaultConfig() *Config {
 	return &Config{
-		Transport:     "stdio",
+		Transport:     TransportStdio,
 		Host:          "localhost",
 		Port:          3001,
 		ListPageLimit: evalhubclient.DefaultListPageLimit,
@@ -87,7 +95,12 @@ func (c *Config) TLSEnabled() bool {
 
 // IsHTTPTransport returns true for any HTTP-based transport mode.
 func (c *Config) IsHTTPTransport() bool {
-	return c.Transport == "http" || c.Transport == "http-sse"
+	return c.Transport == TransportHTTP || c.Transport == TransportHTTPSSE
+}
+
+// IsLegacyHTTPTransport returns true for the deprecated HTTP+SSE transport (MCP 2024-11-05).
+func (c *Config) IsLegacyHTTPTransport() bool {
+	return c.Transport == TransportHTTPSSE
 }
 
 // Validate checks the Config using go-playground/validator struct tags.

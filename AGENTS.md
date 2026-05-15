@@ -154,7 +154,7 @@ The MCP (Model Context Protocol) server exposes eval-hub functionality to AI age
 ```bash
 # Run directly
 go run cmd/evalhub_mcp/main.go                          # stdio transport (default)
-go run cmd/evalhub_mcp/main.go --transport http          # HTTP/SSE on localhost:3001
+go run cmd/evalhub_mcp/main.go --transport http          # Streamable HTTP on localhost:3001
 go run cmd/evalhub_mcp/main.go --transport http --port 4000 --host 0.0.0.0
 
 # Build and run
@@ -165,7 +165,7 @@ make build-mcp
 go test -v ./cmd/evalhub_mcp/ ./internal/evalhub_mcp/...
 ```
 
-**CLI flags:** `--transport stdio|http`, `--host`, `--port`, `--config`, `--insecure`, `--version`
+**CLI flags:** `--transport stdio|http|http-sse` (`http` = Streamable HTTP, default for remote; `http-sse` = legacy HTTP+SSE only), `--host`, `--port`, `--config`, `--insecure`, `--version`
 
 **Configuration precedence:** CLI flags > env vars (`EVALHUB_BASE_URL`, `EVALHUB_TOKEN`, `EVALHUB_TENANT`, `EVALHUB_INSECURE`, `EVALHUB_LIST_PAGE_LIMIT`) > YAML config (`~/.evalhub/config.yaml`)
 

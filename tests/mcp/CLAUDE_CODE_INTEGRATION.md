@@ -152,7 +152,7 @@ In a Claude Code conversation, type a partial resource URI and verify that autoc
 
 ---
 
-## Part 2: HTTP/SSE Transport Integration
+## Part 2: Streamable HTTP Transport Integration
 
 ### Step 7 — Start the evalhub-mcp Server in HTTP Mode
 

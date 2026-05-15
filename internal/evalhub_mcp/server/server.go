@@ -134,12 +134,15 @@ func Run(ctx context.Context, cfg *config.Config, info *ServerInfo, logger *slog
 	)
 
 	switch cfg.Transport {
-	case "stdio":
+	case config.TransportStdio:
 		return runStdio(ctx, srv)
-	case "http":
+	case config.TransportHTTP:
 		return runHTTP(ctx, srv, cfg, logger)
-	case "http-sse":
-		return runHTTPSSE(ctx, srv, cfg, logger)
+	case config.TransportHTTPSSE:
+		logger.Warn("transport http-sse is deprecated; use http (Streamable HTTP) unless connecting to legacy MCP clients",
+			"transport", cfg.Transport,
+		)
+		return runLegacyHTTPSSE(ctx, srv, cfg, logger)
 	default:
 		return fmt.Errorf("unsupported transport: %s", cfg.Transport)
 	}
@@ -157,7 +160,8 @@ func runHTTP(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *s
 	return serveHTTP(ctx, handler, cfg, logger)
 }
 
-func runHTTPSSE(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *slog.Logger) error {
+// runLegacyHTTPSSE serves the deprecated HTTP+SSE transport (MCP 2024-11-05) for older clients.
+func runLegacyHTTPSSE(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *slog.Logger) error {
 	handler := mcp.NewSSEHandler(
 		func(r *http.Request) *mcp.Server { return srv },
 		nil,
