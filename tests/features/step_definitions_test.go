@@ -469,6 +469,7 @@ func (tc *scenarioConfig) iSetWaitDeadlineTo(paramValue string) error {
 func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) error {
 	deadline := time.Now().Add(tc.waitDeadline)
 	var lastErr error
+	var lastStatus string
 	for time.Now().Before(deadline) {
 		if err := tc.iSendARequestImpl(http.MethodGet, "/api/v1/evaluations/jobs/{id}", "", "wait for evaluation job status"); err != nil {
 			lastErr = err
@@ -477,6 +478,9 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) err
 		}
 		if tc.response != nil && tc.response.StatusCode == http.StatusOK {
 			status, err := tc.getJsonPath("$.status.state")
+			if status != "" {
+				lastStatus = status
+			}
 			if err != nil {
 				lastErr = err
 			} else if status == expectedStatus {
@@ -491,7 +495,8 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) err
 					}
 					return tc.logError(fmt.Errorf("evaluation job reached terminal state %q (expected %q)", status, expectedStatus))
 				}
-				lastErr = fmt.Errorf("expected status %q but got %q", expectedStatus, status)
+				// we should not do this because it will be logged as an error
+				// lastErr = fmt.Errorf("expected status %q but got %q", expectedStatus, status)
 			}
 		} else if tc.response != nil {
 			lastErr = tc.logError(fmt.Errorf("unexpected response status %d", tc.response.StatusCode))
@@ -501,7 +506,7 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) err
 	if lastErr != nil {
 		return tc.logError(lastErr)
 	}
-	return tc.logError(fmt.Errorf("timed out waiting for status %q", expectedStatus))
+	return tc.logError(fmt.Errorf("timed out waiting for status %q, last status: %q", expectedStatus, lastStatus))
 }
 
 func (tc *scenarioConfig) findFile(fileName string) (string, error) {
