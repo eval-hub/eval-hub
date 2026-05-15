@@ -12,7 +12,7 @@
 # Environment:
 #   Copy test.env.example to test.env and fill in values before running.
 #   For HTTP tests, start the server first:
-#     evalhub-mcp mcp --transport http --host localhost --port 3001
+#     evalhub-mcp --transport http --host localhost --port 3001
 #
 # Options:
 #   FAIL_FAST=true ./run_tests.sh     # Stop on first failure
@@ -21,6 +21,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common/mcp_client.sh"
 
 # --- Load configuration ------------------------------------------------------
 if [[ -f "$SCRIPT_DIR/test.env" ]]; then
@@ -43,6 +44,13 @@ check_prereqs() {
   if [[ -n "$missing" ]]; then
     echo "ERROR: Missing required commands:$missing"
     exit 1
+  fi
+
+  if [[ -n "${EVALHUB_MCP_BIN:-}" && "${EVALHUB_MCP_BIN}" != /* ]]; then
+    local repo_root
+    repo_root="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+    EVALHUB_MCP_BIN="${repo_root}/${EVALHUB_MCP_BIN#./}"
+    export EVALHUB_MCP_BIN
   fi
 
   if [[ ! -x "${EVALHUB_MCP_BIN:-}" ]]; then
@@ -103,10 +111,10 @@ main() {
 
     # For HTTP, verify the server is reachable before running tests
     if [[ "$transport" == "http" ]]; then
-      if ! timeout 2 bash -c "echo >/dev/tcp/${EVALHUB_HTTP_HOST:-localhost}/${EVALHUB_HTTP_PORT:-3001}" 2>/dev/null; then
+      if ! mcp_http_wait_ready "${EVALHUB_HTTP_HOST:-localhost}" "${EVALHUB_HTTP_PORT:-3001}"; then
         echo ""
         echo "WARNING: HTTP server not reachable at ${EVALHUB_HTTP_HOST:-localhost}:${EVALHUB_HTTP_PORT:-3001}"
-        echo "         Start the server first:  ${EVALHUB_MCP_BIN} mcp --transport http --host ${EVALHUB_HTTP_HOST:-localhost} --port ${EVALHUB_HTTP_PORT:-3001}"
+        echo "         Start the server first:  ${EVALHUB_MCP_BIN} --transport http --host ${EVALHUB_HTTP_HOST:-localhost} --port ${EVALHUB_HTTP_PORT:-3001}"
         echo "         Skipping HTTP tests."
         echo ""
         continue

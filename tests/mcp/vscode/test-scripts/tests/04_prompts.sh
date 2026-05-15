@@ -9,17 +9,7 @@ TRANSPORT="${1:-stdio}"
 
 test_suite "MCP Prompts ($TRANSPORT)"
 
-setup_transport() {
-  if [[ "$TRANSPORT" == "stdio" ]]; then
-    mcp_stdio_start "$EVALHUB_MCP_BIN" mcp
-    sleep 1
-  else
-    mcp_http_start "$EVALHUB_HTTP_HOST" "$EVALHUB_HTTP_PORT"
-  fi
-  mcp_initialize >/dev/null 2>&1
-}
-
-setup_transport
+mcp_setup_transport "$TRANSPORT" || exit 1
 
 # ---------- PRM-01: Prompt discovery ------------------------------------------
 prm01() {
@@ -61,9 +51,9 @@ prm01
 
 # ---------- PRM-02: edd_workflow — RAG type -----------------------------------
 prm02() {
-  local id="PRM-02" desc="edd_workflow prompt — app_type=rag"
+  local id="PRM-02" desc="edd_workflow prompt — application_type=rag"
   local result
-  result=$(mcp_get_prompt "edd_workflow" '{"app_type":"rag"}')
+  result=$(mcp_get_prompt "edd_workflow" '{"application_type":"rag"}')
 
   if assert_json_has_result "$result" && assert_json_no_error "$result"; then
     local messages
@@ -93,7 +83,7 @@ prm03() {
 
   for app_type in agent safety classifier; do
     local result
-    result=$(mcp_get_prompt "edd_workflow" "$(jq -cn --arg t "$app_type" '{"app_type":$t}')")
+    result=$(mcp_get_prompt "edd_workflow" "$(jq -cn --arg t "$app_type" '{"application_type":$t}')")
 
     if ! assert_json_has_result "$result" || ! assert_json_no_error "$result"; then
       all_ok=false
@@ -156,7 +146,7 @@ prm06() {
   # We can only verify within the current transport; cross-transport comparison
   # is done by the runner comparing stdio vs HTTP output files.
   local result
-  result=$(mcp_get_prompt "edd_workflow" '{"app_type":"rag"}')
+  result=$(mcp_get_prompt "edd_workflow" '{"application_type":"rag"}')
 
   if assert_json_has_result "$result"; then
     local msg_count role_ok

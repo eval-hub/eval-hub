@@ -7,19 +7,56 @@ source "$SCRIPT_DIR/../common/test_framework.sh"
 
 TRANSPORT="${1:-stdio}"
 
-test_suite "Client-Specific Behavior ($TRANSPORT)"
-
-setup_transport() {
-  if [[ "$TRANSPORT" == "stdio" ]]; then
-    mcp_stdio_start "$EVALHUB_MCP_BIN" mcp
-    sleep 1
-  else
-    mcp_http_start "$EVALHUB_HTTP_HOST" "$EVALHUB_HTTP_PORT"
+# CS-02: one Streamable HTTP session (initialize → initialized → resources/list).
+# Must be file-scoped so subshells can invoke it on macOS bash 3.2.
+_cs02_http_session_resources_list() {
+  local idx="$1" tmpdir="$2" ep="$3"
+  local hdrf bodyf http_code sid raw
+  hdrf=$(mktemp "${tmpdir}/h${idx}.XXXXXX")
+  bodyf=$(mktemp "${tmpdir}/b${idx}.XXXXXX")
+  http_code=$(curl -sS --max-time "${HTTP_TIMEOUT:-15}" -D "$hdrf" -o "$bodyf" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"cs02-worker","version":"1.0"}}}' \
+    "$ep" 2>/dev/null | tr -d '\r\n')
+  case "$http_code" in
+    200|201|202) ;;
+    *) rm -f "$hdrf" "$bodyf"; echo '{"error":"init_failed","http":'"$http_code"'}' > "$tmpdir/resp_$idx.json"; return ;;
+  esac
+  sid=$(awk -F': *' 'tolower($1)=="mcp-session-id"{gsub(/\r/,"",$2);print $2;exit}' "$hdrf")
+  rm -f "$hdrf" "$bodyf"
+  if [[ -z "$sid" ]]; then
+    echo '{"error":"no_session"}' > "$tmpdir/resp_$idx.json"
+    return
   fi
-  mcp_initialize >/dev/null 2>&1
+  curl -sS --max-time "${HTTP_TIMEOUT:-10}" -o /dev/null -X POST "$ep" \
+    -H "Content-Type: application/json" \
+    -H "Mcp-Session-Id: $sid" \
+    -d '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}' 2>/dev/null || true
+  hdrf=$(mktemp "${tmpdir}/h2${idx}.XXXXXX")
+  bodyf=$(mktemp "${tmpdir}/b2${idx}.XXXXXX")
+  http_code=$(curl -sS --max-time "${HTTP_TIMEOUT:-15}" -D "$hdrf" -o "$bodyf" -w "%{http_code}" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -H "Mcp-Session-Id: $sid" \
+    -d '{"jsonrpc":"2.0","id":2,"method":"resources/list","params":{}}' \
+    "$ep" 2>/dev/null | tr -d '\r\n')
+  raw=$(cat "$bodyf" 2>/dev/null || true)
+  rm -f "$hdrf" "$bodyf"
+  if [[ "$http_code" != "200" && "$http_code" != "201" && "$http_code" != "202" ]]; then
+    echo '{"error":"list_failed","http":'"$http_code"'}' > "$tmpdir/resp_$idx.json"
+    return
+  fi
+  if printf '%s' "$raw" | grep -q '^data:'; then
+    printf '%s' "$raw" | sed -n 's/^data: //p' | tail -n1 > "$tmpdir/resp_$idx.json"
+  else
+    printf '%s\n' "$raw" > "$tmpdir/resp_$idx.json"
+  fi
 }
 
-setup_transport
+test_suite "Client-Specific Behavior ($TRANSPORT)"
+
+mcp_setup_transport "$TRANSPORT" || exit 1
 
 # ---------- CS-01: Transport payload parity -----------------------------------
 cs01() {
@@ -41,7 +78,8 @@ cs01() {
     echo "=== tools/list ==="
     echo "$tools" | jq -S '.result.tools | map({name, description, inputSchema})' 2>/dev/null
     echo "=== prompts/list ==="
-    echo "$prompts" | jq -S '.result.prompts | map({name, description, arguments})' 2>/dev/null
+    # Sort prompt arguments by name so stdio vs HTTP ordering differences do not fail parity.
+    echo "$prompts" | jq -S '.result.prompts | map({name, description, arguments: ((.arguments // []) | sort_by(.name))})' 2>/dev/null
   } > "$outdir/parity_${TRANSPORT}.txt" 2>/dev/null
 
   # Within a single transport, just verify all three returned results
@@ -67,28 +105,16 @@ cs02() {
   local pids=()
   local tmpdir
   tmpdir=$(mktemp -d)
+  local ep="${_MCP_HTTP_ENDPOINT}"
 
-  # Fire 5 concurrent resource reads (each request creates its own streamable session)
   for i in $(seq 1 5); do
-    (
-      curl -sS --max-time "${HTTP_TIMEOUT:-10}" \
-        -H "Content-Type: application/json" \
-        -H "Accept: application/json, text/event-stream" \
-        -d "{\"jsonrpc\":\"2.0\",\"id\":$i,\"method\":\"resources/list\",\"params\":{}}" \
-        "${_MCP_HTTP_ENDPOINT}" > "$tmpdir/resp_$i.raw" 2>/dev/null
-    ) &
+    ( _cs02_http_session_resources_list "$i" "$tmpdir" "$ep" ) &
     pids+=($!)
   done
 
   local failed=0
   for pid in "${pids[@]}"; do
     wait "$pid" || ((failed++))
-  done
-
-  for i in $(seq 1 5); do
-    if [[ -f "$tmpdir/resp_$i.raw" ]]; then
-      mcp_http_strip_sse_data "$(cat "$tmpdir/resp_$i.raw")" > "$tmpdir/resp_$i.json"
-    fi
   done
 
   local success=0
@@ -118,7 +144,7 @@ cs03() {
     # Simulate: stop and restart the stdio server
     mcp_stdio_stop 2>/dev/null || true
     sleep 1
-    mcp_stdio_start "$EVALHUB_MCP_BIN" mcp
+    mcp_stdio_start "$EVALHUB_MCP_BIN"
     sleep 1
     local result
     result=$(mcp_initialize)

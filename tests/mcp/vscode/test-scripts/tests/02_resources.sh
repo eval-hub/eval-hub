@@ -9,16 +9,6 @@ TRANSPORT="${1:-stdio}"
 
 test_suite "MCP Resources ($TRANSPORT)"
 
-setup_transport() {
-  if [[ "$TRANSPORT" == "stdio" ]]; then
-    mcp_stdio_start "$EVALHUB_MCP_BIN" mcp
-    sleep 1
-  else
-    mcp_http_start "$EVALHUB_HTTP_HOST" "$EVALHUB_HTTP_PORT"
-  fi
-  mcp_initialize >/dev/null 2>&1
-}
-
 # --- Helper: read a resource and validate it's non-empty ----------------------
 check_resource() {
   local id="$1" desc="$2" uri="$3" array_path="${4:-.result.contents}"
@@ -36,7 +26,7 @@ check_resource() {
   fi
 }
 
-setup_transport
+mcp_setup_transport "$TRANSPORT" || exit 1
 
 # ---------- RES-01: List all providers ----------------------------------------
 check_resource "RES-01" "List all providers" "evalhub://providers"
@@ -88,7 +78,7 @@ res06
 res08() {
   local id="RES-08" desc="Get server version resource"
   local result
-  result=$(mcp_read_resource "evalhub://version")
+  result=$(mcp_read_resource "evalhub://server/version")
 
   if assert_json_has_result "$result" && assert_json_no_error "$result"; then
     local version
@@ -138,7 +128,7 @@ res_discovery() {
   local uris
   uris=$(echo "$result" | jq -r '.result.resources[].uri' 2>/dev/null || echo "")
   local missing=""
-  for expected in "evalhub://providers" "evalhub://benchmarks" "evalhub://collections" "evalhub://jobs" "evalhub://version"; do
+  for expected in "evalhub://providers" "evalhub://benchmarks" "evalhub://collections" "evalhub://jobs" "evalhub://server/version"; do
     if ! echo "$uris" | grep -q "$expected"; then
       missing="$missing $expected"
     fi

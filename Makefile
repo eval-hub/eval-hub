@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp start-service stop-service start-sidecar stop-sidecar lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-e2e
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp start-service stop-service start-sidecar stop-sidecar lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-e2e test-mcp-vscode
 
 GOPATH := $(shell go env GOPATH)
 GOBIN := $(shell go env GOPATH)/bin
@@ -679,4 +679,28 @@ test-mcp-e2e: start-service ## Run end-to-end MCP tests
 	status=$$?; \
 	echo "End-to-end MCP tests complete"; \
 	$(MAKE) stop-service; \
+	exit $$status
+
+## ------------------------------------------------------------------------------------------------
+## VS Code/Cursor MCP Integration Tests
+## ------------------------------------------------------------------------------------------------
+
+MCP_VSCODE_TEST_DIR = tests/mcp/vscode/test-scripts
+
+test-mcp-vscode: start-service build-mcp ## Run VS Code/Cursor MCP test scripts (all suites, stdio + HTTP)
+	@test -f $(MCP_VSCODE_TEST_DIR)/test.env || { \
+		echo "ERROR: $(MCP_VSCODE_TEST_DIR)/test.env not found."; \
+		echo "       Copy test.env.example to test.env and configure it."; \
+		exit 1; \
+	}
+	@echo "Running VS Code/Cursor MCP integration tests..."
+	@$(MAKE) stop-mcp
+	@$(MAKE) start-mcp
+	@EVALHUB_MCP_BIN="$(CURDIR)/$(BIN_DIR)/$(MCP_BINARY_NAME)" \
+		EVALHUB_BASE_URL="http://localhost:8080" \
+		EVALHUB_TOKEN="token" \
+		EVALHUB_TENANT="tenant" \
+		./$(MCP_VSCODE_TEST_DIR)/run_tests.sh http; \
+	status=$$?; \
+	$(MAKE) stop-mcp stop-service; \
 	exit $$status

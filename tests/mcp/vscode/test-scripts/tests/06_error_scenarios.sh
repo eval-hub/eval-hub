@@ -31,6 +31,7 @@ err01() {
 
   # Restore proper HTTP config for subsequent tests
   mcp_http_start "$EVALHUB_HTTP_HOST" "$EVALHUB_HTTP_PORT"
+  mcp_initialize >/dev/null || true
 }
 err01
 
@@ -49,17 +50,28 @@ err02() {
     local stdout_fifo="$tmpdir/stdout"
     mkfifo "$stdin_fifo" "$stdout_fifo"
 
-    "$EVALHUB_MCP_BIN" mcp < "$stdin_fifo" > "$stdout_fifo" 2>"$tmpdir/stderr" &
+    env EVALHUB_TOKEN="${INVALID_TOKEN:-bad-token-xxx}" \
+      EVALHUB_TENANT="${EVALHUB_TENANT:-tenant}" \
+      EVALHUB_BASE_URL="${EVALHUB_BASE_URL:-http://localhost:8080}" \
+      "$EVALHUB_MCP_BIN" < "$stdin_fifo" > "$stdout_fifo" 2>"$tmpdir/stderr" &
     local pid=$!
     exec 5>"$stdin_fifo"
     exec 6<"$stdout_fifo"
 
     # Initialize
     printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}\n' >&5
-    local init_resp
-    init_resp=$(timeout "${STDIO_TIMEOUT:-10}" head -n1 <&6 2>/dev/null || echo '{"error":"timeout"}')
+    timeout "${STDIO_TIMEOUT:-10}" head -n1 <&6 >/dev/null 2>&1 || true
+    printf '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}\n' >&5 || true
 
     # Try to list providers (should fail with auth error)
+    if ! kill -0 "$pid" 2>/dev/null; then
+      test_fail "$id" "$desc" "server process died before resources/read"
+      export EVALHUB_TOKEN="$orig_token"
+      exec 5>&- 2>/dev/null || true
+      exec 6<&- 2>/dev/null || true
+      rm -rf "$tmpdir"
+      return
+    fi
     printf '{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"evalhub://providers"}}\n' >&5
     local result
     result=$(timeout "${STDIO_TIMEOUT:-10}" head -n1 <&6 2>/dev/null || echo '{"error":"timeout"}')
@@ -115,7 +127,10 @@ err03() {
     local stdout_fifo="$tmpdir/stdout"
     mkfifo "$stdin_fifo" "$stdout_fifo"
 
-    "$EVALHUB_MCP_BIN" mcp < "$stdin_fifo" > "$stdout_fifo" 2>"$tmpdir/stderr" &
+    env EVALHUB_BASE_URL="${UNREACHABLE_URL:-http://192.0.2.1:9999}" \
+      EVALHUB_TOKEN="${EVALHUB_TOKEN:-token}" \
+      EVALHUB_TENANT="${EVALHUB_TENANT:-tenant}" \
+      "$EVALHUB_MCP_BIN" < "$stdin_fifo" > "$stdout_fifo" 2>"$tmpdir/stderr" &
     local pid=$!
     exec 5>"$stdin_fifo"
     exec 6<"$stdout_fifo"
@@ -130,9 +145,18 @@ err03() {
 
     # Initialize (should succeed even with unreachable backend)
     printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}\n' >&5
-    timeout "${STDIO_TIMEOUT:-10}" head -n1 <&6 >/dev/null 2>&1
+    timeout "${STDIO_TIMEOUT:-10}" head -n1 <&6 >/dev/null 2>&1 || true
+    printf '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}\n' >&5 || true
 
     # Try an operation (should return connectivity error)
+    if ! kill -0 "$pid" 2>/dev/null; then
+      test_fail "$id" "$desc" "server process died before resources/read"
+      export EVALHUB_BASE_URL="$orig_url"
+      exec 5>&- 2>/dev/null || true
+      exec 6<&- 2>/dev/null || true
+      rm -rf "$tmpdir"
+      return
+    fi
     printf '{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"evalhub://providers"}}\n' >&5
     local result
     result=$(timeout "${STDIO_TIMEOUT:-10}" head -n1 <&6 2>/dev/null || echo '{"error":"timeout"}')

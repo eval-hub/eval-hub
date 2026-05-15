@@ -12,33 +12,10 @@ test_suite "Server Discovery ($TRANSPORT)"
 # ---------- SD-01: Server launches / connects ---------------------------------
 sd01() {
   local id="SD-01" desc="Server launches and connects via $TRANSPORT"
-  local result
-
-  if [[ "$TRANSPORT" == "stdio" ]]; then
-    mcp_stdio_start "$EVALHUB_MCP_BIN" mcp
-    sleep 1
-    if assert_process_running "$_MCP_STDIO_PID"; then
-      result=$(mcp_initialize)
-      if assert_json_has_result "$result"; then
-        test_pass "$id" "$desc"
-      else
-        test_fail "$id" "$desc" "initialize returned error: $result"
-      fi
-    else
-      test_fail "$id" "$desc" "server process died immediately"
-    fi
+  if mcp_setup_transport "$TRANSPORT"; then
+    test_pass "$id" "$desc"
   else
-    mcp_http_start "$EVALHUB_HTTP_HOST" "$EVALHUB_HTTP_PORT"
-    if assert_port_open "$EVALHUB_HTTP_HOST" "$EVALHUB_HTTP_PORT"; then
-      result=$(mcp_initialize)
-      if assert_json_has_result "$result"; then
-        test_pass "$id" "$desc"
-      else
-        test_fail "$id" "$desc" "initialize returned error: $result"
-      fi
-    else
-      test_fail "$id" "$desc" "cannot connect to $EVALHUB_HTTP_HOST:$EVALHUB_HTTP_PORT"
-    fi
+    test_fail "$id" "$desc" "transport setup or initialize failed"
   fi
 }
 
@@ -66,11 +43,7 @@ sd02() {
 sd03() {
   local id="SD-03" desc="Server metadata (name, version, capabilities) visible"
   local result
-  result=$(mcp_initialize 2>/dev/null || mcp_request "initialize" '{
-    "protocolVersion":"2024-11-05",
-    "capabilities":{},
-    "clientInfo":{"name":"test","version":"1.0.0"}
-  }')
+  result=$(mcp_initialize)
 
   if assert_json_has_key "$result" "result"; then
     local has_name has_version has_caps

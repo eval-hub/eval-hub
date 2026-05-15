@@ -9,17 +9,7 @@ TRANSPORT="${1:-stdio}"
 
 test_suite "End-to-End Workflows ($TRANSPORT)"
 
-setup_transport() {
-  if [[ "$TRANSPORT" == "stdio" ]]; then
-    mcp_stdio_start "$EVALHUB_MCP_BIN" mcp
-    sleep 1
-  else
-    mcp_http_start "$EVALHUB_HTTP_HOST" "$EVALHUB_HTTP_PORT"
-  fi
-  mcp_initialize >/dev/null 2>&1
-}
-
-setup_transport
+mcp_setup_transport "$TRANSPORT" || exit 1
 
 # ---------- E2E-01: Full EDD cycle --------------------------------------------
 e2e01() {

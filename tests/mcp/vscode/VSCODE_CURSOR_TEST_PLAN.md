@@ -72,6 +72,7 @@ This test plan covers end-to-end integration verification of the **evalhub-mcp**
 | **Cursor** | Built-in MCP support | stdio, HTTP/SSE |
 
 ### Out of Scope
+
 - Claude Code integration (covered separately in RHOAIENG-60353 comment)
 - Backend EvalHub API correctness (assumed functional)
 - Binary cross-platform compilation (covered by CI)
@@ -118,11 +119,13 @@ Add to `.vscode/settings.json` or VS Code User Settings:
 ### 3.2 VS Code — HTTP/SSE Transport
 
 Start the server manually:
+
 ```bash
 evalhub-mcp mcp --transport http --host localhost --port 3001
 ```
 
 Add to VS Code settings:
+
 ```json
 {
   "github.copilot.chat.mcp.servers": {
@@ -157,11 +160,13 @@ Add to `.cursor/mcp.json` (project-level) or `~/.cursor/mcp.json` (global):
 ### 3.4 Cursor — HTTP/SSE Transport
 
 Start the server manually (same as VS Code):
+
 ```bash
 evalhub-mcp mcp --transport http --host localhost --port 3001
 ```
 
 Add to Cursor MCP config:
+
 ```json
 {
   "mcpServers": {
@@ -177,6 +182,7 @@ Add to Cursor MCP config:
 ## 4. Test Cases
 
 ### Legend
+
 - **P0** = Must pass for release (blocking)
 - **P1** = Should pass (important)
 - **P2** = Nice to verify (informational)
@@ -205,7 +211,7 @@ Add to Cursor MCP config:
 | RES-05 | P0 | List jobs | Ask agent: "Show my evaluation jobs" | Returns job list via `evalhub://jobs`. | [ ] | [ ] |
 | RES-06 | P1 | Filter jobs by status | Ask agent: "Show running jobs" | Returns filtered jobs via `evalhub://jobs?status=running`. | [ ] | [ ] |
 | RES-07 | P1 | Get experiment results | Ask agent: "Show results for experiment X" | Returns experiment results via `evalhub://experiments/{id}/results`. | [ ] | [ ] |
-| RES-08 | P1 | Get server version | Ask agent: "What version of the evalhub server is running?" | Returns version/build metadata via `evalhub://version`. | [ ] | [ ] |
+| RES-08 | P1 | Get server version | Ask agent: "What version of the evalhub server is running?" | Returns version/build metadata via `evalhub://server/version`. | [ ] | [ ] |
 | RES-09 | P0 | Get individual item by ID | Ask agent: "Get details for benchmark {id}" | Returns single benchmark entity with full detail. | [ ] | [ ] |
 
 **Repeat all RES-* tests for both stdio and HTTP transports.**
@@ -233,8 +239,8 @@ Add to Cursor MCP config:
 | ID | Priority | Test Case | Steps | Expected Result | VS Code | Cursor |
 |----|----------|-----------|-------|-----------------|---------|--------|
 | PRM-01 | P0 | Prompt discovery | Open MCP prompts panel in client. | All 3 prompts visible: `edd_workflow`, `evaluate_model`, `compare_runs`. Each shows description and arguments. | [ ] | [ ] |
-| PRM-02 | P0 | edd_workflow — RAG type | Invoke edd_workflow prompt with `app_type=rag`. | Agent receives structured EDD guidance (Define, Measure, Iterate) tailored to RAG applications. | [ ] | [ ] |
-| PRM-03 | P1 | edd_workflow — other types | Invoke edd_workflow with `app_type=agent`, then `safety`, then `classifier`. | Guidance adapts to each application type. | [ ] | [ ] |
+| PRM-02 | P0 | edd_workflow — RAG type | Invoke edd_workflow prompt with `application_type=rag`. | Agent receives structured EDD guidance (Define, Measure, Iterate) tailored to RAG applications. | [ ] | [ ] |
+| PRM-03 | P1 | edd_workflow — other types | Invoke edd_workflow with `application_type=agent`, then `safety`, then `classifier`. | Guidance adapts to each application type. | [ ] | [ ] |
 | PRM-04 | P0 | evaluate_model | Invoke evaluate_model prompt. | Agent walks through model URL collection, benchmark selection, and job submission steps. | [ ] | [ ] |
 | PRM-05 | P0 | compare_runs | Invoke compare_runs prompt with 2+ job/experiment IDs. | Agent guides comparison of evaluation results across runs. | [ ] | [ ] |
 | PRM-06 | P1 | Prompt rendering fidelity | Compare prompt output between VS Code and Cursor for the same prompt. | Content and structure are identical across clients. | [ ] | [ ] |
@@ -322,14 +328,17 @@ Document findings for each during test execution:
 ## 7. Exit Criteria
 
 ### Pass
+
 - All **P0** tests pass on both clients across both transports
 - No data loss or silent failures observed
 - Setup commands documented and verified as copy-paste ready
 
 ### Conditional Pass
+
 - All P0 pass; some P1 fail with documented workarounds or client-specific limitations logged
 
 ### Fail
+
 - Any P0 test fails on either client
 - Server crashes or hangs during normal operation
 - Error messages are missing or non-actionable
@@ -345,3 +354,39 @@ Document findings for each during test execution:
 | Screenshots of working integration (both clients) | Attach to RHOAIENG-60353 |
 | Known limitations and client-specific behaviors | Project documentation site |
 | Bug tickets for any failures | Linked to RHOAIENG-60353 |
+
+## 9. Automated tests
+
+```shell
+make test-mcp-vscode
+```
+
+### What these scripts actually test
+
+The harness under tests/mcp/vscode/test-scripts/ is an MCP protocol integration test against the evalhub-mcp binary:
+
+- stdio: starts evalhub-mcp, talks over FIFOs with JSON-RPC (initialize, resources/*, tools/*, prompts/*, completion/complete, etc.).
+- HTTP: curl to the same MCP endpoint the server exposes (Streamable HTTP), with a proper session (initialize → notifications/initialized → follow-up calls).
+
+So they verify: the MCP server behaves the way a conforming MCP client would expect, for both transports.
+
+### How that relates to “VS Code integration”
+
+The link to VS Code is indirect:
+
+1. `VSCODE_CURSOR_TEST_PLAN.md` describes manual checks in VS Code (Copilot MCP) and Cursor (settings, MCP panel, chat, etc.).
+2. `run_tests.sh` + `tests/*.sh` automate the same protocol surface those clients use when they talk to evalhub-mcp — but without opening VS Code, without Copilot, and without UI.
+
+So:
+
+| Layer | Automated by test-scripts/? |
+| :---- | :-------------------------- |
+| evalhub-mcp JSON-RPC + stdio/HTTP | Yes |
+| VS Code / Copilot UI, OAuth, extension bugs | No — test plan / manual |
+| “Agent typed this in chat” | No |
+
+### Why it’s still useful for VS Code
+
+If stdio and HTTP both pass here, you’ve shown the server side of what VS Code’s MCP client will drive is consistent. Failures in VS Code that don’t reproduce here are more likely client/extension, config, or user flow issues — which is exactly what the markdown test plan is for.
+
+**Summary**: these tests validate MCP server ↔ protocol client parity; they do not test VS Code itself. VS Code integration is covered by the written test plan (and manual runs), with the scripts acting as a fast, repeatable protocol baseline.
