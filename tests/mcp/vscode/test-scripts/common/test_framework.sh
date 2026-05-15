@@ -40,7 +40,6 @@ test_fail() {
   _junit_add "$id" "$desc" "fail" "$reason"
   if [[ "$_FAIL_FAST" == "true" ]]; then
     printf "${COLOR_RED}FAIL_FAST enabled — aborting.${COLOR_RESET}\n"
-    test_report
     exit 1
   fi
 }
@@ -154,3 +153,20 @@ EOF
   fi
   return 0
 }
+
+# Suite scripts source mcp_client.sh before this file; that registers `trap mcp_cleanup EXIT`.
+# Sourcing this file replaces that trap, so on exit we emit JUnit/summary then run cleanup.
+_test_framework_exit_hook() {
+  local ec=$?
+  if [[ "${_TESTS_RUN:-0}" -gt 0 ]]; then
+    test_report || true
+  fi
+  if declare -F mcp_cleanup >/dev/null 2>&1; then
+    mcp_cleanup || true
+  fi
+  if [[ "${_TESTS_FAILED:-0}" -gt 0 ]]; then
+    exit 1
+  fi
+  exit "$ec"
+}
+trap '_test_framework_exit_hook' EXIT
