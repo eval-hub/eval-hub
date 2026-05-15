@@ -255,3 +255,5 @@ mlflow.log
 .claude/settings.local.json
 
 .agentready/
+
+tests/mcp/vscode/test-scripts/reports/
