@@ -214,10 +214,6 @@ func TestRunLegacyHTTPSSEStartsAndStops(t *testing.T) {
 
 	waitForPort(t, cfg.Host, port, 3*time.Second)
 
-	if !strings.Contains(logBuf.String(), "deprecated") {
-		t.Errorf("expected deprecation warning in logs, got: %s", logBuf.String())
-	}
-
 	cancel()
 
 	select {
@@ -227,6 +223,11 @@ func TestRunLegacyHTTPSSEStartsAndStops(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("server did not shut down within 5 seconds")
+	}
+
+	// Read logBuf only after Run returns; slog writes to the buffer from the server goroutine.
+	if !strings.Contains(logBuf.String(), "deprecated") {
+		t.Errorf("expected deprecation warning in logs, got: %s", logBuf.String())
 	}
 }
 
