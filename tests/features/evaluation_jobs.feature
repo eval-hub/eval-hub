@@ -528,7 +528,10 @@ Feature: Evaluation Jobs
         },
         "model": {
           "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}"
+          "name": "{{env:MODEL_NAME|test}}",
+          "auth": {
+            "secret_ref": "{{env:MODEL_AUTH_SECRET_REF|test}}"
+          }
         }
       }
       """
@@ -608,7 +611,10 @@ Feature: Evaluation Jobs
         },
         "model": {
           "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}"
+          "name": "{{env:MODEL_NAME|test}}",
+          "auth": {
+            "secret_ref": "{{env:MODEL_AUTH_SECRET_REF|test}}"
+          }
         }
       }
       """
@@ -696,7 +702,10 @@ Feature: Evaluation Jobs
         },
         "model": {
           "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}"
+          "name": "{{env:MODEL_NAME|test}}",
+          "auth": {
+            "secret_ref": "{{env:MODEL_AUTH_SECRET_REF|test}}"
+          }
         }
       }
       """
