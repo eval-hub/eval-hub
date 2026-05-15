@@ -2,13 +2,13 @@
 repos:
   # Ruff linting and formatting (replaces black)
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.12
+    rev: v0.15.13
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
-        exclude: ^examples/api_examples\.ipynb$
+        exclude: \.ipynb$
       - id: ruff-format
-        exclude: ^examples/api_examples\.ipynb$
+        exclude: \.ipynb$
 
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -21,7 +21,7 @@ repos:
       - id: check-yaml
         args: [--allow-multiple-documents]
       - id: check-json
-        exclude: ^(examples/api_examples\.ipynb|\.vscode/.*)$
+        exclude: (\.ipynb$|^\.vscode/)
       - id: check-toml
       - id: check-merge-conflict
       - id: check-added-large-files
@@ -33,7 +33,7 @@ repos:
         stages: [pre-push]
 
   - repo: https://github.com/commitizen-tools/commitizen
-    rev: v4.13.10
+    rev: v4.16.2
     hooks:
       - id: commitizen
         stages: [commit-msg]

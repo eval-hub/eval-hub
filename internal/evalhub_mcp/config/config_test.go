@@ -528,6 +528,27 @@ func TestTLSEnabled(t *testing.T) {
 	})
 }
 
+func TestIsLegacyHTTPTransport(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		transport string
+		want      bool
+	}{
+		{"stdio", false},
+		{"http", false},
+		{"http-sse", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.transport, func(t *testing.T) {
+			t.Parallel()
+			cfg := &Config{Transport: tt.transport}
+			if got := cfg.IsLegacyHTTPTransport(); got != tt.want {
+				t.Errorf("IsLegacyHTTPTransport(%q) = %v, want %v", tt.transport, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsHTTPTransport(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
