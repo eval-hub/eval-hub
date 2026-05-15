@@ -44,7 +44,7 @@ evalhub-mcp --transport http --host localhost --port 3001
 | Script | Suite | Test Cases |
 |--------|-------|------------|
 | `tests/01_server_discovery.sh` | Server Discovery | SD-01 to SD-04 |
-| `tests/02_resources.sh` | MCP Resources | RES-01 to RES-09, RES-ALL |
+| `tests/02_resources.sh` | MCP Resources | RES-01–06, RES-08–09, RES-ALL (RES-07 manual-only) |
 | `tests/03_tools.sh` | MCP Tools | TOOL-01 to TOOL-07 |
 | `tests/04_prompts.sh` | MCP Prompts | PRM-01 to PRM-06 |
 | `tests/05_autocompletion.sh` | Autocompletion | AC-01 to AC-03 |
@@ -208,7 +208,7 @@ Add to Cursor MCP config:
 | RES-04 | P0 | List collections | Ask agent: "List evaluation collections" | Returns collection list via `evalhub://collections`. | [ ] | [ ] |
 | RES-05 | P0 | List jobs | Ask agent: "Show my evaluation jobs" | Returns job list via `evalhub://jobs`. | [ ] | [ ] |
 | RES-06 | P1 | Filter jobs by status | Ask agent: "Show running jobs" | Returns filtered jobs via `evalhub://jobs?status=running`. | [ ] | [ ] |
-| RES-07 | P1 | Get experiment results | Ask agent: "Show results for experiment X" | Returns experiment results via `evalhub://experiments/{id}/results`. | [ ] | [ ] |
+| RES-07 | P1 | Get experiment results _(manual only — not in `02_resources.sh`)_ | Ask agent: "Show results for experiment X" | Returns experiment results via `evalhub://experiments/{id}/results`. | [ ] | [ ] |
 | RES-08 | P1 | Get server version | Ask agent: "What version of the evalhub server is running?" | Returns version/build metadata via `evalhub://server/version`. | [ ] | [ ] |
 | RES-09 | P0 | Get individual item by ID | Ask agent: "Get details for benchmark {id}" | Returns single benchmark entity with full detail. | [ ] | [ ] |
 | RES-ALL | P1 | Resource discovery (`resources/list`) | 1. Open MCP resources / ask agent to list registered resources. 2. Compare to server capability. | `resources/list` includes URIs for `evalhub://providers`, `evalhub://benchmarks`, `evalhub://collections`, `evalhub://jobs`, and `evalhub://server/version` (same coverage as automated `02_resources.sh`). | [ ] | [ ] |

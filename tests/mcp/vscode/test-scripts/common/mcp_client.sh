@@ -84,7 +84,7 @@ mcp_stdio_recv() {
   if IFS= read -r -t "$timeout" -u 4 line; then
     printf '%s\n' "$line"
   else
-    echo '{"error":"timeout"}'
+    echo '{"jsonrpc":"2.0","id":null,"error":{"code":-32000,"message":"Request timeout"}}'
   fi
 }
 

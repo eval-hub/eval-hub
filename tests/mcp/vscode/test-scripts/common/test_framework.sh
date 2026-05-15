@@ -88,7 +88,8 @@ assert_json_array_not_empty() {
 
 assert_json_array_contains() {
   local json="$1" path="$2" field="$3" value="$4"
-  echo "$json" | jq -e "$path | map(select(.$field == \"$value\")) | length > 0" >/dev/null 2>&1
+  echo "$json" | jq -e --arg field "$field" --arg value "$value" \
+    "$path | map(select(.[\$field] == \$value)) | length > 0" >/dev/null 2>&1
 }
 
 assert_json_field_equals() {
@@ -113,9 +114,9 @@ assert_port_open() {
 _junit_add() {
   local id="$1" desc="$2" status="$3" message="$4"
   local xml_desc
-  xml_desc=$(echo "$desc" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g')
+  xml_desc=$(echo "$desc" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g' | tr '\n' ' ')
   local xml_msg
-  xml_msg=$(echo "$message" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g')
+  xml_msg=$(echo "$message" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g' | tr '\n' ' ')
 
   local entry="    <testcase classname=\"${_CURRENT_SUITE}\" name=\"[${id}] ${xml_desc}\">"
   case "$status" in

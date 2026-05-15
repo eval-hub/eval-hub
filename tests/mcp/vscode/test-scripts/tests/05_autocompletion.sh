@@ -56,16 +56,16 @@ ac02() {
         test_pass "$id" "$desc — $completions suggestions (rag not in list)"
       fi
     else
-      local err_code
-      err_code=$(echo "$result" | jq -r '.error.code // empty' 2>/dev/null)
-      if [[ "$err_code" == "-32601" ]]; then
-        test_skip "$id" "$desc" "completion/complete not implemented"
-      else
-        test_fail "$id" "$desc" "0 completions"
-      fi
+      test_fail "$id" "$desc" "0 completions"
     fi
   else
-    test_fail "$id" "$desc" "error: $(echo "$result" | jq -c '.error // .')"
+    local err_code
+    err_code=$(echo "$result" | jq -r '.error.code // empty' 2>/dev/null)
+    if [[ "$err_code" == "-32601" ]]; then
+      test_skip "$id" "$desc" "completion/complete not implemented"
+    else
+      test_fail "$id" "$desc" "error: $(echo "$result" | jq -c '.error // .')"
+    fi
   fi
 }
 ac02

@@ -13,11 +13,11 @@ mcp_setup_transport "$TRANSPORT" || exit 1
 
 # ---------- E2E-01: Full EDD cycle --------------------------------------------
 e2e01() {
-  local id="E2E-01" desc="Full EDD cycle — discover, submit, monitor, review, compare, cancel"
+  local id="E2E-01" desc="Full EDD cycle — discover, submit, monitor, compare, cancel"
   local step_failures=""
 
   # Step 1: Discover benchmarks labeled "rag"
-  printf "       Step 1/6: Discover benchmarks...\n"
+  printf "       Step 1/5: Discover benchmarks...\n"
   local benchmarks
   benchmarks=$(mcp_read_resource "evalhub://benchmarks?label=${TEST_BENCHMARK_LABEL:-rag}")
   if ! assert_json_has_result "$benchmarks"; then
@@ -37,7 +37,7 @@ e2e01() {
   fi
 
   # Step 2: Submit evaluation
-  printf "       Step 2/6: Submit evaluation...\n"
+  printf "       Step 2/5: Submit evaluation...\n"
   local submit_args
   submit_args=$(jq -cn --arg b "$bench_id" --arg m "$TEST_MODEL_ENDPOINT" \
     '{"benchmarks":[$b],"model_endpoint":$m,"name":"e2e-test-edd-cycle"}')
@@ -54,7 +54,7 @@ e2e01() {
   fi
 
   # Step 3: Monitor job status
-  printf "       Step 3/6: Monitor job status...\n"
+  printf "       Step 3/5: Monitor job status...\n"
   if [[ -n "$job_id" ]]; then
     local status_result
     status_result=$(mcp_call_tool "get_job_status" "$(jq -cn --arg j "$job_id" '{"job_id":$j}')")
@@ -65,16 +65,16 @@ e2e01() {
     step_failures="$step_failures monitor(no-job-id)"
   fi
 
-  # Step 5: Compare runs using prompt
-  printf "       Step 5/6: Compare runs via prompt...\n"
+  # Step 4: Compare runs using prompt
+  printf "       Step 4/5: Compare runs via prompt...\n"
   local compare_result
   compare_result=$(mcp_get_prompt "compare_runs" '{}')
   if ! assert_json_has_result "$compare_result"; then
     step_failures="$step_failures compare-prompt"
   fi
 
-  # Step 6: Cancel job
-  printf "       Step 6/6: Cancel job...\n"
+  # Step 5: Cancel job
+  printf "       Step 5/5: Cancel job...\n"
   if [[ -n "$job_id" ]]; then
     local cancel_result
     cancel_result=$(mcp_call_tool "cancel_job" "$(jq -cn --arg j "$job_id" '{"job_id":$j}')")
