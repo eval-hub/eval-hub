@@ -28,13 +28,8 @@ mcp_next_id() {
 
 mcp_stdio_start() {
   local binary="$1"; shift
-  # Drop legacy "mcp" subcommand token if present (evalhub-mcp uses flags only).
-  local -a cmd=("$binary")
-  local arg
-  for arg in "$@"; do
-    [[ "$arg" == "mcp" ]] && continue
-    cmd+=("$arg")
-  done
+  # evalhub-mcp accepts pflag-style arguments only (no subcommands); see cmd/evalhub_mcp/main.go.
+  local -a cmd=("$binary" "$@")
 
   _MCP_TRANSPORT="stdio"
   _MCP_INITIALIZED=false
@@ -80,8 +75,17 @@ mcp_stdio_send() {
 }
 
 mcp_stdio_recv() {
-  local timeout="${1:-$STDIO_TIMEOUT}"
-  timeout "$timeout" head -n1 <&4 2>/dev/null || echo '{"error":"timeout"}'
+  # One JSON-RPC line per read from fd 4 (stdio server stdout). Uses read -t instead of
+  # timeout+head so a single process reads exactly one line with one timer. Spontaneous
+  # server notifications still require a queue if they interleave with responses; this
+  # harness assumes request/response ordering for each mcp_request.
+  local timeout="${1:-${STDIO_TIMEOUT:-10}}"
+  local line
+  if IFS= read -r -t "$timeout" -u 4 line; then
+    printf '%s\n' "$line"
+  else
+    echo '{"error":"timeout"}'
+  fi
 }
 
 # --- HTTP/SSE transport --------------------------------------------------------

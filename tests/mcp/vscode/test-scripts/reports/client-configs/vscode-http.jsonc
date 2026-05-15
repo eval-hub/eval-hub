@@ -1,6 +1,6 @@
 // VS Code settings.json — EvalHub MCP (HTTP/SSE transport)
 // First start the server:
-//   ../../../bin/evalhub-mcp mcp --transport http --host localhost --port 3001
+//   ../../../bin/evalhub-mcp --transport http --host localhost --port 3001
 // Then add to settings.json:
 {
   "github.copilot.chat.mcp.servers": {

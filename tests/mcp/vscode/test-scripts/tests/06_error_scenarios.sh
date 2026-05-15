@@ -93,7 +93,7 @@ err02() {
     fi
   else
     # HTTP: send request with bad auth header
-    local result
+    local result raw
     raw=$(curl -sS --max-time "${HTTP_TIMEOUT:-10}" \
       -H "Content-Type: application/json" \
       -H "Accept: application/json, text/event-stream" \
@@ -189,7 +189,7 @@ err04() {
   fi
 
   local fake_bin="/tmp/nonexistent-evalhub-mcp-binary-$$"
-  if "$fake_bin" mcp </dev/null >/dev/null 2>&1; then
+  if "$fake_bin" --version </dev/null >/dev/null 2>&1; then
     test_fail "$id" "$desc" "non-existent binary somehow succeeded"
   else
     test_pass "$id" "$desc — shell returns error for missing binary"

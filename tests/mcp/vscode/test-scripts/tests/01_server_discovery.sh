@@ -33,7 +33,11 @@ sd02() {
       -H "Content-Type: application/json" \
       -H "Accept: application/json, text/event-stream" \
       -d '{"jsonrpc":"2.0","id":999,"method":"ping","params":{}}' 2>/dev/null || echo '{"error":"no_response"}')
-    test_pass "$id" "$desc"
+    if echo "$health" | jq -e '.error' >/dev/null 2>&1; then
+      test_fail "$id" "$desc" "HTTP endpoint returned error: $health"
+    else
+      test_pass "$id" "$desc"
+    fi
   else
     test_fail "$id" "$desc" "port not open"
   fi

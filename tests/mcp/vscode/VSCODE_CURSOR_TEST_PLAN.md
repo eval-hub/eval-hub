@@ -26,7 +26,7 @@ vi test-scripts/test.env  # fill in binary path, token, tenant, backend URL, tes
 ./test-scripts/run_tests.sh stdio
 
 # 4. Start HTTP server, then run HTTP tests
-evalhub-mcp mcp --transport http --host localhost --port 3001
+evalhub-mcp --transport http --host localhost --port 3001
 ./test-scripts/run_tests.sh http
 
 # 5. Run both transports
@@ -105,7 +105,6 @@ Add to `.vscode/settings.json` or VS Code User Settings:
     "evalhub": {
       "type": "stdio",
       "command": "/path/to/evalhub-mcp",
-      "args": ["mcp"],
       "env": {
         "EVALHUB_TOKEN": "<token>",
         "EVALHUB_TENANT": "<tenant>",
@@ -121,7 +120,7 @@ Add to `.vscode/settings.json` or VS Code User Settings:
 Start the server manually:
 
 ```bash
-evalhub-mcp mcp --transport http --host localhost --port 3001
+evalhub-mcp --transport http --host localhost --port 3001
 ```
 
 Add to VS Code settings:
@@ -146,7 +145,6 @@ Add to `.cursor/mcp.json` (project-level) or `~/.cursor/mcp.json` (global):
   "mcpServers": {
     "evalhub": {
       "command": "/path/to/evalhub-mcp",
-      "args": ["mcp"],
       "env": {
         "EVALHUB_TOKEN": "<token>",
         "EVALHUB_TENANT": "<tenant>",
@@ -162,7 +160,7 @@ Add to `.cursor/mcp.json` (project-level) or `~/.cursor/mcp.json` (global):
 Start the server manually (same as VS Code):
 
 ```bash
-evalhub-mcp mcp --transport http --host localhost --port 3001
+evalhub-mcp --transport http --host localhost --port 3001
 ```
 
 Add to Cursor MCP config:
@@ -213,6 +211,7 @@ Add to Cursor MCP config:
 | RES-07 | P1 | Get experiment results | Ask agent: "Show results for experiment X" | Returns experiment results via `evalhub://experiments/{id}/results`. | [ ] | [ ] |
 | RES-08 | P1 | Get server version | Ask agent: "What version of the evalhub server is running?" | Returns version/build metadata via `evalhub://server/version`. | [ ] | [ ] |
 | RES-09 | P0 | Get individual item by ID | Ask agent: "Get details for benchmark {id}" | Returns single benchmark entity with full detail. | [ ] | [ ] |
+| RES-ALL | P1 | Resource discovery (`resources/list`) | 1. Open MCP resources / ask agent to list registered resources. 2. Compare to server capability. | `resources/list` includes URIs for `evalhub://providers`, `evalhub://benchmarks`, `evalhub://collections`, `evalhub://jobs`, and `evalhub://server/version` (same coverage as automated `02_resources.sh`). | [ ] | [ ] |
 
 **Repeat all RES-* tests for both stdio and HTTP transports.**
 
@@ -300,14 +299,14 @@ Add to Cursor MCP config:
 | Category | Test Cases | P0 | P1 | P2 | Total Checks (x2 clients x2 transports) |
 |----------|-----------|----|----|----|-----------------------------------------|
 | Server Discovery | 4 | 3 | 1 | 0 | 16 |
-| Resources | 9 | 5 | 4 | 0 | 36 |
+| Resources | 10 | 5 | 5 | 0 | 40 |
 | Tools | 7 | 4 | 3 | 0 | 28 |
 | Prompts | 6 | 4 | 2 | 0 | 24 |
 | Autocompletion | 3 | 0 | 2 | 1 | 12 |
 | Error Scenarios | 6 | 2 | 3 | 1 | 24 |
 | E2E Workflow | 3 | 1 | 2 | 0 | 12 |
 | Client-Specific | 4 | 0 | 1 | 3 | 16 |
-| **Totals** | **42** | **19** | **18** | **5** | **168** |
+| **Totals** | **43** | **19** | **19** | **5** | **172** |
 
 ---
 

@@ -23,17 +23,17 @@ ac01() {
     if [[ "$completions" -gt 0 ]]; then
       test_pass "$id" "$desc — $completions suggestions returned"
     else
-      # completion/complete may not be supported by all servers; mark as skip if method not found
-      local err_code
-      err_code=$(echo "$result" | jq -r '.error.code // empty' 2>/dev/null)
-      if [[ "$err_code" == "-32601" ]]; then
-        test_skip "$id" "$desc" "completion/complete not implemented"
-      else
-        test_fail "$id" "$desc" "0 completions returned"
-      fi
+      test_fail "$id" "$desc" "0 completions returned"
     fi
   else
-    test_fail "$id" "$desc" "error: $(echo "$result" | jq -c '.error // .')"
+    # completion/complete may not be supported by all servers; mark as skip if method not found
+    local err_code
+    err_code=$(echo "$result" | jq -r '.error.code // empty' 2>/dev/null)
+    if [[ "$err_code" == "-32601" ]]; then
+      test_skip "$id" "$desc" "completion/complete not implemented"
+    else
+      test_fail "$id" "$desc" "error: $(echo "$result" | jq -c '.error // .')"
+    fi
   fi
 }
 ac01

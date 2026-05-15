@@ -31,7 +31,6 @@ cat > "$OUT/vscode-stdio.jsonc" <<EOF
     "evalhub": {
       "type": "stdio",
       "command": "${BIN}",
-      "args": ["mcp"],
       "env": {
         "EVALHUB_TOKEN": "${TOKEN}",
         "EVALHUB_TENANT": "${TENANT}",
@@ -46,7 +45,7 @@ EOF
 cat > "$OUT/vscode-http.jsonc" <<EOF
 // VS Code settings.json — EvalHub MCP (HTTP/SSE transport)
 // First start the server:
-//   ${BIN} mcp --transport http --host ${HOST} --port ${PORT}
+//   ${BIN} --transport http --host ${HOST} --port ${PORT}
 // Then add to settings.json:
 {
   "github.copilot.chat.mcp.servers": {
@@ -64,7 +63,6 @@ cat > "$OUT/cursor-stdio.json" <<EOF
   "mcpServers": {
     "evalhub": {
       "command": "${BIN}",
-      "args": ["mcp"],
       "env": {
         "EVALHUB_TOKEN": "${TOKEN}",
         "EVALHUB_TENANT": "${TENANT}",

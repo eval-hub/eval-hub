@@ -57,16 +57,22 @@ _SUBMITTED_JOB_ID=""
 
 tool02() {
   local id="TOOL-02" desc="submit_evaluation — basic benchmark + model endpoint"
-  if [[ -z "${TEST_BENCHMARK_ID:-}" || -z "${TEST_MODEL_ENDPOINT:-}" ]]; then
-    test_skip "$id" "$desc" "TEST_BENCHMARK_ID or TEST_MODEL_ENDPOINT not set"
+  if [[ -z "${TEST_BENCHMARK_ID:-}" || -z "${TEST_MODEL_ENDPOINT:-}" || -z "${TEST_PROVIDER_ID:-}" || -z "${TEST_MODEL_NAME:-}" ]]; then
+    test_skip "$id" "$desc" "TEST_BENCHMARK_ID, TEST_MODEL_ENDPOINT, TEST_PROVIDER_ID, or TEST_MODEL_NAME not set"
     return
   fi
 
   local args
   args=$(jq -cn \
+    --arg url "$TEST_MODEL_ENDPOINT" \
+    --arg mname "$TEST_MODEL_NAME" \
     --arg bench "$TEST_BENCHMARK_ID" \
-    --arg model "$TEST_MODEL_ENDPOINT" \
-    '{"benchmarks":[$bench],"model_endpoint":$model,"name":"integration-test-basic"}')
+    --arg pid "$TEST_PROVIDER_ID" \
+    '{
+      "name": "integration-test-basic",
+      "model": {"url": $url, "name": $mname},
+      "benchmarks": [{"id": $bench, "provider_id": $pid}]
+    }')
 
   local result
   result=$(mcp_call_tool "submit_evaluation" "$args")
@@ -94,9 +100,13 @@ tool03() {
 
   local args
   args=$(jq -cn \
-    --arg coll "$TEST_COLLECTION_ID" \
-    --arg model "$TEST_MODEL_ENDPOINT" \
-    '{"collection":$coll,"model_endpoint":$model,"name":"integration-test-collection"}')
+    --arg cid "$TEST_COLLECTION_ID" \
+    --arg url "$TEST_MODEL_ENDPOINT" \
+    '{
+      "name": "integration-test-collection",
+      "model": {"url": $url, "name": "integration-test-collection-model"},
+      "collection": {"id": $cid}
+    }')
 
   local result
   result=$(mcp_call_tool "submit_evaluation" "$args")
@@ -112,22 +122,27 @@ tool03
 # ---------- TOOL-04: submit_evaluation — full params --------------------------
 tool04() {
   local id="TOOL-04" desc="submit_evaluation — full params (name, description, tags, config)"
-  if [[ -z "${TEST_BENCHMARK_ID:-}" || -z "${TEST_MODEL_ENDPOINT:-}" ]]; then
-    test_skip "$id" "$desc" "TEST_BENCHMARK_ID or TEST_MODEL_ENDPOINT not set"
+  if [[ -z "${TEST_BENCHMARK_ID:-}" || -z "${TEST_MODEL_ENDPOINT:-}" || -z "${TEST_PROVIDER_ID:-}" || -z "${TEST_MODEL_NAME:-}" ]]; then
+    test_skip "$id" "$desc" "TEST_BENCHMARK_ID, TEST_MODEL_ENDPOINT, TEST_PROVIDER_ID, or TEST_MODEL_NAME not set"
     return
   fi
 
   local args
   args=$(jq -cn \
     --arg bench "$TEST_BENCHMARK_ID" \
-    --arg model "$TEST_MODEL_ENDPOINT" \
+    --arg pid "$TEST_PROVIDER_ID" \
+    --arg url "$TEST_MODEL_ENDPOINT" \
+    --arg mname "$TEST_MODEL_NAME" \
     '{
-      "benchmarks": [$bench],
-      "model_endpoint": $model,
       "name": "integration-test-full",
       "description": "Full-param test from automated harness",
       "tags": ["integration-test", "automated"],
-      "experiment_config": {"max_samples": 10}
+      "model": {"url": $url, "name": $mname},
+      "benchmarks": [{"id": $bench, "provider_id": $pid}],
+      "experiment": {
+        "name": "integration-test-full-experiment",
+        "tags": {"harness": "mcp-tool04"}
+      }
     }')
 
   local result

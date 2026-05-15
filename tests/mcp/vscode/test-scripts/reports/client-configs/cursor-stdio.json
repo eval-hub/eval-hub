@@ -2,12 +2,11 @@
   "mcpServers": {
     "evalhub": {
       "command": "../../../bin/evalhub-mcp",
-      "args": ["mcp"],
       "env": {
         "EVALHUB_TOKEN": "YOUR_TOKEN",
         "EVALHUB_TENANT": "tenant",
-        "EVALHUB_BASE_URL": "http:/localhost:8080"
-      }
+        "EVALHUB_BASE_URL": "http://localhost:8080"
+       }
     }
   }
 }
