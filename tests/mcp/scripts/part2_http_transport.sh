@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Part 2: HTTP/SSE Transport Integration Tests
+# Part 2: Streamable HTTP Transport Integration Tests
 # Tests Steps 7-10 from CLAUDE_CODE_INTEGRATION.md
 # JIRA: RHOAIENG-60353
 set -euo pipefail
@@ -382,7 +382,7 @@ fi
 ###############################################################################
 # Summary
 ###############################################################################
-header "Part 2 Summary: HTTP/SSE Transport"
+header "Part 2 Summary: Streamable HTTP Transport"
 TOTAL=$((PASS + FAIL + SKIP))
 echo -e "  ${GREEN}Passed:  ${PASS}${NC}"
 echo -e "  ${RED}Failed:  ${FAIL}${NC}"

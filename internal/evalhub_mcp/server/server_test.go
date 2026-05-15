@@ -1,11 +1,13 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -162,7 +164,7 @@ func TestRunHTTPStartsAndStops(t *testing.T) {
 	port := freePort(t)
 
 	cfg := &config.Config{
-		Transport: "http",
+		Transport: config.TransportHTTP,
 		Host:      "127.0.0.1",
 		Port:      port,
 	}
@@ -189,12 +191,12 @@ func TestRunHTTPStartsAndStops(t *testing.T) {
 	}
 }
 
-func TestRunHTTPSSEStartsAndStops(t *testing.T) {
+func TestRunLegacyHTTPSSEStartsAndStops(t *testing.T) {
 	t.Parallel()
 	port := freePort(t)
 
 	cfg := &config.Config{
-		Transport: "http-sse",
+		Transport: config.TransportHTTPSSE,
 		Host:      "127.0.0.1",
 		Port:      port,
 	}
@@ -202,9 +204,12 @@ func TestRunHTTPSSEStartsAndStops(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- Run(ctx, cfg, info, discardLogger)
+		errCh <- Run(ctx, cfg, info, logger)
 	}()
 
 	waitForPort(t, cfg.Host, port, 3*time.Second)
@@ -218,6 +223,11 @@ func TestRunHTTPSSEStartsAndStops(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("server did not shut down within 5 seconds")
+	}
+
+	// Read logBuf only after Run returns; slog writes to the buffer from the server goroutine.
+	if !strings.Contains(logBuf.String(), "deprecated") {
+		t.Errorf("expected deprecation warning in logs, got: %s", logBuf.String())
 	}
 }
 
@@ -253,12 +263,12 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 }
 
-func TestHealthEndpointHTTPSSE(t *testing.T) {
+func TestHealthEndpointLegacyHTTPSSE(t *testing.T) {
 	t.Parallel()
 	port := freePort(t)
 
 	cfg := &config.Config{
-		Transport: "http-sse",
+		Transport: config.TransportHTTPSSE,
 		Host:      "127.0.0.1",
 		Port:      port,
 	}

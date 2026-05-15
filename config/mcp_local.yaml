@@ -2,6 +2,7 @@ base_url: http://localhost:8080
 token: token
 tenant: tenant
 insecure: false
+# Streamable HTTP (default for remote); use http-sse only for legacy MCP clients.
 transport: http
 host: localhost
 port: 3001
