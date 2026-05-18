@@ -3,7 +3,7 @@ name = "local-lighteval"
 version = "0.0.1"
 requires-python = ">=3.12"
 dependencies = [
-    "eval-hub-server>=0.4.0.dev363",
+    "eval-hub-server>=0.4.0",
 ]
 
 [project.optional-dependencies]
@@ -15,11 +15,3 @@ demo = [
     "oras>=0.2.41",
     "eval-hub-sdk[client]>=0.1.7",
 ]
-
-[tool.uv.sources]
-eval-hub-server = { index = "testpypi" }
-
-[[tool.uv.index]]
-name = "testpypi"
-url = "https://test.pypi.org/simple/"
-explicit = true
