@@ -1001,6 +1001,11 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPathAtLeast(expectedValu
 	return err
 }
 
+func (tc *scenarioConfig) theResponseShouldMatchAtJSONPath(expectedValue string, jsonPath string) error {
+	_, _, err := tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "matches")
+	return err
+}
+
 func (tc *scenarioConfig) theResponseShouldContainAtJSONPathImpl(expectedValue string, jsonPath string, match string) (bool, string, error) {
 	expanded, err := tc.substituteValues(expectedValue)
 	if err != nil {
@@ -1068,6 +1073,14 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPathImpl(expectedValue s
 			}
 		case "contains":
 			if strings.Contains(foundValue, strings.TrimSpace(value)) {
+				return false, foundValue, nil
+			}
+		case "matches":
+			expr, err := regexp.Compile(value)
+			if err != nil {
+				return false, foundValue, tc.logError(fmt.Errorf("invalid regex %q: %w", strings.TrimSpace(value), err))
+			}
+			if expr.MatchString(foundValue) {
 				return false, foundValue, nil
 			}
 		}
@@ -1438,6 +1451,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the "([^"]*)" field in the response should be saved as "([^"]*)"$`, tc.theFieldShouldBeSaved)
 	ctx.Step(`^the response should contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldContainAtJSONPath)
 	ctx.Step(`^the response should equal the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldEqualAtJSONPath)
+	ctx.Step(`^the response should match the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldMatchAtJSONPath)
 	ctx.Step(`^the response should contain at least the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldContainAtJSONPathAtLeast)
 	ctx.Step(`^the response should not contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldNotContainAtJSONPath)
 	ctx.Step(`^the response should not equal the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldNotEqualAtJSONPath)

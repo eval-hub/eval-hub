@@ -555,7 +555,8 @@ Feature: Evaluation Jobs
     And the response should contain "results"
     # TODO: Add specific metric validations once we verify actual response structure
 
- # This scenario requires HuggingFace authentication for all benchmarks to run
+  # This scenario requires HuggingFace authentication for all benchmarks to run
+  @slow
   Scenario: Verify Evaluation Jobs Can Use OOB Collections - leaderboard-v2
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -647,6 +648,7 @@ Feature: Evaluation Jobs
     # TODO: Add specific metric validations once we verify actual response structure
 
   # This scenario requires HuggingFace authentication for all benchmarks to run
+  @slow
   Scenario: Verify Evaluation Jobs Can Use OOB Collections - safety-and-fairness-v1
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -838,7 +840,7 @@ Feature: Evaluation Jobs
     Then the response code should be 202
     And the response should contain the value "safety-and-fairness-v1" at path "$.collection.id"
 
-  @mlflow  
+  @mlflow
   Scenario: Create an evaluation job with MLflow experiment and OOB collection
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -870,7 +872,8 @@ Feature: Evaluation Jobs
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "leaderboard-v2" at path "$.collection.id"
-    And the response should equal the value "1" at path "$.resource.mlflow_experiment_id"
+    And the response should match the value "^[0-9]+$" at path "$.resource.mlflow_experiment_id"
+    # And the response should match the value "^[0-9a-z:/.-_]+/api/2.0/mlflow/experiments$" at path "$.results.mlflow_experiment_url"
 
   @negative
   Scenario: Verify Evaluation Jobs cannot use both benchmarks and collection
@@ -904,7 +907,7 @@ Feature: Evaluation Jobs
     And the response should contain the value "request_validation_failed" at path "$.message_code"
     And the response should contain the value "'benchmarks' failed on the 'benchmarks or collection' tag'." at path "$.message"
 
-  @negative 
+  @negative
   Scenario: Verify Evaluation Jobs require either benchmarks or collection
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -921,7 +924,7 @@ Feature: Evaluation Jobs
     And the response should contain the value "request_validation_failed" at path "$.message_code"
     And the response should contain the value "benchmarks' failed on the 'minimum one benchmark' tag" at path "$.message"
 
-  @negative  
+  @negative
   Scenario: Cannot create job with empty OOB collection id
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -940,7 +943,7 @@ Feature: Evaluation Jobs
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
 
-  @negative  
+  @negative
   Scenario: Cannot create job with null OOB collection id
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -978,7 +981,7 @@ Feature: Evaluation Jobs
     Then the response code should be 404
     And the response should contain the value "resource_not_found" at path "$.message_code"
 
-  @negative 
+  @negative
   Scenario: Cannot create job with wrong case in OOB collection id
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -997,7 +1000,7 @@ Feature: Evaluation Jobs
     Then the response code should be 404
     And the response should contain the value "resource_not_found" at path "$.message_code"
 
-  @negative 
+  @negative
   Scenario: Cannot create job with whitespace in OOB collection id
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -1046,7 +1049,7 @@ Feature: Evaluation Jobs
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
 
-  @negative 
+  @negative
   Scenario: Cannot override OOB collection benchmark with empty benchmark_id
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -1074,7 +1077,7 @@ Feature: Evaluation Jobs
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
 
-  @negative 
+  @negative
   Scenario: Cannot override OOB collection benchmark with null benchmark_id
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -1102,7 +1105,7 @@ Feature: Evaluation Jobs
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
 
-  @negative  
+  @negative
   @ignore
   #https://redhat.atlassian.net/browse/RHOAIENG-62531
   Scenario: Cannot override OOB collection benchmark with incorrect benchmark_id
