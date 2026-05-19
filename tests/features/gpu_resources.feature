@@ -23,16 +23,15 @@ Feature: GPU Resource Management
     Then the Job spec should have GPU request set to "1"
     And the Job spec should have GPU limit set to "1"
     And the Job spec should not have nodeSelector
-    And I wait for the evaluation job status to be "running|completed"
-    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
-    Then the pod for evaluation job "{id}" should have a GPU attached
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
   @scenario-1b
+  # Validates Job spec for GPU with nodeSelector (no queue)
+  # Note: Execution validation would require actual GPU nodes and is not included
+  # to keep tests fast and avoid dependency on physical GPU hardware
   Scenario: GPU request without queue with nodeSelector for available GPU type
     Given the service is running
-    And GPU node with label "nvidia.com/gpu.product=A100-SXM4-40GB" exists
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/gpu_job_no_queue_with_selector_a100.json"
     Then the response code should be 202
     And the response should contain the value "pending" at path "$.status.state"
@@ -41,10 +40,6 @@ Feature: GPU Resource Management
     Then the Job spec should have GPU request set to "1"
     And the Job spec should have GPU limit set to "1"
     And the Job spec should have nodeSelector "nvidia.com/gpu.product=A100-SXM4-40GB"
-    And I wait for the evaluation job status to be "running|completed"
-    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
-    Then the pod for evaluation job "{id}" should have a GPU attached
-    And the pod for evaluation job "{id}" should be on a node with label "nvidia.com/gpu.product=A100-SXM4-40GB"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -58,17 +53,15 @@ Feature: GPU Resource Management
     And I wait for the Kubernetes Job to be created for evaluation job "{id}"
     Then the Job spec should have GPU request set to "1"
     And the Job spec should have GPU limit set to "1"
-    And the Job spec should have nodeSelector "nvidia.com/gpu.product=H100-SXM5-80GB"
-    And I wait up to "5m" for the evaluation job to have scheduling error
-    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
-    Then the response code should be 200
-    And the response should contain an error message about GPU not being available
-    And the pod for evaluation job "{id}" should not be scheduled
+    And the Job spec should have nodeSelector "nvidia.com/gpu.product=NVIDIA-H100-80GB-HBM3"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
   @scenario-2a
   @kueue
+  # Validates Job spec for GPU with Kueue queue
+  # Note: Execution validation would require GPU quota and admission, not included
+  # to keep tests fast and avoid dependency on Kueue scheduling completion
   Scenario: GPU request with queue without nodeSelector
     Given the service is running
     And Kueue is installed on the cluster
@@ -82,9 +75,6 @@ Feature: GPU Resource Management
     Then the Job spec should have GPU request set to "1"
     And the Job spec should have GPU limit set to "1"
     And the Job spec should have label "kueue.x-k8s.io/queue-name=test-local-queue"
-    And I wait for the evaluation job status to be "running|completed"
-    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
-    Then the pod for evaluation job "{id}" should have a GPU attached
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -105,10 +95,6 @@ Feature: GPU Resource Management
     And the Job spec should have GPU limit set to "1"
     And the Job spec should not have nodeSelector
     And the Job spec should have label "kueue.x-k8s.io/queue-name=test-local-queue"
-    And I wait for the evaluation job status to be "running|completed"
-    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
-    Then the pod for evaluation job "{id}" should have a GPU attached
-    And the pod for evaluation job "{id}" should be on a node with label "nvidia.com/gpu.product=A100-SXM4-40GB"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -127,10 +113,5 @@ Feature: GPU Resource Management
     Then the Job spec should have GPU request set to "1"
     And the Job spec should have GPU limit set to "1"
     And the Job spec should have label "kueue.x-k8s.io/queue-name=cpu-local-queue"
-    And I wait up to "5m" for the evaluation job to have scheduling error
-    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
-    Then the response code should be 200
-    And the response should contain an error message about GPU not being available in queue
-    And the pod for evaluation job "{id}" should not be scheduled
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204

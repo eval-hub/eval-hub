@@ -665,6 +665,15 @@ func (tc *scenarioConfig) getValue(id string) (string, error) {
 	if value, err := tc.substituteValues(id); err == nil {
 		id = value
 	}
+	// Handle {variable} pattern by looking up in values map
+	if strings.HasPrefix(id, "{") && strings.HasSuffix(id, "}") {
+		n := strings.TrimSuffix(strings.TrimPrefix(id, "{"), "}")
+		v := tc.values[n]
+		if v == "" {
+			return "", tc.logError(fmt.Errorf("failed to find value for {%s}", n))
+		}
+		return v, nil
+	}
 	if strings.HasPrefix(id, valuePrefix) {
 		n := strings.TrimPrefix(id, valuePrefix)
 		v := tc.values[n]
@@ -793,6 +802,7 @@ func (tc *scenarioConfig) iSendARequestImpl(method, path, body, caller string) e
 				return tc.logError(fmt.Errorf("response does not contain an ID in response %s", string(tc.body)))
 			}
 			tc.addAsset(assetName, tc.lastId)
+			tc.values["id"] = tc.lastId
 		}
 	}
 
@@ -1189,6 +1199,13 @@ func (tc *scenarioConfig) saveScenarioName(ctx context.Context, sc *godog.Scenar
 }
 
 func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
+	// Skip asset cleanup for @gpu scenarios - they handle deletion explicitly in the scenario steps
+	for _, tag := range sc.Tags {
+		if tag.Name == "@gpu" {
+			return ctx, nil
+		}
+	}
+
 	//tc.assetsSync.Lock()
 	//defer tc.assetsSync.Unlock()
 	for assetName, ids := range tc.assets {
@@ -1400,6 +1417,10 @@ func InitializeTestSuite(ctx *godog.TestSuiteContext) {
 	ctx.BeforeSuite(setUpTestConf)
 	ctx.BeforeSuite(waitForService)
 	ctx.BeforeSuite(checkModelEndpoint)
+
+	// Initialize GPU test suite hooks
+	InitializeGPUTestSuite(ctx)
+
 	ctx.AfterSuite(tidyUpTests)
 }
 

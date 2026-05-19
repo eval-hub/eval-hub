@@ -9,12 +9,12 @@
   "benchmarks": [
     {
       "id": "arc_easy",
-      "provider_id": "gpu_test_provider_l4",
+      "provider_id": "gpu_test_provider_a100",
       "parameters": {
         "num_examples": 10
       }
     }
   ],
-  "name": "gpu-test-no-queue-l4-selector",
-  "tags": ["gpu", "test", "scenario-1b", "l4"]
+  "name": "gpu-test-no-queue-a100-selector",
+  "tags": ["gpu", "test", "scenario-1b", "a100"]
 }
