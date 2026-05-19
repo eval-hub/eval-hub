@@ -13,7 +13,7 @@ import (
 	"github.com/eval-hub/eval-hub/auth"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/go-playground/validator/v10"
-	"github.com/mitchellh/mapstructure"
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
 )
 
@@ -100,6 +100,8 @@ func flattenNestedMap(m map[string]interface{}, prefix string) map[string]string
 			}
 		case string:
 			result[key] = val
+		case bool, int, int64, float64:
+			result[key] = fmt.Sprint(val)
 		}
 	}
 	return result

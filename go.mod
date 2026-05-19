@@ -43,8 +43,6 @@ require (
 	modernc.org/sqlite v1.50.0
 )
 
-require github.com/mitchellh/mapstructure v1.5.0
-
 require (
 	cel.dev/expr v0.25.1 // indirect
 	github.com/Jeffail/gabs/v2 v2.7.0
