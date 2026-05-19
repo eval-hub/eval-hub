@@ -139,6 +139,13 @@ func fixNodeSelectorInSettings(settings map[string]interface{}) {
 	gpu["node_selector"] = fixed
 }
 
+func configDecodeHook() mapstructure.DecodeHookFunc {
+	return mapstructure.ComposeDecodeHookFunc(
+		mapstructure.StringToTimeDurationHookFunc(),
+		mapstructure.StringToSliceHookFunc(","),
+	)
+}
+
 func loadProvider(logger *slog.Logger, validate *validator.Validate, file string, dirs ...string) (*api.ProviderResource, string, error) {
 	type providerConfigInternal struct {
 		ID                 string `mapstructure:"id" yaml:"id" json:"id"`
@@ -154,9 +161,8 @@ func loadProvider(logger *slog.Logger, validate *validator.Validate, file string
 	settings := configValues.AllSettings()
 	fixNodeSelectorInSettings(settings)
 
-	// Use custom decoder config with string slice hook
 	decoderConfig := &mapstructure.DecoderConfig{
-		DecodeHook: mapstructure.StringToSliceHookFunc(","),
+		DecodeHook: configDecodeHook(),
 		Result:     &providerConfig,
 		TagName:    "mapstructure",
 	}
@@ -194,9 +200,8 @@ func loadCollection(logger *slog.Logger, validate *validator.Validate, file stri
 		return nil, "", err
 	}
 
-	// Use custom decoder config to preserve dotted keys in maps
 	decoderConfig := &mapstructure.DecoderConfig{
-		DecodeHook: mapstructure.StringToSliceHookFunc(","),
+		DecodeHook: configDecodeHook(),
 		Result:     &collectionConfig,
 		TagName:    "mapstructure",
 	}
