@@ -46,7 +46,7 @@ The BDD tests assume the required versions of eval-hub and trustyai-operator are
 ### Run All GPU Tests
 
 ```bash
-cd /Users/nbs/work/ai-engineering/code/eval-hub
+cd "$(git rev-parse --show-toplevel)"   # or: cd <path-to-eval-hub-repo>
 GODOG_TAGS="@gpu" go test -v ./tests/features/
 ```
 
@@ -65,56 +65,13 @@ GODOG_TAGS="@kueue" go test -v ./tests/features/
 
 ### Cleanup
 
-GPU test resources are automatically cleaned up after each scenario tagged with `@gpu`. Manual cleanup if needed:
+GPU test resources are automatically cleaned up after each scenario tagged with `@gpu`. Optional cleanup if needed:
 
 ```bash
 oc delete localqueue test-local-queue cpu-local-queue -n ${X_TENANT}
 oc delete clusterqueue gpu-cluster-queue cpu-only-cluster-queue
 oc delete resourceflavor gpu-a100 gpu-v100 default-flavor
 ```
-
-## Manual/Standalone Testing
-
-The standalone test script deploys the feature images, sets up resources, runs all scenarios, and cleans up.
-
-### Manual testing prerequisites
-
-- All BDD test prerequisites above (see [Running BDD Tests](#running-bdd-tests))
-- TrustyAI operator repository cloned at `../trustyai-service-operator`
-- Feature images built and pushed:
-  - eval-hub: `quay.io/rh-ee-nbs/nbs-dev:eval-hub_13may_1`
-  - trustyai-operator: `quay.io/rh-ee-nbs/nbs-dev:sagar-trustyai-operator_13may_1`
-
-### Run the Test Script
-
-```bash
-cd /Users/nbs/work/ai-engineering/code/eval-hub/tests/scripts
-
-# Use default namespace (sagar)
-./test_gpu_resources.sh
-
-# Or specify a namespace
-./test_gpu_resources.sh my-test-namespace
-```
-
-### What the Script Does
-
-1. **Deploy feature images**: Uses `redeploy-evalhub.sh` to deploy eval-hub and operator
-2. **Setup test resources**: Creates Kueue ClusterQueues, LocalQueues, ResourceFlavors, and node labels
-3. **Deploy test provider**: Creates GPU test provider ConfigMap
-4. **Run test scenarios**: Executes all 6 scenarios via API calls
-5. **Validate results**: Checks Job specs, pod scheduling, GPU attachment
-6. **Cleanup**: Removes all test resources
-7. **Report results**: Summarizes pass/fail status
-
-### Test Output
-
-Results are saved to `tests/scripts/gpu_test_results_<timestamp>/`:
-- `deploy.log` - Image deployment output
-- `setup.log` - Resource setup output
-- `scenario_*_create.json` - API responses for job creation
-- `scenario_*_delete.json` - API responses for job deletion
-- `cleanup.log` - Cleanup output
 
 ## Test Data Files
 
@@ -148,17 +105,6 @@ All `gpu_job_*.json` fixtures use benchmark `arc_easy`. Scenario-specific nodeSe
 
 **Issue**: Provider not found
 - **Solution**: Ensure `provider_gpu_test.yaml` is in the test_data directory and eval-hub is restarted
-
-### Manual Script
-
-**Issue**: "TrustyAI operator directory not found"
-- **Solution**: Clone trustyai-service-operator to `../trustyai-service-operator`
-
-**Issue**: Image pull errors
-- **Solution**: Verify images are built and pushed, and cluster can access the registry
-
-**Issue**: Evalhub pod not ready
-- **Solution**: Check pod logs: `oc logs -n sagar -l app=eval-hub`
 
 ## Expected Results
 
