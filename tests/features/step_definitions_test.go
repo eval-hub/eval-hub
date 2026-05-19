@@ -1217,13 +1217,6 @@ func (tc *scenarioConfig) saveScenarioName(ctx context.Context, sc *godog.Scenar
 }
 
 func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
-	// Skip asset cleanup for @gpu scenarios - they handle deletion explicitly in the scenario steps
-	for _, tag := range sc.Tags {
-		if tag.Name == "@gpu" {
-			return ctx, nil
-		}
-	}
-
 	//tc.assetsSync.Lock()
 	//defer tc.assetsSync.Unlock()
 	for assetName, ids := range tc.assets {

@@ -77,9 +77,9 @@ oc delete resourceflavor gpu-a100 gpu-v100 default-flavor
 
 The standalone test script deploys the feature images, sets up resources, runs all scenarios, and cleans up.
 
-### Prerequisites
+### Manual testing prerequisites
 
-- All BDD prerequisites above
+- All BDD test prerequisites above (see [Running BDD Tests](#running-bdd-tests))
 - TrustyAI operator repository cloned at `../trustyai-service-operator`
 - Feature images built and pushed:
   - eval-hub: `quay.io/rh-ee-nbs/nbs-dev:eval-hub_13may_1`
@@ -120,11 +120,12 @@ Results are saved to `tests/scripts/gpu_test_results_<timestamp>/`:
 
 ### Provider Configuration
 
-`tests/features/test_data/provider_gpu_test.yaml` - Defines GPU-enabled benchmarks:
-- `gpu_benchmark_no_selector` - Requires 1 GPU, no specific type
-- `gpu_benchmark_a100` - Requires 1 A100 GPU
-- `gpu_benchmark_v100` - Requires 1 V100 GPU
-- `gpu_benchmark_h100` - Requires 1 H100 GPU (unavailable)
+`tests/features/test_data/provider_gpu_test.yaml` — Defines provider `gpu_test_provider`:
+
+- Benchmark `arc_easy` (“Basic science Q&A (GPU test)”)
+- Runtime GPU: `nvidia.com/gpu`, count `1` (no `node_selector`)
+
+All `gpu_job_*.json` fixtures use benchmark `arc_easy`. Scenario-specific nodeSelectors (for example A100 or H100) come from other GPU test providers created in BDD setup (`gpu_test_provider_a100`, `gpu_test_provider_unavailable`), which also expose `arc_easy` only.
 
 ### Test Job Requests
 

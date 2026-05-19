@@ -176,9 +176,14 @@ func setupGPUTestResources(namespace string) error {
 
 	// Check if Kueue is installed
 	cmd := exec.Command("oc", "get", "crd", "clusterqueues.kueue.x-k8s.io")
-	if err := cmd.Run(); err != nil {
-		logDebug("Kueue not installed, skipping GPU resource setup\n")
-		return nil
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		out := strings.ToLower(string(output))
+		if strings.Contains(out, "notfound") || strings.Contains(out, "not found") {
+			logDebug("Kueue not installed, skipping GPU resource setup\n")
+			return nil
+		}
+		return fmt.Errorf("failed to check Kueue CRD availability: %v, output: %s", err, string(output))
 	}
 
 	// Get GPU product from environment variable (skip nodeSelector tests if not set)
@@ -883,8 +888,12 @@ func (tc *scenarioConfig) podShouldNotBeScheduled(evalJobID string) error {
 		"-o", "jsonpath={.items[0].status.phase}")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		out := strings.ToLower(string(output))
 		// Pod might not exist yet, which is fine
-		return nil
+		if strings.Contains(out, "not found") || strings.Contains(out, "array index out of bounds") {
+			return nil
+		}
+		return tc.logError(fmt.Errorf("failed to check pod scheduling state: %v, output: %s", err, string(output)))
 	}
 
 	phase := strings.TrimSpace(string(output))
