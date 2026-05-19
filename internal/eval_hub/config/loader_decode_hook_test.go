@@ -9,8 +9,8 @@ import (
 
 func TestConfigDecodeHookParsesDurationAndSlice(t *testing.T) {
 	type sample struct {
-		Wait  time.Duration `mapstructure:"wait"`
-		Tags  []string      `mapstructure:"tags"`
+		Wait time.Duration `mapstructure:"wait"`
+		Tags []string      `mapstructure:"tags"`
 	}
 
 	var s sample
