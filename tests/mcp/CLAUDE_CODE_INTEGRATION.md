@@ -29,12 +29,12 @@ Before starting integration verification, ensure:
 ### Step 1 — Register the MCP Server in Claude Code (stdio)
 
 ```bash
-claude mcp add evalhub --transport stdio -- /path/to/evalhub-mcp mcp
+claude mcp add evalhub --transport stdio -- /path/to/evalhub-mcp
 ```
 
 > Replace `/path/to/evalhub-mcp` with the actual binary path (e.g., `$HOME/bin/evalhub-mcp`, or just `evalhub-mcp` if it's on `PATH`).
 
-**What this does**: Tells Claude Code to launch `evalhub-mcp mcp` as a subprocess using stdio transport whenever it needs the evalhub MCP server. Claude Code manages the process lifecycle.
+**What this does**: Tells Claude Code to launch `evalhub-mcp` as a subprocess using stdio transport whenever it needs the evalhub MCP server. Claude Code manages the process lifecycle.
 
 ### Step 2 — Verify Server Launches Correctly
 
@@ -47,7 +47,7 @@ claude mcp list
 If issues occur, verify the binary works standalone:
 
 ```bash
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0.1"}}}' | /path/to/evalhub-mcp mcp
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0.1"}}}' | /path/to/evalhub-mcp
 ```
 
 This should return a JSON-RPC response with server capabilities (tools, resources, prompts).
@@ -67,8 +67,7 @@ List all available MCP resources from the evalhub server.
 | Providers | `evalhub://providers` / `evalhub://providers/{id}` | List/get evaluation providers |
 | Benchmarks | `evalhub://benchmarks` / `evalhub://benchmarks/{id}` | List/get benchmarks (supports label filtering: rag, safety, agents) |
 | Collections | `evalhub://collections` / `evalhub://collections/{id}` | List/get benchmark collections |
-| Jobs | `evalhub://jobs` / `evalhub://jobs/{id}` | List/get evaluation jobs (supports status filtering) |
-| Experiment Results | `evalhub://experiments/{id}/results` | Retrieve experiment results |
+| Jobs | `evalhub://jobs` / `evalhub://jobs/{id}` | List/get evaluation jobs (status filtering on list). **GET by id** returns full job: config, status, per-benchmark progress, and **`results`** (scores, MLflow experiment URL when configured). |
 | Server Version | `evalhub://server/version` | Server version and build metadata |
 
 **Verification commands** to try in conversation:
@@ -97,14 +96,18 @@ What evalhub tools are available?
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `submit_evaluation` | `benchmarks` or `collection`, `model`, `name`, `description`, `tags`, `experiment_config` | Submit an evaluation job |
+| `submit_evaluation` | `name`;<br><br>**`model`**: `url`, `name`, optional `auth_secret`;<br><br>either **`benchmarks`**: non-empty list of `{id, provider_id}` **or** **`collection`**: `{id}` (collection id from eval-hub; shipped defaults include e.g. `leaderboard-v2`);<br><br>optional: `description`, `tags`, `experiment` | Submit an evaluation job |
 | `cancel_job` | `job_id` | Cancel or hard-delete a running job |
 | `get_job_status` | `job_id` | Poll status of a submitted job (includes progress info) |
 
-**Functional test** — submit and track a job:
+**Functional test** — submit and track a job. Tool arguments must match the schema above: **`model` is an object**, **`collection` is `{ "id": "<collection-id>" }`** (not a bare URL or collection name string).
 
 ```text
-Use the submit_evaluation tool to evaluate model "my-model-endpoint" using the "safety" benchmarks collection. Name it "claude-code-stdio-test".
+Use submit_evaluation with:
+  name "claude-code-stdio-test"
+  model {"url":"http://my-model-endpoint","name":"claude-test-model"}
+  collection {"id":"safety-and-fairness-v1"}
+Use another collection id from evalhub://collections if that id is not on this server.
 ```
 
 Then follow up:
@@ -149,14 +152,14 @@ In a Claude Code conversation, type a partial resource URI and verify that autoc
 
 ---
 
-## Part 2: HTTP/SSE Transport Integration
+## Part 2: Streamable HTTP Transport Integration
 
 ### Step 7 — Start the evalhub-mcp Server in HTTP Mode
 
 In a separate terminal:
 
 ```bash
-evalhub-mcp mcp --transport http --host localhost --port 3001
+evalhub-mcp --transport http --host localhost --port 3001
 ```
 
 **Expected**: Server starts and logs indicate it is listening on `http://localhost:3001`.
@@ -164,7 +167,7 @@ evalhub-mcp mcp --transport http --host localhost --port 3001
 If using a dev environment with self-signed certs to the EvalHub backend:
 
 ```bash
-evalhub-mcp mcp --transport http --host localhost --port 3001 --insecure
+evalhub-mcp --transport http --host localhost --port 3001 --insecure
 ```
 
 ### Step 8 — Register the MCP Server in Claude Code (HTTP)
@@ -241,14 +244,24 @@ Both transports must produce identical results for all tool, resource, and promp
 
 This is the "golden path" integration test. In a single Claude Code conversation:
 
-1. **Discover**: "List all available benchmarks labeled 'rag' from evalhub."
-2. **Submit**: "Submit an evaluation using the rag benchmarks collection against model `https://my-model.example.com/v1` — name it 'edd-integration-test'."
+1. **Discover**: "List benchmarks labeled `rag`" (resource `evalhub://benchmarks?label=rag`).
+   **Note:** `rag` is a **benchmark label**, not a collection id; collections are `evalhub://collections` / `evalhub://collections/{id}`.
+2. **Submit**:
+   - Use a **collection that exists on this eval-hub** (`evalhub://collections` or `evalhub://collections/{id}` to pick a real collection `id`).
+   - **`model`** must be an object with at least `url` and `name` (not a bare endpoint string). **`collection`** must be `{ "id": "<collection-id>" }`. The `rag` label from discovery is **not** a collection id unless your server defines one.
+   - Example prompt: *"Submit an evaluation named `edd-integration-test` using collection `leaderboard-v2`, model URL `https://my-model.example.com/v1`, display name `edd-demo-model`."* Claude Code should map that to `submit_evaluation` arguments accordingly.
 3. **Monitor**: "Check the status of the job you just submitted."
-4. **Review**: "Show me the experiment results for that job." (once complete)
+4. **Review**: Read `evalhub://jobs/<job-id>` once the job is complete (same id as above). That resource includes evaluation **results** and MLflow experiment links when configured. evalhub-mcp does not expose a separate experiment-results URI scheme.
 5. **Compare**: "Use the compare_runs prompt to compare this run with job `<previous-job-id>`."
 6. **Clean up**: "Cancel the job if it's still running."
 
 **Expected**: All steps complete without errors. Claude Code correctly chains tool calls and resource reads to support the workflow.
+
+**Automated script** (same golden path, stdio or HTTP): `tests/mcp/scripts/part4_e2e_workflow.sh`.
+
+Defaults use collection id `leaderboard-v2` (override with `E2E_COLLECTION_ID` if your deployment differs).
+
+Optional: `COMPARE_JOB_ID=<uuid>` for the compare step; `TRANSPORT=http` for HTTP transport.
 
 ---
 
@@ -270,8 +283,8 @@ This is the "golden path" integration test. In a single Claude Code conversation
 | 12 | `evalhub://jobs` readable | HTTP | | |
 | 13 | `evalhub://jobs` status filtering | stdio | | |
 | 14 | `evalhub://jobs` status filtering | HTTP | | |
-| 15 | `evalhub://experiments/{id}/results` readable | stdio | | |
-| 16 | `evalhub://experiments/{id}/results` readable | HTTP | | |
+| 15 | `evalhub://jobs/{id}` readable (job detail includes results) | stdio | | |
+| 16 | `evalhub://jobs/{id}` readable (job detail includes results) | HTTP | | |
 | 17 | `evalhub://server/version` readable | stdio | | |
 | 18 | `evalhub://server/version` readable | HTTP | | |
 | 19 | `submit_evaluation` tool works | stdio | | |
@@ -305,7 +318,7 @@ This is the "golden path" integration test. In a single Claude Code conversation
 brew install evalhub-mcp
 
 # Or download binary from GitHub Releases
-# https://github.com/eval-hub/evalhub-hub/releases/latest
+# https://github.com/<org>/evalhub-mcp/releases/latest
 
 # Configure environment
 export EVALHUB_BASE_URL="https://<your-evalhub-instance>"
@@ -313,7 +326,7 @@ export EVALHUB_TOKEN="<your-token>"
 export EVALHUB_TENANT="<your-tenant>"
 
 # Register with Claude Code
-claude mcp add evalhub --transport stdio -- evalhub-mcp mcp
+claude mcp add evalhub --transport stdio -- evalhub-mcp
 
 # Verify
 claude mcp list
@@ -323,7 +336,7 @@ claude mcp list
 
 ```bash
 # Start the MCP server
-evalhub-mcp mcp --transport http --host localhost --port 3001
+evalhub-mcp --transport http --host localhost --port 3001
 
 # In another terminal, register with Claude Code
 claude mcp add evalhub --transport http http://localhost:3001

@@ -469,6 +469,7 @@ func (tc *scenarioConfig) iSetWaitDeadlineTo(paramValue string) error {
 func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) error {
 	deadline := time.Now().Add(tc.waitDeadline)
 	var lastErr error
+	var lastStatus string
 	for time.Now().Before(deadline) {
 		if err := tc.iSendARequestImpl(http.MethodGet, "/api/v1/evaluations/jobs/{id}", "", "wait for evaluation job status"); err != nil {
 			lastErr = err
@@ -477,6 +478,9 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) err
 		}
 		if tc.response != nil && tc.response.StatusCode == http.StatusOK {
 			status, err := tc.getJsonPath("$.status.state")
+			if status != "" {
+				lastStatus = status
+			}
 			if err != nil {
 				lastErr = err
 			} else if status == expectedStatus {
@@ -491,7 +495,8 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) err
 					}
 					return tc.logError(fmt.Errorf("evaluation job reached terminal state %q (expected %q)", status, expectedStatus))
 				}
-				lastErr = fmt.Errorf("expected status %q but got %q", expectedStatus, status)
+				// we should not do this because it will be logged as an error
+				// lastErr = fmt.Errorf("expected status %q but got %q", expectedStatus, status)
 			}
 		} else if tc.response != nil {
 			lastErr = tc.logError(fmt.Errorf("unexpected response status %d", tc.response.StatusCode))
@@ -501,7 +506,7 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) err
 	if lastErr != nil {
 		return tc.logError(lastErr)
 	}
-	return tc.logError(fmt.Errorf("timed out waiting for status %q", expectedStatus))
+	return tc.logError(fmt.Errorf("timed out waiting for status %q, last status: %q", expectedStatus, lastStatus))
 }
 
 func (tc *scenarioConfig) findFile(fileName string) (string, error) {
@@ -1006,6 +1011,11 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPathAtLeast(expectedValu
 	return err
 }
 
+func (tc *scenarioConfig) theResponseShouldMatchAtJSONPath(expectedValue string, jsonPath string) error {
+	_, _, err := tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "matches")
+	return err
+}
+
 func (tc *scenarioConfig) theResponseShouldContainAtJSONPathImpl(expectedValue string, jsonPath string, match string) (bool, string, error) {
 	expanded, err := tc.substituteValues(expectedValue)
 	if err != nil {
@@ -1073,6 +1083,14 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPathImpl(expectedValue s
 			}
 		case "contains":
 			if strings.Contains(foundValue, strings.TrimSpace(value)) {
+				return false, foundValue, nil
+			}
+		case "matches":
+			expr, err := regexp.Compile(value)
+			if err != nil {
+				return false, foundValue, tc.logError(fmt.Errorf("invalid regex %q: %w", strings.TrimSpace(value), err))
+			}
+			if expr.MatchString(foundValue) {
 				return false, foundValue, nil
 			}
 		}
@@ -1454,6 +1472,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the "([^"]*)" field in the response should be saved as "([^"]*)"$`, tc.theFieldShouldBeSaved)
 	ctx.Step(`^the response should contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldContainAtJSONPath)
 	ctx.Step(`^the response should equal the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldEqualAtJSONPath)
+	ctx.Step(`^the response should match the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldMatchAtJSONPath)
 	ctx.Step(`^the response should contain at least the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldContainAtJSONPathAtLeast)
 	ctx.Step(`^the response should not contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldNotContainAtJSONPath)
 	ctx.Step(`^the response should not equal the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldNotEqualAtJSONPath)

@@ -74,7 +74,7 @@ func NewEvalHubClient(cfg *config.Config, logger *slog.Logger) *evalhubclient.Cl
 	if cfg.BaseURL == "" {
 		return nil
 	}
-	client := evalhubclient.NewClient(cfg.BaseURL).WithLogger(logger)
+	client := evalhubclient.NewClient(cfg.BaseURL).WithListPageLimit(cfg.ListPageLimit).WithLogger(logger)
 	if cfg.Token != "" {
 		client = client.WithToken(cfg.Token)
 	}
@@ -84,21 +84,22 @@ func NewEvalHubClient(cfg *config.Config, logger *slog.Logger) *evalhubclient.Cl
 	if cfg.Insecure {
 		client = client.WithInsecureSkipVerify()
 	}
+	logger.Info("EvalHub client created", "baseURL", cfg.BaseURL, "tenant", cfg.Tenant, "insecure", cfg.Insecure)
 	return client
 }
 
 // RegisterHandlers wires tool, resource, and prompt handlers into the MCP
-// server. The server version resource is always registered. The EvalHub client
-// is captured by handler closures so that every handler has access to the API
-// without global state.
-func RegisterHandlers(srv *mcp.Server, client *evalhubclient.Client, info *ServerInfo, logger *slog.Logger) error {
+// server. listPageLimit is the default maximum number of items requested from
+// eval-hub list endpoints (providers, collections, jobs, and completion caches);
+// resource URIs may still set an explicit "limit" query parameter for collections and jobs.
+func RegisterHandlers(srv *mcp.Server, client *evalhubclient.Client, info *ServerInfo, logger *slog.Logger, listPageLimit int) error {
 	registerVersionResource(srv, info, logger)
 	// should we error if no client is provided?
 	if client != nil {
 		if err := registerPrompts(srv, logger); err != nil {
 			return err
 		}
-		registerResources(srv, client, logger)
+		registerResources(srv, client, logger, listPageLimit)
 		registerTools(srv, client, logger)
 	}
 	return nil
@@ -106,11 +107,11 @@ func RegisterHandlers(srv *mcp.Server, client *evalhubclient.Client, info *Serve
 
 // CompletionHandlerOption returns a ServerOption that installs a completion handler
 // backed by the given data source. Returns nil when ds is nil.
-func CompletionHandlerOption(ds EvalHubDiscovery, logger *slog.Logger) *ServerOption {
+func CompletionHandlerOption(ds EvalHubDiscovery, logger *slog.Logger, listPageLimit int) *ServerOption {
 	if ds == nil {
 		return nil
 	}
-	cp := newCompletionProvider(ds, logger)
+	cp := newCompletionProvider(ds, logger, listPageLimit)
 	return &ServerOption{applyFn: func(opts *mcp.ServerOptions) {
 		opts.CompletionHandler = cp.handle
 	}}
@@ -118,8 +119,8 @@ func CompletionHandlerOption(ds EvalHubDiscovery, logger *slog.Logger) *ServerOp
 
 func Run(ctx context.Context, cfg *config.Config, info *ServerInfo, logger *slog.Logger) error {
 	client := NewEvalHubClient(cfg, logger)
-	srv := New(info, logger, CompletionHandlerOption(client, logger))
-	if err := RegisterHandlers(srv, client, info, logger); err != nil {
+	srv := New(info, logger, CompletionHandlerOption(client, logger, cfg.ListPageLimit))
+	if err := RegisterHandlers(srv, client, info, logger, cfg.ListPageLimit); err != nil {
 		return err
 	}
 
@@ -127,16 +128,21 @@ func Run(ctx context.Context, cfg *config.Config, info *ServerInfo, logger *slog
 	if info != nil {
 		version = info.VersionString()
 	}
-	logger.Info("starting evalhub-mcp server",
+	logger.Info("Starting evalhub-mcp server",
 		"version", version,
 		"transport", cfg.Transport,
 	)
 
 	switch cfg.Transport {
-	case "stdio":
+	case config.TransportStdio:
 		return runStdio(ctx, srv)
-	case "http":
+	case config.TransportHTTP:
 		return runHTTP(ctx, srv, cfg, logger)
+	case config.TransportHTTPSSE:
+		logger.Warn("transport http-sse is deprecated; use http (Streamable HTTP) unless connecting to legacy MCP clients",
+			"transport", cfg.Transport,
+		)
+		return runLegacyHTTPSSE(ctx, srv, cfg, logger)
 	default:
 		return fmt.Errorf("unsupported transport: %s", cfg.Transport)
 	}
@@ -151,17 +157,41 @@ func runHTTP(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *s
 		func(r *http.Request) *mcp.Server { return srv },
 		nil,
 	)
+	return serveHTTP(ctx, handler, cfg, logger)
+}
+
+// runLegacyHTTPSSE serves the deprecated HTTP+SSE transport (MCP 2024-11-05) for older clients.
+func runLegacyHTTPSSE(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *slog.Logger) error {
+	handler := mcp.NewSSEHandler(
+		func(r *http.Request) *mcp.Server { return srv },
+		nil,
+	)
+	return serveHTTP(ctx, handler, cfg, logger)
+}
+
+func serveHTTP(ctx context.Context, mcpHandler http.Handler, cfg *config.Config, logger *slog.Logger) error {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"status":"ok"}`)
+	})
+	mux.Handle("/", mcpHandler)
 
 	addr := net.JoinHostPort(cfg.Host, fmt.Sprintf("%d", cfg.Port))
 	httpServer := &http.Server{
 		Addr:    addr,
-		Handler: handler,
+		Handler: mux,
 	}
 
 	errCh := make(chan error, 1)
 	go func() {
-		logger.Info("MCP HTTP Server listening", "addr", addr)
-		errCh <- httpServer.ListenAndServe()
+		logger.Info("MCP HTTP Server listening", "addr", addr, "tls", cfg.TLSEnabled())
+		if cfg.TLSEnabled() {
+			errCh <- httpServer.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile)
+		} else {
+			errCh <- httpServer.ListenAndServe()
+		}
 	}()
 
 	select {

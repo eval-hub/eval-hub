@@ -1,0 +1,17 @@
+[project]
+name = "local-lighteval"
+version = "0.0.1"
+requires-python = ">=3.12"
+dependencies = [
+    "eval-hub-server>=0.4.0",
+]
+
+[project.optional-dependencies]
+demo = [
+    "mlflow>=3.11.1",
+    # demo notebook dependencies
+    "ipykernel>=7.2.0",
+    "ipywidgets>=8.1.8",
+    "oras>=0.2.41",
+    "eval-hub-sdk[client]>=0.1.7",
+]

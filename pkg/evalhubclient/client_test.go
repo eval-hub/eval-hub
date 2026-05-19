@@ -308,6 +308,97 @@ func TestListProvidersPagination(t *testing.T) {
 	}
 }
 
+func TestListBenchmarksUsesListPageLimitForProviderPages(t *testing.T) {
+	resp := api.ProviderResourceList{
+		Page:  api.Page{TotalCount: 1, Limit: 2},
+		Items: []api.ProviderResource{{ProviderConfig: api.ProviderConfig{Name: "p1", Benchmarks: []api.BenchmarkResource{{ID: "b1"}}}}},
+	}
+	srv, capture := newCapturingServer(t, http.StatusOK, mustMarshal(t, resp))
+
+	_, err := newTestClient(srv).WithListPageLimit(2).ListBenchmarks()
+	if err != nil {
+		t.Fatalf("ListBenchmarks: %v", err)
+	}
+	if !strings.Contains(capture.query, "limit=2") {
+		t.Errorf("query %q should include limit=2 for provider paging", capture.query)
+	}
+}
+
+func TestListProvidersLogsErrorWhenTotalCountExceedsLimit(t *testing.T) {
+	var buf strings.Builder
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	resp := api.ProviderResourceList{
+		Page:  api.Page{TotalCount: 500, Limit: 100},
+		Items: []api.ProviderResource{},
+	}
+	srv, _ := newCapturingServer(t, http.StatusOK, mustMarshal(t, resp))
+
+	_, err := NewClient(srv.URL).WithLogger(logger).ListProviders(WithLimit(100))
+	if err != nil {
+		t.Fatalf("ListProviders: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "total_count") || !strings.Contains(out, "500") || !strings.Contains(out, "100") {
+		t.Fatalf("expected truncation error log with total_count and limit, got: %q", out)
+	}
+}
+
+func TestListProvidersDoesNotLogWhenTotalWithinLimit(t *testing.T) {
+	var buf strings.Builder
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	resp := api.ProviderResourceList{
+		Page:  api.Page{TotalCount: 10, Limit: 200},
+		Items: []api.ProviderResource{},
+	}
+	srv, _ := newCapturingServer(t, http.StatusOK, mustMarshal(t, resp))
+
+	_, err := NewClient(srv.URL).WithLogger(logger).ListProviders(WithLimit(200))
+	if err != nil {
+		t.Fatalf("ListProviders: %v", err)
+	}
+	if strings.TrimSpace(buf.String()) != "" {
+		t.Fatalf("expected no error logs, got %q", buf.String())
+	}
+}
+
+func TestListBenchmarksDoesNotLogTruncationDuringAggregatingPagination(t *testing.T) {
+	var buf strings.Builder
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError}))
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		var body []byte
+		if r.URL.Query().Get("offset") == "" || r.URL.Query().Get("offset") == "0" {
+			body = mustMarshal(t, api.ProviderResourceList{
+				Page:  api.Page{TotalCount: 150, Limit: 100},
+				Items: make([]api.ProviderResource, 100),
+			})
+		} else {
+			body = mustMarshal(t, api.ProviderResourceList{
+				Page:  api.Page{TotalCount: 150, Limit: 100},
+				Items: make([]api.ProviderResource, 50),
+			})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(srv.Close)
+
+	_, err := NewClient(srv.URL).WithLogger(logger).WithListPageLimit(100).ListBenchmarks()
+	if err != nil {
+		t.Fatalf("ListBenchmarks: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected 2 provider list calls, got %d", calls)
+	}
+	if strings.TrimSpace(buf.String()) != "" {
+		t.Fatalf("expected no truncation error logs during client pagination, got %q", buf.String())
+	}
+}
+
 func TestGetProvider(t *testing.T) {
 	want := api.ProviderResource{ProviderConfig: api.ProviderConfig{Name: "ragas"}}
 	srv, capture := newCapturingServer(t, http.StatusOK, mustMarshal(t, want))

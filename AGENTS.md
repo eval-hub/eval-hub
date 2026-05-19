@@ -56,6 +56,8 @@ make vet                # Run go vet (same as lint)
 
 **Always run `make fmt lint` after file changes and before committing.** This ensures consistent formatting and catches issues early.
 
+If a `.pre-commit-config.yaml` file exists, run `pre-commit install && pre-commit install --hook-type commit-msg` before making any commits. This automatically enforces formatting, linting, and commit message conventions on every commit.
+
 ### Go Version
 
 **Do not modify the Go version in `go.mod`.** The version specified there is the source of truth. If your local Go toolchain is older, use `GOTOOLCHAIN=auto` to let Go automatically download the required version. Never downgrade `go.mod` to match a locally installed toolchain.
@@ -152,7 +154,7 @@ The MCP (Model Context Protocol) server exposes eval-hub functionality to AI age
 ```bash
 # Run directly
 go run cmd/evalhub_mcp/main.go                          # stdio transport (default)
-go run cmd/evalhub_mcp/main.go --transport http          # HTTP/SSE on localhost:3001
+go run cmd/evalhub_mcp/main.go --transport http          # Streamable HTTP on localhost:3001
 go run cmd/evalhub_mcp/main.go --transport http --port 4000 --host 0.0.0.0
 
 # Build and run
@@ -163,9 +165,9 @@ make build-mcp
 go test -v ./cmd/evalhub_mcp/ ./internal/evalhub_mcp/...
 ```
 
-**CLI flags:** `--transport stdio|http`, `--host`, `--port`, `--config`, `--insecure`, `--version`
+**CLI flags:** `--transport stdio|http|http-sse` (`http` = Streamable HTTP, default for remote; `http-sse` = legacy HTTP+SSE only), `--host`, `--port`, `--config`, `--insecure`, `--version`
 
-**Configuration precedence:** CLI flags > YAML config (`~/.evalhub/config.yaml`) > env vars (`EVALHUB_BASE_URL`, `EVALHUB_TOKEN`, `EVALHUB_TENANT`, `EVALHUB_INSECURE`)
+**Configuration precedence:** CLI flags > env vars (`EVALHUB_BASE_URL`, `EVALHUB_TOKEN`, `EVALHUB_TENANT`, `EVALHUB_INSECURE`, `EVALHUB_LIST_PAGE_LIMIT`) > YAML config (`~/.evalhub/config.yaml`)
 
 **Architecture:**
 

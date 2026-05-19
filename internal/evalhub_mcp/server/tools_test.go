@@ -565,7 +565,7 @@ func TestRegisterHandlersWithNilClientHasNoTools(t *testing.T) {
 	info := &ServerInfo{Version: "test"}
 	srv := New(info, discardLogger, nil)
 
-	if err := RegisterHandlers(srv, nil, info, discardLogger); err != nil {
+	if err := RegisterHandlers(srv, nil, info, discardLogger, evalhubclient.DefaultListPageLimit); err != nil {
 		t.Fatalf("RegisterHandlers: %v", err)
 	}
 

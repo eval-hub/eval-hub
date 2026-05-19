@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -31,6 +33,9 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Insecure {
 		t.Error("expected default insecure to be false")
 	}
+	if cfg.ListPageLimit != evalhubclient.DefaultListPageLimit {
+		t.Errorf("expected default list_page_limit %d, got %d", evalhubclient.DefaultListPageLimit, cfg.ListPageLimit)
+	}
 }
 
 func TestLoadNoConfig(t *testing.T) {
@@ -43,6 +48,9 @@ func TestLoadNoConfig(t *testing.T) {
 	}
 	if cfg.Transport != "stdio" {
 		t.Errorf("expected transport \"stdio\", got %q", cfg.Transport)
+	}
+	if cfg.ListPageLimit != evalhubclient.DefaultListPageLimit {
+		t.Errorf("expected list_page_limit %d, got %d", evalhubclient.DefaultListPageLimit, cfg.ListPageLimit)
 	}
 }
 
@@ -71,6 +79,20 @@ func TestLoadEnvVars(t *testing.T) {
 	}
 	if !cfg.Insecure {
 		t.Error("expected insecure=true from env")
+	}
+}
+
+func TestLoadEnvListPageLimit(t *testing.T) {
+	clearEnv(t)
+	defer clearEnv(t)
+	t.Setenv("EVALHUB_LIST_PAGE_LIMIT", "99")
+
+	cfg, err := Load(nil, nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.ListPageLimit != 99 {
+		t.Errorf("ListPageLimit = %d, want 99", cfg.ListPageLimit)
 	}
 }
 
@@ -224,6 +246,7 @@ func TestValidateTransport(t *testing.T) {
 	}{
 		{"stdio", false},
 		{"http", false},
+		{"http-sse", false},
 		{"grpc", true},
 		{"websocket", true},
 		{"", true},
@@ -273,6 +296,31 @@ func TestValidateStdioIgnoresPort(t *testing.T) {
 	if err := Validate(cfg); err != nil {
 		t.Errorf("stdio transport should not validate port, got: %v", err)
 	}
+}
+
+func TestValidateListPageLimit(t *testing.T) {
+	t.Parallel()
+	t.Run("too large fails", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{Transport: "stdio", Host: "localhost", ListPageLimit: 5000}
+		if err := Validate(cfg); err == nil {
+			t.Fatal("expected validation error for list_page_limit > 2000")
+		}
+	})
+	t.Run("negative fails", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{Transport: "stdio", Host: "localhost", ListPageLimit: -1}
+		if err := Validate(cfg); err == nil {
+			t.Fatal("expected validation error for negative list_page_limit")
+		}
+	})
+	t.Run("valid custom passes", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{Transport: "stdio", Host: "localhost", ListPageLimit: 400}
+		if err := Validate(cfg); err != nil {
+			t.Fatalf("Validate: %v", err)
+		}
+	})
 }
 
 func TestValidateBaseURL(t *testing.T) {
@@ -430,9 +478,138 @@ func TestLoadConfigFile(t *testing.T) {
 
 // helpers
 
+func TestValidateTLSPairing(t *testing.T) {
+	t.Parallel()
+	t.Run("both set passes", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{Transport: "http", Host: "localhost", Port: 8443, TLSCertFile: "/tls/cert.pem", TLSKeyFile: "/tls/key.pem"}
+		if err := Validate(cfg); err != nil {
+			t.Errorf("expected both TLS fields set to pass, got: %v", err)
+		}
+	})
+	t.Run("neither set passes", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{Transport: "http", Host: "localhost", Port: 3001}
+		if err := Validate(cfg); err != nil {
+			t.Errorf("expected no TLS fields to pass, got: %v", err)
+		}
+	})
+	t.Run("only cert fails", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{Transport: "http", Host: "localhost", Port: 8443, TLSCertFile: "/tls/cert.pem"}
+		if err := Validate(cfg); err == nil {
+			t.Error("expected validation error when only tls_cert_file is set")
+		}
+	})
+	t.Run("only key fails", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{Transport: "http", Host: "localhost", Port: 8443, TLSKeyFile: "/tls/key.pem"}
+		if err := Validate(cfg); err == nil {
+			t.Error("expected validation error when only tls_key_file is set")
+		}
+	})
+}
+
+func TestTLSEnabled(t *testing.T) {
+	t.Parallel()
+	t.Run("both set", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{TLSCertFile: "/cert.pem", TLSKeyFile: "/key.pem"}
+		if !cfg.TLSEnabled() {
+			t.Error("expected TLSEnabled() = true")
+		}
+	})
+	t.Run("neither set", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{}
+		if cfg.TLSEnabled() {
+			t.Error("expected TLSEnabled() = false")
+		}
+	})
+}
+
+func TestIsLegacyHTTPTransport(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		transport string
+		want      bool
+	}{
+		{"stdio", false},
+		{"http", false},
+		{"http-sse", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.transport, func(t *testing.T) {
+			t.Parallel()
+			cfg := &Config{Transport: tt.transport}
+			if got := cfg.IsLegacyHTTPTransport(); got != tt.want {
+				t.Errorf("IsLegacyHTTPTransport(%q) = %v, want %v", tt.transport, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsHTTPTransport(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		transport string
+		want      bool
+	}{
+		{"http", true},
+		{"http-sse", true},
+		{"stdio", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.transport, func(t *testing.T) {
+			t.Parallel()
+			cfg := &Config{Transport: tt.transport}
+			if got := cfg.IsHTTPTransport(); got != tt.want {
+				t.Errorf("IsHTTPTransport(%q) = %v, want %v", tt.transport, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoadEnvTLS(t *testing.T) {
+	clearEnv(t)
+	defer clearEnv(t)
+	t.Setenv("EVALHUB_TLS_CERT_FILE", "/tls/cert.pem")
+	t.Setenv("EVALHUB_TLS_KEY_FILE", "/tls/key.pem")
+
+	cfg, err := Load(nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.TLSCertFile != "/tls/cert.pem" {
+		t.Errorf("expected TLSCertFile from env, got %q", cfg.TLSCertFile)
+	}
+	if cfg.TLSKeyFile != "/tls/key.pem" {
+		t.Errorf("expected TLSKeyFile from env, got %q", cfg.TLSKeyFile)
+	}
+}
+
+func TestLoadFlagsTLS(t *testing.T) {
+	clearEnv(t)
+	defer clearEnv(t)
+
+	cert := "/flag/cert.pem"
+	key := "/flag/key.pem"
+	flags := &Flags{TLSCertFile: &cert, TLSKeyFile: &key}
+	cfg, err := Load(flags, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.TLSCertFile != "/flag/cert.pem" {
+		t.Errorf("expected TLSCertFile from flags, got %q", cfg.TLSCertFile)
+	}
+	if cfg.TLSKeyFile != "/flag/key.pem" {
+		t.Errorf("expected TLSKeyFile from flags, got %q", cfg.TLSKeyFile)
+	}
+}
+
 func clearEnv(t *testing.T) {
 	t.Helper()
-	for _, key := range []string{"EVALHUB_BASE_URL", "EVALHUB_TOKEN", "EVALHUB_TENANT", "EVALHUB_INSECURE"} {
+	for _, key := range []string{"EVALHUB_BASE_URL", "EVALHUB_TOKEN", "EVALHUB_TENANT", "EVALHUB_INSECURE", "EVALHUB_LIST_PAGE_LIMIT", "EVALHUB_TLS_CERT_FILE", "EVALHUB_TLS_KEY_FILE"} {
 		t.Setenv(key, "")
 	}
 }

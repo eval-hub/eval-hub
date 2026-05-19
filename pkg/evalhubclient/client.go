@@ -26,6 +26,10 @@ const (
 
 	// maxLoggedBodyBytes caps JSON logged for request/response bodies (aligned with eval-hub handler visibility).
 	maxLoggedBodyBytes = 8192
+
+	// DefaultListPageLimit is the page size used for eval-hub list APIs when the caller
+	// does not set an explicit limit. evalhub-mcp applies this (configurable via list_page_limit).
+	DefaultListPageLimit = 200
 )
 
 // APIError represents a typed error returned by the eval-hub API.
@@ -63,6 +67,9 @@ type Client struct {
 	logger     *slog.Logger
 	maxRetries int
 	retryDelay time.Duration
+	// listPageLimit is the page size for provider listing when aggregating benchmarks
+	// (see allProviders). Zero means use DefaultListPageLimit.
+	listPageLimit int
 }
 
 // NewClient creates a new eval-hub API client. Trailing slashes in baseURL are stripped.
@@ -84,14 +91,15 @@ func NewClient(baseURL string) *Client {
 // a compile-time update here rather than silently inheriting a zero value.
 func (c *Client) clone() *Client {
 	return &Client{
-		ctx:        c.ctx,
-		baseURL:    c.baseURL,
-		token:      c.token,
-		tenant:     c.tenant,
-		httpClient: c.httpClient,
-		logger:     c.logger,
-		maxRetries: c.maxRetries,
-		retryDelay: c.retryDelay,
+		ctx:           c.ctx,
+		baseURL:       c.baseURL,
+		token:         c.token,
+		tenant:        c.tenant,
+		httpClient:    c.httpClient,
+		logger:        c.logger,
+		maxRetries:    c.maxRetries,
+		retryDelay:    c.retryDelay,
+		listPageLimit: c.listPageLimit,
 	}
 }
 
@@ -176,6 +184,25 @@ func (c *Client) WithHTTPClient(httpClient *http.Client) *Client {
 	cp := c.clone()
 	cp.httpClient = httpClient
 	return cp
+}
+
+// WithListPageLimit returns a copy of the client that uses n as the page size when listing
+// providers for benchmark discovery (allProviders). When n < 1, DefaultListPageLimit is used.
+func (c *Client) WithListPageLimit(n int) *Client {
+	cp := c.clone()
+	if n < 1 {
+		cp.listPageLimit = DefaultListPageLimit
+	} else {
+		cp.listPageLimit = n
+	}
+	return cp
+}
+
+func (c *Client) effectiveListPageLimit() int {
+	if c.listPageLimit > 0 {
+		return c.listPageLimit
+	}
+	return DefaultListPageLimit
 }
 
 func truncateBodyForLog(b []byte) string {
@@ -348,6 +375,19 @@ func decode[T any](body []byte) (*T, error) {
 	return &result, nil
 }
 
+func (c *Client) logTruncatedListPage(endpoint string, page api.Page) {
+	if page.Limit <= 0 {
+		return
+	}
+	if page.TotalCount > page.Limit {
+		c.logger.Error("eval-hub list response has more items than returned on this page (total_count > limit); fetch additional pages with offset if needed",
+			"endpoint", endpoint,
+			"total_count", page.TotalCount,
+			"limit", page.Limit,
+		)
+	}
+}
+
 // ─── Health ──────────────────────────────────────────────────────────────────
 
 // GetHealth returns the current health status of the eval-hub service.
@@ -363,11 +403,22 @@ func (c *Client) GetHealth() (*api.HealthResponse, error) {
 
 // ListProviders returns all registered evaluation providers. Use WithLimit/WithOffset for pagination.
 func (c *Client) ListProviders(opts ...ListOption) (*api.ProviderResourceList, error) {
+	return c.fetchProviderList(opts, true)
+}
+
+func (c *Client) fetchProviderList(opts []ListOption, logTruncation bool) (*api.ProviderResourceList, error) {
 	body, _, err := c.doRequest(http.MethodGet, apiBasePath+"/providers", nil, applyListOptions(opts))
 	if err != nil {
 		return nil, err
 	}
-	return decode[api.ProviderResourceList](body)
+	list, err := decode[api.ProviderResourceList](body)
+	if err != nil {
+		return nil, err
+	}
+	if logTruncation {
+		c.logTruncatedListPage(apiBasePath+"/providers", list.Page)
+	}
+	return list, nil
 }
 
 // GetProvider returns the provider with the given ID.
@@ -417,10 +468,10 @@ func (c *Client) ListBenchmarksByLabel(labels []string) ([]api.BenchmarkResource
 
 // allProviders fetches every provider page and returns the combined slice.
 func (c *Client) allProviders() ([]api.ProviderResource, error) {
-	const pageSize = 100
+	pageSize := c.effectiveListPageLimit()
 	var all []api.ProviderResource
 	for offset := 0; ; offset += pageSize {
-		list, err := c.ListProviders(WithLimit(pageSize), WithOffset(offset))
+		list, err := c.fetchProviderList([]ListOption{WithLimit(pageSize), WithOffset(offset)}, false)
 		if err != nil {
 			return nil, err
 		}
@@ -473,7 +524,12 @@ func (c *Client) ListCollections(opts ...ListOption) (*api.CollectionResourceLis
 	if err != nil {
 		return nil, err
 	}
-	return decode[api.CollectionResourceList](body)
+	list, err := decode[api.CollectionResourceList](body)
+	if err != nil {
+		return nil, err
+	}
+	c.logTruncatedListPage(apiBasePath+"/collections", list.Page)
+	return list, nil
 }
 
 // GetCollection returns the collection with the given ID.
@@ -493,7 +549,12 @@ func (c *Client) ListJobs(opts ...ListOption) (*api.EvaluationJobResourceList, e
 	if err != nil {
 		return nil, err
 	}
-	return decode[api.EvaluationJobResourceList](body)
+	list, err := decode[api.EvaluationJobResourceList](body)
+	if err != nil {
+		return nil, err
+	}
+	c.logTruncatedListPage(apiBasePath+"/jobs", list.Page)
+	return list, nil
 }
 
 // GetJob returns the evaluation job with the given ID.

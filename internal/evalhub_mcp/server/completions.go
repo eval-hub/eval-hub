@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
+	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -62,16 +63,18 @@ func (c *completionCache) set(key string, values []string) {
 }
 
 type completionProvider struct {
-	ds     EvalHubDiscovery
-	cache  *completionCache
-	logger *slog.Logger
+	ds            EvalHubDiscovery
+	cache         *completionCache
+	logger        *slog.Logger
+	listPageLimit int
 }
 
-func newCompletionProvider(ds EvalHubDiscovery, logger *slog.Logger) *completionProvider {
+func newCompletionProvider(ds EvalHubDiscovery, logger *slog.Logger, listPageLimit int) *completionProvider {
 	return &completionProvider{
-		ds:     ds,
-		cache:  newCompletionCache(defaultCacheTTL),
-		logger: logger,
+		ds:            ds,
+		cache:         newCompletionCache(defaultCacheTTL),
+		logger:        logger,
+		listPageLimit: listPageLimit,
 	}
 }
 
@@ -131,7 +134,7 @@ func (cp *completionProvider) cachedFetch(key string, fetch func() []string) []s
 }
 
 func (cp *completionProvider) fetchProviderIDs() []string {
-	list, err := cp.ds.ListProviders()
+	list, err := cp.ds.ListProviders(evalhubclient.WithLimit(cp.listPageLimit))
 	if err != nil {
 		cp.logger.Warn("completion: failed to list providers", "error", err)
 		return nil
@@ -157,7 +160,7 @@ func (cp *completionProvider) fetchBenchmarkIDs() []string {
 }
 
 func (cp *completionProvider) fetchCollectionIDs() []string {
-	list, err := cp.ds.ListCollections()
+	list, err := cp.ds.ListCollections(evalhubclient.WithLimit(cp.listPageLimit))
 	if err != nil {
 		cp.logger.Warn("completion: failed to list collections", "error", err)
 		return nil
@@ -170,7 +173,7 @@ func (cp *completionProvider) fetchCollectionIDs() []string {
 }
 
 func (cp *completionProvider) fetchJobIDs() []string {
-	list, err := cp.ds.ListJobs()
+	list, err := cp.ds.ListJobs(evalhubclient.WithLimit(cp.listPageLimit))
 	if err != nil {
 		cp.logger.Warn("completion: failed to list jobs", "error", err)
 		return nil

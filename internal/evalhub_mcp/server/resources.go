@@ -31,7 +31,7 @@ type EvalHubDiscovery interface {
 	ListJobsByStatus(status api.OverallState, opts ...evalhubclient.ListOption) (*api.EvaluationJobResourceList, error)
 }
 
-func registerResources(srv *mcp.Server, ds EvalHubDiscovery, logger *slog.Logger) {
+func registerResources(srv *mcp.Server, ds EvalHubDiscovery, logger *slog.Logger, listPageLimit int) {
 	benchmarksHandler := listBenchmarksHandler(ds, logger)
 
 	srv.AddResource(&mcp.Resource{
@@ -39,7 +39,7 @@ func registerResources(srv *mcp.Server, ds EvalHubDiscovery, logger *slog.Logger
 		Description: "List all evaluation providers",
 		MIMEType:    "application/json",
 		URI:         "evalhub://providers",
-	}, listProvidersHandler(ds, logger))
+	}, listProvidersHandler(ds, logger, listPageLimit))
 
 	srv.AddResourceTemplate(&mcp.ResourceTemplate{
 		Name:        "provider",
@@ -74,7 +74,7 @@ func registerResources(srv *mcp.Server, ds EvalHubDiscovery, logger *slog.Logger
 		Description: "List all benchmark collections",
 		MIMEType:    "application/json",
 		URI:         "evalhub://collections",
-	}, listCollectionsHandler(ds, logger))
+	}, listCollectionsHandler(ds, logger, listPageLimit))
 
 	srv.AddResourceTemplate(&mcp.ResourceTemplate{
 		Name:        "collection",
@@ -83,7 +83,7 @@ func registerResources(srv *mcp.Server, ds EvalHubDiscovery, logger *slog.Logger
 		URITemplate: "evalhub://collections/{id}",
 	}, getCollectionHandler(ds, logger))
 
-	jobsHandler := listJobsHandler(ds, logger)
+	jobsHandler := listJobsHandler(ds, logger, listPageLimit)
 
 	srv.AddResource(&mcp.Resource{
 		Name:        "jobs",
@@ -107,10 +107,10 @@ func registerResources(srv *mcp.Server, ds EvalHubDiscovery, logger *slog.Logger
 	}, getJobHandler(ds, logger))
 }
 
-func listProvidersHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHandler {
+func listProvidersHandler(ds EvalHubDiscovery, logger *slog.Logger, defaultLimit int) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		logger.Debug("reading resource", "uri", req.Params.URI)
-		list, err := ds.ListProviders()
+		list, err := ds.ListProviders(evalhubclient.WithLimit(defaultLimit))
 		if err != nil {
 			return nil, fmt.Errorf("listing providers: %w", err)
 		}
@@ -174,10 +174,10 @@ func getBenchmarkHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceH
 	}
 }
 
-func listCollectionsHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHandler {
+func listCollectionsHandler(ds EvalHubDiscovery, logger *slog.Logger, defaultLimit int) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		logger.Debug("reading resource", "uri", req.Params.URI)
-		opts, err := extractPagination(req.Params.URI)
+		opts, err := listOptsFromResourceURI(req.Params.URI, defaultLimit)
 		if err != nil {
 			return nil, err
 		}
@@ -208,14 +208,14 @@ func getCollectionHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.Resource
 	}
 }
 
-func listJobsHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHandler {
+func listJobsHandler(ds EvalHubDiscovery, logger *slog.Logger, defaultLimit int) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		logger.Debug("reading resource", "uri", req.Params.URI)
 		status, hasStatus, err := extractStatus(req.Params.URI)
 		if err != nil {
 			return nil, err
 		}
-		opts, pErr := extractPagination(req.Params.URI)
+		opts, pErr := listOptsFromResourceURI(req.Params.URI, defaultLimit)
 		if pErr != nil {
 			return nil, pErr
 		}
@@ -317,6 +317,27 @@ func extractPagination(rawURI string) ([]evalhubclient.ListOption, error) {
 		}
 	}
 	return opts, nil
+}
+
+// listOptsFromResourceURI returns list options from the resource URI, applying
+// defaultLimit when the URI does not set an explicit "limit" query parameter.
+func listOptsFromResourceURI(rawURI string, defaultLimit int) ([]evalhubclient.ListOption, error) {
+	opts, err := extractPagination(rawURI)
+	if err != nil {
+		return nil, err
+	}
+	if uriQueryHasLimit(rawURI) {
+		return opts, nil
+	}
+	return append([]evalhubclient.ListOption{evalhubclient.WithLimit(defaultLimit)}, opts...), nil
+}
+
+func uriQueryHasLimit(rawURI string) bool {
+	u, err := url.Parse(rawURI)
+	if err != nil {
+		return false
+	}
+	return u.Query().Get("limit") != ""
 }
 
 func toMCPError(uri string, err error) error {

@@ -1,10 +1,13 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -161,7 +164,7 @@ func TestRunHTTPStartsAndStops(t *testing.T) {
 	port := freePort(t)
 
 	cfg := &config.Config{
-		Transport: "http",
+		Transport: config.TransportHTTP,
 		Host:      "127.0.0.1",
 		Port:      port,
 	}
@@ -185,6 +188,107 @@ func TestRunHTTPStartsAndStops(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("server did not shut down within 5 seconds")
+	}
+}
+
+func TestRunLegacyHTTPSSEStartsAndStops(t *testing.T) {
+	t.Parallel()
+	port := freePort(t)
+
+	cfg := &config.Config{
+		Transport: config.TransportHTTPSSE,
+		Host:      "127.0.0.1",
+		Port:      port,
+	}
+	info := &ServerInfo{Version: "test"}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Run(ctx, cfg, info, logger)
+	}()
+
+	waitForPort(t, cfg.Host, port, 3*time.Second)
+
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("unexpected error after shutdown: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("server did not shut down within 5 seconds")
+	}
+
+	// Read logBuf only after Run returns; slog writes to the buffer from the server goroutine.
+	if !strings.Contains(logBuf.String(), "deprecated") {
+		t.Errorf("expected deprecation warning in logs, got: %s", logBuf.String())
+	}
+}
+
+func TestHealthEndpoint(t *testing.T) {
+	t.Parallel()
+	port := freePort(t)
+
+	cfg := &config.Config{
+		Transport: "http",
+		Host:      "127.0.0.1",
+		Port:      port,
+	}
+	info := &ServerInfo{Version: "test"}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go Run(ctx, cfg, info, discardLogger) //nolint:errcheck
+
+	waitForPort(t, cfg.Host, port, 3*time.Second)
+
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/health", port))
+	if err != nil {
+		t.Fatalf("health request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("health status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("health content-type = %q, want %q", ct, "application/json")
+	}
+}
+
+func TestHealthEndpointLegacyHTTPSSE(t *testing.T) {
+	t.Parallel()
+	port := freePort(t)
+
+	cfg := &config.Config{
+		Transport: config.TransportHTTPSSE,
+		Host:      "127.0.0.1",
+		Port:      port,
+	}
+	info := &ServerInfo{Version: "test"}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go Run(ctx, cfg, info, discardLogger) //nolint:errcheck
+
+	waitForPort(t, cfg.Host, port, 3*time.Second)
+
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/health", port))
+	if err != nil {
+		t.Fatalf("health request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("health status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
 }
 
