@@ -3090,3 +3090,169 @@ benchmarks:
       lower_is_better: true
     pass_criteria:
       threshold: 0.6
+  # ── Standard LLM Evaluation Suite benchmarks ────────────────────────────────
+  # These benchmarks are used in the standard-llm-evals-v1 collection.
+  # They require lm-eval >= 0.4.x with --apply_chat_template and
+  # --fewshot_as_multiturn flags, served via vLLM OpenAI-compatible API.
+  - id: gsm8k_platinum_cot_llama
+    name: GSM8k-Platinum (CoT, Llama chat format)
+    description: |-
+      Filtered, higher-quality subset of GSM8k with corrected labels, evaluated with
+      chain-of-thought prompting in Llama chat template format. 5-shot for instruction-
+      following evaluation; 0-shot for reasoning evaluation. Metric: exact_match,strict-match.
+    category: math
+    metrics:
+      - exact_match
+    num_few_shot: 5   # 5-shot for instruction-following; use 0 for reasoning
+    tags:
+      - math
+      - reasoning
+      - instruction_following
+      - chain_of_thought
+      - chat
+      - lm_eval
+    primary_score:
+      metric: exact_match
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.65
+  - id: mmlu_cot_llama
+    name: MMLU with chain-of-thought (Llama chat format)
+    description: |-
+      57-subject MMLU evaluated with chain-of-thought reasoning using Llama chat template.
+      5-shot with fewshot_as_multiturn. Metric: exact_match,strict_match.
+    category: knowledge
+    metrics:
+      - exact_match
+    num_few_shot: 5
+    dataset_size: 15908
+    tags:
+      - knowledge
+      - multitask
+      - chain_of_thought
+      - chat
+      - lm_eval
+    primary_score:
+      metric: exact_match
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.60
+  - id: ifeval
+    name: Instruction Following Evaluation (IFEval)
+    description: |-
+      541 prompts with 25 verifiable instruction types covering length, keyword, format,
+      JSON structure, and language constraints — evaluates strict adherence to explicit
+      formatting requirements. Scored at both prompt level and instruction level.
+      Metric: inst_level_strict_acc. Use 0-shot with chat template.
+    category: instruction_following
+    metrics:
+      - prompt_level_strict_acc
+      - inst_level_strict_acc
+      - prompt_level_loose_acc
+      - inst_level_loose_acc
+    num_few_shot: 0
+    dataset_size: 541
+    tags:
+      - instruction_following
+      - chat
+      - lm_eval
+    primary_score:
+      metric: inst_level_strict_acc
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.60
+  - id: mrcr
+    name: Multi-step Retrieval and Comprehension Reasoning (MRCR — 1 needle)
+    description: |-
+      Evaluates long-context recall and reasoning with 1 needle across sequence length
+      buckets from 0 to max model length. Primary metric is AUC (area under the
+      score-vs-length curve); per-bucket scores (e.g. score_gt_16k_le_32k) are also
+      reported. Run 3 times with different seeds. See:
+      https://github.com/EleutherAI/lm-evaluation-harness/pull/3754
+    category: long_context
+    metrics:
+      - auc
+      - score_gt_8k_le_16k
+      - score_gt_16k_le_32k
+      - score_gt_32k_le_64k
+      - score_gt_64k_le_128k
+    num_few_shot: 0
+    tags:
+      - long_context
+      - retrieval
+      - comprehension
+      - lm_eval
+    primary_score:
+      metric: auc
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.55
+  - id: mrcr_2needle
+    name: MRCR — 2-needle retrieval
+    description: |-
+      Multi-step Retrieval and Comprehension Reasoning with 2 needles to locate across
+      long contexts. Harder than the 1-needle variant because the model must track and
+      return multiple pieces of information. Primary metric: AUC across length buckets.
+    category: long_context
+    metrics:
+      - auc
+      - score_gt_8k_le_16k
+      - score_gt_16k_le_32k
+      - score_gt_32k_le_64k
+    num_few_shot: 0
+    tags:
+      - long_context
+      - retrieval
+      - multi_needle
+      - lm_eval
+    primary_score:
+      metric: auc
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.55
+  - id: mrcr_4needle
+    name: MRCR — 4-needle retrieval
+    description: |-
+      Multi-step Retrieval and Comprehension Reasoning with 4 needles to locate across
+      long contexts. Requires the model to maintain and return 4 distinct pieces of
+      information from a long document. Primary metric: AUC across length buckets.
+    category: long_context
+    metrics:
+      - auc
+      - score_gt_8k_le_16k
+      - score_gt_16k_le_32k
+      - score_gt_32k_le_64k
+    num_few_shot: 0
+    tags:
+      - long_context
+      - retrieval
+      - multi_needle
+      - lm_eval
+    primary_score:
+      metric: auc
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.45
+  - id: mrcr_8needle
+    name: MRCR — 8-needle retrieval
+    description: |-
+      Multi-step Retrieval and Comprehension Reasoning with 8 needles — the hardest MRCR
+      variant. Requires simultaneously tracking and returning 8 distinct pieces of information
+      from a long document. Primary metric: AUC across length buckets.
+    category: long_context
+    metrics:
+      - auc
+      - score_gt_8k_le_16k
+      - score_gt_16k_le_32k
+      - score_gt_32k_le_64k
+    num_few_shot: 0
+    tags:
+      - long_context
+      - retrieval
+      - multi_needle
+      - lm_eval
+    primary_score:
+      metric: auc
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.35
