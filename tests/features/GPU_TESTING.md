@@ -21,9 +21,9 @@ The feature adds support for GPU resource allocation in eval-hub evaluation jobs
 
 ### With Queue (Kueue-based Scheduling)
 
-4. **GPU with queue, no nodeSelector**: Kueue assigns available GPU from ResourceFlavor
-5. **GPU with queue, conflicting nodeSelector**: Kueue overrides nodeSelector with ResourceFlavor
-6. **GPU with queue, no GPU quota**: Job cannot be scheduled due to missing GPU quota
+1. **GPU with queue, no nodeSelector**: Kueue assigns available GPU from ResourceFlavor
+2. **GPU with queue, conflicting nodeSelector**: Kueue overrides nodeSelector with ResourceFlavor
+3. **GPU with queue, no GPU quota**: Job cannot be scheduled due to missing GPU quota
 
 ## Running BDD Tests
 

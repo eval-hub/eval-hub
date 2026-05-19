@@ -102,9 +102,28 @@ benchmarks:
 	if err != nil {
 		t.Fatalf("LoadProviderConfigs failed: %v", err)
 	}
-	p := providers["gpu_selector_test"]
-	if p.Runtime.K8s.GPU.NodeSelector["nvidia.com/gpu.product"] != "A100-SXM4-40GB" {
-		t.Fatalf("node_selector = %v, want A100-SXM4-40GB label", p.Runtime.K8s.GPU.NodeSelector)
+	p, ok := providers["gpu_selector_test"]
+	if !ok {
+		t.Fatalf("expected gpu_selector_test in providers, got keys: %v", providerIDs(providers))
+	}
+	if p.Runtime == nil {
+		t.Fatalf("gpu_selector_test: expected runtime, got nil")
+	}
+	if p.Runtime.K8s == nil {
+		t.Fatalf("gpu_selector_test: expected runtime.k8s, got nil")
+	}
+	if p.Runtime.K8s.GPU == nil {
+		t.Fatalf("gpu_selector_test: expected runtime.k8s.gpu, got nil")
+	}
+	if p.Runtime.K8s.GPU.NodeSelector == nil {
+		t.Fatalf("gpu_selector_test: expected runtime.k8s.gpu.node_selector map, got nil")
+	}
+	got, ok := p.Runtime.K8s.GPU.NodeSelector["nvidia.com/gpu.product"]
+	if !ok {
+		t.Fatalf("gpu_selector_test: expected nvidia.com/gpu.product in node_selector, got %v", p.Runtime.K8s.GPU.NodeSelector)
+	}
+	if got != "A100-SXM4-40GB" {
+		t.Fatalf("gpu_selector_test: node_selector[nvidia.com/gpu.product] = %q, want A100-SXM4-40GB", got)
 	}
 }
 
