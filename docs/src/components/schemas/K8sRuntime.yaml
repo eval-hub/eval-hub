@@ -21,6 +21,11 @@ properties:
   memory_limit:
     type: string
     description: Memory limit (e.g. 2Gi)
+  gpu:
+    $ref: ./GPUConfig.yaml
+    description: >
+      GPU resource requirement for this adapter. Omit for CPU-only adapters; existing
+      providers without this field are unchanged.
   env:
     type: array
     items:

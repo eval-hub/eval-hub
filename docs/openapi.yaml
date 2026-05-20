@@ -1339,6 +1339,31 @@ components:
               items:
                 type: string
               description: Non-fatal errors (e.g. partial list)
+    GPUConfig:
+      type: object
+      title: GPUConfig
+      description: |
+        GPU resources required by a Kubernetes provider adapter. Omit the parent `gpu` field on `K8sRuntime` for CPU-only adapters. Kubernetes sets GPU requests and limits to the same value (`count`). When `gpu` is omitted or `count` is 0, the evaluation runs without GPU requests.
+      properties:
+        resource:
+          type: string
+          description: |
+            Kubernetes extended resource name (for example `nvidia.com/gpu` or `amd.com/gpu`). When omitted, no specific GPU resource is requested in the pod spec; node selection may be governed by Kueue ResourceFlavors or cluster defaults.
+          examples:
+            - nvidia.com/gpu
+        count:
+          type: integer
+          minimum: 1
+          description: |
+            Number of GPU units to request. Must be at least 1 when `gpu` is specified.
+        node_selector:
+          type: object
+          additionalProperties:
+            type: string
+          description: |
+            Optional node label key/value pairs added to the evaluation pod to target a GPU model or node pool (for example `nvidia.com/gpu.product: NVIDIA-H100-SXM5-80GB`). Ignored when the evaluation job is submitted with a queue; in that case Kueue ResourceFlavors govern node selection.
+          examples:
+            - nvidia.com/gpu.product: NVIDIA-H100-SXM5-80GB
     EnvVar:
       type: object
       description: Environment variable for job configuration
@@ -1376,6 +1401,10 @@ components:
         memory_limit:
           type: string
           description: Memory limit (e.g. 2Gi)
+        gpu:
+          $ref: '#/components/schemas/GPUConfig'
+          description: |
+            GPU resource requirement for this adapter. Omit for CPU-only adapters; existing providers without this field are unchanged.
         env:
           type: array
           items:
