@@ -25,11 +25,11 @@ benchmarks:
     description: Risk assessment with a context-aware custom intent typology and probes of increasing complexity.
     category: security
     metrics:
-    - attack_success_rate
+      - attack_success_rate
     tags:
-    - security
-    - intents
-    - red_team
+      - security
+      - intents
+      - red_team
     primary_score:
       metric: attack_success_rate
       lower_is_better: true
