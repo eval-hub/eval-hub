@@ -107,43 +107,39 @@ func flattenNestedMap(m map[string]interface{}, prefix string) map[string]string
 	return result
 }
 
-// fixNodeSelectorInSettings finds and flattens node_selector maps that Viper incorrectly nested.
-// This specifically targets runtime.k8s.gpu.node_selector to preserve Kubernetes label keys with dots.
-func fixNodeSelectorInSettings(settings map[string]interface{}) {
-	// Navigate to runtime.k8s.gpu.node_selector
-	runtime, ok := settings["runtime"].(map[string]interface{})
-	if !ok {
-		return
-	}
-	k8s, ok := runtime["k8s"].(map[string]interface{})
-	if !ok {
-		return
-	}
-	gpu, ok := k8s["gpu"].(map[string]interface{})
-	if !ok {
-		return
-	}
-	nodeSelector, ok := gpu["node_selector"].(map[string]interface{})
-	if !ok {
-		return
-	}
-
-	// Flatten the nested structure back to dotted keys
-	flattened := flattenNestedMap(nodeSelector, "")
-
-	// Convert to map[string]interface{} for Viper
-	fixed := make(map[string]interface{})
-	for k, v := range flattened {
-		fixed[k] = v
-	}
-	gpu["node_selector"] = fixed
-}
-
 func configDecodeHook() mapstructure.DecodeHookFunc {
 	return mapstructure.ComposeDecodeHookFunc(
 		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
 	)
+}
+
+func viperDecodeOptions() []viper.DecoderConfigOption {
+	return []viper.DecoderConfigOption{viper.DecodeHook(configDecodeHook())}
+}
+
+// applyGPUNodeSelector flattens a Viper-parsed node_selector value onto cfg.
+// Viper splits YAML keys containing dots (e.g. nvidia.com/gpu.product) into nested maps;
+// mapstructure cannot decode those into map[string]string during Unmarshal.
+func applyGPUNodeSelector(cfg *api.ProviderConfig, raw any) {
+	nodeSelector, ok := raw.(map[string]interface{})
+	if !ok || len(nodeSelector) == 0 {
+		return
+	}
+	flattened := flattenNestedMap(nodeSelector, "")
+	if len(flattened) == 0 {
+		return
+	}
+	if cfg.Runtime == nil {
+		cfg.Runtime = &api.Runtime{}
+	}
+	if cfg.Runtime.K8s == nil {
+		cfg.Runtime.K8s = &api.K8sRuntime{}
+	}
+	if cfg.Runtime.K8s.GPU == nil {
+		cfg.Runtime.K8s.GPU = &api.GPUConfig{}
+	}
+	cfg.Runtime.K8s.GPU.NodeSelector = flattened
 }
 
 func loadProvider(logger *slog.Logger, validate *validator.Validate, file string, dirs ...string) (*api.ProviderResource, string, error) {
@@ -157,22 +153,17 @@ func loadProvider(logger *slog.Logger, validate *validator.Validate, file string
 		return nil, "", err
 	}
 
-	// Fix node_selector maps that Viper incorrectly split on dots
-	settings := configValues.AllSettings()
-	fixNodeSelectorInSettings(settings)
-
-	decoderConfig := &mapstructure.DecoderConfig{
-		DecodeHook: configDecodeHook(),
-		Result:     &providerConfig,
-		TagName:    "mapstructure",
+	// node_selector is stripped before Unmarshal because dotted label keys are nested by
+	// Viper and cannot decode into map[string]string; applyGPUNodeSelector restores them.
+	var rawNodeSelector any
+	if configValues.IsSet("runtime.k8s.gpu.node_selector") {
+		rawNodeSelector = configValues.Get("runtime.k8s.gpu.node_selector")
+		configValues.Set("runtime.k8s.gpu.node_selector", nil)
 	}
-	decoder, err := mapstructure.NewDecoder(decoderConfig)
-	if err != nil {
+	if err := configValues.Unmarshal(&providerConfig, viperDecodeOptions()...); err != nil {
 		return nil, configValues.ConfigFileUsed(), err
 	}
-	if err := decoder.Decode(settings); err != nil {
-		return nil, configValues.ConfigFileUsed(), err
-	}
+	applyGPUNodeSelector(&providerConfig.ProviderConfig, rawNodeSelector)
 	res := &api.ProviderResource{
 		Resource: api.Resource{
 			ID:    providerConfig.ID,
@@ -200,16 +191,7 @@ func loadCollection(logger *slog.Logger, validate *validator.Validate, file stri
 		return nil, "", err
 	}
 
-	decoderConfig := &mapstructure.DecoderConfig{
-		DecodeHook: configDecodeHook(),
-		Result:     &collectionConfig,
-		TagName:    "mapstructure",
-	}
-	decoder, err := mapstructure.NewDecoder(decoderConfig)
-	if err != nil {
-		return nil, configValues.ConfigFileUsed(), err
-	}
-	if err := decoder.Decode(configValues.AllSettings()); err != nil {
+	if err := configValues.Unmarshal(&collectionConfig, viperDecodeOptions()...); err != nil {
 		return nil, configValues.ConfigFileUsed(), err
 	}
 	res := &api.CollectionResource{
