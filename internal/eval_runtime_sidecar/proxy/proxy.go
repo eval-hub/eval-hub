@@ -114,6 +114,9 @@ func NewReverseProxy(target *url.URL, client *http.Client, logger *slog.Logger, 
 		req.URL.Scheme = target.Scheme
 		req.URL.Host = target.Host
 		req.Host = target.Host
+		if target.Path != "" && target.Path != "/" {
+			req.URL.Path = strings.TrimSuffix(target.Path, "/") + req.URL.Path
+		}
 		req.RequestURI = "" // required for client requests
 		// Content-Type and X-Tenant are already on req (copied from incoming by ReverseProxy)
 		authInput, ok := AuthInputFromContext(req.Context())

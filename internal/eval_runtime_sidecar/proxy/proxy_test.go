@@ -127,6 +127,31 @@ func TestNewReverseProxy(t *testing.T) {
 	}
 }
 
+func TestNewReverseProxyWithPathPrefix(t *testing.T) {
+	logger := slog.Default()
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/mlflow/api/2.0/mlflow/experiments/get-by-name" {
+			t.Errorf("backend path = %s, want /mlflow/api/2.0/mlflow/experiments/get-by-name", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	}))
+	defer backend.Close()
+
+	target, err := url.Parse(strings.TrimSuffix(backend.URL, "/") + "/mlflow")
+	if err != nil {
+		t.Fatalf("url.Parse: %v", err)
+	}
+	proxy := NewReverseProxy(target, backend.Client(), logger, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/2.0/mlflow/experiments/get-by-name", nil)
+	rw := httptest.NewRecorder()
+	proxy.ServeHTTP(rw, req)
+
+	if rw.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rw.Code)
+	}
+}
+
 func TestContextWithOriginalRequest(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Host = "client.example:8443"
