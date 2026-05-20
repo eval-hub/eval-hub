@@ -28,7 +28,8 @@ def test_setuptools_entrypoint_forwards_argv(mock_exit, mock_run, mock_path):
         main()  # no args, exactly as setuptools calls it
 
     mock_run.assert_called_once_with(
-        ["/fake/eval-hub", "--local", "--configdir", "/tmp/config"]
+        ["eval-hub-server", "--local", "--configdir", "/tmp/config"],
+        executable="/fake/eval-hub",
     )
     mock_exit.assert_called_once_with(0)
 
@@ -49,7 +50,8 @@ def test_explicit_args_override_argv(mock_exit, mock_run, mock_path):
         main(["--local", "--configdir", "/tmp/config"])
 
     mock_run.assert_called_once_with(
-        ["/fake/eval-hub", "--local", "--configdir", "/tmp/config"]
+        ["eval-hub-server", "--local", "--configdir", "/tmp/config"],
+        executable="/fake/eval-hub",
     )
     mock_exit.assert_called_once_with(0)
 

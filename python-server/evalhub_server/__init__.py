@@ -45,10 +45,15 @@ def get_binary_path():
     binary_path = package_dir / "binaries" / binary_name
 
     if not binary_path.exists():
-        raise FileNotFoundError(
-            f"Binary not found: {binary_path}\n"
-            f"This package may not support your platform ({system} {machine})"
-        )
+        fallback_name = "eval-hub.exe" if system == "windows" else "eval-hub"
+        fallback_path = package_dir / "binaries" / fallback_name
+        if fallback_path.exists():
+            binary_path = fallback_path
+        else:
+            raise FileNotFoundError(
+                f"Binary not found: {binary_path}\n"
+                f"This package may not support your platform ({system} {machine})"
+            )
 
     return str(binary_path)
 
