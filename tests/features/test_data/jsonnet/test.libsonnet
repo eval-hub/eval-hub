@@ -1,5 +1,6 @@
 // Shared helpers for FVT test payloads. Reads scenario state from std.extVar('harness'),
-// populated by the Go test harness (env vars, saved values, MLflow flag).
+// populated by the Go test harness (process env plus jsonnetHarnessEnv / jsonnetHarnessEnvOmit
+// on scenarioConfig, saved values, MLflow flag).
 local harness = std.parseJson(std.extVar('harness'));
 
 {

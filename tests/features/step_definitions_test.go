@@ -90,6 +90,13 @@ type scenarioConfig struct {
 
 	values map[string]string
 
+	// jsonnetHarnessEnv overrides process env in the jsonnet harness only (see jsonnetHarnessJSON).
+	jsonnetHarnessEnv map[string]string
+	// jsonnetHarnessEnvOmit drops keys from the harness env snapshot even when set in the process.
+	jsonnetHarnessEnvOmit []string
+	// jsonnetMlflowEnabled overrides harness.mlflow_enabled when non-nil.
+	jsonnetMlflowEnabled *bool
+
 	waitDeadline time.Duration
 	waitInterval time.Duration
 }
@@ -509,20 +516,31 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) err
 	return tc.logError(fmt.Errorf("timed out waiting for status %q, last status: %q", expectedStatus, lastStatus))
 }
 
+var errTestFileNotFound = errors.New("test file not found")
+
 func (tc *scenarioConfig) findFile(fileName string) (string, error) {
 	file := filepath.Join(testDataRoot(), fileName)
-	if _, err := os.Stat(file); os.IsNotExist(err) {
-		path, _ := os.Getwd()
-		return "", tc.logError(fmt.Errorf("test file %s not found in directory %s", fileName, path))
+	_, err := os.Stat(file)
+	if err == nil {
+		return file, nil
 	}
-	return file, nil
+	if os.IsNotExist(err) {
+		return "", errTestFileNotFound
+	}
+	return "", tc.logError(fmt.Errorf("stat test file %s: %w", fileName, err))
 }
 
 func (tc *scenarioConfig) getFile(fileName string) (string, error) {
 	if jsonnetPath, err := tc.findFile(tc.jsonnetSiblingName(fileName)); err == nil {
 		return tc.evaluateJsonnetFile(jsonnetPath)
+	} else if !errors.Is(err, errTestFileNotFound) {
+		return "", err
 	}
 	filePath, err := tc.findFile(fileName)
+	if errors.Is(err, errTestFileNotFound) {
+		path, _ := os.Getwd()
+		return "", tc.logError(fmt.Errorf("test file %s not found in directory %s", fileName, path))
+	}
 	if err != nil {
 		return "", err
 	}

@@ -44,20 +44,35 @@ func jsonnetLibDir() string {
 	return filepath.Join(testDataRoot(), "jsonnet")
 }
 
-func (tc *scenarioConfig) jsonnetHarnessJSON() (string, error) {
+func (tc *scenarioConfig) jsonnetProcessEnv() map[string]string {
 	env := make(map[string]string)
 	for _, kv := range os.Environ() {
 		key, val, _ := strings.Cut(kv, "=")
 		env[key] = val
 	}
+	for _, key := range tc.jsonnetHarnessEnvOmit {
+		delete(env, key)
+	}
+	for key, val := range tc.jsonnetHarnessEnv {
+		env[key] = val
+	}
+	return env
+}
+
+func (tc *scenarioConfig) jsonnetHarnessJSON() (string, error) {
+	env := tc.jsonnetProcessEnv()
 	values := tc.values
 	if values == nil {
 		values = map[string]string{}
 	}
+	mlflowEnabled := env["MLFLOW_TRACKING_URI"] != ""
+	if tc.jsonnetMlflowEnabled != nil {
+		mlflowEnabled = *tc.jsonnetMlflowEnabled
+	}
 	harness := jsonnetHarness{
 		Env:           env,
 		Values:        values,
-		MlflowEnabled: os.Getenv("MLFLOW_TRACKING_URI") != "",
+		MlflowEnabled: mlflowEnabled,
 	}
 	encoded, err := json.Marshal(harness)
 	if err != nil {
@@ -92,9 +107,11 @@ func (tc *scenarioConfig) evaluateJsonnetFile(path string) (string, error) {
 }
 
 func TestJsonnetHarnessEnvAndValue(t *testing.T) {
-	t.Setenv("MODEL_URL", "http://example.com")
 	tc := &scenarioConfig{
 		values: map[string]string{"collection_id": "col-123"},
+		jsonnetHarnessEnv: map[string]string{
+			"MODEL_URL": "http://example.com",
+		},
 	}
 	vm, err := tc.newJsonnetVM()
 	if err != nil {
@@ -126,8 +143,61 @@ local test = import 'test.libsonnet';
 	}
 }
 
+func TestJsonnetHarnessEnvOverrides(t *testing.T) {
+	t.Setenv("MODEL_AUTH_SECRET_REF", "from-process")
+	tc := &scenarioConfig{
+		jsonnetHarnessEnvOmit: []string{"MODEL_AUTH_SECRET_REF"},
+	}
+	vm, err := tc.newJsonnetVM()
+	if err != nil {
+		t.Fatalf("newJsonnetVM: %v", err)
+	}
+	out, err := vm.EvaluateAnonymousSnippet("snippet.jsonnet", `
+local test = import 'test.libsonnet';
+test.model()
+`)
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	var omitted map[string]interface{}
+	if err := json.Unmarshal([]byte(out), &omitted); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := omitted["auth"]; ok {
+		t.Fatal("auth should be omitted when MODEL_AUTH_SECRET_REF is omitted from harness")
+	}
+
+	tc.jsonnetHarnessEnvOmit = nil
+	tc.jsonnetHarnessEnv = map[string]string{"MODEL_AUTH_SECRET_REF": "harness-only"}
+	vm, err = tc.newJsonnetVM()
+	if err != nil {
+		t.Fatalf("newJsonnetVM with harness env: %v", err)
+	}
+	out, err = vm.EvaluateAnonymousSnippet("snippet.jsonnet", `
+local test = import 'test.libsonnet';
+test.model()
+`)
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	var got map[string]interface{}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	auth, ok := got["auth"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("auth = %#v, want object", got["auth"])
+	}
+	if auth["secret_ref"] != "harness-only" {
+		t.Errorf("secret_ref = %v, want harness-only", auth["secret_ref"])
+	}
+}
+
 func TestJsonnetModelAuth(t *testing.T) {
-	tc := &scenarioConfig{values: map[string]string{}}
+	tc := &scenarioConfig{
+		values:                map[string]string{},
+		jsonnetHarnessEnvOmit: []string{"MODEL_AUTH_SECRET_REF"},
+	}
 	eval := func() map[string]interface{} {
 		t.Helper()
 		vm, err := tc.newJsonnetVM()
@@ -152,7 +222,8 @@ test.model()
 		t.Fatal("auth should be omitted when MODEL_AUTH_SECRET_REF is unset")
 	}
 
-	t.Setenv("MODEL_AUTH_SECRET_REF", "my-secret")
+	tc.jsonnetHarnessEnvOmit = nil
+	tc.jsonnetHarnessEnv = map[string]string{"MODEL_AUTH_SECRET_REF": "my-secret"}
 	got := eval()
 	auth, ok := got["auth"].(map[string]interface{})
 	if !ok {
@@ -164,7 +235,11 @@ test.model()
 }
 
 func TestJsonnetExperiment(t *testing.T) {
-	tc := &scenarioConfig{values: map[string]string{}}
+	mlflowOff := false
+	tc := &scenarioConfig{
+		values:               map[string]string{},
+		jsonnetMlflowEnabled: &mlflowOff,
+	}
 	evalExperiment := func() (string, error) {
 		t.Helper()
 		vm, err := tc.newJsonnetVM()
@@ -215,7 +290,8 @@ test.mergeOptional({ name: 'base' }, test.experiment('my-test-experiment'))
 		t.Errorf("name = %v, want base", merged["name"])
 	}
 
-	t.Setenv("MLFLOW_TRACKING_URI", "http://mlflow.local")
+	mlflowOn := true
+	tc.jsonnetMlflowEnabled = &mlflowOn
 	out, err = evalExperiment()
 	if err != nil {
 		t.Fatalf("evaluate experiment with mlflow: %v", err)
@@ -242,7 +318,11 @@ test.mergeOptional({ name: 'base' }, test.experiment('my-test-experiment'))
 }
 
 func TestJsonnetMlflow(t *testing.T) {
-	tc := &scenarioConfig{values: map[string]string{}}
+	mlflowOff := false
+	tc := &scenarioConfig{
+		values:               map[string]string{},
+		jsonnetMlflowEnabled: &mlflowOff,
+	}
 	vm, err := tc.newJsonnetVM()
 	if err != nil {
 		t.Fatalf("newJsonnetVM: %v", err)
@@ -262,7 +342,8 @@ local test = import 'test.libsonnet';
 		t.Errorf("mlflow disabled name = %q, want empty", disabled["name"])
 	}
 
-	t.Setenv("MLFLOW_TRACKING_URI", "http://mlflow.local")
+	mlflowOn := true
+	tc.jsonnetMlflowEnabled = &mlflowOn
 	vm, err = tc.newJsonnetVM()
 	if err != nil {
 		t.Fatalf("newJsonnetVM with mlflow: %v", err)
@@ -322,8 +403,12 @@ test.collection()
 }
 
 func TestEvaluateEvaluationJobJsonnet(t *testing.T) {
-	t.Setenv("MODEL_NAME", "my-model")
-	tc := &scenarioConfig{values: map[string]string{}}
+	tc := &scenarioConfig{
+		values: map[string]string{},
+		jsonnetHarnessEnv: map[string]string{
+			"MODEL_NAME": "my-model",
+		},
+	}
 	path, err := filepath.Abs(filepath.Join(testDataRoot(), "evaluation_job.jsonnet"))
 	if err != nil {
 		t.Fatalf("abs path: %v", err)
@@ -380,8 +465,8 @@ func TestEvaluateEvaluationJobWithCollectionJsonnet(t *testing.T) {
 	if job.Name != "test-evaluation-job" {
 		t.Errorf("name = %q, want test-evaluation-job", job.Name)
 	}
-	if len(job.Benchmarks) != 0 {
-		t.Errorf("benchmarks = %#v, want absent for collection job", job.Benchmarks)
+	if job.Benchmarks != nil {
+		t.Errorf("benchmarks = %#v, want key absent for collection job", job.Benchmarks)
 	}
 }
 
@@ -407,7 +492,7 @@ func TestEvaluateEvaluationJobJsonnetWithCollectionId(t *testing.T) {
 	if job.Collection.ID != "col-xyz" {
 		t.Errorf("collection.id = %q, want col-xyz", job.Collection.ID)
 	}
-	if len(job.Benchmarks) != 0 {
-		t.Errorf("benchmarks = %#v, want absent when collection_id is set", job.Benchmarks)
+	if job.Benchmarks != nil {
+		t.Errorf("benchmarks = %#v, want key absent when collection_id is set", job.Benchmarks)
 	}
 }
