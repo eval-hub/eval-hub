@@ -9,8 +9,6 @@ description: >
   for 1+ fewshot examples, and match sampling parameters to the model provider recommendation.
   Each benchmark is run with 3 repetitions (8 for AIME 25) using different seeds; the
   repetition count is encoded in the pass@k n parameter (e.g. k=1,n=3 or k=1,n=8).
-  Note: mmlu_pro_chat requires the neuralmagic fork
-  (https://github.com/neuralmagic/lm-evaluation-harness/tree/mmlu-pro-chat-variant).
 tags:
   - instruction_following
   - reasoning
@@ -56,19 +54,18 @@ benchmarks:
       apply_chat_template: true
       fewshot_as_multiturn: true
 
-  - id: mmlu_pro_chat
+  - id: leaderboard_mmlu_pro
     provider_id: lm_evaluation_harness
     weight: 2
     primary_score:
-      metric: exact_match
+      metric: acc_norm
       lower_is_better: false
     pass_criteria:
       threshold: 0.45
     parameters:
-      num_fewshot: 5          # 5-shot for instruction-following; 0-shot for reasoning
+      num_fewshot: 5
       apply_chat_template: true
       fewshot_as_multiturn: true
-      # Requires neuralmagic fork: github.com/neuralmagic/lm-evaluation-harness@mmlu-pro-chat-variant
 
   - id: ifeval
     provider_id: lm_evaluation_harness

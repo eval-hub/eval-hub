@@ -36,18 +36,17 @@ benchmarks:
       num_fewshot: 0
       apply_chat_template: true
 
-  - id: mmlu_pro_chat
+  - id: leaderboard_mmlu_pro
     provider_id: lm_evaluation_harness
     weight: 1
     primary_score:
-      metric: exact_match
+      metric: acc_norm
       lower_is_better: false
     pass_criteria:
       threshold: 0.40   # 0-shot is harder than 5-shot
     parameters:
       num_fewshot: 0
       apply_chat_template: true
-      # Requires neuralmagic fork: github.com/neuralmagic/lm-evaluation-harness@mmlu-pro-chat-variant
 
   - id: ifeval
     provider_id: lm_evaluation_harness

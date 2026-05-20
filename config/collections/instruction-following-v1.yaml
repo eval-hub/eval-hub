@@ -46,11 +46,11 @@ benchmarks:
       apply_chat_template: true
       fewshot_as_multiturn: true
 
-  - id: mmlu_pro_chat
+  - id: leaderboard_mmlu_pro
     provider_id: lm_evaluation_harness
     weight: 1
     primary_score:
-      metric: exact_match
+      metric: acc_norm
       lower_is_better: false
     pass_criteria:
       threshold: 0.45
@@ -58,7 +58,6 @@ benchmarks:
       num_fewshot: 5
       apply_chat_template: true
       fewshot_as_multiturn: true
-      # Requires neuralmagic fork: github.com/neuralmagic/lm-evaluation-harness@mmlu-pro-chat-variant
 
   - id: ifeval
     provider_id: lm_evaluation_harness
