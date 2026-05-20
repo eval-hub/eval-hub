@@ -14,7 +14,7 @@ Feature: Evaluation Jobs
 
   Scenario: Verifying results returned for Evaluation job
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_auth.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the response should contain the value "pending" at path "$.status.state"
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
@@ -42,7 +42,7 @@ Feature: Evaluation Jobs
 
   Scenario: Create an evaluation job
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_auth.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
     And the response should contain the value "pending" at path "$.status.state"
@@ -74,7 +74,7 @@ Feature: Evaluation Jobs
   @mlflow
   Scenario: Create an evaluation job with MLflow experiment
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_mlflow_experiment.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
     And the response should contain the value "environment" at path "$.experiment.tags[0].key"
@@ -114,15 +114,15 @@ Feature: Evaluation Jobs
   Scenario: Multiple jobs can be submitted
     Given the service is running
     And I set the header "X-User" to "test-user-1"
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_auth.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the "resource.id" field in the response should be saved as "value:job1_id"
     And I set the header "X-User" to "test-user-2"
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_auth.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the "resource.id" field in the response should be saved as "value:job2_id"
     And I set the header "X-User" to "test-user-3"
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_auth.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the "resource.id" field in the response should be saved as "value:job3_id"
     When I send a GET request to "/api/v1/evaluations/jobs/{{value:job1_id}}"
@@ -203,7 +203,7 @@ Feature: Evaluation Jobs
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:collection_id"
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_collection.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
     And the response should contain the value "pending" at path "$.status.state"
@@ -251,7 +251,7 @@ Feature: Evaluation Jobs
       """
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:collection_id"
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_collection.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
@@ -277,11 +277,11 @@ Feature: Evaluation Jobs
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:collection_id"
     And I set the header "X-User" to "test-user-1"
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_collection.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the "resource.id" field in the response should be saved as "value:job1_id"
     And I set the header "X-User" to "test-user-2"
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_collection.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the "resource.id" field in the response should be saved as "value:job2_id"
     When I send a GET request to "/api/v1/evaluations/jobs/{{value:job1_id}}"
@@ -378,7 +378,7 @@ Feature: Evaluation Jobs
       """
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:collection_id"
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_collection.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
     And the response should contain the value "pending" at path "$.status.state"
@@ -451,7 +451,7 @@ Feature: Evaluation Jobs
     And the response should contain the value "Collection of benchmarks for FVT" at path "$.description"
     And the response should contain the value "0" at path "$.pass_criteria.threshold"
     And the array at path "$.benchmarks" in the response should have length 2
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_collection.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
     And the response should contain the value "pending" at path "$.status.state"
@@ -467,7 +467,7 @@ Feature: Evaluation Jobs
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:collection_id"
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_collection.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
     And the response should contain the value "pending" at path "$.status.state"
@@ -482,7 +482,7 @@ Feature: Evaluation Jobs
 
   Scenario: Create an evaluation job and wait for completion
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_with_auth.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And I wait for the evaluation job status to be "completed"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"

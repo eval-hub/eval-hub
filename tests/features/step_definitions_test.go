@@ -510,7 +510,7 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) err
 }
 
 func (tc *scenarioConfig) findFile(fileName string) (string, error) {
-	file := filepath.Join("tests", "features", "test_data", fileName)
+	file := filepath.Join(testDataRoot(), fileName)
 	if _, err := os.Stat(file); os.IsNotExist(err) {
 		path, _ := os.Getwd()
 		return "", tc.logError(fmt.Errorf("test file %s not found in directory %s", fileName, path))
@@ -519,6 +519,9 @@ func (tc *scenarioConfig) findFile(fileName string) (string, error) {
 }
 
 func (tc *scenarioConfig) getFile(fileName string) (string, error) {
+	if jsonnetPath, err := tc.findFile(tc.jsonnetSiblingName(fileName)); err == nil {
+		return tc.evaluateJsonnetFile(jsonnetPath)
+	}
 	filePath, err := tc.findFile(fileName)
 	if err != nil {
 		return "", err
