@@ -13,7 +13,6 @@ import (
 	"github.com/eval-hub/eval-hub/auth"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/go-playground/validator/v10"
-	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
 )
 
@@ -107,17 +106,6 @@ func flattenNestedMap(m map[string]interface{}, prefix string) map[string]string
 	return result
 }
 
-func configDecodeHook() mapstructure.DecodeHookFunc {
-	return mapstructure.ComposeDecodeHookFunc(
-		mapstructure.StringToTimeDurationHookFunc(),
-		mapstructure.StringToSliceHookFunc(","),
-	)
-}
-
-func viperDecodeOptions() []viper.DecoderConfigOption {
-	return []viper.DecoderConfigOption{viper.DecodeHook(configDecodeHook())}
-}
-
 // applyGPUNodeSelector flattens a Viper-parsed node_selector value onto cfg.
 // Viper splits YAML keys containing dots (e.g. nvidia.com/gpu.product) into nested maps;
 // mapstructure cannot decode those into map[string]string during Unmarshal.
@@ -160,7 +148,7 @@ func loadProvider(logger *slog.Logger, validate *validator.Validate, file string
 		rawNodeSelector = configValues.Get("runtime.k8s.gpu.node_selector")
 		configValues.Set("runtime.k8s.gpu.node_selector", nil)
 	}
-	if err := configValues.Unmarshal(&providerConfig, viperDecodeOptions()...); err != nil {
+	if err := configValues.Unmarshal(&providerConfig); err != nil {
 		return nil, configValues.ConfigFileUsed(), err
 	}
 	applyGPUNodeSelector(&providerConfig.ProviderConfig, rawNodeSelector)
@@ -191,7 +179,7 @@ func loadCollection(logger *slog.Logger, validate *validator.Validate, file stri
 		return nil, "", err
 	}
 
-	if err := configValues.Unmarshal(&collectionConfig, viperDecodeOptions()...); err != nil {
+	if err := configValues.Unmarshal(&collectionConfig); err != nil {
 		return nil, configValues.ConfigFileUsed(), err
 	}
 	res := &api.CollectionResource{
