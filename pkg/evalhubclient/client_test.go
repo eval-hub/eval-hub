@@ -67,7 +67,7 @@ func newCapturingServer(t *testing.T, status int, respBody []byte) (*httptest.Se
 
 func TestGetHealth(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
-	want := api.HealthResponse{Status: "ok", Version: "0.4.0", Timestamp: &now}
+	want := api.HealthResponse{Status: "ok", Version: "0.4.1", Timestamp: &now}
 	srv, capture := newCapturingServer(t, http.StatusOK, mustMarshal(t, want))
 
 	got, err := newTestClient(srv).GetHealth()

@@ -51,7 +51,7 @@ func TestVersionResourceJSONStructure(t *testing.T) {
 	t.Parallel()
 
 	info := &ServerInfo{
-		Version:   "0.4.0",
+		Version:   "0.4.1",
 		Build:     "abc123",
 		BuildDate: "2026-04-30T10:00:00Z",
 		GitHash:   "abc123",
