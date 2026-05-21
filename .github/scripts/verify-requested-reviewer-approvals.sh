@@ -14,8 +14,12 @@ fi
 owner="${repo%%/*}"
 
 required_label="${REQUIRED_LABEL:-ready-for-review}"
-if ! gh pr view "$pr_number" --repo "$repo" --json labels -q '.labels[].name' |
-	grep -qx "$required_label"; then
+labels_output=""
+if ! labels_output=$(gh pr view "$pr_number" --repo "$repo" --json labels -q '.labels[].name'); then
+	echo "::error::Failed to list labels for PR #${pr_number} in ${repo} (required label: ${required_label})" >&2
+	exit 1
+fi
+if ! grep -qx "$required_label" <<<"$labels_output"; then
 	echo "PR #${pr_number} does not have label ${required_label}; skipping approval check."
 	exit 0
 fi
