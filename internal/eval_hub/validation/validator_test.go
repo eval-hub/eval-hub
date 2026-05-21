@@ -257,6 +257,22 @@ func TestValidateCollectionOverrides_InvalidBenchmarkID(t *testing.T) {
 	}
 }
 
+func TestValidateCollectionOverrides_InvalidProviderBenchmarkPair(t *testing.T) {
+	t.Parallel()
+	overrides := []api.EvaluationBenchmarkConfig{
+		{Ref: api.Ref{ID: "b2"}, ProviderID: "p1"},
+	}
+	collectionBenchmarks := []api.CollectionBenchmarkConfig{
+		{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"},
+		{Ref: api.Ref{ID: "b2"}, ProviderID: "p2"},
+	}
+	err := ValidateCollectionOverrides(overrides, collectionBenchmarks)
+	var se *serviceerrors.ServiceError
+	if !errors.As(err, &se) || se.MessageCode() != messages.ResourceDoesNotExist {
+		t.Fatalf("err = %v, want ResourceDoesNotExist service error", err)
+	}
+}
+
 func TestValidateCollectionOverrides_EmptyOverrides(t *testing.T) {
 	t.Parallel()
 	collectionBenchmarks := []api.CollectionBenchmarkConfig{

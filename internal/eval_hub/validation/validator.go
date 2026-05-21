@@ -65,11 +65,12 @@ func ValidateCollectionOverrides(overrides []api.EvaluationBenchmarkConfig, coll
 	if len(overrides) == 0 {
 		return nil
 	}
+	type benchmarkKey struct{ providerID, id string }
 	providerIDs := make(map[string]struct{}, len(collectionBenchmarks))
-	benchmarkIDs := make(map[string]struct{}, len(collectionBenchmarks))
+	pairs := make(map[benchmarkKey]struct{}, len(collectionBenchmarks))
 	for _, b := range collectionBenchmarks {
 		providerIDs[b.ProviderID] = struct{}{}
-		benchmarkIDs[b.ID] = struct{}{}
+		pairs[benchmarkKey{b.ProviderID, b.ID}] = struct{}{}
 	}
 	for _, override := range overrides {
 		if _, ok := providerIDs[override.ProviderID]; !ok {
@@ -80,7 +81,7 @@ func ValidateCollectionOverrides(overrides []api.EvaluationBenchmarkConfig, coll
 			)
 		}
 		if override.ID != "" {
-			if _, ok := benchmarkIDs[override.ID]; !ok {
+			if _, ok := pairs[benchmarkKey{override.ProviderID, override.ID}]; !ok {
 				return serviceerrors.NewServiceError(
 					messages.ResourceDoesNotExist,
 					"Type", "benchmark",
