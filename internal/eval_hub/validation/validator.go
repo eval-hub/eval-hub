@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	validator "github.com/go-playground/validator/v10"
 	"github.com/go-playground/validator/v10/non-standard/validators"
@@ -54,6 +56,40 @@ func registerCustomValidators(instance *validator.Validate) {
 
 func validateK8sLabelValue(fl validator.FieldLevel) bool {
 	return k8sLabelValueRegex.MatchString(fl.Field().String())
+}
+
+// ValidateCollectionOverrides returns an error if any override references a
+// provider_id or benchmark id that does not exist in the collection.
+// It must be called after the collection is fetched from storage.
+func ValidateCollectionOverrides(overrides []api.EvaluationBenchmarkConfig, collectionBenchmarks []api.CollectionBenchmarkConfig) error {
+	if len(overrides) == 0 {
+		return nil
+	}
+	providerIDs := make(map[string]struct{}, len(collectionBenchmarks))
+	benchmarkIDs := make(map[string]struct{}, len(collectionBenchmarks))
+	for _, b := range collectionBenchmarks {
+		providerIDs[b.ProviderID] = struct{}{}
+		benchmarkIDs[b.ID] = struct{}{}
+	}
+	for _, override := range overrides {
+		if _, ok := providerIDs[override.ProviderID]; !ok {
+			return serviceerrors.NewServiceError(
+				messages.ResourceDoesNotExist,
+				"Type", "provider",
+				"ResourceID", override.ProviderID,
+			)
+		}
+		if override.ID != "" {
+			if _, ok := benchmarkIDs[override.ID]; !ok {
+				return serviceerrors.NewServiceError(
+					messages.ResourceDoesNotExist,
+					"Type", "benchmark",
+					"ResourceID", override.ID,
+				)
+			}
+		}
+	}
+	return nil
 }
 
 // evaluationJobConfigBenchmarksMin ensures Benchmarks has at least one element when Collection is not present

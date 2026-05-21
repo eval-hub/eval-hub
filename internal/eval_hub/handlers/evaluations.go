@@ -18,6 +18,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serialization"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/go-playground/validator/v10"
@@ -118,6 +119,9 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 			if evaluation.Collection != nil && evaluation.Collection.ID != "" {
 				collection, err = storage.WithContext(runtimeCtx).GetCollection(evaluation.Collection.ID)
 				if err != nil {
+					return err
+				}
+				if err := validation.ValidateCollectionOverrides(evaluation.Collection.Benchmarks, collection.Benchmarks); err != nil {
 					return err
 				}
 			}

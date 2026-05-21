@@ -1,8 +1,11 @@
 package validation
 
 import (
+	"errors"
 	"testing"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/go-playground/validator/v10"
 )
@@ -221,5 +224,45 @@ func TestEvaluationJobConfig_ExperimentOmittedOk(t *testing.T) {
 	err := validate.Struct(cfg)
 	if err != nil {
 		t.Errorf("expected no error when experiment is omitted, got: %v", err)
+	}
+}
+
+func TestValidateCollectionOverrides_InvalidProviderID(t *testing.T) {
+	t.Parallel()
+	overrides := []api.EvaluationBenchmarkConfig{
+		{Ref: api.Ref{ID: "toxigen"}, ProviderID: "invalid_provider", Parameters: map[string]any{"limit": 5}},
+	}
+	collectionBenchmarks := []api.CollectionBenchmarkConfig{
+		{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness"},
+	}
+	err := ValidateCollectionOverrides(overrides, collectionBenchmarks)
+	var se *serviceerrors.ServiceError
+	if !errors.As(err, &se) || se.MessageCode() != messages.ResourceDoesNotExist {
+		t.Fatalf("err = %v, want ResourceDoesNotExist service error", err)
+	}
+}
+
+func TestValidateCollectionOverrides_InvalidBenchmarkID(t *testing.T) {
+	t.Parallel()
+	overrides := []api.EvaluationBenchmarkConfig{
+		{Ref: api.Ref{ID: "toxigen_typo"}, ProviderID: "lm_evaluation_harness", Parameters: map[string]any{"limit": 5}},
+	}
+	collectionBenchmarks := []api.CollectionBenchmarkConfig{
+		{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness"},
+	}
+	err := ValidateCollectionOverrides(overrides, collectionBenchmarks)
+	var se *serviceerrors.ServiceError
+	if !errors.As(err, &se) || se.MessageCode() != messages.ResourceDoesNotExist {
+		t.Fatalf("err = %v, want ResourceDoesNotExist service error", err)
+	}
+}
+
+func TestValidateCollectionOverrides_EmptyOverrides(t *testing.T) {
+	t.Parallel()
+	collectionBenchmarks := []api.CollectionBenchmarkConfig{
+		{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness"},
+	}
+	if err := ValidateCollectionOverrides(nil, collectionBenchmarks); err != nil {
+		t.Fatalf("expected no error for empty overrides, got: %v", err)
 	}
 }
