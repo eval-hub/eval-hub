@@ -243,6 +243,9 @@ func GetJobBenchmarks(job *api.EvaluationJobResource, collection *api.Collection
 				"CollectionID", job.Collection.ID,
 			)
 		}
+		if err := validateCollectionOverrides(job.Collection.Benchmarks, collection.Benchmarks); err != nil {
+			return nil, err
+		}
 		var mergedBenchmarks []api.EvaluationBenchmarkConfig
 		for _, benchmark := range collection.Benchmarks {
 			benchmark := mergeBenchmarkParameters(benchmark, job.Collection.Benchmarks)
@@ -257,6 +260,39 @@ func GetJobBenchmarks(job *api.EvaluationJobResource, collection *api.Collection
 		)
 	}
 	return job.Benchmarks, nil
+}
+
+// validateCollectionOverrides returns an error if any override references a
+// provider_id or benchmark id that does not exist in the collection.
+func validateCollectionOverrides(overrides []api.EvaluationBenchmarkConfig, collectionBenchmarks []api.CollectionBenchmarkConfig) error {
+	if len(overrides) == 0 {
+		return nil
+	}
+	providerIDs := make(map[string]struct{}, len(collectionBenchmarks))
+	benchmarkIDs := make(map[string]struct{}, len(collectionBenchmarks))
+	for _, b := range collectionBenchmarks {
+		providerIDs[b.ProviderID] = struct{}{}
+		benchmarkIDs[b.ID] = struct{}{}
+	}
+	for _, override := range overrides {
+		if _, ok := providerIDs[override.ProviderID]; !ok {
+			return serviceerrors.NewServiceError(
+				messages.ResourceDoesNotExist,
+				"Type", "provider",
+				"ResourceID", override.ProviderID,
+			)
+		}
+		if override.ID != "" {
+			if _, ok := benchmarkIDs[override.ID]; !ok {
+				return serviceerrors.NewServiceError(
+					messages.ResourceDoesNotExist,
+					"Type", "benchmark",
+					"ResourceID", override.ID,
+				)
+			}
+		}
+	}
+	return nil
 }
 
 func mergeBenchmarkParameters(benchmark api.CollectionBenchmarkConfig, jobBenchmarks []api.EvaluationBenchmarkConfig) api.EvaluationBenchmarkConfig {

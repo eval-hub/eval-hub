@@ -215,6 +215,62 @@ func TestGetJobBenchmarks(t *testing.T) {
 		}
 	})
 
+	t.Run("collection override with invalid provider_id returns resource_does_not_exist", func(t *testing.T) {
+		t.Parallel()
+		job := makeJob()
+		job.Collection = &api.CollectionRef{
+			ID: "col-1",
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{
+					Ref:        api.Ref{ID: "toxigen"},
+					ProviderID: "invalid_provider",
+					Parameters: map[string]any{"limit": 5},
+				},
+			},
+		}
+		collection := &api.CollectionResource{
+			Resource: api.Resource{ID: "col-1"},
+			CollectionConfig: api.CollectionConfig{
+				Benchmarks: []api.CollectionBenchmarkConfig{
+					{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness"},
+				},
+			},
+		}
+		_, err := GetJobBenchmarks(job, collection)
+		var se *serviceerrors.ServiceError
+		if !errors.As(err, &se) || se.MessageCode() != messages.ResourceDoesNotExist {
+			t.Fatalf("err = %v, want ResourceDoesNotExist service error", err)
+		}
+	})
+
+	t.Run("collection override with invalid benchmark id returns resource_does_not_exist", func(t *testing.T) {
+		t.Parallel()
+		job := makeJob()
+		job.Collection = &api.CollectionRef{
+			ID: "col-1",
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{
+					Ref:        api.Ref{ID: "toxigen_typo"},
+					ProviderID: "lm_evaluation_harness",
+					Parameters: map[string]any{"limit": 5},
+				},
+			},
+		}
+		collection := &api.CollectionResource{
+			Resource: api.Resource{ID: "col-1"},
+			CollectionConfig: api.CollectionConfig{
+				Benchmarks: []api.CollectionBenchmarkConfig{
+					{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness"},
+				},
+			},
+		}
+		_, err := GetJobBenchmarks(job, collection)
+		var se *serviceerrors.ServiceError
+		if !errors.As(err, &se) || se.MessageCode() != messages.ResourceDoesNotExist {
+			t.Fatalf("err = %v, want ResourceDoesNotExist service error", err)
+		}
+	})
+
 	t.Run("collection resolves and merges job parameters per benchmark", func(t *testing.T) {
 		t.Parallel()
 		job := makeJob()
