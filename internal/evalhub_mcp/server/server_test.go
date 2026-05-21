@@ -38,7 +38,7 @@ func TestVersionString(t *testing.T) {
 	}{
 		{&ServerInfo{Version: "0.1.0"}, "0.1.0"},
 		{&ServerInfo{Version: "0.1.0", Build: "abc123"}, "0.1.0+abc123"},
-		{&ServerInfo{Version: "0.4.0", Build: "deadbeef", BuildDate: "2026-01-01"}, "0.4.0+deadbeef"},
+		{&ServerInfo{Version: "0.4.1", Build: "deadbeef", BuildDate: "2026-01-01"}, "0.4.1+deadbeef"},
 	}
 	for _, tt := range tests {
 		if got := tt.info.VersionString(); got != tt.want {
