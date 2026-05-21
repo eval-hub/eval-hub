@@ -14,16 +14,17 @@ on:
     branches: [main, develop]
   pull_request_review:
     types: [submitted, dismissed]
-    branches: [main, develop]
 
 jobs:
   required-reviewer-approvals:
     name: Verify requested reviewer approvals
-    if: github.event.pull_request.draft == false
+    if: |
+      github.event.pull_request.draft == false &&
+      (github.event.pull_request.base.ref == 'main' || github.event.pull_request.base.ref == 'develop')
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: read
-      members: read
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
