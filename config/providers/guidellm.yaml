@@ -113,12 +113,12 @@ benchmarks:
       - poisson
       - realistic
       - guidellm
-  # Pre-configured benchmark suites
     primary_score:
       metric: output_tokens_per_second
       lower_is_better: false
     pass_criteria:
       threshold: 10.0
+  # Pre-configured benchmark suites
   - id: quick_perf_test
     name: Quick performance snapshot
     description: Fast sweep-based evaluation with limited samples for rapid performance assessment.

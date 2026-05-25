@@ -131,12 +131,12 @@ benchmarks:
       - glue
       - lighteval
       - suite
-  # Individual benchmarks
     primary_score:
       metric: acc
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
+  # Individual benchmarks
   - id: hellaswag
     name: Everyday activity completion
     description: Picks the most plausible continuation of an everyday scenario (10,042 examples).
