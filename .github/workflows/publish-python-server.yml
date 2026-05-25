@@ -250,7 +250,8 @@ jobs:
     steps:
       - name: Cleanup old TestPyPI dev releases
         env:
-          PYPI_CLEANUP_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          PYPI_CLEANUP_PASSWORD: ${{ secrets.TEST_PYPI_PASSWORD }}
+          PYPI_CLEANUP_USERNAME: ${{ secrets.TEST_PYPI_USERNAME }}
         run: |
           KEEP=20
           REGEX=$(python3 -c "
@@ -271,13 +272,13 @@ jobs:
               sys.exit(0)
           to_delete = sorted(dev, key=lambda v: dev[v])[:-keep]
           print(f'Deleting {len(to_delete)} old dev releases, keeping {keep}', file=sys.stderr)
-          print('|'.join(re.escape(v) for v in to_delete))
+          print('|'.join(re.escape(v) + '$' for v in to_delete))
           ")
           if [ -n "$REGEX" ]; then
             pip install pypi-cleanup==0.1.10
             pypi-cleanup \
               --host https://test.pypi.org/ \
-              --username __token__ \
+              --username "$PYPI_CLEANUP_USERNAME" \
               --package eval-hub-server \
               --version-regex "$REGEX" \
               --do-it \
