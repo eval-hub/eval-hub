@@ -152,7 +152,7 @@ jobs:
   validate-wheels:
     name: Validate wheel (${{ matrix.os }})
     needs: build-wheels
-    if: inputs.validate-wheels || inputs.validate-wheels == null
+    if: inputs.validate-wheels != false
     strategy:
       fail-fast: false
       matrix:
@@ -234,12 +234,48 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
 
+  check-testpypi-age:
+    name: Check TestPyPI release age
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    outputs:
+      should_publish: ${{ steps.check.outputs.should_publish }}
+    steps:
+      - name: Check last TestPyPI upload age
+        id: check
+        run: |
+          echo "should_publish=true" >> "$GITHUB_OUTPUT"
+
+          RESPONSE=$(curl -sf "https://test.pypi.org/pypi/eval-hub-server/json") || exit 0
+
+          LATEST_UPLOAD=$(echo "$RESPONSE" | jq -r '
+            [.releases[][] | .upload_time_iso_8601] | max // empty
+          ')
+          [ -z "$LATEST_UPLOAD" ] && exit 0
+
+          UPLOAD_EPOCH=$(date -d "$LATEST_UPLOAD" +%s)
+          NOW_EPOCH=$(date +%s)
+          AGE_DAYS=$(( (NOW_EPOCH - UPLOAD_EPOCH) / 86400 ))
+          echo "Latest TestPyPI upload: $LATEST_UPLOAD ($AGE_DAYS days ago)"
+
+          if [ "$AGE_DAYS" -lt 7 ]; then
+            echo "Last release is only $AGE_DAYS days old — skipping TestPyPI publish"
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
   publish-test-pypi:
     name: Publish to TestPyPI
-    needs: [build-wheels, validate-wheels]
+    needs: [build-wheels, validate-wheels, check-testpypi-age]
     # TestPyPI only receives devX versions. Tag refs are excluded so that
     # workflow_dispatch against a tag cannot publish a clean release version here.
-    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/') && inputs.publish-test-pypi)
+    # Manual dispatch always publishes; automatic main pushes only publish if
+    # the last TestPyPI release is older than 7 days.
+    if: >-
+      !failure() && !cancelled()
+      && (
+        (github.event_name == 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/') && inputs.publish-test-pypi)
+        || (github.ref == 'refs/heads/main' && needs.check-testpypi-age.outputs.should_publish == 'true')
+      )
     runs-on: ubuntu-latest
     environment:
       name: testpypi
@@ -248,48 +284,17 @@ jobs:
       id-token: write
 
     steps:
-      - name: Cleanup old TestPyPI dev releases
-        env:
-          PYPI_CLEANUP_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
-        run: |
-          KEEP=20
-          REGEX=$(python3 -c "
-          import json, re, urllib.request, sys
-          try:
-              data = json.loads(urllib.request.urlopen(
-                  'https://test.pypi.org/pypi/eval-hub-server/json', timeout=30).read())
-          except Exception as e:
-              print(f'::warning::Could not query TestPyPI: {e}', file=sys.stderr)
-              sys.exit(0)
-          dev = {}
-          for ver, files in data.get('releases', {}).items():
-              if re.search(r'dev\d+$', ver) and files:
-                  dev[ver] = max(f['upload_time'] for f in files)
-          keep = int('${KEEP}')
-          if len(dev) <= keep:
-              print(f'Only {len(dev)} dev releases found, nothing to clean up', file=sys.stderr)
-              sys.exit(0)
-          to_delete = sorted(dev, key=lambda v: dev[v])[:-keep]
-          print(f'Deleting {len(to_delete)} old dev releases, keeping {keep}', file=sys.stderr)
-          print('|'.join(re.escape(v) for v in to_delete))
-          ")
-          if [ -n "$REGEX" ]; then
-            pip install pypi-cleanup==0.1.10
-            pypi-cleanup \
-              --host https://test.pypi.org/ \
-              --username __token__ \
-              --package eval-hub-server \
-              --version-regex "$REGEX" \
-              --do-it \
-              --yes || echo "::warning::TestPyPI cleanup failed — continuing with publish"
-          fi
-
-      - name: Download all wheels
+      - name: Download manylinux x86_64 wheel
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          pattern: wheel-*
+          name: wheel-manylinux-x86_64
           path: dist/
-          merge-multiple: true
+
+      - name: Download macOS arm64 wheel
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: wheel-macosx-arm64
+          path: dist/
 
       - name: List wheels
         run: ls -la dist/

@@ -44,7 +44,7 @@ When a release is published in the eval-hub repository:
 4. **Publish to TestPyPI** (`publish-test-pypi` job) — on `main` pushes or manual dispatch
   - Builds wheels with `.devN` version suffix (e.g., `0.2.0.dev42`)
   - Uses GitHub OIDC trusted publishing against the `testpypi` environment
-  - Publishes all 5 wheels to [TestPyPI](https://test.pypi.org/p/eval-hub-server)
+  - Publishes Linux x86_64 and macOS arm64 wheels to [TestPyPI](https://test.pypi.org/p/eval-hub-server)
 5. **Publish to PyPI** (`publish` job) — on tag pushes only
   - Uses GitHub OIDC trusted publishing (no API tokens)
   - Publishes all 5 wheels to PyPI with the clean version from `VERSION`
