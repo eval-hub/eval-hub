@@ -8,3 +8,7 @@ properties:
     $ref: ./OverallState.yaml
   message:
     $ref: ./MessageInfo.yaml
+  warnings:
+    type: array
+    items:
+      $ref: ./WarningInfo.yaml
