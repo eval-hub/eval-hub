@@ -14,3 +14,6 @@ properties:
       - warning
       - error
     description: Type of message, when appropriate.
+required:
+  - message
+  - message_code
