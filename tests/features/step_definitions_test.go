@@ -513,7 +513,7 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) err
 	if lastErr != nil {
 		return tc.logError(lastErr)
 	}
-	return tc.logError(fmt.Errorf("timed out waiting for status %q, last status: %q", expectedStatus, lastStatus))
+	return tc.logError(fmt.Errorf("timed out after %v waiting for status %q, last status: %q", tc.waitDeadline, expectedStatus, lastStatus))
 }
 
 var errTestFileNotFound = errors.New("test file not found")
