@@ -169,7 +169,7 @@ type BenchmarkStatusEvent struct {
 type EvaluationJobState struct {
 	State    OverallState  `json:"state" validate:"required,oneof=pending running completed failed cancelled partially_failed"`
 	Message  *MessageInfo  `json:"message" validate:"required"`
-	Warnings []WarningInfo `json:"warnings,omitempty"`
+	Warnings []WarningInfo `json:"warnings,omitempty" validate:"omitempty,dive"`
 }
 
 type StatusEvent struct {
