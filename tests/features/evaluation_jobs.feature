@@ -1020,8 +1020,6 @@ Feature: Evaluation Jobs
     And the response should contain the value "resource_not_found" at path "$.message_code"
 
   @negative
-  @ignore
-  #https://redhat.atlassian.net/browse/RHOAIENG-62529
   Scenario: Cannot override OOB collection benchmark with invalid provider_id
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -1047,7 +1045,7 @@ Feature: Evaluation Jobs
       }
       """
     Then the response code should be 400
-    And the response should contain the value "request_validation_failed" at path "$.message_code"
+    And the response should contain the value "resource_does_not_exist" at path "$.message_code"
 
   @negative
   Scenario: Cannot override OOB collection benchmark with empty benchmark_id
@@ -1106,8 +1104,6 @@ Feature: Evaluation Jobs
     And the response should contain the value "request_validation_failed" at path "$.message_code"
 
   @negative
-  @ignore
-  #https://redhat.atlassian.net/browse/RHOAIENG-62531
   Scenario: Cannot override OOB collection benchmark with incorrect benchmark_id
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -1133,7 +1129,7 @@ Feature: Evaluation Jobs
       }
       """
     Then the response code should be 400
-    And the response should contain the value "request_validation_failed" at path "$.message_code"
+    And the response should contain the value "resource_does_not_exist" at path "$.message_code"
 
   @kueue
   Scenario: Create evaluation job with Kueue queue
