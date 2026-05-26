@@ -32,7 +32,7 @@ Eval Hub is an API REST server that serves as a routing and orchestration layer 
 
 **Required for All Development:**
 
-- Go 1.25.0+
+- Go 1.26.0+
 - [Make](https://www.gnu.org/software/make/) for build automation
 - Git
 - [uv](https://docs.astral.sh/uv/) for Python virtual environment management (required by `make test-fvt`, `make start-service`, and pre-commit hooks)
@@ -202,7 +202,7 @@ pre-commit run --all-files
 
 ### Go Standards
 
-- **Go Version**: Support 1.25.0+
+- **Go Version**: Support 1.26.0+
 - **Code Style**: Follow standard Go conventions (enforced by gofmt)
 - **Error Handling**: Always check and handle errors explicitly
 - **Documentation**: Use godoc-style comments for exported types and functions
@@ -470,7 +470,7 @@ When reporting bugs, include:
 
 **Environment**:
 - OS: [e.g. Ubuntu 22.04]
-- Go Version: [e.g. 1.25.0]
+- Go Version: [e.g. 1.26.0]
 - eval-hub Version: [e.g. 0.1.1]
 - Kubernetes Version: [e.g. 1.28]
 
