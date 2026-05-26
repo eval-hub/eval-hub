@@ -1,9 +1,16 @@
 type: object
-description: Message from a downstream service
+description: Message from a downstream service.
 properties:
   message:
     type: string
-    description: Human-readable message
+    description: Human-readable message.
   message_code:
     type: string
-    description: Machine-readable code
+    description: Machine-readable code.
+  type:
+    type: string
+    enum:
+      - info
+      - warning
+      - error
+    description: Type of message, when appropriate.

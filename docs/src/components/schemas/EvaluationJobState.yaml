@@ -11,4 +11,4 @@ properties:
   warnings:
     type: array
     items:
-      $ref: ./WarningInfo.yaml
+      $ref: ./MessageInfo.yaml

@@ -774,30 +774,21 @@ components:
       description: Overall evaluation job state
     MessageInfo:
       type: object
-      description: Message from a downstream service
+      description: Message from a downstream service.
       properties:
         message:
           type: string
-          description: Human-readable message
+          description: Human-readable message.
         message_code:
           type: string
-          description: Machine-readable code
-    WarningInfo:
-      type: object
-      description: |
-        Information related to a job that should be displayed to the user. These messages are typically used to provide additional context or information about the job and not meant to indicate the status of the job.
-      required:
-        - type
-        - message
-      properties:
+          description: Machine-readable code.
         type:
           type: string
           enum:
             - info
             - warning
-        message:
-          type: string
-          description: Message to display to the user.
+            - error
+          description: Type of message, when appropriate.
     EvaluationJobState:
       type: object
       description: Overall evaluation job state and message
@@ -812,7 +803,7 @@ components:
         warnings:
           type: array
           items:
-            $ref: '#/components/schemas/WarningInfo'
+            $ref: '#/components/schemas/MessageInfo'
     State:
       type: string
       enum:

@@ -74,13 +74,9 @@ type ModelAuth struct {
 
 // MessageInfo represents a message from a downstream service
 type MessageInfo struct {
-	Message     string `json:"message"`
-	MessageCode string `json:"message_code"`
-}
-
-type WarningInfo struct {
-	Type    string `json:"type" validate:"required,oneof=info warning"`
-	Message string `json:"message" validate:"required"`
+	Message     string `json:"message" validate:"required"`
+	MessageCode string `json:"message_code" validate:"required"`
+	Type        string `json:"type,omitempty" validate:"omitempty,oneof=info warning error"`
 }
 
 type PrimaryScore struct {
@@ -169,7 +165,7 @@ type BenchmarkStatusEvent struct {
 type EvaluationJobState struct {
 	State    OverallState  `json:"state" validate:"required,oneof=pending running completed failed cancelled partially_failed"`
 	Message  *MessageInfo  `json:"message" validate:"required"`
-	Warnings []WarningInfo `json:"warnings,omitempty" validate:"omitempty,dive"`
+	Warnings []MessageInfo `json:"warnings,omitempty" validate:"omitempty,dive"`
 }
 
 type StatusEvent struct {
