@@ -1343,7 +1343,11 @@
             "type": "string",
             "description": "Machine-readable code"
           }
-        }
+        },
+        "required": [
+          "message",
+          "message_code"
+        ]
       },
       "EvaluationJobState": {
         "type": "object",
@@ -1392,6 +1396,9 @@
             "$ref": "#/components/schemas/State"
           },
           "error_message": {
+            "$ref": "#/components/schemas/MessageInfo"
+          },
+          "warning_message": {
             "$ref": "#/components/schemas/MessageInfo"
           },
           "started_at": {
@@ -2084,6 +2091,9 @@
             "description": "Artifacts"
           },
           "error_message": {
+            "$ref": "#/components/schemas/MessageInfo"
+          },
+          "warning_message": {
             "$ref": "#/components/schemas/MessageInfo"
           },
           "started_at": {

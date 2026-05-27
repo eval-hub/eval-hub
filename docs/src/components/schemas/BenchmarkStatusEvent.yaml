@@ -26,6 +26,8 @@ properties:
     description: Artifacts
   error_message:
     $ref: ./MessageInfo.yaml
+  warning_message:
+    $ref: ./MessageInfo.yaml
   started_at:
     type: string
     format: date-time

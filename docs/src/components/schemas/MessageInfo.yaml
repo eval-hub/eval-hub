@@ -7,3 +7,6 @@ properties:
   message_code:
     type: string
     description: Machine-readable code
+required:
+  - message
+  - message_code
