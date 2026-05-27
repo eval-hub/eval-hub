@@ -22,39 +22,62 @@ get:
             $ref: ../components/schemas/ProviderResource.yaml
           examples:
             response:
-              summary: A single provider resource
+              summary: Garak vulnerability scanning provider
               value:
                 resource:
-                  id: "prov-garak-001"
+                  id: "d8e9f0a1-2345-6789-cdef-012345678901"
                   tenant: "default"
-                  created_at: "2025-11-01T08:00:00Z"
-                  updated_at: "2025-11-15T12:30:00Z"
+                  created_at: "2025-10-01T00:00:00Z"
+                  updated_at: "2025-10-01T00:00:00Z"
                 name: "garak"
-                title: "Garak Safety Evaluator"
-                description: "LLM safety and vulnerability scanning"
+                title: "Garak"
+                description: "LLM vulnerability scanner and red-teaming framework"
                 tags:
-                  - safety
-                  - llm
+                  - security
+                  - red_team
                 runtime:
                   k8s:
-                    image: "quay.io/evalhub/garak-adapter:latest"
+                    image: "quay.io/trustyai/trustyai-garak-lls-provider-dsp:latest"
                     entrypoint:
-                      - "/usr/bin/garak-adapter"
+                      - "python"
+                      - "-m"
+                      - "llama_stack_provider_trustyai_garak.evalhub"
                     cpu_request: "500m"
-                    memory_request: "1Gi"
-                    cpu_limit: "2"
+                    memory_request: "512Mi"
+                    cpu_limit: "2000m"
                     memory_limit: "4Gi"
                 benchmarks:
-                  - id: "toxicity"
-                    name: "Toxicity Detection"
-                    description: "Measures model toxicity in generated content"
+                  - id: "owasp_llm_top10"
+                    name: "OWASP LLM top 10 risk scan"
+                    description: "Tests against the top 10 security risks specific to LLM applications."
+                    category: "security"
+                    metrics:
+                      - attack_success_rate
+                    tags:
+                      - security
+                      - owasp
+                      - red_team
+                    primary_score:
+                      metric: "attack_success_rate"
+                      lower_is_better: true
+                    pass_criteria:
+                      threshold: 0.3
+                  - id: "quality"
+                    name: "Toxic & harmful content scan"
+                    description: "Scans for violence, profanity, toxicity, hate speech, and integrity issues."
                     category: "safety"
                     metrics:
-                      - accuracy
-                      - f1_score
+                      - attack_success_rate
+                    tags:
+                      - safety
+                      - quality
+                      - toxicity
+                      - red_team
                     primary_score:
-                      metric: "accuracy"
-                      lower_is_better: false
+                      metric: "attack_success_rate"
+                      lower_is_better: true
+                    pass_criteria:
+                      threshold: 0.3
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':

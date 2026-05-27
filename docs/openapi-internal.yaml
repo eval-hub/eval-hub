@@ -43,19 +43,37 @@ paths:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
               examples:
-                response:
+                healthy:
                   summary: Healthy service response
                   value:
                     status: healthy
-                    version: 1.2.0
-                    timestamp: '2026-05-27T14:30:00Z'
+                    version: 0.4.1
+                    timestamp: '2026-05-27T18:42:11Z'
                     components:
                       database:
                         status: healthy
-                      cache:
+                        latency_ms: 2
+                      mlflow:
                         status: healthy
+                        latency_ms: 15
                     uptime: 86400000000000
-                    active_evaluations: 3
+                    active_evaluations: 5
+                degraded:
+                  summary: Degraded service response
+                  value:
+                    status: degraded
+                    version: 0.4.1
+                    timestamp: '2026-05-27T18:42:11Z'
+                    components:
+                      database:
+                        status: healthy
+                        latency_ms: 3
+                      mlflow:
+                        status: degraded
+                        latency_ms: 4500
+                        error: connection timeout after 4000ms
+                    uptime: 172800000000000
+                    active_evaluations: 12
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -150,38 +168,52 @@ paths:
               $ref: '#/components/schemas/EvaluationJobConfig'
             examples:
               CreateEvaluationWithBenchmarks:
-                summary: Create an evaluation with inline benchmarks
+                summary: Evaluate a model with inline benchmarks
                 value:
-                  name: my-model-safety-eval
-                  description: Safety evaluation for my-model v2
+                  name: granite-3.1-8b-safety-eval
+                  description: Safety and reasoning evaluation for Granite 3.1 8B Instruct
                   tags:
-                    - safety
-                    - v2
+                    - nightly
+                    - granite
                   model:
-                    url: https://my-model-server.example.com/v1
-                    name: my-model-v2
+                    url: http://llm-service.models.svc.cluster.local:8000/v1
+                    name: granite-3.1-8b-instruct
                   benchmarks:
-                    - id: toxicity
+                    - id: arc_easy
+                      provider_id: lm_evaluation_harness
+                      weight: 0.6
+                      primary_score:
+                        metric: acc_norm
+                        lower_is_better: false
+                      pass_criteria:
+                        threshold: 0.25
+                      parameters:
+                        num_fewshot: 0
+                        limit: 100
+                    - id: owasp_llm_top10
                       provider_id: garak
-                      weight: 1
-                    - id: bias-detection
-                      provider_id: garak
-                      weight: 0.5
+                      weight: 0.4
+                      primary_score:
+                        metric: attack_success_rate
+                        lower_is_better: true
+                      pass_criteria:
+                        threshold: 0.3
                   pass_criteria:
-                    threshold: 0.7
+                    threshold: 0.5
               CreateEvaluationWithCollection:
-                summary: Create an evaluation using a collection
+                summary: Evaluate a model using a benchmark collection
                 value:
-                  name: my-model-full-eval
-                  description: Full evaluation using the standard safety collection
+                  name: llama-3.2-standard-eval
+                  description: Standard evaluation suite for Llama 3.2 3B
                   tags:
-                    - safety
-                    - production
+                    - release-candidate
                   model:
-                    url: https://my-model-server.example.com/v1
-                    name: my-model-v2
+                    url: http://llm-service.models.svc.cluster.local:8000/v1
+                    name: llama-3.2-3b
                   collection:
                     id: standard-safety-collection
+                  pass_criteria:
+                    threshold: 0.5
       responses:
         '202':
           description: Successful Response
@@ -191,36 +223,49 @@ paths:
                 $ref: '#/components/schemas/EvaluationJobResource'
               examples:
                 response:
-                  summary: Evaluation job created and queued
+                  summary: Evaluation job accepted and queued
                   value:
                     resource:
-                      id: f02b16a2-1990-4626-b24d-1cff3febdbfb
+                      id: a1b2c3d4-5678-9abc-def0-1234567890ab
                       tenant: default
-                      created_at: '2026-01-12T10:00:00Z'
-                      updated_at: '2026-01-12T10:00:00Z'
+                      created_at: '2026-01-15T09:30:00Z'
+                      updated_at: '2026-01-15T09:30:00Z'
                       owner: user@example.com
                     status:
                       state: pending
                       message:
-                        message: Evaluation job is queued for execution.
-                        message_code: job_pending
-                    name: my-model-safety-eval
-                    description: Safety evaluation for my-model v2
+                        message: Evaluation job created.
+                        message_code: evaluation_job_created
+                    name: granite-3.1-8b-safety-eval
+                    description: Safety and reasoning evaluation for Granite 3.1 8B Instruct
                     tags:
-                      - safety
-                      - v2
+                      - nightly
+                      - granite
                     model:
-                      url: https://my-model-server.example.com/v1
-                      name: my-model-v2
+                      url: http://llm-service.models.svc.cluster.local:8000/v1
+                      name: granite-3.1-8b-instruct
                     benchmarks:
-                      - id: toxicity
+                      - id: arc_easy
+                        provider_id: lm_evaluation_harness
+                        weight: 0.6
+                        primary_score:
+                          metric: acc_norm
+                          lower_is_better: false
+                        pass_criteria:
+                          threshold: 0.25
+                        parameters:
+                          num_fewshot: 0
+                          limit: 100
+                      - id: owasp_llm_top10
                         provider_id: garak
-                        weight: 1
-                      - id: bias-detection
-                        provider_id: garak
-                        weight: 0.5
+                        weight: 0.4
+                        primary_score:
+                          metric: attack_success_rate
+                          lower_is_better: true
+                        pass_criteria:
+                          threshold: 0.3
                     pass_criteria:
-                      threshold: 0.7
+                      threshold: 0.5
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -288,51 +333,52 @@ paths:
                 $ref: '#/components/schemas/EvaluationJobResourceList'
               examples:
                 response:
-                  summary: A paginated list of evaluation jobs
+                  summary: Paginated list of evaluation jobs
                   value:
                     first:
                       href: /api/v1/evaluations/jobs?limit=50&offset=0
                     next:
                       href: /api/v1/evaluations/jobs?limit=50&offset=50
                     limit: 50
-                    total_count: 120
+                    total_count: 73
                     items:
                       - resource:
-                          id: f02b16a2-1990-4626-b24d-1cff3febdbfb
+                          id: a1b2c3d4-5678-9abc-def0-1234567890ab
                           tenant: default
-                          created_at: '2026-01-12T10:00:00Z'
-                          updated_at: '2026-01-12T10:47:12Z'
+                          created_at: '2026-01-15T09:30:00Z'
+                          updated_at: '2026-01-15T09:42:15Z'
                           owner: user@example.com
                         status:
                           state: completed
                           message:
-                            message: Evaluation job completed successfully.
-                            message_code: job_completed
+                            message: Evaluation job completed.
+                            message_code: evaluation_job_updated
                         results:
                           benchmarks:
-                            - id: toxicity
-                              provider_id: garak
+                            - id: arc_easy
+                              provider_id: lm_evaluation_harness
                               benchmark_index: 0
                               metrics:
-                                accuracy: 0.95
+                                acc: 0.82
+                                acc_norm: 0.85
                               test:
-                                primary_score: 0.95
-                                threshold: 0.7
+                                primary_score: 0.85
+                                threshold: 0.25
                                 pass: true
                           test:
-                            score: 0.95
-                            threshold: 0.7
+                            score: 0.85
+                            threshold: 0.5
                             pass: true
-                        name: my-model-safety-eval
+                        name: granite-3.1-8b-safety-eval
                         model:
-                          url: https://my-model-server.example.com/v1
-                          name: my-model-v2
+                          url: http://llm-service.models.svc.cluster.local:8000/v1
+                          name: granite-3.1-8b-instruct
                         benchmarks:
-                          - id: toxicity
-                            provider_id: garak
-                            weight: 1
+                          - id: arc_easy
+                            provider_id: lm_evaluation_harness
+                            weight: 0.6
                         pass_criteria:
-                          threshold: 0.7
+                          threshold: 0.5
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -579,44 +625,54 @@ paths:
                 $ref: '#/components/schemas/ProviderResourceList'
               examples:
                 response:
-                  summary: A paginated list of providers
+                  summary: Paginated list of evaluation providers
                   value:
                     first:
                       href: /api/v1/evaluations/providers?limit=50&offset=0
                     limit: 50
-                    total_count: 2
+                    total_count: 3
                     items:
                       - resource:
-                          id: prov-garak-001
+                          id: b3f1a2c4-1234-5678-abcd-ef0123456789
                           tenant: default
-                          created_at: '2025-11-01T08:00:00Z'
-                          updated_at: '2025-11-15T12:30:00Z'
-                        name: garak
-                        title: Garak Safety Evaluator
-                        description: LLM safety and vulnerability scanning
+                          created_at: '2025-10-01T00:00:00Z'
+                          updated_at: '2025-10-01T00:00:00Z'
+                        name: lm_evaluation_harness
+                        title: LM Evaluation Harness
+                        description: Comprehensive evaluation framework for language models with 180 benchmarks
                         tags:
-                          - safety
-                          - llm
+                          - reasoning
+                          - science
+                          - lm_eval
                         runtime:
                           k8s:
-                            image: quay.io/evalhub/garak-adapter:latest
+                            image: quay.io/opendatahub/ta-lmes-job:odh-3.4-ea2
                             entrypoint:
-                              - /usr/bin/garak-adapter
-                            cpu_request: 500m
-                            memory_request: 1Gi
-                            cpu_limit: '2'
+                              - /opt/app-root/bin/python
+                              - /opt/app-root/src/main.py
+                            cpu_request: 100m
+                            memory_request: 128Mi
+                            cpu_limit: 500m
                             memory_limit: 4Gi
                         benchmarks:
-                          - id: toxicity
-                            name: Toxicity Detection
-                            description: Measures model toxicity in generated content
-                            category: safety
+                          - id: arc_easy
+                            name: Basic science Q&A
+                            description: Grade-school science questions testing basic reasoning and scientific knowledge (AI2 Reasoning Challenge, easy split).
+                            category: reasoning
                             metrics:
-                              - accuracy
-                              - f1_score
+                              - acc
+                              - acc_norm
+                            num_few_shot: 0
+                            dataset_size: 2376
+                            tags:
+                              - reasoning
+                              - science
+                              - lm_eval
                             primary_score:
-                              metric: accuracy
+                              metric: acc_norm
                               lower_is_better: false
+                            pass_criteria:
+                              threshold: 0.25
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -638,33 +694,37 @@ paths:
               $ref: '#/components/schemas/ProviderConfig'
             examples:
               request:
-                summary: Create a custom evaluation provider
+                summary: Register a custom evaluation provider (BYOP)
                 value:
-                  name: custom-eval-provider
-                  title: Custom Evaluation Provider
-                  description: A custom provider for internal model evaluation
+                  name: my-custom-evaluator
+                  title: Custom Internal Evaluator
+                  description: Internal evaluation adapter for domain-specific benchmarks
                   tags:
                     - custom
                     - internal
                   runtime:
                     k8s:
-                      image: quay.io/myorg/custom-adapter:v1.0
+                      image: registry.internal.example.com/eval/custom-adapter:v1.2
                       entrypoint:
-                        - /usr/bin/custom-adapter
+                        - /opt/app-root/bin/python
+                        - /opt/app-root/src/main.py
                       cpu_request: 250m
                       memory_request: 512Mi
                       cpu_limit: '1'
                       memory_limit: 2Gi
                   benchmarks:
-                    - id: custom-bench-1
-                      name: Custom Benchmark
-                      description: Evaluates custom metrics
-                      category: custom
+                    - id: domain-qa
+                      name: Domain Q&A Accuracy
+                      description: Measures accuracy on domain-specific question answering
+                      category: reasoning
                       metrics:
-                        - custom_score
+                        - acc
+                        - f1
                       primary_score:
-                        metric: custom_score
+                        metric: acc
                         lower_is_better: false
+                      pass_criteria:
+                        threshold: 0.5
         required: true
       responses:
         '201':
@@ -675,39 +735,43 @@ paths:
                 $ref: '#/components/schemas/ProviderResource'
               examples:
                 response:
-                  summary: Newly created provider resource
+                  summary: Newly registered provider
                   value:
                     resource:
-                      id: prov-custom-001
+                      id: c4d5e6f7-8901-2345-bcde-f67890123456
                       tenant: default
-                      created_at: '2026-01-15T09:00:00Z'
-                      updated_at: '2026-01-15T09:00:00Z'
+                      created_at: '2026-01-20T10:00:00Z'
+                      updated_at: '2026-01-20T10:00:00Z'
                       owner: user@example.com
-                    name: custom-eval-provider
-                    title: Custom Evaluation Provider
-                    description: A custom provider for internal model evaluation
+                    name: my-custom-evaluator
+                    title: Custom Internal Evaluator
+                    description: Internal evaluation adapter for domain-specific benchmarks
                     tags:
                       - custom
                       - internal
                     runtime:
                       k8s:
-                        image: quay.io/myorg/custom-adapter:v1.0
+                        image: registry.internal.example.com/eval/custom-adapter:v1.2
                         entrypoint:
-                          - /usr/bin/custom-adapter
+                          - /opt/app-root/bin/python
+                          - /opt/app-root/src/main.py
                         cpu_request: 250m
                         memory_request: 512Mi
                         cpu_limit: '1'
                         memory_limit: 2Gi
                     benchmarks:
-                      - id: custom-bench-1
-                        name: Custom Benchmark
-                        description: Evaluates custom metrics
-                        category: custom
+                      - id: domain-qa
+                        name: Domain Q&A Accuracy
+                        description: Measures accuracy on domain-specific question answering
+                        category: reasoning
                         metrics:
-                          - custom_score
+                          - acc
+                          - f1
                         primary_score:
-                          metric: custom_score
+                          metric: acc
                           lower_is_better: false
+                        pass_criteria:
+                          threshold: 0.5
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1065,7 +1129,7 @@ paths:
                 $ref: '#/components/schemas/CollectionResourceList'
               examples:
                 response:
-                  summary: A paginated list of benchmark collections
+                  summary: Paginated list of benchmark collections
                   value:
                     first:
                       href: /api/v1/evaluations/collections?limit=50&offset=0
@@ -1073,31 +1137,35 @@ paths:
                     total_count: 2
                     items:
                       - resource:
-                          id: col-safety-001
+                          id: e5f6a7b8-9012-3456-cdef-0123456789ab
                           tenant: default
                           created_at: '2025-12-01T10:00:00Z'
-                          updated_at: '2025-12-15T14:00:00Z'
-                        name: standard-safety-collection
+                          updated_at: '2025-12-01T10:00:00Z'
+                        name: llm-safety-suite
                         category: safety
-                        description: Standard safety evaluation benchmarks
+                        description: Comprehensive safety evaluation combining reasoning accuracy and vulnerability scanning
                         tags:
                           - safety
-                          - standard
+                          - nightly
                         pass_criteria:
-                          threshold: 0.7
+                          threshold: 0.5
                         benchmarks:
-                          - id: toxicity
-                            provider_id: garak
-                            weight: 1
+                          - id: arc_easy
+                            provider_id: lm_evaluation_harness
+                            weight: 0.6
                             primary_score:
-                              metric: accuracy
+                              metric: acc_norm
                               lower_is_better: false
-                          - id: bias-detection
+                            pass_criteria:
+                              threshold: 0.25
+                          - id: owasp_llm_top10
                             provider_id: garak
-                            weight: 0.5
+                            weight: 0.4
                             primary_score:
-                              metric: accuracy
-                              lower_is_better: false
+                              metric: attack_success_rate
+                              lower_is_better: true
+                            pass_criteria:
+                              threshold: 0.3
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1119,28 +1187,36 @@ paths:
               $ref: '#/components/schemas/CollectionConfig'
             examples:
               request:
-                summary: Create a new benchmark collection
+                summary: Create a safety evaluation collection
                 value:
-                  name: custom-safety-collection
+                  name: release-gate-safety
                   category: safety
-                  description: Custom safety evaluation benchmarks for production models
+                  description: Release-gate collection combining reasoning and red-teaming benchmarks
                   tags:
+                    - release-gate
                     - safety
-                    - production
                   pass_criteria:
-                    threshold: 0.8
+                    threshold: 0.5
                   benchmarks:
-                    - id: toxicity
-                      provider_id: garak
-                      weight: 1
+                    - id: arc_easy
+                      provider_id: lm_evaluation_harness
+                      weight: 0.6
                       primary_score:
-                        metric: accuracy
+                        metric: acc_norm
                         lower_is_better: false
                       pass_criteria:
-                        threshold: 0.9
-                    - id: bias-detection
+                        threshold: 0.25
+                      parameters:
+                        num_fewshot: 0
+                        limit: 100
+                    - id: owasp_llm_top10
                       provider_id: garak
-                      weight: 0.5
+                      weight: 0.4
+                      primary_score:
+                        metric: attack_success_rate
+                        lower_is_better: true
+                      pass_criteria:
+                        threshold: 0.3
         required: true
       responses:
         '201':
@@ -1151,34 +1227,42 @@ paths:
                 $ref: '#/components/schemas/CollectionResource'
               examples:
                 response:
-                  summary: Newly created collection resource
+                  summary: Newly created collection
                   value:
                     resource:
-                      id: col-custom-001
+                      id: f6a7b8c9-0123-4567-def0-123456789abc
                       tenant: default
                       created_at: '2026-02-01T09:00:00Z'
                       updated_at: '2026-02-01T09:00:00Z'
                       owner: user@example.com
-                    name: custom-safety-collection
+                    name: release-gate-safety
                     category: safety
-                    description: Custom safety evaluation benchmarks for production models
+                    description: Release-gate collection combining reasoning and red-teaming benchmarks
                     tags:
+                      - release-gate
                       - safety
-                      - production
                     pass_criteria:
-                      threshold: 0.8
+                      threshold: 0.5
                     benchmarks:
-                      - id: toxicity
-                        provider_id: garak
-                        weight: 1
+                      - id: arc_easy
+                        provider_id: lm_evaluation_harness
+                        weight: 0.6
                         primary_score:
-                          metric: accuracy
+                          metric: acc_norm
                           lower_is_better: false
                         pass_criteria:
-                          threshold: 0.9
-                      - id: bias-detection
+                          threshold: 0.25
+                        parameters:
+                          num_fewshot: 0
+                          limit: 100
+                      - id: owasp_llm_top10
                         provider_id: garak
-                        weight: 0.5
+                        weight: 0.4
+                        primary_score:
+                          metric: attack_success_rate
+                          lower_is_better: true
+                        pass_criteria:
+                          threshold: 0.3
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1210,34 +1294,38 @@ paths:
                 $ref: '#/components/schemas/CollectionResource'
               examples:
                 response:
-                  summary: A single collection resource
+                  summary: Safety evaluation collection with benchmarks
                   value:
                     resource:
-                      id: col-safety-001
+                      id: e5f6a7b8-9012-3456-cdef-0123456789ab
                       tenant: default
                       created_at: '2025-12-01T10:00:00Z'
-                      updated_at: '2025-12-15T14:00:00Z'
-                    name: standard-safety-collection
+                      updated_at: '2025-12-01T10:00:00Z'
+                    name: llm-safety-suite
                     category: safety
-                    description: Standard safety evaluation benchmarks
+                    description: Comprehensive safety evaluation combining reasoning accuracy and vulnerability scanning
                     tags:
                       - safety
-                      - standard
+                      - nightly
                     pass_criteria:
-                      threshold: 0.7
+                      threshold: 0.5
                     benchmarks:
-                      - id: toxicity
-                        provider_id: garak
-                        weight: 1
+                      - id: arc_easy
+                        provider_id: lm_evaluation_harness
+                        weight: 0.6
                         primary_score:
-                          metric: accuracy
+                          metric: acc_norm
                           lower_is_better: false
-                      - id: bias-detection
+                        pass_criteria:
+                          threshold: 0.25
+                      - id: owasp_llm_top10
                         provider_id: garak
-                        weight: 0.5
+                        weight: 0.4
                         primary_score:
-                          metric: accuracy
-                          lower_is_better: false
+                          metric: attack_success_rate
+                          lower_is_better: true
+                        pass_criteria:
+                          threshold: 0.3
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':

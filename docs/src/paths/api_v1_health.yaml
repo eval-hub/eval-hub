@@ -12,19 +12,37 @@ get:
           schema:
             $ref: ../components/schemas/HealthResponse.yaml
           examples:
-            response:
+            healthy:
               summary: Healthy service response
               value:
                 status: healthy
-                version: 1.2.0
-                timestamp: '2026-05-27T14:30:00Z'
+                version: '0.4.1'
+                timestamp: '2026-05-27T18:42:11Z'
                 components:
                   database:
                     status: healthy
-                  cache:
+                    latency_ms: 2
+                  mlflow:
                     status: healthy
+                    latency_ms: 15
                 uptime: 86400000000000
-                active_evaluations: 3
+                active_evaluations: 5
+            degraded:
+              summary: Degraded service response
+              value:
+                status: degraded
+                version: '0.4.1'
+                timestamp: '2026-05-27T18:42:11Z'
+                components:
+                  database:
+                    status: healthy
+                    latency_ms: 3
+                  mlflow:
+                    status: degraded
+                    latency_ms: 4500
+                    error: 'connection timeout after 4000ms'
+                uptime: 172800000000000
+                active_evaluations: 12
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':

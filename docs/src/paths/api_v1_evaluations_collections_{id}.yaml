@@ -20,34 +20,38 @@ get:
             $ref: ../components/schemas/CollectionResource.yaml
           examples:
             response:
-              summary: A single collection resource
+              summary: Safety evaluation collection with benchmarks
               value:
                 resource:
-                  id: "col-safety-001"
+                  id: "e5f6a7b8-9012-3456-cdef-0123456789ab"
                   tenant: "default"
                   created_at: "2025-12-01T10:00:00Z"
-                  updated_at: "2025-12-15T14:00:00Z"
-                name: "standard-safety-collection"
+                  updated_at: "2025-12-01T10:00:00Z"
+                name: "llm-safety-suite"
                 category: "safety"
-                description: "Standard safety evaluation benchmarks"
+                description: "Comprehensive safety evaluation combining reasoning accuracy and vulnerability scanning"
                 tags:
                   - safety
-                  - standard
+                  - nightly
                 pass_criteria:
-                  threshold: 0.7
+                  threshold: 0.5
                 benchmarks:
-                  - id: "toxicity"
-                    provider_id: "garak"
-                    weight: 1.0
+                  - id: "arc_easy"
+                    provider_id: "lm_evaluation_harness"
+                    weight: 0.6
                     primary_score:
-                      metric: "accuracy"
+                      metric: "acc_norm"
                       lower_is_better: false
-                  - id: "bias-detection"
+                    pass_criteria:
+                      threshold: 0.25
+                  - id: "owasp_llm_top10"
                     provider_id: "garak"
-                    weight: 0.5
+                    weight: 0.4
                     primary_score:
-                      metric: "accuracy"
-                      lower_is_better: false
+                      metric: "attack_success_rate"
+                      lower_is_better: true
+                    pass_criteria:
+                      threshold: 0.3
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':
@@ -77,32 +81,42 @@ put:
           $ref: ../components/schemas/CollectionConfig.yaml
         examples:
           request:
-            summary: Update an existing collection
+            summary: Update collection to add a quality benchmark
             value:
-              name: "standard-safety-collection"
+              name: "llm-safety-suite"
               category: "safety"
-              description: "Updated standard safety evaluation benchmarks"
+              description: "Safety evaluation with reasoning, OWASP risks, and content quality"
               tags:
                 - safety
-                - standard
+                - nightly
                 - updated
               pass_criteria:
-                threshold: 0.75
+                threshold: 0.5
               benchmarks:
-                - id: "toxicity"
-                  provider_id: "garak"
-                  weight: 1.0
+                - id: "arc_easy"
+                  provider_id: "lm_evaluation_harness"
+                  weight: 0.5
                   primary_score:
-                    metric: "accuracy"
+                    metric: "acc_norm"
                     lower_is_better: false
                   pass_criteria:
-                    threshold: 0.9
-                - id: "bias-detection"
+                    threshold: 0.25
+                - id: "owasp_llm_top10"
                   provider_id: "garak"
-                  weight: 0.5
-                - id: "hallucination"
+                  weight: 0.3
+                  primary_score:
+                    metric: "attack_success_rate"
+                    lower_is_better: true
+                  pass_criteria:
+                    threshold: 0.3
+                - id: "quality"
                   provider_id: "garak"
-                  weight: 0.8
+                  weight: 0.2
+                  primary_score:
+                    metric: "attack_success_rate"
+                    lower_is_better: true
+                  pass_criteria:
+                    threshold: 0.3
   responses:
     '200':
       description: Successful Response
@@ -112,37 +126,47 @@ put:
             $ref: ../components/schemas/CollectionResource.yaml
           examples:
             response:
-              summary: Updated collection resource
+              summary: Updated collection with three benchmarks
               value:
                 resource:
-                  id: "col-safety-001"
+                  id: "e5f6a7b8-9012-3456-cdef-0123456789ab"
                   tenant: "default"
                   created_at: "2025-12-01T10:00:00Z"
                   updated_at: "2026-02-10T11:00:00Z"
-                name: "standard-safety-collection"
+                name: "llm-safety-suite"
                 category: "safety"
-                description: "Updated standard safety evaluation benchmarks"
+                description: "Safety evaluation with reasoning, OWASP risks, and content quality"
                 tags:
                   - safety
-                  - standard
+                  - nightly
                   - updated
                 pass_criteria:
-                  threshold: 0.75
+                  threshold: 0.5
                 benchmarks:
-                  - id: "toxicity"
-                    provider_id: "garak"
-                    weight: 1.0
+                  - id: "arc_easy"
+                    provider_id: "lm_evaluation_harness"
+                    weight: 0.5
                     primary_score:
-                      metric: "accuracy"
+                      metric: "acc_norm"
                       lower_is_better: false
                     pass_criteria:
-                      threshold: 0.9
-                  - id: "bias-detection"
+                      threshold: 0.25
+                  - id: "owasp_llm_top10"
                     provider_id: "garak"
-                    weight: 0.5
-                  - id: "hallucination"
+                    weight: 0.3
+                    primary_score:
+                      metric: "attack_success_rate"
+                      lower_is_better: true
+                    pass_criteria:
+                      threshold: 0.3
+                  - id: "quality"
                     provider_id: "garak"
-                    weight: 0.8
+                    weight: 0.2
+                    primary_score:
+                      metric: "attack_success_rate"
+                      lower_is_better: true
+                    pass_criteria:
+                      threshold: 0.3
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':

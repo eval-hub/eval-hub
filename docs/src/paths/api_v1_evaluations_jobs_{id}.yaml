@@ -20,57 +20,91 @@ get:
             $ref: ../components/schemas/EvaluationJobResource.yaml
           examples:
             response:
-              summary: A completed evaluation job with results
+              summary: Completed evaluation job with benchmark results
               value:
                 resource:
-                  id: "f02b16a2-1990-4626-b24d-1cff3febdbfb"
+                  id: "a1b2c3d4-5678-9abc-def0-1234567890ab"
                   tenant: "default"
-                  created_at: "2026-01-12T10:00:00Z"
-                  updated_at: "2026-01-12T10:47:12Z"
+                  created_at: "2026-01-15T09:30:00Z"
+                  updated_at: "2026-01-15T09:42:15Z"
                   owner: "user@example.com"
                 status:
                   state: "completed"
                   message:
-                    message: "Evaluation job completed successfully."
-                    message_code: "job_completed"
+                    message: "Evaluation job completed."
+                    message_code: "evaluation_job_updated"
                   benchmarks:
-                    - provider_id: "garak"
-                      id: "toxicity"
+                    - provider_id: "lm_evaluation_harness"
+                      id: "arc_easy"
                       benchmark_index: 0
                       status: "completed"
-                      started_at: "2026-01-12T10:45:32Z"
-                      completed_at: "2026-01-12T10:47:12Z"
+                      started_at: "2026-01-15T09:31:00Z"
+                      completed_at: "2026-01-15T09:38:45Z"
+                    - provider_id: "garak"
+                      id: "owasp_llm_top10"
+                      benchmark_index: 1
+                      status: "completed"
+                      started_at: "2026-01-15T09:31:00Z"
+                      completed_at: "2026-01-15T09:42:15Z"
                 results:
                   benchmarks:
-                    - id: "toxicity"
-                      provider_id: "garak"
+                    - id: "arc_easy"
+                      provider_id: "lm_evaluation_harness"
                       benchmark_index: 0
                       metrics:
-                        accuracy: 0.95
-                        f1_score: 0.93
-                      mlflow_run_id: "abc123"
+                        acc: 0.82
+                        acc_norm: 0.85
+                      mlflow_run_id: "run-7f3a1b2c"
+                      logs_path: "/data/logs/a1b2c3d4.log"
                       test:
-                        primary_score: 0.95
-                        threshold: 0.7
+                        primary_score: 0.85
+                        threshold: 0.25
+                        pass: true
+                    - id: "owasp_llm_top10"
+                      provider_id: "garak"
+                      benchmark_index: 1
+                      metrics:
+                        attack_success_rate: 0.12
+                      mlflow_run_id: "run-9e8d7c6b"
+                      logs_path: "/data/logs/a1b2c3d4-garak.log"
+                      test:
+                        primary_score: 0.12
+                        threshold: 0.3
                         pass: true
                   test:
-                    score: 0.95
-                    threshold: 0.7
+                    score: 0.85
+                    threshold: 0.5
                     pass: true
-                name: "my-model-safety-eval"
-                description: "Safety evaluation for my-model v2"
+                name: "granite-3.1-8b-safety-eval"
+                description: "Safety and reasoning evaluation for Granite 3.1 8B Instruct"
                 tags:
-                  - safety
-                  - v2
+                  - nightly
+                  - granite
                 model:
-                  url: "https://my-model-server.example.com/v1"
-                  name: "my-model-v2"
+                  url: "http://llm-service.models.svc.cluster.local:8000/v1"
+                  name: "granite-3.1-8b-instruct"
                 benchmarks:
-                  - id: "toxicity"
+                  - id: "arc_easy"
+                    provider_id: "lm_evaluation_harness"
+                    weight: 0.6
+                    primary_score:
+                      metric: "acc_norm"
+                      lower_is_better: false
+                    pass_criteria:
+                      threshold: 0.25
+                    parameters:
+                      num_fewshot: 0
+                      limit: 100
+                  - id: "owasp_llm_top10"
                     provider_id: "garak"
-                    weight: 1.0
+                    weight: 0.4
+                    primary_score:
+                      metric: "attack_success_rate"
+                      lower_is_better: true
+                    pass_criteria:
+                      threshold: 0.3
                 pass_criteria:
-                  threshold: 0.7
+                  threshold: 0.5
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':
