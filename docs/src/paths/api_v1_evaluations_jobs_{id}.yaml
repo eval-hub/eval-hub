@@ -18,6 +18,59 @@ get:
         application/json:
           schema:
             $ref: ../components/schemas/EvaluationJobResource.yaml
+          examples:
+            response:
+              summary: A completed evaluation job with results
+              value:
+                resource:
+                  id: "f02b16a2-1990-4626-b24d-1cff3febdbfb"
+                  tenant: "default"
+                  created_at: "2026-01-12T10:00:00Z"
+                  updated_at: "2026-01-12T10:47:12Z"
+                  owner: "user@example.com"
+                status:
+                  state: "completed"
+                  message:
+                    message: "Evaluation job completed successfully."
+                    message_code: "job_completed"
+                  benchmarks:
+                    - provider_id: "garak"
+                      id: "toxicity"
+                      benchmark_index: 0
+                      status: "completed"
+                      started_at: "2026-01-12T10:45:32Z"
+                      completed_at: "2026-01-12T10:47:12Z"
+                results:
+                  benchmarks:
+                    - id: "toxicity"
+                      provider_id: "garak"
+                      benchmark_index: 0
+                      metrics:
+                        accuracy: 0.95
+                        f1_score: 0.93
+                      mlflow_run_id: "abc123"
+                      test:
+                        primary_score: 0.95
+                        threshold: 0.7
+                        pass: true
+                  test:
+                    score: 0.95
+                    threshold: 0.7
+                    pass: true
+                name: "my-model-safety-eval"
+                description: "Safety evaluation for my-model v2"
+                tags:
+                  - safety
+                  - v2
+                model:
+                  url: "https://my-model-server.example.com/v1"
+                  name: "my-model-v2"
+                benchmarks:
+                  - id: "toxicity"
+                    provider_id: "garak"
+                    weight: 1.0
+                pass_criteria:
+                  threshold: 0.7
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':

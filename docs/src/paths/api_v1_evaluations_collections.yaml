@@ -66,6 +66,41 @@ get:
         application/json:
           schema:
             $ref: ../components/schemas/CollectionResourceList.yaml
+          examples:
+            response:
+              summary: A paginated list of benchmark collections
+              value:
+                first:
+                  href: "/api/v1/evaluations/collections?limit=50&offset=0"
+                limit: 50
+                total_count: 2
+                items:
+                  - resource:
+                      id: "col-safety-001"
+                      tenant: "default"
+                      created_at: "2025-12-01T10:00:00Z"
+                      updated_at: "2025-12-15T14:00:00Z"
+                    name: "standard-safety-collection"
+                    category: "safety"
+                    description: "Standard safety evaluation benchmarks"
+                    tags:
+                      - safety
+                      - standard
+                    pass_criteria:
+                      threshold: 0.7
+                    benchmarks:
+                      - id: "toxicity"
+                        provider_id: "garak"
+                        weight: 1.0
+                        primary_score:
+                          metric: "accuracy"
+                          lower_is_better: false
+                      - id: "bias-detection"
+                        provider_id: "garak"
+                        weight: 0.5
+                        primary_score:
+                          metric: "accuracy"
+                          lower_is_better: false
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':
@@ -85,6 +120,30 @@ post:
       application/json:
         schema:
           $ref: ../components/schemas/CollectionConfig.yaml
+        examples:
+          request:
+            summary: Create a new benchmark collection
+            value:
+              name: "custom-safety-collection"
+              category: "safety"
+              description: "Custom safety evaluation benchmarks for production models"
+              tags:
+                - safety
+                - production
+              pass_criteria:
+                threshold: 0.8
+              benchmarks:
+                - id: "toxicity"
+                  provider_id: "garak"
+                  weight: 1.0
+                  primary_score:
+                    metric: "accuracy"
+                    lower_is_better: false
+                  pass_criteria:
+                    threshold: 0.9
+                - id: "bias-detection"
+                  provider_id: "garak"
+                  weight: 0.5
     required: true
   responses:
     '201':
@@ -93,6 +152,36 @@ post:
         application/json:
           schema:
             $ref: ../components/schemas/CollectionResource.yaml
+          examples:
+            response:
+              summary: Newly created collection resource
+              value:
+                resource:
+                  id: "col-custom-001"
+                  tenant: "default"
+                  created_at: "2026-02-01T09:00:00Z"
+                  updated_at: "2026-02-01T09:00:00Z"
+                  owner: "user@example.com"
+                name: "custom-safety-collection"
+                category: "safety"
+                description: "Custom safety evaluation benchmarks for production models"
+                tags:
+                  - safety
+                  - production
+                pass_criteria:
+                  threshold: 0.8
+                benchmarks:
+                  - id: "toxicity"
+                    provider_id: "garak"
+                    weight: 1.0
+                    primary_score:
+                      metric: "accuracy"
+                      lower_is_better: false
+                    pass_criteria:
+                      threshold: 0.9
+                  - id: "bias-detection"
+                    provider_id: "garak"
+                    weight: 0.5
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':

@@ -20,6 +20,41 @@ get:
         application/json:
           schema:
             $ref: ../components/schemas/ProviderResource.yaml
+          examples:
+            response:
+              summary: A single provider resource
+              value:
+                resource:
+                  id: "prov-garak-001"
+                  tenant: "default"
+                  created_at: "2025-11-01T08:00:00Z"
+                  updated_at: "2025-11-15T12:30:00Z"
+                name: "garak"
+                title: "Garak Safety Evaluator"
+                description: "LLM safety and vulnerability scanning"
+                tags:
+                  - safety
+                  - llm
+                runtime:
+                  k8s:
+                    image: "quay.io/evalhub/garak-adapter:latest"
+                    entrypoint:
+                      - "/usr/bin/garak-adapter"
+                    cpu_request: "500m"
+                    memory_request: "1Gi"
+                    cpu_limit: "2"
+                    memory_limit: "4Gi"
+                benchmarks:
+                  - id: "toxicity"
+                    name: "Toxicity Detection"
+                    description: "Measures model toxicity in generated content"
+                    category: "safety"
+                    metrics:
+                      - accuracy
+                      - f1_score
+                    primary_score:
+                      metric: "accuracy"
+                      lower_is_better: false
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':
@@ -49,6 +84,37 @@ put:
       application/json:
         schema:
           $ref: ../components/schemas/ProviderConfig.yaml
+        examples:
+          request:
+            summary: Update an existing provider
+            value:
+              name: "garak"
+              title: "Garak Safety Evaluator (Updated)"
+              description: "Updated LLM safety and vulnerability scanning provider"
+              tags:
+                - safety
+                - llm
+                - updated
+              runtime:
+                k8s:
+                  image: "quay.io/evalhub/garak-adapter:v2.0"
+                  entrypoint:
+                    - "/usr/bin/garak-adapter"
+                  cpu_request: "1"
+                  memory_request: "2Gi"
+                  cpu_limit: "4"
+                  memory_limit: "8Gi"
+              benchmarks:
+                - id: "toxicity"
+                  name: "Toxicity Detection"
+                  description: "Measures model toxicity in generated content"
+                  category: "safety"
+                  metrics:
+                    - accuracy
+                    - f1_score
+                  primary_score:
+                    metric: "accuracy"
+                    lower_is_better: false
   responses:
     '200':
       description: Successful Response
@@ -56,6 +122,42 @@ put:
         application/json:
           schema:
             $ref: ../components/schemas/ProviderResource.yaml
+          examples:
+            response:
+              summary: Updated provider resource
+              value:
+                resource:
+                  id: "prov-garak-001"
+                  tenant: "default"
+                  created_at: "2025-11-01T08:00:00Z"
+                  updated_at: "2026-01-20T14:00:00Z"
+                name: "garak"
+                title: "Garak Safety Evaluator (Updated)"
+                description: "Updated LLM safety and vulnerability scanning provider"
+                tags:
+                  - safety
+                  - llm
+                  - updated
+                runtime:
+                  k8s:
+                    image: "quay.io/evalhub/garak-adapter:v2.0"
+                    entrypoint:
+                      - "/usr/bin/garak-adapter"
+                    cpu_request: "1"
+                    memory_request: "2Gi"
+                    cpu_limit: "4"
+                    memory_limit: "8Gi"
+                benchmarks:
+                  - id: "toxicity"
+                    name: "Toxicity Detection"
+                    description: "Measures model toxicity in generated content"
+                    category: "safety"
+                    metrics:
+                      - accuracy
+                      - f1_score
+                    primary_score:
+                      metric: "accuracy"
+                      lower_is_better: false
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':
@@ -87,6 +189,16 @@ patch:
           description: JSON Patch operation
           items:
             $ref: ../components/schemas/PatchOperation.yaml
+        examples:
+          request:
+            summary: Patch a provider description and tags
+            value:
+              - op: "replace"
+                path: "/description"
+                value: "Updated provider description"
+              - op: "add"
+                path: "/tags/-"
+                value: "patched"
   responses:
     '200':
       description: Successful Response
@@ -94,6 +206,42 @@ patch:
         application/json:
           schema:
             $ref: ../components/schemas/ProviderResource.yaml
+          examples:
+            response:
+              summary: Patched provider resource
+              value:
+                resource:
+                  id: "prov-garak-001"
+                  tenant: "default"
+                  created_at: "2025-11-01T08:00:00Z"
+                  updated_at: "2026-01-20T15:00:00Z"
+                name: "garak"
+                title: "Garak Safety Evaluator"
+                description: "Updated provider description"
+                tags:
+                  - safety
+                  - llm
+                  - patched
+                runtime:
+                  k8s:
+                    image: "quay.io/evalhub/garak-adapter:latest"
+                    entrypoint:
+                      - "/usr/bin/garak-adapter"
+                    cpu_request: "500m"
+                    memory_request: "1Gi"
+                    cpu_limit: "2"
+                    memory_limit: "4Gi"
+                benchmarks:
+                  - id: "toxicity"
+                    name: "Toxicity Detection"
+                    description: "Measures model toxicity in generated content"
+                    category: "safety"
+                    metrics:
+                      - accuracy
+                      - f1_score
+                    primary_score:
+                      metric: "accuracy"
+                      lower_is_better: false
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':

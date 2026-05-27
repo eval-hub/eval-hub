@@ -11,6 +11,20 @@ get:
         application/json:
           schema:
             $ref: ../components/schemas/HealthResponse.yaml
+          examples:
+            response:
+              summary: Healthy service response
+              value:
+                status: healthy
+                version: 1.2.0
+                timestamp: '2026-05-27T14:30:00Z'
+                components:
+                  database:
+                    status: healthy
+                  cache:
+                    status: healthy
+                uptime: 86400000000000
+                active_evaluations: 3
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':

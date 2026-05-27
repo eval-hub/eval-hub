@@ -36,6 +36,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
+              examples:
+                response:
+                  summary: Healthy service response
+                  value:
+                    status: healthy
+                    version: 1.2.0
+                    timestamp: '2026-05-27T14:30:00Z'
+                    components:
+                      database:
+                        status: healthy
+                      cache:
+                        status: healthy
+                    uptime: 86400000000000
+                    active_evaluations: 3
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -57,6 +71,40 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/EvaluationJobConfig'
+            examples:
+              CreateEvaluationWithBenchmarks:
+                summary: Create an evaluation with inline benchmarks
+                value:
+                  name: my-model-safety-eval
+                  description: Safety evaluation for my-model v2
+                  tags:
+                    - safety
+                    - v2
+                  model:
+                    url: https://my-model-server.example.com/v1
+                    name: my-model-v2
+                  benchmarks:
+                    - id: toxicity
+                      provider_id: garak
+                      weight: 1
+                    - id: bias-detection
+                      provider_id: garak
+                      weight: 0.5
+                  pass_criteria:
+                    threshold: 0.7
+              CreateEvaluationWithCollection:
+                summary: Create an evaluation using a collection
+                value:
+                  name: my-model-full-eval
+                  description: Full evaluation using the standard safety collection
+                  tags:
+                    - safety
+                    - production
+                  model:
+                    url: https://my-model-server.example.com/v1
+                    name: my-model-v2
+                  collection:
+                    id: standard-safety-collection
       responses:
         '202':
           description: Successful Response
@@ -64,6 +112,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EvaluationJobResource'
+              examples:
+                response:
+                  summary: Evaluation job created and queued
+                  value:
+                    resource:
+                      id: f02b16a2-1990-4626-b24d-1cff3febdbfb
+                      tenant: default
+                      created_at: '2026-01-12T10:00:00Z'
+                      updated_at: '2026-01-12T10:00:00Z'
+                      owner: user@example.com
+                    status:
+                      state: pending
+                      message:
+                        message: Evaluation job is queued for execution.
+                        message_code: job_pending
+                    name: my-model-safety-eval
+                    description: Safety evaluation for my-model v2
+                    tags:
+                      - safety
+                      - v2
+                    model:
+                      url: https://my-model-server.example.com/v1
+                      name: my-model-v2
+                    benchmarks:
+                      - id: toxicity
+                        provider_id: garak
+                        weight: 1
+                      - id: bias-detection
+                        provider_id: garak
+                        weight: 0.5
+                    pass_criteria:
+                      threshold: 0.7
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -129,6 +209,53 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EvaluationJobResourceList'
+              examples:
+                response:
+                  summary: A paginated list of evaluation jobs
+                  value:
+                    first:
+                      href: /api/v1/evaluations/jobs?limit=50&offset=0
+                    next:
+                      href: /api/v1/evaluations/jobs?limit=50&offset=50
+                    limit: 50
+                    total_count: 120
+                    items:
+                      - resource:
+                          id: f02b16a2-1990-4626-b24d-1cff3febdbfb
+                          tenant: default
+                          created_at: '2026-01-12T10:00:00Z'
+                          updated_at: '2026-01-12T10:47:12Z'
+                          owner: user@example.com
+                        status:
+                          state: completed
+                          message:
+                            message: Evaluation job completed successfully.
+                            message_code: job_completed
+                        results:
+                          benchmarks:
+                            - id: toxicity
+                              provider_id: garak
+                              benchmark_index: 0
+                              metrics:
+                                accuracy: 0.95
+                              test:
+                                primary_score: 0.95
+                                threshold: 0.7
+                                pass: true
+                          test:
+                            score: 0.95
+                            threshold: 0.7
+                            pass: true
+                        name: my-model-safety-eval
+                        model:
+                          url: https://my-model-server.example.com/v1
+                          name: my-model-v2
+                        benchmarks:
+                          - id: toxicity
+                            provider_id: garak
+                            weight: 1
+                        pass_criteria:
+                          threshold: 0.7
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -158,6 +285,59 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EvaluationJobResource'
+              examples:
+                response:
+                  summary: A completed evaluation job with results
+                  value:
+                    resource:
+                      id: f02b16a2-1990-4626-b24d-1cff3febdbfb
+                      tenant: default
+                      created_at: '2026-01-12T10:00:00Z'
+                      updated_at: '2026-01-12T10:47:12Z'
+                      owner: user@example.com
+                    status:
+                      state: completed
+                      message:
+                        message: Evaluation job completed successfully.
+                        message_code: job_completed
+                      benchmarks:
+                        - provider_id: garak
+                          id: toxicity
+                          benchmark_index: 0
+                          status: completed
+                          started_at: '2026-01-12T10:45:32Z'
+                          completed_at: '2026-01-12T10:47:12Z'
+                    results:
+                      benchmarks:
+                        - id: toxicity
+                          provider_id: garak
+                          benchmark_index: 0
+                          metrics:
+                            accuracy: 0.95
+                            f1_score: 0.93
+                          mlflow_run_id: abc123
+                          test:
+                            primary_score: 0.95
+                            threshold: 0.7
+                            pass: true
+                      test:
+                        score: 0.95
+                        threshold: 0.7
+                        pass: true
+                    name: my-model-safety-eval
+                    description: Safety evaluation for my-model v2
+                    tags:
+                      - safety
+                      - v2
+                    model:
+                      url: https://my-model-server.example.com/v1
+                      name: my-model-v2
+                    benchmarks:
+                      - id: toxicity
+                        provider_id: garak
+                        weight: 1
+                    pass_criteria:
+                      threshold: 0.7
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -270,6 +450,46 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProviderResourceList'
+              examples:
+                response:
+                  summary: A paginated list of providers
+                  value:
+                    first:
+                      href: /api/v1/evaluations/providers?limit=50&offset=0
+                    limit: 50
+                    total_count: 2
+                    items:
+                      - resource:
+                          id: prov-garak-001
+                          tenant: default
+                          created_at: '2025-11-01T08:00:00Z'
+                          updated_at: '2025-11-15T12:30:00Z'
+                        name: garak
+                        title: Garak Safety Evaluator
+                        description: LLM safety and vulnerability scanning
+                        tags:
+                          - safety
+                          - llm
+                        runtime:
+                          k8s:
+                            image: quay.io/evalhub/garak-adapter:latest
+                            entrypoint:
+                              - /usr/bin/garak-adapter
+                            cpu_request: 500m
+                            memory_request: 1Gi
+                            cpu_limit: '2'
+                            memory_limit: 4Gi
+                        benchmarks:
+                          - id: toxicity
+                            name: Toxicity Detection
+                            description: Measures model toxicity in generated content
+                            category: safety
+                            metrics:
+                              - accuracy
+                              - f1_score
+                            primary_score:
+                              metric: accuracy
+                              lower_is_better: false
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -289,6 +509,35 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ProviderConfig'
+            examples:
+              request:
+                summary: Create a custom evaluation provider
+                value:
+                  name: custom-eval-provider
+                  title: Custom Evaluation Provider
+                  description: A custom provider for internal model evaluation
+                  tags:
+                    - custom
+                    - internal
+                  runtime:
+                    k8s:
+                      image: quay.io/myorg/custom-adapter:v1.0
+                      entrypoint:
+                        - /usr/bin/custom-adapter
+                      cpu_request: 250m
+                      memory_request: 512Mi
+                      cpu_limit: '1'
+                      memory_limit: 2Gi
+                  benchmarks:
+                    - id: custom-bench-1
+                      name: Custom Benchmark
+                      description: Evaluates custom metrics
+                      category: custom
+                      metrics:
+                        - custom_score
+                      primary_score:
+                        metric: custom_score
+                        lower_is_better: false
         required: true
       responses:
         '201':
@@ -297,6 +546,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProviderResource'
+              examples:
+                response:
+                  summary: Newly created provider resource
+                  value:
+                    resource:
+                      id: prov-custom-001
+                      tenant: default
+                      created_at: '2026-01-15T09:00:00Z'
+                      updated_at: '2026-01-15T09:00:00Z'
+                      owner: user@example.com
+                    name: custom-eval-provider
+                    title: Custom Evaluation Provider
+                    description: A custom provider for internal model evaluation
+                    tags:
+                      - custom
+                      - internal
+                    runtime:
+                      k8s:
+                        image: quay.io/myorg/custom-adapter:v1.0
+                        entrypoint:
+                          - /usr/bin/custom-adapter
+                        cpu_request: 250m
+                        memory_request: 512Mi
+                        cpu_limit: '1'
+                        memory_limit: 2Gi
+                    benchmarks:
+                      - id: custom-bench-1
+                        name: Custom Benchmark
+                        description: Evaluates custom metrics
+                        category: custom
+                        metrics:
+                          - custom_score
+                        primary_score:
+                          metric: custom_score
+                          lower_is_better: false
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -328,6 +612,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProviderResource'
+              examples:
+                response:
+                  summary: A single provider resource
+                  value:
+                    resource:
+                      id: prov-garak-001
+                      tenant: default
+                      created_at: '2025-11-01T08:00:00Z'
+                      updated_at: '2025-11-15T12:30:00Z'
+                    name: garak
+                    title: Garak Safety Evaluator
+                    description: LLM safety and vulnerability scanning
+                    tags:
+                      - safety
+                      - llm
+                    runtime:
+                      k8s:
+                        image: quay.io/evalhub/garak-adapter:latest
+                        entrypoint:
+                          - /usr/bin/garak-adapter
+                        cpu_request: 500m
+                        memory_request: 1Gi
+                        cpu_limit: '2'
+                        memory_limit: 4Gi
+                    benchmarks:
+                      - id: toxicity
+                        name: Toxicity Detection
+                        description: Measures model toxicity in generated content
+                        category: safety
+                        metrics:
+                          - accuracy
+                          - f1_score
+                        primary_score:
+                          metric: accuracy
+                          lower_is_better: false
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -357,6 +676,37 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ProviderConfig'
+            examples:
+              request:
+                summary: Update an existing provider
+                value:
+                  name: garak
+                  title: Garak Safety Evaluator (Updated)
+                  description: Updated LLM safety and vulnerability scanning provider
+                  tags:
+                    - safety
+                    - llm
+                    - updated
+                  runtime:
+                    k8s:
+                      image: quay.io/evalhub/garak-adapter:v2.0
+                      entrypoint:
+                        - /usr/bin/garak-adapter
+                      cpu_request: '1'
+                      memory_request: 2Gi
+                      cpu_limit: '4'
+                      memory_limit: 8Gi
+                  benchmarks:
+                    - id: toxicity
+                      name: Toxicity Detection
+                      description: Measures model toxicity in generated content
+                      category: safety
+                      metrics:
+                        - accuracy
+                        - f1_score
+                      primary_score:
+                        metric: accuracy
+                        lower_is_better: false
       responses:
         '200':
           description: Successful Response
@@ -364,6 +714,42 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProviderResource'
+              examples:
+                response:
+                  summary: Updated provider resource
+                  value:
+                    resource:
+                      id: prov-garak-001
+                      tenant: default
+                      created_at: '2025-11-01T08:00:00Z'
+                      updated_at: '2026-01-20T14:00:00Z'
+                    name: garak
+                    title: Garak Safety Evaluator (Updated)
+                    description: Updated LLM safety and vulnerability scanning provider
+                    tags:
+                      - safety
+                      - llm
+                      - updated
+                    runtime:
+                      k8s:
+                        image: quay.io/evalhub/garak-adapter:v2.0
+                        entrypoint:
+                          - /usr/bin/garak-adapter
+                        cpu_request: '1'
+                        memory_request: 2Gi
+                        cpu_limit: '4'
+                        memory_limit: 8Gi
+                    benchmarks:
+                      - id: toxicity
+                        name: Toxicity Detection
+                        description: Measures model toxicity in generated content
+                        category: safety
+                        metrics:
+                          - accuracy
+                          - f1_score
+                        primary_score:
+                          metric: accuracy
+                          lower_is_better: false
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -395,6 +781,16 @@ paths:
               description: JSON Patch operation
               items:
                 $ref: '#/components/schemas/PatchOperation'
+            examples:
+              request:
+                summary: Patch a provider description and tags
+                value:
+                  - op: replace
+                    path: /description
+                    value: Updated provider description
+                  - op: add
+                    path: /tags/-
+                    value: patched
       responses:
         '200':
           description: Successful Response
@@ -402,6 +798,42 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProviderResource'
+              examples:
+                response:
+                  summary: Patched provider resource
+                  value:
+                    resource:
+                      id: prov-garak-001
+                      tenant: default
+                      created_at: '2025-11-01T08:00:00Z'
+                      updated_at: '2026-01-20T15:00:00Z'
+                    name: garak
+                    title: Garak Safety Evaluator
+                    description: Updated provider description
+                    tags:
+                      - safety
+                      - llm
+                      - patched
+                    runtime:
+                      k8s:
+                        image: quay.io/evalhub/garak-adapter:latest
+                        entrypoint:
+                          - /usr/bin/garak-adapter
+                        cpu_request: 500m
+                        memory_request: 1Gi
+                        cpu_limit: '2'
+                        memory_limit: 4Gi
+                    benchmarks:
+                      - id: toxicity
+                        name: Toxicity Detection
+                        description: Measures model toxicity in generated content
+                        category: safety
+                        metrics:
+                          - accuracy
+                          - f1_score
+                        primary_score:
+                          metric: accuracy
+                          lower_is_better: false
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -504,6 +936,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CollectionResourceList'
+              examples:
+                response:
+                  summary: A paginated list of benchmark collections
+                  value:
+                    first:
+                      href: /api/v1/evaluations/collections?limit=50&offset=0
+                    limit: 50
+                    total_count: 2
+                    items:
+                      - resource:
+                          id: col-safety-001
+                          tenant: default
+                          created_at: '2025-12-01T10:00:00Z'
+                          updated_at: '2025-12-15T14:00:00Z'
+                        name: standard-safety-collection
+                        category: safety
+                        description: Standard safety evaluation benchmarks
+                        tags:
+                          - safety
+                          - standard
+                        pass_criteria:
+                          threshold: 0.7
+                        benchmarks:
+                          - id: toxicity
+                            provider_id: garak
+                            weight: 1
+                            primary_score:
+                              metric: accuracy
+                              lower_is_better: false
+                          - id: bias-detection
+                            provider_id: garak
+                            weight: 0.5
+                            primary_score:
+                              metric: accuracy
+                              lower_is_better: false
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -523,6 +990,30 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CollectionConfig'
+            examples:
+              request:
+                summary: Create a new benchmark collection
+                value:
+                  name: custom-safety-collection
+                  category: safety
+                  description: Custom safety evaluation benchmarks for production models
+                  tags:
+                    - safety
+                    - production
+                  pass_criteria:
+                    threshold: 0.8
+                  benchmarks:
+                    - id: toxicity
+                      provider_id: garak
+                      weight: 1
+                      primary_score:
+                        metric: accuracy
+                        lower_is_better: false
+                      pass_criteria:
+                        threshold: 0.9
+                    - id: bias-detection
+                      provider_id: garak
+                      weight: 0.5
         required: true
       responses:
         '201':
@@ -531,6 +1022,36 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CollectionResource'
+              examples:
+                response:
+                  summary: Newly created collection resource
+                  value:
+                    resource:
+                      id: col-custom-001
+                      tenant: default
+                      created_at: '2026-02-01T09:00:00Z'
+                      updated_at: '2026-02-01T09:00:00Z'
+                      owner: user@example.com
+                    name: custom-safety-collection
+                    category: safety
+                    description: Custom safety evaluation benchmarks for production models
+                    tags:
+                      - safety
+                      - production
+                    pass_criteria:
+                      threshold: 0.8
+                    benchmarks:
+                      - id: toxicity
+                        provider_id: garak
+                        weight: 1
+                        primary_score:
+                          metric: accuracy
+                          lower_is_better: false
+                        pass_criteria:
+                          threshold: 0.9
+                      - id: bias-detection
+                        provider_id: garak
+                        weight: 0.5
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -560,6 +1081,36 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CollectionResource'
+              examples:
+                response:
+                  summary: A single collection resource
+                  value:
+                    resource:
+                      id: col-safety-001
+                      tenant: default
+                      created_at: '2025-12-01T10:00:00Z'
+                      updated_at: '2025-12-15T14:00:00Z'
+                    name: standard-safety-collection
+                    category: safety
+                    description: Standard safety evaluation benchmarks
+                    tags:
+                      - safety
+                      - standard
+                    pass_criteria:
+                      threshold: 0.7
+                    benchmarks:
+                      - id: toxicity
+                        provider_id: garak
+                        weight: 1
+                        primary_score:
+                          metric: accuracy
+                          lower_is_better: false
+                      - id: bias-detection
+                        provider_id: garak
+                        weight: 0.5
+                        primary_score:
+                          metric: accuracy
+                          lower_is_better: false
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -587,6 +1138,34 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CollectionConfig'
+            examples:
+              request:
+                summary: Update an existing collection
+                value:
+                  name: standard-safety-collection
+                  category: safety
+                  description: Updated standard safety evaluation benchmarks
+                  tags:
+                    - safety
+                    - standard
+                    - updated
+                  pass_criteria:
+                    threshold: 0.75
+                  benchmarks:
+                    - id: toxicity
+                      provider_id: garak
+                      weight: 1
+                      primary_score:
+                        metric: accuracy
+                        lower_is_better: false
+                      pass_criteria:
+                        threshold: 0.9
+                    - id: bias-detection
+                      provider_id: garak
+                      weight: 0.5
+                    - id: hallucination
+                      provider_id: garak
+                      weight: 0.8
       responses:
         '200':
           description: Successful Response
@@ -594,6 +1173,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CollectionResource'
+              examples:
+                response:
+                  summary: Updated collection resource
+                  value:
+                    resource:
+                      id: col-safety-001
+                      tenant: default
+                      created_at: '2025-12-01T10:00:00Z'
+                      updated_at: '2026-02-10T11:00:00Z'
+                    name: standard-safety-collection
+                    category: safety
+                    description: Updated standard safety evaluation benchmarks
+                    tags:
+                      - safety
+                      - standard
+                      - updated
+                    pass_criteria:
+                      threshold: 0.75
+                    benchmarks:
+                      - id: toxicity
+                        provider_id: garak
+                        weight: 1
+                        primary_score:
+                          metric: accuracy
+                          lower_is_better: false
+                        pass_criteria:
+                          threshold: 0.9
+                      - id: bias-detection
+                        provider_id: garak
+                        weight: 0.5
+                      - id: hallucination
+                        provider_id: garak
+                        weight: 0.8
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -625,6 +1237,16 @@ paths:
               description: JSON Patch operation
               items:
                 $ref: '#/components/schemas/PatchOperation'
+            examples:
+              request:
+                summary: Patch a collection's description and pass criteria
+                value:
+                  - op: replace
+                    path: /description
+                    value: Patched collection description
+                  - op: replace
+                    path: /pass_criteria/threshold
+                    value: 0.85
       responses:
         '200':
           description: Successful Response
@@ -632,6 +1254,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CollectionResource'
+              examples:
+                response:
+                  summary: Patched collection resource
+                  value:
+                    resource:
+                      id: col-safety-001
+                      tenant: default
+                      created_at: '2025-12-01T10:00:00Z'
+                      updated_at: '2026-02-10T12:00:00Z'
+                    name: standard-safety-collection
+                    category: safety
+                    description: Patched collection description
+                    tags:
+                      - safety
+                      - standard
+                    pass_criteria:
+                      threshold: 0.85
+                    benchmarks:
+                      - id: toxicity
+                        provider_id: garak
+                        weight: 1
+                        primary_score:
+                          metric: accuracy
+                          lower_is_better: false
+                      - id: bias-detection
+                        provider_id: garak
+                        weight: 0.5
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
