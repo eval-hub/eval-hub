@@ -1977,6 +1977,9 @@ components:
         message_code:
           type: string
           description: Machine-readable code
+      required:
+        - message
+        - message_code
     EvaluationJobState:
       type: object
       description: Overall evaluation job state and message
@@ -2013,6 +2016,8 @@ components:
         status:
           $ref: '#/components/schemas/State'
         error_message:
+          $ref: '#/components/schemas/MessageInfo'
+        warning_message:
           $ref: '#/components/schemas/MessageInfo'
         started_at:
           type: string
@@ -2562,6 +2567,8 @@ components:
           additionalProperties: true
           description: Artifacts
         error_message:
+          $ref: '#/components/schemas/MessageInfo'
+        warning_message:
           $ref: '#/components/schemas/MessageInfo'
         started_at:
           type: string
