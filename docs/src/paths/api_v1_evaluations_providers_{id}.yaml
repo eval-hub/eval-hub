@@ -109,35 +109,37 @@ put:
           $ref: ../components/schemas/ProviderConfig.yaml
         examples:
           request:
-            summary: Update an existing provider
+            summary: Update a custom provider with a new image version
             value:
-              name: "garak"
-              title: "Garak Safety Evaluator (Updated)"
-              description: "Updated LLM safety and vulnerability scanning provider"
+              name: "my-custom-evaluator"
+              title: "Custom Internal Evaluator"
+              description: "Updated evaluation adapter with improved tokenization"
               tags:
-                - safety
-                - llm
-                - updated
+                - custom
+                - internal
               runtime:
                 k8s:
-                  image: "quay.io/evalhub/garak-adapter:v2.0"
+                  image: "registry.internal.example.com/eval/custom-adapter:v2.0"
                   entrypoint:
-                    - "/usr/bin/garak-adapter"
-                  cpu_request: "1"
-                  memory_request: "2Gi"
-                  cpu_limit: "4"
-                  memory_limit: "8Gi"
+                    - "/opt/app-root/bin/python"
+                    - "/opt/app-root/src/main.py"
+                  cpu_request: "500m"
+                  memory_request: "1Gi"
+                  cpu_limit: "2"
+                  memory_limit: "4Gi"
               benchmarks:
-                - id: "toxicity"
-                  name: "Toxicity Detection"
-                  description: "Measures model toxicity in generated content"
-                  category: "safety"
+                - id: "domain-qa"
+                  name: "Domain Q&A Accuracy"
+                  description: "Measures accuracy on domain-specific question answering"
+                  category: "reasoning"
                   metrics:
-                    - accuracy
-                    - f1_score
+                    - acc
+                    - f1
                   primary_score:
-                    metric: "accuracy"
+                    metric: "acc"
                     lower_is_better: false
+                  pass_criteria:
+                    threshold: 0.5
   responses:
     '200':
       description: Successful Response
@@ -150,37 +152,39 @@ put:
               summary: Updated provider resource
               value:
                 resource:
-                  id: "prov-garak-001"
+                  id: "c4d5e6f7-8901-2345-bcde-f67890123456"
                   tenant: "default"
-                  created_at: "2025-11-01T08:00:00Z"
-                  updated_at: "2026-01-20T14:00:00Z"
-                name: "garak"
-                title: "Garak Safety Evaluator (Updated)"
-                description: "Updated LLM safety and vulnerability scanning provider"
+                  created_at: "2026-01-20T10:00:00Z"
+                  updated_at: "2026-02-05T14:30:00Z"
+                name: "my-custom-evaluator"
+                title: "Custom Internal Evaluator"
+                description: "Updated evaluation adapter with improved tokenization"
                 tags:
-                  - safety
-                  - llm
-                  - updated
+                  - custom
+                  - internal
                 runtime:
                   k8s:
-                    image: "quay.io/evalhub/garak-adapter:v2.0"
+                    image: "registry.internal.example.com/eval/custom-adapter:v2.0"
                     entrypoint:
-                      - "/usr/bin/garak-adapter"
-                    cpu_request: "1"
-                    memory_request: "2Gi"
-                    cpu_limit: "4"
-                    memory_limit: "8Gi"
+                      - "/opt/app-root/bin/python"
+                      - "/opt/app-root/src/main.py"
+                    cpu_request: "500m"
+                    memory_request: "1Gi"
+                    cpu_limit: "2"
+                    memory_limit: "4Gi"
                 benchmarks:
-                  - id: "toxicity"
-                    name: "Toxicity Detection"
-                    description: "Measures model toxicity in generated content"
-                    category: "safety"
+                  - id: "domain-qa"
+                    name: "Domain Q&A Accuracy"
+                    description: "Measures accuracy on domain-specific question answering"
+                    category: "reasoning"
                     metrics:
-                      - accuracy
-                      - f1_score
+                      - acc
+                      - f1
                     primary_score:
-                      metric: "accuracy"
+                      metric: "acc"
                       lower_is_better: false
+                    pass_criteria:
+                      threshold: 0.5
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':
@@ -214,14 +218,28 @@ patch:
             $ref: ../components/schemas/PatchOperation.yaml
         examples:
           request:
-            summary: Patch a provider description and tags
+            summary: Update the container image version
             value:
               - op: "replace"
+                path: "/runtime/k8s/image"
+                value: "registry.internal.example.com/eval/custom-adapter:v2.1"
+              - op: "replace"
                 path: "/description"
-                value: "Updated provider description"
+                value: "Updated evaluation adapter with bug fixes"
+          AddTags:
+            summary: Add tags to a provider
+            value:
               - op: "add"
-                path: "/tags/-"
-                value: "patched"
+                path: "/tags"
+                value:
+                  - gpu
+                  - production
+          UpdateRuntime:
+            summary: Replace the local runtime command
+            value:
+              - op: "replace"
+                path: "/runtime/local/command"
+                value: "python /opt/eval/run_benchmark_v2.py"
   responses:
     '200':
       description: Successful Response
@@ -231,40 +249,42 @@ patch:
             $ref: ../components/schemas/ProviderResource.yaml
           examples:
             response:
-              summary: Patched provider resource
+              summary: Provider after applying patch operations
               value:
                 resource:
-                  id: "prov-garak-001"
+                  id: "c4d5e6f7-8901-2345-bcde-f67890123456"
                   tenant: "default"
-                  created_at: "2025-11-01T08:00:00Z"
-                  updated_at: "2026-01-20T15:00:00Z"
-                name: "garak"
-                title: "Garak Safety Evaluator"
-                description: "Updated provider description"
+                  created_at: "2026-01-20T10:00:00Z"
+                  updated_at: "2026-02-06T09:15:00Z"
+                name: "my-custom-evaluator"
+                title: "Custom Internal Evaluator"
+                description: "Updated evaluation adapter with bug fixes"
                 tags:
-                  - safety
-                  - llm
-                  - patched
+                  - custom
+                  - internal
                 runtime:
                   k8s:
-                    image: "quay.io/evalhub/garak-adapter:latest"
+                    image: "registry.internal.example.com/eval/custom-adapter:v2.1"
                     entrypoint:
-                      - "/usr/bin/garak-adapter"
+                      - "/opt/app-root/bin/python"
+                      - "/opt/app-root/src/main.py"
                     cpu_request: "500m"
                     memory_request: "1Gi"
                     cpu_limit: "2"
                     memory_limit: "4Gi"
                 benchmarks:
-                  - id: "toxicity"
-                    name: "Toxicity Detection"
-                    description: "Measures model toxicity in generated content"
-                    category: "safety"
+                  - id: "domain-qa"
+                    name: "Domain Q&A Accuracy"
+                    description: "Measures accuracy on domain-specific question answering"
+                    category: "reasoning"
                     metrics:
-                      - accuracy
-                      - f1_score
+                      - acc
+                      - f1
                     primary_score:
-                      metric: "accuracy"
+                      metric: "acc"
                       lower_is_better: false
+                    pass_criteria:
+                      threshold: 0.5
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':

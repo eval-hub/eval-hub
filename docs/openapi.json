@@ -198,6 +198,95 @@
                       "threshold": 0.5
                     }
                   }
+                },
+                "CreateEvaluationWithAuthAndQueue": {
+                  "summary": "Evaluate an authenticated model with Kueue scheduling",
+                  "value": {
+                    "name": "granite-3.1-8b-gpu-eval",
+                    "description": "GPU-scheduled evaluation with model authentication",
+                    "tags": [
+                      "gpu",
+                      "kueue"
+                    ],
+                    "model": {
+                      "url": "http://llm-service.models.svc.cluster.local:8000/v1",
+                      "name": "granite-3.1-8b-instruct",
+                      "auth": {
+                        "secret_ref": "llm-api-key"
+                      }
+                    },
+                    "benchmarks": [
+                      {
+                        "id": "arc_easy",
+                        "provider_id": "lm_evaluation_harness",
+                        "parameters": {
+                          "num_fewshot": 0,
+                          "limit": 100
+                        }
+                      }
+                    ],
+                    "pass_criteria": {
+                      "threshold": 0.5
+                    },
+                    "queue": {
+                      "kind": "kueue",
+                      "name": "gpu-local-queue"
+                    }
+                  }
+                },
+                "CreateEvaluationWithExperiment": {
+                  "summary": "Evaluate with MLFlow experiment tracking",
+                  "value": {
+                    "name": "llama-3.2-nightly-eval",
+                    "description": "Nightly evaluation tracked in MLFlow",
+                    "tags": [
+                      "nightly",
+                      "mlflow"
+                    ],
+                    "model": {
+                      "url": "http://llm-service.models.svc.cluster.local:8000/v1",
+                      "name": "llama-3.2-3b"
+                    },
+                    "benchmarks": [
+                      {
+                        "id": "arc_easy",
+                        "provider_id": "lm_evaluation_harness",
+                        "weight": 0.6,
+                        "primary_score": {
+                          "metric": "acc_norm",
+                          "lower_is_better": false
+                        },
+                        "parameters": {
+                          "num_fewshot": 0
+                        }
+                      },
+                      {
+                        "id": "owasp_llm_top10",
+                        "provider_id": "garak",
+                        "weight": 0.4,
+                        "primary_score": {
+                          "metric": "attack_success_rate",
+                          "lower_is_better": true
+                        }
+                      }
+                    ],
+                    "pass_criteria": {
+                      "threshold": 0.5
+                    },
+                    "experiment": {
+                      "name": "nightly-eval-experiment",
+                      "tags": [
+                        {
+                          "key": "team",
+                          "value": "model-evaluation"
+                        },
+                        {
+                          "key": "pipeline",
+                          "value": "nightly"
+                        }
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -485,75 +574,122 @@
                 },
                 "examples": {
                   "response": {
-                    "summary": "A completed evaluation job with results",
+                    "summary": "Completed evaluation job with benchmark results",
                     "value": {
                       "resource": {
-                        "id": "f02b16a2-1990-4626-b24d-1cff3febdbfb",
+                        "id": "a1b2c3d4-5678-9abc-def0-1234567890ab",
                         "tenant": "default",
-                        "created_at": "2026-01-12T10:00:00Z",
-                        "updated_at": "2026-01-12T10:47:12Z",
+                        "created_at": "2026-01-15T09:30:00Z",
+                        "updated_at": "2026-01-15T09:42:15Z",
                         "owner": "user@example.com"
                       },
                       "status": {
                         "state": "completed",
                         "message": {
-                          "message": "Evaluation job completed successfully.",
-                          "message_code": "job_completed"
+                          "message": "Evaluation job completed.",
+                          "message_code": "evaluation_job_updated"
                         },
                         "benchmarks": [
                           {
-                            "provider_id": "garak",
-                            "id": "toxicity",
+                            "provider_id": "lm_evaluation_harness",
+                            "id": "arc_easy",
                             "benchmark_index": 0,
                             "status": "completed",
-                            "started_at": "2026-01-12T10:45:32Z",
-                            "completed_at": "2026-01-12T10:47:12Z"
+                            "started_at": "2026-01-15T09:31:00Z",
+                            "completed_at": "2026-01-15T09:38:45Z"
+                          },
+                          {
+                            "provider_id": "garak",
+                            "id": "owasp_llm_top10",
+                            "benchmark_index": 1,
+                            "status": "completed",
+                            "started_at": "2026-01-15T09:31:00Z",
+                            "completed_at": "2026-01-15T09:42:15Z"
                           }
                         ]
                       },
                       "results": {
                         "benchmarks": [
                           {
-                            "id": "toxicity",
-                            "provider_id": "garak",
+                            "id": "arc_easy",
+                            "provider_id": "lm_evaluation_harness",
                             "benchmark_index": 0,
                             "metrics": {
-                              "accuracy": 0.95,
-                              "f1_score": 0.93
+                              "acc": 0.82,
+                              "acc_norm": 0.85
                             },
-                            "mlflow_run_id": "abc123",
+                            "mlflow_run_id": "run-7f3a1b2c",
+                            "logs_path": "/data/logs/a1b2c3d4.log",
                             "test": {
-                              "primary_score": 0.95,
-                              "threshold": 0.7,
+                              "primary_score": 0.85,
+                              "threshold": 0.25,
+                              "pass": true
+                            }
+                          },
+                          {
+                            "id": "owasp_llm_top10",
+                            "provider_id": "garak",
+                            "benchmark_index": 1,
+                            "metrics": {
+                              "attack_success_rate": 0.12
+                            },
+                            "mlflow_run_id": "run-9e8d7c6b",
+                            "logs_path": "/data/logs/a1b2c3d4-garak.log",
+                            "test": {
+                              "primary_score": 0.12,
+                              "threshold": 0.3,
                               "pass": true
                             }
                           }
                         ],
                         "test": {
-                          "score": 0.95,
-                          "threshold": 0.7,
+                          "score": 0.85,
+                          "threshold": 0.5,
                           "pass": true
                         }
                       },
-                      "name": "my-model-safety-eval",
-                      "description": "Safety evaluation for my-model v2",
+                      "name": "granite-3.1-8b-safety-eval",
+                      "description": "Safety and reasoning evaluation for Granite 3.1 8B Instruct",
                       "tags": [
-                        "safety",
-                        "v2"
+                        "nightly",
+                        "granite"
                       ],
                       "model": {
-                        "url": "https://my-model-server.example.com/v1",
-                        "name": "my-model-v2"
+                        "url": "http://llm-service.models.svc.cluster.local:8000/v1",
+                        "name": "granite-3.1-8b-instruct"
                       },
                       "benchmarks": [
                         {
-                          "id": "toxicity",
+                          "id": "arc_easy",
+                          "provider_id": "lm_evaluation_harness",
+                          "weight": 0.6,
+                          "primary_score": {
+                            "metric": "acc_norm",
+                            "lower_is_better": false
+                          },
+                          "pass_criteria": {
+                            "threshold": 0.25
+                          },
+                          "parameters": {
+                            "num_fewshot": 0,
+                            "limit": 100
+                          }
+                        },
+                        {
+                          "id": "owasp_llm_top10",
                           "provider_id": "garak",
-                          "weight": 1
+                          "weight": 0.4,
+                          "primary_score": {
+                            "metric": "attack_success_rate",
+                            "lower_is_better": true
+                          },
+                          "pass_criteria": {
+                            "threshold": 0.3
+                          }
                         }
                       ],
                       "pass_criteria": {
-                        "threshold": 0.7
+                        "threshold": 0.5
                       }
                     }
                   }
@@ -860,6 +996,95 @@
                       }
                     ]
                   }
+                },
+                "LocalRuntimeProvider": {
+                  "summary": "Register a provider with a local runtime",
+                  "value": {
+                    "name": "local-eval-harness",
+                    "title": "Local Evaluation Harness",
+                    "description": "Local-mode provider for development and testing",
+                    "tags": [
+                      "local",
+                      "development"
+                    ],
+                    "runtime": {
+                      "local": {
+                        "command": "python /opt/eval/run_benchmark.py",
+                        "env": [
+                          {
+                            "name": "LOG_LEVEL",
+                            "value": "debug"
+                          }
+                        ]
+                      }
+                    },
+                    "benchmarks": [
+                      {
+                        "id": "custom-qa",
+                        "name": "Custom Q&A",
+                        "description": "Domain-specific question answering benchmark",
+                        "category": "reasoning",
+                        "metrics": [
+                          "acc"
+                        ],
+                        "primary_score": {
+                          "metric": "acc",
+                          "lower_is_better": false
+                        }
+                      }
+                    ]
+                  }
+                },
+                "GPUProvider": {
+                  "summary": "Register a GPU-enabled provider",
+                  "value": {
+                    "name": "gpu-lm-eval",
+                    "title": "GPU LM Evaluation Harness",
+                    "description": "LM Evaluation Harness adapter with GPU support for large models",
+                    "tags": [
+                      "gpu",
+                      "lm_eval"
+                    ],
+                    "runtime": {
+                      "k8s": {
+                        "image": "quay.io/opendatahub/ta-lmes-job:odh-3.4-ea2",
+                        "entrypoint": [
+                          "/opt/app-root/bin/python",
+                          "/opt/app-root/src/main.py"
+                        ],
+                        "cpu_request": "500m",
+                        "memory_request": "1Gi",
+                        "cpu_limit": "2",
+                        "memory_limit": "8Gi",
+                        "gpu": {
+                          "resource": "nvidia.com/gpu",
+                          "count": 1,
+                          "node_selector": {
+                            "nvidia.com/gpu.product": "A100-SXM4-40GB"
+                          }
+                        }
+                      }
+                    },
+                    "benchmarks": [
+                      {
+                        "id": "arc_easy",
+                        "name": "Basic science Q&A",
+                        "description": "Grade-school science questions testing basic reasoning",
+                        "category": "reasoning",
+                        "metrics": [
+                          "acc",
+                          "acc_norm"
+                        ],
+                        "primary_score": {
+                          "metric": "acc_norm",
+                          "lower_is_better": false
+                        },
+                        "pass_criteria": {
+                          "threshold": 0.25
+                        }
+                      }
+                    ]
+                  }
                 }
               }
             }
@@ -976,46 +1201,77 @@
                 },
                 "examples": {
                   "response": {
-                    "summary": "A single provider resource",
+                    "summary": "Garak vulnerability scanning provider",
                     "value": {
                       "resource": {
-                        "id": "prov-garak-001",
+                        "id": "d8e9f0a1-2345-6789-cdef-012345678901",
                         "tenant": "default",
-                        "created_at": "2025-11-01T08:00:00Z",
-                        "updated_at": "2025-11-15T12:30:00Z"
+                        "created_at": "2025-10-01T00:00:00Z",
+                        "updated_at": "2025-10-01T00:00:00Z"
                       },
                       "name": "garak",
-                      "title": "Garak Safety Evaluator",
-                      "description": "LLM safety and vulnerability scanning",
+                      "title": "Garak",
+                      "description": "LLM vulnerability scanner and red-teaming framework",
                       "tags": [
-                        "safety",
-                        "llm"
+                        "security",
+                        "red_team"
                       ],
                       "runtime": {
                         "k8s": {
-                          "image": "quay.io/evalhub/garak-adapter:latest",
+                          "image": "quay.io/trustyai/trustyai-garak-lls-provider-dsp:latest",
                           "entrypoint": [
-                            "/usr/bin/garak-adapter"
+                            "python",
+                            "-m",
+                            "llama_stack_provider_trustyai_garak.evalhub"
                           ],
                           "cpu_request": "500m",
-                          "memory_request": "1Gi",
-                          "cpu_limit": "2",
+                          "memory_request": "512Mi",
+                          "cpu_limit": "2000m",
                           "memory_limit": "4Gi"
                         }
                       },
                       "benchmarks": [
                         {
-                          "id": "toxicity",
-                          "name": "Toxicity Detection",
-                          "description": "Measures model toxicity in generated content",
-                          "category": "safety",
+                          "id": "owasp_llm_top10",
+                          "name": "OWASP LLM top 10 risk scan",
+                          "description": "Tests against the top 10 security risks specific to LLM applications.",
+                          "category": "security",
                           "metrics": [
-                            "accuracy",
-                            "f1_score"
+                            "attack_success_rate"
+                          ],
+                          "tags": [
+                            "security",
+                            "owasp",
+                            "red_team"
                           ],
                           "primary_score": {
-                            "metric": "accuracy",
-                            "lower_is_better": false
+                            "metric": "attack_success_rate",
+                            "lower_is_better": true
+                          },
+                          "pass_criteria": {
+                            "threshold": 0.3
+                          }
+                        },
+                        {
+                          "id": "quality",
+                          "name": "Toxic & harmful content scan",
+                          "description": "Scans for violence, profanity, toxicity, hate speech, and integrity issues.",
+                          "category": "safety",
+                          "metrics": [
+                            "attack_success_rate"
+                          ],
+                          "tags": [
+                            "safety",
+                            "quality",
+                            "toxicity",
+                            "red_team"
+                          ],
+                          "primary_score": {
+                            "metric": "attack_success_rate",
+                            "lower_is_better": true
+                          },
+                          "pass_criteria": {
+                            "threshold": 0.3
                           }
                         }
                       ]
@@ -1068,41 +1324,44 @@
               },
               "examples": {
                 "request": {
-                  "summary": "Update an existing provider",
+                  "summary": "Update a custom provider with a new image version",
                   "value": {
-                    "name": "garak",
-                    "title": "Garak Safety Evaluator (Updated)",
-                    "description": "Updated LLM safety and vulnerability scanning provider",
+                    "name": "my-custom-evaluator",
+                    "title": "Custom Internal Evaluator",
+                    "description": "Updated evaluation adapter with improved tokenization",
                     "tags": [
-                      "safety",
-                      "llm",
-                      "updated"
+                      "custom",
+                      "internal"
                     ],
                     "runtime": {
                       "k8s": {
-                        "image": "quay.io/evalhub/garak-adapter:v2.0",
+                        "image": "registry.internal.example.com/eval/custom-adapter:v2.0",
                         "entrypoint": [
-                          "/usr/bin/garak-adapter"
+                          "/opt/app-root/bin/python",
+                          "/opt/app-root/src/main.py"
                         ],
-                        "cpu_request": "1",
-                        "memory_request": "2Gi",
-                        "cpu_limit": "4",
-                        "memory_limit": "8Gi"
+                        "cpu_request": "500m",
+                        "memory_request": "1Gi",
+                        "cpu_limit": "2",
+                        "memory_limit": "4Gi"
                       }
                     },
                     "benchmarks": [
                       {
-                        "id": "toxicity",
-                        "name": "Toxicity Detection",
-                        "description": "Measures model toxicity in generated content",
-                        "category": "safety",
+                        "id": "domain-qa",
+                        "name": "Domain Q&A Accuracy",
+                        "description": "Measures accuracy on domain-specific question answering",
+                        "category": "reasoning",
                         "metrics": [
-                          "accuracy",
-                          "f1_score"
+                          "acc",
+                          "f1"
                         ],
                         "primary_score": {
-                          "metric": "accuracy",
+                          "metric": "acc",
                           "lower_is_better": false
+                        },
+                        "pass_criteria": {
+                          "threshold": 0.5
                         }
                       }
                     ]
@@ -1125,44 +1384,47 @@
                     "summary": "Updated provider resource",
                     "value": {
                       "resource": {
-                        "id": "prov-garak-001",
+                        "id": "c4d5e6f7-8901-2345-bcde-f67890123456",
                         "tenant": "default",
-                        "created_at": "2025-11-01T08:00:00Z",
-                        "updated_at": "2026-01-20T14:00:00Z"
+                        "created_at": "2026-01-20T10:00:00Z",
+                        "updated_at": "2026-02-05T14:30:00Z"
                       },
-                      "name": "garak",
-                      "title": "Garak Safety Evaluator (Updated)",
-                      "description": "Updated LLM safety and vulnerability scanning provider",
+                      "name": "my-custom-evaluator",
+                      "title": "Custom Internal Evaluator",
+                      "description": "Updated evaluation adapter with improved tokenization",
                       "tags": [
-                        "safety",
-                        "llm",
-                        "updated"
+                        "custom",
+                        "internal"
                       ],
                       "runtime": {
                         "k8s": {
-                          "image": "quay.io/evalhub/garak-adapter:v2.0",
+                          "image": "registry.internal.example.com/eval/custom-adapter:v2.0",
                           "entrypoint": [
-                            "/usr/bin/garak-adapter"
+                            "/opt/app-root/bin/python",
+                            "/opt/app-root/src/main.py"
                           ],
-                          "cpu_request": "1",
-                          "memory_request": "2Gi",
-                          "cpu_limit": "4",
-                          "memory_limit": "8Gi"
+                          "cpu_request": "500m",
+                          "memory_request": "1Gi",
+                          "cpu_limit": "2",
+                          "memory_limit": "4Gi"
                         }
                       },
                       "benchmarks": [
                         {
-                          "id": "toxicity",
-                          "name": "Toxicity Detection",
-                          "description": "Measures model toxicity in generated content",
-                          "category": "safety",
+                          "id": "domain-qa",
+                          "name": "Domain Q&A Accuracy",
+                          "description": "Measures accuracy on domain-specific question answering",
+                          "category": "reasoning",
                           "metrics": [
-                            "accuracy",
-                            "f1_score"
+                            "acc",
+                            "f1"
                           ],
                           "primary_score": {
-                            "metric": "accuracy",
+                            "metric": "acc",
                             "lower_is_better": false
+                          },
+                          "pass_criteria": {
+                            "threshold": 0.5
                           }
                         }
                       ]
@@ -1218,17 +1480,40 @@
               },
               "examples": {
                 "request": {
-                  "summary": "Patch a provider description and tags",
+                  "summary": "Update the container image version",
                   "value": [
                     {
                       "op": "replace",
-                      "path": "/description",
-                      "value": "Updated provider description"
+                      "path": "/runtime/k8s/image",
+                      "value": "registry.internal.example.com/eval/custom-adapter:v2.1"
                     },
                     {
+                      "op": "replace",
+                      "path": "/description",
+                      "value": "Updated evaluation adapter with bug fixes"
+                    }
+                  ]
+                },
+                "AddTags": {
+                  "summary": "Add tags to a provider",
+                  "value": [
+                    {
                       "op": "add",
-                      "path": "/tags/-",
-                      "value": "patched"
+                      "path": "/tags",
+                      "value": [
+                        "gpu",
+                        "production"
+                      ]
+                    }
+                  ]
+                },
+                "UpdateRuntime": {
+                  "summary": "Replace the local runtime command",
+                  "value": [
+                    {
+                      "op": "replace",
+                      "path": "/runtime/local/command",
+                      "value": "python /opt/eval/run_benchmark_v2.py"
                     }
                   ]
                 }
@@ -1246,27 +1531,27 @@
                 },
                 "examples": {
                   "response": {
-                    "summary": "Patched provider resource",
+                    "summary": "Provider after applying patch operations",
                     "value": {
                       "resource": {
-                        "id": "prov-garak-001",
+                        "id": "c4d5e6f7-8901-2345-bcde-f67890123456",
                         "tenant": "default",
-                        "created_at": "2025-11-01T08:00:00Z",
-                        "updated_at": "2026-01-20T15:00:00Z"
+                        "created_at": "2026-01-20T10:00:00Z",
+                        "updated_at": "2026-02-06T09:15:00Z"
                       },
-                      "name": "garak",
-                      "title": "Garak Safety Evaluator",
-                      "description": "Updated provider description",
+                      "name": "my-custom-evaluator",
+                      "title": "Custom Internal Evaluator",
+                      "description": "Updated evaluation adapter with bug fixes",
                       "tags": [
-                        "safety",
-                        "llm",
-                        "patched"
+                        "custom",
+                        "internal"
                       ],
                       "runtime": {
                         "k8s": {
-                          "image": "quay.io/evalhub/garak-adapter:latest",
+                          "image": "registry.internal.example.com/eval/custom-adapter:v2.1",
                           "entrypoint": [
-                            "/usr/bin/garak-adapter"
+                            "/opt/app-root/bin/python",
+                            "/opt/app-root/src/main.py"
                           ],
                           "cpu_request": "500m",
                           "memory_request": "1Gi",
@@ -1276,17 +1561,20 @@
                       },
                       "benchmarks": [
                         {
-                          "id": "toxicity",
-                          "name": "Toxicity Detection",
-                          "description": "Measures model toxicity in generated content",
-                          "category": "safety",
+                          "id": "domain-qa",
+                          "name": "Domain Q&A Accuracy",
+                          "description": "Measures accuracy on domain-specific question answering",
+                          "category": "reasoning",
                           "metrics": [
-                            "accuracy",
-                            "f1_score"
+                            "acc",
+                            "f1"
                           ],
                           "primary_score": {
-                            "metric": "accuracy",
+                            "metric": "acc",
                             "lower_is_better": false
+                          },
+                          "pass_criteria": {
+                            "threshold": 0.5
                           }
                         }
                       ]
@@ -1571,6 +1859,72 @@
                       }
                     ]
                   }
+                },
+                "MinimalCollection": {
+                  "summary": "Create a minimal collection",
+                  "value": {
+                    "name": "quick-reasoning-check",
+                    "category": "reasoning",
+                    "benchmarks": [
+                      {
+                        "id": "arc_easy",
+                        "provider_id": "lm_evaluation_harness"
+                      }
+                    ]
+                  }
+                },
+                "MultiBenchmarkCollection": {
+                  "summary": "Create a multi-benchmark collection with per-benchmark thresholds",
+                  "value": {
+                    "name": "comprehensive-safety-gate",
+                    "category": "safety",
+                    "description": "Comprehensive safety gate combining multiple Garak scans",
+                    "tags": [
+                      "safety",
+                      "release-gate"
+                    ],
+                    "pass_criteria": {
+                      "threshold": 0.5
+                    },
+                    "benchmarks": [
+                      {
+                        "id": "owasp_llm_top10",
+                        "provider_id": "garak",
+                        "weight": 0.4,
+                        "primary_score": {
+                          "metric": "attack_success_rate",
+                          "lower_is_better": true
+                        },
+                        "pass_criteria": {
+                          "threshold": 0.3
+                        }
+                      },
+                      {
+                        "id": "quality",
+                        "provider_id": "garak",
+                        "weight": 0.3,
+                        "primary_score": {
+                          "metric": "attack_success_rate",
+                          "lower_is_better": true
+                        },
+                        "pass_criteria": {
+                          "threshold": 0.3
+                        }
+                      },
+                      {
+                        "id": "intents",
+                        "provider_id": "garak",
+                        "weight": 0.3,
+                        "primary_score": {
+                          "metric": "attack_success_rate",
+                          "lower_is_better": true
+                        },
+                        "pass_criteria": {
+                          "threshold": 0.3
+                        }
+                      }
+                    ]
+                  }
                 }
               }
             }
@@ -1686,41 +2040,47 @@
                 },
                 "examples": {
                   "response": {
-                    "summary": "A single collection resource",
+                    "summary": "Safety evaluation collection with benchmarks",
                     "value": {
                       "resource": {
-                        "id": "col-safety-001",
+                        "id": "e5f6a7b8-9012-3456-cdef-0123456789ab",
                         "tenant": "default",
                         "created_at": "2025-12-01T10:00:00Z",
-                        "updated_at": "2025-12-15T14:00:00Z"
+                        "updated_at": "2025-12-01T10:00:00Z"
                       },
-                      "name": "standard-safety-collection",
+                      "name": "llm-safety-suite",
                       "category": "safety",
-                      "description": "Standard safety evaluation benchmarks",
+                      "description": "Comprehensive safety evaluation combining reasoning accuracy and vulnerability scanning",
                       "tags": [
                         "safety",
-                        "standard"
+                        "nightly"
                       ],
                       "pass_criteria": {
-                        "threshold": 0.7
+                        "threshold": 0.5
                       },
                       "benchmarks": [
                         {
-                          "id": "toxicity",
-                          "provider_id": "garak",
-                          "weight": 1,
+                          "id": "arc_easy",
+                          "provider_id": "lm_evaluation_harness",
+                          "weight": 0.6,
                           "primary_score": {
-                            "metric": "accuracy",
+                            "metric": "acc_norm",
                             "lower_is_better": false
+                          },
+                          "pass_criteria": {
+                            "threshold": 0.25
                           }
                         },
                         {
-                          "id": "bias-detection",
+                          "id": "owasp_llm_top10",
                           "provider_id": "garak",
-                          "weight": 0.5,
+                          "weight": 0.4,
                           "primary_score": {
-                            "metric": "accuracy",
-                            "lower_is_better": false
+                            "metric": "attack_success_rate",
+                            "lower_is_better": true
+                          },
+                          "pass_criteria": {
+                            "threshold": 0.3
                           }
                         }
                       ]
@@ -1771,41 +2131,108 @@
               },
               "examples": {
                 "request": {
-                  "summary": "Update an existing collection",
+                  "summary": "Update collection to add a quality benchmark",
                   "value": {
-                    "name": "standard-safety-collection",
+                    "name": "llm-safety-suite",
                     "category": "safety",
-                    "description": "Updated standard safety evaluation benchmarks",
+                    "description": "Safety evaluation with reasoning, OWASP risks, and content quality",
                     "tags": [
                       "safety",
-                      "standard",
+                      "nightly",
                       "updated"
                     ],
                     "pass_criteria": {
-                      "threshold": 0.75
+                      "threshold": 0.5
                     },
                     "benchmarks": [
                       {
-                        "id": "toxicity",
-                        "provider_id": "garak",
-                        "weight": 1,
+                        "id": "arc_easy",
+                        "provider_id": "lm_evaluation_harness",
+                        "weight": 0.5,
                         "primary_score": {
-                          "metric": "accuracy",
+                          "metric": "acc_norm",
                           "lower_is_better": false
                         },
                         "pass_criteria": {
-                          "threshold": 0.9
+                          "threshold": 0.25
                         }
                       },
                       {
-                        "id": "bias-detection",
+                        "id": "owasp_llm_top10",
                         "provider_id": "garak",
-                        "weight": 0.5
+                        "weight": 0.3,
+                        "primary_score": {
+                          "metric": "attack_success_rate",
+                          "lower_is_better": true
+                        },
+                        "pass_criteria": {
+                          "threshold": 0.3
+                        }
                       },
                       {
-                        "id": "hallucination",
+                        "id": "quality",
                         "provider_id": "garak",
-                        "weight": 0.8
+                        "weight": 0.2,
+                        "primary_score": {
+                          "metric": "attack_success_rate",
+                          "lower_is_better": true
+                        },
+                        "pass_criteria": {
+                          "threshold": 0.3
+                        }
+                      }
+                    ]
+                  }
+                },
+                "UpdateWithDifferentProviders": {
+                  "summary": "Revise collection with benchmarks from multiple providers",
+                  "value": {
+                    "name": "llm-safety-suite",
+                    "category": "safety",
+                    "description": "Revised safety suite with lm-eval and Garak benchmarks",
+                    "tags": [
+                      "safety",
+                      "nightly"
+                    ],
+                    "pass_criteria": {
+                      "threshold": 0.5
+                    },
+                    "benchmarks": [
+                      {
+                        "id": "arc_easy",
+                        "provider_id": "lm_evaluation_harness",
+                        "weight": 0.4,
+                        "primary_score": {
+                          "metric": "acc_norm",
+                          "lower_is_better": false
+                        },
+                        "pass_criteria": {
+                          "threshold": 0.25
+                        }
+                      },
+                      {
+                        "id": "blimp",
+                        "provider_id": "lm_evaluation_harness",
+                        "weight": 0.2,
+                        "primary_score": {
+                          "metric": "acc",
+                          "lower_is_better": false
+                        },
+                        "pass_criteria": {
+                          "threshold": 0.25
+                        }
+                      },
+                      {
+                        "id": "owasp_llm_top10",
+                        "provider_id": "garak",
+                        "weight": 0.4,
+                        "primary_score": {
+                          "metric": "attack_success_rate",
+                          "lower_is_better": true
+                        },
+                        "pass_criteria": {
+                          "threshold": 0.3
+                        }
                       }
                     ]
                   }
@@ -1824,47 +2251,61 @@
                 },
                 "examples": {
                   "response": {
-                    "summary": "Updated collection resource",
+                    "summary": "Updated collection with three benchmarks",
                     "value": {
                       "resource": {
-                        "id": "col-safety-001",
+                        "id": "e5f6a7b8-9012-3456-cdef-0123456789ab",
                         "tenant": "default",
                         "created_at": "2025-12-01T10:00:00Z",
                         "updated_at": "2026-02-10T11:00:00Z"
                       },
-                      "name": "standard-safety-collection",
+                      "name": "llm-safety-suite",
                       "category": "safety",
-                      "description": "Updated standard safety evaluation benchmarks",
+                      "description": "Safety evaluation with reasoning, OWASP risks, and content quality",
                       "tags": [
                         "safety",
-                        "standard",
+                        "nightly",
                         "updated"
                       ],
                       "pass_criteria": {
-                        "threshold": 0.75
+                        "threshold": 0.5
                       },
                       "benchmarks": [
                         {
-                          "id": "toxicity",
-                          "provider_id": "garak",
-                          "weight": 1,
+                          "id": "arc_easy",
+                          "provider_id": "lm_evaluation_harness",
+                          "weight": 0.5,
                           "primary_score": {
-                            "metric": "accuracy",
+                            "metric": "acc_norm",
                             "lower_is_better": false
                           },
                           "pass_criteria": {
-                            "threshold": 0.9
+                            "threshold": 0.25
                           }
                         },
                         {
-                          "id": "bias-detection",
+                          "id": "owasp_llm_top10",
                           "provider_id": "garak",
-                          "weight": 0.5
+                          "weight": 0.3,
+                          "primary_score": {
+                            "metric": "attack_success_rate",
+                            "lower_is_better": true
+                          },
+                          "pass_criteria": {
+                            "threshold": 0.3
+                          }
                         },
                         {
-                          "id": "hallucination",
+                          "id": "quality",
                           "provider_id": "garak",
-                          "weight": 0.8
+                          "weight": 0.2,
+                          "primary_score": {
+                            "metric": "attack_success_rate",
+                            "lower_is_better": true
+                          },
+                          "pass_criteria": {
+                            "threshold": 0.3
+                          }
                         }
                       ]
                     }
@@ -1919,17 +2360,57 @@
               },
               "examples": {
                 "request": {
-                  "summary": "Patch a collection's description and pass criteria",
+                  "summary": "Raise the overall pass threshold",
                   "value": [
                     {
                       "op": "replace",
-                      "path": "/description",
-                      "value": "Patched collection description"
+                      "path": "/pass_criteria/threshold",
+                      "value": 0.6
                     },
                     {
                       "op": "replace",
-                      "path": "/pass_criteria/threshold",
-                      "value": 0.85
+                      "path": "/description",
+                      "value": "Safety evaluation with stricter pass threshold"
+                    }
+                  ]
+                },
+                "ReplaceBenchmark": {
+                  "summary": "Replace a benchmark in the collection",
+                  "value": [
+                    {
+                      "op": "replace",
+                      "path": "/benchmarks/0",
+                      "value": {
+                        "id": "avid",
+                        "provider_id": "garak",
+                        "weight": 0.5,
+                        "primary_score": {
+                          "metric": "attack_success_rate",
+                          "lower_is_better": true
+                        },
+                        "pass_criteria": {
+                          "threshold": 0.3
+                        }
+                      }
+                    }
+                  ]
+                },
+                "UpdateNameAndTags": {
+                  "summary": "Rename collection and update tags",
+                  "value": [
+                    {
+                      "op": "replace",
+                      "path": "/name",
+                      "value": "llm-safety-suite-v2"
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/tags",
+                      "value": [
+                        "safety",
+                        "nightly",
+                        "v2"
+                      ]
                     }
                   ]
                 }
@@ -1947,38 +2428,48 @@
                 },
                 "examples": {
                   "response": {
-                    "summary": "Patched collection resource",
+                    "summary": "Collection after raising the pass threshold",
                     "value": {
                       "resource": {
-                        "id": "col-safety-001",
+                        "id": "e5f6a7b8-9012-3456-cdef-0123456789ab",
                         "tenant": "default",
                         "created_at": "2025-12-01T10:00:00Z",
-                        "updated_at": "2026-02-10T12:00:00Z"
+                        "updated_at": "2026-02-10T12:30:00Z"
                       },
-                      "name": "standard-safety-collection",
+                      "name": "llm-safety-suite",
                       "category": "safety",
-                      "description": "Patched collection description",
+                      "description": "Safety evaluation with stricter pass threshold",
                       "tags": [
                         "safety",
-                        "standard"
+                        "nightly"
                       ],
                       "pass_criteria": {
-                        "threshold": 0.85
+                        "threshold": 0.6
                       },
                       "benchmarks": [
                         {
-                          "id": "toxicity",
-                          "provider_id": "garak",
-                          "weight": 1,
+                          "id": "arc_easy",
+                          "provider_id": "lm_evaluation_harness",
+                          "weight": 0.6,
                           "primary_score": {
-                            "metric": "accuracy",
+                            "metric": "acc_norm",
                             "lower_is_better": false
+                          },
+                          "pass_criteria": {
+                            "threshold": 0.25
                           }
                         },
                         {
-                          "id": "bias-detection",
+                          "id": "owasp_llm_top10",
                           "provider_id": "garak",
-                          "weight": 0.5
+                          "weight": 0.4,
+                          "primary_score": {
+                            "metric": "attack_success_rate",
+                            "lower_is_better": true
+                          },
+                          "pass_criteria": {
+                            "threshold": 0.3
+                          }
                         }
                       ]
                     }

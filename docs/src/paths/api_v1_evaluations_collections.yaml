@@ -156,6 +156,50 @@ post:
                     lower_is_better: true
                   pass_criteria:
                     threshold: 0.3
+          MinimalCollection:
+            summary: Create a minimal collection
+            value:
+              name: "quick-reasoning-check"
+              category: "reasoning"
+              benchmarks:
+                - id: "arc_easy"
+                  provider_id: "lm_evaluation_harness"
+          MultiBenchmarkCollection:
+            summary: Create a multi-benchmark collection with per-benchmark thresholds
+            value:
+              name: "comprehensive-safety-gate"
+              category: "safety"
+              description: "Comprehensive safety gate combining multiple Garak scans"
+              tags:
+                - safety
+                - release-gate
+              pass_criteria:
+                threshold: 0.5
+              benchmarks:
+                - id: "owasp_llm_top10"
+                  provider_id: "garak"
+                  weight: 0.4
+                  primary_score:
+                    metric: "attack_success_rate"
+                    lower_is_better: true
+                  pass_criteria:
+                    threshold: 0.3
+                - id: "quality"
+                  provider_id: "garak"
+                  weight: 0.3
+                  primary_score:
+                    metric: "attack_success_rate"
+                    lower_is_better: true
+                  pass_criteria:
+                    threshold: 0.3
+                - id: "intents"
+                  provider_id: "garak"
+                  weight: 0.3
+                  primary_score:
+                    metric: "attack_success_rate"
+                    lower_is_better: true
+                  pass_criteria:
+                    threshold: 0.3
     required: true
   responses:
     '201':

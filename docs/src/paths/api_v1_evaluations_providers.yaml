@@ -170,6 +170,68 @@ post:
                     lower_is_better: false
                   pass_criteria:
                     threshold: 0.5
+          LocalRuntimeProvider:
+            summary: Register a provider with a local runtime
+            value:
+              name: "local-eval-harness"
+              title: "Local Evaluation Harness"
+              description: "Local-mode provider for development and testing"
+              tags:
+                - local
+                - development
+              runtime:
+                local:
+                  command: "python /opt/eval/run_benchmark.py"
+                  env:
+                    - name: "LOG_LEVEL"
+                      value: "debug"
+              benchmarks:
+                - id: "custom-qa"
+                  name: "Custom Q&A"
+                  description: "Domain-specific question answering benchmark"
+                  category: "reasoning"
+                  metrics:
+                    - acc
+                  primary_score:
+                    metric: "acc"
+                    lower_is_better: false
+          GPUProvider:
+            summary: Register a GPU-enabled provider
+            value:
+              name: "gpu-lm-eval"
+              title: "GPU LM Evaluation Harness"
+              description: "LM Evaluation Harness adapter with GPU support for large models"
+              tags:
+                - gpu
+                - lm_eval
+              runtime:
+                k8s:
+                  image: "quay.io/opendatahub/ta-lmes-job:odh-3.4-ea2"
+                  entrypoint:
+                    - "/opt/app-root/bin/python"
+                    - "/opt/app-root/src/main.py"
+                  cpu_request: "500m"
+                  memory_request: "1Gi"
+                  cpu_limit: "2"
+                  memory_limit: "8Gi"
+                  gpu:
+                    resource: "nvidia.com/gpu"
+                    count: 1
+                    node_selector:
+                      nvidia.com/gpu.product: "A100-SXM4-40GB"
+              benchmarks:
+                - id: "arc_easy"
+                  name: "Basic science Q&A"
+                  description: "Grade-school science questions testing basic reasoning"
+                  category: "reasoning"
+                  metrics:
+                    - acc
+                    - acc_norm
+                  primary_score:
+                    metric: "acc_norm"
+                    lower_is_better: false
+                  pass_criteria:
+                    threshold: 0.25
     required: true
   responses:
     '201':

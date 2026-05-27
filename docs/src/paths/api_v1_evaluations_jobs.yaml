@@ -58,6 +58,65 @@ post:
                 id: "standard-safety-collection"
               pass_criteria:
                 threshold: 0.5
+          CreateEvaluationWithAuthAndQueue:
+            summary: Evaluate an authenticated model with Kueue scheduling
+            value:
+              name: "granite-3.1-8b-gpu-eval"
+              description: "GPU-scheduled evaluation with model authentication"
+              tags:
+                - gpu
+                - kueue
+              model:
+                url: "http://llm-service.models.svc.cluster.local:8000/v1"
+                name: "granite-3.1-8b-instruct"
+                auth:
+                  secret_ref: "llm-api-key"
+              benchmarks:
+                - id: "arc_easy"
+                  provider_id: "lm_evaluation_harness"
+                  parameters:
+                    num_fewshot: 0
+                    limit: 100
+              pass_criteria:
+                threshold: 0.5
+              queue:
+                kind: "kueue"
+                name: "gpu-local-queue"
+          CreateEvaluationWithExperiment:
+            summary: Evaluate with MLFlow experiment tracking
+            value:
+              name: "llama-3.2-nightly-eval"
+              description: "Nightly evaluation tracked in MLFlow"
+              tags:
+                - nightly
+                - mlflow
+              model:
+                url: "http://llm-service.models.svc.cluster.local:8000/v1"
+                name: "llama-3.2-3b"
+              benchmarks:
+                - id: "arc_easy"
+                  provider_id: "lm_evaluation_harness"
+                  weight: 0.6
+                  primary_score:
+                    metric: "acc_norm"
+                    lower_is_better: false
+                  parameters:
+                    num_fewshot: 0
+                - id: "owasp_llm_top10"
+                  provider_id: "garak"
+                  weight: 0.4
+                  primary_score:
+                    metric: "attack_success_rate"
+                    lower_is_better: true
+              pass_criteria:
+                threshold: 0.5
+              experiment:
+                name: "nightly-eval-experiment"
+                tags:
+                  - key: "team"
+                    value: "model-evaluation"
+                  - key: "pipeline"
+                    value: "nightly"
   responses:
     '202':
       description: Successful Response
