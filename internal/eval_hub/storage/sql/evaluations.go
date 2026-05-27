@@ -402,6 +402,7 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 			ID:             runStatus.BenchmarkStatusEvent.ID,
 			Status:         runStatus.BenchmarkStatusEvent.Status,
 			ErrorMessage:   runStatus.BenchmarkStatusEvent.ErrorMessage,
+			WarningMessage: runStatus.BenchmarkStatusEvent.WarningMessage,
 			StartedAt:      runStatus.BenchmarkStatusEvent.StartedAt,
 			CompletedAt:    runStatus.BenchmarkStatusEvent.CompletedAt,
 			BenchmarkIndex: runStatus.BenchmarkStatusEvent.BenchmarkIndex,

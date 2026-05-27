@@ -142,6 +142,7 @@ type BenchmarkStatus struct {
 	BenchmarkIndex int          `json:"benchmark_index"`
 	Status         State        `json:"status,omitempty"`
 	ErrorMessage   *MessageInfo `json:"error_message,omitempty"`
+	WarningMessage *MessageInfo `json:"warning_message,omitempty"`
 	StartedAt      DateTime     `json:"started_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
 	CompletedAt    DateTime     `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
 }

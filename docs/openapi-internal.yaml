@@ -1500,6 +1500,8 @@ components:
           description: Artifacts
         error_message:
           $ref: '#/components/schemas/MessageInfo'
+        warning_message:
+          $ref: '#/components/schemas/MessageInfo'
         started_at:
           type: string
           format: date-time
