@@ -74,8 +74,8 @@ type ModelAuth struct {
 
 // MessageInfo represents a message from a downstream service
 type MessageInfo struct {
-	Message     string `json:"message"`
-	MessageCode string `json:"message_code"`
+	Message     string `json:"message" validate:"required"`
+	MessageCode string `json:"message_code" validate:"required"`
 }
 
 type PrimaryScore struct {
@@ -155,6 +155,7 @@ type BenchmarkStatusEvent struct {
 	Metrics        map[string]any `json:"metrics,omitempty"`
 	Artifacts      map[string]any `json:"artifacts,omitempty"`
 	ErrorMessage   *MessageInfo   `json:"error_message,omitempty"`
+	WarningMessage *MessageInfo   `json:"warning_message,omitempty"`
 	StartedAt      DateTime       `json:"started_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
 	CompletedAt    DateTime       `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
 	MLFlowRunID    string         `json:"mlflow_run_id,omitempty"`
