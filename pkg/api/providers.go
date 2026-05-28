@@ -11,7 +11,7 @@ type BenchmarkResource struct {
 	DatasetSize  int           `mapstructure:"dataset_size" yaml:"dataset_size" json:"dataset_size"`
 	Tags         []string      `mapstructure:"tags" yaml:"tags" json:"tags,omitempty"`
 	PrimaryScore *PrimaryScore `mapstructure:"primary_score" yaml:"primary_score" json:"primary_score,omitempty"`
-	PassCriteria *PassCriteria `mapstructure:"pass_criteria" yaml:"pass_criteria" json:"pass_criteria,omitempty"`
+	PassCriteria *PassCriteria `mapstructure:"pass_criteria" yaml:"pass_criteria" json:"pass_criteria,omitempty" validate:"omitempty"`
 }
 
 type ProviderConfig struct {
@@ -19,7 +19,7 @@ type ProviderConfig struct {
 	Description string              `mapstructure:"description" yaml:"description" json:"description,omitempty" validate:"omitempty,max=1024,min=1"`
 	Title       string              `mapstructure:"title" yaml:"title" json:"title"`
 	Tags        []string            `mapstructure:"tags" yaml:"tags" json:"tags,omitempty" validate:"omitempty,dive,tagname"`
-	Benchmarks  []BenchmarkResource `mapstructure:"benchmarks" yaml:"benchmarks" json:"benchmarks"`
+	Benchmarks  []BenchmarkResource `mapstructure:"benchmarks" yaml:"benchmarks" json:"benchmarks" validate:"dive"`
 	Runtime     *Runtime            `mapstructure:"runtime" yaml:"runtime" json:"runtime,omitempty"`
 }
 
