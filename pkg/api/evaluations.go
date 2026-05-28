@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -86,6 +87,14 @@ type PrimaryScore struct {
 type PassCriteria struct {
 	// The *float32 is a hack to avoid validation failure when threshold=0
 	Threshold *float32 `mapstructure:"threshold" json:"threshold" validate:"required"`
+}
+
+func (p PassCriteria) MarshalJSON() ([]byte, error) {
+	if p.Threshold == nil {
+		return []byte("null"), nil
+	}
+	type passCriteriaAlias PassCriteria
+	return json.Marshal(passCriteriaAlias(p))
 }
 
 // S3TestDataRef represents S3 source for test data.
