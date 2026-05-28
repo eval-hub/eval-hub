@@ -936,7 +936,7 @@ func (tc *scenarioConfig) iWaitForSchedulingError(duration string) error {
 		case <-ticker.C:
 			// Check pod events for scheduling errors
 			cmd := exec.Command("oc", "get", "events", "-n", namespace,
-				"--field-selector", fmt.Sprintf("involvedObject.kind=Pod,reason=FailedScheduling"),
+				"--field-selector", "involvedObject.kind=Pod,reason=FailedScheduling",
 				"-o", "jsonpath={.items[*].message}")
 			output, err := cmd.CombinedOutput()
 			if err == nil && strings.Contains(string(output), "gpu") {
