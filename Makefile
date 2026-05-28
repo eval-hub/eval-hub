@@ -137,6 +137,8 @@ start-mcp: build-mcp ## Run the MCP server in background
 stop-mcp: ## Stop the MCP server
 	-./scripts/stop_server.sh "${MCP_PID_FILE}"
 
+# Use this to ignore any self-signed certificate errors
+# NODE_TLS_REJECT_UNAUTHORIZED=0
 start-inspector-mcp:
 	npx @modelcontextprotocol/inspector
 
