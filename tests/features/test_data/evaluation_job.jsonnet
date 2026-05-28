@@ -7,18 +7,7 @@ test.mergeOptional(
       model: test.model(),
       name: 'test-evaluation-job',
     } + if collectionId == '' then {
-      benchmarks: [
-        {
-          id: 'arc_easy',
-          provider_id: 'lm_evaluation_harness',
-          parameters: {
-            num_examples: 10,
-            num_fewshot: 3,
-            limit: 5,
-            tokenizer: 'google/flan-t5-small',
-          },
-        },
-      ],
+      benchmarks: [test.defaultBenchmark()],
       tags: ['environment'],
     } else {},
     if collectionId != '' then test.collection() else null,

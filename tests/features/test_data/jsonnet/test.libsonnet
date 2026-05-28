@@ -25,6 +25,35 @@ local harness = std.parseJson(std.extVar('harness'));
   mlflow(name)::
     if harness.mlflow_enabled then name else '',
 
+  // Default benchmark for evaluation_job.jsonnet (disconnected vs connected FVT).
+  defaultBenchmark()::
+    if harness.disconnected then {
+      id: 'arc_easy',
+      provider_id: 'lm_evaluation_harness',
+      parameters: {
+        num_examples: 10,
+        num_fewshot: 3,
+        limit: 5,
+        tokenizer: '/test_data/tokenizer',
+      },
+      test_data_ref: {
+        s3: {
+          bucket: $.env('TEST_DATA_S3_BUCKET', 'mlpipeline'),
+          key: $.env('TEST_DATA_S3_KEY', 'offline'),
+          secret_ref: $.env('TEST_DATA_S3_SECRET_REF', 'minio-test'),
+        },
+      },
+    } else {
+      id: 'arc_easy',
+      provider_id: 'lm_evaluation_harness',
+      parameters: {
+        num_examples: 10,
+        num_fewshot: 3,
+        limit: 5,
+        tokenizer: 'google/flan-t5-small',
+      },
+    },
+
   // Default evaluation job model block used across many scenarios.
   model()::
     local secretRef = $.env('MODEL_AUTH_SECRET_REF', '');

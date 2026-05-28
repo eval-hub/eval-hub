@@ -15,6 +15,7 @@ type jsonnetHarness struct {
 	Env           map[string]string `json:"env"`
 	Values        map[string]string `json:"values"`
 	MlflowEnabled bool              `json:"mlflow_enabled"`
+	Disconnected  bool              `json:"disconnected"`
 }
 
 // jsonnetSiblingName returns the test-data filename with a .jsonnet extension for the
@@ -69,10 +70,12 @@ func (tc *scenarioConfig) jsonnetHarnessJSON() (string, error) {
 	if tc.jsonnetMlflowEnabled != nil {
 		mlflowEnabled = *tc.jsonnetMlflowEnabled
 	}
+	disconnected := strings.Contains(strings.ToLower(env["ENVIRONMENT_ID"]), "disconnected")
 	harness := jsonnetHarness{
 		Env:           env,
 		Values:        values,
 		MlflowEnabled: mlflowEnabled,
+		Disconnected:  disconnected,
 	}
 	encoded, err := json.Marshal(harness)
 	if err != nil {
@@ -399,6 +402,52 @@ test.collection()
 	}
 	if got["collection"]["id"] != "col-123" {
 		t.Errorf("collection.id = %q, want col-123", got["collection"]["id"])
+	}
+}
+
+func TestEvaluateEvaluationJobJsonnetDisconnected(t *testing.T) {
+	tc := &scenarioConfig{
+		values: map[string]string{},
+		jsonnetHarnessEnv: map[string]string{
+			"ENVIRONMENT_ID": "disconnected",
+		},
+	}
+	path, err := filepath.Abs(filepath.Join(testDataRoot(), "evaluation_job.jsonnet"))
+	if err != nil {
+		t.Fatalf("abs path: %v", err)
+	}
+	out, err := tc.evaluateJsonnetFile(path)
+	if err != nil {
+		t.Fatalf("evaluateJsonnetFile: %v", err)
+	}
+	var job struct {
+		Benchmarks []struct {
+			ID          string         `json:"id"`
+			Parameters  map[string]any `json:"parameters"`
+			TestDataRef struct {
+				S3 struct {
+					Bucket    string `json:"bucket"`
+					Key       string `json:"key"`
+					SecretRef string `json:"secret_ref"`
+				} `json:"s3"`
+			} `json:"test_data_ref"`
+		} `json:"benchmarks"`
+	}
+	if err := json.Unmarshal([]byte(out), &job); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(job.Benchmarks) != 1 {
+		t.Fatalf("benchmarks = %#v, want one benchmark", job.Benchmarks)
+	}
+	b := job.Benchmarks[0]
+	if b.ID != "blimp" {
+		t.Errorf("benchmark id = %q, want blimp", b.ID)
+	}
+	if b.Parameters["tokenizer"] != "/test_data/tokenizer" {
+		t.Errorf("tokenizer = %v, want /test_data/tokenizer", b.Parameters["tokenizer"])
+	}
+	if b.TestDataRef.S3.Bucket != "mlpipeline" || b.TestDataRef.S3.Key != "offline" || b.TestDataRef.S3.SecretRef != "minio-test" {
+		t.Errorf("test_data_ref.s3 = %+v, want mlpipeline/offline/minio-test", b.TestDataRef.S3)
 	}
 }
 
