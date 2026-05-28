@@ -440,8 +440,8 @@ func TestEvaluateEvaluationJobJsonnetDisconnected(t *testing.T) {
 		t.Fatalf("benchmarks = %#v, want one benchmark", job.Benchmarks)
 	}
 	b := job.Benchmarks[0]
-	if b.ID != "blimp" {
-		t.Errorf("benchmark id = %q, want blimp", b.ID)
+	if b.ID != "arc_easy" {
+		t.Errorf("benchmark id = %q, want arc_easy", b.ID)
 	}
 	if b.Parameters["tokenizer"] != "/test_data/tokenizer" {
 		t.Errorf("tokenizer = %v, want /test_data/tokenizer", b.Parameters["tokenizer"])
