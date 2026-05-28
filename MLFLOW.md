@@ -13,6 +13,7 @@ Concise guide for configuring MLFlow integration and understanding experiment tr
 ### Deployment Configuration
 
 **Podman/Container:**
+
 ```bash
 podman run -p 8080:8080 \
   -e MLFLOW_TRACKING_URI=http://mlflow:5000 \
@@ -20,6 +21,7 @@ podman run -p 8080:8080 \
 ```
 
 **Kubernetes/OpenShift:**
+
 ```yaml
 env:
   - name: MLFLOW_TRACKING_URI
@@ -40,7 +42,6 @@ env:
   }
 }
 ```
-
 
 ## Payload Examples
 
@@ -121,16 +122,19 @@ env:
 ## MLFlow Experiment Structure
 
 ### Experiment Metadata
+
 - **Name**: `{prefix}_{experiment.name}` or auto-generated
 - **Tags**: Direct mapping from `experiment.tags`
 - **Description**: Auto-generated based on benchmarks and model
 
 ### Run Organization
+
 - One MLFlow run per evaluation request
 - Run tags include model configuration and benchmark details
 - Artifacts include detailed results and logs
 
 ### Result Storage
+
 - **Metrics**: Benchmark scores and performance data
 - **Parameters**: Model configuration and benchmark settings
 - **Artifacts**: Detailed result files and execution logs
@@ -139,6 +143,7 @@ env:
 ## Integration Examples
 
 ### CI/CD Pipeline
+
 ```bash
 curl -X POST "http://eval-hub:8080/api/v1/evaluations/jobs" \
   -H "Content-Type: application/json" \
@@ -157,6 +162,7 @@ curl -X POST "http://eval-hub:8080/api/v1/evaluations/jobs" \
 ```
 
 ### Production Monitoring
+
 ```json
 {
   "experiment": {
@@ -176,16 +182,19 @@ curl -X POST "http://eval-hub:8080/api/v1/evaluations/jobs" \
 ### Common Issues
 
 **Connection Errors:**
+
 - Verify `MLFLOW_TRACKING_URI` is accessible from Eval Hub
 - Check network connectivity and firewall rules
 - Ensure MLFlow server is running and healthy
 
 **Experiment Creation Failures:**
+
 - Check MLFlow server disk space
 - Verify experiment naming doesn't conflict with existing experiments
 - Ensure tags contain only valid characters (alphanumeric, _, -, .)
 
 **Missing Results:**
+
 - Verify MLFlow run completed successfully
 - Check evaluation request completed without errors
 - Review MLFlow UI for run details and artifacts
