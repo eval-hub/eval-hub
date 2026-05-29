@@ -11,9 +11,12 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cucumber/godog"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
+	"github.com/google/uuid"
 )
 
 // GPU-specific step definitions for testing GPU resource management
@@ -40,16 +43,10 @@ var (
 	}
 	gpuResourcesSetup  = false
 	gpuTestProviderIDs []string
-)
 
-type providerListResponse struct {
-	Items []struct {
-		Resource struct {
-			ID string `json:"id"`
-		} `json:"resource"`
-		Tags []string `json:"tags"`
-	} `json:"items"`
-}
+	gpuFTSuiteRequestID     string
+	gpuFTSuiteRequestIDOnce sync.Once
+)
 
 type providerCreateResponse struct {
 	Resource struct {
@@ -417,10 +414,24 @@ func gpuFTHTTPClient() *http.Client {
 	if api != nil && api.client != nil {
 		return api.client
 	}
-	return http.DefaultClient
+	return &http.Client{Timeout: 30 * time.Second}
 }
 
-func gpuFTNewRequest(method, url string, body io.Reader, tenant string) (*http.Request, error) {
+func gpuFTSuiteRequestIDValue() string {
+	gpuFTSuiteRequestIDOnce.Do(func() {
+		gpuFTSuiteRequestID = uuid.NewString()
+	})
+	return gpuFTSuiteRequestID
+}
+
+func gpuFTRequestTransactionID(requestID string) string {
+	if id := strings.TrimSpace(requestID); id != "" {
+		return id
+	}
+	return gpuFTSuiteRequestIDValue()
+}
+
+func gpuFTNewRequest(method, url string, body io.Reader, tenant, requestID string) (*http.Request, error) {
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err
@@ -428,6 +439,7 @@ func gpuFTNewRequest(method, url string, body io.Reader, tenant string) (*http.R
 	if tenant != "" {
 		req.Header.Set("X-Tenant", tenant)
 	}
+	req.Header.Set(server.TRANSACTION_ID_HEADER, gpuFTRequestTransactionID(requestID))
 	if token, err := gpuFTAuthToken(tenant); err == nil && token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	} else if err != nil && os.Getenv("AUTH_TOKEN") == "" {
@@ -462,44 +474,15 @@ func deleteGPUTestProvidersAPI(tenant string) error {
 	if api == nil {
 		return fmt.Errorf("API feature not initialized")
 	}
+	if len(gpuTestProviderIDs) == 0 {
+		clearGPUTestProviderEnv()
+		return nil
+	}
 
 	baseURL := gpuFTBaseURL()
-	listURL := baseURL + "/api/v1/evaluations/providers?scope=tenant&limit=100"
-	req, err := gpuFTNewRequest(http.MethodGet, listURL, nil, tenant)
-	if err != nil {
-		return err
-	}
-	resp, err := gpuFTHTTPClient().Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("list providers returned %d: %s", resp.StatusCode, string(body))
-	}
-
-	var listed providerListResponse
-	if err := json.Unmarshal(body, &listed); err != nil {
-		return err
-	}
-
-	idsToDelete := make(map[string]struct{})
 	for _, id := range gpuTestProviderIDs {
-		idsToDelete[id] = struct{}{}
-	}
-	for _, item := range listed.Items {
-		if providerHasGPUTag(item.Tags) {
-			idsToDelete[item.Resource.ID] = struct{}{}
-		}
-	}
-
-	for id := range idsToDelete {
 		deleteURL := baseURL + "/api/v1/evaluations/providers/" + id
-		delReq, err := gpuFTNewRequest(http.MethodDelete, deleteURL, nil, tenant)
+		delReq, err := gpuFTNewRequest(http.MethodDelete, deleteURL, nil, tenant, "")
 		if err != nil {
 			return err
 		}
@@ -529,7 +512,7 @@ func createGPUTestProviderViaAPI(tenant, bodyFile string) (string, error) {
 
 	baseURL := gpuFTBaseURL()
 	createURL := baseURL + "/api/v1/evaluations/providers"
-	req, err := gpuFTNewRequest(http.MethodPost, createURL, strings.NewReader(string(body)), tenant)
+	req, err := gpuFTNewRequest(http.MethodPost, createURL, strings.NewReader(string(body)), tenant, "")
 	if err != nil {
 		return "", err
 	}
@@ -577,22 +560,20 @@ func createGPUTestProviders(namespace string) error {
 		{"gpu_provider_unavailable.json", envGPUTestProviderUnavailableID},
 	}
 
-	ids := make([]string, 0, len(providers))
 	for _, p := range providers {
 		id, err := createGPUTestProviderViaAPI(namespace, p.file)
 		if err != nil {
 			return fmt.Errorf("failed to create GPU test provider from %s: %w", p.file, err)
 		}
-		ids = append(ids, id)
+		gpuTestProviderIDs = append(gpuTestProviderIDs, id)
 		if err := os.Setenv(p.env, id); err != nil {
 			return fmt.Errorf("failed to set %s: %w", p.env, err)
 		}
 		logDebug("Created GPU test provider from %s with id %s\n", p.file, id)
 	}
 
-	gpuTestProviderIDs = ids
-	if len(ids) == 3 {
-		setGPUTestProviderEnv(ids[0], ids[1], ids[2])
+	if len(gpuTestProviderIDs) == 3 {
+		setGPUTestProviderEnv(gpuTestProviderIDs[0], gpuTestProviderIDs[1], gpuTestProviderIDs[2])
 	}
 
 	logDebug("GPU test providers created via API\n")
@@ -1195,7 +1176,7 @@ func (tc *scenarioConfig) gpuTestProviderIsLoaded() error {
 
 	baseURL := gpuFTBaseURL()
 	getURL := baseURL + "/api/v1/evaluations/providers/" + providerID
-	req, err := gpuFTNewRequest(http.MethodGet, getURL, nil, tenant)
+	req, err := gpuFTNewRequest(http.MethodGet, getURL, nil, tenant, "")
 	if err != nil {
 		return tc.logError(err)
 	}
