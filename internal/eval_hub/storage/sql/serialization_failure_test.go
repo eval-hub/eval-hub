@@ -57,6 +57,21 @@ func TestIsSerializationFailure(t *testing.T) {
 	}
 }
 
+func TestSerializationFailureBackoff(t *testing.T) {
+	t.Parallel()
+
+	if got := serializationFailureBackoff(0); got != 0 {
+		t.Fatalf("serializationFailureBackoff(0) = %v, want 0", got)
+	}
+	for attempt := 1; attempt <= 10; attempt++ {
+		got := serializationFailureBackoff(attempt)
+		wantMax := serializationRetryMaxDelay + serializationRetryMaxDelay/4
+		if got < serializationRetryBaseDelay || got > wantMax {
+			t.Fatalf("serializationFailureBackoff(%d) = %v, want in [%v, %v]", attempt, got, serializationRetryBaseDelay, wantMax)
+		}
+	}
+}
+
 func TestRetryOnSerializationFailure(t *testing.T) {
 	t.Parallel()
 

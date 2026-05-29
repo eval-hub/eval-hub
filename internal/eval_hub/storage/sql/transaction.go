@@ -9,8 +9,14 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 )
 
+// TransactionFunction runs database work inside a transaction begun by runTransaction.
+// It may be invoked more than once when runTransaction retries on serialization
+// failure (SQLSTATE 40001); callbacks must be retry-safe—limit work to operations
+// against the provided *sql.Tx and avoid irreversible side effects outside the DB.
 type TransactionFunction func(*sql.Tx) error
 
+// withTransaction runs fn inside a transaction, retrying the full transaction on
+// serialization failure via retryOnSerializationFailure. See TransactionFunction.
 func (s *sqlStorage) withTransaction(name string, resourceID string, fn TransactionFunction) error {
 	return retryOnSerializationFailure(serializationFailureMaxAttempts, func() error {
 		err := s.runTransaction(name, resourceID, fn)
@@ -27,6 +33,9 @@ func (s *sqlStorage) withTransaction(name string, resourceID string, fn Transact
 	})
 }
 
+// runTransaction begins a transaction, runs fn, then commits or rolls back.
+// Serialization-failure retries are applied by withTransaction, which re-invokes
+// runTransaction (and thus fn) until success or retryOnSerializationFailure exhausts attempts.
 func (s *sqlStorage) runTransaction(name string, resourceID string, fn TransactionFunction) error {
 	txn, err := s.pool.BeginTx(s.ctx, &sql.TxOptions{Isolation: s.isolationLevel})
 	if err != nil {
