@@ -9,7 +9,7 @@
   "benchmarks": [
     {
       "id": "arc_easy",
-      "provider_id": "gpu_test_provider_a100",
+      "provider_id": "{{env:GPU_TEST_PROVIDER_A100_ID}}",
       "parameters": {
         "num_examples": 10
       }

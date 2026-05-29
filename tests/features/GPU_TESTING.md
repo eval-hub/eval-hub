@@ -77,12 +77,19 @@ oc delete resourceflavor gpu-a100 gpu-v100 default-flavor
 
 ### Provider Configuration
 
-`tests/features/test_data/provider_gpu_test.yaml` — Defines provider `gpu_test_provider`:
+GPU test providers are created in suite `BeforeSuite` via `POST /api/v1/evaluations/providers` using:
 
-- Benchmark `arc_easy` (“Basic science Q&A (GPU test)”)
-- Runtime GPU: `nvidia.com/gpu`, count `1` (no `node_selector`)
+- `tests/features/test_data/gpu_provider_test.json` — GPU without `node_selector`
+- `tests/features/test_data/gpu_provider_a100.json` — GPU with A100 `node_selector`
+- `tests/features/test_data/gpu_provider_unavailable.json` — GPU with H100 `node_selector` (negative tests)
 
-All `gpu_job_*.json` fixtures use benchmark `arc_easy`. Scenario-specific nodeSelectors (for example A100 or H100) come from other GPU test providers created in BDD setup (`gpu_test_provider_a100`, `gpu_test_provider_unavailable`), which also expose `arc_easy` only.
+Each provider is tagged with `gpu_fvt` for cleanup. The API returns tenant-scoped provider IDs, which are exported as environment variables for job fixtures:
+
+- `GPU_TEST_PROVIDER_ID`
+- `GPU_TEST_PROVIDER_A100_ID`
+- `GPU_TEST_PROVIDER_UNAVAILABLE_ID`
+
+All `gpu_job_*.json` fixtures reference these via `{{env:...}}` and use benchmark `arc_easy`.
 
 ### Test Job Requests
 
@@ -103,8 +110,8 @@ All `gpu_job_*.json` fixtures use benchmark `arc_easy`. Scenario-specific nodeSe
 **Issue**: Tests fail with "GPU not available"
 - **Solution**: The test setup labels nodes with fake GPU types for testing. Real GPU hardware is not required for testing the job spec creation.
 
-**Issue**: Provider not found
-- **Solution**: Ensure `provider_gpu_test.yaml` is in the test_data directory and eval-hub is restarted
+**Issue**: Provider not found / `GPU_TEST_PROVIDER_ID is not set`
+- **Solution**: Ensure suite setup completed (`BeforeSuite` creates providers via API). For cluster runs, set `SERVER_URL` and `AUTH_TOKEN` (or ensure `oc create token` works for `evalhub-service` in `X_TENANT`).
 
 ## Expected Results
 

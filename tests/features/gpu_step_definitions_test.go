@@ -2,9 +2,14 @@ package features
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -21,13 +26,41 @@ type gpuTestResources struct {
 	nodeLabelsAdded        map[string]map[string]string // node -> label key -> original value
 }
 
+const (
+	gpuFVTProviderTag               = "gpu_fvt"
+	envGPUTestProviderID            = "GPU_TEST_PROVIDER_ID"
+	envGPUTestProviderA100ID        = "GPU_TEST_PROVIDER_A100_ID"
+	envGPUTestProviderUnavailableID = "GPU_TEST_PROVIDER_UNAVAILABLE_ID"
+)
+
 var (
 	gpuResources = &gpuTestResources{
 		localQueuesCreated: make(map[string][]string),
 		nodeLabelsAdded:    make(map[string]map[string]string),
 	}
-	gpuResourcesSetup = false
+	gpuResourcesSetup  = false
+	gpuTestProviderIDs []string
 )
+
+type providerListResponse struct {
+	Items []struct {
+		Resource struct {
+			ID string `json:"id"`
+		} `json:"resource"`
+		Tags []string `json:"tags"`
+	} `json:"items"`
+}
+
+type providerCreateResponse struct {
+	Resource struct {
+		ID string `json:"id"`
+	} `json:"resource"`
+	Runtime *struct {
+		K8s *struct {
+			GPU json.RawMessage `json:"gpu"`
+		} `json:"k8s"`
+	} `json:"runtime"`
+}
 
 // setupBasicGPUResources creates ResourceFlavors and ClusterQueues without GPU-specific nodeLabels
 func setupBasicGPUResources() error {
@@ -282,12 +315,6 @@ func cleanupGPUTestResources() error {
 			logDebug("Deleted LocalQueue %s in namespace %s\n", queue, namespace)
 		}
 
-		// Delete GPU test provider ConfigMaps from this namespace
-		for _, providerCM := range []string{"gpu-test-provider", "gpu-test-provider-a100", "gpu-test-provider-unavailable"} {
-			cmd := exec.Command("oc", "delete", "configmap", providerCM, "-n", namespace, "--ignore-not-found=true")
-			_ = cmd.Run()
-			logDebug("Deleted ConfigMap %s in namespace %s\n", providerCM, namespace)
-		}
 	}
 
 	// Delete ClusterQueues
@@ -357,186 +384,218 @@ func setupGPUTestEnvironment(namespace string) error {
 	return setupGPUTestResources(namespace)
 }
 
-// createGPUTestProviders creates ConfigMaps with GPU provider definitions
+func gpuFTBaseURL() string {
+	if api != nil && api.baseURL != nil {
+		return strings.TrimRight(api.baseURL.String(), "/")
+	}
+	if u := os.Getenv("SERVER_URL"); u != "" {
+		return strings.TrimRight(u, "/")
+	}
+	if u := os.Getenv("SERVICE_BASE_URL"); u != "" {
+		return strings.TrimRight(u, "/")
+	}
+	return "http://localhost:8080"
+}
+
+func gpuFTAuthToken(tenant string) (string, error) {
+	if token := os.Getenv("AUTH_TOKEN"); token != "" {
+		return token, nil
+	}
+	saName := os.Getenv("SERVICE_ACCOUNT_NAME")
+	if saName == "" {
+		saName = "evalhub-service"
+	}
+	cmd := exec.Command("oc", "create", "token", saName, "-n", tenant, "--duration=10m")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get auth token: %w", err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func gpuFTHTTPClient() *http.Client {
+	if api != nil && api.client != nil {
+		return api.client
+	}
+	return http.DefaultClient
+}
+
+func gpuFTNewRequest(method, url string, body io.Reader, tenant string) (*http.Request, error) {
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return nil, err
+	}
+	if tenant != "" {
+		req.Header.Set("X-Tenant", tenant)
+	}
+	if token, err := gpuFTAuthToken(tenant); err == nil && token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	} else if err != nil && os.Getenv("AUTH_TOKEN") == "" {
+		logDebug("WARNING: No auth token for GPU FVT API request: %v\n", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	return req, nil
+}
+
+func loadGPUTestProviderBody(filename string) ([]byte, error) {
+	path := filepath.Join("tests", "features", "test_data", filename)
+	return os.ReadFile(path)
+}
+
+func clearGPUTestProviderEnv() {
+	_ = os.Unsetenv(envGPUTestProviderID)
+	_ = os.Unsetenv(envGPUTestProviderA100ID)
+	_ = os.Unsetenv(envGPUTestProviderUnavailableID)
+}
+
+func setGPUTestProviderEnv(basicID, a100ID, unavailableID string) {
+	_ = os.Setenv(envGPUTestProviderID, basicID)
+	_ = os.Setenv(envGPUTestProviderA100ID, a100ID)
+	_ = os.Setenv(envGPUTestProviderUnavailableID, unavailableID)
+}
+
+func providerHasGPUTag(tags []string) bool {
+	return slices.Contains(tags, gpuFVTProviderTag)
+}
+
+func deleteGPUTestProvidersAPI(tenant string) error {
+	if api == nil {
+		return fmt.Errorf("API feature not initialized")
+	}
+
+	baseURL := gpuFTBaseURL()
+	listURL := baseURL + "/api/v1/evaluations/providers?scope=tenant&limit=100"
+	req, err := gpuFTNewRequest(http.MethodGet, listURL, nil, tenant)
+	if err != nil {
+		return err
+	}
+	resp, err := gpuFTHTTPClient().Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("list providers returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	var listed providerListResponse
+	if err := json.Unmarshal(body, &listed); err != nil {
+		return err
+	}
+
+	idsToDelete := make(map[string]struct{})
+	for _, id := range gpuTestProviderIDs {
+		idsToDelete[id] = struct{}{}
+	}
+	for _, item := range listed.Items {
+		if providerHasGPUTag(item.Tags) {
+			idsToDelete[item.Resource.ID] = struct{}{}
+		}
+	}
+
+	for id := range idsToDelete {
+		deleteURL := baseURL + "/api/v1/evaluations/providers/" + id
+		delReq, err := gpuFTNewRequest(http.MethodDelete, deleteURL, nil, tenant)
+		if err != nil {
+			return err
+		}
+		delResp, err := gpuFTHTTPClient().Do(delReq)
+		if err != nil {
+			logDebug("WARNING: Failed to delete GPU test provider %s: %v\n", id, err)
+			continue
+		}
+		delResp.Body.Close()
+		if delResp.StatusCode != http.StatusNoContent && delResp.StatusCode != http.StatusNotFound {
+			logDebug("WARNING: Delete provider %s returned %d\n", id, delResp.StatusCode)
+		} else {
+			logDebug("Deleted GPU test provider %s\n", id)
+		}
+	}
+
+	gpuTestProviderIDs = nil
+	clearGPUTestProviderEnv()
+	return nil
+}
+
+func createGPUTestProviderViaAPI(tenant, bodyFile string) (string, error) {
+	body, err := loadGPUTestProviderBody(bodyFile)
+	if err != nil {
+		return "", err
+	}
+
+	baseURL := gpuFTBaseURL()
+	createURL := baseURL + "/api/v1/evaluations/providers"
+	req, err := gpuFTNewRequest(http.MethodPost, createURL, strings.NewReader(string(body)), tenant)
+	if err != nil {
+		return "", err
+	}
+	resp, err := gpuFTHTTPClient().Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode != http.StatusCreated {
+		return "", fmt.Errorf("create provider from %s returned %d: %s", bodyFile, resp.StatusCode, string(respBody))
+	}
+
+	var created providerCreateResponse
+	if err := json.Unmarshal(respBody, &created); err != nil {
+		return "", err
+	}
+	if created.Resource.ID == "" {
+		return "", fmt.Errorf("create provider from %s: response missing resource.id", bodyFile)
+	}
+	return created.Resource.ID, nil
+}
+
+// createGPUTestProviders registers GPU test providers via the EvalHub providers API.
 func createGPUTestProviders(namespace string) error {
-	logDebug("Creating GPU test provider ConfigMaps in namespace: %s\n", namespace)
-
-	// Create basic GPU test provider (no nodeSelector)
-	basicProviderYAML := `id: gpu_test_provider
-name: GPU Test Provider
-title: GPU Test Provider (minimal lm_eval_harness with GPU)
-description: >
-  Minimal test provider based on lm_evaluation_harness with GPU configuration for testing GPU resource allocation
-
-runtime:
-  k8s:
-    image: quay.io/opendatahub/ta-lmes-job:odh-3.4-ea2
-    entrypoint:
-      - /opt/app-root/bin/python
-      - /opt/app-root/src/main.py
-    cpu_request: 100m
-    memory_request: 128Mi
-    cpu_limit: 500m
-    memory_limit: 4Gi
-    gpu:
-      resource: nvidia.com/gpu
-      count: 1
-  local:
-    command: python tests/features/test_data/runtime/main.py
-
-benchmarks:
-  - id: arc_easy
-    name: "Basic science Q&A (GPU test)"
-    description: |-
-      Grade-school science questions testing basic reasoning and scientific knowledge (AI2 Reasoning Challenge, easy split).
-    category: reasoning
-    metrics:
-      - acc
-      - acc_norm
-    num_few_shot: 0
-    dataset_size: 2376
-    tags:
-      - reasoning
-      - science
-      - gpu_test
-    primary_score:
-      metric: acc_norm
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.25
-`
-
-	cmd := exec.Command("oc", "create", "configmap", "gpu-test-provider",
-		"--from-literal=provider_gpu_test.yaml="+basicProviderYAML,
-		"-n", namespace,
-		"--dry-run=client", "-o", "yaml")
-	output, _ := cmd.Output()
-
-	applyCmd := exec.Command("oc", "apply", "-f", "-")
-	applyCmd.Stdin = strings.NewReader(string(output))
-	if err := applyCmd.Run(); err != nil {
-		logDebug("WARNING: Could not create gpu-test-provider configmap: %v\n", err)
+	if api == nil {
+		return fmt.Errorf("API feature not initialized")
 	}
 
-	// Create GPU test provider with A100 nodeSelector
-	a100ProviderYAML := `id: gpu_test_provider_a100
-name: GPU Test Provider A100
-title: GPU Test Provider with A100 nodeSelector
-description: >
-  GPU test provider with A100 nodeSelector for testing GPU node selection
+	logDebug("Creating GPU test providers via API in tenant: %s\n", namespace)
 
-runtime:
-  k8s:
-    image: quay.io/opendatahub/ta-lmes-job:odh-3.4-ea2
-    entrypoint:
-      - /opt/app-root/bin/python
-      - /opt/app-root/src/main.py
-    cpu_request: 100m
-    memory_request: 128Mi
-    cpu_limit: 500m
-    memory_limit: 4Gi
-    gpu:
-      resource: nvidia.com/gpu
-      count: 1
-      node_selector:
-        nvidia.com/gpu.product: A100-SXM4-40GB
-  local:
-    command: python tests/features/test_data/runtime/main.py
-
-benchmarks:
-  - id: arc_easy
-    name: "Basic science Q&A (GPU test)"
-    description: |-
-      Grade-school science questions testing basic reasoning and scientific knowledge (AI2 Reasoning Challenge, easy split).
-    category: reasoning
-    metrics:
-      - acc
-      - acc_norm
-    num_few_shot: 0
-    dataset_size: 2376
-    tags:
-      - reasoning
-      - science
-      - gpu_test
-    primary_score:
-      metric: acc_norm
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.25
-`
-
-	cmd = exec.Command("oc", "create", "configmap", "gpu-test-provider-a100",
-		"--from-literal=provider_gpu_a100.yaml="+a100ProviderYAML,
-		"-n", namespace,
-		"--dry-run=client", "-o", "yaml")
-	output, _ = cmd.Output()
-
-	applyCmd = exec.Command("oc", "apply", "-f", "-")
-	applyCmd.Stdin = strings.NewReader(string(output))
-	if err := applyCmd.Run(); err != nil {
-		logDebug("WARNING: Could not create gpu-test-provider-a100 configmap: %v\n", err)
+	if err := deleteGPUTestProvidersAPI(namespace); err != nil {
+		logDebug("WARNING: Could not clean up prior GPU test providers: %v\n", err)
 	}
 
-	// Create GPU test provider for unavailable GPU type (H100)
-	unavailableProviderYAML := `id: gpu_test_provider_unavailable
-name: GPU Test Provider Unavailable
-title: GPU Test Provider with H100 nodeSelector (unavailable)
-description: >
-  GPU test provider with H100 nodeSelector for testing unavailable GPU scenarios
-
-runtime:
-  k8s:
-    image: quay.io/opendatahub/ta-lmes-job:odh-3.4-ea2
-    entrypoint:
-      - /opt/app-root/bin/python
-      - /opt/app-root/src/main.py
-    cpu_request: 100m
-    memory_request: 128Mi
-    cpu_limit: 500m
-    memory_limit: 4Gi
-    gpu:
-      resource: nvidia.com/gpu
-      count: 1
-      node_selector:
-        nvidia.com/gpu.product: NVIDIA-H100-80GB-HBM3
-  local:
-    command: python tests/features/test_data/runtime/main.py
-
-benchmarks:
-  - id: arc_easy
-    name: "Basic science Q&A (GPU test)"
-    description: |-
-      Grade-school science questions testing basic reasoning and scientific knowledge (AI2 Reasoning Challenge, easy split).
-    category: reasoning
-    metrics:
-      - acc
-      - acc_norm
-    num_few_shot: 0
-    dataset_size: 2376
-    tags:
-      - reasoning
-      - science
-      - gpu_test
-    primary_score:
-      metric: acc_norm
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.25
-`
-
-	cmd = exec.Command("oc", "create", "configmap", "gpu-test-provider-unavailable",
-		"--from-literal=provider_gpu_unavailable.yaml="+unavailableProviderYAML,
-		"-n", namespace,
-		"--dry-run=client", "-o", "yaml")
-	output, _ = cmd.Output()
-
-	applyCmd = exec.Command("oc", "apply", "-f", "-")
-	applyCmd.Stdin = strings.NewReader(string(output))
-	if err := applyCmd.Run(); err != nil {
-		logDebug("WARNING: Could not create gpu-test-provider-unavailable configmap: %v\n", err)
+	providers := []struct {
+		file string
+		env  string
+	}{
+		{"gpu_provider_test.json", envGPUTestProviderID},
+		{"gpu_provider_a100.json", envGPUTestProviderA100ID},
+		{"gpu_provider_unavailable.json", envGPUTestProviderUnavailableID},
 	}
 
-	logDebug("GPU test provider ConfigMaps created\n")
+	ids := make([]string, 0, len(providers))
+	for _, p := range providers {
+		id, err := createGPUTestProviderViaAPI(namespace, p.file)
+		if err != nil {
+			return fmt.Errorf("failed to create GPU test provider from %s: %w", p.file, err)
+		}
+		ids = append(ids, id)
+		if err := os.Setenv(p.env, id); err != nil {
+			return fmt.Errorf("failed to set %s: %w", p.env, err)
+		}
+		logDebug("Created GPU test provider from %s with id %s\n", p.file, id)
+	}
+
+	gpuTestProviderIDs = ids
+	if len(ids) == 3 {
+		setGPUTestProviderEnv(ids[0], ids[1], ids[2])
+	}
+
+	logDebug("GPU test providers created via API\n")
 	return nil
 }
 
@@ -1124,9 +1183,9 @@ func (tc *scenarioConfig) resourceFlavorHasNodeSelector(flavorName, selectorKeyV
 }
 
 func (tc *scenarioConfig) gpuTestProviderIsLoaded() error {
-	baseURL := os.Getenv("SERVICE_BASE_URL")
-	if baseURL == "" {
-		baseURL = "http://localhost:8443"
+	providerID := os.Getenv(envGPUTestProviderID)
+	if providerID == "" {
+		return tc.logError(fmt.Errorf("%s is not set; GPU test provider setup may have failed", envGPUTestProviderID))
 	}
 
 	tenant := tc.reqHeaders["X-Tenant"]
@@ -1134,51 +1193,37 @@ func (tc *scenarioConfig) gpuTestProviderIsLoaded() error {
 		tenant = "test-tenant"
 	}
 
-	// Get auth token
-	token := os.Getenv("AUTH_TOKEN")
-	if token == "" {
-		// Try to get from oc command
-		saName := os.Getenv("SERVICE_ACCOUNT_NAME")
-		if saName == "" {
-			saName = "evalhub-service"
-		}
-
-		cmd := exec.Command("oc", "create", "token", saName, "-n", tenant, "--duration=10m")
-		output, err := cmd.Output()
-		if err != nil {
-			return tc.logError(fmt.Errorf("failed to get auth token: %v", err))
-		}
-		token = strings.TrimSpace(string(output))
-	}
-
-	// Check if GPU provider exists and has GPU configuration
-	// Remove -f flag to allow checking response even on HTTP errors
-	cmd := exec.Command("curl", "-s", "-k",
-		"-H", fmt.Sprintf("Authorization: Bearer %s", token),
-		"-H", fmt.Sprintf("X-Tenant: %s", tenant),
-		fmt.Sprintf("%s/api/v1/evaluations/providers/gpu_test_provider", baseURL))
-
-	output, err := cmd.CombinedOutput()
+	baseURL := gpuFTBaseURL()
+	getURL := baseURL + "/api/v1/evaluations/providers/" + providerID
+	req, err := gpuFTNewRequest(http.MethodGet, getURL, nil, tenant)
 	if err != nil {
-		logDebug("WARNING: Failed to check GPU test provider: %v\n", err)
-		logDebug("Skipping provider validation - tests will proceed but may fail if provider doesn't exist\n")
-		return nil
+		return tc.logError(err)
+	}
+	resp, err := gpuFTHTTPClient().Do(req)
+	if err != nil {
+		return tc.logError(fmt.Errorf("failed to check GPU test provider: %w", err))
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return tc.logError(err)
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return tc.logError(fmt.Errorf("GPU test provider %s not found", providerID))
+	}
+	if resp.StatusCode != http.StatusOK {
+		return tc.logError(fmt.Errorf("get provider %s returned %d: %s", providerID, resp.StatusCode, string(body)))
 	}
 
-	// Check if provider exists (not a 404 error)
-	if strings.Contains(string(output), "resource_not_found") || strings.Contains(string(output), "not found") {
-		logDebug("WARNING: GPU test provider 'gpu_test_provider' not found on server\n")
-		logDebug("Tests will use whatever GPU providers are available on the server\n")
-		return nil
+	var provider providerCreateResponse
+	if err := json.Unmarshal(body, &provider); err != nil {
+		return tc.logError(fmt.Errorf("failed to parse provider response: %w", err))
+	}
+	if provider.Runtime == nil || provider.Runtime.K8s == nil || len(provider.Runtime.K8s.GPU) == 0 {
+		return tc.logError(fmt.Errorf("GPU test provider %s has no GPU configuration", providerID))
 	}
 
-	// Verify GPU config exists in response
-	if !strings.Contains(string(output), `"gpu"`) {
-		logDebug("WARNING: GPU test provider exists but has no GPU configuration - check eval-hub image version\n")
-		return nil
-	}
-
-	logDebug("GPU test provider validated successfully\n")
+	logDebug("GPU test provider %s validated successfully\n", providerID)
 	return nil
 }
 
@@ -1202,6 +1247,16 @@ func InitializeGPUTestSuite(ctx *godog.TestSuiteContext) {
 	})
 
 	ctx.AfterSuite(func() {
+		namespace := os.Getenv("X_TENANT")
+		if namespace == "" {
+			namespace = "test-tenant"
+		}
+		if len(gpuTestProviderIDs) > 0 {
+			logDebug("Cleaning up GPU test providers via API\n")
+			if err := deleteGPUTestProvidersAPI(namespace); err != nil {
+				logDebug("WARNING: Failed to cleanup GPU test providers: %v\n", err)
+			}
+		}
 		if gpuResourcesSetup {
 			logDebug("Cleaning up GPU test resources for test suite\n")
 			if err := cleanupGPUTestResources(); err != nil {
