@@ -201,7 +201,10 @@ func getIsolationLevel(isolationLevel string, config *shared.SQLDatabaseConfig, 
 	case SQLITE_DRIVER:
 		return sql.LevelDefault, nil
 	case POSTGRES_DRIVER:
-		return sql.LevelSerializable, nil
+		// Read Committed matches PostgreSQL's default and avoids Serializable
+		// snapshot conflicts (SQLSTATE 40001) under concurrent job updates.
+		// Override with DEBUG_SQL_ISOLATION_LEVEL=Serializable when needed.
+		return sql.LevelReadCommitted, nil
 	default:
 		return sql.LevelDefault, nil
 	}

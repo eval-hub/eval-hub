@@ -26,15 +26,15 @@ func TestGetIsolationLevel(t *testing.T) {
 		}
 	})
 
-	t.Run("driver postgres returns serializable when debug env unset", func(t *testing.T) {
+	t.Run("driver postgres returns read committed when debug env unset", func(t *testing.T) {
 		isolationLevel := ""
 		cfg := &shared.SQLDatabaseConfig{Driver: sql.POSTGRES_DRIVER}
 		level, err := sql.GetIsolationLevel(isolationLevel, cfg, logger)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if level != gosql.LevelSerializable {
-			t.Fatalf("want %v, got %v", gosql.LevelSerializable, level)
+		if level != gosql.LevelReadCommitted {
+			t.Fatalf("want %v, got %v", gosql.LevelReadCommitted, level)
 		}
 	})
 

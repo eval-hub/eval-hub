@@ -12,6 +12,22 @@ import (
 type TransactionFunction func(*sql.Tx) error
 
 func (s *sqlStorage) withTransaction(name string, resourceID string, fn TransactionFunction) error {
+	return retryOnSerializationFailure(serializationFailureMaxAttempts, func() error {
+		err := s.runTransaction(name, resourceID, fn)
+		if err != nil && isSerializationFailure(err) {
+			s.logger.Warn(
+				"Transaction failed with serialization error; will retry if attempts remain",
+				"name", name,
+				"resource_id", resourceID,
+				"isolation_level", s.isolationLevel.String(),
+				"error", err.Error(),
+			)
+		}
+		return err
+	})
+}
+
+func (s *sqlStorage) runTransaction(name string, resourceID string, fn TransactionFunction) error {
 	txn, err := s.pool.BeginTx(s.ctx, &sql.TxOptions{Isolation: s.isolationLevel})
 	if err != nil {
 		s.logger.Error("Failed to begin transaction", "name", fmt.Sprintf("begin transaction %s", name), "resource_id", resourceID, "isolation_level", s.isolationLevel.String(), "error", err.Error())
@@ -32,6 +48,7 @@ func (s *sqlStorage) withTransaction(name string, resourceID string, fn Transact
 	}
 	if commit {
 		if txnErr := txn.Commit(); txnErr != nil {
+			_ = txn.Rollback()
 			s.logger.Error("Failed to commit transaction", "name", fmt.Sprintf("commit transaction %s", name), "resource_id", resourceID, "isolation_level", s.isolationLevel.String(), "error", txnErr.Error())
 			return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", fmt.Sprintf("commit transaction %s", name), "ResourceId", resourceID, "Error", txnErr.Error())
 		}

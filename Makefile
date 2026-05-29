@@ -172,6 +172,9 @@ test-coverage: $(BIN_DIR) ## Run unit tests with coverage
 
 test-all: test test-fvt test-fvt-server ## Run all tests (unit + FVT)
 
+test-help:
+	@go help testflag
+
 SERVER_URL ?= http://localhost:8080
 
 ## ------------------------------------------------------------------------------------------------
