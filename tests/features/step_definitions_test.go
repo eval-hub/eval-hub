@@ -31,6 +31,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/internal/logging"
+	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	pkgapi "github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/xeipuuv/gojsonschema"
 
@@ -194,7 +195,11 @@ func (a *apiFeature) startLocalServer(port int) error {
 		return err
 	}
 	validate := validation.NewValidator()
-	serviceConfig, err := config.LoadConfig(logger, "0.4.1", "local", time.Now().Format(time.RFC3339))
+	version, err := testhelpers.RepoVersion()
+	if err != nil {
+		return logError(fmt.Errorf("read VERSION: %w", err))
+	}
+	serviceConfig, err := config.LoadConfig(logger, version, "local", time.Now().Format(time.RFC3339), "")
 	if err != nil {
 		return logError(fmt.Errorf("failed to load service config: %w", err))
 	}

@@ -209,7 +209,7 @@ func (s *Server) setupHealthRoutes(h *handlers.Handlers, router *http.ServeMux) 
 		req := s.newRequestWrapper(w, r)
 		switch req.Method() {
 		case http.MethodGet:
-			h.HandleHealth(ctx, req, resp, s.serviceConfig.Service.Build, s.serviceConfig.Service.BuildDate)
+			h.HandleHealth(ctx, req, resp, s.serviceConfig.Service.Build, s.serviceConfig.Service.BuildDate, s.serviceConfig.Service.GitHash)
 		default:
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}

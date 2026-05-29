@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/evalhub_mcp/config"
+	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -32,13 +33,14 @@ func connectServer(t *testing.T, info *ServerInfo) (context.Context, *mcp.Client
 
 func TestVersionString(t *testing.T) {
 	t.Parallel()
+	repoVersion := testhelpers.Version(t)
 	tests := []struct {
 		info *ServerInfo
 		want string
 	}{
 		{&ServerInfo{Version: "0.1.0"}, "0.1.0"},
 		{&ServerInfo{Version: "0.1.0", Build: "abc123"}, "0.1.0+abc123"},
-		{&ServerInfo{Version: "0.4.1", Build: "deadbeef", BuildDate: "2026-01-01"}, "0.4.1+deadbeef"},
+		{&ServerInfo{Version: repoVersion, Build: "deadbeef", BuildDate: "2026-01-01"}, repoVersion + "+deadbeef"},
 	}
 	for _, tt := range tests {
 		if got := tt.info.VersionString(); got != tt.want {

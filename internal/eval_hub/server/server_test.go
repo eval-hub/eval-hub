@@ -22,6 +22,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/internal/logging"
+	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -91,7 +92,7 @@ func (r *stubRuntime) DeleteEvaluationJobResources(_ *api.EvaluationJobResource)
 func TestNewServer(t *testing.T) {
 	t.Run("creates server with default port", func(t *testing.T) {
 		os.Unsetenv("PORT")
-		srv, err := createServer(8080)
+		srv, err := createServer(t, 8080)
 		if err != nil {
 			t.Fatalf("NewServer() returned error: %v", err)
 		}
@@ -109,7 +110,7 @@ func TestNewServer(t *testing.T) {
 		//os.Setenv("PORT", "9000")
 		//defer os.Unsetenv("PORT")
 
-		srv, err := createServer(9000)
+		srv, err := createServer(t, 9000)
 		if err != nil {
 			t.Fatalf("NewServer() returned error: %v", err)
 		}
@@ -121,7 +122,7 @@ func TestNewServer(t *testing.T) {
 }
 
 func TestServerSetupRoutes(t *testing.T) {
-	srv, err := createServer(8080)
+	srv, err := createServer(t, 8080)
 	if err != nil {
 		t.Fatalf("NewServer() returned error: %v", err)
 	}
@@ -212,7 +213,7 @@ func TestServerSetupRoutes(t *testing.T) {
 
 func TestServerShutdown(t *testing.T) {
 	t.Run("shutdown works with running server", func(t *testing.T) {
-		srv, err := createServer(0) // Use random port for testing
+		srv, err := createServer(t, 0) // Use random port for testing
 		if err != nil {
 			t.Fatalf("NewServer() returned error: %v", err)
 		}
@@ -247,13 +248,14 @@ func TestServerShutdown(t *testing.T) {
 	})
 }
 
-func createServer(port int) (*server.Server, error) {
+func createServer(t *testing.T, port int) (*server.Server, error) {
+	t.Helper()
 	logger, _, err := logging.NewLogger()
 	if err != nil {
 		return nil, err
 	}
 	validate := validation.NewValidator()
-	serviceConfig, err := config.LoadConfig(logger, "0.4.1", "local", time.Now().Format(time.RFC3339))
+	serviceConfig, err := config.LoadConfig(logger, testhelpers.Version(t), "local", time.Now().Format(time.RFC3339), "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load service config: %w", err)
 	}

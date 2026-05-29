@@ -26,11 +26,13 @@ import (
 
 var (
 	// Version can be set during the compilation
-	Version string = "0.4.1"
+	Version string = "0.4.2"
 	// Build is set during the compilation
 	Build string
 	// BuildDate is set during the compilation
 	BuildDate string
+	// GitHash is set during the compilation
+	GitHash string
 )
 
 type Args struct {
@@ -63,7 +65,7 @@ func main() {
 		startUpFailed(nil, err, "Failed to create service logger", logging.FallbackLogger())
 	}
 
-	serviceConfig, err := config.LoadConfig(logger, Version, Build, BuildDate, args.ConfigDir)
+	serviceConfig, err := config.LoadConfig(logger, Version, Build, BuildDate, GitHash, args.ConfigDir)
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(nil, err, "Failed to create service config", logger)
@@ -148,6 +150,7 @@ func main() {
 		"version", serviceConfig.Service.Version,
 		"build", serviceConfig.Service.Build,
 		"build_date", serviceConfig.Service.BuildDate,
+		"git_hash", serviceConfig.Service.GitHash,
 		"validator", validate != nil,
 		"local", serviceConfig.Service.LocalMode,
 		"tls", serviceConfig.Service.TLSEnabled(),

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -67,7 +68,7 @@ func newCapturingServer(t *testing.T, status int, respBody []byte) (*httptest.Se
 
 func TestGetHealth(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
-	want := api.HealthResponse{Status: "ok", Version: "0.4.1", Timestamp: &now}
+	want := api.HealthResponse{Status: "ok", Version: testhelpers.Version(t), Timestamp: &now}
 	srv, capture := newCapturingServer(t, http.StatusOK, mustMarshal(t, want))
 
 	got, err := newTestClient(srv).GetHealth()

@@ -359,7 +359,7 @@ func LoadAuthConfig(logger *slog.Logger, dirs ...string) (*auth.AuthConfig, erro
 // Returns:
 //   - *Config: The loaded configuration with all sources applied
 //   - error: An error if configuration cannot be loaded or is invalid
-func LoadConfig(logger *slog.Logger, version string, build string, buildDate string, dirs ...string) (*Config, error) {
+func LoadConfig(logger *slog.Logger, version string, build string, buildDate string, gitHash string, dirs ...string) (*Config, error) {
 	logger.Info("Start reading configuration", "version", version, "build", build, "build_date", buildDate, "dirs", dirs)
 
 	if !hasExplicitConfigDir(dirs) {
@@ -433,7 +433,7 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 	conf.Service.Version = version
 	conf.Service.Build = build
 	conf.Service.BuildDate = buildDate
-
+	conf.Service.GitHash = gitHash
 	logger.Info("End reading configuration", "config", RedactedJSON(conf, redactedFields))
 	return &conf, nil
 }

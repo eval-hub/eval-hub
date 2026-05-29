@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	Version   string = "0.1.0"
+	Version   string = "0.4.2"
 	Build     string
 	BuildDate string
 	GitHash   string
