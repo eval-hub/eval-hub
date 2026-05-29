@@ -83,13 +83,13 @@ GPU test providers are created in suite `BeforeSuite` via `POST /api/v1/evaluati
 - `tests/features/test_data/gpu_provider_a100.json` — GPU with A100 `node_selector`
 - `tests/features/test_data/gpu_provider_unavailable.json` — GPU with H100 `node_selector` (negative tests)
 
-Each provider is tagged with `gpu_fvt` for cleanup. The API returns tenant-scoped provider IDs, which are exported as environment variables for job fixtures:
+Each provider is tagged with `gpu_fvt` for identification. The API returns tenant-scoped provider IDs, stored in suite-local state and referenced from job fixtures via:
 
-- `GPU_TEST_PROVIDER_ID`
-- `GPU_TEST_PROVIDER_A100_ID`
-- `GPU_TEST_PROVIDER_UNAVAILABLE_ID`
+- `{{env:GPU_TEST_PROVIDER_ID}}`
+- `{{env:GPU_TEST_PROVIDER_A100_ID}}`
+- `{{env:GPU_TEST_PROVIDER_UNAVAILABLE_ID}}`
 
-All `gpu_job_*.json` fixtures reference these via `{{env:...}}` and use benchmark `arc_easy`.
+These `{{env:...}}` placeholders resolve from suite state (not process environment), so parallel scenarios do not race on `os.Setenv`.
 
 ### Test Job Requests
 
@@ -110,7 +110,7 @@ All `gpu_job_*.json` fixtures reference these via `{{env:...}}` and use benchmar
 **Issue**: Tests fail with "GPU not available"
 - **Solution**: The test setup labels nodes with fake GPU types for testing. Real GPU hardware is not required for testing the job spec creation.
 
-**Issue**: Provider not found / `GPU_TEST_PROVIDER_ID is not set`
+**Issue**: Provider not found / GPU test provider ID is not set
 - **Solution**: Ensure suite setup completed (`BeforeSuite` creates providers via API). For cluster runs, set `SERVER_URL` and `AUTH_TOKEN` (or ensure `oc create token` works for `evalhub-service` in `X_TENANT`).
 
 ## Expected Results

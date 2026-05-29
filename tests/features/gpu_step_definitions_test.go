@@ -454,16 +454,28 @@ func loadGPUTestProviderBody(filename string) ([]byte, error) {
 	return os.ReadFile(path)
 }
 
-func clearGPUTestProviderEnv() {
-	_ = os.Unsetenv(envGPUTestProviderID)
-	_ = os.Unsetenv(envGPUTestProviderA100ID)
-	_ = os.Unsetenv(envGPUTestProviderUnavailableID)
-}
-
-func setGPUTestProviderEnv(basicID, a100ID, unavailableID string) {
-	_ = os.Setenv(envGPUTestProviderID, basicID)
-	_ = os.Setenv(envGPUTestProviderA100ID, a100ID)
-	_ = os.Setenv(envGPUTestProviderUnavailableID, unavailableID)
+// gpuTestSuiteSubstValue resolves GPU FVT provider IDs from suite-local state (not process env).
+// Returns ok=true when name is a known GPU test substitution key, even if the ID is not set yet.
+func gpuTestSuiteSubstValue(name string) (value string, ok bool) {
+	switch name {
+	case envGPUTestProviderID:
+		if len(gpuTestProviderIDs) > 0 {
+			return gpuTestProviderIDs[0], true
+		}
+		return "", true
+	case envGPUTestProviderA100ID:
+		if len(gpuTestProviderIDs) > 1 {
+			return gpuTestProviderIDs[1], true
+		}
+		return "", true
+	case envGPUTestProviderUnavailableID:
+		if len(gpuTestProviderIDs) > 2 {
+			return gpuTestProviderIDs[2], true
+		}
+		return "", true
+	default:
+		return "", false
+	}
 }
 
 func providerHasGPUTag(tags []string) bool {
@@ -475,7 +487,6 @@ func deleteGPUTestProvidersAPI(tenant string) error {
 		return fmt.Errorf("API feature not initialized")
 	}
 	if len(gpuTestProviderIDs) == 0 {
-		clearGPUTestProviderEnv()
 		return nil
 	}
 
@@ -500,7 +511,6 @@ func deleteGPUTestProvidersAPI(tenant string) error {
 	}
 
 	gpuTestProviderIDs = nil
-	clearGPUTestProviderEnv()
 	return nil
 }
 
@@ -551,29 +561,19 @@ func createGPUTestProviders(namespace string) error {
 		logDebug("WARNING: Could not clean up prior GPU test providers: %v\n", err)
 	}
 
-	providers := []struct {
-		file string
-		env  string
-	}{
-		{"gpu_provider_test.json", envGPUTestProviderID},
-		{"gpu_provider_a100.json", envGPUTestProviderA100ID},
-		{"gpu_provider_unavailable.json", envGPUTestProviderUnavailableID},
+	providerFiles := []string{
+		"gpu_provider_test.json",
+		"gpu_provider_a100.json",
+		"gpu_provider_unavailable.json",
 	}
 
-	for _, p := range providers {
-		id, err := createGPUTestProviderViaAPI(namespace, p.file)
+	for _, file := range providerFiles {
+		id, err := createGPUTestProviderViaAPI(namespace, file)
 		if err != nil {
-			return fmt.Errorf("failed to create GPU test provider from %s: %w", p.file, err)
+			return fmt.Errorf("failed to create GPU test provider from %s: %w", file, err)
 		}
 		gpuTestProviderIDs = append(gpuTestProviderIDs, id)
-		if err := os.Setenv(p.env, id); err != nil {
-			return fmt.Errorf("failed to set %s: %w", p.env, err)
-		}
-		logDebug("Created GPU test provider from %s with id %s\n", p.file, id)
-	}
-
-	if len(gpuTestProviderIDs) == 3 {
-		setGPUTestProviderEnv(gpuTestProviderIDs[0], gpuTestProviderIDs[1], gpuTestProviderIDs[2])
+		logDebug("Created GPU test provider from %s with id %s\n", file, id)
 	}
 
 	logDebug("GPU test providers created via API\n")
@@ -1164,9 +1164,9 @@ func (tc *scenarioConfig) resourceFlavorHasNodeSelector(flavorName, selectorKeyV
 }
 
 func (tc *scenarioConfig) gpuTestProviderIsLoaded() error {
-	providerID := os.Getenv(envGPUTestProviderID)
-	if providerID == "" {
-		return tc.logError(fmt.Errorf("%s is not set; GPU test provider setup may have failed", envGPUTestProviderID))
+	providerID, ok := gpuTestSuiteSubstValue(envGPUTestProviderID)
+	if !ok || providerID == "" {
+		return tc.logError(fmt.Errorf("GPU test provider ID is not set; GPU test provider setup may have failed"))
 	}
 
 	tenant := tc.reqHeaders["X-Tenant"]

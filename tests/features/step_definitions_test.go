@@ -568,13 +568,15 @@ func (tc *scenarioConfig) substituteValues(body string) (string, error) {
 				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), experimentName)
 			} else if raw, ok := strings.CutPrefix(match[1], envPrefix); ok {
 				envName, fallback, hasFallback := strings.Cut(raw, "|")
-				value, ok := os.LookupEnv(envName)
-				if !ok {
-					if hasFallback {
-						value = fallback
-					} else {
-						value = ""
-					}
+				var value string
+				if v, found := gpuTestSuiteSubstValue(envName); found {
+					value = v
+				} else if envValue, envOk := os.LookupEnv(envName); envOk {
+					value = envValue
+				} else if hasFallback {
+					value = fallback
+				} else {
+					value = ""
 				}
 				tc.logDebug("Substituting value '%s' with '%s'\n", match[1], value)
 				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), value)
