@@ -152,7 +152,7 @@ jobs:
   validate-wheels:
     name: Validate wheel (${{ matrix.os }})
     needs: build-wheels
-    if: inputs.validate-wheels != false
+    if: github.event_name != 'workflow_dispatch' || inputs.validate-wheels != false
     strategy:
       fail-fast: false
       matrix:
