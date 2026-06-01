@@ -51,8 +51,8 @@ Override defaults on the `make` command line or in the environment:
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `VENV_DIR` | `.venv` | uv virtualenv location (under `tests/mlflow`) |
-| `PYTHON` | `3.11` | Python version passed to `uv venv` |
-| `MLFLOW_VERSION` | `3.8.1` | MLflow package version for `uv pip install` (see **MLflow version note** below) |
+| `PYTHON` | `3.14` | Python version passed to `uv venv` |
+| `MLFLOW_VERSION` | `3.13.0` | MLflow package version for `uv pip install` (see **MLflow version note** below) |
 | `MLFLOW_HOST` | `127.0.0.1` | Server bind address |
 | `MLFLOW_PORT` | `5000` | Server port |
 | `MLFLOW_BACKEND_STORE_URI` | `sqlite:///bin/mlflow.db` | Tracking store URI |
