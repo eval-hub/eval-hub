@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Eval Hub
   description: API REST server for evaluation backend orchestration
-  version: 0.4.1
+  version: 0.4.2
   contact:
     name: API Support
   license:
@@ -47,8 +47,9 @@ paths:
                   summary: Healthy service response
                   value:
                     status: healthy
-                    version: 0.4.1
+                    version: N.N.N
                     timestamp: '2026-05-27T18:42:11Z'
+                    git_hash: abc1234
                     components:
                       database:
                         status: healthy
@@ -62,8 +63,9 @@ paths:
                   summary: Degraded service response
                   value:
                     status: degraded
-                    version: 0.4.1
+                    version: N.N.N
                     timestamp: '2026-05-27T18:42:11Z'
+                    git_hash: abc1234
                     components:
                       database:
                         status: healthy
@@ -1875,6 +1877,9 @@ components:
           type: string
           format: date-time
           description: Server timestamp
+        git_hash:
+          type: string
+          description: Commit hash
         components:
           type: object
           additionalProperties:
@@ -1887,6 +1892,11 @@ components:
         active_evaluations:
           type: integer
           description: Number of active evaluations
+      required:
+        - status
+        - version
+        - timestamp
+        - uptime
     Error:
       type: object
       description: Error response

@@ -11,6 +11,9 @@ properties:
     type: string
     format: date-time
     description: Server timestamp
+  git_hash:
+    type: string
+    description: Commit hash
   components:
     type: object
     additionalProperties:
@@ -23,3 +26,8 @@ properties:
   active_evaluations:
     type: integer
     description: Number of active evaluations
+required:
+  - status
+  - version
+  - timestamp
+  - uptime

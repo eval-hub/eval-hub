@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -51,7 +52,7 @@ func TestVersionResourceJSONStructure(t *testing.T) {
 	t.Parallel()
 
 	info := &ServerInfo{
-		Version:   "0.4.1",
+		Version:   testhelpers.Version(t),
 		Build:     "abc123",
 		BuildDate: "2026-04-30T10:00:00Z",
 		GitHash:   "abc123",

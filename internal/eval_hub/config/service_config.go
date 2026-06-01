@@ -13,6 +13,7 @@ type ServiceConfig struct {
 	Version         string `mapstructure:"version,omitempty"`
 	Build           string `mapstructure:"build,omitempty"`
 	BuildDate       string `mapstructure:"build_date,omitempty"`
+	GitHash         string `mapstructure:"git_hash,omitempty"`
 	Port            int    `mapstructure:"port,omitempty"`
 	Host            string `mapstructure:"host,omitempty"`
 	ReadyFile       string `mapstructure:"ready_file"`

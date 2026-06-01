@@ -16,8 +16,9 @@ get:
               summary: Healthy service response
               value:
                 status: healthy
-                version: '0.4.1'
+                version: 'N.N.N'
                 timestamp: '2026-05-27T18:42:11Z'
+                git_hash: abc1234
                 components:
                   database:
                     status: healthy
@@ -31,8 +32,9 @@ get:
               summary: Degraded service response
               value:
                 status: degraded
-                version: '0.4.1'
+                version: 'N.N.N'
                 timestamp: '2026-05-27T18:42:11Z'
+                git_hash: abc1234
                 components:
                   database:
                     status: healthy

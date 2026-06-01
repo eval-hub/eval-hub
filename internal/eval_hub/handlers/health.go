@@ -19,9 +19,10 @@ type HealthResponse struct {
 	Timestamp time.Time `json:"timestamp"`
 	Build     string    `json:"build,omitempty"`
 	BuildDate string    `json:"build_date,omitempty"`
+	GitHash   string    `json:"git_hash,omitempty"`
 }
 
-func (h *Handlers) HandleHealth(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper, build string, buildDate string) {
+func (h *Handlers) HandleHealth(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper, build string, buildDate string, gitHash string) {
 	// We do not want to flood logs with health checks from readiness and liveness probes,
 	// so all health checks are set to log at debug level. The logger is overridden with this
 	// at the start of HandleHealth, by setting the log level in the ExecutionContext.
@@ -34,6 +35,7 @@ func (h *Handlers) HandleHealth(ctx *executioncontext.ExecutionContext, r http_w
 		Timestamp: time.Now().UTC(),
 		Build:     build,
 		BuildDate: buildDate,
+		GitHash:   gitHash,
 	}
 	w.WriteJSON(healthInfo, 200)
 }
