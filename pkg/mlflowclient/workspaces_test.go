@@ -126,10 +126,10 @@ func TestWithWorkspaceRespectsServerSupport(t *testing.T) {
 
 	t.Run("omits header when workspaces disabled", func(t *testing.T) {
 		t.Parallel()
-		var gotWorkspaceHeader string
+		headerCh := make(chan string, 1)
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			gotWorkspaceHeader = r.Header.Get("X-MLFLOW-WORKSPACE")
 			if r.URL.Path == endpointExperimentsGetByNameBase {
+				headerCh <- r.Header.Get("X-MLFLOW-WORKSPACE")
 				w.WriteHeader(http.StatusNotFound)
 				_, _ = w.Write([]byte(`{"error_code":"RESOURCE_DOES_NOT_EXIST"}`))
 				return
@@ -143,6 +143,7 @@ func TestWithWorkspaceRespectsServerSupport(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for missing experiment")
 		}
+		gotWorkspaceHeader := <-headerCh
 		if gotWorkspaceHeader != "" {
 			t.Fatalf("X-MLFLOW-WORKSPACE = %q, want empty", gotWorkspaceHeader)
 		}
@@ -150,10 +151,10 @@ func TestWithWorkspaceRespectsServerSupport(t *testing.T) {
 
 	t.Run("sends header when workspaces enabled", func(t *testing.T) {
 		t.Parallel()
-		var gotWorkspaceHeader string
+		headerCh := make(chan string, 1)
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			gotWorkspaceHeader = r.Header.Get("X-MLFLOW-WORKSPACE")
 			if r.URL.Path == endpointExperimentsGetByNameBase {
+				headerCh <- r.Header.Get("X-MLFLOW-WORKSPACE")
 				w.WriteHeader(http.StatusNotFound)
 				_, _ = w.Write([]byte(`{"error_code":"RESOURCE_DOES_NOT_EXIST"}`))
 				return
@@ -167,6 +168,7 @@ func TestWithWorkspaceRespectsServerSupport(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for missing experiment")
 		}
+		gotWorkspaceHeader := <-headerCh
 		if gotWorkspaceHeader != "test-tenant" {
 			t.Fatalf("X-MLFLOW-WORKSPACE = %q, want test-tenant", gotWorkspaceHeader)
 		}
