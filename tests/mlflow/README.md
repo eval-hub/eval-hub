@@ -106,7 +106,7 @@ Repository-wide FVT (`make test-fvt` from the repo root) **excludes** `@mlflow` 
 | `scripts/start_mlflow.sh` | Starts `mlflow server`, waits for `/health`, logs to `bin/mlflow.log` |
 | `scripts/stop_mlflow.sh` | Stops background MLflow server processes |
 
-`start-mlflow` does auto-install MLflow; run `make clean` if there are issues with the database.
+`make start-mlflow` installs MLflow first via its `install-mlflow` dependency. The `run_mlflow.sh` script itself does **not** auto-install; it exits with guidance if `mlflow` is missing. Run `make clean` if there are issues with the database.
 
 ## MLflow version note
 
