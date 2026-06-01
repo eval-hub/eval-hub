@@ -22,8 +22,7 @@ clean: ## Remove bin/ artifacts (DB, logs, mlruns)
 	@echo "🧹 Cleaning up MLflow server..."
 	@rm -fr bin
 
-## init-python: Create a local Python virtualenv with uv (required before install-mlflow)
-init-python:
+init-python: ## Create a local Python virtualenv with uv (required before install-mlflow)
 	@if ! command -v uv >/dev/null 2>&1; then \
 		echo "❌ uv is not installed. Install from https://docs.astral.sh/uv/"; \
 		exit 1; \
@@ -35,13 +34,11 @@ init-python:
 		echo "Virtual environment already exists at $(VENV_DIR)"; \
 	fi
 
-## install-mlflow: Install MLflow into the uv virtualenv
-install-mlflow: init-python
+install-mlflow: init-python ## Install MLflow into the uv virtualenv
 	@echo "📥 Installing MLflow server (version $(MLFLOW_VERSION))..."
 	@MLFLOW_VERSION=$(MLFLOW_VERSION) VENV_DIR=$(VENV_DIR) ./scripts/download_mlflow.sh
 
-## start-mlflow: Run MLflow server locally in the background
-start-mlflow: install-mlflow
+start-mlflow: install-mlflow ## Run MLflow server locally in the background
 	@echo "🛑 Stopping MLflow server..."
 	-@make stop-mlflow
 	-@rm -f mlflow.db tests/features/test_mlflow_${MLFLOW_PORT}.db
@@ -66,12 +63,10 @@ start-mlflow: install-mlflow
 	@echo "   To stop the server:"
 	@echo "   make stop-mlflow"
 
-## stop-mlflow: Stop MLflow server (if running)
-stop-mlflow:
+stop-mlflow: ## Stop MLflow server (if running)
 	./scripts/stop_mlflow.sh
 
-## test-godog-server: Run godog tests with automatic server management
-test-godog-server: start-mlflow ; $(info The MLflow server was successfully started)
+test-godog-server: start-mlflow ; $(info The MLflow server was successfully started) ## Run godog tests with automatic server management
 	@echo "🧪 Running godog BDD tests with test server..."
 	@MLFLOW_TRACKING_URI=$(MLFLOW_TRACKING_URI) go test -v -tags=godog ./...
 	@make stop-mlflow
