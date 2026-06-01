@@ -39,13 +39,7 @@ func (c *Client) ProbeWorkspacesEnabled() (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to create server-info request: %w", err)
 	}
-	if token := c.resolveAuthToken(); token != "" {
-		if strings.HasPrefix(token, "Bearer ") || strings.HasPrefix(token, "Basic ") {
-			req.Header.Set("Authorization", token)
-		} else {
-			req.Header.Set("Authorization", "Bearer "+token)
-		}
-	}
+	c.applyAuthHeader(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

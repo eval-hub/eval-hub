@@ -19,6 +19,8 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
+const workspaceProbeTimeout = 5 * time.Second
+
 func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.Client, error) {
 	url := ""
 	if config.MLFlow != nil && config.MLFlow.TrackingURI != "" {
@@ -93,7 +95,19 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.
 		logger.Info("MLflow static auth token configured (fallback)")
 	}
 
-	workspacesEnabled, err := client.ProbeWorkspacesEnabled()
+	if config.IsOTELEnabled() {
+		currentHTTPClient := client.GetHTTPClient()
+		client = client.WithHTTPClient(&http.Client{
+			Transport: otelhttp.NewTransport(currentHTTPClient.Transport),
+			Timeout:   currentHTTPClient.Timeout,
+		})
+		logger.Info("Enabled OTEL transport for MLFlow client")
+	}
+
+	probeCtx, cancel := context.WithTimeout(context.Background(), workspaceProbeTimeout)
+	defer cancel()
+
+	workspacesEnabled, err := client.WithContext(probeCtx).ProbeWorkspacesEnabled()
 	if err != nil {
 		logger.Warn(
 			"Could not probe MLflow workspace support; workspace headers will not be sent",
@@ -114,15 +128,6 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.
 				"workspace", config.MLFlow.Workspace,
 			)
 		}
-	}
-
-	if config.IsOTELEnabled() {
-		currentHTTPClient := client.GetHTTPClient()
-		client = client.WithHTTPClient(&http.Client{
-			Transport: otelhttp.NewTransport(currentHTTPClient.Transport),
-			Timeout:   currentHTTPClient.Timeout,
-		})
-		logger.Info("Enabled OTEL transport for MLFlow client")
 	}
 
 	logger.Info("MLFlow tracking enabled", "mlflow_experiment_url", client.GetExperimentsURL())

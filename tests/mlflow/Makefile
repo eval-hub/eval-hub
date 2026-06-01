@@ -41,7 +41,7 @@ install-mlflow: init-python ## Install MLflow into the uv virtualenv
 start-mlflow: install-mlflow ## Run MLflow server locally in the background
 	@echo "🛑 Stopping MLflow server..."
 	-@make stop-mlflow
-	-@rm -f mlflow.db tests/features/test_mlflow_${MLFLOW_PORT}.db
+	-@rm -f bin/mlflow.db tests/features/test_mlflow_${MLFLOW_PORT}.db
 	@echo "🚀 Starting MLflow server..."
 	@echo "   Host: $(MLFLOW_HOST)"
 	@echo "   Port: $(MLFLOW_PORT)"

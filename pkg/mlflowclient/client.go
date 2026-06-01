@@ -37,7 +37,6 @@ type Client struct {
 	authTokenPath     string
 	workspace         string
 	workspacesEnabled bool
-	workspacesProbed  bool
 	logger            *slog.Logger
 }
 
@@ -123,7 +122,6 @@ func (c *Client) WithWorkspacesSupport(enabled bool) *Client {
 	}
 	cp := c.copy()
 	cp.workspacesEnabled = enabled
-	cp.workspacesProbed = true
 	if !enabled {
 		cp.workspace = ""
 	}
@@ -185,6 +183,18 @@ func (c *Client) resolveAuthToken() string {
 	return c.authToken
 }
 
+func (c *Client) applyAuthHeader(req *http.Request) {
+	token := c.resolveAuthToken()
+	if token == "" {
+		return
+	}
+	if strings.HasPrefix(token, "Bearer ") || strings.HasPrefix(token, "Basic ") {
+		req.Header.Set("Authorization", token)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+}
+
 // doRequest performs an HTTP request to the MLflow API, including X-MLFLOW-WORKSPACE when configured.
 func (c *Client) doRequest(method, endpoint string, body any) ([]byte, error) {
 	return c.doRequestInternal(method, endpoint, body, true)
@@ -221,13 +231,7 @@ func (c *Client) doRequestInternal(method, endpoint string, body any, includeWor
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	if token := c.resolveAuthToken(); token != "" {
-		if strings.HasPrefix(token, "Bearer ") || strings.HasPrefix(token, "Basic ") {
-			req.Header.Set("Authorization", token)
-		} else {
-			req.Header.Set("Authorization", "Bearer "+token)
-		}
-	}
+	c.applyAuthHeader(req)
 	// X-MLFLOW-WORKSPACE scopes requests to a workspace on servers started with
 	// --enable-workspaces (MLflow 3.10+). Sending it when workspaces are disabled
 	// returns FEATURE_DISABLED from MLflow 3.13+.

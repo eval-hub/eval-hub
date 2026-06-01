@@ -11,7 +11,7 @@ This directory runs a **local MLflow tracking server** for development and for g
 ## Quick start
 
 ```bash
-make install-mlflow   # pip install mlflow into .venv
+make install-mlflow   # uv pip install mlflow into .venv (via scripts/download_mlflow.sh)
 make start-mlflow       # start server in the background
 ```
 
