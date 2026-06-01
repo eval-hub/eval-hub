@@ -5,6 +5,15 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MLFLOW_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "${MLFLOW_DIR}"
+
+VENV_DIR="${VENV_DIR:-.venv}"
+if [ -d "${VENV_DIR}/bin" ]; then
+    export PATH="${MLFLOW_DIR}/${VENV_DIR}/bin:${PATH}"
+fi
+
 mkdir -p bin
 
 # Default values
@@ -12,6 +21,7 @@ HOST=${MLFLOW_HOST:-"127.0.0.1"}
 PORT=${MLFLOW_PORT:-"5000"}
 BACKEND_URI=${MLFLOW_BACKEND_STORE_URI:-"sqlite:///bin/mlflow.db"}
 DEFAULT_ARTIFACT_ROOT=${MLFLOW_DEFAULT_ARTIFACT_ROOT:-"./bin/mlruns"}
+ENABLE_WORKSPACES=${MLFLOW_ENABLE_WORKSPACES:-""}
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -28,11 +38,13 @@ echo -e "  ${YELLOW}Backend Store URI:${NC} $BACKEND_URI"
 echo -e "  ${YELLOW}Default Artifact Root:${NC} $DEFAULT_ARTIFACT_ROOT"
 echo ""
 
-# Check if MLflow is installed
+# Check if MLflow is installed in the venv (or on PATH)
 if ! command -v mlflow &> /dev/null; then
-    echo -e "${YELLOW}⚠️  MLflow not found. Installing...${NC}"
-    ./scripts/download_mlflow.sh
-    echo ""
+    echo -e "${YELLOW}⚠️  MLflow not found. Run 'make install-mlflow' first.${NC}"
+    if [ ! -x "${VENV_DIR}/bin/python" ]; then
+        echo -e "${YELLOW}   Hint: make init-python && make install-mlflow${NC}"
+    fi
+    exit 1
 fi
 
 # Create artifact root directory if it doesn't exist
@@ -54,7 +66,7 @@ fi
 echo -e "${GREEN}✅ Starting MLflow server...${NC}"
 MLFLOW_VERSION=$(mlflow --version 2>/dev/null | head -n 1)
 echo -e "${BLUE}📍 MLflow version: ${MLFLOW_VERSION}${NC}"
-echo -e "${BLUE}📍 Server will be available at: http://$HOST:$PORT${NC}"
+echo -e "${BLUE}📍 Server will be available at: http://$HOST:$PORT${NC} with options: ${ENABLE_WORKSPACES}"
 echo -e "${YELLOW}💡 Press Ctrl+C to stop the server${NC}"
 echo ""
 
@@ -62,6 +74,7 @@ echo ""
 mlflow server \
     --host "$HOST" \
     --port "$PORT" \
+    ${ENABLE_WORKSPACES} \
     --backend-store-uri "$BACKEND_URI" \
     --default-artifact-root "$DEFAULT_ARTIFACT_ROOT" | tee bin/mlflow.log &
 

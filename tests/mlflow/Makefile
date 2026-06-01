@@ -1,16 +1,47 @@
-.PHONY: clean install-mlflow run-mlflow stop-mlflow cls test-godog-server
+.PHONY: help clean init-python install-mlflow start-mlflow stop-mlflow cls test-godog-server
 
-clean:
+# Local Python environment (uv). Isolated from the repo-root .venv used for FVT.
+VENV_DIR ?= .venv
+PYTHON ?= 3.14
+
+MLFLOW_OLD_VERSION ?= 3.8.1
+MLFLOW_LATEST_VERSION ?= 3.13.0
+MLFLOW_VERSION ?= $(MLFLOW_LATEST_VERSION)
+
+MLFLOW_HOST ?= 127.0.0.1
+MLFLOW_PORT ?= 5000
+MLFLOW_BACKEND_STORE_URI ?= sqlite:///bin/mlflow.db
+MLFLOW_DEFAULT_ARTIFACT_ROOT ?= ./bin/mlruns
+MLFLOW_TRACKING_URI ?= http://127.0.0.1:5000
+MLFLOW_ENABLE_WORKSPACES ?= --enable-workspaces
+
+help: ## Show MLflow dev targets
+	@grep -E '^[a-zA-Z0-9_.-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
+
+clean: ## Remove bin/ artifacts (DB, logs, mlruns)
 	@echo "🧹 Cleaning up MLflow server..."
 	@rm -fr bin
 
-## install-mlflow: Download and install MLflow server
-install-mlflow:
-	@echo "📥 Installing MLflow server..."
-	@./scripts/download_mlflow.sh
+## init-python: Create a local Python virtualenv with uv (required before install-mlflow)
+init-python:
+	@if ! command -v uv >/dev/null 2>&1; then \
+		echo "❌ uv is not installed. Install from https://docs.astral.sh/uv/"; \
+		exit 1; \
+	fi
+	@if [ ! -d "$(VENV_DIR)" ]; then \
+		echo "Creating uv virtual environment at $(VENV_DIR) (Python $(PYTHON))..."; \
+		uv venv $(VENV_DIR) --python $(PYTHON); \
+	else \
+		echo "Virtual environment already exists at $(VENV_DIR)"; \
+	fi
 
-## run-mlflow: Run MLflow server locally in the background
-run-mlflow:
+## install-mlflow: Install MLflow into the uv virtualenv
+install-mlflow: init-python
+	@echo "📥 Installing MLflow server (version $(MLFLOW_VERSION))..."
+	@MLFLOW_VERSION=$(MLFLOW_VERSION) VENV_DIR=$(VENV_DIR) ./scripts/download_mlflow.sh
+
+## start-mlflow: Run MLflow server locally in the background
+start-mlflow: install-mlflow
 	@echo "🛑 Stopping MLflow server..."
 	-@make stop-mlflow
 	-@rm -f mlflow.db tests/features/test_mlflow_${MLFLOW_PORT}.db
@@ -24,13 +55,13 @@ run-mlflow:
 	 MLFLOW_PORT=$(MLFLOW_PORT) \
 	 MLFLOW_BACKEND_STORE_URI=$(MLFLOW_BACKEND_STORE_URI) \
 	 MLFLOW_DEFAULT_ARTIFACT_ROOT=$(MLFLOW_DEFAULT_ARTIFACT_ROOT) \
+	 MLFLOW_ENABLE_WORKSPACES=$(MLFLOW_ENABLE_WORKSPACES) \
+	 VENV_DIR=$(VENV_DIR) \
 	 ./scripts/run_mlflow.sh
 	@echo "   MLflow server started in background. Use 'make stop-mlflow' to stop it."
-	@echo "" #@echo "   You can use 'make test-godog-server' to run BDD tests with the server automatically."
 	@echo ""
 	@echo "   To use the server in your tests:"
-	@echo "   - Set MLFLOW_TRACKING_URI=http://127.0.0.1:5000 in your test environment"
-	@echo "" # @echo "   - Run tests with 'make test-godog'"
+	@echo "   export MLFLOW_TRACKING_URI=$(MLFLOW_TRACKING_URI)"
 	@echo ""
 	@echo "   To stop the server:"
 	@echo "   make stop-mlflow"
@@ -39,12 +70,10 @@ run-mlflow:
 stop-mlflow:
 	./scripts/stop_mlflow.sh
 
-MLFLOW_TRACKING_URI ?= http://127.0.0.1:5000
-
 ## test-godog-server: Run godog tests with automatic server management
-test-godog-server: run-mlflow ; $(info The MLflow server was successfully started)
+test-godog-server: start-mlflow ; $(info The MLflow server was successfully started)
 	@echo "🧪 Running godog BDD tests with test server..."
-	@MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI} go test -v -tags=godog ./...
+	@MLFLOW_TRACKING_URI=$(MLFLOW_TRACKING_URI) go test -v -tags=godog ./...
 	@make stop-mlflow
 
 .PHONY: cls

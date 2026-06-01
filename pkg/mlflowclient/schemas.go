@@ -96,3 +96,20 @@ type GetExperimentByNameRequest struct {
 type GetExperimentResponse struct {
 	Experiment Experiment `json:"experiment" validate:"required"`
 }
+
+// Workspace is an MLflow workspace (MLflow 3.10+).
+type Workspace struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}
+
+// GetWorkspaceResponse is the JSON body from GET /api/3.0/mlflow/workspaces/{name}.
+type GetWorkspaceResponse struct {
+	Workspace Workspace `json:"workspace"`
+}
+
+// CreateWorkspaceRequest is the JSON body for POST /api/3.0/mlflow/workspaces.
+type CreateWorkspaceRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}

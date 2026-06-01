@@ -30,13 +30,23 @@ const (
 
 // Client represents an MLflow API client
 type Client struct {
-	ctx           context.Context
-	baseURL       string
-	httpClient    *http.Client
-	authToken     string
-	authTokenPath string
-	workspace     string
-	logger        *slog.Logger
+	ctx               context.Context
+	baseURL           string
+	httpClient        *http.Client
+	authToken         string
+	authTokenPath     string
+	workspace         string
+	workspacesEnabled bool
+	workspacesProbed  bool
+	logger            *slog.Logger
+}
+
+func (c *Client) copy() *Client {
+	if c == nil {
+		return nil
+	}
+	clone := *c
+	return &clone
 }
 
 // NewClient creates a new MLflow client
@@ -60,45 +70,27 @@ func (c *Client) WithHTTPClient(httpClient *http.Client) *Client {
 	if c == nil {
 		return nil
 	}
-	return &Client{
-		ctx:           c.ctx,
-		baseURL:       c.baseURL,
-		httpClient:    httpClient,
-		authToken:     c.authToken,
-		authTokenPath: c.authTokenPath,
-		workspace:     c.workspace,
-		logger:        c.logger,
-	}
+	cp := c.copy()
+	cp.httpClient = httpClient
+	return cp
 }
 
 func (c *Client) WithContext(ctx context.Context) *Client {
 	if c == nil {
 		return nil
 	}
-	return &Client{
-		ctx:           ctx,
-		baseURL:       c.baseURL,
-		httpClient:    c.httpClient,
-		authToken:     c.authToken,
-		authTokenPath: c.authTokenPath,
-		workspace:     c.workspace,
-		logger:        c.logger,
-	}
+	cp := c.copy()
+	cp.ctx = ctx
+	return cp
 }
 
 func (c *Client) WithLogger(logger *slog.Logger) *Client {
 	if c == nil {
 		return nil
 	}
-	return &Client{
-		ctx:           c.ctx,
-		baseURL:       c.baseURL,
-		httpClient:    c.httpClient,
-		authToken:     c.authToken,
-		authTokenPath: c.authTokenPath,
-		workspace:     c.workspace,
-		logger:        logger,
-	}
+	cp := c.copy()
+	cp.logger = logger
+	return cp
 }
 
 // WithToken sets a static auth token (for local development without a token file).
@@ -106,15 +98,9 @@ func (c *Client) WithToken(authToken string) *Client {
 	if c == nil {
 		return nil
 	}
-	return &Client{
-		ctx:           c.ctx,
-		baseURL:       c.baseURL,
-		httpClient:    c.httpClient,
-		authToken:     authToken,
-		authTokenPath: c.authTokenPath,
-		workspace:     c.workspace,
-		logger:        c.logger,
-	}
+	cp := c.copy()
+	cp.authToken = authToken
+	return cp
 }
 
 // WithTokenPath sets a file path from which the auth token is read on each request.
@@ -124,30 +110,47 @@ func (c *Client) WithTokenPath(authTokenPath string) *Client {
 	if c == nil {
 		return nil
 	}
-	return &Client{
-		ctx:           c.ctx,
-		baseURL:       c.baseURL,
-		httpClient:    c.httpClient,
-		authToken:     c.authToken,
-		authTokenPath: authTokenPath,
-		workspace:     c.workspace,
-		logger:        c.logger,
-	}
+	cp := c.copy()
+	cp.authTokenPath = authTokenPath
+	return cp
 }
 
+// WithWorkspacesSupport records whether the server supports X-MLFLOW-WORKSPACE headers.
+// Call ProbeWorkspacesEnabled during client setup, then pass the result here.
+func (c *Client) WithWorkspacesSupport(enabled bool) *Client {
+	if c == nil {
+		return nil
+	}
+	cp := c.copy()
+	cp.workspacesEnabled = enabled
+	cp.workspacesProbed = true
+	if !enabled {
+		cp.workspace = ""
+	}
+	return cp
+}
+
+// WithWorkspace sets the workspace name sent as X-MLFLOW-WORKSPACE when the server supports workspaces.
 func (c *Client) WithWorkspace(workspace string) *Client {
 	if c == nil {
 		return nil
 	}
-	return &Client{
-		ctx:           c.ctx,
-		baseURL:       c.baseURL,
-		httpClient:    c.httpClient,
-		authToken:     c.authToken,
-		authTokenPath: c.authTokenPath,
-		workspace:     workspace,
-		logger:        c.logger,
+	cp := c.copy()
+	workspace = strings.TrimSpace(workspace)
+	if workspace == "" {
+		cp.workspace = ""
+		return cp
 	}
+	if !cp.workspacesEnabled {
+		cp.logger.Info(
+			"MLflow workspaces not enabled on server; ignoring workspace",
+			"workspace", workspace,
+		)
+		cp.workspace = ""
+		return cp
+	}
+	cp.workspace = workspace
+	return cp
 }
 
 func (c *Client) GetHTTPClient() *http.Client {
@@ -182,8 +185,17 @@ func (c *Client) resolveAuthToken() string {
 	return c.authToken
 }
 
-// doRequest performs an HTTP request to the MLflow API
+// doRequest performs an HTTP request to the MLflow API, including X-MLFLOW-WORKSPACE when configured.
 func (c *Client) doRequest(method, endpoint string, body any) ([]byte, error) {
+	return c.doRequestInternal(method, endpoint, body, true)
+}
+
+// doRequestWithoutWorkspace performs a global MLflow API request (workspace management).
+func (c *Client) doRequestWithoutWorkspace(method, endpoint string, body any) ([]byte, error) {
+	return c.doRequestInternal(method, endpoint, body, false)
+}
+
+func (c *Client) doRequestInternal(method, endpoint string, body any, includeWorkspaceHeader bool) ([]byte, error) {
 	c.logger.Info("MLFlow request started", "method", method, "endpoint", endpoint)
 
 	var reqBody io.Reader
@@ -216,11 +228,10 @@ func (c *Client) doRequest(method, endpoint string, body any) ([]byte, error) {
 			req.Header.Set("Authorization", "Bearer "+token)
 		}
 	}
-	// ODH-specific: the X-MLFLOW-WORKSPACE header is a non-standard extension
-	// used by Open Data Hub MLFlow to scope API requests to a Kubernetes
-	// namespace. This header is only set when workspace is explicitly configured
-	// (via MLFLOW_WORKSPACE env var). It has no effect on upstream MLFlow.
-	if c.workspace != "" {
+	// X-MLFLOW-WORKSPACE scopes requests to a workspace on servers started with
+	// --enable-workspaces (MLflow 3.10+). Sending it when workspaces are disabled
+	// returns FEATURE_DISABLED from MLflow 3.13+.
+	if includeWorkspaceHeader && c.workspacesEnabled && c.workspace != "" {
 		req.Header.Set("X-MLFLOW-WORKSPACE", c.workspace)
 	}
 
