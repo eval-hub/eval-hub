@@ -13,7 +13,7 @@ MLFLOW_PORT ?= 5000
 MLFLOW_BACKEND_STORE_URI ?= sqlite:///bin/mlflow.db
 MLFLOW_DEFAULT_ARTIFACT_ROOT ?= ./bin/mlruns
 MLFLOW_TRACKING_URI ?= http://127.0.0.1:5000
-MLFLOW_ENABLE_WORKSPACES ?=
+MLFLOW_ENABLE_WORKSPACES ?= false
 
 help: ## Show MLflow dev targets
 	@grep -E '^[a-zA-Z0-9_.-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'

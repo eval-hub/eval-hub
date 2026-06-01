@@ -21,7 +21,10 @@ HOST=${MLFLOW_HOST:-"127.0.0.1"}
 PORT=${MLFLOW_PORT:-"5000"}
 BACKEND_URI=${MLFLOW_BACKEND_STORE_URI:-"sqlite:///bin/mlflow.db"}
 DEFAULT_ARTIFACT_ROOT=${MLFLOW_DEFAULT_ARTIFACT_ROOT:-"./bin/mlruns"}
-ENABLE_WORKSPACES=${MLFLOW_ENABLE_WORKSPACES:-""}
+ENABLE_WORKSPACES=""
+if [[ "${MLFLOW_ENABLE_WORKSPACES:-false}" == "true" ]]; then
+    ENABLE_WORKSPACES="--enable-workspaces"
+fi
 
 # Colors for output
 GREEN='\033[0;32m'
