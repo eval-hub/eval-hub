@@ -18,6 +18,7 @@ get:
                 status: healthy
                 version: 'N.N.N'
                 timestamp: '2026-05-27T18:42:11Z'
+                git_hash: abc1234
                 components:
                   database:
                     status: healthy
@@ -33,6 +34,7 @@ get:
                 status: degraded
                 version: 'N.N.N'
                 timestamp: '2026-05-27T18:42:11Z'
+                git_hash: abc1234
                 components:
                   database:
                     status: healthy

@@ -71,6 +71,7 @@
                       "status": "healthy",
                       "version": "N.N.N",
                       "timestamp": "2026-05-27T18:42:11Z",
+                      "git_hash": "abc1234",
                       "components": {
                         "database": {
                           "status": "healthy",
@@ -91,6 +92,7 @@
                       "status": "degraded",
                       "version": "N.N.N",
                       "timestamp": "2026-05-27T18:42:11Z",
+                      "git_hash": "abc1234",
                       "components": {
                         "database": {
                           "status": "healthy",
@@ -2737,6 +2739,10 @@
             "format": "date-time",
             "description": "Server timestamp"
           },
+          "git_hash": {
+            "type": "string",
+            "description": "Commit hash"
+          },
           "components": {
             "type": "object",
             "additionalProperties": {
@@ -2753,7 +2759,13 @@
             "type": "integer",
             "description": "Number of active evaluations"
           }
-        }
+        },
+        "required": [
+          "status",
+          "version",
+          "timestamp",
+          "uptime"
+        ]
       },
       "Error": {
         "type": "object",
