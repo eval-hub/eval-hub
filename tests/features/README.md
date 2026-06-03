@@ -79,7 +79,7 @@ When running in local server mode, the tests will:
 | `@evaluations` | Used to run just the evaluations tests |
 | `@providers` | Used to run just the providers tests |
 | `@cluster` | Tests that require the Kubernetes cluster runtime (default `make test-fvt` excludes them via `~@cluster` in `FVT_TAGS`) |
-| `@local_runtime` | Scenarios that require a **fully functional local evaluation runtime**—eval-hub in local mode (embedded FVT server with `LocalMode`, or a binary started with `--local`). Use for flows such as local evaluation jobs that run to completion. Distinct from `@cluster`. **Excluded by default** (`~@local_runtime` in `FVT_TAGS` / `suite_test.go` defaults), same idea as `@cluster` and `@mlflow` |
+| `@local_runtime` | Scenarios that require a **fully functional local evaluation runtime**—eval-hub in local mode (embedded FVT server with `LocalMode`, or a binary started with `--local`). Use for flows such as local evaluation jobs that run to completion. Distinct from `@cluster`. **Excluded by default for `make test-fvt`/CI** via `~@local_runtime` in Makefile `FVT_TAGS`; `suite_test.go` only defaults to `~@ignore`, so plain `go test ./tests/features/...` does not exclude `@local_runtime` unless you set `GODOG_TAGS` |
 | `@local` | Still used on some evaluation scenarios in `evaluations.feature` for local (non-cluster) job flows; prefer `@local_runtime` for new scenarios that depend on full local job/runtime execution |
 | `@negative` | Used to mark this as a negative test |
 | `@mlflow` | Tests that only work when running with a configured mlflow service |
