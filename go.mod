@@ -1,8 +1,8 @@
 module github.com/eval-hub/eval-hub
 
-go 1.26.2
+go 1.26.3
 
-// toolchain go1.26.2
+// toolchain go1.26.3
 
 require (
 	github.com/PaesslerAG/jsonpath v0.1.1
