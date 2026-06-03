@@ -397,6 +397,7 @@ Feature: Evaluation Jobs
     When I send a DELETE request to "/api/v1/evaluations/collections/{{value:collection_id}}?hard_delete=true"
     Then the response code should be 204
 
+  @slow
   Scenario: Create threshold-zero collection then submit job and verify completion
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body:
