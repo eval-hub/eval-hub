@@ -253,7 +253,6 @@ func (a *apiFeature) startLocalServer(port int) error {
 
 	a.server, err = server.NewServer(logger,
 		serviceConfig,
-		nil,
 		storage,
 		validate,
 		runtime,

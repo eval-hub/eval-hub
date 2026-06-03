@@ -83,34 +83,28 @@ func TestIsOTELStorageScansEnabled(t *testing.T) {
 	})
 }
 
-func TestIsAuthenticationEnabled(t *testing.T) {
+func TestRequiresTenant(t *testing.T) {
 	t.Run("nil config returns false", func(t *testing.T) {
 		var c *config.Config
-		if c.IsAuthenticationEnabled() {
+		if c.RequiresTenant() {
 			t.Error("nil config")
 		}
 	})
 	t.Run("nil service returns false", func(t *testing.T) {
 		c := &config.Config{}
-		if c.IsAuthenticationEnabled() {
+		if c.RequiresTenant() {
 			t.Error("nil Service")
 		}
 	})
 	t.Run("local mode returns false", func(t *testing.T) {
-		c := &config.Config{Service: &config.ServiceConfig{LocalMode: true, DisableAuth: false}}
-		if c.IsAuthenticationEnabled() {
+		c := &config.Config{Service: &config.ServiceConfig{LocalMode: true}}
+		if c.RequiresTenant() {
 			t.Error("LocalMode")
 		}
 	})
-	t.Run("disable auth returns false", func(t *testing.T) {
-		c := &config.Config{Service: &config.ServiceConfig{LocalMode: false, DisableAuth: true}}
-		if c.IsAuthenticationEnabled() {
-			t.Error("DisableAuth")
-		}
-	})
-	t.Run("auth enabled when not local and not disabled", func(t *testing.T) {
-		c := &config.Config{Service: &config.ServiceConfig{LocalMode: false, DisableAuth: false}}
-		if !c.IsAuthenticationEnabled() {
+	t.Run("tenant required when not local", func(t *testing.T) {
+		c := &config.Config{Service: &config.ServiceConfig{LocalMode: false}}
+		if !c.RequiresTenant() {
 			t.Error("expected true")
 		}
 	})

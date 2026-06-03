@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/eval-hub/eval-hub/auth"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/go-playground/validator/v10"
 	"github.com/spf13/viper"
@@ -303,27 +302,6 @@ func LoadCollectionConfigs(logger *slog.Logger, validate *validator.Validate, di
 	}
 
 	return collectionConfigs, nil
-}
-
-func LoadAuthConfig(logger *slog.Logger, dirs ...string) (*auth.AuthConfig, error) {
-	logger.Info("Start reading auth configuration", "dirs", dirs)
-
-	if !hasExplicitConfigDir(dirs) {
-		dirs = configLookup
-	}
-
-	v, err := readConfig(logger, "auth", "yaml", dirs...)
-	if err != nil {
-		logger.Error("Failed to read auth configuration", "error", err.Error())
-		return nil, err
-	}
-
-	var authConfig auth.AuthConfig
-	if err := v.Unmarshal(&authConfig); err != nil {
-		return nil, err
-	}
-
-	return authConfig.Optimize(), nil
 }
 
 // LoadConfig loads configuration using a two-tier system with Viper. This implements

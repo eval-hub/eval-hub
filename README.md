@@ -112,13 +112,7 @@ make build-wheel
 
 ### Exposing private functions for tests
 
-Create a file called `export_test.go`:
-
-```go
-package auth
-
-var MatchEndpoint = matchEndpoint
-```
+Create a file called `export_test.go` in the package under test and re-export symbols needed by `_test.go` files in other packages.
 
 ### Database
 

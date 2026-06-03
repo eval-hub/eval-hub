@@ -225,32 +225,11 @@ var (
 		"unknown_error",
 	)
 
-	// Forbidden The request is not authorized.
-	Forbidden = createMessage(
-		constants.HTTPCodeForbidden,
-		"The request is not authorized.",
-		"forbidden",
-	)
-
-	// BadAuthorizationRequest Bad request: '{{.Error}}'.
-	BadAuthorizationRequest = createMessage(
+	// MissingTenantHeader The request is missing a required header {{.Header}}.
+	MissingTenantHeader = createMessage(
 		constants.HTTPCodeBadRequest,
-		"Bad request: '{{.Error}}'.",
-		"unable_to_authorize_request",
-	)
-
-	// Unauthorized The request is not authenticated.
-	Unauthorized = createMessage(
-		constants.HTTPCodeUnauthorized,
-		"The request is not authenticated.",
-		"unauthorized",
-	)
-
-	// MissingAuthenticationHeader The request is not authenticated. Please provide a non-empty authentication header {{.Header}}.
-	MissingAuthenticationHeader = createMessage(
-		constants.HTTPCodeUnauthorized,
-		"The request is not authenticated. Please provide a non-empty authentication header {{.Header}}.",
-		"missing_authentication_header",
+		"The request is missing a required header {{.Header}}.",
+		"missing_tenant_header",
 	)
 )
 

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/eval-hub/eval-hub/auth"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
@@ -17,7 +16,6 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/http_wrappers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/k8s"
 	"github.com/eval-hub/eval-hub/internal/platform"
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 	"github.com/go-playground/validator/v10"
@@ -32,7 +30,6 @@ type Server struct {
 	port          int
 	logger        *slog.Logger
 	serviceConfig *config.Config
-	authConfig    *auth.AuthConfig
 	storage       abstractions.Storage
 	validate      *validator.Validate
 	runtime       abstractions.Runtime
@@ -64,7 +61,6 @@ func (s *Server) isOTELEnabled() bool {
 //   - error: An error if logger or serviceConfig is nil
 func NewServer(logger *slog.Logger,
 	serviceConfig *config.Config,
-	authConfig *auth.AuthConfig,
 	storage abstractions.Storage,
 	validate *validator.Validate,
 	runtime abstractions.Runtime,
@@ -88,7 +84,6 @@ func NewServer(logger *slog.Logger,
 		port:          serviceConfig.Service.Port,
 		logger:        logger,
 		serviceConfig: serviceConfig,
-		authConfig:    authConfig,
 		storage:       storage,
 		validate:      validate,
 		runtime:       runtime,
@@ -110,7 +105,7 @@ func (s *Server) GetPort() int {
 //   - uri: Request path (from URL.Path or RequestURI)
 //   - user_agent: Client user agent from User-Agent header
 //   - remote_addr: Client IP address
-//   - remote_user: Authenticated user from URL user info or Remote-User header
+//   - remote_user: Authenticated user from X-User header (kube-rbac-proxy), URL user info, or Remote-User header
 //   - referer: HTTP referer header
 //
 // This enables correlating logs across services using the request_id and provides
@@ -161,9 +156,9 @@ func (s *Server) loggerWithRequest(r *http.Request) (string, *slog.Logger) {
 		enhancedLogger = enhancedLogger.With(constants.LOG_REMOTE_ADR, remoteAddr)
 	}
 
-	// Extract remote_user from URL user info or header
-	remoteUser := ""
-	if r.URL != nil && r.URL.User != nil {
+	// Extract remote_user from X-User (kube-rbac-proxy), URL user info, or Remote-User header
+	remoteUser := r.Header.Get(USER_HEADER)
+	if remoteUser == "" && r.URL != nil && r.URL.User != nil {
 		remoteUser = r.URL.User.Username()
 	}
 	if remoteUser == "" {
@@ -385,8 +380,8 @@ func (s *Server) setupDocsRoutes(h *handlers.Handlers, router *http.ServeMux) {
 }
 
 func (s *Server) canContinueRequest(ctx *executioncontext.ExecutionContext, resp RespWrapper) bool {
-	if s.serviceConfig.IsAuthenticationEnabled() && ctx.Tenant == "" {
-		resp.ErrorWithMessageCode(ctx.RequestID, messages.MissingAuthenticationHeader, "Header", TENANT_HEADER)
+	if s.serviceConfig.RequiresTenant() && ctx.Tenant == "" {
+		resp.ErrorWithMessageCode(ctx.RequestID, messages.MissingTenantHeader, "Header", TENANT_HEADER)
 		return false
 	}
 	return true
@@ -432,30 +427,6 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 
 	// Wrap with metrics middleware (outermost for complete observability)
 	handler = Middleware(handler, prometheusEnabled, s.logger)
-	handler, err := s.setupAuth(handler)
-	if err != nil {
-		return nil, err
-	}
-	return handler, nil
-}
-
-func (s *Server) setupAuth(handler http.Handler) (http.Handler, error) {
-	if s.serviceConfig.IsAuthenticationEnabled() {
-		client, err := k8s.NewKubernetesClient()
-		if err != nil {
-			return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
-		}
-
-		handler, err = WithAuthorization(handler, s.logger, client, s.authConfig)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create authorization handler: %w", err)
-		}
-		handler, err = WithAuthentication(handler, s.logger, client, s.authConfig)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create authentication handler: %w", err)
-		}
-		s.logger.Info("Authentication and authorization setup completed")
-	}
 	return handler, nil
 }
 

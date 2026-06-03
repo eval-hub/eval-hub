@@ -24,7 +24,7 @@ The Python SDK, community adapters, and end-user tutorials live in **other** Eva
 ## High-level request flow
 
 1. **`cmd/eval-hub/main.go`** constructs the logger, loads config, builds the HTTP server, runs until shutdown (SIGINT/SIGTERM).
-2. **`internal/eval_hub/server`** registers routes on `net/http.ServeMux`, applies middleware (metrics, auth, CORS as configured), and for API routes builds an **`ExecutionContext`** per request.
+2. **`internal/eval_hub/server`** registers routes on `net/http.ServeMux`, applies middleware (metrics, CORS in local mode), and for API routes builds an **`ExecutionContext`** per request.
 3. **`internal/eval_hub/handlers`** implements REST semantics: validation, storage calls, optional **MLflow** experiment setup, and delegation to a **`Runtime`** when a job should run.
 4. **`internal/eval_hub/storage`** persists tenants’ evaluations, providers, collections, etc. The active backend is **SQL** (SQLite or PostgreSQL) behind **`abstractions.Storage`**.
 5. **`internal/eval_hub/runtimes`** implements **`abstractions.Runtime`** (e.g. local processes, Kubernetes Jobs). Runtimes receive a narrow **`RuntimeStorage`** surface for `GetProvider` and benchmark status updates so orchestration stays decoupled from full storage access.
@@ -44,6 +44,8 @@ Domain types are largely **`pkg/api`** structs; errors to clients are shaped via
 ## ExecutionContext (`internal/eval_hub/executioncontext`)
 
 Evaluation handlers take **`ExecutionContext`** (not raw `*http.Request` alone): request ID, tenant, user, logger, cancelable context, and service config. That keeps logging fields consistent and avoids threading globals. Basic routes (health, OpenAPI) may use plain `http` handlers.
+
+In cluster deployments, **kube-rbac-proxy** performs authentication and authorization, then forwards API requests to eval-hub with **`X-Tenant`** (namespace) and **`X-User`** (authenticated identity). eval-hub reads those headers for multi-tenant storage scoping and resource ownership; it does not validate Bearer tokens itself.
 
 ---
 

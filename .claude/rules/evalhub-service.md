@@ -2,7 +2,6 @@
 paths:
   - "cmd/eval_hub/**"
   - "internal/eval_hub/**"
-  - "config/auth.yaml"
   - "config/config.yaml"
   - "config/collections/**"
   - "config/providers/**"
@@ -146,7 +145,7 @@ Located alongside code in `*_test.go` files:
 
 - Test individual handlers, middleware, server setup
 - Use standard library `testing` package
-- Found in: `auth/**/*_test.go`, `internal/**/*_test.go`, `cmd/**/*_test.go`, `pkg/**/*_test.go`
+- Found in: `internal/**/*_test.go`, `cmd/**/*_test.go`, `pkg/**/*_test.go`
 - Add `t.Parallel()` to new tests where safe — avoid it when the test mutates process-wide state (e.g. `t.Setenv`, `os.Stdout`, package-level globals)
 
 #### FVT (Functional Verification Tests)

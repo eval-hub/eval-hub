@@ -26,8 +26,9 @@ const (
 // is called at the route level before invoking evaluation-related handlers to set up
 // request-scoped context.
 //
-// The function automatically enhances the logger with request-specific fields via
-// logging.LoggerWithRequest.
+// Identity headers: in cluster deployments kube-rbac-proxy authenticates callers and
+// forwards requests to eval-hub with X-Tenant and X-User set. Local mode tests may
+// set these headers directly.
 //
 // This enables automatic request ID tracking (from X-Global-Transaction-Id header or
 // auto-generated UUID) and structured logging with consistent request metadata.

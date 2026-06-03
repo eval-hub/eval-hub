@@ -4,7 +4,6 @@ service:
   # These will be elsewhere on a cluster and coherent with the pod spec
   ready_file: "/tmp/repo-ready"
   termination_file: "/tmp/termination-log"
-  disable_auth: false
   # read_timeout: 15s       # http.Server ReadTimeout; omit or 0 for default (15s)
   # write_timeout: 15s      # http.Server WriteTimeout; omit or 0 for default (15s)
   # idle_timeout: 60s       # http.Server IdleTimeout; omit or 0 for default (60s)

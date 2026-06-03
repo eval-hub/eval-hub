@@ -35,7 +35,7 @@ make build-mcp          # evalhub-mcp only
 ### Testing
 
 ```bash
-make test               # unit tests (auth, internal, cmd, pkg, …)
+make test               # unit tests (internal, cmd, pkg, …)
 make test-fvt           # godog FVT (tests/features)
 make test-all           # unit + FVT + FVT against started server
 make test-coverage      # HTML under bin/
@@ -119,7 +119,6 @@ See **ARCHITECTURE.md** for a concise layout and request flow.
 - **cmd/eval_runtime_sidecar/** - Sidecar for job pods (proxy, readiness, termination log)
 - **pkg/api/** - Shared API types (IDs, errors, request/response shapes)
 - **pkg/evalhubclient/** - HTTP client library for the eval-hub REST API (used by MCP server and external consumers)
-- **auth/** - Authentication configuration and HTTP middleware helpers
 - **internal/eval_hub/abstractions/** - `Storage`, `Runtime`, and related interfaces
 - **internal/eval_hub/config/** - Configuration loading with Viper
 - **internal/eval_hub/constants/** - Shared constants (log field names, etc.)
@@ -130,7 +129,7 @@ See **ARCHITECTURE.md** for a concise layout and request flow.
 - **internal/eval_hub/storage/** - Persistence implementations (e.g. SQL)
 - **internal/logging/** - Logger creation (zap backend, `slog` API)
 - **internal/eval_hub/metrics/** - Prometheus metrics and middleware
-- **internal/eval_hub/server/** - Server setup, routing, auth wiring, `newExecutionContext`
+- **internal/eval_hub/server/** - Server setup, routing, `newExecutionContext`
 - **internal/evalhub_mcp/config/** - MCP server configuration (CLI flags, YAML profiles, env vars)
 - **internal/evalhub_mcp/server/** - MCP server setup (transport selection, capabilities, client wiring)
 - **docs/src/openapi.yaml** - OpenAPI 3.1.0 specification source; bundled/public copies under **docs/** (see `make generate-public-docs`)
@@ -140,9 +139,9 @@ See **ARCHITECTURE.md** for a concise layout and request flow.
 
 Main function (`cmd/eval_hub/main.go`) implements graceful shutdown:
 
-1. Creates logger and loads service, provider, and collection config (and optional auth config when enabled)
+1. Creates logger and loads service, provider, and collection config
 2. Wires storage, validator, runtime, and MLflow client
-3. Creates server with `server.NewServer(logger, serviceConfig, authConfig, storage, validate, runtime, mlflowClient)`
+3. Creates server with `server.NewServer(logger, serviceConfig, storage, validate, runtime, mlflowClient)`
 4. Starts server in a goroutine
 5. Waits for SIGINT/SIGTERM
 6. Gracefully shuts down with a bounded timeout
@@ -195,6 +194,15 @@ When running locally:
 - **No `evalhub-config` ConfigMap** on job pods; proxy targets and TLS live in JSON (`eval_hub.base_url`, `mlflow.tracking_uri`, `mlflow.token_path`, CA paths, optional `eval_hub.token`).
 - Ready and termination message paths are **fixed in the sidecar binary** (`/data/sidecar-ready`, `/data/termination-log`).
 - Local dev: `config/sidecar_runtime_local.json` or `make start-sidecar`.
+
+#### Request identity (kube-rbac-proxy)
+
+Cluster traffic reaches eval-hub through **kube-rbac-proxy**, which handles Bearer token authentication and RBAC authorization. Forwarded requests include:
+
+- **`X-Tenant`** — tenant namespace; required on API routes when not in local mode
+- **`X-User`** — authenticated caller identity; used for resource ownership
+
+eval-hub does not perform in-process TokenReview/SAR; it trusts these headers from the proxy and applies tenant/user scoping in storage and handlers.
 
 #### Request ID Tracking
 

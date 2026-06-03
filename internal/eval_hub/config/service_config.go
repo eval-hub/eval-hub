@@ -20,7 +20,6 @@ type ServiceConfig struct {
 	TerminationFile string `mapstructure:"termination_file"`
 	EvalInitImage   string `mapstructure:"eval_init_image,omitempty"`
 	LocalMode       bool   `mapstructure:"local_mode,omitempty"`
-	DisableAuth     bool   `mapstructure:"disable_auth,omitempty"`
 	TLSCertFile     string `mapstructure:"tls_cert_file,omitempty"`
 	TLSKeyFile      string `mapstructure:"tls_key_file,omitempty"`
 	// ReadTimeout is http.Server ReadTimeout (entire request read). Zero uses default (15s).

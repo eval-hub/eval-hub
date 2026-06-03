@@ -13,7 +13,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/eval-hub/eval-hub/auth"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes"
@@ -121,19 +120,9 @@ func main() {
 		otelShutdown = shutdown
 	}
 
-	// setup authentication and authorization
-	var authConfig *auth.AuthConfig = nil
-	if serviceConfig.IsAuthenticationEnabled() {
-		authConfig, err = config.LoadAuthConfig(logger, args.ConfigDir)
-		if err != nil {
-			startUpFailed(serviceConfig, err, "Failed to setup authentication and authorization", logger)
-		}
-	}
-
 	// create the server
 	srv, err := server.NewServer(logger,
 		serviceConfig,
-		authConfig,
 		storage,
 		validate,
 		runtime,
@@ -157,7 +146,6 @@ func main() {
 		"mlflow_tracking", mlflowClient != nil,
 		"otel", serviceConfig.IsOTELEnabled(),
 		"prometheus", serviceConfig.IsPrometheusEnabled(),
-		"authentication", serviceConfig.IsAuthenticationEnabled(),
 	)
 
 	// Start config watcher to reload system providers and collections on file changes

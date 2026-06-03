@@ -29,7 +29,7 @@ func (c *Config) IsPrometheusEnabled() bool {
 	return (c != nil) && (c.Prometheus != nil) && c.Prometheus.Enabled
 }
 
-// IsAuthenticationEnabled reports whether HTTP authentication should be enforced (not disabled and not local mode).
-func (c *Config) IsAuthenticationEnabled() bool {
-	return (c != nil) && (c.Service != nil) && !c.Service.DisableAuth && !c.Service.LocalMode
+// RequiresTenant reports whether API routes require an X-Tenant header (non-local mode).
+func (c *Config) RequiresTenant() bool {
+	return (c != nil) && (c.Service != nil) && !c.Service.LocalMode
 }
