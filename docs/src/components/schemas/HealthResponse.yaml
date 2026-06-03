@@ -14,18 +14,20 @@ properties:
   git_hash:
     type: string
     description: Commit hash
-  components:
-    type: object
-    additionalProperties:
-      type: object
-      additionalProperties: true
-    description: Per-component health
+  # TODO
+  # components:
+  #  type: object
+  #  additionalProperties:
+  #    type: object
+  #    additionalProperties: true
+  #  description: Per-component health
   uptime:
     type: integer
     description: Uptime in nanoseconds (or use string for duration)
-  active_evaluations:
-    type: integer
-    description: Number of active evaluations
+  # TODO
+  # active_evaluations:
+  #  type: integer
+  #  description: Number of active evaluations
 required:
   - status
   - version
