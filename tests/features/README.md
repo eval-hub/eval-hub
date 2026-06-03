@@ -75,15 +75,18 @@ When running in local server mode, the tests will:
 
 | Tag | Use |
 | --- | :-- |
-| @collections | Used to run just the collections tests |
-| @evaluations | Used to run just the evaluations tests |
-| @providers | Used to run just the providers tests |
-| @cluster | Tests that require the Kubernetes cluster runtime (default `make test-fvt` excludes them via `~@cluster` in `FVT_TAGS`) |
-| @local_runtime | Scenarios that require a **fully functional local evaluation runtime**—eval-hub in local mode (embedded FVT server with `LocalMode`, or a binary started with `--local`). Use for flows such as local evaluation jobs that run to completion. Distinct from `@cluster`. **Excluded by default** (`~@local_runtime` in `FVT_TAGS` / `suite_test.go` defaults), same idea as `@cluster` and `@mlflow`. |
-| @local | Still used on some evaluation scenarios in `evaluations.feature` for local (non-cluster) job flows; prefer `@local_runtime` for new scenarios that depend on full local job/runtime execution. |
-| @negative | Used to mark this as a negative test |
-| @mlflow | Tests that only work when running with a configured mlflow service |
-| @ignore | Can be used to ignore a test |
+| `@collections` | Used to run just the collections tests |
+| `@evaluations` | Used to run just the evaluations tests |
+| `@providers` | Used to run just the providers tests |
+| `@cluster` | Tests that require the Kubernetes cluster runtime (default `make test-fvt` excludes them via `~@cluster` in `FVT_TAGS`) |
+| `@local_runtime` | Scenarios that require a **fully functional local evaluation runtime**—eval-hub in local mode (embedded FVT server with `LocalMode`, or a binary started with `--local`). Use for flows such as local evaluation jobs that run to completion. Distinct from `@cluster`. **Excluded by default** (`~@local_runtime` in `FVT_TAGS` / `suite_test.go` defaults), same idea as `@cluster` and `@mlflow` |
+| `@local` | Still used on some evaluation scenarios in `evaluations.feature` for local (non-cluster) job flows; prefer `@local_runtime` for new scenarios that depend on full local job/runtime execution |
+| `@negative` | Used to mark this as a negative test |
+| `@mlflow` | Tests that only work when running with a configured mlflow service |
+| `@slow` | Tests that take more than the normal timeout (currently 1 hour) |
+| `@ignore` | Can be used to ignore a test |
+| `@connected` | Used by the Jenkins jobs and set when running on a connected cluster |
+| `@disconnected` | Used by the Jenkins jobs and set when running on a disconnected cluster |
 
 Note that if you want to run a single test you can add a tag to the test,
 such as `@focus` and then set the environment variable `GODOG_TAGS`:

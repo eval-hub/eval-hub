@@ -1245,8 +1245,6 @@ func (tc *scenarioConfig) saveScenarioName(ctx context.Context, sc *godog.Scenar
 }
 
 func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
-	//tc.assetsSync.Lock()
-	//defer tc.assetsSync.Unlock()
 	for assetName, ids := range tc.assets {
 		clonedIDs := slices.Clone(ids)
 		hardDelete := false
