@@ -72,18 +72,7 @@
                       "version": "N.N.N",
                       "timestamp": "2026-05-27T18:42:11Z",
                       "git_hash": "abc1234",
-                      "components": {
-                        "database": {
-                          "status": "healthy",
-                          "latency_ms": 2
-                        },
-                        "mlflow": {
-                          "status": "healthy",
-                          "latency_ms": 15
-                        }
-                      },
-                      "uptime": 86400000000000,
-                      "active_evaluations": 5
+                      "uptime": 86400000000000
                     }
                   },
                   "degraded": {
@@ -93,19 +82,7 @@
                       "version": "N.N.N",
                       "timestamp": "2026-05-27T18:42:11Z",
                       "git_hash": "abc1234",
-                      "components": {
-                        "database": {
-                          "status": "healthy",
-                          "latency_ms": 3
-                        },
-                        "mlflow": {
-                          "status": "degraded",
-                          "latency_ms": 4500,
-                          "error": "connection timeout after 4000ms"
-                        }
-                      },
-                      "uptime": 172800000000000,
-                      "active_evaluations": 12
+                      "uptime": 172800000000000
                     }
                   }
                 }
@@ -2743,21 +2720,9 @@
             "type": "string",
             "description": "Commit hash"
           },
-          "components": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "object",
-              "additionalProperties": true
-            },
-            "description": "Per-component health"
-          },
           "uptime": {
             "type": "integer",
             "description": "Uptime in nanoseconds (or use string for duration)"
-          },
-          "active_evaluations": {
-            "type": "integer",
-            "description": "Number of active evaluations"
           }
         },
         "required": [
