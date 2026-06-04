@@ -1,5 +1,28 @@
 package api
 
+// AgentMetadata contains structured metadata for AI agent consumption at the provider level.
+type AgentMetadata struct {
+	Evaluates            []string `mapstructure:"evaluates" yaml:"evaluates" json:"evaluates,omitempty"`
+	RecommendedWhen      []string `mapstructure:"recommended_when" yaml:"recommended_when" json:"recommended_when,omitempty"`
+	TargetType           string   `mapstructure:"target_type" yaml:"target_type" json:"target_type,omitempty" validate:"omitempty,oneof=model agent inference_server"`
+	Summary              string   `mapstructure:"summary" yaml:"summary" json:"summary,omitempty" validate:"omitempty,max=200"`
+	Complements          []string `mapstructure:"complements" yaml:"complements" json:"complements,omitempty"`
+	Hints                []string `mapstructure:"hints" yaml:"hints" json:"hints,omitempty"`
+	ResultInterpretation []string `mapstructure:"result_interpretation" yaml:"result_interpretation" json:"result_interpretation,omitempty"`
+}
+
+// ScoreRange describes a score band with semantic meaning.
+type ScoreRange struct {
+	Range   string `mapstructure:"range" yaml:"range" json:"range"`
+	Meaning string `mapstructure:"meaning" yaml:"meaning" json:"meaning"`
+}
+
+// BenchmarkAgentMetadata contains agent metadata at the individual benchmark level.
+type BenchmarkAgentMetadata struct {
+	ResultInterpretation string       `mapstructure:"result_interpretation" yaml:"result_interpretation" json:"result_interpretation,omitempty"`
+	ScoreRanges          []ScoreRange `mapstructure:"score_ranges" yaml:"score_ranges" json:"score_ranges,omitempty"`
+}
+
 type BenchmarkResource struct {
 	ID           string        `mapstructure:"id" yaml:"id" json:"id"`
 	URL          string        `mapstructure:"url" yaml:"url" json:"url,omitempty"`
@@ -10,8 +33,9 @@ type BenchmarkResource struct {
 	NumFewShot   int           `mapstructure:"num_few_shot" yaml:"num_few_shot" json:"num_few_shot"`
 	DatasetSize  int           `mapstructure:"dataset_size" yaml:"dataset_size" json:"dataset_size"`
 	Tags         []string      `mapstructure:"tags" yaml:"tags" json:"tags,omitempty"`
-	PrimaryScore *PrimaryScore `mapstructure:"primary_score" yaml:"primary_score" json:"primary_score,omitempty"`
-	PassCriteria *PassCriteria `mapstructure:"pass_criteria" yaml:"pass_criteria" json:"pass_criteria,omitempty" validate:"omitempty"`
+	PrimaryScore *PrimaryScore           `mapstructure:"primary_score" yaml:"primary_score" json:"primary_score,omitempty"`
+	PassCriteria *PassCriteria           `mapstructure:"pass_criteria" yaml:"pass_criteria" json:"pass_criteria,omitempty" validate:"omitempty"`
+	Agent        *BenchmarkAgentMetadata `mapstructure:"agent" yaml:"agent" json:"agent,omitempty"`
 }
 
 type ProviderConfig struct {
@@ -21,6 +45,7 @@ type ProviderConfig struct {
 	Tags        []string            `mapstructure:"tags" yaml:"tags" json:"tags,omitempty" validate:"omitempty,dive,tagname"`
 	Benchmarks  []BenchmarkResource `mapstructure:"benchmarks" yaml:"benchmarks" json:"benchmarks" validate:"dive"`
 	Runtime     *Runtime            `mapstructure:"runtime" yaml:"runtime" json:"runtime,omitempty"`
+	Agent       *AgentMetadata      `mapstructure:"agent" yaml:"agent" json:"agent,omitempty"`
 }
 
 type ProviderResource struct {

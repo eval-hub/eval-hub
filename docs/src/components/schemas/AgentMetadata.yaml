@@ -1,0 +1,36 @@
+type: object
+description: Metadata for AI agent discoverability and operational guidance
+properties:
+  evaluates:
+    type: array
+    items:
+      type: string
+    description: Semantic tags describing what this provider measures
+  recommended_when:
+    type: array
+    items:
+      type: string
+    description: Natural-language conditions for agent recommendation
+  target_type:
+    type: string
+    enum: [model, agent, inference_server]
+    description: What kind of target this provider evaluates
+  summary:
+    type: string
+    maxLength: 200
+    description: Concise description optimised for agent tool listings
+  complements:
+    type: array
+    items:
+      type: string
+    description: Provider IDs that pair well with this one
+  hints:
+    type: array
+    items:
+      type: string
+    description: Free-form operational guidance for agents constructing job requests
+  result_interpretation:
+    type: array
+    items:
+      type: string
+    description: Guidance for interpreting evaluation results

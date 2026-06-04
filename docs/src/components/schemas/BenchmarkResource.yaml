@@ -36,3 +36,6 @@ properties:
     $ref: ./PrimaryScore.yaml
   pass_criteria:
     $ref: ./PassCriteria.yaml
+  agent:
+    $ref: ./BenchmarkAgentMetadata.yaml
+    description: Agent discoverability metadata for this benchmark

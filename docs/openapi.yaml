@@ -2396,6 +2396,46 @@ components:
               items:
                 type: string
               description: Non-fatal errors (e.g. partial list)
+    AgentMetadata:
+      type: object
+      description: Metadata for AI agent discoverability and operational guidance
+      properties:
+        evaluates:
+          type: array
+          items:
+            type: string
+          description: Semantic tags describing what this provider measures
+        recommended_when:
+          type: array
+          items:
+            type: string
+          description: Natural-language conditions for agent recommendation
+        target_type:
+          type: string
+          enum:
+            - model
+            - agent
+            - inference_server
+          description: What kind of target this provider evaluates
+        summary:
+          type: string
+          maxLength: 200
+          description: Concise description optimised for agent tool listings
+        complements:
+          type: array
+          items:
+            type: string
+          description: Provider IDs that pair well with this one
+        hints:
+          type: array
+          items:
+            type: string
+          description: Free-form operational guidance for agents constructing job requests
+        result_interpretation:
+          type: array
+          items:
+            type: string
+          description: Guidance for interpreting evaluation results
     GPUConfig:
       type: object
       title: GPUConfig
@@ -2494,6 +2534,31 @@ components:
         local:
           $ref: '#/components/schemas/LocalRuntime'
           description: Local runtime configuration
+    ScoreRange:
+      type: object
+      description: A score range with its interpretation
+      properties:
+        range:
+          type: string
+          description: Score range (e.g. "0.0-0.25")
+        meaning:
+          type: string
+          description: What scores in this range indicate
+      required:
+        - range
+        - meaning
+    BenchmarkAgentMetadata:
+      type: object
+      description: Benchmark-level agent guidance (overrides provider defaults)
+      properties:
+        result_interpretation:
+          type: string
+          description: How to read results for this specific benchmark
+        score_ranges:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScoreRange'
+          description: Score ranges with their interpretations for this benchmark
     BenchmarkResource:
       type: object
       description: Benchmark specification (from a provider)
@@ -2533,6 +2598,9 @@ components:
           $ref: '#/components/schemas/PrimaryScore'
         pass_criteria:
           $ref: '#/components/schemas/PassCriteria'
+        agent:
+          $ref: '#/components/schemas/BenchmarkAgentMetadata'
+          description: Agent discoverability metadata for this benchmark
     ProviderConfig:
       type: object
       description: Evaluation provider (configuration and available benchmarks)
@@ -2551,6 +2619,9 @@ components:
           items:
             type: string
           description: Provider tags
+        agent:
+          $ref: '#/components/schemas/AgentMetadata'
+          description: Agent discoverability metadata for this provider
         runtime:
           $ref: '#/components/schemas/Runtime'
           description: Provider runtime configuration
