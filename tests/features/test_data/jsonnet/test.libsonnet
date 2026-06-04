@@ -25,34 +25,41 @@ local harness = std.parseJson(std.extVar('harness'));
   mlflow(name)::
     if harness.mlflow_enabled then name else '',
 
-  // Default benchmark for evaluation_job.jsonnet (disconnected vs connected FVT).
-  defaultBenchmark()::
-    if harness.disconnected then {
-      id: 'arc_easy',
-      provider_id: 'lm_evaluation_harness',
-      parameters: {
-        num_examples: 10,
-        num_fewshot: 3,
-        limit: 5,
-        tokenizer: '/test_data/tokenizer',
-      },
-      test_data_ref: {
-        s3: {
-          bucket: $.env('TEST_DATA_S3_BUCKET', 'mlpipeline'),
-          key: $.env('TEST_DATA_S3_KEY', 'offline'),
-          secret_ref: $.env('TEST_DATA_S3_SECRET_REF', 'minio-test'),
-        },
-      },
-    } else {
-      id: 'arc_easy',
-      provider_id: 'lm_evaluation_harness',
-      parameters: {
-        num_examples: 10,
-        num_fewshot: 3,
-        limit: 5,
-        tokenizer: 'google/flan-t5-small',
+  // Tokenizer path for connected vs disconnected cluster FVT.
+  defaultTokenizer()::
+    if harness.disconnected then '/test_data/tokenizer' else 'google/flan-t5-small',
+
+  // Offline test data reference for disconnected runs.
+  testDataRef()::
+    {
+      s3: {
+        bucket: $.env('TEST_DATA_S3_BUCKET', 'mlpipeline'),
+        key: $.env('TEST_DATA_S3_KEY', 'offline'),
+        secret_ref: $.env('TEST_DATA_S3_SECRET_REF', 'minio-test'),
       },
     },
+
+  // Evaluation/collection benchmark with disconnected-aware tokenizer and optional test_data_ref.
+  benchmark(id, providerId, parameters)::
+    local base = {
+      id: id,
+      provider_id: providerId,
+      parameters: {
+        tokenizer: $.defaultTokenizer(),
+      } + parameters,
+    };
+    if harness.disconnected then base + { test_data_ref: $.testDataRef() } else base,
+
+  // arc_easy benchmark with common FVT defaults; extra parameters override or extend.
+  arcEasyBenchmark(parameters={})::
+    $.benchmark('arc_easy', 'lm_evaluation_harness', {
+      num_examples: 10,
+      num_fewshot: 3,
+      limit: 5,
+    } + parameters),
+
+  // Default benchmark for evaluation_job.jsonnet (disconnected vs connected FVT).
+  defaultBenchmark():: $.arcEasyBenchmark({}),
 
   // Default evaluation job model block used across many scenarios.
   model()::

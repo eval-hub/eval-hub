@@ -523,6 +523,14 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) err
 
 var errTestFileNotFound = errors.New("test file not found")
 
+// fvtBenchmarkTokenizer returns the expected benchmark tokenizer for FVT assertions and payloads.
+func fvtBenchmarkTokenizer() string {
+	if strings.Contains(strings.ToLower(os.Getenv("ENVIRONMENT_ID")), "disconnected") {
+		return "/test_data/tokenizer"
+	}
+	return "google/flan-t5-small"
+}
+
 func (tc *scenarioConfig) findFile(fileName string) (string, error) {
 	file := filepath.Join(testDataRoot(), fileName)
 	_, err := os.Stat(file)
@@ -576,6 +584,8 @@ func (tc *scenarioConfig) substituteValues(body string) (string, error) {
 				var value string
 				if v, found := gpuTestSuiteSubstValue(envName); found {
 					value = v
+				} else if envName == "FVT_BENCHMARK_TOKENIZER" {
+					value = fvtBenchmarkTokenizer()
 				} else if envValue, envOk := os.LookupEnv(envName); envOk {
 					value = envValue
 				} else if hasFallback {
