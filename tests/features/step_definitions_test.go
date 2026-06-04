@@ -955,6 +955,18 @@ func asPrettyJson(s string) string {
 
 func (tc *scenarioConfig) compareJSONSchema(expectedSchema string, actualResponse string) error {
 	expectedSchemaLoader := gojsonschema.NewStringLoader(expectedSchema)
+	return tc.validateJSONSchema(expectedSchemaLoader, actualResponse)
+}
+
+func (tc *scenarioConfig) compareJSONSchemaFile(schemaFile string, actualResponse string) error {
+	schemaContent, err := tc.getFile(schemaFile)
+	if err != nil {
+		return tc.logError(fmt.Errorf("schema file %s: %w", schemaFile, err))
+	}
+	return tc.compareJSONSchema(schemaContent, actualResponse)
+}
+
+func (tc *scenarioConfig) validateJSONSchema(expectedSchemaLoader gojsonschema.JSONLoader, actualResponse string) error {
 	actualResultLoader := gojsonschema.NewStringLoader(actualResponse)
 	result, validateErr := gojsonschema.Validate(expectedSchemaLoader, actualResultLoader)
 	if validateErr != nil {
@@ -972,16 +984,21 @@ func (tc *scenarioConfig) compareJSONSchema(expectedSchema string, actualRespons
 		for _, err := range result.Errors() {
 			fmt.Printf("- %s value = %s\n", err, err.Value())
 		}
-		return tc.logError(fmt.Errorf("the response %s does not match %s", asPrettyJson(actualResponse), expectedSchema))
+		return fmt.Errorf("the response does not match the expected JSON schema")
 	}
 	if result.Valid() {
 		return nil
 	}
-	return tc.logError(fmt.Errorf("failed to validate the response %s but no error detected when expecting %s", asPrettyJson(actualResponse), expectedSchema))
+	return fmt.Errorf("failed to validate the response %s but no error detected", asPrettyJson(actualResponse))
 }
 
 func (tc *scenarioConfig) theResponseShouldHaveSchemaAs(body *godog.DocString) error {
 	return tc.compareJSONSchema(body.Content, string(tc.body))
+}
+
+func (tc *scenarioConfig) theResponseShouldHaveSchemaFromFile(filePath string) error {
+	filePath = strings.TrimPrefix(filePath, "file:/")
+	return tc.compareJSONSchemaFile(filePath, string(tc.body))
 }
 
 func (tc *scenarioConfig) unquoteJsonPath(jsonPath string) string {
@@ -1244,8 +1261,6 @@ func (tc *scenarioConfig) saveScenarioName(ctx context.Context, sc *godog.Scenar
 }
 
 func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
-	//tc.assetsSync.Lock()
-	//defer tc.assetsSync.Unlock()
 	for assetName, ids := range tc.assets {
 		clonedIDs := slices.Clone(ids)
 		hardDelete := false
@@ -1489,6 +1504,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the metrics should show request count for "([^"]*)"$`, tc.theMetricsShouldShowRequestCountFor)
 	// Responses
 	ctx.Step(`^the response should have schema as:$`, tc.theResponseShouldHaveSchemaAs)
+	ctx.Step(`^the response should have schema from file "([^"]*)"$`, tc.theResponseShouldHaveSchemaFromFile)
 	ctx.Step(`^the "([^"]*)" field in the response should be saved as "([^"]*)"$`, tc.theFieldShouldBeSaved)
 	ctx.Step(`^the response should contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldContainAtJSONPath)
 	ctx.Step(`^the response should equal the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldEqualAtJSONPath)

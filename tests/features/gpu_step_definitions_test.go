@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -491,9 +490,11 @@ func gpuTestSuiteSubstValue(name string) (value string, ok bool) {
 	}
 }
 
+/*
 func providerHasGPUTag(tags []string) bool {
 	return slices.Contains(tags, gpuFVTProviderTag)
 }
+*/
 
 func deleteGPUTestProvidersAPI(headers map[string]string) error {
 	if api == nil {

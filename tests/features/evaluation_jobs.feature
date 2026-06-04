@@ -13,6 +13,22 @@ Feature: Evaluation Jobs
     # This is mandatory for the tests to run successfully
     And the value "{{env:MODEL_AUTH_SECRET_REF}}" is not empty
 
+  @connected
+  Scenario: Check evaluation job creation on a connected cluster
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    Then the response code should be 202
+    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.resource.tenant"
+    And the response should have schema from file "file:/schemas/evaluation_job_resource_connected.schema.json"
+
+  @disconnected
+  Scenario: Check evaluation job creation on a disconnected cluster
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    Then the response code should be 202
+    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.resource.tenant"
+    And the response should have schema from file "file:/schemas/evaluation_job_resource_disconnected.schema.json"
+
   Scenario: Verifying results returned for Evaluation job
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"

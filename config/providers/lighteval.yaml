@@ -456,3 +456,72 @@ benchmarks:
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
+  - id: math_500
+    name: MATH-500 competition problems
+    description: |-
+      500 hand-picked problems from the MATH dataset spanning 7 subject areas (algebra,
+      counting, geometry, number theory, probability, pre-calculus, intermediate algebra).
+      Tests competition-level mathematical reasoning with multi-step solutions. Primary
+      metric is pass@1 averaged over 3 random seeds (k=1, n=3 in lighteval syntax).
+    category: math
+    metrics:
+      - pass@1
+      - exact_match
+    num_few_shot: 0
+    dataset_size: 500
+    tags:
+      - math
+      - reasoning
+      - competition
+      - lighteval
+    primary_score:
+      metric: pass@1
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.30
+  - id: gpqa:diamond
+    name: Graduate-level science (GPQA Diamond)
+    description: |-
+      Expert-crafted PhD-level multiple-choice questions in biology, chemistry, and physics
+      requiring deep domain synthesis across topics rarely co-occurring in training data.
+      Diamond subset is the hardest tier — domain experts answer correctly ~65% of the time.
+      Primary metric is gpqa_pass@1 averaged over 3 random seeds.
+    category: reasoning
+    metrics:
+      - gpqa_pass@1
+      - acc
+    num_few_shot: 0
+    dataset_size: 198
+    tags:
+      - reasoning
+      - science
+      - expert
+      - competition
+      - lighteval
+    primary_score:
+      metric: gpqa_pass@1
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.35
+  - id: lcb:codegeneration_v6
+    name: LiveCodeBench v6 — code generation
+    description: |-
+      Real-world competitive programming problems collected from Codeforces, LeetCode, and
+      AtCoder after the model knowledge cutoff — eliminates data contamination risk.
+      Execution-based evaluation: generated code is run against hidden test cases.
+      Primary metric is codegen_pass@1 averaged over 3 random seeds.
+    category: code
+    metrics:
+      - codegen_pass@1
+    num_few_shot: 0
+    tags:
+      - code
+      - competitive-programming
+      - execution
+      - contamination-free
+      - lighteval
+    primary_score:
+      metric: codegen_pass@1
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.25

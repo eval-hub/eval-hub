@@ -420,6 +420,7 @@ func TestEvaluateEvaluationJobJsonnetDisconnected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("evaluateJsonnetFile: %v", err)
 	}
+	t.Logf("Disconnected: %s", out)
 	var job struct {
 		Benchmarks []struct {
 			ID          string         `json:"id"`
@@ -448,6 +449,53 @@ func TestEvaluateEvaluationJobJsonnetDisconnected(t *testing.T) {
 	}
 	if b.TestDataRef.S3.Bucket != "mlpipeline" || b.TestDataRef.S3.Key != "offline" || b.TestDataRef.S3.SecretRef != "minio-test" {
 		t.Errorf("test_data_ref.s3 = %+v, want mlpipeline/offline/minio-test", b.TestDataRef.S3)
+	}
+}
+
+func TestEvaluateEvaluationJobJsonnetConnected(t *testing.T) {
+	tc := &scenarioConfig{
+		values: map[string]string{},
+		jsonnetHarnessEnv: map[string]string{
+			"ENVIRONMENT_ID": "connected",
+		},
+	}
+	path, err := filepath.Abs(filepath.Join(testDataRoot(), "evaluation_job.jsonnet"))
+	if err != nil {
+		t.Fatalf("abs path: %v", err)
+	}
+	out, err := tc.evaluateJsonnetFile(path)
+	if err != nil {
+		t.Fatalf("evaluateJsonnetFile: %v", err)
+	}
+	t.Logf("Connected: %s", out)
+	var job struct {
+		Benchmarks []struct {
+			ID          string         `json:"id"`
+			Parameters  map[string]any `json:"parameters"`
+			TestDataRef *struct {
+				S3 struct {
+					Bucket    string `json:"bucket"`
+					Key       string `json:"key"`
+					SecretRef string `json:"secret_ref"`
+				} `json:"s3"`
+			} `json:"test_data_ref"`
+		} `json:"benchmarks"`
+	}
+	if err := json.Unmarshal([]byte(out), &job); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(job.Benchmarks) != 1 {
+		t.Fatalf("benchmarks = %#v, want one benchmark", job.Benchmarks)
+	}
+	b := job.Benchmarks[0]
+	if b.ID != "arc_easy" {
+		t.Errorf("benchmark id = %q, want arc_easy", b.ID)
+	}
+	if b.Parameters["tokenizer"] != "google/flan-t5-small" {
+		t.Errorf("tokenizer = %v, want google/flan-t5-small", b.Parameters["tokenizer"])
+	}
+	if b.TestDataRef != nil {
+		t.Errorf("test_data_ref = %+v, want nil", b.TestDataRef.S3)
 	}
 }
 
