@@ -24,13 +24,16 @@ import (
 
 var configPrinted bool
 
+const k8sEnvPrefix = "env:"
+
 // testContext holds state for real Kubernetes integration tests
 type testContext struct {
 	// HTTP client and server details
-	client   *http.Client
-	baseURL  string
-	response *http.Response
-	body     []byte
+	client      *http.Client
+	baseURL     string
+	response    *http.Response
+	body        []byte
+	reqHeaders  map[string]string
 	// Request tracking
 	lastRequestDuration time.Duration
 	lastRequestBody     string
@@ -55,6 +58,24 @@ type testContext struct {
 	createdJobIDs   []string
 
 	// Scenario flags
+}
+
+func resolveK8sStepValue(raw string) (string, error) {
+	re := regexp.MustCompile(`^\{\{([^}]*)\}\}$`)
+	if m := re.FindStringSubmatch(raw); len(m) > 1 {
+		raw = m[1]
+	}
+	if after, ok := strings.CutPrefix(raw, k8sEnvPrefix); ok {
+		envName, fallback, hasFallback := strings.Cut(after, "|")
+		if v, ok := os.LookupEnv(envName); ok {
+			return v, nil
+		}
+		if hasFallback {
+			return fallback, nil
+		}
+		return "", fmt.Errorf("environment variable %s is not set", envName)
+	}
+	return raw, nil
 }
 
 func newTestContext() *testContext {
@@ -85,6 +106,7 @@ func newTestContext() *testContext {
 		},
 		baseURL:    serviceURL,
 		namespace:  namespace,
+		reqHeaders: make(map[string]string),
 		configMaps: []*corev1.ConfigMap{},
 		jobs:       []*batchv1.Job{},
 	}
@@ -165,6 +187,7 @@ func (tc *testContext) initKubernetesClient() error {
 func (tc *testContext) reset() {
 	tc.response = nil
 	tc.body = nil
+	tc.reqHeaders = make(map[string]string)
 	tc.lastRequestDuration = 0
 	tc.lastRequestBody = ""
 	tc.lastBenchmarkIDs = nil
@@ -182,6 +205,17 @@ func (tc *testContext) reset() {
 	tc.createdJobIDs = nil
 }
 
+func (tc *testContext) applyAPIHeaders(req *http.Request) {
+	for k, v := range tc.reqHeaders {
+		req.Header.Set(k, v)
+	}
+	req.Header.Set("X-Tenant", tc.namespace)
+	authToken := os.Getenv("AUTH_TOKEN")
+	if authToken != "" {
+		req.Header.Set("Authorization", "Bearer "+authToken)
+	}
+}
+
 // cleanup removes resources created during the test
 func (tc *testContext) cleanup(ctx context.Context) error {
 	for _, jobID := range tc.createdJobIDs {
@@ -190,11 +224,7 @@ func (tc *testContext) cleanup(ctx context.Context) error {
 		}
 		req, err := http.NewRequestWithContext(ctx, "DELETE", tc.baseURL+"/api/v1/evaluations/jobs/"+jobID+"?hard_delete=true", nil)
 		if err == nil {
-			req.Header.Set("X-Tenant", tc.namespace)
-			authToken := os.Getenv("AUTH_TOKEN")
-			if authToken != "" {
-				req.Header.Set("Authorization", "Bearer "+authToken)
-			}
+			tc.applyAPIHeaders(req)
 			resp, reqErr := tc.client.Do(req)
 			if reqErr == nil && resp != nil {
 				resp.Body.Close()
@@ -233,6 +263,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	// Background Steps
 	ctx.Step(`^the service is running with Kubernetes runtime$`, tc.theServiceIsRunningWithK8sRuntime)
 	ctx.Step(`^the environment variable "([^"]*)" is set to "([^"]*)"$`, tc.environmentVariableIsSet)
+	ctx.Step(`^I set the header "([^"]*)" to "([^"]*)"$`, tc.iSetHeaderTo)
+	ctx.Step(`^I unset the header "([^"]*)"$`, tc.iUnsetHeader)
 
 	// HTTP Steps
 	ctx.Step(`^I send a POST request to "([^"]*)" with body "([^"]*)"$`, tc.iSendPostRequestWithBody)
@@ -350,6 +382,19 @@ func (tc *testContext) theServiceIsRunningWithK8sRuntime(ctx context.Context) er
 	return nil
 }
 
+func (tc *testContext) iSetHeaderTo(paramName, paramValue string) error {
+	value, err := resolveK8sStepValue(paramValue)
+	if err != nil {
+		return err
+	}
+	tc.reqHeaders[paramName] = value
+	return nil
+}
+
+func (tc *testContext) iUnsetHeader(paramName string) {
+	delete(tc.reqHeaders, paramName)
+}
+
 // ============================================================================
 // HTTP Steps
 // ============================================================================
@@ -392,13 +437,7 @@ func (tc *testContext) iSendRequestWithBody(method, path, bodyFile string) error
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	req.Header.Set("X-Tenant", tc.namespace)
-
-	// Add authentication token if available
-	authToken := os.Getenv("AUTH_TOKEN")
-	if authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+authToken)
-	}
+	tc.applyAPIHeaders(req)
 
 	start := time.Now()
 	tc.response, err = tc.client.Do(req)
@@ -419,6 +458,7 @@ func (tc *testContext) iSendRequestWithBody(method, path, bodyFile string) error
 		fmt.Printf("  URL: %s %s\n", method, url)
 		fmt.Printf("  Status: %d %s\n", tc.response.StatusCode, http.StatusText(tc.response.StatusCode))
 		fmt.Printf("  Auth Token: %s\n", func() string {
+			authToken := os.Getenv("AUTH_TOKEN")
 			if authToken == "" {
 				return "❌ NOT SET"
 			}
@@ -2287,11 +2327,7 @@ func (tc *testContext) fetchBenchmarkStatuses() ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("X-Tenant", tc.namespace)
-	authToken := os.Getenv("AUTH_TOKEN")
-	if authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+authToken)
-	}
+	tc.applyAPIHeaders(req)
 	resp, err := tc.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)

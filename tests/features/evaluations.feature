@@ -6,6 +6,7 @@ Feature: Evaluations Endpoint
 
   Background:
     Given I set the header "X-Tenant" to "{{env:X_TENANT|test-tenant}}"
+    And I set the header "X-User" to "{{env:X_USER|test-user}}"
 
   @negative
   Scenario: Create evaluation job missing name

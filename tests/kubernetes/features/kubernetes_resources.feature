@@ -5,6 +5,7 @@ Feature: Kubernetes Resources Validation
 
   Background:
     Given the service is running with Kubernetes runtime
+    And I set the header "X-User" to "{{env:X_USER|test-user}}"
 
   Scenario: Job and ConfigMap specification (basic)
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_basic.json"

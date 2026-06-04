@@ -83,28 +83,28 @@ func TestIsOTELStorageScansEnabled(t *testing.T) {
 	})
 }
 
-func TestRequiresTenant(t *testing.T) {
+func TestRequiresIdentityHeaders(t *testing.T) {
 	t.Run("nil config returns false", func(t *testing.T) {
 		var c *config.Config
-		if c.RequiresTenant() {
+		if c.RequiresIdentityHeaders() {
 			t.Error("nil config")
 		}
 	})
 	t.Run("nil service returns false", func(t *testing.T) {
 		c := &config.Config{}
-		if c.RequiresTenant() {
+		if c.RequiresIdentityHeaders() {
 			t.Error("nil Service")
 		}
 	})
 	t.Run("local mode returns false", func(t *testing.T) {
 		c := &config.Config{Service: &config.ServiceConfig{LocalMode: true}}
-		if c.RequiresTenant() {
+		if c.RequiresIdentityHeaders() {
 			t.Error("LocalMode")
 		}
 	})
-	t.Run("tenant required when not local", func(t *testing.T) {
+	t.Run("cluster mode returns true", func(t *testing.T) {
 		c := &config.Config{Service: &config.ServiceConfig{LocalMode: false}}
-		if !c.RequiresTenant() {
+		if !c.RequiresIdentityHeaders() {
 			t.Error("expected true")
 		}
 	})

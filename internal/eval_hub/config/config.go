@@ -29,7 +29,9 @@ func (c *Config) IsPrometheusEnabled() bool {
 	return (c != nil) && (c.Prometheus != nil) && c.Prometheus.Enabled
 }
 
-// RequiresTenant reports whether API routes require an X-Tenant header (non-local mode).
-func (c *Config) RequiresTenant() bool {
+// RequiresIdentityHeaders reports whether evaluation API routes require X-Tenant and X-User.
+// Cluster mode (not --local): kube-rbac-proxy sets these headers. Local mode does not require
+// or enforce them.
+func (c *Config) RequiresIdentityHeaders() bool {
 	return (c != nil) && (c.Service != nil) && !c.Service.LocalMode
 }

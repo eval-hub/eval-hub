@@ -6,6 +6,7 @@ Feature: Collections Endpoint
 
   Background:
     Given I set the header "X-Tenant" to "{{env:X_TENANT|test-tenant}}"
+    And I set the header "X-User" to "{{env:X_USER|test-user}}"
 
   Scenario: Create a collection of benchmarks and get by id
     Given the service is running

@@ -7,6 +7,7 @@ Feature: Evaluation Jobs
 
   Background:
     Given I set the header "X-Tenant" to "{{env:X_TENANT|test-tenant}}"
+    And I set the header "X-User" to "{{env:X_USER|test-user}}"
     And I set the wait deadline to "{{env:WAIT_DEADLINE|30m}}"
     And the model endpoint is reachable
     # This is mandatory for the tests to run successfully

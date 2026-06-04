@@ -431,22 +431,35 @@ func gpuFTRequestTransactionID(requestID string) string {
 	return gpuFTSuiteRequestIDValue()
 }
 
-func gpuFTNewRequest(method, url string, body io.Reader, tenant, requestID string) (*http.Request, error) {
+func gpuFTNewRequest(method, url string, body io.Reader, headers map[string]string, requestID string) (*http.Request, error) {
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err
 	}
-	if tenant != "" {
-		req.Header.Set("X-Tenant", tenant)
+	for k, v := range headers {
+		req.Header.Set(k, v)
 	}
 	req.Header.Set(server.TRANSACTION_ID_HEADER, gpuFTRequestTransactionID(requestID))
-	if token, err := gpuFTAuthToken(tenant); err == nil && token != "" {
+	if token, err := gpuFTAuthToken(headers["X-Tenant"]); err == nil && token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	} else if err != nil && os.Getenv("AUTH_TOKEN") == "" {
 		logDebug("WARNING: No auth token for GPU FVT API request: %v\n", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	return req, nil
+}
+
+// gpuFTSuiteAPIHeaders builds identity headers for suite-level API setup (BeforeSuite),
+// using the same env/default pattern as X_TENANT in suite hooks.
+func gpuFTSuiteAPIHeaders(tenant string) map[string]string {
+	user := os.Getenv("X_USER")
+	if user == "" {
+		user = "test-user"
+	}
+	return map[string]string{
+		"X-Tenant": tenant,
+		"X-User":   user,
+	}
 }
 
 func loadGPUTestProviderBody(filename string) ([]byte, error) {
@@ -482,7 +495,7 @@ func providerHasGPUTag(tags []string) bool {
 	return slices.Contains(tags, gpuFVTProviderTag)
 }
 
-func deleteGPUTestProvidersAPI(tenant string) error {
+func deleteGPUTestProvidersAPI(headers map[string]string) error {
 	if api == nil {
 		return fmt.Errorf("API feature not initialized")
 	}
@@ -493,7 +506,7 @@ func deleteGPUTestProvidersAPI(tenant string) error {
 	baseURL := gpuFTBaseURL()
 	for _, id := range gpuTestProviderIDs {
 		deleteURL := baseURL + "/api/v1/evaluations/providers/" + id
-		delReq, err := gpuFTNewRequest(http.MethodDelete, deleteURL, nil, tenant, "")
+		delReq, err := gpuFTNewRequest(http.MethodDelete, deleteURL, nil, headers, "")
 		if err != nil {
 			return err
 		}
@@ -514,7 +527,7 @@ func deleteGPUTestProvidersAPI(tenant string) error {
 	return nil
 }
 
-func createGPUTestProviderViaAPI(tenant, bodyFile string) (string, error) {
+func createGPUTestProviderViaAPI(headers map[string]string, bodyFile string) (string, error) {
 	body, err := loadGPUTestProviderBody(bodyFile)
 	if err != nil {
 		return "", err
@@ -522,7 +535,7 @@ func createGPUTestProviderViaAPI(tenant, bodyFile string) (string, error) {
 
 	baseURL := gpuFTBaseURL()
 	createURL := baseURL + "/api/v1/evaluations/providers"
-	req, err := gpuFTNewRequest(http.MethodPost, createURL, strings.NewReader(string(body)), tenant, "")
+	req, err := gpuFTNewRequest(http.MethodPost, createURL, strings.NewReader(string(body)), headers, "")
 	if err != nil {
 		return "", err
 	}
@@ -557,7 +570,8 @@ func createGPUTestProviders(namespace string) error {
 
 	logDebug("Creating GPU test providers via API in tenant: %s\n", namespace)
 
-	if err := deleteGPUTestProvidersAPI(namespace); err != nil {
+	headers := gpuFTSuiteAPIHeaders(namespace)
+	if err := deleteGPUTestProvidersAPI(headers); err != nil {
 		logDebug("WARNING: Could not clean up prior GPU test providers: %v\n", err)
 	}
 
@@ -568,7 +582,7 @@ func createGPUTestProviders(namespace string) error {
 	}
 
 	for _, file := range providerFiles {
-		id, err := createGPUTestProviderViaAPI(namespace, file)
+		id, err := createGPUTestProviderViaAPI(headers, file)
 		if err != nil {
 			return fmt.Errorf("failed to create GPU test provider from %s: %w", file, err)
 		}
@@ -1176,7 +1190,7 @@ func (tc *scenarioConfig) gpuTestProviderIsLoaded() error {
 
 	baseURL := gpuFTBaseURL()
 	getURL := baseURL + "/api/v1/evaluations/providers/" + providerID
-	req, err := gpuFTNewRequest(http.MethodGet, getURL, nil, tenant, "")
+	req, err := gpuFTNewRequest(http.MethodGet, getURL, nil, tc.reqHeaders, "")
 	if err != nil {
 		return tc.logError(err)
 	}
@@ -1234,7 +1248,7 @@ func InitializeGPUTestSuite(ctx *godog.TestSuiteContext) {
 		}
 		if len(gpuTestProviderIDs) > 0 {
 			logDebug("Cleaning up GPU test providers via API\n")
-			if err := deleteGPUTestProvidersAPI(namespace); err != nil {
+			if err := deleteGPUTestProvidersAPI(gpuFTSuiteAPIHeaders(namespace)); err != nil {
 				logDebug("WARNING: Failed to cleanup GPU test providers: %v\n", err)
 			}
 		}

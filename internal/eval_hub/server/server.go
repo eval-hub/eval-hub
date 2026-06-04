@@ -380,8 +380,15 @@ func (s *Server) setupDocsRoutes(h *handlers.Handlers, router *http.ServeMux) {
 }
 
 func (s *Server) canContinueRequest(ctx *executioncontext.ExecutionContext, resp RespWrapper) bool {
-	if s.serviceConfig.RequiresTenant() && ctx.Tenant == "" {
+	if !s.serviceConfig.RequiresIdentityHeaders() {
+		return true
+	}
+	if ctx.Tenant == "" {
 		resp.ErrorWithMessageCode(ctx.RequestID, messages.MissingTenantHeader, "Header", TENANT_HEADER)
+		return false
+	}
+	if ctx.User == "" {
+		resp.ErrorWithMessageCode(ctx.RequestID, messages.MissingUserHeader, "Header", USER_HEADER)
 		return false
 	}
 	return true

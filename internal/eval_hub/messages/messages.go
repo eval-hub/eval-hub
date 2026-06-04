@@ -231,6 +231,13 @@ var (
 		"The request is missing a required header {{.Header}}.",
 		"missing_tenant_header",
 	)
+
+	// MissingUserHeader The request is missing a required header {{.Header}}.
+	MissingUserHeader = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The request is missing a required header {{.Header}}.",
+		"missing_user_header",
+	)
 )
 
 type MessageCode struct {
