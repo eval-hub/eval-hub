@@ -250,6 +250,11 @@ func TestServerShutdown(t *testing.T) {
 
 func createServer(t *testing.T, port int) (*server.Server, error) {
 	t.Helper()
+	return createServerWithLocalMode(t, port, true)
+}
+
+func createServerWithLocalMode(t *testing.T, port int, localMode bool) (*server.Server, error) {
+	t.Helper()
 	logger, _, err := logging.NewLogger()
 	if err != nil {
 		return nil, err
@@ -267,7 +272,7 @@ func createServer(t *testing.T, port int) (*server.Server, error) {
 	} else {
 		serviceConfig.Prometheus.Enabled = true
 	}
-	serviceConfig.Service.LocalMode = true // set local mode for testing
+	serviceConfig.Service.LocalMode = localMode
 	// set up the provider configs
 	providerConfigs, err := config.LoadProviderConfigs(logger, validate)
 	if err != nil {
