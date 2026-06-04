@@ -29,11 +29,11 @@ const k8sEnvPrefix = "env:"
 // testContext holds state for real Kubernetes integration tests
 type testContext struct {
 	// HTTP client and server details
-	client      *http.Client
-	baseURL     string
-	response    *http.Response
-	body        []byte
-	reqHeaders  map[string]string
+	client     *http.Client
+	baseURL    string
+	response   *http.Response
+	body       []byte
+	reqHeaders map[string]string
 	// Request tracking
 	lastRequestDuration time.Duration
 	lastRequestBody     string
