@@ -245,7 +245,7 @@ func (h *Handlers) HandleCreateCollection(ctx *executioncontext.ExecutionContext
 			if err != nil {
 				return err
 			}
-			return serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, collection)
+			return serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, collection, nil)
 		},
 		"validation",
 		"validate-collection",
@@ -341,7 +341,7 @@ func (h *Handlers) HandleUpdateCollection(ctx *executioncontext.ExecutionContext
 			if err != nil {
 				return err
 			}
-			return serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, request)
+			return serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, request, nil)
 		},
 		"validation",
 		"validate-collection-update",

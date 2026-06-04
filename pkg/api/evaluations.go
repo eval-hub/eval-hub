@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -224,8 +225,31 @@ type CollectionRef struct {
 	Benchmarks []EvaluationBenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 }
 
+// NormalizeEvaluationJobConfig trims queue fields on a decoded job config before validation.
+// Intended as a serialization.Unmarshal beforeValidate hook; v must be *EvaluationJobConfig.
+func NormalizeEvaluationJobConfig(v any) {
+	cfg, ok := v.(*EvaluationJobConfig)
+	if !ok || cfg == nil {
+		return
+	}
+	cfg.Normalize()
+}
+
+// Normalize trims queue fields and applies defaults before struct validation.
+// Queue name/kind whitespace is stripped; an empty kind defaults to "kueue".
+func (cfg *EvaluationJobConfig) Normalize() {
+	if cfg == nil || cfg.Queue == nil {
+		return
+	}
+	cfg.Queue.Name = strings.TrimSpace(cfg.Queue.Name)
+	cfg.Queue.Kind = strings.TrimSpace(cfg.Queue.Kind)
+	if cfg.Queue.Kind == "" {
+		cfg.Queue.Kind = "kueue"
+	}
+}
+
 // QueueConfig represents an optional scheduling queue for evaluation jobs.
-// When Kind is empty, the evaluation job API handler normalizes it to "kueue" before persist/runtime.
+// When Kind is empty, Normalize sets it to "kueue" before validation and persist.
 type QueueConfig struct {
 	Kind string `json:"kind,omitempty" validate:"omitempty,oneof=kueue"`
 	Name string `json:"name" validate:"required,k8s_label_value"`

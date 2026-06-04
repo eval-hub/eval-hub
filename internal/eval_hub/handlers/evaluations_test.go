@@ -239,40 +239,58 @@ func TestResolveProvider_NotFound(t *testing.T) {
 	}
 }
 
-func TestApplyEvaluationJobQueueDefaults(t *testing.T) {
+func TestHandleCreateEvaluationAcceptsTrimmedQueueName(t *testing.T) {
 	t.Parallel()
-	t.Run("nil config", func(t *testing.T) {
-		t.Parallel()
-		handlers.ApplyEvaluationJobQueueDefaults(nil)
-	})
-	t.Run("nil queue", func(t *testing.T) {
-		t.Parallel()
-		cfg := &api.EvaluationJobConfig{}
-		handlers.ApplyEvaluationJobQueueDefaults(cfg)
-		if cfg.Queue != nil {
-			t.Fatal("expected Queue to stay nil")
-		}
-	})
-	t.Run("empty kind defaults to kueue", func(t *testing.T) {
-		t.Parallel()
-		cfg := &api.EvaluationJobConfig{
-			Queue: &api.QueueConfig{Name: "  q1  ", Kind: "  "},
-		}
-		handlers.ApplyEvaluationJobQueueDefaults(cfg)
-		if cfg.Queue.Kind != "kueue" || cfg.Queue.Name != "q1" {
-			t.Fatalf("got kind %q name %q", cfg.Queue.Kind, cfg.Queue.Name)
-		}
-	})
-	t.Run("preserves explicit kind", func(t *testing.T) {
-		t.Parallel()
-		cfg := &api.EvaluationJobConfig{
-			Queue: &api.QueueConfig{Name: "q", Kind: "other"},
-		}
-		handlers.ApplyEvaluationJobQueueDefaults(cfg)
-		if cfg.Queue.Kind != "other" {
-			t.Fatalf("got kind %q", cfg.Queue.Kind)
-		}
-	})
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	providerConfigs := map[string]api.ProviderResource{
+		"lm_evaluation_harness": {
+			Resource: api.Resource{ID: "lm_evaluation_harness"},
+			ProviderConfig: api.ProviderConfig{
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "arc_easy"},
+				},
+			},
+		},
+	}
+	storage := &fakeStorage{providerConfigs: providerConfigs}
+	runtime := &fakeRuntime{}
+	validate := validation.NewValidator()
+	h := handlers.New(storage, validate, runtime, nil, nil)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-trim-queue", logger, "test-user", "test-tenant")
+
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+		body: []byte(`{
+			"name": "test-evaluation-job-queue",
+			"model": {"url": "http://test.com", "name": "test"},
+			"benchmarks": [{"id": "arc_easy", "provider_id": "lm_evaluation_harness"}],
+			"queue": {"kind": "kueue", "name": "  user-queue  "}
+		}`),
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCreateEvaluation(ctx, req, resp)
+
+	if !runtime.called {
+		t.Fatal("expected runtime to be invoked")
+	}
+	if recorder.Code != 202 {
+		t.Fatalf("expected status 202, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+	var job api.EvaluationJobResource
+	if err := json.Unmarshal(recorder.Body.Bytes(), &job); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if job.Queue == nil {
+		t.Fatal("expected queue in response")
+	}
+	if job.Queue.Name != "user-queue" {
+		t.Fatalf("queue.name: got %q want user-queue", job.Queue.Name)
+	}
+	if job.Queue.Kind != "kueue" {
+		t.Fatalf("queue.kind: got %q want kueue", job.Queue.Kind)
+	}
 }
 
 /* TODO: Fix this test

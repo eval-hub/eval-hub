@@ -63,7 +63,7 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 			if err != nil {
 				return err
 			}
-			return serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, request)
+			return serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, request, nil)
 		},
 		"validation",
 		"validate-provider",
@@ -240,7 +240,7 @@ func (h *Handlers) HandleUpdateProvider(ctx *executioncontext.ExecutionContext, 
 			if err != nil {
 				return err
 			}
-			return serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, request)
+			return serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, request, nil)
 		},
 		"validation",
 		"validate-provider-update",

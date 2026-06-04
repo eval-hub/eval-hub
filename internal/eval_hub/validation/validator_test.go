@@ -186,6 +186,22 @@ func TestQueueConfig_InvalidNameRejected(t *testing.T) {
 	}
 }
 
+func TestQueueConfig_WhitespaceTrimmedBeforeValidation(t *testing.T) {
+	validate := NewValidator()
+	cfg := api.EvaluationJobConfig{
+		Name:  "test-job",
+		Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+		Benchmarks: []api.EvaluationBenchmarkConfig{
+			{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
+		},
+		Queue: &api.QueueConfig{Kind: "kueue", Name: "  user-queue  "},
+	}
+	cfg.Normalize()
+	if err := validate.Struct(cfg); err != nil {
+		t.Fatalf("expected no error after normalize, got: %v", err)
+	}
+}
+
 func TestQueueConfig_ValidNameAccepted(t *testing.T) {
 	validate := NewValidator()
 	valid := []string{
