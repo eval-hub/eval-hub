@@ -1184,11 +1184,6 @@ func (tc *scenarioConfig) gpuTestProviderIsLoaded() error {
 		return tc.logError(fmt.Errorf("GPU test provider ID is not set; GPU test provider setup may have failed"))
 	}
 
-	tenant := tc.reqHeaders["X-Tenant"]
-	if tenant == "" {
-		tenant = "test-tenant"
-	}
-
 	baseURL := gpuFTBaseURL()
 	getURL := baseURL + "/api/v1/evaluations/providers/" + providerID
 	req, err := gpuFTNewRequest(http.MethodGet, getURL, nil, tc.reqHeaders, "")
