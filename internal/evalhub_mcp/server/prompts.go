@@ -143,8 +143,9 @@ func registerPrompts(srv *mcp.Server, logger *slog.Logger) error {
 
 func eddWorkflowHandler(result *promptResultConfig, eddGuidance map[string]eddPhaseGuidance, logger *slog.Logger) mcp.PromptHandler {
 	return func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+		log := requestLogger(ctx, logger)
 		appType := req.Params.Arguments[ArgNameApplicationType]
-		logger.Debug(fmt.Sprintf("%s called", PromptNameEDDWorkflow), ArgNameApplicationType, appType)
+		log.Debug(fmt.Sprintf("%s called", PromptNameEDDWorkflow), ArgNameApplicationType, appType)
 
 		if appType == "" {
 			return nil, fmt.Errorf("%s is required; valid values: %s", ArgNameApplicationType, strings.Join(validApplicationTypes, ", "))
@@ -178,9 +179,10 @@ func eddWorkflowHandler(result *promptResultConfig, eddGuidance map[string]eddPh
 
 func evaluateModelHandler(result *promptResultConfig, logger *slog.Logger) mcp.PromptHandler {
 	return func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+		log := requestLogger(ctx, logger)
 		modelURL := strings.TrimSpace(req.Params.Arguments[ArgNameModelURL])
 		benchmarkPrefs := strings.TrimSpace(req.Params.Arguments[ArgNameBenchmarkPreferences])
-		logger.Debug(fmt.Sprintf("%s called", PromptNameEvaluateModel), ArgNameModelURL, modelURL, ArgNameBenchmarkPreferences, benchmarkPrefs)
+		log.Debug(fmt.Sprintf("%s called", PromptNameEvaluateModel), ArgNameModelURL, modelURL, ArgNameBenchmarkPreferences, benchmarkPrefs)
 
 		var messages []*mcp.PromptMessage
 		if modelURL == "" {
@@ -222,9 +224,10 @@ func evaluateModelHandler(result *promptResultConfig, logger *slog.Logger) mcp.P
 
 func compareRunsHandler(result *promptResultConfig, logger *slog.Logger) mcp.PromptHandler {
 	return func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+		log := requestLogger(ctx, logger)
 		jobIDsRaw := req.Params.Arguments[ArgNameJobIds]
 		jobIDs := parseJobIDs(jobIDsRaw)
-		logger.Debug(fmt.Sprintf("%s called", PromptNameCompareRuns), ArgNameJobIds, jobIDsRaw)
+		log.Debug(fmt.Sprintf("%s called", PromptNameCompareRuns), ArgNameJobIds, jobIDsRaw)
 
 		var messages []*mcp.PromptMessage
 		if jobIDs == nil {

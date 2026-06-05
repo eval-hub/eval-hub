@@ -221,7 +221,7 @@ func TestWrapRequestBearerTokenRequiresAuthorization(t *testing.T) {
 		t.Fatalf("newOIDCTokenVerifier: %v", err)
 	}
 
-	handler := wrapRequest(cfg, verifier.verify, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := wrapRequest(cfg, verifier.verify, discardLogger, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -255,7 +255,7 @@ func TestWrapRequestBearerTokenRequiresAuthorization(t *testing.T) {
 func TestWrapRequestRBACProxyRequiresHeaders(t *testing.T) {
 	t.Parallel()
 
-	handler := wrapRequest(&config.Config{AuthType: config.AuthTypeRBACProxy}, nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := wrapRequest(&config.Config{AuthType: config.AuthTypeRBACProxy}, nil, discardLogger, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 

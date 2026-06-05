@@ -112,7 +112,8 @@ func registerTools(srv *mcp.Server, client EvalHubToolClient, logger *slog.Logge
 
 func submitEvaluationHandler(client EvalHubToolClient, logger *slog.Logger) mcp.ToolHandlerFor[SubmitEvaluationInput, SubmitEvaluationOutput] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input SubmitEvaluationInput) (*mcp.CallToolResult, SubmitEvaluationOutput, error) {
-		logger.Debug("submit_evaluation called", "name", input.Name)
+		log := requestLogger(ctx, logger)
+		log.Debug("submit_evaluation called", "name", input.Name)
 
 		if len(input.Benchmarks) == 0 && input.Collection == nil {
 			return errorResult("validation error: provide at least one of 'benchmarks' or 'collection'"), SubmitEvaluationOutput{}, nil
@@ -125,7 +126,7 @@ func submitEvaluationHandler(client EvalHubToolClient, logger *slog.Logger) mcp.
 
 		job, err := client.CreateJob(config)
 		if err != nil {
-			logger.Error("submit_evaluation failed", "error", err)
+			log.Error("submit_evaluation failed", "error", err)
 			return errorResult(fmt.Sprintf("failed to create evaluation job: %v", err)), SubmitEvaluationOutput{}, nil
 		}
 
@@ -148,7 +149,8 @@ func submitEvaluationHandler(client EvalHubToolClient, logger *slog.Logger) mcp.
 
 func cancelJobHandler(client EvalHubToolClient, logger *slog.Logger) mcp.ToolHandlerFor[CancelJobInput, CancelJobOutput] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input CancelJobInput) (*mcp.CallToolResult, CancelJobOutput, error) {
-		logger.Debug("cancel_job called", "job_id", input.JobID)
+		log := requestLogger(ctx, logger)
+		log.Debug("cancel_job called", "job_id", input.JobID)
 
 		if input.JobID == "" {
 			return errorResult("validation error: 'job_id' is required"), CancelJobOutput{}, nil
@@ -156,7 +158,7 @@ func cancelJobHandler(client EvalHubToolClient, logger *slog.Logger) mcp.ToolHan
 
 		err := client.CancelJob(input.JobID)
 		if err != nil {
-			logger.Error("cancel_job failed", "job_id", input.JobID, "error", err)
+			log.Error("cancel_job failed", "job_id", input.JobID, "error", err)
 			return errorResult(fmt.Sprintf("failed to cancel job %s: %v", input.JobID, err)), CancelJobOutput{}, nil
 		}
 
@@ -174,7 +176,8 @@ func cancelJobHandler(client EvalHubToolClient, logger *slog.Logger) mcp.ToolHan
 
 func getJobStatusHandler(client EvalHubToolClient, logger *slog.Logger) mcp.ToolHandlerFor[GetJobStatusInput, GetJobStatusOutput] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input GetJobStatusInput) (*mcp.CallToolResult, GetJobStatusOutput, error) {
-		logger.Debug("get_job_status called", "job_id", input.JobID)
+		log := requestLogger(ctx, logger)
+		log.Debug("get_job_status called", "job_id", input.JobID)
 
 		if input.JobID == "" {
 			return errorResult("validation error: 'job_id' is required"), GetJobStatusOutput{}, nil
@@ -182,7 +185,7 @@ func getJobStatusHandler(client EvalHubToolClient, logger *slog.Logger) mcp.Tool
 
 		job, err := client.GetJob(input.JobID)
 		if err != nil {
-			logger.Error("get_job_status failed", "job_id", input.JobID, "error", err)
+			log.Error("get_job_status failed", "job_id", input.JobID, "error", err)
 			return errorResult(fmt.Sprintf("failed to get job status for %s: %v", input.JobID, err)), GetJobStatusOutput{}, nil
 		}
 

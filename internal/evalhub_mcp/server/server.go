@@ -171,12 +171,13 @@ func runStdio(ctx context.Context, srv *mcp.Server) error {
 	return srv.Run(ctx, &mcp.StdioTransport{})
 }
 
-func wrapRequest(cfg *config.Config, bearerVerifier auth.TokenVerifier, next http.Handler) http.Handler {
+func wrapRequest(cfg *config.Config, bearerVerifier auth.TokenVerifier, logger *slog.Logger, next http.Handler) http.Handler {
+	var h http.Handler
 	switch cfg.AuthType {
 	case config.AuthTypeRBACProxy:
 		// if we have the kube-rbac-proxy then we need to check the HTTP headers for the tenant and user headers
 		required := []string{TENANT_HEADER, USER_HEADER}
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			for _, name := range required {
 				if strings.TrimSpace(r.Header.Get(name)) == "" {
 					http.Error(w, fmt.Sprintf("Missing required header '%s' from kube-rbac-proxy", name), http.StatusForbidden)
@@ -187,22 +188,24 @@ func wrapRequest(cfg *config.Config, bearerVerifier auth.TokenVerifier, next htt
 		})
 	case config.AuthTypeOIDC:
 		if bearerVerifier == nil {
-			return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			h = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				http.Error(w, "Bearer token authentication is not configured", http.StatusInternalServerError)
 			})
+		} else {
+			var opts *auth.RequireBearerTokenOptions
+			if len(cfg.OIDC.Scopes) > 0 {
+				opts = &auth.RequireBearerTokenOptions{Scopes: cfg.OIDC.Scopes}
+			}
+			h = auth.RequireBearerToken(bearerVerifier, opts)(next)
 		}
-		var opts *auth.RequireBearerTokenOptions
-		if len(cfg.OIDC.Scopes) > 0 {
-			opts = &auth.RequireBearerTokenOptions{Scopes: cfg.OIDC.Scopes}
-		}
-		return auth.RequireBearerToken(bearerVerifier, opts)(next)
 	case config.AuthTypeNone:
-		return next
+		h = next
 	default:
-		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		h = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			http.Error(w, "Unsupported authentication type", http.StatusInternalServerError)
 		})
 	}
+	return withRequestContext(logger, h)
 }
 
 func runHTTP(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *slog.Logger, bearerVerifier auth.TokenVerifier) error {
@@ -210,7 +213,7 @@ func runHTTP(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *s
 		func(r *http.Request) *mcp.Server { return srv },
 		nil,
 	)
-	handler := wrapRequest(cfg, bearerVerifier, mcpHandler)
+	handler := wrapRequest(cfg, bearerVerifier, logger, mcpHandler)
 	return serveHTTP(ctx, handler, cfg, logger)
 }
 
@@ -221,7 +224,7 @@ func runLegacyHTTPSSE(ctx context.Context, srv *mcp.Server, cfg *config.Config, 
 		nil,
 	)
 	logger.Warn("transport 'http-sse' is deprecated; use 'http' (Streamable HTTP) unless connecting to legacy MCP clients", "transport", cfg.Transport)
-	handler := wrapRequest(cfg, bearerVerifier, mcpHandler)
+	handler := wrapRequest(cfg, bearerVerifier, logger, mcpHandler)
 	return serveHTTP(ctx, handler, cfg, logger)
 }
 

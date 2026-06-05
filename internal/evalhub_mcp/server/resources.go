@@ -109,7 +109,8 @@ func registerResources(srv *mcp.Server, ds EvalHubDiscovery, logger *slog.Logger
 
 func listProvidersHandler(ds EvalHubDiscovery, logger *slog.Logger, defaultLimit int) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		logger.Debug("reading resource", "uri", req.Params.URI)
+		log := requestLogger(ctx, logger)
+		log.Debug("reading resource", "uri", req.Params.URI)
 		list, err := ds.ListProviders(evalhubclient.WithLimit(defaultLimit))
 		if err != nil {
 			return nil, fmt.Errorf("listing providers: %w", err)
@@ -124,11 +125,12 @@ func listProvidersHandler(ds EvalHubDiscovery, logger *slog.Logger, defaultLimit
 
 func getProviderHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		log := requestLogger(ctx, logger)
 		id, err := extractPathID(req.Params.URI, "providers")
 		if err != nil {
 			return nil, err
 		}
-		logger.Debug("reading resource", "uri", req.Params.URI, "id", id)
+		log.Debug("reading resource", "uri", req.Params.URI, "id", id)
 		provider, err := ds.GetProvider(id)
 		if err != nil {
 			return nil, toMCPError(req.Params.URI, err)
@@ -139,8 +141,9 @@ func getProviderHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHa
 
 func listBenchmarksHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		logger.Debug("reading resource", "uri", req.Params.URI)
-		labels := extractLabels(req.Params.URI, logger)
+		log := requestLogger(ctx, logger)
+		log.Debug("reading resource", "uri", req.Params.URI)
+		labels := extractLabels(req.Params.URI, log)
 
 		var benchmarks []api.BenchmarkResource
 		var err error
@@ -161,11 +164,12 @@ func listBenchmarksHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.Resourc
 
 func getBenchmarkHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		log := requestLogger(ctx, logger)
 		id, err := extractPathID(req.Params.URI, "benchmarks")
 		if err != nil {
 			return nil, err
 		}
-		logger.Debug("reading resource", "uri", req.Params.URI, "id", id)
+		log.Debug("reading resource", "uri", req.Params.URI, "id", id)
 		benchmark, err := ds.GetBenchmark(id)
 		if err != nil {
 			return nil, toMCPError(req.Params.URI, err)
@@ -176,7 +180,8 @@ func getBenchmarkHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceH
 
 func listCollectionsHandler(ds EvalHubDiscovery, logger *slog.Logger, defaultLimit int) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		logger.Debug("reading resource", "uri", req.Params.URI)
+		log := requestLogger(ctx, logger)
+		log.Debug("reading resource", "uri", req.Params.URI)
 		opts, err := listOptsFromResourceURI(req.Params.URI, defaultLimit)
 		if err != nil {
 			return nil, err
@@ -195,11 +200,12 @@ func listCollectionsHandler(ds EvalHubDiscovery, logger *slog.Logger, defaultLim
 
 func getCollectionHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		log := requestLogger(ctx, logger)
 		id, err := extractPathID(req.Params.URI, "collections")
 		if err != nil {
 			return nil, err
 		}
-		logger.Debug("reading resource", "uri", req.Params.URI, "id", id)
+		log.Debug("reading resource", "uri", req.Params.URI, "id", id)
 		collection, err := ds.GetCollection(id)
 		if err != nil {
 			return nil, toMCPError(req.Params.URI, err)
@@ -210,7 +216,8 @@ func getCollectionHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.Resource
 
 func listJobsHandler(ds EvalHubDiscovery, logger *slog.Logger, defaultLimit int) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		logger.Debug("reading resource", "uri", req.Params.URI)
+		log := requestLogger(ctx, logger)
+		log.Debug("reading resource", "uri", req.Params.URI)
 		status, hasStatus, err := extractStatus(req.Params.URI)
 		if err != nil {
 			return nil, err
@@ -239,11 +246,12 @@ func listJobsHandler(ds EvalHubDiscovery, logger *slog.Logger, defaultLimit int)
 
 func getJobHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		log := requestLogger(ctx, logger)
 		id, err := extractPathID(req.Params.URI, "jobs")
 		if err != nil {
 			return nil, err
 		}
-		logger.Debug("reading resource", "uri", req.Params.URI, "id", id)
+		log.Debug("reading resource", "uri", req.Params.URI, "id", id)
 		job, err := ds.GetJob(id)
 		if err != nil {
 			return nil, toMCPError(req.Params.URI, err)

@@ -86,7 +86,7 @@ Authorization: Bearer eyJhbGciOi...
 
 Validation uses [go-oidc](https://github.com/coreos/go-oidc) against the issuer's `.well-known/openid-configuration` and JWKS. Invalid, expired, or wrongly scoped tokens receive **401** / **403** with a plain-text body.
 
-Set `insecure: true` only when the IdP uses a self-signed TLS certificate (development).
+Set `oidc.insecure: true` only when the IdP uses a self-signed TLS certificate (development). This is separate from top-level `insecure`, which only affects TLS to the eval-hub API.
 
 ### Outbound eval-hub API credentials
 
@@ -110,7 +110,8 @@ YAML keys and environment variables (env overrides YAML):
 | OIDC issuer | `oidc.issuer_url` | `EVALHUB_OIDC_ISSUER_URL` |
 | OIDC audience | `oidc.audience` | `EVALHUB_OIDC_AUDIENCE` |
 | OIDC required scopes | `oidc.scopes` | `EVALHUB_OIDC_SCOPES` |
-| Skip TLS verification | `insecure` | `EVALHUB_INSECURE` |
+| Skip TLS verification (IdP) | `oidc.insecure` | `EVALHUB_OIDC_INSECURE` |
+| Skip TLS verification (eval-hub API) | `insecure` | `EVALHUB_INSECURE` |
 | Eval-hub API URL | `base_url` | `EVALHUB_BASE_URL` |
 | Eval-hub token | `token` | `EVALHUB_TOKEN` |
 | Eval-hub tenant | `tenant` | `EVALHUB_TENANT` |

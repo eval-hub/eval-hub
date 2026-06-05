@@ -46,7 +46,7 @@ func versionHandler(info *ServerInfo, logger *slog.Logger) mcp.ResourceHandler {
 	}
 
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		logger.Debug("reading resource", "uri", req.Params.URI)
+		requestLogger(ctx, logger).Debug("reading resource", "uri", req.Params.URI)
 		return jsonResult(resp)
 	}
 }

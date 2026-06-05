@@ -129,3 +129,20 @@ func TestLoadEnvAuthTypeAndOIDC(t *testing.T) {
 		t.Errorf("OIDC.Audience = %q", cfg.OIDC.Audience)
 	}
 }
+
+func TestLoadEnvOIDCInsecure(t *testing.T) {
+	clearEnv(t)
+	defer clearEnv(t)
+	t.Setenv("EVALHUB_OIDC_INSECURE", "true")
+
+	cfg, err := Load(nil, nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.OIDC.Insecure {
+		t.Error("OIDC.Insecure = false, want true")
+	}
+	if cfg.Insecure {
+		t.Error("Insecure = true, want false (OIDC insecure is separate from eval-hub client insecure)")
+	}
+}

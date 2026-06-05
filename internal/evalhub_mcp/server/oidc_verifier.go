@@ -27,7 +27,7 @@ func newOIDCTokenVerifier(ctx context.Context, cfg *config.Config, logger *slog.
 	}
 
 	httpClient := http.DefaultClient
-	if cfg.Insecure {
+	if cfg.OIDC.Insecure {
 		httpClient = &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // dev/self-signed IdP TLS

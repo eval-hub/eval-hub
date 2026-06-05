@@ -34,6 +34,7 @@ type OIDCConfig struct {
 	IssuerURL string   `mapstructure:"issuer_url" validate:"omitempty,url"`
 	Audience  string   `mapstructure:"audience"`
 	Scopes    []string `mapstructure:"scopes"`
+	Insecure  bool     `mapstructure:"insecure"`
 }
 
 type Config struct {
@@ -197,6 +198,7 @@ func applyYAMLConfig(cfg *Config, path string) (*Config, error) {
 		"auth_type", "EVALHUB_AUTH_TYPE",
 		"oidc.issuer_url", "EVALHUB_OIDC_ISSUER_URL",
 		"oidc.audience", "EVALHUB_OIDC_AUDIENCE",
+		"oidc.insecure", "EVALHUB_OIDC_INSECURE",
 	)
 	if err != nil {
 		return nil, err
