@@ -10,11 +10,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
 	"github.com/eval-hub/eval-hub/internal/evalhub_mcp/config"
 	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+// These should be shared with the eval-hub server
+const (
+	TRANSACTION_ID_HEADER = "X-Global-Transaction-Id"
+	USER_HEADER           = "X-User"
+	TENANT_HEADER         = "X-Tenant"
 )
 
 type ServerInfo struct {
@@ -169,7 +175,7 @@ func wrapRequest(cfg *config.Config, bearerVerifier auth.TokenVerifier, next htt
 	switch cfg.AuthType {
 	case config.AuthTypeRBACProxy:
 		// if we have the kube-rbac-proxy then we need to check the HTTP headers for the tenant and user headers
-		required := []string{server.TENANT_HEADER, server.USER_HEADER}
+		required := []string{TENANT_HEADER, USER_HEADER}
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			for _, name := range required {
 				if strings.TrimSpace(r.Header.Get(name)) == "" {
