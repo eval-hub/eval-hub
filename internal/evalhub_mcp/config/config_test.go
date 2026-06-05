@@ -609,7 +609,11 @@ func TestLoadFlagsTLS(t *testing.T) {
 
 func clearEnv(t *testing.T) {
 	t.Helper()
-	for _, key := range []string{"EVALHUB_BASE_URL", "EVALHUB_TOKEN", "EVALHUB_TENANT", "EVALHUB_INSECURE", "EVALHUB_LIST_PAGE_LIMIT", "EVALHUB_TLS_CERT_FILE", "EVALHUB_TLS_KEY_FILE"} {
+	for _, key := range []string{
+		"EVALHUB_BASE_URL", "EVALHUB_TOKEN", "EVALHUB_TENANT", "EVALHUB_INSECURE",
+		"EVALHUB_LIST_PAGE_LIMIT", "EVALHUB_TLS_CERT_FILE", "EVALHUB_TLS_KEY_FILE",
+		"EVALHUB_AUTH_TYPE", "EVALHUB_OIDC_ISSUER_URL", "EVALHUB_OIDC_AUDIENCE",
+	} {
 		t.Setenv(key, "")
 	}
 }

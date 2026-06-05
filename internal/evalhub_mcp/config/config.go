@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
@@ -18,19 +19,36 @@ const (
 	TransportStdio   = "stdio"
 	TransportHTTP    = "http"
 	TransportHTTPSSE = "http-sse"
+
+	// Auth type names:
+	// - Use AuthTypeRBACProxy for kube-rbac-proxy header authentication
+	// - Use AuthTypeOIDC for external OIDC JWT bearer authentication
+	// - Use AuthTypeNone for no authentication
+	AuthTypeRBACProxy = "rbac-proxy"
+	AuthTypeOIDC      = "oidc"
+	AuthTypeNone      = "none"
 )
 
+// OIDCConfig configures external OIDC JWT validation for oidc auth.
+type OIDCConfig struct {
+	IssuerURL string   `mapstructure:"issuer_url" validate:"omitempty,url"`
+	Audience  string   `mapstructure:"audience"`
+	Scopes    []string `mapstructure:"scopes"`
+}
+
 type Config struct {
-	BaseURL       string `mapstructure:"base_url,omitempty" validate:"omitempty,url"`
-	Token         string `mapstructure:"token"`
-	Tenant        string `mapstructure:"tenant"`
-	Insecure      bool   `mapstructure:"insecure"`
-	Transport     string `mapstructure:"transport" validate:"required,oneof=stdio http http-sse"` // default stdio; use http for remote
-	Host          string `mapstructure:"host"      validate:"required"`
-	Port          int    `mapstructure:"port,omitempty" validate:"omitempty,min=1,max=65535"`
-	ListPageLimit int    `mapstructure:"list_page_limit,omitempty" validate:"omitempty,min=1,max=2000"`
-	TLSCertFile   string `mapstructure:"tls_cert_file"`
-	TLSKeyFile    string `mapstructure:"tls_key_file"`
+	BaseURL       string     `mapstructure:"base_url,omitempty" validate:"omitempty,url"`
+	Token         string     `mapstructure:"token"`
+	Tenant        string     `mapstructure:"tenant"`
+	Insecure      bool       `mapstructure:"insecure"`
+	Transport     string     `mapstructure:"transport" validate:"required,oneof=stdio http http-sse"` // default stdio; use http for remote
+	Host          string     `mapstructure:"host"      validate:"required"`
+	Port          int        `mapstructure:"port,omitempty" validate:"omitempty,min=1,max=65535"`
+	ListPageLimit int        `mapstructure:"list_page_limit,omitempty" validate:"omitempty,min=1,max=2000"`
+	TLSCertFile   string     `mapstructure:"tls_cert_file"`
+	TLSKeyFile    string     `mapstructure:"tls_key_file"`
+	AuthType      string     `mapstructure:"auth_type" validate:"omitempty,oneof=rbac-proxy oidc none"`
+	OIDC          OIDCConfig `mapstructure:"oidc"`
 }
 
 type Flags struct {
@@ -49,6 +67,7 @@ func DefaultConfig() *Config {
 		Host:          "localhost",
 		Port:          3001,
 		ListPageLimit: evalhubclient.DefaultListPageLimit,
+		AuthType:      AuthTypeNone,
 	}
 }
 
@@ -71,6 +90,7 @@ func Load(flags *Flags, logger *slog.Logger) (*Config, error) {
 	}
 
 	normalizeListPageLimit(conf)
+	normalizeAuthType(conf)
 
 	if logger != nil {
 		logger.Info("Loaded configuration", "config", logging.AsPrettyJson(conf, "token"), "config_path", configPath)
@@ -86,6 +106,13 @@ func normalizeListPageLimit(cfg *Config) {
 	if cfg.ListPageLimit == 0 {
 		cfg.ListPageLimit = evalhubclient.DefaultListPageLimit
 	}
+}
+
+func normalizeAuthType(cfg *Config) {
+	if cfg == nil || cfg.AuthType != "" {
+		return
+	}
+	cfg.AuthType = AuthTypeNone
 }
 
 // TLSEnabled returns true when both TLS cert and key files are configured.
@@ -106,6 +133,7 @@ func (c *Config) IsLegacyHTTPTransport() bool {
 // Validate checks the Config using go-playground/validator struct tags.
 func Validate(cfg *Config) error {
 	normalizeListPageLimit(cfg)
+	normalizeAuthType(cfg)
 	validate := validator.New(validator.WithRequiredStructEnabled())
 
 	if err := validate.Struct(cfg); err != nil {
@@ -116,6 +144,24 @@ func Validate(cfg *Config) error {
 		return fmt.Errorf("config validation failed: tls_cert_file and tls_key_file must both be set or both be empty")
 	}
 
+	if err := validateAuthConfig(cfg); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateAuthConfig(cfg *Config) error {
+	switch cfg.AuthType {
+	case AuthTypeOIDC:
+		if strings.TrimSpace(cfg.OIDC.IssuerURL) == "" {
+			return fmt.Errorf("config validation failed: oidc.issuer_url is required when auth_type is %q", AuthTypeOIDC)
+		}
+	case AuthTypeRBACProxy, AuthTypeNone:
+		return nil
+	default:
+		return fmt.Errorf("config validation failed: unsupported auth_type %q", cfg.AuthType)
+	}
 	return nil
 }
 
@@ -147,6 +193,9 @@ func applyYAMLConfig(cfg *Config, path string) (*Config, error) {
 		"list_page_limit", "EVALHUB_LIST_PAGE_LIMIT",
 		"tls_cert_file", "EVALHUB_TLS_CERT_FILE",
 		"tls_key_file", "EVALHUB_TLS_KEY_FILE",
+		"auth_type", "EVALHUB_AUTH_TYPE",
+		"oidc.issuer_url", "EVALHUB_OIDC_ISSUER_URL",
+		"oidc.audience", "EVALHUB_OIDC_AUDIENCE",
 	)
 	if err != nil {
 		return nil, err
@@ -163,6 +212,7 @@ func applyYAMLConfig(cfg *Config, path string) (*Config, error) {
 		v.SetDefault("list_page_limit", cfg.ListPageLimit)
 		v.SetDefault("tls_cert_file", cfg.TLSCertFile)
 		v.SetDefault("tls_key_file", cfg.TLSKeyFile)
+		v.SetDefault("auth_type", cfg.AuthType)
 	}
 
 	if path == "" {

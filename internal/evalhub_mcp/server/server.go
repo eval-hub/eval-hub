@@ -7,10 +7,13 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
 	"github.com/eval-hub/eval-hub/internal/evalhub_mcp/config"
 	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -124,6 +127,15 @@ func Run(ctx context.Context, cfg *config.Config, info *ServerInfo, logger *slog
 		return err
 	}
 
+	var bearerVerifier auth.TokenVerifier
+	if cfg.AuthType == config.AuthTypeOIDC {
+		oidcVerifier, err := newOIDCTokenVerifier(ctx, cfg, logger)
+		if err != nil {
+			return fmt.Errorf("configure OIDC authentication: %w", err)
+		}
+		bearerVerifier = oidcVerifier.verify
+	}
+
 	version := "unknown"
 	if info != nil {
 		version = info.VersionString()
@@ -131,18 +143,19 @@ func Run(ctx context.Context, cfg *config.Config, info *ServerInfo, logger *slog
 	logger.Info("Starting evalhub-mcp server",
 		"version", version,
 		"transport", cfg.Transport,
+		"auth_type", cfg.AuthType,
 	)
 
 	switch cfg.Transport {
 	case config.TransportStdio:
 		return runStdio(ctx, srv)
 	case config.TransportHTTP:
-		return runHTTP(ctx, srv, cfg, logger)
+		return runHTTP(ctx, srv, cfg, logger, bearerVerifier)
 	case config.TransportHTTPSSE:
 		logger.Warn("transport http-sse is deprecated; use http (Streamable HTTP) unless connecting to legacy MCP clients",
 			"transport", cfg.Transport,
 		)
-		return runLegacyHTTPSSE(ctx, srv, cfg, logger)
+		return runLegacyHTTPSSE(ctx, srv, cfg, logger, bearerVerifier)
 	default:
 		return fmt.Errorf("unsupported transport: %s", cfg.Transport)
 	}
@@ -152,20 +165,55 @@ func runStdio(ctx context.Context, srv *mcp.Server) error {
 	return srv.Run(ctx, &mcp.StdioTransport{})
 }
 
-func runHTTP(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *slog.Logger) error {
-	handler := mcp.NewStreamableHTTPHandler(
+func wrapRequest(cfg *config.Config, bearerVerifier auth.TokenVerifier, next http.Handler) http.Handler {
+	switch cfg.AuthType {
+	case config.AuthTypeRBACProxy:
+		// if we have the kube-rbac-proxy then we need to check the HTTP headers for the tenant and user headers
+		required := []string{server.TENANT_HEADER, server.USER_HEADER}
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			for _, name := range required {
+				if strings.TrimSpace(r.Header.Get(name)) == "" {
+					http.Error(w, fmt.Sprintf("Missing required header '%s' from kube-rbac-proxy", name), http.StatusForbidden)
+					return
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	case config.AuthTypeOIDC:
+		if bearerVerifier == nil {
+			return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				http.Error(w, "Bearer token authentication is not configured", http.StatusInternalServerError)
+			})
+		}
+		var opts *auth.RequireBearerTokenOptions
+		if len(cfg.OIDC.Scopes) > 0 {
+			opts = &auth.RequireBearerTokenOptions{Scopes: cfg.OIDC.Scopes}
+		}
+		return auth.RequireBearerToken(bearerVerifier, opts)(next)
+	case config.AuthTypeNone:
+		return next
+	default:
+		return next
+	}
+}
+
+func runHTTP(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *slog.Logger, bearerVerifier auth.TokenVerifier) error {
+	mcpHandler := mcp.NewStreamableHTTPHandler(
 		func(r *http.Request) *mcp.Server { return srv },
 		nil,
 	)
+	handler := wrapRequest(cfg, bearerVerifier, mcpHandler)
 	return serveHTTP(ctx, handler, cfg, logger)
 }
 
 // runLegacyHTTPSSE serves the deprecated HTTP+SSE transport (MCP 2024-11-05) for older clients.
-func runLegacyHTTPSSE(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *slog.Logger) error {
-	handler := mcp.NewSSEHandler(
+func runLegacyHTTPSSE(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *slog.Logger, bearerVerifier auth.TokenVerifier) error {
+	mcpHandler := mcp.NewSSEHandler(
 		func(r *http.Request) *mcp.Server { return srv },
 		nil,
 	)
+	logger.Warn("transport 'http-sse' is deprecated; use 'http' (Streamable HTTP) unless connecting to legacy MCP clients", "transport", cfg.Transport)
+	handler := wrapRequest(cfg, bearerVerifier, mcpHandler)
 	return serveHTTP(ctx, handler, cfg, logger)
 }
 
