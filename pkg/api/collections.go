@@ -25,6 +25,16 @@ func (b CollectionBenchmarkConfig) ToEvaluationBenchmark() EvaluationBenchmarkCo
 	}
 }
 
+// CollectionAgentMetadata contains structured metadata for AI agent consumption at the collection level.
+type CollectionAgentMetadata struct {
+	Evaluates            []string `mapstructure:"evaluates" yaml:"evaluates" json:"evaluates,omitempty"`
+	RecommendedWhen      []string `mapstructure:"recommended_when" yaml:"recommended_when" json:"recommended_when,omitempty"`
+	Summary              string   `mapstructure:"summary" yaml:"summary" json:"summary,omitempty" validate:"omitempty,max=200"`
+	Complements          []string `mapstructure:"complements" yaml:"complements" json:"complements,omitempty"`
+	Hints                []string `mapstructure:"hints" yaml:"hints" json:"hints,omitempty"`
+	ResultInterpretation []string `mapstructure:"result_interpretation" yaml:"result_interpretation" json:"result_interpretation,omitempty"`
+}
+
 // CollectionConfig represents request to create a collection
 type CollectionConfig struct {
 	Name         string                      `mapstructure:"name" json:"name" validate:"required"`
@@ -34,6 +44,7 @@ type CollectionConfig struct {
 	Custom       *map[string]any             `mapstructure:"custom" json:"custom,omitempty"`
 	PassCriteria *PassCriteria               `mapstructure:"pass_criteria" json:"pass_criteria,omitempty"`
 	Benchmarks   []CollectionBenchmarkConfig `mapstructure:"benchmarks" json:"benchmarks" validate:"required,min=1,dive"`
+	Agent        *CollectionAgentMetadata    `mapstructure:"agent" json:"agent,omitempty"`
 }
 
 // CollectionResource represents collection resource

@@ -1,0 +1,10 @@
+type: object
+description: A score range with its interpretation
+properties:
+  range:
+    type: string
+    description: Score range (e.g. "0.0-0.25")
+  meaning:
+    type: string
+    description: What scores in this range indicate
+required: [range, meaning]
