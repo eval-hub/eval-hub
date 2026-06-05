@@ -91,6 +91,23 @@ func TestValidateAuthType(t *testing.T) {
 	}
 }
 
+func TestLoadFlagsAuthTypeOverride(t *testing.T) {
+	clearEnv(t)
+	defer clearEnv(t)
+
+	configFile := writeConfig(t, `
+    auth_type: none
+`)
+	authType := AuthTypeRBACProxy
+	cfg, err := Load(&Flags{ConfigPath: configFile, AuthType: &authType}, nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.AuthType != AuthTypeRBACProxy {
+		t.Errorf("AuthType = %q, want %q", cfg.AuthType, AuthTypeRBACProxy)
+	}
+}
+
 func TestLoadEnvAuthTypeAndOIDC(t *testing.T) {
 	clearEnv(t)
 	defer clearEnv(t)

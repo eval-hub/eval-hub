@@ -42,6 +42,7 @@ func run(args []string) int {
 	insecure := fs.Bool("insecure", false, "Disable TLS certificate verification")
 	tlsCertFile := fs.String("tls-cert", "", "Path to TLS certificate file")
 	tlsKeyFile := fs.String("tls-key", "", "Path to TLS private key file")
+	authType := fs.String("auth-type", "none", "Inbound HTTP authentication: none, rbac-proxy, or oidc")
 	version := fs.Bool("version", false, "Print version information and exit")
 
 	if err := fs.Parse(args); err != nil {
@@ -74,6 +75,9 @@ func run(args []string) int {
 	}
 	if fs.Changed("tls-key") {
 		flags.TLSKeyFile = tlsKeyFile
+	}
+	if fs.Changed("auth-type") {
+		flags.AuthType = authType
 	}
 
 	cfg, err := config.Load(flags, logger)

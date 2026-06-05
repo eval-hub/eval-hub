@@ -80,6 +80,13 @@ func TestInvalidTransportFlag(t *testing.T) {
 	}
 }
 
+func TestInvalidAuthTypeFlag(t *testing.T) {
+	code := run([]string{"--auth-type", "standalone"})
+	if code != 1 {
+		t.Fatalf("expected exit code 1 for invalid auth-type, got %d", code)
+	}
+}
+
 func TestConfigLoadError(t *testing.T) {
 	code := run([]string{"--config", "/nonexistent/config.yaml"})
 	if code != 1 {

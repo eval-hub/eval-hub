@@ -117,6 +117,8 @@ YAML keys and environment variables (env overrides YAML):
 | Transport | `transport` | `EVALHUB_TRANSPORT` |
 | HTTP host / port | `host`, `port` | `EVALHUB_HOST`, `EVALHUB_PORT` |
 
+CLI flags override YAML and environment variables when set: `--auth-type`, `--transport`, `--host`, `--port`, `--insecure`, `--tls-cert`, `--tls-key`.
+
 Load a config file with `--config /path/to/config.yaml` or `~/.evalhub/config.yaml`.
 
 ## Testing that the MCP service is functioning

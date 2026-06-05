@@ -56,6 +56,7 @@ type Flags struct {
 	Host        *string
 	Port        *int
 	Insecure    *bool
+	AuthType    *string
 	ConfigPath  string
 	TLSCertFile *string
 	TLSKeyFile  *string
@@ -268,5 +269,8 @@ func applyFlags(cfg *Config, flags *Flags) {
 	}
 	if flags.TLSKeyFile != nil {
 		cfg.TLSKeyFile = *flags.TLSKeyFile
+	}
+	if flags.AuthType != nil {
+		cfg.AuthType = *flags.AuthType
 	}
 }
