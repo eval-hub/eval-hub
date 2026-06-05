@@ -24,15 +24,15 @@ type BenchmarkAgentMetadata struct {
 }
 
 type BenchmarkResource struct {
-	ID           string        `mapstructure:"id" yaml:"id" json:"id"`
-	URL          string        `mapstructure:"url" yaml:"url" json:"url,omitempty"`
-	Name         string        `mapstructure:"name" yaml:"name" json:"name"`
-	Description  string        `mapstructure:"description" yaml:"description" json:"description,omitempty" validate:"omitempty,max=1024,min=1"`
-	Category     string        `mapstructure:"category" yaml:"category" json:"category"`
-	Metrics      []string      `mapstructure:"metrics" yaml:"metrics" json:"metrics,omitempty"`
-	NumFewShot   int           `mapstructure:"num_few_shot" yaml:"num_few_shot" json:"num_few_shot"`
-	DatasetSize  int           `mapstructure:"dataset_size" yaml:"dataset_size" json:"dataset_size"`
-	Tags         []string      `mapstructure:"tags" yaml:"tags" json:"tags,omitempty"`
+	ID           string                  `mapstructure:"id" yaml:"id" json:"id"`
+	URL          string                  `mapstructure:"url" yaml:"url" json:"url,omitempty"`
+	Name         string                  `mapstructure:"name" yaml:"name" json:"name"`
+	Description  string                  `mapstructure:"description" yaml:"description" json:"description,omitempty" validate:"omitempty,max=1024,min=1"`
+	Category     string                  `mapstructure:"category" yaml:"category" json:"category"`
+	Metrics      []string                `mapstructure:"metrics" yaml:"metrics" json:"metrics,omitempty"`
+	NumFewShot   int                     `mapstructure:"num_few_shot" yaml:"num_few_shot" json:"num_few_shot"`
+	DatasetSize  int                     `mapstructure:"dataset_size" yaml:"dataset_size" json:"dataset_size"`
+	Tags         []string                `mapstructure:"tags" yaml:"tags" json:"tags,omitempty"`
 	PrimaryScore *PrimaryScore           `mapstructure:"primary_score" yaml:"primary_score" json:"primary_score,omitempty"`
 	PassCriteria *PassCriteria           `mapstructure:"pass_criteria" yaml:"pass_criteria" json:"pass_criteria,omitempty" validate:"omitempty"`
 	Agent        *BenchmarkAgentMetadata `mapstructure:"agent" yaml:"agent" json:"agent,omitempty"`
