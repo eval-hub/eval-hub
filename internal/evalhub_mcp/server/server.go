@@ -199,7 +199,9 @@ func wrapRequest(cfg *config.Config, bearerVerifier auth.TokenVerifier, next htt
 	case config.AuthTypeNone:
 		return next
 	default:
-		return next
+		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "Unsupported authentication type", http.StatusInternalServerError)
+		})
 	}
 }
 

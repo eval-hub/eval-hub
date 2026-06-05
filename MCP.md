@@ -109,6 +109,8 @@ YAML keys and environment variables (env overrides YAML):
 | Auth mode | `auth_type` | `EVALHUB_AUTH_TYPE` |
 | OIDC issuer | `oidc.issuer_url` | `EVALHUB_OIDC_ISSUER_URL` |
 | OIDC audience | `oidc.audience` | `EVALHUB_OIDC_AUDIENCE` |
+| OIDC required scopes | `oidc.scopes` | `EVALHUB_OIDC_SCOPES` |
+| Skip TLS verification | `insecure` | `EVALHUB_INSECURE` |
 | Eval-hub API URL | `base_url` | `EVALHUB_BASE_URL` |
 | Eval-hub token | `token` | `EVALHUB_TOKEN` |
 | Eval-hub tenant | `tenant` | `EVALHUB_TENANT` |
