@@ -13,14 +13,14 @@ type AgentMetadata struct {
 
 // ScoreRange describes a score band with semantic meaning.
 type ScoreRange struct {
-	Range   string `mapstructure:"range" yaml:"range" json:"range"`
-	Meaning string `mapstructure:"meaning" yaml:"meaning" json:"meaning"`
+	Range   string `mapstructure:"range" yaml:"range" json:"range" validate:"required"`
+	Meaning string `mapstructure:"meaning" yaml:"meaning" json:"meaning" validate:"required"`
 }
 
 // BenchmarkAgentMetadata contains agent metadata at the individual benchmark level.
 type BenchmarkAgentMetadata struct {
 	ResultInterpretation string       `mapstructure:"result_interpretation" yaml:"result_interpretation" json:"result_interpretation,omitempty"`
-	ScoreRanges          []ScoreRange `mapstructure:"score_ranges" yaml:"score_ranges" json:"score_ranges,omitempty"`
+	ScoreRanges          []ScoreRange `mapstructure:"score_ranges" yaml:"score_ranges" json:"score_ranges,omitempty" validate:"omitempty,dive"`
 }
 
 type BenchmarkResource struct {
