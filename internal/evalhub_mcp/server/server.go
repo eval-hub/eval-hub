@@ -155,7 +155,10 @@ func runStdio(ctx context.Context, srv *mcp.Server) error {
 func runHTTP(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *slog.Logger) error {
 	handler := mcp.NewStreamableHTTPHandler(
 		func(r *http.Request) *mcp.Server { return srv },
-		nil,
+		// Server runs behind kube-rbac-proxy which handles authentication;
+		// the default localhost DNS-rebinding protection rejects the proxy's
+		// forwarded Host header and must be disabled.
+		&mcp.StreamableHTTPOptions{DisableLocalhostProtection: true},
 	)
 	return serveHTTP(ctx, handler, cfg, logger)
 }
@@ -164,7 +167,8 @@ func runHTTP(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *s
 func runLegacyHTTPSSE(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *slog.Logger) error {
 	handler := mcp.NewSSEHandler(
 		func(r *http.Request) *mcp.Server { return srv },
-		nil,
+		// Same rationale as runHTTP: behind kube-rbac-proxy.
+		&mcp.SSEOptions{DisableLocalhostProtection: true},
 	)
 	return serveHTTP(ctx, handler, cfg, logger)
 }
