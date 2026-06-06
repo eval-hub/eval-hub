@@ -1,7 +1,7 @@
 # eval-hub-server
 
 This package distributes the compiled Go eval-hub server binary for multiple
-platforms. It installs the binary directly into your `bin/` directory with no
+platforms. It installs the binary directly into your `bin/` directory (`Scripts/` on Windows) with no
 Python wrapper — no argument rewriting, no subprocess overhead, no Python
 runtime required at execution time.
 

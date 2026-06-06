@@ -29,3 +29,12 @@ jobs:
         run: make cross-compile
       - name: Build wheel
         run: make build-wheel
+      - name: Install wheel
+        run: |
+          uv venv --python 3.11 .venv
+          uv pip install --python .venv python-server/dist/*.whl
+      - name: Wheel sanity test
+        run: |
+          source .venv/bin/activate
+          chmod +x scripts/gha_wheel_sanity_test.sh
+          ./scripts/gha_wheel_sanity_test.sh
