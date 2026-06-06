@@ -1,6 +1,9 @@
 # eval-hub-server
 
-This package is a thin Python wrapper that packages and distributes the compiled Go eval-hub server binary for multiple platforms. It handles platform detection and binary resolution so consumers can simply install and run.
+This package distributes the compiled Go eval-hub server binary for multiple
+platforms. It installs the binary directly into your `bin/` directory with no
+Python wrapper — no argument rewriting, no subprocess overhead, no Python
+runtime required at execution time.
 
 It is primarily intended to be used as a dependency of `eval-hub-sdk`.
 
@@ -12,39 +15,22 @@ pip install eval-hub-server
 
 ## Usage
 
-### CLI
-
 ```bash
 # Run with default settings (port 8080)
 eval-hub-server
 
 # Run in local mode
-eval-hub-server --local
+eval-hub-server -local
 
 # Run with custom port 5000
-PORT=5000 eval-hub-server --local
+PORT=5000 eval-hub-server -local
+
+# The eval-hub command is also available
+eval-hub -local
 ```
 
-### Python module
-
-```bash
-python -m evalhub_server.main --local
-```
-
-### Programmatically
-
-Requires the package to be installed. `get_binary_path()` raises `FileNotFoundError` or `RuntimeError` if the binary for your platform is not available.
-
-```python
-from evalhub_server import get_binary_path
-
-# Get the path to the binary
-binary_path = get_binary_path()
-
-# Use it however you need (e.g., subprocess)
-import subprocess
-subprocess.run([binary_path, "--local"], check=True)
-```
+Both `eval-hub-server` and `eval-hub` run the same Go binary.
+`eval-hub-server` is a shell shim that execs `eval-hub`.
 
 ## Supported Platforms
 
@@ -61,10 +47,6 @@ pip install eval-hub-sdk[server]
 ```
 
 For more information, see the [eval-hub-sdk repository](https://github.com/eval-hub/eval-hub-sdk).
-
-## Development
-
-See [DEVELOPMENT.md](DEVELOPMENT.md) for build process details, local development setup, testing, and troubleshooting.
 
 ## License
 

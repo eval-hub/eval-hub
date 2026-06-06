@@ -70,24 +70,29 @@ jobs:
         include:
           - platform: manylinux
             arch: x86_64
+            goos: linux
+            goarch: amd64
             binary-pattern: "binary-linux-amd64"
-            binary-name: eval-hub-linux-amd64
           - platform: manylinux
             arch: aarch64
+            goos: linux
+            goarch: arm64
             binary-pattern: "binary-linux-arm64"
-            binary-name: eval-hub-linux-arm64
           - platform: macosx
             arch: x86_64
+            goos: darwin
+            goarch: amd64
             binary-pattern: "binary-darwin-amd64"
-            binary-name: eval-hub-darwin-amd64
           - platform: macosx
             arch: arm64
+            goos: darwin
+            goarch: arm64
             binary-pattern: "binary-darwin-arm64"
-            binary-name: eval-hub-darwin-arm64
           - platform: win
             arch: amd64
+            goos: windows
+            goarch: amd64
             binary-pattern: "binary-windows-amd64"
-            binary-name: eval-hub-windows-amd64
 
     steps:
       - name: Checkout
@@ -105,13 +110,11 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: ${{ matrix.binary-pattern }}
-          path: python-server/evalhub_server/binaries/
+          path: bin/
           merge-multiple: true
 
       - name: List downloaded files
-        run: |
-          ls -la python-server/evalhub_server/binaries/
-        shell: bash
+        run: ls -la bin/
 
       - name: Set platform tag
         id: platform
@@ -135,12 +138,7 @@ jobs:
           if [[ ! "${{ github.ref }}" == refs/tags/* ]]; then
             DEV_SUFFIX_ARG="DEV_SUFFIX=dev${{ github.run_number }}"
           fi
-          make build-wheel WHEEL_PLATFORM=${{ steps.platform.outputs.tag }} WHEEL_BINARY=${{ matrix.binary-name }} $DEV_SUFFIX_ARG
-
-      - name: Smoke test with python-server tests
-        if: matrix.platform == 'manylinux' && matrix.arch == 'x86_64'
-        continue-on-error: true
-        run: make test-python-server || echo "::warning::python-server smoke tests failed — wheel will still be published"
+          make build-wheel WHEEL_PLATFORM=${{ steps.platform.outputs.tag }} CROSS_GOOS=${{ matrix.goos }} CROSS_GOARCH=${{ matrix.goarch }} $DEV_SUFFIX_ARG
 
       - name: Upload wheel
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
