@@ -72,27 +72,22 @@ jobs:
             arch: x86_64
             goos: linux
             goarch: amd64
-            binary-pattern: "binary-linux-amd64"
           - platform: manylinux
             arch: aarch64
             goos: linux
             goarch: arm64
-            binary-pattern: "binary-linux-arm64"
           - platform: macosx
             arch: x86_64
             goos: darwin
             goarch: amd64
-            binary-pattern: "binary-darwin-amd64"
           - platform: macosx
             arch: arm64
             goos: darwin
             goarch: arm64
-            binary-pattern: "binary-darwin-arm64"
           - platform: win
             arch: amd64
             goos: windows
             goarch: amd64
-            binary-pattern: "binary-windows-amd64"
 
     steps:
       - name: Checkout
@@ -109,7 +104,7 @@ jobs:
       - name: Download binary
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          pattern: ${{ matrix.binary-pattern }}
+          pattern: binary-${{ matrix.goos }}-${{ matrix.goarch }}
           path: bin/
           merge-multiple: true
 

@@ -27,12 +27,17 @@ class PlatformSpecificWheel(bdist_wheel):
 
 def _find_files(subdir, exclude=None):
     d = Path(__file__).parent / subdir
+    if not d.exists():
+        return []
     return [os.path.join(subdir, f.name) for f in d.iterdir() if f.name != exclude]
 
+
+wheel_platform = os.environ.get("WHEEL_PLATFORM", "")
+bin_dir = "Scripts" if "win" in wheel_platform else "bin"
 
 setup(
     cmdclass={"bdist_wheel": PlatformSpecificWheel},
     data_files=[
-        ("bin", _find_files("binaries", exclude=".gitkeep") + _find_files("shims"))
+        (bin_dir, _find_files("binaries", exclude=".gitkeep") + _find_files("shims"))
     ],
 )
