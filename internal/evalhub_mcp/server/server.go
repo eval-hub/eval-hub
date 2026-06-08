@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/evalhub_mcp/config"
@@ -84,7 +85,20 @@ func NewEvalHubClient(cfg *config.Config, logger *slog.Logger) *evalhubclient.Cl
 	if cfg.Insecure {
 		client = client.WithInsecureSkipVerify()
 	}
-	logger.Info("EvalHub client created", "baseURL", cfg.BaseURL, "tenant", cfg.Tenant, "insecure", cfg.Insecure)
+	if cfg.CACertPath != "" {
+		pemData, err := os.ReadFile(cfg.CACertPath)
+		if err != nil {
+			logger.Error("failed to read CA cert file", "path", cfg.CACertPath, "error", err)
+		} else {
+			withCA, err := client.WithCACert(pemData)
+			if err != nil {
+				logger.Error("failed to configure CA cert", "path", cfg.CACertPath, "error", err)
+			} else {
+				client = withCA
+			}
+		}
+	}
+	logger.Info("EvalHub client created", "baseURL", cfg.BaseURL, "tenant", cfg.Tenant, "insecure", cfg.Insecure, "caCertPath", cfg.CACertPath)
 	return client
 }
 

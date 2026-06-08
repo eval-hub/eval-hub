@@ -31,6 +31,7 @@ type Config struct {
 	ListPageLimit int    `mapstructure:"list_page_limit,omitempty" validate:"omitempty,min=1,max=2000"`
 	TLSCertFile   string `mapstructure:"tls_cert_file"`
 	TLSKeyFile    string `mapstructure:"tls_key_file"`
+	CACertPath    string `mapstructure:"ca_cert_path"`
 }
 
 type Flags struct {
@@ -147,6 +148,7 @@ func applyYAMLConfig(cfg *Config, path string) (*Config, error) {
 		"list_page_limit", "EVALHUB_LIST_PAGE_LIMIT",
 		"tls_cert_file", "EVALHUB_TLS_CERT_FILE",
 		"tls_key_file", "EVALHUB_TLS_KEY_FILE",
+		"ca_cert_path", "EVALHUB_CA_CERT_PATH",
 	)
 	if err != nil {
 		return nil, err
@@ -163,6 +165,7 @@ func applyYAMLConfig(cfg *Config, path string) (*Config, error) {
 		v.SetDefault("list_page_limit", cfg.ListPageLimit)
 		v.SetDefault("tls_cert_file", cfg.TLSCertFile)
 		v.SetDefault("tls_key_file", cfg.TLSKeyFile)
+		v.SetDefault("ca_cert_path", cfg.CACertPath)
 	}
 
 	if path == "" {
