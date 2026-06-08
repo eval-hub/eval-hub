@@ -111,29 +111,13 @@ jobs:
       - name: List downloaded files
         run: ls -la bin/
 
-      - name: Set platform tag
-        id: platform
-        shell: bash
-        run: |
-          if [ "${{ matrix.platform }}" = "manylinux" ]; then
-            echo "tag=manylinux_2_17_${{ matrix.arch }}" >> $GITHUB_OUTPUT
-          elif [ "${{ matrix.platform }}" = "macosx" ]; then
-            if [ "${{ matrix.arch }}" = "arm64" ]; then
-              echo "tag=macosx_11_0_arm64" >> $GITHUB_OUTPUT
-            else
-              echo "tag=macosx_10_9_x86_64" >> $GITHUB_OUTPUT
-            fi
-          elif [ "${{ matrix.platform }}" = "win" ]; then
-            echo "tag=win_amd64" >> $GITHUB_OUTPUT
-          fi
-
       - name: Build wheel
         run: |
           DEV_SUFFIX_ARG=""
           if [[ ! "${{ github.ref }}" == refs/tags/* ]]; then
             DEV_SUFFIX_ARG="DEV_SUFFIX=dev${{ github.run_number }}"
           fi
-          make build-wheel WHEEL_PLATFORM=${{ steps.platform.outputs.tag }} CROSS_GOOS=${{ matrix.goos }} CROSS_GOARCH=${{ matrix.goarch }} $DEV_SUFFIX_ARG
+          make build-wheel CROSS_GOOS=${{ matrix.goos }} CROSS_GOARCH=${{ matrix.goarch }} $DEV_SUFFIX_ARG
 
       - name: Upload wheel
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
