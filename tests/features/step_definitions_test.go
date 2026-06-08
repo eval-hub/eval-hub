@@ -463,19 +463,27 @@ func (tc *scenarioConfig) iSendARequestTo(method, path string) error {
 	return tc.iSendARequestToWithBody(method, path, "")
 }
 
-func (tc *scenarioConfig) iSetWaitDeadlineTo(paramValue string) error {
+func (tc *scenarioConfig) setDuration(dest *time.Duration, fieldName, paramValue string) error {
 	value, err := tc.getValue(paramValue)
 	if err != nil {
 		return err
 	}
-	tc.waitDeadline, err = time.ParseDuration(value)
+	*dest, err = time.ParseDuration(value)
 	if err != nil {
 		return tc.logError(fmt.Errorf("failed to parse duration %q: %w", value, err))
 	}
-	if tc.waitDeadline <= 0 {
-		return tc.logError(fmt.Errorf("wait deadline must be positive, got %q (%v)", value, tc.waitDeadline))
+	if *dest <= 0 {
+		return tc.logError(fmt.Errorf("%s must be positive, got %q (%v)", fieldName, value, *dest))
 	}
 	return nil
+}
+
+func (tc *scenarioConfig) iSetWaitDeadlineTo(paramValue string) error {
+	return tc.setDuration(&tc.waitDeadline, "wait deadline", paramValue)
+}
+
+func (tc *scenarioConfig) iSetWaitIntervalTo(paramValue string) error {
+	return tc.setDuration(&tc.waitInterval, "wait interval", paramValue)
 }
 
 func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) error {
@@ -1529,6 +1537,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least "([^"]*)"$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^I wait for the evaluation job status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatus)
 	ctx.Step(`^I set the wait deadline to "([^"]*)"$`, tc.iSetWaitDeadlineTo)
+	ctx.Step(`^I set the wait interval to "([^"]*)"$`, tc.iSetWaitIntervalTo)
 	// Other steps
 	ctx.Step(`^fix this step$`, tc.fixThisStep)
 

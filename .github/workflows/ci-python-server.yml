@@ -27,10 +27,14 @@ jobs:
           python-version: '3.11'
       - name: Build binary for this platform via cross-compile target
         run: make cross-compile
-      - name: Copy binary to python-server manually (this is done usually by .github/workflows/publish-python-server.yml)
+      - name: Build wheel
+        run: make build-wheel
+      - name: Install wheel
         run: |
-          mkdir -p python-server/evalhub_server/binaries/
-          cp bin/eval-hub-* python-server/evalhub_server/binaries/
-          chmod +x python-server/evalhub_server/binaries/*
-      - name: Build wheel and run tests
-        run: make build-wheel test-python-server
+          uv venv --python 3.11 .venv
+          uv pip install --python .venv python-server/dist/*.whl
+      - name: Wheel sanity test
+        run: |
+          source .venv/bin/activate
+          chmod +x scripts/gha_wheel_sanity_test.sh
+          ./scripts/gha_wheel_sanity_test.sh
