@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
@@ -22,34 +21,23 @@ const (
 
 	// Auth type names:
 	// - Use AuthTypeRBACProxy for kube-rbac-proxy header authentication
-	// - Use AuthTypeOIDC for external OIDC JWT bearer authentication
 	// - Use AuthTypeNone for no authentication
 	AuthTypeRBACProxy = "rbac-proxy"
-	AuthTypeOIDC      = "oidc"
 	AuthTypeNone      = "none"
 )
 
-// OIDCConfig configures external OIDC JWT validation for oidc auth.
-type OIDCConfig struct {
-	IssuerURL string   `mapstructure:"issuer_url" validate:"omitempty,url"`
-	Audience  string   `mapstructure:"audience"`
-	Scopes    []string `mapstructure:"scopes"`
-	Insecure  bool     `mapstructure:"insecure"`
-}
-
 type Config struct {
-	BaseURL       string     `mapstructure:"base_url,omitempty" validate:"omitempty,url"`
-	Token         string     `mapstructure:"token"`
-	Tenant        string     `mapstructure:"tenant"`
-	Insecure      bool       `mapstructure:"insecure"`
-	Transport     string     `mapstructure:"transport" validate:"required,oneof=stdio http http-sse"` // default stdio; use http for remote
-	Host          string     `mapstructure:"host"      validate:"required"`
-	Port          int        `mapstructure:"port,omitempty" validate:"omitempty,min=1,max=65535"`
-	ListPageLimit int        `mapstructure:"list_page_limit,omitempty" validate:"omitempty,min=1,max=2000"`
-	TLSCertFile   string     `mapstructure:"tls_cert_file"`
-	TLSKeyFile    string     `mapstructure:"tls_key_file"`
-	AuthType      string     `mapstructure:"auth_type" validate:"omitempty,oneof=rbac-proxy oidc none"`
-	OIDC          OIDCConfig `mapstructure:"oidc"`
+	BaseURL       string `mapstructure:"base_url,omitempty" validate:"omitempty,url"`
+	Token         string `mapstructure:"token"`
+	Tenant        string `mapstructure:"tenant"`
+	Insecure      bool   `mapstructure:"insecure"`
+	Transport     string `mapstructure:"transport" validate:"required,oneof=stdio http http-sse"` // default stdio; use http for remote
+	Host          string `mapstructure:"host"      validate:"required"`
+	Port          int    `mapstructure:"port,omitempty" validate:"omitempty,min=1,max=65535"`
+	ListPageLimit int    `mapstructure:"list_page_limit,omitempty" validate:"omitempty,min=1,max=2000"`
+	TLSCertFile   string `mapstructure:"tls_cert_file"`
+	TLSKeyFile    string `mapstructure:"tls_key_file"`
+	AuthType      string `mapstructure:"auth_type" validate:"omitempty,oneof=rbac-proxy none"`
 }
 
 type Flags struct {
@@ -155,16 +143,11 @@ func Validate(cfg *Config) error {
 
 func validateAuthConfig(cfg *Config) error {
 	switch cfg.AuthType {
-	case AuthTypeOIDC:
-		if strings.TrimSpace(cfg.OIDC.IssuerURL) == "" {
-			return fmt.Errorf("config validation failed: oidc.issuer_url is required when auth_type is %q", AuthTypeOIDC)
-		}
 	case AuthTypeRBACProxy, AuthTypeNone:
 		return nil
 	default:
 		return fmt.Errorf("config validation failed: unsupported auth_type %q", cfg.AuthType)
 	}
-	return nil
 }
 
 func bindEnvs(v *viper.Viper, envs ...string) error {
@@ -196,9 +179,6 @@ func applyYAMLConfig(cfg *Config, path string) (*Config, error) {
 		"tls_cert_file", "EVALHUB_TLS_CERT_FILE",
 		"tls_key_file", "EVALHUB_TLS_KEY_FILE",
 		"auth_type", "EVALHUB_AUTH_TYPE",
-		"oidc.issuer_url", "EVALHUB_OIDC_ISSUER_URL",
-		"oidc.audience", "EVALHUB_OIDC_AUDIENCE",
-		"oidc.insecure", "EVALHUB_OIDC_INSECURE",
 	)
 	if err != nil {
 		return nil, err

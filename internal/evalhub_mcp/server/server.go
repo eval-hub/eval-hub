@@ -12,7 +12,6 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/evalhub_mcp/config"
 	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
-	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -133,15 +132,6 @@ func Run(ctx context.Context, cfg *config.Config, info *ServerInfo, logger *slog
 		return err
 	}
 
-	var bearerVerifier auth.TokenVerifier
-	if cfg.AuthType == config.AuthTypeOIDC {
-		oidcVerifier, err := newOIDCTokenVerifier(ctx, cfg, logger)
-		if err != nil {
-			return fmt.Errorf("configure OIDC authentication: %w", err)
-		}
-		bearerVerifier = oidcVerifier.verify
-	}
-
 	version := "unknown"
 	if info != nil {
 		version = info.VersionString()
@@ -156,12 +146,12 @@ func Run(ctx context.Context, cfg *config.Config, info *ServerInfo, logger *slog
 	case config.TransportStdio:
 		return runStdio(ctx, srv)
 	case config.TransportHTTP:
-		return runHTTP(ctx, srv, cfg, logger, bearerVerifier)
+		return runHTTP(ctx, srv, cfg, logger)
 	case config.TransportHTTPSSE:
 		logger.Warn("transport http-sse is deprecated; use http (Streamable HTTP) unless connecting to legacy MCP clients",
 			"transport", cfg.Transport,
 		)
-		return runLegacyHTTPSSE(ctx, srv, cfg, logger, bearerVerifier)
+		return runLegacyHTTPSSE(ctx, srv, cfg, logger)
 	default:
 		return fmt.Errorf("unsupported transport: %s", cfg.Transport)
 	}
@@ -171,7 +161,7 @@ func runStdio(ctx context.Context, srv *mcp.Server) error {
 	return srv.Run(ctx, &mcp.StdioTransport{})
 }
 
-func wrapRequest(cfg *config.Config, bearerVerifier auth.TokenVerifier, logger *slog.Logger, next http.Handler) http.Handler {
+func wrapRequest(cfg *config.Config, logger *slog.Logger, next http.Handler) http.Handler {
 	var h http.Handler
 	switch cfg.AuthType {
 	case config.AuthTypeRBACProxy:
@@ -186,18 +176,6 @@ func wrapRequest(cfg *config.Config, bearerVerifier auth.TokenVerifier, logger *
 			}
 			next.ServeHTTP(w, r)
 		})
-	case config.AuthTypeOIDC:
-		if bearerVerifier == nil {
-			h = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				http.Error(w, "Bearer token authentication is not configured", http.StatusInternalServerError)
-			})
-		} else {
-			var opts *auth.RequireBearerTokenOptions
-			if len(cfg.OIDC.Scopes) > 0 {
-				opts = &auth.RequireBearerTokenOptions{Scopes: cfg.OIDC.Scopes}
-			}
-			h = auth.RequireBearerToken(bearerVerifier, opts)(next)
-		}
 	case config.AuthTypeNone:
 		h = next
 	default:
@@ -208,23 +186,23 @@ func wrapRequest(cfg *config.Config, bearerVerifier auth.TokenVerifier, logger *
 	return withRequestContext(logger, h)
 }
 
-func runHTTP(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *slog.Logger, bearerVerifier auth.TokenVerifier) error {
+func runHTTP(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *slog.Logger) error {
 	mcpHandler := mcp.NewStreamableHTTPHandler(
 		func(r *http.Request) *mcp.Server { return srv },
 		nil,
 	)
-	handler := wrapRequest(cfg, bearerVerifier, logger, mcpHandler)
+	handler := wrapRequest(cfg, logger, mcpHandler)
 	return serveHTTP(ctx, handler, cfg, logger)
 }
 
 // runLegacyHTTPSSE serves the deprecated HTTP+SSE transport (MCP 2024-11-05) for older clients.
-func runLegacyHTTPSSE(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *slog.Logger, bearerVerifier auth.TokenVerifier) error {
+func runLegacyHTTPSSE(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *slog.Logger) error {
 	mcpHandler := mcp.NewSSEHandler(
 		func(r *http.Request) *mcp.Server { return srv },
 		nil,
 	)
 	logger.Warn("transport 'http-sse' is deprecated; use 'http' (Streamable HTTP) unless connecting to legacy MCP clients", "transport", cfg.Transport)
-	handler := wrapRequest(cfg, bearerVerifier, logger, mcpHandler)
+	handler := wrapRequest(cfg, logger, mcpHandler)
 	return serveHTTP(ctx, handler, cfg, logger)
 }
 

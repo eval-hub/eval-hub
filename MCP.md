@@ -42,7 +42,6 @@ Set `auth_type` in the evalhub-mcp config file or with environment variable `EVA
 |-------|----------|-------------------|
 | `none` (default) | Local development, open HTTP listener | No MCP-level auth |
 | `rbac-proxy` | OpenShift deployment behind kube-rbac-proxy | `Authorization: Bearer <token>` to the proxy; proxy forwards `X-User` and `X-Tenant` |
-| `oidc` | Standalone HTTP deployment with an external IdP | `Authorization: Bearer <JWT>` validated against OIDC issuer metadata |
 
 ### OpenShift: `rbac-proxy`
 
@@ -58,35 +57,6 @@ auth_type: rbac-proxy
 - `X-User` — authenticated user identity
 
 The `evalhub-mcp` process itself does not validate the bearer token; the sidecar does that before the request arrives.
-
-### Standalone: `oidc`
-
-For HTTP deployments without `kube-rbac-proxy`, set `auth_type: oidc` and configure OIDC issuer discovery:
-
-```yaml
-auth_type: oidc
-transport: http
-host: 0.0.0.0
-port: 3001
-oidc:
-  issuer_url: https://auth.example.com/realms/evalhub # required
-  audience: evalhub-mcp                               # optional; expected JWT aud claim
-  scopes:                                             # optional; all listed scopes must be present in the token
-    - read
-base_url: https://eval-hub.example.com
-tenant: my-tenant
-token: <service-account-or-user-token-for-eval-hub-api>
-```
-
-Clients send a JWT access token (or OIDC ID token from the same issuer) on every MCP HTTP request:
-
-```http
-Authorization: Bearer eyJhbGciOi...
-```
-
-Validation uses [go-oidc](https://github.com/coreos/go-oidc) against the issuer's `.well-known/openid-configuration` and JWKS. Invalid, expired, or wrongly scoped tokens receive **401** / **403** with a plain-text body.
-
-Set `oidc.insecure: true` only when the IdP uses a self-signed TLS certificate (development). This is separate from top-level `insecure`, which only affects TLS to the eval-hub API.
 
 ### Outbound eval-hub API credentials
 
@@ -107,10 +77,6 @@ YAML keys and environment variables (env overrides YAML):
 | Setting | YAML key | Environment variable |
 |---------|----------|----------------------|
 | Auth mode | `auth_type` | `EVALHUB_AUTH_TYPE` |
-| OIDC issuer | `oidc.issuer_url` | `EVALHUB_OIDC_ISSUER_URL` |
-| OIDC audience | `oidc.audience` | `EVALHUB_OIDC_AUDIENCE` |
-| OIDC required scopes | `oidc.scopes` | (not currently supported via env; configure in YAML) |
-| Skip TLS verification (IdP) | `oidc.insecure` | `EVALHUB_OIDC_INSECURE` |
 | Skip TLS verification (eval-hub API) | `insecure` | `EVALHUB_INSECURE` |
 | Eval-hub API URL | `base_url` | `EVALHUB_BASE_URL` |
 | Eval-hub token | `token` | `EVALHUB_TOKEN` |
@@ -142,14 +108,6 @@ Load a config file with `--config /path/to/config.yaml` or `~/.evalhub/config.ya
 3. In the UI enter `https://127.0.0.1:8443/sse` as the URL (legacy SSE) or the service root for Streamable HTTP, and in the **Authentication** section add a bearer token from `oc whoami -t`.
 
    Export `NODE_TLS_REJECT_UNAUTHORIZED` to avoid errors related to self-signed certificates.
-
-### Standalone OIDC
-
-1. Start evalhub-mcp with an OIDC config (see above) and `--transport http`.
-
-2. Obtain a JWT from your IdP (access token with the configured audience and scopes).
-
-3. Connect with the MCP inspector or any Streamable HTTP client, setting **Authentication** to `Bearer <token>`.
 
 ### Local development (no inbound auth)
 

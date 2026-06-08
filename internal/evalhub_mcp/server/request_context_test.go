@@ -86,7 +86,7 @@ func TestWrapRequestPropagatesRequestID(t *testing.T) {
 	inner := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		gotID = RequestIDFromContext(r.Context())
 	})
-	handler := wrapRequest(&config.Config{AuthType: config.AuthTypeNone}, nil, discardLogger, inner)
+	handler := wrapRequest(&config.Config{AuthType: config.AuthTypeNone}, discardLogger, inner)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set(TRANSACTION_ID_HEADER, "wrapped-req")

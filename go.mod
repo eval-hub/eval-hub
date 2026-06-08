@@ -10,12 +10,10 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.32.23
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.22
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.103.2
-	github.com/coreos/go-oidc/v3 v3.18.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-logr/logr v1.4.3
 	github.com/go-playground/validator/v10 v10.30.3
 	github.com/go-viper/mapstructure/v2 v2.5.0
-	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/go-jsonnet v0.22.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
@@ -45,8 +43,6 @@ require (
 	k8s.io/client-go v0.36.1
 	modernc.org/sqlite v1.51.0
 )
-
-require github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 
 require (
 	cel.dev/expr v0.25.2 // indirect

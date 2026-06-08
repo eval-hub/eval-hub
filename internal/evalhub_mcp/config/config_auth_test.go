@@ -10,37 +10,6 @@ func TestDefaultConfigAuthType(t *testing.T) {
 	}
 }
 
-func TestValidateBearerTokenRequiresOIDCIssuer(t *testing.T) {
-	t.Parallel()
-	cfg := &Config{
-		Transport: "http",
-		Host:      "localhost",
-		Port:      3001,
-		AuthType:  AuthTypeOIDC,
-	}
-	if err := Validate(cfg); err == nil {
-		t.Fatal("expected validation error when oidc.issuer_url is missing")
-	}
-}
-
-func TestValidateBearerTokenWithOIDC(t *testing.T) {
-	t.Parallel()
-	cfg := &Config{
-		Transport: "http",
-		Host:      "localhost",
-		Port:      3001,
-		AuthType:  AuthTypeOIDC,
-		OIDC: OIDCConfig{
-			IssuerURL: "https://auth.example.com",
-			Audience:  "evalhub-mcp",
-			Scopes:    []string{"read"},
-		},
-	}
-	if err := Validate(cfg); err != nil {
-		t.Fatalf("Validate: %v", err)
-	}
-}
-
 func TestValidateAuthType(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -59,20 +28,9 @@ func TestValidateAuthType(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "bearer missing issuer",
-			cfg:     &Config{Transport: "http", Host: "localhost", Port: 3001, AuthType: AuthTypeOIDC},
+			name:    "oidc removed",
+			cfg:     &Config{Transport: "http", Host: "localhost", Port: 3001, AuthType: "oidc"},
 			wantErr: true,
-		},
-		{
-			name: "bearer with issuer",
-			cfg: &Config{
-				Transport: "http",
-				Host:      "localhost",
-				Port:      3001,
-				AuthType:  AuthTypeOIDC,
-				OIDC:      OIDCConfig{IssuerURL: "https://auth.example.com"},
-			},
-			wantErr: false,
 		},
 		{
 			name:    "invalid auth type",
@@ -105,44 +63,5 @@ func TestLoadFlagsAuthTypeOverride(t *testing.T) {
 	}
 	if cfg.AuthType != AuthTypeRBACProxy {
 		t.Errorf("AuthType = %q, want %q", cfg.AuthType, AuthTypeRBACProxy)
-	}
-}
-
-func TestLoadEnvAuthTypeAndOIDC(t *testing.T) {
-	clearEnv(t)
-	defer clearEnv(t)
-	t.Setenv("EVALHUB_AUTH_TYPE", AuthTypeOIDC)
-	t.Setenv("EVALHUB_OIDC_ISSUER_URL", "https://auth.example.com")
-	t.Setenv("EVALHUB_OIDC_AUDIENCE", "evalhub-mcp")
-
-	cfg, err := Load(nil, nil)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if cfg.AuthType != AuthTypeOIDC {
-		t.Errorf("AuthType = %q, want %q", cfg.AuthType, AuthTypeOIDC)
-	}
-	if cfg.OIDC.IssuerURL != "https://auth.example.com" {
-		t.Errorf("OIDC.IssuerURL = %q", cfg.OIDC.IssuerURL)
-	}
-	if cfg.OIDC.Audience != "evalhub-mcp" {
-		t.Errorf("OIDC.Audience = %q", cfg.OIDC.Audience)
-	}
-}
-
-func TestLoadEnvOIDCInsecure(t *testing.T) {
-	clearEnv(t)
-	defer clearEnv(t)
-	t.Setenv("EVALHUB_OIDC_INSECURE", "true")
-
-	cfg, err := Load(nil, nil)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if !cfg.OIDC.Insecure {
-		t.Error("OIDC.Insecure = false, want true")
-	}
-	if cfg.Insecure {
-		t.Error("Insecure = true, want false (OIDC insecure is separate from eval-hub client insecure)")
 	}
 }
