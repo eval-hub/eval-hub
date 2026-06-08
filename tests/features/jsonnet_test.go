@@ -593,3 +593,258 @@ func TestEvaluateEvaluationJobJsonnetWithCollectionId(t *testing.T) {
 		t.Errorf("benchmarks = %#v, want key absent when collection_id is set", job.Benchmarks)
 	}
 }
+
+type jsonnetTestDataRef struct {
+	S3 struct {
+		Bucket    string `json:"bucket"`
+		Key       string `json:"key"`
+		SecretRef string `json:"secret_ref"`
+	} `json:"s3"`
+}
+
+type jsonnetBenchmarkPayload struct {
+	ID          string              `json:"id"`
+	ProviderID  string              `json:"provider_id"`
+	Parameters  map[string]any      `json:"parameters"`
+	TestDataRef *jsonnetTestDataRef `json:"test_data_ref"`
+}
+
+type jsonnetPayloadDocument struct {
+	Name         string                    `json:"name"`
+	Benchmarks   []jsonnetBenchmarkPayload `json:"benchmarks"`
+	PassCriteria *struct {
+		Threshold float64 `json:"threshold"`
+	} `json:"pass_criteria"`
+	Queue *struct {
+		Kind string `json:"kind"`
+		Name string `json:"name"`
+	} `json:"queue"`
+	Tags []string `json:"tags"`
+}
+
+func jsonnetPayloadFilePath(t *testing.T, name string) string {
+	t.Helper()
+	path, err := filepath.Abs(filepath.Join(testDataRoot(), name))
+	if err != nil {
+		t.Fatalf("abs path: %v", err)
+	}
+	return path
+}
+
+func evaluateJsonnetPayloadDocument(t *testing.T, tc *scenarioConfig, file string) jsonnetPayloadDocument {
+	t.Helper()
+	out, err := tc.evaluateJsonnetFile(jsonnetPayloadFilePath(t, file))
+	if err != nil {
+		t.Fatalf("evaluateJsonnetFile(%s): %v", file, err)
+	}
+	var doc jsonnetPayloadDocument
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("unmarshal %s: %v\noutput: %s", file, err, out)
+	}
+	return doc
+}
+
+func assertJsonnetBenchmarksDisconnectedAware(t *testing.T, file string, benchmarks []jsonnetBenchmarkPayload, disconnected bool) {
+	t.Helper()
+	wantTokenizer := "google/flan-t5-small"
+	if disconnected {
+		wantTokenizer = "/test_data/tokenizer"
+	}
+	for i, b := range benchmarks {
+		if b.ID == "" {
+			t.Errorf("%s benchmarks[%d].id is empty", file, i)
+		}
+		if b.ProviderID == "" {
+			t.Errorf("%s benchmarks[%d].provider_id is empty", file, i)
+		}
+		if got := b.Parameters["tokenizer"]; got != wantTokenizer {
+			t.Errorf("%s benchmarks[%d].parameters.tokenizer = %v, want %s", file, i, got, wantTokenizer)
+		}
+		if disconnected {
+			if b.TestDataRef == nil {
+				t.Errorf("%s benchmarks[%d].test_data_ref is nil, want s3 ref", file, i)
+				continue
+			}
+			s3 := b.TestDataRef.S3
+			if s3.Bucket != "mlpipeline" || s3.Key != "offline" || s3.SecretRef != "minio-test" {
+				t.Errorf("%s benchmarks[%d].test_data_ref.s3 = %+v, want mlpipeline/offline/minio-test", file, i, s3)
+			}
+		} else if b.TestDataRef != nil {
+			t.Errorf("%s benchmarks[%d].test_data_ref = %+v, want nil", file, i, b.TestDataRef.S3)
+		}
+	}
+}
+
+func TestEvaluateFVTJsonnetPayloadFiles(t *testing.T) {
+	mlflowOff := false
+	connectedEnv := map[string]string{"ENVIRONMENT_ID": "connected"}
+	disconnectedEnv := map[string]string{
+		"ENVIRONMENT_ID":          "disconnected",
+		"TEST_DATA_S3_BUCKET":     "mlpipeline",
+		"TEST_DATA_S3_KEY":        "offline",
+		"TEST_DATA_S3_SECRET_REF": "minio-test",
+	}
+	queueEnv := map[string]string{"QUEUE_NAME": "user-queue"}
+
+	type payloadCase struct {
+		file                      string
+		env                       map[string]string
+		wantName                  string
+		minBenchmarks             int
+		wantPassCriteriaThreshold *float64
+		wantQueueKind             string
+		wantQueueName             string
+		wantTags                  []string
+	}
+
+	cases := []payloadCase{
+		{
+			file:          "collection.jsonnet",
+			wantName:      "test-benchmarks-collection",
+			minBenchmarks: 1,
+		},
+		{
+			file:          "collection_multi_benchmark.jsonnet",
+			wantName:      "test-multi-benchmarks-collection",
+			minBenchmarks: 2,
+		},
+		{
+			file:          "collection_job_parameters.jsonnet",
+			wantName:      "job-collection-override",
+			minBenchmarks: 1,
+		},
+		{
+			file:                      "collection_threshold_zero.jsonnet",
+			wantName:                  "test-benchmarks-collection-threshold-zero",
+			minBenchmarks:             2,
+			wantPassCriteriaThreshold: ptrFloat64(0),
+		},
+		{
+			file:          "evaluation_job_multiple_benchmark.jsonnet",
+			wantName:      "automation_test_evaluation_multiple_benchmark_job",
+			minBenchmarks: 2,
+		},
+		{
+			file:          "evaluation_job_kueue.jsonnet",
+			wantName:      "test-evaluation-job-queue",
+			minBenchmarks: 1,
+			env:           queueEnv,
+			wantQueueKind: "kueue",
+			wantQueueName: "user-queue",
+		},
+		{
+			file:          "evaluation_job_kueue_name_only.jsonnet",
+			wantName:      "test-evaluation-job-queue-name",
+			minBenchmarks: 1,
+			env:           queueEnv,
+			wantQueueName: "user-queue",
+		},
+		{
+			file:          "evaluation_job_kueue_shared_job1.jsonnet",
+			wantName:      "automation_shared_experiment_job_1",
+			minBenchmarks: 1,
+			env:           queueEnv,
+			wantQueueKind: "kueue",
+			wantQueueName: "user-queue",
+		},
+		{
+			file:          "evaluation_job_kueue_shared_job2.jsonnet",
+			wantName:      "automation_shared_experiment_job_2",
+			minBenchmarks: 1,
+			env:           queueEnv,
+			wantQueueKind: "kueue",
+			wantQueueName: "user-queue",
+		},
+		{
+			file:                      "evaluation_job_kueue_tags_criteria.jsonnet",
+			wantName:                  "test-evaluation-job-queue-tags-criteria",
+			minBenchmarks:             1,
+			env:                       queueEnv,
+			wantQueueKind:             "kueue",
+			wantQueueName:             "user-queue",
+			wantTags:                  []string{"integration-test", "kueue-enabled"},
+			wantPassCriteriaThreshold: ptrFloat64(0.8),
+		},
+		{
+			file:          "evaluation_job_kueue_whitespace.jsonnet",
+			wantName:      "test-evaluation-job-queue",
+			minBenchmarks: 1,
+			wantQueueKind: "kueue",
+			wantQueueName: "  user-queue  ",
+		},
+	}
+
+	for _, disconnected := range []bool{false, true} {
+		mode := "connected"
+		baseEnv := connectedEnv
+		if disconnected {
+			mode = "disconnected"
+			baseEnv = disconnectedEnv
+		}
+		for _, tc := range cases {
+			name := mode + "/" + tc.file
+			t.Run(name, func(t *testing.T) {
+				env := make(map[string]string, len(baseEnv)+len(tc.env))
+				for k, v := range baseEnv {
+					env[k] = v
+				}
+				for k, v := range tc.env {
+					env[k] = v
+				}
+				sc := &scenarioConfig{
+					values:               map[string]string{},
+					jsonnetHarnessEnv:    env,
+					jsonnetMlflowEnabled: &mlflowOff,
+				}
+				doc := evaluateJsonnetPayloadDocument(t, sc, tc.file)
+
+				if doc.Name != tc.wantName {
+					t.Errorf("name = %q, want %q", doc.Name, tc.wantName)
+				}
+				if len(doc.Benchmarks) < tc.minBenchmarks {
+					t.Fatalf("benchmarks = %d, want at least %d", len(doc.Benchmarks), tc.minBenchmarks)
+				}
+				assertJsonnetBenchmarksDisconnectedAware(t, tc.file, doc.Benchmarks, disconnected)
+
+				if tc.wantPassCriteriaThreshold != nil {
+					if doc.PassCriteria == nil {
+						t.Fatal("pass_criteria is nil")
+					}
+					if doc.PassCriteria.Threshold != *tc.wantPassCriteriaThreshold {
+						t.Errorf("pass_criteria.threshold = %v, want %v", doc.PassCriteria.Threshold, *tc.wantPassCriteriaThreshold)
+					}
+				}
+				if tc.wantQueueKind != "" {
+					if doc.Queue == nil {
+						t.Fatal("queue is nil")
+					}
+					if doc.Queue.Kind != tc.wantQueueKind {
+						t.Errorf("queue.kind = %q, want %q", doc.Queue.Kind, tc.wantQueueKind)
+					}
+				}
+				if tc.wantQueueName != "" {
+					if doc.Queue == nil {
+						t.Fatal("queue is nil")
+					}
+					if doc.Queue.Name != tc.wantQueueName {
+						t.Errorf("queue.name = %q, want %q", doc.Queue.Name, tc.wantQueueName)
+					}
+				}
+				if tc.wantTags != nil {
+					if len(doc.Tags) != len(tc.wantTags) {
+						t.Fatalf("tags = %#v, want %#v", doc.Tags, tc.wantTags)
+					}
+					for i, tag := range tc.wantTags {
+						if doc.Tags[i] != tag {
+							t.Errorf("tags[%d] = %q, want %q", i, doc.Tags[i], tag)
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
+func ptrFloat64(v float64) *float64 {
+	return &v
+}

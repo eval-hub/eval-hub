@@ -1,0 +1,11 @@
+type: object
+description: Benchmark-level agent guidance (overrides provider defaults)
+properties:
+  result_interpretation:
+    type: string
+    description: How to read results for this specific benchmark
+  score_ranges:
+    type: array
+    items:
+      $ref: ./ScoreRange.yaml
+    description: Score ranges with their interpretations for this benchmark

@@ -15,6 +15,9 @@ properties:
     items:
       type: string
     description: Provider tags
+  agent:
+    $ref: ./AgentMetadata.yaml
+    description: Agent discoverability metadata for this provider
   runtime:
     $ref: ./Runtime.yaml
     description: Provider runtime configuration

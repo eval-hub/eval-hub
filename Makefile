@@ -278,13 +278,21 @@ cross-compile: ## Build for specific platform: make cross-compile CROSS_GOOS=lin
 	GOOS=$(CROSS_GOOS) GOARCH=$(CROSS_GOARCH) CGO_ENABLED=0 go build -o $(CROSS_OUTPUT) -ldflags="-s -w ${LDFLAGS_X}" $(CMD_PATH)
 	@echo "Built: $(CROSS_OUTPUT)"
 
+# Platform table: single source of truth for all supported platforms
+SUPPORTED_PLATFORMS = linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64
+
+WHEEL_PLATFORM_linux-amd64   = manylinux_2_17_x86_64
+WHEEL_PLATFORM_linux-arm64   = manylinux_2_17_aarch64
+WHEEL_PLATFORM_darwin-amd64  = macosx_10_9_x86_64
+WHEEL_PLATFORM_darwin-arm64  = macosx_11_0_arm64
+WHEEL_PLATFORM_windows-amd64 = win_amd64
+
+build-platform-%:
+	@$(MAKE) cross-compile CROSS_GOOS=$(word 1,$(subst -, ,$*)) CROSS_GOARCH=$(word 2,$(subst -, ,$*))
+
 .PHONY: build-all-platforms
-build-all-platforms: ## Build for all supported platforms
-	@$(MAKE) cross-compile CROSS_GOOS=linux CROSS_GOARCH=amd64
-	@$(MAKE) cross-compile CROSS_GOOS=linux CROSS_GOARCH=arm64
-	@$(MAKE) cross-compile CROSS_GOOS=darwin CROSS_GOARCH=amd64
-	@$(MAKE) cross-compile CROSS_GOOS=darwin CROSS_GOARCH=arm64
-	@$(MAKE) cross-compile CROSS_GOOS=windows CROSS_GOARCH=amd64
+build-all-platforms: ## Build for all supported platforms (parallel: make -j5 build-all-platforms)
+	@$(MAKE) -j5 $(addprefix build-platform-,$(SUPPORTED_PLATFORMS))
 
 # MCP cross-compilation
 MCP_CROSS_OUTPUT = bin/evalhub-mcp-$(CROSS_GOOS)-$(CROSS_GOARCH)$(if $(filter windows,$(CROSS_GOOS)),.exe,)
@@ -318,77 +326,54 @@ venv: ## Create Python virtual environment using uv
 		echo "Virtual environment already exists at $(VENV_DIR)"; \
 	fi
 
-# Python wheel building - auto-detect platform based on CROSS_GOOS/CROSS_GOARCH (we re-use CROSS_OUTPUT_SUFFIX)
-# Platform mappings as defined also in .github/workflows/publish-python-server.yml
-ifeq ($(CROSS_OUTPUT_SUFFIX),linux-amd64)
-    WHEEL_PLATFORM ?= manylinux_2_17_x86_64
-    WHEEL_BINARY ?= eval-hub-linux-amd64
-else ifeq ($(CROSS_OUTPUT_SUFFIX),linux-arm64)
-    WHEEL_PLATFORM ?= manylinux_2_17_aarch64
-    WHEEL_BINARY ?= eval-hub-linux-arm64
-else ifeq ($(CROSS_OUTPUT_SUFFIX),darwin-amd64)
-    WHEEL_PLATFORM ?= macosx_10_9_x86_64
-    WHEEL_BINARY ?= eval-hub-darwin-amd64
-else ifeq ($(CROSS_OUTPUT_SUFFIX),darwin-arm64)
-    WHEEL_PLATFORM ?= macosx_11_0_arm64
-    WHEEL_BINARY ?= eval-hub-darwin-arm64
-else ifeq ($(CROSS_OUTPUT_SUFFIX),windows-amd64)
-    WHEEL_PLATFORM ?= win_amd64
-    WHEEL_BINARY ?= eval-hub-windows-amd64
-else
-    # Fallback to macOS ARM (M-chips) if platform not recognized
-    WHEEL_PLATFORM ?= macosx_11_0_arm64
-    WHEEL_BINARY ?= eval-hub-darwin-arm64
-endif
+# Python wheel building - platform derived from CROSS_OUTPUT_SUFFIX via SUPPORTED_PLATFORMS table above
+WHEEL_PLATFORM ?= $(WHEEL_PLATFORM_$(CROSS_OUTPUT_SUFFIX))
 
 .PHONY: install-wheel-tools
 install-wheel-tools: venv ## Install Python wheel build tools using uv
 	@echo "Installing wheel build tools via uv..."
 	@uv pip install build wheel setuptools
 
-.PHONY: test-python-server
-test-python-server: ## Run python-server tests (you probably need `build-wheel` first, we use this target as-is in GHA/ci/cd)
-	@echo "Running python-server tests..."
-	@cd python-server && uv run --extra dev pytest
+# Per-platform build isolation directory
+WHEEL_BUILD_DIR = python-server/build-$(CROSS_GOOS)-$(CROSS_GOARCH)
+
+WHEEL_BINARY_NAME = eval-hub$(if $(filter windows,$(CROSS_GOOS)),.exe,)
 
 .PHONY: clean-wheels
 clean-wheels: ## Clean Python wheel build artifacts
 	@echo "Cleaning wheel build artifacts..."
 	@rm -rf python-server/dist/
-	@rm -rf python-server/build/
+	@rm -rf python-server/build-*/
 	@rm -rf python-server/*.egg-info
-	@find python-server/evalhub_server/binaries/ -type f ! -name '.gitkeep' -delete
 	@rm -f python-server/VERSION
 
 .PHONY: build-wheel
-build-wheel: ## Build Python wheel: make build-wheel WHEEL_PLATFORM=manylinux_2_17_x86_64 WHEEL_BINARY=eval-hub-linux-amd64
-	@if [ "$${GITHUB_ACTIONS}" != "true" ]; then \
-		$(MAKE) cross-compile; \
-		echo "Copying binary $(WHEEL_PLATFORM) $(WHEEL_BINARY)"; \
-		mkdir -p python-server/evalhub_server/binaries/; \
-		find python-server/evalhub_server/binaries/ -type f ! -name '.gitkeep' -delete; \
-		cp bin/$(WHEEL_BINARY)* python-server/evalhub_server/binaries/; \
-	else \
-		echo "Skipping copy (GITHUB_ACTIONS): binary provided by actions/download-artifact"; \
-	fi
-	@find python-server/evalhub_server/binaries/ -type f ! -name '.gitkeep' -exec chmod +x {} +
-	@echo "Building wheel for $(WHEEL_PLATFORM) with binary $(WHEEL_BINARY)..."
-	@rm -rf python-server/build/
-	@cp VERSION python-server/VERSION
+build-wheel: ## Build Python wheel: make build-wheel WHEEL_PLATFORM=manylinux_2_17_x86_64 CROSS_GOOS=linux CROSS_GOARCH=amd64
+	@rm -rf $(WHEEL_BUILD_DIR)
+	@mkdir -p $(WHEEL_BUILD_DIR)/binaries $(WHEEL_BUILD_DIR)/shims python-server/dist
+	@cp python-server/pyproject.toml python-server/setup.py python-server/README.md $(WHEEL_BUILD_DIR)/
+	@cp python-server/shims/* $(WHEEL_BUILD_DIR)/shims/
+	@cp VERSION $(WHEEL_BUILD_DIR)/VERSION
 	@if [ -n "$(DEV_SUFFIX)" ]; then \
-		BASE=$$(tr -d '\n' < python-server/VERSION); \
-		echo "$${BASE}.$(DEV_SUFFIX)" > python-server/VERSION; \
+		BASE=$$(tr -d '\n' < $(WHEEL_BUILD_DIR)/VERSION); \
+		echo "$${BASE}.$(DEV_SUFFIX)" > $(WHEEL_BUILD_DIR)/VERSION; \
 		echo "Python package version: $${BASE}.$(DEV_SUFFIX)"; \
 	fi
-	WHEEL_PLATFORM=$(WHEEL_PLATFORM) uv build --wheel python-server
+	# GHA downloads pre-built binaries into bin/ via actions/download-artifact; skip compile if present
+	@test -f $(CROSS_OUTPUT) || $(MAKE) cross-compile
+	@echo "Staging binary $(CROSS_OUTPUT) as $(WHEEL_BINARY_NAME)"
+	@cp $(CROSS_OUTPUT) $(WHEEL_BUILD_DIR)/binaries/$(WHEEL_BINARY_NAME)
+	@chmod +x $(WHEEL_BUILD_DIR)/binaries/$(WHEEL_BINARY_NAME)
+	@echo "Building wheel for $(WHEEL_PLATFORM)..."
+	WHEEL_PLATFORM=$(WHEEL_PLATFORM) uv build --wheel $(WHEEL_BUILD_DIR) --out-dir python-server/dist
+	@rm -rf $(WHEEL_BUILD_DIR)
+
+build-wheel-%:
+	@$(MAKE) build-wheel WHEEL_PLATFORM=$(WHEEL_PLATFORM_$*) CROSS_GOOS=$(word 1,$(subst -, ,$*)) CROSS_GOARCH=$(word 2,$(subst -, ,$*))
 
 .PHONY: build-all-wheels
-build-all-wheels: clean-wheels build-all-platforms ## Build all Python wheels for all platforms
-	@$(MAKE) build-wheel WHEEL_PLATFORM=manylinux_2_17_x86_64 WHEEL_BINARY=eval-hub-linux-amd64
-	@$(MAKE) build-wheel WHEEL_PLATFORM=manylinux_2_17_aarch64 WHEEL_BINARY=eval-hub-linux-arm64
-	@$(MAKE) build-wheel WHEEL_PLATFORM=macosx_10_9_x86_64 WHEEL_BINARY=eval-hub-darwin-amd64
-	@$(MAKE) build-wheel WHEEL_PLATFORM=macosx_11_0_arm64 WHEEL_BINARY=eval-hub-darwin-arm64
-	@$(MAKE) build-wheel WHEEL_PLATFORM=win_amd64 WHEEL_BINARY=eval-hub-windows-amd64
+build-all-wheels: clean-wheels ## Build all Python wheels (parallel: make -j5 build-all-wheels)
+	@$(MAKE) -j5 $(addprefix build-wheel-,$(SUPPORTED_PLATFORMS))
 
 .PHONY: cls
 cls:
@@ -455,14 +440,13 @@ MCP_TEST_IMAGE ?= evalhub-mcp-test:latest
 MCP_TEST_CONTAINER ?= evalhub-mcp-test
 MCP_TEST_PORT ?= 3001
 
-MCP_PLATFORMS = linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64
 
 test-mcp-build-all: ## Build all 5 MCP platform binaries and verify they exist
 	@echo "=== test-mcp-build-all ==="
 	@$(MAKE) build-all-platforms-mcp
 	@echo "Verifying all platform binaries exist..."
 	@fail=0; \
-	for p in $(MCP_PLATFORMS); do \
+	for p in $(SUPPORTED_PLATFORMS); do \
 		bin="bin/evalhub-mcp-$$p"; \
 		if [ "$$p" = "windows-amd64" ]; then bin="$${bin}.exe"; fi; \
 		if [ ! -f "$$bin" ]; then echo "FAIL: missing $$bin"; fail=1; else echo "OK: $$bin"; fi; \
@@ -499,7 +483,7 @@ test-mcp-binary-naming: ## Verify binaries follow the evalhub-mcp-{OS}-{ARCH} na
 	@count=$$(ls -1 bin/evalhub-mcp-* 2>/dev/null | wc -l); \
 	if [ "$$count" -ne 5 ]; then echo "FAIL: expected 5 platform binaries, found $$count"; exit 1; fi
 	@fail=0; \
-	for p in $(MCP_PLATFORMS); do \
+	for p in $(SUPPORTED_PLATFORMS); do \
 		bin="bin/evalhub-mcp-$$p"; \
 		if [ "$$p" = "windows-amd64" ]; then bin="$${bin}.exe"; fi; \
 		if [ ! -f "$$bin" ]; then echo "FAIL: missing $$bin"; fail=1; else echo "OK: $$bin matches naming convention"; fi; \

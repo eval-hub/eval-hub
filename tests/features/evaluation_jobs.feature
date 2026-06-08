@@ -52,7 +52,7 @@ Feature: Evaluation Jobs
     And the response should contain the value "{{env:MODEL_URL|http://test.com}}" at path "$.model.url"
     And the response should contain the value "test-evaluation-job" at path "$.name"
     And the response should contain the value "10" at path "$.benchmarks[0].parameters.num_examples"
-    And the response should contain the value "google/flan-t5-small" at path "$.benchmarks[0].parameters.tokenizer"
+    And the response should contain the value "{{env:FVT_BENCHMARK_TOKENIZER|google/flan-t5-small}}" at path "$.benchmarks[0].parameters.tokenizer"
     And the response should not contain the value "collection" at path "$.collection"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
@@ -69,7 +69,7 @@ Feature: Evaluation Jobs
     And the response should contain the value "garak|lm_evaluation_harness" at path "$.benchmarks[0].provider_id"
     And the response should contain the value "3" at path "$.benchmarks[0].parameters.num_fewshot"
     And the response should contain the value "5" at path "$.benchmarks[0].parameters.limit"
-    And the response should contain the value "google/flan-t5-small" at path "$.benchmarks[0].parameters.tokenizer"
+    And the response should contain the value "{{env:FVT_BENCHMARK_TOKENIZER|google/flan-t5-small}}" at path "$.benchmarks[0].parameters.tokenizer"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "pending" at path "$.status.state"
@@ -79,7 +79,7 @@ Feature: Evaluation Jobs
     And the response should contain the value "garak|lm_evaluation_harness" at path "$.benchmarks[0].provider_id"
     And the response should contain the value "3" at path "$.benchmarks[0].parameters.num_fewshot"
     And the response should contain the value "5" at path "$.benchmarks[0].parameters.limit"
-    And the response should contain the value "google/flan-t5-small" at path "$.benchmarks[0].parameters.tokenizer"
+    And the response should contain the value "{{env:FVT_BENCHMARK_TOKENIZER|google/flan-t5-small}}" at path "$.benchmarks[0].parameters.tokenizer"
     And the response should not contain the value "collection" at path "$.collection"
     And I wait for the evaluation job status to be "completed"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
@@ -237,35 +237,7 @@ Feature: Evaluation Jobs
 
   Scenario: Evaluation job completes with multi-benchmark collection
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/collections" with body:
-      """
-      {
-        "name": "test-multi-benchmarks-collection",
-        "description": "Collection of multiple benchmarks for FVT",
-        "category": "test",
-        "benchmarks": [
-          {
-            "id": "arc_easy",
-            "provider_id": "lm_evaluation_harness",
-            "parameters": {
-              "tokenizer": "google/flan-t5-small",
-              "limit": 5,
-              "num_examples": 10
-            }
-          },
-          {
-            "id": "arc_easy",
-            "provider_id": "lm_evaluation_harness",
-            "parameters": {
-              "num_examples": 15,
-              "num_fewshot": 3,
-              "limit": 5,
-              "tokenizer": "google/flan-t5-small"
-            }
-          }
-        ]
-      }
-      """
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_multi_benchmark.json"
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:collection_id"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
@@ -375,24 +347,7 @@ Feature: Evaluation Jobs
 
   Scenario: Collection job with parameters
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/collections" with body:
-      """
-      {
-        "name": "job-collection-override",
-        "description": "Override parameter",
-        "category": "test",
-        "benchmarks": [
-          {
-            "id": "arc_easy",
-            "provider_id": "lm_evaluation_harness",
-            "parameters": {
-              "num_examples": 3,
-              "tokenizer": "google/flan-t5-small"
-            }
-          }
-        ]
-      }
-      """
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_job_parameters.json"
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:collection_id"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
@@ -403,7 +358,7 @@ Feature: Evaluation Jobs
     When I send a GET request to "/api/v1/evaluations/collections/{{value:collection_id}}"
     Then the response code should be 200
     And the response should contain the value "3" at path "$.benchmarks[0].parameters.num_examples"
-    And the response should contain the value "google/flan-t5-small" at path "$.benchmarks[0].parameters.tokenizer"
+    And the response should contain the value "{{env:FVT_BENCHMARK_TOKENIZER|google/flan-t5-small}}" at path "$.benchmarks[0].parameters.tokenizer"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "completed" at path "$.status.state"
@@ -416,51 +371,7 @@ Feature: Evaluation Jobs
 
   Scenario: Create threshold-zero collection then submit job and verify completion
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/collections" with body:
-    """
-    {
-        "name": "test-benchmarks-collection-threshold-zero",
-        "category": "test",
-        "description": "Collection of benchmarks for FVT",
-        "pass_criteria": {
-            "threshold": 0
-        },
-        "benchmarks": [
-            {
-                "id": "arc_easy",
-                "provider_id": "lm_evaluation_harness",
-                "primary_score": {
-                    "metric": "acc_norm",
-                    "lower_is_better": false
-                },
-                "pass_criteria": {
-                    "threshold": 0.5
-                },
-                "parameters": {
-                    "limit": 10,
-                    "num_fewshot": 0,
-                    "tokenizer": "google/flan-t5-small"
-                }
-            },
-            {
-                "id": "arc_easy",
-                "provider_id": "lm_evaluation_harness",
-                "primary_score": {
-                    "metric": "acc_norm",
-                    "lower_is_better": false
-                },
-                "pass_criteria": {
-                    "threshold": 0.5
-                },
-                "parameters": {
-                    "limit": 10,
-                    "num_fewshot": 0,
-                    "tokenizer": "google/flan-t5-small"
-                }
-            }
-        ]
-    }
-    """
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_threshold_zero.json"
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:collection_id"
     And the response should contain the value "test-benchmarks-collection-threshold-zero" at path "$.name"
@@ -1153,32 +1064,7 @@ Feature: Evaluation Jobs
   @kueue
   Scenario: Create evaluation job with Kueue queue
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body:
-      """
-      {
-        "model": {
-          "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}"
-        },
-        "benchmarks": [
-          {
-            "id": "arc_easy",
-            "provider_id": "lm_evaluation_harness",
-            "parameters": {
-              "num_examples": 10,
-              "num_fewshot": 3,
-              "limit": 5,
-              "tokenizer": "google/flan-t5-small"
-            }
-          }
-        ],
-        "name": "test-evaluation-job-queue",
-        "queue": {
-          "kind": "kueue",
-          "name": "{{env:QUEUE_NAME|user-queue}}"
-        }
-      }
-      """
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_kueue.json"
     Then the response code should be 202
     And the response should contain the value "kueue" at path "$.queue.kind"
     And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
@@ -1192,31 +1078,7 @@ Feature: Evaluation Jobs
   @kueue
   Scenario: Create evaluation job with queue name only
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body:
-      """
-      {
-        "model": {
-          "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}"
-        },
-        "benchmarks": [
-          {
-            "id": "arc_easy",
-            "provider_id": "lm_evaluation_harness",
-            "parameters": {
-              "num_examples": 10,
-              "num_fewshot": 3,
-              "limit": 5,
-              "tokenizer": "google/flan-t5-small"
-            }
-          }
-        ],
-        "name": "test-evaluation-job-queue-name",
-        "queue": {
-          "name": "{{env:QUEUE_NAME|user-queue}}"
-        }
-      }
-      """
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_kueue_name_only.json"
     Then the response code should be 202
     And the response should contain the value "kueue" at path "$.queue.kind"
     And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
@@ -1415,32 +1277,7 @@ Feature: Evaluation Jobs
   @kueue
   Scenario: Create evaluation job with queue name with whitespace is trimmed
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body:
-      """
-      {
-        "model": {
-          "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}"
-        },
-        "benchmarks": [
-          {
-            "id": "arc_easy",
-            "provider_id": "lm_evaluation_harness",
-            "parameters": {
-              "num_examples": 10,
-              "num_fewshot": 3,
-              "limit": 5,
-              "tokenizer": "google/flan-t5-small"
-            }
-          }
-        ],
-        "name": "test-evaluation-job-queue",
-        "queue": {
-          "kind": "kueue",
-          "name": "  user-queue  "
-        }
-      }
-      """
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_kueue_whitespace.json"
     Then the response code should be 202
     And the response should contain the value "kueue" at path "$.queue.kind"
     And the response should contain the value "user-queue" at path "$.queue.name"
@@ -1454,57 +1291,11 @@ Feature: Evaluation Jobs
   @kueue
   Scenario: Multiple jobs can use the same queue
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body:
-      """
-      {
-        "name": "automation_shared_experiment_job_1",
-        "queue": {
-          "kind": "kueue",
-          "name": "{{env:QUEUE_NAME|user-queue}}"
-        },
-        "model": {
-          "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}"
-        },
-        "benchmarks": [
-          {
-            "id": "arc_easy",
-            "provider_id": "lm_evaluation_harness",
-            "parameters": {
-              "num_examples": 3,
-              "tokenizer": "google/flan-t5-small"
-            }
-          }
-        ]
-      }
-      """
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_kueue_shared_job1.json"
     Then the response code should be 202
     And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
     And the "resource.id" field in the response should be saved as "value:job1_id"
-    When I send a POST request to "/api/v1/evaluations/jobs" with body:
-      """
-      {
-        "name": "automation_shared_experiment_job_2",
-        "model": {
-          "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}"
-        },
-        "queue": {
-          "kind": "kueue",
-          "name": "{{env:QUEUE_NAME|user-queue}}"
-        },
-        "benchmarks": [
-          {
-            "id": "arc_easy",
-            "provider_id": "lm_evaluation_harness",
-            "parameters": {
-              "num_examples": 3,
-              "tokenizer": "google/flan-t5-small"
-            }
-          }
-        ]
-      }
-      """
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_kueue_shared_job2.json"
     Then the response code should be 202
     And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
     And the "resource.id" field in the response should be saved as "value:job2_id"
@@ -1590,39 +1381,7 @@ Feature: Evaluation Jobs
   @kueue
   Scenario: Create evaluation job with Kueue queue, tags and pass criteria
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body:
-      """
-      {
-        "model": {
-          "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}"
-        },
-        "benchmarks": [
-          {
-            "id": "arc_easy",
-            "provider_id": "lm_evaluation_harness",
-            "parameters": {
-              "num_examples": 10,
-              "num_fewshot": 3,
-              "limit": 5,
-              "tokenizer": "google/flan-t5-small"
-            }
-          }
-        ],
-        "name": "test-evaluation-job-queue-tags-criteria",
-        "queue": {
-          "kind": "kueue",
-          "name": "{{env:QUEUE_NAME|user-queue}}"
-        },
-        "tags": [
-          "integration-test",
-          "kueue-enabled"
-        ],
-        "pass_criteria": {
-          "threshold": 0.8
-        }
-      }
-      """
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_kueue_tags_criteria.json"
     Then the response code should be 202
     And the response should contain the value "kueue" at path "$.queue.kind"
     And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"

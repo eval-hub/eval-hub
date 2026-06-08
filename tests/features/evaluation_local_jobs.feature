@@ -14,6 +14,7 @@ Feature: Evaluation Jobs
   @gha-wheel-sanity
   Scenario: Create an evaluation job and wait for completion
     Given the service is running
+    And I set the wait interval to "5s"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And I wait for the evaluation job status to be "completed"
