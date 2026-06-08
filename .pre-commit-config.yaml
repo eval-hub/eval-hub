@@ -1,15 +1,5 @@
 # Pre-commit configuration for eval-hub
 repos:
-  # Ruff linting and formatting (replaces black)
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.13
-    hooks:
-      - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
-        exclude: \.ipynb$
-      - id: ruff-format
-        exclude: \.ipynb$
-
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
