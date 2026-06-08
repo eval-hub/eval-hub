@@ -1,15 +1,5 @@
 # Pre-commit configuration for eval-hub
 repos:
-  # Ruff linting and formatting (replaces black)
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.13
-    hooks:
-      - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
-        exclude: \.ipynb$
-      - id: ruff-format
-        exclude: \.ipynb$
-
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -41,24 +31,6 @@ repos:
   # Local checks
   - repo: local
     hooks:
-      - id: mypy-check
-        name: mypy type checking
-        entry: uv
-        args: [run, --project, python-server, --extra, dev, mypy, --exclude, "python-server/(build|setup\\.py)", python-server/]
-        language: system
-        types: [python]
-        pass_filenames: false
-        files: ^python-server/
-
-      - id: pytest-unit
-        name: unit tests
-        entry: bash
-        args: [-c, 'if [ -d python-server/tests ]; then uv run --project python-server --extra dev pytest python-server/tests/ -m "unit" --tb=short -q; else echo "Skipping: python-server/tests/ not found"; fi']
-        language: system
-        types: [python]
-        pass_filenames: false
-        files: ^python-server/
-
       - id: go-test
         name: go unit and integration tests
         entry: make

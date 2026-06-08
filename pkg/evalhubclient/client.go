@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -162,6 +163,34 @@ func (c *Client) WithInsecureSkipVerify() *Client {
 		Transport: &http.Transport{TLSClientConfig: tlsCfg},
 	}
 	return cp
+}
+
+// WithCACert returns a copy of the client that trusts the PEM-encoded CA certificate(s)
+// in pemData in addition to the system certificate pool. Use this to trust a cluster-internal
+// CA (e.g. the OpenShift service CA) without disabling all certificate verification.
+func (c *Client) WithCACert(pemData []byte) (*Client, error) {
+	pool, err := x509.SystemCertPool()
+	if err != nil {
+		pool = x509.NewCertPool()
+	}
+	if !pool.AppendCertsFromPEM(pemData) {
+		return nil, fmt.Errorf("no valid PEM certificate found in CA data")
+	}
+
+	var tlsCfg *tls.Config
+	if existing, ok := c.httpClient.Transport.(*http.Transport); ok && existing.TLSClientConfig != nil {
+		tlsCfg = existing.TLSClientConfig.Clone()
+	} else {
+		tlsCfg = &tls.Config{} //nolint:gosec
+	}
+	tlsCfg.RootCAs = pool
+
+	cp := c.clone()
+	cp.httpClient = &http.Client{
+		Timeout:   c.httpClient.Timeout,
+		Transport: &http.Transport{TLSClientConfig: tlsCfg},
+	}
+	return cp, nil
 }
 
 // WithMaxRetries returns a copy of the client that retries up to n times on transient failures.

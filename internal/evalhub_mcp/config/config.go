@@ -38,6 +38,7 @@ type Config struct {
 	TLSCertFile   string `mapstructure:"tls_cert_file"`
 	TLSKeyFile    string `mapstructure:"tls_key_file"`
 	AuthType      string `mapstructure:"auth_type" validate:"omitempty,oneof=rbac-proxy none"`
+	CACertPath    string `mapstructure:"ca_cert_path"`
 }
 
 type Flags struct {
@@ -179,6 +180,7 @@ func applyYAMLConfig(cfg *Config, path string) (*Config, error) {
 		"tls_cert_file", "EVALHUB_TLS_CERT_FILE",
 		"tls_key_file", "EVALHUB_TLS_KEY_FILE",
 		"auth_type", "EVALHUB_AUTH_TYPE",
+		"ca_cert_path", "EVALHUB_CA_CERT_PATH",
 	)
 	if err != nil {
 		return nil, err
@@ -196,6 +198,7 @@ func applyYAMLConfig(cfg *Config, path string) (*Config, error) {
 		v.SetDefault("tls_cert_file", cfg.TLSCertFile)
 		v.SetDefault("tls_key_file", cfg.TLSKeyFile)
 		v.SetDefault("auth_type", cfg.AuthType)
+		v.SetDefault("ca_cert_path", cfg.CACertPath)
 	}
 
 	if path == "" {

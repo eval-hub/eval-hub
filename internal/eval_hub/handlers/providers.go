@@ -43,6 +43,10 @@ var (
 		{Path: "/runtime", Op: api.PatchOpReplace, Prefix: true},
 
 		{Path: "/benchmarks", Op: api.PatchOpReplace, Prefix: true},
+
+		{Path: "/agent", Op: api.PatchOpAdd, Prefix: true},
+		{Path: "/agent", Op: api.PatchOpRemove, Prefix: true},
+		{Path: "/agent", Op: api.PatchOpReplace, Prefix: true},
 	}
 )
 

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -92,7 +93,20 @@ func NewEvalHubClient(cfg *config.Config, logger *slog.Logger) *evalhubclient.Cl
 	if cfg.Insecure {
 		client = client.WithInsecureSkipVerify()
 	}
-	logger.Info("EvalHub client created", "baseURL", cfg.BaseURL, "tenant", cfg.Tenant, "insecure", cfg.Insecure)
+	if cfg.CACertPath != "" {
+		pemData, err := os.ReadFile(cfg.CACertPath)
+		if err != nil {
+			logger.Error("failed to read CA cert file", "path", cfg.CACertPath, "error", err)
+		} else {
+			withCA, err := client.WithCACert(pemData)
+			if err != nil {
+				logger.Error("failed to configure CA cert", "path", cfg.CACertPath, "error", err)
+			} else {
+				client = withCA
+			}
+		}
+	}
+	logger.Info("EvalHub client created", "baseURL", cfg.BaseURL, "tenant", cfg.Tenant, "insecure", cfg.Insecure, "caCertPath", cfg.CACertPath)
 	return client
 }
 
@@ -189,7 +203,10 @@ func wrapRequest(cfg *config.Config, logger *slog.Logger, next http.Handler) htt
 func runHTTP(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *slog.Logger) error {
 	mcpHandler := mcp.NewStreamableHTTPHandler(
 		func(r *http.Request) *mcp.Server { return srv },
-		nil,
+		// Server runs behind kube-rbac-proxy which handles authentication;
+		// the default localhost DNS-rebinding protection rejects the proxy's
+		// forwarded Host header and must be disabled.
+		&mcp.StreamableHTTPOptions{DisableLocalhostProtection: true},
 	)
 	handler := wrapRequest(cfg, logger, mcpHandler)
 	return serveHTTP(ctx, handler, cfg, logger)
@@ -199,7 +216,8 @@ func runHTTP(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *s
 func runLegacyHTTPSSE(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *slog.Logger) error {
 	mcpHandler := mcp.NewSSEHandler(
 		func(r *http.Request) *mcp.Server { return srv },
-		nil,
+		// Same rationale as runHTTP: behind kube-rbac-proxy.
+		&mcp.SSEOptions{DisableLocalhostProtection: true},
 	)
 	logger.Warn("transport 'http-sse' is deprecated; use 'http' (Streamable HTTP) unless connecting to legacy MCP clients", "transport", cfg.Transport)
 	handler := wrapRequest(cfg, logger, mcpHandler)
