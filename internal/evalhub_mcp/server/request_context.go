@@ -25,7 +25,7 @@ func requestIDFromRequest(r *http.Request) string {
 func withRequestContext(baseLogger *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestID := requestIDFromRequest(r)
-		r.Header.Set(TRANSACTION_ID_HEADER, requestID)
+		w.Header().Set(TRANSACTION_ID_HEADER, requestID)
 
 		ctx := context.WithValue(r.Context(), requestContextKey{}, requestID)
 		if baseLogger != nil {

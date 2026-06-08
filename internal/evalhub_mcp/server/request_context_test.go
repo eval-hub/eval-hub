@@ -29,8 +29,11 @@ func TestWithRequestContextUsesExistingHeader(t *testing.T) {
 	if gotID != "req-123" {
 		t.Fatalf("RequestIDFromContext() = %q, want %q", gotID, "req-123")
 	}
-	if req.Header.Get(TRANSACTION_ID_HEADER) != "req-123" {
-		t.Fatalf("header = %q, want %q", req.Header.Get(TRANSACTION_ID_HEADER), "req-123")
+	if rec.Header().Get(TRANSACTION_ID_HEADER) != "req-123" {
+		t.Fatalf("response header = %q, want %q", rec.Header().Get(TRANSACTION_ID_HEADER), "req-123")
+	}
+	if req.Header.Get(TRANSACTION_ID_HEADER) != "  req-123  " {
+		t.Fatalf("request header was mutated: %q", req.Header.Get(TRANSACTION_ID_HEADER))
 	}
 }
 
@@ -53,8 +56,8 @@ func TestWithRequestContextGeneratesRequestID(t *testing.T) {
 	if _, err := uuid.Parse(gotID); err != nil {
 		t.Fatalf("generated request ID %q is not a UUID: %v", gotID, err)
 	}
-	if req.Header.Get(TRANSACTION_ID_HEADER) != gotID {
-		t.Fatalf("header = %q, want %q", req.Header.Get(TRANSACTION_ID_HEADER), gotID)
+	if rec.Header().Get(TRANSACTION_ID_HEADER) != gotID {
+		t.Fatalf("response header = %q, want %q", rec.Header().Get(TRANSACTION_ID_HEADER), gotID)
 	}
 }
 
