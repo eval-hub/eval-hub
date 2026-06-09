@@ -889,6 +889,13 @@ func (tc *scenarioConfig) theResponseStatusShouldBe(status int) error {
 	return nil
 }
 
+func (tc *scenarioConfig) theResponseStatusShouldBeOr(status1, status2 int) error {
+	if (tc.response.StatusCode != status1) && (tc.response.StatusCode != status2) {
+		return tc.logError(fmt.Errorf("expected status %d or %d, got %d for request %s %s with response %s", status1, status2, tc.response.StatusCode, tc.lastMethod, tc.lastURL, string(tc.body)))
+	}
+	return nil
+}
+
 func (tc *scenarioConfig) theResponseShouldContainWithValue(key, value string) error {
 	var data map[string]interface{}
 	if err := json.Unmarshal(tc.body, &data); err != nil {
@@ -1514,6 +1521,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I send a (POST|PUT|PATCH) request to "([^"]*)" with body "([^"]*)"$`, tc.iSendARequestToWithBody)
 	ctx.Step(`^I send a (POST|PUT|PATCH) request to "([^"]*)" with body:$`, tc.iSendARequestToWithInlineBody)
 	ctx.Step(`^the response code should be (\d+)$`, tc.theResponseStatusShouldBe)
+	ctx.Step(`^the response code should be (\d+) or (\d+)$`, tc.theResponseStatusShouldBeOr)
 	ctx.Step(`^the response should contain "([^"]*)" with value "([^"]*)"$`, tc.theResponseShouldContainWithValue)
 	ctx.Step(`^the response should contain "([^"]*)"$`, tc.theResponseShouldContain)
 	ctx.Step(`^the response should be JSON$`, tc.theResponseShouldBeJSON)

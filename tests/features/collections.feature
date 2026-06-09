@@ -91,13 +91,15 @@ Feature: Collections Endpoint
   Scenario: Update collection with non-existent id returns 404
     Given the service is running
     When I send a PUT request to "/api/v1/evaluations/collections/00000000-0000-0000-0000-000000000000" with body "file:/collection_update.json"
-    Then the response code should be 404
+    # 403 is returned by the kube-rbac-proxy - 404 is standalone
+    Then the response code should be 404 or 403
 
   @negative
   Scenario: Update collection with empty id returns 404
     Given the service is running
     When I send a PUT request to "/api/v1/evaluations/collections/" with body "file:/collection_update.json"
-    Then the response code should be 404
+    # 403 is returned by the kube-rbac-proxy - 404 is standalone
+    Then the response code should be 404 or 403
 
   @negative
   Scenario: Update collection without name in body returns 400
@@ -190,7 +192,8 @@ Feature: Collections Endpoint
   Scenario: Patch collection with empty id returns 404
     Given the service is running
     When I send a PATCH request to "/api/v1/evaluations/collections/" with body "file:/patch_collection_name.json"
-    Then the response code should be 404
+    # 403 is returned by the kube-rbac-proxy - 404 is standalone
+    Then the response code should be 404 or 403
 
   @negative
   Scenario: Patch collection with invalid body returns 400
@@ -497,34 +500,34 @@ Feature: Collections Endpoint
     And the response should contain the value "Collection of benchmarks for FVT" at path "$.description"
     And the response should equal the value "0.0" at path "$.pass_criteria.threshold"
     And the array at path "$.benchmarks" in the response should have length 2
-  
+
   Scenario: Verify soft delete of collection returns 204
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
     Then the response code should be 201
     When I send a DELETE request to "/api/v1/evaluations/collections/{id}"
     Then the response code should be 204
-  
+
   @negative
   Scenario: Verify soft deleted collection returns 404 on GET
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
     Then the response code should be 201
     When I send a DELETE request to "/api/v1/evaluations/collections/{id}"
-    Then the response code should be 204  
+    Then the response code should be 204
     When I send a GET request to "/api/v1/evaluations/collections/{id}"
     Then the response code should be 404
-  
+
   @negative
   Scenario: Verify DELETE on a deleted collection returns 404
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
     Then the response code should be 201
     When I send a DELETE request to "/api/v1/evaluations/collections/{id}"
-    Then the response code should be 204  
+    Then the response code should be 204
     When I send a DELETE request to "/api/v1/evaluations/collections/{id}"
     Then the response code should be 404
-  
+
   Scenario: Create collection with weighted benchmarks
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body:
@@ -563,7 +566,7 @@ Feature: Collections Endpoint
     And the response should contain the value "2" at path "$.benchmarks[1].weight"
     When I send a DELETE request to "/api/v1/evaluations/collections/{id}?hard_delete=true"
     Then the response code should be 204
-  
+
   Scenario: Weighted benchmarks persist on GET
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/collections" with body:
@@ -602,7 +605,7 @@ Feature: Collections Endpoint
     # Not that a tenant owner can be 'system:serviceaccount:tenant:tenant-user' so we must check for equals and not contains
     And the response should not equal the value "system" at path "$.items[0].resource.owner"
     And the array at path "items" in the response should have length at least 1
-  
+
   Scenario: List collections with scope=system and check it returns only system collection
     Given the service is running
     And there are system collections
@@ -610,13 +613,13 @@ Feature: Collections Endpoint
     Then the response code should be 200
     And the response should equal the value "system" at path "$.items[0].resource.owner"
     And the array at path "items" in the response should have length at least 1
-  
+
   Scenario: Verify out of box collection retrieval by id
     Given the service is running
     And there are system collections
     When I send a GET request to "/api/v1/evaluations/collections/{{value:collection0:id}}"
     Then the response code should be 200
-  
+
   Scenario: Verify out of box collection retrieval - name and category
     Given the service is running
     And there are system collections
