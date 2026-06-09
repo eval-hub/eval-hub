@@ -20,10 +20,8 @@ type ServiceConfig struct {
 	TerminationFile string `mapstructure:"termination_file"`
 	EvalInitImage   string `mapstructure:"eval_init_image,omitempty"`
 	LocalMode       bool   `mapstructure:"local_mode,omitempty"`
-	// AuthType is set via --auth-type at startup (e.g. rbac-proxy when behind kube-rbac-proxy).
-	AuthType    string
-	TLSCertFile string `mapstructure:"tls_cert_file,omitempty"`
-	TLSKeyFile  string `mapstructure:"tls_key_file,omitempty"`
+	TLSCertFile     string `mapstructure:"tls_cert_file,omitempty"`
+	TLSKeyFile      string `mapstructure:"tls_key_file,omitempty"`
 	// ReadTimeout is http.Server ReadTimeout (entire request read). Zero uses default (15s).
 	ReadTimeout time.Duration `mapstructure:"read_timeout,omitempty"`
 	// WriteTimeout is http.Server WriteTimeout. Zero uses default (15s).
