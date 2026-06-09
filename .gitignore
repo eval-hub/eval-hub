@@ -205,12 +205,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
-.idea/.gitignore
-.idea/eval-hub.iml
-.idea/misc.xml
-.idea/modules.xml
-.idea/vcs.xml
-.idea/inspectionProfiles/profiles_settings.xml
 
 # KFP generated pipeline files
 containers/**/*_pipeline.yaml
@@ -245,11 +239,12 @@ node_modules/
 mlflow.db
 mlruns/
 mlflow.log
+
 .idea/
 .serena/
 
-# Claude - for now this is ignored - later we may want to share this
-.claude/settings.local.json
+# Claude - for now everything is ignored
+.claude/
 
 .agentready/
 
