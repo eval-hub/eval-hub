@@ -403,7 +403,8 @@ Feature: Providers Endpoint
   Scenario: Update provider with empty path returns 404
     Given the service is running
     When I send a PUT request to "/api/v1/evaluations/providers/" with body "file:/user_provider_update.json"
-    Then the response code should be 404
+    # 403 is returned by the kube-rbac-proxy - 404 is standalone
+    Then the response code should be 404 or 403
 
   @negative
   Scenario: Get provider with empty path returns 404

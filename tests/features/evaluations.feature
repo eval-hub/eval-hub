@@ -698,9 +698,11 @@ Feature: Evaluations Endpoint
   Scenario: Evaluation endpoints reject unsupported methods
     Given the service is running
     When I send a PUT request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
-    Then the response code should be 405
+    # 403 is returned by the kube-rbac-proxy - 405 is standalone
+    Then the response code should be 405 or 403
     When I send a POST request to "/api/v1/evaluations/jobs/unknown-id" with body "file:/evaluation_job.json"
-    Then the response code should be 405
+    # 403 is returned by the kube-rbac-proxy - 405 is standalone
+    Then the response code should be 405 or 403
     When I send a GET request to "/api/v1/evaluations/jobs/unknown-id/events"
     # 403 is returned by the kube-rbac-proxy - 405 is standalone
     Then the response code should be 405 or 403
