@@ -16,9 +16,12 @@ import (
 // --- mock tool client ---
 
 type mockToolClient struct {
-	createJobFn func(config api.EvaluationJobConfig) (*api.EvaluationJobResource, error)
-	cancelJobFn func(id string) error
-	getJobFn    func(id string) (*api.EvaluationJobResource, error)
+	createJobFn    func(config api.EvaluationJobConfig) (*api.EvaluationJobResource, error)
+	cancelJobFn    func(id string) error
+	getJobFn       func(id string) (*api.EvaluationJobResource, error)
+	listProviderFn func(opts ...evalhubclient.ListOption) (*api.ProviderResourceList, error)
+	getProviderFn  func(id string) (*api.ProviderResource, error)
+	getBenchmarkFn func(id string) (*api.BenchmarkResource, error)
 }
 
 func (m *mockToolClient) CreateJob(config api.EvaluationJobConfig) (*api.EvaluationJobResource, error) {
@@ -50,6 +53,33 @@ func (m *mockToolClient) GetJob(id string) (*api.EvaluationJobResource, error) {
 	return nil, &evalhubclient.APIError{
 		StatusCode: http.StatusNotFound,
 		Message:    fmt.Sprintf("job %q not found", id),
+	}
+}
+
+func (m *mockToolClient) ListProviders(opts ...evalhubclient.ListOption) (*api.ProviderResourceList, error) {
+	if m.listProviderFn != nil {
+		return m.listProviderFn(opts...)
+	}
+	return &api.ProviderResourceList{Items: []api.ProviderResource{}}, nil
+}
+
+func (m *mockToolClient) GetProvider(id string) (*api.ProviderResource, error) {
+	if m.getProviderFn != nil {
+		return m.getProviderFn(id)
+	}
+	return nil, &evalhubclient.APIError{
+		StatusCode: http.StatusNotFound,
+		Message:    fmt.Sprintf("provider %q not found", id),
+	}
+}
+
+func (m *mockToolClient) GetBenchmark(id string) (*api.BenchmarkResource, error) {
+	if m.getBenchmarkFn != nil {
+		return m.getBenchmarkFn(id)
+	}
+	return nil, &evalhubclient.APIError{
+		StatusCode: http.StatusNotFound,
+		Message:    fmt.Sprintf("benchmark %q not found", id),
 	}
 }
 
@@ -122,7 +152,7 @@ func callToolExpectError(t *testing.T, ctx context.Context, cs *mcp.ClientSessio
 
 // --- tools/list ---
 
-func TestToolsListIncludesAllThree(t *testing.T) {
+func TestToolsListIncludesAll(t *testing.T) {
 	t.Parallel()
 	ctx, cs := connectWithTools(t, &mockToolClient{})
 
@@ -132,9 +162,10 @@ func TestToolsListIncludesAllThree(t *testing.T) {
 	}
 
 	want := map[string]bool{
-		"submit_evaluation": false,
-		"cancel_job":        false,
-		"get_job_status":    false,
+		"submit_evaluation":  false,
+		"cancel_job":         false,
+		"get_job_status":     false,
+		"discover_providers": false,
 	}
 	for _, tool := range result.Tools {
 		if _, ok := want[tool.Name]; ok {
@@ -555,6 +586,336 @@ func TestGetJobStatusEmptyID(t *testing.T) {
 
 	if msg == "" {
 		t.Error("expected non-empty error message for empty job_id")
+	}
+}
+
+// --- discover_providers ---
+
+func testProviders() []api.ProviderResource {
+	return []api.ProviderResource{
+		{
+			Resource:       api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{Name: "garak", Title: "Garak Safety"},
+		},
+		{
+			Resource: api.Resource{ID: "agentdojo"},
+			ProviderConfig: api.ProviderConfig{
+				Name:  "agentdojo",
+				Title: "AgentDojo",
+				Agent: &api.AgentMetadata{
+					TargetType:           "agent",
+					Evaluates:            []string{"safety", "prompt-injection"},
+					Summary:              "Test agent resilience to prompt injection",
+					Hints:                []string{"Requires tool-calling model"},
+					ResultInterpretation: []string{"High utility + low security = dangerous"},
+					Complements:          []string{"garak"},
+					RecommendedWhen:      []string{"Evaluating agentic systems"},
+				},
+			},
+		},
+		{
+			Resource: api.Resource{ID: "lmeval"},
+			ProviderConfig: api.ProviderConfig{
+				Name:  "lm_evaluation_harness",
+				Title: "LM Evaluation Harness",
+				Agent: &api.AgentMetadata{
+					TargetType: "model",
+					Evaluates:  []string{"knowledge", "reasoning"},
+					Summary:    "Standard academic benchmarks",
+				},
+			},
+		},
+	}
+}
+
+func mockWithProviders(providers []api.ProviderResource) *mockToolClient {
+	providerMap := make(map[string]*api.ProviderResource, len(providers))
+	for i := range providers {
+		providerMap[providers[i].Resource.ID] = &providers[i]
+	}
+	return &mockToolClient{
+		listProviderFn: func(opts ...evalhubclient.ListOption) (*api.ProviderResourceList, error) {
+			return &api.ProviderResourceList{Items: providers}, nil
+		},
+		getProviderFn: func(id string) (*api.ProviderResource, error) {
+			if p, ok := providerMap[id]; ok {
+				return p, nil
+			}
+			return nil, &evalhubclient.APIError{StatusCode: http.StatusNotFound, Message: fmt.Sprintf("provider %q not found", id)}
+		},
+	}
+}
+
+func TestDiscoverProvidersNoFilter(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProviders())
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[DiscoverProvidersOutput](t, ctx, cs, "discover_providers", map[string]any{})
+
+	if len(out.Providers) != 3 {
+		t.Fatalf("expected 3 providers, got %d", len(out.Providers))
+	}
+	var garakFound bool
+	for _, p := range out.Providers {
+		if p.ID == "garak" {
+			garakFound = true
+			if p.Summary != "" {
+				t.Errorf("garak should have empty summary (no agent block), got %q", p.Summary)
+			}
+		}
+	}
+	if !garakFound {
+		t.Error("garak (no agent block) should be included in unfiltered results")
+	}
+}
+
+func TestDiscoverProvidersFilterByTargetType(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProviders())
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[DiscoverProvidersOutput](t, ctx, cs, "discover_providers", map[string]any{
+		"target_type": "agent",
+	})
+
+	if len(out.Providers) != 1 {
+		t.Fatalf("expected 1 provider for target_type=agent, got %d", len(out.Providers))
+	}
+	if out.Providers[0].ID != "agentdojo" {
+		t.Errorf("expected agentdojo, got %q", out.Providers[0].ID)
+	}
+	if out.Providers[0].Summary != "Test agent resilience to prompt injection" {
+		t.Errorf("summary not populated: %q", out.Providers[0].Summary)
+	}
+}
+
+func TestDiscoverProvidersFilterByEvaluates(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProviders())
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[DiscoverProvidersOutput](t, ctx, cs, "discover_providers", map[string]any{
+		"evaluates": []string{"safety"},
+	})
+
+	if len(out.Providers) != 1 {
+		t.Fatalf("expected 1 provider for evaluates=[safety], got %d", len(out.Providers))
+	}
+	if out.Providers[0].ID != "agentdojo" {
+		t.Errorf("expected agentdojo, got %q", out.Providers[0].ID)
+	}
+}
+
+func TestDiscoverProvidersFilterAllNilAgent(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders([]api.ProviderResource{
+		{
+			Resource:       api.Resource{ID: "bare"},
+			ProviderConfig: api.ProviderConfig{Name: "bare", Title: "Bare Provider"},
+		},
+	})
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[DiscoverProvidersOutput](t, ctx, cs, "discover_providers", map[string]any{
+		"target_type": "model",
+	})
+
+	if len(out.Providers) != 0 {
+		t.Errorf("expected 0 providers when all have nil agent, got %d", len(out.Providers))
+	}
+}
+
+func TestDiscoverProvidersMixedAgentBlocks(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProviders())
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[DiscoverProvidersOutput](t, ctx, cs, "discover_providers", map[string]any{
+		"target_type": "model",
+	})
+
+	if len(out.Providers) != 1 {
+		t.Fatalf("expected 1 provider for target_type=model, got %d", len(out.Providers))
+	}
+	if out.Providers[0].ID != "lmeval" {
+		t.Errorf("expected lmeval, got %q", out.Providers[0].ID)
+	}
+}
+
+// --- get_job_status enrichment ---
+
+func TestGetJobStatusEnrichedWithAgentMetadata(t *testing.T) {
+	t.Parallel()
+
+	client := mockWithProviders([]api.ProviderResource{
+		{
+			Resource: api.Resource{ID: "test-provider"},
+			ProviderConfig: api.ProviderConfig{
+				Name:  "test-provider",
+				Title: "Test Provider",
+				Agent: &api.AgentMetadata{
+					Complements: []string{"other-provider"},
+				},
+				Benchmarks: []api.BenchmarkResource{
+					{
+						ID:   "bench-1",
+						Name: "Benchmark One",
+						Agent: &api.BenchmarkAgentMetadata{
+							ResultInterpretation: "Higher is better",
+						},
+					},
+				},
+			},
+		},
+	})
+	client.getJobFn = func(id string) (*api.EvaluationJobResource, error) {
+		return &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{ID: id, CreatedAt: time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC)},
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{State: api.OverallStateCompleted},
+				Benchmarks: []api.BenchmarkStatus{
+					{
+						ID:          "bench-1",
+						ProviderID:  "test-provider",
+						Status:      api.StateCompleted,
+						StartedAt:   "2026-05-01T10:01:00Z",
+						CompletedAt: "2026-05-01T10:05:00Z",
+					},
+				},
+			},
+		}, nil
+	}
+
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[GetJobStatusOutput](t, ctx, cs, "get_job_status", map[string]any{
+		"job_id": "job-enriched",
+	})
+
+	if len(out.Benchmarks) != 1 {
+		t.Fatalf("expected 1 benchmark, got %d", len(out.Benchmarks))
+	}
+	b := out.Benchmarks[0]
+	if b.ResultInterpretation != "Higher is better" {
+		t.Errorf("result_interpretation = %q, want %q", b.ResultInterpretation, "Higher is better")
+	}
+	if len(b.Complements) != 1 || b.Complements[0] != "other-provider" {
+		t.Errorf("complements = %v, want [other-provider]", b.Complements)
+	}
+}
+
+func TestGetJobStatusNoAgentMetadata(t *testing.T) {
+	t.Parallel()
+
+	client := mockWithProviders([]api.ProviderResource{
+		{
+			Resource: api.Resource{ID: "bare-provider"},
+			ProviderConfig: api.ProviderConfig{
+				Name:  "bare-provider",
+				Title: "Bare Provider",
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-bare", Name: "Bare Benchmark"},
+				},
+			},
+		},
+	})
+	client.getJobFn = func(id string) (*api.EvaluationJobResource, error) {
+		return &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{ID: id, CreatedAt: time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC)},
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{State: api.OverallStateCompleted},
+				Benchmarks: []api.BenchmarkStatus{
+					{
+						ID:          "bench-bare",
+						ProviderID:  "bare-provider",
+						Status:      api.StateCompleted,
+						StartedAt:   "2026-05-01T10:01:00Z",
+						CompletedAt: "2026-05-01T10:05:00Z",
+					},
+				},
+			},
+		}, nil
+	}
+
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[GetJobStatusOutput](t, ctx, cs, "get_job_status", map[string]any{
+		"job_id": "job-bare",
+	})
+
+	if len(out.Benchmarks) != 1 {
+		t.Fatalf("expected 1 benchmark, got %d", len(out.Benchmarks))
+	}
+	b := out.Benchmarks[0]
+	if b.ResultInterpretation != "" {
+		t.Errorf("result_interpretation should be empty, got %q", b.ResultInterpretation)
+	}
+	if len(b.Complements) != 0 {
+		t.Errorf("complements should be empty, got %v", b.Complements)
+	}
+}
+
+func TestGetJobStatusRunningNoEnrichment(t *testing.T) {
+	t.Parallel()
+
+	client := mockWithProviders([]api.ProviderResource{
+		{
+			Resource: api.Resource{ID: "some-provider"},
+			ProviderConfig: api.ProviderConfig{
+				Name:  "some-provider",
+				Title: "Some Provider",
+				Agent: &api.AgentMetadata{Complements: []string{"should-not-appear"}},
+				Benchmarks: []api.BenchmarkResource{
+					{
+						ID:   "bench-running",
+						Name: "Running Benchmark",
+						Agent: &api.BenchmarkAgentMetadata{
+							ResultInterpretation: "should-not-appear",
+						},
+					},
+				},
+			},
+		},
+	})
+	client.getJobFn = func(id string) (*api.EvaluationJobResource, error) {
+		return &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{ID: id, CreatedAt: time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC)},
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{State: api.OverallStateRunning},
+				Benchmarks: []api.BenchmarkStatus{
+					{
+						ID:         "bench-running",
+						ProviderID: "some-provider",
+						Status:     api.StateRunning,
+						StartedAt:  "2026-05-01T10:01:00Z",
+					},
+				},
+			},
+		}, nil
+	}
+
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[GetJobStatusOutput](t, ctx, cs, "get_job_status", map[string]any{
+		"job_id": "job-running",
+	})
+
+	if len(out.Benchmarks) != 1 {
+		t.Fatalf("expected 1 benchmark, got %d", len(out.Benchmarks))
+	}
+	b := out.Benchmarks[0]
+	if b.ResultInterpretation != "" {
+		t.Errorf("running benchmark should not have result_interpretation, got %q", b.ResultInterpretation)
+	}
+	if len(b.Complements) != 0 {
+		t.Errorf("running benchmark should not have complements, got %v", b.Complements)
 	}
 }
 
