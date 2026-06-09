@@ -83,6 +83,27 @@ func TestIsOTELStorageScansEnabled(t *testing.T) {
 	})
 }
 
+func TestIsRBACProxyAuth(t *testing.T) {
+	t.Run("nil service returns false", func(t *testing.T) {
+		var c *config.ServiceConfig
+		if c.IsRBACProxyAuth() {
+			t.Error("nil Service")
+		}
+	})
+	t.Run("empty auth type returns false", func(t *testing.T) {
+		c := &config.ServiceConfig{}
+		if c.IsRBACProxyAuth() {
+			t.Error("empty AuthType")
+		}
+	})
+	t.Run("rbac-proxy returns true", func(t *testing.T) {
+		c := &config.ServiceConfig{AuthType: config.AuthTypeRBACProxy}
+		if !c.IsRBACProxyAuth() {
+			t.Error("expected true")
+		}
+	})
+}
+
 func TestRequiresIdentityHeaders(t *testing.T) {
 	t.Run("nil config returns false", func(t *testing.T) {
 		var c *config.Config

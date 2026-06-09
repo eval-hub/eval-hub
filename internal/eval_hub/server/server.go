@@ -105,7 +105,7 @@ func (s *Server) GetPort() int {
 //   - uri: Request path (from URL.Path or RequestURI)
 //   - user_agent: Client user agent from User-Agent header
 //   - remote_addr: Client IP address
-//   - remote_user: Authenticated user from X-User header (kube-rbac-proxy), URL user info, or Remote-User header
+//   - remote_user: Authenticated user from X-User header; when not behind rbac-proxy, also URL user info or Remote-User header
 //   - referer: HTTP referer header
 //
 // This enables correlating logs across services using the request_id and provides
@@ -156,14 +156,7 @@ func (s *Server) loggerWithRequest(r *http.Request) (string, *slog.Logger) {
 		enhancedLogger = enhancedLogger.With(constants.LOG_REMOTE_ADR, remoteAddr)
 	}
 
-	// Extract remote_user from X-User (kube-rbac-proxy), URL user info, or Remote-User header
-	remoteUser := r.Header.Get(USER_HEADER)
-	if remoteUser == "" && r.URL != nil && r.URL.User != nil {
-		remoteUser = r.URL.User.Username()
-	}
-	if remoteUser == "" {
-		remoteUser = r.Header.Get("Remote-User")
-	}
+	remoteUser := remoteUserFromRequest(r, s.serviceConfig.Service.IsRBACProxyAuth())
 	if remoteUser != "" {
 		enhancedLogger = enhancedLogger.With(constants.LOG_REMOTE_USER, remoteUser)
 	}

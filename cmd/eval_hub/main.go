@@ -37,21 +37,27 @@ var (
 type Args struct {
 	ConfigDir string
 	LocalMode bool
+	AuthType  string
 }
 
 func args() Args {
 	configDir := ""
 	dir := flag.String("configdir", configDir, "Directory to search for configuration files.")
 	local := flag.Bool("local", false, "Server operates in local mode or not.")
+	authType := flag.String("auth-type", "", "Authentication type when behind a proxy (rbac-proxy)")
 	flag.Parse()
 	configDir = *dir
 	if configDir == "" {
 		configDir = os.Getenv("EVAL_HUB_CONFIG_DIR")
 	}
+	if *authType != "" && *authType != config.AuthTypeRBACProxy {
+		log.Fatalf("unsupported auth-type %q: supported value is %q", *authType, config.AuthTypeRBACProxy)
+	}
 
 	return Args{
 		ConfigDir: configDir,
 		LocalMode: *local,
+		AuthType:  *authType,
 	}
 }
 
@@ -71,6 +77,7 @@ func main() {
 	}
 
 	serviceConfig.Service.LocalMode = args.LocalMode
+	serviceConfig.Service.AuthType = args.AuthType
 
 	// set up the validator
 	validate := validation.NewValidator()
@@ -142,6 +149,7 @@ func main() {
 		"git_hash", serviceConfig.Service.GitHash,
 		"validator", validate != nil,
 		"local", serviceConfig.Service.LocalMode,
+		"auth_type", serviceConfig.Service.AuthType,
 		"tls", serviceConfig.Service.TLSEnabled(),
 		"mlflow_tracking", mlflowClient != nil,
 		"otel", serviceConfig.IsOTELEnabled(),
