@@ -8,11 +8,19 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/evalhub_mcp/config"
 	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+// These should be shared with the eval-hub server
+const (
+	TRANSACTION_ID_HEADER = "X-Global-Transaction-Id"
+	USER_HEADER           = "X-User"
+	TENANT_HEADER         = "X-Tenant"
 )
 
 type ServerInfo struct {
@@ -145,6 +153,7 @@ func Run(ctx context.Context, cfg *config.Config, info *ServerInfo, logger *slog
 	logger.Info("Starting evalhub-mcp server",
 		"version", version,
 		"transport", cfg.Transport,
+		"auth_type", cfg.AuthType,
 	)
 
 	switch cfg.Transport {
@@ -166,24 +175,52 @@ func runStdio(ctx context.Context, srv *mcp.Server) error {
 	return srv.Run(ctx, &mcp.StdioTransport{})
 }
 
+func wrapRequest(cfg *config.Config, logger *slog.Logger, next http.Handler) http.Handler {
+	var h http.Handler
+	switch cfg.AuthType {
+	case config.AuthTypeRBACProxy:
+		// if we have the kube-rbac-proxy then we need to check the HTTP headers for the tenant and user headers
+		required := []string{TENANT_HEADER, USER_HEADER}
+		h = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			for _, name := range required {
+				if strings.TrimSpace(r.Header.Get(name)) == "" {
+					http.Error(w, fmt.Sprintf("Missing required header '%s' from kube-rbac-proxy", name), http.StatusForbidden)
+					return
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	case config.AuthTypeNone:
+		h = next
+	default:
+		h = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "Unsupported authentication type", http.StatusInternalServerError)
+		})
+	}
+	return withRequestContext(logger, h)
+}
+
 func runHTTP(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *slog.Logger) error {
-	handler := mcp.NewStreamableHTTPHandler(
+	mcpHandler := mcp.NewStreamableHTTPHandler(
 		func(r *http.Request) *mcp.Server { return srv },
 		// Server runs behind kube-rbac-proxy which handles authentication;
 		// the default localhost DNS-rebinding protection rejects the proxy's
 		// forwarded Host header and must be disabled.
 		&mcp.StreamableHTTPOptions{DisableLocalhostProtection: true},
 	)
+	handler := wrapRequest(cfg, logger, mcpHandler)
 	return serveHTTP(ctx, handler, cfg, logger)
 }
 
 // runLegacyHTTPSSE serves the deprecated HTTP+SSE transport (MCP 2024-11-05) for older clients.
 func runLegacyHTTPSSE(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *slog.Logger) error {
-	handler := mcp.NewSSEHandler(
+	mcpHandler := mcp.NewSSEHandler(
 		func(r *http.Request) *mcp.Server { return srv },
 		// Same rationale as runHTTP: behind kube-rbac-proxy.
 		&mcp.SSEOptions{DisableLocalhostProtection: true},
 	)
+	logger.Warn("transport 'http-sse' is deprecated; use 'http' (Streamable HTTP) unless connecting to legacy MCP clients", "transport", cfg.Transport)
+	handler := wrapRequest(cfg, logger, mcpHandler)
 	return serveHTTP(ctx, handler, cfg, logger)
 }
 

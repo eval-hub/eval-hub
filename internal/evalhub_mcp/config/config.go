@@ -18,6 +18,12 @@ const (
 	TransportStdio   = "stdio"
 	TransportHTTP    = "http"
 	TransportHTTPSSE = "http-sse"
+
+	// Auth type names:
+	// - Use AuthTypeRBACProxy for kube-rbac-proxy header authentication
+	// - Use AuthTypeNone for no authentication
+	AuthTypeRBACProxy = "rbac-proxy"
+	AuthTypeNone      = "none"
 )
 
 type Config struct {
@@ -31,6 +37,7 @@ type Config struct {
 	ListPageLimit int    `mapstructure:"list_page_limit,omitempty" validate:"omitempty,min=1,max=2000"`
 	TLSCertFile   string `mapstructure:"tls_cert_file"`
 	TLSKeyFile    string `mapstructure:"tls_key_file"`
+	AuthType      string `mapstructure:"auth_type" validate:"omitempty,oneof=rbac-proxy none"`
 	CACertPath    string `mapstructure:"ca_cert_path"`
 }
 
@@ -39,6 +46,7 @@ type Flags struct {
 	Host        *string
 	Port        *int
 	Insecure    *bool
+	AuthType    *string
 	ConfigPath  string
 	TLSCertFile *string
 	TLSKeyFile  *string
@@ -50,6 +58,7 @@ func DefaultConfig() *Config {
 		Host:          "localhost",
 		Port:          3001,
 		ListPageLimit: evalhubclient.DefaultListPageLimit,
+		AuthType:      AuthTypeNone,
 	}
 }
 
@@ -72,6 +81,7 @@ func Load(flags *Flags, logger *slog.Logger) (*Config, error) {
 	}
 
 	normalizeListPageLimit(conf)
+	normalizeAuthType(conf)
 
 	if logger != nil {
 		logger.Info("Loaded configuration", "config", logging.AsPrettyJson(conf, "token"), "config_path", configPath)
@@ -87,6 +97,13 @@ func normalizeListPageLimit(cfg *Config) {
 	if cfg.ListPageLimit == 0 {
 		cfg.ListPageLimit = evalhubclient.DefaultListPageLimit
 	}
+}
+
+func normalizeAuthType(cfg *Config) {
+	if cfg == nil || cfg.AuthType != "" {
+		return
+	}
+	cfg.AuthType = AuthTypeNone
 }
 
 // TLSEnabled returns true when both TLS cert and key files are configured.
@@ -107,6 +124,7 @@ func (c *Config) IsLegacyHTTPTransport() bool {
 // Validate checks the Config using go-playground/validator struct tags.
 func Validate(cfg *Config) error {
 	normalizeListPageLimit(cfg)
+	normalizeAuthType(cfg)
 	validate := validator.New(validator.WithRequiredStructEnabled())
 
 	if err := validate.Struct(cfg); err != nil {
@@ -117,7 +135,20 @@ func Validate(cfg *Config) error {
 		return fmt.Errorf("config validation failed: tls_cert_file and tls_key_file must both be set or both be empty")
 	}
 
+	if err := validateAuthConfig(cfg); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func validateAuthConfig(cfg *Config) error {
+	switch cfg.AuthType {
+	case AuthTypeRBACProxy, AuthTypeNone:
+		return nil
+	default:
+		return fmt.Errorf("config validation failed: unsupported auth_type %q", cfg.AuthType)
+	}
 }
 
 func bindEnvs(v *viper.Viper, envs ...string) error {
@@ -148,6 +179,7 @@ func applyYAMLConfig(cfg *Config, path string) (*Config, error) {
 		"list_page_limit", "EVALHUB_LIST_PAGE_LIMIT",
 		"tls_cert_file", "EVALHUB_TLS_CERT_FILE",
 		"tls_key_file", "EVALHUB_TLS_KEY_FILE",
+		"auth_type", "EVALHUB_AUTH_TYPE",
 		"ca_cert_path", "EVALHUB_CA_CERT_PATH",
 	)
 	if err != nil {
@@ -165,6 +197,7 @@ func applyYAMLConfig(cfg *Config, path string) (*Config, error) {
 		v.SetDefault("list_page_limit", cfg.ListPageLimit)
 		v.SetDefault("tls_cert_file", cfg.TLSCertFile)
 		v.SetDefault("tls_key_file", cfg.TLSKeyFile)
+		v.SetDefault("auth_type", cfg.AuthType)
 		v.SetDefault("ca_cert_path", cfg.CACertPath)
 	}
 
@@ -221,5 +254,8 @@ func applyFlags(cfg *Config, flags *Flags) {
 	}
 	if flags.TLSKeyFile != nil {
 		cfg.TLSKeyFile = *flags.TLSKeyFile
+	}
+	if flags.AuthType != nil {
+		cfg.AuthType = *flags.AuthType
 	}
 }

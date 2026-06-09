@@ -15,7 +15,7 @@ paths:
 - Lint: `make lint`
 - Formatting: `make fmt vet`
 
-**CLI flags:** `--transport stdio|http|http-sse` (`http` = Streamable HTTP; `http-sse` = legacy only), `--host`, `--port`, `--config`, `--insecure`, `--version`
+**CLI flags:** `--transport stdio|http|http-sse` (`http` = Streamable HTTP; `http-sse` = legacy only), `--host`, `--port`, `--config`, `--insecure`, `--auth-type`, `--version`
 
 **Configuration precedence:** CLI flags > YAML config (`~/.evalhub/config.yaml`) > env vars (`EVALHUB_BASE_URL`, `EVALHUB_TOKEN`, `EVALHUB_TENANT`, `EVALHUB_INSECURE`)
 

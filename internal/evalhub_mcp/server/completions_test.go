@@ -283,19 +283,19 @@ func TestCompletionCacheExpiry(t *testing.T) {
 	now := time.Now()
 	cp.cache.now = func() time.Time { return now }
 
-	cp.resolveValues("evalhub://providers/{id}", "id")
+	cp.resolveValues(context.Background(), "evalhub://providers/{id}", "id")
 	if ds.listProvidersCalls != 1 {
 		t.Fatalf("expected 1 call, got %d", ds.listProvidersCalls)
 	}
 
-	cp.resolveValues("evalhub://providers/{id}", "id")
+	cp.resolveValues(context.Background(), "evalhub://providers/{id}", "id")
 	if ds.listProvidersCalls != 1 {
 		t.Fatalf("expected still 1 call (cached), got %d", ds.listProvidersCalls)
 	}
 
 	cp.cache.now = func() time.Time { return now.Add(defaultCacheTTL + time.Second) }
 
-	cp.resolveValues("evalhub://providers/{id}", "id")
+	cp.resolveValues(context.Background(), "evalhub://providers/{id}", "id")
 	if ds.listProvidersCalls != 2 {
 		t.Errorf("expected 2 calls after TTL expiry, got %d", ds.listProvidersCalls)
 	}
@@ -354,12 +354,12 @@ func TestCompletionAPIErrorNotCached(t *testing.T) {
 	}
 	cp := newCompletionProvider(ds, discardLogger, evalhubclient.DefaultListPageLimit)
 
-	got := cp.resolveValues("evalhub://providers/{id}", "id")
+	got := cp.resolveValues(context.Background(), "evalhub://providers/{id}", "id")
 	if len(got) != 0 {
 		t.Fatalf("expected empty on first (errored) call, got %v", got)
 	}
 
-	got = cp.resolveValues("evalhub://providers/{id}", "id")
+	got = cp.resolveValues(context.Background(), "evalhub://providers/{id}", "id")
 	if len(got) != 1 || got[0] != "recovered" {
 		t.Fatalf("expected [recovered] on retry, got %v", got)
 	}

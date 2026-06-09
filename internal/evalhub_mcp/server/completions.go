@@ -78,7 +78,7 @@ func newCompletionProvider(ds EvalHubDiscovery, logger *slog.Logger, listPageLim
 	}
 }
 
-func (cp *completionProvider) handle(_ context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
+func (cp *completionProvider) handle(ctx context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
 	if req.Params.Ref == nil || req.Params.Ref.Type != "ref/resource" {
 		return emptyResult(), nil
 	}
@@ -87,7 +87,7 @@ func (cp *completionProvider) handle(_ context.Context, req *mcp.CompleteRequest
 	argName := req.Params.Argument.Name
 	prefix := req.Params.Argument.Value
 
-	values := cp.resolveValues(uri, argName)
+	values := cp.resolveValues(ctx, uri, argName)
 	filtered := filterByPrefix(values, prefix)
 
 	return &mcp.CompleteResult{
@@ -99,20 +99,20 @@ func (cp *completionProvider) handle(_ context.Context, req *mcp.CompleteRequest
 	}, nil
 }
 
-func (cp *completionProvider) resolveValues(uri, argName string) []string {
+func (cp *completionProvider) resolveValues(ctx context.Context, uri, argName string) []string {
 	switch {
 	case matchesTemplate(uri, "evalhub://providers/{id}") && argName == "id":
-		return cp.cachedFetch("providers", cp.fetchProviderIDs)
+		return cp.cachedFetch("providers", func() []string { return cp.fetchProviderIDs(ctx) })
 	case matchesTemplate(uri, "evalhub://benchmarks/{id}") && argName == "id":
-		return cp.cachedFetch("benchmarks", cp.fetchBenchmarkIDs)
+		return cp.cachedFetch("benchmarks", func() []string { return cp.fetchBenchmarkIDs(ctx) })
 	case matchesTemplate(uri, "evalhub://collections/{id}") && argName == "id":
-		return cp.cachedFetch("collections", cp.fetchCollectionIDs)
+		return cp.cachedFetch("collections", func() []string { return cp.fetchCollectionIDs(ctx) })
 	case matchesTemplate(uri, "evalhub://jobs/{id}") && argName == "id":
-		return cp.cachedFetch("jobs", cp.fetchJobIDs)
+		return cp.cachedFetch("jobs", func() []string { return cp.fetchJobIDs(ctx) })
 	case matchesTemplate(uri, "evalhub://jobs{?status}") && argName == "status":
 		return statusValues
 	case matchesTemplate(uri, "evalhub://benchmarks{?label*}") && argName == "label":
-		return cp.cachedFetch("labels", cp.fetchLabels)
+		return cp.cachedFetch("labels", func() []string { return cp.fetchLabels(ctx) })
 	default:
 		return nil
 	}
@@ -133,10 +133,10 @@ func (cp *completionProvider) cachedFetch(key string, fetch func() []string) []s
 	return values
 }
 
-func (cp *completionProvider) fetchProviderIDs() []string {
+func (cp *completionProvider) fetchProviderIDs(ctx context.Context) []string {
 	list, err := cp.ds.ListProviders(evalhubclient.WithLimit(cp.listPageLimit))
 	if err != nil {
-		cp.logger.Warn("completion: failed to list providers", "error", err)
+		requestLogger(ctx, cp.logger).Warn("completion: failed to list providers", "error", err)
 		return nil
 	}
 	ids := make([]string, len(list.Items))
@@ -146,10 +146,10 @@ func (cp *completionProvider) fetchProviderIDs() []string {
 	return ids
 }
 
-func (cp *completionProvider) fetchBenchmarkIDs() []string {
+func (cp *completionProvider) fetchBenchmarkIDs(ctx context.Context) []string {
 	benchmarks, err := cp.ds.ListBenchmarks()
 	if err != nil {
-		cp.logger.Warn("completion: failed to list benchmarks", "error", err)
+		requestLogger(ctx, cp.logger).Warn("completion: failed to list benchmarks", "error", err)
 		return nil
 	}
 	ids := make([]string, len(benchmarks))
@@ -159,10 +159,10 @@ func (cp *completionProvider) fetchBenchmarkIDs() []string {
 	return ids
 }
 
-func (cp *completionProvider) fetchCollectionIDs() []string {
+func (cp *completionProvider) fetchCollectionIDs(ctx context.Context) []string {
 	list, err := cp.ds.ListCollections(evalhubclient.WithLimit(cp.listPageLimit))
 	if err != nil {
-		cp.logger.Warn("completion: failed to list collections", "error", err)
+		requestLogger(ctx, cp.logger).Warn("completion: failed to list collections", "error", err)
 		return nil
 	}
 	ids := make([]string, len(list.Items))
@@ -172,10 +172,10 @@ func (cp *completionProvider) fetchCollectionIDs() []string {
 	return ids
 }
 
-func (cp *completionProvider) fetchJobIDs() []string {
+func (cp *completionProvider) fetchJobIDs(ctx context.Context) []string {
 	list, err := cp.ds.ListJobs(evalhubclient.WithLimit(cp.listPageLimit))
 	if err != nil {
-		cp.logger.Warn("completion: failed to list jobs", "error", err)
+		requestLogger(ctx, cp.logger).Warn("completion: failed to list jobs", "error", err)
 		return nil
 	}
 	ids := make([]string, len(list.Items))
@@ -185,10 +185,10 @@ func (cp *completionProvider) fetchJobIDs() []string {
 	return ids
 }
 
-func (cp *completionProvider) fetchLabels() []string {
+func (cp *completionProvider) fetchLabels(ctx context.Context) []string {
 	benchmarks, err := cp.ds.ListBenchmarks()
 	if err != nil {
-		cp.logger.Warn("completion: failed to list benchmarks for labels", "error", err)
+		requestLogger(ctx, cp.logger).Warn("completion: failed to list benchmarks for labels", "error", err)
 		return nil
 	}
 	seen := make(map[string]struct{})
