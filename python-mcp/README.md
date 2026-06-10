@@ -1,6 +1,6 @@
-# evalhub-mcp
+# eval-hub-mcp
 
-This package distributes the compiled Go evalhub-mcp server binary for multiple
+This package distributes the compiled Go eval-hub-mcp server binary for multiple
 platforms. It installs the binary directly into your `bin/` directory (`Scripts/` on Windows) with no
 Python wrapper — no argument rewriting, no subprocess overhead, no Python
 runtime required at execution time.
@@ -8,7 +8,7 @@ runtime required at execution time.
 ## Installation
 
 ```bash
-pip install evalhub-mcp
+pip install eval-hub-mcp
 ```
 
 ## Usage
@@ -32,7 +32,9 @@ evalhub-mcp --version
 
 ## For eval-hub-sdk Users
 
-If you're using [`eval-hub-sdk`](https://github.com/eval-hub/eval-hub-sdk), you can install the MCP server binary as an extra:
+> **Note:** `eval-hub-sdk[mcp]` currently installs a Python FastMCP-based server. This will be replaced with `eval-hub-mcp` (the Go binary distributed by this package) in a future release.
+
+If you're using [`eval-hub-sdk`](https://github.com/eval-hub/eval-hub-sdk), you can install the MCP server as an extra:
 
 ```bash
 pip install eval-hub-sdk[mcp]
