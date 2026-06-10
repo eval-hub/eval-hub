@@ -3,6 +3,7 @@ package mlflow
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -313,4 +314,47 @@ func assertServiceErrorCode(t *testing.T, err error, want *messages.MessageCode)
 	if se.MessageCode() != want {
 		t.Fatalf("message code = %v, want %v", se.MessageCode(), want)
 	}
+}
+
+func TestGetOrCreateExperimentIDOnServer(t *testing.T) {
+	mlflowURL := os.Getenv("MLFLOW_TRACKING_URI")
+	if mlflowURL == "" {
+		t.Skip("MLFLOW_TRACKING_URI is not set")
+	}
+
+	client := mlflowclient.NewClient(mlflowURL).WithContext(t.Context()).WithLogger(testLogger())
+
+	enabledWorkspaces := false
+
+	t.Run("probe workspaces", func(t *testing.T) {
+		workspacesEnabled, err := client.WithContext(t.Context()).ProbeWorkspacesEnabled()
+		if err != nil {
+			t.Logf("Could not probe MLflow workspace support; workspace headers will not be sent: %s", err.Error())
+			workspacesEnabled = false
+		}
+		client = client.WithWorkspacesSupport(workspacesEnabled)
+		t.Logf("MLflow workspace support probed: workspaces enabled %t", workspacesEnabled)
+		enabledWorkspaces = workspacesEnabled
+	})
+
+	t.Run(fmt.Sprintf("create experiment - no workspace (workspaces enabled=%t)", enabledWorkspaces), func(t *testing.T) {
+		jobConfig := &api.EvaluationJobConfig{Experiment: &api.ExperimentConfig{Name: "test-experiment1"}}
+		id, url, err := GetOrCreateExperimentID(client, jobConfig, "job-1")
+		if err != nil || id == "" || url == "" {
+			t.Fatalf("got id=%q url=%q err=%v", id, url, err)
+		}
+		t.Logf("created experiment: id=%q url=%q", id, url)
+	})
+
+	t.Run(fmt.Sprintf("create experiment - with workspace (workspaces enabled=%t)", enabledWorkspaces), func(t *testing.T) {
+		if enabledWorkspaces {
+			client = client.WithWorkspace("test-workspace")
+		}
+		jobConfig := &api.EvaluationJobConfig{Experiment: &api.ExperimentConfig{Name: "test-experiment2"}}
+		id, url, err := GetOrCreateExperimentID(client, jobConfig, "job-1")
+		if err != nil || id == "" || url == "" {
+			t.Fatalf("got id=%q url=%q err=%v", id, url, err)
+		}
+		t.Logf("created experiment: id=%q url=%q", id, url)
+	})
 }
