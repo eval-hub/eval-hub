@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
+	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -17,6 +18,9 @@ type EvalHubToolClient interface {
 	CreateJob(config api.EvaluationJobConfig) (*api.EvaluationJobResource, error)
 	CancelJob(id string) error
 	GetJob(id string) (*api.EvaluationJobResource, error)
+	ListProviders(opts ...evalhubclient.ListOption) (*api.ProviderResourceList, error)
+	GetProvider(id string) (*api.ProviderResource, error)
+	GetBenchmark(id string) (*api.BenchmarkResource, error)
 }
 
 // --- input types ---
@@ -52,6 +56,11 @@ type ExperimentInput struct {
 	ArtifactLocation string            `json:"artifact_location,omitempty" jsonschema:"Storage location for experiment artifacts"`
 }
 
+type DiscoverProvidersInput struct {
+	TargetType string   `json:"target_type,omitempty" jsonschema:"Filter by target type: model, agent, or inference_server"`
+	Evaluates  []string `json:"evaluates,omitempty" jsonschema:"Filter to providers that evaluate all of these capabilities (e.g. safety, robustness)"`
+}
+
 type CancelJobInput struct {
 	JobID string `json:"job_id" jsonschema:"ID of the evaluation job to cancel"`
 }
@@ -82,11 +91,30 @@ type GetJobStatusOutput struct {
 }
 
 type BenchmarkStatusOutput struct {
-	ID          string `json:"id"`
-	ProviderID  string `json:"provider_id"`
-	Status      string `json:"status"`
-	StartedAt   string `json:"started_at,omitempty"`
-	CompletedAt string `json:"completed_at,omitempty"`
+	ID                   string   `json:"id"`
+	ProviderID           string   `json:"provider_id"`
+	Status               string   `json:"status"`
+	StartedAt            string   `json:"started_at,omitempty"`
+	CompletedAt          string   `json:"completed_at,omitempty"`
+	ResultInterpretation string   `json:"result_interpretation,omitempty"`
+	Complements          []string `json:"complements,omitempty"`
+}
+
+type ProviderSummaryOutput struct {
+	ID                   string   `json:"id"`
+	Name                 string   `json:"name"`
+	Title                string   `json:"title"`
+	Summary              string   `json:"summary,omitempty"`
+	TargetType           string   `json:"target_type,omitempty"`
+	Evaluates            []string `json:"evaluates,omitempty"`
+	Hints                []string `json:"hints,omitempty"`
+	ResultInterpretation []string `json:"result_interpretation,omitempty"`
+	Complements          []string `json:"complements,omitempty"`
+	RecommendedWhen      []string `json:"recommended_when,omitempty"`
+}
+
+type DiscoverProvidersOutput struct {
+	Providers []ProviderSummaryOutput `json:"providers"`
 }
 
 // --- registration ---
@@ -106,6 +134,11 @@ func registerTools(srv *mcp.Server, client EvalHubToolClient, logger *slog.Logge
 		Name:        "get_job_status",
 		Description: "Get the current status of an evaluation job including overall state, progress percentage, and per-benchmark status with timestamps. Designed for polling: call repeatedly to monitor a running evaluation.",
 	}, getJobStatusHandler(client, logger))
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "discover_providers",
+		Description: "Discover evaluation providers. Filter by target_type (model, agent, inference_server) and/or evaluates (e.g. safety, robustness) to find the right provider for your use case. Each result includes a summary, usage hints, result interpretation guidance, and complementary provider suggestions.",
+	}, discoverProvidersHandler(client, logger))
 }
 
 // --- handlers ---
@@ -190,12 +223,128 @@ func getJobStatusHandler(client EvalHubToolClient, logger *slog.Logger) mcp.Tool
 		}
 
 		out := buildJobStatusOutput(job)
+		enrichBenchmarkStatuses(client, log, out.Benchmarks)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Job %s: %s (%d%% complete)", out.JobID, out.State, out.Progress)},
 			},
 		}, out, nil
 	}
+}
+
+func discoverProvidersHandler(client EvalHubToolClient, logger *slog.Logger) mcp.ToolHandlerFor[DiscoverProvidersInput, DiscoverProvidersOutput] {
+	return func(ctx context.Context, req *mcp.CallToolRequest, input DiscoverProvidersInput) (*mcp.CallToolResult, DiscoverProvidersOutput, error) {
+		log := requestLogger(ctx, logger)
+		log.Debug("discover_providers called", "target_type", input.TargetType, "evaluates", input.Evaluates)
+
+		list, err := client.ListProviders()
+		if err != nil {
+			log.Error("discover_providers failed", "error", err)
+			return errorResult(fmt.Sprintf("failed to list providers: %v", err)), DiscoverProvidersOutput{}, nil
+		}
+
+		hasFilter := input.TargetType != "" || len(input.Evaluates) > 0
+		var providers []ProviderSummaryOutput
+		for _, p := range list.Items {
+			if hasFilter && p.Agent == nil {
+				continue
+			}
+			if input.TargetType != "" && (p.Agent == nil || p.Agent.TargetType != input.TargetType) {
+				continue
+			}
+			if len(input.Evaluates) > 0 && !agentEvaluatesAll(p.Agent, input.Evaluates) {
+				continue
+			}
+			providers = append(providers, toProviderSummary(p))
+		}
+
+		if providers == nil {
+			providers = []ProviderSummaryOutput{}
+		}
+
+		out := DiscoverProvidersOutput{Providers: providers}
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Found %d providers", len(providers))},
+			},
+		}, out, nil
+	}
+}
+
+func toProviderSummary(p api.ProviderResource) ProviderSummaryOutput {
+	out := ProviderSummaryOutput{
+		ID:    p.Resource.ID,
+		Name:  p.Name,
+		Title: p.Title,
+	}
+	if p.Agent != nil {
+		out.Summary = p.Agent.Summary
+		out.TargetType = p.Agent.TargetType
+		out.Evaluates = p.Agent.Evaluates
+		out.Hints = p.Agent.Hints
+		out.ResultInterpretation = p.Agent.ResultInterpretation
+		out.Complements = p.Agent.Complements
+		out.RecommendedWhen = p.Agent.RecommendedWhen
+	}
+	return out
+}
+
+func enrichBenchmarkStatuses(client EvalHubToolClient, log *slog.Logger, benchmarks []BenchmarkStatusOutput) {
+	providerIDs := make(map[string]struct{})
+	for _, b := range benchmarks {
+		if api.IsBenchmarkTerminalState(api.State(b.Status)) {
+			providerIDs[b.ProviderID] = struct{}{}
+		}
+	}
+	if len(providerIDs) == 0 {
+		return
+	}
+
+	providers := make(map[string]*api.ProviderResource, len(providerIDs))
+	for pid := range providerIDs {
+		p, err := client.GetProvider(pid)
+		if err != nil {
+			log.Debug("could not fetch provider for enrichment", "provider_id", pid, "error", err)
+			continue
+		}
+		providers[pid] = p
+	}
+
+	for i := range benchmarks {
+		b := &benchmarks[i]
+		if !api.IsBenchmarkTerminalState(api.State(b.Status)) {
+			continue
+		}
+		p, ok := providers[b.ProviderID]
+		if !ok {
+			continue
+		}
+		if p.Agent != nil {
+			b.Complements = p.Agent.Complements
+		}
+		for _, bm := range p.Benchmarks {
+			if bm.ID == b.ID && bm.Agent != nil {
+				b.ResultInterpretation = bm.Agent.ResultInterpretation
+				break
+			}
+		}
+	}
+}
+
+func agentEvaluatesAll(agent *api.AgentMetadata, required []string) bool {
+	if agent == nil {
+		return false
+	}
+	have := make(map[string]struct{}, len(agent.Evaluates))
+	for _, e := range agent.Evaluates {
+		have[e] = struct{}{}
+	}
+	for _, r := range required {
+		if _, ok := have[r]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // --- helpers ---
