@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eval-hub-mcp"
+dynamic = ["version"]
+description = "MCP server binary for eval-hub"
+authors = [
+    {name = "Rui Vieira", email = "rui@redhat.com"},
+]
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = ["eval-hub", "mcp", "binary", "model-context-protocol"]
+
+[project.urls]
+Homepage = "https://github.com/eval-hub/eval-hub"
+Repository = "https://github.com/eval-hub/eval-hub"
+"Bug Tracker" = "https://github.com/eval-hub/eval-hub/issues"
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}
+
+[tool.setuptools.packages]
+find = {include = []}

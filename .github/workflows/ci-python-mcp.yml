@@ -1,19 +1,19 @@
-name: CI python-server
+name: CI python-mcp
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [ main, develop ]
     paths:
-      - 'python-server/**'
-      - 'config/**'
-      - 'cmd/eval_hub/**'
-      - 'internal/**'
+      - 'python-mcp/**'
+      - 'cmd/evalhub_mcp/**'
+      - 'internal/evalhub_mcp/**'
       - 'pkg/**'
       - 'Makefile'
-      - '.github/workflows/ci-python-server.yml'
+      - '.github/workflows/ci-python-mcp.yml'
 
 jobs:
-  test-server-wheel:
+  test-mcp-wheel:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -28,16 +28,13 @@ jobs:
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           python-version: '3.11'
-      - name: Build binary for this platform via cross-compile target
-        run: make cross-compile
-      - name: Build wheel
-        run: make build-wheel
-      - name: Install wheel
+      - name: Build MCP binary for this platform via cross-compile target
+        run: make cross-compile-mcp
+      - name: Build MCP wheel
+        run: make build-mcp-wheel
+      - name: Install MCP wheel
         run: |
           uv venv --python 3.11 .venv
-          uv pip install --python .venv python-server/dist/*.whl
-      - name: Wheel sanity test
-        run: |
-          source .venv/bin/activate
-          chmod +x scripts/gha_wheel_sanity_test.sh
-          ./scripts/gha_wheel_sanity_test.sh
+          uv pip install --python .venv python-mcp/dist/*.whl
+      - name: MCP wheel sanity test
+        run: uv run --python .venv eval-hub-mcp --version

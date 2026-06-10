@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp start-service stop-service start-sidecar stop-sidecar lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-e2e test-mcp test-mcp-vscode test-help
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp start-service stop-service start-sidecar stop-sidecar lint test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels
 
 GOPATH := $(shell go env GOPATH)
 GOBIN := $(shell go env GOPATH)/bin
@@ -304,13 +304,12 @@ cross-compile-mcp: ## Build MCP for specific platform: make cross-compile-mcp CR
 	GOOS=$(CROSS_GOOS) GOARCH=$(CROSS_GOARCH) CGO_ENABLED=0 go build -o $(MCP_CROSS_OUTPUT) -ldflags="-s -w ${LDFLAGS_X}" $(MCP_CMD_PATH)
 	@echo "Built: $(MCP_CROSS_OUTPUT)"
 
+build-mcp-platform-%:
+	@$(MAKE) cross-compile-mcp CROSS_GOOS=$(word 1,$(subst -, ,$*)) CROSS_GOARCH=$(word 2,$(subst -, ,$*))
+
 .PHONY: build-all-platforms-mcp
-build-all-platforms-mcp: ## Build MCP for all supported platforms
-	@$(MAKE) cross-compile-mcp CROSS_GOOS=linux CROSS_GOARCH=amd64
-	@$(MAKE) cross-compile-mcp CROSS_GOOS=linux CROSS_GOARCH=arm64
-	@$(MAKE) cross-compile-mcp CROSS_GOOS=darwin CROSS_GOARCH=amd64
-	@$(MAKE) cross-compile-mcp CROSS_GOOS=darwin CROSS_GOARCH=arm64
-	@$(MAKE) cross-compile-mcp CROSS_GOOS=windows CROSS_GOARCH=amd64
+build-all-platforms-mcp: ## Build MCP for all supported platforms (parallel: make -j5 build-all-platforms-mcp)
+	@$(MAKE) -j5 $(addprefix build-mcp-platform-,$(SUPPORTED_PLATFORMS))
 
 # Python virtual environment - expects uv venv
 VENV_DIR = .venv
@@ -374,6 +373,45 @@ build-wheel-%:
 .PHONY: build-all-wheels
 build-all-wheels: clean-wheels ## Build all Python wheels (parallel: make -j5 build-all-wheels)
 	@$(MAKE) -j5 $(addprefix build-wheel-,$(SUPPORTED_PLATFORMS))
+
+# MCP Python wheel building - platform derived from CROSS_OUTPUT_SUFFIX via SUPPORTED_PLATFORMS table above
+MCP_WHEEL_BUILD_DIR = python-mcp/build-$(CROSS_GOOS)-$(CROSS_GOARCH)
+MCP_WHEEL_BINARY_NAME = evalhub-mcp$(if $(filter windows,$(CROSS_GOOS)),.exe,)
+
+.PHONY: clean-mcp-wheels
+clean-mcp-wheels: ## Clean MCP Python wheel build artifacts
+	@echo "Cleaning MCP wheel build artifacts..."
+	@rm -rf python-mcp/dist/
+	@rm -rf python-mcp/build-*/
+	@rm -rf python-mcp/*.egg-info
+	@rm -f python-mcp/VERSION
+
+.PHONY: build-mcp-wheel
+build-mcp-wheel: ## Build MCP Python wheel: make build-mcp-wheel WHEEL_PLATFORM=manylinux_2_17_x86_64 CROSS_GOOS=linux CROSS_GOARCH=amd64
+	@rm -rf $(MCP_WHEEL_BUILD_DIR)
+	@mkdir -p $(MCP_WHEEL_BUILD_DIR)/binaries $(MCP_WHEEL_BUILD_DIR)/shims python-mcp/dist
+	@cp python-mcp/pyproject.toml python-mcp/setup.py python-mcp/README.md $(MCP_WHEEL_BUILD_DIR)/
+	@cp python-mcp/shims/* $(MCP_WHEEL_BUILD_DIR)/shims/
+	@cp VERSION $(MCP_WHEEL_BUILD_DIR)/VERSION
+	@if [ -n "$(DEV_SUFFIX)" ]; then \
+		BASE=$$(tr -d '\n' < $(MCP_WHEEL_BUILD_DIR)/VERSION); \
+		echo "$${BASE}.$(DEV_SUFFIX)" > $(MCP_WHEEL_BUILD_DIR)/VERSION; \
+		echo "Python package version: $${BASE}.$(DEV_SUFFIX)"; \
+	fi
+	@test -f $(MCP_CROSS_OUTPUT) || $(MAKE) cross-compile-mcp
+	@echo "Staging binary $(MCP_CROSS_OUTPUT) as $(MCP_WHEEL_BINARY_NAME)"
+	@cp $(MCP_CROSS_OUTPUT) $(MCP_WHEEL_BUILD_DIR)/binaries/$(MCP_WHEEL_BINARY_NAME)
+	@chmod +x $(MCP_WHEEL_BUILD_DIR)/binaries/$(MCP_WHEEL_BINARY_NAME)
+	@echo "Building MCP wheel for $(WHEEL_PLATFORM)..."
+	WHEEL_PLATFORM=$(WHEEL_PLATFORM) uv build --wheel $(MCP_WHEEL_BUILD_DIR) --out-dir python-mcp/dist
+	@rm -rf $(MCP_WHEEL_BUILD_DIR)
+
+build-mcp-wheel-%:
+	@$(MAKE) build-mcp-wheel WHEEL_PLATFORM=$(WHEEL_PLATFORM_$*) CROSS_GOOS=$(word 1,$(subst -, ,$*)) CROSS_GOARCH=$(word 2,$(subst -, ,$*))
+
+.PHONY: build-all-mcp-wheels
+build-all-mcp-wheels: clean-mcp-wheels ## Build all MCP Python wheels (parallel: make -j5 build-all-mcp-wheels)
+	@$(MAKE) -j5 $(addprefix build-mcp-wheel-,$(SUPPORTED_PLATFORMS))
 
 .PHONY: cls
 cls:
