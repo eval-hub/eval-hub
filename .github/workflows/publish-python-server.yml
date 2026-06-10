@@ -117,10 +117,13 @@ jobs:
         run: ls -la bin/
 
       - name: Build wheel
+        env:
+          GH_REF: ${{ github.ref }}
+          GH_RUN_NUMBER: ${{ github.run_number }}
         run: |
           DEV_SUFFIX_ARG=""
-          if [[ ! "${{ github.ref }}" == refs/tags/* ]]; then
-            DEV_SUFFIX_ARG="DEV_SUFFIX=dev${{ github.run_number }}"
+          if [[ ! "${GH_REF}" == refs/tags/* ]]; then
+            DEV_SUFFIX_ARG="DEV_SUFFIX=dev${GH_RUN_NUMBER}"
           fi
           make build-wheel CROSS_GOOS=${{ matrix.goos }} CROSS_GOARCH=${{ matrix.goarch }} $DEV_SUFFIX_ARG
 
