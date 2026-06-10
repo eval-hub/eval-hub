@@ -8,6 +8,9 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -17,10 +20,17 @@ import (
 // Keeping this abstraction in one place allows all call sites to stay unchanged if we switch
 // to a different underlying Kubernetes client implementation.
 type KubernetesHelper struct {
-	clientset kubernetes.Interface
+	clientset     kubernetes.Interface
+	dynamicClient dynamic.Interface
 }
 
-func NewKubernetesClient() (*kubernetes.Clientset, error) {
+var hardwareProfileGVR = schema.GroupVersionResource{
+	Group:    hardwareProfileAPIGroup,
+	Version:  hardwareProfileAPIVersion,
+	Resource: hardwareProfileResource,
+}
+
+func loadKubernetesConfig() (*rest.Config, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -33,24 +43,50 @@ func NewKubernetesClient() (*kubernetes.Clientset, error) {
 			return nil, err
 		}
 	}
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-	return clientset, nil
+	return config, nil
 }
 
 // NewKubernetesHelper builds a Kubernetes client (in-cluster config, then default kubeconfig)
 // and returns a KubernetesHelper.
 func NewKubernetesHelper() (*KubernetesHelper, error) {
-
-	clientset, err := NewKubernetesClient()
+	config, err := loadKubernetesConfig()
+	if err != nil {
+		return nil, err
+	}
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	dynamicClient, err := dynamic.NewForConfig(config)
 	if err != nil {
 		return nil, err
 	}
 	return &KubernetesHelper{
-		clientset: clientset,
+		clientset:     clientset,
+		dynamicClient: dynamicClient,
 	}, nil
+}
+
+// GetHardwareProfile fetches a HardwareProfile custom resource by name in the given namespace.
+func (h *KubernetesHelper) GetHardwareProfile(ctx context.Context, namespace, name string) (*unstructured.Unstructured, error) {
+	if namespace == "" || name == "" {
+		return nil, fmt.Errorf("namespace and name are required")
+	}
+	if h.dynamicClient == nil {
+		return nil, fmt.Errorf("dynamic kubernetes client is not configured")
+	}
+	return h.dynamicClient.Resource(hardwareProfileGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+}
+
+// DeleteHardwareProfile deletes a HardwareProfile custom resource by name in the given namespace.
+func (h *KubernetesHelper) DeleteHardwareProfile(ctx context.Context, namespace, name string) error {
+	if namespace == "" || name == "" {
+		return fmt.Errorf("namespace and name are required")
+	}
+	if h.dynamicClient == nil {
+		return fmt.Errorf("dynamic kubernetes client is not configured")
+	}
+	return h.dynamicClient.Resource(hardwareProfileGVR).Namespace(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // CreateConfigMap creates a ConfigMap in the given namespace.

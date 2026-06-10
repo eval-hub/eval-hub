@@ -20,6 +20,11 @@ allOf:
         $ref: ./PrimaryScore.yaml
       pass_criteria:
         $ref: ./PassCriteria.yaml
+      hardware_config:
+        $ref: ./BenchmarkHardwareConfig.yaml
+        description: |
+          Optional hardware profile override for this benchmark. Kubernetes runtimes
+          only; ignored by local runtimes.
       parameters:
         type: object
         additionalProperties: true

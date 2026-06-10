@@ -79,7 +79,7 @@ type s3TestDataConfig struct {
 	secretRef string
 }
 
-func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkConfig *api.EvaluationBenchmarkConfig, benchmarkIndex int, serviceConfig *config.Config) (*jobConfig, error) {
+func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkConfig *api.EvaluationBenchmarkConfig, benchmarkIndex int, serviceConfig *config.Config, hardwareProfile *hardwareProfileResources) (*jobConfig, error) {
 	runtime := provider.Runtime
 	if runtime == nil || runtime.K8s == nil {
 		return nil, fmt.Errorf("provider %q missing runtime configuration", provider.Resource.ID)
@@ -229,6 +229,8 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 			secretRef: testDataS3SecretRef,
 		},
 	}
+	applyHardwareProfileResources(out, hardwareProfile)
+
 	sidecarJSON, err := sidecarForJobPod(serviceConfig, out)
 	if err != nil {
 		return nil, fmt.Errorf("sidecar config json: %w", err)

@@ -43,7 +43,7 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestBuildJobConfigModelAuthSecretRefPresent(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestBuildJobConfigModelAuthSecretRefEmptyWhenNil(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
@@ -209,7 +209,7 @@ func TestBuildJobConfigTestDataS3(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
@@ -254,7 +254,7 @@ func TestBuildJobConfigAllowsNumExamplesOnly(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
 	if err != nil {
 		t.Fatalf("expected no error for num_examples-only parameters, got %v", err)
 	}
@@ -292,7 +292,7 @@ func TestBuildJobConfigMissingRuntime(t *testing.T) {
 		},
 	}
 
-	_, err := buildJobConfig(evaluation, provider, &api.EvaluationBenchmarkConfig{}, 0, nil)
+	_, err := buildJobConfig(evaluation, provider, &api.EvaluationBenchmarkConfig{}, 0, nil, nil)
 	if err == nil {
 		t.Fatalf("expected error for missing runtime")
 	}
@@ -318,7 +318,7 @@ func TestBuildJobConfigMissingAdapterImage(t *testing.T) {
 		},
 	}
 
-	_, err := buildJobConfig(evaluation, provider, nil, 0, nil)
+	_, err := buildJobConfig(evaluation, provider, nil, 0, nil, nil)
 	if err == nil {
 		t.Fatalf("expected error for missing adapter image")
 	}
@@ -353,7 +353,7 @@ func TestBuildJobConfigAllowsEmptyBenchmarkConfig(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
 	if err != nil {
 		t.Fatalf("expected no error for empty parameters, got %v", err)
 	}
@@ -407,7 +407,7 @@ func TestBuildJobConfigWithOCIExports(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
@@ -521,7 +521,7 @@ func TestBuildJobConfigUsesTenantNamespace(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
@@ -556,7 +556,7 @@ func TestBuildJobConfigEmptyTenantFallsBack(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
@@ -595,7 +595,7 @@ func TestBuildJobConfigKueueQueueNameWhenSpecified(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
@@ -630,7 +630,7 @@ func TestBuildJobConfigKueueQueueNameWhenNoQueue(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
@@ -669,7 +669,7 @@ func TestBuildJobConfigKueueQueueNameIgnoresNonKueueKind(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
@@ -699,7 +699,7 @@ func TestBuildJobConfigBenchmarkIndexPropagated(t *testing.T) {
 	}
 
 	for _, idx := range []int{0, 1, 5} {
-		cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], idx, nil)
+		cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], idx, nil, nil)
 		if err != nil {
 			t.Fatalf("buildJobConfig(%d) error: %v", idx, err)
 		}
@@ -807,7 +807,7 @@ func TestBuildJobConfigGPU(t *testing.T) {
 	}
 
 	t.Run("gpu config and node_selector propagated when no queue", func(t *testing.T) {
-		cfg, err := buildJobConfig(newEvaluation(nil), gpuProvider, &benchmark, 0, nil)
+		cfg, err := buildJobConfig(newEvaluation(nil), gpuProvider, &benchmark, 0, nil, nil)
 		if err != nil {
 			t.Fatalf("buildJobConfig: %v", err)
 		}
@@ -824,7 +824,7 @@ func TestBuildJobConfigGPU(t *testing.T) {
 
 	t.Run("node_selector suppressed when queue is set but GPU resources remain", func(t *testing.T) {
 		q := &api.QueueConfig{Kind: "kueue", Name: "gpu-queue"}
-		cfg, err := buildJobConfig(newEvaluation(q), gpuProvider, &benchmark, 0, nil)
+		cfg, err := buildJobConfig(newEvaluation(q), gpuProvider, &benchmark, 0, nil, nil)
 		if err != nil {
 			t.Fatalf("buildJobConfig: %v", err)
 		}
@@ -845,7 +845,7 @@ func TestBuildJobConfigGPU(t *testing.T) {
 	})
 
 	t.Run("nil gpu config leaves jobConfig without GPU", func(t *testing.T) {
-		cfg, err := buildJobConfig(newEvaluation(nil), cpuProvider, &benchmark, 0, nil)
+		cfg, err := buildJobConfig(newEvaluation(nil), cpuProvider, &benchmark, 0, nil, nil)
 		if err != nil {
 			t.Fatalf("buildJobConfig: %v", err)
 		}

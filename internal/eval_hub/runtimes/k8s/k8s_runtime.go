@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
@@ -151,7 +152,23 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	jobConfig, err := buildJobConfig(evaluation, provider, benchmark, benchmarkIndex, r.serviceConfig)
+	var hardwareProfile *hardwareProfileResources
+	if benchmark.HardwareConfig != nil {
+		profileRef := strings.TrimSpace(benchmark.HardwareConfig.HardwareProfileRef)
+		if profileRef != "" {
+			namespace := resolveNamespace(string(evaluation.Resource.Tenant))
+			profileCR, err := r.helper.GetHardwareProfile(ctx, namespace, profileRef)
+			if err != nil {
+				return fmt.Errorf("job %s benchmark %s: fetch hardware profile %q: %w", evaluation.Resource.ID, benchmarkID, profileRef, err)
+			}
+			parsed, err := parseHardwareProfileResources(profileCR)
+			if err != nil {
+				return fmt.Errorf("job %s benchmark %s: parse hardware profile %q: %w", evaluation.Resource.ID, benchmarkID, profileRef, err)
+			}
+			hardwareProfile = parsed
+		}
+	}
+	jobConfig, err := buildJobConfig(evaluation, provider, benchmark, benchmarkIndex, r.serviceConfig, hardwareProfile)
 	if err != nil {
 		logger.Error("kubernetes job config error", "benchmark_id", benchmarkID, "error", err)
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)

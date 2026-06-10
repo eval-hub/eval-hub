@@ -3157,6 +3157,22 @@
           "threshold"
         ]
       },
+      "BenchmarkHardwareConfig": {
+        "type": "object",
+        "title": "BenchmarkHardwareConfig",
+        "description": "Optional per-benchmark hardware override for Kubernetes runtimes. When `hardware_profile_ref` is set, the server fetches the named OpenDataHub `HardwareProfile` custom resource in the tenant namespace and applies its CPU, memory, and GPU resource values to the evaluation Job adapter container. Values missing from the profile fall back to the provider `runtime.k8s` configuration (and built-in defaults when those are unset).\n",
+        "properties": {
+          "hardware_profile_ref": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9]([A-Za-z0-9_.\\-]*[A-Za-z0-9])?$",
+            "description": "Name of the `HardwareProfile` custom resource (`hardwareprofiles.infrastructure.opendatahub.io`) in the evaluation job's tenant namespace. Must conform to Kubernetes resource name conventions (same rules as queue names).\n",
+            "examples": [
+              "default-profile",
+              "gpu-profile.v1"
+            ]
+          }
+        }
+      },
       "TestDataRefS3": {
         "type": "object",
         "description": "S3 (or S3-compatible) test data. Only applies when Eval Hub runs the benchmark as a\n**Kubernetes Job** (cluster execution). It does not apply to local-only evaluation runs.\n\nThe test-data **init container** loads the Secret named **`secret_ref`** from the\njob namespace. It expects these keys. **All values must be non-empty** or the init\ncontainer fails:\n\n- **`AWS_ACCESS_KEY_ID`** — access key\n- **`AWS_SECRET_ACCESS_KEY`** — secret key\n- **`AWS_DEFAULT_REGION`** — region used for signing (for example `us-east-1`)\n- **`AWS_S3_ENDPOINT`** — base URL of the S3 API (AWS regional endpoint or your\n  S3-compatible gateway)\n\nThese align with Secrets commonly produced by ODH/RHOAI when an S3 connection is created.\n",
@@ -3225,6 +3241,10 @@
               },
               "pass_criteria": {
                 "$ref": "#/components/schemas/PassCriteria"
+              },
+              "hardware_config": {
+                "$ref": "#/components/schemas/BenchmarkHardwareConfig",
+                "description": "Optional hardware profile override for this benchmark. Kubernetes runtimes\nonly; ignored by local runtimes.\n"
               },
               "parameters": {
                 "type": "object",

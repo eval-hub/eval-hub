@@ -211,6 +211,64 @@ func TestQueueConfig_ValidNameAccepted(t *testing.T) {
 	}
 }
 
+func TestBenchmarkHardwareConfig_InvalidNameRejected(t *testing.T) {
+	validate := NewValidator()
+	invalid := []string{
+		"profile!@#$%",
+		"-starts-with-dash",
+		"ends-with-dash-",
+		"has spaces",
+		".starts-with-dot",
+	}
+	for _, name := range invalid {
+		cfg := api.EvaluationJobConfig{
+			Name:  "test-job",
+			Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{
+					Ref:        api.Ref{ID: "b1"},
+					ProviderID: "provider-1",
+					HardwareConfig: &api.BenchmarkHardwareConfig{
+						HardwareProfileRef: name,
+					},
+				},
+			},
+		}
+		err := validate.Struct(cfg)
+		if err == nil {
+			t.Errorf("expected validation error for hardware profile ref %q", name)
+		}
+	}
+}
+
+func TestBenchmarkHardwareConfig_ValidNameAccepted(t *testing.T) {
+	validate := NewValidator()
+	valid := []string{
+		"default-profile",
+		"gpu-profile.v1",
+		"A",
+	}
+	for _, name := range valid {
+		cfg := api.EvaluationJobConfig{
+			Name:  "test-job",
+			Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{
+					Ref:        api.Ref{ID: "b1"},
+					ProviderID: "provider-1",
+					HardwareConfig: &api.BenchmarkHardwareConfig{
+						HardwareProfileRef: name,
+					},
+				},
+			},
+		}
+		err := validate.Struct(cfg)
+		if err != nil {
+			t.Errorf("expected no error for hardware profile ref %q, got: %v", name, err)
+		}
+	}
+}
+
 func TestEvaluationJobConfig_ExperimentOmittedOk(t *testing.T) {
 	validate := NewValidator()
 	cfg := api.EvaluationJobConfig{

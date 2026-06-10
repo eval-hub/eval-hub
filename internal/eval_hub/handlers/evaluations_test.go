@@ -944,3 +944,40 @@ func TestHandleCreateEvaluationRejectsInvalidQueueName(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleCreateEvaluationRejectsInvalidHardwareProfileRef(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	storage := &fakeStorage{}
+	runtime := &fakeRuntime{}
+	validate := validation.NewValidator()
+	h := handlers.New(storage, validate, runtime, nil, nil)
+
+	invalidNames := []string{
+		"profile!@#$%",
+		"-starts-with-dash",
+		"has spaces",
+	}
+	for _, name := range invalidNames {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			body := fmt.Sprintf(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"b","provider_id":"p","hardware_config":{"hardware_profile_ref":%q}}]}`, name)
+			req := &bodyRequest{
+				MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+				body:        []byte(body),
+			}
+			ctx := executioncontext.NewExecutionContext(context.Background(), "req-invalid-hwp", logger, "test-user", "test-tenant")
+			recorder := httptest.NewRecorder()
+			resp := MockResponseWrapper{recorder: recorder}
+
+			h.HandleCreateEvaluation(ctx, req, resp)
+
+			if runtime.called {
+				t.Fatalf("did not expect runtime to be invoked for hardware profile ref %q", name)
+			}
+			if recorder.Code != 400 {
+				t.Fatalf("expected status 400 for hardware profile ref %q, got %d", name, recorder.Code)
+			}
+		})
+	}
+}
