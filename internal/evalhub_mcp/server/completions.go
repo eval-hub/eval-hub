@@ -134,7 +134,8 @@ func (cp *completionProvider) cachedFetch(key string, fetch func() []string) []s
 }
 
 func (cp *completionProvider) fetchProviderIDs(ctx context.Context) []string {
-	list, err := cp.ds.ListProviders(evalhubclient.WithLimit(cp.listPageLimit))
+	ds := evalHubDiscoveryForRequest(ctx, cp.ds, cp.logger)
+	list, err := ds.ListProviders(evalhubclient.WithLimit(cp.listPageLimit))
 	if err != nil {
 		requestLogger(ctx, cp.logger).Warn("completion: failed to list providers", "error", err)
 		return nil
@@ -147,7 +148,8 @@ func (cp *completionProvider) fetchProviderIDs(ctx context.Context) []string {
 }
 
 func (cp *completionProvider) fetchBenchmarkIDs(ctx context.Context) []string {
-	benchmarks, err := cp.ds.ListBenchmarks()
+	ds := evalHubDiscoveryForRequest(ctx, cp.ds, cp.logger)
+	benchmarks, err := ds.ListBenchmarks()
 	if err != nil {
 		requestLogger(ctx, cp.logger).Warn("completion: failed to list benchmarks", "error", err)
 		return nil
@@ -160,7 +162,8 @@ func (cp *completionProvider) fetchBenchmarkIDs(ctx context.Context) []string {
 }
 
 func (cp *completionProvider) fetchCollectionIDs(ctx context.Context) []string {
-	list, err := cp.ds.ListCollections(evalhubclient.WithLimit(cp.listPageLimit))
+	ds := evalHubDiscoveryForRequest(ctx, cp.ds, cp.logger)
+	list, err := ds.ListCollections(evalhubclient.WithLimit(cp.listPageLimit))
 	if err != nil {
 		requestLogger(ctx, cp.logger).Warn("completion: failed to list collections", "error", err)
 		return nil
@@ -173,7 +176,8 @@ func (cp *completionProvider) fetchCollectionIDs(ctx context.Context) []string {
 }
 
 func (cp *completionProvider) fetchJobIDs(ctx context.Context) []string {
-	list, err := cp.ds.ListJobs(evalhubclient.WithLimit(cp.listPageLimit))
+	ds := evalHubDiscoveryForRequest(ctx, cp.ds, cp.logger)
+	list, err := ds.ListJobs(evalhubclient.WithLimit(cp.listPageLimit))
 	if err != nil {
 		requestLogger(ctx, cp.logger).Warn("completion: failed to list jobs", "error", err)
 		return nil
@@ -186,7 +190,8 @@ func (cp *completionProvider) fetchJobIDs(ctx context.Context) []string {
 }
 
 func (cp *completionProvider) fetchLabels(ctx context.Context) []string {
-	benchmarks, err := cp.ds.ListBenchmarks()
+	ds := evalHubDiscoveryForRequest(ctx, cp.ds, cp.logger)
+	benchmarks, err := ds.ListBenchmarks()
 	if err != nil {
 		requestLogger(ctx, cp.logger).Warn("completion: failed to list benchmarks for labels", "error", err)
 		return nil

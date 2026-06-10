@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -146,6 +147,7 @@ func registerTools(srv *mcp.Server, client EvalHubToolClient, logger *slog.Logge
 func submitEvaluationHandler(client EvalHubToolClient, logger *slog.Logger) mcp.ToolHandlerFor[SubmitEvaluationInput, SubmitEvaluationOutput] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input SubmitEvaluationInput) (*mcp.CallToolResult, SubmitEvaluationOutput, error) {
 		log := requestLogger(ctx, logger)
+		client := evalHubToolClientForRequest(ctx, client, logger)
 		log.Debug("submit_evaluation called", "name", input.Name)
 
 		if len(input.Benchmarks) == 0 && input.Collection == nil {
@@ -183,6 +185,7 @@ func submitEvaluationHandler(client EvalHubToolClient, logger *slog.Logger) mcp.
 func cancelJobHandler(client EvalHubToolClient, logger *slog.Logger) mcp.ToolHandlerFor[CancelJobInput, CancelJobOutput] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input CancelJobInput) (*mcp.CallToolResult, CancelJobOutput, error) {
 		log := requestLogger(ctx, logger)
+		client := evalHubToolClientForRequest(ctx, client, logger)
 		log.Debug("cancel_job called", "job_id", input.JobID)
 
 		if input.JobID == "" {
@@ -210,6 +213,7 @@ func cancelJobHandler(client EvalHubToolClient, logger *slog.Logger) mcp.ToolHan
 func getJobStatusHandler(client EvalHubToolClient, logger *slog.Logger) mcp.ToolHandlerFor[GetJobStatusInput, GetJobStatusOutput] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input GetJobStatusInput) (*mcp.CallToolResult, GetJobStatusOutput, error) {
 		log := requestLogger(ctx, logger)
+		client := evalHubToolClientForRequest(ctx, client, logger)
 		log.Debug("get_job_status called", "job_id", input.JobID)
 
 		if input.JobID == "" {
@@ -235,6 +239,7 @@ func getJobStatusHandler(client EvalHubToolClient, logger *slog.Logger) mcp.Tool
 func discoverProvidersHandler(client EvalHubToolClient, logger *slog.Logger) mcp.ToolHandlerFor[DiscoverProvidersInput, DiscoverProvidersOutput] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input DiscoverProvidersInput) (*mcp.CallToolResult, DiscoverProvidersOutput, error) {
 		log := requestLogger(ctx, logger)
+		client := evalHubToolClientForRequest(ctx, client, logger)
 		log.Debug("discover_providers called", "target_type", input.TargetType, "evaluates", input.Evaluates)
 
 		list, err := client.ListProviders()
@@ -243,11 +248,18 @@ func discoverProvidersHandler(client EvalHubToolClient, logger *slog.Logger) mcp
 			return errorResult(fmt.Sprintf("failed to list providers: %v", err)), DiscoverProvidersOutput{}, nil
 		}
 
+		var targetTypes []string
+		var evaluates []string
+
 		hasFilter := input.TargetType != "" || len(input.Evaluates) > 0
 		var providers []ProviderSummaryOutput
 		for _, p := range list.Items {
 			if hasFilter && p.Agent == nil {
 				continue
+			}
+			if p.Agent != nil {
+				targetTypes = append(targetTypes, p.Agent.TargetType)
+				evaluates = append(evaluates, p.Agent.Evaluates...)
 			}
 			if input.TargetType != "" && (p.Agent == nil || p.Agent.TargetType != input.TargetType) {
 				continue
@@ -264,6 +276,12 @@ func discoverProvidersHandler(client EvalHubToolClient, logger *slog.Logger) mcp
 
 		out := DiscoverProvidersOutput{Providers: providers}
 		return &mcp.CallToolResult{
+			Meta: mcp.Meta{
+				"target_types_found": strings.Join(targetTypes, ","),
+				"target_type":        input.TargetType,
+				"evaluates_found":    strings.Join(evaluates, ","),
+				"evaluates":          strings.Join(input.Evaluates, ","),
+			},
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Found %d providers", len(providers))},
 			},

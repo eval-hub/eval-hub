@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/url"
 	"strings"
 	"testing"
@@ -97,7 +98,7 @@ func TestExtractLabels(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := extractLabels(tt.rawURI, discardLogger)
+			got := extractLabels(context.Background(), tt.rawURI, discardLogger)
 			if tt.wantNil {
 				if got != nil {
 					t.Fatalf("extractLabels() = %v, want nil", got)

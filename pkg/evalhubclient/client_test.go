@@ -141,6 +141,40 @@ func TestNoTenantHeaderWhenNotConfigured(t *testing.T) {
 	}
 }
 
+// ─── Request correlation ──────────────────────────────────────────────────────
+
+func TestTransactionIDHeader(t *testing.T) {
+	srv, capture := newCapturingServer(t, http.StatusOK, mustMarshal(t, api.HealthResponse{Status: "ok"}))
+
+	ctx := ContextWithRequestID(context.Background(), "req-abc-123")
+	_, err := newTestClient(srv).WithContext(ctx).GetHealth()
+	if err != nil {
+		t.Fatalf("GetHealth: %v", err)
+	}
+	if got := capture.headers.Get(TransactionIDHeader); got != "req-abc-123" {
+		t.Errorf("%s = %q, want %q", TransactionIDHeader, got, "req-abc-123")
+	}
+}
+
+func TestRequestScopedLogger(t *testing.T) {
+	srv, _ := newCapturingServer(t, http.StatusOK, mustMarshal(t, api.HealthResponse{Status: "ok"}))
+
+	var buf bytes.Buffer
+	scoped := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	ctx := ContextWithLogger(context.Background(), scoped.With("request_id", "req-log"))
+
+	_, err := newTestClient(srv).WithContext(ctx).GetHealth()
+	if err != nil {
+		t.Fatalf("GetHealth: %v", err)
+	}
+	if !strings.Contains(buf.String(), "request_id=req-log") {
+		t.Fatalf("log = %q, want request_id field", buf.String())
+	}
+	if !strings.Contains(buf.String(), "Request started") {
+		t.Fatalf("log = %q, want Request started", buf.String())
+	}
+}
+
 // ─── Base URL trailing slash ──────────────────────────────────────────────────
 
 func TestBaseURLTrailingSlashStripped(t *testing.T) {

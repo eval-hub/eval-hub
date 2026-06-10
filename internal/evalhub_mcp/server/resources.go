@@ -110,6 +110,7 @@ func registerResources(srv *mcp.Server, ds EvalHubDiscovery, logger *slog.Logger
 func listProvidersHandler(ds EvalHubDiscovery, logger *slog.Logger, defaultLimit int) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		log := requestLogger(ctx, logger)
+		ds := evalHubDiscoveryForRequest(ctx, ds, logger)
 		log.Debug("reading resource", "uri", req.Params.URI)
 		list, err := ds.ListProviders(evalhubclient.WithLimit(defaultLimit))
 		if err != nil {
@@ -126,6 +127,7 @@ func listProvidersHandler(ds EvalHubDiscovery, logger *slog.Logger, defaultLimit
 func getProviderHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		log := requestLogger(ctx, logger)
+		ds := evalHubDiscoveryForRequest(ctx, ds, logger)
 		id, err := extractPathID(req.Params.URI, "providers")
 		if err != nil {
 			return nil, err
@@ -142,8 +144,9 @@ func getProviderHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHa
 func listBenchmarksHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		log := requestLogger(ctx, logger)
+		ds := evalHubDiscoveryForRequest(ctx, ds, logger)
 		log.Debug("reading resource", "uri", req.Params.URI)
-		labels := extractLabels(req.Params.URI, log)
+		labels := extractLabels(ctx, req.Params.URI, log)
 
 		var benchmarks []api.BenchmarkResource
 		var err error
@@ -165,6 +168,7 @@ func listBenchmarksHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.Resourc
 func getBenchmarkHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		log := requestLogger(ctx, logger)
+		ds := evalHubDiscoveryForRequest(ctx, ds, logger)
 		id, err := extractPathID(req.Params.URI, "benchmarks")
 		if err != nil {
 			return nil, err
@@ -181,6 +185,7 @@ func getBenchmarkHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceH
 func listCollectionsHandler(ds EvalHubDiscovery, logger *slog.Logger, defaultLimit int) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		log := requestLogger(ctx, logger)
+		ds := evalHubDiscoveryForRequest(ctx, ds, logger)
 		log.Debug("reading resource", "uri", req.Params.URI)
 		opts, err := listOptsFromResourceURI(req.Params.URI, defaultLimit)
 		if err != nil {
@@ -201,6 +206,7 @@ func listCollectionsHandler(ds EvalHubDiscovery, logger *slog.Logger, defaultLim
 func getCollectionHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		log := requestLogger(ctx, logger)
+		ds := evalHubDiscoveryForRequest(ctx, ds, logger)
 		id, err := extractPathID(req.Params.URI, "collections")
 		if err != nil {
 			return nil, err
@@ -217,6 +223,7 @@ func getCollectionHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.Resource
 func listJobsHandler(ds EvalHubDiscovery, logger *slog.Logger, defaultLimit int) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		log := requestLogger(ctx, logger)
+		ds := evalHubDiscoveryForRequest(ctx, ds, logger)
 		log.Debug("reading resource", "uri", req.Params.URI)
 		status, hasStatus, err := extractStatus(req.Params.URI)
 		if err != nil {
@@ -247,6 +254,7 @@ func listJobsHandler(ds EvalHubDiscovery, logger *slog.Logger, defaultLimit int)
 func getJobHandler(ds EvalHubDiscovery, logger *slog.Logger) mcp.ResourceHandler {
 	return func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		log := requestLogger(ctx, logger)
+		ds := evalHubDiscoveryForRequest(ctx, ds, logger)
 		id, err := extractPathID(req.Params.URI, "jobs")
 		if err != nil {
 			return nil, err
@@ -275,10 +283,10 @@ func extractPathID(rawURI, kind string) (string, error) {
 	return id, nil
 }
 
-func extractLabels(rawURI string, logger *slog.Logger) []string {
+func extractLabels(ctx context.Context, rawURI string, logger *slog.Logger) []string {
 	u, err := url.Parse(rawURI)
 	if err != nil {
-		logger.Error("failed to parse resource URI", "uri", rawURI, "error", err)
+		requestLogger(ctx, logger).Error("failed to parse resource URI", "uri", rawURI, "error", err)
 		return nil
 	}
 	return u.Query()["label"]

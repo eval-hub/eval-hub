@@ -244,9 +244,16 @@ func truncateBodyForLog(b []byte) string {
 	return string(b[:maxLoggedBodyBytes]) + "… (truncated)"
 }
 
+func (c *Client) effectiveLogger() *slog.Logger {
+	if log := LoggerFromContext(c.ctx); log != nil {
+		return log
+	}
+	return c.logger
+}
+
 // shouldLogBody returns true if the body should be logged based on the logger level (DEBUG level) and the body length (greater than zero).
 func (c *Client) shouldLogBody(b []byte) bool {
-	return c.logger.Enabled(c.ctx, slog.LevelDebug) && (len(b) > 0)
+	return c.effectiveLogger().Enabled(c.ctx, slog.LevelDebug) && (len(b) > 0)
 }
 
 func (c *Client) logEvalHubRequestStarted(method, fullURL string, bodyBytes []byte) {
@@ -257,7 +264,7 @@ func (c *Client) logEvalHubRequestStarted(method, fullURL string, bodyBytes []by
 	if c.shouldLogBody(bodyBytes) {
 		args = append(args, "request", truncateBodyForLog(bodyBytes))
 	}
-	c.logger.Info("Request started", args...)
+	c.effectiveLogger().Info("Request started", args...)
 }
 
 func (c *Client) logEvalHubRequestFailed(start time.Time, code int, errMsg string, respBody []byte) {
@@ -265,7 +272,7 @@ func (c *Client) logEvalHubRequestFailed(start time.Time, code int, errMsg strin
 	if c.shouldLogBody(respBody) {
 		args = append(args, "response", truncateBodyForLog(respBody))
 	}
-	c.logger.Info("Request failed", args...)
+	c.effectiveLogger().Info("Request failed", args...)
 }
 
 func (c *Client) logEvalHubRequestSuccessful(start time.Time, code int, respBody []byte) {
@@ -273,7 +280,7 @@ func (c *Client) logEvalHubRequestSuccessful(start time.Time, code int, respBody
 	if c.shouldLogBody(respBody) {
 		args = append(args, "response", truncateBodyForLog(respBody))
 	}
-	c.logger.Info("Request successful", args...)
+	c.effectiveLogger().Info("Request successful", args...)
 }
 
 func (c *Client) setHeaders(req *http.Request) {
@@ -288,6 +295,9 @@ func (c *Client) setHeaders(req *http.Request) {
 	}
 	if c.tenant != "" {
 		req.Header.Set("X-Tenant", c.tenant)
+	}
+	if id := RequestIDFromContext(c.ctx); id != "" {
+		req.Header.Set(TransactionIDHeader, id)
 	}
 }
 
@@ -339,7 +349,7 @@ func (c *Client) doRequest(method, path string, body any, queryParams url.Values
 		if err != nil {
 			lastErr = fmt.Errorf("request failed: %w", err)
 			if attempt < c.maxRetries {
-				c.logger.Warn("eval-hub request failed, retrying", "method", method, "path", path, "attempt", attempt+1, "error", err)
+				c.effectiveLogger().Warn("eval-hub request failed, retrying", "method", method, "path", path, "attempt", attempt+1, "error", err)
 				continue
 			}
 			c.logEvalHubRequestFailed(start, 0, lastErr.Error(), nil)
@@ -357,7 +367,7 @@ func (c *Client) doRequest(method, path string, body any, queryParams url.Values
 
 		// Retry server errors; propagate client errors immediately.
 		if statusCode >= 500 && attempt < c.maxRetries {
-			c.logger.Warn("eval-hub server error, retrying", "method", method, "path", path, "status", statusCode, "attempt", attempt+1)
+			c.effectiveLogger().Warn("eval-hub server error, retrying", "method", method, "path", path, "status", statusCode, "attempt", attempt+1)
 			lastErr = c.parseAPIError(statusCode, respBody)
 			continue
 		}
@@ -409,7 +419,7 @@ func (c *Client) logTruncatedListPage(endpoint string, page api.Page) {
 		return
 	}
 	if page.TotalCount > page.Limit {
-		c.logger.Error("eval-hub list response has more items than returned on this page (total_count > limit); fetch additional pages with offset if needed",
+		c.effectiveLogger().Error("eval-hub list response has more items than returned on this page (total_count > limit); fetch additional pages with offset if needed",
 			"endpoint", endpoint,
 			"total_count", page.TotalCount,
 			"limit", page.Limit,
