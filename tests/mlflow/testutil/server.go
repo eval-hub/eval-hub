@@ -60,7 +60,7 @@ func StartMLFlowServer(t *testing.T, opts ServerOptions) *Server {
 
 	if err := runMakeTarget(t, dir, startTimeout, "start-mlflow", opts); err != nil {
 		opts.Logger.Error("Skipping tests: failed to start MLflow server", "error", err, "version", opts.Version, "workspaces", opts.EnableWorkspaces, "port", opts.Port)
-		t.Skipf(
+		t.Fatalf(
 			"failed to start MLflow server (version=%s workspaces=%t port=%d): %v",
 			opts.Version, opts.EnableWorkspaces, opts.Port, err,
 		)
@@ -69,7 +69,7 @@ func StartMLFlowServer(t *testing.T, opts ServerOptions) *Server {
 	if err := waitForHealth(trackingURI, healthTimeout); err != nil {
 		_ = runMakeTarget(t, dir, stopTimeout, "stop-mlflow", opts)
 		opts.Logger.Error("Skipping tests: MLflow server at %s did not become healthy", "error", err, "trackingURI", trackingURI)
-		t.Skipf("MLflow server at %s did not become healthy: %v", trackingURI, err)
+		t.Fatalf("MLflow server at %s did not become healthy: %v", trackingURI, err)
 	}
 
 	srv := &Server{
