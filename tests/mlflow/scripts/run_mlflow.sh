@@ -5,6 +5,12 @@
 
 set -euo pipefail
 
+# Colors for output
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MLFLOW_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${MLFLOW_DIR}"
@@ -13,6 +19,14 @@ VENV_DIR="${VENV_DIR:-.venv}"
 if [ -d "${VENV_DIR}/bin" ]; then
     export PATH="${MLFLOW_DIR}/${VENV_DIR}/bin:${PATH}"
 fi
+
+# for now we wipe out the mlflow db and mlruns directory
+rm -rf bin/mlflow*.db bin/mlruns
+if [ $? -ne 0 ]; then
+    echo -e "${YELLOW}❌ Failed to wipe out mlflow db and mlruns directory${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ Wiped out mlflow db and mlruns directory${NC}"
 
 mkdir -p bin
 
@@ -25,12 +39,6 @@ ENABLE_WORKSPACES=""
 if [[ "${MLFLOW_ENABLE_WORKSPACES:-false}" == "true" ]]; then
     ENABLE_WORKSPACES="--enable-workspaces"
 fi
-
-# Colors for output
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
 
 echo -e "${BLUE}🚀 Starting MLflow server...${NC}"
 echo ""
@@ -73,13 +81,17 @@ echo -e "${BLUE}📍 Server will be available at: http://$HOST:$PORT${NC} with o
 echo -e "${YELLOW}💡 Press Ctrl+C to stop the server${NC}"
 echo ""
 
-# Start MLflow server in background
+# Log to file only — do not write server output to stdout. Background processes that
+# keep stdout open will cause "make start-mlflow" (and go test exec) to hang waiting
+# for EOF on the pipe.
+MLFLOW_LOG_FILE="bin/mlflow_${PORT}.log"
 mlflow server \
     --host "$HOST" \
     --port "$PORT" \
     ${ENABLE_WORKSPACES} \
     --backend-store-uri "$BACKEND_URI" \
-    --default-artifact-root "$DEFAULT_ARTIFACT_ROOT" | tee bin/mlflow.log &
+    --default-artifact-root "$DEFAULT_ARTIFACT_ROOT" \
+    >> "${MLFLOW_LOG_FILE}" 2>&1 &
 
 MLFLOW_PID=$!
 
@@ -135,11 +147,10 @@ wait_for_server() {
 # Wait for server to be ready
 RED='\033[0;31m'
 if wait_for_server; then
-    # Server is ready - if running in background mode, exit successfully
-    # The server will continue running in the background
     echo "Server is ready"
     echo "export MLFLOW_TRACKING_URI=http://$HOST:$PORT"
-    # exit 0
+    echo "Server logs: ${MLFLOW_LOG_FILE}"
+    exit 0
 else
     # Server didn't start properly - try to clean up
     ./scripts/stop_mlflow.sh || true

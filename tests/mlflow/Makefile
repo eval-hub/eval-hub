@@ -1,4 +1,4 @@
-.PHONY: help clean init-python install-mlflow start-mlflow stop-mlflow cls test-godog-server run-unit-test
+.PHONY: help clean init-python install-mlflow start-mlflow stop-mlflow cls test-godog-server test-unit-server
 
 # Local Python environment (uv). Isolated from the repo-root .venv used for FVT.
 VENV_DIR ?= .venv
@@ -75,7 +75,6 @@ test-godog-server: start-mlflow ; $(info The MLflow server was successfully star
 cls:
 	printf "\33c\e[3J"
 
-MLFLOW_UNIT_TEST ?= TestGetOrCreateExperimentIDOnServer
-
-run-unit-test:
-	go test -v ../../internal/eval_hub/mlflow -run $(MLFLOW_UNIT_TEST) -count=1
+test-unit-server: ## Run MLflow integration unit tests (auto-starts server per case, skips if unavailable)
+	@echo "🧪 Running MLflow integration unit tests..."
+	@go test -v ../../internal/eval_hub/mlflow -run TestMLFlowIntegration -count=1
