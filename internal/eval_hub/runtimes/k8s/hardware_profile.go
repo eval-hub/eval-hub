@@ -86,6 +86,13 @@ func parseHardwareProfileResources(profile *unstructured.Unstructured) (*hardwar
 	return out, nil
 }
 
+func resolveHardwareProfileNamespace(namespace, tenant string) string {
+	if trimmed := strings.TrimSpace(namespace); trimmed != "" {
+		return trimmed
+	}
+	return resolveNamespace(tenant)
+}
+
 func applyHardwareProfileResources(cfg *jobConfig, profile *hardwareProfileResources) {
 	if cfg == nil || profile == nil {
 		return

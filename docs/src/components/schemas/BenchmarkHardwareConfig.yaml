@@ -3,19 +3,10 @@ title: BenchmarkHardwareConfig
 description: >
   Optional per-benchmark hardware override for Kubernetes runtimes. When
   `hardware_profile_ref` is set, the server fetches the named OpenDataHub
-  `HardwareProfile` custom resource in the tenant namespace and applies its
-  CPU, memory, and GPU resource values to the evaluation Job adapter container.
-  Values missing from the profile fall back to the provider `runtime.k8s`
-  configuration (and built-in defaults when those are unset).
+  `HardwareProfile` custom resource and applies its CPU, memory, and GPU resource
+  values to the evaluation Job adapter container. Values missing from the profile
+  fall back to the provider `runtime.k8s` configuration (and built-in defaults
+  when those are unset).
 properties:
   hardware_profile_ref:
-    type: string
-    pattern: '^[A-Za-z0-9]([A-Za-z0-9_.\-]*[A-Za-z0-9])?$'
-    description: >
-      Name of the `HardwareProfile` custom resource
-      (`hardwareprofiles.infrastructure.opendatahub.io`) in the evaluation job's
-      tenant namespace. Must conform to Kubernetes resource name conventions
-      (rfc1123).
-    examples:
-      - default-profile
-      - gpu-profile.v1
+    $ref: ./HardwareProfileRef.yaml

@@ -229,7 +229,7 @@ func TestBenchmarkHardwareConfig_InvalidNameRejected(t *testing.T) {
 					Ref:        api.Ref{ID: "b1"},
 					ProviderID: "provider-1",
 					HardwareConfig: &api.BenchmarkHardwareConfig{
-						HardwareProfileRef: name,
+						HardwareProfileRef: api.HardwareProfileRef{Name: name},
 					},
 				},
 			},
@@ -243,12 +243,15 @@ func TestBenchmarkHardwareConfig_InvalidNameRejected(t *testing.T) {
 
 func TestBenchmarkHardwareConfig_ValidNameAccepted(t *testing.T) {
 	validate := NewValidator()
-	valid := []string{
-		"default-profile",
-		"gpu-profile.v1",
-		"A",
+	valid := []struct {
+		name      string
+		namespace string
+	}{
+		{name: "default-profile"},
+		{name: "gpu-profile.v1", namespace: "opendatahub"},
+		{name: "A"},
 	}
-	for _, name := range valid {
+	for _, tc := range valid {
 		cfg := api.EvaluationJobConfig{
 			Name:  "test-job",
 			Model: api.ModelRef{URL: "http://test.com", Name: "model"},
@@ -257,14 +260,17 @@ func TestBenchmarkHardwareConfig_ValidNameAccepted(t *testing.T) {
 					Ref:        api.Ref{ID: "b1"},
 					ProviderID: "provider-1",
 					HardwareConfig: &api.BenchmarkHardwareConfig{
-						HardwareProfileRef: name,
+						HardwareProfileRef: api.HardwareProfileRef{
+							Name:      tc.name,
+							Namespace: tc.namespace,
+						},
 					},
 				},
 			},
 		}
 		err := validate.Struct(cfg)
 		if err != nil {
-			t.Errorf("expected no error for hardware profile ref %q, got: %v", name, err)
+			t.Errorf("expected no error for hardware profile ref %#v, got: %v", tc, err)
 		}
 	}
 }

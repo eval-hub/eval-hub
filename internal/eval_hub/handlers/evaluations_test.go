@@ -961,7 +961,7 @@ func TestHandleCreateEvaluationRejectsInvalidHardwareProfileRef(t *testing.T) {
 	for _, name := range invalidNames {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			body := fmt.Sprintf(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"b","provider_id":"p","hardware_config":{"hardware_profile_ref":%q}}]}`, name)
+			body := fmt.Sprintf(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"b","provider_id":"p","hardware_config":{"hardware_profile_ref":{"name":%q}}}]}`, name)
 			req := &bodyRequest{
 				MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
 				body:        []byte(body),

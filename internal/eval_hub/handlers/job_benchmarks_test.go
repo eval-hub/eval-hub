@@ -113,6 +113,31 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 		}
 	})
 
+	t.Run("job override hardware_config is preserved", func(t *testing.T) {
+		t.Parallel()
+		benchmark := api.CollectionBenchmarkConfig{
+			Ref:        api.Ref{ID: "bench-1"},
+			ProviderID: "prov-a",
+		}
+		job := []api.EvaluationBenchmarkConfig{{
+			Ref:        api.Ref{ID: "bench-1"},
+			ProviderID: "prov-a",
+			HardwareConfig: &api.BenchmarkHardwareConfig{
+				HardwareProfileRef: api.HardwareProfileRef{
+					Name:      "default-profile",
+					Namespace: "opendatahub",
+				},
+			},
+		}}
+		got := mergeBenchmarkParameters(benchmark, job)
+		if got.HardwareConfig == nil {
+			t.Fatal("expected hardware_config from collection override")
+		}
+		if got.HardwareConfig.HardwareProfileRef.Name != "default-profile" {
+			t.Fatalf("name = %q, want default-profile", got.HardwareConfig.HardwareProfileRef.Name)
+		}
+	})
+
 	t.Run("multiple job blocks same provider accumulate then collection overlays", func(t *testing.T) {
 		t.Parallel()
 		benchmark := api.CollectionBenchmarkConfig{

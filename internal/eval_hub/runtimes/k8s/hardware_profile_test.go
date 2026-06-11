@@ -57,6 +57,15 @@ func TestParseHardwareProfileResources(t *testing.T) {
 	}
 }
 
+func TestResolveHardwareProfileNamespace(t *testing.T) {
+	if got := resolveHardwareProfileNamespace("custom-ns", "tenant-ns"); got != "custom-ns" {
+		t.Fatalf("namespace = %q, want custom-ns", got)
+	}
+	if got := resolveHardwareProfileNamespace("", "my-tenant"); got != "my-tenant" {
+		t.Fatalf("empty namespace with tenant = %q, want my-tenant", got)
+	}
+}
+
 func TestApplyHardwareProfileResourcesPartialFallback(t *testing.T) {
 	cfg := &jobConfig{
 		cpuRequest:    "250m",

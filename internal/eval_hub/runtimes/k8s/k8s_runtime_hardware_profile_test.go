@@ -86,9 +86,9 @@ func TestRunEvaluationJobWithHardwareProfileCreatesResources(t *testing.T) {
 		t.Skip("hardwareprofiles.infrastructure.opendatahub.io CRD is not installed")
 	}
 
-	namespace := getTestNamespace(t)
+	jobNamespace := getTestNamespace(t)
 	profileName := fmt.Sprintf("evalhub-test-hwp-%s", uuid.NewString()[:8])
-	createTestHardwareProfile(t, helper, namespace, profileName)
+	createTestHardwareProfile(t, helper, jobNamespace, profileName)
 
 	jobID := uuid.NewString()
 	benchmarkID := "arc_easy"
@@ -116,7 +116,7 @@ func TestRunEvaluationJobWithHardwareProfileCreatesResources(t *testing.T) {
 	}
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
-			Resource: api.Resource{ID: jobID, Tenant: api.Tenant(namespace)},
+			Resource: api.Resource{ID: jobID, Tenant: api.Tenant(jobNamespace)},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Model: api.ModelRef{
@@ -128,7 +128,9 @@ func TestRunEvaluationJobWithHardwareProfileCreatesResources(t *testing.T) {
 					Ref:        api.Ref{ID: benchmarkID},
 					ProviderID: "lm_evaluation_harness",
 					HardwareConfig: &api.BenchmarkHardwareConfig{
-						HardwareProfileRef: profileName,
+						HardwareProfileRef: api.HardwareProfileRef{
+							Name: profileName,
+						},
 					},
 				},
 			},
@@ -151,7 +153,7 @@ func TestRunEvaluationJobWithHardwareProfileCreatesResources(t *testing.T) {
 	var createdJob *batchv1.Job
 	deadline := time.Now().Add(apiTimeout)
 	for time.Now().Before(deadline) {
-		jobs, err := helper.ListJobs(context.Background(), namespace, labelSelector)
+		jobs, err := helper.ListJobs(context.Background(), jobNamespace, labelSelector)
 		if err != nil {
 			t.Fatalf("failed to list jobs: %v", err)
 		}
@@ -188,8 +190,7 @@ func TestGetHardwareProfileNotFound(t *testing.T) {
 		t.Skip("hardwareprofiles.infrastructure.opendatahub.io CRD is not installed")
 	}
 
-	namespace := getTestNamespace(t)
-	_, err = helper.GetHardwareProfile(context.Background(), namespace, "missing-hardware-profile")
+	_, err = helper.GetHardwareProfile(context.Background(), getTestNamespace(t), "missing-hardware-profile")
 	if !apierrors.IsNotFound(err) {
 		t.Fatalf("expected not found error, got: %v", err)
 	}

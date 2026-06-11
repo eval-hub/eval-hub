@@ -100,8 +100,13 @@ type TestDataRef struct {
 	S3 *S3TestDataRef `mapstructure:"s3" json:"s3,omitempty"`
 }
 
+type HardwareProfileRef struct {
+	Name      string `mapstructure:"name" json:"name" validate:"required,k8s_label_value"`
+	Namespace string `mapstructure:"namespace" json:"namespace,omitempty" validate:"omitempty,k8s_label_value"`
+}
+
 type BenchmarkHardwareConfig struct {
-	HardwareProfileRef string `mapstructure:"hardware_profile_ref" json:"hardware_profile_ref,omitempty" validate:"omitempty,k8s_label_value"`
+	HardwareProfileRef HardwareProfileRef `mapstructure:"hardware_profile_ref" json:"hardware_profile_ref,omitempty"`
 }
 
 // EvaluationBenchmarkConfig represents a benchmark reference in an evaluation job request or persisted job config.

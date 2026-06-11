@@ -273,25 +273,38 @@ func mergeBenchmarkParameters(benchmark api.CollectionBenchmarkConfig, jobBenchm
 			parameters[key] = value
 		}
 	}
-	// pick up TestDataRef from the job override if provided
+	// pick up TestDataRef and HardwareConfig from the job override if provided
 	testDataRef := benchmark.TestDataRef
+	var hardwareConfig *api.BenchmarkHardwareConfig
 
 	for _, jobBenchmark := range jobBenchmarks {
 		if jobBenchmark.ID == benchmark.ID && jobBenchmark.ProviderID == benchmark.ProviderID {
 			if jobBenchmark.TestDataRef != nil {
 				testDataRef = jobBenchmark.TestDataRef
 			}
+			if jobBenchmark.HardwareConfig != nil {
+				hardwareConfig = jobBenchmark.HardwareConfig
+			}
 			break
 		}
 	}
+	if hardwareConfig == nil {
+		for _, jobBenchmark := range jobBenchmarks {
+			if jobBenchmark.ProviderID == benchmark.ProviderID && jobBenchmark.ID == "" && jobBenchmark.HardwareConfig != nil {
+				hardwareConfig = jobBenchmark.HardwareConfig
+				break
+			}
+		}
+	}
 	return api.EvaluationBenchmarkConfig{
-		Ref:          benchmark.Ref,
-		ProviderID:   benchmark.ProviderID,
-		Weight:       benchmark.Weight,
-		PrimaryScore: benchmark.PrimaryScore,
-		PassCriteria: benchmark.PassCriteria,
-		TestDataRef:  testDataRef,
-		Parameters:   parameters,
+		Ref:            benchmark.Ref,
+		ProviderID:     benchmark.ProviderID,
+		Weight:         benchmark.Weight,
+		PrimaryScore:   benchmark.PrimaryScore,
+		PassCriteria:   benchmark.PassCriteria,
+		HardwareConfig: hardwareConfig,
+		TestDataRef:    testDataRef,
+		Parameters:     parameters,
 	}
 }
 

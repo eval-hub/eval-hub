@@ -154,16 +154,18 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 	}
 	var hardwareProfile *hardwareProfileResources
 	if benchmark.HardwareConfig != nil {
-		profileRef := strings.TrimSpace(benchmark.HardwareConfig.HardwareProfileRef)
-		if profileRef != "" {
-			namespace := resolveNamespace(string(evaluation.Resource.Tenant))
-			profileCR, err := r.helper.GetHardwareProfile(ctx, namespace, profileRef)
+		ref := benchmark.HardwareConfig.HardwareProfileRef
+		profileName := strings.TrimSpace(ref.Name)
+		if profileName != "" {
+			profileNamespace := resolveHardwareProfileNamespace(ref.Namespace, string(evaluation.Resource.Tenant))
+			profileCR, err := r.helper.GetHardwareProfile(ctx, profileNamespace, profileName)
 			if err != nil {
-				return fmt.Errorf("job %s benchmark %s: fetch hardware profile %q: %w", evaluation.Resource.ID, benchmarkID, profileRef, err)
+				return fmt.Errorf("job %s benchmark %s: fetch hardware profile %q in namespace %q: %w",
+					evaluation.Resource.ID, benchmarkID, profileName, profileNamespace, err)
 			}
 			parsed, err := parseHardwareProfileResources(profileCR)
 			if err != nil {
-				return fmt.Errorf("job %s benchmark %s: parse hardware profile %q: %w", evaluation.Resource.ID, benchmarkID, profileRef, err)
+				return fmt.Errorf("job %s benchmark %s: parse hardware profile %q: %w", evaluation.Resource.ID, benchmarkID, profileName, err)
 			}
 			hardwareProfile = parsed
 		}

@@ -2969,19 +2969,40 @@
           "threshold"
         ]
       },
-      "BenchmarkHardwareConfig": {
+      "HardwareProfileRef": {
         "type": "object",
-        "title": "BenchmarkHardwareConfig",
-        "description": "Optional per-benchmark hardware override for Kubernetes runtimes. When `hardware_profile_ref` is set, the server fetches the named OpenDataHub `HardwareProfile` custom resource in the tenant namespace and applies its CPU, memory, and GPU resource values to the evaluation Job adapter container. Values missing from the profile fall back to the provider `runtime.k8s` configuration (and built-in defaults when those are unset).\n",
+        "title": "HardwareProfileRef",
+        "description": "Reference to an OpenDataHub HardwareProfile custom resource.",
+        "required": [
+          "name"
+        ],
         "properties": {
-          "hardware_profile_ref": {
+          "name": {
             "type": "string",
             "pattern": "^[A-Za-z0-9]([A-Za-z0-9_.\\-]*[A-Za-z0-9])?$",
-            "description": "Name of the `HardwareProfile` custom resource (`hardwareprofiles.infrastructure.opendatahub.io`) in the evaluation job's tenant namespace. Must conform to Kubernetes resource name conventions (rfc1123).\n",
+            "description": "Name of the `HardwareProfile` custom resource (`hardwareprofiles.infrastructure.opendatahub.io`). Must conform to Kubernetes resource name conventions (RFC 1123 DNS subdomain names).\n",
             "examples": [
               "default-profile",
               "gpu-profile.v1"
             ]
+          },
+          "namespace": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9]([A-Za-z0-9_.\\-]*[A-Za-z0-9])?$",
+            "description": "Namespace of the `HardwareProfile` custom resource. When omitted, the server defaults to the evaluation job tenant namespace (from the `X-Tenant` request header in cluster mode).\n",
+            "examples": [
+              "my-tenant-namespace"
+            ]
+          }
+        }
+      },
+      "BenchmarkHardwareConfig": {
+        "type": "object",
+        "title": "BenchmarkHardwareConfig",
+        "description": "Optional per-benchmark hardware override for Kubernetes runtimes. When `hardware_profile_ref` is set, the server fetches the named OpenDataHub `HardwareProfile` custom resource and applies its CPU, memory, and GPU resource values to the evaluation Job adapter container. Values missing from the profile fall back to the provider `runtime.k8s` configuration (and built-in defaults when those are unset).\n",
+        "properties": {
+          "hardware_profile_ref": {
+            "$ref": "#/components/schemas/HardwareProfileRef"
           }
         }
       },
