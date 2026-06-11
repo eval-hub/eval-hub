@@ -21,8 +21,7 @@ if [ -d "${VENV_DIR}/bin" ]; then
 fi
 
 # for now we wipe out the mlflow db and mlruns directory
-rm -rf bin/mlflow*.db bin/mlruns
-if [ $? -ne 0 ]; then
+if ! rm -rf bin/mlflow*.db bin/mlruns; then
     echo -e "${YELLOW}❌ Failed to wipe out mlflow db and mlruns directory${NC}"
     exit 1
 fi
