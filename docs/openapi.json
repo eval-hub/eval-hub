@@ -2977,7 +2977,7 @@
           "hardware_profile_ref": {
             "type": "string",
             "pattern": "^[A-Za-z0-9]([A-Za-z0-9_.\\-]*[A-Za-z0-9])?$",
-            "description": "Name of the `HardwareProfile` custom resource (`hardwareprofiles.infrastructure.opendatahub.io`) in the evaluation job's tenant namespace. Must conform to Kubernetes resource name conventions (same rules as queue names).\n",
+            "description": "Name of the `HardwareProfile` custom resource (`hardwareprofiles.infrastructure.opendatahub.io`) in the evaluation job's tenant namespace. Must conform to Kubernetes resource name conventions (rfc1123).\n",
             "examples": [
               "default-profile",
               "gpu-profile.v1"
