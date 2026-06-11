@@ -461,7 +461,7 @@ DOCKER_BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 DOCKER ?= podman
 
 docker-image-local: ## Build the eval-hub Docker image locally from Containerfile
-	$(DOCKER) build -f Containerfile \
+	$(DOCKER) build -f Containerfile $(if $(DOCKER_PLATFORM),--platform $(DOCKER_PLATFORM)) \
 		--build-arg "BUILD_DATE=$(DOCKER_BUILD_DATE)" \
 		--build-arg "GIT_HASH=$(GIT_HASH)" \
 		-t "$(DOCKER_IMAGE_LOCAL)" .
