@@ -10,11 +10,15 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
 // API endpoint constants
 const (
+	// Version endpoint
+	endpointVersion = "/version"
+
 	// Base API path
 	apiBasePath = "/api/2.0/mlflow"
 
@@ -30,22 +34,33 @@ const (
 
 // Client represents an MLflow API client
 type Client struct {
-	ctx               context.Context
-	baseURL           string
-	httpClient        *http.Client
-	authToken         string
-	authTokenPath     string
-	workspace         string
-	workspacesEnabled bool
-	logger            *slog.Logger
+	ctx                        context.Context
+	baseURL                    string
+	httpClient                 *http.Client
+	authToken                  string
+	authTokenPath              string
+	authTokenPathWarningLogged atomic.Bool
+	workspace                  string
+	workspacesEnabled          bool
+	logger                     *slog.Logger
 }
 
 func (c *Client) copy() *Client {
 	if c == nil {
 		return nil
 	}
-	clone := *c
-	return &clone
+	cp := &Client{
+		ctx:               c.ctx,
+		baseURL:           c.baseURL,
+		httpClient:        c.httpClient,
+		authToken:         c.authToken,
+		authTokenPath:     c.authTokenPath,
+		workspace:         c.workspace,
+		workspacesEnabled: c.workspacesEnabled,
+		logger:            c.logger,
+	}
+	cp.authTokenPathWarningLogged.Store(c.authTokenPathWarningLogged.Load())
+	return cp
 }
 
 // NewClient creates a new MLflow client
@@ -175,7 +190,10 @@ func (c *Client) resolveAuthToken() string {
 	if c.authTokenPath != "" {
 		tokenData, err := os.ReadFile(c.authTokenPath)
 		if err != nil {
-			c.logger.Warn("Failed to read auth token file, falling back to static token", "path", c.authTokenPath, "error", err)
+			if !c.authTokenPathWarningLogged.Load() {
+				c.authTokenPathWarningLogged.Store(true)
+				c.logger.Warn("Failed to read auth token file, falling back to static token", "path", c.authTokenPath, "error", err)
+			}
 		} else if token := strings.TrimSpace(string(tokenData)); token != "" {
 			return token
 		}
@@ -283,6 +301,21 @@ func unmarshalResponse[T any](respBody []byte) (*T, error) {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 	return &response, nil
+}
+
+// Version API
+
+// GetVersion returns the version of the MLflow server, or an error if it does not exist.
+func (c *Client) GetVersion() (string, error) {
+	if c == nil {
+		return "", fmt.Errorf("mlflow client does not exist")
+	}
+
+	respBody, err := c.doRequestWithoutWorkspace(http.MethodGet, endpointVersion, nil)
+	if err != nil {
+		return "", err
+	}
+	return string(respBody), nil
 }
 
 // Experiments API

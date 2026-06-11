@@ -21,6 +21,24 @@ import (
 
 const workspaceProbeTimeout = 5 * time.Second
 
+func SetupMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.Client, string, string, error) {
+	mlflowClient, err := NewMLFlowClient(config, logger)
+	if err != nil {
+		return nil, "", "", err
+	}
+	if mlflowClient == nil {
+		// this is the case when no tracking URI is set
+		return nil, "", "", nil
+	}
+	serverVersion, err := mlflowClient.GetVersion()
+	if err != nil {
+		// for now a failure to get the mlflow server version will stop the server startup
+		return mlflowClient, config.MLFlow.TrackingURI, "", fmt.Errorf("Failed to get MLFlow server version: %w", err)
+	}
+	// if we get here then we have a valid tracking URI
+	return mlflowClient, config.MLFlow.TrackingURI, serverVersion, nil
+}
+
 func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.Client, error) {
 	url := ""
 	if config.MLFlow != nil && config.MLFlow.TrackingURI != "" {
@@ -83,16 +101,15 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.
 	//   2. Static token (WithToken) — for local development without a token file.
 	// At runtime, the token file takes precedence over the static token.
 	tokenPath := config.MLFlow.TokenPath
-	if tokenPath == "" {
-		tokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-	}
 	// Always configure the token path; resolveAuthToken handles transient
 	// absence at request time (e.g. projected volume not yet mounted).
-	client = client.WithTokenPath(tokenPath)
-	logger.Info("MLflow auth token path configured (per-request reading)", "path", tokenPath)
+	if tokenPath != "" {
+		client = client.WithTokenPath(tokenPath)
+		logger.Info("MLflow auth token path configured (per-request reading)", "path", tokenPath)
+	}
 	if config.MLFlow.Token != "" {
 		client = client.WithToken(config.MLFlow.Token)
-		logger.Info("MLflow static auth token configured (fallback)")
+		logger.Info("MLflow static auth token configured")
 	}
 
 	if config.IsOTELEnabled() {

@@ -29,7 +29,7 @@ type ServerInfoResponse struct {
 // Returns false for older servers that do not expose server-info (404).
 func (c *Client) ProbeWorkspacesEnabled() (bool, error) {
 	if c == nil {
-		return false, fmt.Errorf("mlflow client is nil")
+		return false, fmt.Errorf("mlflow client does not exist")
 	}
 	if c.ctx == nil {
 		return false, fmt.Errorf("context is nil for MLflow server-info request")
@@ -78,7 +78,7 @@ func (c *Client) WorkspacesEnabled() bool {
 // GetWorkspace returns the named workspace, or an error if it does not exist.
 func (c *Client) GetWorkspace(name string) (*Workspace, error) {
 	if c == nil {
-		return nil, fmt.Errorf("mlflow client is nil")
+		return nil, fmt.Errorf("mlflow client does not exist")
 	}
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -100,7 +100,7 @@ func (c *Client) GetWorkspace(name string) (*Workspace, error) {
 // CreateWorkspace creates a workspace. Workspace management APIs do not use X-MLFLOW-WORKSPACE.
 func (c *Client) CreateWorkspace(req *CreateWorkspaceRequest) (*Workspace, error) {
 	if c == nil {
-		return nil, fmt.Errorf("mlflow client is nil")
+		return nil, fmt.Errorf("mlflow client does not exist")
 	}
 	if req == nil || strings.TrimSpace(req.Name) == "" {
 		return nil, fmt.Errorf("create workspace request is nil or missing name")

@@ -103,7 +103,8 @@ func main() {
 	}
 	logger.Info("Runtime created", "runtime", runtime.Name())
 
-	mlflowClient, err := mlflow.NewMLFlowClient(serviceConfig, logger)
+	// setup mlflow client if there is a tracking URI set
+	mlflowClient, mlflowTrackingURI, mlflowServerVersion, err := mlflow.SetupMLFlowClient(serviceConfig, logger)
 	if err != nil {
 		startUpFailed(serviceConfig, err, "Failed to create MLFlow client", logger)
 	}
@@ -144,6 +145,8 @@ func main() {
 		"local", serviceConfig.Service.LocalMode,
 		"tls", serviceConfig.Service.TLSEnabled(),
 		"mlflow_tracking", mlflowClient != nil,
+		"mlflow_tracking_uri", mlflowTrackingURI,
+		"mlflow_server_version", mlflowServerVersion,
 		"otel", serviceConfig.IsOTELEnabled(),
 		"prometheus", serviceConfig.IsPrometheusEnabled(),
 	)

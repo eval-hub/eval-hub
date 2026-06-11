@@ -39,9 +39,12 @@ database:
   url: file::eval_hub:?mode=memory&cache=shared
   # driver: pgx
   # url: postgres://user@localhost:5432/eval_hub
-# MLFlow configuration
+
+# MLFlow configuration - enable by setting the tracking_uri
 mlflow:
   # tracking_uri: http://localhost:5000
+  # token_path: /var/run/secrets/kubernetes.io/serviceaccount/token
+
 # This is an example of how to enable instrumentation in a cluster
 otel:
   enabled: false
