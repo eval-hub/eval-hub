@@ -269,9 +269,9 @@ func findAdapterContainer(job *batchv1.Job) (*corev1.Container, error) {
 	if job == nil {
 		return nil, fmt.Errorf("job is required")
 	}
-	for _, container := range job.Spec.Template.Spec.Containers {
-		if container.Name == "adapter" {
-			return &container, nil
+	for i := range job.Spec.Template.Spec.Containers {
+		if job.Spec.Template.Spec.Containers[i].Name == "adapter" {
+			return &job.Spec.Template.Spec.Containers[i], nil
 		}
 	}
 	return nil, fmt.Errorf("adapter container not found in job %s", job.Name)

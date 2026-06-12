@@ -169,6 +169,9 @@ func TestQueueConfig_InvalidNameRejected(t *testing.T) {
 		"has spaces",
 		".starts-with-dot",
 		"ends-with-dot.",
+		"Uppercase-Queue",
+		"my_queue",
+		"queue.name",
 	}
 	for _, name := range invalid {
 		cfg := api.EvaluationJobConfig{
@@ -191,9 +194,8 @@ func TestQueueConfig_ValidNameAccepted(t *testing.T) {
 	valid := []string{
 		"my-queue",
 		"queue1",
-		"A",
-		"my_queue.v2",
-		"Queue-Name.1_2",
+		"a",
+		"gpu-profile-v1",
 	}
 	for _, name := range valid {
 		cfg := api.EvaluationJobConfig{
@@ -219,6 +221,9 @@ func TestBenchmarkHardwareConfig_InvalidNameRejected(t *testing.T) {
 		"ends-with-dash-",
 		"has spaces",
 		".starts-with-dot",
+		"GPU-Profile",
+		"cpu_profile",
+		"gpu.profile.v1",
 	}
 	for _, name := range invalid {
 		cfg := api.EvaluationJobConfig{
@@ -248,8 +253,8 @@ func TestBenchmarkHardwareConfig_ValidNameAccepted(t *testing.T) {
 		namespace string
 	}{
 		{name: "default-profile"},
-		{name: "gpu-profile.v1", namespace: "opendatahub"},
-		{name: "A"},
+		{name: "gpu-profile-v1", namespace: "opendatahub"},
+		{name: "a"},
 	}
 	for _, tc := range valid {
 		cfg := api.EvaluationJobConfig{

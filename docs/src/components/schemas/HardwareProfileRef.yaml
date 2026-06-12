@@ -6,17 +6,17 @@ required:
 properties:
   name:
     type: string
-    pattern: '^[A-Za-z0-9]([A-Za-z0-9_.\-]*[A-Za-z0-9])?$'
+    pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
     description: >
       Name of the `HardwareProfile` custom resource
       (`hardwareprofiles.infrastructure.opendatahub.io`). Must conform to
-      Kubernetes resource name conventions (RFC 1123 DNS subdomain names).
+      RFC 1123 DNS label naming (lowercase letters, digits, and internal hyphens).
     examples:
       - default-profile
-      - gpu-profile.v1
+      - gpu-profile-v1
   namespace:
     type: string
-    pattern: '^[A-Za-z0-9]([A-Za-z0-9_.\-]*[A-Za-z0-9])?$'
+    pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
     description: >
       Namespace of the `HardwareProfile` custom resource. When omitted, the
       server defaults to the evaluation job tenant namespace (from the

@@ -20,7 +20,7 @@ var (
 		"resource_id": "required,min=1,max=36",
 	}
 
-	k8sLabelValueRegex = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9_.\-]*[A-Za-z0-9])?$`)
+	k8sLabelValueRegex = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
 )
 
 func NewValidator() *validator.Validate {

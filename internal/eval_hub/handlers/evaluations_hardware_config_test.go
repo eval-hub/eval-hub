@@ -91,7 +91,7 @@ func TestEvaluationJobConfigHardwareConfigRoundTrip(t *testing.T) {
 				"provider_id":"provider-1",
 				"hardware_config":{
 					"hardware_profile_ref":{
-						"name":"gpu-profile.v1",
+						"name":"gpu-profile-v1",
 						"namespace":"my-tenant"
 					}
 				}
