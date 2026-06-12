@@ -51,7 +51,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     ./cmd/evalhub_mcp
 
 # Runtime stage
-FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:latest
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 # Create user and app directory
 RUN groupadd -g 1000 evalhub && \
