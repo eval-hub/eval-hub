@@ -1550,4 +1550,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 
 	// GPU-specific steps
 	InitializeGPUSteps(ctx, tc)
+
+	// Hardware profile steps (Kubernetes client-go; no shell/oc)
+	InitializeHardwareProfileSteps(ctx, tc)
 }

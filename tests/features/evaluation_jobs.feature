@@ -1372,6 +1372,96 @@ Feature: Evaluation Jobs
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
 
+  @hardware_profile
+  Scenario: Create evaluation job with hardware profile applies adapter resources
+    Given the service is running
+    And the HardwareProfile CRD is installed on the cluster
+    And a test HardwareProfile is created in the tenant namespace
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+      """
+      {
+        "name": "test-evaluation-job-hardware-profile",
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}",
+          "auth": {
+            "secret_ref": "{{env:MODEL_AUTH_SECRET_REF|test}}"
+          }
+        },
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+              "num_examples": 3,
+              "tokenizer": "{{env:FVT_BENCHMARK_TOKENIZER|google/flan-t5-small}}"
+            },
+            "hardware_config": {
+              "hardware_profile_ref": {
+                "name": "{{value:hardware_profile_name}}"
+              }
+            }
+          }
+        ]
+      }
+      """
+    Then the response code should be 202
+    And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
+    And the response should contain the value "{{value:hardware_profile_name}}" at path "$.benchmarks[0].hardware_config.hardware_profile_ref.name"
+    And I wait for the Kubernetes evaluation Job to be created
+    And the Job adapter container should have CPU request "1"
+    And the Job adapter container should have memory request "1Gi"
+    And the Job adapter container should have CPU limit "2"
+    And the Job adapter container should have memory limit "2Gi"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "{{value:hardware_profile_name}}" at path "$.benchmarks[0].hardware_config.hardware_profile_ref.name"
+    And the response should not contain the value "" at path "$.benchmarks[0].hardware_config.hardware_profile_ref.namespace"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
+  @hardware_profile
+  Scenario: Create evaluation job with explicit hardware profile namespace
+    Given the service is running
+    And the HardwareProfile CRD is installed on the cluster
+    And a test HardwareProfile is created in the tenant namespace
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+      """
+      {
+        "name": "test-evaluation-job-hardware-profile-explicit-ns",
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}",
+          "auth": {
+            "secret_ref": "{{env:MODEL_AUTH_SECRET_REF|test}}"
+          }
+        },
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+              "num_examples": 3,
+              "tokenizer": "{{env:FVT_BENCHMARK_TOKENIZER|google/flan-t5-small}}"
+            },
+            "hardware_config": {
+              "hardware_profile_ref": {
+                "name": "{{value:hardware_profile_name}}",
+                "namespace": "{{env:X_TENANT|test-tenant}}"
+              }
+            }
+          }
+        ]
+      }
+      """
+    Then the response code should be 202
+    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.benchmarks[0].hardware_config.hardware_profile_ref.namespace"
+    And I wait for the Kubernetes evaluation Job to be created
+    And the Job adapter container should have CPU request "1"
+    And the Job adapter container should have memory request "1Gi"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
   @kueue
   Scenario: Create evaluation job with Kueue queue, tags and pass criteria
     Given the service is running
