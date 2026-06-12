@@ -2440,8 +2440,9 @@ components:
             Queue integration to use. When omitted, the server behaves as if `kueue` was set. Only `kueue` is supported today.
         name:
           type: string
+          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
           description: |
-            Queue resource name (for Kueue, the LocalQueue name). Set on the Job as label `kueue.x-k8s.io/queue-name`.
+            Queue resource name (for Kueue, the LocalQueue name). Must conform to RFC 1123 DNS label naming (lowercase letters, digits, and internal hyphens). Set on the Job as label `kueue.x-k8s.io/queue-name`.
     EvaluationJobConfigCommon2:
       type: object
       title: EvaluationJobConfigCommon2

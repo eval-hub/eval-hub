@@ -20,7 +20,8 @@ var (
 		"resource_id": "required,min=1,max=36",
 	}
 
-	k8sLabelValueRegex = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+	// RFC 1123 DNS label: lowercase alphanumeric, internal hyphens, no leading/trailing hyphen.
+	rfc1123DNSLabelRegex = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
 )
 
 func NewValidator() *validator.Validate {
@@ -49,13 +50,13 @@ func register(instance *validator.Validate) {
 func registerCustomValidators(instance *validator.Validate) {
 	// https://github.com/go-playground/validator/blob/v10.30.2/non-standard/validators/notblank.go
 	instance.RegisterValidation("notblank", validators.NotBlank)
-	instance.RegisterValidation("k8s_label_value", validateK8sLabelValue)
+	instance.RegisterValidation("rfc1123_dns_label", validateRFC1123DNSLabel)
 	// Benchmarks min=1 only when Collection is not set (required_without handles presence; this enforces length)
 	instance.RegisterStructValidation(evaluationJobConfigBenchmarksMin, api.EvaluationJobConfig{})
 }
 
-func validateK8sLabelValue(fl validator.FieldLevel) bool {
-	return k8sLabelValueRegex.MatchString(fl.Field().String())
+func validateRFC1123DNSLabel(fl validator.FieldLevel) bool {
+	return rfc1123DNSLabelRegex.MatchString(fl.Field().String())
 }
 
 // ValidateCollectionOverrides returns an error if any override references a

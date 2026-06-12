@@ -3439,7 +3439,8 @@
           },
           "name": {
             "type": "string",
-            "description": "Queue resource name (for Kueue, the LocalQueue name). Set on the Job as label `kueue.x-k8s.io/queue-name`.\n"
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "description": "Queue resource name (for Kueue, the LocalQueue name). Must conform to RFC 1123 DNS label naming (lowercase letters, digits, and internal hyphens). Set on the Job as label `kueue.x-k8s.io/queue-name`.\n"
           }
         }
       },

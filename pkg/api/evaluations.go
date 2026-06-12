@@ -101,8 +101,8 @@ type TestDataRef struct {
 }
 
 type HardwareProfileRef struct {
-	Name      string `mapstructure:"name" json:"name" validate:"required,k8s_label_value"`
-	Namespace string `mapstructure:"namespace" json:"namespace,omitempty" validate:"omitempty,k8s_label_value"`
+	Name      string `mapstructure:"name" json:"name" validate:"required,rfc1123_dns_label"`
+	Namespace string `mapstructure:"namespace" json:"namespace,omitempty" validate:"omitempty,rfc1123_dns_label"`
 }
 
 type BenchmarkHardwareConfig struct {
@@ -238,7 +238,7 @@ type CollectionRef struct {
 // When Kind is empty, the evaluation job API handler normalizes it to "kueue" before persist/runtime.
 type QueueConfig struct {
 	Kind string `json:"kind,omitempty" validate:"omitempty,oneof=kueue"`
-	Name string `json:"name" validate:"required,k8s_label_value"`
+	Name string `json:"name" validate:"required,rfc1123_dns_label"`
 }
 
 // EvaluationJobConfig represents evaluation job request schema
