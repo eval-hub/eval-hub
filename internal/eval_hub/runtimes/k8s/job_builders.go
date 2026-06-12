@@ -51,8 +51,9 @@ const (
 	ociCredentialsMountPath           = "/etc/evalhub/.docker/config.json"
 	ociCredentialsSubPath             = ".dockerconfigjson"
 	envOCIAuthConfigPathName          = "OCI_AUTH_CONFIG_PATH"
-	modelAuthVolumeName               = "model-auth"
+	modelAuthVolumeName               = "model-auth" // real credentials secret; mounted in sidecar (injection) or adapter (direct)
 	modelAuthMountPath                = "/var/run/secrets/model"
+	modelInternalAuthVolumeName       = "model-auth-internal" // internalModelRef projected volume; mounted in adapter during credential injection
 	testDataSecretVolumeName          = "test-data-secret"
 	testDataSecretMountPath           = "/var/run/secrets/test-data"
 	serviceCABundleFile               = "service-ca.crt"
@@ -379,8 +380,44 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		})
 	}
 
-	// Add model auth secret when configured.
-	if cfg.modelAuthSecretRef != "" {
+	// Add model auth volumes.
+	// Credential-injection path (modelInternalRefSecretName set): adapter receives a projected
+	// volume (model-auth-internal) combining the internalModelRef secret (synthetic refs) and
+	// selective keys from the model credential secret (hf-token, ca_cert with optional:true so
+	// Kubernetes silently omits absent keys). The sidecar gets the real secret separately.
+	// Direct-mount path (no injection): adapter receives the real secret directly as model-auth.
+	if cfg.modelInternalRefSecretName != "" {
+		optionalTrue := true
+		projectedSources := []corev1.VolumeProjection{
+			{
+				Secret: &corev1.SecretProjection{
+					LocalObjectReference: corev1.LocalObjectReference{Name: cfg.modelInternalRefSecretName},
+				},
+			},
+			{
+				Secret: &corev1.SecretProjection{
+					LocalObjectReference: corev1.LocalObjectReference{Name: cfg.modelAuthSecretRef},
+					Items: []corev1.KeyToPath{
+						{Key: modelHFTokenKey, Path: modelHFTokenKey},
+						{Key: modelCACertKey, Path: modelCACertKey},
+					},
+					Optional: &optionalTrue,
+				},
+			},
+		}
+		volumes = append(volumes, corev1.Volume{
+			Name: modelInternalAuthVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{Sources: projectedSources},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      modelInternalAuthVolumeName,
+			MountPath: modelAuthMountPath,
+			ReadOnly:  true,
+		})
+	} else if cfg.modelAuthSecretRef != "" {
+		// Direct-mount path: no credential injection; mount the real secret directly in the adapter.
 		volumes = append(volumes, corev1.Volume{
 			Name: modelAuthVolumeName,
 			VolumeSource: corev1.VolumeSource{
@@ -486,6 +523,24 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      mlflowTokenVolumeName,
 			MountPath: mlflowTokenMountPath,
+			ReadOnly:  true,
+		})
+	}
+
+	// When credential injection is active, mount the real credentials secret in the sidecar at
+	// modelAuthMountPath. The adapter never sees this volume.
+	if cfg.modelInternalRefSecretName != "" && cfg.modelAuthSecretRef != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name: modelAuthVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: cfg.modelAuthSecretRef,
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      modelAuthVolumeName,
+			MountPath: modelAuthMountPath,
 			ReadOnly:  true,
 		})
 	}

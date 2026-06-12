@@ -22,9 +22,10 @@ type Handlers struct {
 	ociProxy         *httputil.ReverseProxy
 	ociTokenProducer *proxy.OCITokenProducer // created once at startup for OCI auth
 	ociRepository    string                  // from job spec; used to route requests to /registry/{ociRepository}
+	modelProxy       *httputil.ReverseProxy  // model credential-injection proxy; nil when not configured
 }
 
-// New creates handlers and builds reverse proxies for eval-hub, MLflow, and optionally OCI.
+// New creates handlers and builds reverse proxies for eval-hub, MLflow, OCI, and optionally model.
 func New(config *config.Config, logger *slog.Logger) (*Handlers, error) {
 	evalHubProxy, err := newEvalhubProxy(config, logger)
 	if err != nil {
@@ -41,6 +42,11 @@ func New(config *config.Config, logger *slog.Logger) (*Handlers, error) {
 		return nil, err
 	}
 
+	modelProxy, err := newModelProxy(config, logger)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Handlers{
 		logger:           logger,
 		serviceConfig:    config,
@@ -49,6 +55,7 @@ func New(config *config.Config, logger *slog.Logger) (*Handlers, error) {
 		ociProxy:         ociProxy,
 		ociTokenProducer: ociTokenProducer,
 		ociRepository:    ociRepository,
+		modelProxy:       modelProxy,
 	}, nil
 }
 
@@ -119,6 +126,13 @@ func (h *Handlers) parseProxyCall(r *http.Request) (*httputil.ReverseProxy, *pro
 		}
 		return nil, nil, fmt.Errorf("oci proxy is not configured")
 	default:
+		// Model credential-injection proxy is the catch-all: when configured, any request
+		// not matched by the specific prefixes above is forwarded to the model target URL.
+		// The model proxy's Rewrite function performs ref-token substitution and dynamic URL
+		// routing; it does not use AuthTokenInput, so an empty value is returned.
+		if h.modelProxy != nil {
+			return h.modelProxy, &proxy.AuthTokenInput{}, nil
+		}
 		return nil, nil, fmt.Errorf("unknown proxy call: %s", r.RequestURI)
 	}
 }

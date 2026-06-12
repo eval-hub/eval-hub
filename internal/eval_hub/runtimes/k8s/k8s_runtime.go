@@ -110,7 +110,6 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 	if err != nil {
 		return err
 	}
-
 	var deleteErr error
 	for _, job := range jobs {
 		r.logger.Info(
@@ -123,8 +122,9 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 			deleteErr = errors.Join(deleteErr, err)
 		}
 	}
-	// OwnerReferences should GC ConfigMaps when Jobs are deleted, but we delete explicitly
-	// to avoid orphans if the owner ref was never set or the job delete is delayed.
+	// Delete ConfigMaps explicitly to avoid orphans if the owner ref was never set or the
+	// job delete is delayed. OwnerReferences GC them automatically when the Job is removed,
+	// but explicit deletion is a safe belt-and-suspenders measure.
 	for _, configMap := range configMaps {
 		r.logger.Info(
 			"deleting evaluation runtime configmap",
@@ -133,6 +133,23 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 			"namespace", namespace,
 		)
 		if err := r.helper.DeleteConfigMap(r.ctx, namespace, configMap.Name); err != nil && !apierrors.IsNotFound(err) {
+			deleteErr = errors.Join(deleteErr, err)
+		}
+	}
+	// Delete ref secrets explicitly using the same label selector so they are never orphaned
+	// even if the Job's owner-reference GC is delayed or the owner ref was never set.
+	secrets, err := r.helper.ListSecrets(r.ctx, namespace, labelSelector)
+	if err != nil {
+		deleteErr = errors.Join(deleteErr, err)
+	}
+	for _, secret := range secrets {
+		r.logger.Info(
+			"deleting evaluation runtime ref secret",
+			"job_id", evaluation.Resource.ID,
+			"secret_name", secret.Name,
+			"namespace", namespace,
+		)
+		if err := r.helper.DeleteSecret(r.ctx, namespace, secret.Name, deleteOptions); err != nil && !apierrors.IsNotFound(err) {
 			deleteErr = errors.Join(deleteErr, err)
 		}
 	}
@@ -187,6 +204,32 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		"service_ca_configmap", jobConfig.serviceCAConfigMap,
 		"eval_hub_url", jobConfig.evalHubURL,
 	)
+	// Inspect the model credential secret once to decide the auth path. Proxy-injectable keys
+	// (api-key, *_api-key, *_url) activate credential injection — the adapter receives the
+	// ephemeral internalModelRef secret and the sidecar proxies model calls. Passthrough-only
+	// secrets (hf-token/ca_cert) mount directly in the adapter without a ref secret or model proxy.
+	if jobConfig.modelAuthSecretRef != "" {
+		secretInfo, err := inspectModelSecret(ctx, jobConfig.namespace, jobConfig.modelAuthSecretRef, r.helper)
+		if err != nil {
+			logger.Error("kubernetes model secret inspect error", "benchmark_id", benchmarkID, "error", err)
+			return fmt.Errorf("job %s benchmark %s: model secret inspect: %w", evaluation.Resource.ID, benchmarkID, err)
+		}
+		if secretInfo.hasCredentialKeys {
+			jobConfig.modelInternalRefSecretName = buildK8sName(jobConfig.jobID, jobConfig.resourceGUID, "-model-ref")
+			jobConfig.jobSpec.Model.URL = jobConfig.sidecarBaseURL
+		} else {
+			// passthrough-only (e.g. ca_cert only): clear modelTargetURL so sidecar gets no model proxy config
+			jobConfig.modelTargetURL = ""
+			logger.Info("model credential secret has no proxy-injectable keys; disabling credential injection")
+		}
+	}
+	// Build sidecar config after inspectModelSecret so modelTargetURL reflects the final state.
+	sidecarJSON, err := sidecarForJobPod(r.serviceConfig, jobConfig)
+	if err != nil {
+		return fmt.Errorf("job %s benchmark %s: sidecar config json: %w", evaluation.Resource.ID, benchmarkID, err)
+	}
+	jobConfig.sidecarConfig = sidecarJSON
+
 	configMap, err := buildConfigMap(jobConfig)
 	if err != nil {
 		logger.Error("kubernetes configmap build error", "benchmark_id", benchmarkID, "error", err)
@@ -225,18 +268,39 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 	logger.Info("kubernetes resource", "kind", "ConfigMap", "object", configMap)
 	logger.Info("kubernetes resource", "kind", "Job", "object", job)
 
+	// Create the ephemeral internalModelRef secret before the Job so the Pod can mount it.
+	if jobConfig.modelInternalRefSecretName != "" {
+		_, err := buildInternalModelRefSecret(ctx, jobConfig.namespace, jobConfig.modelInternalRefSecretName, jobConfig.modelAuthSecretRef, jobConfig.sidecarBaseURL, jobLabels(jobConfig), r.helper)
+		if err != nil {
+			logger.Error("kubernetes internalModelRef secret create error", "namespace", jobConfig.namespace, "name", jobConfig.modelInternalRefSecretName, "error", err)
+			return fmt.Errorf("job %s benchmark %s: internalModelRef secret: %w", evaluation.Resource.ID, benchmarkID, err)
+		}
+		logger.Info("kubernetes internalModelRef secret created", "namespace", jobConfig.namespace, "name", jobConfig.modelInternalRefSecretName)
+	}
+
+	cleanupModelRefSecret := func() {
+		if jobConfig.modelInternalRefSecretName == "" {
+			return
+		}
+		if cleanupErr := r.helper.DeleteSecret(ctx, jobConfig.namespace, jobConfig.modelInternalRefSecretName, metav1.DeleteOptions{}); cleanupErr != nil && !apierrors.IsNotFound(cleanupErr) {
+			logger.Error("failed to delete internalModelRef secret after error", "error", cleanupErr)
+		}
+	}
+
 	_, err = r.helper.CreateConfigMap(ctx, configMap.Namespace, configMap.Name, configMap.Data, &CreateConfigMapOptions{
 		Labels:      configMap.Labels,
 		Annotations: configMap.Annotations,
 	})
 	if err != nil {
 		logger.Error("kubernetes configmap create error", "namespace", configMap.Namespace, "name", configMap.Name, "error", err)
+		cleanupModelRefSecret()
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
 	}
 
 	createdJob, err := r.helper.CreateJob(ctx, job)
 	if err != nil {
 		logger.Error("kubernetes job create error", "namespace", job.Namespace, "name", job.Name, "error", err)
+		cleanupModelRefSecret()
 		cleanupErr := r.helper.DeleteConfigMap(ctx, configMap.Namespace, configMap.Name)
 		if cleanupErr != nil && !apierrors.IsNotFound(cleanupErr) {
 			if logger != nil {
@@ -266,6 +330,14 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 			return nil
 		}
 		logger.Error("failed to set configmap owner reference", "namespace", configMap.Namespace, "name", configMap.Name, "error", err)
+	}
+	// Point the internalModelRef secret at the Job so Kubernetes GC deletes it when the Job is removed.
+	// If SetSecretOwner fails, delete the secret immediately to avoid orphaning it.
+	if jobConfig.modelInternalRefSecretName != "" {
+		if err := r.helper.SetSecretOwner(ctx, jobConfig.namespace, jobConfig.modelInternalRefSecretName, ownerRef); err != nil {
+			logger.Error("failed to set internalModelRef secret owner reference; cleaning up to avoid orphan", "namespace", jobConfig.namespace, "name", jobConfig.modelInternalRefSecretName, "error", err)
+			cleanupModelRefSecret()
+		}
 	}
 	return nil
 }

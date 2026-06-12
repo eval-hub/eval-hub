@@ -11,7 +11,20 @@ type SidecarConfig struct {
 	EvalHub          *EvalHubClientConfig    `mapstructure:"eval_hub" json:"eval_hub,omitempty"`
 	MLFlow           *SidecarMLFlowConfig    `mapstructure:"mlflow,omitempty" json:"mlflow,omitempty"`
 	OCI              *SidecarOCIConfig       `mapstructure:"oci,omitempty" json:"oci,omitempty"`
+	Model            *SidecarModelConfig     `mapstructure:"model,omitempty" json:"model,omitempty"`
 	SidecarContainer *SidecarContainerConfig `mapstructure:"sidecar_container,omitempty" json:"sidecar_container,omitempty"`
+}
+
+// SidecarModelConfig holds the model credential-injection proxy settings written into
+// sidecar_config.json. The sidecar reads this at startup to configure the model reverse
+// proxy: URL is the model endpoint; AuthSecretMountPath is where the sidecar mounts the
+// model credential secret. The adapter container only sees the ephemeral ref secret
+// with placeholder values like "api-key:ref".
+type SidecarModelConfig struct {
+	URL                 string        `mapstructure:"url,omitempty" json:"url,omitempty"`
+	AuthSecretMountPath string        `mapstructure:"auth_secret_mount_path,omitempty" json:"auth_secret_mount_path,omitempty"`
+	HTTPTimeout         time.Duration `mapstructure:"http_timeout,omitempty" json:"http_timeout,omitempty"`
+	InsecureSkipVerify  bool          `mapstructure:"insecure_skip_verify,omitempty" json:"insecure_skip_verify,omitempty"`
 }
 
 // SidecarOCIConfig holds optional TLS/timeout overrides for the OCI registry HTTP client.
