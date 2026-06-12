@@ -447,22 +447,18 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnv(t *testing.T) {
 func TestBuildInternalModelRefSecretMultiModel(t *testing.T) {
 	// Multi-model credential secret: *_api-key keys become refs, *_url keys become the sidecar
 	// proxy URL, ca_cert is excluded (projected directly from the real secret into the adapter).
-	const realSecretName = "multi-model-creds"
-	realSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: realSecretName, Namespace: "default"},
-		Data: map[string][]byte{
-			"model-1_api-key": []byte("sk-model1"),
-			"model-1_url":     []byte("https://api.openai.com/v1"),
-			"model-2_api-key": []byte("sk-model2"),
-			"model-2_url":     []byte("https://azure.example.com/v1"),
-			"ca_cert":         []byte("-----BEGIN CERTIFICATE-----"),
-		},
+	data := map[string][]byte{
+		"model-1_api-key": []byte("sk-model1"),
+		"model-1_url":     []byte("https://api.openai.com/v1"),
+		"model-2_api-key": []byte("sk-model2"),
+		"model-2_url":     []byte("https://azure.example.com/v1"),
+		"ca_cert":         []byte("-----BEGIN CERTIFICATE-----"),
 	}
-	clientset := fake.NewClientset(realSecret)
+	clientset := fake.NewClientset()
 	helper := &KubernetesHelper{clientset: clientset}
 
 	const sidecarURL = "http://localhost:8080"
-	secret, err := buildInternalModelRefSecret(context.Background(), "default", "multi-model-ref", realSecretName, sidecarURL, nil, helper)
+	secret, err := buildInternalModelRefSecret(context.Background(), "default", "multi-model-ref", data, sidecarURL, nil, helper)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

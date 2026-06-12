@@ -208,11 +208,12 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 	// (api-key, *_api-key, *_url) activate credential injection — the adapter receives the
 	// ephemeral internalModelRef secret and the sidecar proxies model calls. Passthrough-only
 	// secrets (hf-token/ca_cert) mount directly in the adapter without a ref secret or model proxy.
+	var secretInfo modelSecretInfo
 	if jobConfig.modelAuthSecretRef != "" {
-		secretInfo, err := inspectModelSecret(ctx, jobConfig.namespace, jobConfig.modelAuthSecretRef, r.helper)
+		secretInfo, err = inspectModelSecret(ctx, jobConfig.namespace, jobConfig.modelAuthSecretRef, r.helper)
 		if err != nil {
 			logger.Error("kubernetes model secret inspect error", "benchmark_id", benchmarkID, "error", err)
-			return fmt.Errorf("job %s benchmark %s: model secret inspect: %w", evaluation.Resource.ID, benchmarkID, err)
+			return fmt.Errorf("job %s benchmark %s: reading model auth secret: %w", evaluation.Resource.ID, benchmarkID, err)
 		}
 		if secretInfo.hasCredentialKeys {
 			jobConfig.modelInternalRefSecretName = buildK8sName(jobConfig.jobID, jobConfig.resourceGUID, "-model-ref")
@@ -270,7 +271,7 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 
 	// Create the ephemeral internalModelRef secret before the Job so the Pod can mount it.
 	if jobConfig.modelInternalRefSecretName != "" {
-		_, err := buildInternalModelRefSecret(ctx, jobConfig.namespace, jobConfig.modelInternalRefSecretName, jobConfig.modelAuthSecretRef, jobConfig.sidecarBaseURL, jobLabels(jobConfig), r.helper)
+		_, err := buildInternalModelRefSecret(ctx, jobConfig.namespace, jobConfig.modelInternalRefSecretName, secretInfo.data, jobConfig.sidecarBaseURL, jobLabels(jobConfig), r.helper)
 		if err != nil {
 			logger.Error("kubernetes internalModelRef secret create error", "namespace", jobConfig.namespace, "name", jobConfig.modelInternalRefSecretName, "error", err)
 			return fmt.Errorf("job %s benchmark %s: internalModelRef secret: %w", evaluation.Resource.ID, benchmarkID, err)
