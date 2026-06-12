@@ -32,6 +32,8 @@ env_mappings:
   EVALHUB_TOKEN_CACHE_TIMEOUT: sidecar.eval_hub.token_cache_timeout
   MLFLOW_TOKEN_CACHE_TIMEOUT: sidecar.mlflow.token_cache_timeout
   SIDECAR_PORT: sidecar.port
+  METRICS_PORT: prometheus.port
+  METRICS_HOST: prometheus.host
 
 # Database configuration
 database:
@@ -54,6 +56,8 @@ otel:
   # enable_logs: true
 prometheus:
   enabled: true
+  port: 9090
+  host: "0.0.0.0"
 
 sidecar:
   base_url: http://localhost:8080  # URL for adapter/runtime to call sidecar proxy (cluster mode)

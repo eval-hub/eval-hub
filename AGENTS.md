@@ -142,9 +142,14 @@ Main function (`cmd/eval_hub/main.go`) implements graceful shutdown:
 1. Creates logger and loads service, provider, and collection config
 2. Wires storage, validator, runtime, and MLflow client
 3. Creates server with `server.NewServer(logger, serviceConfig, storage, validate, runtime, mlflowClient)`
-4. Starts server in a goroutine
-5. Waits for SIGINT/SIGTERM
-6. Gracefully shuts down with a bounded timeout
+4. If Prometheus is enabled, creates and starts a dedicated **MetricsServer** on port 9090 (configurable via `METRICS_PORT`)
+5. Starts main API server in a goroutine
+6. Waits for SIGINT/SIGTERM
+7. Gracefully shuts down metrics server, then main server, with a bounded timeout
+
+#### Metrics server
+
+A separate `MetricsServer` (`internal/eval_hub/server/metrics_server.go`) serves `/metrics` on port 9090 bound to `0.0.0.0` over plain HTTP. This allows Prometheus to scrape metrics without going through kube-rbac-proxy auth. The main API server (bound to `127.0.0.1`) does not serve `/metrics` in cluster mode. In **local mode** (`--local`), `/metrics` is dual-served on both ports for FVT test compatibility.
 
 ### MCP Server
 

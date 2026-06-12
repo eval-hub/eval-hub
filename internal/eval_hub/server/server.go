@@ -419,11 +419,13 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 
 	s.setupDocsRoutes(h, router)
 
-	// Prometheus metrics endpoint
+	// Prometheus metrics endpoint: in cluster mode, /metrics is served by the
+	// dedicated MetricsServer on a separate port. In local mode, also serve it
+	// here for development convenience and FVT compatibility.
 	prometheusEnabled := s.serviceConfig.IsPrometheusEnabled()
-	if prometheusEnabled {
+	if prometheusEnabled && s.serviceConfig.Service.LocalMode {
 		router.Handle("/metrics", promhttp.Handler())
-		s.logger.Info("Registered API", "pattern", "/metrics")
+		s.logger.Info("Registered API (local mode)", "pattern", "/metrics")
 	}
 
 	// Enable CORS in local mode only (for development/testing)
