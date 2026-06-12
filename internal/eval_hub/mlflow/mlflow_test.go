@@ -295,6 +295,9 @@ func TestGetOrCreateExperimentID(t *testing.T) {
 		if !foundJobTag {
 			t.Fatal("expected evaluation_job_id tag on create request")
 		}
+		if getCalls != 2 {
+			t.Fatalf("getCalls = %d, want 2", getCalls)
+		}
 	})
 
 	t.Run("non-404 get error", func(t *testing.T) {
