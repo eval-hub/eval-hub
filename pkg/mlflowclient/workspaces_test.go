@@ -222,6 +222,67 @@ func TestEnsureWorkspace_edgeCases(t *testing.T) {
 	})
 }
 
+func TestWorkspaceMgmtAPIsIncludeHeader(t *testing.T) {
+	t.Parallel()
+
+	t.Run("GetWorkspace sends header when workspaces enabled", func(t *testing.T) {
+		t.Parallel()
+		headerCh := make(chan string, 1)
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			headerCh <- r.Header.Get("X-MLFLOW-WORKSPACE")
+			_ = json.NewEncoder(w).Encode(GetWorkspaceResponse{Workspace: Workspace{Name: "my-ws"}})
+		}))
+		t.Cleanup(srv.Close)
+
+		client := NewClient(srv.URL).WithWorkspacesSupport(true).WithWorkspace("my-ws")
+		_, err := client.GetWorkspace("my-ws")
+		if err != nil {
+			t.Fatalf("GetWorkspace() = %v", err)
+		}
+		if got := <-headerCh; got != "my-ws" {
+			t.Fatalf("X-MLFLOW-WORKSPACE = %q, want %q", got, "my-ws")
+		}
+	})
+
+	t.Run("GetWorkspace omits header when workspaces disabled", func(t *testing.T) {
+		t.Parallel()
+		headerCh := make(chan string, 1)
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			headerCh <- r.Header.Get("X-MLFLOW-WORKSPACE")
+			_ = json.NewEncoder(w).Encode(GetWorkspaceResponse{Workspace: Workspace{Name: "my-ws"}})
+		}))
+		t.Cleanup(srv.Close)
+
+		client := NewClient(srv.URL).WithWorkspacesSupport(false)
+		_, err := client.GetWorkspace("my-ws")
+		if err != nil {
+			t.Fatalf("GetWorkspace() = %v", err)
+		}
+		if got := <-headerCh; got != "" {
+			t.Fatalf("X-MLFLOW-WORKSPACE = %q, want empty", got)
+		}
+	})
+
+	t.Run("CreateWorkspace omits header even when workspaces enabled", func(t *testing.T) {
+		t.Parallel()
+		headerCh := make(chan string, 1)
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			headerCh <- r.Header.Get("X-MLFLOW-WORKSPACE")
+			_ = json.NewEncoder(w).Encode(GetWorkspaceResponse{Workspace: Workspace{Name: "new-ws"}})
+		}))
+		t.Cleanup(srv.Close)
+
+		client := NewClient(srv.URL).WithWorkspacesSupport(true).WithWorkspace("my-ws")
+		_, err := client.CreateWorkspace(&CreateWorkspaceRequest{Name: "new-ws"})
+		if err != nil {
+			t.Fatalf("CreateWorkspace() = %v", err)
+		}
+		if got := <-headerCh; got != "" {
+			t.Fatalf("X-MLFLOW-WORKSPACE = %q, want empty", got)
+		}
+	})
+}
+
 func TestGetWorkspace_validation(t *testing.T) {
 	t.Parallel()
 	var c *Client

@@ -200,7 +200,7 @@ func (c *Client) doRequest(method, endpoint string, body any) ([]byte, error) {
 	return c.doRequestInternal(method, endpoint, body, true)
 }
 
-// doRequestWithoutWorkspace performs a global MLflow API request (workspace management).
+// doRequestWithoutWorkspace performs an MLflow API request without the X-MLFLOW-WORKSPACE header.
 func (c *Client) doRequestWithoutWorkspace(method, endpoint string, body any) ([]byte, error) {
 	return c.doRequestInternal(method, endpoint, body, false)
 }
