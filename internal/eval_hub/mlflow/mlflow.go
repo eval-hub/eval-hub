@@ -188,35 +188,17 @@ func GetOrCreateExperimentID(mlflowClient *mlflowclient.Client, jobConfig *api.E
 		return "", "", serviceerrors.NewServiceError(messages.MLFlowRequestFailed, "Error", err.Error())
 	}
 
-	mlflowExperiment, err := mlflowClient.GetExperimentByName(jobConfig.Experiment.Name)
-	if err != nil {
-		if !mlflowclient.IsResourceDoesNotExistError(err) {
-			// This is some other error than "resource does not exist" so report it as an error
-			return "", "", serviceerrors.NewServiceError(messages.MLFlowRequestFailed, "Error", err.Error())
-		}
-	}
-
-	if mlflowExperiment != nil && mlflowExperiment.Experiment.LifecycleStage == "active" && mlflowExperiment.Experiment.ExperimentID != "" {
-		mlflowClient.GetLogger().Info("Found active experiment", "experiment_name", jobConfig.Experiment.Name, "experiment_id", mlflowExperiment.Experiment.ExperimentID)
-		// we found an active experiment with the given name so return the ID
-		return mlflowExperiment.Experiment.ExperimentID, mlflowClient.GetExperimentsURL(), nil
-	}
-
-	// There is a possibility that the experiment was created between the get and the create
-	// but we do not consider this worth taking into account as it is very unlikely to happen.
-
-	// create a new experiment as we did not find an active experiment with the given name
 	tags := injectEvaluationJobTags(jobId, jobConfig)
 	req := mlflowclient.CreateExperimentRequest{
 		Name:             jobConfig.Experiment.Name,
 		ArtifactLocation: jobConfig.Experiment.ArtifactLocation,
 		Tags:             tags,
 	}
-	resp, err := mlflowClient.CreateExperiment(&req)
+	mlflowExperiment, err := mlflowClient.GetOrCreateExperiment(&req)
 	if err != nil {
 		return "", "", serviceerrors.NewServiceError(messages.MLFlowRequestFailed, "Error", err.Error())
 	}
 
-	mlflowClient.GetLogger().Info("Created new experiment", "experiment_name", jobConfig.Experiment.Name, "experiment_id", resp.ExperimentID)
-	return resp.ExperimentID, mlflowClient.GetExperimentsURL(), nil
+	mlflowClient.GetLogger().Info("Resolved experiment", "experiment_name", jobConfig.Experiment.Name, "experiment_id", mlflowExperiment.Experiment.ExperimentID)
+	return mlflowExperiment.Experiment.ExperimentID, mlflowClient.GetExperimentsURL(), nil
 }

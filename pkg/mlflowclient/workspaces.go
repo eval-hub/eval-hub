@@ -146,7 +146,8 @@ func (c *Client) EnsureWorkspace() error {
 		return nil
 	}
 	if IsResourceAlreadyExistsError(err) {
-		return nil
+		_, getErr := c.GetWorkspace(name)
+		return getErr
 	}
 	return err
 }

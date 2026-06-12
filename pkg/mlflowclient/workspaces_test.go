@@ -203,10 +203,16 @@ func TestEnsureWorkspace_edgeCases(t *testing.T) {
 
 	t.Run("create races with RESOURCE_ALREADY_EXISTS", func(t *testing.T) {
 		t.Parallel()
+		var getCalls int
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch {
 			case r.Method == http.MethodGet && r.URL.Path == "/api/3.0/mlflow/workspaces/race-ws":
-				http.Error(w, `{"error_code":"RESOURCE_DOES_NOT_EXIST"}`, http.StatusNotFound)
+				getCalls++
+				if getCalls == 1 {
+					http.Error(w, `{"error_code":"RESOURCE_DOES_NOT_EXIST"}`, http.StatusNotFound)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(GetWorkspaceResponse{Workspace: Workspace{Name: "race-ws"}})
 			case r.Method == http.MethodPost && r.URL.Path == "/api/3.0/mlflow/workspaces":
 				http.Error(w, `{"error_code":"RESOURCE_ALREADY_EXISTS"}`, http.StatusBadRequest)
 			default:
@@ -218,6 +224,9 @@ func TestEnsureWorkspace_edgeCases(t *testing.T) {
 		client := NewClient(srv.URL).WithContext(t.Context()).WithWorkspacesSupport(true).WithWorkspace("race-ws")
 		if err := client.EnsureWorkspace(); err != nil {
 			t.Fatalf("EnsureWorkspace() = %v", err)
+		}
+		if getCalls != 2 {
+			t.Fatalf("getCalls = %d, want 2", getCalls)
 		}
 	})
 }
