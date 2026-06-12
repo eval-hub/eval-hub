@@ -275,6 +275,29 @@ func TestBenchmarkHardwareConfig_ValidNameAccepted(t *testing.T) {
 	}
 }
 
+func TestBenchmarkHardwareConfig_InvalidNamespaceRejected(t *testing.T) {
+	validate := NewValidator()
+	cfg := api.EvaluationJobConfig{
+		Name:  "test-job",
+		Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+		Benchmarks: []api.EvaluationBenchmarkConfig{
+			{
+				Ref:        api.Ref{ID: "b1"},
+				ProviderID: "provider-1",
+				HardwareConfig: &api.BenchmarkHardwareConfig{
+					HardwareProfileRef: api.HardwareProfileRef{
+						Name:      "valid-profile",
+						Namespace: "invalid namespace",
+					},
+				},
+			},
+		},
+	}
+	if err := validate.Struct(cfg); err == nil {
+		t.Fatal("expected validation error for invalid hardware profile namespace")
+	}
+}
+
 func TestEvaluationJobConfig_ExperimentOmittedOk(t *testing.T) {
 	validate := NewValidator()
 	cfg := api.EvaluationJobConfig{

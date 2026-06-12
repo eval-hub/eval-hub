@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,7 +13,10 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 )
@@ -468,6 +472,204 @@ func TestCreateBenchmarkResourcesDeletesConfigMapOnJobFailure(t *testing.T) {
 	if len(configMaps) != 0 {
 		t.Fatalf("expected configmap to be deleted, got %d", len(configMaps))
 	}
+}
+
+func TestCreateBenchmarkResourcesAppliesHardwareProfile(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
+		HardwareProfileRef: api.HardwareProfileRef{Name: "cpu-profile"},
+	}
+
+	profile := testHardwareProfileUnstructured("default", "cpu-profile")
+	profile.Object["spec"] = map[string]any{
+		"identifiers": []any{
+			map[string]any{
+				"identifier":   "cpu",
+				"resourceType": "CPU",
+				"defaultCount": int64(4),
+				"maxCount":     int64(8),
+			},
+			map[string]any{
+				"identifier":   "memory",
+				"resourceType": "Memory",
+				"defaultCount": "2Gi",
+				"maxCount":     "4Gi",
+			},
+		},
+	}
+
+	clientset := fake.NewClientset()
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{
+			clientset:     clientset,
+			dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme(), profile),
+		},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
+		},
+	}
+
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
+	if err != nil {
+		t.Fatalf("createBenchmarkResources returned error: %v", err)
+	}
+
+	jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(jobs))
+	}
+	adapter, err := adapterContainerFromJob(&jobs[0])
+	if err != nil {
+		t.Fatalf("adapter container: %v", err)
+	}
+	if cpu := adapter.Resources.Requests.Cpu().String(); cpu != "4" {
+		t.Fatalf("cpu request = %q, want 4", cpu)
+	}
+	if memory := adapter.Resources.Requests.Memory().String(); memory != "2Gi" {
+		t.Fatalf("memory request = %q, want 2Gi", memory)
+	}
+	if cpuLimit := adapter.Resources.Limits.Cpu().String(); cpuLimit != "8" {
+		t.Fatalf("cpu limit = %q, want 8", cpuLimit)
+	}
+	if memoryLimit := adapter.Resources.Limits.Memory().String(); memoryLimit != "4Gi" {
+		t.Fatalf("memory limit = %q, want 4Gi", memoryLimit)
+	}
+}
+
+func TestCreateBenchmarkResourcesHardwareProfileUsesExplicitNamespace(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Resource.Tenant = "tenant-a"
+	evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
+		HardwareProfileRef: api.HardwareProfileRef{
+			Name:      "cpu-profile",
+			Namespace: "custom-ns",
+		},
+	}
+
+	profile := testHardwareProfileUnstructured("custom-ns", "cpu-profile")
+	clientset := fake.NewClientset()
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{
+			clientset:     clientset,
+			dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme(), profile),
+		},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
+		},
+	}
+
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+	if err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage); err != nil {
+		t.Fatalf("createBenchmarkResources returned error: %v", err)
+	}
+}
+
+func TestCreateBenchmarkResourcesHardwareProfileNotFound(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
+		HardwareProfileRef: api.HardwareProfileRef{Name: "missing-profile"},
+	}
+
+	clientset := fake.NewClientset()
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{
+			clientset:     clientset,
+			dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme()),
+		},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
+		},
+	}
+
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
+	if err == nil {
+		t.Fatal("expected error when hardware profile is missing")
+	}
+	if !strings.Contains(err.Error(), "fetch hardware profile") {
+		t.Fatalf("expected fetch hardware profile error, got: %v", err)
+	}
+}
+
+func TestCreateBenchmarkResourcesInvalidHardwareProfileSpec(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
+		HardwareProfileRef: api.HardwareProfileRef{Name: "bad-profile"},
+	}
+
+	profile := testHardwareProfileUnstructured("default", "bad-profile")
+	profile.Object["spec"] = map[string]any{
+		"identifiers": []any{
+			map[string]any{
+				"identifier":   "nvidia.com/gpu",
+				"resourceType": "Accelerator",
+				"defaultCount": "not-a-number",
+			},
+		},
+	}
+
+	clientset := fake.NewClientset()
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{
+			clientset:     clientset,
+			dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme(), profile),
+		},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
+		},
+	}
+
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
+	if err == nil {
+		t.Fatal("expected error when hardware profile spec is invalid")
+	}
+	if !strings.Contains(err.Error(), "parse hardware profile") {
+		t.Fatalf("expected parse hardware profile error, got: %v", err)
+	}
+}
+
+func TestCreateBenchmarkResourcesIgnoresEmptyHardwareProfileName(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
+		HardwareProfileRef: api.HardwareProfileRef{Name: "   "},
+	}
+
+	clientset := fake.NewClientset()
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{
+			clientset:     clientset,
+			dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme()),
+		},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
+		},
+	}
+
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+	if err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage); err != nil {
+		t.Fatalf("createBenchmarkResources returned error: %v", err)
+	}
+}
+
+func adapterContainerFromJob(job *batchv1.Job) (*corev1.Container, error) {
+	for i := range job.Spec.Template.Spec.Containers {
+		if job.Spec.Template.Spec.Containers[i].Name == adapterContainerName {
+			return &job.Spec.Template.Spec.Containers[i], nil
+		}
+	}
+	return nil, fmt.Errorf("adapter container not found in job %s", job.Name)
 }
 
 func TestRunEvaluationJobMarksBenchmarkFailedOnCreateError(t *testing.T) {

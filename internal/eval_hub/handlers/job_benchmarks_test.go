@@ -138,6 +138,27 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 		}
 	})
 
+	t.Run("provider-level hardware_config when benchmark id omitted", func(t *testing.T) {
+		t.Parallel()
+		benchmark := api.CollectionBenchmarkConfig{
+			Ref:        api.Ref{ID: "bench-1"},
+			ProviderID: "prov-a",
+		}
+		job := []api.EvaluationBenchmarkConfig{{
+			ProviderID: "prov-a",
+			HardwareConfig: &api.BenchmarkHardwareConfig{
+				HardwareProfileRef: api.HardwareProfileRef{Name: "shared-profile"},
+			},
+		}}
+		got := mergeBenchmarkParameters(benchmark, job)
+		if got.HardwareConfig == nil {
+			t.Fatal("expected provider-level hardware_config")
+		}
+		if got.HardwareConfig.HardwareProfileRef.Name != "shared-profile" {
+			t.Fatalf("name = %q, want shared-profile", got.HardwareConfig.HardwareProfileRef.Name)
+		}
+	})
+
 	t.Run("multiple job blocks same provider accumulate then collection overlays", func(t *testing.T) {
 		t.Parallel()
 		benchmark := api.CollectionBenchmarkConfig{
