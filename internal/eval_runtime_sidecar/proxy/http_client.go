@@ -127,6 +127,41 @@ func NewMLFlowHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logge
 	return client, nil
 }
 
+// NewModelHTTPClient creates an HTTP client for the model credential-injection proxy.
+// When Sidecar.Model is nil, system defaults are used (no custom CA, standard timeout).
+// CACertPath is always set to the potential ca_cert file in the real secret mount; if the
+// file does not exist (secret has no ca_cert key) the client falls back to system roots
+// rather than failing startup.
+func NewModelHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logger *slog.Logger) (*http.Client, error) {
+	if serviceConfig == nil || serviceConfig.Sidecar == nil {
+		return nil, nil
+	}
+	mc := serviceConfig.Sidecar.Model
+	timeout := DefaultHTTPTimeout
+	if mc != nil && mc.HTTPTimeout > 0 {
+		timeout = mc.HTTPTimeout
+	}
+	caCertPath := ""
+	if mc != nil && mc.AuthSecretMountPath != "" {
+		candidate := mc.AuthSecretMountPath + "/ca_cert"
+		if _, statErr := os.Stat(candidate); statErr == nil {
+			caCertPath = candidate
+		} else {
+			logger.Info("Model CA cert absent in secret mount, using system roots", "path", candidate)
+		}
+	}
+	insecureSkipVerify := DefaultInsecureSkipVerify
+	if mc != nil && mc.InsecureSkipVerify {
+		insecureSkipVerify = mc.InsecureSkipVerify
+	}
+	tlsConfig, err := buildTLSConfig(caCertPath, insecureSkipVerify, logger, "Model")
+	if err != nil {
+		return nil, err
+	}
+	client := newHTTPClient(timeout, tlsConfig, isOTELEnabled, logger, "Model")
+	return client, nil
+}
+
 // NewOCIHTTPClient creates an HTTP client for the OCI registry from config (TLS, timeout).
 // Registry host comes from the job spec, not this config. When Sidecar.OCI is nil, defaults
 // are used; non-nil sidecar.oci in sidecar_config.json supplies optional CA, insecure, and

@@ -51,6 +51,12 @@ func sidecarForJobPod(cfg *config.Config, jc *jobConfig) (*config.SidecarConfig,
 				export.MLFlow.CACertPath = serviceCAMountPath + "/" + serviceCABundleFile
 			}
 		}
+		if jc.modelTargetURL != "" {
+			export.Model = &config.SidecarModelConfig{
+				URL:                 jc.modelTargetURL,
+				AuthSecretMountPath: modelAuthMountPath,
+			}
+		}
 	}
 
 	return export, nil
@@ -72,6 +78,10 @@ func cloneSidecarConfig(sc *config.SidecarConfig) *config.SidecarConfig {
 	if sc.OCI != nil {
 		oci := *sc.OCI
 		out.OCI = &oci
+	}
+	if sc.Model != nil {
+		m := *sc.Model
+		out.Model = &m
 	}
 	// SidecarContainer (image/resources) is for eval-hub job scheduling only, not the sidecar process.
 	return out

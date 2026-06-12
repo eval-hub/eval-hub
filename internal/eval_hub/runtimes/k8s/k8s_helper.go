@@ -181,6 +181,57 @@ func (h *KubernetesHelper) SetConfigMapOwner(ctx context.Context, namespace, nam
 	return err
 }
 
+// GetSecret returns the Secret with the given name in namespace.
+func (h *KubernetesHelper) GetSecret(ctx context.Context, namespace, name string) (*corev1.Secret, error) {
+	if namespace == "" || name == "" {
+		return nil, fmt.Errorf("namespace and name are required")
+	}
+	return h.clientset.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
+}
+
+// CreateSecret creates a Secret in the given namespace.
+func (h *KubernetesHelper) CreateSecret(ctx context.Context, namespace string, secret *corev1.Secret) (*corev1.Secret, error) {
+	if secret == nil || namespace == "" || secret.Name == "" {
+		return nil, fmt.Errorf("secret, namespace, and name are required")
+	}
+	secret.Namespace = namespace
+	return h.clientset.CoreV1().Secrets(namespace).Create(ctx, secret, metav1.CreateOptions{})
+}
+
+// DeleteSecret deletes a Secret in the given namespace.
+func (h *KubernetesHelper) DeleteSecret(ctx context.Context, namespace, name string, opts metav1.DeleteOptions) error {
+	if namespace == "" || name == "" {
+		return fmt.Errorf("namespace and name are required")
+	}
+	return h.clientset.CoreV1().Secrets(namespace).Delete(ctx, name, opts)
+}
+
+// ListSecrets returns Secrets matching the label selector.
+func (h *KubernetesHelper) ListSecrets(ctx context.Context, namespace, labelSelector string) ([]corev1.Secret, error) {
+	if namespace == "" {
+		return nil, fmt.Errorf("namespace is required")
+	}
+	list, err := h.clientset.CoreV1().Secrets(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+	if err != nil {
+		return nil, err
+	}
+	return list.Items, nil
+}
+
+// SetSecretOwner sets a single owner reference on the Secret.
+func (h *KubernetesHelper) SetSecretOwner(ctx context.Context, namespace, name string, owner metav1.OwnerReference) error {
+	if namespace == "" || name == "" {
+		return fmt.Errorf("namespace and name are required")
+	}
+	secret, err := h.clientset.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	secret.OwnerReferences = []metav1.OwnerReference{owner}
+	_, err = h.clientset.CoreV1().Secrets(namespace).Update(ctx, secret, metav1.UpdateOptions{})
+	return err
+}
+
 // CreateConfigMapOptions holds optional metadata for CreateConfigMap.
 type CreateConfigMapOptions struct {
 	Labels      map[string]string

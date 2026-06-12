@@ -59,15 +59,17 @@ type jobConfig struct {
 	sidecarBaseURL      string // base URL for adapter/runtime to call sidecar's proxy (config.Sidecar.BaseURL)
 	evalHubInstanceName string
 	// evalHubCRNamespace is the namespace of the EvalHub CR (control plane); used for Job labels.
-	evalHubCRNamespace   string
-	mlflowTrackingURI    string
-	mlflowWorkspace      string
-	ociCredentialsSecret string
-	modelAuthSecretRef   string
-	sidecarResources     corev1.ResourceRequirements
-	testDataS3           s3TestDataConfig
-	testDataInitImage    string
-	sidecarConfig        *config.SidecarConfig
+	evalHubCRNamespace         string
+	mlflowTrackingURI          string
+	mlflowWorkspace            string
+	ociCredentialsSecret       string
+	modelAuthSecretRef         string // user's real credentials secret mounted only in sidecar
+	modelInternalRefSecretName string // ephemeral internalModelRef secret mounted in adapter; empty when credential injection is not active
+	modelTargetURL             string // real model URL forwarded by the sidecar model proxy; cleared when hasCredentialKeys=false
+	sidecarResources           corev1.ResourceRequirements
+	testDataS3                 s3TestDataConfig
+	testDataInitImage          string
+	sidecarConfig              *config.SidecarConfig
 	// queueKind and queueName come from evaluation.Queue when set (API layer normalizes empty kind to kueue).
 	queueKind string
 	queueName string
@@ -163,6 +165,15 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		modelAuthSecretRef = strings.TrimSpace(evaluation.Model.Auth.SecretRef)
 	}
 
+	// modelInternalRefSecretName is set in createBenchmarkResources after inspectModelSecret
+	// confirms proxy-injectable keys. modelTargetURL starts as the model URL when model auth
+	// is configured; cleared in createBenchmarkResources for passthrough-only secrets.
+	modelInternalRefSecretName := ""
+	modelTargetURL := ""
+	if modelAuthSecretRef != "" {
+		modelTargetURL = strings.TrimSpace(evaluation.Model.URL)
+	}
+
 	sidecarImage, sidecarResources, err := sidecarImageAndResources(serviceConfig)
 	if err != nil {
 		return nil, err
@@ -191,38 +202,42 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		nodeSelector = resolveNodeSelector(runtime.K8s.GPU)
 	}
 
+	resourceGUID := uuid.NewString()
+
 	out := &jobConfig{
-		jobID:                evaluation.Resource.ID,
-		resourceGUID:         uuid.NewString(),
-		namespace:            namespace,
-		providerID:           provider.Resource.ID,
-		benchmarkID:          benchmarkConfig.ID,
-		benchmarkIndex:       benchmarkIndex,
-		adapterImage:         runtime.K8s.Image,
-		sidecarImage:         sidecarImage,
-		entrypoint:           runtime.K8s.Entrypoint,
-		defaultEnv:           runtime.K8s.Env,
-		cpuRequest:           cpuRequest,
-		memoryRequest:        memoryRequest,
-		cpuLimit:             cpuLimit,
-		memoryLimit:          memoryLimit,
-		gpuResource:          gpuResource,
-		gpuCount:             gpuCount,
-		nodeSelector:         nodeSelector,
-		jobSpec:              *spec,
-		serviceAccountName:   serviceAccountName,
-		serviceCAConfigMap:   serviceCAConfigMap,
-		evalHubInstanceName:  evalHubInstanceName,
-		evalHubCRNamespace:   evalHubCRNamespace,
-		mlflowTrackingURI:    mlflowTrackingURI,
-		mlflowWorkspace:      mlflowWorkspace,
-		ociCredentialsSecret: ociCredentialsSecret,
-		modelAuthSecretRef:   modelAuthSecretRef,
-		sidecarResources:     sidecarResources,
-		sidecarBaseURL:       sidecarBaseURL,
-		evalHubURL:           evalHubURL,
-		queueKind:            queueKind,
-		queueName:            queueName,
+		jobID:                      evaluation.Resource.ID,
+		resourceGUID:               resourceGUID,
+		namespace:                  namespace,
+		providerID:                 provider.Resource.ID,
+		benchmarkID:                benchmarkConfig.ID,
+		benchmarkIndex:             benchmarkIndex,
+		adapterImage:               runtime.K8s.Image,
+		sidecarImage:               sidecarImage,
+		entrypoint:                 runtime.K8s.Entrypoint,
+		defaultEnv:                 runtime.K8s.Env,
+		cpuRequest:                 cpuRequest,
+		memoryRequest:              memoryRequest,
+		cpuLimit:                   cpuLimit,
+		memoryLimit:                memoryLimit,
+		gpuResource:                gpuResource,
+		gpuCount:                   gpuCount,
+		nodeSelector:               nodeSelector,
+		jobSpec:                    *spec,
+		serviceAccountName:         serviceAccountName,
+		serviceCAConfigMap:         serviceCAConfigMap,
+		evalHubInstanceName:        evalHubInstanceName,
+		evalHubCRNamespace:         evalHubCRNamespace,
+		mlflowTrackingURI:          mlflowTrackingURI,
+		mlflowWorkspace:            mlflowWorkspace,
+		ociCredentialsSecret:       ociCredentialsSecret,
+		modelAuthSecretRef:         modelAuthSecretRef,
+		modelInternalRefSecretName: modelInternalRefSecretName,
+		modelTargetURL:             modelTargetURL,
+		sidecarResources:           sidecarResources,
+		sidecarBaseURL:             sidecarBaseURL,
+		evalHubURL:                 evalHubURL,
+		queueKind:                  queueKind,
+		queueName:                  queueName,
 		testDataS3: s3TestDataConfig{
 			bucket:    testDataS3Bucket,
 			key:       testDataS3Key,
@@ -230,12 +245,6 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		},
 	}
 	applyHardwareProfileResources(out, hardwareProfile)
-
-	sidecarJSON, err := sidecarForJobPod(serviceConfig, out)
-	if err != nil {
-		return nil, fmt.Errorf("sidecar config json: %w", err)
-	}
-	out.sidecarConfig = sidecarJSON
 	return out, nil
 }
 
