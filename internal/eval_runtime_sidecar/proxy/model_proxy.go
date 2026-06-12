@@ -84,15 +84,23 @@ func NewModelReverseProxy(defaultTarget *url.URL, client *http.Client, logger *s
 			if err != nil {
 				// Signal the RoundTripper to return 400 without forwarding.
 				pr.Out.Header.Set(xModelCredError, err.Error())
-				pr.SetURL(defaultTarget)
+				pr.Out.URL.Scheme = defaultTarget.Scheme
+				pr.Out.URL.Host = defaultTarget.Host
+				pr.Out.Host = defaultTarget.Host
+				pr.Out.RequestURI = ""
 				return
 			}
 			target = resolvedTarget
 			SetAuthHeader(pr.Out, realToken)
 		}
 
-		pr.SetURL(target)
-		pr.Out.RequestURI = "" // http.Client.Do rejects non-empty RequestURI
+		// Set only scheme and host from the target — do not join the target path with the
+		// incoming path. The incoming path already contains the full API path (e.g. /v1/completions)
+		// so prepending the target's path prefix (e.g. /v1) would produce /v1/v1/completions.
+		pr.Out.URL.Scheme = target.Scheme
+		pr.Out.URL.Host = target.Host
+		pr.Out.Host = target.Host
+		pr.Out.RequestURI = ""
 		reqLog.Info("Proxying model request", "method", pr.Out.Method, "url", pr.Out.URL.String(), "headers", headersForLog(pr.Out.Header))
 	}
 

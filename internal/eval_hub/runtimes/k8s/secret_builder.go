@@ -35,12 +35,16 @@ type modelSecretInfo struct {
 	// hasCredentialKeys is true when the secret contains at least one proxy-injectable
 	// key (api-key, *_api-key, *_url), meaning credential injection should be activated.
 	hasCredentialKeys bool
+	// data is the full secret data, populated when hasCredentialKeys is true so callers
+	// can build the internalModelRef secret without a second API call.
+	data map[string][]byte
 }
 
 // inspectModelSecret reads the model credential secret and reports whether it contains
-// proxy-injectable credential keys. Breaks early on first match. When hasCredentialKeys=false
-// (e.g. ca_cert-only secret), no internalModelRef secret is created and no model proxy
-// is started.
+// proxy-injectable credential keys. When hasCredentialKeys=true the full data map is
+// returned so the caller can pass it directly to buildInternalModelRefSecret without a
+// second GetSecret call. When hasCredentialKeys=false (e.g. ca_cert-only secret), no
+// internalModelRef secret is created and no model proxy is started.
 func inspectModelSecret(ctx context.Context, namespace, secretName string, helper *KubernetesHelper) (modelSecretInfo, error) {
 	realSecret, err := helper.GetSecret(ctx, namespace, secretName)
 	if err != nil {
@@ -48,15 +52,15 @@ func inspectModelSecret(ctx context.Context, namespace, secretName string, helpe
 	}
 	for k := range realSecret.Data {
 		if isModelCredentialKey(k) {
-			return modelSecretInfo{hasCredentialKeys: true}, nil
+			return modelSecretInfo{hasCredentialKeys: true, data: realSecret.Data}, nil
 		}
 	}
 	return modelSecretInfo{}, nil
 }
 
 // buildInternalModelRefSecret creates the ephemeral internalModelRef secret in namespace
-// by reading the model credential secret and generating synthetic ref/placeholder values.
-// Only called when hasCredentialKeys=true (verified by inspectModelSecret).
+// from the already-read model credential secret data. Only called when hasCredentialKeys=true
+// (verified by inspectModelSecret, which also provides the data to avoid a second API call).
 //
 // Key filtering rules applied to model credential secret keys:
 //
@@ -72,18 +76,13 @@ func buildInternalModelRefSecret(
 	ctx context.Context,
 	namespace string,
 	refSecretName string,
-	realSecretName string,
+	data map[string][]byte,
 	sidecarProxyURL string,
 	labels map[string]string,
 	helper *KubernetesHelper,
 ) (*corev1.Secret, error) {
-	realSecret, err := helper.GetSecret(ctx, namespace, realSecretName)
-	if err != nil {
-		return nil, fmt.Errorf("get model credential secret %q: %w", realSecretName, err)
-	}
-	data := realSecret.Data
 	if len(data) == 0 {
-		return nil, fmt.Errorf("model credential secret %q has no data keys", realSecretName)
+		return nil, fmt.Errorf("model credential secret data is empty")
 	}
 
 	refData := make(map[string][]byte, len(data))
@@ -103,8 +102,8 @@ func buildInternalModelRefSecret(
 	}
 
 	if len(refData) == 0 {
-		return nil, fmt.Errorf("model credential secret %q contains no recognised credential keys (expected %q or keys with %q or %q suffix)",
-			realSecretName, modelSingleAPIKey, modelAPIKeySuffix, modelURLSuffix)
+		return nil, fmt.Errorf("model credential secret data contains no recognised credential keys (expected %q or keys with %q or %q suffix)",
+			modelSingleAPIKey, modelAPIKeySuffix, modelURLSuffix)
 	}
 
 	secret := &corev1.Secret{
