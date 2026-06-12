@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -24,7 +25,7 @@ func NewMetricsServer(logger *slog.Logger, promConfig *config.PrometheusConfig) 
 	host := promConfig.EffectiveHost()
 
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/metrics", withRequestID(promhttp.Handler()))
 
 	return &MetricsServer{
 		httpServer: &http.Server{
@@ -39,6 +40,22 @@ func NewMetricsServer(logger *slog.Logger, promConfig *config.PrometheusConfig) 
 		host:   host,
 		logger: logger,
 	}
+}
+
+type contextKeyRequestID struct{}
+
+// withRequestID extracts X-Global-Transaction-Id from the request or generates a UUID,
+// injects it into the request context and response header, then delegates to next.
+func withRequestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID := r.Header.Get(TRANSACTION_ID_HEADER)
+		if requestID == "" {
+			requestID = uuid.New().String()
+		}
+		ctx := context.WithValue(r.Context(), contextKeyRequestID{}, requestID)
+		w.Header().Set(TRANSACTION_ID_HEADER, requestID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 func (m *MetricsServer) Start() error {
