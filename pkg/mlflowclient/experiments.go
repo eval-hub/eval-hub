@@ -15,6 +15,8 @@ func (c *Client) GetOrCreateExperiment(req *CreateExperimentRequest) (*GetExperi
 		return nil, fmt.Errorf("create experiment request is nil or missing name")
 	}
 	name := strings.TrimSpace(req.Name)
+	normalizedReq := *req
+	normalizedReq.Name = name
 
 	resp, err := c.GetExperimentByName(name)
 	if err == nil {
@@ -25,7 +27,7 @@ func (c *Client) GetOrCreateExperiment(req *CreateExperimentRequest) (*GetExperi
 		return nil, err
 	}
 
-	_, createErr := c.CreateExperiment(req)
+	_, createErr := c.CreateExperiment(&normalizedReq)
 	if createErr != nil && !IsResourceAlreadyExistsError(createErr) {
 		return nil, createErr
 	}
