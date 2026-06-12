@@ -32,8 +32,9 @@ func SetupMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclien
 	}
 	serverVersion, err := mlflowClient.GetVersion()
 	if err != nil {
-		// for now a failure to get the mlflow server version will stop the server startup
-		return mlflowClient, config.MLFlow.TrackingURI, "", fmt.Errorf("Failed to get MLFlow server version: %w", err)
+		// for now a failure to get the mlflow server version will not stop the server startup
+		// because maybe the port is not yet ready or the server is not yet running
+		logger.Warn("Failed to get MLFlow server version", "error", err.Error())
 	}
 	// if we get here then we have a valid tracking URI
 	return mlflowClient, config.MLFlow.TrackingURI, serverVersion, nil
