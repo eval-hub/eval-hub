@@ -41,14 +41,8 @@ func getOrCreateRequestID(req *http.Request) string {
 	return uuid.New().String()
 }
 
-// requestIDForRequest returns the request ID from the X-Global-Transaction-Id header,
-// generating a UUID when not present.
-func requestIDForRequest(req *http.Request) string {
-	return getOrCreateRequestID(req)
-}
-
 func loggerForRequest(logger *slog.Logger, req *http.Request) *slog.Logger {
-	return logger.With("request_id", requestIDForRequest(req))
+	return logger.With("request_id", getOrCreateRequestID(req))
 }
 
 // NewModelReverseProxy returns an httputil.ReverseProxy that performs model credential injection.
@@ -129,7 +123,7 @@ type modelRoundTripper struct {
 func (t *modelRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	if errMsg := req.Header.Get(xModelCredError); errMsg != "" {
 		req.Header.Del(xModelCredError)
-		reqID := requestIDForRequest(req)
+		reqID := getOrCreateRequestID(req)
 		t.logger.Error("model credential resolution failed, returning 400", "request_id", reqID, "error", errMsg)
 		respHeader := make(http.Header)
 		respHeader.Set(globalTransactionIDHeader, reqID)

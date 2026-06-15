@@ -1110,6 +1110,128 @@ func TestCreateBenchmarkResourcesReturnsErrorWhenOrphanedJobDeletionFails(t *tes
 	}
 }
 
+func TestDeleteEvaluationJobResourcesDeletesRefSecrets(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	jobID := evaluation.Resource.ID
+	namespace := "default"
+	labelKey := labelJobIDKey
+	labelVal := sanitizeLabelValue(jobID)
+
+	// Pre-create a Job, ConfigMap, and ref Secret all carrying the job-ID label,
+	// as they would exist after a successful createBenchmarkResources call.
+	clientset := fake.NewClientset(
+		&batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "eval-job-1",
+				Namespace: namespace,
+				Labels:    map[string]string{labelKey: labelVal},
+			},
+		},
+		&corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "eval-cm-1",
+				Namespace: namespace,
+				Labels:    map[string]string{labelKey: labelVal},
+			},
+		},
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "eval-ref-secret-1",
+				Namespace: namespace,
+				Labels:    map[string]string{labelKey: labelVal},
+			},
+		},
+	)
+
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
+	}
+
+	err := runtime.DeleteEvaluationJobResources(evaluation)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	secrets, listErr := clientset.CoreV1().Secrets(namespace).List(context.Background(), metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", labelKey, labelVal),
+	})
+	if listErr != nil {
+		t.Fatalf("failed to list secrets: %v", listErr)
+	}
+	if len(secrets.Items) != 0 {
+		t.Fatalf("expected ref secret to be deleted, got %d secret(s)", len(secrets.Items))
+	}
+}
+
+func TestDeleteEvaluationJobResourcesIgnoresMissingRefSecret(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+
+	// No pre-created resources — everything is already gone (e.g. GC already ran).
+	clientset := fake.NewClientset()
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
+	}
+
+	err := runtime.DeleteEvaluationJobResources(evaluation)
+	if err != nil {
+		t.Fatalf("expected no error when resources already gone, got %v", err)
+	}
+}
+
+// TestCreateBenchmarkResourcesDeletesRefSecretWhenConfigMapDeletedMidCreation verifies that
+// when the ConfigMap disappears between Job creation and owner-ref setup (race with hard_delete),
+// the ephemeral internalModelRef secret is cleaned up together with the orphaned Job.
+func TestCreateBenchmarkResourcesDeletesRefSecretWhenConfigMapDeletedMidCreation(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Model.Auth = &api.ModelAuth{SecretRef: "model-auth-secret"}
+
+	realSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "model-auth-secret", Namespace: "default"},
+		Data:       map[string][]byte{"api-key": []byte("sk-real-key")},
+	}
+	clientset := fake.NewClientset(realSecret)
+	// Simulate ConfigMap NotFound during SetConfigMapOwner (mid-creation race).
+	clientset.PrependReactor("get", "configmaps", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+		return true, nil, apierrors.NewNotFound(schema.GroupResource{Resource: "configmaps"}, action.(k8stesting.GetAction).GetName())
+	})
+
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{
+				EvalInitImage: "eval-init-image",
+			},
+		},
+	}
+
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// Both the orphaned Job and the internalModelRef secret must be gone.
+	jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+	if len(jobs) != 0 {
+		t.Fatalf("expected orphaned job to be deleted, got %d job(s)", len(jobs))
+	}
+	secrets, listErr := clientset.CoreV1().Secrets("default").List(context.Background(), metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", labelJobIDKey, sanitizeLabelValue(evaluation.Resource.ID)),
+	})
+	if listErr != nil {
+		t.Fatalf("failed to list secrets: %v", listErr)
+	}
+	if len(secrets.Items) != 0 {
+		t.Fatalf("expected internalModelRef secret to be deleted after mid-creation race, got %d secret(s)", len(secrets.Items))
+	}
+}
+
 func sampleProviders(providerID string) map[string]api.ProviderResource {
 	return map[string]api.ProviderResource{
 		providerID: {

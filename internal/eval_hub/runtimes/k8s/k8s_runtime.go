@@ -328,6 +328,7 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 				logger.Error("failed to delete orphaned job", "namespace", createdJob.Namespace, "name", createdJob.Name, "error", delErr)
 				return delErr
 			}
+			cleanupModelRefSecret()
 			return nil
 		}
 		logger.Error("failed to set configmap owner reference", "namespace", configMap.Namespace, "name", configMap.Name, "error", err)

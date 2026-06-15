@@ -17,13 +17,6 @@ const (
 	modelSingleAPIKey = "api-key"
 )
 
-// directAdapterSecretKeys are keys from the model credential secret projected directly into
-// the adapter volume rather than replaced with a ref token. These credentials cannot be
-// proxied by the sidecar (HF Hub calls bypass the proxy; ca_cert is a TLS artifact, not an
-// inference credential), so the adapter receives the real values via a selective real-secret
-// projection alongside the internalModelRef secret.
-var directAdapterSecretKeys = []string{modelHFTokenKey, modelCACertKey}
-
 // isModelCredentialKey reports whether k is a proxy-injectable credential key
 // (api-key, *_api-key, or *_url).
 func isModelCredentialKey(k string) bool {
