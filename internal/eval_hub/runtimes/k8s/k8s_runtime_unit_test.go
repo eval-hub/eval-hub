@@ -842,6 +842,35 @@ func TestCreateBenchmarkResourcesDeletesOrphanedJobWhenConfigMapDeletedMidCreati
 	}
 }
 
+func TestCreateBenchmarkResourcesReturnsErrorWhenOrphanedJobDeletionFails(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+
+	clientset := fake.NewClientset()
+	clientset.PrependReactor("get", "configmaps", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+		return true, nil, apierrors.NewNotFound(schema.GroupResource{Resource: "configmaps"}, action.(k8stesting.GetAction).GetName())
+	})
+	clientset.PrependReactor("delete", "jobs", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+		return true, nil, fmt.Errorf("job delete failed")
+	})
+
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{
+				EvalInitImage: "eval-init-image",
+			},
+		},
+	}
+
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
+	if err == nil {
+		t.Fatal("expected error when orphaned job deletion fails, got nil")
+	}
+}
+
 func sampleProviders(providerID string) map[string]api.ProviderResource {
 	return map[string]api.ProviderResource{
 		providerID: {

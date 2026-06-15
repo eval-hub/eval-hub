@@ -261,6 +261,7 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 				"namespace", createdJob.Namespace, "job", createdJob.Name, "configmap", configMap.Name)
 			if delErr := r.helper.DeleteJob(ctx, createdJob.Namespace, createdJob.Name, metav1.DeleteOptions{}); delErr != nil && !apierrors.IsNotFound(delErr) {
 				logger.Error("failed to delete orphaned job", "namespace", createdJob.Namespace, "name", createdJob.Name, "error", delErr)
+				return delErr
 			}
 			return nil
 		}
