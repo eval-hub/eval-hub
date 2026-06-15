@@ -52,8 +52,7 @@ func TestVersionResourceJSONStructure(t *testing.T) {
 	t.Parallel()
 
 	info := &ServerInfo{
-		Version:   testhelpers.Version(t),
-		Build:     "abc123",
+		Build:     testhelpers.Version(t),
 		BuildDate: "2026-04-30T10:00:00Z",
 		GitHash:   "abc123",
 	}
@@ -86,8 +85,7 @@ func TestVersionResourceMatchesBuildValues(t *testing.T) {
 	t.Parallel()
 
 	info := &ServerInfo{
-		Version:   "1.2.3",
-		Build:     "deadbeef",
+		Build:     "1.2.3",
 		BuildDate: "2026-01-15T12:00:00Z",
 		GitHash:   "deadbeef",
 	}
@@ -110,7 +108,7 @@ func TestVersionResourceMatchesBuildValues(t *testing.T) {
 func TestVersionResourceMatchesRuntime(t *testing.T) {
 	t.Parallel()
 
-	info := &ServerInfo{Version: "0.1.0"}
+	info := &ServerInfo{Build: "0.1.0"}
 
 	ctx, cs := connectWithVersion(t, info)
 
@@ -130,7 +128,7 @@ func TestVersionResourceMatchesRuntime(t *testing.T) {
 func TestVersionResourceAvailableWithoutBackend(t *testing.T) {
 	t.Parallel()
 
-	info := &ServerInfo{Version: "0.1.0"}
+	info := &ServerInfo{Build: "0.1.0"}
 	srv := New(info, discardLogger, nil)
 	if err := RegisterHandlers(srv, nil, info, discardLogger, evalhubclient.DefaultListPageLimit); err != nil {
 		t.Fatalf("RegisterHandlers: %v", err)
@@ -166,7 +164,7 @@ func TestVersionResourceAvailableWithoutBackend(t *testing.T) {
 func TestVersionResourceInResourcesList(t *testing.T) {
 	t.Parallel()
 
-	info := &ServerInfo{Version: "0.3.0", Build: "test"}
+	info := &ServerInfo{Build: "0.3.0", BuildDate: "2026-01-01", GitHash: "abc123"}
 
 	ctx, cs := connectWithVersion(t, info)
 

@@ -6,6 +6,31 @@ import (
 	"testing"
 )
 
+func TestHelpFlag(t *testing.T) {
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	code := run([]string{"--help"})
+
+	w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	if !bytes.Contains([]byte(output), []byte("Usage: evalhub-mcp")) {
+		t.Errorf("expected usage output, got: %s", output)
+	}
+	if !bytes.Contains([]byte(output), []byte("--transport")) {
+		t.Errorf("expected flag list in output, got: %s", output)
+	}
+}
+
 func TestVersionFlag(t *testing.T) {
 	old := os.Stdout
 	r, w, _ := os.Pipe()
@@ -55,7 +80,7 @@ func TestVersionFlagWithBuildInfo(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("expected exit code 0, got %d", code)
 	}
-	if !bytes.Contains([]byte(output), []byte("build: abc123")) {
+	if !bytes.Contains([]byte(output), []byte("version abc123")) {
 		t.Errorf("expected build info in output, got: %s", output)
 	}
 	if !bytes.Contains([]byte(output), []byte("commit: def456")) {

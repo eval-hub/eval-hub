@@ -38,9 +38,8 @@ func TestVersionString(t *testing.T) {
 		info *ServerInfo
 		want string
 	}{
-		{&ServerInfo{Version: "0.1.0"}, "0.1.0"},
-		{&ServerInfo{Version: "0.1.0", Build: "abc123"}, "0.1.0+abc123"},
-		{&ServerInfo{Version: repoVersion, Build: "deadbeef", BuildDate: "2026-01-01"}, repoVersion + "+deadbeef"},
+		{&ServerInfo{Build: "abc123"}, "abc123"},
+		{&ServerInfo{Build: repoVersion, BuildDate: "2026-01-01"}, repoVersion},
 	}
 	for _, tt := range tests {
 		if got := tt.info.VersionString(); got != tt.want {
@@ -78,12 +77,12 @@ func TestNewEvalHubClientCreated(t *testing.T) {
 
 func TestInitializeHandshake(t *testing.T) {
 	t.Parallel()
-	connectServer(t, &ServerInfo{Version: "0.1.0", Build: "test123"})
+	connectServer(t, &ServerInfo{Build: "test123"})
 }
 
 func TestServerMetadata(t *testing.T) {
 	t.Parallel()
-	_, cs := connectServer(t, &ServerInfo{Version: "0.2.0", Build: "deadbeef"})
+	_, cs := connectServer(t, &ServerInfo{Build: "0.2.0"})
 
 	initResult := cs.InitializeResult()
 	if initResult == nil {
@@ -92,14 +91,14 @@ func TestServerMetadata(t *testing.T) {
 	if initResult.ServerInfo.Name != "evalhub-mcp" {
 		t.Errorf("server name = %q, want %q", initResult.ServerInfo.Name, "evalhub-mcp")
 	}
-	if initResult.ServerInfo.Version != "0.2.0+deadbeef" {
-		t.Errorf("server version = %q, want %q", initResult.ServerInfo.Version, "0.2.0+deadbeef")
+	if initResult.ServerInfo.Version != "0.2.0" {
+		t.Errorf("server version = %q, want %q", initResult.ServerInfo.Version, "0.2.0")
 	}
 }
 
 func TestCapabilitiesAdvertised(t *testing.T) {
 	t.Parallel()
-	_, cs := connectServer(t, &ServerInfo{Version: "0.1.0"})
+	_, cs := connectServer(t, &ServerInfo{Build: "0.1.0"})
 
 	initResult := cs.InitializeResult()
 	if initResult == nil {
@@ -122,7 +121,7 @@ func TestCapabilitiesAdvertised(t *testing.T) {
 
 func TestToolsListEmpty(t *testing.T) {
 	t.Parallel()
-	ctx, cs := connectServer(t, &ServerInfo{Version: "0.1.0"})
+	ctx, cs := connectServer(t, &ServerInfo{Build: "0.1.0"})
 
 	toolsResult, err := cs.ListTools(ctx, nil)
 	if err != nil {
@@ -135,7 +134,7 @@ func TestToolsListEmpty(t *testing.T) {
 
 func TestResourcesListEmpty(t *testing.T) {
 	t.Parallel()
-	ctx, cs := connectServer(t, &ServerInfo{Version: "0.1.0"})
+	ctx, cs := connectServer(t, &ServerInfo{Build: "0.1.0"})
 
 	resourcesResult, err := cs.ListResources(ctx, nil)
 	if err != nil {
@@ -148,7 +147,7 @@ func TestResourcesListEmpty(t *testing.T) {
 
 func TestPromptsListEmpty(t *testing.T) {
 	t.Parallel()
-	ctx, cs := connectServer(t, &ServerInfo{Version: "0.1.0"})
+	ctx, cs := connectServer(t, &ServerInfo{Build: "0.1.0"})
 
 	promptsResult, err := cs.ListPrompts(ctx, nil)
 	if err != nil {
@@ -170,7 +169,7 @@ func TestRunHTTPStartsAndStops(t *testing.T) {
 		Host:      "127.0.0.1",
 		Port:      port,
 	}
-	info := &ServerInfo{Version: "test"}
+	info := &ServerInfo{Build: "test"}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -202,7 +201,7 @@ func TestRunLegacyHTTPSSEStartsAndStops(t *testing.T) {
 		Host:      "127.0.0.1",
 		Port:      port,
 	}
-	info := &ServerInfo{Version: "test"}
+	info := &ServerInfo{Build: "test"}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -242,7 +241,7 @@ func TestHealthEndpoint(t *testing.T) {
 		Host:      "127.0.0.1",
 		Port:      port,
 	}
-	info := &ServerInfo{Version: "test"}
+	info := &ServerInfo{Build: "test"}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -274,7 +273,7 @@ func TestHealthEndpointLegacyHTTPSSE(t *testing.T) {
 		Host:      "127.0.0.1",
 		Port:      port,
 	}
-	info := &ServerInfo{Version: "test"}
+	info := &ServerInfo{Build: "test"}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -308,7 +307,7 @@ func TestRunHTTPPortInUse(t *testing.T) {
 		Host:      "127.0.0.1",
 		Port:      port,
 	}
-	info := &ServerInfo{Version: "test"}
+	info := &ServerInfo{Build: "test"}
 
 	err = Run(context.Background(), cfg, info, discardLogger)
 	if err == nil {
@@ -321,7 +320,7 @@ func TestRunInvalidTransport(t *testing.T) {
 	cfg := &config.Config{
 		Transport: "grpc",
 	}
-	info := &ServerInfo{Version: "test"}
+	info := &ServerInfo{Build: "test"}
 
 	err := Run(context.Background(), cfg, info, discardLogger)
 	if err == nil {

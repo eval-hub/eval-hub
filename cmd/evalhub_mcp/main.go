@@ -14,7 +14,6 @@ import (
 )
 
 var (
-	Version   string = "0.4.3"
 	Build     string
 	BuildDate string
 	GitHash   string
@@ -44,10 +43,16 @@ func run(args []string) int {
 	tlsKeyFile := fs.String("tls-key", "", "Path to TLS private key file")
 	authType := fs.String("auth-type", "none", "Inbound HTTP authentication: none or rbac-proxy")
 	version := fs.Bool("version", false, "Print version information and exit")
+	help := fs.BoolP("help", "h", false, "Show usage and exit")
 
 	if err := fs.Parse(args); err != nil {
 		logger.Error("failed to parse flags", "error", err)
 		return 1
+	}
+
+	if *help {
+		printUsage(fs)
+		return 0
 	}
 
 	if *version {
@@ -103,7 +108,6 @@ func run(args []string) int {
 	}()
 
 	info := &mcpserver.ServerInfo{
-		Version:   Version,
 		Build:     Build,
 		BuildDate: BuildDate,
 		GitHash:   GitHash,
@@ -118,10 +122,7 @@ func run(args []string) int {
 }
 
 func printVersion() {
-	fmt.Printf("evalhub-mcp version %s", Version)
-	if Build != "" {
-		fmt.Printf(" (build: %s)", Build)
-	}
+	fmt.Printf("evalhub-mcp version %s", Build)
 	if GitHash != "" {
 		fmt.Printf(" (commit: %s)", GitHash)
 	}
@@ -129,4 +130,12 @@ func printVersion() {
 		fmt.Printf(" (built: %s)", BuildDate)
 	}
 	fmt.Println()
+}
+
+func printUsage(fs *flag.FlagSet) {
+	fmt.Println("Usage: evalhub-mcp [flags]")
+	fmt.Println()
+	fmt.Println("Flags:")
+	fs.SetOutput(os.Stdout)
+	fs.PrintDefaults()
 }
