@@ -15,7 +15,7 @@ import (
 func connectWithPrompts(t *testing.T) (context.Context, *mcp.ClientSession) {
 	t.Helper()
 
-	srv := New(&ServerInfo{Version: "test"}, discardLogger, nil)
+	srv := New(&ServerInfo{Build: "test"}, discardLogger, nil)
 	if err := registerPrompts(srv, discardLogger); err != nil {
 		t.Fatalf("registerPrompts failed: %v", err)
 	}
@@ -457,7 +457,7 @@ func TestCompareRunsIncludesComparisonSteps(t *testing.T) {
 
 func TestRegisterHandlersIncludesPromptsWithoutBackend(t *testing.T) {
 	t.Parallel()
-	info := &ServerInfo{Version: "test"}
+	info := &ServerInfo{Build: "test"}
 	srv := New(info, discardLogger, nil)
 
 	if err := RegisterHandlers(srv, nil, info, discardLogger, evalhubclient.DefaultListPageLimit); err != nil {
@@ -481,7 +481,7 @@ func TestRegisterHandlersIncludesPromptsWithoutBackend(t *testing.T) {
 
 func TestRegisterHandlersPromptsUnavailableWithoutBackend(t *testing.T) {
 	t.Parallel()
-	info := &ServerInfo{Version: "test"}
+	info := &ServerInfo{Build: "test"}
 	srv := New(info, discardLogger, nil)
 
 	if err := RegisterHandlers(srv, nil, info, discardLogger, evalhubclient.DefaultListPageLimit); err != nil {

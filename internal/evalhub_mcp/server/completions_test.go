@@ -17,7 +17,7 @@ import (
 func connectWithCompletions(t *testing.T, ds EvalHubDiscovery) (context.Context, *mcp.ClientSession) {
 	t.Helper()
 
-	srv := New(&ServerInfo{Version: "test"}, discardLogger, CompletionHandlerOption(ds, discardLogger, evalhubclient.DefaultListPageLimit))
+	srv := New(&ServerInfo{Build: "test"}, discardLogger, CompletionHandlerOption(ds, discardLogger, evalhubclient.DefaultListPageLimit))
 	registerResources(srv, ds, discardLogger, evalhubclient.DefaultListPageLimit)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

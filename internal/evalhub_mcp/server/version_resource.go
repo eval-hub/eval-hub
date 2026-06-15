@@ -40,7 +40,7 @@ func versionHandler(info *ServerInfo, logger *slog.Logger) mcp.ResourceHandler {
 		MCPLibraryVersion: mcpLibraryVersion(),
 	}
 	if info != nil {
-		resp.Version = info.Version
+		resp.Version = info.Build
 		resp.GitHash = info.GitHash
 		resp.BuildDate = info.BuildDate
 	}

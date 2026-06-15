@@ -253,6 +253,18 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		Controller: boolPtr(true),
 	}
 	if err := r.helper.SetConfigMapOwner(ctx, configMap.Namespace, configMap.Name, ownerRef); err != nil {
+		if apierrors.IsNotFound(err) {
+			// Race: hard_delete arrived during creation and removed the ConfigMap before the
+			// owner reference could be set. The K8s Job was created but can never mount the
+			// missing ConfigMap — delete it now to prevent an orphaned, permanently-stuck job.
+			logger.Warn("configmap deleted mid-creation (race with hard_delete) — cleaning up orphaned job",
+				"namespace", createdJob.Namespace, "job", createdJob.Name, "configmap", configMap.Name)
+			if delErr := r.helper.DeleteJob(ctx, createdJob.Namespace, createdJob.Name, metav1.DeleteOptions{}); delErr != nil && !apierrors.IsNotFound(delErr) {
+				logger.Error("failed to delete orphaned job", "namespace", createdJob.Namespace, "name", createdJob.Name, "error", delErr)
+				return delErr
+			}
+			return nil
+		}
 		logger.Error("failed to set configmap owner reference", "namespace", configMap.Namespace, "name", configMap.Name, "error", err)
 	}
 	return nil

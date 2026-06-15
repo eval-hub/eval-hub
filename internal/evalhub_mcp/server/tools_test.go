@@ -88,7 +88,7 @@ func (m *mockToolClient) GetBenchmark(id string) (*api.BenchmarkResource, error)
 func connectWithTools(t *testing.T, client EvalHubToolClient) (context.Context, *mcp.ClientSession) {
 	t.Helper()
 
-	srv := New(&ServerInfo{Version: "test"}, discardLogger, nil)
+	srv := New(&ServerInfo{Build: "test"}, discardLogger, nil)
 	registerTools(srv, client, discardLogger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -923,7 +923,7 @@ func TestGetJobStatusRunningNoEnrichment(t *testing.T) {
 
 func TestRegisterHandlersWithNilClientHasNoTools(t *testing.T) {
 	t.Parallel()
-	info := &ServerInfo{Version: "test"}
+	info := &ServerInfo{Build: "test"}
 	srv := New(info, discardLogger, nil)
 
 	if err := RegisterHandlers(srv, nil, info, discardLogger, evalhubclient.DefaultListPageLimit); err != nil {

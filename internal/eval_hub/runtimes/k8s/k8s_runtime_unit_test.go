@@ -15,7 +15,9 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
@@ -799,6 +801,73 @@ func sampleEvaluation(providerID string) *api.EvaluationJobResource {
 				Name: "exp-1",
 			},
 		},
+	}
+}
+
+// TestCreateBenchmarkResourcesDeletesOrphanedJobWhenConfigMapDeletedMidCreation verifies
+// that when SetConfigMapOwner fails with NotFound (the ConfigMap was hard-deleted by a
+// concurrent DELETE request between Job creation and owner-reference setup), the orphaned
+// K8s Job is cleaned up so it cannot remain stuck in a permanent FailedMount loop.
+func TestCreateBenchmarkResourcesDeletesOrphanedJobWhenConfigMapDeletedMidCreation(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+
+	clientset := fake.NewClientset()
+	// Simulate the race: ConfigMap GET inside SetConfigMapOwner returns NotFound,
+	// as if the ConfigMap was deleted by a concurrent hard_delete after Job creation.
+	clientset.PrependReactor("get", "configmaps", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+		return true, nil, apierrors.NewNotFound(schema.GroupResource{Resource: "configmaps"}, action.(k8stesting.GetAction).GetName())
+	})
+
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{
+				EvalInitImage: "eval-init-image",
+			},
+		},
+	}
+
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// The orphaned K8s Job must be deleted to prevent it getting stuck in FailedMount.
+	jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+	if len(jobs) != 0 {
+		t.Fatalf("expected orphaned job to be deleted, got %d job(s)", len(jobs))
+	}
+}
+
+func TestCreateBenchmarkResourcesReturnsErrorWhenOrphanedJobDeletionFails(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+
+	clientset := fake.NewClientset()
+	clientset.PrependReactor("get", "configmaps", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+		return true, nil, apierrors.NewNotFound(schema.GroupResource{Resource: "configmaps"}, action.(k8stesting.GetAction).GetName())
+	})
+	clientset.PrependReactor("delete", "jobs", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+		return true, nil, fmt.Errorf("job delete failed")
+	})
+
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{
+				EvalInitImage: "eval-init-image",
+			},
+		},
+	}
+
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
+	if err == nil {
+		t.Fatal("expected error when orphaned job deletion fails, got nil")
 	}
 }
 

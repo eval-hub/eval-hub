@@ -24,17 +24,13 @@ const (
 )
 
 type ServerInfo struct {
-	Version   string
 	Build     string
 	BuildDate string
 	GitHash   string
 }
 
 func (s *ServerInfo) VersionString() string {
-	if s.Build != "" {
-		return s.Version + "+" + s.Build
-	}
-	return s.Version
+	return s.Build
 }
 
 // New creates a configured MCP server with capabilities advertised for tools,
@@ -60,6 +56,7 @@ func New(info *ServerInfo, logger *slog.Logger, serverOption *ServerOption) *mcp
 	return mcp.NewServer(
 		&mcp.Implementation{
 			Name:    "evalhub-mcp",
+			Title:   "EvalHub MCP Server",
 			Version: version,
 		},
 		serverOpts,

@@ -1,7 +1,7 @@
 class EvalhubMcp < Formula
     desc "EvalHub MCP Server - Model Context Protocol server for AI evaluation"
     homepage "https://github.com/eval-hub/eval-hub"
-    version "0.4.2"
+    version "0.4.3"
     license "Apache-2.0"
 
     on_macos do
