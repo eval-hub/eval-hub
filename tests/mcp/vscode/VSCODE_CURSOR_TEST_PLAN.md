@@ -221,7 +221,8 @@ Add to Cursor MCP config:
 
 | ID | Priority | Test Case | Steps | Expected Result | VS Code | Cursor |
 |----|----------|-----------|-------|-----------------|---------|--------|
-| TOOL-01 | P0 | Tool discovery | Open MCP tools panel in client. | All 3 tools visible: `submit_evaluation`, `cancel_job`, `get_job_status`. Each has parameter schema, description, and examples. | [ ] | [ ] |
+| TOOL-01 | P0 | Tool discovery | Open MCP tools panel in client. | All 4 tools visible: `discover_providers`, `submit_evaluation`, `cancel_job`, `get_job_status`. Each has parameter schema, description, and examples. | [ ] | [ ] |
+| TOOL-01a | P1 | discover_providers | Ask agent: "What evaluation providers are available for agent safety?" | Tool invoked with optional filters. Returns provider summaries with hints and complementary suggestions. | [ ] | [ ] |
 | TOOL-02 | P0 | submit_evaluation — basic | Ask agent: "Submit an evaluation using benchmark X against model endpoint Y" | Tool invoked with correct params. Job submitted. Job ID returned. | [ ] | [ ] |
 | TOOL-03 | P1 | submit_evaluation — with collection | Ask agent: "Run collection Z against model endpoint Y" | Tool invoked with collection reference. Job created successfully. | [ ] | [ ] |
 | TOOL-04 | P1 | submit_evaluation — full params | Ask agent to submit with name, description, tags, and experiment config. | All optional fields passed through. Job created with metadata visible in backend. | [ ] | [ ] |

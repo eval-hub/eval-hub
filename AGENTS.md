@@ -153,7 +153,7 @@ A separate `MetricsServer` (`internal/eval_hub/server/metrics_server.go`) serves
 
 ### MCP Server
 
-The MCP (Model Context Protocol) server exposes eval-hub functionality to AI agents. Entry point: `cmd/evalhub_mcp/main.go`.
+The MCP (Model Context Protocol) server exposes eval-hub functionality to AI agents. Entry point: `cmd/evalhub_mcp/main.go`. **MCP.md** documents deployment, authentication, and the full capabilities reference (tools including `discover_providers`, resources, prompts, and completions).
 
 ```bash
 # Run directly
