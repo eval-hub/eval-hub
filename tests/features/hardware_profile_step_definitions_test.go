@@ -3,142 +3,40 @@ package features
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/cucumber/godog"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/k8s"
-	"github.com/google/uuid"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 const (
-	hardwareProfileFVTTag            = "hardware_profile"
-	hardwareProfileNameValueKey      = "hardware_profile_name"
-	fvtHardwareProfileJobWaitTimeout = 2 * time.Minute
+	envTestHardwareProfile              = "TEST_HARDWARE_PROFILE"
+	envTestHardwareProfileCPURequest    = "TEST_HARDWARE_PROFILE_CPU_REQUEST"
+	envTestHardwareProfileMemoryRequest = "TEST_HARDWARE_PROFILE_MEMORY_REQUEST"
+	envTestHardwareProfileCPULimit      = "TEST_HARDWARE_PROFILE_CPU_LIMIT"
+	envTestHardwareProfileMemoryLimit   = "TEST_HARDWARE_PROFILE_MEMORY_LIMIT"
+	fvtHardwareProfileJobWaitTimeout    = 2 * time.Minute
 )
 
-var (
-	fvtHardwareProfileGVR = schema.GroupVersionResource{
-		Group:    "infrastructure.opendatahub.io",
-		Version:  "v1",
-		Resource: "hardwareprofiles",
-	}
-	fvtCRDGVR = schema.GroupVersionResource{
-		Group:    "apiextensions.k8s.io",
-		Version:  "v1",
-		Resource: "customresourcedefinitions",
-	}
-)
+var testHardwareProfileRequiredEnv = []string{
+	envTestHardwareProfile,
+	envTestHardwareProfileCPURequest,
+	envTestHardwareProfileMemoryRequest,
+	envTestHardwareProfileCPULimit,
+	envTestHardwareProfileMemoryLimit,
+}
 
 type hardwareProfileScenarioState struct {
-	helper        *k8s.KubernetesHelper
-	dynamicClient dynamic.Interface
-	namespace     string
-	name          string
+	helper *k8s.KubernetesHelper
 }
 
 func (s *hardwareProfileScenarioState) reset() {
 	s.helper = nil
-	s.dynamicClient = nil
-	s.namespace = ""
-	s.name = ""
-}
-
-func loadFVTKubernetesConfig() (*rest.Config, error) {
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-		configOverrides := &clientcmd.ConfigOverrides{}
-		config, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-			loadingRules,
-			configOverrides,
-		).ClientConfig()
-		if err != nil {
-			return nil, err
-		}
-	}
-	return config, nil
-}
-
-func (s *hardwareProfileScenarioState) initDynamicClient() error {
-	if s.dynamicClient != nil {
-		return nil
-	}
-	config, err := loadFVTKubernetesConfig()
-	if err != nil {
-		return fmt.Errorf("load kubernetes config: %w", err)
-	}
-	dynamicClient, err := dynamic.NewForConfig(config)
-	if err != nil {
-		return fmt.Errorf("create dynamic kubernetes client: %w", err)
-	}
-	s.dynamicClient = dynamicClient
-	return nil
-}
-
-func createFVTHardwareProfile(ctx context.Context, dynamicClient dynamic.Interface, namespace string, profile *unstructured.Unstructured) error {
-	if dynamicClient == nil {
-		return fmt.Errorf("dynamic kubernetes client is required")
-	}
-	if namespace == "" {
-		return fmt.Errorf("namespace is required")
-	}
-	if profile == nil {
-		return fmt.Errorf("hardware profile is required")
-	}
-	_, err := dynamicClient.Resource(fvtHardwareProfileGVR).Namespace(namespace).Create(ctx, profile, metav1.CreateOptions{})
-	return err
-}
-
-func deleteFVTHardwareProfile(ctx context.Context, dynamicClient dynamic.Interface, namespace, name string) error {
-	if dynamicClient == nil {
-		return fmt.Errorf("dynamic kubernetes client is required")
-	}
-	return dynamicClient.Resource(fvtHardwareProfileGVR).Namespace(namespace).Delete(ctx, name, metav1.DeleteOptions{})
-}
-
-func fvtHardwareProfileCRDInstalled(ctx context.Context, dynamicClient dynamic.Interface) (bool, error) {
-	if dynamicClient == nil {
-		return false, fmt.Errorf("dynamic kubernetes client is required")
-	}
-	_, err := dynamicClient.Resource(fvtCRDGVR).Get(ctx, "hardwareprofiles.infrastructure.opendatahub.io", metav1.GetOptions{})
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
-}
-
-func (s *hardwareProfileScenarioState) cleanup() {
-	if s.dynamicClient == nil || s.namespace == "" || s.name == "" {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if err := deleteFVTHardwareProfile(ctx, s.dynamicClient, s.namespace, s.name); err != nil {
-		logDebug("WARNING: failed to delete test HardwareProfile %s in %s: %v\n", s.name, s.namespace, err)
-	}
-}
-
-func scenarioHasTag(sc *godog.Scenario, tag string) bool {
-	for _, t := range sc.Tags {
-		if strings.TrimPrefix(t.Name, "@") == tag {
-			return true
-		}
-	}
-	return false
 }
 
 func (tc *scenarioConfig) tenantNamespace() string {
@@ -161,74 +59,28 @@ func (s *hardwareProfileScenarioState) initHelper() error {
 	return nil
 }
 
-func buildFVTHardwareProfile(namespace, name string) *unstructured.Unstructured {
-	return &unstructured.Unstructured{
-		Object: map[string]any{
-			"apiVersion": "infrastructure.opendatahub.io/v1",
-			"kind":       "HardwareProfile",
-			"metadata": map[string]any{
-				"name":      name,
-				"namespace": namespace,
-			},
-			"spec": map[string]any{
-				"identifiers": []any{
-					map[string]any{
-						"identifier":   "cpu",
-						"displayName":  "CPU",
-						"resourceType": "CPU",
-						"minCount":     int64(1),
-						"defaultCount": int64(1),
-						"maxCount":     int64(2),
-					},
-					map[string]any{
-						"identifier":   "memory",
-						"displayName":  "Memory",
-						"resourceType": "Memory",
-						"minCount":     "1Gi",
-						"defaultCount": "1Gi",
-						"maxCount":     "2Gi",
-					},
-				},
-			},
-		},
+func (tc *scenarioConfig) testHardwareProfileIsConfigured() error {
+	var missing []string
+	for _, name := range testHardwareProfileRequiredEnv {
+		if strings.TrimSpace(os.Getenv(name)) == "" {
+			missing = append(missing, name)
+		}
 	}
-}
-
-func (tc *scenarioConfig) hardwareProfileCRDIsInstalled(state *hardwareProfileScenarioState) error {
-	if err := state.initDynamicClient(); err != nil {
-		return tc.logError(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	installed, err := fvtHardwareProfileCRDInstalled(ctx, state.dynamicClient)
-	if err != nil {
-		return tc.logError(fmt.Errorf("check HardwareProfile CRD: %w", err))
-	}
-	if !installed {
-		tc.logDebug("Skipping scenario: hardwareprofiles.infrastructure.opendatahub.io CRD is not installed\n")
+	if len(missing) > 0 {
+		tc.logDebug(
+			"Skipping scenario: missing hardware profile test env: %s (pipeline should verify the HardwareProfile CRD, create or select a profile, and export name plus expected adapter resources)\n",
+			strings.Join(missing, ", "),
+		)
 		return godog.ErrSkip
 	}
-	return nil
-}
-
-func (tc *scenarioConfig) createTestHardwareProfileInTenantNamespace(state *hardwareProfileScenarioState) error {
-	if err := state.initDynamicClient(); err != nil {
-		return tc.logError(err)
-	}
-	namespace := tc.tenantNamespace()
-	name := fmt.Sprintf("fvt-hwp-%s", uuid.NewString()[:8])
-	profile := buildFVTHardwareProfile(namespace, name)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if err := createFVTHardwareProfile(ctx, state.dynamicClient, namespace, profile); err != nil {
-		return tc.logError(fmt.Errorf("create test HardwareProfile %q in namespace %q: %w", name, namespace, err))
-	}
-
-	state.namespace = namespace
-	state.name = name
-	tc.saveValue(hardwareProfileNameValueKey, name)
-	logDebug("Created test HardwareProfile %s in namespace %s\n", name, namespace)
+	logDebug(
+		"Using test hardware profile %q with adapter resources cpu=%s/%s memory=%s/%s\n",
+		os.Getenv(envTestHardwareProfile),
+		os.Getenv(envTestHardwareProfileCPURequest),
+		os.Getenv(envTestHardwareProfileCPULimit),
+		os.Getenv(envTestHardwareProfileMemoryRequest),
+		os.Getenv(envTestHardwareProfileMemoryLimit),
+	)
 	return nil
 }
 
@@ -291,6 +143,10 @@ func (tc *scenarioConfig) jobAdapterContainerShouldHaveResource(
 ) error {
 	if tc.lastId == "" {
 		return tc.logError(fmt.Errorf("no evaluation job ID found"))
+	}
+	expectedValue, err := tc.getValue(expectedValue)
+	if err != nil {
+		return tc.logError(err)
 	}
 	if err := state.initHelper(); err != nil {
 		return tc.logError(err)
@@ -357,26 +213,16 @@ func InitializeHardwareProfileSteps(ctx *godog.ScenarioContext, tc *scenarioConf
 	state := &hardwareProfileScenarioState{}
 
 	ctx.Before(func(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
-		if !scenarioHasTag(sc, hardwareProfileFVTTag) {
-			return ctx, nil
+		for _, t := range sc.Tags {
+			if strings.TrimPrefix(t.Name, "@") == "hardware_profile" {
+				state.reset()
+				break
+			}
 		}
-		state.reset()
 		return ctx, nil
 	})
 
-	ctx.After(func(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
-		if scenarioHasTag(sc, hardwareProfileFVTTag) {
-			state.cleanup()
-		}
-		return ctx, err
-	})
-
-	ctx.Step(`^the HardwareProfile CRD is installed on the cluster$`, func() error {
-		return tc.hardwareProfileCRDIsInstalled(state)
-	})
-	ctx.Step(`^a test HardwareProfile is created in the tenant namespace$`, func() error {
-		return tc.createTestHardwareProfileInTenantNamespace(state)
-	})
+	ctx.Step(`^the test hardware profile is configured$`, tc.testHardwareProfileIsConfigured)
 	ctx.Step(`^I wait for the Kubernetes evaluation Job to be created$`, func() error {
 		return tc.waitForKubernetesEvaluationJob(state)
 	})

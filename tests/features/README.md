@@ -87,6 +87,43 @@ When running in local server mode, the tests will:
 | `@ignore` | Can be used to ignore a test |
 | `@connected` | Used by the Jenkins jobs and set when running on a connected cluster |
 | `@disconnected` | Used by the Jenkins jobs and set when running on a disconnected cluster |
+| `@hardware_profile` | Hardware profile API and Kubernetes Job adapter resource tests in `evaluation_jobs.feature`; require pipeline env vars (see below). |
+
+### Hardware profile tests (`@hardware_profile`)
+
+These scenarios validate that evaluation job APIs accept and persist `hardware_config.hardware_profile_ref`, and that the created Kubernetes Job adapter container receives CPU/memory from the referenced profile. They do **not** create `HardwareProfile` CRs or fetch profile specs in the test binary — the pipeline supplies the profile name and expected adapter resources via environment variables.
+
+**Pipeline / cluster prerequisites** (outside the test binary):
+
+1. Confirm `hardwareprofiles.infrastructure.opendatahub.io` CRD is installed (e.g. `oc get crd hardwareprofiles.infrastructure.opendatahub.io`).
+2. Ensure a `HardwareProfile` exists in the tenant namespace (`X_TENANT`).
+3. Export its name and expected adapter resources (must match the profile's `defaultCount` / `maxCount` for CPU and memory):
+
+```bash
+export TEST_HARDWARE_PROFILE="your-profile-name"
+export TEST_HARDWARE_PROFILE_CPU_REQUEST="1"
+export TEST_HARDWARE_PROFILE_MEMORY_REQUEST="1Gi"
+export TEST_HARDWARE_PROFILE_CPU_LIMIT="2"
+export TEST_HARDWARE_PROFILE_MEMORY_LIMIT="2Gi"
+```
+
+4. Grant the FVT test runner **`get`/`list` on `jobs`** in the tenant namespace (to inspect the adapter container). The test process uses in-cluster config or `KUBECONFIG`; it does not read `HardwareProfile` CRs or cluster-scoped CRDs.
+
+If any required env var above is unset, `@hardware_profile` scenarios are **skipped** (default `make test-fvt` behavior).
+
+Run only hardware profile scenarios against a remote server:
+
+```bash
+export SERVER_URL="https://evalhub.example.com"
+export AUTH_TOKEN="..."
+export X_TENANT="tenant"
+export TEST_HARDWARE_PROFILE="fvt-hardware-profile"
+export TEST_HARDWARE_PROFILE_CPU_REQUEST="1"
+export TEST_HARDWARE_PROFILE_MEMORY_REQUEST="1Gi"
+export TEST_HARDWARE_PROFILE_CPU_LIMIT="2"
+export TEST_HARDWARE_PROFILE_MEMORY_LIMIT="2Gi"
+GODOG_TAGS="@hardware_profile" go test -v ./tests/features/...
+```
 
 Note that if you want to run a single test you can add a tag to the test,
 such as `@focus` and then set the environment variable `GODOG_TAGS`:

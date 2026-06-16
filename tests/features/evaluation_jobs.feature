@@ -1373,10 +1373,9 @@ Feature: Evaluation Jobs
     And the response should contain the value "request_validation_failed" at path "$.message_code"
 
   @hardware_profile
-  Scenario: Create evaluation job with hardware profile applies adapter resources
+  Scenario: Create evaluation job with hardware profile persists reference in API response
     Given the service is running
-    And the HardwareProfile CRD is installed on the cluster
-    And a test HardwareProfile is created in the tenant namespace
+    And the test hardware profile is configured
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
       """
       {
@@ -1398,7 +1397,7 @@ Feature: Evaluation Jobs
             },
             "hardware_config": {
               "hardware_profile_ref": {
-                "name": "{{value:hardware_profile_name}}"
+                "name": "{{env:TEST_HARDWARE_PROFILE}}"
               }
             }
           }
@@ -1407,24 +1406,23 @@ Feature: Evaluation Jobs
       """
     Then the response code should be 202
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
-    And the response should contain the value "{{value:hardware_profile_name}}" at path "$.benchmarks[0].hardware_config.hardware_profile_ref.name"
+    And the response should contain the value "{{env:TEST_HARDWARE_PROFILE}}" at path "$.benchmarks[0].hardware_config.hardware_profile_ref.name"
     And I wait for the Kubernetes evaluation Job to be created
-    And the Job adapter container should have CPU request "1"
-    And the Job adapter container should have memory request "1Gi"
-    And the Job adapter container should have CPU limit "2"
-    And the Job adapter container should have memory limit "2Gi"
+    And the Job adapter container should have CPU request "{{env:TEST_HARDWARE_PROFILE_CPU_REQUEST}}"
+    And the Job adapter container should have memory request "{{env:TEST_HARDWARE_PROFILE_MEMORY_REQUEST}}"
+    And the Job adapter container should have CPU limit "{{env:TEST_HARDWARE_PROFILE_CPU_LIMIT}}"
+    And the Job adapter container should have memory limit "{{env:TEST_HARDWARE_PROFILE_MEMORY_LIMIT}}"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    And the response should contain the value "{{value:hardware_profile_name}}" at path "$.benchmarks[0].hardware_config.hardware_profile_ref.name"
+    And the response should contain the value "{{env:TEST_HARDWARE_PROFILE}}" at path "$.benchmarks[0].hardware_config.hardware_profile_ref.name"
     And the response should not contain the value "" at path "$.benchmarks[0].hardware_config.hardware_profile_ref.namespace"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
   @hardware_profile
-  Scenario: Create evaluation job with explicit hardware profile namespace
+  Scenario: Create evaluation job with explicit hardware profile namespace in API response
     Given the service is running
-    And the HardwareProfile CRD is installed on the cluster
-    And a test HardwareProfile is created in the tenant namespace
+    And the test hardware profile is configured
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
       """
       {
@@ -1446,7 +1444,7 @@ Feature: Evaluation Jobs
             },
             "hardware_config": {
               "hardware_profile_ref": {
-                "name": "{{value:hardware_profile_name}}",
+                "name": "{{env:TEST_HARDWARE_PROFILE}}",
                 "namespace": "{{env:X_TENANT|test-tenant}}"
               }
             }
@@ -1455,10 +1453,11 @@ Feature: Evaluation Jobs
       }
       """
     Then the response code should be 202
+    And the response should contain the value "{{env:TEST_HARDWARE_PROFILE}}" at path "$.benchmarks[0].hardware_config.hardware_profile_ref.name"
     And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.benchmarks[0].hardware_config.hardware_profile_ref.namespace"
     And I wait for the Kubernetes evaluation Job to be created
-    And the Job adapter container should have CPU request "1"
-    And the Job adapter container should have memory request "1Gi"
+    And the Job adapter container should have CPU request "{{env:TEST_HARDWARE_PROFILE_CPU_REQUEST}}"
+    And the Job adapter container should have memory request "{{env:TEST_HARDWARE_PROFILE_MEMORY_REQUEST}}"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
