@@ -594,6 +594,68 @@ func TestEvaluateEvaluationJobJsonnetWithCollectionId(t *testing.T) {
 	}
 }
 
+func TestEvaluateOobCollectionJobJsonnetDisconnectedAware(t *testing.T) {
+	connectedEnv := map[string]string{
+		"MODEL_URL":             "http://model.example/v1",
+		"MODEL_NAME":            "test-model",
+		"MODEL_AUTH_SECRET_REF": "secret",
+		"ENVIRONMENT_ID":        "connected",
+	}
+	disconnectedEnv := map[string]string{
+		"MODEL_URL":               "http://model.example/v1",
+		"MODEL_NAME":              "test-model",
+		"MODEL_AUTH_SECRET_REF":   "secret",
+		"ENVIRONMENT_ID":          "disconnected",
+		"TEST_DATA_S3_BUCKET":     "mlpipeline",
+		"TEST_DATA_S3_KEY":        "offline",
+		"TEST_DATA_S3_SECRET_REF": "minio-test",
+	}
+	cases := []struct {
+		file           string
+		wantCollection string
+		minBenchmarks  int
+	}{
+		{"evaluation_job_oob_toxicity.jsonnet", "toxicity-and-ethical-principles", 3},
+	}
+	for _, disconnected := range []bool{false, true} {
+		mode := "connected"
+		baseEnv := connectedEnv
+		if disconnected {
+			mode = "disconnected"
+			baseEnv = disconnectedEnv
+		}
+		for _, tc := range cases {
+			name := mode + "/" + tc.file
+			t.Run(name, func(t *testing.T) {
+				sc := &scenarioConfig{
+					values:            map[string]string{},
+					jsonnetHarnessEnv: baseEnv,
+				}
+				out, err := sc.evaluateJsonnetFile(jsonnetPayloadFilePath(t, tc.file))
+				if err != nil {
+					t.Fatalf("evaluateJsonnetFile(%s): %v", tc.file, err)
+				}
+				var job struct {
+					Collection struct {
+						ID         string                    `json:"id"`
+						Benchmarks []jsonnetBenchmarkPayload `json:"benchmarks"`
+					} `json:"collection"`
+				}
+				if err := json.Unmarshal([]byte(out), &job); err != nil {
+					t.Fatalf("unmarshal %s: %v\noutput: %s", tc.file, err, out)
+				}
+				if job.Collection.ID != tc.wantCollection {
+					t.Errorf("collection.id = %q, want %q", job.Collection.ID, tc.wantCollection)
+				}
+				if len(job.Collection.Benchmarks) < tc.minBenchmarks {
+					t.Fatalf("collection.benchmarks = %d, want at least %d", len(job.Collection.Benchmarks), tc.minBenchmarks)
+				}
+				assertJsonnetBenchmarksDisconnectedAware(t, tc.file, job.Collection.Benchmarks, disconnected)
+			})
+		}
+	}
+}
+
 type jsonnetTestDataRef struct {
 	S3 struct {
 		Bucket    string `json:"bucket"`

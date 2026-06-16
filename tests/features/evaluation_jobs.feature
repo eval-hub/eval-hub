@@ -424,45 +424,7 @@ Feature: Evaluation Jobs
  # This test uses gated HuggingFace datasets (toxigen, truthfulqa_mc1, bigbench_hhh_alignment_multiple_choice) which require authentication.
   Scenario: Verify Evaluation Jobs Can Use OOB Collections - toxicity-and-ethical-principles
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body:
-      """
-      {
-        "name": "test-evaluation-job-oob-collection",
-        "collection": {
-          "id": "toxicity-and-ethical-principles",
-          "benchmarks": [
-            {
-              "id": "toxigen",
-              "provider_id": "lm_evaluation_harness",
-              "parameters": {
-                "limit": 5
-              }
-            },
-            {
-              "id": "truthfulqa_mc1",
-              "provider_id": "lm_evaluation_harness",
-              "parameters": {
-                "limit": 3
-              }
-            },
-            {
-              "id": "bigbench_hhh_alignment_multiple_choice",
-              "provider_id": "lm_evaluation_harness",
-              "parameters": {
-                "limit": 1
-              }
-            }
-          ]
-        },
-        "model": {
-          "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}",
-          "auth": {
-            "secret_ref": "{{env:MODEL_AUTH_SECRET_REF|test}}"
-          }
-        }
-      }
-      """
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oob_toxicity.jsonnet"
     Then the response code should be 202
     And the response should contain the value "toxicity-and-ethical-principles" at path "$.collection.id"
     And I wait for the evaluation job status to be "completed"
