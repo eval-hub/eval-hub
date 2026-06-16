@@ -96,6 +96,7 @@ What evalhub tools are available?
 
 | Tool | Parameters | Description |
 |---|---|---|
+| `discover_providers` | optional: `target_type` (`model`, `agent`, `inference_server`); `evaluates` (array of capability tags — provider must match all) | Discover providers with summaries, hints, and complementary suggestions |
 | `submit_evaluation` | `name`;<br><br>**`model`**: `url`, `name`, optional `auth_secret`;<br><br>either **`benchmarks`**: non-empty list of `{id, provider_id}` **or** **`collection`**: `{id}` (collection id from eval-hub; shipped defaults include e.g. `leaderboard-v2`);<br><br>optional: `description`, `tags`, `experiment` | Submit an evaluation job |
 | `cancel_job` | `job_id` | Cancel or hard-delete a running job |
 | `get_job_status` | `job_id` | Poll status of a submitted job (includes progress info) |
@@ -192,7 +193,7 @@ claude mcp list
 Run the same verification steps as stdio transport:
 
 - [ ] Resources accessible (`evalhub://providers`, `evalhub://benchmarks`, `evalhub://server/version`, etc.)
-- [ ] Tools accessible and functional (`submit_evaluation`, `cancel_job`, `get_job_status`)
+- [ ] Tools accessible and functional (`discover_providers`, `submit_evaluation`, `cancel_job`, `get_job_status`)
 - [ ] Prompts accessible (`edd_workflow`, `evaluate_model`, `compare_runs`)
 - [ ] Autocompletion works for parameterized resource URIs
 

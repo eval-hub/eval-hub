@@ -11,6 +11,10 @@ runtime required at execution time.
 pip install eval-hub-mcp
 ```
 
+## Capabilities
+
+With `EVALHUB_BASE_URL`, `EVALHUB_TOKEN`, and `EVALHUB_TENANT` configured, the server exposes MCP **tools** (`discover_providers`, `submit_evaluation`, `get_job_status`, `cancel_job`), **resources** (`evalhub://providers`, `evalhub://benchmarks`, `evalhub://collections`, `evalhub://jobs`, and more), and **prompts** (`edd_workflow`, `evaluate_model`, `compare_runs`). See [MCP.md](../MCP.md) in the eval-hub repository for the full reference.
+
 ## Usage
 
 ```bash

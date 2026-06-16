@@ -88,6 +88,76 @@ CLI flags override YAML and environment variables when set: `--auth-type`, `--tr
 
 Load a config file with `--config /path/to/config.yaml` or `~/.evalhub/config.yaml`.
 
+## MCP capabilities reference
+
+When `EVALHUB_BASE_URL` is configured and the eval-hub API is reachable, the MCP server advertises **tools**, **resources**, **prompts**, and **completions**. Without a backend, only the `evalhub://server/version` resource is available (no tools).
+
+### Tools
+
+| Tool | Parameters | Description |
+|------|------------|-------------|
+| `discover_providers` | Optional: `target_type` (`model`, `agent`, or `inference_server`); `evaluates` (array of capability tags, e.g. `safety`, `robustness` — provider must evaluate **all** listed values) | Discover evaluation providers with agent-oriented metadata: summary, usage hints, result interpretation, complementary providers, and when to use each provider. Unfiltered calls return every provider; when filters are set, only providers with agent metadata can match. |
+| `submit_evaluation` | Required: `name`, `model` (`url`, `name`, optional `auth_secret`); either `benchmarks` (list of `{id, provider_id}`) **or** `collection` (`{id}`), not both. Optional: `description`, `tags`, `experiment` (`name`, `tags`, `artifact_location`) | Submit a new evaluation job. Returns `job_id` and initial `state`. |
+| `get_job_status` | Required: `job_id` | Poll job state, progress percentage, and per-benchmark status. Completed benchmarks may include `result_interpretation` and `complements` from provider metadata. |
+| `cancel_job` | Required: `job_id` | Cancel a running or pending job. Use `get_job_status` to confirm the final state. |
+
+**Example — discover providers for agent safety evaluation:**
+
+```json
+{
+  "target_type": "agent",
+  "evaluates": ["safety"]
+}
+```
+
+**Example — submit with a collection:**
+
+```json
+{
+  "name": "safety-eval",
+  "model": {"url": "http://my-model:8080/v1", "name": "my-model"},
+  "collection": {"id": "safety-suite"}
+}
+```
+
+### Resources
+
+All resource URIs use the `evalhub://` scheme and return JSON.
+
+| URI | Description |
+|-----|-------------|
+| `evalhub://providers` | List evaluation providers (supports `?limit=` and `?offset=` pagination) |
+| `evalhub://providers/{id}` | Get a provider by ID |
+| `evalhub://benchmarks` | List all benchmarks |
+| `evalhub://benchmarks?label={label}` | Filter benchmarks by label (repeat `label` for multiple values) |
+| `evalhub://benchmarks/{id}` | Get a benchmark by ID |
+| `evalhub://collections` | List benchmark collections (supports `?limit=` and `?offset=`) |
+| `evalhub://collections/{id}` | Get a collection by ID |
+| `evalhub://jobs` | List evaluation jobs (supports `?limit=` and `?offset=`) |
+| `evalhub://jobs?status={status}` | Filter jobs by status: `pending`, `running`, `completed`, `failed`, `cancelled`, `partially_failed` |
+| `evalhub://jobs/{id}` | Get a job by ID (full status and per-benchmark progress) |
+| `evalhub://server/version` | Server version and build metadata (always available) |
+
+### Prompts
+
+| Prompt | Arguments | Description |
+|--------|-----------|-------------|
+| `edd_workflow` | Required: `application_type` (`rag`, `agent`, `safety`, or `classifier`) | Evaluation-Driven Development cycle (Define → Measure → Iterate) tailored to the application type |
+| `evaluate_model` | Optional: `model_url`, `benchmark_preferences` | Step-by-step model evaluation workflow (model URL, benchmark selection, experiment config, submission, monitoring) |
+| `compare_runs` | Optional: `job_ids` (comma-separated) | Compare two or more evaluation jobs: fetch results, compare metrics, summarize findings |
+
+### Completions
+
+Argument completion is available for resource template parameters (provider, benchmark, collection, and job IDs; job `status` values; benchmark `label` tags). Values are cached for 30 seconds.
+
+### Typical workflow
+
+1. Call `discover_providers` (or read `evalhub://providers`) to choose an evaluation provider.
+2. Browse `evalhub://benchmarks` or `evalhub://collections` to pick benchmarks or a collection.
+3. Call `submit_evaluation` with the model endpoint and selected benchmarks or collection.
+4. Poll with `get_job_status` until the job reaches a terminal state.
+5. Optionally use the `compare_runs` prompt to compare multiple completed jobs.
+
 ## Testing that the MCP service is functioning
 
 ### OpenShift (kube-rbac-proxy)
