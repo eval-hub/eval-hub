@@ -147,8 +147,7 @@ func newMockEvalHubHandler() http.Handler {
 				},
 				EvaluationJobConfig: config,
 			}
-			w.WriteHeader(http.StatusAccepted)
-			writeJSON(w, job)
+			writeJSONStatus(w, http.StatusAccepted, job)
 			return
 		}
 
@@ -192,6 +191,11 @@ func newMockEvalHubHandler() http.Handler {
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
+	writeJSONStatus(w, http.StatusOK, v)
+}
+
+func writeJSONStatus(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v) //nolint:errcheck
 }

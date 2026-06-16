@@ -295,13 +295,10 @@ func (tc *mcpTestContext) theToolCallShouldSucceed() error {
 }
 
 func (tc *mcpTestContext) theToolCallShouldReturnAnError() error {
-	if tc.toolCallErr != nil {
-		return nil
+	if tc.toolCallErr == nil && (tc.toolCallResult == nil || !tc.toolCallResult.IsError) {
+		return fmt.Errorf("expected tool call to return an error, but it succeeded")
 	}
-	if tc.toolCallResult != nil && tc.toolCallResult.IsError {
-		return nil
-	}
-	return fmt.Errorf("expected tool call to return an error, but it succeeded")
+	return nil
 }
 
 func (tc *mcpTestContext) theToolResultShouldContain(expected string) error {
