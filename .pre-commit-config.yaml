@@ -5,9 +5,9 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^docs/.*\.(html|json)$
+        exclude: (\.ipynb$|^docs/.*\.(html|json)$)
       - id: end-of-file-fixer
-        exclude: ^docs/.*\.(html|json)$
+        exclude: (\.ipynb$|^docs/.*\.(html|json)$)
       - id: check-yaml
         args: [--allow-multiple-documents]
       - id: check-json
