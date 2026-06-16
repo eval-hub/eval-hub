@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp start-service stop-service start-sidecar stop-sidecar lint validate-configs test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp start-service stop-service start-sidecar stop-sidecar lint validate-configs test test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet update-deps generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components fvt-report docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels
 
 GOPATH := $(shell go env GOPATH)
 GOBIN := $(shell go env GOPATH)/bin
@@ -173,7 +173,7 @@ test-coverage: $(BIN_DIR) ## Run unit tests with coverage
 	@go tool cover -html=$(BIN_DIR)/coverage-init.out -o $(BIN_DIR)/coverage-init.html
 	@echo "Coverage report generated: $(BIN_DIR)/coverage.html and $(BIN_DIR)/coverage-init.html"
 
-test-all: test test-fvt test-fvt-server ## Run all tests (unit + FVT)
+test-all: test test-fvt test-fvt-server test-mcp-fvt ## Run all tests (unit + FVT)
 
 test-help: ## Display Go test flags documentation
 	@go help testflag
@@ -210,7 +210,7 @@ test-fvt-coverage: $(BIN_DIR)## Run integration (FVT) tests with coverage
 
 test-fvt-server-coverage: start-service-coverage ## Run FVT tests using godog against a running server with coverage
 	@echo "Running FVT tests with coverage against a running server..."
-	@GOCOVERDIR="${BIN_DIR}" SERVER_URL="${SERVER_URL}" make test-fvt; status=$$?; make stop-service; exit $$status
+	@GOCOVERDIR="${BIN_DIR}" SERVER_URL="${SERVER_URL}" make test-fvt test-mcp-fvt; status=$$?; make stop-service; exit $$status
 	go tool covdata textfmt -i ${BIN_DIR} -o ${BIN_DIR}/coverage-fvt.out
 	@go tool cover -html=$(BIN_DIR)/coverage-fvt.out -o $(BIN_DIR)/coverage-fvt.html
 	@echo "Coverage report generated: $(BIN_DIR)/coverage-fvt.html"
@@ -699,6 +699,12 @@ test-mcp-cross-platform: test-mcp-build-all test-mcp-binary-info test-mcp-binary
 	@echo "========================================"
 	@echo "  All cross-platform build tests PASSED"
 	@echo "========================================"
+
+MCP_FVT_TESTS ?= ./tests/mcp/features/...
+
+test-mcp-fvt: $(BIN_DIR) ## Run MCP godog feature tests (tests/mcp/features)
+	@echo "Running MCP godog tests..."
+	@go test -v -race ${MCP_FVT_TESTS}
 
 test-mcp-e2e: start-service ## Run end-to-end MCP tests
 	@echo "Running end-to-end MCP tests..."
