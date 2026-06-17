@@ -61,6 +61,17 @@ local harness = std.parseJson(std.extVar('harness'));
   // Default benchmark for evaluation_job.jsonnet (disconnected vs connected FVT).
   defaultBenchmark():: $.arcEasyBenchmark({}),
 
+  // OOB collection job with per-benchmark overrides (disconnected-aware tokenizer + test_data_ref).
+  oobCollectionJob(collectionId, benchmarks)::
+    {
+      name: 'test-evaluation-job-oob-collection',
+      collection: {
+        id: collectionId,
+        benchmarks: benchmarks,
+      },
+      model: $.model(),
+    },
+
   // Default evaluation job model block used across many scenarios.
   model()::
     local secretRef = $.env('MODEL_AUTH_SECRET_REF', '');
