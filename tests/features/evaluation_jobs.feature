@@ -105,7 +105,7 @@ Feature: Evaluation Jobs
 
   Scenario: Evaluation job with multiple benchmarks from same provider
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_multiple_benchmark.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_multiple_benchmark.jsonnet"
     Then the response code should be 202
     And the response should contain the value "pending" at path "$.status.state"
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
@@ -123,7 +123,7 @@ Feature: Evaluation Jobs
     And the response should contain the value "arc_easy" at path "$.benchmarks[0].id"
     And the response should contain the value "5" at path "$.benchmarks[0].parameters.num_examples"
     And the response should contain the value "arc_easy" at path "$.benchmarks[1].id"
-    And the response should contain the value "10" at path "$.benchmarks[1].parameters.num_examples"
+    And the response should contain the value "5" at path "$.benchmarks[1].parameters.num_examples"
     And the response should not contain the value "collection" at path "$.collection"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204

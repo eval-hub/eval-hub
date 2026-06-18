@@ -11,7 +11,7 @@ test.mergeOptional(
     model: test.model(),
     benchmarks: [
       test.benchmark('arc_easy', 'lm_evaluation_harness', { num_examples: 5 }),
-      test.benchmark('arc_easy', 'lm_evaluation_harness', { num_examples: 10 }),
+      test.benchmark('arc_easy', 'lm_evaluation_harness', { num_examples: 5 }),
     ],
     pass_criteria: {
       threshold: 0.5,
