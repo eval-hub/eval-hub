@@ -75,7 +75,7 @@ Kubernetes **job pods** use **`sidecar_config.json`** (not the server’s main C
 ## Observability
 
 - **`internal/eval_hub/metrics`** — Prometheus metric definitions (request counters, duration histograms). The metrics middleware wraps the main API router to record observations.
-- **`internal/eval_hub/server/metrics_server.go`** — Dedicated HTTP server for Prometheus scraping. Serves **only** `/metrics` on a separate port (default 9090, configurable via `METRICS_PORT`) bound to `0.0.0.0`. This port is cluster-internal only (no Route, no auth) so that Prometheus can scrape without going through kube-rbac-proxy. In **local mode**, `/metrics` is additionally served on the main API router for FVT compatibility.
+- **`internal/eval_hub/server/metrics_server.go`** — Dedicated HTTP server for Prometheus scraping. Serves **only** `/metrics` on a separate port (default 8081, configurable via `METRICS_PORT`) bound to `0.0.0.0`. This port is cluster-internal only (no Route, no auth) so that Prometheus can scrape without going through kube-rbac-proxy. In **local mode**, `/metrics` is additionally served on the main API router for FVT compatibility.
 - **OpenTelemetry** — Optional tracing/metrics wiring from service config (`internal/eval_hub/config`, handler helpers as applicable).
 
 Logging uses **slog** with **`internal/logging`** enriching logs from the incoming request (request ID, method, URI, etc.).

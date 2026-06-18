@@ -3,6 +3,7 @@ Feature: Metrics Endpoint
   I want to scrape Prometheus metrics
   So that I can monitor the service
 
+  @metrics
   Scenario: Get Prometheus metrics
     Given the service is running
     When I send a GET request to "/metrics"
@@ -12,6 +13,7 @@ Feature: Metrics Endpoint
     And the metrics should include "http_request_duration_seconds"
     And the metrics should include "http_requests_in_flight"
 
+  @metrics
   Scenario: Metrics are recorded for requests
     Given the service is running
     When I send a GET request to "/api/v1/health"
