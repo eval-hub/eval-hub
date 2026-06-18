@@ -59,7 +59,7 @@ otel:
   # enable_logs: true
 prometheus:
   enabled: true
-  port: 9090
+  port: 8081
   host: "0.0.0.0"
 
 sidecar:

@@ -88,6 +88,26 @@ When running in local server mode, the tests will:
 | `@connected` | Used by the Jenkins jobs and set when running on a connected cluster |
 | `@disconnected` | Used by the Jenkins jobs and set when running on a disconnected cluster |
 | `@hardware_profile` | Hardware profile API and Kubernetes Job adapter resource tests in `evaluation_jobs.feature`; require pipeline env vars (see below). |
+| `@metrics` | Prometheus `/metrics` scrape tests in `metrics.feature`; in cluster/remote mode require `METRICS_URL` (see below). |
+
+### Metrics tests (`@metrics`)
+
+Prometheus metrics are served on a **dedicated port** (default `8081`) and are scraped directly, not through kube-rbac-proxy. API requests continue to use `SERVER_URL`; scrape requests use `METRICS_URL`.
+
+| Mode | `METRICS_URL` |
+| --- | --- |
+| Local embedded server (default) | Optional; defaults to the API base URL (`http://localhost:8080` or `PORT`) because local mode serves `/metrics` on the main router |
+| Remote / cluster (`SERVER_URL` set) | **Required** — e.g. `http://evalhub-metrics.evalhub.svc.cluster.local:8081` |
+
+```bash
+export SERVER_URL="https://evalhub.example.com"
+export METRICS_URL="http://evalhub-metrics.evalhub.svc.cluster.local:8081"
+export AUTH_TOKEN="..."
+export X_TENANT="tenant"
+GODOG_TAGS="@metrics" go test -v ./tests/features/...
+```
+
+If `SERVER_URL` is set but `METRICS_URL` is not, `@metrics` scenarios are **skipped**.
 
 ### Hardware profile tests (`@hardware_profile`)
 
