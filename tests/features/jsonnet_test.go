@@ -277,9 +277,6 @@ test.oobCollectionRefJobWithLimit('job-a', 'toxicity-and-ethical-principles', te
 		if lim, ok := params["num_examples"].(float64); !ok || int(lim) != 10 {
 			t.Errorf("benchmark[%d].parameters.num_examples = %v, want 10", i, params["num_examples"])
 		}
-		if limit, ok := params["limit"]; ok && limit != nil {
-			t.Errorf("benchmark[%d].parameters.limit = %v, want cleared", i, limit)
-		}
 	}
 }
 

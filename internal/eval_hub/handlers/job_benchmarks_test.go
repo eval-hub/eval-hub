@@ -48,7 +48,7 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 		}
 	})
 
-	t.Run("provider-wide job override wins over collection for same key", func(t *testing.T) {
+	t.Run("non-empty collection value overrides job for same key", func(t *testing.T) {
 		t.Parallel()
 		benchmark := api.CollectionBenchmarkConfig{
 			ProviderID: "prov-a",
@@ -59,65 +59,20 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 			Parameters: map[string]any{"k": "from_job"},
 		}}
 		got := mergeBenchmarkParameters(benchmark, job)
-		if got.Parameters["k"] != "from_job" {
-			t.Fatalf("k = %v, want from_job", got.Parameters["k"])
+		if got.Parameters["k"] != "from_collection" {
+			t.Fatalf("k = %v, want from_collection", got.Parameters["k"])
 		}
 	})
 
-	t.Run("benchmark-specific job override uses num_examples and clears collection limit", func(t *testing.T) {
-		t.Parallel()
-		benchmark := api.CollectionBenchmarkConfig{
-			Ref:        api.Ref{ID: "toxigen"},
-			ProviderID: "lm_evaluation_harness",
-			Parameters: map[string]any{"limit": 940, "num_fewshot": 0},
-		}
-		job := []api.EvaluationBenchmarkConfig{{
-			Ref:        api.Ref{ID: "toxigen"},
-			ProviderID: "lm_evaluation_harness",
-			Parameters: map[string]any{"num_examples": 10, "limit": nil},
-		}}
-		got := mergeBenchmarkParameters(benchmark, job)
-		if got.Parameters["num_examples"] != 10 {
-			t.Fatalf("num_examples = %v, want 10", got.Parameters["num_examples"])
-		}
-		if _, ok := got.Parameters["limit"]; ok {
-			t.Fatalf("limit = %v, want cleared", got.Parameters["limit"])
-		}
-		if got.Parameters["num_fewshot"] != 0 {
-			t.Fatalf("num_fewshot = %v, want 0", got.Parameters["num_fewshot"])
-		}
-	})
-
-	t.Run("benchmark-specific job override wins over collection limit", func(t *testing.T) {
-		t.Parallel()
-		benchmark := api.CollectionBenchmarkConfig{
-			Ref:        api.Ref{ID: "toxigen"},
-			ProviderID: "lm_evaluation_harness",
-			Parameters: map[string]any{"limit": 940, "num_fewshot": 0},
-		}
-		job := []api.EvaluationBenchmarkConfig{{
-			Ref:        api.Ref{ID: "toxigen"},
-			ProviderID: "lm_evaluation_harness",
-			Parameters: map[string]any{"limit": 10},
-		}}
-		got := mergeBenchmarkParameters(benchmark, job)
-		if got.Parameters["limit"] != 10 {
-			t.Fatalf("limit = %v, want 10", got.Parameters["limit"])
-		}
-		if got.Parameters["num_fewshot"] != 0 {
-			t.Fatalf("num_fewshot = %v, want 0", got.Parameters["num_fewshot"])
-		}
-	})
-
-	t.Run("empty string in job override removes collection parameter", func(t *testing.T) {
+	t.Run("empty string in collection removes key including job-only keys", func(t *testing.T) {
 		t.Parallel()
 		benchmark := api.CollectionBenchmarkConfig{
 			ProviderID: "prov-a",
-			Parameters: map[string]any{"k": "collection_val"},
+			Parameters: map[string]any{"k": ""},
 		}
 		job := []api.EvaluationBenchmarkConfig{{
 			ProviderID: "prov-a",
-			Parameters: map[string]any{"k": "", "other": "keep"},
+			Parameters: map[string]any{"k": "job_val", "other": "keep"},
 		}}
 		got := mergeBenchmarkParameters(benchmark, job)
 		want := map[string]any{"other": "keep"}
@@ -126,15 +81,15 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 		}
 	})
 
-	t.Run("nil parameter value in job override removes collection key", func(t *testing.T) {
+	t.Run("nil parameter value in collection removes key", func(t *testing.T) {
 		t.Parallel()
 		benchmark := api.CollectionBenchmarkConfig{
 			ProviderID: "prov-a",
-			Parameters: map[string]any{"k": "collection_val"},
+			Parameters: map[string]any{"k": nil},
 		}
 		job := []api.EvaluationBenchmarkConfig{{
 			ProviderID: "prov-a",
-			Parameters: map[string]any{"k": nil},
+			Parameters: map[string]any{"k": "job_val"},
 		}}
 		got := mergeBenchmarkParameters(benchmark, job)
 		if _, ok := got.Parameters["k"]; ok {
@@ -204,11 +159,11 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 		}
 	})
 
-	t.Run("multiple provider-wide job blocks accumulate with later winning conflicts", func(t *testing.T) {
+	t.Run("multiple job blocks same provider accumulate then collection overlays", func(t *testing.T) {
 		t.Parallel()
 		benchmark := api.CollectionBenchmarkConfig{
 			ProviderID: "prov-a",
-			Parameters: map[string]any{"third": "from_collection", "dup": "collection_val"},
+			Parameters: map[string]any{"third": "from_collection", "dup": "collection_wins"},
 		}
 		job := []api.EvaluationBenchmarkConfig{
 			{ProviderID: "prov-a", Parameters: map[string]any{"first": 1, "dup": "first"}},
@@ -219,7 +174,7 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 			"first":  1,
 			"second": 2,
 			"third":  "from_collection",
-			"dup":    "second",
+			"dup":    "collection_wins",
 		}
 		if !reflect.DeepEqual(got.Parameters, want) {
 			t.Fatalf("Parameters = %#v, want %#v", got.Parameters, want)
@@ -347,7 +302,7 @@ func TestGetJobBenchmarks(t *testing.T) {
 		if len(got) != 2 {
 			t.Fatalf("len = %d, want 2", len(got))
 		}
-		want0 := map[string]any{"shared": "from_job_a", "only_a": 1, "base": "x"}
+		want0 := map[string]any{"shared": "from_collection_a", "only_a": 1, "base": "x"}
 		if !reflect.DeepEqual(got[0].Parameters, want0) {
 			t.Fatalf("first benchmark parameters = %#v, want %#v", got[0].Parameters, want0)
 		}

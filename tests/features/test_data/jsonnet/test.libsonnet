@@ -95,11 +95,10 @@ local harness = std.parseJson(std.extVar('harness'));
       },
     },
 
-  // num_examples caps runtime; null limit clears collection YAML limit when present.
+  // num_examples caps runtime for OOB collection FVT without conflicting with collection limit.
   oobCollectionParameterOverrides(numExamples)::
     {
       num_examples: numExamples,
-      limit: null,
     },
 
   // Applies defaultOobNumExamples() to each benchmark id in an OOB collection.
