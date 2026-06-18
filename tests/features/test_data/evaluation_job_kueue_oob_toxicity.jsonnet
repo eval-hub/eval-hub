@@ -9,7 +9,7 @@ local test = import 'test.libsonnet';
   collection: {
     id: 'toxicity-and-ethical-principles',
     benchmarks: std.map(
-      function(id) test.benchmark(id, 'lm_evaluation_harness', { limit: test.defaultOobLimit() }),
+      function(id) test.benchmark(id, 'lm_evaluation_harness', test.oobCollectionParameterOverrides(test.defaultOobNumExamples())),
       test.toxicityAndEthicalPrinciplesBenchmarkIds(),
     ),
   },

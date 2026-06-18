@@ -72,8 +72,8 @@ local harness = std.parseJson(std.extVar('harness'));
       model: $.model(),
     },
 
-  // Default per-benchmark limit for OOB collection FVT (overrides collection YAML defaults).
-  defaultOobLimit():: 10,
+  // Default per-benchmark example cap for OOB collection FVT.
+  defaultOobNumExamples():: 10,
 
   safetyAndFairnessV1BenchmarkIds()::
     ['truthfulqa_mc1', 'toxigen', 'winogender', 'crows_pairs_english', 'bbq', 'ethics_cm'],
@@ -84,7 +84,7 @@ local harness = std.parseJson(std.extVar('harness'));
   leaderboardV2BenchmarkIds()::
     ['leaderboard_ifeval', 'leaderboard_bbh', 'leaderboard_gpqa', 'leaderboard_mmlu_pro', 'leaderboard_musr', 'leaderboard_math_hard'],
 
-  // OOB collection with per-benchmark parameter overrides (e.g. limit for faster cluster FVT).
+  // OOB collection with per-benchmark parameter overrides for faster cluster FVT.
   oobCollectionRefJobWithBenchmarks(name, collectionId, benchmarks)::
     {
       name: name,
@@ -95,13 +95,20 @@ local harness = std.parseJson(std.extVar('harness'));
       },
     },
 
-  // Applies defaultOobLimit() (or custom limit) to each benchmark id in an OOB collection.
-  oobCollectionRefJobWithLimit(name, collectionId, benchmarkIds, limit=null)::
-    local lim = if limit == null then $.defaultOobLimit() else limit;
+  // num_examples caps runtime; null limit clears collection YAML limit when present.
+  oobCollectionParameterOverrides(numExamples)::
+    {
+      num_examples: numExamples,
+      limit: null,
+    },
+
+  // Applies defaultOobNumExamples() to each benchmark id in an OOB collection.
+  oobCollectionRefJobWithLimit(name, collectionId, benchmarkIds, numExamples=null)::
+    local n = if numExamples == null then $.defaultOobNumExamples() else numExamples;
     $.oobCollectionRefJobWithBenchmarks(
       name,
       collectionId,
-      std.map(function(id) $.benchmark(id, 'lm_evaluation_harness', { limit: lim }), benchmarkIds),
+      std.map(function(id) $.benchmark(id, 'lm_evaluation_harness', $.oobCollectionParameterOverrides(n)), benchmarkIds),
     ),
 
   // OOB collection by id only (server expands to full collection). model.auth is included only when

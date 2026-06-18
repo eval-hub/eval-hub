@@ -261,16 +261,21 @@ func GetJobBenchmarks(job *api.EvaluationJobResource, collection *api.Collection
 
 func mergeBenchmarkParameters(benchmark api.CollectionBenchmarkConfig, jobBenchmarks []api.EvaluationBenchmarkConfig) api.EvaluationBenchmarkConfig {
 	parameters := map[string]any{}
-	for _, jobBenchmark := range jobBenchmarks {
-		if jobBenchmark.ProviderID == benchmark.ProviderID {
-			maps.Copy(parameters, jobBenchmark.Parameters)
+	for key, value := range benchmark.Parameters {
+		if !isEmpty(value) {
+			parameters[key] = value
 		}
 	}
-	for key, value := range benchmark.Parameters {
-		if isEmpty(value) {
-			delete(parameters, key)
-		} else {
-			parameters[key] = value
+	// Provider-wide job overrides (no benchmark id) apply to every benchmark from that provider.
+	for _, jobBenchmark := range jobBenchmarks {
+		if jobBenchmark.ID == "" && jobBenchmark.ProviderID == benchmark.ProviderID {
+			applyParameterOverrides(parameters, jobBenchmark.Parameters)
+		}
+	}
+	// Benchmark-specific overrides win over collection defaults and provider-wide overrides.
+	for _, jobBenchmark := range jobBenchmarks {
+		if jobBenchmark.ID == benchmark.ID && jobBenchmark.ProviderID == benchmark.ProviderID {
+			applyParameterOverrides(parameters, jobBenchmark.Parameters)
 		}
 	}
 	// pick up TestDataRef and HardwareConfig from the job override if provided
@@ -305,6 +310,16 @@ func mergeBenchmarkParameters(benchmark api.CollectionBenchmarkConfig, jobBenchm
 		HardwareConfig: hardwareConfig,
 		TestDataRef:    testDataRef,
 		Parameters:     parameters,
+	}
+}
+
+func applyParameterOverrides(parameters map[string]any, overrides map[string]any) {
+	for key, value := range overrides {
+		if isEmpty(value) {
+			delete(parameters, key)
+		} else {
+			parameters[key] = value
+		}
 	}
 }
 
