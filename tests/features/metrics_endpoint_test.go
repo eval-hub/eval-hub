@@ -3,7 +3,28 @@ package features
 import (
 	"net/url"
 	"testing"
+
+	messages "github.com/cucumber/messages/go/v21"
 )
+
+func TestScenarioHasTag(t *testing.T) {
+	t.Parallel()
+	sc := &messages.Pickle{
+		Tags: []*messages.PickleTag{
+			{Name: "@metrics"},
+			{Name: "hardware_profile"},
+		},
+	}
+	if !scenarioHasTag(sc, "metrics") {
+		t.Fatal("expected @metrics to match tag metrics")
+	}
+	if !scenarioHasTag(sc, "hardware_profile") {
+		t.Fatal("expected hardware_profile to match")
+	}
+	if scenarioHasTag(sc, "ignore") {
+		t.Fatal("unexpected tag match")
+	}
+}
 
 func TestIsMetricsScrapePath(t *testing.T) {
 	t.Parallel()

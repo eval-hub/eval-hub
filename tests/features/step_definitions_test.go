@@ -196,7 +196,8 @@ func resolveMetricsBaseURL(apiBase *url.URL) (*url.URL, error) {
 
 func scenarioHasTag(sc *godog.Scenario, tag string) bool {
 	for _, t := range sc.Tags {
-		if t.Name == tag {
+		tagName := strings.TrimPrefix(t.Name, "@")
+		if tagName == tag {
 			return true
 		}
 	}
