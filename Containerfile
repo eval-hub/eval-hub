@@ -76,7 +76,7 @@ USER 1000
 
 # Expose service port
 EXPOSE 8080
-EXPOSE 9090
+EXPOSE 8081
 
 # Environment variables
 ENV PORT=8080 \

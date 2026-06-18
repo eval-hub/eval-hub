@@ -43,6 +43,8 @@ const (
 	mlflowPrefix = "mlflow:"
 	envPrefix    = "env:"
 	regexpPrefix = "regex:"
+
+	envMetricsURL = "METRICS_URL"
 )
 
 // modelEndpointStatus captures preflight outcome from checkModelEndpoint for steps that gate on connectivity.
@@ -66,10 +68,11 @@ var (
 )
 
 type apiFeature struct {
-	baseURL    *url.URL
-	server     *server.Server
-	httpServer *http.Server
-	client     *http.Client
+	baseURL        *url.URL
+	metricsBaseURL *url.URL
+	server         *server.Server
+	httpServer     *http.Server
+	client         *http.Client
 }
 
 // this is used for a scenario to ensure that scenarios do not overwrite
@@ -143,6 +146,63 @@ func checkBaseURL(uri *url.URL, from string) {
 	}
 }
 
+func isMetricsScrapePath(path string) bool {
+	path = strings.TrimSpace(path)
+	if path == "/metrics" {
+		return true
+	}
+	u, err := url.Parse(path)
+	return err == nil && u.Path == "/metrics"
+}
+
+func joinBaseURL(base *url.URL, path string) string {
+	baseStr := strings.TrimRight(base.String(), "/")
+	if strings.HasPrefix(path, baseStr) {
+		return path
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return baseStr + path
+}
+
+// resolveMetricsBaseURL returns the base URL for Prometheus scrape requests.
+func resolveMetricsBaseURL(apiBase *url.URL) (*url.URL, error) {
+	// METRICS_URL is set (local or remote/cluster).
+	// Input: METRICS_URL=http://evalhub-metrics.<ns>.svc:8081 (or any valid scrape base).
+	// Behavior: parse and return it; used when the pipeline targets the dedicated metrics port directly.
+	if raw := strings.TrimSpace(os.Getenv(envMetricsURL)); raw != "" {
+		u, err := url.Parse(raw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid METRICS_URL: %w", err)
+		}
+		checkBaseURL(u, raw)
+		return u, nil
+	}
+
+	// Remote/cluster mode without METRICS_URL.
+	// Input: SERVER_URL=https://evalhub.example.com, METRICS_URL unset.
+	// Behavior: return nil so callers can skip @metrics scenarios or error if /metrics is requested
+	// (metrics are not on the kube-rbac-proxy route; the pipeline must set METRICS_URL explicitly).
+	if strings.TrimSpace(os.Getenv("SERVER_URL")) != "" {
+		return nil, nil
+	}
+
+	// Local embedded-server mode (SERVER_URL unset, METRICS_URL unset).
+	// Input: apiBase=http://localhost:8080 (or PORT); local mode serves /metrics on the main router.
+	// Behavior: default scrape base to the API base URL.
+	return apiBase, nil
+}
+
+func scenarioHasTag(sc *godog.Scenario, tag string) bool {
+	for _, t := range sc.Tags {
+		if t.Name == tag {
+			return true
+		}
+	}
+	return false
+}
+
 func createApiFeature() (*apiFeature, error) {
 	timeout := 60 * time.Second
 	if timeoutStr := os.Getenv("TEST_TIMEOUT"); timeoutStr != "" {
@@ -162,7 +222,11 @@ func createApiFeature() (*apiFeature, error) {
 			return nil, logError(fmt.Errorf("Invalid SERVER_URL: %v", err))
 		}
 		checkBaseURL(uri, serverURL)
-		return &apiFeature{client: client, baseURL: uri}, nil
+		metricsBase, err := resolveMetricsBaseURL(uri)
+		if err != nil {
+			return nil, logError(err)
+		}
+		return &apiFeature{client: client, baseURL: uri, metricsBaseURL: metricsBase}, nil
 	}
 
 	port := 8080
@@ -181,9 +245,15 @@ func createApiFeature() (*apiFeature, error) {
 	}
 	checkBaseURL(baseURL, uri)
 
+	metricsBase, err := resolveMetricsBaseURL(baseURL)
+	if err != nil {
+		return nil, logError(err)
+	}
+
 	api := &apiFeature{
-		client:  client,
-		baseURL: baseURL,
+		client:         client,
+		baseURL:        baseURL,
+		metricsBaseURL: metricsBase,
 	}
 	api.startLocalServer(port)
 	return api, nil
@@ -763,9 +833,18 @@ func (tc *scenarioConfig) getEndpoint(path string) (string, error) {
 		path = strings.Replace(path, "{id}", tc.lastId, 1)
 	}
 
+	if isMetricsScrapePath(path) {
+		if tc.apiFeature.metricsBaseURL == nil {
+			return "", tc.logError(fmt.Errorf(
+				"METRICS_URL is required when SERVER_URL is set (metrics are served on a separate port, not through kube-rbac-proxy)",
+			))
+		}
+		return joinBaseURL(tc.apiFeature.metricsBaseURL, path), nil
+	}
+
 	endpoint := path
 	if !strings.HasPrefix(endpoint, tc.apiFeature.baseURL.String()) {
-		endpoint = fmt.Sprintf("%s%s", tc.apiFeature.baseURL.String(), path)
+		endpoint = joinBaseURL(tc.apiFeature.baseURL, path)
 	}
 
 	return endpoint, nil
@@ -803,11 +882,14 @@ func (tc *scenarioConfig) iSendARequestImpl(method, path, body, caller string) e
 		tc.logDebug("Failed to create request: %v\n", err)
 		return err
 	}
-	if authToken := os.Getenv("AUTH_TOKEN"); authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+authToken)
-	}
-	if tenant := os.Getenv("X_TENANT"); tenant != "" {
-		req.Header.Set("X-Tenant", tenant)
+	scrapeMetrics := isMetricsScrapePath(path)
+	if !scrapeMetrics {
+		if authToken := os.Getenv("AUTH_TOKEN"); authToken != "" {
+			req.Header.Set("Authorization", "Bearer "+authToken)
+		}
+		if tenant := os.Getenv("X_TENANT"); tenant != "" {
+			req.Header.Set("X-Tenant", tenant)
+		}
 	}
 
 	for k, v := range tc.reqHeaders {
@@ -1280,6 +1362,37 @@ func (tc *scenarioConfig) fixThisStep() error {
 	return godog.ErrSkip
 }
 
+func (tc *scenarioConfig) requireMetricsURLForRemoteServer(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
+	// Not a @metrics scenario.
+	// Input: any scenario without the @metrics tag.
+	// Behavior: no-op; other features are unaffected by METRICS_URL requirements.
+	if !scenarioHasTag(sc, "metrics") {
+		return ctx, nil
+	}
+
+	// Local embedded-server mode.
+	// Input: SERVER_URL unset; METRICS_URL optional (defaults via resolveMetricsBaseURL).
+	// Behavior: run the scenario; /metrics is served on the main API router in local mode.
+	if strings.TrimSpace(os.Getenv("SERVER_URL")) == "" {
+		return ctx, nil
+	}
+
+	// Remote/cluster mode with METRICS_URL configured.
+	// Input: SERVER_URL=https://evalhub.example.com, METRICS_URL=http://evalhub-metrics.<ns>.svc:8081.
+	// Behavior: run the scenario; scrape requests use the dedicated metrics port.
+	if strings.TrimSpace(os.Getenv(envMetricsURL)) != "" {
+		return ctx, nil
+	}
+
+	// Remote/cluster mode without METRICS_URL.
+	// Input: SERVER_URL set, METRICS_URL unset.
+	// Behavior: skip the scenario (scraping via SERVER_URL would hit kube-rbac-proxy and fail with 403).
+	tc.logDebug(
+		"Skipping scenario: METRICS_URL is required when SERVER_URL is set (metrics are served on a separate port, not through kube-rbac-proxy)\n",
+	)
+	return ctx, godog.ErrSkip
+}
+
 func (tc *scenarioConfig) saveScenarioName(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
 	tc.scenarioName = sc.Name
 	return ctx, nil
@@ -1489,6 +1602,9 @@ func InitializeTestSuite(ctx *godog.TestSuiteContext) {
 	if tenant := os.Getenv("X_TENANT"); tenant != "" {
 		logDebug("Using X-Tenant header with value %s\n", tenant)
 	}
+	if metricsURL := os.Getenv(envMetricsURL); metricsURL != "" {
+		logDebug("Using METRICS_URL for Prometheus scrape requests: %s\n", metricsURL)
+	}
 
 	ctx.BeforeSuite(checkRegexes)
 
@@ -1506,6 +1622,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	tc := createScenarioConfig(api)
 
 	ctx.Before(tc.saveScenarioName)
+	ctx.Before(tc.requireMetricsURLForRemoteServer)
 	ctx.After(tc.assetCleanup)
 
 	ctx.Step(`^the service is running$`, tc.theServiceIsRunning)

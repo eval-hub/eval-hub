@@ -1,7 +1,7 @@
 package config
 
 const (
-	DefaultMetricsPort = 9090
+	DefaultMetricsPort = 8081
 	DefaultMetricsHost = "0.0.0.0"
 )
 

@@ -42,6 +42,9 @@ func TestMain(m *testing.M) {
 	if serverURL := os.Getenv("SERVER_URL"); serverURL != "" {
 		fmt.Printf("Running FVT tests against the server %s\n", serverURL)
 	}
+	if metricsURL := os.Getenv("METRICS_URL"); metricsURL != "" {
+		fmt.Printf("Prometheus scrape requests will use METRICS_URL %s\n", metricsURL)
+	}
 
 	workDir, err := os.Getwd()
 	if err != nil {
