@@ -1,0 +1,9 @@
+type: string
+description: Current execution phase of the benchmark
+enum:
+  - initializing
+  - loading_data
+  - running_evaluation
+  - post_processing
+  - persisting_artifacts
+  - completed

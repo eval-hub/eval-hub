@@ -12,6 +12,8 @@ properties:
     description: Benchmark index in the evaluation job request
   status:
     $ref: ./State.yaml
+  phase:
+    $ref: ./JobPhase.yaml
   error_message:
     $ref: ./MessageInfo.yaml
   warning_message:

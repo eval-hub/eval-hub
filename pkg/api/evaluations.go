@@ -22,6 +22,17 @@ func IsBenchmarkTerminalState(s State) bool {
 	return s == StateCompleted || s == StateFailed || s == StateCancelled
 }
 
+type JobPhase string
+
+const (
+	JobPhaseInitializing        JobPhase = "initializing"
+	JobPhaseLoadingData         JobPhase = "loading_data"
+	JobPhaseRunningEvaluation   JobPhase = "running_evaluation"
+	JobPhasePostProcessing      JobPhase = "post_processing"
+	JobPhasePersistingArtifacts JobPhase = "persisting_artifacts"
+	JobPhaseCompleted           JobPhase = "completed"
+)
+
 type OverallState string
 
 const (
@@ -151,6 +162,7 @@ type BenchmarkStatus struct {
 	ID             string       `json:"id"`
 	BenchmarkIndex int          `json:"benchmark_index"`
 	Status         State        `json:"status,omitempty"`
+	Phase          JobPhase     `json:"phase,omitempty"`
 	ErrorMessage   *MessageInfo `json:"error_message,omitempty"`
 	WarningMessage *MessageInfo `json:"warning_message,omitempty"`
 	StartedAt      DateTime     `json:"started_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
@@ -163,6 +175,7 @@ type BenchmarkStatusEvent struct {
 	ID             string         `json:"id" validate:"required"`
 	BenchmarkIndex int            `json:"benchmark_index"`
 	Status         State          `json:"status" validate:"required,oneof=pending running completed failed"`
+	Phase          JobPhase       `json:"phase,omitempty" validate:"omitempty,oneof=initializing loading_data running_evaluation post_processing persisting_artifacts completed"`
 	Metrics        map[string]any `json:"metrics,omitempty"`
 	Artifacts      map[string]any `json:"artifacts,omitempty"`
 	ErrorMessage   *MessageInfo   `json:"error_message,omitempty"`

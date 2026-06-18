@@ -770,6 +770,64 @@ func TestHandleUpdateEvaluationRejectsCancelledStatus(t *testing.T) {
 	}
 }
 
+func TestHandleUpdateEvaluationAcceptsValidPhase(t *testing.T) {
+	t.Parallel()
+	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{}}
+	validate := validation.NewValidator()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+
+	body := `{"benchmark_status_event":{"provider_id":"p1","id":"b1","status":"running","phase":"running_evaluation"}}`
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs/job-phase/events"),
+		body:        []byte(body),
+	}
+	reqWithPath := &updateEvaluationRequest{
+		bodyRequest: req,
+		pathValues:  map[string]string{"job_id": "job-phase"},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-phase", logger, "test-user", "test-tenant")
+
+	h.HandleUpdateEvaluation(ctx, reqWithPath, resp)
+
+	if recorder.Code != 204 {
+		t.Fatalf("expected status 204, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestHandleUpdateEvaluationRejectsInvalidPhase(t *testing.T) {
+	t.Parallel()
+	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{}}
+	validate := validation.NewValidator()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+
+	body := `{"benchmark_status_event":{"provider_id":"p1","id":"b1","status":"running","phase":"invalid_phase"}}`
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs/job-bad-phase/events"),
+		body:        []byte(body),
+	}
+	reqWithPath := &updateEvaluationRequest{
+		bodyRequest: req,
+		pathValues:  map[string]string{"job_id": "job-bad-phase"},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-bad-phase", logger, "test-user", "test-tenant")
+
+	h.HandleUpdateEvaluation(ctx, reqWithPath, resp)
+
+	if recorder.Code != 400 {
+		t.Fatalf("expected status 400 for invalid phase, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+	respBody := recorder.Body.String()
+	if !strings.Contains(respBody, "request_validation_failed") {
+		t.Fatalf("expected request_validation_failed in body, got %q", respBody)
+	}
+}
+
 func TestHandleCreateEvaluationRejectsExperimentWhenMLflowDisabled(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	providerConfigs := map[string]api.ProviderResource{
