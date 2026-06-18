@@ -1,3 +1,7 @@
 local test = import 'test.libsonnet';
 
-test.oobCollectionRefJob('multiple-job-different-collection-1', 'safety-and-fairness-v1')
+test.oobCollectionRefJobWithLimit(
+  'multiple-job-different-collection-1',
+  'safety-and-fairness-v1',
+  test.safetyAndFairnessV1BenchmarkIds(),
+)
