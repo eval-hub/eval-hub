@@ -72,6 +72,21 @@ local harness = std.parseJson(std.extVar('harness'));
       model: $.model(),
     },
 
+  // OOB collection by id only (server expands to full collection). model.auth is included only when
+  // MODEL_AUTH_SECRET_REF is set in the harness env (see model()).
+  oobCollectionRefJob(name, collectionId)::
+    {
+      name: name,
+      model: $.model(),
+      collection: {
+        id: collectionId,
+      },
+    },
+
+  // Same as oobCollectionRefJob with collection id from a saved scenario value.
+  oobCollectionRefJobFromValue(name, collectionIdKey='collection_id')::
+    $.oobCollectionRefJob(name, $.value(collectionIdKey)),
+
   // Default evaluation job model block used across many scenarios.
   model()::
     local secretRef = $.env('MODEL_AUTH_SECRET_REF', '');
