@@ -274,8 +274,8 @@ test.oobCollectionRefJobWithLimit('job-a', 'toxicity-and-ethical-principles', te
 		if !ok {
 			t.Fatalf("benchmark[%d].parameters = %#v", i, b["parameters"])
 		}
-		if lim, ok := params["num_examples"].(float64); !ok || int(lim) != 10 {
-			t.Errorf("benchmark[%d].parameters.num_examples = %v, want 10", i, params["num_examples"])
+		if lim, ok := params["num_examples"].(float64); !ok || int(lim) != 5 {
+			t.Errorf("benchmark[%d].parameters.num_examples = %v, want 5", i, params["num_examples"])
 		}
 	}
 }

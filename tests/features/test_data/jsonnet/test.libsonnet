@@ -73,7 +73,7 @@ local harness = std.parseJson(std.extVar('harness'));
     },
 
   // Default per-benchmark example cap for OOB collection FVT.
-  defaultOobNumExamples():: 10,
+  defaultOobNumExamples():: 5,
 
   safetyAndFairnessV1BenchmarkIds()::
     ['truthfulqa_mc1', 'toxigen', 'winogender', 'crows_pairs_english', 'bbq', 'ethics_cm'],

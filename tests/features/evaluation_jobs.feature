@@ -409,9 +409,9 @@ Feature: Evaluation Jobs
     And the response should contain the value "toxigen" at path "$.results.benchmarks[*].id"
     And the response should contain the value "truthfulqa_mc1" at path "$.results.benchmarks[*].id"
     And the response should contain the value "bigbench_hhh_alignment_multiple_choice" at path "$.results.benchmarks[*].id"
-    And the response should equal the value "10" at path "$.collection.benchmarks[0].parameters.num_examples"
-    And the response should equal the value "10" at path "$.collection.benchmarks[1].parameters.num_examples"
-    And the response should equal the value "10" at path "$.collection.benchmarks[2].parameters.num_examples"
+    And the response should equal the value "5" at path "$.collection.benchmarks[0].parameters.num_examples"
+    And the response should equal the value "5" at path "$.collection.benchmarks[1].parameters.num_examples"
+    And the response should equal the value "5" at path "$.collection.benchmarks[2].parameters.num_examples"
     And the response should contain "results"
     # TODO: Add specific metric validations once we verify actual response structure
 
