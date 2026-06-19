@@ -59,7 +59,24 @@ func TestMetricsServerHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("returns 404 for non-metrics paths", func(t *testing.T) {
+	t.Run("serves /healthz with JSON status", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d", w.Code)
+		}
+		if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+			t.Errorf("expected Content-Type application/json, got %s", ct)
+		}
+		if body := w.Body.String(); body != `{"status":"healthy"}` {
+			t.Errorf("unexpected body: %s", body)
+		}
+	})
+
+	t.Run("returns 404 for non-registered paths", func(t *testing.T) {
 		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
 		w := httptest.NewRecorder()
