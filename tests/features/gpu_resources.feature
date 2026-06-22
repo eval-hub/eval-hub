@@ -84,17 +84,17 @@ Feature: GPU Resource Management
   Scenario: GPU request with queue with nodeSelector that conflicts with ResourceFlavor
     Given the service is running
     And Kueue is installed on the cluster
-    And ClusterQueue "gpu-cluster-queue" with GPU ResourceFlavor "gpu-a100" exists
-    And ResourceFlavor "gpu-a100" has nodeSelector "nvidia.com/gpu.product=A100-SXM4-40GB"
+    And ClusterQueue "gpu-cluster-queue" with GPU ResourceFlavor exists
+    And ResourceFlavor "gpu-detected" has nodeSelector "nvidia.com/gpu.product={{env:GPU_PRODUCT}}"
     And LocalQueue "test-local-queue" in namespace "{{env:X_TENANT|test-tenant}}" exists
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/gpu_job_with_queue_with_selector_v100.json"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/gpu_job_with_queue_with_selector_conflicting.json"
     Then the response code should be 202
     And the response should contain the value "pending" at path "$.status.state"
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
     And I wait for the Kubernetes Job to be created for evaluation job "{id}"
     Then the Job spec should have GPU request set to "1"
     And the Job spec should have GPU limit set to "1"
-    And the Job spec should not have nodeSelector
+    And the Job spec should have nodeSelector "nvidia.com/gpu.product={{env:GPU_PRODUCT}}"
     And the Job spec should have label "kueue.x-k8s.io/queue-name=test-local-queue"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204

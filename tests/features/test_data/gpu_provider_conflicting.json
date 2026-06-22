@@ -1,0 +1,48 @@
+{
+  "name": "GPU Test Provider Conflicting",
+  "title": "GPU Test Provider with conflicting nodeSelector",
+  "description": "GPU test provider with a nodeSelector that does not match any cluster GPU or Kueue ResourceFlavor",
+  "tags": ["reasoning", "science", "gpu_test", "gpu_fvt"],
+  "runtime": {
+    "k8s": {
+      "image": "quay.io/opendatahub/ta-lmes-job:odh-3.4-ea2",
+      "entrypoint": [
+        "/opt/app-root/bin/python",
+        "/opt/app-root/src/main.py"
+      ],
+      "cpu_request": "100m",
+      "memory_request": "128Mi",
+      "cpu_limit": "500m",
+      "memory_limit": "4Gi",
+      "gpu": {
+        "resource": "nvidia.com/gpu",
+        "count": 1,
+        "node_selector": {
+          "nvidia.com/gpu.product": "DOES_NOT_EXIST"
+        }
+      }
+    },
+    "local": {
+      "command": "python tests/features/test_data/runtime/main.py"
+    }
+  },
+  "benchmarks": [
+    {
+      "id": "arc_easy",
+      "name": "Basic science Q&A (GPU test)",
+      "description": "Grade-school science questions testing basic reasoning and scientific knowledge (AI2 Reasoning Challenge, easy split).",
+      "category": "reasoning",
+      "metrics": ["acc", "acc_norm"],
+      "num_few_shot": 0,
+      "dataset_size": 2376,
+      "tags": ["reasoning", "science", "gpu_test"],
+      "primary_score": {
+        "metric": "acc_norm",
+        "lower_is_better": false
+      },
+      "pass_criteria": {
+        "threshold": 0.25
+      }
+    }
+  ]
+}

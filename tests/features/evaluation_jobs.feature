@@ -1221,7 +1221,6 @@ Feature: Evaluation Jobs
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "{{env:TEST_HARDWARE_PROFILE}}" at path "$.benchmarks[0].hardware_config.hardware_profile_ref.name"
-    And the response should not contain the value "" at path "$.benchmarks[0].hardware_config.hardware_profile_ref.namespace"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 

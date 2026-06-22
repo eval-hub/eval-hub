@@ -22,7 +22,7 @@ The feature adds support for GPU resource allocation in eval-hub evaluation jobs
 ### With Queue (Kueue-based Scheduling)
 
 1. **GPU with queue, no nodeSelector**: Kueue assigns available GPU from ResourceFlavor
-2. **GPU with queue, conflicting nodeSelector**: Kueue overrides nodeSelector with ResourceFlavor
+2. **GPU with queue, conflicting nodeSelector**: Provider requests a GPU type that conflicts with the queue's ResourceFlavor; eval-hub omits nodeSelector so Kueue can schedule via ResourceFlavor
 3. **GPU with queue, no GPU quota**: Job cannot be scheduled due to missing GPU quota
 
 ## Running BDD Tests
@@ -41,6 +41,7 @@ The BDD tests assume the required versions of eval-hub and trustyai-operator are
   export MODEL_URL=http://your-model-service
   export MODEL_NAME=test-model
   export MODEL_AUTH_SECRET_REF=test-secret
+  export GPU_PRODUCT=NVIDIA-A10G  # GPU product label for Kueue ResourceFlavor and nodeSelector checks
   ```
 
 ### Run All GPU Tests
@@ -70,7 +71,7 @@ GPU test resources are automatically cleaned up after each scenario tagged with 
 ```bash
 oc delete localqueue test-local-queue cpu-local-queue -n ${X_TENANT}
 oc delete clusterqueue gpu-cluster-queue cpu-only-cluster-queue
-oc delete resourceflavor gpu-a100 gpu-v100 default-flavor
+oc delete resourceflavor gpu-detected test-default-flavor
 ```
 
 ## Test Data Files
@@ -82,12 +83,14 @@ GPU test providers are created in suite `BeforeSuite` via `POST /api/v1/evaluati
 - `tests/features/test_data/gpu_provider_test.json` — GPU without `node_selector`
 - `tests/features/test_data/gpu_provider_a100.json` — GPU with A100 `node_selector`
 - `tests/features/test_data/gpu_provider_unavailable.json` — GPU with H100 `node_selector` (negative tests)
+- `tests/features/test_data/gpu_provider_conflicting.json` — GPU with `DOES_NOT_EXIST` `node_selector` (conflicts with Kueue ResourceFlavor in scenario 2b)
 
 Each provider is tagged with `gpu_fvt` for identification. The API returns tenant-scoped provider IDs, stored in suite-local state and referenced from job fixtures via:
 
 - `{{env:GPU_TEST_PROVIDER_ID}}`
 - `{{env:GPU_TEST_PROVIDER_A100_ID}}`
 - `{{env:GPU_TEST_PROVIDER_UNAVAILABLE_ID}}`
+- `{{env:GPU_TEST_PROVIDER_CONFLICTING_ID}}`
 
 These `{{env:...}}` placeholders resolve from suite state (not process environment), so parallel scenarios do not race on `os.Setenv`.
 
@@ -97,8 +100,10 @@ These `{{env:...}}` placeholders resolve from suite state (not process environme
 - `gpu_job_no_queue_with_selector_a100.json` - Scenario 1b
 - `gpu_job_no_queue_with_selector_h100.json` - Scenario 1c
 - `gpu_job_with_queue_no_selector.json` - Scenario 2a
-- `gpu_job_with_queue_with_selector_v100.json` - Scenario 2b
+- `gpu_job_with_queue_with_selector_conflicting.json` - Scenario 2b (uses conflicting provider)
 - `gpu_job_with_queue_no_gpu_in_cq.json` - Scenario 2c
+
+When `GPU_PRODUCT` is set, suite setup creates Kueue `ResourceFlavor` `gpu-detected` with `nodeLabels.nvidia.com/gpu.product` set to that value. Scenario 2b verifies that flavor and asserts eval-hub strips the provider's conflicting nodeSelector when a queue is used.
 
 ## Troubleshooting
 
