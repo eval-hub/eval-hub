@@ -127,7 +127,7 @@ export TEST_HARDWARE_PROFILE_CPU_LIMIT="2"
 export TEST_HARDWARE_PROFILE_MEMORY_LIMIT="2Gi"
 ```
 
-4. Grant the FVT test runner **`get`/`list` on `jobs`** in the tenant namespace (to inspect the adapter container). The test process uses in-cluster config or `KUBECONFIG`; it does not read `HardwareProfile` CRs or cluster-scoped CRDs.
+4. Grant the FVT test runner **`get`/`list` on `jobs`** in the tenant namespace (to inspect the adapter container). Hardware profile steps use a FVT Kubernetes client that **prefers `KUBECONFIG`** (pipeline `oc login`) over in-cluster credentials, then falls back to in-cluster config for local runs inside the cluster. The test process does not read `HardwareProfile` CRs or cluster-scoped CRDs.
 
 If any required env var above is unset, `@hardware_profile` scenarios are **skipped** (default `make test-fvt` behavior).
 

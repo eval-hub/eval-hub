@@ -1669,6 +1669,6 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	// GPU-specific steps
 	InitializeGPUSteps(ctx, tc)
 
-	// Hardware profile steps (Kubernetes client-go; no shell/oc)
+	// Hardware profile steps (Kubernetes client-go via KUBECONFIG-first FVT helper)
 	InitializeHardwareProfileSteps(ctx, tc)
 }

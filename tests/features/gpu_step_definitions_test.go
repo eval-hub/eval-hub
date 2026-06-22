@@ -33,6 +33,7 @@ const (
 	envGPUTestProviderID            = "GPU_TEST_PROVIDER_ID"
 	envGPUTestProviderA100ID        = "GPU_TEST_PROVIDER_A100_ID"
 	envGPUTestProviderUnavailableID = "GPU_TEST_PROVIDER_UNAVAILABLE_ID"
+	envGPUTestProviderConflictingID = "GPU_TEST_PROVIDER_CONFLICTING_ID"
 )
 
 var (
@@ -41,7 +42,7 @@ var (
 		nodeLabelsAdded:    make(map[string]map[string]string),
 	}
 	gpuResourcesSetup  = false
-	gpuTestProviderIDs []string
+	gpuTestProviderIDs = make(map[string]string)
 
 	gpuFTSuiteRequestID     string
 	gpuFTSuiteRequestIDOnce sync.Once
@@ -470,21 +471,9 @@ func loadGPUTestProviderBody(filename string) ([]byte, error) {
 // Returns ok=true when name is a known GPU test substitution key, even if the ID is not set yet.
 func gpuTestSuiteSubstValue(name string) (value string, ok bool) {
 	switch name {
-	case envGPUTestProviderID:
-		if len(gpuTestProviderIDs) > 0 {
-			return gpuTestProviderIDs[0], true
-		}
-		return "", true
-	case envGPUTestProviderA100ID:
-		if len(gpuTestProviderIDs) > 1 {
-			return gpuTestProviderIDs[1], true
-		}
-		return "", true
-	case envGPUTestProviderUnavailableID:
-		if len(gpuTestProviderIDs) > 2 {
-			return gpuTestProviderIDs[2], true
-		}
-		return "", true
+	case envGPUTestProviderID, envGPUTestProviderA100ID, envGPUTestProviderUnavailableID, envGPUTestProviderConflictingID:
+		v, found := gpuTestProviderIDs[name]
+		return v, found
 	default:
 		return "", false
 	}
@@ -524,7 +513,7 @@ func deleteGPUTestProvidersAPI(headers map[string]string) error {
 		}
 	}
 
-	gpuTestProviderIDs = nil
+	gpuTestProviderIDs = make(map[string]string)
 	return nil
 }
 
@@ -576,19 +565,24 @@ func createGPUTestProviders(namespace string) error {
 		logDebug("WARNING: Could not clean up prior GPU test providers: %v\n", err)
 	}
 
-	providerFiles := []string{
-		"gpu_provider_test.json",
-		"gpu_provider_a100.json",
-		"gpu_provider_unavailable.json",
+	providerSpecs := []struct {
+		envKey string
+		file   string
+	}{
+		{envGPUTestProviderID, "gpu_provider_test.json"},
+		{envGPUTestProviderA100ID, "gpu_provider_a100.json"},
+		{envGPUTestProviderUnavailableID, "gpu_provider_unavailable.json"},
+		{envGPUTestProviderConflictingID, "gpu_provider_conflicting.json"},
 	}
 
-	for _, file := range providerFiles {
-		id, err := createGPUTestProviderViaAPI(headers, file)
+	gpuTestProviderIDs = make(map[string]string, len(providerSpecs))
+	for _, spec := range providerSpecs {
+		id, err := createGPUTestProviderViaAPI(headers, spec.file)
 		if err != nil {
-			return fmt.Errorf("failed to create GPU test provider from %s: %w", file, err)
+			return fmt.Errorf("failed to create GPU test provider from %s: %w", spec.file, err)
 		}
-		gpuTestProviderIDs = append(gpuTestProviderIDs, id)
-		logDebug("Created GPU test provider from %s with id %s\n", file, id)
+		gpuTestProviderIDs[spec.envKey] = id
+		logDebug("Created GPU test provider from %s with id %s (%s)\n", spec.file, id, spec.envKey)
 	}
 
 	logDebug("GPU test providers created via API\n")
@@ -732,6 +726,12 @@ func (tc *scenarioConfig) jobSpecShouldHaveNodeSelector(selectorKeyValue string)
 	id := tc.lastId
 	if id == "" {
 		return tc.logError(fmt.Errorf("no evaluation job ID found"))
+	}
+
+	var err error
+	selectorKeyValue, err = tc.getValue(selectorKeyValue)
+	if err != nil {
+		return err
 	}
 
 	parts := strings.SplitN(selectorKeyValue, "=", 2)
@@ -1146,6 +1146,16 @@ func (tc *scenarioConfig) resourceFlavorHasNodeSelector(flavorName, selectorKeyV
 	if os.Getenv("GPU_PRODUCT") == "" {
 		logDebug("Skipping ResourceFlavor nodeSelector check (GPU_PRODUCT not set)\n")
 		return nil
+	}
+
+	var err error
+	flavorName, err = tc.getValue(flavorName)
+	if err != nil {
+		return err
+	}
+	selectorKeyValue, err = tc.getValue(selectorKeyValue)
+	if err != nil {
+		return err
 	}
 
 	parts := strings.SplitN(selectorKeyValue, "=", 2)

@@ -9,14 +9,14 @@
   "benchmarks": [
     {
       "id": "arc_easy",
-      "provider_id": "{{env:GPU_TEST_PROVIDER_ID}}",
+      "provider_id": "{{env:GPU_TEST_PROVIDER_CONFLICTING_ID}}",
       "parameters": {
         "num_examples": 10
       }
     }
   ],
-  "name": "gpu-test-with-queue-v100-selector",
-  "tags": ["gpu", "test", "scenario-2b", "kueue", "v100"],
+  "name": "gpu-test-with-queue-conflicting-selector",
+  "tags": ["gpu", "test", "scenario-2b", "kueue", "conflicting"],
   "queue": {
     "kind": "kueue",
     "name": "test-local-queue"
