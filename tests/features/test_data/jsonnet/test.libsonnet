@@ -72,6 +72,59 @@ local harness = std.parseJson(std.extVar('harness'));
       model: $.model(),
     },
 
+  // Default per-benchmark example cap for OOB collection FVT.
+  defaultOobNumExamples():: 5,
+
+  safetyAndFairnessV1BenchmarkIds()::
+    ['truthfulqa_mc1', 'toxigen', 'winogender', 'crows_pairs_english', 'bbq', 'ethics_cm'],
+
+  toxicityAndEthicalPrinciplesBenchmarkIds()::
+    ['toxigen', 'truthfulqa_mc1', 'bigbench_hhh_alignment_multiple_choice'],
+
+  leaderboardV2BenchmarkIds()::
+    ['leaderboard_ifeval', 'leaderboard_bbh', 'leaderboard_gpqa', 'leaderboard_mmlu_pro', 'leaderboard_musr', 'leaderboard_math_hard'],
+
+  // OOB collection with per-benchmark parameter overrides for faster cluster FVT.
+  oobCollectionRefJobWithBenchmarks(name, collectionId, benchmarks)::
+    {
+      name: name,
+      model: $.model(),
+      collection: {
+        id: collectionId,
+        benchmarks: benchmarks,
+      },
+    },
+
+  // num_examples caps runtime for OOB collection FVT without conflicting with collection limit.
+  oobCollectionParameterOverrides(numExamples)::
+    {
+      num_examples: numExamples,
+    },
+
+  // Applies defaultOobNumExamples() to each benchmark id in an OOB collection.
+  oobCollectionRefJobWithLimit(name, collectionId, benchmarkIds, numExamples=null)::
+    local n = if numExamples == null then $.defaultOobNumExamples() else numExamples;
+    $.oobCollectionRefJobWithBenchmarks(
+      name,
+      collectionId,
+      std.map(function(id) $.benchmark(id, 'lm_evaluation_harness', $.oobCollectionParameterOverrides(n)), benchmarkIds),
+    ),
+
+  // OOB collection by id only (server expands to full collection). model.auth is included only when
+  // MODEL_AUTH_SECRET_REF is set in the harness env (see model()). Prefer oobCollectionRefJobWithLimit for FVT.
+  oobCollectionRefJob(name, collectionId)::
+    {
+      name: name,
+      model: $.model(),
+      collection: {
+        id: collectionId,
+      },
+    },
+
+  // Same as oobCollectionRefJob with collection id from a saved scenario value.
+  oobCollectionRefJobFromValue(name, collectionIdKey='collection_id')::
+    $.oobCollectionRefJob(name, $.value(collectionIdKey)),
+
   // Default evaluation job model block used across many scenarios.
   model()::
     local secretRef = $.env('MODEL_AUTH_SECRET_REF', '');

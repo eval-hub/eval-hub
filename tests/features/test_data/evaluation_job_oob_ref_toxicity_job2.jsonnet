@@ -1,7 +1,7 @@
 local test = import 'test.libsonnet';
 
 test.oobCollectionRefJobWithLimit(
-  'test-evaluation-job-oob-collection',
+  'multiple-job-different-collection-2',
   'toxicity-and-ethical-principles',
   test.toxicityAndEthicalPrinciplesBenchmarkIds(),
 )
