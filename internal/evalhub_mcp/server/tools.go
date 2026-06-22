@@ -30,7 +30,7 @@ type SubmitEvaluationInput struct {
 	Name        string                          `json:"name" jsonschema:"Name for the evaluation job"`
 	Description string                          `json:"description,omitempty" jsonschema:"Human-readable description of what this evaluation measures"`
 	Tags        []string                        `json:"tags,omitempty" jsonschema:"Tags for categorizing the evaluation"`
-	Model       ModelInput                      `json:"model" jsonschema:"Model to evaluate (EvaluationJobConfig.model; auth_secret accepted as alias for auth.secret_ref)"`
+	Model       api.ModelRef                    `json:"model" jsonschema:"Model to evaluate (EvaluationJobConfig.model)"`
 	Benchmarks  []api.EvaluationBenchmarkConfig `json:"benchmarks,omitempty" jsonschema:"List of benchmarks to run; provide benchmarks OR collection, not both"`
 	Collection  *api.CollectionRef              `json:"collection,omitempty" jsonschema:"Benchmark collection to run; provide collection OR benchmarks, not both"`
 	Experiment  *ExperimentInput                `json:"experiment,omitempty" jsonschema:"Optional MLflow experiment tracking configuration"`
@@ -356,7 +356,7 @@ func buildJobConfig(input SubmitEvaluationInput) api.EvaluationJobConfig {
 	config := api.EvaluationJobConfig{
 		Name:       input.Name,
 		Tags:       input.Tags,
-		Model:      input.Model.ModelRef,
+		Model:      input.Model,
 		Benchmarks: input.Benchmarks,
 	}
 

@@ -362,7 +362,7 @@ func TestSubmitEvaluationParameters(t *testing.T) {
 	}
 }
 
-func TestSubmitEvaluationAuthSecretAlias(t *testing.T) {
+func TestSubmitEvaluationModelAuth(t *testing.T) {
 	t.Parallel()
 
 	var captured api.EvaluationJobConfig
@@ -386,17 +386,19 @@ func TestSubmitEvaluationAuthSecretAlias(t *testing.T) {
 	callToolJSON[SubmitEvaluationOutput](t, ctx, cs, "submit_evaluation", map[string]any{
 		"name": "auth-eval",
 		"model": map[string]any{
-			"url":         "http://model:8080",
-			"name":        "test-model",
-			"auth_secret": "legacy-secret",
+			"url":  "http://model:8080",
+			"name": "test-model",
+			"auth": map[string]any{
+				"secret_ref": "model-auth-secret",
+			},
 		},
 		"benchmarks": []map[string]any{
 			{"id": "mmlu", "provider_id": "unitxt"},
 		},
 	})
 
-	if captured.Model.Auth == nil || captured.Model.Auth.SecretRef != "legacy-secret" {
-		t.Errorf("auth = %#v, want secret_ref legacy-secret", captured.Model.Auth)
+	if captured.Model.Auth == nil || captured.Model.Auth.SecretRef != "model-auth-secret" {
+		t.Errorf("auth = %#v, want secret_ref model-auth-secret", captured.Model.Auth)
 	}
 }
 
