@@ -104,7 +104,7 @@ func (tc *scenarioConfig) waitForKubernetesEvaluationJob(state *hardwareProfileS
 		case <-ctx.Done():
 			return tc.logError(fmt.Errorf("timeout waiting for Kubernetes Job for evaluation job %s in namespace %s", tc.lastId, namespace))
 		case <-ticker.C:
-			jobs, err := state.k8s.listJobs(context.Background(), namespace, labelSelector)
+			jobs, err := state.k8s.listJobs(ctx, namespace, labelSelector)
 			if err != nil {
 				return tc.logError(fmt.Errorf("list jobs for evaluation job %s: %w", tc.lastId, err))
 			}

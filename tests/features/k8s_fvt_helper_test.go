@@ -7,8 +7,6 @@ import (
 )
 
 func TestLoadFVTKubeConfigPrefersKubeconfig(t *testing.T) {
-	t.Parallel()
-
 	dir := t.TempDir()
 	kubeconfig := filepath.Join(dir, "config")
 	if err := os.WriteFile(kubeconfig, []byte(minimalKubeconfig), 0o600); err != nil {
@@ -23,6 +21,15 @@ func TestLoadFVTKubeConfigPrefersKubeconfig(t *testing.T) {
 	}
 	if cfg.Host != "https://test-cluster.example:6443" {
 		t.Fatalf("Host = %q, want https://test-cluster.example:6443", cfg.Host)
+	}
+}
+
+func TestLoadFVTKubeConfigFailsWhenExplicitKubeconfigInvalid(t *testing.T) {
+	t.Setenv("KUBECONFIG", filepath.Join(t.TempDir(), "missing-config"))
+
+	_, err := loadFVTKubeConfig()
+	if err == nil {
+		t.Fatal("loadFVTKubeConfig() error = nil, want error for invalid KUBECONFIG")
 	}
 }
 

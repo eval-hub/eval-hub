@@ -472,7 +472,8 @@ func loadGPUTestProviderBody(filename string) ([]byte, error) {
 func gpuTestSuiteSubstValue(name string) (value string, ok bool) {
 	switch name {
 	case envGPUTestProviderID, envGPUTestProviderA100ID, envGPUTestProviderUnavailableID, envGPUTestProviderConflictingID:
-		return gpuTestProviderIDs[name], true
+		v, found := gpuTestProviderIDs[name]
+		return v, found
 	default:
 		return "", false
 	}

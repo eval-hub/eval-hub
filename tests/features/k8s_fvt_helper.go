@@ -34,8 +34,9 @@ func newFVTK8sClient() (*fvtK8sClient, error) {
 // credentials so FVT running on a Jenkins agent reaches the test cluster API.
 func loadFVTKubeConfig() (*rest.Config, error) {
 	rules := clientcmd.NewDefaultClientConfigLoadingRules()
-	if path := os.Getenv("KUBECONFIG"); path != "" {
-		rules.ExplicitPath = path
+	kubeconfigPath := os.Getenv("KUBECONFIG")
+	if kubeconfigPath != "" {
+		rules.ExplicitPath = kubeconfigPath
 	}
 
 	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
@@ -44,6 +45,9 @@ func loadFVTKubeConfig() (*rest.Config, error) {
 	).ClientConfig()
 	if err == nil {
 		return config, nil
+	}
+	if kubeconfigPath != "" {
+		return nil, fmt.Errorf("load kubeconfig from KUBECONFIG %q: %w", kubeconfigPath, err)
 	}
 
 	config, icErr := rest.InClusterConfig()
