@@ -429,6 +429,7 @@ Feature: Evaluations Endpoint
     Then the response code should be 202
     When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_invalid_phase.json"
     Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
