@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/cucumber/godog"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/k8s"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -32,11 +31,11 @@ var testHardwareProfileRequiredEnv = []string{
 }
 
 type hardwareProfileScenarioState struct {
-	helper *k8s.KubernetesHelper
+	k8s *fvtK8sClient
 }
 
 func (s *hardwareProfileScenarioState) reset() {
-	s.helper = nil
+	s.k8s = nil
 }
 
 func (tc *scenarioConfig) tenantNamespace() string {
@@ -48,14 +47,14 @@ func (tc *scenarioConfig) tenantNamespace() string {
 }
 
 func (s *hardwareProfileScenarioState) initHelper() error {
-	if s.helper != nil {
+	if s.k8s != nil {
 		return nil
 	}
-	helper, err := k8s.NewKubernetesHelper()
+	client, err := newFVTK8sClient()
 	if err != nil {
-		return fmt.Errorf("create kubernetes helper: %w", err)
+		return fmt.Errorf("create fvt kubernetes client: %w", err)
 	}
-	s.helper = helper
+	s.k8s = client
 	return nil
 }
 
@@ -105,7 +104,7 @@ func (tc *scenarioConfig) waitForKubernetesEvaluationJob(state *hardwareProfileS
 		case <-ctx.Done():
 			return tc.logError(fmt.Errorf("timeout waiting for Kubernetes Job for evaluation job %s in namespace %s", tc.lastId, namespace))
 		case <-ticker.C:
-			jobs, err := state.helper.ListJobs(context.Background(), namespace, labelSelector)
+			jobs, err := state.k8s.listJobs(context.Background(), namespace, labelSelector)
 			if err != nil {
 				return tc.logError(fmt.Errorf("list jobs for evaluation job %s: %w", tc.lastId, err))
 			}
@@ -157,7 +156,7 @@ func (tc *scenarioConfig) jobAdapterContainerShouldHaveResource(
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	jobs, err := state.helper.ListJobs(ctx, namespace, labelSelector)
+	jobs, err := state.k8s.listJobs(ctx, namespace, labelSelector)
 	if err != nil {
 		return tc.logError(fmt.Errorf("list jobs for evaluation job %s: %w", tc.lastId, err))
 	}
