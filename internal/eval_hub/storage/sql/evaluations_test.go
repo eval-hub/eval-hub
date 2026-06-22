@@ -30,6 +30,10 @@ func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 	testUpdateEvaluationJob_PreservesProviderID(t, drivers[0], getDBName())
 }
 
+func TestUpdateEvaluationJob_PersistsPhase(t *testing.T) {
+	testUpdateEvaluationJob_PersistsPhase(t, drivers[0], getDBName())
+}
+
 // TestStorage tests the storage implementation and provides
 // a simple way to debug the storage implementation.
 func TestEvaluationsStorage(t *testing.T) {
@@ -54,6 +58,7 @@ func TestGetEvaluationJobs_Postgres(t *testing.T) {
 
 	testGetEvaluationJobs_TenantFilter(t, drivers[1], databaseName)
 	testUpdateEvaluationJob_PreservesProviderID(t, drivers[1], databaseName)
+	testUpdateEvaluationJob_PersistsPhase(t, drivers[1], databaseName)
 	testEvaluationsStorage(t, drivers[1], databaseName)
 }
 
@@ -270,6 +275,93 @@ func testUpdateEvaluationJob_PreservesProviderID(t *testing.T, driver string, da
 
 	if acc, ok := result.Metrics["acc"].(float64); !ok || acc != 0.85 {
 		t.Errorf("Expected acc=0.85, got %v", result.Metrics["acc"])
+	}
+}
+
+func testUpdateEvaluationJob_PersistsPhase(t *testing.T, driver string, databaseName string) {
+	store, err := getTestStorage(t, driver, databaseName)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	now := time.Now()
+	jobID := common.GUID()
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{
+				ID:        jobID,
+				Tenant:    api.Tenant("tenant-phase"),
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			MLFlowExperimentID: "experiment-1",
+		},
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{
+				State:   api.OverallStateRunning,
+				Message: &api.MessageInfo{Message: "Job is running", MessageCode: "JOB_RUNNING"},
+			},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{URL: "http://test-model:8000", Name: "test-model"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "arc_easy"}, ProviderID: "lm_evaluation_harness"},
+			},
+		},
+	}
+
+	if err := store.CreateEvaluationJob(job); err != nil {
+		t.Fatalf("Failed to create job: %v", err)
+	}
+
+	statusUpdate := &api.StatusEvent{
+		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			ProviderID: "lm_evaluation_harness",
+			ID:         "arc_easy",
+			Status:     api.StateRunning,
+			Phase:      api.JobPhaseRunningEvaluation,
+			StartedAt:  api.DateTimeToString(now),
+		},
+	}
+
+	if err := store.UpdateEvaluationJob(jobID, statusUpdate); err != nil {
+		t.Fatalf("Failed to update job with phase: %v", err)
+	}
+
+	updatedJob, err := store.GetEvaluationJob(jobID)
+	if err != nil {
+		t.Fatalf("Failed to get updated job: %v", err)
+	}
+
+	if len(updatedJob.Status.Benchmarks) != 1 {
+		t.Fatalf("Expected 1 benchmark, got %d", len(updatedJob.Status.Benchmarks))
+	}
+
+	if updatedJob.Status.Benchmarks[0].Phase != api.JobPhaseRunningEvaluation {
+		t.Errorf("Expected phase=%q, got %q", api.JobPhaseRunningEvaluation, updatedJob.Status.Benchmarks[0].Phase)
+	}
+
+	completionUpdate := &api.StatusEvent{
+		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			ProviderID: "lm_evaluation_harness",
+			ID:         "arc_easy",
+			Status:     api.StateCompleted,
+			Phase:      api.JobPhaseCompleted,
+			Metrics:    map[string]any{"acc": 0.85},
+		},
+	}
+
+	if err := store.UpdateEvaluationJob(jobID, completionUpdate); err != nil {
+		t.Fatalf("Failed to update job with completed phase: %v", err)
+	}
+
+	finalJob, err := store.GetEvaluationJob(jobID)
+	if err != nil {
+		t.Fatalf("Failed to get final job: %v", err)
+	}
+
+	if finalJob.Status.Benchmarks[0].Phase != api.JobPhaseCompleted {
+		t.Errorf("Expected phase=%q after completion, got %q", api.JobPhaseCompleted, finalJob.Status.Benchmarks[0].Phase)
 	}
 }
 

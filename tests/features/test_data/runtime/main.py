@@ -13,7 +13,6 @@ from evalhub.adapter import (
     JobSpec,
     JobStatus,
     JobStatusUpdate,
-    MessageInfo,
 )
 from evalhub.adapter.callbacks import DefaultCallbacks
 
@@ -72,11 +71,6 @@ def main() -> None:
             JobStatusUpdate(
                 status=JobStatus.RUNNING,
                 phase=JobPhase.INITIALIZING,
-                progress=0.0,
-                message=MessageInfo(
-                    message="Initialising Test Adapter for benchmark",
-                    message_code="initializing",
-                ),
             )
         )
         results = adapter.run_benchmark_job(adapter.job_spec, callbacks)

@@ -401,6 +401,7 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 			ProviderID:     runStatus.BenchmarkStatusEvent.ProviderID,
 			ID:             runStatus.BenchmarkStatusEvent.ID,
 			Status:         runStatus.BenchmarkStatusEvent.Status,
+			Phase:          runStatus.BenchmarkStatusEvent.Phase,
 			ErrorMessage:   runStatus.BenchmarkStatusEvent.ErrorMessage,
 			WarningMessage: runStatus.BenchmarkStatusEvent.WarningMessage,
 			StartedAt:      runStatus.BenchmarkStatusEvent.StartedAt,

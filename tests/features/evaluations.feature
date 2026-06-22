@@ -406,6 +406,33 @@ Feature: Evaluations Endpoint
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
+  @local
+  Scenario: Update evaluation job status with phase
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    Then the response code should be 202
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_running_with_phase.json"
+    Then the response code should be 204
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "running" at path "$.status.state"
+    And the response should contain the value "running_evaluation" at path "$.status.benchmarks[0].phase"
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_completed.json"
+    Then the response code should be 204
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
+  @local
+  Scenario: Update evaluation job status with invalid phase returns 400
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    Then the response code should be 202
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_invalid_phase.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
   # This will no longer work with the logic in the events API
   @ignore
   @local
@@ -593,7 +620,7 @@ Feature: Evaluations Endpoint
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_for_pass_criteria_test.json"
     Then the response code should be 202
-    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/#evaluation_job_status_event_for_pass_criteria_test_b1.json"
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_for_pass_criteria_test_b1.json"
     Then the response code should be 204
     When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_for_pass_criteria_test_b2_failed.json"
     Then the response code should be 204

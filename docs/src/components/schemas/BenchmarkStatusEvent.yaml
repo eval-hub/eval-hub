@@ -16,6 +16,8 @@ properties:
     description: Benchmark index in the evaluation job request
   status:
     $ref: ./State.yaml
+  phase:
+    $ref: ./JobPhase.yaml
   metrics:
     type: object
     additionalProperties: true

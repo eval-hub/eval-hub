@@ -2889,6 +2889,18 @@
         ],
         "description": "Evaluation or benchmark state"
       },
+      "JobPhase": {
+        "type": "string",
+        "description": "Current execution phase of the benchmark",
+        "enum": [
+          "initializing",
+          "loading_data",
+          "running_evaluation",
+          "post_processing",
+          "persisting_artifacts",
+          "completed"
+        ]
+      },
       "BenchmarkStatus": {
         "type": "object",
         "description": "Status of an individual benchmark in an evaluation",
@@ -2907,6 +2919,9 @@
           },
           "status": {
             "$ref": "#/components/schemas/State"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/JobPhase"
           },
           "error_message": {
             "$ref": "#/components/schemas/MessageInfo"
@@ -3634,6 +3649,9 @@
           },
           "status": {
             "$ref": "#/components/schemas/State"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/JobPhase"
           },
           "metrics": {
             "type": "object",
