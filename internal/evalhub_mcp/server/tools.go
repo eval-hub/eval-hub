@@ -30,7 +30,7 @@ type SubmitEvaluationInput struct {
 	Name        string                          `json:"name" jsonschema:"Name for the evaluation job"`
 	Description string                          `json:"description,omitempty" jsonschema:"Human-readable description of what this evaluation measures"`
 	Tags        []string                        `json:"tags,omitempty" jsonschema:"Tags for categorizing the evaluation"`
-	Model       api.ModelRef                    `json:"model" jsonschema:"Model to evaluate (EvaluationJobConfig.model)"`
+	Model       api.ModelRef                    `json:"model" jsonschema:"Model endpoint to evaluate: url and name required; optional parameters and auth.secret_ref (same fields as POST /api/v1/evaluations)"`
 	Benchmarks  []api.EvaluationBenchmarkConfig `json:"benchmarks,omitempty" jsonschema:"List of benchmarks to run; provide benchmarks OR collection, not both"`
 	Collection  *api.CollectionRef              `json:"collection,omitempty" jsonschema:"Benchmark collection to run; provide collection OR benchmarks, not both"`
 	Experiment  *ExperimentInput                `json:"experiment,omitempty" jsonschema:"Optional MLflow experiment tracking configuration"`
