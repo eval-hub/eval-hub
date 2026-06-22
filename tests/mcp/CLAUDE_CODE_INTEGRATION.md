@@ -97,7 +97,7 @@ What evalhub tools are available?
 | Tool | Parameters | Description |
 |---|---|---|
 | `discover_providers` | optional: `target_type` (`model`, `agent`, `inference_server`); `evaluates` (array of capability tags — provider must match all) | Discover providers with summaries, hints, and complementary suggestions |
-| `submit_evaluation` | `name`;<br><br>**`model`**: `url`, `name`, optional `auth_secret`;<br><br>either **`benchmarks`**: non-empty list of `{id, provider_id}` **or** **`collection`**: `{id}` (collection id from eval-hub; shipped defaults include e.g. `leaderboard-v2`);<br><br>optional: `description`, `tags`, `experiment` | Submit an evaluation job |
+| `submit_evaluation` | `name`;<br><br>**`model`**: REST `ModelRef` (`url`, `name`, optional `parameters`, optional `auth.secret_ref`; legacy `auth_secret` alias accepted);<br><br>either **`benchmarks`**: REST `EvaluationBenchmarkConfig` list **or** **`collection`**: `CollectionRef` (e.g. `leaderboard-v2`);<br><br>optional: `description`, `tags`, `experiment` | Submit an evaluation job |
 | `cancel_job` | `job_id` | Cancel or hard-delete a running job |
 | `get_job_status` | `job_id` | Poll status of a submitted job (includes progress info) |
 

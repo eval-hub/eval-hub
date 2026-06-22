@@ -27,30 +27,13 @@ type EvalHubToolClient interface {
 // --- input types ---
 
 type SubmitEvaluationInput struct {
-	Name        string           `json:"name" jsonschema:"Name for the evaluation job"`
-	Description string           `json:"description,omitempty" jsonschema:"Human-readable description of what this evaluation measures"`
-	Tags        []string         `json:"tags,omitempty" jsonschema:"Tags for categorizing the evaluation"`
-	Model       ModelInput       `json:"model" jsonschema:"Model to evaluate"`
-	Benchmarks  []BenchmarkInput `json:"benchmarks,omitempty" jsonschema:"List of benchmarks to run; provide benchmarks OR collection, not both"`
-	Collection  *CollectionInput `json:"collection,omitempty" jsonschema:"Benchmark collection to run; provide collection OR benchmarks, not both"`
-	Experiment  *ExperimentInput `json:"experiment,omitempty" jsonschema:"Optional MLflow experiment tracking configuration"`
-}
-
-type ModelInput struct {
-	URL        string         `json:"url" jsonschema:"URL of the model inference endpoint"`
-	Name       string         `json:"name" jsonschema:"Display name of the model"`
-	AuthSecret string         `json:"auth_secret,omitempty" jsonschema:"Kubernetes secret reference for model authentication"`
-	Parameters map[string]any `json:"parameters,omitempty" jsonschema:"Optional model inference parameters (e.g. temperature, max_tokens)"`
-}
-
-type BenchmarkInput struct {
-	ID         string         `json:"id" jsonschema:"Benchmark identifier"`
-	ProviderID string         `json:"provider_id" jsonschema:"Evaluation provider that runs this benchmark"`
-	Parameters map[string]any `json:"parameters,omitempty" jsonschema:"Optional benchmark-specific parameters passed to the evaluation adapter"`
-}
-
-type CollectionInput struct {
-	ID string `json:"id" jsonschema:"Collection identifier"`
+	Name        string                          `json:"name" jsonschema:"Name for the evaluation job"`
+	Description string                          `json:"description,omitempty" jsonschema:"Human-readable description of what this evaluation measures"`
+	Tags        []string                        `json:"tags,omitempty" jsonschema:"Tags for categorizing the evaluation"`
+	Model       ModelInput                      `json:"model" jsonschema:"Model to evaluate (EvaluationJobConfig.model; auth_secret accepted as alias for auth.secret_ref)"`
+	Benchmarks  []api.EvaluationBenchmarkConfig `json:"benchmarks,omitempty" jsonschema:"List of benchmarks to run; provide benchmarks OR collection, not both"`
+	Collection  *api.CollectionRef              `json:"collection,omitempty" jsonschema:"Benchmark collection to run; provide collection OR benchmarks, not both"`
+	Experiment  *ExperimentInput                `json:"experiment,omitempty" jsonschema:"Optional MLflow experiment tracking configuration"`
 }
 
 type ExperimentInput struct {
@@ -371,33 +354,18 @@ func agentEvaluatesAll(agent *api.AgentMetadata, required []string) bool {
 
 func buildJobConfig(input SubmitEvaluationInput) api.EvaluationJobConfig {
 	config := api.EvaluationJobConfig{
-		Name: input.Name,
-		Tags: input.Tags,
-		Model: api.ModelRef{
-			URL:        input.Model.URL,
-			Name:       input.Model.Name,
-			Parameters: input.Model.Parameters,
-		},
+		Name:       input.Name,
+		Tags:       input.Tags,
+		Model:      input.Model.ModelRef,
+		Benchmarks: input.Benchmarks,
 	}
 
 	if input.Description != "" {
 		config.Description = &input.Description
 	}
 
-	if input.Model.AuthSecret != "" {
-		config.Model.Auth = &api.ModelAuth{SecretRef: input.Model.AuthSecret}
-	}
-
-	for _, b := range input.Benchmarks {
-		config.Benchmarks = append(config.Benchmarks, api.EvaluationBenchmarkConfig{
-			Ref:        api.Ref{ID: b.ID},
-			ProviderID: b.ProviderID,
-			Parameters: b.Parameters,
-		})
-	}
-
 	if input.Collection != nil {
-		config.Collection = &api.CollectionRef{ID: input.Collection.ID}
+		config.Collection = input.Collection
 	}
 
 	if input.Experiment != nil {
