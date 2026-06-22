@@ -334,6 +334,7 @@ func TestSubmitEvaluationParameters(t *testing.T) {
 				"parameters": map[string]any{
 					"num_fewshot": 5,
 				},
+				"weight": 2.5,
 			},
 		},
 	})
@@ -355,6 +356,49 @@ func TestSubmitEvaluationParameters(t *testing.T) {
 	}
 	if captured.Benchmarks[0].Parameters["num_fewshot"] != float64(5) {
 		t.Errorf("benchmark num_fewshot = %v, want 5", captured.Benchmarks[0].Parameters["num_fewshot"])
+	}
+	if captured.Benchmarks[0].Weight != 2.5 {
+		t.Errorf("benchmark weight = %v, want 2.5", captured.Benchmarks[0].Weight)
+	}
+}
+
+func TestSubmitEvaluationModelAuth(t *testing.T) {
+	t.Parallel()
+
+	var captured api.EvaluationJobConfig
+	client := &mockToolClient{
+		createJobFn: func(config api.EvaluationJobConfig) (*api.EvaluationJobResource, error) {
+			captured = config
+			return &api.EvaluationJobResource{
+				Resource: api.EvaluationResource{
+					Resource: api.Resource{ID: "job-auth"},
+				},
+				Status: &api.EvaluationJobStatus{
+					EvaluationJobState: api.EvaluationJobState{State: api.OverallStatePending},
+				},
+				EvaluationJobConfig: config,
+			}, nil
+		},
+	}
+
+	ctx, cs := connectWithTools(t, client)
+
+	callToolJSON[SubmitEvaluationOutput](t, ctx, cs, "submit_evaluation", map[string]any{
+		"name": "auth-eval",
+		"model": map[string]any{
+			"url":  "http://model:8080",
+			"name": "test-model",
+			"auth": map[string]any{
+				"secret_ref": "model-auth-secret",
+			},
+		},
+		"benchmarks": []map[string]any{
+			{"id": "mmlu", "provider_id": "unitxt"},
+		},
+	})
+
+	if captured.Model.Auth == nil || captured.Model.Auth.SecretRef != "model-auth-secret" {
+		t.Errorf("auth = %#v, want secret_ref model-auth-secret", captured.Model.Auth)
 	}
 }
 
