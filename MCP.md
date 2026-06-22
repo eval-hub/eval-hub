@@ -97,7 +97,7 @@ When `EVALHUB_BASE_URL` is configured and the eval-hub API is reachable, the MCP
 | Tool | Parameters | Description |
 |------|------------|-------------|
 | `discover_providers` | Optional: `target_type` (`model`, `agent`, or `inference_server`); `evaluates` (array of capability tags, e.g. `safety`, `robustness` — provider must evaluate **all** listed values) | Discover evaluation providers with agent-oriented metadata: summary, usage hints, result interpretation, complementary providers, and when to use each provider. Unfiltered calls return every provider; when filters are set, only providers with agent metadata can match. |
-| `submit_evaluation` | Required: `name`, `model` (`url`, `name`, optional `auth_secret`); either `benchmarks` (list of `{id, provider_id}`) **or** `collection` (`{id}`), not both. Optional: `description`, `tags`, `experiment` (`name`, `tags`, `artifact_location`) | Submit a new evaluation job. Returns `job_id` and initial `state`. |
+| `submit_evaluation` | Required: `name`, `model` (`url`, `name`, optional `auth_secret`, optional `parameters`); either `benchmarks` (list of `{id, provider_id, optional parameters}`) **or** `collection` (`{id}`), not both. Optional: `description`, `tags`, `experiment` (`name`, `tags`, `artifact_location`) | Submit a new evaluation job. Returns `job_id` and initial `state`. |
 | `get_job_status` | Required: `job_id` | Poll job state, progress percentage, and per-benchmark status. Completed benchmarks may include `result_interpretation` and `complements` from provider metadata. |
 | `cancel_job` | Required: `job_id` | Cancel a running or pending job. Use `get_job_status` to confirm the final state. |
 

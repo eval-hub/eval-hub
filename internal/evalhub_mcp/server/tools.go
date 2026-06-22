@@ -37,14 +37,16 @@ type SubmitEvaluationInput struct {
 }
 
 type ModelInput struct {
-	URL        string `json:"url" jsonschema:"URL of the model inference endpoint"`
-	Name       string `json:"name" jsonschema:"Display name of the model"`
-	AuthSecret string `json:"auth_secret,omitempty" jsonschema:"Kubernetes secret reference for model authentication"`
+	URL        string         `json:"url" jsonschema:"URL of the model inference endpoint"`
+	Name       string         `json:"name" jsonschema:"Display name of the model"`
+	AuthSecret string         `json:"auth_secret,omitempty" jsonschema:"Kubernetes secret reference for model authentication"`
+	Parameters map[string]any `json:"parameters,omitempty" jsonschema:"Optional model inference parameters (e.g. temperature, max_tokens)"`
 }
 
 type BenchmarkInput struct {
-	ID         string `json:"id" jsonschema:"Benchmark identifier"`
-	ProviderID string `json:"provider_id" jsonschema:"Evaluation provider that runs this benchmark"`
+	ID         string         `json:"id" jsonschema:"Benchmark identifier"`
+	ProviderID string         `json:"provider_id" jsonschema:"Evaluation provider that runs this benchmark"`
+	Parameters map[string]any `json:"parameters,omitempty" jsonschema:"Optional benchmark-specific parameters passed to the evaluation adapter"`
 }
 
 type CollectionInput struct {
@@ -372,8 +374,9 @@ func buildJobConfig(input SubmitEvaluationInput) api.EvaluationJobConfig {
 		Name: input.Name,
 		Tags: input.Tags,
 		Model: api.ModelRef{
-			URL:  input.Model.URL,
-			Name: input.Model.Name,
+			URL:        input.Model.URL,
+			Name:       input.Model.Name,
+			Parameters: input.Model.Parameters,
 		},
 	}
 
@@ -389,6 +392,7 @@ func buildJobConfig(input SubmitEvaluationInput) api.EvaluationJobConfig {
 		config.Benchmarks = append(config.Benchmarks, api.EvaluationBenchmarkConfig{
 			Ref:        api.Ref{ID: b.ID},
 			ProviderID: b.ProviderID,
+			Parameters: b.Parameters,
 		})
 	}
 
