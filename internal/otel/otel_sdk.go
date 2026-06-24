@@ -272,14 +272,20 @@ func parseMeterExportInterval() (time.Duration, error) {
 	if raw == "" {
 		return DefaultMeterExportInterval, nil
 	}
-	secs, err := strconv.Atoi(raw)
+	if d, err := time.ParseDuration(raw); err == nil {
+		if d <= 0 {
+			return 0, fmt.Errorf("invalid OTEL_METRIC_EXPORT_INTERVAL value %q: must be a positive duration", raw)
+		}
+		return d, nil
+	}
+	ms, err := strconv.Atoi(raw)
 	if err != nil {
-		return 0, fmt.Errorf("invalid OTEL_METRIC_EXPORT_INTERVAL value %q: must be a positive integer (seconds)", raw)
+		return 0, fmt.Errorf("invalid OTEL_METRIC_EXPORT_INTERVAL value %q: must be a duration or positive integer (milliseconds)", raw)
 	}
-	if secs <= 0 {
-		return 0, fmt.Errorf("invalid OTEL_METRIC_EXPORT_INTERVAL value %q: must be a positive integer (seconds)", raw)
+	if ms <= 0 {
+		return 0, fmt.Errorf("invalid OTEL_METRIC_EXPORT_INTERVAL value %q: must be a positive integer (milliseconds)", raw)
 	}
-	return time.Duration(secs) * time.Second, nil
+	return time.Duration(ms) * time.Millisecond, nil
 }
 
 func newMeterProvider(ctx context.Context, cfg *config.OTELConfig, logger *slog.Logger, prometheusEnabled bool) (*metric.MeterProvider, error) {

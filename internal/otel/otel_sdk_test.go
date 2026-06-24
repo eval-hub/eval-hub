@@ -31,40 +31,64 @@ func TestParseMeterExportInterval(t *testing.T) {
 			wantDur:  60 * time.Second,
 		},
 		{
-			name:     "valid positive integer",
-			envValue: "30",
+			name:     "valid duration with unit",
+			envValue: "30s",
 			setEnv:   true,
 			wantDur:  30 * time.Second,
 		},
 		{
-			name:     "valid large integer",
-			envValue: "300",
+			name:     "valid duration compound",
+			envValue: "1m30s",
 			setEnv:   true,
-			wantDur:  300 * time.Second,
+			wantDur:  90 * time.Second,
 		},
 		{
-			name:       "zero causes error",
+			name:     "valid positive integer as milliseconds",
+			envValue: "30000",
+			setEnv:   true,
+			wantDur:  30 * time.Second,
+		},
+		{
+			name:     "valid small integer as milliseconds",
+			envValue: "500",
+			setEnv:   true,
+			wantDur:  500 * time.Millisecond,
+		},
+		{
+			name:       "zero duration causes error",
+			envValue:   "0s",
+			setEnv:     true,
+			wantErrSub: "must be a positive duration",
+		},
+		{
+			name:       "zero integer causes error",
 			envValue:   "0",
 			setEnv:     true,
-			wantErrSub: "must be a positive integer",
+			wantErrSub: "must be a positive",
 		},
 		{
-			name:       "negative causes error",
+			name:       "negative integer causes error",
 			envValue:   "-5",
 			setEnv:     true,
-			wantErrSub: "must be a positive integer",
+			wantErrSub: "must be a positive integer (milliseconds)",
 		},
 		{
 			name:       "non-integer causes error",
 			envValue:   "abc",
 			setEnv:     true,
-			wantErrSub: "must be a positive integer",
+			wantErrSub: "must be a duration or positive integer (milliseconds)",
 		},
 		{
-			name:       "float causes error",
+			name:       "bare float causes error",
 			envValue:   "1.5",
 			setEnv:     true,
-			wantErrSub: "must be a positive integer",
+			wantErrSub: "must be a duration or positive integer (milliseconds)",
+		},
+		{
+			name:     "float with unit parses as duration",
+			envValue: "1.5s",
+			setEnv:   true,
+			wantDur:  1500 * time.Millisecond,
 		},
 	}
 
@@ -252,8 +276,8 @@ func TestNewMeterProviderInvalidInterval(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid interval, got nil")
 	}
-	if !strings.Contains(err.Error(), "must be a positive integer") {
-		t.Fatalf("expected error about positive integer, got %q", err.Error())
+	if !strings.Contains(err.Error(), "must be a duration or positive integer (milliseconds)") {
+		t.Fatalf("expected error about duration or milliseconds, got %q", err.Error())
 	}
 	if mp != nil {
 		t.Fatal("expected nil provider on error")
