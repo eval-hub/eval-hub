@@ -7,8 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
@@ -267,29 +265,24 @@ func createProcessResource(ctx context.Context, config *config.OTELConfig) (*res
 	return resource.New(ctx, opts...)
 }
 
-func parseMeterExportInterval() (time.Duration, error) {
-	raw := os.Getenv("OTEL_METRIC_EXPORT_INTERVAL")
-	if raw == "" {
+func parseMeterExportInterval(cfg *config.OTELConfig) (time.Duration, error) {
+	d := cfg.MetricExportInterval
+	if d.Milliseconds() == 0 {
 		return DefaultMeterExportInterval, nil
 	}
-	if d, err := time.ParseDuration(raw); err == nil {
-		if d <= 0 {
-			return 0, fmt.Errorf("invalid OTEL_METRIC_EXPORT_INTERVAL value %q: must be a positive duration", raw)
-		}
-		return d, nil
+	if d <= 0 {
+		return 0, fmt.Errorf("Invalid OTEL metric export interval: value %q must be a positive duration", d)
 	}
-	ms, err := strconv.Atoi(raw)
-	if err != nil {
-		return 0, fmt.Errorf("invalid OTEL_METRIC_EXPORT_INTERVAL value %q: must be a duration or positive integer (milliseconds)", raw)
-	}
-	if ms <= 0 {
-		return 0, fmt.Errorf("invalid OTEL_METRIC_EXPORT_INTERVAL value %q: must be a positive integer (milliseconds)", raw)
-	}
-	return time.Duration(ms) * time.Millisecond, nil
+	return d, nil
 }
 
 func newMeterProvider(ctx context.Context, cfg *config.OTELConfig, logger *slog.Logger, prometheusEnabled bool) (*metric.MeterProvider, error) {
-	exportInterval, err := parseMeterExportInterval()
+	exportInterval, err := parseMeterExportInterval(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := createResource(ctx, cfg, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -316,10 +309,6 @@ func newMeterProvider(ctx context.Context, cfg *config.OTELConfig, logger *slog.
 		if err != nil {
 			return nil, err
 		}
-		res, err := createResource(ctx, cfg, logger)
-		if err != nil {
-			return nil, err
-		}
 		opts = append(opts,
 			metric.WithReader(metric.NewPeriodicReader(metricExporter, metric.WithInterval(exportInterval))),
 			metric.WithResource(res),
@@ -343,10 +332,6 @@ func newMeterProvider(ctx context.Context, cfg *config.OTELConfig, logger *slog.
 		if err != nil {
 			return nil, err
 		}
-		res, err := createResource(ctx, cfg, logger)
-		if err != nil {
-			return nil, err
-		}
 		opts = append(opts,
 			metric.WithReader(metric.NewPeriodicReader(metricExporter, metric.WithInterval(exportInterval))),
 			metric.WithResource(res),
@@ -359,6 +344,7 @@ func newMeterProvider(ctx context.Context, cfg *config.OTELConfig, logger *slog.
 		}
 		opts = append(opts,
 			metric.WithReader(metric.NewPeriodicReader(metricExporter, metric.WithInterval(exportInterval))),
+			metric.WithResource(res),
 		)
 
 	default:

@@ -35,4 +35,6 @@ type OTELConfig struct {
 	DisableDatabaseOTELScans bool `mapstructure:"disable_database_otel_scan,omitempty"`
 	// The TLS config if running securely (that is not loaded from the config)
 	TLSConfig *tls.Config
+	// The interval for the metric export, set to 60000 milliseconds by default
+	MetricExportInterval time.Duration `mapstructure:"metric_export_interval,omitempty"`
 }
