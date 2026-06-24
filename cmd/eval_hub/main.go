@@ -113,7 +113,7 @@ func main() {
 	var otelShutdown func(context.Context) error
 	if serviceConfig.IsOTELEnabled() {
 		// TODO CHECK TO SEE WHY WE HAVE TO PASS IN A CONTEXT HERE
-		shutdown, err := otel.SetupOTEL(context.Background(), serviceConfig.OTEL, logger)
+		shutdown, err := otel.SetupOTEL(context.Background(), serviceConfig.OTEL, logger, serviceConfig.IsPrometheusEnabled())
 		if err != nil {
 			// we do this as no point trying to continue
 			startUpFailed(serviceConfig, err, "Failed to setup OTEL", logger)
