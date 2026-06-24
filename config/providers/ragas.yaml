@@ -1,0 +1,61 @@
+id: ragas
+name: RAGAS
+title: RAGAS
+description: >
+  Retrieval Augmented Generation Assessment — evaluates RAG pipeline quality
+  using metrics like faithfulness, answer relevancy, context precision/recall,
+  and more. Models are accessed via OpenAI-compatible endpoints.
+runtime:
+  k8s:
+    image: quay.io/evalhub/community-ragas:latest
+    entrypoint:
+      - python
+      - main.py
+    cpu_request: 100m
+    memory_request: 128Mi
+    cpu_limit: 1000m
+    memory_limit: 2Gi
+  local:
+    command: python tests/features/test_data/runtime/main.py
+benchmarks:
+  - id: ragas_rag_default
+    name: RAG Default Suite
+    description: Default RAG evaluation with answer relevancy, context precision, faithfulness, and context recall
+    category: rag_evaluation
+    metrics:
+      - answer_relevancy
+      - context_precision
+      - faithfulness
+      - context_recall
+    tags:
+      - ragas
+      - rag
+      - default
+    primary_score:
+      metric: faithfulness
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.5
+
+  - id: ragas_rag_full
+    name: RAG Full Suite
+    description: Comprehensive RAG evaluation with all available RAGAS metrics
+    category: rag_evaluation
+    metrics:
+      - answer_relevancy
+      - answer_similarity
+      - context_precision
+      - faithfulness
+      - context_recall
+      - context_entity_recall
+      - factual_correctness
+      - noise_sensitivity
+    tags:
+      - ragas
+      - rag
+      - comprehensive
+    primary_score:
+      metric: faithfulness
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.5
