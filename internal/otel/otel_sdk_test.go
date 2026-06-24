@@ -45,7 +45,11 @@ func TestParseMeterExportInterval(t *testing.T) {
 			wantDur:  500 * time.Millisecond,
 		},
 		{
-			name:       "negative duration causes error",
+			name:     "positive sub-millisecond duration",
+			interval: 500 * time.Microsecond,
+			wantDur:  500 * time.Microsecond,
+		},
+		{
 			interval:   -5 * time.Millisecond,
 			wantErrSub: "must be a positive duration",
 		},

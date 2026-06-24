@@ -267,7 +267,7 @@ func createProcessResource(ctx context.Context, config *config.OTELConfig) (*res
 
 func parseMeterExportInterval(cfg *config.OTELConfig) (time.Duration, error) {
 	d := cfg.MetricExportInterval
-	if d.Milliseconds() == 0 {
+	if d == 0 {
 		return DefaultMeterExportInterval, nil
 	}
 	if d <= 0 {

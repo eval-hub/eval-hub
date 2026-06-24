@@ -34,6 +34,7 @@ env_mappings:
   SIDECAR_PORT: sidecar.port
   METRICS_PORT: prometheus.port
   METRICS_HOST: prometheus.host
+  OTEL_METRIC_EXPORT_INTERVAL: otel.metric_export_interval
 
 # Database configuration
 database:
