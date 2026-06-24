@@ -5,6 +5,7 @@ go 1.26.3
 // toolchain go1.26.3
 
 require (
+	github.com/Jeffail/gabs/v2 v2.7.0
 	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/aws/aws-sdk-go-v2 v1.42.0
 	github.com/aws/aws-sdk-go-v2/config v1.32.25
@@ -24,9 +25,13 @@ require (
 	go.opentelemetry.io/contrib/detectors/aws/ecs v1.44.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.69.0
 	go.opentelemetry.io/otel v1.44.0
+	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.44.0
+	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.44.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.44.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.44.0
+	go.opentelemetry.io/otel/exporters/prometheus v0.66.0
 	go.opentelemetry.io/otel/exporters/stdout/stdoutlog v0.20.0
+	go.opentelemetry.io/otel/exporters/stdout/stdoutmetric v1.44.0
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.44.0
 	go.opentelemetry.io/otel/log v0.20.0
 	go.opentelemetry.io/otel/sdk v1.44.0
@@ -44,15 +49,6 @@ require (
 )
 
 require (
-	github.com/prometheus/otlptranslator v1.0.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.44.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.44.0 // indirect
-	go.opentelemetry.io/otel/exporters/prometheus v0.66.0 // indirect
-	go.opentelemetry.io/otel/exporters/stdout/stdoutmetric v1.44.0 // indirect
-)
-
-require (
-	github.com/Jeffail/gabs/v2 v2.7.0
 	github.com/PaesslerAG/gval v1.2.4 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.13 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.29 // indirect
@@ -118,6 +114,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.3.1 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.68.1 // indirect
+	github.com/prometheus/otlptranslator v1.0.0 // indirect
 	github.com/prometheus/procfs v0.20.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/sagikazarmark/locafero v0.12.0 // indirect
