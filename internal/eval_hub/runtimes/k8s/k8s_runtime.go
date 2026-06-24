@@ -210,10 +210,12 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		"service_ca_configmap", jobConfig.serviceCAConfigMap,
 		"eval_hub_url", jobConfig.evalHubURL,
 	)
-	// Inspect the model credential secret once to decide the auth path. Proxy-injectable keys
-	// (api-key, *_api-key, *_url) activate credential injection — the adapter receives the
-	// ephemeral internalModelRef secret and the sidecar proxies model calls. Passthrough-only
-	// secrets (hf-token/ca_cert) mount directly in the adapter without a ref secret or model proxy.
+	// Inspect the model credential secret once to decide the auth path.
+	// The sidecar model proxy is always started when model.auth is set — it handles SA token
+	// injection for unauthenticated adapter requests, ca_cert TLS, and ref-token resolution.
+	// Proxy-injectable keys (api-key, *_api-key, *_url) additionally activate credential
+	// injection: the adapter receives the ephemeral internalModelRef secret and sends a
+	// ref token that the sidecar resolves to the real credential.
 	var secretInfo modelSecretInfo
 	if jobConfig.modelAuthSecretRef != "" {
 		secretInfo, err = inspectModelSecret(ctx, jobConfig.namespace, jobConfig.modelAuthSecretRef, r.helper)
@@ -221,13 +223,14 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 			logger.Error("kubernetes model secret inspect error", "benchmark_id", benchmarkID, "error", err)
 			return fmt.Errorf("job %s benchmark %s: reading model auth secret: %w", evaluation.Resource.ID, benchmarkID, err)
 		}
+		// Always redirect the adapter through the sidecar model proxy when auth is configured.
+		// This ensures SA token injection and ca_cert TLS are applied even when the secret
+		// contains only ca_cert (no proxy-injectable api-key keys).
+		jobConfig.jobSpec.Model.URL = jobConfig.sidecarBaseURL
 		if secretInfo.hasCredentialKeys {
 			jobConfig.modelInternalRefSecretName = buildK8sName(jobConfig.jobID, jobConfig.resourceGUID, "-model-ref")
-			jobConfig.jobSpec.Model.URL = jobConfig.sidecarBaseURL
 		} else {
-			// passthrough-only (e.g. ca_cert only): clear modelTargetURL so sidecar gets no model proxy config
-			jobConfig.modelTargetURL = ""
-			logger.Info("model credential secret has no proxy-injectable keys; disabling credential injection")
+			logger.Info("model credential secret has no proxy-injectable keys; sidecar proxy active for SA token")
 		}
 	}
 	// Build sidecar config after inspectModelSecret so modelTargetURL reflects the final state.

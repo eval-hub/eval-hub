@@ -43,7 +43,6 @@ const (
 	specSuffix                        = "-spec"
 	envMLFlowTrackingURIName          = "MLFLOW_TRACKING_URI"
 	envMLFlowWorkspaceName            = "MLFLOW_WORKSPACE"
-	envMLFlowTokenPathName            = "MLFLOW_TRACKING_TOKEN_PATH"
 	mlflowTokenVolumeName             = "mlflow-token"
 	mlflowTokenMountPath              = "/var/run/secrets/mlflow"
 	mlflowTokenFile                   = "token"
@@ -51,21 +50,31 @@ const (
 	ociCredentialsMountPath           = "/etc/evalhub/.docker/config.json"
 	ociCredentialsSubPath             = ".dockerconfigjson"
 	envOCIAuthConfigPathName          = "OCI_AUTH_CONFIG_PATH"
-	modelAuthVolumeName               = "model-auth" // real credentials secret; mounted in sidecar (injection) or adapter (direct)
+	modelAuthVolumeName               = "model-auth" // credentials secret; mounted in sidecar only
 	modelAuthMountPath                = "/var/run/secrets/model"
-	modelInternalAuthVolumeName       = "model-auth-internal" // internalModelRef projected volume; mounted in adapter during credential injection
-	testDataSecretVolumeName          = "test-data-secret"
-	testDataSecretMountPath           = "/var/run/secrets/test-data"
-	serviceCABundleFile               = "service-ca.crt"
-	envMLFlowCertPathName             = "MLFLOW_TRACKING_SERVER_CERT_PATH"
-	envEvalHubModeName                = "EVALHUB_MODE"
-	envTestDataS3BucketName           = "TEST_DATA_S3_BUCKET"
-	envTestDataS3KeyName              = "TEST_DATA_S3_KEY"
-	defaultInitCPURequest             = "100m"
-	defaultInitCPULimit               = "500m"
-	defaultInitMemoryRequest          = "128Mi"
-	defaultInitMemoryLimit            = "512Mi"
-	defaultAllowPrivilegeEscalation   = false
+	// Standard Kubernetes SA mount path; used by both the sidecar SA token volume and the
+	// adapter DownwardAPI namespace volume so the SDK finds files at the expected locations.
+	k8sSAMountPath = "/var/run/secrets/kubernetes.io/serviceaccount"
+	// evalhub SA token — projected into sidecar only; pod-level auto-mount is disabled so adapter cannot see it.
+	evalhubSATokenVolumeName = "evalhub-sa-token"
+	evalhubSATokenFile       = "token"
+	// pod namespace projected into adapter via DownwardAPI so the SDK can set X-Tenant on sidecar requests.
+	// The SA token auto-mount is disabled so the standard namespace file is absent; we expose it explicitly.
+	adapterNamespaceVolumeName      = "pod-namespace"
+	adapterNamespaceFile            = "namespace"
+	modelInternalAuthVolumeName     = "model-auth-internal" // internalModelRef projected volume; mounted in adapter during credential injection
+	testDataSecretVolumeName        = "test-data-secret"
+	testDataSecretMountPath         = "/var/run/secrets/test-data"
+	serviceCABundleFile             = "service-ca.crt"
+	envMLFlowCertPathName           = "MLFLOW_TRACKING_SERVER_CERT_PATH"
+	envEvalHubModeName              = "EVALHUB_MODE"
+	envTestDataS3BucketName         = "TEST_DATA_S3_BUCKET"
+	envTestDataS3KeyName            = "TEST_DATA_S3_KEY"
+	defaultInitCPURequest           = "100m"
+	defaultInitCPULimit             = "500m"
+	defaultInitMemoryRequest        = "128Mi"
+	defaultInitMemoryLimit          = "512Mi"
+	defaultAllowPrivilegeEscalation = false
 	//defaultRunAsUser                = int64(1000)
 	//defaultRunAsGroup               = int64(1000)
 	labelAppKey       = "app"
@@ -273,12 +282,13 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 					Annotations: annotations,
 				},
 				Spec: corev1.PodSpec{
-					RestartPolicy:      corev1.RestartPolicyNever,
-					NodeSelector:       cfg.nodeSelector,
-					InitContainers:     initContainers,
-					Containers:         containers,
-					Volumes:            jobVolumes,
-					ServiceAccountName: cfg.serviceAccountName,
+					RestartPolicy:                corev1.RestartPolicyNever,
+					NodeSelector:                 cfg.nodeSelector,
+					InitContainers:               initContainers,
+					Containers:                   containers,
+					Volumes:                      jobVolumes,
+					ServiceAccountName:           cfg.serviceAccountName,
+					AutomountServiceAccountToken: boolPtr(false),
 				},
 			},
 		},
@@ -307,6 +317,27 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		},
+		// Pod namespace exposed via DownwardAPI so the adapter SDK can read it to set the
+		// X-Tenant header on sidecar requests. Pod-level SA auto-mount is disabled, so the
+		// standard /var/run/secrets/kubernetes.io/serviceaccount/namespace file is absent
+		// on the adapter; we project it explicitly via DownwardAPI instead.
+		{
+			Name: adapterNamespaceVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					Sources: []corev1.VolumeProjection{{
+						DownwardAPI: &corev1.DownwardAPIProjection{
+							Items: []corev1.DownwardAPIVolumeFile{{
+								Path: adapterNamespaceFile,
+								FieldRef: &corev1.ObjectFieldSelector{
+									FieldPath: "metadata.namespace",
+								},
+							}},
+						},
+					}},
+				},
+			},
+		},
 	}
 
 	// Build volume mounts list
@@ -325,6 +356,11 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 			Name:      terminationFileVolumeName,
 			MountPath: adapterTerminationSharedMountPath,
 		},
+		{
+			Name:      adapterNamespaceVolumeName,
+			MountPath: k8sSAMountPath,
+			ReadOnly:  true,
+		},
 	}
 
 	serviceCAConfigMap := cfg.serviceCAConfigMap
@@ -332,34 +368,6 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 	if serviceCAConfigMap != "" {
 		volumes = ensureServiceCAVolume(volumes, serviceCAConfigMap)
 		volumeMounts = ensureServiceCAMount(volumeMounts)
-	}
-
-	// Add projected ServiceAccountToken volume for MLFlow authentication.
-	// On ROSA/STS clusters, the auto-mounted SA token has the wrong audience
-	// (AWS OIDC instead of Kubernetes API), so we mint a token with the default
-	// audience that MLFlow's kubernetes-auth plugin can use for SelfSubjectAccessReview.
-	if cfg.mlflowTrackingURI != "" {
-		expSeconds := int64(3600)
-		volumes = append(volumes, corev1.Volume{
-			Name: mlflowTokenVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				Projected: &corev1.ProjectedVolumeSource{
-					Sources: []corev1.VolumeProjection{
-						{
-							ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
-								Path:              mlflowTokenFile,
-								ExpirationSeconds: &expSeconds,
-							},
-						},
-					},
-				},
-			},
-		})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      mlflowTokenVolumeName,
-			MountPath: mlflowTokenMountPath,
-			ReadOnly:  true,
-		})
 	}
 
 	// Add OCI credentials volume/mount when a K8s secret connection is configured.
@@ -380,20 +388,15 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		})
 	}
 
-	// Add model auth volumes.
-	// Credential-injection path (modelInternalRefSecretName set): adapter receives a projected
-	// volume (model-auth-internal) combining the internalModelRef secret (synthetic refs) and
-	// selective keys from the model credential secret (hf-token, ca_cert with optional:true so
-	// Kubernetes silently omits absent keys). The sidecar gets the real secret separately.
-	// Direct-mount path (no injection): adapter receives the real secret directly as model-auth.
-	if cfg.modelInternalRefSecretName != "" {
+	// Add model auth volume for the adapter. The sidecar is always active when modelAuthSecretRef
+	// is set (k8s_runtime.go unconditionally redirects the adapter URL to the sidecar), so there
+	// is only one adapter path: a projected volume of passthrough keys (hf-token, ca_cert, both
+	// optional) from the real secret. When credential injection is also active
+	// (modelInternalRefSecretName set), the internalRef secret is prepended so the adapter
+	// receives the synthetic ref tokens alongside the passthrough keys.
+	if cfg.modelAuthSecretRef != "" {
 		optionalTrue := true
 		projectedSources := []corev1.VolumeProjection{
-			{
-				Secret: &corev1.SecretProjection{
-					LocalObjectReference: corev1.LocalObjectReference{Name: cfg.modelInternalRefSecretName},
-				},
-			},
 			{
 				Secret: &corev1.SecretProjection{
 					LocalObjectReference: corev1.LocalObjectReference{Name: cfg.modelAuthSecretRef},
@@ -405,6 +408,15 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 				},
 			},
 		}
+		if cfg.modelInternalRefSecretName != "" {
+			projectedSources = append([]corev1.VolumeProjection{
+				{
+					Secret: &corev1.SecretProjection{
+						LocalObjectReference: corev1.LocalObjectReference{Name: cfg.modelInternalRefSecretName},
+					},
+				},
+			}, projectedSources...)
+		}
 		volumes = append(volumes, corev1.Volume{
 			Name: modelInternalAuthVolumeName,
 			VolumeSource: corev1.VolumeSource{
@@ -413,21 +425,6 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		})
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      modelInternalAuthVolumeName,
-			MountPath: modelAuthMountPath,
-			ReadOnly:  true,
-		})
-	} else if cfg.modelAuthSecretRef != "" {
-		// Direct-mount path: no credential injection; mount the real secret directly in the adapter.
-		volumes = append(volumes, corev1.Volume{
-			Name: modelAuthVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: cfg.modelAuthSecretRef,
-				},
-			},
-		})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      modelAuthVolumeName,
 			MountPath: modelAuthMountPath,
 			ReadOnly:  true,
 		})
@@ -499,6 +496,36 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		volumeMounts = ensureServiceCAMount(volumeMounts)
 	}
 
+	// Projected ServiceAccountToken for the sidecar only.
+	// Pod-level auto-mount is disabled (AutomountServiceAccountToken=false on PodSpec) so that
+	// the adapter cannot access the SA token. The sidecar needs it to authenticate callbacks to
+	// the eval-hub API server (X-Tenant header via kube-rbac-proxy). On ROSA/STS clusters the
+	// default auto-mounted token carries the wrong audience (AWS OIDC); projecting explicitly
+	// gives us a token scoped to the Kubernetes API audience.
+	{
+		expSeconds := int64(3600)
+		volumes = append(volumes, corev1.Volume{
+			Name: evalhubSATokenVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					Sources: []corev1.VolumeProjection{
+						{
+							ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+								Path:              evalhubSATokenFile,
+								ExpirationSeconds: &expSeconds,
+							},
+						},
+					},
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      evalhubSATokenVolumeName,
+			MountPath: k8sSAMountPath,
+			ReadOnly:  true,
+		})
+	}
+
 	// Add projected ServiceAccountToken volume for MLFlow authentication (sidecar proxies MLflow).
 	// On ROSA/STS clusters, the auto-mounted SA token has the wrong audience
 	// (AWS OIDC instead of Kubernetes API), so we mint a token with the default
@@ -527,9 +554,10 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		})
 	}
 
-	// When credential injection is active, mount the real credentials secret in the sidecar at
-	// modelAuthMountPath. The adapter never sees this volume.
-	if cfg.modelInternalRefSecretName != "" && cfg.modelAuthSecretRef != "" {
+	// Mount the real credentials secret in the sidecar whenever model auth is configured.
+	// The sidecar needs it for ca_cert TLS and (in the credential-injection path) for
+	// resolving ref tokens. The adapter never sees this volume.
+	if cfg.modelAuthSecretRef != "" {
 		volumes = append(volumes, corev1.Volume{
 			Name: modelAuthVolumeName,
 			VolumeSource: corev1.VolumeSource{
@@ -727,12 +755,6 @@ func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 		})
 		seen[envMLFlowTrackingURIName] = true
 
-		// Token path points to the projected ServiceAccountToken volume
-		env = append(env, corev1.EnvVar{
-			Name:  envMLFlowTokenPathName,
-			Value: mlflowTokenMountPath + "/" + mlflowTokenFile,
-		})
-		seen[envMLFlowTokenPathName] = true
 	}
 	if cfg.mlflowWorkspace != "" {
 		env = append(env, corev1.EnvVar{

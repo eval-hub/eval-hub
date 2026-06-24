@@ -522,6 +522,10 @@ func TestIsModelCredentialKey(t *testing.T) {
 	}
 }
 
+// TestCreateBenchmarkResourcesPassthroughOnlyModelAuth verifies that when the model credential
+// secret contains only ca_cert (SA token auth, no api-key), the sidecar proxy is still started:
+// the adapter URL is redirected to the sidecar, the sidecar gets the real secret mount for TLS,
+// and no internalModelRef ephemeral secret is created (no ref token needed).
 func TestCreateBenchmarkResourcesPassthroughOnlyModelAuth(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
@@ -553,38 +557,78 @@ func TestCreateBenchmarkResourcesPassthroughOnlyModelAuth(t *testing.T) {
 
 	jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
 	job := jobs[0]
-	container := job.Spec.Template.Spec.Containers[0]
 
-	for _, volume := range job.Spec.Template.Spec.Volumes {
-		if volume.Name == modelAuthVolumeName && volume.VolumeSource.Projected != nil {
-			t.Fatal("expected passthrough-only secret to use direct secret mount, not projected ref volume")
-		}
-	}
-	for _, mount := range job.Spec.Template.Spec.InitContainers[0].VolumeMounts {
-		if mount.Name == modelAuthVolumeName {
-			t.Fatal("expected no sidecar real-secret mount when credential injection is disabled")
-		}
-	}
-
+	// No internalModelRef ephemeral secret — no proxy-injectable api-key in the secret.
 	secrets, err := clientset.CoreV1().Secrets("default").List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("list secrets: %v", err)
 	}
 	for _, s := range secrets.Items {
 		if strings.Contains(s.Name, "-model-ref") {
-			t.Fatalf("expected no ephemeral ref secret, found %q", s.Name)
+			t.Fatalf("expected no ephemeral ref secret for ca_cert-only auth, found %q", s.Name)
 		}
 	}
 
+	// Adapter must have a projected passthrough volume (for hf-token/ca_cert) but it must
+	// contain only ONE source — the real secret with selective optional keys. It must NOT
+	// include a second source for an internalRef secret (no api-key was injected).
+	var passthroughVolume *corev1.Volume
+	for i := range job.Spec.Template.Spec.Volumes {
+		if job.Spec.Template.Spec.Volumes[i].Name == modelInternalAuthVolumeName {
+			passthroughVolume = &job.Spec.Template.Spec.Volumes[i]
+			break
+		}
+	}
+	if passthroughVolume == nil {
+		t.Fatal("expected adapter to have passthrough volume (hf-token/ca_cert) in sidecar-proxy path")
+	}
+	if passthroughVolume.Projected == nil {
+		t.Fatal("expected passthrough volume to be a projected volume")
+	}
+	if len(passthroughVolume.Projected.Sources) != 1 {
+		t.Fatalf("expected exactly 1 projected source (real secret passthrough), got %d", len(passthroughVolume.Projected.Sources))
+	}
+	src := passthroughVolume.Projected.Sources[0]
+	if src.Secret == nil {
+		t.Fatal("expected projected source to be a Secret source")
+	}
+	if src.Secret.Name != "tls-only-creds" {
+		t.Fatalf("expected projected source to name real secret %q, got %q", "tls-only-creds", src.Secret.Name)
+	}
+	// Must NOT reference an internalRef secret (no ephemeral secret was created).
+	if src.Secret.Optional == nil || !*src.Secret.Optional {
+		t.Fatal("expected passthrough secret projection to be optional:true")
+	}
+
+	// Sidecar must have the real secret mounted (for ca_cert TLS and SA token injection).
+	var foundSidecarMount bool
+	for _, init := range job.Spec.Template.Spec.InitContainers {
+		if init.Name != sidecarContainerName {
+			continue
+		}
+		for _, m := range init.VolumeMounts {
+			if m.Name == modelAuthVolumeName {
+				foundSidecarMount = true
+			}
+		}
+	}
+	if !foundSidecarMount {
+		t.Fatal("expected sidecar to have real secret mount for ca_cert TLS")
+	}
+
+	// job.json model URL must be redirected to the sidecar (not the direct model URL),
+	// so the sidecar proxy handles SA token injection and TLS.
 	cmName := job.Spec.Template.Spec.Volumes[0].VolumeSource.ConfigMap.Name
 	cm, err := clientset.CoreV1().ConfigMaps("default").Get(context.Background(), cmName, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("get configmap: %v", err)
 	}
-	if !strings.Contains(cm.Data["job.json"], "https://model.example.com/v1") {
-		t.Fatalf("expected job.json to keep direct model URL, got %s", cm.Data["job.json"])
+	if strings.Contains(cm.Data["job.json"], "https://model.example.com/v1") {
+		t.Fatalf("expected job.json model URL to be redirected to sidecar, not direct model URL")
 	}
-	_ = container
+	if !strings.Contains(cm.Data["job.json"], "localhost") {
+		t.Fatalf("expected job.json model URL to point to sidecar (localhost), got: %s", cm.Data["job.json"])
+	}
 }
 
 func TestCreateBenchmarkResourcesAddsInitContainerForS3TestData(t *testing.T) {

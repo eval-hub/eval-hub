@@ -31,6 +31,7 @@ var (
 	evalHubCachedToken atomic.Pointer[TokenWithExpiry]
 	mlflowCachedToken  atomic.Pointer[TokenWithExpiry]
 	ociCachedToken     atomic.Pointer[TokenWithExpiry]
+	modelSACachedToken atomic.Pointer[TokenWithExpiry]
 )
 
 // getTokenPointer returns the cache slot for a known proxy target, or nil if the endpoint is not cacheable.
@@ -42,6 +43,8 @@ func getTokenPointer(targetEndpoint string) *atomic.Pointer[TokenWithExpiry] {
 		return &mlflowCachedToken
 	case "oci":
 		return &ociCachedToken
+	case "model-sa":
+		return &modelSACachedToken
 	default:
 		return nil
 	}
