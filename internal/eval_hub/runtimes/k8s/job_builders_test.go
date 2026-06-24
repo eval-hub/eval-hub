@@ -590,6 +590,10 @@ func TestBuildJobWithS3TestDataSkipsEmptyNormalizedKey(t *testing.T) {
 	}
 }
 
+// TestBuildJobWithModelAuthSecret verifies that when only modelAuthSecretRef is set (sidecar-proxy
+// path, SA token auth), the adapter receives a projected volume with passthrough keys only
+// (hf-token, ca_cert, both optional). There is no direct-mount path — the sidecar is always
+// active when model auth is configured.
 func TestBuildJobWithModelAuthSecret(t *testing.T) {
 	cfg := &jobConfig{
 		jobID:              "job-auth",
@@ -608,42 +612,52 @@ func TestBuildJobWithModelAuthSecret(t *testing.T) {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
 
-	var foundVolume bool
-	for _, v := range job.Spec.Template.Spec.Volumes {
-		if v.Name == modelAuthVolumeName {
-			foundVolume = true
-			if v.VolumeSource.Secret == nil {
-				t.Fatalf("expected secret volume source for %s", modelAuthVolumeName)
-			}
-			if v.VolumeSource.Secret.SecretName != "model-auth-secret" {
-				t.Fatalf("expected secret name %q, got %q", "model-auth-secret", v.VolumeSource.Secret.SecretName)
-			}
+	// Adapter must have the projected passthrough volume, not the raw secret volume.
+	var foundVolume *corev1.Volume
+	for i := range job.Spec.Template.Spec.Volumes {
+		if job.Spec.Template.Spec.Volumes[i].Name == modelInternalAuthVolumeName {
+			foundVolume = &job.Spec.Template.Spec.Volumes[i]
+			break
 		}
 	}
-	if !foundVolume {
-		t.Fatalf("expected volume %s to be present", modelAuthVolumeName)
+	if foundVolume == nil {
+		t.Fatalf("expected projected volume %s on adapter", modelInternalAuthVolumeName)
+	}
+	if foundVolume.VolumeSource.Projected == nil {
+		t.Fatalf("expected projected volume source for %s", modelInternalAuthVolumeName)
+	}
+	if len(foundVolume.VolumeSource.Projected.Sources) != 1 {
+		t.Fatalf("expected exactly 1 projected source (passthrough only), got %d", len(foundVolume.VolumeSource.Projected.Sources))
+	}
+	src := foundVolume.VolumeSource.Projected.Sources[0]
+	if src.Secret == nil || src.Secret.Name != "model-auth-secret" {
+		t.Fatalf("expected projected source from real secret %q, got %+v", "model-auth-secret", src)
+	}
+	if src.Secret.Optional == nil || !*src.Secret.Optional {
+		t.Fatal("expected passthrough projection to be optional:true")
 	}
 
 	container := job.Spec.Template.Spec.Containers[0]
 	var foundMount bool
 	for _, m := range container.VolumeMounts {
-		if m.Name == modelAuthVolumeName {
+		if m.Name == modelInternalAuthVolumeName {
 			foundMount = true
 			if m.MountPath != modelAuthMountPath {
 				t.Fatalf("expected mount path %q, got %q", modelAuthMountPath, m.MountPath)
 			}
 			if !m.ReadOnly {
-				t.Fatalf("expected mount to be read-only")
+				t.Fatal("expected mount to be read-only")
 			}
 		}
 	}
 	if !foundMount {
-		t.Fatalf("expected volume mount %s to be present", modelAuthVolumeName)
+		t.Fatalf("expected volume mount %s to be present on adapter", modelInternalAuthVolumeName)
 	}
 
-	for _, e := range container.Env {
-		if e.Name == "MODEL_AUTH_API_KEY_PATH" || e.Name == "MODEL_AUTH_CA_CERT_PATH" {
-			t.Fatalf("expected no model auth env vars, found %s", e.Name)
+	// Raw secret volume must not be mounted on the adapter container (it belongs to the sidecar).
+	for _, m := range container.VolumeMounts {
+		if m.Name == modelAuthVolumeName {
+			t.Fatalf("unexpected raw secret mount %s on adapter container; direct-mount path is gone", modelAuthVolumeName)
 		}
 	}
 }
@@ -835,5 +849,126 @@ func TestBuildJobNoNodeSelectorWhenAbsent(t *testing.T) {
 	}
 	if len(job.Spec.Template.Spec.NodeSelector) != 0 {
 		t.Errorf("expected empty NodeSelector, got %v", job.Spec.Template.Spec.NodeSelector)
+	}
+}
+
+// TestBuildJobSATokenSidecarOnly verifies that:
+//   - pod-level AutomountServiceAccountToken is explicitly disabled
+//   - the evalhub-sa-token projected volume exists on the pod and is mounted in the sidecar
+//   - the adapter container has no evalhub-sa-token mount
+//   - the adapter has the pod-namespace DownwardAPI volume mounted at k8sSAMountPath
+func TestBuildJobSATokenSidecarOnly(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "sa-token-job",
+		resourceGUID:   "guid-sa",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "p",
+		benchmarkID:    "b",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
+	}
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob: %v", err)
+	}
+
+	// Pod must disable auto-mount so SA token is not injected into adapter.
+	if job.Spec.Template.Spec.AutomountServiceAccountToken == nil || *job.Spec.Template.Spec.AutomountServiceAccountToken {
+		t.Fatal("expected AutomountServiceAccountToken=false on PodSpec")
+	}
+
+	// Pod volumes must contain the evalhub-sa-token projected volume.
+	var foundPodVolume bool
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == evalhubSATokenVolumeName {
+			foundPodVolume = true
+			if v.VolumeSource.Projected == nil {
+				t.Fatal("evalhub-sa-token volume must be a projected volume")
+			}
+			hasSAToken := false
+			for _, src := range v.VolumeSource.Projected.Sources {
+				if src.ServiceAccountToken != nil {
+					hasSAToken = true
+				}
+			}
+			if !hasSAToken {
+				t.Fatal("evalhub-sa-token projected volume must contain a ServiceAccountToken source")
+			}
+		}
+	}
+	if !foundPodVolume {
+		t.Fatalf("expected pod volume %q", evalhubSATokenVolumeName)
+	}
+
+	// Sidecar must mount evalhub-sa-token at the standard SA token path.
+	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
+	if sidecar == nil {
+		t.Fatal("sidecar init container not found")
+	}
+	var foundSidecarMount bool
+	for _, m := range sidecar.VolumeMounts {
+		if m.Name == evalhubSATokenVolumeName {
+			foundSidecarMount = true
+			if m.MountPath != k8sSAMountPath {
+				t.Errorf("sidecar SA token mount path: got %q, want %q", m.MountPath, k8sSAMountPath)
+			}
+			if !m.ReadOnly {
+				t.Error("sidecar SA token mount must be read-only")
+			}
+		}
+	}
+	if !foundSidecarMount {
+		t.Fatalf("sidecar must mount %q", evalhubSATokenVolumeName)
+	}
+
+	// Adapter must NOT mount evalhub-sa-token.
+	adapter := findContainer(job.Spec.Template.Spec.Containers, adapterContainerName)
+	if adapter == nil {
+		t.Fatal("adapter container not found")
+	}
+	for _, m := range adapter.VolumeMounts {
+		if m.Name == evalhubSATokenVolumeName {
+			t.Fatalf("adapter must not have %q volume mount", evalhubSATokenVolumeName)
+		}
+	}
+
+	// Adapter must have the pod-namespace DownwardAPI volume mounted at k8sSAMountPath
+	// so the SDK can read the namespace file to set X-Tenant on sidecar requests.
+	var foundNamespaceVolume bool
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == adapterNamespaceVolumeName {
+			foundNamespaceVolume = true
+			if v.VolumeSource.Projected == nil {
+				t.Fatal("pod-namespace volume must be a projected volume")
+			}
+			hasDownwardAPI := false
+			for _, src := range v.VolumeSource.Projected.Sources {
+				if src.DownwardAPI != nil {
+					hasDownwardAPI = true
+				}
+			}
+			if !hasDownwardAPI {
+				t.Fatal("pod-namespace projected volume must contain a DownwardAPI source")
+			}
+		}
+	}
+	if !foundNamespaceVolume {
+		t.Fatalf("expected pod-namespace DownwardAPI volume %q on pod", adapterNamespaceVolumeName)
+	}
+	var foundNamespaceMount bool
+	for _, m := range adapter.VolumeMounts {
+		if m.Name == adapterNamespaceVolumeName {
+			foundNamespaceMount = true
+			if m.MountPath != k8sSAMountPath {
+				t.Errorf("adapter namespace mount path: got %q, want %q", m.MountPath, k8sSAMountPath)
+			}
+			if !m.ReadOnly {
+				t.Error("adapter namespace mount must be read-only")
+			}
+		}
+	}
+	if !foundNamespaceMount {
+		t.Fatalf("adapter must mount %q at %q", adapterNamespaceVolumeName, k8sSAMountPath)
 	}
 }
