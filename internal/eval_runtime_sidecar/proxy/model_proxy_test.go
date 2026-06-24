@@ -348,7 +348,7 @@ func TestIsBearerEmpty(t *testing.T) {
 		want   bool
 	}{
 		{"", true},
-		{"Bearer", true},  // Go HTTP parser strips trailing space from "Bearer " sent by Python requests
+		{"Bearer", true}, // Go HTTP parser strips trailing space from "Bearer " sent by Python requests
 		{"Bearer ", true},
 		{"Bearer  ", true},
 		{"Bearer \t", true},

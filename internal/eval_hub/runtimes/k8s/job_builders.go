@@ -60,21 +60,21 @@ const (
 	evalhubSATokenFile       = "token"
 	// pod namespace projected into adapter via DownwardAPI so the SDK can set X-Tenant on sidecar requests.
 	// The SA token auto-mount is disabled so the standard namespace file is absent; we expose it explicitly.
-	adapterNamespaceVolumeName = "pod-namespace"
-	adapterNamespaceFile       = "namespace"
-	modelInternalAuthVolumeName       = "model-auth-internal" // internalModelRef projected volume; mounted in adapter during credential injection
-	testDataSecretVolumeName          = "test-data-secret"
-	testDataSecretMountPath           = "/var/run/secrets/test-data"
-	serviceCABundleFile               = "service-ca.crt"
-	envMLFlowCertPathName             = "MLFLOW_TRACKING_SERVER_CERT_PATH"
-	envEvalHubModeName                = "EVALHUB_MODE"
-	envTestDataS3BucketName           = "TEST_DATA_S3_BUCKET"
-	envTestDataS3KeyName              = "TEST_DATA_S3_KEY"
-	defaultInitCPURequest             = "100m"
-	defaultInitCPULimit               = "500m"
-	defaultInitMemoryRequest          = "128Mi"
-	defaultInitMemoryLimit            = "512Mi"
-	defaultAllowPrivilegeEscalation   = false
+	adapterNamespaceVolumeName      = "pod-namespace"
+	adapterNamespaceFile            = "namespace"
+	modelInternalAuthVolumeName     = "model-auth-internal" // internalModelRef projected volume; mounted in adapter during credential injection
+	testDataSecretVolumeName        = "test-data-secret"
+	testDataSecretMountPath         = "/var/run/secrets/test-data"
+	serviceCABundleFile             = "service-ca.crt"
+	envMLFlowCertPathName           = "MLFLOW_TRACKING_SERVER_CERT_PATH"
+	envEvalHubModeName              = "EVALHUB_MODE"
+	envTestDataS3BucketName         = "TEST_DATA_S3_BUCKET"
+	envTestDataS3KeyName            = "TEST_DATA_S3_KEY"
+	defaultInitCPURequest           = "100m"
+	defaultInitCPULimit             = "500m"
+	defaultInitMemoryRequest        = "128Mi"
+	defaultInitMemoryLimit          = "512Mi"
+	defaultAllowPrivilegeEscalation = false
 	//defaultRunAsUser                = int64(1000)
 	//defaultRunAsGroup               = int64(1000)
 	labelAppKey       = "app"
