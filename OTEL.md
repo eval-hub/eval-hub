@@ -100,7 +100,7 @@ Child spans are created when `otel.enabled` is true (they use the global TracerP
 
 - **MLflow client** — `otelhttp.NewTransport` when `otel.enabled` (`internal/eval_hub/mlflow/mlflow.go`)
 
-### Database
+### Database traces
 
 - **SQL storage** — `otelsql` wraps the driver when storage scans **or** metrics are enabled (`IsOTELStorageScansEnabled()` || `IsOTELMetricsEnabled()`)
 - Produces client spans for queries when the tracer provider is configured
@@ -149,7 +149,7 @@ Terminal-state completions are recorded from:
 
 There is no end-to-end job duration histogram and no per-tenant label on domain metrics today.
 
-### Database
+### Database metrics
 
 When `otelsql` is active and `enable_metrics` is set:
 
@@ -219,6 +219,63 @@ Application structured logs (`slog`) are separate from OTEL logs.
 
 - Manual integration against a real OTLP collector and live dual-sink `/metrics` verification remain recommended before production rollout.
 - FVT `@metrics` scenarios auto-enable OTEL metrics when Prometheus scraping is configured but do not enable tracing.
+
+### Local SigNoz (Podman)
+
+For macOS or Linux local testing, run SigNoz (traces, metrics, and logs in one UI) with Podman Compose. Requires Podman and at least 4GB memory for the stack.
+
+```bash
+cd tests/otel
+make start-signoz
+# or: podman compose -f pours/deployment/compose.yaml up -d
+```
+
+Stop the stack:
+
+```bash
+cd tests/otel
+make stop-signoz
+# or: podman compose -f pours/deployment/compose.yaml down
+```
+
+| Endpoint | URL |
+|----------|-----|
+| SigNoz UI | <http://localhost:3301> |
+| OTLP gRPC (send eval-hub traces/metrics here) | `localhost:4317` |
+| OTLP HTTP | `localhost:4318` |
+
+SigNoz UI is mapped to **3301** so it does not clash with eval-hub on `:8080`.
+
+Point eval-hub at SigNoz (local plaintext gRPC):
+
+```yaml
+otel:
+  enabled: true
+  exporter_type: "otlp-grpc"
+  exporter_endpoint: "localhost:4317"
+  exporter_insecure: true
+  enable_tracing: true
+  enable_metrics: true
+  metric_export_interval: 10s
+```
+
+Then start the API (`make start-service`) and generate traffic. In SigNoz, filter by `service.name` = `github.com/eval-hub/eval-hub` (or the sidecar service name). eval-hub dual-sink Prometheus metrics remain on `:8081/metrics`.
+
+**Refresh compose files** from the upstream SigNoz Foundry example:
+
+```bash
+cd tests/otel
+./scripts/bootstrap-pours.sh
+```
+
+**Regenerate with Foundry** (optional; install `foundryctl` from [SigNoz Foundry](https://github.com/SigNoz/foundry)):
+
+```bash
+cd tests/otel
+make forge-signoz
+```
+
+Files: `tests/otel/pours/deployment/`, `tests/otel/casting.yaml`, `tests/otel/scripts/bootstrap-pours.sh`.
 
 ---
 
