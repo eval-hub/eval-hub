@@ -1102,6 +1102,11 @@ func TestModelAuthCombinations(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			// blank Model.URL must be caught at job-creation time, not silently misdirect traffic
+			name:    "empty model URL",
+			wantErr: true,
+		},
+		{
 			name: "api-key only",
 			secretData: map[string][]byte{
 				"api-key": []byte("sk-real"),
@@ -1280,7 +1285,10 @@ func TestModelAuthCombinations(t *testing.T) {
 			evaluation.Model.URL = modelURL
 
 			var clientset *fake.Clientset
-			if tc.wantErr {
+			if tc.name == "empty model URL" {
+				evaluation.Model.URL = ""
+				clientset = fake.NewClientset()
+			} else if tc.wantErr {
 				// secret_ref set but secret absent from fake store → error expected
 				evaluation.Model.Auth = &api.ModelAuth{SecretRef: secretName}
 				clientset = fake.NewClientset()

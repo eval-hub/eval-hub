@@ -233,7 +233,7 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 			logger.Info("model credential secret has no proxy-injectable keys; sidecar proxy active for SA token")
 		}
 	}
-	// Build sidecar config after inspectModelSecret so modelTargetURL reflects the final state.
+	// Build sidecar config after inspecting the model secret so modelInternalRefSecretName is set.
 	sidecarJSON, err := sidecarForJobPod(r.serviceConfig, jobConfig)
 	if err != nil {
 		return fmt.Errorf("job %s benchmark %s: sidecar config json: %w", evaluation.Resource.ID, benchmarkID, err)

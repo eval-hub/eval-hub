@@ -170,6 +170,9 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	// is active for all jobs — open and authenticated alike.
 	modelInternalRefSecretName := ""
 	modelTargetURL := strings.TrimSpace(evaluation.Model.URL)
+	if modelTargetURL == "" {
+		return nil, fmt.Errorf("model URL must not be empty")
+	}
 
 	sidecarImage, sidecarResources, err := sidecarImageAndResources(serviceConfig)
 	if err != nil {
