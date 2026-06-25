@@ -21,7 +21,7 @@ func Middleware(next http.Handler, metricsEnabled bool, logger *slog.Logger) htt
 
 			endpoint := r.Pattern
 			if endpoint == "" {
-				endpoint = r.URL.Path
+				endpoint = "not_found"
 			}
 			metrics.RecordHTTPRequest(r.Context(), r.Method, endpoint, strconv.Itoa(rw.statusCode))
 		})

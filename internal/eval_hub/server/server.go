@@ -434,7 +434,8 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 		handler = CorsMiddleware(handler, s.serviceConfig)
 	}
 
-	// Wrap with metrics middleware (outermost for complete observability)
+	// HTTP request counters require otel.enable_metrics; Prometheus /metrics uses the OTEL
+	// Prometheus reader registered in newMeterProvider when both are enabled.
 	handler = Middleware(handler, s.serviceConfig.IsOTELMetricsEnabled(), s.logger)
 	return handler, nil
 }

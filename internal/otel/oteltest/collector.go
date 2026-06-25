@@ -24,7 +24,8 @@ type GRPCCollector struct {
 
 // NewGRPCCollector listens on an ephemeral localhost port.
 func NewGRPCCollector() (*GRPCCollector, error) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	var lc net.ListenConfig
+	listener, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, err
 	}

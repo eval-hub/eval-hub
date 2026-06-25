@@ -44,6 +44,7 @@ func TestSetupOTELExportsHTTPMetricsViaOTLPGRPC(t *testing.T) {
 		}), true, logging.FallbackLogger())
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+		req.Pattern = "/api/v1/health"
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 
