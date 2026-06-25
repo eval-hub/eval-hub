@@ -1470,6 +1470,48 @@ func TestModelAuthCombinations(t *testing.T) {
 					t.Errorf("legacy env var %q must not be set on adapter container", env.Name)
 				}
 			}
+
+			// Isolation invariants: adapter must never have the SA token or raw credentials mounts.
+			// evalhub-sa-token is projected only to the sidecar so the adapter cannot read it.
+			// model-auth (raw real secret) is mounted only in the sidecar; the adapter gets the
+			// synthetic model-auth-internal (ref tokens + optional passthrough) instead.
+			for _, m := range adapterContainer.VolumeMounts {
+				if m.Name == evalhubSATokenVolumeName {
+					t.Errorf("adapter must never have the SA token volume mounted (name %q)", m.Name)
+				}
+				if m.Name == modelAuthVolumeName {
+					t.Errorf("adapter must never have the raw model-auth secret mounted (name %q); it should get model-auth-internal instead", m.Name)
+				}
+			}
+
+			// Verify AutomountServiceAccountToken=false on the pod spec — this is the mechanism
+			// that prevents Kubernetes from auto-mounting the default SA token onto the adapter.
+			if job.Spec.Template.Spec.AutomountServiceAccountToken == nil || *job.Spec.Template.Spec.AutomountServiceAccountToken {
+				t.Errorf("pod AutomountServiceAccountToken must be explicitly false to prevent adapter SA token access")
+			}
+
+			// Sidecar must have the SA token mount when auth secret is configured (it needs it
+			// for model SA token injection); for open models the sidecar still gets it for
+			// eval-hub API callbacks.
+			if tc.wantModelAuthVol {
+				sidecarContainer := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
+				if sidecarContainer == nil {
+					t.Fatalf("expected sidecar init container to be present")
+				}
+				var sidecarHasSAToken bool
+				for _, m := range sidecarContainer.VolumeMounts {
+					if m.Name == evalhubSATokenVolumeName {
+						sidecarHasSAToken = true
+					}
+					// sidecar must NOT have model-auth-internal (adapter's synthetic volume)
+					if m.Name == modelInternalAuthVolumeName {
+						t.Errorf("sidecar must never have the model-auth-internal (adapter) volume mounted")
+					}
+				}
+				if !sidecarHasSAToken {
+					t.Errorf("sidecar must have evalhub-sa-token mounted for SA token injection")
+				}
+			}
 		})
 	}
 }
