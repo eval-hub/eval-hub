@@ -74,6 +74,7 @@ type apiFeature struct {
 	metricsBaseURL *url.URL
 	server         *server.Server
 	httpServer     *http.Server
+	metricsServer  *server.MetricsServer
 	client         *http.Client
 }
 
@@ -384,10 +385,24 @@ func (a *apiFeature) startLocalServer(port int) error {
 		a.httpServer.Serve(listener)
 	}()
 
+	if serviceConfig.IsPrometheusEnabled() {
+		a.metricsServer = server.NewMetricsServer(logger, serviceConfig.Prometheus)
+		go func() {
+			if err := a.metricsServer.Start(); err != nil {
+				logger.Error("Metrics server failed", "error", err.Error())
+			}
+		}()
+	}
+
 	return nil
 }
 
 func (a *apiFeature) cleanup(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
+	if a.metricsServer != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		_ = a.metricsServer.Shutdown(shutdownCtx)
+		cancel()
+	}
 	if a.httpServer != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()

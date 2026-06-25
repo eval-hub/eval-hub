@@ -184,8 +184,6 @@ SERVER_URL ?= http://localhost:8080
 ## FVT tests (Functional Verification Tests) using godog
 ## ------------------------------------------------------------------------------------------------
 
-SERVER_URL ?= http://localhost:8080
-
 FVT_TESTS ?= ./tests/features/...
 FVT_OUTPUT ?= --godog.format=junit:${PWD}/$(BIN_DIR)/junit-fvt-report.xml,pretty
 FVT_TAGS ?= --godog.tags=~@ignore && ~@mlflow && ~@cluster && ~@local_runtime
