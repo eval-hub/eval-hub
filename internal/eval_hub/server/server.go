@@ -435,7 +435,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	}
 
 	// Wrap with metrics middleware (outermost for complete observability)
-	handler = Middleware(handler, prometheusEnabled, s.logger)
+	handler = Middleware(handler, s.serviceConfig.IsOTELMetricsEnabled(), s.logger)
 	return handler, nil
 }
 

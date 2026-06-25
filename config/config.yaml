@@ -56,7 +56,7 @@ otel:
   exporter_insecure: false
   sampling_ratio: 1.0
   enable_tracing: true
-  # enable_metrics: true
+  enable_metrics: true
   # enable_logs: true
 prometheus:
   enabled: true

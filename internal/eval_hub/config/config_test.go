@@ -62,6 +62,33 @@ func TestIsPrometheusEnabled(t *testing.T) {
 	})
 }
 
+func TestIsOTELMetricsEnabled(t *testing.T) {
+	t.Run("nil config returns false", func(t *testing.T) {
+		var c *config.Config
+		if c.IsOTELMetricsEnabled() {
+			t.Error("IsOTELMetricsEnabled() on nil config should return false")
+		}
+	})
+	t.Run("OTEL disabled returns false", func(t *testing.T) {
+		c := &config.Config{OTEL: &config.OTELConfig{Enabled: false, EnableMetrics: true}}
+		if c.IsOTELMetricsEnabled() {
+			t.Error("expected false when OTEL disabled")
+		}
+	})
+	t.Run("metrics disabled returns false", func(t *testing.T) {
+		c := &config.Config{OTEL: &config.OTELConfig{Enabled: true, EnableMetrics: false}}
+		if c.IsOTELMetricsEnabled() {
+			t.Error("expected false when EnableMetrics is false")
+		}
+	})
+	t.Run("OTEL and metrics enabled returns true", func(t *testing.T) {
+		c := &config.Config{OTEL: &config.OTELConfig{Enabled: true, EnableMetrics: true}}
+		if !c.IsOTELMetricsEnabled() {
+			t.Error("expected true when OTEL and metrics enabled")
+		}
+	})
+}
+
 func TestIsOTELStorageScansEnabled(t *testing.T) {
 	t.Run("OTEL off returns false", func(t *testing.T) {
 		c := &config.Config{OTEL: &config.OTELConfig{Enabled: false, DisableDatabaseOTELScans: false}}

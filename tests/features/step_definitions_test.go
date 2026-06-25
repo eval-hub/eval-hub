@@ -25,12 +25,14 @@ import (
 	"github.com/Jeffail/gabs/v2"
 	"github.com/PaesslerAG/jsonpath"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/internal/logging"
+	"github.com/eval-hub/eval-hub/internal/otel"
 	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	pkgapi "github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/xeipuuv/gojsonschema"
@@ -260,6 +262,20 @@ func createApiFeature() (*apiFeature, error) {
 	return api, nil
 }
 
+// ensureFVTOTELConfig enables OTEL metrics export for embedded FVT servers when Prometheus
+// scraping is configured. Request duration is collected by otelhttp; counters use OTEL instruments.
+func ensureFVTOTELConfig(serviceConfig *config.Config) {
+	if serviceConfig == nil || !serviceConfig.IsPrometheusEnabled() {
+		return
+	}
+	if serviceConfig.OTEL == nil {
+		serviceConfig.OTEL = &config.OTELConfig{}
+	}
+	serviceConfig.OTEL.Enabled = true
+	serviceConfig.OTEL.EnableMetrics = true
+	serviceConfig.OTEL.ExporterType = otel.ExporterTypeStdout
+}
+
 func (a *apiFeature) startLocalServer(port int) error {
 	logger, _, err := logging.NewLogger()
 	if err != nil {
@@ -320,6 +336,18 @@ func (a *apiFeature) startLocalServer(port int) error {
 	mlflowClient, err := mlflow.NewMLFlowClient(serviceConfig, logger)
 	if err != nil {
 		return logError(fmt.Errorf("failed to create MLFlow client: %w", err))
+	}
+
+	ensureFVTOTELConfig(serviceConfig)
+	if serviceConfig.IsOTELEnabled() {
+		if _, err := otel.SetupOTEL(context.Background(), serviceConfig.OTEL, logger, serviceConfig.IsPrometheusEnabled()); err != nil {
+			return logError(fmt.Errorf("failed to setup OTEL: %w", err))
+		}
+	}
+	if serviceConfig.IsOTELMetricsEnabled() {
+		if err := metrics.Init(); err != nil {
+			return logError(fmt.Errorf("failed to initialize OTEL HTTP metrics: %w", err))
+		}
 	}
 
 	a.server, err = server.NewServer(logger,

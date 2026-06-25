@@ -59,11 +59,8 @@ func TestMiddleware(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		w := httptest.NewRecorder()
 
-		// Before request, in-flight should be 0 (or initial value)
 		wrapped.ServeHTTP(w, req)
 
-		// After request completes, in-flight should be decremented
-		// This is tested implicitly - if defer doesn't work, we'd see issues
 		if w.Code != http.StatusOK {
 			t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
 		}
@@ -95,7 +92,7 @@ func TestResponseWriter(t *testing.T) {
 			ResponseWriter: w,
 			statusCode:     http.StatusOK,
 		}
-		_ = rw.ResponseWriter // ResponseWriter is required for struct validity but not used in this test
+		_ = rw.ResponseWriter
 
 		if rw.statusCode != http.StatusOK {
 			t.Errorf("Expected default status code %d, got %d", http.StatusOK, rw.statusCode)

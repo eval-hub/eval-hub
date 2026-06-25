@@ -19,6 +19,11 @@ func (c *Config) IsOTELEnabled() bool {
 	return (c != nil) && (c.OTEL != nil) && c.OTEL.Enabled
 }
 
+// IsOTELMetricsEnabled reports whether OTEL metric export is turned on in config.
+func (c *Config) IsOTELMetricsEnabled() bool {
+	return c.IsOTELEnabled() && c.OTEL != nil && c.OTEL.EnableMetrics
+}
+
 // IsOTELStorageScansEnabled reports whether OTEL is enabled and database scan spans are not disabled.
 func (c *Config) IsOTELStorageScansEnabled() bool {
 	return c.IsOTELEnabled() && !c.OTEL.DisableDatabaseOTELScans

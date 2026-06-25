@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
@@ -121,6 +122,12 @@ func main() {
 		otelShutdown = shutdown
 	}
 
+	if serviceConfig.IsOTELMetricsEnabled() {
+		if err := metrics.Init(); err != nil {
+			startUpFailed(serviceConfig, err, "Failed to initialize OTEL HTTP metrics", logger)
+		}
+	}
+
 	// create the server
 	srv, err := server.NewServer(logger,
 		serviceConfig,
@@ -159,6 +166,7 @@ func main() {
 		"mlflow_tracking_uri", mlflowTrackingURI,
 		"mlflow_server_version", mlflowServerVersion,
 		"otel", serviceConfig.IsOTELEnabled(),
+		"otel_storage_scans", serviceConfig.IsOTELStorageScansEnabled(),
 		"prometheus", serviceConfig.IsPrometheusEnabled(),
 	)
 

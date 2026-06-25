@@ -5,14 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/go-logr/logr"
 	"go.opentelemetry.io/contrib/detectors/aws/ecs"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
@@ -385,10 +383,6 @@ func newSampler(ratio float64) trace.Sampler {
 		return trace.NeverSample()
 	}
 	return trace.TraceIDRatioBased(ratio)
-}
-
-func NewRoundTripper(base http.RoundTripper) http.RoundTripper {
-	return otelhttp.NewTransport(base)
 }
 
 func safeURL(endpoint string) string {

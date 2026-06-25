@@ -4,46 +4,28 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
 )
 
-// Middleware wraps an http.Handler to collect Prometheus metrics
-func Middleware(next http.Handler, prometheusMetrics bool, logger *slog.Logger) http.Handler {
+// Middleware wraps an http.Handler to collect OTEL HTTP request metrics.
+func Middleware(next http.Handler, metricsEnabled bool, logger *slog.Logger) http.Handler {
 	handler := next
-	if prometheusMetrics {
-		// this should really be in a prometheus package but it uses the http.Handler interface
+	if metricsEnabled {
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			start := time.Now()
+			metrics.IncHTTPInFlight(r.Context())
+			defer metrics.DecHTTPInFlight(r.Context())
 
-			// Track in-flight requests
-			metrics.HTTPRequestInFlight.Inc()
-			defer metrics.HTTPRequestInFlight.Dec()
-
-			// Create a response writer wrapper to capture status code
 			rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-
-			// Call the next handler
 			next.ServeHTTP(rw, r)
 
-			// Calculate duration
-			duration := time.Since(start).Seconds()
-
-			// Extract method and endpoint
-			method := r.Method
-			// Use route pattern to avoid high-cardinality labels from path params
 			endpoint := r.Pattern
 			if endpoint == "" {
 				endpoint = r.URL.Path
 			}
-			status := strconv.Itoa(rw.statusCode)
-
-			// Record metrics
-			metrics.HTTPRequestDuration.WithLabelValues(method, endpoint, status).Observe(duration)
-			metrics.HTTPRequestTotal.WithLabelValues(method, endpoint, status).Inc()
+			metrics.RecordHTTPRequest(r.Context(), r.Method, endpoint, strconv.Itoa(rw.statusCode))
 		})
-		logger.Info("Enabled Prometheus metrics middleware")
+		logger.Info("Enabled OTEL HTTP metrics middleware")
 	}
 
 	return handler
