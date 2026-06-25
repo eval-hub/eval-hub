@@ -92,3 +92,34 @@ func TestLoadSidecarRuntimeConfig_OCISnakeCase(t *testing.T) {
 		t.Errorf("oci.http_timeout = %v", cfg.Sidecar.OCI.HTTPTimeout)
 	}
 }
+
+func TestLoadSidecarRuntimeConfig_OTEL(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sidecar_config.json")
+	json := `{
+  "port": 8080,
+  "eval_hub": { "base_url": "https://eval.example" },
+  "otel": {
+    "enabled": true,
+    "enable_metrics": true,
+    "enable_tracing": true,
+    "exporter_type": "otlp-grpc",
+    "exporter_endpoint": "collector:4317",
+    "exporter_insecure": true
+  }
+}`
+	if err := os.WriteFile(path, []byte(json), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := LoadSidecarRuntimeConfig(path, "v1", "b1", "d1")
+	if err != nil {
+		t.Fatalf("LoadSidecarRuntimeConfig: %v", err)
+	}
+	if !cfg.IsOTELEnabled() {
+		t.Fatal("expected OTEL enabled")
+	}
+	if cfg.OTEL == nil || cfg.OTEL.ExporterEndpoint != "collector:4317" {
+		t.Fatalf("OTEL config: %+v", cfg.OTEL)
+	}
+}

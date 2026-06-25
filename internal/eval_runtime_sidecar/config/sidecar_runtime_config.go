@@ -57,5 +57,9 @@ func LoadSidecarRuntimeConfig(sidecarJSONPath, version, build, buildDate string)
 		}
 	}
 
+	if sc.OTEL != nil {
+		cfg.OTEL = sc.OTEL
+	}
+
 	return cfg, nil
 }

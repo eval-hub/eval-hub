@@ -14,6 +14,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -152,6 +153,7 @@ func (r *LocalRuntime) RunEvaluationJob(
 	for i, bench := range benchmarks {
 		go func() {
 			if err := r.runBenchmark(jobID, bench, i, evaluation, r.callbackURL, storage); err != nil {
+				metrics.RecordBenchmarkRuntimeError(r.ctx, r.Name())
 				r.logger.Error(
 					"local runtime benchmark launch failed",
 					"error", err,

@@ -124,7 +124,7 @@ func main() {
 
 	if serviceConfig.IsOTELMetricsEnabled() {
 		if err := metrics.Init(); err != nil {
-			startUpFailed(serviceConfig, err, "Failed to initialize OTEL HTTP metrics", logger)
+			startUpFailed(serviceConfig, err, "Failed to initialize OTEL evaluation job metrics", logger)
 		}
 	}
 

@@ -10,41 +10,47 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
-	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/otel"
 	oteltest "github.com/eval-hub/eval-hub/internal/otel/oteltest"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	gootel "go.opentelemetry.io/otel"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 )
 
-func TestSetupOTELExportsHTTPMetricsViaOTLPGRPC(t *testing.T) {
-	t.Run("records counters directly", func(t *testing.T) {
+func TestSetupOTELExportsMetricsViaOTLPGRPC(t *testing.T) {
+	t.Run("exports domain metrics", func(t *testing.T) {
 		collector, shutdownOTEL := setupOTELWithCollector(t)
 		defer collector.Shutdown()
 		defer shutdownOTEL(context.Background())
 
 		ctx := context.Background()
-		metrics.RecordHTTPRequest(ctx, http.MethodGet, "/api/v1/health", "200")
-		metrics.IncHTTPInFlight(ctx)
-		metrics.DecHTTPInFlight(ctx)
+		metrics.RecordEvaluationJobCreated(ctx, "kubernetes")
 
 		waitForExportedMetrics(t, ctx, collector)
 
-		assertExportedHTTPMetrics(t, collector, "/api/v1/health")
+		exported := collector.ResourceMetrics()
+		names := oteltest.MetricNames(exported)
+		if _, ok := names["evalhub.evaluation_jobs"]; !ok {
+			t.Error("missing exported metric evalhub.evaluation_jobs")
+		}
+		if !oteltest.HasIntSumDataPoint(exported, "evalhub.evaluation_jobs", "action", "created") {
+			t.Error("evalhub.evaluation_jobs missing action=created attribute")
+		}
+		if !oteltest.HasIntSumDataPoint(exported, "evalhub.evaluation_jobs", "runtime", "kubernetes") {
+			t.Error("evalhub.evaluation_jobs missing runtime=kubernetes attribute")
+		}
 	})
 
-	t.Run("records counters through HTTP middleware", func(t *testing.T) {
+	t.Run("exports otelhttp server duration", func(t *testing.T) {
 		collector, shutdownOTEL := setupOTELWithCollector(t)
 		defer collector.Shutdown()
 		defer shutdownOTEL(context.Background())
 
-		handler := server.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler := otelhttp.NewHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-		}), true, logging.FallbackLogger())
+		}), "/api/v1/health")
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
-		req.Pattern = "/api/v1/health"
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 
@@ -54,7 +60,10 @@ func TestSetupOTELExportsHTTPMetricsViaOTLPGRPC(t *testing.T) {
 
 		waitForExportedMetrics(t, req.Context(), collector)
 
-		assertExportedHTTPMetrics(t, collector, "/api/v1/health")
+		names := oteltest.MetricNames(collector.ResourceMetrics())
+		if _, ok := names["http.server.request.duration"]; !ok {
+			t.Error("missing exported metric http.server.request.duration")
+		}
 	})
 }
 
@@ -107,27 +116,4 @@ func waitForExportedMetrics(t *testing.T, ctx context.Context, collector *otelte
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatal("timed out waiting for OTLP metric export")
-}
-
-func assertExportedHTTPMetrics(t *testing.T, collector *oteltest.GRPCCollector, endpoint string) {
-	t.Helper()
-
-	exported := collector.ResourceMetrics()
-	names := oteltest.MetricNames(exported)
-
-	for _, want := range []string{"http_requests_total", "http_requests_in_flight"} {
-		if _, ok := names[want]; !ok {
-			t.Errorf("missing exported metric %q", want)
-		}
-	}
-
-	if !oteltest.HasIntSumDataPoint(exported, "http_requests_total", "method", http.MethodGet) {
-		t.Error("http_requests_total missing method=GET attribute")
-	}
-	if !oteltest.HasIntSumDataPoint(exported, "http_requests_total", "endpoint", endpoint) {
-		t.Errorf("http_requests_total missing endpoint=%q attribute", endpoint)
-	}
-	if !oteltest.HasIntSumDataPoint(exported, "http_requests_total", "status", "200") {
-		t.Error("http_requests_total missing status=200 attribute")
-	}
 }

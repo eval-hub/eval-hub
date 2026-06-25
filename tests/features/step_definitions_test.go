@@ -263,7 +263,7 @@ func createApiFeature() (*apiFeature, error) {
 }
 
 // ensureFVTOTELConfig enables OTEL metrics export for embedded FVT servers when Prometheus
-// scraping is configured. Request duration is collected by otelhttp; counters use OTEL instruments.
+// scraping is configured. HTTP request duration is collected by otelhttp.
 func ensureFVTOTELConfig(serviceConfig *config.Config) {
 	if serviceConfig == nil || !serviceConfig.IsPrometheusEnabled() {
 		return

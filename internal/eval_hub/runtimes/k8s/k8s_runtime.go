@@ -12,6 +12,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -65,6 +66,7 @@ func (r *K8sRuntime) RunEvaluationJob(
 		for idx, bench := range benchmarks {
 			benchCtx := context.Background()
 			if err := r.createBenchmarkResources(benchCtx, r.logger, evaluation, &bench, idx, storage); err != nil {
+				metrics.RecordBenchmarkRuntimeError(benchCtx, r.Name())
 				r.logger.Error(
 					"kubernetes job creation failed",
 					"error", err,

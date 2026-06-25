@@ -13,6 +13,7 @@ type SidecarConfig struct {
 	OCI              *SidecarOCIConfig       `mapstructure:"oci,omitempty" json:"oci,omitempty"`
 	Model            *SidecarModelConfig     `mapstructure:"model,omitempty" json:"model,omitempty"`
 	SidecarContainer *SidecarContainerConfig `mapstructure:"sidecar_container,omitempty" json:"sidecar_container,omitempty"`
+	OTEL             *OTELConfig             `mapstructure:"otel,omitempty" json:"otel,omitempty"`
 }
 
 // SidecarModelConfig holds the model credential-injection proxy settings written into

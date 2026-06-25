@@ -36,8 +36,9 @@ const (
 	ExporterTypeOTLPHTTP = "otlp-http"
 	ExporterTypeStdout   = "stdout"
 
-	ServiceName = "github.com/eval-hub/eval-hub"
-	Compressor  = "gzip"
+	ServiceName        = "github.com/eval-hub/eval-hub"
+	SidecarServiceName = "github.com/eval-hub/eval-runtime-sidecar"
+	Compressor         = "gzip"
 
 	DefaultMeterExportInterval = 60 * time.Second
 )
@@ -222,8 +223,12 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig, logger *s
 }
 
 func createResource(ctx context.Context, config *config.OTELConfig, logger *slog.Logger) (*resource.Resource, error) {
+	serviceName := ServiceName
+	if config.ServiceName != "" {
+		serviceName = config.ServiceName
+	}
 	attrs := []attribute.KeyValue{
-		semconv.ServiceName(ServiceName),
+		semconv.ServiceName(serviceName),
 		// semconv.ServiceVersion(config.ServiceVersion),
 	}
 

@@ -5,51 +5,49 @@ import (
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
+	"github.com/eval-hub/eval-hub/pkg/api"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
 
-func setupTestMeterProvider(t *testing.T) *metric.ManualReader {
-	t.Helper()
+func TestInitCreatesEvaluationJobInstruments(t *testing.T) {
 	reader := metric.NewManualReader()
 	provider := metric.NewMeterProvider(metric.WithReader(reader))
+	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+
 	otel.SetMeterProvider(provider)
-	t.Cleanup(func() {
-		_ = provider.Shutdown(context.Background())
-	})
+
 	if err := metrics.Init(); err != nil {
 		t.Fatalf("metrics.Init: %v", err)
 	}
-	return reader
-}
 
-func TestInitCreatesHTTPMetrics(t *testing.T) {
-	reader := setupTestMeterProvider(t)
-
-	metrics.RecordHTTPRequest(context.Background(), "GET", "/api/v1/health", "200")
-	metrics.IncHTTPInFlight(context.Background())
-	metrics.DecHTTPInFlight(context.Background())
+	ctx := context.Background()
+	metrics.RecordEvaluationJobCreated(ctx, "kubernetes")
+	metrics.RecordEvaluationJobCancelled(ctx)
+	metrics.RecordEvaluationJobRuntimeStartFailed(ctx, "local")
+	metrics.RecordEvaluationJobTerminalState(ctx, api.OverallStateRunning, api.OverallStateCompleted)
+	metrics.RecordBenchmarkRuntimeError(ctx, "kubernetes")
 
 	var rm metricdata.ResourceMetrics
-	if err := reader.Collect(context.Background(), &rm); err != nil {
-		t.Fatalf("collect: %v", err)
+	if err := reader.Collect(ctx, &rm); err != nil {
+		t.Fatalf("Collect: %v", err)
 	}
 
-	names := metricNames(rm)
-	for _, want := range []string{"http_requests_total", "http_requests_in_flight"} {
-		if !names[want] {
+	names := make(map[string]struct{})
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			names[m.Name] = struct{}{}
+		}
+	}
+
+	for _, want := range []string{
+		"evalhub.evaluation_jobs",
+		"evalhub.evaluation_job_completions",
+		"evalhub.benchmark_runtime_errors",
+	} {
+		if _, ok := names[want]; !ok {
 			t.Errorf("missing metric %q", want)
 		}
 	}
-}
-
-func metricNames(rm metricdata.ResourceMetrics) map[string]bool {
-	found := make(map[string]bool)
-	for _, sm := range rm.ScopeMetrics {
-		for _, m := range sm.Metrics {
-			found[m.Name] = true
-		}
-	}
-	return found
 }

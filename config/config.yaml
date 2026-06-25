@@ -56,7 +56,7 @@ otel:
   exporter_insecure: false
   sampling_ratio: 1.0
   enable_tracing: true
-  enable_metrics: true  # required for http_requests_* metrics and OTEL-bridged /metrics scrape
+  enable_metrics: true  # required for otelhttp HTTP metrics and OTEL-bridged /metrics scrape
   # enable_logs: true
 prometheus:
   enabled: true

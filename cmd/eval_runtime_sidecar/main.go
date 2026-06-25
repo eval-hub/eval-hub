@@ -18,6 +18,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_runtime_sidecar/config"
 	sidecarServer "github.com/eval-hub/eval-hub/internal/eval_runtime_sidecar/server"
 	"github.com/eval-hub/eval-hub/internal/logging"
+	"github.com/eval-hub/eval-hub/internal/otel"
 )
 
 var (
@@ -51,6 +52,15 @@ func main() {
 		startUpFailed(terminationFilePath(), err, "Failed to load sidecar config", logger)
 	}
 
+	var otelShutdown func(context.Context) error
+	if svcConfig.IsOTELEnabled() {
+		shutdown, err := otel.SetupOTEL(context.Background(), svcConfig.OTEL, logger, false)
+		if err != nil {
+			startUpFailed(terminationFilePath(), err, "Failed to setup OTEL", logger)
+		}
+		otelShutdown = shutdown
+	}
+
 	srv, err := sidecarServer.NewSidecarServer(logger, svcConfig)
 	if err != nil {
 		startUpFailed(terminationFilePath(), err, "Failed to create sidecar server", logger)
@@ -67,6 +77,7 @@ func main() {
 		"build", build,
 		"build_date", buildDate,
 		"mlflow_tracking", svcConfig.MLFlow != nil && svcConfig.MLFlow.TrackingURI != "",
+		"otel", svcConfig.IsOTELEnabled(),
 	)
 
 	// Start server in a goroutine
@@ -100,6 +111,12 @@ func main() {
 	} else {
 		logger.Info("Sidecar server shutdown gracefully")
 		_ = logShutdown() // ignore the error
+	}
+
+	if otelShutdown != nil {
+		if err := otelShutdown(shutdownCtx); err != nil {
+			logger.Error("Failed to shutdown OTEL", "error", err.Error())
+		}
 	}
 }
 

@@ -6,35 +6,37 @@ import (
 )
 
 type OTELConfig struct {
-	Enabled bool `mapstructure:"enabled"`
+	Enabled bool `mapstructure:"enabled" json:"enabled,omitempty"`
 	// ExporterType defines the exporter to use: "otlp-grpc", "otlp-http", or "stdout"
-	ExporterType string `mapstructure:"exporter_type,omitempty"`
+	ExporterType string `mapstructure:"exporter_type,omitempty" json:"exporter_type,omitempty"`
 	// ExporterEndpoint is the endpoint for the OTLP exporter (e.g., "localhost:4317" for gRPC)
-	ExporterEndpoint string `mapstructure:"exporter_endpoint,omitempty"`
+	ExporterEndpoint string `mapstructure:"exporter_endpoint,omitempty" json:"exporter_endpoint,omitempty"`
 	// ExporterInsecure determines whether to use insecure connection for OTLP exporter
-	ExporterInsecure bool `mapstructure:"exporter_insecure,omitempty"`
+	ExporterInsecure bool `mapstructure:"exporter_insecure,omitempty" json:"exporter_insecure,omitempty"`
 	// SamplingRatio is the ratio of traces to sample (0.0 to 1.0) - defaults to 1.0 if not set
-	SamplingRatio *float64 `mapstructure:"sampling_ratio,omitempty"`
+	SamplingRatio *float64 `mapstructure:"sampling_ratio,omitempty" json:"sampling_ratio,omitempty"`
 	// Used to enable tracing
-	EnableTracing bool `mapstructure:"enable_tracing,omitempty"`
+	EnableTracing bool `mapstructure:"enable_tracing,omitempty" json:"enable_tracing,omitempty"`
 	// TracerTimeout is the timeout for the tracer - defaults to 30 seconds if not set
-	TracerTimeout time.Duration `mapstructure:"tracer_timeout,omitempty"`
+	TracerTimeout time.Duration `mapstructure:"tracer_timeout,omitempty" json:"tracer_timeout,omitempty"`
 	// TracerBatchInterval is the interval for the tracer batch - defaults to 5 seconds if not set
-	TracerBatchInterval time.Duration `mapstructure:"tracer_batch_interval,omitempty"`
+	TracerBatchInterval time.Duration `mapstructure:"tracer_batch_interval,omitempty" json:"tracer_batch_interval,omitempty"`
 	// Used to enable metrics
-	EnableMetrics bool `mapstructure:"enable_metrics,omitempty"`
+	EnableMetrics bool `mapstructure:"enable_metrics,omitempty" json:"enable_metrics,omitempty"`
 	// Used to enable sending of logs
-	EnableLogs bool `mapstructure:"enable_logs,omitempty"`
+	EnableLogs bool `mapstructure:"enable_logs,omitempty" json:"enable_logs,omitempty"`
+	// ServiceName overrides the default OTEL service.name resource attribute.
+	ServiceName string `mapstructure:"service_name,omitempty" json:"service_name,omitempty"`
 	// AdditionalAttributes are custom attributes to add to all traces
-	AdditionalAttributes map[string]string `mapstructure:"additional_attributes,omitempty"`
+	AdditionalAttributes map[string]string `mapstructure:"additional_attributes,omitempty" json:"additional_attributes,omitempty"`
 	// Used to enable ECS resource detection
-	EnableECSResourceDetection bool `mapstructure:"enable_ecs_resource_detection,omitempty"`
+	EnableECSResourceDetection bool `mapstructure:"enable_ecs_resource_detection,omitempty" json:"enable_ecs_resource_detection,omitempty"`
 	// When true, OTEL SDK diagnostic logs are not redirected to the main logger
-	DisableRedirectOTELLogs bool `mapstructure:"disable_redirect_otel_logs,omitempty"`
+	DisableRedirectOTELLogs bool `mapstructure:"disable_redirect_otel_logs,omitempty" json:"disable_redirect_otel_logs,omitempty"`
 	// When true, the database OTEL scan is disabled
-	DisableDatabaseOTELScans bool `mapstructure:"disable_database_otel_scan,omitempty"`
+	DisableDatabaseOTELScans bool `mapstructure:"disable_database_otel_scan,omitempty" json:"disable_database_otel_scan,omitempty"`
 	// The TLS config if running securely (that is not loaded from the config)
-	TLSConfig *tls.Config
+	TLSConfig *tls.Config `json:"-"`
 	// The interval for the metric export, set to 60000 milliseconds by default
-	MetricExportInterval time.Duration `mapstructure:"metric_export_interval,omitempty"`
+	MetricExportInterval time.Duration `mapstructure:"metric_export_interval,omitempty" json:"metric_export_interval,omitempty"`
 }

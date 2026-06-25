@@ -13,6 +13,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
 	handlers "github.com/eval-hub/eval-hub/internal/eval_runtime_sidecar/handlers"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 type SidecarServer struct {
@@ -58,6 +59,10 @@ func NewSidecarServer(logger *slog.Logger,
 	}, nil
 }
 
+func (s *SidecarServer) isOTELEnabled() bool {
+	return s.config != nil && s.config.IsOTELEnabled()
+}
+
 func (s *SidecarServer) GetPort() int {
 	return s.port
 }
@@ -69,20 +74,21 @@ func (s *SidecarServer) setupRoutes() (http.Handler, error) {
 		return nil, fmt.Errorf("failed to create handlers: %w", err)
 	}
 
-	s.setupHealthRoutes(h, router)
-	s.setupSidecarProxyRoutes(h, router)
+	s.handleFunc(router, "GET /health", h.HandleHealth)
+	s.handleFunc(router, "/", h.HandleProxyCall)
 
 	handler := http.Handler(router)
 
 	return handler, nil
 }
 
-func (s *SidecarServer) setupHealthRoutes(h *handlers.Handlers, router *http.ServeMux) {
-	router.HandleFunc("GET /health", h.HandleHealth)
-}
-
-func (s *SidecarServer) setupSidecarProxyRoutes(h *handlers.Handlers, router *http.ServeMux) {
-	router.HandleFunc("/", h.HandleProxyCall)
+func (s *SidecarServer) handleFunc(router *http.ServeMux, pattern string, handler func(http.ResponseWriter, *http.Request)) {
+	h := http.Handler(http.HandlerFunc(handler))
+	if s.isOTELEnabled() {
+		h = otelhttp.NewHandler(h, pattern)
+		s.logger.Info("Enabled OTEL handler", "pattern", pattern)
+	}
+	router.Handle(pattern, h)
 }
 
 // SetupRoutes exposes the route setup for testing
@@ -128,7 +134,6 @@ func (s *SidecarServer) Start() error {
 }
 
 func (s *SidecarServer) Shutdown(ctx context.Context) error {
-	//TODO: Explore sending metrics on sidecar shutdown
 	s.logger.Info("Shutting down sidecar server gracefully...")
 	return s.httpServer.Shutdown(ctx)
 }

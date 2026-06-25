@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/otel"
 )
 
 // sidecarForJobPod builds sidecar_config.json for the job ConfigMap from server
@@ -59,7 +60,23 @@ func sidecarForJobPod(cfg *config.Config, jc *jobConfig) (*config.SidecarConfig,
 		}
 	}
 
+	if otelCfg := otelConfigForJobPod(cfg); otelCfg != nil {
+		export.OTEL = otelCfg
+	}
+
 	return export, nil
+}
+
+func otelConfigForJobPod(cfg *config.Config) *config.OTELConfig {
+	if cfg == nil || cfg.OTEL == nil || !cfg.OTEL.Enabled {
+		return nil
+	}
+	out := *cfg.OTEL
+	out.TLSConfig = nil
+	if out.ServiceName == "" {
+		out.ServiceName = otel.SidecarServiceName
+	}
+	return &out
 }
 
 func cloneSidecarConfig(sc *config.SidecarConfig) *config.SidecarConfig {
@@ -82,6 +99,10 @@ func cloneSidecarConfig(sc *config.SidecarConfig) *config.SidecarConfig {
 	if sc.Model != nil {
 		m := *sc.Model
 		out.Model = &m
+	}
+	if sc.OTEL != nil {
+		o := *sc.OTEL
+		out.OTEL = &o
 	}
 	// SidecarContainer (image/resources) is for eval-hub job scheduling only, not the sidecar process.
 	return out
