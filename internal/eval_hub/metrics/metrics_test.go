@@ -2,6 +2,7 @@ package metrics_test
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
@@ -28,6 +29,10 @@ func TestInitCreatesEvaluationJobInstruments(t *testing.T) {
 	metrics.RecordEvaluationJobRuntimeStartFailed(ctx, "local")
 	metrics.RecordEvaluationJobTerminalState(ctx, api.OverallStateRunning, api.OverallStateCompleted)
 	metrics.RecordBenchmarkRuntimeError(ctx, "kubernetes")
+	metrics.RecordHTTPServerRequest(ctx, http.MethodGet, "/api/v1/health", http.StatusOK)
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	metrics.IncHTTPServerActiveRequests(ctx, req)
+	metrics.DecHTTPServerActiveRequests(ctx, req)
 
 	var rm metricdata.ResourceMetrics
 	if err := reader.Collect(ctx, &rm); err != nil {
@@ -45,6 +50,8 @@ func TestInitCreatesEvaluationJobInstruments(t *testing.T) {
 		"evalhub.evaluation_jobs",
 		"evalhub.evaluation_job_completions",
 		"evalhub.benchmark_runtime_errors",
+		"http.server.request.count",
+		"http.server.active_requests",
 	} {
 		if _, ok := names[want]; !ok {
 			t.Errorf("missing metric %q", want)

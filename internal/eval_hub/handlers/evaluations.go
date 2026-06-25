@@ -88,10 +88,9 @@ func (s *runtimeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEve
 		return err
 	}
 
-	updated, jobErr := s.scopedStorage().GetEvaluationJob(id)
-	if jobErr == nil && updated != nil && updated.Status != nil {
-		metrics.RecordEvaluationJobTerminalState(s.ctx, previousState, updated.Status.State)
-	}
+	recordEvaluationJobTerminalStateAfterUpdate(s.ctx, func() (*api.EvaluationJobResource, error) {
+		return s.scopedStorage().GetEvaluationJob(id)
+	}, previousState)
 	return nil
 }
 
@@ -483,14 +482,26 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 
 	ctx.Logger.Debug("Updating evaluation job", "id", evaluationJobID, "state", status.BenchmarkStatusEvent.Status, "status", status)
 
+	var previousState api.OverallState
+
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			err = storage.WithContext(runtimeCtx).UpdateEvaluationJob(evaluationJobID, status)
+			scoped := storage.WithContext(runtimeCtx)
+			job, jobErr := scoped.GetEvaluationJob(evaluationJobID)
+			if jobErr == nil && job != nil && job.Status != nil {
+				previousState = job.Status.State
+			}
+
+			err = scoped.UpdateEvaluationJob(evaluationJobID, status)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
 			}
+
+			recordEvaluationJobTerminalStateAfterUpdate(runtimeCtx, func() (*api.EvaluationJobResource, error) {
+				return scoped.GetEvaluationJob(evaluationJobID)
+			}, previousState)
 			w.WriteJSON(nil, 204)
 			return nil
 		},

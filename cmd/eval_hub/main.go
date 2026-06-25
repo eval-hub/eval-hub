@@ -90,8 +90,31 @@ func main() {
 		startUpFailed(serviceConfig, err, "Failed to create collection configs", logger)
 	}
 
+	// setup OTEL before storage so DB metrics can register against the MeterProvider
+	var otelShutdown func(context.Context) error
+	if serviceConfig.IsOTELEnabled() {
+		shutdown, err := otel.SetupOTEL(context.Background(), serviceConfig.OTEL, logger, serviceConfig.IsPrometheusEnabled())
+		if err != nil {
+			startUpFailed(serviceConfig, err, "Failed to setup OTEL", logger)
+		}
+		otelShutdown = shutdown
+	}
+
+	if serviceConfig.IsOTELMetricsEnabled() {
+		if err := metrics.Init(); err != nil {
+			startUpFailed(serviceConfig, err, "Failed to initialize OTEL metrics", logger)
+		}
+	}
+
 	// set up the storage
-	storage, err := storage.NewStorage(serviceConfig.Database, collectionConfigs, providerConfigs, serviceConfig.IsOTELStorageScansEnabled(), logger)
+	storage, err := storage.NewStorage(
+		serviceConfig.Database,
+		collectionConfigs,
+		providerConfigs,
+		serviceConfig.IsOTELStorageScansEnabled(),
+		serviceConfig.IsOTELMetricsEnabled(),
+		logger,
+	)
 	if err != nil {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create storage", logger)
@@ -108,24 +131,6 @@ func main() {
 	mlflowClient, mlflowTrackingURI, mlflowServerVersion, err := mlflow.SetupMLFlowClient(serviceConfig, logger)
 	if err != nil {
 		startUpFailed(serviceConfig, err, "Failed to create MLFlow client", logger)
-	}
-
-	// setup OTEL
-	var otelShutdown func(context.Context) error
-	if serviceConfig.IsOTELEnabled() {
-		// TODO CHECK TO SEE WHY WE HAVE TO PASS IN A CONTEXT HERE
-		shutdown, err := otel.SetupOTEL(context.Background(), serviceConfig.OTEL, logger, serviceConfig.IsPrometheusEnabled())
-		if err != nil {
-			// we do this as no point trying to continue
-			startUpFailed(serviceConfig, err, "Failed to setup OTEL", logger)
-		}
-		otelShutdown = shutdown
-	}
-
-	if serviceConfig.IsOTELMetricsEnabled() {
-		if err := metrics.Init(); err != nil {
-			startUpFailed(serviceConfig, err, "Failed to initialize OTEL evaluation job metrics", logger)
-		}
 	}
 
 	// create the server

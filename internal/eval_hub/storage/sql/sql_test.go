@@ -1,6 +1,7 @@
 package sql_test
 
 import (
+	"context"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -9,6 +10,8 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/internal/logging"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/sdk/metric"
 )
 
 var (
@@ -24,7 +27,7 @@ func TestNewStorageConnMaxLifetime(t *testing.T) {
 			"url":               getDBInMemoryURL(getDBName()),
 			"conn_max_lifetime": "30m",
 		}
-		s, err := storage.NewStorage(&config, nil, nil, false, logger)
+		s, err := storage.NewStorage(&config, nil, nil, false, false, logger)
 		if err != nil {
 			t.Fatalf("NewStorage failed with duration string: %v", err)
 		}
@@ -36,12 +39,30 @@ func TestNewStorageConnMaxLifetime(t *testing.T) {
 			"driver": "sqlite",
 			"url":    getDBInMemoryURL(getDBName()),
 		}
-		s, err := storage.NewStorage(&config, nil, nil, false, logger)
+		s, err := storage.NewStorage(&config, nil, nil, false, false, logger)
 		if err != nil {
 			t.Fatalf("NewStorage failed without conn_max_lifetime: %v", err)
 		}
 		s.Close()
 	})
+}
+
+func TestNewStorageOTELMetrics(t *testing.T) {
+	logger := logging.FallbackLogger()
+	reader := metric.NewManualReader()
+	provider := metric.NewMeterProvider(metric.WithReader(reader))
+	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+	otel.SetMeterProvider(provider)
+
+	config := map[string]any{
+		"driver": "sqlite",
+		"url":    getDBInMemoryURL(getDBName()),
+	}
+	s, err := storage.NewStorage(&config, nil, nil, false, true, logger)
+	if err != nil {
+		t.Fatalf("NewStorage with OTEL metrics: %v", err)
+	}
+	s.Close()
 }
 
 func TestSQLStorage(t *testing.T) {
@@ -75,7 +96,7 @@ func getTestStorage(t *testing.T, driver string, databaseName string) (abstracti
 			"url":           getDBInMemoryURL(databaseName),
 			"database_name": databaseName,
 		}
-		return storage.NewStorage(&databaseConfig, nil, nil, false, logger)
+		return storage.NewStorage(&databaseConfig, nil, nil, false, false, logger)
 	case "postgres", "pgx":
 		url, err := getPostgresURL(databaseName)
 		if err != nil {
@@ -86,7 +107,7 @@ func getTestStorage(t *testing.T, driver string, databaseName string) (abstracti
 			"url":           url,
 			"database_name": databaseName,
 		}
-		return storage.NewStorage(&databaseConfig, nil, nil, false, logger)
+		return storage.NewStorage(&databaseConfig, nil, nil, false, false, logger)
 	default:
 		return nil, fmt.Errorf("unsupported driver: %s", driver)
 	}

@@ -42,7 +42,11 @@ func Init() error {
 		"evalhub.benchmark_runtime_errors",
 		metric.WithDescription("Benchmark scheduling or start errors by runtime"),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+
+	return initHTTPMetrics(meter)
 }
 
 // RecordEvaluationJobCreated increments the counter when a job is persisted successfully.

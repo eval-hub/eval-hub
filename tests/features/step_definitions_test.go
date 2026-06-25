@@ -322,7 +322,26 @@ func (a *apiFeature) startLocalServer(port int) error {
 		return logError(fmt.Errorf("failed to load collection configs: %w", err))
 	}
 
-	storage, err := storage.NewStorage(serviceConfig.Database, collectionConfigs, providerConfigs, serviceConfig.IsOTELStorageScansEnabled(), logger)
+	ensureFVTOTELConfig(serviceConfig)
+	if serviceConfig.IsOTELEnabled() {
+		if _, err := otel.SetupOTEL(context.Background(), serviceConfig.OTEL, logger, serviceConfig.IsPrometheusEnabled()); err != nil {
+			return logError(fmt.Errorf("failed to setup OTEL: %w", err))
+		}
+	}
+	if serviceConfig.IsOTELMetricsEnabled() {
+		if err := metrics.Init(); err != nil {
+			return logError(fmt.Errorf("failed to initialize OTEL metrics: %w", err))
+		}
+	}
+
+	storage, err := storage.NewStorage(
+		serviceConfig.Database,
+		collectionConfigs,
+		providerConfigs,
+		serviceConfig.IsOTELStorageScansEnabled(),
+		serviceConfig.IsOTELMetricsEnabled(),
+		logger,
+	)
 	if err != nil {
 		return logError(fmt.Errorf("failed to create storage: %w", err))
 	}
@@ -336,18 +355,6 @@ func (a *apiFeature) startLocalServer(port int) error {
 	mlflowClient, err := mlflow.NewMLFlowClient(serviceConfig, logger)
 	if err != nil {
 		return logError(fmt.Errorf("failed to create MLFlow client: %w", err))
-	}
-
-	ensureFVTOTELConfig(serviceConfig)
-	if serviceConfig.IsOTELEnabled() {
-		if _, err := otel.SetupOTEL(context.Background(), serviceConfig.OTEL, logger, serviceConfig.IsPrometheusEnabled()); err != nil {
-			return logError(fmt.Errorf("failed to setup OTEL: %w", err))
-		}
-	}
-	if serviceConfig.IsOTELMetricsEnabled() {
-		if err := metrics.Init(); err != nil {
-			return logError(fmt.Errorf("failed to initialize OTEL HTTP metrics: %w", err))
-		}
 	}
 
 	a.server, err = server.NewServer(logger,

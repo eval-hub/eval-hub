@@ -32,7 +32,7 @@ func TestCollections_PassCriteria(t *testing.T) {
 		"url":           getDBInMemoryURL("eval_hub_pass_criteria"),
 		"database_name": "eval_hub_pass_criteria",
 	}
-	store, err := storage.NewStorage(&databaseConfig, collectionConfigs, nil, false, logger)
+	store, err := storage.NewStorage(&databaseConfig, collectionConfigs, nil, false, false, logger)
 	if err != nil {
 		t.Fatalf("failed to create storage: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestCollections_BenchmarksExist(t *testing.T) {
 		"url":           getDBInMemoryURL("eval_hub_pass_criteria"),
 		"database_name": "eval_hub_pass_criteria",
 	}
-	store, err := storage.NewStorage(&databaseConfig, collectionConfigs, providerConfigs, false, logger)
+	store, err := storage.NewStorage(&databaseConfig, collectionConfigs, providerConfigs, false, false, logger)
 	if err != nil {
 		t.Fatalf("failed to create storage: %v", err)
 	}

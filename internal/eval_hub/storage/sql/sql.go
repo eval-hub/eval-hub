@@ -52,7 +52,8 @@ func NewStorage(
 	config map[string]any,
 	systemCollections map[string]api.CollectionResource,
 	systemProviders map[string]api.ProviderResource,
-	otelEnabled bool,
+	otelStorageScansEnabled bool,
+	otelMetricsEnabled bool,
 	logger *slog.Logger,
 ) (abstractions.Storage, error) {
 	var sqlConfig shared.SQLDatabaseConfig
@@ -87,7 +88,8 @@ func NewStorage(
 
 	var pool *sql.DB
 	var err error
-	if otelEnabled {
+	useOTELOSQL := otelStorageScansEnabled || otelMetricsEnabled
+	if useOTELOSQL {
 		var attrs []attribute.KeyValue
 		switch sqlConfig.Driver {
 		case SQLITE_DRIVER:
@@ -99,6 +101,12 @@ func NewStorage(
 			attrs = append(attrs, semconv.DBNameKey.String(databaseName))
 		}
 		pool, err = otelsql.Open(sqlConfig.Driver, sqlConfig.URL, otelsql.WithAttributes(attrs...))
+		if err != nil {
+			return nil, err
+		}
+		if otelMetricsEnabled {
+			otelsql.ReportDBStatsMetrics(pool, otelsql.WithAttributes(attrs...))
+		}
 	} else {
 		pool, err = sql.Open(sqlConfig.Driver, sqlConfig.URL)
 	}

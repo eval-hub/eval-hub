@@ -10,6 +10,8 @@ Feature: Metrics Endpoint
     Then the response code should be 200
     And the response should contain Prometheus metrics
     And the metrics should include "http_server_request_duration"
+    And the metrics should include "http_server_request_count"
+    And the metrics should include "http_server_active_requests"
 
   @metrics
   Scenario: Metrics are recorded for requests

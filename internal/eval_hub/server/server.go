@@ -49,8 +49,10 @@ func (s *Server) isOTELEnabled() bool {
 //   - ExecutionContext is created at the route level before calling handlers
 //   - Routes manually switch on HTTP method in handler functions
 //
-// Per-route handlers are wrapped with otelhttp when OTEL is enabled; Prometheus /metrics
-// uses the OTEL Prometheus reader when otel.enable_metrics and prometheus.enabled are set.
+// Per-route handlers are wrapped with otelhttp when OTEL is enabled; semconv HTTP
+// request count and active-request metrics are recorded by HTTPMetricsMiddleware.
+// Prometheus /metrics uses the OTEL Prometheus reader when otel.enable_metrics and
+// prometheus.enabled are set.
 //
 // Parameters:
 //   - logger: The structured logger for the server
@@ -433,6 +435,8 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	if s.serviceConfig.Service.LocalMode {
 		handler = CorsMiddleware(handler, s.serviceConfig)
 	}
+
+	handler = HTTPMetricsMiddleware(handler, s.serviceConfig.IsOTELMetricsEnabled(), s.logger)
 
 	return handler, nil
 }
