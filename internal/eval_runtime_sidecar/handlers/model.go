@@ -44,11 +44,8 @@ func newModelProxy(config *config.Config, logger *slog.Logger) (*httputil.Revers
 	}
 
 	secretMountPath := strings.TrimSpace(mc.AuthSecretMountPath)
-	if secretMountPath == "" {
-		secretMountPath = ModelAuthSecretMountPathDefault
-	}
 
 	rp := proxy.NewModelReverseProxy(target, modelHTTPClient, logger, secretMountPath, ServiceAccountTokenPathDefault)
-	logger.Info("Model credential-injection proxy enabled", "url", targetURL)
+	logger.Info("Model proxy enabled", "url", targetURL)
 	return rp, nil
 }
