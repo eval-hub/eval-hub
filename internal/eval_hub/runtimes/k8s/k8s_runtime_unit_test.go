@@ -1074,9 +1074,10 @@ func TestModelAuthCombinations(t *testing.T) {
 	}
 
 	cases := []struct {
-		name       string
-		secretData map[string][]byte // nil = open model (no model.auth); use wantErr for missing-secret case
-		wantErr    bool
+		name            string
+		secretData      map[string][]byte // nil = open model (no model.auth); use wantErr for missing-secret case
+		wantErr         bool
+		wantErrContains string // when wantErr=true, assert error message contains this substring
 
 		wantInternalRefSecret     bool
 		wantModelAuthVol          bool
@@ -1098,13 +1099,15 @@ func TestModelAuthCombinations(t *testing.T) {
 		},
 		{
 			// secret_ref is set but the secret does not exist → should propagate error
-			name:    "secret not found",
-			wantErr: true,
+			name:            "secret not found",
+			wantErr:         true,
+			wantErrContains: "reading model auth secret",
 		},
 		{
 			// blank Model.URL must be caught at job-creation time, not silently misdirect traffic
-			name:    "empty model URL",
-			wantErr: true,
+			name:            "empty model URL",
+			wantErr:         true,
+			wantErrContains: "model url and name are required",
 		},
 		{
 			name: "api-key only",
@@ -1235,6 +1238,7 @@ func TestModelAuthCombinations(t *testing.T) {
 			wantInternalRefFirstSrc:   true,
 			wantRealSecretOptional:    true,
 			wantAuthMountInSidecarCfg: true,
+			refKeys:                   []refSecretExpect{{"model-1_url", "http://localhost:8080"}},
 		},
 		{
 			name: "multi-model api-keys + urls",
@@ -1253,7 +1257,9 @@ func TestModelAuthCombinations(t *testing.T) {
 			wantAuthMountInSidecarCfg: true,
 			refKeys: []refSecretExpect{
 				{"model-1_api-key", "model-1_api-key:ref"},
+				{"model-1_url", "http://localhost:8080"},
 				{"model-2_api-key", "model-2_api-key:ref"},
+				{"model-2_url", "http://localhost:8080"},
 			},
 		},
 		{
@@ -1270,8 +1276,11 @@ func TestModelAuthCombinations(t *testing.T) {
 			wantInternalRefFirstSrc:   true,
 			wantRealSecretOptional:    true,
 			wantAuthMountInSidecarCfg: true,
-			refKeys:                   []refSecretExpect{{"model-1_api-key", "model-1_api-key:ref"}},
-			passthroughItemKeys:       []string{"ca_cert"},
+			refKeys: []refSecretExpect{
+				{"model-1_api-key", "model-1_api-key:ref"},
+				{"model-1_url", "http://localhost:8080"},
+			},
+			passthroughItemKeys: []string{"ca_cert"},
 		},
 	}
 
@@ -1315,6 +1324,9 @@ func TestModelAuthCombinations(t *testing.T) {
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("expected an error, got nil")
+				}
+				if tc.wantErrContains != "" && !strings.Contains(err.Error(), tc.wantErrContains) {
+					t.Fatalf("expected error containing %q, got: %v", tc.wantErrContains, err)
 				}
 				return
 			}
@@ -1497,26 +1509,27 @@ func TestModelAuthCombinations(t *testing.T) {
 				t.Errorf("pod AutomountServiceAccountToken must be explicitly false to prevent adapter SA token access")
 			}
 
-			// Sidecar must have the SA token mount when auth secret is configured (it needs it
-			// for model SA token injection); for open models the sidecar still gets it for
-			// eval-hub API callbacks.
-			if tc.wantModelAuthVol {
-				sidecarContainer := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
-				if sidecarContainer == nil {
-					t.Fatalf("expected sidecar init container to be present")
+			// Sidecar always has the SA token mount (needed for eval-hub API callbacks on all jobs;
+			// also used for model SA token injection when auth is configured).
+			sidecarContainer := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
+			if sidecarContainer == nil {
+				t.Fatalf("expected sidecar init container to be present")
+			}
+			var sidecarHasSAToken bool
+			for _, m := range sidecarContainer.VolumeMounts {
+				if m.Name == evalhubSATokenVolumeName {
+					sidecarHasSAToken = true
 				}
-				var sidecarHasSAToken bool
+			}
+			if !sidecarHasSAToken {
+				t.Errorf("sidecar must always have evalhub-sa-token mounted")
+			}
+			// sidecar must NOT have model-auth-internal (adapter's synthetic volume)
+			if tc.wantModelAuthVol {
 				for _, m := range sidecarContainer.VolumeMounts {
-					if m.Name == evalhubSATokenVolumeName {
-						sidecarHasSAToken = true
-					}
-					// sidecar must NOT have model-auth-internal (adapter's synthetic volume)
 					if m.Name == modelInternalAuthVolumeName {
 						t.Errorf("sidecar must never have the model-auth-internal (adapter) volume mounted")
 					}
-				}
-				if !sidecarHasSAToken {
-					t.Errorf("sidecar must have evalhub-sa-token mounted for SA token injection")
 				}
 			}
 		})
