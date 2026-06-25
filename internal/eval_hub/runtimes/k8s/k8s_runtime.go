@@ -210,12 +210,16 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		"service_ca_configmap", jobConfig.serviceCAConfigMap,
 		"eval_hub_url", jobConfig.evalHubURL,
 	)
-	// Inspect the model credential secret once to decide the auth path.
-	// The sidecar model proxy is always started when model.auth is set — it handles SA token
-	// injection for unauthenticated adapter requests, ca_cert TLS, and ref-token resolution.
-	// Proxy-injectable keys (api-key, *_api-key, *_url) additionally activate credential
-	// injection: the adapter receives the ephemeral internalModelRef secret and sends a
-	// ref token that the sidecar resolves to the real credential.
+	// The sidecar model proxy is always active for all jobs. When model.auth is set,
+	// the secret is inspected to determine if credential injection (ref-token resolution)
+	// is needed. Proxy-injectable keys (api-key, *_api-key, *_url) cause an ephemeral
+	// internalModelRef secret to be created; the adapter sends ref tokens that the sidecar
+	// resolves to real credentials.
+	// Always redirect the adapter through the sidecar model proxy so all model traffic
+	// (open and authenticated) flows through the sidecar. This gives a single forwarding
+	// path and allows SA token injection for models that need it.
+	jobConfig.jobSpec.Model.URL = jobConfig.sidecarBaseURL
+
 	var secretInfo modelSecretInfo
 	if jobConfig.modelAuthSecretRef != "" {
 		secretInfo, err = inspectModelSecret(ctx, jobConfig.namespace, jobConfig.modelAuthSecretRef, r.helper)
@@ -223,10 +227,6 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 			logger.Error("kubernetes model secret inspect error", "benchmark_id", benchmarkID, "error", err)
 			return fmt.Errorf("job %s benchmark %s: reading model auth secret: %w", evaluation.Resource.ID, benchmarkID, err)
 		}
-		// Always redirect the adapter through the sidecar model proxy when auth is configured.
-		// This ensures SA token injection and ca_cert TLS are applied even when the secret
-		// contains only ca_cert (no proxy-injectable api-key keys).
-		jobConfig.jobSpec.Model.URL = jobConfig.sidecarBaseURL
 		if secretInfo.hasCredentialKeys {
 			jobConfig.modelInternalRefSecretName = buildK8sName(jobConfig.jobID, jobConfig.resourceGUID, "-model-ref")
 		} else {

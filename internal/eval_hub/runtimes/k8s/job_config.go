@@ -65,7 +65,7 @@ type jobConfig struct {
 	ociCredentialsSecret       string
 	modelAuthSecretRef         string // user's real credentials secret mounted only in sidecar
 	modelInternalRefSecretName string // ephemeral internalModelRef secret mounted in adapter; empty when credential injection is not active
-	modelTargetURL             string // real model URL forwarded by the sidecar model proxy; always set when model auth is configured
+	modelTargetURL             string // real model URL forwarded by the sidecar model proxy; always set for all jobs
 	sidecarResources           corev1.ResourceRequirements
 	testDataS3                 s3TestDataConfig
 	testDataInitImage          string
@@ -166,13 +166,10 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	}
 
 	// modelInternalRefSecretName is set in createBenchmarkResources after inspectModelSecret
-	// confirms proxy-injectable keys. modelTargetURL starts as the model URL when model auth
-	// is configured; the sidecar model proxy is always active when model auth is set.
+	// confirms proxy-injectable keys. modelTargetURL is always set so the sidecar model proxy
+	// is active for all jobs — open and authenticated alike.
 	modelInternalRefSecretName := ""
-	modelTargetURL := ""
-	if modelAuthSecretRef != "" {
-		modelTargetURL = strings.TrimSpace(evaluation.Model.URL)
-	}
+	modelTargetURL := strings.TrimSpace(evaluation.Model.URL)
 
 	sidecarImage, sidecarResources, err := sidecarImageAndResources(serviceConfig)
 	if err != nil {

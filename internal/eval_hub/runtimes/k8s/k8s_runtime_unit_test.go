@@ -279,170 +279,6 @@ func TestCreateBenchmarkResourcesSetsAnnotations(t *testing.T) {
 	}
 }
 
-func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnv(t *testing.T) {
-	providerID := "provider-1"
-	evaluation := sampleEvaluation(providerID)
-	evaluation.Model.Auth = &api.ModelAuth{SecretRef: "model-auth-secret"}
-
-	// Pre-create the real secret so the runtime can read its keys to generate the ephemeral
-	// ref secret. Includes ca_cert and hf-token (both excluded from the ref secret and
-	// projected directly from the real secret).
-	realSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "model-auth-secret",
-			Namespace: "default",
-		},
-		Data: map[string][]byte{
-			"api-key":  []byte("sk-real-key"),
-			"hf-token": []byte("hf-real-token"),
-			"ca_cert":  []byte("-----BEGIN CERTIFICATE-----"),
-		},
-	}
-	clientset := fake.NewClientset(realSecret)
-	runtime := &K8sRuntime{
-		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		helper: &KubernetesHelper{clientset: clientset},
-		serviceConfig: &config.Config{
-			Service: &config.ServiceConfig{
-				EvalInitImage: "eval-init-image",
-			},
-		},
-	}
-
-	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
-	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
-	if len(jobs) != 1 {
-		t.Fatalf("expected 1 job, got %d", len(jobs))
-	}
-	job := jobs[0]
-	container := job.Spec.Template.Spec.Containers[0]
-
-	// Adapter container: volume must be model-auth-internal (projected), combining the
-	// internalModelRef secret and selective keys from the real secret (hf-token, ca_cert, optional).
-	var foundVolume bool
-	var adapterRefSecretName string
-	for _, volume := range job.Spec.Template.Spec.Volumes {
-		if volume.Name == modelInternalAuthVolumeName {
-			foundVolume = true
-			if volume.VolumeSource.Projected == nil {
-				t.Fatalf("expected model-auth-internal volume to be a projected volume, got plain Secret")
-			}
-			sources := volume.VolumeSource.Projected.Sources
-			if len(sources) < 2 {
-				t.Fatalf("expected at least 2 projected sources (internalModelRef secret + real secret passthrough), got %d", len(sources))
-			}
-			// First source: internalModelRef secret (no items filter — all ref/placeholder keys)
-			if sources[0].Secret == nil {
-				t.Fatal("expected first projected source to be the internalModelRef secret")
-			}
-			if sources[0].Secret.LocalObjectReference.Name == "model-auth-secret" {
-				t.Fatal("first projected source must be the ephemeral internalModelRef secret, not the real secret")
-			}
-			adapterRefSecretName = sources[0].Secret.LocalObjectReference.Name
-			// Second source: real secret selective projection (hf-token, ca_cert, optional:true)
-			if sources[1].Secret == nil {
-				t.Fatal("expected second projected source to be the real secret (selective)")
-			}
-			if sources[1].Secret.LocalObjectReference.Name != "model-auth-secret" {
-				t.Fatalf("expected second projected source to be the real secret %q, got %q", "model-auth-secret", sources[1].Secret.LocalObjectReference.Name)
-			}
-			projectedKeys := make(map[string]bool)
-			for _, item := range sources[1].Secret.Items {
-				projectedKeys[item.Key] = true
-			}
-			if !projectedKeys["hf-token"] {
-				t.Fatal("expected hf-token to be projected from the real secret into adapter volume")
-			}
-			if !projectedKeys["ca_cert"] {
-				t.Fatal("expected ca_cert to be projected from the real secret into adapter volume")
-			}
-		}
-	}
-	if !foundVolume {
-		t.Fatalf("expected volume %s to be present on adapter", modelInternalAuthVolumeName)
-	}
-
-	var foundMount bool
-	for _, mount := range container.VolumeMounts {
-		if mount.Name == modelInternalAuthVolumeName {
-			foundMount = true
-			if mount.MountPath != modelAuthMountPath {
-				t.Fatalf("expected mount path %q, got %q", modelAuthMountPath, mount.MountPath)
-			}
-		}
-	}
-	if !foundMount {
-		t.Fatalf("expected volume mount %s on adapter container", modelInternalAuthVolumeName)
-	}
-
-	// Ref secret must exist with ref/placeholder keys only — no hf-token, no ca_cert.
-	if adapterRefSecretName == "" {
-		t.Fatal("expected a non-empty ref secret name from the projected volume")
-	}
-	refSecret, err := clientset.CoreV1().Secrets("default").Get(context.Background(), adapterRefSecretName, metav1.GetOptions{})
-	if err != nil {
-		t.Fatalf("expected ephemeral ref secret %q to exist, got error: %v", adapterRefSecretName, err)
-	}
-	if string(refSecret.Data["api-key"]) != "api-key:ref" {
-		t.Fatalf("expected ref secret api-key value %q, got %q", "api-key:ref", string(refSecret.Data["api-key"]))
-	}
-	if _, ok := refSecret.Data["hf-token"]; ok {
-		t.Fatal("hf-token must not appear in the ref secret; it is projected directly from the real secret")
-	}
-	if _, ok := refSecret.Data["ca_cert"]; ok {
-		t.Fatal("ca_cert must not appear in the ref secret; it is projected directly from the real secret")
-	}
-
-	// Sidecar container: should have the real credentials secret mounted as model-auth at modelAuthMountPath.
-	sidecarContainer := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
-	if sidecarContainer == nil {
-		t.Fatal("expected sidecar init container")
-	}
-	var foundRealMount bool
-	for _, mount := range sidecarContainer.VolumeMounts {
-		if mount.Name == modelAuthVolumeName {
-			foundRealMount = true
-			if mount.MountPath != modelAuthMountPath {
-				t.Fatalf("expected sidecar real secret mount path %q, got %q", modelAuthMountPath, mount.MountPath)
-			}
-		}
-	}
-	if !foundRealMount {
-		t.Fatalf("expected sidecar to have %s mount at %s", modelAuthVolumeName, modelAuthMountPath)
-	}
-	var foundRealVolume bool
-	for _, volume := range job.Spec.Template.Spec.Volumes {
-		if volume.Name == modelAuthVolumeName {
-			foundRealVolume = true
-			if volume.VolumeSource.Secret == nil || volume.VolumeSource.Secret.SecretName != "model-auth-secret" {
-				t.Fatalf("expected sidecar real secret volume to reference %q", "model-auth-secret")
-			}
-		}
-	}
-	if !foundRealVolume {
-		t.Fatalf("expected volume %s (real creds) to be present for sidecar", modelAuthVolumeName)
-	}
-
-	// Legacy model auth env vars should be absent.
-	envKeys := make(map[string]struct{}, len(container.Env))
-	for _, env := range container.Env {
-		envKeys[env.Name] = struct{}{}
-	}
-	legacyModelAuthKeys := []string{
-		"MODEL_AUTH_API_KEY_PATH",
-		"MODEL_AUTH_CA_CERT_PATH",
-	}
-	for _, key := range legacyModelAuthKeys {
-		if _, found := envKeys[key]; found {
-			t.Fatalf("expected env var %s to be absent", key)
-		}
-	}
-}
 
 func TestBuildInternalModelRefSecretMultiModel(t *testing.T) {
 	// Multi-model credential secret: *_api-key keys become refs, *_url keys become the sidecar
@@ -525,111 +361,8 @@ func TestIsModelCredentialKey(t *testing.T) {
 // TestCreateBenchmarkResourcesPassthroughOnlyModelAuth verifies that when the model credential
 // secret contains only ca_cert (SA token auth, no api-key), the sidecar proxy is still started:
 // the adapter URL is redirected to the sidecar, the sidecar gets the real secret mount for TLS,
-// and no internalModelRef ephemeral secret is created (no ref token needed).
-func TestCreateBenchmarkResourcesPassthroughOnlyModelAuth(t *testing.T) {
-	providerID := "provider-1"
-	evaluation := sampleEvaluation(providerID)
-	evaluation.Model.URL = "https://model.example.com/v1"
-	evaluation.Model.Auth = &api.ModelAuth{SecretRef: "tls-only-creds"}
-
-	realSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "tls-only-creds", Namespace: "default"},
-		Data: map[string][]byte{
-			"ca_cert": []byte("-----BEGIN CERTIFICATE-----"),
-		},
-	}
-	clientset := fake.NewClientset(realSecret)
-	runtime := &K8sRuntime{
-		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		helper: &KubernetesHelper{clientset: clientset},
-		serviceConfig: &config.Config{
-			Service: &config.ServiceConfig{
-				EvalInitImage: "eval-init-image",
-			},
-		},
-	}
-
-	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
-	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
-	job := jobs[0]
-
-	// No internalModelRef ephemeral secret — no proxy-injectable api-key in the secret.
-	secrets, err := clientset.CoreV1().Secrets("default").List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		t.Fatalf("list secrets: %v", err)
-	}
-	for _, s := range secrets.Items {
-		if strings.Contains(s.Name, "-model-ref") {
-			t.Fatalf("expected no ephemeral ref secret for ca_cert-only auth, found %q", s.Name)
-		}
-	}
-
-	// Adapter must have a projected passthrough volume (for hf-token/ca_cert) but it must
-	// contain only ONE source — the real secret with selective optional keys. It must NOT
-	// include a second source for an internalRef secret (no api-key was injected).
-	var passthroughVolume *corev1.Volume
-	for i := range job.Spec.Template.Spec.Volumes {
-		if job.Spec.Template.Spec.Volumes[i].Name == modelInternalAuthVolumeName {
-			passthroughVolume = &job.Spec.Template.Spec.Volumes[i]
-			break
-		}
-	}
-	if passthroughVolume == nil {
-		t.Fatal("expected adapter to have passthrough volume (hf-token/ca_cert) in sidecar-proxy path")
-	}
-	if passthroughVolume.Projected == nil {
-		t.Fatal("expected passthrough volume to be a projected volume")
-	}
-	if len(passthroughVolume.Projected.Sources) != 1 {
-		t.Fatalf("expected exactly 1 projected source (real secret passthrough), got %d", len(passthroughVolume.Projected.Sources))
-	}
-	src := passthroughVolume.Projected.Sources[0]
-	if src.Secret == nil {
-		t.Fatal("expected projected source to be a Secret source")
-	}
-	if src.Secret.Name != "tls-only-creds" {
-		t.Fatalf("expected projected source to name real secret %q, got %q", "tls-only-creds", src.Secret.Name)
-	}
-	// Must NOT reference an internalRef secret (no ephemeral secret was created).
-	if src.Secret.Optional == nil || !*src.Secret.Optional {
-		t.Fatal("expected passthrough secret projection to be optional:true")
-	}
-
-	// Sidecar must have the real secret mounted (for ca_cert TLS and SA token injection).
-	var foundSidecarMount bool
-	for _, init := range job.Spec.Template.Spec.InitContainers {
-		if init.Name != sidecarContainerName {
-			continue
-		}
-		for _, m := range init.VolumeMounts {
-			if m.Name == modelAuthVolumeName {
-				foundSidecarMount = true
-			}
-		}
-	}
-	if !foundSidecarMount {
-		t.Fatal("expected sidecar to have real secret mount for ca_cert TLS")
-	}
-
-	// job.json model URL must be redirected to the sidecar (not the direct model URL),
-	// so the sidecar proxy handles SA token injection and TLS.
-	cmName := job.Spec.Template.Spec.Volumes[0].VolumeSource.ConfigMap.Name
-	cm, err := clientset.CoreV1().ConfigMaps("default").Get(context.Background(), cmName, metav1.GetOptions{})
-	if err != nil {
-		t.Fatalf("get configmap: %v", err)
-	}
-	if strings.Contains(cm.Data["job.json"], "https://model.example.com/v1") {
-		t.Fatalf("expected job.json model URL to be redirected to sidecar, not direct model URL")
-	}
-	if !strings.Contains(cm.Data["job.json"], "localhost") {
-		t.Fatalf("expected job.json model URL to point to sidecar (localhost), got: %s", cm.Data["job.json"])
-	}
-}
+// TestCreateBenchmarkResourcesOpenModelRoutedThroughSidecar verifies that even when no
+// model.auth is configured, the adapter URL is redirected to the sidecar and the sidecar
 
 func TestCreateBenchmarkResourcesAddsInitContainerForS3TestData(t *testing.T) {
 	providerID := "provider-1"
@@ -1290,3 +1023,457 @@ func sampleProviders(providerID string) map[string]api.ProviderResource {
 		},
 	}
 }
+
+// findConfigMapVolumeName locates the job-spec ConfigMap volume by iterating volumes by name,
+// avoiding a fragile positional index that panics when volume ordering changes.
+func findConfigMapVolumeName(t *testing.T, volumes []corev1.Volume) string {
+	t.Helper()
+	for _, v := range volumes {
+		if v.VolumeSource.ConfigMap != nil {
+			return v.VolumeSource.ConfigMap.Name
+		}
+	}
+	t.Fatal("expected a ConfigMap-backed volume on the pod")
+	return ""
+}
+
+
+// TestModelAuthCombinations is a table-driven end-to-end test covering every meaningful
+// combination of model credential secret contents through createBenchmarkResources.
+//
+// Each case drives the full resource-creation path and asserts the resulting K8s objects:
+//   - job.json adapter URL → always localhost (sidecar)
+//   - sidecar_config.json model section → real URL always present; auth_secret_mount_path only when secret set
+//   - model-auth volume (sidecar)  → present iff secret is configured
+//   - model-auth-internal volume (adapter) → present iff secret is configured
+//     - projected sources: 2 (ref+real) when api-key present; 1 (real only) when ca_cert-only
+//   - ephemeral internalModelRef secret → created iff api-key (or *_api-key) present
+//   - ref secret keys → api-key→"api-key:ref", *_api-key→"<k>:ref", *_url→sidecarURL
+//   - adapter projected passthrough keys → ca_cert / hf-token projected optional when present in real secret
+// TestModelAuthCombinations is a table-driven end-to-end test covering every meaningful
+// combination of model credential secret contents through createBenchmarkResources.
+//
+// Replaces the three former individual model-auth tests
+// (AddsModelAuthVolumeAndEnv, PassthroughOnlyModelAuth, OpenModelRoutedThroughSidecar)
+// and adds new cases: hf-token only, secret not found, empty secret,
+// url-key without api-key, and SA token with no recognisable keys.
+//
+// Assertions per case:
+//   - adapter job.json URL → sidecar (localhost), never direct model URL
+//   - sidecar_config.json → real URL always present; auth_secret_mount_path only when secret set
+//   - model-auth volume (sidecar) and model-auth-internal volume (adapter) present/absent
+//   - projected source count + ordering: internalRef is sources[0] when api-key present
+//   - real-secret projection carries optional:true (absent keys silently skipped at runtime)
+//   - ephemeral internalModelRef secret created iff api-key (or *_api-key/*_url) present
+//   - ref secret values correct; raw ca_cert / hf-token never in ref secret
+//   - adapter volume mounted at modelAuthMountPath
+//   - no legacy MODEL_AUTH_* env vars on adapter container
+func TestModelAuthCombinations(t *testing.T) {
+	type refSecretExpect struct {
+		key  string
+		want string
+	}
+
+	cases := []struct {
+		name       string
+		secretData map[string][]byte // nil = open model (no model.auth); use wantErr for missing-secret case
+		wantErr    bool
+
+		wantInternalRefSecret     bool
+		wantModelAuthVol          bool
+		wantModelInternalAuthVol  bool
+		wantProjectedSources      int // 0 = not checked
+		wantInternalRefFirstSrc   bool // internalRef must be sources[0]
+		wantRealSecretOptional    bool // real-secret projection must have optional:true
+		wantAuthMountInSidecarCfg bool
+		refKeys                   []refSecretExpect
+		passthroughItemKeys       []string // keys that must appear in real-secret Items
+	}{
+		{
+			name:                      "open model — no secret",
+			secretData:                nil,
+			wantInternalRefSecret:     false,
+			wantModelAuthVol:          false,
+			wantModelInternalAuthVol:  false,
+			wantAuthMountInSidecarCfg: false,
+		},
+		{
+			// secret_ref is set but the secret does not exist → should propagate error
+			name:    "secret not found",
+			wantErr: true,
+		},
+		{
+			name: "api-key only",
+			secretData: map[string][]byte{
+				"api-key": []byte("sk-real"),
+			},
+			wantInternalRefSecret:     true,
+			wantModelAuthVol:          true,
+			wantModelInternalAuthVol:  true,
+			wantProjectedSources:      2,
+			wantInternalRefFirstSrc:   true,
+			wantRealSecretOptional:    true,
+			wantAuthMountInSidecarCfg: true,
+			refKeys:                   []refSecretExpect{{"api-key", "api-key:ref"}},
+		},
+		{
+			name: "api-key + ca_cert",
+			secretData: map[string][]byte{
+				"api-key": []byte("sk-real"),
+				"ca_cert": []byte("-----BEGIN CERTIFICATE-----"),
+			},
+			wantInternalRefSecret:     true,
+			wantModelAuthVol:          true,
+			wantModelInternalAuthVol:  true,
+			wantProjectedSources:      2,
+			wantInternalRefFirstSrc:   true,
+			wantRealSecretOptional:    true,
+			wantAuthMountInSidecarCfg: true,
+			refKeys:                   []refSecretExpect{{"api-key", "api-key:ref"}},
+			passthroughItemKeys:       []string{"ca_cert"},
+		},
+		{
+			name: "api-key + hf-token",
+			secretData: map[string][]byte{
+				"api-key":  []byte("sk-real"),
+				"hf-token": []byte("hf-real"),
+			},
+			wantInternalRefSecret:     true,
+			wantModelAuthVol:          true,
+			wantModelInternalAuthVol:  true,
+			wantProjectedSources:      2,
+			wantInternalRefFirstSrc:   true,
+			wantRealSecretOptional:    true,
+			wantAuthMountInSidecarCfg: true,
+			refKeys:                   []refSecretExpect{{"api-key", "api-key:ref"}},
+			passthroughItemKeys:       []string{"hf-token"},
+		},
+		{
+			name: "api-key + ca_cert + hf-token",
+			secretData: map[string][]byte{
+				"api-key":  []byte("sk-real"),
+				"ca_cert":  []byte("-----BEGIN CERTIFICATE-----"),
+				"hf-token": []byte("hf-real"),
+			},
+			wantInternalRefSecret:     true,
+			wantModelAuthVol:          true,
+			wantModelInternalAuthVol:  true,
+			wantProjectedSources:      2,
+			wantInternalRefFirstSrc:   true,
+			wantRealSecretOptional:    true,
+			wantAuthMountInSidecarCfg: true,
+			refKeys:                   []refSecretExpect{{"api-key", "api-key:ref"}},
+			passthroughItemKeys:       []string{"ca_cert", "hf-token"},
+		},
+		{
+			// hf-token is not a credential key → no internalRef, but volumes still present
+			// and hf-token is projected to the adapter; sidecar handles SA token injection.
+			name: "hf-token only",
+			secretData: map[string][]byte{
+				"hf-token": []byte("hf-real"),
+			},
+			wantInternalRefSecret:     false,
+			wantModelAuthVol:          true,
+			wantModelInternalAuthVol:  true,
+			wantProjectedSources:      1,
+			wantRealSecretOptional:    true,
+			wantAuthMountInSidecarCfg: true,
+			passthroughItemKeys:       []string{"hf-token"},
+		},
+		{
+			// SA token auth: only ca_cert in secret for TLS; sidecar injects SA token.
+			name: "SA token / ca_cert only (passthrough)",
+			secretData: map[string][]byte{
+				"ca_cert": []byte("-----BEGIN CERTIFICATE-----"),
+			},
+			wantInternalRefSecret:     false,
+			wantModelAuthVol:          true,
+			wantModelInternalAuthVol:  true,
+			wantProjectedSources:      1,
+			wantRealSecretOptional:    true,
+			wantAuthMountInSidecarCfg: true,
+			passthroughItemKeys:       []string{"ca_cert"},
+		},
+		{
+			// Secret set but contains no keys the sidecar recognises.
+			name: "SA token — no recognisable keys",
+			secretData: map[string][]byte{
+				"some-unrelated": []byte("value"),
+			},
+			wantInternalRefSecret:     false,
+			wantModelAuthVol:          true,
+			wantModelInternalAuthVol:  true,
+			wantProjectedSources:      1,
+			wantRealSecretOptional:    true,
+			wantAuthMountInSidecarCfg: true,
+		},
+		{
+			// Secret exists but has no data at all.
+			name:                      "empty secret",
+			secretData:                map[string][]byte{},
+			wantInternalRefSecret:     false,
+			wantModelAuthVol:          true,
+			wantModelInternalAuthVol:  true,
+			wantProjectedSources:      1,
+			wantRealSecretOptional:    true,
+			wantAuthMountInSidecarCfg: true,
+		},
+		{
+			// *_url IS a credential key, so internalRef is created even without an api-key.
+			name: "url key without matching api-key",
+			secretData: map[string][]byte{
+				"model-1_url": []byte("https://api.openai.com/v1"),
+			},
+			wantInternalRefSecret:     true,
+			wantModelAuthVol:          true,
+			wantModelInternalAuthVol:  true,
+			wantProjectedSources:      2,
+			wantInternalRefFirstSrc:   true,
+			wantRealSecretOptional:    true,
+			wantAuthMountInSidecarCfg: true,
+		},
+		{
+			name: "multi-model api-keys + urls",
+			secretData: map[string][]byte{
+				"model-1_api-key": []byte("sk-m1"),
+				"model-1_url":     []byte("https://api.openai.com/v1"),
+				"model-2_api-key": []byte("sk-m2"),
+				"model-2_url":     []byte("https://azure.example.com/v1"),
+			},
+			wantInternalRefSecret:     true,
+			wantModelAuthVol:          true,
+			wantModelInternalAuthVol:  true,
+			wantProjectedSources:      2,
+			wantInternalRefFirstSrc:   true,
+			wantRealSecretOptional:    true,
+			wantAuthMountInSidecarCfg: true,
+			refKeys: []refSecretExpect{
+				{"model-1_api-key", "model-1_api-key:ref"},
+				{"model-2_api-key", "model-2_api-key:ref"},
+			},
+		},
+		{
+			name: "multi-model api-keys + urls + ca_cert",
+			secretData: map[string][]byte{
+				"model-1_api-key": []byte("sk-m1"),
+				"model-1_url":     []byte("https://api.openai.com/v1"),
+				"ca_cert":         []byte("-----BEGIN CERTIFICATE-----"),
+			},
+			wantInternalRefSecret:     true,
+			wantModelAuthVol:          true,
+			wantModelInternalAuthVol:  true,
+			wantProjectedSources:      2,
+			wantInternalRefFirstSrc:   true,
+			wantRealSecretOptional:    true,
+			wantAuthMountInSidecarCfg: true,
+			refKeys:                   []refSecretExpect{{"model-1_api-key", "model-1_api-key:ref"}},
+			passthroughItemKeys:       []string{"ca_cert"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			const secretName = "model-auth-secret"
+			const modelURL = "https://model.example.com/v1"
+
+			providerID := "provider-1"
+			evaluation := sampleEvaluation(providerID)
+			evaluation.Model.URL = modelURL
+
+			var clientset *fake.Clientset
+			if tc.wantErr {
+				// secret_ref set but secret absent from fake store → error expected
+				evaluation.Model.Auth = &api.ModelAuth{SecretRef: secretName}
+				clientset = fake.NewClientset()
+			} else if tc.secretData != nil {
+				evaluation.Model.Auth = &api.ModelAuth{SecretRef: secretName}
+				clientset = fake.NewClientset(&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "default"},
+					Data:       tc.secretData,
+				})
+			} else {
+				clientset = fake.NewClientset()
+			}
+
+			runtime := &K8sRuntime{
+				logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+				helper: &KubernetesHelper{clientset: clientset},
+				serviceConfig: &config.Config{
+					Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
+				},
+			}
+
+			storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+			err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected an error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("createBenchmarkResources: %v", err)
+			}
+
+			jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+			job := jobs[0]
+			adapterContainer := job.Spec.Template.Spec.Containers[0]
+
+			// adapter URL always routes through the sidecar
+			cmName := findConfigMapVolumeName(t, job.Spec.Template.Spec.Volumes)
+			cm, err := clientset.CoreV1().ConfigMaps("default").Get(context.Background(), cmName, metav1.GetOptions{})
+			if err != nil {
+				t.Fatalf("get configmap: %v", err)
+			}
+			if strings.Contains(cm.Data["job.json"], "model.example.com") {
+				t.Errorf("job.json must not contain direct model URL; adapter should talk to sidecar")
+			}
+			if !strings.Contains(cm.Data["job.json"], "localhost") {
+				t.Errorf("job.json model URL must point to sidecar (localhost), got: %s", cm.Data["job.json"])
+			}
+
+			// sidecar_config.json: real URL always present; auth_secret_mount_path conditional
+			sidecarCfg := cm.Data["sidecar_config.json"]
+			if !strings.Contains(sidecarCfg, "model.example.com") {
+				t.Errorf("sidecar_config.json must always contain the real model URL, got: %s", sidecarCfg)
+			}
+			if tc.wantAuthMountInSidecarCfg && !strings.Contains(sidecarCfg, "auth_secret_mount_path") {
+				t.Errorf("sidecar_config.json must have auth_secret_mount_path when secret is configured")
+			}
+			if !tc.wantAuthMountInSidecarCfg && strings.Contains(sidecarCfg, "auth_secret_mount_path") {
+				t.Errorf("sidecar_config.json must not have auth_secret_mount_path when no secret configured")
+			}
+
+			// volume presence
+			var modelAuthVol, modelInternalAuthVol *corev1.Volume
+			for i := range job.Spec.Template.Spec.Volumes {
+				v := &job.Spec.Template.Spec.Volumes[i]
+				switch v.Name {
+				case modelAuthVolumeName:
+					modelAuthVol = v
+				case modelInternalAuthVolumeName:
+					modelInternalAuthVol = v
+				}
+			}
+			if tc.wantModelAuthVol && modelAuthVol == nil {
+				t.Errorf("expected model-auth volume (sidecar real secret mount) to be present")
+			}
+			if !tc.wantModelAuthVol && modelAuthVol != nil {
+				t.Errorf("expected no model-auth volume for this case")
+			}
+			if tc.wantModelInternalAuthVol && modelInternalAuthVol == nil {
+				t.Errorf("expected model-auth-internal volume (adapter projected) to be present")
+			}
+			if !tc.wantModelInternalAuthVol && modelInternalAuthVol != nil {
+				t.Errorf("expected no model-auth-internal volume for this case")
+			}
+
+			// adapter volume mount path
+			if tc.wantModelInternalAuthVol {
+				var foundMount bool
+				for _, m := range adapterContainer.VolumeMounts {
+					if m.Name == modelInternalAuthVolumeName {
+						foundMount = true
+						if m.MountPath != modelAuthMountPath {
+							t.Errorf("adapter mount path: want %q, got %q", modelAuthMountPath, m.MountPath)
+						}
+					}
+				}
+				if !foundMount {
+					t.Errorf("expected adapter volume mount %s", modelInternalAuthVolumeName)
+				}
+			}
+
+			// projected source count, ordering, optional flag
+			if tc.wantProjectedSources > 0 && modelInternalAuthVol != nil {
+				if modelInternalAuthVol.Projected == nil {
+					t.Fatalf("model-auth-internal must be a projected volume")
+				}
+				sources := modelInternalAuthVol.Projected.Sources
+				if got := len(sources); got != tc.wantProjectedSources {
+					t.Errorf("projected sources: want %d, got %d", tc.wantProjectedSources, got)
+				}
+				if tc.wantInternalRefFirstSrc && len(sources) >= 1 {
+					if sources[0].Secret == nil {
+						t.Errorf("sources[0] must be a Secret source (internalRef)")
+					} else if sources[0].Secret.Name == secretName {
+						t.Errorf("sources[0] must be the internalRef secret, not the real secret %q", secretName)
+					}
+				}
+				if tc.wantRealSecretOptional && len(sources) > 0 {
+					last := sources[len(sources)-1]
+					if last.Secret == nil {
+						t.Errorf("last projected source must be a Secret source (real secret)")
+					} else if last.Secret.Optional == nil || !*last.Secret.Optional {
+						t.Errorf("real-secret projection must have optional:true so absent keys are silently skipped")
+					}
+				}
+			}
+
+			// ephemeral internalModelRef secret
+			secrets, err := clientset.CoreV1().Secrets("default").List(context.Background(), metav1.ListOptions{})
+			if err != nil {
+				t.Fatalf("list secrets: %v", err)
+			}
+			var refSecret *corev1.Secret
+			for i := range secrets.Items {
+				if strings.Contains(secrets.Items[i].Name, "-model-ref") {
+					refSecret = &secrets.Items[i]
+					break
+				}
+			}
+			if tc.wantInternalRefSecret && refSecret == nil {
+				t.Errorf("expected ephemeral internalModelRef secret to be created")
+			}
+			if !tc.wantInternalRefSecret && refSecret != nil {
+				t.Errorf("expected no ephemeral internalModelRef secret, found %q", refSecret.Name)
+			}
+			// ref key values
+			for _, rk := range tc.refKeys {
+				if refSecret == nil {
+					t.Errorf("cannot check ref key %q: ref secret not created", rk.key)
+					continue
+				}
+				if got := string(refSecret.Data[rk.key]); got != rk.want {
+					t.Errorf("ref secret key %q: want %q, got %q", rk.key, rk.want, got)
+				}
+			}
+			// raw credentials must never appear in the ref secret
+			if refSecret != nil {
+				for _, forbidden := range []string{"ca_cert", "hf-token"} {
+					if _, ok := refSecret.Data[forbidden]; ok {
+						t.Errorf("%q must not appear in the internalModelRef secret", forbidden)
+					}
+				}
+			}
+
+			// passthrough keys declared in the real-secret Items projection
+			if len(tc.passthroughItemKeys) > 0 && modelInternalAuthVol != nil && modelInternalAuthVol.Projected != nil {
+				itemSet := map[string]bool{}
+				for _, src := range modelInternalAuthVol.Projected.Sources {
+					if src.Secret != nil && src.Secret.Name == secretName {
+						for _, item := range src.Secret.Items {
+							itemSet[item.Key] = true
+						}
+					}
+				}
+				for _, key := range tc.passthroughItemKeys {
+					if !itemSet[key] {
+						t.Errorf("expected key %q declared in real-secret projection Items", key)
+					}
+				}
+			}
+
+			// no legacy MODEL_AUTH_* env vars on adapter container
+			for _, env := range adapterContainer.Env {
+				if strings.HasPrefix(env.Name, "MODEL_AUTH_") {
+					t.Errorf("legacy env var %q must not be set on adapter container", env.Name)
+				}
+			}
+		})
+	}
+}
+
+
+
+

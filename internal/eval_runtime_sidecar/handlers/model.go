@@ -16,10 +16,12 @@ import (
 // internal/eval_hub/runtimes/k8s/job_builders.go.
 const ModelAuthSecretMountPathDefault = "/var/run/secrets/model"
 
-// newModelProxy creates a reverse proxy for model credential injection when sidecar.model
-// is configured. Returns (nil, nil) when model credential injection is not configured.
-// The proxy replaces ref-token Authorization headers (e.g. "Bearer api-key:ref") with the
-// real credential read from the secret mount, then forwards to the configured target URL.
+// newModelProxy creates a reverse proxy for model request forwarding when sidecar.model
+// is configured. Returns (nil, nil) when no model URL is configured (standalone sidecar use).
+// For eval-hub job pods, sidecar_config.json always contains a model section so this proxy
+// is always active. The proxy resolves ref-token Authorization headers (e.g. "Bearer api-key:ref")
+// to real credentials, injects the SA token when no auth is present, and forwards to the
+// configured target URL.
 func newModelProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseProxy, error) {
 	if config == nil || config.Sidecar == nil || config.Sidecar.Model == nil {
 		return nil, nil
