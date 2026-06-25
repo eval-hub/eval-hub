@@ -279,7 +279,6 @@ func TestCreateBenchmarkResourcesSetsAnnotations(t *testing.T) {
 	}
 }
 
-
 func TestBuildInternalModelRefSecretMultiModel(t *testing.T) {
 	// Multi-model credential secret: *_api-key keys become refs, *_url keys become the sidecar
 	// proxy URL, ca_cert is excluded (projected directly from the real secret into the adapter).
@@ -1037,7 +1036,6 @@ func findConfigMapVolumeName(t *testing.T, volumes []corev1.Volume) string {
 	return ""
 }
 
-
 // TestModelAuthCombinations is a table-driven end-to-end test covering every meaningful
 // combination of model credential secret contents through createBenchmarkResources.
 //
@@ -1046,10 +1044,11 @@ func findConfigMapVolumeName(t *testing.T, volumes []corev1.Volume) string {
 //   - sidecar_config.json model section → real URL always present; auth_secret_mount_path only when secret set
 //   - model-auth volume (sidecar)  → present iff secret is configured
 //   - model-auth-internal volume (adapter) → present iff secret is configured
-//     - projected sources: 2 (ref+real) when api-key present; 1 (real only) when ca_cert-only
+//   - projected sources: 2 (ref+real) when api-key present; 1 (real only) when ca_cert-only
 //   - ephemeral internalModelRef secret → created iff api-key (or *_api-key) present
 //   - ref secret keys → api-key→"api-key:ref", *_api-key→"<k>:ref", *_url→sidecarURL
 //   - adapter projected passthrough keys → ca_cert / hf-token projected optional when present in real secret
+//
 // TestModelAuthCombinations is a table-driven end-to-end test covering every meaningful
 // combination of model credential secret contents through createBenchmarkResources.
 //
@@ -1082,7 +1081,7 @@ func TestModelAuthCombinations(t *testing.T) {
 		wantInternalRefSecret     bool
 		wantModelAuthVol          bool
 		wantModelInternalAuthVol  bool
-		wantProjectedSources      int // 0 = not checked
+		wantProjectedSources      int  // 0 = not checked
 		wantInternalRefFirstSrc   bool // internalRef must be sources[0]
 		wantRealSecretOptional    bool // real-secret projection must have optional:true
 		wantAuthMountInSidecarCfg bool
@@ -1515,7 +1514,3 @@ func TestModelAuthCombinations(t *testing.T) {
 		})
 	}
 }
-
-
-
-
