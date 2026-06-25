@@ -11,11 +11,6 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_runtime_sidecar/proxy"
 )
 
-// ModelAuthSecretMountPathDefault is the default path for the model credentials
-// secret mount in the sidecar container. Must match modelAuthRealMountPath in
-// internal/eval_hub/runtimes/k8s/job_builders.go.
-const ModelAuthSecretMountPathDefault = "/var/run/secrets/model"
-
 // newModelProxy creates a reverse proxy for model request forwarding when sidecar.model
 // is configured. Returns (nil, nil) when no model URL is configured (standalone sidecar use).
 // For eval-hub job pods, sidecar_config.json always contains a model section so this proxy
