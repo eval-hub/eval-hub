@@ -30,7 +30,7 @@ func TestInitCreatesEvaluationJobInstruments(t *testing.T) {
 	metrics.RecordEvaluationJobTerminalState(ctx, api.OverallStateRunning, api.OverallStateCompleted)
 	metrics.RecordBenchmarkRuntimeError(ctx, "kubernetes")
 	metrics.RecordHTTPServerRequest(ctx, http.MethodGet, "/api/v1/health", http.StatusOK)
-	req, _ := http.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/health", nil)
 	metrics.IncHTTPServerActiveRequests(ctx, req)
 	metrics.DecHTTPServerActiveRequests(ctx, req)
 
