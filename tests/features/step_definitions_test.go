@@ -256,13 +256,13 @@ func createApiFeature() (*apiFeature, error) {
 		return nil, logError(err)
 	}
 
-	api := &apiFeature{
+	apiFeat := &apiFeature{
 		client:         client,
 		baseURL:        baseURL,
 		metricsBaseURL: metricsBase,
 	}
-	api.startLocalServer(port)
-	return api, nil
+	apiFeat.startLocalServer(port)
+	return apiFeat, nil
 }
 
 // ensureFVTOTELConfig enables OTEL metrics export for embedded FVT servers when Prometheus
