@@ -382,8 +382,8 @@ func setupGPUTestEnvironment(namespace string) error {
 }
 
 func gpuFTBaseURL() string {
-	if api != nil && api.baseURL != nil {
-		return strings.TrimRight(api.baseURL.String(), "/")
+	if apiFeat != nil && apiFeat.baseURL != nil {
+		return strings.TrimRight(apiFeat.baseURL.String(), "/")
 	}
 	if u := os.Getenv("SERVER_URL"); u != "" {
 		return strings.TrimRight(u, "/")
@@ -411,8 +411,8 @@ func gpuFTAuthToken(tenant string) (string, error) {
 }
 
 func gpuFTHTTPClient() *http.Client {
-	if api != nil && api.client != nil {
-		return api.client
+	if apiFeat != nil && apiFeat.client != nil {
+		return apiFeat.client
 	}
 	return &http.Client{Timeout: 30 * time.Second}
 }
@@ -486,7 +486,7 @@ func providerHasGPUTag(tags []string) bool {
 */
 
 func deleteGPUTestProvidersAPI(headers map[string]string) error {
-	if api == nil {
+	if apiFeat == nil {
 		return fmt.Errorf("API feature not initialized")
 	}
 	if len(gpuTestProviderIDs) == 0 {
@@ -554,7 +554,7 @@ func createGPUTestProviderViaAPI(headers map[string]string, bodyFile string) (st
 
 // createGPUTestProviders registers GPU test providers via the EvalHub providers API.
 func createGPUTestProviders(namespace string) error {
-	if api == nil {
+	if apiFeat == nil {
 		return fmt.Errorf("API feature not initialized")
 	}
 

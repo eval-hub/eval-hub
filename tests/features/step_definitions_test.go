@@ -61,7 +61,7 @@ const (
 var (
 	// testConfig to be used throughout all the test suites
 	// for the global configuration
-	api *apiFeature
+	apiFeat *apiFeature
 
 	once   sync.Once
 	logger *log.Logger
@@ -103,6 +103,8 @@ type scenarioConfig struct {
 	jsonnetHarnessEnvOmit []string
 	// jsonnetMlflowEnabled overrides harness.mlflow_enabled when non-nil.
 	jsonnetMlflowEnabled *bool
+	// jsonnetQueueEnabled overrides harness.queue_enabled when non-nil.
+	jsonnetQueueEnabled *bool
 
 	waitDeadline time.Duration
 	waitInterval time.Duration
@@ -1446,7 +1448,15 @@ func (tc *scenarioConfig) requireMetricsURLForRemoteServer(ctx context.Context, 
 
 func (tc *scenarioConfig) saveScenarioName(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
 	tc.scenarioName = sc.Name
+	tc.jsonnetQueueEnabled = nil
 	return ctx, nil
+}
+
+func (tc *scenarioConfig) queueIsEnabledForJsonnetPayloads() error {
+	queueOn := true
+	tc.jsonnetQueueEnabled = &queueOn
+	logDebug("Queue enabled for jsonnet payloads\n")
+	return nil
 }
 
 func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
@@ -1508,19 +1518,19 @@ func setUpTestConf() {
 	if err != nil {
 		panic(logError(fmt.Errorf("failed to create API feature: %v", err)))
 	}
-	api = apiFeature
+	apiFeat = apiFeature
 }
 
 func waitForService() {
-	tc := createScenarioConfig(api)
+	tc := createScenarioConfig(apiFeat)
 	if err := tc.theServiceIsRunning(context.Background()); err != nil {
 		panic("Stopped API Tests. Service is not ready for testing.\n")
 	}
 }
 
 func tidyUpTests() {
-	if api != nil {
-		api.cleanup(context.Background(), nil, nil)
+	if apiFeat != nil {
+		apiFeat.cleanup(context.Background(), nil, nil)
 	}
 	if s, ok := logger.Writer().(*os.File); ok {
 		err := s.Close()
@@ -1582,7 +1592,7 @@ func (tc *scenarioConfig) theModelEndpointIsReachable() error {
 
 // A bit of a hack to have some checks that the regexes are working as expected
 func checkRegexes() {
-	tc := createScenarioConfig(api)
+	tc := createScenarioConfig(apiFeat)
 	paths := [][]string{
 		{"/api/v1/evaluations", "evaluations", "", ""},
 		{"/api/v1/evaluations/jobs", "evaluations", "jobs", ""},
@@ -1670,13 +1680,14 @@ func InitializeTestSuite(ctx *godog.TestSuiteContext) {
 }
 
 func InitializeScenario(ctx *godog.ScenarioContext) {
-	tc := createScenarioConfig(api)
+	tc := createScenarioConfig(apiFeat)
 
 	ctx.Before(tc.saveScenarioName)
 	ctx.Before(tc.requireMetricsURLForRemoteServer)
 	ctx.After(tc.assetCleanup)
 
 	ctx.Step(`^the service is running$`, tc.theServiceIsRunning)
+	ctx.Step(`^queue is enabled for payloads$`, tc.queueIsEnabledForJsonnetPayloads)
 	ctx.Step(`^the model endpoint is reachable$`, tc.theModelEndpointIsReachable)
 	ctx.Step(`^there are system providers$`, tc.thereAreSystemProviders)
 	ctx.Step(`^there are system collections$`, tc.thereAreSystemCollections)

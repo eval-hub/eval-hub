@@ -150,4 +150,13 @@ local harness = std.parseJson(std.extVar('harness'));
         tags: tags,
       },
     },
+
+  // Queue block, or null when queue is not enabled (use with mergeOptional).
+  queue()::
+    if harness.queue_enabled then {
+      queue: {
+        kind: 'kueue',
+        name: $.env('QUEUE_NAME', '{{env:QUEUE_NAME|user-queue}}'),
+      },
+    },
 }

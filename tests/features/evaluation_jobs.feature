@@ -105,7 +105,7 @@ Feature: Evaluation Jobs
 
   Scenario: Evaluation job with multiple benchmarks from same provider
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_multiple_benchmark.jsonnet"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_multiple_benchmark.json"
     Then the response code should be 202
     And the response should contain the value "pending" at path "$.status.state"
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
@@ -292,11 +292,11 @@ Feature: Evaluation Jobs
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:collection_id"
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_mlflow_collection_shared_job1.jsonnet"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_mlflow_collection_shared_job1.json"
     Then the response code should be 202
     And the "resource.mlflow_experiment_id" field in the response should be saved as "value:exp_id"
     And the "resource.id" field in the response should be saved as "value:exp_job1_id"
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_mlflow_collection_shared_job2.jsonnet"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_mlflow_collection_shared_job2.json"
     Then the response code should be 202
     And the response should contain the value "{{value:exp_id}}" at path "$.resource.mlflow_experiment_id"
     And the "resource.id" field in the response should be saved as "value:exp_job2_id"
@@ -394,7 +394,7 @@ Feature: Evaluation Jobs
  # This test uses gated HuggingFace datasets (toxigen, truthfulqa_mc1, bigbench_hhh_alignment_multiple_choice) which require authentication.
   Scenario: Verify Evaluation Jobs Can Use OOB Collections - toxicity-and-ethical-principles
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oob_toxicity.jsonnet"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oob_toxicity.json"
     Then the response code should be 202
     And the response should contain the value "toxicity-and-ethical-principles" at path "$.collection.id"
     And I wait for the evaluation job status to be "completed"
@@ -621,29 +621,29 @@ Feature: Evaluation Jobs
 
   Scenario: Multiple jobs can reference different OOB collection
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oob_ref_safety_fairness_job1.jsonnet"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oob_ref_safety_fairness_job1.json"
     Then the response code should be 202
     And the response should contain the value "safety-and-fairness-v1" at path "$.collection.id"
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oob_ref_toxicity_job2.jsonnet"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oob_ref_toxicity_job2.json"
     Then the response code should be 202
     And the response should contain the value "toxicity-and-ethical-principles" at path "$.collection.id"
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oob_ref_leaderboard_job3.jsonnet"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oob_ref_leaderboard_job3.json"
     Then the response code should be 202
     And the response should contain the value "leaderboard-v2" at path "$.collection.id"
 
   Scenario: Multiple jobs can reference same OOB collection
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oob_ref_safety_same1.jsonnet"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oob_ref_safety_same1.json"
     Then the response code should be 202
     And the response should contain the value "safety-and-fairness-v1" at path "$.collection.id"
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oob_ref_safety_same2.jsonnet"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oob_ref_safety_same2.json"
     Then the response code should be 202
     And the response should contain the value "safety-and-fairness-v1" at path "$.collection.id"
 
   @mlflow
   Scenario: Create an evaluation job with MLflow experiment and OOB collection
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_mlflow_oob_leaderboard.jsonnet"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_mlflow_oob_leaderboard.json"
     Then the response code should be 202
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
@@ -1006,7 +1006,7 @@ Feature: Evaluation Jobs
   # This scenario requires HuggingFace authentication for all 3 benchmarks to run
   Scenario: Create evaluation job with queue and collection
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_kueue_oob_toxicity.jsonnet"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_kueue_oob_toxicity.json"
     Then the response code should be 202
     And the response should contain the value "kueue" at path "$.queue.kind"
     And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
@@ -1023,44 +1023,8 @@ Feature: Evaluation Jobs
   @mlflow
   Scenario: Create evaluation job with queue and MLflow experiment
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body:
-      """
-      {
-        "model": {
-          "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}"
-        },
-        "benchmarks": [
-          {
-            "id": "arc_easy",
-            "provider_id": "lm_evaluation_harness",
-            "parameters": {
-              "num_examples": 10,
-              "num_fewshot": 3,
-              "limit": 5,
-              "tokenizer": "google/flan-t5-small"
-            }
-          }
-        ],
-        "experiment": {
-          "name": "{{mlflow:my-test-experiment}}",
-          "tags": [
-            {
-              "key": "environment",
-              "value": "test"
-            }
-          ]
-        },
-        "name": "test-evaluation-job-with-kueue-and-mlflow",
-        "queue": {
-          "kind": "kueue",
-          "name": "{{env:QUEUE_NAME|user-queue}}"
-        },
-        "tags": [
-          "environment"
-        ]
-      }
-      """
+    And queue is enabled for payloads
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And the response should contain the value "kueue" at path "$.queue.kind"
     And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"

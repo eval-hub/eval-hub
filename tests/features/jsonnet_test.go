@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/google/go-jsonnet"
 )
 
@@ -15,6 +17,7 @@ type jsonnetHarness struct {
 	Env           map[string]string `json:"env"`
 	Values        map[string]string `json:"values"`
 	MlflowEnabled bool              `json:"mlflow_enabled"`
+	QueueEnabled  bool              `json:"queue_enabled"`
 	Disconnected  bool              `json:"disconnected"`
 }
 
@@ -70,11 +73,16 @@ func (tc *scenarioConfig) jsonnetHarnessJSON() (string, error) {
 	if tc.jsonnetMlflowEnabled != nil {
 		mlflowEnabled = *tc.jsonnetMlflowEnabled
 	}
+	queueEnabled := false
+	if tc.jsonnetQueueEnabled != nil {
+		queueEnabled = *tc.jsonnetQueueEnabled
+	}
 	disconnected := strings.Contains(strings.ToLower(env["ENVIRONMENT_ID"]), "disconnected")
 	harness := jsonnetHarness{
 		Env:           env,
 		Values:        values,
 		MlflowEnabled: mlflowEnabled,
+		QueueEnabled:  queueEnabled,
 		Disconnected:  disconnected,
 	}
 	encoded, err := json.Marshal(harness)
@@ -539,6 +547,87 @@ func TestEvaluateEvaluationJobJsonnetConnected(t *testing.T) {
 	}
 	if b.TestDataRef != nil {
 		t.Errorf("test_data_ref = %+v, want nil", b.TestDataRef.S3)
+	}
+}
+
+func TestEvaluateEvaluationJobJsonnetWithQueue(t *testing.T) {
+	queueJobJson := `
+	{
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}"
+        },
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+              "num_examples": 10,
+              "num_fewshot": 3,
+              "limit": 5,
+              "tokenizer": "google/flan-t5-small"
+            }
+          }
+        ],
+        "name": "test-evaluation-job",
+        "queue": {
+          "kind": "kueue",
+          "name": "{{env:QUEUE_NAME|user-queue}}"
+        },
+        "tags": [
+          "environment"
+        ]
+      }`
+	queueOn := true
+	tc := &scenarioConfig{
+		values: map[string]string{},
+		jsonnetHarnessEnv: map[string]string{
+			"MODEL_NAME": "{{env:MODEL_NAME|test}}",
+			"MODEL_URL":  "{{env:MODEL_URL|http://test.com}}",
+		},
+		jsonnetQueueEnabled: &queueOn,
+	}
+	path, err := filepath.Abs(filepath.Join(testDataRoot(), "evaluation_job.jsonnet"))
+	if err != nil {
+		t.Fatalf("abs path: %v", err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	out, err := tc.evaluateJsonnetFile(path)
+	if err != nil {
+		t.Fatalf("evaluateJsonnetFile: %v", err)
+	}
+	outJob := api.EvaluationJobConfig{}
+	err = json.Unmarshal([]byte(out), &outJob)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	queueJob := api.EvaluationJobConfig{}
+	err = json.Unmarshal([]byte(queueJobJson), &queueJob)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !reflect.DeepEqual(outJob, queueJob) {
+		if !reflect.DeepEqual(outJob.Name, queueJob.Name) {
+			t.Errorf("name = %+v, want %+v", outJob.Name, queueJob.Name)
+		}
+		if !reflect.DeepEqual(outJob.Description, queueJob.Description) {
+			t.Errorf("description = %+v, want %+v", outJob.Description, queueJob.Description)
+		}
+		if !reflect.DeepEqual(outJob.Model, queueJob.Model) {
+			t.Errorf("model = %+v, want %+v", outJob.Model, queueJob.Model)
+		}
+		if !reflect.DeepEqual(outJob.Benchmarks, queueJob.Benchmarks) {
+			t.Errorf("benchmarks = %+v, want %+v", outJob.Benchmarks, queueJob.Benchmarks)
+		}
+		if !reflect.DeepEqual(outJob.Experiment, queueJob.Experiment) {
+			t.Errorf("experiment = %+v, want %+v", outJob.Experiment, queueJob.Experiment)
+		}
+		if !reflect.DeepEqual(outJob.Queue, queueJob.Queue) {
+			t.Errorf("queue = %+v, want %+v", outJob.Queue, queueJob.Queue)
+		}
+		t.Errorf("got = %+v,\n\nwant %+v", outJob, queueJob)
 	}
 }
 
