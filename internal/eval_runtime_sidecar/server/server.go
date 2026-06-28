@@ -102,10 +102,16 @@ func (s *SidecarServer) Start() error {
 		return err
 	}
 	s.httpServer = &http.Server{
-		Addr:         fmt.Sprintf(":%d", s.port),
-		Handler:      handler,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		Addr:    fmt.Sprintf(":%d", s.port),
+		Handler: handler,
+		// ReadHeaderTimeout bounds slow-header attacks; ReadTimeout is left unset so the
+		// server can receive large request bodies (e.g. inference payloads) without a deadline.
+		ReadHeaderTimeout: 15 * time.Second,
+		// WriteTimeout must be 0 for a reverse proxy: Go measures it from the moment the
+		// request is received, so a non-zero value fires while the sidecar is still waiting
+		// for the upstream (LiteLLM / eval-hub) to respond. Upstream latency is instead
+		// bounded by each HTTP client's own Timeout (see http_client.go).
+		WriteTimeout: 0,
 		IdleTimeout:  60 * time.Second,
 		TLSConfig: &tls.Config{
 			MinVersion: tls.VersionTLS12,
