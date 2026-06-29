@@ -1,0 +1,30 @@
+type: object
+description: Container log output for one pod/container pair
+properties:
+  benchmark_index:
+    type: integer
+    description: Benchmark index in the evaluation job request
+  benchmark_id:
+    type: string
+    description: Benchmark ID
+  provider_id:
+    type: string
+    description: Provider ID
+  pod:
+    type: string
+    description: Kubernetes pod name
+  container:
+    type: string
+    description: Container name within the pod
+  truncated:
+    type: boolean
+    description: Whether the log content was truncated by server limits
+  byte_count:
+    type: integer
+    description: Number of bytes returned in content
+  content:
+    type: string
+    description: Log text
+  error:
+    type: string
+    description: Error message when log retrieval failed for this stream

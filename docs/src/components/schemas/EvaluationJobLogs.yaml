@@ -1,0 +1,24 @@
+type: object
+description: Workload logs for an evaluation job
+required:
+  - job_id
+  - available
+  - streams
+properties:
+  job_id:
+    type: string
+    description: Evaluation job ID
+  benchmark_index:
+    type: integer
+    description: Present when logs were requested for a single benchmark
+  available:
+    type: boolean
+    description: Whether any workload logs could be retrieved
+  message:
+    type: string
+    description: Human-readable detail when logs are unavailable or partially available
+  streams:
+    type: array
+    items:
+      $ref: ./LogStream.yaml
+    description: Per-pod/container log streams

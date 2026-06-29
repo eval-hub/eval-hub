@@ -1,0 +1,98 @@
+get:
+  tags:
+    - Evaluations
+  summary: Get Evaluation Job Logs
+  description: |
+    Returns Kubernetes workload logs for all benchmarks in an evaluation job.
+
+    Logs are fetched on demand from the active runtime (Kubernetes API in cluster mode,
+    local `jobrun.log` files in local mode). This endpoint returns container stdout/stderr
+    and is distinct from `logs_path` on benchmark results, which refers to adapter-written
+    artifact files inside the job pod.
+
+    Use `Accept: text/plain` for concatenated plain-text output suitable for CLI use.
+  operationId: get_evaluations_jobs_id_logs
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        title: Id
+    - name: container
+      in: query
+      required: false
+      schema:
+        type: string
+        description: Filter to a single container name (for example `adapter` or `sidecar`)
+    - name: tail_lines
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1000
+        description: Maximum number of log lines to return per container
+    - name: timestamps
+      in: query
+      required: false
+      schema:
+        type: boolean
+        default: false
+        description: Include Kubernetes log timestamps
+    - name: previous
+      in: query
+      required: false
+      schema:
+        type: boolean
+        default: false
+        description: Return logs from the previous terminated container instance
+    - name: since_seconds
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        description: Only return logs newer than this many seconds
+  responses:
+    '200':
+      description: Successful Response
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/EvaluationJobLogs.yaml
+          examples:
+            response:
+              summary: Logs for a completed evaluation job
+              value:
+                job_id: a1b2c3d4-5678-9abc-def0-1234567890ab
+                available: true
+                streams:
+                  - benchmark_index: 0
+                    benchmark_id: arc_easy
+                    provider_id: lm_evaluation_harness
+                    pod: a1b2c3d4-405ef22a-abc12
+                    container: adapter
+                    truncated: false
+                    byte_count: 128
+                    content: |
+                      INFO starting evaluation
+                      INFO benchmark completed
+        text/plain:
+          schema:
+            type: string
+          examples:
+            response:
+              summary: Plain-text logs
+              value: |
+                === pod=a1b2c3d4-405ef22a-abc12 container=adapter benchmark_index=0 benchmark_id=arc_easy ===
+                INFO starting evaluation
+                INFO benchmark completed
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml
