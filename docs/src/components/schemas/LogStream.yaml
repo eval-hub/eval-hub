@@ -1,5 +1,15 @@
 type: object
-description: Container log output for one pod/container pair
+description: |
+  Log output for one benchmark workload stream.
+
+  **Kubernetes runtime:** one stream per pod container (init, adapter, sidecar, etc.).
+  `pod` and `container` are the real Kubernetes pod and container names.
+
+  **Local runtime:** one stream per benchmark, read from the local `jobrun.log` file
+  (`/tmp/evalhub-jobs/{job_id}/{benchmark_index}/{provider_id}/{benchmark_id}/jobrun.log`).
+  `pod` and `container` are always present with synthetic values (`pod` =
+  `{job_id}-{benchmark_index}`, `container` = `local`) so clients can use the same
+  response shape in both runtimes.
 properties:
   benchmark_index:
     type: integer
@@ -12,10 +22,15 @@ properties:
     description: Provider ID
   pod:
     type: string
-    description: Kubernetes pod name
+    description: |
+      Kubernetes pod name in cluster mode. In local mode, a synthetic stream
+      identifier `{job_id}-{benchmark_index}` (not a Kubernetes pod).
   container:
     type: string
-    description: Container name within the pod
+    description: |
+      Container name within the pod in cluster mode (for example `adapter` or
+      `sidecar`). In local mode, always `local` (the captured subprocess log file,
+      not a container).
   truncated:
     type: boolean
     description: Whether the log content was truncated by server limits
@@ -24,7 +39,9 @@ properties:
     description: Number of bytes returned in content
   content:
     type: string
-    description: Log text
+    description: |
+      Log text. Kubernetes runtime returns container stdout/stderr. Local runtime
+      returns the contents of `jobrun.log`.
   error:
     type: string
     description: Error message when log retrieval failed for this stream

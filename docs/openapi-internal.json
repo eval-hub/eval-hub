@@ -3938,7 +3938,7 @@
       },
       "LogStream": {
         "type": "object",
-        "description": "Container log output for one pod/container pair",
+        "description": "Log output for one benchmark workload stream.\n\n**Kubernetes runtime:** one stream per pod container (init, adapter, sidecar, etc.).\n`pod` and `container` are the real Kubernetes pod and container names.\n\n**Local runtime:** one stream per benchmark, read from the local `jobrun.log` file\n(`/tmp/evalhub-jobs/{job_id}/{benchmark_index}/{provider_id}/{benchmark_id}/jobrun.log`).\n`pod` and `container` are always present with synthetic values (`pod` =\n`{job_id}-{benchmark_index}`, `container` = `local`) so clients can use the same\nresponse shape in both runtimes.\n",
         "properties": {
           "benchmark_index": {
             "type": "integer",
@@ -3954,11 +3954,11 @@
           },
           "pod": {
             "type": "string",
-            "description": "Kubernetes pod name"
+            "description": "Kubernetes pod name in cluster mode. In local mode, a synthetic stream\nidentifier `{job_id}-{benchmark_index}` (not a Kubernetes pod).\n"
           },
           "container": {
             "type": "string",
-            "description": "Container name within the pod"
+            "description": "Container name within the pod in cluster mode (for example `adapter` or\n`sidecar`). In local mode, always `local` (the captured subprocess log file,\nnot a container).\n"
           },
           "truncated": {
             "type": "boolean",
@@ -3970,7 +3970,7 @@
           },
           "content": {
             "type": "string",
-            "description": "Log text"
+            "description": "Log text. Kubernetes runtime returns container stdout/stderr. Local runtime\nreturns the contents of `jobrun.log`.\n"
           },
           "error": {
             "type": "string",
@@ -4008,7 +4008,7 @@
             "items": {
               "$ref": "#/components/schemas/LogStream"
             },
-            "description": "Per-pod/container log streams"
+            "description": "Log streams for the job. Kubernetes runtimes return one or more streams per\nbenchmark (per container). Local runtimes return one stream per benchmark\nfrom `jobrun.log`.\n"
           }
         }
       },

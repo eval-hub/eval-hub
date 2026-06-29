@@ -21,4 +21,7 @@ properties:
     type: array
     items:
       $ref: ./LogStream.yaml
-    description: Per-pod/container log streams
+    description: |
+      Log streams for the job. Kubernetes runtimes return one or more streams per
+      benchmark (per container). Local runtimes return one stream per benchmark
+      from `jobrun.log`.
