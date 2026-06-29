@@ -26,6 +26,7 @@ func NewMetricsServer(logger *slog.Logger, promConfig *config.PrometheusConfig) 
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", withRequestID(promhttp.Handler()))
+	mux.Handle("/healthz", withRequestID(http.HandlerFunc(handleHealthz)))
 
 	return &MetricsServer{
 		httpServer: &http.Server{
@@ -56,6 +57,12 @@ func withRequestID(next http.Handler) http.Handler {
 		w.Header().Set(TRANSACTION_ID_HEADER, requestID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func handleHealthz(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(`{"status":"healthy"}`))
 }
 
 func (m *MetricsServer) Start() error {
