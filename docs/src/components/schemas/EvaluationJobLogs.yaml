@@ -10,7 +10,7 @@ properties:
     description: Evaluation job ID
   benchmark_index:
     type: integer
-    description: Present when logs were requested for a single benchmark
+    description: Omitted when logs are returned for all benchmarks (`GET .../jobs/{id}/logs`)
   available:
     type: boolean
     description: Whether any workload logs could be retrieved

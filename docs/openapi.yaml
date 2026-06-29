@@ -668,7 +668,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EvaluationJobLogs'
+                $ref: '#/components/schemas/EvaluationBenchmarkJobLogs'
             text/plain:
               schema:
                 type: string
@@ -2681,7 +2681,7 @@ components:
           description: Evaluation job ID
         benchmark_index:
           type: integer
-          description: Present when logs were requested for a single benchmark
+          description: Omitted when logs are returned for all benchmarks (`GET .../jobs/{id}/logs`)
         available:
           type: boolean
           description: Whether any workload logs could be retrieved
@@ -2696,6 +2696,18 @@ components:
             Log streams for the job. Kubernetes runtimes return one or more streams per
             benchmark (per container). Local runtimes return one stream per benchmark
             from `jobrun.log`.
+    EvaluationBenchmarkJobLogs:
+      type: object
+      description: Workload logs for a single benchmark within an evaluation job
+      allOf:
+        - $ref: '#/components/schemas/EvaluationJobLogs'
+        - type: object
+          required:
+            - benchmark_index
+          properties:
+            benchmark_index:
+              type: integer
+              description: Benchmark index from the request path; always present in this response
     AgentMetadata:
       type: object
       description: Metadata for AI agent discoverability and operational guidance

@@ -62,7 +62,7 @@ get:
       content:
         application/json:
           schema:
-            $ref: ../components/schemas/EvaluationJobLogs.yaml
+            $ref: ../components/schemas/EvaluationBenchmarkJobLogs.yaml
         text/plain:
           schema:
             type: string
