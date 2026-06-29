@@ -225,7 +225,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 		{
 			Name:            adapterContainerName,
 			Image:           cfg.adapterImage,
-			ImagePullPolicy: corev1.PullAlways,
+			ImagePullPolicy: corev1.PullIfNotPresent,
 			Command:         buildContainerCommand(cfg.entrypoint),
 			Env:             adapterEnvVars,
 			Resources:       resources,
@@ -632,7 +632,7 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 		initContainers = append(initContainers, corev1.Container{
 			Name:            initContainerName,
 			Image:           initImage,
-			ImagePullPolicy: corev1.PullAlways,
+			ImagePullPolicy: corev1.PullIfNotPresent,
 			Command:         []string{initCommand},
 			Resources:       initResources,
 			Env: []corev1.EnvVar{
