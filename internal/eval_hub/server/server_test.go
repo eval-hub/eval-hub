@@ -89,6 +89,15 @@ func (r *stubRuntime) DeleteEvaluationJobResources(_ *api.EvaluationJobResource)
 	return nil
 }
 
+func (r *stubRuntime) GetEvaluationLogs(
+	_ *api.EvaluationJobResource,
+	_ []api.EvaluationBenchmarkConfig,
+	_ *int,
+	_ api.EvaluationLogOptions,
+) (string, error) {
+	return "", nil
+}
+
 func TestNewServer(t *testing.T) {
 	t.Run("creates server with default port", func(t *testing.T) {
 		os.Unsetenv("PORT")

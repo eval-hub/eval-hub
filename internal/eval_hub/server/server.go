@@ -232,6 +232,38 @@ func (s *Server) setupEvaluationJobsRoutes(h *handlers.Handlers, router *http.Se
 	})
 }
 
+func (s *Server) setupEvaluationJobLogsRoutes(h *handlers.Handlers, router *http.ServeMux) {
+	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/jobs/{%s}/benchmarks/{%s}/logs", constants.PATH_PARAMETER_JOB_ID, constants.PATH_PARAMETER_BENCHMARK_INDEX), func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := s.newRequestWrapper(w, r)
+		if !s.canContinueRequest(ctx, resp) {
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleGetEvaluationBenchmarkLogs(ctx, req, resp)
+		default:
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
+		}
+	})
+
+	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/jobs/{%s}/logs", constants.PATH_PARAMETER_JOB_ID), func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := s.newRequestWrapper(w, r)
+		if !s.canContinueRequest(ctx, resp) {
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleGetEvaluationJobLogs(ctx, req, resp)
+		default:
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
+		}
+	})
+}
+
 func (s *Server) setupEvaluationJobEventsRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/jobs/{%s}/events", constants.PATH_PARAMETER_JOB_ID), func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
@@ -405,6 +437,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 
 	// Evaluation jobs endpoints
 	s.setupEvaluationJobsRoutes(h, router)
+	s.setupEvaluationJobLogsRoutes(h, router)
 	s.setupEvaluationJobEventsRoutes(h, router)
 	s.setupEvaluationJobRoutes(h, router)
 

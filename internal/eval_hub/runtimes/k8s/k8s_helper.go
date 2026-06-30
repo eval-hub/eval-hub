@@ -4,6 +4,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"io"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -230,6 +231,39 @@ func (h *KubernetesHelper) SetSecretOwner(ctx context.Context, namespace, name s
 	secret.OwnerReferences = []metav1.OwnerReference{owner}
 	_, err = h.clientset.CoreV1().Secrets(namespace).Update(ctx, secret, metav1.UpdateOptions{})
 	return err
+}
+
+// ListPods returns Pods matching the label selector.
+func (h *KubernetesHelper) ListPods(ctx context.Context, namespace, labelSelector string) ([]corev1.Pod, error) {
+	if namespace == "" {
+		return nil, fmt.Errorf("namespace is required")
+	}
+	list, err := h.clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+	if err != nil {
+		return nil, err
+	}
+	return list.Items, nil
+}
+
+// GetPodLogs returns plain-text logs for a pod container.
+func (h *KubernetesHelper) GetPodLogs(ctx context.Context, namespace, podName string, opts *corev1.PodLogOptions) (string, error) {
+	if namespace == "" || podName == "" {
+		return "", fmt.Errorf("namespace and pod name are required")
+	}
+	if opts == nil {
+		opts = &corev1.PodLogOptions{}
+	}
+	req := h.clientset.CoreV1().Pods(namespace).GetLogs(podName, opts)
+	stream, err := req.Stream(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer stream.Close()
+	data, err := io.ReadAll(stream)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 // CreateConfigMapOptions holds optional metadata for CreateConfigMap.
