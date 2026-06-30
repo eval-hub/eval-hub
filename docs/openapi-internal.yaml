@@ -659,6 +659,7 @@ paths:
           schema:
             type: integer
             minimum: 1
+            maximum: 10000
             default: 1000
             description: Maximum number of log lines to return
         - name: timestamps
@@ -754,6 +755,7 @@ paths:
           schema:
             type: integer
             minimum: 1
+            maximum: 10000
             default: 1000
             description: Maximum number of log lines to return
         - name: timestamps
