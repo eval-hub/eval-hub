@@ -2,8 +2,8 @@ type: object
 description: |
   Log output for one benchmark workload stream.
 
-  **Kubernetes runtime:** one stream per pod container (init, adapter, sidecar, etc.).
-  `pod` and `container` are the real Kubernetes pod and container names.
+  **Kubernetes runtime:** one stream per benchmark from the adapter container.
+  `pod` is the Kubernetes pod name; `container` is always `adapter`.
 
   **Local runtime:** one stream per benchmark, read from the local `jobrun.log` file
   (`/tmp/evalhub-jobs/{job_id}/{benchmark_index}/{provider_id}/{benchmark_id}/jobrun.log`).
@@ -28,9 +28,8 @@ properties:
   container:
     type: string
     description: |
-      Container name within the pod in cluster mode (for example `adapter` or
-      `sidecar`). In local mode, always `local` (the captured subprocess log file,
-      not a container).
+      Container name within the pod in cluster mode; always `adapter`. In local
+      mode, always `local` (the captured subprocess log file, not a container).
   truncated:
     type: boolean
     description: Whether the log content was truncated by server limits

@@ -747,7 +747,7 @@
           "Evaluations"
         ],
         "summary": "Get Evaluation Job Logs",
-        "description": "Returns Kubernetes workload logs for all benchmarks in an evaluation job.\n\nLogs are fetched on demand from the active runtime (Kubernetes API in cluster mode,\nlocal `jobrun.log` files in local mode). This endpoint returns container stdout/stderr\nand is distinct from `logs_path` on benchmark results, which refers to adapter-written\nartifact files inside the job pod.\n\nUse `Accept: text/plain` for concatenated plain-text output suitable for CLI use.\n",
+        "description": "Returns Kubernetes workload logs for all benchmarks in an evaluation job.\n\nLogs are fetched on demand from the active runtime (Kubernetes API in cluster mode,\nlocal `jobrun.log` files in local mode). This endpoint returns adapter container\nstdout/stderr only and is distinct from `logs_path` on benchmark results, which\nrefers to adapter-written artifact files inside the job pod.\n\nUse `Accept: text/plain` for concatenated plain-text output suitable for CLI use.\n",
         "operationId": "get_evaluations_jobs_id_logs",
         "parameters": [
           {
@@ -760,15 +760,6 @@
             }
           },
           {
-            "name": "container",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "Filter to a single container name (for example `adapter` or `sidecar`)"
-            }
-          },
-          {
             "name": "tail_lines",
             "in": "query",
             "required": false,
@@ -776,7 +767,7 @@
               "type": "integer",
               "minimum": 1,
               "default": 1000,
-              "description": "Maximum number of log lines to return per container"
+              "description": "Maximum number of log lines to return"
             }
           },
           {
@@ -874,7 +865,7 @@
           "Evaluations"
         ],
         "summary": "Get Evaluation Benchmark Logs",
-        "description": "Returns Kubernetes workload logs for a single benchmark within an evaluation job.\n\nSee `GET /api/v1/evaluations/jobs/{id}/logs` for query parameters and response formats.\n",
+        "description": "Returns adapter container workload logs for a single benchmark within an evaluation job.\n\nSee `GET /api/v1/evaluations/jobs/{id}/logs` for query parameters and response formats.\n",
         "operationId": "get_evaluations_jobs_id_benchmarks_benchmark_index_logs",
         "parameters": [
           {
@@ -897,15 +888,6 @@
             }
           },
           {
-            "name": "container",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "Filter to a single container name (for example `adapter` or `sidecar`)"
-            }
-          },
-          {
             "name": "tail_lines",
             "in": "query",
             "required": false,
@@ -913,7 +895,7 @@
               "type": "integer",
               "minimum": 1,
               "default": 1000,
-              "description": "Maximum number of log lines to return per container"
+              "description": "Maximum number of log lines to return"
             }
           },
           {
@@ -3677,7 +3659,7 @@
       },
       "LogStream": {
         "type": "object",
-        "description": "Log output for one benchmark workload stream.\n\n**Kubernetes runtime:** one stream per pod container (init, adapter, sidecar, etc.).\n`pod` and `container` are the real Kubernetes pod and container names.\n\n**Local runtime:** one stream per benchmark, read from the local `jobrun.log` file\n(`/tmp/evalhub-jobs/{job_id}/{benchmark_index}/{provider_id}/{benchmark_id}/jobrun.log`).\n`pod` and `container` are always present with synthetic values (`pod` =\n`{job_id}-{benchmark_index}`, `container` = `local`) so clients can use the same\nresponse shape in both runtimes.\n",
+        "description": "Log output for one benchmark workload stream.\n\n**Kubernetes runtime:** one stream per benchmark from the adapter container.\n`pod` is the Kubernetes pod name; `container` is always `adapter`.\n\n**Local runtime:** one stream per benchmark, read from the local `jobrun.log` file\n(`/tmp/evalhub-jobs/{job_id}/{benchmark_index}/{provider_id}/{benchmark_id}/jobrun.log`).\n`pod` and `container` are always present with synthetic values (`pod` =\n`{job_id}-{benchmark_index}`, `container` = `local`) so clients can use the same\nresponse shape in both runtimes.\n",
         "properties": {
           "benchmark_index": {
             "type": "integer",
@@ -3697,7 +3679,7 @@
           },
           "container": {
             "type": "string",
-            "description": "Container name within the pod in cluster mode (for example `adapter` or\n`sidecar`). In local mode, always `local` (the captured subprocess log file,\nnot a container).\n"
+            "description": "Container name within the pod in cluster mode; always `adapter`. In local\nmode, always `local` (the captured subprocess log file, not a container).\n"
           },
           "truncated": {
             "type": "boolean",
@@ -3747,7 +3729,7 @@
             "items": {
               "$ref": "#/components/schemas/LogStream"
             },
-            "description": "Log streams for the job. Kubernetes runtimes return one or more streams per\nbenchmark (per container). Local runtimes return one stream per benchmark\nfrom `jobrun.log`.\n"
+            "description": "Log streams for the job. Kubernetes runtimes return one adapter container\nstream per benchmark. Local runtimes return one stream per benchmark from\n`jobrun.log`.\n"
           }
         }
       },
