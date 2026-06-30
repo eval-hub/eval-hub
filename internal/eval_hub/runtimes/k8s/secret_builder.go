@@ -11,6 +11,7 @@ import (
 
 const (
 	modelAPIKeySuffix = "_api-key"
+	modelTokenSuffix  = "_token"
 	modelURLSuffix    = "_url"
 	modelHFTokenKey   = "hf-token"
 	modelCACertKey    = "ca_cert"
@@ -18,9 +19,12 @@ const (
 )
 
 // isModelCredentialKey reports whether k is a proxy-injectable credential key
-// (api-key, *_api-key, or *_url).
+// (api-key, *_api-key, *_token, or *_url).
 func isModelCredentialKey(k string) bool {
-	return k == modelSingleAPIKey || strings.HasSuffix(k, modelAPIKeySuffix) || strings.HasSuffix(k, modelURLSuffix)
+	return k == modelSingleAPIKey ||
+		strings.HasSuffix(k, modelAPIKeySuffix) ||
+		strings.HasSuffix(k, modelTokenSuffix) ||
+		strings.HasSuffix(k, modelURLSuffix)
 }
 
 // modelSecretInfo holds the result of inspecting the model credential secret.
@@ -59,6 +63,7 @@ func inspectModelSecret(ctx context.Context, namespace, secretName string, helpe
 //
 //   - "api-key"          → value becomes "api-key:ref" (sidecar injects real key)
 //   - "*_api-key" suffix → value becomes "<key>:ref"   (sidecar injects real key)
+//   - "*_token" suffix   → value becomes "<key>:ref"   (sidecar injects token or SA token when value empty)
 //   - "*_url" suffix     → value becomes sidecarProxyURL (adapter routes through sidecar)
 //   - "hf-token"         → omitted; projected directly from the model credential secret
 //   - "ca_cert"          → omitted; projected directly from the model credential secret
@@ -95,8 +100,8 @@ func buildInternalModelRefSecret(
 	}
 
 	if len(refData) == 0 {
-		return nil, fmt.Errorf("model credential secret data contains no recognised credential keys (expected %q or keys with %q or %q suffix)",
-			modelSingleAPIKey, modelAPIKeySuffix, modelURLSuffix)
+		return nil, fmt.Errorf("model credential secret data contains no recognised credential keys (expected %q or keys with %q, %q, or %q suffix)",
+			modelSingleAPIKey, modelAPIKeySuffix, modelTokenSuffix, modelURLSuffix)
 	}
 
 	secret := &corev1.Secret{
