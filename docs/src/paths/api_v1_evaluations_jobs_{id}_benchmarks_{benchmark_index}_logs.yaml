@@ -1,0 +1,77 @@
+get:
+  tags:
+    - Evaluations
+  summary: Get Evaluation Benchmark Logs
+  description: |
+    Returns plain-text workload logs for a single benchmark within an evaluation job.
+    The benchmark is identified by `benchmark_index` in the request path.
+
+    **Kubernetes runtime:** adapter container stdout/stderr via the Kubernetes API.
+    **Local runtime:** contents of the benchmark's `jobrun.log` file. See
+    `GET /api/v1/evaluations/jobs/{id}/logs` for shared query parameters.
+  operationId: get_evaluations_jobs_id_benchmarks_benchmark_index_logs
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        title: Id
+    - name: benchmark_index
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 0
+        title: Benchmark Index
+    - name: tail_lines
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 10000
+        default: 1000
+        description: Maximum number of log lines to return
+    - name: timestamps
+      in: query
+      required: false
+      schema:
+        type: boolean
+        default: false
+        description: Include Kubernetes log timestamps
+    - name: previous
+      in: query
+      required: false
+      schema:
+        type: boolean
+        default: false
+        description: Return logs from the previous terminated container instance
+    - name: since_seconds
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        description: Only return logs newer than this many seconds
+  responses:
+    '200':
+      description: Successful Response
+      content:
+        text/plain:
+          schema:
+            type: string
+          examples:
+            response:
+              summary: Plain-text logs for one benchmark
+              value: |
+                INFO starting evaluation
+                INFO benchmark completed
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml

@@ -42,6 +42,10 @@ paths:
     $ref: paths/api_v1_evaluations_jobs_{id}.yaml
   /api/v1/evaluations/jobs/{id}/events:
     $ref: paths/api_v1_evaluations_jobs_{id}_events.yaml
+  /api/v1/evaluations/jobs/{id}/logs:
+    $ref: paths/api_v1_evaluations_jobs_{id}_logs.yaml
+  /api/v1/evaluations/jobs/{id}/benchmarks/{benchmark_index}/logs:
+    $ref: paths/api_v1_evaluations_jobs_{id}_benchmarks_{benchmark_index}_logs.yaml
   /api/v1/evaluations/providers:
     $ref: paths/api_v1_evaluations_providers.yaml
   /api/v1/evaluations/providers/{id}:
