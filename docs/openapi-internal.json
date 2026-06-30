@@ -4012,6 +4012,14 @@
               "benchmark_index": {
                 "type": "integer",
                 "description": "Benchmark index from the request path; always present in this response"
+              },
+              "streams": {
+                "type": "array",
+                "maxItems": 1,
+                "items": {
+                  "$ref": "#/components/schemas/LogStream"
+                },
+                "description": "Log stream for this benchmark. At most one adapter container stream.\nEmpty when no logs could be retrieved.\n"
               }
             }
           }
