@@ -935,7 +935,7 @@
           "Evaluations"
         ],
         "summary": "Get Evaluation Job Logs",
-        "description": "Returns workload logs for all benchmarks in an evaluation job.\n\n**Kubernetes runtime:** adapter container stdout/stderr via the Kubernetes API.\n**Local runtime:** contents of each benchmark's `jobrun.log` file under\n`/tmp/evalhub-jobs/{job_id}/{benchmark_index}/{provider_id}/{benchmark_id}/`.\nLogs are fetched on demand from the active runtime. Responses use the same JSON\nshape in both modes (`pod` and `container` are synthetic in local mode; see\n`LogStream`). Distinct from `logs_path` on benchmark results, which refers to\nadapter-written artifact files.\n\nUse `Accept: text/plain` for concatenated plain-text output suitable for CLI use.\n",
+        "description": "Returns plain-text workload logs for all benchmarks in an evaluation job.\n\n**Kubernetes runtime:** adapter container stdout/stderr via the Kubernetes API.\n**Local runtime:** contents of each benchmark's `jobrun.log` file under\n`/tmp/evalhub-jobs/{job_id}/{benchmark_index}/{provider_id}/{benchmark_id}/`.\nLogs are fetched on demand from the active runtime. Distinct from `logs_path` on\nbenchmark results, which refers to adapter-written artifact files.\n",
         "operationId": "get_evaluations_jobs_id_logs",
         "parameters": [
           {
@@ -994,40 +994,14 @@
           "200": {
             "description": "Successful Response",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EvaluationJobLogs"
-                },
-                "examples": {
-                  "response": {
-                    "summary": "Logs for a completed evaluation job",
-                    "value": {
-                      "job_id": "a1b2c3d4-5678-9abc-def0-1234567890ab",
-                      "available": true,
-                      "streams": [
-                        {
-                          "benchmark_index": 0,
-                          "benchmark_id": "arc_easy",
-                          "provider_id": "lm_evaluation_harness",
-                          "pod": "a1b2c3d4-405ef22a-abc12",
-                          "container": "adapter",
-                          "truncated": false,
-                          "byte_count": 128,
-                          "content": "INFO starting evaluation\nINFO benchmark completed\n"
-                        }
-                      ]
-                    }
-                  }
-                }
-              },
               "text/plain": {
                 "schema": {
                   "type": "string"
                 },
                 "examples": {
                   "response": {
-                    "summary": "Plain-text logs",
-                    "value": "=== pod=a1b2c3d4-405ef22a-abc12 container=adapter benchmark_index=0 benchmark_id=arc_easy ===\nINFO starting evaluation\nINFO benchmark completed\n"
+                    "summary": "Plain-text logs for all benchmarks in a job",
+                    "value": "=== pod=a1b2c3d4-405ef22a-abc12 container=adapter benchmark_id=arc_easy ===\nINFO starting evaluation\nINFO benchmark completed\n"
                   }
                 }
               }
@@ -1054,7 +1028,7 @@
           "Evaluations"
         ],
         "summary": "Get Evaluation Benchmark Logs",
-        "description": "Returns workload logs for a single benchmark within an evaluation job.\n\n**Kubernetes runtime:** adapter container stdout/stderr via the Kubernetes API.\n**Local runtime:** contents of the benchmark's `jobrun.log` file. See\n`GET /api/v1/evaluations/jobs/{id}/logs` for query parameters and response formats.\n",
+        "description": "Returns plain-text workload logs for a single benchmark within an evaluation job.\nThe benchmark is identified by `benchmark_index` in the request path.\n\n**Kubernetes runtime:** adapter container stdout/stderr via the Kubernetes API.\n**Local runtime:** contents of the benchmark's `jobrun.log` file. See\n`GET /api/v1/evaluations/jobs/{id}/logs` for shared query parameters.\n",
         "operationId": "get_evaluations_jobs_id_benchmarks_benchmark_index_logs",
         "parameters": [
           {
@@ -1123,14 +1097,15 @@
           "200": {
             "description": "Successful Response",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EvaluationBenchmarkJobLogs"
-                }
-              },
               "text/plain": {
                 "schema": {
                   "type": "string"
+                },
+                "examples": {
+                  "response": {
+                    "summary": "Plain-text logs for one benchmark",
+                    "value": "INFO starting evaluation\nINFO benchmark completed\n"
+                  }
                 }
               }
             }
@@ -3919,111 +3894,6 @@
             "$ref": "#/components/schemas/BenchmarkStatusEvent"
           }
         }
-      },
-      "LogStream": {
-        "type": "object",
-        "description": "Log output for one benchmark workload stream.\n\n**Kubernetes runtime:** one stream per benchmark from the adapter container.\n`pod` is the Kubernetes pod name; `container` is always `adapter`.\n\n**Local runtime:** one stream per benchmark, read from the local `jobrun.log` file\n(`/tmp/evalhub-jobs/{job_id}/{benchmark_index}/{provider_id}/{benchmark_id}/jobrun.log`).\n`pod` and `container` are always present with synthetic values (`pod` =\n`{job_id}-{benchmark_index}`, `container` = `local`) so clients can use the same\nresponse shape in both runtimes.\n",
-        "properties": {
-          "benchmark_index": {
-            "type": "integer",
-            "description": "Benchmark index in the evaluation job request"
-          },
-          "benchmark_id": {
-            "type": "string",
-            "description": "Benchmark ID"
-          },
-          "provider_id": {
-            "type": "string",
-            "description": "Provider ID"
-          },
-          "pod": {
-            "type": "string",
-            "description": "Kubernetes pod name in cluster mode. In local mode, a synthetic stream\nidentifier `{job_id}-{benchmark_index}` (not a Kubernetes pod).\n"
-          },
-          "container": {
-            "type": "string",
-            "description": "Container name within the pod in cluster mode; always `adapter`. In local\nmode, always `local` (the captured subprocess log file, not a container).\n"
-          },
-          "truncated": {
-            "type": "boolean",
-            "description": "Whether the log content was truncated by server limits"
-          },
-          "byte_count": {
-            "type": "integer",
-            "description": "Number of bytes returned in content"
-          },
-          "content": {
-            "type": "string",
-            "description": "Log text. Kubernetes runtime returns container stdout/stderr. Local runtime\nreturns the contents of `jobrun.log`.\n"
-          },
-          "error": {
-            "type": "string",
-            "description": "Error message when log retrieval failed for this stream"
-          }
-        }
-      },
-      "EvaluationJobLogs": {
-        "type": "object",
-        "description": "Workload logs for an evaluation job",
-        "required": [
-          "job_id",
-          "available",
-          "streams"
-        ],
-        "properties": {
-          "job_id": {
-            "type": "string",
-            "description": "Evaluation job ID"
-          },
-          "benchmark_index": {
-            "type": "integer",
-            "description": "Omitted when logs are returned for all benchmarks (`GET .../jobs/{id}/logs`)"
-          },
-          "available": {
-            "type": "boolean",
-            "description": "Whether any workload logs could be retrieved"
-          },
-          "message": {
-            "type": "string",
-            "description": "Human-readable detail when logs are unavailable or partially available"
-          },
-          "streams": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/LogStream"
-            },
-            "description": "Log streams for the job. Kubernetes runtimes return one adapter container\nstream per benchmark. Local runtimes return one stream per benchmark from\n`jobrun.log`.\n"
-          }
-        }
-      },
-      "EvaluationBenchmarkJobLogs": {
-        "type": "object",
-        "description": "Workload logs for a single benchmark within an evaluation job",
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/EvaluationJobLogs"
-          },
-          {
-            "type": "object",
-            "required": [
-              "benchmark_index"
-            ],
-            "properties": {
-              "benchmark_index": {
-                "type": "integer",
-                "description": "Benchmark index from the request path; always present in this response"
-              },
-              "streams": {
-                "type": "array",
-                "maxItems": 1,
-                "items": {
-                  "$ref": "#/components/schemas/LogStream"
-                },
-                "description": "Log stream for this benchmark. At most one adapter container stream.\nEmpty when no logs could be retrieved.\n"
-              }
-            }
-          }
-        ]
       },
       "AgentMetadata": {
         "type": "object",

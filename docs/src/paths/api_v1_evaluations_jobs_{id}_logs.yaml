@@ -3,17 +3,13 @@ get:
     - Evaluations
   summary: Get Evaluation Job Logs
   description: |
-    Returns workload logs for all benchmarks in an evaluation job.
+    Returns plain-text workload logs for all benchmarks in an evaluation job.
 
     **Kubernetes runtime:** adapter container stdout/stderr via the Kubernetes API.
     **Local runtime:** contents of each benchmark's `jobrun.log` file under
     `/tmp/evalhub-jobs/{job_id}/{benchmark_index}/{provider_id}/{benchmark_id}/`.
-    Logs are fetched on demand from the active runtime. Responses use the same JSON
-    shape in both modes (`pod` and `container` are synthetic in local mode; see
-    `LogStream`). Distinct from `logs_path` on benchmark results, which refers to
-    adapter-written artifact files.
-
-    Use `Accept: text/plain` for concatenated plain-text output suitable for CLI use.
+    Logs are fetched on demand from the active runtime. Distinct from `logs_path` on
+    benchmark results, which refers to adapter-written artifact files.
   operationId: get_evaluations_jobs_id_logs
   parameters:
     - name: id
@@ -56,34 +52,14 @@ get:
     '200':
       description: Successful Response
       content:
-        application/json:
-          schema:
-            $ref: ../components/schemas/EvaluationJobLogs.yaml
-          examples:
-            response:
-              summary: Logs for a completed evaluation job
-              value:
-                job_id: a1b2c3d4-5678-9abc-def0-1234567890ab
-                available: true
-                streams:
-                  - benchmark_index: 0
-                    benchmark_id: arc_easy
-                    provider_id: lm_evaluation_harness
-                    pod: a1b2c3d4-405ef22a-abc12
-                    container: adapter
-                    truncated: false
-                    byte_count: 128
-                    content: |
-                      INFO starting evaluation
-                      INFO benchmark completed
         text/plain:
           schema:
             type: string
           examples:
             response:
-              summary: Plain-text logs
+              summary: Plain-text logs for all benchmarks in a job
               value: |
-                === pod=a1b2c3d4-405ef22a-abc12 container=adapter benchmark_index=0 benchmark_id=arc_easy ===
+                === pod=a1b2c3d4-405ef22a-abc12 container=adapter benchmark_id=arc_easy ===
                 INFO starting evaluation
                 INFO benchmark completed
     '400':

@@ -637,17 +637,13 @@ paths:
         - Evaluations
       summary: Get Evaluation Job Logs
       description: |
-        Returns workload logs for all benchmarks in an evaluation job.
+        Returns plain-text workload logs for all benchmarks in an evaluation job.
 
         **Kubernetes runtime:** adapter container stdout/stderr via the Kubernetes API.
         **Local runtime:** contents of each benchmark's `jobrun.log` file under
         `/tmp/evalhub-jobs/{job_id}/{benchmark_index}/{provider_id}/{benchmark_id}/`.
-        Logs are fetched on demand from the active runtime. Responses use the same JSON
-        shape in both modes (`pod` and `container` are synthetic in local mode; see
-        `LogStream`). Distinct from `logs_path` on benchmark results, which refers to
-        adapter-written artifact files.
-
-        Use `Accept: text/plain` for concatenated plain-text output suitable for CLI use.
+        Logs are fetched on demand from the active runtime. Distinct from `logs_path` on
+        benchmark results, which refers to adapter-written artifact files.
       operationId: get_evaluations_jobs_id_logs
       parameters:
         - name: id
@@ -690,34 +686,14 @@ paths:
         '200':
           description: Successful Response
           content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/EvaluationJobLogs'
-              examples:
-                response:
-                  summary: Logs for a completed evaluation job
-                  value:
-                    job_id: a1b2c3d4-5678-9abc-def0-1234567890ab
-                    available: true
-                    streams:
-                      - benchmark_index: 0
-                        benchmark_id: arc_easy
-                        provider_id: lm_evaluation_harness
-                        pod: a1b2c3d4-405ef22a-abc12
-                        container: adapter
-                        truncated: false
-                        byte_count: 128
-                        content: |
-                          INFO starting evaluation
-                          INFO benchmark completed
             text/plain:
               schema:
                 type: string
               examples:
                 response:
-                  summary: Plain-text logs
+                  summary: Plain-text logs for all benchmarks in a job
                   value: |
-                    === pod=a1b2c3d4-405ef22a-abc12 container=adapter benchmark_index=0 benchmark_id=arc_easy ===
+                    === pod=a1b2c3d4-405ef22a-abc12 container=adapter benchmark_id=arc_easy ===
                     INFO starting evaluation
                     INFO benchmark completed
         '400':
@@ -734,11 +710,12 @@ paths:
         - Evaluations
       summary: Get Evaluation Benchmark Logs
       description: |
-        Returns workload logs for a single benchmark within an evaluation job.
+        Returns plain-text workload logs for a single benchmark within an evaluation job.
+        The benchmark is identified by `benchmark_index` in the request path.
 
         **Kubernetes runtime:** adapter container stdout/stderr via the Kubernetes API.
         **Local runtime:** contents of the benchmark's `jobrun.log` file. See
-        `GET /api/v1/evaluations/jobs/{id}/logs` for query parameters and response formats.
+        `GET /api/v1/evaluations/jobs/{id}/logs` for shared query parameters.
       operationId: get_evaluations_jobs_id_benchmarks_benchmark_index_logs
       parameters:
         - name: id
@@ -788,12 +765,15 @@ paths:
         '200':
           description: Successful Response
           content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/EvaluationBenchmarkJobLogs'
             text/plain:
               schema:
                 type: string
+              examples:
+                response:
+                  summary: Plain-text logs for one benchmark
+                  value: |
+                    INFO starting evaluation
+                    INFO benchmark completed
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -2795,101 +2775,6 @@ components:
       properties:
         benchmark_status_event:
           $ref: '#/components/schemas/BenchmarkStatusEvent'
-    LogStream:
-      type: object
-      description: |
-        Log output for one benchmark workload stream.
-
-        **Kubernetes runtime:** one stream per benchmark from the adapter container.
-        `pod` is the Kubernetes pod name; `container` is always `adapter`.
-
-        **Local runtime:** one stream per benchmark, read from the local `jobrun.log` file
-        (`/tmp/evalhub-jobs/{job_id}/{benchmark_index}/{provider_id}/{benchmark_id}/jobrun.log`).
-        `pod` and `container` are always present with synthetic values (`pod` =
-        `{job_id}-{benchmark_index}`, `container` = `local`) so clients can use the same
-        response shape in both runtimes.
-      properties:
-        benchmark_index:
-          type: integer
-          description: Benchmark index in the evaluation job request
-        benchmark_id:
-          type: string
-          description: Benchmark ID
-        provider_id:
-          type: string
-          description: Provider ID
-        pod:
-          type: string
-          description: |
-            Kubernetes pod name in cluster mode. In local mode, a synthetic stream
-            identifier `{job_id}-{benchmark_index}` (not a Kubernetes pod).
-        container:
-          type: string
-          description: |
-            Container name within the pod in cluster mode; always `adapter`. In local
-            mode, always `local` (the captured subprocess log file, not a container).
-        truncated:
-          type: boolean
-          description: Whether the log content was truncated by server limits
-        byte_count:
-          type: integer
-          description: Number of bytes returned in content
-        content:
-          type: string
-          description: |
-            Log text. Kubernetes runtime returns container stdout/stderr. Local runtime
-            returns the contents of `jobrun.log`.
-        error:
-          type: string
-          description: Error message when log retrieval failed for this stream
-    EvaluationJobLogs:
-      type: object
-      description: Workload logs for an evaluation job
-      required:
-        - job_id
-        - available
-        - streams
-      properties:
-        job_id:
-          type: string
-          description: Evaluation job ID
-        benchmark_index:
-          type: integer
-          description: Omitted when logs are returned for all benchmarks (`GET .../jobs/{id}/logs`)
-        available:
-          type: boolean
-          description: Whether any workload logs could be retrieved
-        message:
-          type: string
-          description: Human-readable detail when logs are unavailable or partially available
-        streams:
-          type: array
-          items:
-            $ref: '#/components/schemas/LogStream'
-          description: |
-            Log streams for the job. Kubernetes runtimes return one adapter container
-            stream per benchmark. Local runtimes return one stream per benchmark from
-            `jobrun.log`.
-    EvaluationBenchmarkJobLogs:
-      type: object
-      description: Workload logs for a single benchmark within an evaluation job
-      allOf:
-        - $ref: '#/components/schemas/EvaluationJobLogs'
-        - type: object
-          required:
-            - benchmark_index
-          properties:
-            benchmark_index:
-              type: integer
-              description: Benchmark index from the request path; always present in this response
-            streams:
-              type: array
-              maxItems: 1
-              items:
-                $ref: '#/components/schemas/LogStream'
-              description: |
-                Log stream for this benchmark. At most one adapter container stream.
-                Empty when no logs could be retrieved.
     AgentMetadata:
       type: object
       description: Metadata for AI agent discoverability and operational guidance
