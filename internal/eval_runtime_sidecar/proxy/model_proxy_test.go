@@ -483,6 +483,34 @@ func TestModelProxyTokenSuffixUsesExplicitValueWhenNonEmpty(t *testing.T) {
 	}
 }
 
+// TestModelProxyReturns400OnURLKeyRef verifies that a *_url:ref Bearer token is rejected
+// with 400. URL keys are routing hints — not credentials — and must never be forwarded
+// as bearer tokens even if the key exists in the secret cache.
+func TestModelProxyReturns400OnURLKeyRef(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	secretDir := t.TempDir()
+	// kfp_url is present in cache — proxy must still reject it as a ref token.
+	if err := os.WriteFile(filepath.Join(secretDir, "kfp_url"), []byte(upstream.URL), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	target, _ := url.Parse(upstream.URL)
+	rp := NewModelReverseProxy(target, &http.Client{}, slog.New(slog.NewTextHandler(io.Discard, nil)), secretDir, "")
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/completions", nil)
+	req.Header.Set("Authorization", "Bearer kfp_url:ref")
+	rr := httptest.NewRecorder()
+	rp.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for _url ref key, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 // TestModelProxyTokenSuffixReturns400WhenEmptyAndNoSAToken verifies that when kfp_token is
 // empty and no SA token is available, the proxy returns 400 rather than forwarding.
 func TestModelProxyTokenSuffixReturns400WhenEmptyAndNoSAToken(t *testing.T) {

@@ -25,6 +25,7 @@ const modelRefSuffix = ":ref"
 // this is the mechanism for KFP and other SA-token-authenticated in-cluster services.
 // _url holds the real upstream URL for the corresponding prefix.
 const (
+	modelSingleAPIKey = "api-key"
 	modelAPIKeySuffix = "_api-key"
 	modelTokenSuffix  = "_token"
 	modelURLSuffix    = "_url"
@@ -231,6 +232,15 @@ func loadSecretCache(mountPath string, logger *slog.Logger) map[string]string {
 	return cache
 }
 
+// isCredentialKey reports whether key is a valid credential ref key.
+// Only "api-key", *_api-key, and *_token keys may appear as Bearer ref tokens.
+// _url and other keys are not credentials and must not be forwarded as tokens.
+func isCredentialKey(key string) bool {
+	return key == modelSingleAPIKey ||
+		strings.HasSuffix(key, modelAPIKeySuffix) ||
+		strings.HasSuffix(key, modelTokenSuffix)
+}
+
 // resolveModelCredential resolves a Bearer ref token to a (upstream URL, credential) pair
 // using the pre-loaded in-memory secret cache.
 //
@@ -239,12 +249,21 @@ func loadSecretCache(mountPath string, logger *slog.Logger) map[string]string {
 //   - "*_token:ref"   → when secret value is empty, the SA token from saTokenPath is injected
 //     instead (KFP path); upstream URL from *_url.
 //   - "api-key:ref"   → single-model shorthand; always uses defaultTarget.
+//
+// Any other key suffix (e.g. *_url) is rejected with an error — non-credential
+// keys must not be forwarded as bearer tokens.
 func resolveModelCredential(logger *slog.Logger, authHeader string, secretCache map[string]string, defaultTarget *url.URL, saTokenPath string) (*url.URL, string, error) {
 	token := strings.TrimPrefix(authHeader, "Bearer ")
 	key := strings.TrimSuffix(token, modelRefSuffix)
 
 	if key == "" || strings.ContainsAny(key, "/\\") {
 		return nil, "", fmt.Errorf("model ref token has invalid key %q", key)
+	}
+
+	// Reject non-credential key suffixes early — _url and any unknown suffixes
+	// must not be resolved as bearer tokens.
+	if !isCredentialKey(key) {
+		return nil, "", fmt.Errorf("ref key %q is not a credential key (must be api-key, *_api-key, or *_token)", key)
 	}
 
 	secretValue, ok := secretCache[key]
@@ -270,7 +289,7 @@ func resolveModelCredential(logger *slog.Logger, authHeader string, secretCache 
 			logger.Info("Injected SA token for _token credential", "key", key)
 		}
 	default:
-		// _api-key and bare keys: value must be non-empty.
+		// api-key and *_api-key: value must be non-empty.
 		if secretValue == "" {
 			return nil, "", fmt.Errorf("credential for key %q is empty", key)
 		}
