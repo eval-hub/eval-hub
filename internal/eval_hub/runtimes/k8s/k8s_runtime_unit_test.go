@@ -363,7 +363,7 @@ func TestBuildInternalModelRefSecretWithTokenSuffix(t *testing.T) {
 	// _token keys (e.g. kfp_token) must become <key>:ref in the internalModelRef secret
 	// so the adapter can send "Authorization: Bearer kfp_token:ref" and the sidecar resolves it.
 	data := map[string][]byte{
-		"kfp_token": []byte(""),               // intentionally empty — SA token injected at runtime
+		"kfp_token": []byte(""), // intentionally empty — SA token injected at runtime
 		"kfp_url":   []byte("https://kfp-svc"),
 	}
 	clientset := fake.NewClientset()
