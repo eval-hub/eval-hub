@@ -3,6 +3,8 @@ package shared
 import (
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -51,6 +53,26 @@ func TestTailFileLines(t *testing.T) {
 		}
 		if got != "line3\nline4" {
 			t.Fatalf("got %q, want %q", got, "line3\nline4")
+		}
+	})
+
+	t.Run("returns last n lines from large file", func(t *testing.T) {
+		largePath := filepath.Join(dir, "large.log")
+		var b strings.Builder
+		for i := 1; i <= 1000; i++ {
+			b.WriteString("line")
+			b.WriteString(strconv.Itoa(i))
+			b.WriteByte('\n')
+		}
+		if err := os.WriteFile(largePath, []byte(b.String()), 0644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+		got, err := TailFileLines(largePath, 3)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "line998\nline999\nline1000" {
+			t.Fatalf("got %q, want last 3 lines", got)
 		}
 	})
 }

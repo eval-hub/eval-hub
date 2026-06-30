@@ -18,8 +18,11 @@ import (
 )
 
 type logsRuntime struct {
-	logs string
-	err  error
+	logs                   string
+	err                    error
+	getLogsCalled          bool
+	capturedBenchmarkIndex *int
+	capturedOpts           api.EvaluationLogOptions
 }
 
 func (r *logsRuntime) WithLogger(_ *slog.Logger) abstractions.Runtime { return r }
@@ -38,9 +41,12 @@ func (r *logsRuntime) DeleteEvaluationJobResources(_ *api.EvaluationJobResource)
 func (r *logsRuntime) GetEvaluationLogs(
 	_ *api.EvaluationJobResource,
 	_ []api.EvaluationBenchmarkConfig,
-	_ *int,
-	_ api.EvaluationLogOptions,
+	benchmarkIndex *int,
+	opts api.EvaluationLogOptions,
 ) (string, error) {
+	r.getLogsCalled = true
+	r.capturedBenchmarkIndex = benchmarkIndex
+	r.capturedOpts = opts
 	if r.err != nil {
 		return "", r.err
 	}
@@ -66,6 +72,7 @@ func (r *logsRequest) Query(key string) []string {
 
 func TestHandleGetEvaluationJobLogs(t *testing.T) {
 	jobID := "job-logs"
+	runtime := &logsRuntime{logs: "hello logs"}
 	storage := &fakeStorage{
 		job: &api.EvaluationJobResource{
 			Resource: api.EvaluationResource{
@@ -78,13 +85,19 @@ func TestHandleGetEvaluationJobLogs(t *testing.T) {
 			},
 		},
 	}
-	h := handlers.New(storage, validation.NewValidator(), &logsRuntime{logs: "hello logs"}, nil, nil)
+	h := handlers.New(storage, validation.NewValidator(), runtime, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 	req := &logsRequest{
 		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
 		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+		queryValues: map[string][]string{
+			"tail_lines":    {"500"},
+			"timestamps":    {"true"},
+			"previous":      {"true"},
+			"since_seconds": {"120"},
+		},
 	}
 
 	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
@@ -98,10 +111,29 @@ func TestHandleGetEvaluationJobLogs(t *testing.T) {
 	if body := strings.TrimSpace(rec.Body.String()); body != "hello logs" {
 		t.Fatalf("body = %q, want %q", body, "hello logs")
 	}
+	if !runtime.getLogsCalled {
+		t.Fatal("expected GetEvaluationLogs to be called")
+	}
+	if runtime.capturedBenchmarkIndex != nil {
+		t.Fatalf("benchmark index = %v, want nil", runtime.capturedBenchmarkIndex)
+	}
+	if runtime.capturedOpts.TailLines != 500 {
+		t.Fatalf("tail_lines = %d, want 500", runtime.capturedOpts.TailLines)
+	}
+	if !runtime.capturedOpts.Timestamps {
+		t.Fatal("expected timestamps=true")
+	}
+	if !runtime.capturedOpts.Previous {
+		t.Fatal("expected previous=true")
+	}
+	if runtime.capturedOpts.SinceSeconds == nil || *runtime.capturedOpts.SinceSeconds != 120 {
+		t.Fatalf("since_seconds = %v, want 120", runtime.capturedOpts.SinceSeconds)
+	}
 }
 
 func TestHandleGetEvaluationBenchmarkLogs(t *testing.T) {
 	jobID := "job-logs-bench"
+	runtime := &logsRuntime{logs: "bench log"}
 	storage := &fakeStorage{
 		job: &api.EvaluationJobResource{
 			Resource: api.EvaluationResource{
@@ -114,7 +146,7 @@ func TestHandleGetEvaluationBenchmarkLogs(t *testing.T) {
 			},
 		},
 	}
-	h := handlers.New(storage, validation.NewValidator(), &logsRuntime{logs: "bench log"}, nil, nil)
+	h := handlers.New(storage, validation.NewValidator(), runtime, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-2", logger, "test-user", "test-tenant")
@@ -123,6 +155,9 @@ func TestHandleGetEvaluationBenchmarkLogs(t *testing.T) {
 		pathValues: map[string]string{
 			constants.PATH_PARAMETER_JOB_ID:          jobID,
 			constants.PATH_PARAMETER_BENCHMARK_INDEX: "0",
+		},
+		queryValues: map[string][]string{
+			"tail_lines": {"250"},
 		},
 	}
 
@@ -133,6 +168,15 @@ func TestHandleGetEvaluationBenchmarkLogs(t *testing.T) {
 	}
 	if body := strings.TrimSpace(rec.Body.String()); body != "bench log" {
 		t.Fatalf("body = %q, want %q", body, "bench log")
+	}
+	if runtime.capturedBenchmarkIndex == nil || *runtime.capturedBenchmarkIndex != 0 {
+		t.Fatalf("benchmark index = %v, want 0", runtime.capturedBenchmarkIndex)
+	}
+	if runtime.capturedOpts.TailLines != 250 {
+		t.Fatalf("tail_lines = %d, want 250", runtime.capturedOpts.TailLines)
+	}
+	if runtime.capturedOpts.SinceSeconds != nil {
+		t.Fatalf("since_seconds = %v, want nil", runtime.capturedOpts.SinceSeconds)
 	}
 }
 
@@ -150,7 +194,8 @@ func TestHandleGetEvaluationJobLogsRejectsInvalidTailLines(t *testing.T) {
 			},
 		},
 	}
-	h := handlers.New(storage, validation.NewValidator(), &logsRuntime{logs: "ignored"}, nil, nil)
+	runtime := &logsRuntime{logs: "ignored"}
+	h := handlers.New(storage, validation.NewValidator(), runtime, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-3", logger, "test-user", "test-tenant")
@@ -164,5 +209,43 @@ func TestHandleGetEvaluationJobLogsRejectsInvalidTailLines(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	if runtime.getLogsCalled {
+		t.Fatal("expected GetEvaluationLogs not to be called")
+	}
+}
+
+func TestHandleGetEvaluationJobLogsRejectsEmptySinceSeconds(t *testing.T) {
+	jobID := "job-logs-empty-since"
+	storage := &fakeStorage{
+		job: &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{ID: jobID},
+			},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Benchmarks: []api.EvaluationBenchmarkConfig{
+					{Ref: api.Ref{ID: "bench-1"}, ProviderID: "provider-1"},
+				},
+			},
+		},
+	}
+	runtime := &logsRuntime{logs: "ignored"}
+	h := handlers.New(storage, validation.NewValidator(), runtime, nil, nil)
+	rec := httptest.NewRecorder()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-4", logger, "test-user", "test-tenant")
+	req := &logsRequest{
+		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs?since_seconds="),
+		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+		queryValues: map[string][]string{"since_seconds": {""}},
+	}
+
+	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	if runtime.getLogsCalled {
+		t.Fatal("expected GetEvaluationLogs not to be called")
 	}
 }

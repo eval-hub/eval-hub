@@ -135,7 +135,7 @@ func parseEvaluationLogOptions(req http_wrappers.RequestWrapper) (api.Evaluation
 	}
 
 	rawSince := req.Query("since_seconds")
-	if len(rawSince) > 0 && rawSince[0] != "" {
+	if len(rawSince) > 0 {
 		sinceSeconds, err := GetParam(req, "since_seconds", false, 0)
 		if err != nil {
 			return api.EvaluationLogOptions{}, err
