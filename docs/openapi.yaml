@@ -510,12 +510,15 @@ paths:
         - Evaluations
       summary: Get Evaluation Job Logs
       description: |
-        Returns Kubernetes workload logs for all benchmarks in an evaluation job.
+        Returns workload logs for all benchmarks in an evaluation job.
 
-        Logs are fetched on demand from the active runtime (Kubernetes API in cluster mode,
-        local `jobrun.log` files in local mode). This endpoint returns adapter container
-        stdout/stderr only and is distinct from `logs_path` on benchmark results, which
-        refers to adapter-written artifact files inside the job pod.
+        **Kubernetes runtime:** adapter container stdout/stderr via the Kubernetes API.
+        **Local runtime:** contents of each benchmark's `jobrun.log` file under
+        `/tmp/evalhub-jobs/{job_id}/{benchmark_index}/{provider_id}/{benchmark_id}/`.
+        Logs are fetched on demand from the active runtime. Responses use the same JSON
+        shape in both modes (`pod` and `container` are synthetic in local mode; see
+        `LogStream`). Distinct from `logs_path` on benchmark results, which refers to
+        adapter-written artifact files.
 
         Use `Accept: text/plain` for concatenated plain-text output suitable for CLI use.
       operationId: get_evaluations_jobs_id_logs
@@ -604,9 +607,11 @@ paths:
         - Evaluations
       summary: Get Evaluation Benchmark Logs
       description: |
-        Returns adapter container workload logs for a single benchmark within an evaluation job.
+        Returns workload logs for a single benchmark within an evaluation job.
 
-        See `GET /api/v1/evaluations/jobs/{id}/logs` for query parameters and response formats.
+        **Kubernetes runtime:** adapter container stdout/stderr via the Kubernetes API.
+        **Local runtime:** contents of the benchmark's `jobrun.log` file. See
+        `GET /api/v1/evaluations/jobs/{id}/logs` for query parameters and response formats.
       operationId: get_evaluations_jobs_id_benchmarks_benchmark_index_logs
       parameters:
         - name: id

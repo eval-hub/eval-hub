@@ -3,9 +3,11 @@ get:
     - Evaluations
   summary: Get Evaluation Benchmark Logs
   description: |
-    Returns adapter container workload logs for a single benchmark within an evaluation job.
+    Returns workload logs for a single benchmark within an evaluation job.
 
-    See `GET /api/v1/evaluations/jobs/{id}/logs` for query parameters and response formats.
+    **Kubernetes runtime:** adapter container stdout/stderr via the Kubernetes API.
+    **Local runtime:** contents of the benchmark's `jobrun.log` file. See
+    `GET /api/v1/evaluations/jobs/{id}/logs` for query parameters and response formats.
   operationId: get_evaluations_jobs_id_benchmarks_benchmark_index_logs
   parameters:
     - name: id

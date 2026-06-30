@@ -747,7 +747,7 @@
           "Evaluations"
         ],
         "summary": "Get Evaluation Job Logs",
-        "description": "Returns Kubernetes workload logs for all benchmarks in an evaluation job.\n\nLogs are fetched on demand from the active runtime (Kubernetes API in cluster mode,\nlocal `jobrun.log` files in local mode). This endpoint returns adapter container\nstdout/stderr only and is distinct from `logs_path` on benchmark results, which\nrefers to adapter-written artifact files inside the job pod.\n\nUse `Accept: text/plain` for concatenated plain-text output suitable for CLI use.\n",
+        "description": "Returns workload logs for all benchmarks in an evaluation job.\n\n**Kubernetes runtime:** adapter container stdout/stderr via the Kubernetes API.\n**Local runtime:** contents of each benchmark's `jobrun.log` file under\n`/tmp/evalhub-jobs/{job_id}/{benchmark_index}/{provider_id}/{benchmark_id}/`.\nLogs are fetched on demand from the active runtime. Responses use the same JSON\nshape in both modes (`pod` and `container` are synthetic in local mode; see\n`LogStream`). Distinct from `logs_path` on benchmark results, which refers to\nadapter-written artifact files.\n\nUse `Accept: text/plain` for concatenated plain-text output suitable for CLI use.\n",
         "operationId": "get_evaluations_jobs_id_logs",
         "parameters": [
           {
@@ -866,7 +866,7 @@
           "Evaluations"
         ],
         "summary": "Get Evaluation Benchmark Logs",
-        "description": "Returns adapter container workload logs for a single benchmark within an evaluation job.\n\nSee `GET /api/v1/evaluations/jobs/{id}/logs` for query parameters and response formats.\n",
+        "description": "Returns workload logs for a single benchmark within an evaluation job.\n\n**Kubernetes runtime:** adapter container stdout/stderr via the Kubernetes API.\n**Local runtime:** contents of the benchmark's `jobrun.log` file. See\n`GET /api/v1/evaluations/jobs/{id}/logs` for query parameters and response formats.\n",
         "operationId": "get_evaluations_jobs_id_benchmarks_benchmark_index_logs",
         "parameters": [
           {
