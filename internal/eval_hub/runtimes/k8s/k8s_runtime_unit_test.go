@@ -345,8 +345,9 @@ func TestIsModelCredentialKey(t *testing.T) {
 		{"api-key", true},
 		{"model-1_api-key", true},
 		{"model-1_url", true},
-		{"kfp_token", true},
-		{"svc_token", true},
+		{"kfp_sa_token", true},
+		{"svc_sa_token", true},
+		{"kfp_token", false},
 		{"hf-token", false},
 		{"ca_cert", false},
 		{"some-other-key", false},
@@ -359,12 +360,12 @@ func TestIsModelCredentialKey(t *testing.T) {
 	}
 }
 
-func TestBuildInternalModelRefSecretWithTokenSuffix(t *testing.T) {
-	// _token keys (e.g. kfp_token) must become <key>:ref in the internalModelRef secret
-	// so the adapter can send "Authorization: Bearer kfp_token:ref" and the sidecar resolves it.
+func TestBuildInternalModelRefSecretWithSATokenSuffix(t *testing.T) {
+	// _sa_token keys (e.g. kfp_sa_token) must become <key>:ref in the internalModelRef secret
+	// so the adapter can send "Authorization: Bearer kfp_sa_token:ref" and the sidecar resolves it.
 	data := map[string][]byte{
-		"kfp_token": []byte(""), // intentionally empty — SA token injected at runtime
-		"kfp_url":   []byte("https://kfp-svc"),
+		"kfp_sa_token": []byte(""), // intentionally empty — SA token injected at runtime
+		"kfp_url":      []byte("https://kfp-svc"),
 	}
 	clientset := fake.NewClientset()
 	helper := &KubernetesHelper{clientset: clientset}
@@ -375,8 +376,8 @@ func TestBuildInternalModelRefSecretWithTokenSuffix(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if got := string(secret.Data["kfp_token"]); got != "kfp_token:ref" {
-		t.Errorf("kfp_token: want %q, got %q", "kfp_token:ref", got)
+	if got := string(secret.Data["kfp_sa_token"]); got != "kfp_sa_token:ref" {
+		t.Errorf("kfp_sa_token: want %q, got %q", "kfp_sa_token:ref", got)
 	}
 	if got := string(secret.Data["kfp_url"]); got != sidecarURL {
 		t.Errorf("kfp_url: want %q, got %q", sidecarURL, got)

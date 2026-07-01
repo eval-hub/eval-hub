@@ -397,9 +397,9 @@ func TestModelProxySATokenNotInjectedWhenAuthPresent(t *testing.T) {
 	}
 }
 
-// TestModelProxyTokenSuffixInjectsSATokenWhenEmpty verifies the KFP path:
-// secret has "kfp_token: """ (empty) — sidecar injects the SA token and routes to kfp_url.
-func TestModelProxyTokenSuffixInjectsSATokenWhenEmpty(t *testing.T) {
+// TestModelProxySATokenSuffixInjectsSATokenWhenEmpty verifies the KFP path:
+// secret has "kfp_sa_token: """ (empty) — sidecar injects the SA token and routes to kfp_url.
+func TestModelProxySATokenSuffixInjectsSATokenWhenEmpty(t *testing.T) {
 	// Clear the shared SA token cache so we read from the file written by this test.
 	UpdateCachedToken(AuthTokenInput{TargetEndpoint: "model-sa"}, "")
 	var gotAuth, gotHost string
@@ -428,15 +428,15 @@ func TestModelProxyTokenSuffixInjectsSATokenWhenEmpty(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// kfp_token is intentionally empty — SA token should be injected.
-	writeFile("kfp_token", "")
+	// kfp_sa_token is intentionally empty — SA token should be injected.
+	writeFile("kfp_sa_token", "")
 	writeFile("kfp_url", kfpUpstream.URL)
 
 	defaultTarget, _ := url.Parse(defaultUpstream.URL)
 	rp := NewModelReverseProxy(defaultTarget, &http.Client{}, slog.New(slog.NewTextHandler(io.Discard, nil)), secretDir, saTokenPath)
 
 	req := httptest.NewRequest(http.MethodGet, "/apis/v1beta1/runs", nil)
-	req.Header.Set("Authorization", "Bearer kfp_token:ref")
+	req.Header.Set("Authorization", "Bearer kfp_sa_token:ref")
 	rr := httptest.NewRecorder()
 	rp.ServeHTTP(rr, req)
 
@@ -452,9 +452,9 @@ func TestModelProxyTokenSuffixInjectsSATokenWhenEmpty(t *testing.T) {
 	}
 }
 
-// TestModelProxyTokenSuffixUsesExplicitValueWhenNonEmpty verifies that when kfp_token has a
+// TestModelProxySATokenSuffixUsesExplicitValueWhenNonEmpty verifies that when kfp_sa_token has a
 // non-empty value (e.g. a user-provided JWT), it is forwarded as-is without SA injection.
-func TestModelProxyTokenSuffixUsesExplicitValueWhenNonEmpty(t *testing.T) {
+func TestModelProxySATokenSuffixUsesExplicitValueWhenNonEmpty(t *testing.T) {
 	var gotAuth string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
@@ -463,7 +463,7 @@ func TestModelProxyTokenSuffixUsesExplicitValueWhenNonEmpty(t *testing.T) {
 	defer upstream.Close()
 
 	secretDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(secretDir, "kfp_token"), []byte("user-provided-jwt"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(secretDir, "kfp_sa_token"), []byte("user-provided-jwt"), 0600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -471,7 +471,7 @@ func TestModelProxyTokenSuffixUsesExplicitValueWhenNonEmpty(t *testing.T) {
 	rp := NewModelReverseProxy(target, &http.Client{}, slog.New(slog.NewTextHandler(io.Discard, nil)), secretDir, "")
 
 	req := httptest.NewRequest(http.MethodGet, "/apis/v1beta1/runs", nil)
-	req.Header.Set("Authorization", "Bearer kfp_token:ref")
+	req.Header.Set("Authorization", "Bearer kfp_sa_token:ref")
 	rr := httptest.NewRecorder()
 	rp.ServeHTTP(rr, req)
 
@@ -511,9 +511,9 @@ func TestModelProxyReturns400OnURLKeyRef(t *testing.T) {
 	}
 }
 
-// TestModelProxyTokenSuffixReturns400WhenEmptyAndNoSAToken verifies that when kfp_token is
+// TestModelProxySATokenSuffixReturns400WhenEmptyAndNoSAToken verifies that when kfp_sa_token is
 // empty and no SA token is available, the proxy returns 400 rather than forwarding.
-func TestModelProxyTokenSuffixReturns400WhenEmptyAndNoSAToken(t *testing.T) {
+func TestModelProxySATokenSuffixReturns400WhenEmptyAndNoSAToken(t *testing.T) {
 	// Clear the shared SA token cache so a stale token from a prior test doesn't mask the error.
 	UpdateCachedToken(AuthTokenInput{TargetEndpoint: "model-sa"}, "")
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -522,7 +522,7 @@ func TestModelProxyTokenSuffixReturns400WhenEmptyAndNoSAToken(t *testing.T) {
 	defer upstream.Close()
 
 	secretDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(secretDir, "kfp_token"), []byte(""), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(secretDir, "kfp_sa_token"), []byte(""), 0600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -531,11 +531,11 @@ func TestModelProxyTokenSuffixReturns400WhenEmptyAndNoSAToken(t *testing.T) {
 	rp := NewModelReverseProxy(target, &http.Client{}, slog.New(slog.NewTextHandler(io.Discard, nil)), secretDir, "")
 
 	req := httptest.NewRequest(http.MethodGet, "/apis/v1beta1/runs", nil)
-	req.Header.Set("Authorization", "Bearer kfp_token:ref")
+	req.Header.Set("Authorization", "Bearer kfp_sa_token:ref")
 	rr := httptest.NewRecorder()
 	rp.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 when _token empty and no SA token, got %d", rr.Code)
+		t.Fatalf("expected 400 when _sa_token empty and no SA token, got %d", rr.Code)
 	}
 }

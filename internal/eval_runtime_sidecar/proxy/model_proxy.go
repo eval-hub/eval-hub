@@ -21,14 +21,14 @@ const modelRefSuffix = ":ref"
 // Key-naming conventions for multi-service secrets.
 //
 // _api-key holds an opaque API key forwarded as-is.
-// _token holds a bearer token; when its value is empty the sidecar injects the pod SA token —
-// this is the mechanism for KFP and other SA-token-authenticated in-cluster services.
+// _sa_token holds a bearer token; when its value is empty the sidecar injects the pod SA token
+// from saTokenPath — this is the mechanism for KFP and other SA-token-authenticated services.
 // _url holds the real upstream URL for the corresponding prefix.
 const (
-	modelSingleAPIKey = "api-key"
-	modelAPIKeySuffix = "_api-key"
-	modelTokenSuffix  = "_token"
-	modelURLSuffix    = "_url"
+	modelSingleAPIKey  = "api-key"
+	modelAPIKeySuffix  = "_api-key"
+	modelSATokenSuffix = "_sa_token"
+	modelURLSuffix     = "_url"
 )
 
 // xModelCredError is an internal sentinel header set by the Director when ref resolution fails.
@@ -59,11 +59,11 @@ func loggerForRequest(logger *slog.Logger, req *http.Request) *slog.Logger {
 // for the pod's lifetime — so per-request file reads are unnecessary.
 //
 // Per-request behaviour:
-//  1. If the Authorization header carries a ref token (e.g. "Bearer kfp_token:ref"):
+//  1. If the Authorization header carries a ref token (e.g. "Bearer kfp_sa_token:ref"):
 //     a. The credential is looked up from the in-memory cache by key name.
 //     b. For *_api-key keys: credential must be non-empty; upstream URL comes from *_url.
-//     c. For *_token keys: when the secret value is empty the SA token from saTokenPath is
-//     injected instead — this is the KFP path (kfp_token: "" in the secret, SA injected).
+//     c. For *_sa_token keys: when the secret value is empty the SA token from saTokenPath is
+//     injected instead — this is the KFP path (kfp_sa_token: "" in the secret, SA injected).
 //     d. The upstream URL is looked up from the cache under *_url for both suffixes;
 //     falls back to defaultTarget when absent.
 //  2. If resolution fails (key not in cache, path traversal, empty _api-key) the proxy
@@ -219,7 +219,7 @@ func loadSecretCache(mountPath string, logger *slog.Logger) map[string]string {
 			logger.Warn("skipping unreadable secret file", "file", e.Name(), "error", err)
 			continue
 		}
-		// Store all values including empty ones: _token keys may legitimately be empty
+		// Store all values including empty ones: _sa_token keys may legitimately be empty
 		// (signals SA token injection), and we need to distinguish "key present, value
 		// empty" from "key absent".
 		cache[e.Name()] = strings.TrimSpace(string(data))
@@ -233,12 +233,12 @@ func loadSecretCache(mountPath string, logger *slog.Logger) map[string]string {
 }
 
 // isCredentialKey reports whether key is a valid credential ref key.
-// Only "api-key", *_api-key, and *_token keys may appear as Bearer ref tokens.
+// Only "api-key", *_api-key, and *_sa_token keys may appear as Bearer ref tokens.
 // _url and other keys are not credentials and must not be forwarded as tokens.
 func isCredentialKey(key string) bool {
 	return key == modelSingleAPIKey ||
 		strings.HasSuffix(key, modelAPIKeySuffix) ||
-		strings.HasSuffix(key, modelTokenSuffix)
+		strings.HasSuffix(key, modelSATokenSuffix)
 }
 
 // resolveModelCredential resolves a Bearer ref token to a (upstream URL, credential) pair
@@ -246,7 +246,7 @@ func isCredentialKey(key string) bool {
 //
 // Key derivation:
 //   - "*_api-key:ref" → credential must be non-empty; upstream URL from *_url.
-//   - "*_token:ref"   → when secret value is empty, the SA token from saTokenPath is injected
+//   - "*_sa_token:ref" → when secret value is empty, the SA token from saTokenPath is injected
 //     instead (KFP path); upstream URL from *_url.
 //   - "api-key:ref"   → single-model shorthand; always uses defaultTarget.
 //
@@ -263,7 +263,7 @@ func resolveModelCredential(logger *slog.Logger, authHeader string, secretCache 
 	// Reject non-credential key suffixes early — _url and any unknown suffixes
 	// must not be resolved as bearer tokens.
 	if !isCredentialKey(key) {
-		return nil, "", fmt.Errorf("ref key %q is not a credential key (must be api-key, *_api-key, or *_token)", key)
+		return nil, "", fmt.Errorf("ref key %q is not a credential key (must be api-key, *_api-key, or *_sa_token)", key)
 	}
 
 	secretValue, ok := secretCache[key]
@@ -274,8 +274,8 @@ func resolveModelCredential(logger *slog.Logger, authHeader string, secretCache 
 
 	var realToken string
 	switch {
-	case strings.HasSuffix(key, modelTokenSuffix):
-		// _token keys: empty value means inject the pod SA token.
+	case strings.HasSuffix(key, modelSATokenSuffix):
+		// _sa_token keys: empty value means inject the pod SA token from saTokenPath.
 		if secretValue != "" {
 			realToken = secretValue
 		} else {
@@ -284,9 +284,9 @@ func resolveModelCredential(logger *slog.Logger, authHeader string, secretCache 
 				AuthTokenPath:  saTokenPath,
 			})
 			if realToken == "" {
-				return nil, "", fmt.Errorf("_token credential for key %q is empty and SA token is unavailable", key)
+				return nil, "", fmt.Errorf("_sa_token credential for key %q is empty and SA token is unavailable", key)
 			}
-			logger.Info("Injected SA token for _token credential", "key", key)
+			logger.Info("Injected SA token for _sa_token credential", "key", key)
 		}
 	default:
 		// api-key and *_api-key: value must be non-empty.
@@ -302,15 +302,15 @@ func resolveModelCredential(logger *slog.Logger, authHeader string, secretCache 
 }
 
 // resolveUpstreamURL returns the upstream URL for a secret key by stripping the credential
-// suffix (_api-key or _token) and looking up <prefix>_url in the cache.
+// suffix (_api-key or _sa_token) and looking up <prefix>_url in the cache.
 // Falls back to defaultTarget when no URL entry exists or the entry is invalid.
 func resolveUpstreamURL(logger *slog.Logger, key string, secretCache map[string]string, defaultTarget *url.URL) *url.URL {
 	var prefix string
 	switch {
 	case strings.HasSuffix(key, modelAPIKeySuffix):
 		prefix = strings.TrimSuffix(key, modelAPIKeySuffix)
-	case strings.HasSuffix(key, modelTokenSuffix):
-		prefix = strings.TrimSuffix(key, modelTokenSuffix)
+	case strings.HasSuffix(key, modelSATokenSuffix):
+		prefix = strings.TrimSuffix(key, modelSATokenSuffix)
 	default:
 		return defaultTarget
 	}
