@@ -103,6 +103,12 @@ Made-with: Cursor
 Generated with: Claude Code
 ```
 
+Always end the commit message body with this sign-off trailer (after any AI-assistance trailers) for the current user, for example:
+
+```text
+Signed-off-by: Julian Payne <julpayne@redhat.com>
+```
+
 ## Architecture Overview
 
 Layout and request flow: **ARCHITECTURE.md** (in this repository). Supplementary docs: <https://github.com/eval-hub/eval-hub.github.io>.
