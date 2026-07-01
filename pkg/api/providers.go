@@ -97,6 +97,7 @@ type GPUConfig struct {
 //	  default_env:
 //	    - name: FOO
 //	      value: "bar"
+//	  image_pull_policy: if_not_present  # optional; if_not_present (default) or always
 type K8sRuntime struct {
 	Image         string   `mapstructure:"image" yaml:"image"`
 	Entrypoint    []string `mapstructure:"entrypoint" yaml:"entrypoint"`
@@ -108,6 +109,10 @@ type K8sRuntime struct {
 	// adapters — existing adapters are unaffected.
 	GPU *GPUConfig `mapstructure:"gpu" yaml:"gpu" json:"gpu,omitempty"`
 	Env []EnvVar   `mapstructure:"env" yaml:"env"`
+	// ImagePullPolicy controls when the adapter container image is pulled.
+	// API values: if_not_present (default when omitted) or always. Mapped to Kubernetes
+	// PullIfNotPresent / PullAlways on the adapter container only; sidecar/init are fixed.
+	ImagePullPolicy string `mapstructure:"image_pull_policy" yaml:"image_pull_policy,omitempty" json:"image_pull_policy,omitempty" validate:"omitempty,oneof=if_not_present always"`
 }
 
 type LocalRuntime struct {

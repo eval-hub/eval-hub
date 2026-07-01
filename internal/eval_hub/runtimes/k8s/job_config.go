@@ -42,6 +42,7 @@ type jobConfig struct {
 	benchmarkID         string
 	benchmarkIndex      int
 	adapterImage        string
+	adapterPullPolicy   corev1.PullPolicy
 	sidecarImage        string
 	entrypoint          []string
 	defaultEnv          []api.EnvVar
@@ -202,6 +203,8 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		nodeSelector = resolveNodeSelector(runtime.K8s.GPU)
 	}
 
+	adapterPullPolicy := resolveImagePullPolicy(runtime.K8s.ImagePullPolicy)
+
 	resourceGUID := uuid.NewString()
 
 	out := &jobConfig{
@@ -212,6 +215,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		benchmarkID:                benchmarkConfig.ID,
 		benchmarkIndex:             benchmarkIndex,
 		adapterImage:               runtime.K8s.Image,
+		adapterPullPolicy:          adapterPullPolicy,
 		sidecarImage:               sidecarImage,
 		entrypoint:                 runtime.K8s.Entrypoint,
 		defaultEnv:                 runtime.K8s.Env,
@@ -380,4 +384,17 @@ func readInClusterNamespace() string {
 		return ""
 	}
 	return strings.TrimSpace(string(content))
+}
+
+// resolveImagePullPolicy maps the validated provider image_pull_policy to a corev1.PullPolicy.
+// Empty string defaults to PullIfNotPresent.
+func resolveImagePullPolicy(policy string) corev1.PullPolicy {
+	switch policy {
+	case "", "if_not_present":
+		return corev1.PullIfNotPresent
+	case "always":
+		return corev1.PullAlways
+	default:
+		return corev1.PullIfNotPresent
+	}
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	corev1 "k8s.io/api/core/v1"
 )
 
 func TestBuildJobConfigDefaults(t *testing.T) {
@@ -52,6 +53,9 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 	}
 	if cfg.adapterImage != "adapter:latest" {
 		t.Fatalf("expected adapter image to be set")
+	}
+	if cfg.adapterPullPolicy != corev1.PullIfNotPresent {
+		t.Fatalf("expected default adapterPullPolicy to be IfNotPresent, got %q", cfg.adapterPullPolicy)
 	}
 	if cfg.namespace == "" {
 		t.Fatalf("expected namespace to be set")
@@ -897,5 +901,56 @@ func TestResolveNodeSelector(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestBuildJobConfigImagePullPolicyAlways(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-123"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{URL: "http://model", Name: "model"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}},
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image:           "adapter:dev",
+					Entrypoint:      []string{"python", "main.py"},
+					ImagePullPolicy: "always",
+				},
+			},
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.adapterPullPolicy != corev1.PullAlways {
+		t.Fatalf("adapterPullPolicy = %q, want Always", cfg.adapterPullPolicy)
+	}
+}
+
+func TestResolveImagePullPolicy(t *testing.T) {
+	tests := []struct {
+		input string
+		want  corev1.PullPolicy
+	}{
+		{"", corev1.PullIfNotPresent},
+		{"if_not_present", corev1.PullIfNotPresent},
+		{"always", corev1.PullAlways},
+	}
+	for _, tc := range tests {
+		got := resolveImagePullPolicy(tc.input)
+		if got != tc.want {
+			t.Errorf("resolveImagePullPolicy(%q) = %q, want %q", tc.input, got, tc.want)
+		}
 	}
 }

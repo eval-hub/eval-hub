@@ -62,7 +62,7 @@ spec:
       containers:
         - name: adapter
           image: quay.io/evalhub/adapter:latest
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           command: []
           env: []
           resources:

@@ -4040,6 +4040,14 @@
               "$ref": "#/components/schemas/EnvVar"
             },
             "description": "Environment variables for the job"
+          },
+          "image_pull_policy": {
+            "type": "string",
+            "enum": [
+              "if_not_present",
+              "always"
+            ],
+            "description": "When the adapter container image is pulled. API values are if_not_present (default when omitted) or always. EvalHub maps these to the Kubernetes imagePullPolicy values IfNotPresent and Always on the adapter container only. Custom providers may set always during development to pick up fresh image tags. Sidecar and init containers are not configurable and always use the Kubernetes IfNotPresent policy.\n"
           }
         },
         "required": [
