@@ -25,6 +25,9 @@ type OTELConfig struct {
 	EnableMetrics bool `mapstructure:"enable_metrics,omitempty" json:"enable_metrics,omitempty"`
 	// Used to enable sending of logs
 	EnableLogs bool `mapstructure:"enable_logs,omitempty" json:"enable_logs,omitempty"`
+	// When true, fetch container logs at job terminal transition and export them via OTEL Logs.
+	// Requires enable_logs.
+	EnableJobContainerLogs bool `mapstructure:"enable_job_container_logs,omitempty" json:"enable_job_container_logs,omitempty"`
 	// ServiceName overrides the default OTEL service.name resource attribute.
 	ServiceName string `mapstructure:"service_name,omitempty" json:"service_name,omitempty"`
 	// AdditionalAttributes are custom attributes to add to all traces

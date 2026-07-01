@@ -18,6 +18,7 @@ otel:
   enable_tracing: true
   enable_metrics: true            # required for application metrics and OTEL-bridged /metrics
   # enable_logs: true
+  # enable_job_container_logs: true # requires enable_logs; exports adapter logs at job completion
   # metric_export_interval: 60s
   # disable_database_otel_scan: false
   # service_name: "custom-service-name"
@@ -28,7 +29,8 @@ otel:
 | `otel.enabled` | Master switch; required for any OTEL export |
 | `otel.enable_tracing` | TracerProvider and trace export |
 | `otel.enable_metrics` | MeterProvider, application metrics, DB pool metrics, and OTEL-bridged Prometheus scrape |
-| `otel.enable_logs` | LoggerProvider (stdout only today) |
+| `otel.enable_logs` | LoggerProvider; bridges application `slog` output to OTEL Logs |
+| `otel.enable_job_container_logs` | Fetches adapter container logs when a job reaches a terminal state and emits them as OTEL log records (requires `enable_logs`) |
 | `prometheus.enabled` | Dedicated `/metrics` port; when combined with `otel.enable_metrics`, registers the OTEL Prometheus reader as a dual sink |
 
 **Important:** Enabling `prometheus.enabled` alone does **not** expose HTTP, domain, or DB application metrics. Those require `otel.enabled` and `otel.enable_metrics`.
@@ -37,6 +39,8 @@ otel:
 
 - `IsOTELEnabled()` — `otel.enabled`
 - `IsOTELMetricsEnabled()` — `otel.enabled` && `otel.enable_metrics`
+- `IsOTELLogsEnabled()` — `otel.enabled` && `otel.enable_logs`
+- `IsOTELJobContainerLogsEnabled()` — `IsOTELLogsEnabled()` && `otel.enable_job_container_logs`
 - `IsOTELStorageScansEnabled()` — `otel.enabled` && !`disable_database_otel_scan`
 
 ### Startup order (eval-hub API)
@@ -69,7 +73,7 @@ Override with `otel.service_name` in config.
 
 - **Traces** — OTLP gRPC, OTLP HTTP, or stdout; head sampling via `sampling_ratio`
 - **Metrics** — OTLP gRPC, OTLP HTTP, or stdout; export interval via `metric_export_interval` (default 60s)
-- **Logs** — stdout only (OTLP log export not implemented)
+- **Logs** — OTLP gRPC, OTLP HTTP, or stdout (same `exporter_type` / endpoint as traces and metrics)
 - **Propagators** — W3C Trace Context and Baggage
 - **Resource** — process/OS/host/container attributes; optional ECS detection
 
@@ -172,9 +176,19 @@ There are no semconv `db.client.*` metrics or explicit DB error counters beyond 
 
 ## Logs
 
-When `otel.enable_logs` is true, the SDK LoggerProvider exports to stdout with pretty printing. OTLP log export is not implemented (`newLoggerProvider` has a TODO).
+When `otel.enable_logs` is true:
 
-Application structured logs (`slog`) are separate from OTEL logs.
+1. **Service logs** — `cmd/eval_hub` bridges the application `slog` logger to the global OTEL `LoggerProvider` (tee: existing stdout JSON logs are preserved). Implementation: `internal/otel/slog_bridge.go`.
+2. **Export** — `newLoggerProvider` uses the configured `exporter_type` (`otlp-grpc`, `otlp-http`, or `stdout`) and attaches the same resource attributes as traces/metrics.
+
+When `otel.enable_job_container_logs` is also true (eval-hub API only):
+
+- On transition to a terminal job state (`completed`, `failed`, `partially_failed`, `cancelled`), eval-hub asynchronously calls `Runtime.GetEvaluationLogs` (tail capped at `DefaultLogTailLines`, 1000) and emits each log line as an OTEL log record with attributes such as `evalhub.job.id`, `evalhub.benchmark.id`, and `evalhub.log.source=container`.
+- Hook points: `POST /api/v1/evaluations/jobs/{id}/events` and runtime-initiated status updates (`runtimeStorage.UpdateEvaluationJob`).
+- Export runs in a background goroutine (30s timeout) so workload callbacks are not blocked.
+- **Limitations:** cancelled jobs may delete runtime resources before logs are fetched; log export is not triggered on per-benchmark events (only overall job terminal transition).
+
+Local validation: enable OTEL logs in `config/config.yaml`, run a job, and inspect logs in the SigNoz UI from `tests/otel/`.
 
 ---
 
@@ -203,7 +217,8 @@ Application structured logs (`slog`) are separate from OTEL logs.
 ### Configuration and gating
 
 - **`otel.enabled` vs signal flags** — `otelhttp` and `withSpan` gate on `otel.enabled`, not separately on `enable_tracing`. With tracing disabled, spans are created against the noop tracer (small overhead, no export).
-- **`enable_logs`** — stdout only; no OTLP.
+- **`enable_logs`** — requires `exporter_type` (defaults to stdout when unset).
+- **`enable_job_container_logs`** — no effect unless `enable_logs` is true; startup logs a warning if misconfigured.
 - **Stdout trace exporter** — OTLP trace paths attach resource attributes; the stdout trace exporter path does not use the same resource setup as OTLP.
 - **`service.version`** — not set on the OTEL resource (commented out in `createResource`).
 - **Prometheus-only deployments** — without `otel.enable_metrics`, `/metrics` exposes default process/Go collectors only, not application HTTP or domain metrics.
