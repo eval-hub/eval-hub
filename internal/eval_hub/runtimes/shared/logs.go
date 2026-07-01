@@ -73,7 +73,10 @@ func readLastNLines(f *os.File, size int64, n int) (string, error) {
 		if _, err := f.ReadAt(buf, offset); err != nil {
 			return "", err
 		}
-		remainder = append(buf, remainder...)
+		combined := make([]byte, 0, len(buf)+len(remainder))
+		combined = append(combined, buf...)
+		combined = append(combined, remainder...)
+		remainder = combined
 	}
 	return string(remainder), nil
 }
