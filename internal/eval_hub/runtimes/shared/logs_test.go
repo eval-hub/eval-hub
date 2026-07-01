@@ -69,6 +69,20 @@ func TestTailFileLines(t *testing.T) {
 		}
 	})
 
+	t.Run("empty file returns empty", func(t *testing.T) {
+		emptyPath := filepath.Join(dir, "empty.log")
+		if err := os.WriteFile(emptyPath, nil, 0644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+		got, err := TailFileLines(emptyPath, 10)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "" {
+			t.Fatalf("got %q, want empty", got)
+		}
+	})
+
 	t.Run("returns last n lines from large file", func(t *testing.T) {
 		largePath := filepath.Join(dir, "large.log")
 		var b strings.Builder

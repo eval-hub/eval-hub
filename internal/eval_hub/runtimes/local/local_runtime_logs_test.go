@@ -98,3 +98,46 @@ func TestGetEvaluationLogsInvalidBenchmarkIndex(t *testing.T) {
 		t.Fatal("expected error for out-of-range benchmark index")
 	}
 }
+
+func TestGetEvaluationLogsRequiresContext(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	rt := &LocalRuntime{logger: discardLogger()}
+	_, err := rt.GetEvaluationLogs(evaluation, evaluation.Benchmarks, nil, api.EvaluationLogOptions{TailLines: 10})
+	if err == nil {
+		t.Fatal("expected error for nil context")
+	}
+}
+
+func TestGetEvaluationLogsRejectsEmptyBenchmarks(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	rt := &LocalRuntime{logger: discardLogger(), ctx: context.Background()}
+	_, err := rt.GetEvaluationLogs(evaluation, nil, nil, api.EvaluationLogOptions{TailLines: 10})
+	if err == nil {
+		t.Fatal("expected error for empty benchmarks")
+	}
+}
+
+func TestGetEvaluationLogsHeaderOnlyWhenLogMissing(t *testing.T) {
+	providerID := "provider-1"
+	jobID := "job-logs-missing-file"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Resource.ID = jobID
+	cleanupDir(t, jobID)
+
+	rt := &LocalRuntime{logger: discardLogger(), ctx: context.Background()}
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("GetJobBenchmarks: %v", err)
+	}
+
+	got, err := rt.GetEvaluationLogs(evaluation, benchmarks, nil, api.EvaluationLogOptions{TailLines: 10})
+	if err != nil {
+		t.Fatalf("GetEvaluationLogs: %v", err)
+	}
+	want := "=== pod=job-logs-missing-file-0 container=local benchmark_id=bench-1 ==="
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
