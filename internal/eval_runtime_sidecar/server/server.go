@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
 	handlers "github.com/eval-hub/eval-hub/internal/eval_runtime_sidecar/handlers"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
@@ -117,16 +116,6 @@ func (s *SidecarServer) Start() error {
 			MinVersion: tls.VersionTLS12,
 			MaxVersion: tls.VersionTLS13,
 		},
-	}
-
-	readyFile := ""
-	if s.config.Service != nil {
-		readyFile = s.config.Service.ReadyFile
-	}
-	s.logger.Info("Writing the sidecar server ready message", "file", readyFile)
-	err = server.SetReady(s.config, s.logger)
-	if err != nil {
-		return err
 	}
 
 	s.logger.Info("Sidecar server starting", "port", s.port)

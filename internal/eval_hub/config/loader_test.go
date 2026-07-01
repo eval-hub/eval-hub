@@ -27,9 +27,6 @@ func TestLoadConfig(t *testing.T) {
 		if serviceConfig == nil {
 			t.Fatalf("Service config is nil")
 		}
-		if serviceConfig.Service.ReadyFile != "/tmp/repo-ready" {
-			t.Fatalf("Ready file is not /tmp/repo-ready, got %s", serviceConfig.Service.ReadyFile)
-		}
 		if serviceConfig.Service.TerminationFile != "/tmp/termination-log" {
 			t.Fatalf("Termination file is not /tmp/termination-log, got %s", serviceConfig.Service.TerminationFile)
 		}
@@ -58,7 +55,6 @@ func TestLoadConfig(t *testing.T) {
 		baseContent := `
 service:
   port: 8080
-  ready_file: "/tmp/repo-ready"
   termination_file: "/tmp/termination-log"
 database:
   driver: sqlite
@@ -107,7 +103,6 @@ database:
 		baseContent := `
 service:
   port: 8080
-  ready_file: "/tmp/repo-ready"
   termination_file: "/tmp/termination-log"
 database:
   driver: sqlite
@@ -158,7 +153,6 @@ secrets:
 		baseContent := `
 service:
   port: 8080
-  ready_file: "/tmp/repo-ready"
   termination_file: "/tmp/termination-log"
 secrets:
   dir: /tmp

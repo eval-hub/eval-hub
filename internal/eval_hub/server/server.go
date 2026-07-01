@@ -481,12 +481,6 @@ func (s *Server) Start() error {
 		return fmt.Errorf("FIPS mode enabled, but TLS certificate verification is required")
 	}
 
-	s.logger.Info("Writing the API server ready message", "file", s.serviceConfig.Service.ReadyFile)
-	err = SetReady(s.serviceConfig, s.logger)
-	if err != nil {
-		return err
-	}
-
 	tlsEnabled := s.serviceConfig.Service.TLSEnabled()
 	s.logger.Info("API Server starting", "addr", addr, "tls", tlsEnabled)
 

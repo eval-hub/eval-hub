@@ -30,9 +30,6 @@ func TestLoadSidecarRuntimeConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadSidecarRuntimeConfig: %v", err)
 	}
-	if cfg.Service.ReadyFile != SidecarReadyFilePath {
-		t.Fatalf("ReadyFile: %q", cfg.Service.ReadyFile)
-	}
 	if cfg.Sidecar.Port != 9090 {
 		t.Fatalf("port %d", cfg.Sidecar.Port)
 	}

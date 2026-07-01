@@ -11,7 +11,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 )
 
-// handle ready and termination messages
+// handle termination messages
 
 func GetTerminationFile(conf *config.Config, logger *slog.Logger) string {
 	tf := ""
@@ -49,14 +49,6 @@ func writeFile(fname string, message string, fileType string, logger *slog.Logge
 		logger.Info(fmt.Sprintf("Set %s message", fileType), "message", message)
 	}
 	return err
-}
-
-func getReadyContents(conf *config.Config) string {
-	return fmt.Sprintf("Version: %s\nBuild: %s\nBuildDate: %s\n", conf.Service.Version, conf.Service.Build, conf.Service.BuildDate)
-}
-
-func SetReady(conf *config.Config, logger *slog.Logger) error {
-	return writeFile(conf.Service.ReadyFile, getReadyContents(conf), "ready", logger)
 }
 
 func SetTerminationMessage(terminationFile string, message string, logger *slog.Logger) error {

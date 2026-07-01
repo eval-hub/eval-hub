@@ -12,8 +12,6 @@ import (
 const (
 	// DefaultSidecarConfigPath is where the job pod mounts sidecar_config.json.
 	DefaultSidecarConfigPath = "/meta/sidecar_config.json"
-	// SidecarReadyFilePath is where the sidecar writes its ready file (emptyDir in job pods).
-	SidecarReadyFilePath = "/data/sidecar-ready"
 	// SidecarTerminationFilePath is used for Kubernetes termination messages.
 	SidecarTerminationFilePath = "/data/termination-log"
 )
@@ -41,7 +39,6 @@ func LoadSidecarRuntimeConfig(sidecarJSONPath, version, build, buildDate string)
 			Version:   version,
 			Build:     build,
 			BuildDate: buildDate,
-			ReadyFile: SidecarReadyFilePath,
 		},
 		Sidecar: &sc,
 	}

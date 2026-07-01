@@ -197,7 +197,7 @@ When running locally:
 
 - Loads **`sidecar_config.json`** only (default `/meta/sidecar_config.json`; local override via `--sidecarconfig`).
 - **No `evalhub-config` ConfigMap** on job pods; proxy targets and TLS live in JSON (`eval_hub.base_url`, `mlflow.tracking_uri`, `mlflow.token_path`, CA paths, optional `eval_hub.token`).
-- Ready and termination message paths are **fixed in the sidecar binary** (`/data/sidecar-ready`, `/data/termination-log`).
+- Termination message path is **fixed in the sidecar binary** (`/data/termination-log`).
 - Local dev: `config/sidecar_runtime_local.json` or `make start-sidecar`.
 
 #### Request identity (kube-rbac-proxy)

@@ -16,7 +16,6 @@ type ServiceConfig struct {
 	GitHash         string `mapstructure:"git_hash,omitempty"`
 	Port            int    `mapstructure:"port,omitempty"`
 	Host            string `mapstructure:"host,omitempty"`
-	ReadyFile       string `mapstructure:"ready_file"`
 	TerminationFile string `mapstructure:"termination_file"`
 	EvalInitImage   string `mapstructure:"eval_init_image,omitempty"`
 	LocalMode       bool   `mapstructure:"local_mode,omitempty"`
