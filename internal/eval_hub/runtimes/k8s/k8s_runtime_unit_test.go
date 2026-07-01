@@ -361,10 +361,11 @@ func TestIsModelCredentialKey(t *testing.T) {
 }
 
 func TestBuildInternalModelRefSecretWithSATokenSuffix(t *testing.T) {
-	// _sa_token keys (e.g. kfp_sa_token) must become <key>:ref in the internalModelRef secret
-	// so the adapter can send "Authorization: Bearer kfp_sa_token:ref" and the sidecar resolves it.
+	// buildInternalModelRefSecret maps *_sa_token keys to <key>:ref regardless of the input
+	// value (including empty). The adapter sends "Authorization: Bearer kfp_sa_token:ref";
+	// empty-value SA injection is handled by the sidecar model proxy, not this layer.
 	data := map[string][]byte{
-		"kfp_sa_token": []byte(""), // intentionally empty — SA token injected at runtime
+		"kfp_sa_token": []byte(""), // empty is preserved through ref mapping; sidecar injects SA at runtime
 		"kfp_url":      []byte("https://kfp-svc"),
 	}
 	clientset := fake.NewClientset()

@@ -30,7 +30,7 @@ func isModelCredentialKey(k string) bool {
 // modelSecretInfo holds the result of inspecting the model credential secret.
 type modelSecretInfo struct {
 	// hasCredentialKeys is true when the secret contains at least one proxy-injectable
-	// key (api-key, *_api-key, *_url), meaning credential injection should be activated.
+	// key (api-key, *_api-key, *_sa_token, or *_url), meaning credential injection should be activated.
 	hasCredentialKeys bool
 	// data is the full secret data, populated when hasCredentialKeys is true so callers
 	// can build the internalModelRef secret without a second API call.
