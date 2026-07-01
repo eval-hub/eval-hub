@@ -2,10 +2,12 @@ package handlers_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -248,4 +250,243 @@ func TestHandleGetEvaluationJobLogsRejectsEmptySinceSeconds(t *testing.T) {
 	if runtime.getLogsCalled {
 		t.Fatal("expected GetEvaluationLogs not to be called")
 	}
+}
+
+func TestHandleGetEvaluationJobLogsMissingJobID(t *testing.T) {
+	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &logsRuntime{}, nil, nil)
+	rec := httptest.NewRecorder()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-5", logger, "test-user", "test-tenant")
+	req := &logsRequest{
+		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs//logs"),
+		pathValues:  map[string]string{},
+	}
+
+	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestHandleGetEvaluationBenchmarkLogsMissingBenchmarkIndex(t *testing.T) {
+	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &logsRuntime{}, nil, nil)
+	rec := httptest.NewRecorder()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-6", logger, "test-user", "test-tenant")
+	req := &logsRequest{
+		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/job-1/benchmarks//logs"),
+		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: "job-1"},
+	}
+
+	h.HandleGetEvaluationBenchmarkLogs(ctx, req, MockResponseWrapper{recorder: rec})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestHandleGetEvaluationBenchmarkLogsInvalidBenchmarkIndex(t *testing.T) {
+	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &logsRuntime{}, nil, nil)
+	rec := httptest.NewRecorder()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-7", logger, "test-user", "test-tenant")
+	req := &logsRequest{
+		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/job-1/benchmarks/abc/logs"),
+		pathValues: map[string]string{
+			constants.PATH_PARAMETER_JOB_ID:          "job-1",
+			constants.PATH_PARAMETER_BENCHMARK_INDEX: "abc",
+		},
+	}
+
+	h.HandleGetEvaluationBenchmarkLogs(ctx, req, MockResponseWrapper{recorder: rec})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestHandleGetEvaluationJobLogsNoRuntime(t *testing.T) {
+	jobID := "job-logs-no-runtime"
+	storage := &fakeStorage{
+		job: &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+		},
+	}
+	h := handlers.New(storage, validation.NewValidator(), nil, nil, nil)
+	rec := httptest.NewRecorder()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-8", logger, "test-user", "test-tenant")
+	req := &logsRequest{
+		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
+		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+	}
+
+	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", rec.Code)
+	}
+}
+
+func TestHandleGetEvaluationJobLogsRuntimeError(t *testing.T) {
+	jobID := "job-logs-runtime-err"
+	runtime := &logsRuntime{err: errors.New("runtime failed")}
+	storage := &fakeStorage{
+		job: &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Benchmarks: []api.EvaluationBenchmarkConfig{
+					{Ref: api.Ref{ID: "bench-1"}, ProviderID: "provider-1"},
+				},
+			},
+		},
+	}
+	h := handlers.New(storage, validation.NewValidator(), runtime, nil, nil)
+	rec := httptest.NewRecorder()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-9", logger, "test-user", "test-tenant")
+	req := &logsRequest{
+		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
+		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+	}
+
+	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", rec.Code)
+	}
+}
+
+func TestHandleGetEvaluationJobLogsRejectsTailLinesOverMax(t *testing.T) {
+	jobID := "job-logs-tail-max"
+	storage := &fakeStorage{
+		job: &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+		},
+	}
+	runtime := &logsRuntime{}
+	h := handlers.New(storage, validation.NewValidator(), runtime, nil, nil)
+	rec := httptest.NewRecorder()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-10", logger, "test-user", "test-tenant")
+	req := &logsRequest{
+		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
+		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+		queryValues: map[string][]string{"tail_lines": {strconv.Itoa(api.MaxLogTailLines + 1)}},
+	}
+
+	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestHandleGetEvaluationJobLogsRejectsNonPositiveSinceSeconds(t *testing.T) {
+	jobID := "job-logs-since-zero"
+	storage := &fakeStorage{
+		job: &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+		},
+	}
+	runtime := &logsRuntime{}
+	h := handlers.New(storage, validation.NewValidator(), runtime, nil, nil)
+	rec := httptest.NewRecorder()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-11", logger, "test-user", "test-tenant")
+	req := &logsRequest{
+		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
+		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+		queryValues: map[string][]string{"since_seconds": {"0"}},
+	}
+
+	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestHandleGetEvaluationJobLogsResolvesCollectionBenchmarks(t *testing.T) {
+	jobID := "job-logs-collection"
+	collectionID := "coll-1"
+	runtime := &logsRuntime{logs: "collection logs"}
+	storage := &logsCollectionStorage{
+		fakeStorage: fakeStorage{
+			job: &api.EvaluationJobResource{
+				Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+				EvaluationJobConfig: api.EvaluationJobConfig{
+					Collection: &api.CollectionRef{ID: collectionID},
+				},
+			},
+			collectionConfigs: map[string]api.CollectionResource{
+				collectionID: {
+					Resource: api.Resource{ID: collectionID},
+					CollectionConfig: api.CollectionConfig{
+						Benchmarks: []api.CollectionBenchmarkConfig{
+							{Ref: api.Ref{ID: "bench-1"}, ProviderID: "provider-1"},
+						},
+					},
+				},
+			},
+		},
+	}
+	h := handlers.New(storage, validation.NewValidator(), runtime, nil, nil)
+	rec := httptest.NewRecorder()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-12", logger, "test-user", "test-tenant")
+	req := &logsRequest{
+		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
+		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+	}
+
+	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if !runtime.getLogsCalled {
+		t.Fatal("expected GetEvaluationLogs to be called")
+	}
+}
+
+type logsCollectionStorage struct {
+	fakeStorage
+}
+
+func (s *logsCollectionStorage) copy() *logsCollectionStorage {
+	c := *s
+	return &c
+}
+
+func (s *logsCollectionStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
+	c := s.copy()
+	c.fakeStorage = *s.fakeStorage.WithLogger(logger).(*fakeStorage)
+	return c
+}
+
+func (s *logsCollectionStorage) WithContext(ctx context.Context) abstractions.Storage {
+	c := s.copy()
+	c.fakeStorage = *s.fakeStorage.WithContext(ctx).(*fakeStorage)
+	return c
+}
+
+func (s *logsCollectionStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
+	c := s.copy()
+	c.fakeStorage = *s.fakeStorage.WithTenant(tenant).(*fakeStorage)
+	return c
+}
+
+func (s *logsCollectionStorage) WithOwner(user api.User) abstractions.Storage {
+	c := s.copy()
+	c.fakeStorage = *s.fakeStorage.WithOwner(user).(*fakeStorage)
+	return c
+}
+
+func (s *logsCollectionStorage) GetCollection(id string) (*api.CollectionResource, error) {
+	if collection, ok := s.collectionConfigs[id]; ok {
+		return &collection, nil
+	}
+	return s.fakeStorage.GetCollection(id)
 }

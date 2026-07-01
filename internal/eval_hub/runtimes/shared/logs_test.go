@@ -56,6 +56,19 @@ func TestTailFileLines(t *testing.T) {
 		}
 	})
 
+	t.Run("returns all lines when n is zero", func(t *testing.T) {
+		if err := os.WriteFile(path, []byte("line1\nline2\nline3\n"), 0644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+		got, err := TailFileLines(path, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "line1\nline2\nline3" {
+			t.Fatalf("got %q, want all lines", got)
+		}
+	})
+
 	t.Run("returns last n lines from large file", func(t *testing.T) {
 		largePath := filepath.Join(dir, "large.log")
 		var b strings.Builder

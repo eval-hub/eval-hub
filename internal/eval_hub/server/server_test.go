@@ -162,6 +162,7 @@ func TestServerSetupRoutes(t *testing.T) {
 		{http.MethodPost, "/api/v1/evaluations/jobs", http.StatusAccepted, `{"name": "test-evaluation-job", "model": {"url": "http://test.com", "name": "test"}, "benchmarks": [{"id": "arc_easy", "provider_id": "lm_evaluation_harness"}]}`},
 		{http.MethodGet, "/api/v1/evaluations/jobs", http.StatusOK, ""},
 		{http.MethodGet, "/api/v1/evaluations/jobs/test-id", http.StatusNotFound, ""},
+		{http.MethodPost, "/api/v1/evaluations/jobs/test-id/logs", http.StatusMethodNotAllowed, ""},
 		// Collections
 		{http.MethodPost, "/api/v1/evaluations/collections", http.StatusCreated, `{"name": "test-benchmarks-collection", "description": "Collection of benchmarks for FVT", "category": "test", "benchmarks": [{"id": "arc_easy", "provider_id": "lm_evaluation_harness"}]}`},
 		{http.MethodGet, "/api/v1/evaluations/collections", http.StatusOK, ""},
@@ -192,7 +193,7 @@ func TestServerSetupRoutes(t *testing.T) {
 				t.Fatalf("Expected status %d for %s %s, got %d with message %s", tc.status, tc.method, tc.path, w.Code, w.Body.String())
 			}
 
-			if (tc.method == http.MethodPost) && (w.Body.String() != "") && (strings.HasPrefix(tc.path, "/api/v1/evaluations/jobs")) {
+			if tc.method == http.MethodPost && w.Body.String() != "" && tc.path == "/api/v1/evaluations/jobs" {
 				var body map[string]interface{}
 				if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 					t.Fatalf("Failed to unmarshal body: %v", err)
@@ -208,6 +209,23 @@ func TestServerSetupRoutes(t *testing.T) {
 	}
 
 	for _, id := range evaluationIds {
+		for _, logsPath := range []string{
+			fmt.Sprintf("/api/v1/evaluations/jobs/%s/logs", id),
+			fmt.Sprintf("/api/v1/evaluations/jobs/%s/benchmarks/0/logs", id),
+		} {
+			t.Run("GET "+logsPath, func(t *testing.T) {
+				req := httptest.NewRequest(http.MethodGet, logsPath, nil)
+				w := httptest.NewRecorder()
+				handler.ServeHTTP(w, req)
+				if w.Code != http.StatusOK {
+					t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+				}
+				if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/plain") {
+					t.Fatalf("expected text/plain content type, got %q", ct)
+				}
+			})
+		}
+
 		path := fmt.Sprintf("/api/v1/evaluations/jobs/%s", id)
 		req := httptest.NewRequest(http.MethodDelete, path, nil)
 		w := httptest.NewRecorder()
