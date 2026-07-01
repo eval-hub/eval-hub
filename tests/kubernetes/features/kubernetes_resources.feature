@@ -64,7 +64,7 @@ Feature: Kubernetes Resources Validation
     And the volume "evalhub-service-ca" should reference ConfigMap derived from service account name
     And the Job pod template should have container named "adapter"
     And the container should have a non-empty image
-    And the container should have "imagePullPolicy" set to "Always"
+    And the container should have "imagePullPolicy" set to "IfNotPresent"
     And the container command should be a valid array
     And the container command should not contain empty strings
     And the container command should have trimmed whitespace from each element

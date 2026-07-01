@@ -319,6 +319,52 @@ func TestEvaluationJobConfig_ExperimentOmittedOk(t *testing.T) {
 	}
 }
 
+func TestK8sRuntimeImagePullPolicy_InvalidValueRejected(t *testing.T) {
+	validate := NewValidator()
+	cfg := api.ProviderConfig{
+		Name: "test-provider",
+		Runtime: &api.Runtime{
+			K8s: &api.K8sRuntime{
+				Image:           "quay.io/example/adapter:latest",
+				Entrypoint:      []string{"/bin/true"},
+				ImagePullPolicy: "random",
+			},
+		},
+		Benchmarks: []api.BenchmarkResource{{ID: "bench-1", Name: "Bench 1"}},
+	}
+	err := validate.Struct(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for invalid image_pull_policy")
+	}
+	valErr, ok := err.(validator.ValidationErrors)
+	if !ok || len(valErr) == 0 {
+		t.Fatalf("expected validator.ValidationErrors, got %T: %v", err, err)
+	}
+	if valErr[0].Field() != "image_pull_policy" || valErr[0].Tag() != "oneof" {
+		t.Fatalf("expected oneof error on image_pull_policy, got: %v", err)
+	}
+}
+
+func TestK8sRuntimeImagePullPolicy_ValidValuesAccepted(t *testing.T) {
+	validate := NewValidator()
+	for _, policy := range []string{"", "if_not_present", "always"} {
+		cfg := api.ProviderConfig{
+			Name: "test-provider",
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image:           "quay.io/example/adapter:latest",
+					Entrypoint:      []string{"/bin/true"},
+					ImagePullPolicy: policy,
+				},
+			},
+			Benchmarks: []api.BenchmarkResource{{ID: "bench-1", Name: "Bench 1"}},
+		}
+		if err := validate.Struct(cfg); err != nil {
+			t.Errorf("image_pull_policy %q: expected no error, got: %v", policy, err)
+		}
+	}
+}
+
 func TestValidateCollectionOverrides_InvalidProviderID(t *testing.T) {
 	t.Parallel()
 	overrides := []api.EvaluationBenchmarkConfig{

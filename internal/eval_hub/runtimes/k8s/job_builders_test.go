@@ -168,6 +168,43 @@ func TestBuildJobRequiresAdapterImage(t *testing.T) {
 	}
 }
 
+func TestBuildJobAdapterImagePullPolicy(t *testing.T) {
+	base := &jobConfig{
+		jobID:          "job-pull",
+		resourceGUID:   "guid-pull",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:dev",
+		defaultEnv:     []api.EnvVar{},
+	}
+
+	t.Run("uses IfNotPresent from job config", func(t *testing.T) {
+		cfg := *base
+		cfg.adapterPullPolicy = corev1.PullIfNotPresent
+		job, err := buildJob(&cfg)
+		if err != nil {
+			t.Fatalf("buildJob: %v", err)
+		}
+		if got := job.Spec.Template.Spec.Containers[0].ImagePullPolicy; got != corev1.PullIfNotPresent {
+			t.Fatalf("adapter ImagePullPolicy = %q, want IfNotPresent", got)
+		}
+	})
+
+	t.Run("honors Always override", func(t *testing.T) {
+		cfg := *base
+		cfg.adapterPullPolicy = corev1.PullAlways
+		job, err := buildJob(&cfg)
+		if err != nil {
+			t.Fatalf("buildJob: %v", err)
+		}
+		if got := job.Spec.Template.Spec.Containers[0].ImagePullPolicy; got != corev1.PullAlways {
+			t.Fatalf("adapter ImagePullPolicy = %q, want Always", got)
+		}
+	})
+}
+
 func TestBuildJobAdapterEvalHubModeEnv(t *testing.T) {
 	cfg := &jobConfig{
 		jobID:          "job-mode",

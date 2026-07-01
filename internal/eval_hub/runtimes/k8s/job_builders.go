@@ -225,7 +225,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 		{
 			Name:            adapterContainerName,
 			Image:           cfg.adapterImage,
-			ImagePullPolicy: corev1.PullIfNotPresent,
+			ImagePullPolicy: cfg.adapterPullPolicy,
 			Command:         buildContainerCommand(cfg.entrypoint),
 			Env:             adapterEnvVars,
 			Resources:       resources,

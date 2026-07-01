@@ -17,6 +17,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	jsonpatch "gopkg.in/evanphx/json-patch.v4"
 )
 
 var (
@@ -298,7 +299,7 @@ func (h *Handlers) HandlePatchProvider(ctx *executioncontext.ExecutionContext, r
 			if err := h.verifyPatches(runtimeCtx, patches, allowedProviderPatches); err != nil {
 				return err
 			}
-			return nil
+			return h.validatePatchedProviderConfig(ctx.WithContext(runtimeCtx), storage, providerId, patches)
 		},
 		"validation",
 		"validate-provider-patch",
@@ -324,6 +325,38 @@ func (h *Handlers) HandlePatchProvider(ctx *executioncontext.ExecutionContext, r
 		"patch-provider",
 		"provider.id", providerId,
 	)
+}
+
+func (h *Handlers) validatePatchedProviderConfig(ctx *executioncontext.ExecutionContext, storage abstractions.Storage, providerID string, patches api.Patch) error {
+	existing, err := storage.GetProvider(providerID)
+	if err != nil {
+		return err
+	}
+	configJSON, err := json.Marshal(existing.ProviderConfig)
+	if err != nil {
+		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err.Error())
+	}
+	patchedJSON, err := applyJSONPatches(configJSON, &patches)
+	if err != nil {
+		return serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", err.Error())
+	}
+	merged := &api.ProviderConfig{}
+	return serialization.Unmarshal(h.validate, ctx, patchedJSON, merged)
+}
+
+func applyJSONPatches(doc []byte, patches *api.Patch) ([]byte, error) {
+	if patches == nil || len(*patches) == 0 {
+		return doc, nil
+	}
+	patchesJSON, err := json.Marshal(patches)
+	if err != nil {
+		return nil, err
+	}
+	patch, err := jsonpatch.DecodePatch(patchesJSON)
+	if err != nil {
+		return nil, err
+	}
+	return patch.Apply(doc)
 }
 
 func (h *Handlers) HandleDeleteProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
