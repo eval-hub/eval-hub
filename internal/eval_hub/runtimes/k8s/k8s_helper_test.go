@@ -79,3 +79,34 @@ func TestSetConfigMapOwnerUpdatesOwnerReferences(t *testing.T) {
 		t.Fatalf("expected owner reference to be set")
 	}
 }
+
+func TestListPodsRequiresNamespace(t *testing.T) {
+	helper := &KubernetesHelper{}
+	if _, err := helper.ListPods(context.Background(), "", "job-name=foo"); err == nil {
+		t.Fatal("expected error for missing namespace")
+	}
+}
+
+func TestGetPodLogsRequiresNamespaceAndPodName(t *testing.T) {
+	helper := &KubernetesHelper{}
+	if _, err := helper.GetPodLogs(context.Background(), "", "pod-1", nil); err == nil {
+		t.Fatal("expected error for missing namespace")
+	}
+	if _, err := helper.GetPodLogs(context.Background(), "default", "", nil); err == nil {
+		t.Fatal("expected error for missing pod name")
+	}
+}
+
+func TestGetPodLogsReturnsStreamContent(t *testing.T) {
+	clientset := fake.NewClientset(&corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "pod-1", Namespace: "default"},
+	})
+	helper := &KubernetesHelper{clientset: clientset}
+	got, err := helper.GetPodLogs(context.Background(), "default", "pod-1", nil)
+	if err != nil {
+		t.Fatalf("GetPodLogs: %v", err)
+	}
+	if got != "fake logs" {
+		t.Fatalf("got %q, want fake logs", got)
+	}
+}

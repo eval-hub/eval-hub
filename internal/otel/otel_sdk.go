@@ -13,6 +13,8 @@ import (
 	"go.opentelemetry.io/contrib/detectors/aws/ecs"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -107,14 +109,18 @@ func SetupOTEL(ctx context.Context, config *config.OTELConfig, logger *slog.Logg
 
 	// Set up logger provider.
 	if config.EnableLogs {
-		loggerProvider, err := newLoggerProvider(ctx, config)
+		loggerProvider, err := newLoggerProvider(ctx, config, logger)
 		if err != nil {
 			handleErr(err)
 			return shutdown, err
 		}
 		shutdownFuncs = append(shutdownFuncs, loggerProvider.Shutdown)
 		global.SetLoggerProvider(loggerProvider)
-		logger.Info("OTEL logger provider created")
+		exporterType := config.ExporterType
+		if exporterType == "" {
+			exporterType = ExporterTypeStdout
+		}
+		logger.Info("OTEL logger provider created", "exporter_type", exporterType, "exporter_endpoint", safeURL(config.ExporterEndpoint), "exporter_insecure", config.ExporterInsecure)
 	}
 
 	if err != nil {
@@ -366,17 +372,76 @@ func newMeterProvider(ctx context.Context, cfg *config.OTELConfig, logger *slog.
 	return meterProvider, nil
 }
 
-func newLoggerProvider(_ context.Context, _ *config.OTELConfig) (*log.LoggerProvider, error) {
-	// TODO: Implement logger exporter for something other than stdout
-	logExporter, err := stdoutlog.New(stdoutlog.WithPrettyPrint())
+func newLoggerProvider(ctx context.Context, cfg *config.OTELConfig, logger *slog.Logger) (*log.LoggerProvider, error) {
+	exporterType := cfg.ExporterType
+	if exporterType == "" {
+		exporterType = ExporterTypeStdout
+	}
+
+	res, err := createResource(ctx, cfg, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	loggerProvider := log.NewLoggerProvider(
+	var logExporter log.Exporter
+
+	switch exporterType {
+	case ExporterTypeOTLPGRPC:
+		if cfg.ExporterEndpoint == "" {
+			return nil, fmt.Errorf("Exporter endpoint is required for OTEL %s exporter", exporterType)
+		}
+		opts := []otlploggrpc.Option{
+			otlploggrpc.WithEndpoint(cfg.ExporterEndpoint),
+			otlploggrpc.WithCompressor(Compressor),
+		}
+		if cfg.ExporterInsecure {
+			opts = append(opts, otlploggrpc.WithInsecure())
+		} else if cfg.TLSConfig != nil {
+			opts = append(opts, otlploggrpc.WithTLSCredentials(credentials.NewTLS(cfg.TLSConfig)))
+		} else {
+			return nil, fmt.Errorf("No TLS config provided for secure OTEL %s exporter", exporterType)
+		}
+		exp, err := otlploggrpc.New(ctx, opts...)
+		if err != nil {
+			return nil, err
+		}
+		logExporter = exp
+
+	case ExporterTypeOTLPHTTP:
+		if cfg.ExporterEndpoint == "" {
+			return nil, fmt.Errorf("Exporter endpoint is required for OTEL %s exporter", exporterType)
+		}
+		opts := []otlploghttp.Option{
+			otlploghttp.WithEndpoint(cfg.ExporterEndpoint),
+		}
+		if cfg.ExporterInsecure {
+			opts = append(opts, otlploghttp.WithInsecure())
+		} else if cfg.TLSConfig != nil {
+			opts = append(opts, otlploghttp.WithTLSClientConfig(cfg.TLSConfig))
+		} else {
+			return nil, fmt.Errorf("No TLS config provided for secure OTEL %s exporter", exporterType)
+		}
+		exp, err := otlploghttp.New(ctx, opts...)
+		if err != nil {
+			return nil, err
+		}
+		logExporter = exp
+
+	case ExporterTypeStdout:
+		exp, err := stdoutlog.New(stdoutlog.WithPrettyPrint())
+		if err != nil {
+			return nil, err
+		}
+		logExporter = exp
+
+	default:
+		return nil, fmt.Errorf("Invalid OTEL exporter type: %s", exporterType)
+	}
+
+	return log.NewLoggerProvider(
 		log.WithProcessor(log.NewBatchProcessor(logExporter)),
-	)
-	return loggerProvider, nil
+		log.WithResource(res),
+	), nil
 }
 
 // newSampler creates a sampler based on the sampling ratio

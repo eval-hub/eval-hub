@@ -55,7 +55,8 @@ otel:
   sampling_ratio: 1.0
   enable_tracing: true
   enable_metrics: true  # required for otelhttp HTTP metrics and OTEL-bridged /metrics scrape
-  # enable_logs: true
+  enable_logs: true
+  enable_job_container_logs: true  # requires enable_logs; exports adapter container logs at job completion
 prometheus:
   enabled: true
   port: 8081

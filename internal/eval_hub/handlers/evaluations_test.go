@@ -137,6 +137,18 @@ func (r *fakeRuntime) DeleteEvaluationJobResources(_ *api.EvaluationJobResource)
 	r.called = true
 	return r.err
 }
+func (r *fakeRuntime) GetEvaluationLogs(
+	_ *api.EvaluationJobResource,
+	_ []api.EvaluationBenchmarkConfig,
+	_ *int,
+	_ api.EvaluationLogOptions,
+) (string, error) {
+	r.called = true
+	if r.err != nil {
+		return "", r.err
+	}
+	return "", nil
+}
 
 type listEvaluationsRequest struct {
 	*MockRequest

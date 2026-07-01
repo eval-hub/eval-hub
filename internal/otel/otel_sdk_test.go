@@ -374,15 +374,80 @@ func TestNewTracerProvider(t *testing.T) {
 }
 
 func TestNewLoggerProvider(t *testing.T) {
-	lp, err := newLoggerProvider(context.Background(), &config.OTELConfig{Enabled: true})
-	if err != nil {
-		t.Fatalf("newLoggerProvider: %v", err)
+	logger := slog.Default()
+	ctx := context.Background()
+
+	tests := []struct {
+		name       string
+		cfg        *config.OTELConfig
+		wantErrSub string
+	}{
+		{
+			name: "stdout returns provider",
+			cfg: &config.OTELConfig{
+				Enabled:      true,
+				ExporterType: ExporterTypeStdout,
+			},
+		},
+		{
+			name: "default exporter type uses stdout",
+			cfg: &config.OTELConfig{
+				Enabled: true,
+			},
+		},
+		{
+			name: "otlp-grpc insecure returns provider",
+			cfg: &config.OTELConfig{
+				Enabled:          true,
+				ExporterType:     ExporterTypeOTLPGRPC,
+				ExporterEndpoint: "localhost:4317",
+				ExporterInsecure: true,
+			},
+		},
+		{
+			name: "otlp-grpc missing endpoint",
+			cfg: &config.OTELConfig{
+				Enabled:          true,
+				ExporterType:     ExporterTypeOTLPGRPC,
+				ExporterInsecure: true,
+			},
+			wantErrSub: "Exporter endpoint is required",
+		},
+		{
+			name: "invalid exporter type",
+			cfg: &config.OTELConfig{
+				Enabled:      true,
+				ExporterType: "kafka",
+			},
+			wantErrSub: "Invalid OTEL exporter type",
+		},
 	}
-	if lp == nil {
-		t.Fatal("expected non-nil LoggerProvider")
-	}
-	if err := lp.Shutdown(context.Background()); err != nil {
-		t.Fatalf("Shutdown: %v", err)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lp, err := newLoggerProvider(ctx, tt.cfg, logger)
+
+			if tt.wantErrSub != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.wantErrSub)
+				}
+				if !strings.Contains(err.Error(), tt.wantErrSub) {
+					t.Fatalf("expected error containing %q, got %q", tt.wantErrSub, err.Error())
+				}
+				if lp != nil {
+					t.Fatal("expected nil provider on error")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if lp == nil {
+				t.Fatal("expected non-nil LoggerProvider")
+			}
+			_ = lp.Shutdown(ctx)
+		})
 	}
 }
 

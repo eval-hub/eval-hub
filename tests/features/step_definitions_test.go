@@ -1031,6 +1031,30 @@ func (tc *scenarioConfig) theResponseStatusShouldBeOr(status1, status2 int) erro
 	return nil
 }
 
+func (tc *scenarioConfig) theResponseContentTypeShouldBe(contentType string) error {
+	expected, err := tc.getValue(contentType)
+	if err != nil {
+		return err
+	}
+	actual := tc.response.Header.Get("Content-Type")
+	if !strings.HasPrefix(actual, expected) {
+		return tc.logError(fmt.Errorf("expected Content-Type to start with %q, got %q for request %s %s", expected, actual, tc.lastMethod, tc.lastURL))
+	}
+	return nil
+}
+
+func (tc *scenarioConfig) theResponseBodyShouldContain(text string) error {
+	expected, err := tc.getValue(text)
+	if err != nil {
+		return err
+	}
+	body := string(tc.body)
+	if !strings.Contains(body, expected) {
+		return tc.logError(fmt.Errorf("expected response body to contain %q for request %s %s, got %q", expected, tc.lastMethod, tc.lastURL, body))
+	}
+	return nil
+}
+
 func (tc *scenarioConfig) theResponseShouldContainWithValue(key, value string) error {
 	var data map[string]interface{}
 	if err := json.Unmarshal(tc.body, &data); err != nil {
@@ -1701,6 +1725,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I send a (POST|PUT|PATCH) request to "([^"]*)" with body:$`, tc.iSendARequestToWithInlineBody)
 	ctx.Step(`^the response code should be (\d+)$`, tc.theResponseStatusShouldBe)
 	ctx.Step(`^the response code should be (\d+) or (\d+)$`, tc.theResponseStatusShouldBeOr)
+	ctx.Step(`^the response content type should be "([^"]*)"$`, tc.theResponseContentTypeShouldBe)
+	ctx.Step(`^the response body should contain "([^"]*)"$`, tc.theResponseBodyShouldContain)
 	ctx.Step(`^the response should contain "([^"]*)" with value "([^"]*)"$`, tc.theResponseShouldContainWithValue)
 	ctx.Step(`^the response should contain "([^"]*)"$`, tc.theResponseShouldContain)
 	ctx.Step(`^the response should be JSON$`, tc.theResponseShouldBeJSON)

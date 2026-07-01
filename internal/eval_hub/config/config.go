@@ -30,6 +30,16 @@ func (c *Config) IsOTELStorageScansEnabled() bool {
 	return c.IsOTELEnabled() && !c.OTEL.DisableDatabaseOTELScans
 }
 
+// IsOTELLogsEnabled reports whether OTEL log export is turned on in config.
+func (c *Config) IsOTELLogsEnabled() bool {
+	return c.IsOTELEnabled() && c.OTEL != nil && c.OTEL.EnableLogs
+}
+
+// IsOTELJobContainerLogsEnabled reports whether container logs are exported to OTEL at job completion.
+func (c *Config) IsOTELJobContainerLogsEnabled() bool {
+	return c.IsOTELLogsEnabled() && c.OTEL != nil && c.OTEL.EnableJobContainerLogs
+}
+
 // IsPrometheusEnabled reports whether the Prometheus metrics endpoint is enabled.
 func (c *Config) IsPrometheusEnabled() bool {
 	return (c != nil) && (c.Prometheus != nil) && c.Prometheus.Enabled

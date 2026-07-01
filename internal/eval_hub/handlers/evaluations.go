@@ -88,9 +88,9 @@ func (s *runtimeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEve
 		return err
 	}
 
-	recordEvaluationJobTerminalStateAfterUpdate(s.ctx, func() (*api.EvaluationJobResource, error) {
+	s.handlers.onEvaluationJobUpdated(s.ctx, s.scopedStorage(), func() (*api.EvaluationJobResource, error) {
 		return s.scopedStorage().GetEvaluationJob(id)
-	}, previousState)
+	}, previousState, s.logger)
 	return nil
 }
 
@@ -499,9 +499,9 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 				return err
 			}
 
-			recordEvaluationJobTerminalStateAfterUpdate(runtimeCtx, func() (*api.EvaluationJobResource, error) {
+			h.onEvaluationJobUpdated(runtimeCtx, scoped, func() (*api.EvaluationJobResource, error) {
 				return scoped.GetEvaluationJob(evaluationJobID)
-			}, previousState)
+			}, previousState, ctx.Logger)
 			w.WriteJSON(nil, 204)
 			return nil
 		},
