@@ -21,31 +21,32 @@ ARG BUILD_NUMBER=0.4.4
 ARG BUILD_DATE
 ARG BUILD_PACKAGE=main
 ARG GIT_HASH
+ARG LD_FLAGS="-w -s -X '${BUILD_PACKAGE}.Build=${BUILD_NUMBER}' -X '${BUILD_PACKAGE}.BuildDate=${BUILD_DATE}' -X '${BUILD_PACKAGE}.GitHash=${GIT_HASH}'"
 
 # Build eval-hub binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
-    -ldflags="-w -s -X '${BUILD_PACKAGE}.Build=${BUILD_NUMBER}' -X '${BUILD_PACKAGE}.BuildDate=${BUILD_DATE}'" \
+    -ldflags="${LD_FLAGS}" \
     -a -installsuffix cgo \
     -o eval-hub \
     ./cmd/eval_hub
 
 # Build eval-runtime-sidecar binary (same image can run either via container command override)
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
-    -ldflags="-w -s -X '${BUILD_PACKAGE}.Build=${BUILD_NUMBER}' -X '${BUILD_PACKAGE}.BuildDate=${BUILD_DATE}'" \
+    -ldflags="${LD_FLAGS}" \
     -a -installsuffix cgo \
     -o eval-runtime-sidecar \
     ./cmd/eval_runtime_sidecar
 
 # Build the eval runtime init binary (S3 test-data download)
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
-    -ldflags="-w -s -X '${BUILD_PACKAGE}.Build=${BUILD_NUMBER}' -X '${BUILD_PACKAGE}.BuildDate=${BUILD_DATE}'" \
+    -ldflags="${LD_FLAGS}" \
     -a -installsuffix cgo \
     -o eval-runtime-init \
     ./cmd/eval_runtime_init
 
 # Build evalhub-mcp binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
-    -ldflags="-w -s -X '${BUILD_PACKAGE}.Build=${BUILD_NUMBER}' -X '${BUILD_PACKAGE}.BuildDate=${BUILD_DATE}' -X '${BUILD_PACKAGE}.GitHash=${GIT_HASH}'" \
+    -ldflags="${LD_FLAGS}" \
     -a -installsuffix cgo \
     -o evalhub-mcp \
     ./cmd/evalhub_mcp
