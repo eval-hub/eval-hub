@@ -247,10 +247,12 @@ func main() {
 }
 
 func startUpFailed(conf *config.Config, err error, msg string, logger *slog.Logger) {
-	termErr := server.SetTerminationMessage(server.GetTerminationFile(conf, logger), fmt.Sprintf("%s: %s", msg, err.Error()), logger)
-	if termErr != nil {
-		logger.Error("Failed to set termination message", "message", msg, "error", termErr.Error())
-		log.Println(termErr.Error())
+	if conf == nil || conf.Service == nil || !conf.Service.LocalMode {
+		termErr := server.SetTerminationMessage(server.GetTerminationFile(conf, logger), fmt.Sprintf("%s: %s", msg, err.Error()), logger)
+		if termErr != nil {
+			logger.Error("Failed to set termination message", "message", msg, "error", termErr.Error())
+			log.Println(termErr.Error())
+		}
 	}
 	log.Fatal(err)
 }
