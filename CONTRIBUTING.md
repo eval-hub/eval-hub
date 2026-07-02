@@ -371,14 +371,30 @@ EvalHub can be deployed on OpenShift via the [TrustyAI operator](https://github.
    Create an EvalHub CR to deploy your instance:
 
    ```yaml
-   apiVersion: trustyai.opendatahub.io/v1alpha1
+   apiVersion: trustyai.opendatahub.io/v1
    kind: EvalHub
    metadata:
      name: evalhub-instance
      namespace: <your-namespace>
    spec:
-     # Add your EvalHub configuration here
+     database:
+       type: postgresql
+       secret: evalhub-db
+     otel:
+       exporterType: otlp-grpc
+       exporterEndpoint: otel-collector.opentelemetry.svc:4317
+       exporterInsecure: false
+       samplingRatio: "1.0"
+       enableTracing: true
+       enableMetrics: true
+       enableLogs: false
+       tracerTimeout: "30s"
+       tracerBatchInterval: "5s"
+       metricExportInterval: "60s"
+       serviceName: eval-hub
    ```
+
+   When `spec.otel` is set, the [TrustyAI operator](https://github.com/trustyai-explainability/trustyai-service-operator) writes an `otel:` block into the EvalHub ConfigMap `config.yaml`. Field names use camelCase in the CR and map to eval-hub `otel.*` keys (see [OTEL.md](OTEL.md#openshift--trustyai-operator)).
 
 ### Additional Resources
 

@@ -192,6 +192,33 @@ Local validation: enable OTEL logs in `config/config.yaml`, run a job, and inspe
 
 ---
 
+## OpenShift / TrustyAI operator
+
+On OpenShift, EvalHub is typically deployed via the [TrustyAI service operator](https://github.com/trustyai-explainability/trustyai-service-operator). Set `spec.otel` on the `EvalHub` custom resource; the operator renders matching keys under `otel:` in the instance ConfigMap.
+
+| eval-hub `config.yaml` key | EvalHub CR `spec.otel` field | Notes |
+|----------------------------|------------------------------|-------|
+| `enabled` | *(presence of `spec.otel`)* | Omit `spec.otel` to disable OTEL |
+| `exporter_type` | `exporterType` | `otlp-grpc`, `otlp-http`, or `stdout` |
+| `exporter_endpoint` | `exporterEndpoint` | |
+| `exporter_insecure` | `exporterInsecure` | |
+| `sampling_ratio` | `samplingRatio` | String float, e.g. `"0.5"` |
+| `enable_tracing` | `enableTracing` | |
+| `enable_metrics` | `enableMetrics` | Required for HTTP metrics and OTEL-bridged `/metrics` |
+| `enable_logs` | `enableLogs` | |
+| `tracer_timeout` | `tracerTimeout` | Duration string, e.g. `"30s"` |
+| `tracer_batch_interval` | `tracerBatchInterval` | Duration string, e.g. `"5s"` |
+| `service_name` | `serviceName` | |
+| `additional_attributes` | `additionalAttributes` | Map of strings |
+| `enable_ecs_resource_detection` | `enableEcsResourceDetection` | |
+| `disable_redirect_otel_logs` | `disableRedirectOtelLogs` | |
+| `disable_database_otel_scan` | `disableDatabaseOtelScans` | |
+| `metric_export_interval` | `metricExportInterval` | Duration string, e.g. `"60s"` |
+
+`TLSConfig` is runtime-only and is not set from the CR. Job-pod sidecars inherit the OTEL block from the EvalHub service config when jobs are created.
+
+---
+
 ## Known gaps and limitations
 
 ### Trace continuity
