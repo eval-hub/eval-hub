@@ -387,7 +387,7 @@ EvalHub can be deployed on OpenShift via the [TrustyAI operator](https://github.
        samplingRatio: "1.0"
        enableTracing: true
        enableMetrics: true
-       enableLogs: false
+       enableLogs: true
        tracerTimeout: "30s"
        tracerBatchInterval: "5s"
        metricExportInterval: "60s"
@@ -395,6 +395,8 @@ EvalHub can be deployed on OpenShift via the [TrustyAI operator](https://github.
    ```
 
    When `spec.otel` is set, the [TrustyAI operator](https://github.com/trustyai-explainability/trustyai-service-operator) writes an `otel:` block into the EvalHub ConfigMap `config.yaml`. Field names use camelCase in the CR and map to eval-hub `otel.*` keys (see [OTEL.md](OTEL.md#openshift--trustyai-operator)).
+
+   To export adapter container logs at job completion, `enable_logs` must be true (`enableLogs: true` above). Eval-hub also supports `otel.enable_job_container_logs` (see [`config/config.yaml`](config/config.yaml)); it has no effect unless `enable_logs` is enabled. That flag is not yet exposed on `spec.otel`—set it in the operator-generated `config.yaml` if needed until the CRD adds it.
 
 ### Additional Resources
 
