@@ -249,5 +249,3 @@ mlflow.log
 .agentready/
 
 tests/mcp/vscode/test-scripts/reports/
-
-tests/prometheus/data/

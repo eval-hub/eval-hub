@@ -1,2 +1,2 @@
-# pours/
-# !pours/deployment/compose.yaml
+pours/
+!pours/deployment/compose.yaml
