@@ -60,3 +60,10 @@ func SetTerminationMessage(terminationFile string, message string, logger *slog.
 	}
 	return writeFile(terminationFile, message, "termination", logger)
 }
+
+func HandleStartupFailure(conf *config.Config, localMode bool, err error, msg string, logger *slog.Logger) {
+	termErr := SetTerminationMessage(GetTerminationFile(conf, localMode, logger), fmt.Sprintf("%s: %s", msg, err.Error()), logger)
+	if termErr != nil {
+		logger.Error("Failed to set termination message", "message", msg, "error", termErr.Error())
+	}
+}

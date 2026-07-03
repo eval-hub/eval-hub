@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"fmt"
 	"log"
 	"log/slog"
 
@@ -59,16 +58,21 @@ func args() Args {
 func main() {
 	args := args()
 
+	startUpFailed := func(conf *config.Config, err error, msg string, logger *slog.Logger) {
+		server.HandleStartupFailure(conf, args.LocalMode, err, msg, logger)
+		log.Fatal(err)
+	}
+
 	logger, logShutdown, err := logging.NewLogger()
 	if err != nil {
 		// we do this as no point trying to continue
-		startUpFailed(nil, args.LocalMode, err, "Failed to create service logger", logging.FallbackLogger())
+		startUpFailed(nil, err, "Failed to create service logger", logging.FallbackLogger())
 	}
 
 	serviceConfig, err := config.LoadConfig(logger, Version, Build, BuildDate, GitHash, args.ConfigDir)
 	if err != nil {
 		// we do this as no point trying to continue
-		startUpFailed(nil, args.LocalMode, err, "Failed to create service config", logger)
+		startUpFailed(nil, err, "Failed to create service config", logger)
 	}
 
 	serviceConfig.Service.LocalMode = args.LocalMode
@@ -80,14 +84,14 @@ func main() {
 	providerConfigs, err := config.LoadProviderConfigs(logger, validate, args.ConfigDir)
 	if err != nil {
 		// we do this as no point trying to continue
-		startUpFailed(serviceConfig, args.LocalMode, err, "Failed to create provider configs", logger)
+		startUpFailed(serviceConfig, err, "Failed to create provider configs", logger)
 	}
 
 	// set up the collection configs
 	collectionConfigs, err := config.LoadCollectionConfigs(logger, validate, args.ConfigDir)
 	if err != nil {
 		// we do this as no point trying to continue
-		startUpFailed(serviceConfig, args.LocalMode, err, "Failed to create collection configs", logger)
+		startUpFailed(serviceConfig, err, "Failed to create collection configs", logger)
 	}
 
 	// setup OTEL before storage so DB metrics can register against the MeterProvider
@@ -95,14 +99,14 @@ func main() {
 	if serviceConfig.IsOTELEnabled() {
 		shutdown, err := otel.SetupOTEL(context.Background(), serviceConfig.OTEL, logger, serviceConfig.IsPrometheusEnabled())
 		if err != nil {
-			startUpFailed(serviceConfig, args.LocalMode, err, "Failed to setup OTEL", logger)
+			startUpFailed(serviceConfig, err, "Failed to setup OTEL", logger)
 		}
 		otelShutdown = shutdown
 	}
 
 	if serviceConfig.IsOTELMetricsEnabled() {
 		if err := metrics.Init(); err != nil {
-			startUpFailed(serviceConfig, args.LocalMode, err, "Failed to initialize OTEL metrics", logger)
+			startUpFailed(serviceConfig, err, "Failed to initialize OTEL metrics", logger)
 		}
 	}
 
@@ -117,20 +121,20 @@ func main() {
 	)
 	if err != nil {
 		// we do this as no point trying to continue
-		startUpFailed(serviceConfig, args.LocalMode, err, "Failed to create storage", logger)
+		startUpFailed(serviceConfig, err, "Failed to create storage", logger)
 	}
 	// setup runtime
 	runtime, err := runtimes.NewRuntime(logger, serviceConfig)
 	if err != nil {
 		// we do this as no point trying to continue
-		startUpFailed(serviceConfig, args.LocalMode, err, "Failed to create runtime", logger)
+		startUpFailed(serviceConfig, err, "Failed to create runtime", logger)
 	}
 	logger.Info("Runtime created", "runtime", runtime.Name())
 
 	// setup mlflow client if there is a tracking URI set
 	mlflowClient, mlflowTrackingURI, mlflowServerVersion, err := mlflow.SetupMLFlowClient(serviceConfig, logger)
 	if err != nil {
-		startUpFailed(serviceConfig, args.LocalMode, err, "Failed to create MLFlow client", logger)
+		startUpFailed(serviceConfig, err, "Failed to create MLFlow client", logger)
 	}
 
 	// create the server
@@ -143,7 +147,7 @@ func main() {
 
 	if err != nil {
 		// we do this as no point trying to continue
-		startUpFailed(serviceConfig, args.LocalMode, err, "Failed to create API server", logger)
+		startUpFailed(serviceConfig, err, "Failed to create API server", logger)
 	}
 
 	// Create the metrics server if Prometheus is enabled
@@ -195,7 +199,7 @@ func main() {
 				logger.Info("API Server closed gracefully")
 				return
 			}
-			startUpFailed(serviceConfig, args.LocalMode, err, "API Server failed to start", logger)
+			startUpFailed(serviceConfig, err, "API Server failed to start", logger)
 		}
 	}()
 
@@ -244,13 +248,4 @@ func main() {
 		logger.Info("API Server shutdown gracefully")
 		_ = logShutdown() // ignore the error
 	}
-}
-
-func startUpFailed(conf *config.Config, localMode bool, err error, msg string, logger *slog.Logger) {
-	termErr := server.SetTerminationMessage(server.GetTerminationFile(conf, localMode, logger), fmt.Sprintf("%s: %s", msg, err.Error()), logger)
-	if termErr != nil {
-		logger.Error("Failed to set termination message", "message", msg, "error", termErr.Error())
-		log.Println(termErr.Error())
-	}
-	log.Fatal(err)
 }

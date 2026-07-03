@@ -1,7 +1,7 @@
 package server_test
 
 import (
-	"io"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -13,7 +13,7 @@ import (
 )
 
 func discardLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
+	return slog.New(slog.DiscardHandler)
 }
 
 func TestGetTerminationFile(t *testing.T) {
@@ -139,4 +139,38 @@ func TestSetTerminationMessage_EmptyPath(t *testing.T) {
 	if err != nil {
 		t.Errorf("expected no-op for empty path, got error: %v", err)
 	}
+}
+
+func TestHandleStartupFailure_WritesTerminationFile(t *testing.T) {
+	dir := t.TempDir()
+	termFile := filepath.Join(dir, "termination-log")
+	conf := &config.Config{Service: &config.ServiceConfig{TerminationFile: termFile}}
+
+	server.HandleStartupFailure(conf, false, errors.New("db connect failed"), "Failed to create storage", discardLogger())
+
+	data, err := os.ReadFile(termFile)
+	if err != nil {
+		t.Fatalf("failed to read termination file: %v", err)
+	}
+	want := "Failed to create storage: db connect failed"
+	if string(data) != want {
+		t.Errorf("got %q, want %q", string(data), want)
+	}
+}
+
+func TestHandleStartupFailure_LocalModeSkipsFile(t *testing.T) {
+	dir := t.TempDir()
+	termFile := filepath.Join(dir, "termination-log")
+	conf := &config.Config{Service: &config.ServiceConfig{TerminationFile: termFile}}
+
+	server.HandleStartupFailure(conf, true, errors.New("boom"), "Failed", discardLogger())
+
+	if _, err := os.Stat(termFile); !os.IsNotExist(err) {
+		t.Error("expected no termination file in local mode")
+	}
+}
+
+func TestHandleStartupFailure_NilConfig(t *testing.T) {
+	t.Setenv(constants.EnvVarTerminationFile, "")
+	server.HandleStartupFailure(nil, false, errors.New("boom"), "Failed", discardLogger())
 }
