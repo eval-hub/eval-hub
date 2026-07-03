@@ -13,7 +13,7 @@ DOWNLOAD_NAME="darwin-amd64"
 # https://github.com/jaegertracing/jaeger/releases/download/v2.15.1/jaeger-2.15.1-darwin-arm64.tar.gz
 
 # This is the jaeger v2 version
-JAEGER_VERSION="2.15.1"
+JAEGER_VERSION="2.19.0"
 
 # Get the project root directory, handling both direct execution and symlink execution
 if [ -L "${BASH_SOURCE[0]}" ]; then

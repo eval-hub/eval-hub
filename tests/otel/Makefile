@@ -8,7 +8,7 @@ start-signoz: ## Start local SigNoz stack (Podman Compose)
 	$(PODMAN) compose -f $(COMPOSE_FILE) up -d
 
 stop-signoz: ## Stop local SigNoz stack
-	$(PODMAN) compose -f $(COMPOSE_FILE) down
+	$(PODMAN) compose -f $(COMPOSE_FILE) down -v
 
 logs-signoz: ## Follow SigNoz ingester and UI logs
 	$(PODMAN) compose -f $(COMPOSE_FILE) logs -f ingester signoz-signoz-0
@@ -24,3 +24,7 @@ forge-signoz: ## Regenerate pours/deployment with foundryctl (requires casting.y
 # Backward-compatible aliases
 start-otel-collector: start-signoz
 stop-otel-collector: stop-signoz
+
+.PHONY: cls
+cls:
+	printf "\33c\e[3J"
