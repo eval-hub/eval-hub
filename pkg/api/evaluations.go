@@ -177,6 +177,7 @@ type BenchmarkStatusEvent struct {
 	Status         State          `json:"status" validate:"required,oneof=pending running completed failed"`
 	Phase          JobPhase       `json:"phase,omitempty" validate:"omitempty,oneof=initializing loading_data running_evaluation post_processing persisting_artifacts completed"`
 	Metrics        map[string]any `json:"metrics,omitempty"`
+	AdditionalInfo map[string]any `json:"additional_info,omitempty"`
 	Artifacts      map[string]any `json:"artifacts,omitempty"`
 	ErrorMessage   *MessageInfo   `json:"error_message,omitempty"`
 	WarningMessage *MessageInfo   `json:"warning_message,omitempty"`
@@ -200,6 +201,7 @@ type BenchmarkResult struct {
 	ProviderID     string         `json:"provider_id"`
 	BenchmarkIndex int            `json:"benchmark_index"`
 	Metrics        map[string]any `json:"metrics,omitempty"`
+	AdditionalInfo map[string]any `json:"additional_info,omitempty"`
 	Artifacts      map[string]any `json:"artifacts,omitempty"`
 	MLFlowRunID    string         `json:"mlflow_run_id,omitempty"`
 	LogsPath       string         `json:"logs_path,omitempty"`

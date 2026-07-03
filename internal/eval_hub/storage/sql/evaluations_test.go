@@ -34,6 +34,10 @@ func TestUpdateEvaluationJob_PersistsPhase(t *testing.T) {
 	testUpdateEvaluationJob_PersistsPhase(t, drivers[0], getDBName())
 }
 
+func TestUpdateEvaluationJob_PersistsAdditionalInfo(t *testing.T) {
+	testUpdateEvaluationJob_PersistsAdditionalInfo(t, drivers[0], getDBName())
+}
+
 // TestStorage tests the storage implementation and provides
 // a simple way to debug the storage implementation.
 func TestEvaluationsStorage(t *testing.T) {
@@ -59,6 +63,7 @@ func TestGetEvaluationJobs_Postgres(t *testing.T) {
 	testGetEvaluationJobs_TenantFilter(t, drivers[1], databaseName)
 	testUpdateEvaluationJob_PreservesProviderID(t, drivers[1], databaseName)
 	testUpdateEvaluationJob_PersistsPhase(t, drivers[1], databaseName)
+	testUpdateEvaluationJob_PersistsAdditionalInfo(t, drivers[1], databaseName)
 	testEvaluationsStorage(t, drivers[1], databaseName)
 }
 
@@ -365,6 +370,102 @@ func testUpdateEvaluationJob_PersistsPhase(t *testing.T, driver string, database
 	}
 }
 
+func testUpdateEvaluationJob_PersistsAdditionalInfo(t *testing.T, driver string, databaseName string) {
+	store, err := getTestStorage(t, driver, databaseName)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	now := time.Now()
+	jobID := common.GUID()
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{
+				ID:        jobID,
+				Tenant:    api.Tenant("tenant-additional-info"),
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			MLFlowExperimentID: "experiment-1",
+		},
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{
+				State:   api.OverallStateRunning,
+				Message: &api.MessageInfo{Message: "Job is running", MessageCode: "JOB_RUNNING"},
+			},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{URL: "http://test-model:8000", Name: "test-model"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "arc_easy"}, ProviderID: "lm_evaluation_harness"},
+			},
+		},
+	}
+
+	if err := store.CreateEvaluationJob(job); err != nil {
+		t.Fatalf("Failed to create job: %v", err)
+	}
+
+	additionalInfo := map[string]any{
+		"model_size": "7B",
+		"tokens":     float64(1024),
+	}
+
+	runningUpdate := &api.StatusEvent{
+		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			ProviderID:     "lm_evaluation_harness",
+			ID:             "arc_easy",
+			Status:         api.StateRunning,
+			StartedAt:      api.DateTimeToString(now),
+			AdditionalInfo: additionalInfo,
+		},
+	}
+
+	if err := store.UpdateEvaluationJob(jobID, runningUpdate); err != nil {
+		t.Fatalf("Failed to update job with running status: %v", err)
+	}
+
+	runningJob, err := store.GetEvaluationJob(jobID)
+	if err != nil {
+		t.Fatalf("Failed to get running job: %v", err)
+	}
+
+	if runningJob.Results != nil && len(runningJob.Results.Benchmarks) > 0 {
+		t.Fatal("Expected additional_info not to be persisted before terminal benchmark state")
+	}
+
+	completionUpdate := &api.StatusEvent{
+		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			ProviderID:     "lm_evaluation_harness",
+			ID:             "arc_easy",
+			Status:         api.StateCompleted,
+			AdditionalInfo: additionalInfo,
+		},
+	}
+
+	if err := store.UpdateEvaluationJob(jobID, completionUpdate); err != nil {
+		t.Fatalf("Failed to update job with completed status: %v", err)
+	}
+
+	finalJob, err := store.GetEvaluationJob(jobID)
+	if err != nil {
+		t.Fatalf("Failed to get final job: %v", err)
+	}
+
+	if len(finalJob.Results.Benchmarks) != 1 {
+		t.Fatalf("Expected 1 benchmark in results, got %d", len(finalJob.Results.Benchmarks))
+	}
+
+	result := finalJob.Results.Benchmarks[0]
+	if result.AdditionalInfo == nil {
+		t.Fatal("Expected additional_info to be stored, got nil")
+	}
+
+	if !maps.Equal(result.AdditionalInfo, additionalInfo) {
+		t.Errorf("AdditionalInfo mismatch: %v != %v", result.AdditionalInfo, additionalInfo)
+	}
+}
+
 func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 	var store abstractions.Storage
 	var evaluationId string
@@ -516,16 +617,21 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 			"metric-1": 1.0,
 			"metric-2": 2.0,
 		}
+		additionalInfo := map[string]any{
+			"runtime": "local",
+			"version": "1.0.0",
+		}
 		now := time.Now()
 		status := &api.StatusEvent{
 			BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 				ID:         benchmarkConfig.ID,
 				ProviderID: benchmarkConfig.ProviderID,
 				// the job status needs to be completed to update the metrics and artifacts
-				Status:      api.StateCompleted,
-				CompletedAt: api.DateTimeToString(now),
-				Metrics:     metrics,
-				Artifacts:   map[string]any{},
+				Status:         api.StateCompleted,
+				CompletedAt:    api.DateTimeToString(now),
+				Metrics:        metrics,
+				AdditionalInfo: additionalInfo,
+				Artifacts:      map[string]any{},
 				ErrorMessage: &api.MessageInfo{
 					Message:     "Test error message",
 					MessageCode: "TEST_ERROR_MESSAGE",
@@ -561,6 +667,9 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 		}
 		if !maps.Equal(job.Results.Benchmarks[0].Metrics, metrics) {
 			t.Fatalf("Metrics mismatch: %v != %v", job.Results.Benchmarks[0].Metrics, metrics)
+		}
+		if !maps.Equal(job.Results.Benchmarks[0].AdditionalInfo, additionalInfo) {
+			t.Fatalf("AdditionalInfo mismatch: %v != %v", job.Results.Benchmarks[0].AdditionalInfo, additionalInfo)
 		}
 
 		if job.Status.Benchmarks[0].CompletedAt == "" {
