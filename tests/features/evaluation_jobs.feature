@@ -1249,3 +1249,22 @@ Feature: Evaluation Jobs
     And the response should contain the value "integration-test" at path "$.tags[0]"
     And the response should contain the value "kueue-enabled" at path "$.tags[1]"
     And the response should equal the value "0.8" at path "$.pass_criteria.threshold"
+
+  @logs
+  Scenario: Collect evaluation job logs after completion
+    Given the service is running
+    And I set the wait interval to "5s"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    Then the response code should be 202
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}/logs"
+    Then the response code should be 200
+    And the response content type should be "text/plain"
+    And the response body should contain "benchmark_id=arc_easy"
+    And the response body should contain "EVALUATION COMPLETE"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}/benchmarks/0/logs"
+    Then the response code should be 200
+    And the response content type should be "text/plain"
+    And the response body should contain "EVALUATION COMPLETE"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204

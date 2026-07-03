@@ -89,6 +89,42 @@ func TestIsOTELMetricsEnabled(t *testing.T) {
 	})
 }
 
+func TestIsOTELLogsEnabled(t *testing.T) {
+	t.Run("nil config returns false", func(t *testing.T) {
+		var c *config.Config
+		if c.IsOTELLogsEnabled() {
+			t.Error("expected false")
+		}
+	})
+	t.Run("logs disabled returns false", func(t *testing.T) {
+		c := &config.Config{OTEL: &config.OTELConfig{Enabled: true, EnableLogs: false}}
+		if c.IsOTELLogsEnabled() {
+			t.Error("expected false when EnableLogs is false")
+		}
+	})
+	t.Run("OTEL and logs enabled returns true", func(t *testing.T) {
+		c := &config.Config{OTEL: &config.OTELConfig{Enabled: true, EnableLogs: true}}
+		if !c.IsOTELLogsEnabled() {
+			t.Error("expected true")
+		}
+	})
+}
+
+func TestIsOTELJobContainerLogsEnabled(t *testing.T) {
+	t.Run("container logs without enable_logs returns false", func(t *testing.T) {
+		c := &config.Config{OTEL: &config.OTELConfig{Enabled: true, EnableJobContainerLogs: true}}
+		if c.IsOTELJobContainerLogsEnabled() {
+			t.Error("expected false without enable_logs")
+		}
+	})
+	t.Run("all flags enabled returns true", func(t *testing.T) {
+		c := &config.Config{OTEL: &config.OTELConfig{Enabled: true, EnableLogs: true, EnableJobContainerLogs: true}}
+		if !c.IsOTELJobContainerLogsEnabled() {
+			t.Error("expected true")
+		}
+	})
+}
+
 func TestIsOTELStorageScansEnabled(t *testing.T) {
 	t.Run("OTEL off returns false", func(t *testing.T) {
 		c := &config.Config{OTEL: &config.OTELConfig{Enabled: false, DisableDatabaseOTELScans: false}}

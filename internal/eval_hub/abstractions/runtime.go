@@ -26,6 +26,14 @@ type Runtime interface {
 	Name() string
 	RunEvaluationJob(evaluation *api.EvaluationJobResource, benchmarks []api.EvaluationBenchmarkConfig, storage RuntimeStorage) error
 	DeleteEvaluationJobResources(evaluation *api.EvaluationJobResource) error
+	// GetEvaluationLogs returns plain-text workload logs. When benchmarkIndex is nil, logs
+	// for all benchmarks are concatenated with section headers; otherwise only that benchmark.
+	GetEvaluationLogs(
+		evaluation *api.EvaluationJobResource,
+		benchmarks []api.EvaluationBenchmarkConfig,
+		benchmarkIndex *int,
+		opts api.EvaluationLogOptions,
+	) (string, error)
 }
 
 // This interface must be decoupled from the service HTTP layer

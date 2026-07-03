@@ -98,6 +98,12 @@ func main() {
 			startUpFailed(serviceConfig, err, "Failed to setup OTEL", logger)
 		}
 		otelShutdown = shutdown
+		if serviceConfig.IsOTELLogsEnabled() {
+			logger = otel.BridgeSlogToOTEL(logger)
+		}
+	}
+	if serviceConfig.OTEL != nil && serviceConfig.OTEL.EnableJobContainerLogs && !serviceConfig.IsOTELLogsEnabled() {
+		logger.Warn("otel.enable_job_container_logs requires otel.enable_logs; container log export is disabled")
 	}
 
 	if serviceConfig.IsOTELMetricsEnabled() {
