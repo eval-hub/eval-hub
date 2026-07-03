@@ -418,6 +418,7 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 				ID:             runStatus.BenchmarkStatusEvent.ID,
 				ProviderID:     runStatus.BenchmarkStatusEvent.ProviderID,
 				Metrics:        runStatus.BenchmarkStatusEvent.Metrics,
+				AdditionalInfo: runStatus.BenchmarkStatusEvent.AdditionalInfo,
 				Artifacts:      runStatus.BenchmarkStatusEvent.Artifacts,
 				MLFlowRunID:    runStatus.BenchmarkStatusEvent.MLFlowRunID,
 				LogsPath:       runStatus.BenchmarkStatusEvent.LogsPath,

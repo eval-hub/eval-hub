@@ -3199,6 +3199,11 @@
             "additionalProperties": true,
             "description": "Metric name to value"
           },
+          "additional_info": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Additional benchmark information"
+          },
           "artifacts": {
             "type": "object",
             "additionalProperties": true,
@@ -3853,6 +3858,11 @@
             "type": "object",
             "additionalProperties": true,
             "description": "Benchmark metrics"
+          },
+          "additional_info": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Additional benchmark information"
           },
           "artifacts": {
             "type": "object",
