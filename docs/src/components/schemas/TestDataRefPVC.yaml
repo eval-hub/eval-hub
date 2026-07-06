@@ -7,9 +7,9 @@ description: |
   No init container is scheduled — the data must already reside on the PVC before job submission.
 
   **Requirements:**
-  - The PVC must exist in the **same namespace** as the evaluation job.
-  - Cross-namespace PVC references are rejected at submission time.
-  - EvalHub does not create, provision, or manage the PVC — this is the tenant's responsibility.
+  - The PersistentVolumeClaim named by **`claim`** must already exist in the **same namespace**
+    as the evaluation job.
+  - Eval Hub does not create, provision, or manage the PVC — this is the tenant's responsibility.
   - The evaluation adapter reads data from `/test_data` identically to S3-backed jobs.
 required:
   - claim

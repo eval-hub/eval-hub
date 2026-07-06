@@ -123,15 +123,9 @@ func parseEvaluationLogOptions(req http_wrappers.RequestWrapper) (api.Evaluation
 		return api.EvaluationLogOptions{}, err
 	}
 
-	previous, err := GetParam(req, "previous", true, false)
-	if err != nil {
-		return api.EvaluationLogOptions{}, err
-	}
-
 	opts := api.EvaluationLogOptions{
 		TailLines:  tailLines,
 		Timestamps: timestamps,
-		Previous:   previous,
 	}
 
 	rawSince := req.Query("since_seconds")

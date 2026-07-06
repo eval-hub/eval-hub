@@ -30,6 +30,7 @@ allOf:
       test_data_ref:
         $ref: ./TestDataRef.yaml
         description: |
-          Optional external test data (e.g. **S3**). For **Kubernetes Job** runs, may
-          trigger a pre-run init container that downloads files to **`/test_data`** for
-          the adapter. Omit if the benchmark does not need mounted files.
+          Optional external test data mounted at **`/test_data`** for **Kubernetes Job** runs.
+          Set **`s3`** to download objects via a pre-run init container, or **`pvc`** to mount
+          an existing PersistentVolumeClaim read-only with no init container. Omit if the
+          benchmark does not need mounted files.

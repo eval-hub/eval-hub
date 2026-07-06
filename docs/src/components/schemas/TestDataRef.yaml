@@ -19,8 +19,22 @@ description: |
 
   Do not put credentials in the Eval Hub API request body; only reference an existing
   Secret via **`secret_ref`** (for S3).
-properties:
-  s3:
-    $ref: ./TestDataRefS3.yaml
-  pvc:
-    $ref: ./TestDataRefPVC.yaml
+oneOf:
+  - type: object
+    required:
+      - s3
+    properties:
+      s3:
+        $ref: ./TestDataRefS3.yaml
+    not:
+      required:
+        - pvc
+  - type: object
+    required:
+      - pvc
+    properties:
+      pvc:
+        $ref: ./TestDataRefPVC.yaml
+    not:
+      required:
+        - s3
