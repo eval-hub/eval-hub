@@ -9,6 +9,5 @@ const (
 type EvaluationLogOptions struct {
 	TailLines    int
 	Timestamps   bool
-	Previous     bool
 	SinceSeconds *int
 }

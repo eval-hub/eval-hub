@@ -99,7 +99,6 @@ func TestHandleGetEvaluationJobLogs(t *testing.T) {
 		queryValues: map[string][]string{
 			"tail_lines":    {"500"},
 			"timestamps":    {"true"},
-			"previous":      {"true"},
 			"since_seconds": {"120"},
 		},
 	}
@@ -126,9 +125,6 @@ func TestHandleGetEvaluationJobLogs(t *testing.T) {
 	}
 	if !runtime.capturedOpts.Timestamps {
 		t.Fatal("expected timestamps=true")
-	}
-	if !runtime.capturedOpts.Previous {
-		t.Fatal("expected previous=true")
 	}
 	if runtime.capturedOpts.SinceSeconds == nil || *runtime.capturedOpts.SinceSeconds != 120 {
 		t.Fatalf("since_seconds = %v, want 120", runtime.capturedOpts.SinceSeconds)

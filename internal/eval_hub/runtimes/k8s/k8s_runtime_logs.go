@@ -89,7 +89,6 @@ func (r *K8sRuntime) readBenchmarkLogs(
 	logOpts := &corev1.PodLogOptions{
 		Container:  adapterContainerName,
 		Timestamps: opts.Timestamps,
-		Previous:   opts.Previous,
 	}
 	if opts.TailLines > 0 {
 		tail := int64(opts.TailLines)

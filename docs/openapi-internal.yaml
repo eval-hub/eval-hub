@@ -671,13 +671,6 @@ paths:
             type: boolean
             default: false
             description: Include Kubernetes log timestamps
-        - name: previous
-          in: query
-          required: false
-          schema:
-            type: boolean
-            default: false
-            description: Return logs from the previous terminated container instance
         - name: since_seconds
           in: query
           required: false
@@ -750,13 +743,6 @@ paths:
             type: boolean
             default: false
             description: Include Kubernetes log timestamps
-        - name: previous
-          in: query
-          required: false
-          schema:
-            type: boolean
-            default: false
-            description: Return logs from the previous terminated container instance
         - name: since_seconds
           in: query
           required: false
