@@ -493,8 +493,8 @@ func TestCreateBenchmarkResourcesMountsPVCTestData(t *testing.T) {
 	evaluation := sampleEvaluation(providerID)
 	evaluation.Benchmarks[0].TestDataRef = &api.TestDataRef{
 		PVC: &api.PVCTestDataRef{
-			Claim: "eval-datasets-pvc",
-			SubPath:   "benchmark-a/v1",
+			Claim:   "eval-datasets-pvc",
+			SubPath: "benchmark-a/v1",
 		},
 	}
 
