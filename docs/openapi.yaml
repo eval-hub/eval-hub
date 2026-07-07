@@ -2281,13 +2281,44 @@ components:
         bucket: my-eval-bucket
         key: datasets/benchmark-a/v1
         secret_ref: my-s3-connection-secret
+    TestDataRefPVC:
+      type: object
+      description: |
+        PersistentVolumeClaim (PVC) test data. Only applies when Eval Hub runs the benchmark as a
+        **Kubernetes Job** (cluster execution). It does not apply to local-only evaluation runs.
+
+        The PVC is mounted **read-only** directly into the evaluation container at **`/test_data`**.
+        No init container is scheduled — the data must already reside on the PVC before job submission.
+
+        **Requirements:**
+        - The PersistentVolumeClaim named by **`claim_name`** must already exist in the **same namespace**
+          as the evaluation job.
+        - Eval Hub does not create, provision, or manage the PVC — this is the tenant's responsibility.
+        - The evaluation adapter reads data from `/test_data` identically to S3-backed jobs.
+      required:
+        - claim_name
+      properties:
+        claim_name:
+          type: string
+          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+          description: |
+            Name of the PersistentVolumeClaim in the evaluation job namespace (same as Kubernetes
+            `PersistentVolumeClaimVolumeSource.claimName`). Must be a valid RFC 1123 DNS label.
+        sub_path:
+          type: string
+          description: |
+            Optional path within the PVC to mount at `/test_data` instead of the PVC root.
+            Useful when a single PVC contains data for multiple benchmarks in separate directories.
+      example:
+        claim_name: eval-datasets-pvc
+        sub_path: benchmark-a/v1
     TestDataRef:
       type: object
       description: |
-        Reference to external test data for a benchmark.
+        Reference to external test data for a benchmark. Exactly one of `s3` or `pvc` must be set.
 
-        When the evaluation runs as a **Kubernetes Job**, setting `s3` makes Eval Hub schedule
-        an **init container** on the evaluation job pod before the adapter runs. That init container:
+        **`s3`** — When the evaluation runs as a **Kubernetes Job**, Eval Hub schedules an
+        **init container** on the evaluation job pod before the adapter runs. That init container:
 
         - Reads **`bucket`**, **`key`**, and **`secret_ref`** from the job spec (same JSON
           mounted into the pod).
@@ -2297,13 +2328,25 @@ components:
           **`emptyDir`** volume at **`/test_data`**, preserving relative paths.
         - Exits; the **adapter container** mounts `/test_data` and reads the files.
 
+        **`pvc`** — The PersistentVolumeClaim is mounted **read-only** directly into the evaluation
+        container at **`/test_data`**. No init container is used; the PVC must already contain the
+        data and must exist in the same namespace as the evaluation job.
+
         Do not put credentials in the Eval Hub API request body; only reference an existing
-        Secret via **`secret_ref`**.
-      required:
-        - s3
+        Secret via **`secret_ref`** (for S3).
+      additionalProperties: false
       properties:
         s3:
           $ref: '#/components/schemas/TestDataRefS3'
+        pvc:
+          $ref: '#/components/schemas/TestDataRefPVC'
+      minProperties: 1
+      maxProperties: 1
+      oneOf:
+        - required:
+            - s3
+        - required:
+            - pvc
     EvaluationBenchmarkConfig:
       type: object
       description: |
@@ -2339,9 +2382,10 @@ components:
             test_data_ref:
               $ref: '#/components/schemas/TestDataRef'
               description: |
-                Optional external test data (e.g. **S3**). For **Kubernetes Job** runs, may
-                trigger a pre-run init container that downloads files to **`/test_data`** for
-                the adapter. Omit if the benchmark does not need mounted files.
+                Optional external test data mounted at **`/test_data`** for **Kubernetes Job** runs.
+                Set **`s3`** to download objects via a pre-run init container, or **`pvc`** to mount
+                an existing PersistentVolumeClaim read-only with no init container. Omit if the
+                benchmark does not need mounted files.
     PassCriteriaWithDefault:
       type: object
       description: Pass/fail threshold criteria.
@@ -2914,9 +2958,10 @@ components:
             test_data_ref:
               $ref: '#/components/schemas/TestDataRef'
               description: |
-                Optional external test data (e.g. **S3**). For **Kubernetes Job** runs, may
-                trigger a pre-run init container that downloads files to **`/test_data`** for
-                the adapter. Omit if the benchmark does not need mounted files.
+                Optional external test data mounted at **`/test_data`** for **Kubernetes Job** runs.
+                Set **`s3`** to download objects via a pre-run init container, or **`pvc`** to mount
+                an existing PersistentVolumeClaim read-only with no init container. Omit if the
+                benchmark does not need mounted files.
     CollectionConfig:
       type: object
       description: Request to create or update a collection.

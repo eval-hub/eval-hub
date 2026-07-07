@@ -420,3 +420,66 @@ func TestValidateCollectionOverrides_EmptyOverrides(t *testing.T) {
 		t.Fatalf("expected no error for empty overrides, got: %v", err)
 	}
 }
+
+func TestTestDataRef_BothS3AndPVCRejected(t *testing.T) {
+	validate := NewValidator()
+	ref := api.TestDataRef{
+		S3:  &api.S3TestDataRef{Bucket: "b", Key: "k", SecretRef: "s"},
+		PVC: &api.PVCTestDataRef{ClaimName: "my-pvc"},
+	}
+	err := validate.Struct(ref)
+	if err == nil {
+		t.Fatal("expected validation error when both s3 and pvc are set")
+	}
+}
+
+func TestTestDataRef_NeitherS3NorPVCRejected(t *testing.T) {
+	validate := NewValidator()
+	ref := api.TestDataRef{}
+	err := validate.Struct(ref)
+	if err == nil {
+		t.Fatal("expected validation error when neither s3 nor pvc is set")
+	}
+}
+
+func TestTestDataRef_PVCOnlyAccepted(t *testing.T) {
+	validate := NewValidator()
+	ref := api.TestDataRef{
+		PVC: &api.PVCTestDataRef{ClaimName: "my-pvc"},
+	}
+	if err := validate.Struct(ref); err != nil {
+		t.Fatalf("expected no error for valid pvc-only TestDataRef, got: %v", err)
+	}
+}
+
+func TestTestDataRef_S3OnlyAccepted(t *testing.T) {
+	validate := NewValidator()
+	ref := api.TestDataRef{
+		S3: &api.S3TestDataRef{Bucket: "b", Key: "k", SecretRef: "s"},
+	}
+	if err := validate.Struct(ref); err != nil {
+		t.Fatalf("expected no error for valid s3-only TestDataRef, got: %v", err)
+	}
+}
+
+func TestPVCTestDataRef_InvalidClaimNameRejected(t *testing.T) {
+	validate := NewValidator()
+	cases := []string{"", "My_PVC", "my pvc", "-leading-hyphen", "trailing-hyphen-"}
+	for _, name := range cases {
+		ref := api.PVCTestDataRef{ClaimName: name}
+		if err := validate.Struct(ref); err == nil {
+			t.Errorf("expected validation error for claim %q", name)
+		}
+	}
+}
+
+func TestPVCTestDataRef_ValidClaimNameAccepted(t *testing.T) {
+	validate := NewValidator()
+	cases := []string{"my-pvc", "eval-datasets-pvc", "pvc123", "a"}
+	for _, name := range cases {
+		ref := api.PVCTestDataRef{ClaimName: name}
+		if err := validate.Struct(ref); err != nil {
+			t.Errorf("expected no error for claim %q, got: %v", name, err)
+		}
+	}
+}
