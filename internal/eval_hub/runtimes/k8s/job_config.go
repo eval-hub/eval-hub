@@ -195,7 +195,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 
 	var testDataPVCClaimName, testDataPVCSubPath string
 	if benchmarkConfig.TestDataRef != nil && benchmarkConfig.TestDataRef.PVC != nil {
-		testDataPVCClaimName = strings.TrimSpace(benchmarkConfig.TestDataRef.PVC.Claim)
+		testDataPVCClaimName = strings.TrimSpace(benchmarkConfig.TestDataRef.PVC.ClaimName)
 		testDataPVCSubPath = strings.TrimSpace(benchmarkConfig.TestDataRef.PVC.SubPath)
 	}
 

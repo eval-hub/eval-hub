@@ -52,7 +52,7 @@ func TestUnmarshal_TestDataRefMutualExclusionValidationError(t *testing.T) {
 			"provider_id":"provider-1",
 			"test_data_ref":{
 				"s3":{"bucket":"b","key":"k","secret_ref":"s"},
-				"pvc":{"claim":"my-pvc"}
+				"pvc":{"claim_name":"my-pvc"}
 			}
 		}]
 	}`)

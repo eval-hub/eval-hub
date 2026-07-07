@@ -110,8 +110,8 @@ type S3TestDataRef struct {
 // The PVC must exist in the same namespace as the evaluation job and is mounted
 // read-only at /test_data in the adapter container. No init container is used.
 type PVCTestDataRef struct {
-	Claim   string `json:"claim" validate:"required,rfc1123_dns_label"`
-	SubPath string `json:"sub_path,omitempty"`
+	ClaimName string `json:"claim_name" mapstructure:"claim_name" validate:"required,rfc1123_dns_label"`
+	SubPath   string `json:"sub_path,omitempty" mapstructure:"sub_path,omitempty"`
 }
 
 // TestDataRef represents external test data sources.

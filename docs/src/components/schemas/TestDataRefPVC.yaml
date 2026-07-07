@@ -7,23 +7,24 @@ description: |
   No init container is scheduled — the data must already reside on the PVC before job submission.
 
   **Requirements:**
-  - The PersistentVolumeClaim named by **`claim`** must already exist in the **same namespace**
+  - The PersistentVolumeClaim named by **`claim_name`** must already exist in the **same namespace**
     as the evaluation job.
   - Eval Hub does not create, provision, or manage the PVC — this is the tenant's responsibility.
   - The evaluation adapter reads data from `/test_data` identically to S3-backed jobs.
 required:
-  - claim
+  - claim_name
 properties:
-  claim:
+  claim_name:
     type: string
+    pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
     description: |
-      Name of the PersistentVolumeClaim in the evaluation job namespace.
-      Must be a valid RFC 1123 DNS label.
+      Name of the PersistentVolumeClaim in the evaluation job namespace (same as Kubernetes
+      `PersistentVolumeClaimVolumeSource.claimName`). Must be a valid RFC 1123 DNS label.
   sub_path:
     type: string
     description: |
       Optional path within the PVC to mount at `/test_data` instead of the PVC root.
       Useful when a single PVC contains data for multiple benchmarks in separate directories.
 example:
-  claim: eval-datasets-pvc
+  claim_name: eval-datasets-pvc
   sub_path: benchmark-a/v1

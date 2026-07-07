@@ -425,7 +425,7 @@ func TestTestDataRef_BothS3AndPVCRejected(t *testing.T) {
 	validate := NewValidator()
 	ref := api.TestDataRef{
 		S3:  &api.S3TestDataRef{Bucket: "b", Key: "k", SecretRef: "s"},
-		PVC: &api.PVCTestDataRef{Claim: "my-pvc"},
+		PVC: &api.PVCTestDataRef{ClaimName: "my-pvc"},
 	}
 	err := validate.Struct(ref)
 	if err == nil {
@@ -445,7 +445,7 @@ func TestTestDataRef_NeitherS3NorPVCRejected(t *testing.T) {
 func TestTestDataRef_PVCOnlyAccepted(t *testing.T) {
 	validate := NewValidator()
 	ref := api.TestDataRef{
-		PVC: &api.PVCTestDataRef{Claim: "my-pvc"},
+		PVC: &api.PVCTestDataRef{ClaimName: "my-pvc"},
 	}
 	if err := validate.Struct(ref); err != nil {
 		t.Fatalf("expected no error for valid pvc-only TestDataRef, got: %v", err)
@@ -466,7 +466,7 @@ func TestPVCTestDataRef_InvalidClaimNameRejected(t *testing.T) {
 	validate := NewValidator()
 	cases := []string{"", "My_PVC", "my pvc", "-leading-hyphen", "trailing-hyphen-"}
 	for _, name := range cases {
-		ref := api.PVCTestDataRef{Claim: name}
+		ref := api.PVCTestDataRef{ClaimName: name}
 		if err := validate.Struct(ref); err == nil {
 			t.Errorf("expected validation error for claim %q", name)
 		}
@@ -477,7 +477,7 @@ func TestPVCTestDataRef_ValidClaimNameAccepted(t *testing.T) {
 	validate := NewValidator()
 	cases := []string{"my-pvc", "eval-datasets-pvc", "pvc123", "a"}
 	for _, name := range cases {
-		ref := api.PVCTestDataRef{Claim: name}
+		ref := api.PVCTestDataRef{ClaimName: name}
 		if err := validate.Struct(ref); err != nil {
 			t.Errorf("expected no error for claim %q, got: %v", name, err)
 		}
