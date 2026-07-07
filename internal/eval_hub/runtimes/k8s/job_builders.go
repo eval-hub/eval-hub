@@ -195,9 +195,6 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	if cfg.adapterImage == "" {
 		return nil, fmt.Errorf("adapter image is required")
 	}
-	if err := validateExclusiveTestDataSource(cfg); err != nil {
-		return nil, err
-	}
 	labels := jobLabels(cfg)
 	annotations := jobAnnotations(cfg.jobID, cfg.providerID, cfg.benchmarkID)
 	jobName := jobName(cfg.jobID, cfg.resourceGUID)
@@ -734,13 +731,6 @@ func hasS3TestData(cfg *jobConfig) bool {
 
 func hasPVCTestData(cfg *jobConfig) bool {
 	return cfg.testDataPVC.claimName != ""
-}
-
-func validateExclusiveTestDataSource(cfg *jobConfig) error {
-	if hasS3TestData(cfg) && hasPVCTestData(cfg) {
-		return fmt.Errorf("benchmark test data cannot configure both S3 and PVC")
-	}
-	return nil
 }
 
 func normalizeS3Key(key string) string {

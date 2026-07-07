@@ -168,34 +168,6 @@ func TestBuildJobRequiresAdapterImage(t *testing.T) {
 	}
 }
 
-func TestBuildJobRejectsS3AndPVCTestData(t *testing.T) {
-	cfg := &jobConfig{
-		jobID:          "job-123",
-		resourceGUID:   "guid-123",
-		benchmarkIndex: 0,
-		namespace:      "default",
-		providerID:     "provider-1",
-		benchmarkID:    "bench-1",
-		adapterImage:   "adapter:dev",
-		testDataS3: s3TestDataConfig{
-			bucket:    "bucket",
-			key:       "prefix",
-			secretRef: "s3-secret",
-		},
-		testDataPVC: pvcTestDataConfig{
-			claimName: "datasets-pvc",
-		},
-	}
-
-	_, err := buildJob(cfg)
-	if err == nil {
-		t.Fatal("expected error when both S3 and PVC test data are configured")
-	}
-	if !strings.Contains(err.Error(), "both S3 and PVC") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
 func TestBuildJobAdapterImagePullPolicy(t *testing.T) {
 	base := &jobConfig{
 		jobID:          "job-pull",
