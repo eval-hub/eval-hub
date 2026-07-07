@@ -188,7 +188,7 @@ jobs:
       )
     runs-on: ubuntu-latest
     environment:
-      name: pypi
+      name: pypi-mcp
       url: https://pypi.org/p/eval-hub-mcp
     permissions:
       id-token: write
