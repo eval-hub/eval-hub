@@ -94,10 +94,10 @@ jobs:
       env:
         # make sure that we use the golang version required by the project
         GOSECGOVERSION: go1.26.3
+        GOTOOLCHAIN: go1.26.3
       uses: securego/gosec@5a2f0a6455f43d8ac8efaf1591ee0fb400dce662 # v2.27.1
       with:
-        # verbose: -stdout -verbose=text
-        args: '-fmt sarif -out gosec-results.sarif -exclude-dir=tests ./...'
+        args: '-fmt sarif -out gosec-results.sarif -stdout -verbose=text -exclude-dir=tests ./...'
 
     - name: Upload SARIF file to GitHub Security tab
       uses: github/codeql-action/upload-sarif@8272c299f21ca24af15dfe9ac0971ba969e5e0d5 # v3.36.2
