@@ -290,7 +290,9 @@ func createApiFeature() (*apiFeature, error) {
 		baseURL:        baseURL,
 		metricsBaseURL: metricsBase,
 	}
-	apiFeat.startLocalServer(port)
+	if err := apiFeat.startLocalServer(port); err != nil {
+		return nil, err
+	}
 	return apiFeat, nil
 }
 
