@@ -440,6 +440,9 @@ func TestRunEvaluationJobProviderNotFound(t *testing.T) {
 		if !strings.Contains(runStatus.BenchmarkStatusEvent.ErrorMessage.Message, "not found") {
 			t.Fatalf("expected error message to contain %q, got %q", "not found", runStatus.BenchmarkStatusEvent.ErrorMessage.Message)
 		}
+		if runStatus.BenchmarkStatusEvent.ErrorMessage.MessageOrigin != api.MessageOriginServer {
+			t.Fatalf("expected server error origin, got %q", runStatus.BenchmarkStatusEvent.ErrorMessage.MessageOrigin)
+		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for failed benchmark status update")
 	}

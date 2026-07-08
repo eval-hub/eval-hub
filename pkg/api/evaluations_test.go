@@ -49,3 +49,10 @@ func TestBenchmarkStatusEventStampRuntimeMessageOrigins(t *testing.T) {
 		t.Fatalf("expected runtime warning origin, got %q", event.WarningMessage.MessageOrigin)
 	}
 }
+
+// TestBenchmarkStatusEventNilStampRuntimeMessageOrigins verifies StampRuntimeMessageOrigins
+// is a no-op on a nil receiver and does not panic.
+func TestBenchmarkStatusEventNilStampRuntimeMessageOrigins(t *testing.T) {
+	var event *BenchmarkStatusEvent
+	event.StampRuntimeMessageOrigins()
+}
