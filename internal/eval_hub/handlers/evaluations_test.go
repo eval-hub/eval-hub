@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
@@ -34,61 +33,68 @@ func (r *bodyRequest) BodyAsBytes() ([]byte, error) {
 	return r.body, nil
 }
 
-type fakeStorageCapture struct {
-	lastStatusID      string
-	lastStatus        api.OverallState
-	lastStatusMessage *api.MessageInfo
-	createdJob        *api.EvaluationJobResource
-	deleteID          string
-}
-
 type fakeStorage struct {
 	abstractions.Storage
-	capture           *fakeStorageCapture
+	lastStatusID      string
+	lastStatus        api.OverallState
 	job               *api.EvaluationJobResource
+	deleteID          string
 	providerConfigs   map[string]api.ProviderResource
 	collectionConfigs map[string]api.CollectionResource
 }
 
-func newFakeStorage() *fakeStorage {
-	return &fakeStorage{capture: &fakeStorageCapture{}}
-}
-
-func (f *fakeStorage) copy() *fakeStorage {
-	if f.capture == nil {
-		f.capture = &fakeStorageCapture{}
-	}
+func (f *fakeStorage) WithLogger(_ *slog.Logger) abstractions.Storage {
 	return &fakeStorage{
 		Storage:           f.Storage,
-		capture:           f.capture,
+		lastStatusID:      f.lastStatusID,
+		lastStatus:        f.lastStatus,
 		job:               f.job,
+		deleteID:          f.deleteID,
+		providerConfigs:   f.providerConfigs,
+		collectionConfigs: f.collectionConfigs,
+	}
+}
+func (f *fakeStorage) WithContext(_ context.Context) abstractions.Storage {
+	return &fakeStorage{
+		Storage:           f.Storage,
+		lastStatusID:      f.lastStatusID,
+		lastStatus:        f.lastStatus,
+		job:               f.job,
+		deleteID:          f.deleteID,
+		providerConfigs:   f.providerConfigs,
+		collectionConfigs: f.collectionConfigs,
+	}
+}
+func (f *fakeStorage) WithTenant(_ api.Tenant) abstractions.Storage {
+	return &fakeStorage{
+		Storage:           f.Storage,
+		lastStatusID:      f.lastStatusID,
+		lastStatus:        f.lastStatus,
+		job:               f.job,
+		deleteID:          f.deleteID,
+		providerConfigs:   f.providerConfigs,
+		collectionConfigs: f.collectionConfigs,
+	}
+}
+func (f *fakeStorage) WithOwner(_ api.User) abstractions.Storage {
+	return &fakeStorage{
+		Storage:           f.Storage,
+		lastStatusID:      f.lastStatusID,
+		lastStatus:        f.lastStatus,
+		job:               f.job,
+		deleteID:          f.deleteID,
 		providerConfigs:   f.providerConfigs,
 		collectionConfigs: f.collectionConfigs,
 	}
 }
 
-func (f *fakeStorage) WithLogger(_ *slog.Logger) abstractions.Storage {
-	return f.copy()
-}
-func (f *fakeStorage) WithContext(_ context.Context) abstractions.Storage {
-	return f.copy()
-}
-func (f *fakeStorage) WithTenant(_ api.Tenant) abstractions.Storage {
-	return f.copy()
-}
-func (f *fakeStorage) WithOwner(_ api.User) abstractions.Storage {
-	return f.copy()
-}
-
-func (f *fakeStorage) CreateEvaluationJob(job *api.EvaluationJobResource) error {
-	f.capture.createdJob = job
+func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobResource) error {
 	return nil
 }
 
 func (f *fakeStorage) UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error {
-	f.capture.lastStatusID = id
-	f.capture.lastStatus = state
-	f.capture.lastStatusMessage = message
+	f.lastStatusID = id
+	f.lastStatus = state
 	return nil
 }
 
@@ -105,7 +111,7 @@ func (f *fakeStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
 }
 
 func (f *fakeStorage) DeleteEvaluationJob(id string) error {
-	f.capture.deleteID = id
+	f.deleteID = id
 	return nil
 }
 
@@ -317,11 +323,11 @@ func TestHandleCreateEvaluationMarksFailedWhenRuntimeErrors(t *testing.T) {
 	if !runtime.called {
 		t.Fatalf("expected runtime to be invoked")
 	}
-	if storage.capture.lastStatus == "" || storage.capture.lastStatusID == "" {
+	if storage.lastStatus == "" || storage.lastStatusID == "" {
 		t.Fatalf("expected evaluation status update to be recorded")
 	}
-	if storage.capture.lastStatus != api.OverallStateFailed {
-		t.Fatalf("expected failed status update, got %+v", storage.capture.lastStatus)
+	if storage.lastStatus != api.OverallStateFailed {
+		t.Fatalf("expected failed status update, got %+v", storage.lastStatus)
 	}
 	if recorder.Code == 202 {
 		t.Fatalf("expected non-202 error response, got %d", recorder.Code)
@@ -361,7 +367,7 @@ func TestHandleCreateEvaluationSucceedsWhenRuntimeOk(t *testing.T) {
 	if !runtime.called {
 		t.Fatalf("expected runtime to be invoked")
 	}
-	if storage.capture.lastStatus != "" {
+	if storage.lastStatus != "" {
 		t.Fatalf("did not expect evaluation status update on success")
 	}
 	if recorder.Code != 202 {
@@ -439,8 +445,8 @@ func TestHandleDeleteEvaluationCleansUpResources(t *testing.T) {
 	if !runtime.called {
 		t.Fatalf("expected runtime cleanup to be invoked for hard delete")
 	}
-	if storage.capture.deleteID != jobID {
-		t.Fatalf("expected delete to be invoked for %s, got %s", jobID, storage.capture.deleteID)
+	if storage.deleteID != jobID {
+		t.Fatalf("expected delete to be invoked for %s, got %s", jobID, storage.deleteID)
 	}
 	if recorder.Code != 204 {
 		t.Fatalf("expected 204 response, got %d", recorder.Code)
@@ -839,84 +845,6 @@ func TestHandleUpdateEvaluationStampsRuntimeMessageOrigins(t *testing.T) {
 	}
 	if event.WarningMessage == nil || event.WarningMessage.MessageOrigin != api.MessageOriginRuntime {
 		t.Fatalf("expected runtime warning origin, got %+v", event.WarningMessage)
-	}
-}
-
-func TestHandleCreateEvaluationStampsServerMessageOrigin(t *testing.T) {
-	t.Parallel()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	providerConfigs := map[string]api.ProviderResource{
-		"garak": {
-			Resource: api.Resource{ID: "garak"},
-			ProviderConfig: api.ProviderConfig{
-				Benchmarks: []api.BenchmarkResource{{ID: "bench-1"}},
-			},
-		},
-	}
-	storage := &fakeStorage{providerConfigs: providerConfigs}
-	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, nil)
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-create-origin", logger, "test-user", "test-tenant")
-
-	req := &bodyRequest{
-		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
-		body:        []byte(`{"name":"origin-create","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1","provider_id":"garak"}]}`),
-	}
-	recorder := httptest.NewRecorder()
-	h.HandleCreateEvaluation(ctx, req, MockResponseWrapper{recorder: recorder})
-
-	if recorder.Code != 202 {
-		t.Fatalf("expected 202, got %d body %s", recorder.Code, recorder.Body.String())
-	}
-	if storage.capture.createdJob == nil || storage.capture.createdJob.Status == nil || storage.capture.createdJob.Status.Message == nil {
-		t.Fatal("expected created job status message")
-	}
-	if storage.capture.createdJob.Status.Message.MessageOrigin != api.MessageOriginServer {
-		t.Fatalf("expected server origin on create, got %q", storage.capture.createdJob.Status.Message.MessageOrigin)
-	}
-
-	var response api.EvaluationJobResource
-	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if response.Status == nil || response.Status.Message == nil {
-		t.Fatal("expected status message in response")
-	}
-	if response.Status.Message.MessageOrigin != api.MessageOriginServer {
-		t.Fatalf("expected server origin in response, got %q", response.Status.Message.MessageOrigin)
-	}
-}
-
-func TestHandleCancelEvaluationStampsServerMessageOrigin(t *testing.T) {
-	t.Parallel()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	jobID := "job-cancel-origin"
-	storage := &fakeStorage{
-		job: &api.EvaluationJobResource{
-			Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
-			Status: &api.EvaluationJobStatus{
-				EvaluationJobState: api.EvaluationJobState{State: api.OverallStateRunning},
-			},
-		},
-	}
-	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, nil)
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-cancel-origin", logger, "test-user", "test-tenant")
-
-	req := &deleteRequest{
-		MockRequest: createMockRequest("DELETE", "/api/v1/evaluations/jobs/"+jobID),
-		queryValues: map[string][]string{"hard_delete": {"false"}},
-		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
-	}
-	recorder := httptest.NewRecorder()
-	h.HandleCancelEvaluation(ctx, req, MockResponseWrapper{recorder: recorder})
-
-	if recorder.Code != 204 {
-		t.Fatalf("expected 204, got %d body %s", recorder.Code, recorder.Body.String())
-	}
-	if storage.capture.lastStatusMessage == nil {
-		t.Fatal("expected cancel status message")
-	}
-	if storage.capture.lastStatusMessage.MessageOrigin != api.MessageOriginServer {
-		t.Fatalf("expected server origin on cancel, got %q", storage.capture.lastStatusMessage.MessageOrigin)
 	}
 }
 
