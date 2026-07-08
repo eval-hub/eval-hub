@@ -322,7 +322,7 @@ func createServerWithLocalMode(t *testing.T, port int, localMode bool) (*server.
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MLFlow client: %w", err)
 	}
-	return server.NewServer(logger, serviceConfig, store, validate, runtime, mlflowClient)
+	return server.NewServer(logger, serviceConfig, store, validate, runtime, mlflowClient, nil)
 }
 
 func getKeyAsString(obj map[string]interface{}, key string) string {

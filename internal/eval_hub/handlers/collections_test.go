@@ -217,7 +217,7 @@ func TestHandleListCollections(t *testing.T) {
 	}
 	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/collections"),
@@ -340,7 +340,7 @@ func TestHandleListCollections_ReturnsStoredBenchmarkURL(t *testing.T) {
 	}
 	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/collections"),
@@ -386,7 +386,7 @@ func TestHandleGetCollection_ReturnsStoredBenchmarkURL(t *testing.T) {
 	}
 	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/collections/coll-1"),
@@ -421,7 +421,7 @@ func TestHandleListCollections_StorageError(t *testing.T) {
 	}
 	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/collections"),
@@ -452,7 +452,7 @@ func TestHandleCreateCollection(t *testing.T) {
 	}}
 	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
 	body := `
 	{
@@ -512,7 +512,7 @@ func TestHandleGetCollection(t *testing.T) {
 	storage := &getCollectionStorage{fakeStorage: &fakeStorage{}, collection: coll}
 	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/collections/coll-123"),
@@ -541,7 +541,7 @@ func TestHandleGetCollection_MissingPathParam(t *testing.T) {
 	storage := &fakeStorage{}
 	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/collections/"),
@@ -582,7 +582,7 @@ func TestHandleUpdateCollection(t *testing.T) {
 	}
 	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
 	body := `
 	{
@@ -685,7 +685,7 @@ func TestHandlePatchCollection_EnrichesFullBenchmarkElementBeforeStorage(t *test
 	}
 	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
 	body := `[{"op":"replace","path":"/benchmarks/0","value":{"id":"b1","provider_id":"p1"}}]`
 	req := &providersRequest{
@@ -747,7 +747,7 @@ func TestHandlePatchCollection_EnrichesFullBenchmarksArrayBeforeStorage(t *testi
 	}
 	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
 	body := `[{"op":"replace","path":"/benchmarks","value":[{"id":"b1","provider_id":"p1"},{"id":"b2","provider_id":"p2"}]}]`
 	req := &providersRequest{
@@ -795,7 +795,7 @@ func TestHandlePatchCollection(t *testing.T) {
 	}
 	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
 	body := `[{"op":"replace","path":"/name","value":"Patched Name"}]`
 	req := &providersRequest{
@@ -818,7 +818,7 @@ func TestHandleDeleteCollection(t *testing.T) {
 	storage := &updatePatchDeleteCollectionStorage{fakeStorage: &fakeStorage{}}
 	validate := validation.NewValidator()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("DELETE", "/api/v1/evaluations/collections/coll-del"),
@@ -933,7 +933,7 @@ func TestCollectionHandlers_PropagateTenantAndOwner(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			storage := &tenantTrackingStorage{fakeStorage: &fakeStorage{}}
-			h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+			h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
 			req := &providersRequest{
 				MockRequest: createMockRequest(tt.method, tt.path),

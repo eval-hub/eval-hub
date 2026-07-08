@@ -16,7 +16,7 @@ import (
 )
 
 func TestHandleOpenAPI(t *testing.T) {
-	h := handlers.New(nil, nil, nil, nil, nil)
+	h := handlers.New(nil, nil, nil, nil, nil, nil)
 
 	t.Run("GET request returns OpenAPI spec", func(t *testing.T) {
 		ctx := createExecutionContext()
@@ -60,7 +60,7 @@ func TestHandleOpenAPI(t *testing.T) {
 }
 
 func TestHandleOpenAPI_SpecNotFound(t *testing.T) {
-	h := handlers.New(nil, nil, nil, nil, nil)
+	h := handlers.New(nil, nil, nil, nil, nil, nil)
 
 	base := t.TempDir()
 	deep := filepath.Join(base, "a", "b", "c", "d")
@@ -87,7 +87,7 @@ func TestHandleOpenAPI_SpecNotFound(t *testing.T) {
 }
 
 func TestHandleDocs(t *testing.T) {
-	h := handlers.New(nil, nil, nil, nil, nil)
+	h := handlers.New(nil, nil, nil, nil, nil, nil)
 
 	t.Run("GET request returns HTML documentation", func(t *testing.T) {
 		ctx := createExecutionContext()

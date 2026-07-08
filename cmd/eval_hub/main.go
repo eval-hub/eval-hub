@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/evalcards"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes"
@@ -116,7 +117,14 @@ func main() {
 		}
 	}
 
+	// setup mlflow client if there is a tracking URI set
+	mlflowClient, mlflowTrackingURI, mlflowServerVersion, err := mlflow.SetupMLFlowClient(serviceConfig, logger)
+	if err != nil {
+		startUpFailed(serviceConfig, err, "Failed to create MLFlow client", logger)
+	}
+
 	// set up the storage
+	resultsExporter := evalcards.NewManager(logger, evalcards.ManagerConfig{MLFlowClient: mlflowClient})
 	storage, err := storage.NewStorage(
 		serviceConfig.Database,
 		collectionConfigs,
@@ -137,19 +145,14 @@ func main() {
 	}
 	logger.Info("Runtime created", "runtime", runtime.Name())
 
-	// setup mlflow client if there is a tracking URI set
-	mlflowClient, mlflowTrackingURI, mlflowServerVersion, err := mlflow.SetupMLFlowClient(serviceConfig, logger)
-	if err != nil {
-		startUpFailed(serviceConfig, err, "Failed to create MLFlow client", logger)
-	}
-
 	// create the server
 	srv, err := server.NewServer(logger,
 		serviceConfig,
 		storage,
 		validate,
 		runtime,
-		mlflowClient)
+		mlflowClient,
+		resultsExporter)
 
 	if err != nil {
 		// we do this as no point trying to continue

@@ -77,6 +77,7 @@ type ModelRef struct {
 	Name       string         `json:"name" validate:"required"`
 	Auth       *ModelAuth     `json:"auth,omitempty"`
 	Parameters map[string]any `json:"parameters,omitempty"`
+	CardURL    string         `json:"card_url,omitempty"`
 }
 
 type ModelAuth struct {
@@ -199,6 +200,7 @@ type StatusEvent struct {
 type BenchmarkResult struct {
 	ID             string         `json:"id"`
 	ProviderID     string         `json:"provider_id"`
+	Contacts       []string       `json:"contacts,omitempty"`
 	BenchmarkIndex int            `json:"benchmark_index"`
 	Metrics        map[string]any `json:"metrics,omitempty"`
 	AdditionalInfo map[string]any `json:"additional_info,omitempty"`
@@ -213,6 +215,7 @@ type EvaluationJobResults struct {
 	Test                *EvaluationTest   `json:"test,omitempty"`
 	Benchmarks          []BenchmarkResult `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 	MLFlowExperimentURL string            `json:"mlflow_experiment_url,omitempty"`
+	CardURL             string            `json:"evaluation_card_url,omitempty"`
 }
 
 // OCICoordinates represents OCI artifact coordinates for persistence
