@@ -4,13 +4,13 @@ on:
   push:
     branches:
       - main
-    tags: ['*']  # we haven't established a Tag strategy yet
+    tags: ['*']
   workflow_dispatch:
     inputs:
-      publish-test-pypi:
-        description: 'Publish to TestPyPI'
+      publish-pypi:
+        description: 'Publish to PyPI (production)'
         type: boolean
-        default: true
+        default: false
       validate-wheels:
         description: 'Run wheel validation on real runners before publishing'
         type: boolean
@@ -180,12 +180,15 @@ jobs:
   publish-mcp:
     name: Publish to PyPI
     needs: [build-mcp-wheels, validate-mcp-wheels]
-    # TODO: enable when eval-hub-mcp project is created
-    if: false
-    # if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    if: >-
+      !failure() && !cancelled()
+      && (
+        (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
+        || (github.event_name == 'workflow_dispatch' && inputs.publish-pypi)
+      )
     runs-on: ubuntu-latest
     environment:
-      name: pypi
+      name: pypi-mcp
       url: https://pypi.org/p/eval-hub-mcp
     permissions:
       id-token: write
@@ -203,76 +206,3 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
-
-  check-mcp-testpypi-age:
-    name: Check TestPyPI release age
-    runs-on: ubuntu-latest
-    # TODO: enable when eval-hub-mcp project is created
-    if: false
-    # if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    outputs:
-      should_publish: ${{ steps.check.outputs.should_publish }}
-    steps:
-      - name: Check last TestPyPI upload age
-        id: check
-        run: |
-          echo "should_publish=true" >> "$GITHUB_OUTPUT"
-
-          RESPONSE=$(curl -sf "https://test.pypi.org/pypi/eval-hub-mcp/json") || exit 0
-
-          LATEST_UPLOAD=$(echo "$RESPONSE" | jq -r '
-            [.releases[][] | .upload_time_iso_8601] | max // empty
-          ')
-          [ -z "$LATEST_UPLOAD" ] && exit 0
-
-          UPLOAD_EPOCH=$(date -d "$LATEST_UPLOAD" +%s)
-          NOW_EPOCH=$(date +%s)
-          AGE_DAYS=$(( (NOW_EPOCH - UPLOAD_EPOCH) / 86400 ))
-          echo "Latest TestPyPI upload: $LATEST_UPLOAD ($AGE_DAYS days ago)"
-
-          if [ "$AGE_DAYS" -lt 7 ]; then
-            echo "Last release is only $AGE_DAYS days old — skipping TestPyPI publish"
-            echo "should_publish=false" >> "$GITHUB_OUTPUT"
-          fi
-
-  publish-mcp-test-pypi:
-    name: Publish to TestPyPI
-    needs: [build-mcp-wheels, validate-mcp-wheels, check-mcp-testpypi-age]
-    # TODO: enable when eval-hub-mcp project is created
-    if: false
-    # if: >-
-    #   !failure() && !cancelled()
-    #   && (
-    #     (github.event_name == 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/') && inputs.publish-test-pypi)
-    #     || (github.ref == 'refs/heads/main' && needs.check-mcp-testpypi-age.outputs.should_publish == 'true')
-    #   )
-    runs-on: ubuntu-latest
-    environment:
-      name: testpypi
-      url: https://test.pypi.org/p/eval-hub-mcp
-    permissions:
-      id-token: write
-
-    steps:
-      - name: Download manylinux x86_64 wheel
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: mcp-wheel-manylinux-x86_64
-          path: dist/
-
-      - name: Download macOS arm64 wheel
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: mcp-wheel-macosx-arm64
-          path: dist/
-
-      - name: List wheels
-        run: ls -la dist/
-
-      - name: Publish to TestPyPI
-        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
-        with:
-          repository-url: https://test.pypi.org/legacy/
-          skip-existing: true
-          attestations: false
-          verbose: true

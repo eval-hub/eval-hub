@@ -438,6 +438,25 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		})
 	}
 
+	// PVC test data: mount the PVC directly — no init container required.
+	if hasPVCTestData(cfg) {
+		volumes = append(volumes, corev1.Volume{
+			Name: testDataVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: cfg.testDataPVC.claimName,
+					ReadOnly:  true,
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      testDataVolumeName,
+			MountPath: testDataMountPath,
+			SubPath:   cfg.testDataPVC.subPath,
+			ReadOnly:  true,
+		})
+	}
+
 	return volumes, volumeMounts
 }
 
@@ -708,6 +727,10 @@ func hasS3TestData(cfg *jobConfig) bool {
 		return false
 	}
 	return normalizeS3Key(cfg.testDataS3.key) != ""
+}
+
+func hasPVCTestData(cfg *jobConfig) bool {
+	return cfg.testDataPVC.claimName != ""
 }
 
 func normalizeS3Key(key string) string {

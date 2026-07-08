@@ -36,8 +36,13 @@ func formatValidationError(errs validator.ValidationErrors) string {
 		return ""
 	}
 	e := errs[0]
-	if e.Tag() == "oneof" {
+	switch e.Tag() {
+	case "oneof":
 		return fmt.Sprintf("%s must be one of: %s", e.Field(), strings.ReplaceAll(e.Param(), " ", ", "))
+	case "test_data_ref_exclusive", "test_data_ref_required":
+		if param := e.Param(); param != "" {
+			return fmt.Sprintf("test_data_ref: %s", param)
+		}
 	}
 	return errs.Error()
 }

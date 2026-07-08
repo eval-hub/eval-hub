@@ -53,6 +53,8 @@ func registerCustomValidators(instance *validator.Validate) {
 	instance.RegisterValidation("rfc1123_dns_label", validateRFC1123DNSLabel)
 	// Benchmarks min=1 only when Collection is not set (required_without handles presence; this enforces length)
 	instance.RegisterStructValidation(evaluationJobConfigBenchmarksMin, api.EvaluationJobConfig{})
+	// Exactly one of s3 or pvc must be set in TestDataRef.
+	instance.RegisterStructValidation(validateTestDataRefMutualExclusion, api.TestDataRef{})
 }
 
 func validateRFC1123DNSLabel(fl validator.FieldLevel) bool {
@@ -92,6 +94,20 @@ func ValidateCollectionOverrides(overrides []api.EvaluationBenchmarkConfig, coll
 		}
 	}
 	return nil
+}
+
+// validateTestDataRefMutualExclusion ensures exactly one of s3 or pvc is set.
+func validateTestDataRefMutualExclusion(sl validator.StructLevel) {
+	ref, ok := sl.Current().Interface().(api.TestDataRef)
+	if !ok {
+		return
+	}
+	if ref.S3 != nil && ref.PVC != nil {
+		sl.ReportError(ref.PVC, "pvc", "pvc", "test_data_ref_exclusive", "s3 and pvc are mutually exclusive")
+	}
+	if ref.S3 == nil && ref.PVC == nil {
+		sl.ReportError(ref.S3, "s3", "s3", "test_data_ref_required", "one of s3 or pvc must be set")
+	}
 }
 
 // evaluationJobConfigBenchmarksMin ensures Benchmarks has at least one element when Collection is not present

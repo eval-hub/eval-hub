@@ -1,0 +1,30 @@
+type: object
+description: |
+  PersistentVolumeClaim (PVC) test data. Only applies when Eval Hub runs the benchmark as a
+  **Kubernetes Job** (cluster execution). It does not apply to local-only evaluation runs.
+
+  The PVC is mounted **read-only** directly into the evaluation container at **`/test_data`**.
+  No init container is scheduled — the data must already reside on the PVC before job submission.
+
+  **Requirements:**
+  - The PersistentVolumeClaim named by **`claim_name`** must already exist in the **same namespace**
+    as the evaluation job.
+  - Eval Hub does not create, provision, or manage the PVC — this is the tenant's responsibility.
+  - The evaluation adapter reads data from `/test_data` identically to S3-backed jobs.
+required:
+  - claim_name
+properties:
+  claim_name:
+    type: string
+    pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+    description: |
+      Name of the PersistentVolumeClaim in the evaluation job namespace (same as Kubernetes
+      `PersistentVolumeClaimVolumeSource.claimName`). Must be a valid RFC 1123 DNS label.
+  sub_path:
+    type: string
+    description: |
+      Optional path within the PVC to mount at `/test_data` instead of the PVC root.
+      Useful when a single PVC contains data for multiple benchmarks in separate directories.
+example:
+  claim_name: eval-datasets-pvc
+  sub_path: benchmark-a/v1
