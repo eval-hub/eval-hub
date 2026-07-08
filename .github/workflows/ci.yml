@@ -94,6 +94,7 @@ jobs:
       env:
         # make sure that we use the golang version required by the project
         GOTOOLCHAIN=auto
+        GOSECGOVERSION=go1.26.3
       uses: securego/gosec@5a2f0a6455f43d8ac8efaf1591ee0fb400dce662 # v2.27.1
       with:
         # verbose: -stdout -verbose=text
