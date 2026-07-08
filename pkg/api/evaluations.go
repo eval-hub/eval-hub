@@ -83,10 +83,36 @@ type ModelAuth struct {
 	SecretRef string `json:"secret_ref" validate:"required"`
 }
 
+// MessageOrigin represents the origin of a status or error message.
+type MessageOrigin string
+
+const (
+	MessageOriginServer  MessageOrigin = "server"
+	MessageOriginRuntime MessageOrigin = "runtime"
+)
+
 // MessageInfo represents a message from a downstream service
 type MessageInfo struct {
-	Message     string `json:"message" validate:"required"`
-	MessageCode string `json:"message_code" validate:"required"`
+	Message       string        `json:"message" validate:"required"`
+	MessageCode   string        `json:"message_code" validate:"required"`
+	MessageOrigin MessageOrigin `json:"message_origin,omitempty"`
+}
+
+// WithMessageOrigin sets origin on message and returns it (nil-safe).
+func WithMessageOrigin(m *MessageInfo, origin MessageOrigin) *MessageInfo {
+	if m != nil {
+		m.MessageOrigin = origin
+	}
+	return m
+}
+
+// StampRuntimeMessageOrigins sets runtime origin on benchmark error and warning messages.
+func (e *BenchmarkStatusEvent) StampRuntimeMessageOrigins() {
+	if e == nil {
+		return
+	}
+	WithMessageOrigin(e.ErrorMessage, MessageOriginRuntime)
+	WithMessageOrigin(e.WarningMessage, MessageOriginRuntime)
 }
 
 type PrimaryScore struct {

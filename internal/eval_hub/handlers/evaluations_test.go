@@ -192,7 +192,8 @@ func (s *listEvaluationsStorage) GetEvaluationJobs(_ *abstractions.QueryFilter) 
 
 type updateEvaluationStorage struct {
 	*fakeStorage
-	updateErr error
+	updateErr       error
+	lastStatusEvent *api.StatusEvent
 }
 
 func (s *updateEvaluationStorage) WithLogger(_ *slog.Logger) abstractions.Storage { return s }
@@ -202,7 +203,8 @@ func (s *updateEvaluationStorage) WithContext(_ context.Context) abstractions.St
 func (s *updateEvaluationStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
 func (s *updateEvaluationStorage) WithOwner(_ api.User) abstractions.Storage    { return s }
 
-func (s *updateEvaluationStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
+func (s *updateEvaluationStorage) UpdateEvaluationJob(_ string, status *api.StatusEvent) error {
+	s.lastStatusEvent = status
 	return s.updateErr
 }
 
@@ -806,6 +808,43 @@ func TestHandleUpdateEvaluationAcceptsValidPhase(t *testing.T) {
 
 	if recorder.Code != 204 {
 		t.Fatalf("expected status 204, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestHandleUpdateEvaluationStampsRuntimeMessageOrigins(t *testing.T) {
+	t.Parallel()
+	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{}}
+	validate := validation.NewValidator()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+
+	body := `{"benchmark_status_event":{"provider_id":"p1","id":"b1","status":"failed","error_message":{"message":"adapter failed","message_code":"ADAPTER_FAIL"},"warning_message":{"message":"adapter warning","message_code":"ADAPTER_WARN"}}}`
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs/job-runtime-origin/events"),
+		body:        []byte(body),
+	}
+	reqWithPath := &updateEvaluationRequest{
+		bodyRequest: req,
+		pathValues:  map[string]string{"job_id": "job-runtime-origin"},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-runtime-origin", logger, "test-user", "test-tenant")
+
+	h.HandleUpdateEvaluation(ctx, reqWithPath, resp)
+
+	if recorder.Code != 204 {
+		t.Fatalf("expected status 204, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+	if storage.lastStatusEvent == nil || storage.lastStatusEvent.BenchmarkStatusEvent == nil {
+		t.Fatal("expected status event to be stored")
+	}
+	event := storage.lastStatusEvent.BenchmarkStatusEvent
+	if event.ErrorMessage == nil || event.ErrorMessage.MessageOrigin != api.MessageOriginRuntime {
+		t.Fatalf("expected runtime error origin, got %+v", event.ErrorMessage)
+	}
+	if event.WarningMessage == nil || event.WarningMessage.MessageOrigin != api.MessageOriginRuntime {
+		t.Fatalf("expected runtime warning origin, got %+v", event.WarningMessage)
 	}
 }
 

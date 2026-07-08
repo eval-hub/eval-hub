@@ -143,10 +143,11 @@ func messageInfosEquivalent(a, b *api.MessageInfo) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Message == b.Message && a.MessageCode == b.MessageCode
+	return a.Message == b.Message && a.MessageCode == b.MessageCode && a.MessageOrigin == b.MessageOrigin
 }
 
 func (s *sqlStorage) UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error {
+	api.WithMessageOrigin(message, api.MessageOriginServer)
 	// we have to get the evaluation job and update the status so we need a transaction
 	s.logger.Debug("Updating evaluation job status", "id", id, "state", state, "message", message)
 	err := s.withTransaction("update evaluation job status", id, func(txn *sql.Tx) error {
@@ -277,19 +278,19 @@ func (s *sqlStorage) getOverallJobStatus(txn *sql.Tx, job *api.EvaluationJobReso
 	if job.Collection != nil && job.Collection.ID != "" {
 		collection, err = s.getCollectionTransactional(txn, job.Collection.ID)
 		if err != nil {
-			return api.OverallStatePending, &api.MessageInfo{
+			return api.OverallStatePending, api.WithMessageOrigin(&api.MessageInfo{
 				Message:     "Evaluation job is pending",
 				MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
-			}, err
+			}, api.MessageOriginServer), err
 		}
 	}
 	benchmarks, err := handlers.GetJobBenchmarks(job, collection)
 	total := 0
 	if err != nil || len(benchmarks) == 0 {
-		return api.OverallStatePending, &api.MessageInfo{
+		return api.OverallStatePending, api.WithMessageOrigin(&api.MessageInfo{
 			Message:     "Evaluation job is pending",
 			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
-		}, err
+		}, api.MessageOriginServer), err
 	}
 	total = len(benchmarks)
 	completed, failed, running, cancelled := benchmarkStates[api.StateCompleted], benchmarkStates[api.StateFailed], benchmarkStates[api.StateRunning], benchmarkStates[api.StateCancelled]
@@ -315,10 +316,10 @@ func (s *sqlStorage) getOverallJobStatus(txn *sql.Tx, job *api.EvaluationJobReso
 
 	s.logger.Debug("Overall job state", "state", overallState, "completed", completed, "failed", failed, "running", running, "cancelled", cancelled, "total", total)
 
-	return overallState, &api.MessageInfo{
+	return overallState, api.WithMessageOrigin(&api.MessageInfo{
 		Message:     stateMessage,
 		MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
-	}, nil
+	}, api.MessageOriginServer), nil
 }
 
 func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runStatus *api.StatusEvent, benchmarkStatus *api.BenchmarkStatus) {

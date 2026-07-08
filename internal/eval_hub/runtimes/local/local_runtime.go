@@ -335,10 +335,10 @@ func (r *LocalRuntime) failBenchmark(
 			ID:             bench.ID,
 			BenchmarkIndex: benchmarkIndex,
 			Status:         api.StateFailed,
-			ErrorMessage: &api.MessageInfo{
+			ErrorMessage: api.WithMessageOrigin(&api.MessageInfo{
 				Message:     errMsg,
 				MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED,
-			},
+			}, api.MessageOriginServer),
 		},
 	}
 	if updateErr := storage.UpdateEvaluationJob(jobID, runStatus); updateErr != nil {
