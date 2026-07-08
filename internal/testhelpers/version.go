@@ -62,6 +62,8 @@ func Version(t *testing.T) string {
 }
 
 func NewValidator(t *testing.T) *validator.Validate {
+	t.Helper()
+
 	validate, err := validation.NewValidator()
 	if err != nil {
 		t.Fatal(err)

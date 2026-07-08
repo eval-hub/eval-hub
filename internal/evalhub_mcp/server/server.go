@@ -235,6 +235,9 @@ func serveHTTP(ctx context.Context, mcpHandler http.Handler, cfg *config.Config,
 		Addr:              addr,
 		Handler:           mux,
 		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	errCh := make(chan error, 1)

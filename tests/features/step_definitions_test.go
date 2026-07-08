@@ -289,6 +289,9 @@ func (a *apiFeature) startLocalServer(port int) error {
 		return logError(err)
 	}
 	version, err := testhelpers.RepoVersion()
+	if err != nil {
+		return logError(err)
+	}
 	serviceConfig, err := config.LoadConfig(logger, version, "local", time.Now().Format(time.RFC3339), "")
 	if err != nil {
 		return logError(fmt.Errorf("failed to load service config: %w", err))
