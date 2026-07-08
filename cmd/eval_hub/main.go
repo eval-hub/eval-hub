@@ -78,7 +78,10 @@ func main() {
 	serviceConfig.Service.LocalMode = args.LocalMode
 
 	// set up the validator
-	validate := validation.NewValidator()
+	validate, err := validation.NewValidator()
+	if err != nil {
+		startUpFailed(serviceConfig, err, "Failed to create validator", logger)
+	}
 
 	// set up the provider configs
 	providerConfigs, err := config.LoadProviderConfigs(logger, validate, args.ConfigDir)

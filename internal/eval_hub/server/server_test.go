@@ -20,7 +20,6 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -287,7 +286,7 @@ func createServerWithLocalMode(t *testing.T, port int, localMode bool) (*server.
 	if err != nil {
 		return nil, err
 	}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	serviceConfig, err := config.LoadConfig(logger, testhelpers.Version(t), "local", time.Now().Format(time.RFC3339), "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load service config: %w", err)

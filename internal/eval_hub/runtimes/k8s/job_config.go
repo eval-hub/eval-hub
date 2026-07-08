@@ -110,7 +110,11 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	sidecarBaseURL := ""
 	if serviceConfig != nil && serviceConfig.Sidecar != nil {
 		if serviceConfig.Sidecar.Port != 0 {
-			port = int32(serviceConfig.Sidecar.Port)
+			p, err := sidecarPortFromInt(serviceConfig.Sidecar.Port)
+			if err != nil {
+				return nil, fmt.Errorf("sidecar port: %w", err)
+			}
+			port = p
 		}
 		sidecarBaseURL = strings.TrimSpace(serviceConfig.Sidecar.BaseURL)
 	}

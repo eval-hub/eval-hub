@@ -7,6 +7,9 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
+	"github.com/go-playground/validator/v10"
 )
 
 func findRepoRoot() (string, error) {
@@ -36,7 +39,7 @@ func RepoVersion() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	data, err := os.ReadFile(filepath.Join(root, "VERSION"))
+	data, err := os.ReadFile(filepath.Join(root, "VERSION")) // #nosec G304 -- repo root resolved from test caller location
 	if err != nil {
 		return "", fmt.Errorf("read VERSION: %w", err)
 	}
@@ -56,4 +59,12 @@ func Version(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return version
+}
+
+func NewValidator(t *testing.T) *validator.Validate {
+	validate, err := validation.NewValidator()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return validate
 }

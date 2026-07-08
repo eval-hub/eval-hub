@@ -50,7 +50,7 @@ func buildTLSConfig(caCertPath string, insecureSkipVerify bool, logger *slog.Log
 		MaxVersion: tls.VersionTLS13,
 	}
 	if caCertPath != "" && !insecureSkipVerify {
-		caCert, err := os.ReadFile(caCertPath)
+		caCert, err := os.ReadFile(caCertPath) // #nosec G304 -- CA bundle path from sidecar configuration
 		if err != nil {
 			return nil, fmt.Errorf("failed to read %s CA certificate at %s: %w", certLabel, caCertPath, err)
 		}

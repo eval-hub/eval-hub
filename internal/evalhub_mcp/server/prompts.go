@@ -297,7 +297,7 @@ func parseJobIDs(raw string) []string {
 }
 
 func replaceTemplateVariables(s string, variables ...string) string {
-	for i := 0; i < len(variables); i += 2 {
+	for i := 0; i+1 < len(variables); i += 2 {
 		s = strings.ReplaceAll(s, "{"+variables[i]+"}", variables[i+1])
 	}
 	return s

@@ -12,7 +12,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/common"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
+	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -642,7 +642,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 		if completedAtStr == "" {
 			t.Fatalf("CompletedAt is empty")
 		}
-		val := validation.NewValidator()
+		val := testhelpers.NewValidator(t)
 		err := val.Struct(status)
 		if err != nil {
 			t.Fatalf("Failed to validate status: %v", err)

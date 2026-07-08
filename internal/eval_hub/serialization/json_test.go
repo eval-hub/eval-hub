@@ -8,13 +8,13 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/internal/logging"
+	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 func TestUnmarshal_OneOfValidationErrorListsAllowedValues(t *testing.T) {
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := logging.FallbackLogger()
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user", "tenant")
 
@@ -40,7 +40,7 @@ func TestUnmarshal_OneOfValidationErrorListsAllowedValues(t *testing.T) {
 }
 
 func TestUnmarshal_TestDataRefMutualExclusionValidationError(t *testing.T) {
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := logging.FallbackLogger()
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user", "tenant")
 
@@ -73,7 +73,7 @@ func TestUnmarshal_TestDataRefMutualExclusionValidationError(t *testing.T) {
 }
 
 func TestUnmarshal_TestDataRefRequiredValidationError(t *testing.T) {
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := logging.FallbackLogger()
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user", "tenant")
 

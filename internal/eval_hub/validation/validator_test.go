@@ -7,18 +7,20 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
-	"github.com/go-playground/validator/v10"
+	validator "github.com/go-playground/validator/v10"
 )
 
-func TestNewValidator(t *testing.T) {
-	validate := NewValidator()
-	if validate == nil {
-		t.Fatal("NewValidator() returned nil validator")
+func newTestValidator(t *testing.T) *validator.Validate {
+	t.Helper()
+	v, err := NewValidator()
+	if err != nil {
+		t.Fatal(err)
 	}
+	return v
 }
 
 func TestEvaluationJobConfigBenchmarksMin_WithCollection(t *testing.T) {
-	validate := NewValidator()
+	validate := newTestValidator(t)
 	// When Collection is set with ID, empty Benchmarks is allowed
 	cfg := api.EvaluationJobConfig{
 		Name:       "test-evaluation-job",
@@ -33,7 +35,7 @@ func TestEvaluationJobConfigBenchmarksMin_WithCollection(t *testing.T) {
 }
 
 func TestEvaluationJobConfigBenchmarksMin_WithoutCollection_EmptyBenchmarks(t *testing.T) {
-	validate := NewValidator()
+	validate := newTestValidator(t)
 	// When Collection is not set, Benchmarks must have at least 1 element
 	cfg := api.EvaluationJobConfig{
 		Name:       "test-evaluation-job",
@@ -55,7 +57,7 @@ func TestEvaluationJobConfigBenchmarksMin_WithoutCollection_EmptyBenchmarks(t *t
 }
 
 func TestEvaluationJobConfigBenchmarksMin_WithoutCollection_WithBenchmark(t *testing.T) {
-	validate := NewValidator()
+	validate := newTestValidator(t)
 	cfg := api.EvaluationJobConfig{
 		Name:  "test-evaluation-job",
 		Model: api.ModelRef{URL: "http://test.com", Name: "model"},
@@ -70,7 +72,7 @@ func TestEvaluationJobConfigBenchmarksMin_WithoutCollection_WithBenchmark(t *tes
 }
 
 func TestEvaluationJobConfig_ExperimentWithoutNameFails(t *testing.T) {
-	validate := NewValidator()
+	validate := newTestValidator(t)
 	cfg := api.EvaluationJobConfig{
 		Name:  "test-evaluation-job",
 		Model: api.ModelRef{URL: "http://test.com", Name: "model"},
@@ -100,7 +102,7 @@ func TestEvaluationJobConfig_ExperimentWithoutNameFails(t *testing.T) {
 }
 
 func TestEvaluationJobConfig_ExperimentNameEmptyStringFails(t *testing.T) {
-	validate := NewValidator()
+	validate := newTestValidator(t)
 	cfg := api.EvaluationJobConfig{
 		Name:  "test-evaluation-job",
 		Model: api.ModelRef{URL: "http://test.com", Name: "model"},
@@ -130,7 +132,7 @@ func TestEvaluationJobConfig_ExperimentNameEmptyStringFails(t *testing.T) {
 }
 
 func TestEvaluationJobConfig_ExperimentNameWhitespaceOnlyFails(t *testing.T) {
-	validate := NewValidator()
+	validate := newTestValidator(t)
 	ws := " \t "
 	cfg := api.EvaluationJobConfig{
 		Name:  "test-evaluation-job",
@@ -161,7 +163,7 @@ func TestEvaluationJobConfig_ExperimentNameWhitespaceOnlyFails(t *testing.T) {
 }
 
 func TestQueueConfig_InvalidNameRejected(t *testing.T) {
-	validate := NewValidator()
+	validate := newTestValidator(t)
 	invalid := []string{
 		"user-queue!@#$%",
 		"-starts-with-dash",
@@ -190,7 +192,7 @@ func TestQueueConfig_InvalidNameRejected(t *testing.T) {
 }
 
 func TestQueueConfig_ValidNameAccepted(t *testing.T) {
-	validate := NewValidator()
+	validate := newTestValidator(t)
 	valid := []string{
 		"my-queue",
 		"queue1",
@@ -214,7 +216,7 @@ func TestQueueConfig_ValidNameAccepted(t *testing.T) {
 }
 
 func TestBenchmarkHardwareConfig_InvalidNameRejected(t *testing.T) {
-	validate := NewValidator()
+	validate := newTestValidator(t)
 	invalid := []string{
 		"profile!@#$%",
 		"-starts-with-dash",
@@ -247,7 +249,7 @@ func TestBenchmarkHardwareConfig_InvalidNameRejected(t *testing.T) {
 }
 
 func TestBenchmarkHardwareConfig_ValidNameAccepted(t *testing.T) {
-	validate := NewValidator()
+	validate := newTestValidator(t)
 	valid := []struct {
 		name      string
 		namespace string
@@ -281,7 +283,7 @@ func TestBenchmarkHardwareConfig_ValidNameAccepted(t *testing.T) {
 }
 
 func TestBenchmarkHardwareConfig_InvalidNamespaceRejected(t *testing.T) {
-	validate := NewValidator()
+	validate := newTestValidator(t)
 	cfg := api.EvaluationJobConfig{
 		Name:  "test-job",
 		Model: api.ModelRef{URL: "http://test.com", Name: "model"},
@@ -304,7 +306,7 @@ func TestBenchmarkHardwareConfig_InvalidNamespaceRejected(t *testing.T) {
 }
 
 func TestEvaluationJobConfig_ExperimentOmittedOk(t *testing.T) {
-	validate := NewValidator()
+	validate := newTestValidator(t)
 	cfg := api.EvaluationJobConfig{
 		Name:  "test-evaluation-job",
 		Model: api.ModelRef{URL: "http://test.com", Name: "model"},
@@ -320,7 +322,7 @@ func TestEvaluationJobConfig_ExperimentOmittedOk(t *testing.T) {
 }
 
 func TestK8sRuntimeImagePullPolicy_InvalidValueRejected(t *testing.T) {
-	validate := NewValidator()
+	validate := newTestValidator(t)
 	cfg := api.ProviderConfig{
 		Name: "test-provider",
 		Runtime: &api.Runtime{
@@ -346,7 +348,7 @@ func TestK8sRuntimeImagePullPolicy_InvalidValueRejected(t *testing.T) {
 }
 
 func TestK8sRuntimeImagePullPolicy_ValidValuesAccepted(t *testing.T) {
-	validate := NewValidator()
+	validate := newTestValidator(t)
 	for _, policy := range []string{"", "if_not_present", "always"} {
 		cfg := api.ProviderConfig{
 			Name: "test-provider",
@@ -422,7 +424,7 @@ func TestValidateCollectionOverrides_EmptyOverrides(t *testing.T) {
 }
 
 func TestTestDataRef_BothS3AndPVCRejected(t *testing.T) {
-	validate := NewValidator()
+	validate := newTestValidator(t)
 	ref := api.TestDataRef{
 		S3:  &api.S3TestDataRef{Bucket: "b", Key: "k", SecretRef: "s"},
 		PVC: &api.PVCTestDataRef{ClaimName: "my-pvc"},
@@ -434,7 +436,7 @@ func TestTestDataRef_BothS3AndPVCRejected(t *testing.T) {
 }
 
 func TestTestDataRef_NeitherS3NorPVCRejected(t *testing.T) {
-	validate := NewValidator()
+	validate := newTestValidator(t)
 	ref := api.TestDataRef{}
 	err := validate.Struct(ref)
 	if err == nil {
@@ -443,7 +445,7 @@ func TestTestDataRef_NeitherS3NorPVCRejected(t *testing.T) {
 }
 
 func TestTestDataRef_PVCOnlyAccepted(t *testing.T) {
-	validate := NewValidator()
+	validate := newTestValidator(t)
 	ref := api.TestDataRef{
 		PVC: &api.PVCTestDataRef{ClaimName: "my-pvc"},
 	}
@@ -453,7 +455,7 @@ func TestTestDataRef_PVCOnlyAccepted(t *testing.T) {
 }
 
 func TestTestDataRef_S3OnlyAccepted(t *testing.T) {
-	validate := NewValidator()
+	validate := newTestValidator(t)
 	ref := api.TestDataRef{
 		S3: &api.S3TestDataRef{Bucket: "b", Key: "k", SecretRef: "s"},
 	}
@@ -463,7 +465,7 @@ func TestTestDataRef_S3OnlyAccepted(t *testing.T) {
 }
 
 func TestPVCTestDataRef_InvalidClaimNameRejected(t *testing.T) {
-	validate := NewValidator()
+	validate := newTestValidator(t)
 	cases := []string{"", "My_PVC", "my pvc", "-leading-hyphen", "trailing-hyphen-"}
 	for _, name := range cases {
 		ref := api.PVCTestDataRef{ClaimName: name}
@@ -474,7 +476,7 @@ func TestPVCTestDataRef_InvalidClaimNameRejected(t *testing.T) {
 }
 
 func TestPVCTestDataRef_ValidClaimNameAccepted(t *testing.T) {
-	validate := NewValidator()
+	validate := newTestValidator(t)
 	cases := []string{"my-pvc", "eval-datasets-pvc", "pvc123", "a"}
 	for _, name := range cases {
 		ref := api.PVCTestDataRef{ClaimName: name}

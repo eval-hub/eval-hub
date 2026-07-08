@@ -17,7 +17,7 @@ const tailReadBlockSize = 8192
 // TailFileLines returns up to the last n non-empty-terminated lines from a file.
 // A missing file yields an empty string without error.
 func TailFileLines(path string, n int) (string, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- log file path from runtime job metadata
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", nil

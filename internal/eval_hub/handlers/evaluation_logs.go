@@ -90,7 +90,7 @@ func (h *Handlers) handleGetEvaluationLogs(
 	)
 }
 
-func (h *Handlers) resolveJobBenchmarks(ctx *executioncontext.ExecutionContext, storage interface {
+func (h *Handlers) resolveJobBenchmarks(_ *executioncontext.ExecutionContext, storage interface {
 	GetCollection(id string) (*api.CollectionResource, error)
 }, job *api.EvaluationJobResource) ([]api.EvaluationBenchmarkConfig, error) {
 	var collection *api.CollectionResource

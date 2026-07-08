@@ -117,7 +117,7 @@ func NewStorage(
 	success := false
 	defer func() {
 		if !success {
-			pool.Close()
+			_ = pool.Close()
 		}
 	}()
 

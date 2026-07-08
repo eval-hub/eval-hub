@@ -44,11 +44,11 @@ const (
 	envMLFlowTrackingURIName          = "MLFLOW_TRACKING_URI"
 	envMLFlowWorkspaceName            = "MLFLOW_WORKSPACE"
 	mlflowTokenVolumeName             = "mlflow-token"
-	mlflowTokenMountPath              = "/var/run/secrets/mlflow"
+	mlflowTokenMountPath              = "/var/run/secrets/mlflow" // #nosec G101 -- K8s secret mount path
 	mlflowTokenFile                   = "token"
 	ociCredentialsVolumeName          = "oci-credentials"
-	ociCredentialsMountPath           = "/etc/evalhub/.docker/config.json"
-	ociCredentialsSubPath             = ".dockerconfigjson"
+	ociCredentialsMountPath           = "/etc/evalhub/.docker/config.json" // #nosec G101 -- K8s secret mount path
+	ociCredentialsSubPath             = ".dockerconfigjson"                // #nosec G101 -- K8s secret subpath name
 	envOCIAuthConfigPathName          = "OCI_AUTH_CONFIG_PATH"
 	modelAuthVolumeName               = "model-auth" // credentials secret; mounted in sidecar only
 	modelAuthMountPath                = "/var/run/secrets/model"
@@ -56,7 +56,7 @@ const (
 	// adapter DownwardAPI namespace volume so the SDK finds files at the expected locations.
 	k8sSAMountPath = "/var/run/secrets/kubernetes.io/serviceaccount"
 	// evalhub SA token — projected into sidecar only; pod-level auto-mount is disabled so adapter cannot see it.
-	evalhubSATokenVolumeName = "evalhub-sa-token"
+	evalhubSATokenVolumeName = "evalhub-sa-token" // #nosec G101 -- K8s projected volume name
 	evalhubSATokenFile       = "token"
 	// pod namespace projected into adapter via DownwardAPI so the SDK can set X-Tenant on sidecar requests.
 	// The SA token auto-mount is disabled so the standard namespace file is absent; we expose it explicitly.
@@ -64,7 +64,7 @@ const (
 	adapterNamespaceFile            = "namespace"
 	modelInternalAuthVolumeName     = "model-auth-internal" // internalModelRef projected volume; mounted in adapter during credential injection
 	testDataSecretVolumeName        = "test-data-secret"
-	testDataSecretMountPath         = "/var/run/secrets/test-data"
+	testDataSecretMountPath         = "/var/run/secrets/test-data" // #nosec G101 -- K8s secret mount path
 	serviceCABundleFile             = "service-ca.crt"
 	envMLFlowCertPathName           = "MLFLOW_TRACKING_SERVER_CERT_PATH"
 	envEvalHubModeName              = "EVALHUB_MODE"
@@ -191,6 +191,13 @@ func mergeVolumesByName(slices ...[]corev1.Volume) []corev1.Volume {
 	return out
 }
 
+func sidecarPortFromInt(port int) (int32, error) {
+	if port < 1 || port > 65535 {
+		return 0, fmt.Errorf("port %d out of range (1-65535)", port)
+	}
+	return int32(port), nil
+}
+
 func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	if cfg.adapterImage == "" {
 		return nil, fmt.Errorf("adapter image is required")
@@ -234,8 +241,12 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 		},
 	}
 	probePort := defaultSidecarPort
-	if cfg.sidecarConfig != nil {
-		probePort = int32(cfg.sidecarConfig.Port)
+	if cfg.sidecarConfig != nil && cfg.sidecarConfig.Port != 0 {
+		p, err := sidecarPortFromInt(cfg.sidecarConfig.Port)
+		if err != nil {
+			return nil, fmt.Errorf("sidecar port: %w", err)
+		}
+		probePort = p
 	}
 	// Sidecar is added as an init container with restartPolicy=Always to be
 	// promoted as a native sidecar container (KEP-753).

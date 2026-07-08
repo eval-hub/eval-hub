@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
+	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -46,7 +46,7 @@ func TestCollectionsValidation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to unmarshal collection config: %v", err)
 		}
-		validator := validation.NewValidator()
+		validator := testhelpers.NewValidator(t)
 		err = validator.Struct(config)
 		if err != nil {
 			t.Fatalf("failed to validate collection config: %v", err)

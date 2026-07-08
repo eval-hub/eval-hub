@@ -7,12 +7,11 @@ import (
 
 func (h *Handlers) withSpan(ctx *executioncontext.ExecutionContext, fn otel.SpanFunction, component string, operation string, atts ...string) error {
 	attributes := make(map[string]string)
-	for i := 0; i < len(atts); i += 2 {
-		if i+1 >= len(atts) {
-			attributes[atts[i]] = ""
-		} else {
-			attributes[atts[i]] = atts[i+1]
-		}
+	for i := 0; i+1 < len(atts); i += 2 {
+		attributes[atts[i]] = atts[i+1]
+	}
+	if len(atts)%2 == 1 {
+		attributes[atts[len(atts)-1]] = ""
 	}
 	return otel.WithSpan(
 		ctx.Ctx,

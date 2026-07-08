@@ -34,7 +34,7 @@ const (
 // xModelCredError is an internal sentinel header set by the Director when ref resolution fails.
 // The modelRoundTripper checks for it and returns 400 to the eval container instead of
 // forwarding a request with a literal ref token.
-const xModelCredError = "X-Model-Cred-Error"
+const xModelCredError = "X-Model-Cred-Error" // #nosec G101 -- internal HTTP header name, not a credential
 
 const globalTransactionIDHeader = "X-Global-Transaction-Id"
 
@@ -211,10 +211,10 @@ func loadSecretCache(mountPath string, logger *slog.Logger) map[string]string {
 	}
 	for _, e := range entries {
 		// Skip directories and Kubernetes secret mount internals (..data, ..2024_... symlinks).
-		if e.IsDir() || strings.HasPrefix(e.Name(), "..") {
+		if e.IsDir() || strings.HasPrefix(e.Name(), "..") || strings.Contains(e.Name(), string(filepath.Separator)) {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(mountPath, e.Name()))
+		data, err := os.ReadFile(filepath.Join(mountPath, e.Name())) // #nosec G304 -- entry name validated above
 		if err != nil {
 			logger.Warn("skipping unreadable secret file", "file", e.Name(), "error", err)
 			continue

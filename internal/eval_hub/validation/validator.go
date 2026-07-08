@@ -1,6 +1,7 @@
 package validation
 
 import (
+	"fmt"
 	"reflect"
 	"regexp"
 	"strings"
@@ -24,14 +25,14 @@ var (
 	rfc1123DNSLabelRegex = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
 )
 
-func NewValidator() *validator.Validate {
+func NewValidator() (*validator.Validate, error) {
 	validate := validator.New(validator.WithRequiredStructEnabled())
 	for alias, definition := range tagAliases {
 		validate.RegisterAlias(alias, definition)
 	}
 	register(validate)
-	registerCustomValidators(validate)
-	return validate
+	err := registerCustomValidators(validate)
+	return validate, err
 }
 
 func register(instance *validator.Validate) {
@@ -47,14 +48,19 @@ func register(instance *validator.Validate) {
 	)
 }
 
-func registerCustomValidators(instance *validator.Validate) {
+func registerCustomValidators(instance *validator.Validate) error {
 	// https://github.com/go-playground/validator/blob/v10.30.2/non-standard/validators/notblank.go
-	instance.RegisterValidation("notblank", validators.NotBlank)
-	instance.RegisterValidation("rfc1123_dns_label", validateRFC1123DNSLabel)
+	if err := instance.RegisterValidation("notblank", validators.NotBlank); err != nil {
+		return fmt.Errorf("register validator failed for notblank: %w", err)
+	}
+	if err := instance.RegisterValidation("rfc1123_dns_label", validateRFC1123DNSLabel); err != nil {
+		return fmt.Errorf("register validator failed for rfc1123_dns_label: %w", err)
+	}
 	// Benchmarks min=1 only when Collection is not set (required_without handles presence; this enforces length)
 	instance.RegisterStructValidation(evaluationJobConfigBenchmarksMin, api.EvaluationJobConfig{})
 	// Exactly one of s3 or pvc must be set in TestDataRef.
 	instance.RegisterStructValidation(validateTestDataRefMutualExclusion, api.TestDataRef{})
+	return nil
 }
 
 func validateRFC1123DNSLabel(fl validator.FieldLevel) bool {

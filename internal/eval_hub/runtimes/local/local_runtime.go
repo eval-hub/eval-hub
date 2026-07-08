@@ -203,7 +203,7 @@ func (r *LocalRuntime) runBenchmark(
 	// Create output directory: /tmp/evalhub-jobs/<job_id>/<benchmark_index>/<provider_id>/<benchmark_id>/
 	jobDir := filepath.Join(localJobsBaseDir, jobID, fmt.Sprintf("%d", benchmarkIndex), bench.ProviderID, bench.ID)
 	metaDir := filepath.Join(jobDir, "meta")
-	if err := os.MkdirAll(metaDir, 0755); err != nil {
+	if err := os.MkdirAll(metaDir, 0o750); err != nil {
 		return fmt.Errorf("create meta directory: %w", err)
 	}
 
@@ -214,7 +214,7 @@ func (r *LocalRuntime) runBenchmark(
 
 	// Write job.json
 	jobSpecPath := filepath.Join(metaDir, "job.json")
-	if err := os.WriteFile(jobSpecPath, []byte(specJSON), 0644); err != nil {
+	if err := os.WriteFile(jobSpecPath, []byte(specJSON), 0o600); err != nil {
 		return fmt.Errorf("write job spec: %w", err)
 	}
 
@@ -234,7 +234,7 @@ func (r *LocalRuntime) runBenchmark(
 
 	// Build command using shell interpretation
 	command := provider.Runtime.Local.Command
-	cmd := exec.Command("sh", "-c", command)
+	cmd := exec.Command("sh", "-c", command) // #nosec G204 -- local runtime executes provider-defined commands by design
 	// Setpgid places the child in its own process group (PGID = child PID).
 	// This is critical for two reasons:
 	//   1. cancelJob calls Kill(-PID, SIGKILL) which targets the entire process
@@ -257,7 +257,7 @@ func (r *LocalRuntime) runBenchmark(
 
 	// Capture stdout/stderr to log file
 	logFilePath := filepath.Join(jobDir, "jobrun.log")
-	logFile, err := os.Create(logFilePath)
+	logFile, err := os.Create(logFilePath) // #nosec G304 -- log path derived from trusted job metadata
 	if err != nil {
 		return fmt.Errorf("create log file: %w", err)
 	}
@@ -275,7 +275,7 @@ func (r *LocalRuntime) runBenchmark(
 
 	// Start the process
 	if err := cmd.Start(); err != nil {
-		logFile.Close()
+		_ = logFile.Close()
 		return fmt.Errorf("start local process: %w", err)
 	}
 
@@ -283,7 +283,7 @@ func (r *LocalRuntime) runBenchmark(
 	r.tracker.addPID(jobID, pid)
 
 	// Close the log file — the child process has its own fd copy.
-	logFile.Close()
+	_ = logFile.Close()
 
 	r.logger.Info(
 		"local runtime process started",

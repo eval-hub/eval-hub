@@ -9,15 +9,15 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/internal/logging"
+	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 func TestCollections_PassCriteria(t *testing.T) {
 	logger := logging.FallbackLogger()
 
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	// set up the collection configs
 	collectionConfigs, err := config.LoadCollectionConfigs(logger, validate, "../../../../config")
 	if err != nil {
@@ -90,7 +90,7 @@ func TestCollections_PassCriteria(t *testing.T) {
 func TestCollections_BenchmarksExist(t *testing.T) {
 	logger := logging.FallbackLogger()
 
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	// set up the collection configs
 	collectionConfigs, err := config.LoadCollectionConfigs(logger, validate, "../../../../config")
 	if err != nil {

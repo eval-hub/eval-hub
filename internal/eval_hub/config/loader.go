@@ -68,7 +68,10 @@ func readConfig(logger *slog.Logger, name string, ext string, dirs ...string) (*
 	}
 	if len(envMappings.EnvMappings) > 0 {
 		for envName, field := range envMappings.EnvMappings {
-			configValues.BindEnv(field, strings.ToUpper(envName))
+			if err := configValues.BindEnv(field, strings.ToUpper(envName)); err != nil {
+				logger.Error("Failed to bind environment variable", "field_name", field, "env_name", envName, "error", err.Error())
+				return nil, err
+			}
 			logger.Info("Mapped environment variable", "field_name", field, "env_name", envName)
 		}
 		// now we need to reload the config file

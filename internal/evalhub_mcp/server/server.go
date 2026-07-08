@@ -232,8 +232,9 @@ func serveHTTP(ctx context.Context, mcpHandler http.Handler, cfg *config.Config,
 
 	addr := net.JoinHostPort(cfg.Host, fmt.Sprintf("%d", cfg.Port))
 	httpServer := &http.Server{
-		Addr:    addr,
-		Handler: mux,
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 15 * time.Second,
 	}
 
 	errCh := make(chan error, 1)
