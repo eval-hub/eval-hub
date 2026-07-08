@@ -11,6 +11,47 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+func TestSidecarPortFromInt(t *testing.T) {
+	t.Parallel()
+
+	got, err := sidecarPortFromInt(8080)
+	if err != nil {
+		t.Fatalf("sidecarPortFromInt(8080) = %v, want nil error", err)
+	}
+	if got != 8080 {
+		t.Fatalf("sidecarPortFromInt(8080) = %d, want 8080", got)
+	}
+
+	for _, port := range []int{0, -1, 65536} {
+		if _, err := sidecarPortFromInt(port); err == nil {
+			t.Fatalf("sidecarPortFromInt(%d) = nil error, want out of range error", port)
+		}
+	}
+}
+
+func TestBuildJobRejectsInvalidSidecarPort(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "job-bad-port",
+		resourceGUID:   "guid-bp",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		sidecarConfig: &config.SidecarConfig{
+			Port: 70000,
+		},
+	}
+
+	_, err := buildJob(cfg)
+	if err == nil {
+		t.Fatal("buildJob() = nil, want sidecar port error")
+	}
+	if !strings.Contains(err.Error(), "sidecar port") {
+		t.Fatalf("buildJob() error = %v, want sidecar port error", err)
+	}
+}
+
 func findContainer(containers []corev1.Container, name string) *corev1.Container {
 	for i := range containers {
 		if containers[i].Name == name {

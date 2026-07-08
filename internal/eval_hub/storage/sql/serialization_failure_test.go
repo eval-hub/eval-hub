@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
@@ -69,6 +70,34 @@ func TestSerializationFailureBackoff(t *testing.T) {
 		if got < serializationRetryBaseDelay || got > wantMax {
 			t.Fatalf("serializationFailureBackoff(%d) = %v, want in [%v, %v]", attempt, got, serializationRetryBaseDelay, wantMax)
 		}
+	}
+}
+
+func TestSerializationRetryJitter(t *testing.T) {
+	t.Parallel()
+
+	delay := 100 * time.Millisecond
+	maxJitter := delay/4 + 1
+	for i := 0; i < 20; i++ {
+		jitter, err := serializationRetryJitter(delay)
+		if err != nil {
+			t.Fatalf("serializationRetryJitter() = %v, want nil error", err)
+		}
+		if jitter < 0 || jitter >= maxJitter {
+			t.Fatalf("serializationRetryJitter() = %v, want in [0, %v)", jitter, maxJitter)
+		}
+	}
+}
+
+func TestSerializationRetryJitterZeroMax(t *testing.T) {
+	t.Parallel()
+
+	jitter, err := serializationRetryJitter(-5 * time.Millisecond)
+	if err != nil {
+		t.Fatalf("serializationRetryJitter() = %v, want nil error", err)
+	}
+	if jitter != 0 {
+		t.Fatalf("serializationRetryJitter() = %v, want 0", jitter)
 	}
 }
 

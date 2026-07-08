@@ -19,6 +19,18 @@ func newTestValidator(t *testing.T) *validator.Validate {
 	return v
 }
 
+func TestNewValidator(t *testing.T) {
+	t.Parallel()
+
+	validate, err := NewValidator()
+	if err != nil {
+		t.Fatalf("NewValidator() = %v, want nil error", err)
+	}
+	if validate == nil {
+		t.Fatal("NewValidator() returned nil")
+	}
+}
+
 func TestEvaluationJobConfigBenchmarksMin_WithCollection(t *testing.T) {
 	validate := newTestValidator(t)
 	// When Collection is set with ID, empty Benchmarks is allowed
