@@ -51,6 +51,71 @@ func TestManagerExportEnabledTargetsOnly(t *testing.T) {
 	}
 }
 
+func TestMLflowTargetDisabledWithoutExperimentName(t *testing.T) {
+	target := NewMLflowTarget(mlflowclient.NewClient("http://example.com"), nil)
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource:           api.Resource{ID: "job-1"},
+			MLFlowExperimentID: "exp-1",
+		},
+	}
+	if target.Enabled(job) {
+		t.Fatal("expected mlflow target to be disabled without experiment name")
+	}
+}
+
+func TestMLflowTargetDisabledWithoutExperimentID(t *testing.T) {
+	target := NewMLflowTarget(mlflowclient.NewClient("http://example.com"), nil)
+	job := &api.EvaluationJobResource{
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Experiment: &api.ExperimentConfig{Name: "exp"},
+		},
+	}
+	if target.Enabled(job) {
+		t.Fatal("expected mlflow target to be disabled without experiment id")
+	}
+}
+
+func TestMLflowTargetExportWithoutArtifactLocation(t *testing.T) {
+	t.Parallel()
+
+	var uploadedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/runs/create"):
+			_ = json.NewEncoder(w).Encode(mlflowclient.CreateRunResponse{
+				Run: mlflowclient.Run{Info: mlflowclient.RunInfo{RunID: "run-1"}},
+			})
+		case r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/mlflow-artifacts/artifacts/"):
+			uploadedPath = r.URL.Path
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	target := NewMLflowTarget(mlflowclient.NewClient(srv.URL), nil)
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource:           api.Resource{ID: "job-1"},
+			MLFlowExperimentID: "8",
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Name:       "demo",
+			Experiment: &api.ExperimentConfig{Name: "exp"},
+		},
+	}
+	_, err := target.Export(context.Background(), job, &cards.EvaluationCard{CardVersion: cards.CardVersion})
+	if err != nil {
+		t.Fatalf("Export() err = %v", err)
+	}
+	wantSuffix := "/mlflow-artifacts/artifacts/8/run-1/artifacts/evaluation-card.json"
+	if !strings.HasSuffix(uploadedPath, wantSuffix) {
+		t.Fatalf("uploaded path = %q, want suffix %q", uploadedPath, wantSuffix)
+	}
+}
+
 func TestMLflowTargetExport(t *testing.T) {
 	t.Parallel()
 

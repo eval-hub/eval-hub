@@ -132,3 +132,79 @@ func TestHandleUpdateEvaluationExportsCardOnTerminalTransition(t *testing.T) {
 		t.Fatalf("expected card URL persisted, got id=%q url=%q", storage.updateID, storage.cardURL)
 	}
 }
+
+func TestHandleUpdateEvaluationExportsCardOnFailedTransition(t *testing.T) {
+	t.Parallel()
+	exporter := &recordingResultsExporter{cardURL: "https://example.com/card.json"}
+	storage := &terminalExportStorage{
+		fakeStorage: &fakeStorage{
+			job: &api.EvaluationJobResource{
+				Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
+				Status: &api.EvaluationJobStatus{
+					EvaluationJobState: api.EvaluationJobState{State: api.OverallStateRunning},
+				},
+			},
+		},
+	}
+	h := handlers.New(storage, validation.NewValidator(), nil, nil, nil, exporter)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-failed", logger, "test-user", "test-tenant")
+
+	body := `{"benchmark_status_event":{"provider_id":"p1","id":"b1","status":"failed"}}`
+	req := &updateEvaluationRequest{
+		bodyRequest: &bodyRequest{
+			MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs/job-1/events"),
+			body:        []byte(body),
+		},
+		pathValues: map[string]string{"job_id": "job-1"},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleUpdateEvaluation(ctx, req, resp)
+
+	if recorder.Code != 204 {
+		t.Fatalf("expected status 204, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+	if !exporter.called {
+		t.Fatal("expected card export when job transitions to failed")
+	}
+}
+
+func TestHandleUpdateEvaluationSkipsCardExportWhenTerminalStateUnchanged(t *testing.T) {
+	t.Parallel()
+	exporter := &recordingResultsExporter{cardURL: "https://example.com/card.json"}
+	storage := &terminalExportStorage{
+		fakeStorage: &fakeStorage{
+			job: &api.EvaluationJobResource{
+				Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
+				Status: &api.EvaluationJobStatus{
+					EvaluationJobState: api.EvaluationJobState{State: api.OverallStateCompleted},
+				},
+			},
+		},
+	}
+	h := handlers.New(storage, validation.NewValidator(), nil, nil, nil, exporter)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-completed-again", logger, "test-user", "test-tenant")
+
+	body := `{"benchmark_status_event":{"provider_id":"p1","id":"b1","status":"completed"}}`
+	req := &updateEvaluationRequest{
+		bodyRequest: &bodyRequest{
+			MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs/job-1/events"),
+			body:        []byte(body),
+		},
+		pathValues: map[string]string{"job_id": "job-1"},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleUpdateEvaluation(ctx, req, resp)
+
+	if recorder.Code != 204 {
+		t.Fatalf("expected status 204, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+	if exporter.called {
+		t.Fatal("expected card export to be skipped when terminal state is unchanged")
+	}
+}

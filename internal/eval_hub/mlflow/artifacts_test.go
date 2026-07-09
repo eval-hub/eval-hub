@@ -26,6 +26,61 @@ func TestBuildRunArtifactPath(t *testing.T) {
 	}
 }
 
+func TestArtifactLocationPathPrefix(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		location string
+		want     string
+	}{
+		{name: "empty", location: "", want: ""},
+		{name: "whitespace", location: "  ", want: ""},
+		{name: "trim slashes", location: "/mlflow/artifacts/workspaces/sagar/8/", want: "mlflow/artifacts/workspaces/sagar/8"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := ArtifactLocationPathPrefix(tt.location); got != tt.want {
+				t.Fatalf("prefix = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestUploadArtifactToExperimentWithArtifactLocation(t *testing.T) {
+	t.Parallel()
+
+	var uploadedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/mlflow-artifacts/artifacts/") {
+			uploadedPath = r.URL.Path
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := mlflowclient.NewClient(srv.URL).WithContext(t.Context())
+	_, err := UploadArtifactToExperiment(
+		client,
+		"8",
+		"run-1",
+		"evaluation-card.json",
+		"/mlflow/artifacts/workspaces/sagar/8",
+		[]byte(`{"card_version":"1.0"}`),
+		"application/json",
+	)
+	if err != nil {
+		t.Fatalf("UploadArtifactToExperiment() err = %v", err)
+	}
+	want := "/mlflow-artifacts/artifacts/mlflow/artifacts/workspaces/sagar/8/8/run-1/artifacts/evaluation-card.json"
+	if !strings.HasSuffix(uploadedPath, want) {
+		t.Fatalf("uploaded path = %q, want suffix %q", uploadedPath, want)
+	}
+}
+
 func TestPersistEvalCard(t *testing.T) {
 	t.Parallel()
 
