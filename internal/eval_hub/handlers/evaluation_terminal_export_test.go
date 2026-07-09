@@ -10,7 +10,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
+	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/cards"
 )
@@ -64,7 +64,7 @@ func TestHandleUpdateEvaluationSkipsCardExportWhenNotTerminal(t *testing.T) {
 			},
 		},
 	}
-	h := handlers.New(storage, validation.NewValidator(), nil, nil, nil, exporter)
+	h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, exporter)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-running", logger, "test-user", "test-tenant")
 
@@ -105,7 +105,7 @@ func TestHandleUpdateEvaluationExportsCardOnTerminalTransition(t *testing.T) {
 			},
 		},
 	}
-	h := handlers.New(storage, validation.NewValidator(), nil, nil, nil, exporter)
+	h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, exporter)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-completed", logger, "test-user", "test-tenant")
 
@@ -146,7 +146,7 @@ func TestHandleUpdateEvaluationExportsCardOnFailedTransition(t *testing.T) {
 			},
 		},
 	}
-	h := handlers.New(storage, validation.NewValidator(), nil, nil, nil, exporter)
+	h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, exporter)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-failed", logger, "test-user", "test-tenant")
 
@@ -184,7 +184,7 @@ func TestHandleUpdateEvaluationSkipsCardExportWhenTerminalStateUnchanged(t *test
 			},
 		},
 	}
-	h := handlers.New(storage, validation.NewValidator(), nil, nil, nil, exporter)
+	h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, exporter)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-completed-again", logger, "test-user", "test-tenant")
 

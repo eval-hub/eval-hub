@@ -35,6 +35,13 @@ func TestNewEvaluationCardFromDirectBenchmarkJob(t *testing.T) {
 			},
 		},
 		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{
+				State: api.OverallStateCompleted,
+				Message: &api.MessageInfo{
+					Message:     "Evaluation job is completed",
+					MessageCode: "evaluation.job.updated",
+				},
+			},
 			Benchmarks: []api.BenchmarkStatus{
 				{
 					ID:             "arc_easy",
@@ -93,6 +100,15 @@ func TestNewEvaluationCardFromDirectBenchmarkJob(t *testing.T) {
 	if card.Results.Benchmarks[0].Test.PrimaryScore != "0.95" {
 		t.Fatalf("primary_score = %q", card.Results.Benchmarks[0].Test.PrimaryScore)
 	}
+	if card.Results.Status == nil {
+		t.Fatal("expected overall job status")
+	}
+	if card.Results.Status.State != api.OverallStateCompleted {
+		t.Fatalf("overall state = %q, want completed", card.Results.Status.State)
+	}
+	if card.Results.Status.Message == nil || card.Results.Status.Message.Message != "Evaluation job is completed" {
+		t.Fatalf("overall message = %#v", card.Results.Status.Message)
+	}
 	if card.Results.Collection != nil {
 		t.Fatal("expected no collection results for direct benchmark job")
 	}
@@ -111,6 +127,13 @@ func TestNewEvaluationCardFromCollectionJob(t *testing.T) {
 			},
 		},
 		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{
+				State: api.OverallStateCompleted,
+				Message: &api.MessageInfo{
+					Message:     "Evaluation job is completed",
+					MessageCode: "evaluation.job.updated",
+				},
+			},
 			Benchmarks: []api.BenchmarkStatus{
 				{ID: "arc_easy", ProviderID: "lm_evaluation_harness", BenchmarkIndex: 0, Status: api.StateCompleted},
 			},
@@ -135,6 +158,74 @@ func TestNewEvaluationCardFromCollectionJob(t *testing.T) {
 	}
 	if card.Results.Collection.Test.Threshold != threshold {
 		t.Fatalf("collection threshold = %v", card.Results.Collection.Test.Threshold)
+	}
+	if card.Results.Status == nil || card.Results.Status.State != api.OverallStateCompleted {
+		t.Fatalf("overall status = %#v", card.Results.Status)
+	}
+}
+
+func TestNewEvaluationCardPartiallyFailedJobStatus(t *testing.T) {
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-789"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{URL: "https://vllm.example.com/v1", Name: "model"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "arc_easy"}, ProviderID: "lm_evaluation_harness"},
+				{Ref: api.Ref{ID: "arc_challenge"}, ProviderID: "lm_evaluation_harness"},
+			},
+		},
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{
+				State: api.OverallStatePartiallyFailed,
+				Message: &api.MessageInfo{
+					Message:     "Some of the benchmarks failed.",
+					MessageCode: "evaluation.job.updated",
+				},
+			},
+			Benchmarks: []api.BenchmarkStatus{
+				{ID: "arc_easy", ProviderID: "lm_evaluation_harness", BenchmarkIndex: 0, Status: api.StateCompleted},
+				{
+					ID:             "arc_challenge",
+					ProviderID:     "lm_evaluation_harness",
+					BenchmarkIndex: 0,
+					Status:         api.StateFailed,
+					ErrorMessage: &api.MessageInfo{
+						Message:     "Benchmark run failed",
+						MessageCode: "benchmark.failed",
+					},
+					WarningMessage: &api.MessageInfo{
+						Message:     "Partial dataset used",
+						MessageCode: "benchmark.warning",
+					},
+				},
+			},
+		},
+		Results: &api.EvaluationJobResults{
+			Benchmarks: []api.BenchmarkResult{
+				{ID: "arc_easy", ProviderID: "lm_evaluation_harness", BenchmarkIndex: 0},
+				{ID: "arc_challenge", ProviderID: "lm_evaluation_harness", BenchmarkIndex: 0},
+			},
+		},
+	}
+
+	card := NewEvaluationCard(job)
+	if card.Results.Status.State != api.OverallStatePartiallyFailed {
+		t.Fatalf("overall state = %q", card.Results.Status.State)
+	}
+	if card.Results.Status.Message.Message != "Some of the benchmarks failed." {
+		t.Fatalf("message = %q", card.Results.Status.Message.Message)
+	}
+	if len(card.Results.Benchmarks) != 2 {
+		t.Fatalf("benchmark results len = %d, want 2", len(card.Results.Benchmarks))
+	}
+	failed := card.Results.Benchmarks[1]
+	if failed.ErrorMessage == nil || failed.ErrorMessage.Message != "Benchmark run failed" {
+		t.Fatalf("error_message = %#v", failed.ErrorMessage)
+	}
+	if failed.WarningMessage == nil || failed.WarningMessage.Message != "Partial dataset used" {
+		t.Fatalf("warning_message = %#v", failed.WarningMessage)
 	}
 }
 

@@ -10,8 +10,9 @@ const (
 // EvaluationCard is the top-level evaluation card document.
 //
 // Differences from api.EvaluationJobResource:
-//   - Adds card_version and schema_version; no api.Resource (id, tenant, owner), status, or job config fields (name, description, tags, experiment, custom, exports, queue).
+//   - Adds card_version and schema_version; no api.Resource (id, tenant, owner), top-level status, or job config fields (name, description, tags, experiment, custom, exports, queue).
 //   - Splits content into metadata, context, and results instead of resource + status + EvaluationJobConfig.
+//   - Overall job status is nested under results.status instead of a top-level status field.
 type EvaluationCard struct {
 	CardVersion   string                 `json:"card_version"`
 	SchemaVersion string                 `json:"schema_version"`
@@ -59,35 +60,46 @@ type CardModelRef struct {
 //
 // Differences from api.EvaluationBenchmarkConfig:
 //   - id is an inline field; api embeds api.Ref.
-//   - Adds contacts and config.
+//   - Adds contacts (see field comment).
 //   - Omits hardware_config and test_data_ref.
 //   - Reuses api.PrimaryScore and api.PassCriteria for shared fields.
 type CardBenchmarkConfig struct {
-	ID           string            `json:"id"`
-	ProviderID   string            `json:"provider_id"`
+	ID         string `json:"id"`
+	ProviderID string `json:"provider_id"`
+	// Contacts will be wired from provider benchmark config when contacts are introduced there.
 	Contacts     []string          `json:"contacts,omitempty"`
-	Config       map[string]any    `json:"config,omitempty"`
 	Parameters   map[string]any    `json:"parameters,omitempty"`
 	PrimaryScore *api.PrimaryScore `json:"primary_score,omitempty"`
 	PassCriteria *api.PassCriteria `json:"pass_criteria,omitempty"`
 	Weight       float32           `json:"weight,omitempty"`
 }
 
-// EvaluationCardResults holds benchmark and collection-level results.
+// EvaluationCardResults holds overall job status, benchmark, and collection-level results.
 //
 // Differences from api.EvaluationJobResults:
+//   - Adds status (overall job state and message from api.EvaluationJobStatus).
 //   - Collection-level test is nested under collection instead of a top-level test field.
 //   - Omits mlflow_experiment_url and evaluation_card_url.
 //   - Uses CardBenchmarkResult instead of api.BenchmarkResult.
 type EvaluationCardResults struct {
+	Status     *CardJobStatus        `json:"status,omitempty"`
 	Benchmarks []CardBenchmarkResult `json:"benchmarks,omitempty"`
 	Collection *CardCollectionResult `json:"collection,omitempty"`
+}
+
+// CardJobStatus holds the overall evaluation job state in the card results section.
+//
+// Differences from api.EvaluationJobStatus:
+//   - Contains only overall state and message; per-benchmark status lives on CardBenchmarkResult.
+type CardJobStatus struct {
+	State   api.OverallState `json:"state"`
+	Message *api.MessageInfo `json:"message,omitempty"`
 }
 
 // CardBenchmarkResult holds the outcome of a single benchmark run.
 //
 // Differences from api.BenchmarkResult:
-//   - Adds status (from api.BenchmarkStatus / api.BenchmarkStatusEvent).
+//   - Adds status, error_message, and warning_message (from api.BenchmarkStatus / api.BenchmarkStatusEvent).
 //   - Omits benchmark_index.
 //   - Uses CardBenchmarkTest instead of api.BenchmarkTest.
 type CardBenchmarkResult struct {
@@ -95,6 +107,8 @@ type CardBenchmarkResult struct {
 	ProviderID     string             `json:"provider_id"`
 	Contacts       []string           `json:"contacts,omitempty"`
 	Status         api.State          `json:"status,omitempty"`
+	ErrorMessage   *api.MessageInfo   `json:"error_message,omitempty"`
+	WarningMessage *api.MessageInfo   `json:"warning_message,omitempty"`
 	Metrics        map[string]any     `json:"metrics,omitempty"`
 	AdditionalInfo map[string]any     `json:"additional_info,omitempty"`
 	Artifacts      map[string]any     `json:"artifacts,omitempty"`

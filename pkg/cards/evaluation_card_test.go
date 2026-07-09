@@ -40,12 +40,23 @@ func TestEvaluationCardJSONRoundTrip(t *testing.T) {
 			},
 		},
 		Results: &EvaluationCardResults{
+			Status: &CardJobStatus{
+				State: api.OverallStateCompleted,
+				Message: &api.MessageInfo{
+					Message:     "Evaluation job is completed",
+					MessageCode: "evaluation.job.updated",
+				},
+			},
 			Benchmarks: []CardBenchmarkResult{
 				{
 					ID:         "arc_easy",
 					ProviderID: "lm_evaluation_harness",
 					Contacts:   []string{"team@example.com"},
 					Status:     api.StateCompleted,
+					WarningMessage: &api.MessageInfo{
+						Message:     "Completed with warnings",
+						MessageCode: "benchmark.warning",
+					},
 					Metrics: map[string]any{
 						"accuracy": 0.95,
 					},
@@ -93,6 +104,15 @@ func TestEvaluationCardJSONRoundTrip(t *testing.T) {
 	}
 	if decoded.Results.Benchmarks[0].Test.Pass != true {
 		t.Error("benchmark test pass = false, want true")
+	}
+	if decoded.Results.Benchmarks[0].WarningMessage == nil || decoded.Results.Benchmarks[0].WarningMessage.MessageCode != "benchmark.warning" {
+		t.Errorf("warning_message = %#v", decoded.Results.Benchmarks[0].WarningMessage)
+	}
+	if decoded.Results.Status == nil || decoded.Results.Status.State != api.OverallStateCompleted {
+		t.Errorf("overall status = %#v", decoded.Results.Status)
+	}
+	if decoded.Results.Status.Message == nil || decoded.Results.Status.Message.MessageCode != "evaluation.job.updated" {
+		t.Errorf("overall message = %#v", decoded.Results.Status.Message)
 	}
 	if decoded.Results.Collection.Test.Score != 0.80 {
 		t.Errorf("collection score = %v, want 0.80", decoded.Results.Collection.Test.Score)

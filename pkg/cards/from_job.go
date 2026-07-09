@@ -72,6 +72,7 @@ func newEvaluationCardResults(job *api.EvaluationJobResource) *EvaluationCardRes
 	}
 
 	results := &EvaluationCardResults{
+		Status:     toCardJobStatus(job.Status),
 		Benchmarks: buildCardBenchmarkResults(job),
 	}
 
@@ -85,11 +86,21 @@ func newEvaluationCardResults(job *api.EvaluationJobResource) *EvaluationCardRes
 		}
 	}
 
-	if len(results.Benchmarks) == 0 && results.Collection == nil {
+	if results.Status == nil && len(results.Benchmarks) == 0 && results.Collection == nil {
 		return nil
 	}
 
 	return results
+}
+
+func toCardJobStatus(status *api.EvaluationJobStatus) *CardJobStatus {
+	if status == nil || status.State == "" {
+		return nil
+	}
+	return &CardJobStatus{
+		State:   status.State,
+		Message: status.Message,
+	}
 }
 
 func buildCardBenchmarkResults(job *api.EvaluationJobResource) []CardBenchmarkResult {
@@ -115,9 +126,11 @@ func buildCardBenchmarkResults(job *api.EvaluationJobResource) []CardBenchmarkRe
 	for _, status := range job.Status.Benchmarks {
 		result, ok := resultByKey[benchmarkKey(status.ID, status.ProviderID, status.BenchmarkIndex)]
 		cardResult := CardBenchmarkResult{
-			ID:         status.ID,
-			ProviderID: status.ProviderID,
-			Status:     status.Status,
+			ID:             status.ID,
+			ProviderID:     status.ProviderID,
+			Status:         status.Status,
+			ErrorMessage:   status.ErrorMessage,
+			WarningMessage: status.WarningMessage,
 		}
 		if ok {
 			cardResult.Contacts = result.Contacts
