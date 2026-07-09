@@ -88,8 +88,6 @@ func (s *runtimeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEve
 		return err
 	}
 
-	s.handlers.exportEvaluationResults(s.ctx, s.scopedStorage(), id, s.logger)
-
 	s.handlers.onEvaluationJobUpdated(s.ctx, s.scopedStorage(), func() (*api.EvaluationJobResource, error) {
 		return s.scopedStorage().GetEvaluationJob(id)
 	}, previousState, s.logger)
@@ -500,8 +498,6 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 				w.Error(err, ctx.RequestID)
 				return err
 			}
-
-			h.exportEvaluationResults(runtimeCtx, scoped, evaluationJobID, ctx.Logger)
 
 			h.onEvaluationJobUpdated(runtimeCtx, scoped, func() (*api.EvaluationJobResource, error) {
 				return scoped.GetEvaluationJob(evaluationJobID)

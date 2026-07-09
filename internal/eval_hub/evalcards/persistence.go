@@ -137,11 +137,17 @@ func (t *mlflowTarget) Export(ctx context.Context, job *api.EvaluationJobResourc
 		client = client.WithWorkspace(job.Resource.Tenant.String())
 	}
 
+	artifactLocation := ""
+	if job.Experiment != nil {
+		artifactLocation = job.Experiment.ArtifactLocation
+	}
+
 	artifactURL, err := evalhubmlflow.PersistEvalCard(
 		client,
 		job.Resource.MLFlowExperimentID,
 		job.Resource.ID,
 		job.Name,
+		artifactLocation,
 		cardJSON,
 	)
 	if err != nil {

@@ -54,6 +54,7 @@ func TestManagerExportEnabledTargetsOnly(t *testing.T) {
 func TestMLflowTargetExport(t *testing.T) {
 	t.Parallel()
 
+	var uploadedPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/runs/create"):
@@ -61,6 +62,7 @@ func TestMLflowTargetExport(t *testing.T) {
 				Run: mlflowclient.Run{Info: mlflowclient.RunInfo{RunID: "run-1"}},
 			})
 		case r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/mlflow-artifacts/artifacts/"):
+			uploadedPath = r.URL.Path
 			w.WriteHeader(http.StatusOK)
 		default:
 			http.NotFound(w, r)
@@ -72,11 +74,14 @@ func TestMLflowTargetExport(t *testing.T) {
 	job := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource:           api.Resource{ID: "job-1", Tenant: "tenant-a"},
-			MLFlowExperimentID: "exp-1",
+			MLFlowExperimentID: "8",
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Name:       "demo",
-			Experiment: &api.ExperimentConfig{Name: "exp"},
+			Name: "demo",
+			Experiment: &api.ExperimentConfig{
+				Name:             "exp",
+				ArtifactLocation: "/mlflow/artifacts/workspaces/sagar/8",
+			},
 		},
 	}
 	if !target.Enabled(job) {
@@ -88,6 +93,10 @@ func TestMLflowTargetExport(t *testing.T) {
 	}
 	if cardURL == "" {
 		t.Fatal("expected non-empty card URL")
+	}
+	wantSuffix := "/mlflow-artifacts/artifacts/mlflow/artifacts/workspaces/sagar/8/8/run-1/artifacts/evaluation-card.json"
+	if !strings.HasSuffix(uploadedPath, wantSuffix) {
+		t.Fatalf("uploaded path = %q, want suffix %q", uploadedPath, wantSuffix)
 	}
 }
 

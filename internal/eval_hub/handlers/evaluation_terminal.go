@@ -18,15 +18,17 @@ func (h *Handlers) onEvaluationJobUpdated(
 ) {
 	recordEvaluationJobTerminalStateAfterUpdate(ctx, getJob, previousState)
 
-	if h.serviceConfig == nil || !h.serviceConfig.IsOTELJobContainerLogsEnabled() || h.runtime == nil {
-		return
-	}
-
 	job, err := getJob()
 	if err != nil || job == nil || job.Status == nil {
 		return
 	}
 	if !job.Status.State.IsTerminalState() || previousState == job.Status.State {
+		return
+	}
+
+	h.exportEvaluationResults(ctx, storage, job.Resource.ID, logger)
+
+	if h.serviceConfig == nil || !h.serviceConfig.IsOTELJobContainerLogsEnabled() || h.runtime == nil {
 		return
 	}
 

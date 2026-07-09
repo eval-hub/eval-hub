@@ -12,10 +12,26 @@ const (
 	EvalCardRunTagKey        = "evaluation_job_id"
 )
 
+// ArtifactLocationPathPrefix returns a slash-separated prefix for MLflow proxied artifact
+// paths derived from an experiment artifact_location. Empty when not configured.
+func ArtifactLocationPathPrefix(artifactLocation string) string {
+	loc := strings.TrimSpace(artifactLocation)
+	if loc == "" {
+		return ""
+	}
+	return strings.Trim(loc, "/")
+}
+
 // BuildRunArtifactPath returns the MLflow proxied artifact path for a run-relative file.
-func BuildRunArtifactPath(experimentID, runID, relativeArtifactPath string) string {
+// When artifactLocation is set on the experiment, it is prepended before experimentID/runID.
+func BuildRunArtifactPath(experimentID, runID, relativeArtifactPath, artifactLocation string) string {
 	relativeArtifactPath = strings.TrimPrefix(strings.TrimSpace(relativeArtifactPath), "/")
-	return fmt.Sprintf("%s/%s/artifacts/%s", experimentID, runID, relativeArtifactPath)
+	suffix := fmt.Sprintf("%s/%s/artifacts/%s", experimentID, runID, relativeArtifactPath)
+	prefix := ArtifactLocationPathPrefix(artifactLocation)
+	if prefix == "" {
+		return suffix
+	}
+	return prefix + "/" + suffix
 }
 
 // UploadArtifactToExperiment uploads content to a run artifact path under an experiment.
@@ -24,6 +40,7 @@ func UploadArtifactToExperiment(
 	experimentID string,
 	runID string,
 	relativeArtifactPath string,
+	artifactLocation string,
 	content []byte,
 	contentType string,
 ) (string, error) {
@@ -40,7 +57,7 @@ func UploadArtifactToExperiment(
 		return "", err
 	}
 	return client.UploadArtifact(
-		BuildRunArtifactPath(experimentID, runID, relativeArtifactPath),
+		BuildRunArtifactPath(experimentID, runID, relativeArtifactPath, artifactLocation),
 		content,
 		contentType,
 	)
@@ -82,11 +99,15 @@ func CreateEvaluationCardRun(client *mlflowclient.Client, experimentID, jobID, r
 }
 
 // PersistEvalCard uploads the evaluation card JSON artifact to a new MLflow run in the job's experiment.
-func PersistEvalCard(client *mlflowclient.Client, experimentID, jobID, runName string, cardJSON []byte) (string, error) {
+func PersistEvalCard(
+	client *mlflowclient.Client,
+	experimentID, jobID, runName, artifactLocation string,
+	cardJSON []byte,
+) (string, error) {
 	runID, err := CreateEvaluationCardRun(client, experimentID, jobID, runName)
 	if err != nil {
 		return "", err
 	}
-	artifactPath := BuildRunArtifactPath(experimentID, runID, EvalCardArtifactFileName)
+	artifactPath := BuildRunArtifactPath(experimentID, runID, EvalCardArtifactFileName, artifactLocation)
 	return client.UploadArtifact(artifactPath, cardJSON, "application/json")
 }
