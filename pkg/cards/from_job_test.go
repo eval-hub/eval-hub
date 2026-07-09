@@ -237,3 +237,72 @@ func mustParseTime(t *testing.T, value string) (parsed time.Time) {
 	}
 	return parsed
 }
+
+func TestNewEvaluationCardNilJob(t *testing.T) {
+	if card := NewEvaluationCard(nil); card != nil {
+		t.Fatalf("card = %#v, want nil", card)
+	}
+}
+
+func TestNewEvaluationCardFromResultsWithoutStatusBenchmarks(t *testing.T) {
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-results-only"}},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{URL: "https://vllm.example.com/v1", Name: "model"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "arc_easy"}, ProviderID: "lm_evaluation_harness"},
+			},
+		},
+		Results: &api.EvaluationJobResults{
+			Benchmarks: []api.BenchmarkResult{
+				{
+					ID:             "arc_easy",
+					ProviderID:     "lm_evaluation_harness",
+					BenchmarkIndex: 0,
+					Metrics:        map[string]any{"accuracy": 0.9},
+					Test:           &api.BenchmarkTest{PrimaryScore: 0.9, Threshold: 0.5, Pass: true},
+				},
+			},
+		},
+	}
+
+	card := NewEvaluationCard(job)
+	if card.Results == nil || len(card.Results.Benchmarks) != 1 {
+		t.Fatalf("results = %#v", card.Results)
+	}
+	if card.Results.Benchmarks[0].Status != "" {
+		t.Fatalf("status = %q, want empty when built from results only", card.Results.Benchmarks[0].Status)
+	}
+	if card.Results.Benchmarks[0].Test.PrimaryScore != "0.9" {
+		t.Fatalf("primary_score = %q", card.Results.Benchmarks[0].Test.PrimaryScore)
+	}
+}
+
+func TestNewEvaluationCardStatusOnlyResults(t *testing.T) {
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-status-only"}},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{URL: "https://vllm.example.com/v1", Name: "model"},
+		},
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{
+				State: api.OverallStateRunning,
+				Message: &api.MessageInfo{
+					Message:     "Evaluation job is running",
+					MessageCode: "evaluation.job.updated",
+				},
+			},
+		},
+	}
+
+	card := NewEvaluationCard(job)
+	if card.Results == nil || card.Results.Status == nil {
+		t.Fatal("expected results with overall status")
+	}
+	if card.Results.Status.State != api.OverallStateRunning {
+		t.Fatalf("state = %q", card.Results.Status.State)
+	}
+	if len(card.Results.Benchmarks) != 0 {
+		t.Fatalf("benchmarks = %#v, want empty", card.Results.Benchmarks)
+	}
+}

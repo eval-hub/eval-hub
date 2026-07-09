@@ -57,4 +57,71 @@ func TestBuildArtifactUploadEndpoint(t *testing.T) {
 	if got != want {
 		t.Fatalf("endpoint = %q, want %q", got, want)
 	}
+
+	if _, err := buildArtifactUploadEndpoint(""); err == nil {
+		t.Fatal("expected error for empty artifact path")
+	}
+	if _, err := buildArtifactUploadEndpoint("/"); err == nil {
+		t.Fatal("expected error for slash-only artifact path")
+	}
+}
+
+func TestUploadArtifactValidationErrors(t *testing.T) {
+	t.Parallel()
+
+	var nilClient *Client
+	if _, err := nilClient.UploadArtifact("path", []byte("x"), ""); err == nil {
+		t.Fatal("expected error for nil client")
+	}
+
+	client := NewClient("http://example.com").WithContext(t.Context())
+	if _, err := client.UploadArtifact("", []byte("x"), ""); err == nil {
+		t.Fatal("expected error for empty artifact path")
+	}
+}
+
+func TestUploadArtifactErrorResponse(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error_code":"INVALID_PARAMETER_VALUE","message":"bad path"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := NewClient(srv.URL).WithContext(t.Context())
+	_, err := client.UploadArtifact("1/run-1/artifacts/file.json", []byte("{}"), "application/json")
+	if err == nil {
+		t.Fatal("expected upload error")
+	}
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("error type = %T, want *APIError", err)
+	}
+	if apiErr.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d", apiErr.StatusCode)
+	}
+}
+
+func TestUploadArtifactWithWorkspaceHeader(t *testing.T) {
+	t.Parallel()
+
+	var workspaceHeader string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		workspaceHeader = r.Header.Get("X-MLFLOW-WORKSPACE")
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := NewClient(srv.URL).
+		WithContext(t.Context()).
+		WithWorkspacesSupport(true).
+		WithWorkspace("tenant-a")
+	_, err := client.UploadArtifact("1/run-1/artifacts/file.json", []byte("{}"), "application/json")
+	if err != nil {
+		t.Fatalf("UploadArtifact() err = %v", err)
+	}
+	if workspaceHeader != "tenant-a" {
+		t.Fatalf("workspace header = %q", workspaceHeader)
+	}
 }

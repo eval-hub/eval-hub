@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -113,4 +114,78 @@ func TestOnEvaluationJobUpdatedExportsOnFailedTransition(t *testing.T) {
 	if storage.updateID != "job-1" || storage.cardURL != "https://example.com/card.json" {
 		t.Fatalf("expected card URL persisted, got id=%q url=%q", storage.updateID, storage.cardURL)
 	}
+}
+
+func TestOnEvaluationJobUpdatedSkipsWhenGetJobFails(t *testing.T) {
+	t.Parallel()
+	exporter := &terminalTestExporter{}
+	h := &Handlers{resultsExporter: exporter}
+
+	h.onEvaluationJobUpdated(
+		context.Background(),
+		&terminalTestStorage{},
+		func() (*api.EvaluationJobResource, error) { return nil, errors.New("load failed") },
+		api.OverallStateRunning,
+		nil,
+	)
+
+	if exporter.called {
+		t.Fatal("expected export to be skipped when getJob fails")
+	}
+}
+
+func TestOnEvaluationJobUpdatedSkipsWhenJobNil(t *testing.T) {
+	t.Parallel()
+	exporter := &terminalTestExporter{}
+	h := &Handlers{resultsExporter: exporter}
+
+	h.onEvaluationJobUpdated(
+		context.Background(),
+		&terminalTestStorage{},
+		func() (*api.EvaluationJobResource, error) { return nil, nil },
+		api.OverallStateRunning,
+		nil,
+	)
+
+	if exporter.called {
+		t.Fatal("expected export to be skipped when job is nil")
+	}
+}
+
+func TestResolveJobBenchmarksForStorageWithCollection(t *testing.T) {
+	t.Parallel()
+	storage := &collectionTerminalStorage{
+		terminalTestStorage: terminalTestStorage{
+			job: &api.EvaluationJobResource{
+				EvaluationJobConfig: api.EvaluationJobConfig{
+					Collection: &api.CollectionRef{ID: "col-1"},
+				},
+			},
+		},
+		collection: &api.CollectionResource{
+			CollectionConfig: api.CollectionConfig{
+				Benchmarks: []api.CollectionBenchmarkConfig{
+					{Ref: api.Ref{ID: "arc_easy"}, ProviderID: "lm_evaluation_harness"},
+				},
+			},
+		},
+	}
+	h := &Handlers{}
+
+	benchmarks, err := h.resolveJobBenchmarksForStorage(storage, storage.job)
+	if err != nil {
+		t.Fatalf("resolveJobBenchmarksForStorage() err = %v", err)
+	}
+	if len(benchmarks) != 1 || benchmarks[0].ID != "arc_easy" {
+		t.Fatalf("benchmarks = %#v", benchmarks)
+	}
+}
+
+type collectionTerminalStorage struct {
+	terminalTestStorage
+	collection *api.CollectionResource
+}
+
+func (s *collectionTerminalStorage) GetCollection(_ string) (*api.CollectionResource, error) {
+	return s.collection, nil
 }

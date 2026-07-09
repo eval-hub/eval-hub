@@ -178,3 +178,85 @@ func TestCreateEvaluationCardRunAlwaysCreates(t *testing.T) {
 		t.Fatal("expected create run to be called")
 	}
 }
+
+func TestUploadArtifactToExperimentValidationErrors(t *testing.T) {
+	t.Parallel()
+
+	if _, err := UploadArtifactToExperiment(nil, "8", "run-1", "file.json", "", nil, ""); err == nil {
+		t.Fatal("expected error for nil client")
+	}
+	client := mlflowclient.NewClient("http://example.com").WithContext(t.Context())
+	if _, err := UploadArtifactToExperiment(client, "", "run-1", "file.json", "", nil, ""); err == nil {
+		t.Fatal("expected error for empty experiment id")
+	}
+	if _, err := UploadArtifactToExperiment(client, "8", "", "file.json", "", nil, ""); err == nil {
+		t.Fatal("expected error for empty run id")
+	}
+}
+
+func TestCreateEvaluationCardRunValidationErrors(t *testing.T) {
+	t.Parallel()
+
+	if _, err := CreateEvaluationCardRun(nil, "exp-1", "job-1", "demo"); err == nil {
+		t.Fatal("expected error for nil client")
+	}
+	client := mlflowclient.NewClient("http://example.com").WithContext(t.Context())
+	if _, err := CreateEvaluationCardRun(client, "", "job-1", "demo"); err == nil {
+		t.Fatal("expected error for empty experiment id")
+	}
+	if _, err := CreateEvaluationCardRun(client, "exp-1", "", "demo"); err == nil {
+		t.Fatal("expected error for empty job id")
+	}
+}
+
+func TestCreateEvaluationCardRunMissingRunID(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/runs/create") {
+			_ = json.NewEncoder(w).Encode(mlflowclient.CreateRunResponse{
+				Run: mlflowclient.Run{Info: mlflowclient.RunInfo{}},
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := mlflowclient.NewClient(srv.URL).WithContext(t.Context())
+	_, err := CreateEvaluationCardRun(client, "exp-1", "job-1", "")
+	if err == nil {
+		t.Fatal("expected error when create run response has no run id")
+	}
+}
+
+func TestCreateEvaluationCardRunDefaultRunName(t *testing.T) {
+	t.Parallel()
+
+	var runName string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/runs/create") {
+			var req mlflowclient.CreateRunRequest
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			runName = req.RunName
+			_ = json.NewEncoder(w).Encode(mlflowclient.CreateRunResponse{
+				Run: mlflowclient.Run{Info: mlflowclient.RunInfo{RunID: "run-1"}},
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := mlflowclient.NewClient(srv.URL).WithContext(t.Context())
+	runID, err := CreateEvaluationCardRun(client, "exp-1", "job-1", "")
+	if err != nil {
+		t.Fatalf("CreateEvaluationCardRun() err = %v", err)
+	}
+	if runID != "run-1" {
+		t.Fatalf("runID = %q", runID)
+	}
+	if runName != "evaluation-card-job-1" {
+		t.Fatalf("runName = %q", runName)
+	}
+}
