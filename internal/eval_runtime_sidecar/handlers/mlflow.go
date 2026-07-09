@@ -12,7 +12,7 @@ import (
 )
 
 // MLFlowTokenPathDefault is the default path for the MLflow bearer token in the container.
-const MLFlowTokenPathDefault = "/var/run/secrets/mlflow/token"
+const MLFlowTokenPathDefault = "/var/run/secrets/mlflow/token" // #nosec G101 -- K8s secret mount path
 
 // /api/2.0|3.0/mlflow/... and /api/2.0/mlflow-artifacts/... are proxied to mlflow.tracking_uri.
 // (mlflow-artifacts is a separate top-level path on the tracking server, not under /mlflow/.)

@@ -1,0 +1,31 @@
+# Global fallback — all PRs need at least one approval
+* @ruivieira @julpayne
+
+# Go service
+/cmd/ @ruivieira @julpayne
+/internal/eval_hub/ @ruivieira @julpayne @gnaulak-redhat
+/internal/handlers/ @ruivieira @julpayne
+/internal/storage/ @ruivieira @julpayne @nbs-rh
+/pkg/ @ruivieira @julpayne @scheruku-rh @nbs-rh
+
+# K8s runtime
+/internal/runtimes/ @ruivieira @julpayne @scheruku-rh
+
+# Sidecar
+/eval_runtime_sidecar/ @ruivieira @julpayne @nbs-rh @scheruku-rh
+
+# Python server
+/src/ @ruivieira @julpayne @gnaulak-redhat
+/python-server/ @ruivieira @julpayne @gnaulak-redhat
+
+# MCP
+/python-mcp/ @ruivieira @julpayne @gnaulak-redhat
+
+# Config and providers
+/config/ @ruivieira @julpayne @gnaulak-redhat
+
+# CI workflows
+/.github/workflows/ @ruivieira @julpayne @gnaulak-redhat
+
+# Tests
+/tests/ @ruivieira @julpayne @scheruku-rh @nbs-rh

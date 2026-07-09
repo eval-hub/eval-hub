@@ -103,11 +103,7 @@ Made-with: Cursor
 Generated with: Claude Code
 ```
 
-Always end the commit message body with this sign-off trailer (after any AI-assistance trailers) for the current user, for example:
-
-```text
-Signed-off-by: Julian Payne <julpayne@redhat.com>
-```
+For DCO sign-off, use `git commit -s` (or `git commit --signoff`). Do **not** include a `Signed-off-by` line in the commit message body; `-s` appends it from the author's configured `user.name` and `user.email`.
 
 ## Architecture Overview
 

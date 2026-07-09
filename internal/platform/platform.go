@@ -6,7 +6,7 @@ import (
 )
 
 func readFile(path string) string {
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(path) // #nosec G304 -- platform metadata path from Kubernetes downward API
 	if err != nil {
 		return ""
 	}

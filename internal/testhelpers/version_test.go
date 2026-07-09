@@ -18,6 +18,13 @@ func TestVersion(t *testing.T) {
 	}
 }
 
+func TestNewValidator(t *testing.T) {
+	validate := NewValidator(t)
+	if validate == nil {
+		t.Fatal("NewValidator() returned nil")
+	}
+}
+
 func TestRepoVersion(t *testing.T) {
 	root, err := findRepoRoot()
 	if err != nil {

@@ -9,7 +9,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serialization"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
+	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -17,7 +17,7 @@ func TestEvaluationJobConfigHardwareConfigRoundTrip(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-hwp", logger, "test-user", "test-tenant")
 
 	t.Run("omits empty namespace in response", func(t *testing.T) {

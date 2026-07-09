@@ -12,8 +12,8 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/internal/logging"
+	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -46,7 +46,7 @@ func TestHandleGetProvider_ReturnsGPUConfig(t *testing.T) {
 		provider.Resource.ID: provider,
 	}}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers/"+provider.Resource.ID),
@@ -75,7 +75,7 @@ func TestHandleListProviders_ReturnsGPUConfig(t *testing.T) {
 		providers:   []api.ProviderResource{provider},
 	}
 	logger := logging.FallbackLogger()
-	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers"),
@@ -111,7 +111,7 @@ func TestHandleUpdateProvider_PreservesGPUConfig(t *testing.T) {
 	}
 
 	logger := logging.FallbackLogger()
-	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil, nil)
 
 	body := `{
 		"name":"GPU Provider Updated",
@@ -161,7 +161,7 @@ func TestHandleUpdateProvider_PreservesGPUConfig(t *testing.T) {
 func TestHandleCreateProvider_RejectsInvalidImagePullPolicy(t *testing.T) {
 	storage := &fakeStorage{}
 	logger := logging.FallbackLogger()
-	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil, nil)
 
 	body := `{
 		"name":"My Provider",
@@ -214,7 +214,7 @@ func TestHandlePatchProvider_RejectsInvalidImagePullPolicy(t *testing.T) {
 		},
 	}
 	logger := logging.FallbackLogger()
-	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil, nil)
 
 	body := `[{
 		"op":"replace",

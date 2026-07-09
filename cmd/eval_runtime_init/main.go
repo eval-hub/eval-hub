@@ -22,12 +22,12 @@ const (
 	envBucket         = "TEST_DATA_S3_BUCKET"
 	envKey            = "TEST_DATA_S3_KEY"
 	envTimeout        = "TEST_DATA_S3_TIMEOUT"
-	secretDir         = "/var/run/secrets/test-data"
+	secretDir         = "/var/run/secrets/test-data" // #nosec G101 -- K8s secret mount path
 	destDir           = "/test_data"
 	regionOptionalKey = "AWS_DEFAULT_REGION"
 	endpointKey       = "AWS_S3_ENDPOINT"
 	accessKeyIDKey    = "AWS_ACCESS_KEY_ID"
-	secretAccessKey   = "AWS_SECRET_ACCESS_KEY"
+	secretAccessKey   = "AWS_SECRET_ACCESS_KEY" // #nosec G101 -- env var name, not a credential value
 	defaultTimeout    = 10 * time.Minute
 )
 
@@ -90,9 +90,15 @@ func run() error {
 		}
 	})
 
-	if err := os.MkdirAll(destDir, 0o755); err != nil {
+	if err := os.MkdirAll(destDir, 0o750); err != nil {
 		return fmt.Errorf("create dest dir: %w", err)
 	}
+
+	destRoot, err := os.OpenRoot(destDir)
+	if err != nil {
+		return fmt.Errorf("open dest root: %w", err)
+	}
+	defer destRoot.Close()
 
 	slog.Info("starting download", "bucket", bucket, "key", keyPrefix)
 
@@ -117,7 +123,7 @@ func run() error {
 				continue
 			}
 			found = true
-			written, err := downloadObject(ctx, client, bucket, keyPrefix, *obj.Key)
+			written, err := downloadObject(ctx, client, destRoot, bucket, keyPrefix, *obj.Key)
 			if err != nil {
 				return err
 			}
@@ -151,22 +157,16 @@ func loadAWSConfig(ctx context.Context, region, accessKey, secretKey string) (aw
 	return cfg, nil
 }
 
-func downloadObject(ctx context.Context, client *s3.Client, bucket, prefix, key string) (int64, error) {
-	rel := strings.TrimPrefix(key, prefix)
-	rel = strings.TrimPrefix(rel, "/")
-	if rel == "" {
-		rel = path.Base(key)
-	}
-	if rel == "." || rel == "/" {
-		return 0, errors.New("invalid object key for destination path")
+func downloadObject(ctx context.Context, client *s3.Client, destRoot *os.Root, bucket, prefix, key string) (int64, error) {
+	rel, err := relativeDestPath(prefix, key)
+	if err != nil {
+		return 0, err
 	}
 
-	destPath := filepath.Join(destDir, filepath.FromSlash(rel))
-	if !strings.HasPrefix(destPath, destDir+string(os.PathSeparator)) && destPath != destDir {
-		return 0, fmt.Errorf("invalid destination path resolved for %q", key)
-	}
-	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
-		return 0, fmt.Errorf("create dir for %q: %w", destPath, err)
+	if dir := path.Dir(rel); dir != "." {
+		if err := destRoot.MkdirAll(dir, 0o750); err != nil {
+			return 0, fmt.Errorf("create dir for %q: %w", key, err)
+		}
 	}
 
 	resp, err := client.GetObject(ctx, &s3.GetObjectInput{
@@ -178,24 +178,40 @@ func downloadObject(ctx context.Context, client *s3.Client, bucket, prefix, key 
 	}
 	defer resp.Body.Close()
 
-	file, err := os.Create(destPath)
+	file, err := destRoot.Create(rel)
 	if err != nil {
-		return 0, fmt.Errorf("create file %q: %w", destPath, err)
+		return 0, fmt.Errorf("create file %q: %w", key, err)
 	}
 	defer file.Close()
 
 	written, err := io.Copy(file, resp.Body)
 	if err != nil {
-		return 0, fmt.Errorf("write file %q: %w", destPath, err)
+		return 0, fmt.Errorf("write file %q: %w", key, err)
 	}
 	return written, nil
+}
+
+func relativeDestPath(prefix, key string) (string, error) {
+	rel := strings.TrimPrefix(key, prefix)
+	rel = strings.TrimPrefix(rel, "/")
+	if rel == "" {
+		rel = path.Base(key)
+	}
+	rel = filepath.FromSlash(rel)
+	if rel == "." || rel == "/" {
+		return "", errors.New("invalid object key for destination path")
+	}
+	if !filepath.IsLocal(rel) {
+		return "", fmt.Errorf("object key escapes destination directory: %q", key)
+	}
+	return filepath.ToSlash(rel), nil
 }
 
 func readSecret(name string) string {
 	if name == "" {
 		return ""
 	}
-	content, err := os.ReadFile(filepath.Join(secretDir, name))
+	content, err := os.ReadFile(filepath.Join(secretDir, name)) // #nosec G304 -- name is a fixed secret key
 	if err != nil {
 		return ""
 	}

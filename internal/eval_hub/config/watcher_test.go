@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/internal/logging"
+	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/fsnotify/fsnotify"
 )
@@ -58,7 +58,7 @@ func TestWatcher_ReloadsOnFileChange(t *testing.T) {
 
 	logger := logging.FallbackLogger()
 	store := &mockStorage{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 
 	w := NewWatcher(logger, validate, store, dir)
 	w.debounce = 100 * time.Millisecond // speed up tests
@@ -110,7 +110,7 @@ func TestWatcher_DebouncesMutipleEvents(t *testing.T) {
 
 	logger := logging.FallbackLogger()
 	store := &mockStorage{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 
 	w := NewWatcher(logger, validate, store, dir)
 	w.debounce = 200 * time.Millisecond
@@ -146,7 +146,7 @@ func TestWatcher_StopsOnContextCancel(t *testing.T) {
 
 	logger := logging.FallbackLogger()
 	store := &mockStorage{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 
 	w := NewWatcher(logger, validate, store, dir)
 

@@ -1,8 +1,10 @@
 package k8s
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	corev1 "k8s.io/api/core/v1"
@@ -100,6 +102,82 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 	callback := spec.CallbackURL
 	if callback == nil || *callback != callbackURL {
 		t.Fatalf("expected job spec json callback_url to be %q, got %v", callbackURL, callback)
+	}
+}
+
+func TestBuildJobConfigRejectsInvalidSidecarPort(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-123"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}},
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
+			},
+		},
+	}
+	serviceConfig := &config.Config{
+		Sidecar: &config.SidecarConfig{Port: 70000},
+	}
+
+	_, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, serviceConfig, nil)
+	if err == nil {
+		t.Fatal("buildJobConfig() = nil, want sidecar port error")
+	}
+	if !strings.Contains(err.Error(), "sidecar port") {
+		t.Fatalf("buildJobConfig() error = %v, want sidecar port error", err)
+	}
+}
+
+func TestBuildJobConfigUsesValidSidecarPort(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-123"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}},
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
+			},
+		},
+	}
+	serviceConfig := &config.Config{
+		Sidecar: &config.SidecarConfig{Port: 9090},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, serviceConfig, nil)
+	if err != nil {
+		t.Fatalf("buildJobConfig() = %v, want nil error", err)
+	}
+	if cfg.sidecarBaseURL != "http://localhost:9090" {
+		t.Fatalf("sidecarBaseURL = %q, want http://localhost:9090", cfg.sidecarBaseURL)
 	}
 }
 

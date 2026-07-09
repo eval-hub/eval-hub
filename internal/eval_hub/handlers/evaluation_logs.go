@@ -69,7 +69,7 @@ func (h *Handlers) handleGetEvaluationLogs(
 				return err
 			}
 
-			benchmarks, err := h.resolveJobBenchmarks(ctx, storage.WithContext(runtimeCtx), job)
+			benchmarks, err := h.resolveJobBenchmarks(storage.WithContext(runtimeCtx), job)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -90,7 +90,7 @@ func (h *Handlers) handleGetEvaluationLogs(
 	)
 }
 
-func (h *Handlers) resolveJobBenchmarks(ctx *executioncontext.ExecutionContext, storage interface {
+func (h *Handlers) resolveJobBenchmarks(storage interface {
 	GetCollection(id string) (*api.CollectionResource, error)
 }, job *api.EvaluationJobResource) ([]api.EvaluationBenchmarkConfig, error) {
 	var collection *api.CollectionResource
@@ -123,15 +123,9 @@ func parseEvaluationLogOptions(req http_wrappers.RequestWrapper) (api.Evaluation
 		return api.EvaluationLogOptions{}, err
 	}
 
-	previous, err := GetParam(req, "previous", true, false)
-	if err != nil {
-		return api.EvaluationLogOptions{}, err
-	}
-
 	opts := api.EvaluationLogOptions{
 		TailLines:  tailLines,
 		Timestamps: timestamps,
-		Previous:   previous,
 	}
 
 	rawSince := req.Query("since_seconds")

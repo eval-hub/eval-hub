@@ -12,7 +12,7 @@ import (
 )
 
 // ServiceAccountTokenPathDefault is the in-cluster path for the k8s SA token (Eval Hub API auth).
-const ServiceAccountTokenPathDefault = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+const ServiceAccountTokenPathDefault = "/var/run/secrets/kubernetes.io/serviceaccount/token" // #nosec G101 -- K8s SA token path
 
 // newEvalhubProxy builds a reverse proxy to eval_hub.base_url (Eval Hub REST API, e.g. /api/v1/evaluations/ for job callbacks to the hub).
 func newEvalhubProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseProxy, error) {

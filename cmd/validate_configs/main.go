@@ -16,7 +16,11 @@ func main() {
 	flag.Parse()
 
 	logger := logging.FallbackLogger()
-	validate := validation.NewValidator()
+	validate, err := validation.NewValidator()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create validator: %v\n", err)
+		os.Exit(1)
+	}
 
 	providers, err := config.LoadProviderConfigs(logger, validate, *configDir)
 	if err != nil {

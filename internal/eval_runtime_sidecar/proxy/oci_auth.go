@@ -75,7 +75,7 @@ type registryAuthConfig struct {
 // and repository from exports.oci.coordinates using shared.JobSpec. Host is normalized to a URL (https:// if no scheme).
 // Returns ("", "", nil) when the file has no OCI exports; returns ("", "", err) on read/parse errors.
 func GetOCICoordinatesFromJobSpec(path string) (host, repository string, err error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- job spec path from sidecar configuration
 	if err != nil {
 		return "", "", fmt.Errorf("read job spec: %w", err)
 	}
@@ -106,7 +106,7 @@ func LoadTokenProducerFromOCISecret(ociSecretMountPath, registryHost, repository
 	if httpClient == nil {
 		return nil, fmt.Errorf("oci http client is required")
 	}
-	data, err := os.ReadFile(ociSecretMountPath)
+	data, err := os.ReadFile(ociSecretMountPath) // #nosec G304 -- OCI secret mount path from configuration
 	if err != nil {
 		return nil, fmt.Errorf("read OCI secret: %w", err)
 	}

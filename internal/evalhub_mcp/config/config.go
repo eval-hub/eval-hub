@@ -152,7 +152,7 @@ func validateAuthConfig(cfg *Config) error {
 }
 
 func bindEnvs(v *viper.Viper, envs ...string) error {
-	for i := 0; i < len(envs); i += 2 {
+	for i := 0; i+1 < len(envs); i += 2 {
 		err := v.BindEnv(envs[i], envs[i+1])
 		if err != nil {
 			return fmt.Errorf("binding environment variable %s: %w", envs[i], err)

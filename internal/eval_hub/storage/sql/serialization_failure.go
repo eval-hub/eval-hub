@@ -1,8 +1,9 @@
 package sql
 
 import (
+	"crypto/rand"
 	"errors"
-	"math/rand"
+	"math/big"
 	"strings"
 	"time"
 
@@ -37,8 +38,23 @@ func serializationFailureBackoff(attempt int) time.Duration {
 	if delay > serializationRetryMaxDelay {
 		delay = serializationRetryMaxDelay
 	}
-	jitter := time.Duration(rand.Int63n(int64(delay/4 + 1)))
+	jitter, err := serializationRetryJitter(delay)
+	if err != nil {
+		return delay
+	}
 	return delay + jitter
+}
+
+func serializationRetryJitter(delay time.Duration) (time.Duration, error) {
+	max := int64(delay/4 + 1)
+	if max <= 0 {
+		return 0, nil
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(max))
+	if err != nil {
+		return 0, err
+	}
+	return time.Duration(n.Int64()), nil
 }
 
 func retryOnSerializationFailure(maxAttempts int, run func() error) error {

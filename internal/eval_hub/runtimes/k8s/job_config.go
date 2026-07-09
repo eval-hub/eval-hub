@@ -69,6 +69,7 @@ type jobConfig struct {
 	modelTargetURL             string // real model URL forwarded by the sidecar model proxy; always set for all jobs
 	sidecarResources           corev1.ResourceRequirements
 	testDataS3                 s3TestDataConfig
+	testDataPVC                pvcTestDataConfig
 	testDataInitImage          string
 	sidecarConfig              *config.SidecarConfig
 	// queueKind and queueName come from evaluation.Queue when set (API layer normalizes empty kind to kueue).
@@ -80,6 +81,11 @@ type s3TestDataConfig struct {
 	bucket    string
 	key       string
 	secretRef string
+}
+
+type pvcTestDataConfig struct {
+	claimName string
+	subPath   string
 }
 
 func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkConfig *api.EvaluationBenchmarkConfig, benchmarkIndex int, serviceConfig *config.Config, hardwareProfile *hardwareProfileResources) (*jobConfig, error) {
@@ -104,7 +110,11 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	sidecarBaseURL := ""
 	if serviceConfig != nil && serviceConfig.Sidecar != nil {
 		if serviceConfig.Sidecar.Port != 0 {
-			port = int32(serviceConfig.Sidecar.Port)
+			p, err := sidecarPortFromInt(serviceConfig.Sidecar.Port)
+			if err != nil {
+				return nil, fmt.Errorf("sidecar port: %w", err)
+			}
+			port = p
 		}
 		sidecarBaseURL = strings.TrimSpace(serviceConfig.Sidecar.BaseURL)
 	}
@@ -187,6 +197,12 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		testDataS3SecretRef = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.SecretRef)
 	}
 
+	var testDataPVCClaimName, testDataPVCSubPath string
+	if benchmarkConfig.TestDataRef != nil && benchmarkConfig.TestDataRef.PVC != nil {
+		testDataPVCClaimName = strings.TrimSpace(benchmarkConfig.TestDataRef.PVC.ClaimName)
+		testDataPVCSubPath = strings.TrimSpace(benchmarkConfig.TestDataRef.PVC.SubPath)
+	}
+
 	var queueKind, queueName string
 	if evaluation.Queue != nil {
 		queueName = strings.TrimSpace(evaluation.Queue.Name)
@@ -246,6 +262,10 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 			bucket:    testDataS3Bucket,
 			key:       testDataS3Key,
 			secretRef: testDataS3SecretRef,
+		},
+		testDataPVC: pvcTestDataConfig{
+			claimName: testDataPVCClaimName,
+			subPath:   testDataPVCSubPath,
 		},
 	}
 	applyHardwareProfileResources(out, hardwareProfile)

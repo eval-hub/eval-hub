@@ -14,7 +14,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
+	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -215,7 +215,7 @@ func TestHandleListCollections(t *testing.T) {
 		fakeStorage: &fakeStorage{},
 		collections: collections,
 	}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
@@ -338,7 +338,7 @@ func TestHandleListCollections_ReturnsStoredBenchmarkURL(t *testing.T) {
 		fakeStorage: &fakeStorage{},
 		collections: collections,
 	}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
@@ -384,7 +384,7 @@ func TestHandleGetCollection_ReturnsStoredBenchmarkURL(t *testing.T) {
 		fakeStorage: &fakeStorage{},
 		collection:  coll,
 	}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
@@ -419,7 +419,7 @@ func TestHandleListCollections_StorageError(t *testing.T) {
 		fakeStorage: &fakeStorage{},
 		err:         serviceerrors.NewServiceError(messages.InternalServerError, "Error", "db error"),
 	}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
@@ -450,7 +450,7 @@ func TestHandleCreateCollection(t *testing.T) {
 			},
 		},
 	}}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
@@ -510,7 +510,7 @@ func TestHandleGetCollection(t *testing.T) {
 		},
 	}
 	storage := &getCollectionStorage{fakeStorage: &fakeStorage{}, collection: coll}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
@@ -539,7 +539,7 @@ func TestHandleGetCollection(t *testing.T) {
 
 func TestHandleGetCollection_MissingPathParam(t *testing.T) {
 	storage := &fakeStorage{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
@@ -580,7 +580,7 @@ func TestHandleUpdateCollection(t *testing.T) {
 			},
 		},
 	}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
@@ -683,7 +683,7 @@ func TestHandlePatchCollection_EnrichesFullBenchmarkElementBeforeStorage(t *test
 		},
 		hook: hook,
 	}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
@@ -745,7 +745,7 @@ func TestHandlePatchCollection_EnrichesFullBenchmarksArrayBeforeStorage(t *testi
 		},
 		hook: hook,
 	}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
@@ -793,7 +793,7 @@ func TestHandlePatchCollection(t *testing.T) {
 			},
 		},
 	}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
@@ -816,7 +816,7 @@ func TestHandlePatchCollection(t *testing.T) {
 
 func TestHandleDeleteCollection(t *testing.T) {
 	storage := &updatePatchDeleteCollectionStorage{fakeStorage: &fakeStorage{}}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
@@ -862,7 +862,7 @@ func (s *tenantTrackingStorage) PatchCollection(_ string, _ *api.Patch) (*api.Co
 func (s *tenantTrackingStorage) DeleteCollection(_ string) error { return nil }
 
 func TestCollectionHandlers_PropagateTenantAndOwner(t *testing.T) {
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	tests := []struct {

@@ -489,6 +489,122 @@ func TestCreateBenchmarkResourcesAddsInitContainerForS3TestData(t *testing.T) {
 	}
 }
 
+func TestCreateBenchmarkResourcesMountsPVCTestData(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Benchmarks[0].TestDataRef = &api.TestDataRef{
+		PVC: &api.PVCTestDataRef{
+			ClaimName: "eval-datasets-pvc",
+			SubPath:   "benchmark-a/v1",
+		},
+	}
+
+	clientset := fake.NewClientset()
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{},
+		},
+	}
+
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(jobs))
+	}
+	job := jobs[0]
+
+	// No data-fetch init container expected for PVC-backed jobs (sidecar runs as native init container).
+	if findContainer(job.Spec.Template.Spec.InitContainers, initContainerName) != nil {
+		t.Fatal("expected no data-fetch init container for PVC test data")
+	}
+
+	// PVC volume must be present with correct claimName and readOnly.
+	var foundPVCVolume bool
+	for _, volume := range job.Spec.Template.Spec.Volumes {
+		if volume.Name == testDataVolumeName {
+			if volume.VolumeSource.PersistentVolumeClaim == nil {
+				t.Fatalf("expected PVC volume source for %q", testDataVolumeName)
+			}
+			if volume.VolumeSource.PersistentVolumeClaim.ClaimName != "eval-datasets-pvc" {
+				t.Fatalf("expected claimName %q, got %q", "eval-datasets-pvc", volume.VolumeSource.PersistentVolumeClaim.ClaimName)
+			}
+			if !volume.VolumeSource.PersistentVolumeClaim.ReadOnly {
+				t.Fatal("expected PVC volume to be read-only")
+			}
+			foundPVCVolume = true
+		}
+	}
+	if !foundPVCVolume {
+		t.Fatalf("expected PVC volume %q in pod spec", testDataVolumeName)
+	}
+
+	// Adapter container must have read-only mount at /test_data with sub_path.
+	var foundAdapterMount bool
+	for _, mount := range job.Spec.Template.Spec.Containers[0].VolumeMounts {
+		if mount.Name == testDataVolumeName && mount.MountPath == testDataMountPath {
+			if !mount.ReadOnly {
+				t.Fatal("expected adapter test-data mount to be read-only")
+			}
+			if mount.SubPath != "benchmark-a/v1" {
+				t.Fatalf("expected SubPath %q, got %q", "benchmark-a/v1", mount.SubPath)
+			}
+			foundAdapterMount = true
+		}
+	}
+	if !foundAdapterMount {
+		t.Fatalf("expected adapter container to mount %s", testDataMountPath)
+	}
+}
+
+func TestCreateBenchmarkResourcesMountsPVCTestDataNoSubPath(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Benchmarks[0].TestDataRef = &api.TestDataRef{
+		PVC: &api.PVCTestDataRef{
+			ClaimName: "my-pvc",
+		},
+	}
+
+	clientset := fake.NewClientset()
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{},
+		},
+	}
+
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+	job := jobs[0]
+
+	if findContainer(job.Spec.Template.Spec.InitContainers, initContainerName) != nil {
+		t.Fatal("expected no data-fetch init container for PVC test data")
+	}
+
+	for _, mount := range job.Spec.Template.Spec.Containers[0].VolumeMounts {
+		if mount.Name == testDataVolumeName {
+			if mount.SubPath != "" {
+				t.Fatalf("expected empty SubPath when not set, got %q", mount.SubPath)
+			}
+			return
+		}
+	}
+	t.Fatalf("expected adapter container to mount %s", testDataMountPath)
+}
+
 func TestCreateBenchmarkResourcesDeletesConfigMapOnJobFailure(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)

@@ -358,7 +358,7 @@ func (c *Client) doRequest(method, path string, body any, queryParams url.Values
 
 		statusCode = resp.StatusCode
 		respBody, err = io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if err != nil {
 			wrapped := fmt.Errorf("failed to read response body: %w", err)
 			c.logEvalHubRequestFailed(start, statusCode, wrapped.Error(), nil)

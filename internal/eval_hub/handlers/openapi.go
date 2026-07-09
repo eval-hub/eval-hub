@@ -25,7 +25,7 @@ func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_
 		for key, value := range noCacheHeaders {
 			w.SetHeader(key, value)
 		}
-		w.Write(contents)
+		_, _ = w.Write(contents)
 	}
 
 	// Determine content type based on Accept header
@@ -41,7 +41,7 @@ func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_
 	if exePath != "" {
 		exeDir := filepath.Dir(exePath)
 		specPath := filepath.Join(exeDir, "docs", file)
-		contents, err := os.ReadFile(specPath)
+		contents, err := os.ReadFile(specPath) // #nosec G304 -- bundled OpenAPI spec beside executable
 		if err == nil {
 			found(contents, contentType)
 			return
@@ -66,7 +66,7 @@ func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_
 			continue
 		}
 		paths = append(paths, absPath)
-		contents, err := os.ReadFile(absPath)
+		contents, err := os.ReadFile(absPath) // #nosec G304 -- OpenAPI spec from configured docs paths
 		if err == nil {
 			found(contents, contentType)
 			return
@@ -135,5 +135,5 @@ func (h *Handlers) HandleDocs(ctx *executioncontext.ExecutionContext, r http_wra
 		w.SetHeader(key, value)
 	}
 	w.SetHeader("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(html))
+	_, _ = w.Write([]byte(html))
 }

@@ -16,7 +16,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
+	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -758,7 +758,7 @@ func (r *updateEvaluationRequest) PathValue(name string) string {
 
 func TestHandleUpdateEvaluationRejectsCancelledStatus(t *testing.T) {
 	storage := &fakeStorage{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
@@ -789,7 +789,7 @@ func TestHandleUpdateEvaluationRejectsCancelledStatus(t *testing.T) {
 func TestHandleUpdateEvaluationAcceptsValidPhase(t *testing.T) {
 	t.Parallel()
 	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{}}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
@@ -816,7 +816,7 @@ func TestHandleUpdateEvaluationAcceptsValidPhase(t *testing.T) {
 func TestHandleUpdateEvaluationRejectsInvalidPhase(t *testing.T) {
 	t.Parallel()
 	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{}}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
@@ -858,7 +858,7 @@ func TestHandleCreateEvaluationRejectsExperimentWhenMLflowDisabled(t *testing.T)
 	}
 	storage := &fakeStorage{providerConfigs: providerConfigs}
 	runtime := &fakeRuntime{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	h := handlers.New(storage, validate, runtime, nil, nil, nil)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-mlflow-exp", logger, "test-user", "test-tenant")
 
@@ -897,7 +897,7 @@ func TestHandleCreateEvaluationRejectsEmptyExperimentName(t *testing.T) {
 	}
 	storage := &fakeStorage{providerConfigs: providerConfigs}
 	runtime := &fakeRuntime{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	h := handlers.New(storage, validate, runtime, nil, nil, nil)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-empty-exp", logger, "test-user", "test-tenant")
 
@@ -935,7 +935,7 @@ func TestHandleListEvaluations_WriteJSON_logsExtraArgs(t *testing.T) {
 			{Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-2"}}},
 		},
 	}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
 	req := &listEvaluationsRequest{
@@ -985,7 +985,7 @@ func TestHandleCreateEvaluationRejectsInvalidQueueName(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	storage := &fakeStorage{}
 	runtime := &fakeRuntime{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	h := handlers.New(storage, validate, runtime, nil, nil, nil)
 
 	invalidNames := []string{
@@ -1024,7 +1024,7 @@ func TestHandleCreateEvaluationRejectsInvalidHardwareProfileRef(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	storage := &fakeStorage{}
 	runtime := &fakeRuntime{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	h := handlers.New(storage, validate, runtime, nil, nil, nil)
 
 	invalidNames := []string{

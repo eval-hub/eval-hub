@@ -150,7 +150,6 @@ func TestGetEvaluationLogsSectionWithPodLogContent(t *testing.T) {
 	got, err := runtime.GetEvaluationLogs(evaluation, benchmarks, nil, api.EvaluationLogOptions{
 		TailLines:    25,
 		Timestamps:   true,
-		Previous:     true,
 		SinceSeconds: &since,
 	})
 	if err != nil {

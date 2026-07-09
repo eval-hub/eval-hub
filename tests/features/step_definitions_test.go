@@ -284,10 +284,13 @@ func (a *apiFeature) startLocalServer(port int) error {
 	if err != nil {
 		return err
 	}
-	validate := validation.NewValidator()
+	validate, err := validation.NewValidator()
+	if err != nil {
+		return logError(err)
+	}
 	version, err := testhelpers.RepoVersion()
 	if err != nil {
-		return logError(fmt.Errorf("read VERSION: %w", err))
+		return logError(err)
 	}
 	serviceConfig, err := config.LoadConfig(logger, version, "local", time.Now().Format(time.RFC3339), "")
 	if err != nil {

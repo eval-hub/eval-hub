@@ -21,7 +21,7 @@ func LoadSidecarRuntimeConfig(sidecarJSONPath, version, build, buildDate string)
 	if strings.TrimSpace(sidecarJSONPath) == "" {
 		sidecarJSONPath = DefaultSidecarConfigPath
 	}
-	data, err := os.ReadFile(sidecarJSONPath)
+	data, err := os.ReadFile(sidecarJSONPath) // #nosec G304 -- sidecar config path from CLI or default mount
 	if err != nil {
 		return nil, fmt.Errorf("read sidecar config %q: %w", sidecarJSONPath, err)
 	}

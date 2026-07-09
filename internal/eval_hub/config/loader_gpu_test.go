@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/internal/logging"
+	"github.com/eval-hub/eval-hub/internal/testhelpers"
 )
 
 func TestLoadProviderConfigs_ParsesGPUProviderFixture(t *testing.T) {
@@ -15,7 +15,7 @@ func TestLoadProviderConfigs_ParsesGPUProviderFixture(t *testing.T) {
 	configRoot := t.TempDir()
 	copyProviderFixture(t, configRoot, "provider_gpu_test.yaml")
 
-	providers, err := config.LoadProviderConfigs(logger, validation.NewValidator(), configRoot)
+	providers, err := config.LoadProviderConfigs(logger, testhelpers.NewValidator(t), configRoot)
 	if err != nil {
 		t.Fatalf("LoadProviderConfigs failed: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestLoadProviderConfigs_ParsesGPUNodeSelectorFixture(t *testing.T) {
 	configRoot := t.TempDir()
 	copyProviderFixture(t, configRoot, "provider_gpu_a100.yaml")
 
-	providers, err := config.LoadProviderConfigs(logger, validation.NewValidator(), configRoot)
+	providers, err := config.LoadProviderConfigs(logger, testhelpers.NewValidator(t), configRoot)
 	if err != nil {
 		t.Fatalf("LoadProviderConfigs failed: %v", err)
 	}
@@ -98,7 +98,7 @@ benchmarks:
 		t.Fatalf("write provider yaml: %v", err)
 	}
 
-	providers, err := config.LoadProviderConfigs(logger, validation.NewValidator(), configRoot)
+	providers, err := config.LoadProviderConfigs(logger, testhelpers.NewValidator(t), configRoot)
 	if err != nil {
 		t.Fatalf("LoadProviderConfigs failed: %v", err)
 	}
