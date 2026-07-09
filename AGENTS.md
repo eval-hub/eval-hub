@@ -62,6 +62,17 @@ If a `.pre-commit-config.yaml` file exists, run `pre-commit install && pre-commi
 
 **Do not modify the Go version in `go.mod`.** The version specified there is the source of truth. If your local Go toolchain is older, use `GOTOOLCHAIN=auto` to let Go automatically download the required version. Never downgrade `go.mod` to match a locally installed toolchain.
 
+### Version Bumps
+
+When updating the project version, edit these four source files:
+
+1. **`VERSION`** — single-line version string
+2. **`cmd/eval_hub/main.go`** — `Version` constant
+3. **`Containerfile`** — both `BUILD_NUMBER` ARG defaults (builder and runtime stages)
+4. **`docs/src/openapi.yaml`** — `info.version`
+
+Then run `make documentation` to regenerate the bundled docs. Do **not** hand-edit the generated files under `docs/` (`openapi.yaml`, `openapi.json`, `openapi-internal.yaml`, `openapi-internal.json`, `index*.html`).
+
 ### Dependencies
 
 ```bash
