@@ -13,7 +13,7 @@ import (
 func TestWithSpanOddAttributeCount(t *testing.T) {
 	t.Parallel()
 
-	h := New(nil, nil, nil, nil, &config.Config{})
+	h := New(nil, nil, nil, nil, &config.Config{}, nil)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user", "tenant")
 
