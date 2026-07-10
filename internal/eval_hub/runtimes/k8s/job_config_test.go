@@ -829,6 +829,36 @@ func TestRewriteModelURLForSidecar(t *testing.T) {
 			modelURL:       "http://llm-inference.apps.example.com/llm/my-model/v1/",
 			want:           "http://localhost:8080/llm/my-model/v1",
 		},
+		{
+			name:           "empty sidecar URL is invalid — missing host",
+			sidecarBaseURL: "",
+			modelURL:       "http://llm-inference.apps.example.com/v1",
+			wantErr:        true,
+		},
+		{
+			name:           "sidecar URL without host is invalid",
+			sidecarBaseURL: "/relative/path",
+			modelURL:       "http://llm-inference.apps.example.com/v1",
+			wantErr:        true,
+		},
+		{
+			name:           "malformed sidecar URL fails url.Parse",
+			sidecarBaseURL: "http://host%GG/path",
+			modelURL:       "http://llm-inference.apps.example.com/v1",
+			wantErr:        true,
+		},
+		{
+			name:           "malformed model URL fails url.Parse",
+			sidecarBaseURL: "http://localhost:8080",
+			modelURL:       "http://host%GG/v1",
+			wantErr:        true,
+		},
+		{
+			name:           "query and fragment from model URL are preserved",
+			sidecarBaseURL: "http://localhost:8080",
+			modelURL:       "http://llm-inference.apps.example.com/llm/my-model/v1?timeout=30#section",
+			want:           "http://localhost:8080/llm/my-model/v1?timeout=30#section",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
