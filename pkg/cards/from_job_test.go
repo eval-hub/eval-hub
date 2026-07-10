@@ -13,7 +13,7 @@ func TestNewEvaluationCardFromDirectBenchmarkJob(t *testing.T) {
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{
 				ID:        "job-123",
-				CreatedAt: mustParseTime(t, "2026-07-07T00:00:00Z"),
+				CreatedAt: mustParseTime(t, "2026-07-07T00:00:00.001Z"),
 				UpdatedAt: mustParseTime(t, "2026-07-07T01:00:00Z"),
 			},
 		},
