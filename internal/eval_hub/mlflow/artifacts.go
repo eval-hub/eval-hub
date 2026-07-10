@@ -1,6 +1,7 @@
 package mlflow
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
@@ -58,7 +59,7 @@ func UploadArtifactToExperiment(
 	}
 	return client.UploadArtifact(
 		BuildRunArtifactPath(experimentID, runID, relativeArtifactPath, artifactLocation),
-		content,
+		bytes.NewReader(content),
 		contentType,
 	)
 }
@@ -109,5 +110,5 @@ func PersistEvalCard(
 		return "", err
 	}
 	artifactPath := BuildRunArtifactPath(experimentID, runID, EvalCardArtifactFileName, artifactLocation)
-	return client.UploadArtifact(artifactPath, cardJSON, "application/json")
+	return client.UploadArtifact(artifactPath, bytes.NewReader(cardJSON), "application/json")
 }
