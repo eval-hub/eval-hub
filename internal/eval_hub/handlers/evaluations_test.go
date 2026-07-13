@@ -814,7 +814,7 @@ func TestHandleUpdateEvaluationAcceptsValidPhase(t *testing.T) {
 func TestHandleUpdateEvaluationStampsRuntimeMessageOrigins(t *testing.T) {
 	t.Parallel()
 	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{}}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
 
