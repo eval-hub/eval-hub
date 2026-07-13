@@ -69,7 +69,6 @@ func NewServer(logger *slog.Logger,
 	validate *validator.Validate,
 	runtime abstractions.Runtime,
 	mlflowClient *mlflowclient.Client,
-	resultsExporter evalcards.ResultsExporter,
 ) (*Server, error) {
 
 	if logger == nil {
@@ -84,6 +83,8 @@ func NewServer(logger *slog.Logger,
 	if validate == nil {
 		return nil, fmt.Errorf("validator is required for the server")
 	}
+
+	resultsExporter := evalcards.NewManager(logger, evalcards.ManagerConfig{MLFlowClient: mlflowClient})
 
 	return &Server{
 		port:            serviceConfig.Service.Port,

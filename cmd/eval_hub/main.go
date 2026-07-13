@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/evalcards"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes"
@@ -127,7 +126,6 @@ func main() {
 	}
 
 	// set up the storage
-	resultsExporter := evalcards.NewManager(logger, evalcards.ManagerConfig{MLFlowClient: mlflowClient})
 	storage, err := storage.NewStorage(
 		serviceConfig.Database,
 		collectionConfigs,
@@ -154,8 +152,7 @@ func main() {
 		storage,
 		validate,
 		runtime,
-		mlflowClient,
-		resultsExporter)
+		mlflowClient)
 
 	if err != nil {
 		// we do this as no point trying to continue
