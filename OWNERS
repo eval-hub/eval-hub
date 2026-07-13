@@ -1,5 +1,10 @@
 # OWNERS file for eval-hub
-# This file defines project maintainers who can approve and review pull requests
+# This file defines project maintainers who can approve and review pull requests.
+#
+# Required for the repository review process (approvers, default reviewers, and PR
+# labels). Path-specific ownership for GitHub review requests is maintained in
+# .github/CODEOWNERS. Update both files when project-wide maintainer membership
+# changes; update CODEOWNERS when path-specific ownership changes.
 
 # Project maintainers (can approve and merge PRs)
 approvers:
