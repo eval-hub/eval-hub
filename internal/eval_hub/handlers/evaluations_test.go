@@ -820,7 +820,7 @@ func TestHandleUpdateEvaluationStampsRuntimeMessageOrigins(t *testing.T) {
 	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{}}
 	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
 
 	body := `{"benchmark_status_event":{"provider_id":"p1","id":"b1","status":"failed","error_message":{"message":"adapter failed","message_code":"ADAPTER_FAIL"},"warning_message":{"message":"adapter warning","message_code":"ADAPTER_WARN"}}}`
 	req := &bodyRequest{
