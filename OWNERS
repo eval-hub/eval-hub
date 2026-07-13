@@ -4,8 +4,9 @@
 # who can approve and review pull requests.
 #
 # Path-specific ownership for GitHub review requests is maintained in
-# .github/CODEOWNERS. Update both files when project-wide maintainer membership
-# changes; update CODEOWNERS when path-specific ownership changes.
+# .github/CODEOWNERS; update that file only when path-specific ownership changes.
+# Update approvers and reviewers in this file when project-wide maintainer
+# membership changes.
 
 # Project maintainers (can approve and merge PRs)
 approvers:
