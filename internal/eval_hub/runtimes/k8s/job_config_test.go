@@ -791,6 +791,132 @@ func TestBuildJobConfigBenchmarkIndexPropagated(t *testing.T) {
 	}
 }
 
+func TestRewriteModelURLForSidecar(t *testing.T) {
+	tests := []struct {
+		name           string
+		sidecarBaseURL string
+		modelURL       string
+		want           string
+		wantErr        bool
+	}{
+		{
+			name:           "preserves deep KServe path prefix",
+			sidecarBaseURL: "http://localhost:8080",
+			modelURL:       "http://llm-inference.apps.example.com/llm/llama-3-1-8b-instruct/v1",
+			want:           "http://localhost:8080/llm/llama-3-1-8b-instruct/v1",
+		},
+		{
+			name:           "model URL with no path — no path added",
+			sidecarBaseURL: "http://localhost:8080",
+			modelURL:       "http://llm-inference.apps.example.com",
+			want:           "http://localhost:8080",
+		},
+		{
+			name:           "model URL with /v1 only",
+			sidecarBaseURL: "http://localhost:8080",
+			modelURL:       "http://llm-inference.apps.example.com/v1",
+			want:           "http://localhost:8080/v1",
+		},
+		{
+			name:           "custom sidecar port preserved",
+			sidecarBaseURL: "http://localhost:9090",
+			modelURL:       "http://llm-inference.apps.example.com/llm/my-model/v1",
+			want:           "http://localhost:9090/llm/my-model/v1",
+		},
+		{
+			name:           "trailing slash on model URL stripped",
+			sidecarBaseURL: "http://localhost:8080",
+			modelURL:       "http://llm-inference.apps.example.com/llm/my-model/v1/",
+			want:           "http://localhost:8080/llm/my-model/v1",
+		},
+		{
+			name:           "empty sidecar URL is invalid — missing host",
+			sidecarBaseURL: "",
+			modelURL:       "http://llm-inference.apps.example.com/v1",
+			wantErr:        true,
+		},
+		{
+			name:           "sidecar URL without host is invalid",
+			sidecarBaseURL: "/relative/path",
+			modelURL:       "http://llm-inference.apps.example.com/v1",
+			wantErr:        true,
+		},
+		{
+			name:           "malformed sidecar URL fails url.Parse",
+			sidecarBaseURL: "http://host%GG/path",
+			modelURL:       "http://llm-inference.apps.example.com/v1",
+			wantErr:        true,
+		},
+		{
+			name:           "malformed model URL fails url.Parse",
+			sidecarBaseURL: "http://localhost:8080",
+			modelURL:       "http://host%GG/v1",
+			wantErr:        true,
+		},
+		{
+			name:           "query and fragment from model URL are preserved",
+			sidecarBaseURL: "http://localhost:8080",
+			modelURL:       "http://llm-inference.apps.example.com/llm/my-model/v1?timeout=30#section",
+			want:           "http://localhost:8080/llm/my-model/v1?timeout=30#section",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := rewriteModelURLForSidecar(tc.sidecarBaseURL, tc.modelURL)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got %q", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("rewriteModelURLForSidecar(%q, %q) = %q, want %q", tc.sidecarBaseURL, tc.modelURL, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBuildJobConfigModelURLPreservesRealURLAndTargetURL(t *testing.T) {
+	// buildJobConfig does NOT rewrite model.url — that happens in k8s_runtime.go
+	// via rewriteModelURLForSidecar. Verify modelTargetURL holds the real upstream URL
+	// and sidecarBaseURL is plain localhost for the runtime to use.
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-rewrite"}},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://llm-inference.apps.example.com/llm/llama-3-1-8b-instruct/v1",
+				Name: "llama-3-1-8b-instruct",
+			},
+			Benchmarks: []api.EvaluationBenchmarkConfig{{Ref: api.Ref{ID: "bench-1"}}},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{K8s: &api.K8sRuntime{Image: "adapter:latest"}},
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
+	if err != nil {
+		t.Fatalf("buildJobConfig: %v", err)
+	}
+
+	// modelTargetURL must hold the real upstream URL for the sidecar proxy config.
+	wantTargetURL := "http://llm-inference.apps.example.com/llm/llama-3-1-8b-instruct/v1"
+	if cfg.modelTargetURL != wantTargetURL {
+		t.Errorf("modelTargetURL = %q, want %q (real upstream)", cfg.modelTargetURL, wantTargetURL)
+	}
+
+	// sidecarBaseURL is plain localhost — the runtime rewrites model.url using this + model path.
+	if cfg.sidecarBaseURL != "http://localhost:8080" {
+		t.Errorf("sidecarBaseURL = %q, want http://localhost:8080", cfg.sidecarBaseURL)
+	}
+}
+
 func intPtr(value int) *int {
 	return &value
 }

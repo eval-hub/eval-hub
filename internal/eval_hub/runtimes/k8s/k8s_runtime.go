@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
@@ -220,7 +221,14 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 	// Always redirect the adapter through the sidecar model proxy so all model traffic
 	// (open and authenticated) flows through the sidecar. This gives a single forwarding
 	// path and allows SA token injection for models that need it.
-	jobConfig.jobSpec.Model.URL = jobConfig.sidecarBaseURL
+	// Redirect the adapter to the sidecar, preserving the full path from the user's model URL.
+	// The sidecar Rewrite function swaps only scheme+host from its configured target, so
+	// whatever path the adapter sends is forwarded verbatim to the real upstream model host.
+	rewrittenModelURL, err := rewriteModelURLForSidecar(jobConfig.sidecarBaseURL, jobConfig.modelTargetURL)
+	if err != nil {
+		return fmt.Errorf("job %s benchmark %s: rewriting model URL for sidecar: %w", evaluation.Resource.ID, benchmarkID, err)
+	}
+	jobConfig.jobSpec.Model.URL = rewrittenModelURL
 
 	var secretInfo modelSecretInfo
 	if jobConfig.modelAuthSecretRef != "" {
@@ -369,4 +377,32 @@ func buildBenchmarkFailureStatus(benchmark *api.EvaluationBenchmarkConfig, bench
 
 func (r *K8sRuntime) Name() string {
 	return "kubernetes"
+}
+
+// rewriteModelURLForSidecar returns a URL with the scheme and host of sidecarBaseURL
+// but the path (and any query/fragment) of modelURL. This lets the adapter call the
+// sidecar at localhost while preserving the full path prefix from the user's model URL
+// (e.g. /llm/llama-3-1-8b-instruct/v1 for a KServe Gateway API ingress route).
+// The sidecar Rewrite function forwards the incoming path verbatim to the real model
+// host (it only swaps scheme+host), so the full path is preserved end-to-end.
+func rewriteModelURLForSidecar(sidecarBaseURL, modelURL string) (string, error) {
+	sidecar, err := url.Parse(strings.TrimSuffix(sidecarBaseURL, "/"))
+	if err != nil {
+		return "", fmt.Errorf("invalid sidecar base URL %q: %w", sidecarBaseURL, err)
+	}
+	if sidecar.Host == "" {
+		return "", fmt.Errorf("invalid sidecar base URL %q: missing host", sidecarBaseURL)
+	}
+	model, err := url.Parse(strings.TrimSuffix(modelURL, "/"))
+	if err != nil {
+		return "", fmt.Errorf("invalid model URL %q: %w", modelURL, err)
+	}
+	out := &url.URL{
+		Scheme:   sidecar.Scheme,
+		Host:     sidecar.Host,
+		Path:     model.Path,
+		RawQuery: model.RawQuery,
+		Fragment: model.Fragment,
+	}
+	return out.String(), nil
 }
