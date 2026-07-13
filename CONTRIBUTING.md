@@ -463,10 +463,7 @@ If yes, describe migration path. Otherwise delete this section.
 ### Review Process
 
 1. **Automated Checks**: CI must pass (format check, `go vet`, tests with coverage, API doc generation). For `python-server/`, pre-commit may run mypy when Python files change; Go types are checked by the compiler during build and tests
-2. **Reviewer assignment**: The repository uses two complementary ownership files:
-   - **`OWNERS`**: Defines project-wide approvers, default reviewers, and labels used by the review process. Keep this file when changing who can approve or merge PRs.
-   - **`.github/CODEOWNERS`**: Defines path-specific owners for GitHub review requests. Update this file when ownership of a code area changes.
-   These files are not interchangeable; GitHub does not read `OWNERS`, and the review process still requires `OWNERS` for maintainer approval rules.
+2. **Reviewer assignment**: Path-specific owners are defined in `.github/CODEOWNERS`. Update that file when ownership of a code area changes. GitHub uses it to request reviews from the relevant owners.
 3. **Code Review**: Component experts and maintainer approval required
 4. **Testing**: Reviewers may test functionality manually
 5. **Documentation**: Ensure documentation is clear and complete
