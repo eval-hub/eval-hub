@@ -306,7 +306,7 @@ func TestHandleCreateEvaluationMarksFailedWhenRuntimeErrors(t *testing.T) {
 	// note that the fake storage only implements the functions that are used in this test
 	storage := &fakeStorage{providerConfigs: providerConfigs}
 	runtime := &fakeRuntime{err: errors.New("runtime failed")}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 
 	h := handlers.New(storage, validate, runtime, nil, nil)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "")
@@ -351,7 +351,7 @@ func TestHandleCreateEvaluationSucceedsWhenRuntimeOk(t *testing.T) {
 	}
 	storage := &fakeStorage{providerConfigs: providerConfigs}
 	runtime := &fakeRuntime{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	h := handlers.New(storage, validate, runtime, nil, nil)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-2", logger, "test-user", "test-tenant")
 
@@ -386,7 +386,7 @@ func TestHandleCancelEvaluationWithSoftDeleteDoesNotCleanupResources(t *testing.
 		},
 	}
 	runtime := &fakeRuntime{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	h := handlers.New(storage, validate, runtime, nil, nil)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-3", logger, "test-user", "test-tenant")
 
@@ -428,7 +428,7 @@ func TestHandleDeleteEvaluationCleansUpResources(t *testing.T) {
 		},
 	}
 	runtime := &fakeRuntime{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	h := handlers.New(storage, validate, runtime, nil, nil)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-4", logger, "test-user", "test-tenant")
 
@@ -457,7 +457,7 @@ func TestHandleCreateEvaluationRejectsMissingBenchmarkID(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	storage := &fakeStorage{}
 	runtime := &fakeRuntime{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	h := handlers.New(storage, validate, runtime, nil, nil)
 
 	req := &bodyRequest{
@@ -482,7 +482,7 @@ func TestHandleCreateEvaluationRejectsMissingBenchmarks(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	storage := &fakeStorage{}
 	runtime := &fakeRuntime{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	h := handlers.New(storage, validate, runtime, nil, nil)
 
 	index := 1
@@ -517,7 +517,7 @@ func TestHandleCreateEvaluationRejectsMissingProviderID(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	storage := &fakeStorage{}
 	runtime := &fakeRuntime{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	h := handlers.New(storage, validate, runtime, nil, nil)
 
 	req := &bodyRequest{
@@ -552,7 +552,7 @@ func TestHandleCreateEvaluationRejectsInvalidProviderID(t *testing.T) {
 	}
 	storage := &fakeStorage{providerConfigs: providerConfigs}
 	runtime := &fakeRuntime{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	h := handlers.New(storage, validate, runtime, nil, nil)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-invalid-provider", logger, "test-user", "test-tenant")
 
@@ -584,7 +584,7 @@ func TestHandleCreateEvaluationRejectsInvalidBenchmarkID(t *testing.T) {
 	}
 	storage := &fakeStorage{providerConfigs: providerConfigs}
 	runtime := &fakeRuntime{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	h := handlers.New(storage, validate, runtime, nil, nil)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-invalid-benchmark", logger, "test-user", "test-tenant")
 
@@ -613,7 +613,7 @@ func TestHandleListEvaluations(t *testing.T) {
 			},
 		},
 	}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
 
@@ -654,7 +654,7 @@ func TestHandleGetEvaluation(t *testing.T) {
 			},
 		},
 	}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
 
@@ -682,7 +682,7 @@ func TestHandleGetEvaluation(t *testing.T) {
 
 func TestHandleGetEvaluation_MissingPathParam(t *testing.T) {
 	storage := &fakeStorage{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
 
@@ -720,7 +720,7 @@ func TestHandleUpdateEvaluation(t *testing.T) {
 			},
 		},
 	}}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
 
@@ -814,7 +814,7 @@ func TestHandleUpdateEvaluationAcceptsValidPhase(t *testing.T) {
 func TestHandleUpdateEvaluationStampsRuntimeMessageOrigins(t *testing.T) {
 	t.Parallel()
 	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{}}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
 

@@ -163,7 +163,7 @@ func TestHandleListProviders_ReturnsSystemProviders(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	var storage abstractions.Storage = &fakeStorage{providerConfigs: providerConfigs}
 	storage = storage.WithTenant(api.Tenant("test-tenant"))
-	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers"),
@@ -213,7 +213,7 @@ func TestHandleListProviders_AppliesPaginationWhenLimitLessThanSystemProviders(t
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(&fakeStorage{providerConfigs: providerConfigs}, validation.NewValidator(), &fakeRuntime{}, nil, nil)
+	h := handlers.New(&fakeStorage{providerConfigs: providerConfigs}, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers"),
@@ -263,7 +263,7 @@ func TestHandleListProviders_FilterSystemProvidersWithCommaAndPipe(t *testing.T)
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(&fakeStorage{providerConfigs: providerConfigs}, validation.NewValidator(), &fakeRuntime{}, nil, nil)
+	h := handlers.New(&fakeStorage{providerConfigs: providerConfigs}, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil)
 
 	tests := []struct {
 		name            string
@@ -350,7 +350,7 @@ func TestHandleListProviders_ExcludesSystemProvidersWhenParamFalse(t *testing.T)
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(&fakeStorage{providerConfigs: providerConfigs}, validation.NewValidator(), &fakeRuntime{}, nil, nil)
+	h := handlers.New(&fakeStorage{providerConfigs: providerConfigs}, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers"),
@@ -389,7 +389,7 @@ func TestHandleListProviders_ExcludesBenchmarksWhenParamFalse(t *testing.T) {
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(&fakeStorage{providerConfigs: providerConfigs}, validation.NewValidator(), &fakeRuntime{}, nil, nil)
+	h := handlers.New(&fakeStorage{providerConfigs: providerConfigs}, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers"),
@@ -428,7 +428,7 @@ func TestHandleListProviders_ReturnsUserProvidersFromStorage(t *testing.T) {
 		providers:   []api.ProviderResource{userProvider},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers"),
@@ -468,7 +468,7 @@ func TestHandleListProviders_ReturnsErrorWhenStorageFails(t *testing.T) {
 		err:         fmt.Errorf("storage unavailable"),
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers"),
@@ -488,7 +488,7 @@ func TestHandleListProviders_ReturnsErrorWhenStorageFails(t *testing.T) {
 
 func TestHandleListProviders_Returns400WhenInvalidLimit(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(&fakeStorage{}, validation.NewValidator(), &fakeRuntime{}, nil, nil)
+	h := handlers.New(&fakeStorage{}, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers"),
@@ -518,7 +518,7 @@ func TestHandleListProvidersReturnsEmptyForInvalidProviderID(t *testing.T) {
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(&fakeStorage{providerConfigs: providerConfigs}, validation.NewValidator(), &fakeRuntime{}, nil, nil)
+	h := handlers.New(&fakeStorage{providerConfigs: providerConfigs}, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil)
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers/unknown"),
@@ -553,7 +553,7 @@ func TestHandleUpdateProvider(t *testing.T) {
 	}
 	// providerConfigs empty so getSystemProvider returns nil
 	logger := logging.FallbackLogger() // slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil)
 
 	body := `{"name":"Updated Name","description":"Updated desc","benchmarks":[]}`
 	req := &providersRequest{
@@ -591,7 +591,7 @@ func TestHandleUpdateProviderRejectsSystemProvider(t *testing.T) {
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(&fakeStorage{providerConfigs: providerConfigs}, validation.NewValidator(), &fakeRuntime{}, nil, nil)
+	h := handlers.New(&fakeStorage{providerConfigs: providerConfigs}, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil)
 
 	body := `{"name":"Hacked","description":"","benchmarks":[]}`
 	req := &providersRequest{
@@ -625,7 +625,7 @@ func TestHandlePatchProvider(t *testing.T) {
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil)
 
 	body := `[{"op":"replace","path":"/description","value":"Patched description"}]`
 	req := &providersRequest{
@@ -664,7 +664,7 @@ func TestHandlePatchProviderRejectsImmutablePaths(t *testing.T) {
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validation.NewValidator(), &fakeRuntime{}, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil)
 
 	immutablePaths := []string{"/resource", "/resource/id", "/resource/tenant", "/created_at", "/updated_at"}
 	for _, path := range immutablePaths {
@@ -695,7 +695,7 @@ func TestHandlePatchProviderRejectsSystemProvider(t *testing.T) {
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(&fakeStorage{providerConfigs: providerConfigs}, validation.NewValidator(), &fakeRuntime{}, nil, nil)
+	h := handlers.New(&fakeStorage{providerConfigs: providerConfigs}, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil)
 
 	body := `[{"op":"replace","path":"/name","value":"Hacked"}]`
 	req := &providersRequest{
@@ -716,7 +716,7 @@ func TestHandlePatchProviderRejectsSystemProvider(t *testing.T) {
 
 func TestHandleCreateProvider(t *testing.T) {
 	storage := &fakeStorage{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
 
@@ -750,7 +750,7 @@ func TestHandleCreateProvider(t *testing.T) {
 
 func TestHandleDeleteProvider(t *testing.T) {
 	storage := &fakeStorage{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
 
@@ -771,7 +771,7 @@ func TestHandleDeleteProvider(t *testing.T) {
 
 func TestHandleDeleteProvider_MissingPathParam(t *testing.T) {
 	storage := &fakeStorage{}
-	validate := validation.NewValidator()
+	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil)
 
