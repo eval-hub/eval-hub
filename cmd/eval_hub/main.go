@@ -119,12 +119,6 @@ func main() {
 		}
 	}
 
-	// setup mlflow client if there is a tracking URI set
-	mlflowClient, mlflowTrackingURI, mlflowServerVersion, err := mlflow.SetupMLFlowClient(serviceConfig, logger)
-	if err != nil {
-		startUpFailed(serviceConfig, err, "Failed to create MLFlow client", logger)
-	}
-
 	// set up the storage
 	storage, err := storage.NewStorage(
 		serviceConfig.Database,
@@ -145,6 +139,12 @@ func main() {
 		startUpFailed(serviceConfig, err, "Failed to create runtime", logger)
 	}
 	logger.Info("Runtime created", "runtime", runtime.Name())
+
+	// setup mlflow client if there is a tracking URI set
+	mlflowClient, mlflowTrackingURI, mlflowServerVersion, err := mlflow.SetupMLFlowClient(serviceConfig, logger)
+	if err != nil {
+		startUpFailed(serviceConfig, err, "Failed to create MLFlow client", logger)
+	}
 
 	// create the server
 	srv, err := server.NewServer(logger,
