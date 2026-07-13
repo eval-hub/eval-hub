@@ -15,6 +15,10 @@ on:
   pull_request_review:
     types: [submitted, dismissed]
 
+concurrency:
+  group: required-reviewer-approvals-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   required-reviewer-approvals:
     name: Verify requested reviewer approvals

@@ -209,10 +209,10 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				Status: &api.EvaluationJobStatus{
 					EvaluationJobState: api.EvaluationJobState{
 						State: api.OverallStatePending,
-						Message: &api.MessageInfo{
+						Message: api.WithMessageOrigin(&api.MessageInfo{
 							Message:     "Evaluation job created",
 							MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CREATED,
-						},
+						}, api.MessageOriginServer),
 					},
 				},
 				Results: &api.EvaluationJobResults{
@@ -243,10 +243,10 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				runErr := h.executeEvaluationJob(ctx.WithContext(runtimeCtx), job, collection)
 				if runErr != nil {
 					state := api.OverallStateFailed
-					message := &api.MessageInfo{
+					message := api.WithMessageOrigin(&api.MessageInfo{
 						Message:     runErr.Error(),
 						MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED,
-					}
+					}, api.MessageOriginServer)
 					metrics.RecordEvaluationJobRuntimeStartFailed(ctx.Ctx, h.runtimeName())
 					metrics.RecordEvaluationJobTerminalState(ctx.Ctx, api.OverallStatePending, state)
 					if err := storage.WithContext(runtimeCtx).UpdateEvaluationJobStatus(job.Resource.ID, state, message); err != nil {
@@ -257,10 +257,10 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 					return runErr
 				}
 			} else {
-				message := &api.MessageInfo{
+				message := api.WithMessageOrigin(&api.MessageInfo{
 					Message:     "Evaluation job created but no runtime configured",
 					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
-				}
+				}, api.MessageOriginServer)
 				if err := storage.WithContext(runtimeCtx).UpdateEvaluationJobStatus(job.Resource.ID, job.Status.State, message); err != nil {
 					ctx.Logger.Error("Failed to update evaluation status", "error", err, "job_id", job.Resource.ID)
 				}
@@ -480,6 +480,10 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
+	if status.BenchmarkStatusEvent != nil {
+		status.BenchmarkStatusEvent.StampRuntimeMessageOrigins()
+	}
+
 	ctx.Logger.Debug("Updating evaluation job", "id", evaluationJobID, "state", status.BenchmarkStatusEvent.Status, "status", status)
 
 	var previousState api.OverallState
@@ -582,10 +586,10 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 				if jobErr == nil && job != nil && job.Status != nil {
 					previousState = job.Status.State
 				}
-				err = storage.WithContext(runtimeCtx).UpdateEvaluationJobStatus(evaluationJobID, api.OverallStateCancelled, &api.MessageInfo{
+				err = storage.WithContext(runtimeCtx).UpdateEvaluationJobStatus(evaluationJobID, api.OverallStateCancelled, api.WithMessageOrigin(&api.MessageInfo{
 					Message:     "Evaluation job cancelled",
 					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
-				})
+				}, api.MessageOriginServer))
 				if err != nil {
 					ctx.Logger.Info("Failed to cancel evaluation job", "error", err.Error(), "id", evaluationJobID)
 					w.Error(err, ctx.RequestID)

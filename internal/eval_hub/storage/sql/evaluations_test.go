@@ -679,6 +679,239 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 		if err != nil {
 			t.Fatalf("Failed to convert CompletedAt to time: %v", err)
 		}
+		if job.Status.Benchmarks[0].ErrorMessage == nil {
+			t.Fatal("expected benchmark error message to be persisted")
+		}
+	})
+
+	t.Run("UpdateEvaluationJob persists runtime origin for failed benchmark errors", func(t *testing.T) {
+		jobID := common.GUID()
+		now := time.Now()
+		job := &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{
+					ID:        jobID,
+					Tenant:    api.Tenant(tenant),
+					CreatedAt: now,
+					UpdatedAt: now,
+				},
+				MLFlowExperimentID: "experiment-1",
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{
+					State: api.OverallStateRunning,
+					Message: &api.MessageInfo{
+						Message:     "Job is running",
+						MessageCode: "JOB_RUNNING",
+					},
+				},
+			},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
+				Benchmarks: []api.EvaluationBenchmarkConfig{benchmarkConfig},
+			},
+		}
+		if err := store.CreateEvaluationJob(job); err != nil {
+			t.Fatalf("CreateEvaluationJob: %v", err)
+		}
+
+		status := &api.StatusEvent{
+			BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+				ID:             benchmarkConfig.ID,
+				ProviderID:     benchmarkConfig.ProviderID,
+				BenchmarkIndex: 0,
+				Status:         api.StateFailed,
+				ErrorMessage: &api.MessageInfo{
+					Message:     "adapter failed",
+					MessageCode: "ADAPTER_FAIL",
+				},
+			},
+		}
+		status.BenchmarkStatusEvent.StampRuntimeMessageOrigins()
+		if err := store.UpdateEvaluationJob(jobID, status); err != nil {
+			t.Fatalf("UpdateEvaluationJob: %v", err)
+		}
+
+		got, err := store.GetEvaluationJob(jobID)
+		if err != nil {
+			t.Fatalf("GetEvaluationJob: %v", err)
+		}
+		if len(got.Status.Benchmarks) == 0 || got.Status.Benchmarks[0].ErrorMessage == nil {
+			t.Fatal("expected benchmark error message")
+		}
+		if got.Status.Benchmarks[0].ErrorMessage.MessageOrigin != api.MessageOriginRuntime {
+			t.Fatalf("expected runtime benchmark error origin, got %q", got.Status.Benchmarks[0].ErrorMessage.MessageOrigin)
+		}
+		if got.Status.Message == nil || got.Status.Message.MessageOrigin != api.MessageOriginServer {
+			t.Fatalf("expected server job message origin, got %+v", got.Status.Message)
+		}
+	})
+
+	t.Run("UpdateEvaluationJob preserves server origin on benchmark errors", func(t *testing.T) {
+		jobID := common.GUID()
+		now := time.Now()
+		job := &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{
+					ID:        jobID,
+					Tenant:    api.Tenant(tenant),
+					CreatedAt: now,
+					UpdatedAt: now,
+				},
+				MLFlowExperimentID: "experiment-1",
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{
+					State: api.OverallStateRunning,
+					Message: &api.MessageInfo{
+						Message:     "Job is running",
+						MessageCode: "JOB_RUNNING",
+					},
+				},
+			},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
+				Benchmarks: []api.EvaluationBenchmarkConfig{benchmarkConfig},
+			},
+		}
+		if err := store.CreateEvaluationJob(job); err != nil {
+			t.Fatalf("CreateEvaluationJob: %v", err)
+		}
+
+		status := &api.StatusEvent{
+			BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+				ID:             benchmarkConfig.ID,
+				ProviderID:     benchmarkConfig.ProviderID,
+				BenchmarkIndex: 0,
+				Status:         api.StateFailed,
+				ErrorMessage: api.WithMessageOrigin(&api.MessageInfo{
+					Message:     "k8s runtime failed",
+					MessageCode: "EVALUATION_JOB_FAILED",
+				}, api.MessageOriginServer),
+			},
+		}
+		if err := store.UpdateEvaluationJob(jobID, status); err != nil {
+			t.Fatalf("UpdateEvaluationJob: %v", err)
+		}
+
+		got, err := store.GetEvaluationJob(jobID)
+		if err != nil {
+			t.Fatalf("GetEvaluationJob: %v", err)
+		}
+		if got.Status.Benchmarks[0].ErrorMessage.MessageOrigin != api.MessageOriginServer {
+			t.Fatalf("expected server benchmark error origin, got %q", got.Status.Benchmarks[0].ErrorMessage.MessageOrigin)
+		}
+		if got.Status.Message.MessageOrigin != api.MessageOriginServer {
+			t.Fatalf("expected server job message origin, got %q", got.Status.Message.MessageOrigin)
+		}
+	})
+
+	t.Run("UpdateEvaluationJob stamps runtime origin on warning messages", func(t *testing.T) {
+		jobID := common.GUID()
+		now := time.Now()
+		job := &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{
+					ID:        jobID,
+					Tenant:    api.Tenant(tenant),
+					CreatedAt: now,
+					UpdatedAt: now,
+				},
+				MLFlowExperimentID: "experiment-1",
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{
+					State: api.OverallStateRunning,
+					Message: &api.MessageInfo{
+						Message:     "Job is running",
+						MessageCode: "JOB_RUNNING",
+					},
+				},
+			},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
+				Benchmarks: []api.EvaluationBenchmarkConfig{benchmarkConfig},
+			},
+		}
+		if err := store.CreateEvaluationJob(job); err != nil {
+			t.Fatalf("CreateEvaluationJob: %v", err)
+		}
+
+		status := &api.StatusEvent{
+			BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+				ID:             benchmarkConfig.ID,
+				ProviderID:     benchmarkConfig.ProviderID,
+				BenchmarkIndex: 0,
+				Status:         api.StateRunning,
+				WarningMessage: &api.MessageInfo{
+					Message:     "adapter warning",
+					MessageCode: "ADAPTER_WARN",
+				},
+			},
+		}
+		status.BenchmarkStatusEvent.StampRuntimeMessageOrigins()
+		if err := store.UpdateEvaluationJob(jobID, status); err != nil {
+			t.Fatalf("UpdateEvaluationJob: %v", err)
+		}
+
+		got, err := store.GetEvaluationJob(jobID)
+		if err != nil {
+			t.Fatalf("GetEvaluationJob: %v", err)
+		}
+		if got.Status.Benchmarks[0].WarningMessage == nil {
+			t.Fatal("expected benchmark warning message")
+		}
+		if got.Status.Benchmarks[0].WarningMessage.MessageOrigin != api.MessageOriginRuntime {
+			t.Fatalf("expected runtime warning origin, got %q", got.Status.Benchmarks[0].WarningMessage.MessageOrigin)
+		}
+		if got.Status.Message.MessageOrigin != api.MessageOriginServer {
+			t.Fatalf("expected server job message origin for running state, got %q", got.Status.Message.MessageOrigin)
+		}
+	})
+
+	t.Run("UpdateEvaluationJobStatus stamps server message origin", func(t *testing.T) {
+		jobID := common.GUID()
+		now := time.Now()
+		job := &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{
+					ID:        jobID,
+					Tenant:    api.Tenant(tenant),
+					CreatedAt: now,
+					UpdatedAt: now,
+				},
+				MLFlowExperimentID: "experiment-1",
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{
+					State: api.OverallStateRunning,
+					Message: &api.MessageInfo{
+						Message:     "Job is running",
+						MessageCode: "JOB_RUNNING",
+					},
+				},
+			},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
+				Benchmarks: []api.EvaluationBenchmarkConfig{benchmarkConfig},
+			},
+		}
+		if err := store.CreateEvaluationJob(job); err != nil {
+			t.Fatalf("CreateEvaluationJob: %v", err)
+		}
+
+		msg := &api.MessageInfo{Message: "cancelled by server", MessageCode: "CANCELLED"}
+		if err := store.UpdateEvaluationJobStatus(jobID, api.OverallStateCancelled, msg); err != nil {
+			t.Fatalf("UpdateEvaluationJobStatus: %v", err)
+		}
+
+		got, err := store.GetEvaluationJob(jobID)
+		if err != nil {
+			t.Fatalf("GetEvaluationJob: %v", err)
+		}
+		if got.Status.Message.MessageOrigin != api.MessageOriginServer {
+			t.Fatalf("expected server origin, got %q", got.Status.Message.MessageOrigin)
+		}
 	})
 
 	t.Run("UpdateEvaluationJobStatus running to pending updates state", func(t *testing.T) {
@@ -771,6 +1004,50 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 		}
 		if got.Status.Message == nil || got.Status.Message.Message != newMsg.Message || got.Status.Message.MessageCode != newMsg.MessageCode {
 			t.Fatalf("message not updated: %+v", got.Status.Message)
+		}
+		if got.Status.Message.MessageOrigin != api.MessageOriginServer {
+			t.Fatalf("expected server origin on updated message, got %q", got.Status.Message.MessageOrigin)
+		}
+	})
+
+	t.Run("UpdateEvaluationJobStatus same-state persists message when only origin changes", func(t *testing.T) {
+		jobID := common.GUID()
+		now := time.Now()
+		initialMsg := &api.MessageInfo{
+			Message: "unchanged", MessageCode: "K", MessageOrigin: api.MessageOriginRuntime,
+		}
+
+		j := &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{
+					ID: jobID, Tenant: api.Tenant(tenant), CreatedAt: now, UpdatedAt: now,
+				},
+				MLFlowExperimentID: "experiment-1",
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{
+					State: api.OverallStatePending, Message: initialMsg,
+				},
+			},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
+				Benchmarks: []api.EvaluationBenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
+			},
+		}
+		if err := store.CreateEvaluationJob(j); err != nil {
+			t.Fatalf("CreateEvaluationJob: %v", err)
+		}
+
+		updatedMsg := &api.MessageInfo{Message: "unchanged", MessageCode: "K"}
+		if err := store.UpdateEvaluationJobStatus(jobID, api.OverallStatePending, updatedMsg); err != nil {
+			t.Fatalf("UpdateEvaluationJobStatus: %v", err)
+		}
+		got, err := store.GetEvaluationJob(jobID)
+		if err != nil {
+			t.Fatalf("GetEvaluationJob: %v", err)
+		}
+		if got.Status.Message.MessageOrigin != api.MessageOriginServer {
+			t.Fatalf("expected server origin after status update, got %q", got.Status.Message.MessageOrigin)
 		}
 	})
 
