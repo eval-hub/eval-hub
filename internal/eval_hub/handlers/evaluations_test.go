@@ -840,7 +840,7 @@ func TestHandleUpdateEvaluationRejectsInvalidPhase(t *testing.T) {
 	}
 	respBody := recorder.Body.String()
 	if !strings.Contains(respBody, "request_validation_failed") {
-		t.Fatalf("expected request_validation_failed in body, got %q", respBody)
+		t.Fatalf("expected request_validation_failed in body, but got %q", respBody)
 	}
 }
 
