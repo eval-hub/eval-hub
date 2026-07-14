@@ -552,3 +552,114 @@ func TestUploadBlobNilReader(t *testing.T) {
 		t.Fatal("expected error for nil reader")
 	}
 }
+
+func TestRegistryURLAbsolutePath(t *testing.T) {
+	t.Parallel()
+
+	client := &Client{registry: "https://registry.example"}
+	if got := client.registryURL("https://auth.example/token"); got != "https://auth.example/token" {
+		t.Fatalf("registryURL() = %q", got)
+	}
+}
+
+func TestResolveLocationInvalidRegistry(t *testing.T) {
+	t.Parallel()
+
+	client := &Client{registry: "://bad-registry"}
+	if _, err := client.resolveLocation("/upload"); err == nil {
+		t.Fatal("expected registry parse error")
+	}
+}
+
+func TestResolveLocationInvalidLocation(t *testing.T) {
+	t.Parallel()
+
+	client := &Client{registry: "https://registry.example"}
+	if _, err := client.resolveLocation("://bad-location"); err == nil {
+		t.Fatal("expected location parse error")
+	}
+}
+
+func TestDoRefreshTokenFailure(t *testing.T) {
+	t.Parallel()
+
+	const tokenPath = "/token"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodHead:
+			w.WriteHeader(http.StatusUnauthorized)
+		case r.Method == http.MethodGet && r.URL.Path == "/v2":
+			w.Header().Set("WWW-Authenticate", `Bearer realm="http://`+r.Host+tokenPath+`",service="test"`)
+			w.WriteHeader(http.StatusUnauthorized)
+		case r.Method == http.MethodGet && r.URL.Path == tokenPath:
+			w.WriteHeader(http.StatusUnauthorized)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "org/repo", Credentials{Username: "user", Password: "bad"}, srv.Client())
+	if err != nil {
+		t.Fatalf("NewClient() err = %v", err)
+	}
+	if _, err := client.blobExists(context.Background(), "sha256:deadbeef"); err == nil {
+		t.Fatal("expected auth refresh failure")
+	}
+}
+
+func TestUploadBlobMonolithicFailure(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v2":
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodHead && strings.HasPrefix(r.URL.Path, "/v2/org/repo/blobs/"):
+			w.WriteHeader(http.StatusNotFound)
+		case r.Method == http.MethodPost && r.URL.Path == "/v2/org/repo/blobs/uploads/":
+			w.Header().Set("Location", "/v2/org/repo/blobs/uploads/upload-1")
+			w.WriteHeader(http.StatusAccepted)
+		case r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/blobs/uploads/"):
+			w.WriteHeader(http.StatusBadRequest)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "org/repo", Credentials{}, srv.Client())
+	if err != nil {
+		t.Fatalf("NewClient() err = %v", err)
+	}
+	if err := client.PushEvaluationCard(context.Background(), "job-1", []byte(`{"card_version":"1.0"}`), "", nil); err == nil {
+		t.Fatal("expected upload failure")
+	}
+}
+
+func TestPatchBlobChunkFailure(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v2":
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodPost && r.URL.Path == "/v2/org/repo/blobs/uploads/":
+			w.Header().Set("Location", "/v2/org/repo/blobs/uploads/upload-1")
+			w.WriteHeader(http.StatusAccepted)
+		case r.Method == http.MethodPatch:
+			w.WriteHeader(http.StatusBadRequest)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "org/repo", Credentials{}, srv.Client())
+	if err != nil {
+		t.Fatalf("NewClient() err = %v", err)
+	}
+	if _, _, err := client.UploadBlob(context.Background(), bytes.NewReader([]byte("chunked")), UploadBlobOptions{ChunkSize: 4}); err == nil {
+		t.Fatal("expected patch failure")
+	}
+}

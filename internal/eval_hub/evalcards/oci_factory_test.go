@@ -259,3 +259,60 @@ func TestNoopOCIPublisherFactory(t *testing.T) {
 		t.Fatalf("Close() err = %v", err)
 	}
 }
+
+func TestOCIPublisherFactoryInvalidCredentials(t *testing.T) {
+	t.Parallel()
+
+	factory := NewOCIPublisherFactory(
+		stubDockerConfigSecretGetter{data: []byte(`{"auths":{}}`)},
+		http.DefaultClient,
+	)
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1", Tenant: "tenant-a"}},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Exports: &api.EvaluationExports{
+				OCI: &api.EvaluationExportsOCI{
+					Coordinates: api.OCICoordinates{
+						OCIHost:       "quay.io",
+						OCIRepository: "org/repo",
+					},
+					K8s: &api.OCIConnectionConfig{Connection: "oci-secret"},
+				},
+			},
+		},
+	}
+	if _, err := factory.NewPublisher(context.Background(), job); err == nil {
+		t.Fatal("expected credential parse error")
+	}
+}
+
+func TestOCIPublisherFactoryInvalidRepository(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/v2" {
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	secretData := []byte(`{"auths":{"` + srv.URL + `":{"username":"user","password":"pass"}}}`)
+	factory := NewOCIPublisherFactory(stubDockerConfigSecretGetter{data: secretData}, srv.Client())
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1", Tenant: "tenant-a"}},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Exports: &api.EvaluationExports{
+				OCI: &api.EvaluationExportsOCI{
+					Coordinates: api.OCICoordinates{
+						OCIHost:       srv.URL,
+						OCIRepository: "",
+					},
+					K8s: &api.OCIConnectionConfig{Connection: "oci-secret"},
+				},
+			},
+		},
+	}
+	if _, err := factory.NewPublisher(context.Background(), job); err == nil {
+		t.Fatal("expected repository validation error")
+	}
+}

@@ -155,6 +155,61 @@ func TestAuthenticatorCreateNewTokenErrors(t *testing.T) {
 	}
 }
 
+func TestAuthenticatorRefreshTokenCancelledContext(t *testing.T) {
+	t.Parallel()
+
+	auth := newAuthenticator("https://registry.example", "org/repo", Credentials{}, http.DefaultClient)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := auth.refreshToken(ctx); err == nil {
+		t.Fatal("expected cancelled context error")
+	}
+}
+
+func TestAuthenticatorInitiateChallengeMissingWWWAuthenticate(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/v2" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+
+	auth := newAuthenticator(srv.URL, "org/repo", Credentials{}, srv.Client())
+	if _, err := auth.initiateChallenge(context.Background()); err == nil {
+		t.Fatal("expected missing WWW-Authenticate error")
+	}
+}
+
+func TestAuthenticatorCreateNewTokenMissingToken(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/token" {
+			_ = json.NewEncoder(w).Encode(map[string]string{})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+
+	auth := newAuthenticator(srv.URL, "org/repo", Credentials{}, srv.Client())
+	if err := auth.createNewToken(context.Background(), srv.URL+"/token"); err == nil {
+		t.Fatal("expected missing token error")
+	}
+}
+
+func TestValidateTokenRealmURLParseError(t *testing.T) {
+	t.Parallel()
+
+	if err := validateTokenRealmURL("https://quay.io", "://bad-url"); err == nil {
+		t.Fatal("expected parse error")
+	}
+}
+
 func TestValidateTokenRealmURL(t *testing.T) {
 	t.Parallel()
 

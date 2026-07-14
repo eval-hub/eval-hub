@@ -68,6 +68,12 @@ func NewKubernetesHelper() (*KubernetesHelper, error) {
 	}, nil
 }
 
+// NewKubernetesHelperWithClientset returns a helper backed by the given clientset.
+// It is intended for unit tests that need deterministic Kubernetes API behavior.
+func NewKubernetesHelperWithClientset(clientset kubernetes.Interface) *KubernetesHelper {
+	return &KubernetesHelper{clientset: clientset}
+}
+
 // GetHardwareProfile fetches a HardwareProfile custom resource by name in the given namespace.
 func (h *KubernetesHelper) GetHardwareProfile(ctx context.Context, namespace, name string) (*unstructured.Unstructured, error) {
 	if namespace == "" || name == "" {

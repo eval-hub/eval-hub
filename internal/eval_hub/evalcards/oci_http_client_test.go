@@ -91,6 +91,44 @@ func TestBuildOCIHTTPClientTLSValidCA(t *testing.T) {
 	}
 }
 
+func TestNewOCIHTTPClientInvalidCA(t *testing.T) {
+	t.Parallel()
+
+	caPath := filepath.Join(t.TempDir(), "bad-ca.crt")
+	if err := os.WriteFile(caPath, []byte("not-a-cert"), 0o600); err != nil {
+		t.Fatalf("WriteFile() err = %v", err)
+	}
+	if _, err := NewOCIHTTPClient(&config.Config{
+		Sidecar: &config.SidecarConfig{
+			OCI: &config.SidecarOCIConfig{CACertPath: caPath},
+		},
+	}, false, nil); err == nil {
+		t.Fatal("expected invalid CA error")
+	}
+}
+
+func TestNewOCIHTTPClientWithOTELEnabled(t *testing.T) {
+	t.Parallel()
+
+	client, err := NewOCIHTTPClient(&config.Config{
+		OTEL: &config.OTELConfig{Enabled: true},
+	}, true, nil)
+	if err != nil {
+		t.Fatalf("NewOCIHTTPClient() err = %v", err)
+	}
+	if client.Transport == nil {
+		t.Fatal("expected transport")
+	}
+}
+
+func TestBuildOCIHTTPClientTLSReadError(t *testing.T) {
+	t.Parallel()
+
+	if _, err := buildOCIHTTPClientTLS(t.TempDir(), false, nil); err == nil {
+		t.Fatal("expected read error when CA path is a directory")
+	}
+}
+
 func writeTestCACert(t *testing.T) string {
 	t.Helper()
 

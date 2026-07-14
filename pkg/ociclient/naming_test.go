@@ -15,6 +15,18 @@ func TestEvaluationCardLayerTitle(t *testing.T) {
 	if got := EvaluationCardLayerTitle("job-1"); got != "evaluation-card-job-1.json" {
 		t.Fatalf("got %q", got)
 	}
+	if got := EvaluationCardLayerTitle(""); got != "evaluation-card.json" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestEvaluationCardConfigTitle(t *testing.T) {
+	if got := EvaluationCardConfigTitle("job-1"); got != "evaluation-card-job-1-config.json" {
+		t.Fatalf("got %q", got)
+	}
+	if got := EvaluationCardConfigTitle(""); got != "evaluation-card-config.json" {
+		t.Fatalf("got %q", got)
+	}
 }
 
 func TestArtifactConfigBlobForJob(t *testing.T) {
@@ -24,6 +36,10 @@ func TestArtifactConfigBlobForJob(t *testing.T) {
 	}
 	if string(got) != `{"evaluation_job_id":"job-1"}` {
 		t.Fatalf("got %s", got)
+	}
+	got, err = artifactConfigBlobForJob("")
+	if err != nil || string(got) != "{}" {
+		t.Fatalf("artifactConfigBlobForJob(\"\") = %q err=%v", got, err)
 	}
 }
 
