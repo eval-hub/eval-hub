@@ -225,3 +225,330 @@ func TestUploadBlobSkipsKnownDigest(t *testing.T) {
 		t.Fatalf("uploads = %d, want 0 when known digest already exists", uploads)
 	}
 }
+
+func TestNewClientValidationErrors(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		registry   string
+		repository string
+		client     *http.Client
+	}{
+		{name: "missing registry", registry: "", repository: "org/repo", client: http.DefaultClient},
+		{name: "missing repository", registry: "quay.io", repository: "", client: http.DefaultClient},
+		{name: "missing http client", registry: "quay.io", repository: "org/repo", client: nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := NewClient(tc.registry, tc.repository, Credentials{}, tc.client); err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	}
+}
+
+func TestPushEvaluationCardValidationErrors(t *testing.T) {
+	t.Parallel()
+
+	client, err := NewClient("https://quay.io", "org/repo", Credentials{}, http.DefaultClient)
+	if err != nil {
+		t.Fatalf("NewClient() err = %v", err)
+	}
+	cases := []struct {
+		name     string
+		jobID    string
+		cardJSON []byte
+	}{
+		{name: "missing job id", jobID: "", cardJSON: []byte(`{"card_version":"1.0"}`)},
+		{name: "empty card", jobID: "job-1", cardJSON: nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if err := client.PushEvaluationCard(context.Background(), tc.jobID, tc.cardJSON, "", nil); err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	}
+}
+
+func TestPushEvaluationCardRetriesAuthOnUnauthorized(t *testing.T) {
+	t.Parallel()
+
+	const tokenPath = "/token"
+	var headAttempts int
+	var firstAuth, retryAuth string
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v2":
+			w.Header().Set("WWW-Authenticate", `Bearer realm="http://`+r.Host+tokenPath+`",service="test"`)
+			w.WriteHeader(http.StatusUnauthorized)
+		case r.Method == http.MethodGet && r.URL.Path == tokenPath:
+			_ = json.NewEncoder(w).Encode(tokenResponse{Token: "registry-token"})
+		case r.Method == http.MethodHead && strings.HasPrefix(r.URL.Path, "/v2/org/repo/blobs/"):
+			mu.Lock()
+			headAttempts++
+			switch headAttempts {
+			case 1:
+				firstAuth = r.Header.Get("Authorization")
+			case 2:
+				retryAuth = r.Header.Get("Authorization")
+			}
+			mu.Unlock()
+			if headAttempts == 1 {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			w.WriteHeader(http.StatusNotFound)
+		case r.Method == http.MethodPost && r.URL.Path == "/v2/org/repo/blobs/uploads/":
+			w.Header().Set("Location", "/v2/org/repo/blobs/uploads/upload-1")
+			w.WriteHeader(http.StatusAccepted)
+		case r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/blobs/uploads/"):
+			w.WriteHeader(http.StatusCreated)
+		case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/v2/org/repo/manifests/"):
+			w.WriteHeader(http.StatusCreated)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "org/repo", Credentials{Username: "user", Password: "pass"}, srv.Client())
+	if err != nil {
+		t.Fatalf("NewClient() err = %v", err)
+	}
+	if err := client.PushEvaluationCard(context.Background(), "job-1", []byte(`{"card_version":"1.0"}`), "", nil); err != nil {
+		t.Fatalf("PushEvaluationCard() err = %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if headAttempts < 2 {
+		t.Fatalf("headAttempts = %d, want at least 2 for auth retry", headAttempts)
+	}
+	if firstAuth != "" {
+		t.Fatalf("first blob head Authorization = %q, want empty", firstAuth)
+	}
+	if retryAuth != "Bearer registry-token" {
+		t.Fatalf("retry blob head Authorization = %q", retryAuth)
+	}
+}
+
+func TestPutManifestRetriesAuthWithReplayableBody(t *testing.T) {
+	t.Parallel()
+
+	const tokenPath = "/token"
+	var putAttempts int
+	var replayedBody bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v2":
+			w.Header().Set("WWW-Authenticate", `Bearer realm="http://`+r.Host+tokenPath+`",service="test"`)
+			w.WriteHeader(http.StatusUnauthorized)
+		case r.Method == http.MethodGet && r.URL.Path == tokenPath:
+			_ = json.NewEncoder(w).Encode(tokenResponse{Token: "registry-token"})
+		case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/v2/org/repo/manifests/"):
+			putAttempts++
+			if putAttempts == 1 {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			body, _ := io.ReadAll(r.Body)
+			if len(body) > 0 {
+				replayedBody = true
+			}
+			w.WriteHeader(http.StatusCreated)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "org/repo", Credentials{Username: "user", Password: "pass"}, srv.Client())
+	if err != nil {
+		t.Fatalf("NewClient() err = %v", err)
+	}
+	if err := client.putManifest(context.Background(), "evaluation-card-job-1", []byte(`{"schemaVersion":2}`)); err != nil {
+		t.Fatalf("putManifest() err = %v", err)
+	}
+	if putAttempts != 2 {
+		t.Fatalf("putAttempts = %d, want 2", putAttempts)
+	}
+	if !replayedBody {
+		t.Fatal("expected replayed manifest body on auth retry")
+	}
+}
+
+func TestEnsureBlobUsesMonolithicUploadForSmallContent(t *testing.T) {
+	t.Parallel()
+
+	var patchCalls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v2":
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodHead && strings.HasPrefix(r.URL.Path, "/v2/org/repo/blobs/"):
+			w.WriteHeader(http.StatusNotFound)
+		case r.Method == http.MethodPost && r.URL.Path == "/v2/org/repo/blobs/uploads/":
+			w.Header().Set("Location", "/v2/org/repo/blobs/uploads/upload-1")
+			w.WriteHeader(http.StatusAccepted)
+		case r.Method == http.MethodPatch:
+			patchCalls++
+			http.NotFound(w, r)
+		case r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/blobs/uploads/"):
+			w.WriteHeader(http.StatusCreated)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "org/repo", Credentials{}, srv.Client())
+	if err != nil {
+		t.Fatalf("NewClient() err = %v", err)
+	}
+	content := []byte("small-blob")
+	digest, size, err := client.ensureBlob(context.Background(), content)
+	if err != nil {
+		t.Fatalf("ensureBlob() err = %v", err)
+	}
+	if digest != blobDigest(content) || size != int64(len(content)) {
+		t.Fatalf("digest=%q size=%d", digest, size)
+	}
+	if patchCalls != 0 {
+		t.Fatalf("patchCalls = %d, want monolithic upload without PATCH", patchCalls)
+	}
+}
+
+func TestEnsureBlobUsesChunkedUploadForLargeContent(t *testing.T) {
+	t.Parallel()
+
+	var patchCalls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v2":
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodHead && strings.HasPrefix(r.URL.Path, "/v2/org/repo/blobs/"):
+			w.WriteHeader(http.StatusNotFound)
+		case r.Method == http.MethodPost && r.URL.Path == "/v2/org/repo/blobs/uploads/":
+			w.Header().Set("Location", "/v2/org/repo/blobs/uploads/upload-1")
+			w.WriteHeader(http.StatusAccepted)
+		case r.Method == http.MethodPatch && strings.Contains(r.URL.Path, "/blobs/uploads/"):
+			patchCalls++
+			_, _ = io.Copy(io.Discard, r.Body)
+			w.WriteHeader(http.StatusAccepted)
+		case r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/blobs/uploads/"):
+			w.WriteHeader(http.StatusCreated)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "org/repo", Credentials{}, srv.Client())
+	if err != nil {
+		t.Fatalf("NewClient() err = %v", err)
+	}
+	content := bytes.Repeat([]byte("x"), DefaultChunkSize+1)
+	digest, size, err := client.ensureBlob(context.Background(), content)
+	if err != nil {
+		t.Fatalf("ensureBlob() err = %v", err)
+	}
+	if digest != blobDigest(content) || size != int64(len(content)) {
+		t.Fatalf("digest=%q size=%d", digest, size)
+	}
+	if patchCalls == 0 {
+		t.Fatal("expected chunked PATCH upload for large content")
+	}
+}
+
+func TestResolveLocation(t *testing.T) {
+	t.Parallel()
+
+	client := &Client{registry: "https://registry.example"}
+	abs, err := client.resolveLocation("https://auth.example/upload/session-1")
+	if err != nil || abs != "https://auth.example/upload/session-1" {
+		t.Fatalf("resolveLocation(abs) = %q err=%v", abs, err)
+	}
+	rel, err := client.resolveLocation("/v2/org/repo/blobs/uploads/session-1")
+	if err != nil || rel != "https://registry.example/v2/org/repo/blobs/uploads/session-1" {
+		t.Fatalf("resolveLocation(rel) = %q err=%v", rel, err)
+	}
+}
+
+func TestBlobExistsServerError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodHead {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "org/repo", Credentials{}, srv.Client())
+	if err != nil {
+		t.Fatalf("NewClient() err = %v", err)
+	}
+	if _, err := client.blobExists(context.Background(), "sha256:deadbeef"); err == nil {
+		t.Fatal("expected blob head error")
+	}
+}
+
+func TestStartBlobUploadMissingLocation(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/blobs/uploads/") {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "org/repo", Credentials{}, srv.Client())
+	if err != nil {
+		t.Fatalf("NewClient() err = %v", err)
+	}
+	if _, err := client.startBlobUpload(context.Background()); err == nil {
+		t.Fatal("expected missing Location header error")
+	}
+}
+
+func TestPutManifestError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/v2/org/repo/manifests/") {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "org/repo", Credentials{}, srv.Client())
+	if err != nil {
+		t.Fatalf("NewClient() err = %v", err)
+	}
+	if err := client.putManifest(context.Background(), "tag-1", []byte(`{}`)); err == nil {
+		t.Fatal("expected put manifest error")
+	}
+}
+
+func TestUploadBlobNilReader(t *testing.T) {
+	t.Parallel()
+
+	client, err := NewClient("https://quay.io", "org/repo", Credentials{}, http.DefaultClient)
+	if err != nil {
+		t.Fatalf("NewClient() err = %v", err)
+	}
+	if _, _, err := client.UploadBlob(context.Background(), nil, UploadBlobOptions{}); err == nil {
+		t.Fatal("expected error for nil reader")
+	}
+}

@@ -26,3 +26,18 @@ func TestArtifactConfigBlobForJob(t *testing.T) {
 		t.Fatalf("got %s", got)
 	}
 }
+
+func TestValidateEvaluationJobID(t *testing.T) {
+	if err := validateEvaluationJobID(""); err == nil {
+		t.Fatal("expected error for empty job id")
+	}
+	if err := validateEvaluationJobID("job-1"); err != nil {
+		t.Fatalf("validateEvaluationJobID() err = %v", err)
+	}
+}
+
+func TestEvaluationCardManifestTagEmptyJobID(t *testing.T) {
+	if got := EvaluationCardManifestTag("", "custom-tag"); got != "custom-tag" {
+		t.Fatalf("got %q", got)
+	}
+}

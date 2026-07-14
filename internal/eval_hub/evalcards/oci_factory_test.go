@@ -3,6 +3,7 @@ package evalcards
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -154,5 +155,107 @@ func TestOCIPublisherFactoryDefaultsTagToJobID(t *testing.T) {
 	}
 	if tag != "evaluation-card-job-42" {
 		t.Fatalf("tag = %q, want evaluation-card-job-42", tag)
+	}
+}
+
+func TestOCIPublisherFactoryNewPublisherValidationErrors(t *testing.T) {
+	t.Parallel()
+
+	validJob := func() *api.EvaluationJobResource {
+		return &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{ID: "job-1", Tenant: "tenant-a"},
+			},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Exports: &api.EvaluationExports{
+					OCI: &api.EvaluationExportsOCI{
+						Coordinates: api.OCICoordinates{
+							OCIHost:       "quay.io",
+							OCIRepository: "org/repo",
+						},
+						K8s: &api.OCIConnectionConfig{Connection: "oci-secret"},
+					},
+				},
+			},
+		}
+	}
+
+	factory := NewOCIPublisherFactory(stubDockerConfigSecretGetter{data: []byte(`{"auths":{}}`)}, http.DefaultClient)
+	cases := []struct {
+		name    string
+		factory OCIPublisherFactory
+		job     *api.EvaluationJobResource
+	}{
+		{name: "nil job", factory: factory, job: nil},
+		{name: "missing exports", factory: factory, job: &api.EvaluationJobResource{}},
+		{name: "missing oci export", factory: factory, job: &api.EvaluationJobResource{
+			EvaluationJobConfig: api.EvaluationJobConfig{Exports: &api.EvaluationExports{}},
+		}},
+		{name: "missing k8s secret", factory: factory, job: &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{Resource: api.Resource{Tenant: "tenant-a"}},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Exports: &api.EvaluationExports{OCI: &api.EvaluationExportsOCI{
+					Coordinates: api.OCICoordinates{OCIHost: "quay.io", OCIRepository: "org/repo"},
+				}},
+			},
+		}},
+		{name: "nil secret getter", factory: NewOCIPublisherFactory(nil, http.DefaultClient), job: validJob()},
+		{name: "nil http client", factory: NewOCIPublisherFactory(stubDockerConfigSecretGetter{}, nil), job: validJob()},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := tc.factory.NewPublisher(context.Background(), tc.job); err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	}
+}
+
+func TestOCIPublisherFactorySecretGetterError(t *testing.T) {
+	t.Parallel()
+
+	factory := NewOCIPublisherFactory(
+		stubDockerConfigSecretGetter{err: errors.New("secret unavailable")},
+		http.DefaultClient,
+	)
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1", Tenant: "tenant-a"}},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Exports: &api.EvaluationExports{
+				OCI: &api.EvaluationExportsOCI{
+					Coordinates: api.OCICoordinates{OCIHost: "quay.io", OCIRepository: "org/repo"},
+					K8s:         &api.OCIConnectionConfig{Connection: "oci-secret"},
+				},
+			},
+		},
+	}
+	if _, err := factory.NewPublisher(context.Background(), job); err == nil {
+		t.Fatal("expected secret getter error")
+	}
+}
+
+func TestOCIPublisherPublishEvalCardNotConfigured(t *testing.T) {
+	t.Parallel()
+
+	publisher := &ociPublisher{}
+	if err := publisher.PublishEvalCard(context.Background(), []byte(`{"card_version":"1.0"}`)); err == nil {
+		t.Fatal("expected error for unconfigured publisher")
+	}
+}
+
+func TestNoopOCIPublisherFactory(t *testing.T) {
+	t.Parallel()
+
+	factory := NewNoopOCIPublisherFactory()
+	publisher, err := factory.NewPublisher(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("NewPublisher() err = %v", err)
+	}
+	if err := publisher.PublishEvalCard(context.Background(), []byte(`{"card_version":"1.0"}`)); err != nil {
+		t.Fatalf("PublishEvalCard() err = %v", err)
+	}
+	if err := publisher.Close(); err != nil {
+		t.Fatalf("Close() err = %v", err)
 	}
 }
