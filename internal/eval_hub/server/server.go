@@ -84,7 +84,10 @@ func NewServer(logger *slog.Logger,
 		return nil, fmt.Errorf("validator is required for the server")
 	}
 
-	resultsExporter := evalcards.NewManager(logger, evalcards.ManagerConfig{MLFlowClient: mlflowClient})
+	resultsExporter := evalcards.NewManager(logger, evalcards.ManagerConfig{
+		MLFlowClient:        mlflowClient,
+		OCIPublisherFactory: newOCIPublisherFactory(logger, serviceConfig),
+	})
 
 	return &Server{
 		port:            serviceConfig.Service.Port,
