@@ -32,7 +32,6 @@ func (noopStorage) DeleteEvaluationJob(_ string) error { return nil }
 func (noopStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
 	return nil
 }
-func (noopStorage) UpdateEvaluationJobCardURL(_ string, _ string) error { return nil }
 func (noopStorage) UpdateEvaluationJobStatus(_ string, _ api.OverallState, _ *api.MessageInfo) error {
 	return nil
 }

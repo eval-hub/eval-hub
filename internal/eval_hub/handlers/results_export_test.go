@@ -22,11 +22,8 @@ func (s *stubResultsExporter) Export(_ context.Context, _ *api.EvaluationJobReso
 
 type exportResultsStorage struct {
 	noopStorage
-	job           *api.EvaluationJobResource
-	cardURL       string
-	updateID      string
-	updateCardErr error
-	getJobErr     error
+	job       *api.EvaluationJobResource
+	getJobErr error
 }
 
 func (s *exportResultsStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) {
@@ -36,22 +33,13 @@ func (s *exportResultsStorage) GetEvaluationJob(_ string) (*api.EvaluationJobRes
 	return s.job, nil
 }
 
-func (s *exportResultsStorage) UpdateEvaluationJobCardURL(id string, cardURL string) error {
-	if s.updateCardErr != nil {
-		return s.updateCardErr
-	}
-	s.updateID = id
-	s.cardURL = cardURL
-	return nil
-}
-
 func TestExportEvaluationResultsNilExporter(t *testing.T) {
 	t.Parallel()
 	h := &Handlers{}
 	h.exportEvaluationResults(context.Background(), &exportResultsStorage{}, "job-1", nil)
 }
 
-func TestExportEvaluationResultsPersistsCardURL(t *testing.T) {
+func TestExportEvaluationResultsExportsCard(t *testing.T) {
 	t.Parallel()
 	storage := &exportResultsStorage{
 		job: &api.EvaluationJobResource{
@@ -61,33 +49,14 @@ func TestExportEvaluationResultsPersistsCardURL(t *testing.T) {
 			},
 		},
 	}
-	h := &Handlers{resultsExporter: &stubResultsExporter{cardURL: "https://example.com/card.json"}}
+	exporter := &stubResultsExporter{cardURL: "https://example.com/card.json"}
+	h := &Handlers{resultsExporter: exporter}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	h.exportEvaluationResults(context.Background(), storage, "job-1", logger)
-
-	if storage.updateID != "job-1" || storage.cardURL != "https://example.com/card.json" {
-		t.Fatalf("expected card URL persisted, got id=%q url=%q", storage.updateID, storage.cardURL)
-	}
 }
 
-func TestExportEvaluationResultsSkipsWhenExportReturnsEmptyURL(t *testing.T) {
-	t.Parallel()
-	storage := &exportResultsStorage{
-		job: &api.EvaluationJobResource{
-			Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
-		},
-	}
-	h := &Handlers{resultsExporter: &stubResultsExporter{}}
-
-	h.exportEvaluationResults(context.Background(), storage, "job-1", nil)
-
-	if storage.updateID != "" {
-		t.Fatalf("expected no card URL persistence, got update for %q", storage.updateID)
-	}
-}
-
-func TestExportEvaluationResultsSkipsPersistWhenExportErrors(t *testing.T) {
+func TestExportEvaluationResultsExportError(t *testing.T) {
 	t.Parallel()
 	storage := &exportResultsStorage{
 		job: &api.EvaluationJobResource{
@@ -97,10 +66,6 @@ func TestExportEvaluationResultsSkipsPersistWhenExportErrors(t *testing.T) {
 	h := &Handlers{resultsExporter: &stubResultsExporter{err: errors.New("mlflow unavailable")}}
 
 	h.exportEvaluationResults(context.Background(), storage, "job-1", nil)
-
-	if storage.updateID != "" {
-		t.Fatalf("expected no card URL persistence on export error, got update for %q", storage.updateID)
-	}
 }
 
 func TestExportEvaluationResultsGetJobError(t *testing.T) {
@@ -109,10 +74,6 @@ func TestExportEvaluationResultsGetJobError(t *testing.T) {
 	h := &Handlers{resultsExporter: &stubResultsExporter{cardURL: "https://example.com/card.json"}}
 
 	h.exportEvaluationResults(context.Background(), storage, "job-1", nil)
-
-	if storage.updateID != "" {
-		t.Fatal("expected no persist when get job fails")
-	}
 }
 
 func TestExportEvaluationResultsNilJob(t *testing.T) {
@@ -121,25 +82,4 @@ func TestExportEvaluationResultsNilJob(t *testing.T) {
 	h := &Handlers{resultsExporter: &stubResultsExporter{cardURL: "https://example.com/card.json"}}
 
 	h.exportEvaluationResults(context.Background(), storage, "job-1", nil)
-
-	if storage.updateID != "" {
-		t.Fatal("expected no persist when job is nil")
-	}
-}
-
-func TestExportEvaluationResultsPersistError(t *testing.T) {
-	t.Parallel()
-	storage := &exportResultsStorage{
-		job: &api.EvaluationJobResource{
-			Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
-		},
-		updateCardErr: errors.New("persist failed"),
-	}
-	h := &Handlers{resultsExporter: &stubResultsExporter{cardURL: "https://example.com/card.json"}}
-
-	h.exportEvaluationResults(context.Background(), storage, "job-1", nil)
-
-	if storage.updateID != "" || storage.cardURL != "" {
-		t.Fatalf("expected no persisted card URL on persist error, got id=%q url=%q", storage.updateID, storage.cardURL)
-	}
 }

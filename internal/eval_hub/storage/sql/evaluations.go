@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
@@ -209,31 +208,6 @@ func (s *sqlStorage) UpdateEvaluationJobStatus(id string, state api.OverallState
 		return s.updateEvaluationJobTxn(txn, id, state, &entity)
 	})
 	return err
-}
-
-func (s *sqlStorage) UpdateEvaluationJobCardURL(id string, cardURL string) error {
-	if strings.TrimSpace(cardURL) == "" {
-		return nil
-	}
-	return s.withTransaction("update evaluation job card url", id, func(txn *sql.Tx) error {
-		evaluationJob, err := s.getEvaluationJobTransactional(txn, id)
-		if err != nil {
-			return err
-		}
-
-		results := evaluationJob.Results
-		if results == nil {
-			results = &api.EvaluationJobResults{}
-		}
-		results.CardURL = cardURL
-
-		entity := EvaluationJobEntity{
-			Config:  &evaluationJob.EvaluationJobConfig,
-			Status:  evaluationJob.Status,
-			Results: results,
-		}
-		return s.updateEvaluationJobTxn(txn, id, evaluationJob.Status.State, &entity)
-	})
 }
 
 func (s *sqlStorage) updateEvaluationJobTxn(txn *sql.Tx, id string, status api.OverallState, evaluationJob *EvaluationJobEntity) error {

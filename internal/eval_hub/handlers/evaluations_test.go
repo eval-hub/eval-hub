@@ -110,10 +110,6 @@ func (f *fakeStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
 	return nil
 }
 
-func (f *fakeStorage) UpdateEvaluationJobCardURL(_ string, _ string) error {
-	return nil
-}
-
 func (f *fakeStorage) DeleteEvaluationJob(id string) error {
 	f.deleteID = id
 	return nil

@@ -27,8 +27,6 @@ func (r *recordingResultsExporter) Export(_ context.Context, _ *api.EvaluationJo
 
 type terminalExportStorage struct {
 	*fakeStorage
-	cardURL  string
-	updateID string
 }
 
 func (s *terminalExportStorage) WithLogger(_ *slog.Logger) abstractions.Storage { return s }
@@ -42,12 +40,6 @@ func (s *terminalExportStorage) UpdateEvaluationJob(_ string, status *api.Status
 	if s.job != nil && s.job.Status != nil && status != nil && status.BenchmarkStatusEvent != nil {
 		s.job.Status.State = api.OverallState(status.BenchmarkStatusEvent.Status)
 	}
-	return nil
-}
-
-func (s *terminalExportStorage) UpdateEvaluationJobCardURL(id string, cardURL string) error {
-	s.updateID = id
-	s.cardURL = cardURL
 	return nil
 }
 
@@ -87,9 +79,6 @@ func TestHandleUpdateEvaluationSkipsCardExportWhenNotTerminal(t *testing.T) {
 	if exporter.called {
 		t.Fatal("expected card export to be skipped for non-terminal job")
 	}
-	if storage.updateID != "" {
-		t.Fatalf("expected card URL not to be persisted, got update for %q", storage.updateID)
-	}
 }
 
 func TestHandleUpdateEvaluationExportsCardOnTerminalTransition(t *testing.T) {
@@ -127,9 +116,6 @@ func TestHandleUpdateEvaluationExportsCardOnTerminalTransition(t *testing.T) {
 	}
 	if !exporter.called {
 		t.Fatal("expected card export when job transitions to terminal state")
-	}
-	if storage.updateID != "job-1" || storage.cardURL != "https://example.com/card.json" {
-		t.Fatalf("expected card URL persisted, got id=%q url=%q", storage.updateID, storage.cardURL)
 	}
 }
 

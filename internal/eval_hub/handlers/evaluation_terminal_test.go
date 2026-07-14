@@ -20,19 +20,11 @@ func (e *terminalTestExporter) Export(_ context.Context, _ *api.EvaluationJobRes
 
 type terminalTestStorage struct {
 	noopStorage
-	job      *api.EvaluationJobResource
-	updateID string
-	cardURL  string
+	job *api.EvaluationJobResource
 }
 
 func (s *terminalTestStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) {
 	return s.job, nil
-}
-
-func (s *terminalTestStorage) UpdateEvaluationJobCardURL(id string, cardURL string) error {
-	s.updateID = id
-	s.cardURL = cardURL
-	return nil
 }
 
 func TestOnEvaluationJobUpdatedSkipsExportWhenNotTerminal(t *testing.T) {
@@ -110,9 +102,6 @@ func TestOnEvaluationJobUpdatedExportsOnFailedTransition(t *testing.T) {
 
 	if !exporter.called {
 		t.Fatal("expected export when job transitions to failed")
-	}
-	if storage.updateID != "job-1" || storage.cardURL != "https://example.com/card.json" {
-		t.Fatalf("expected card URL persisted, got id=%q url=%q", storage.updateID, storage.cardURL)
 	}
 }
 

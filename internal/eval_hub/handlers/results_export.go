@@ -26,17 +26,7 @@ func (h *Handlers) exportEvaluationResults(ctx context.Context, storage abstract
 	}
 
 	card := cards.NewEvaluationCard(job)
-	cardURL, err := h.resultsExporter.Export(ctx, job, card)
-	if err != nil {
+	if _, err := h.resultsExporter.Export(ctx, job, card); err != nil {
 		logger.Error("Failed to export evaluation results", "job_id", jobID, "error", err)
 	}
-	if cardURL == "" {
-		return
-	}
-
-	if err := storage.UpdateEvaluationJobCardURL(jobID, cardURL); err != nil {
-		logger.Error("Failed to persist evaluation card URL", "job_id", jobID, "card_url", cardURL, "error", err)
-		return
-	}
-	logger.Info("Persisted evaluation card URL", "job_id", jobID, "card_url", cardURL)
 }
