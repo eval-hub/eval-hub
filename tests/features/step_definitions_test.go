@@ -2209,6 +2209,26 @@ func (tc *scenarioConfig) theMCPResponseArrayAtPathShouldHaveLengthAtLeast(jsonP
 
 // MCP JSONPath validation steps (with filter expression support)
 
+// Helper: Check if JSONPath uses filter or wildcard syntax
+func jsonPathUsesFilterOrWildcard(jsonPath string) bool {
+	return strings.Contains(jsonPath, "[?(") || strings.Contains(jsonPath, "[*]") || strings.Contains(jsonPath, "..")
+}
+
+// Helper: Conditionally unwrap single-element arrays from JSONPath filter results
+func unwrapIfFilterResult(value interface{}, jsonPath string) interface{} {
+	// Only unwrap if the JSONPath uses filter/wildcard syntax
+	if !jsonPathUsesFilterOrWildcard(jsonPath) {
+		return value
+	}
+
+	// Filter expressions return arrays - unwrap single-element results
+	if arr, ok := value.([]interface{}); ok && len(arr) == 1 {
+		return arr[0]
+	}
+
+	return value
+}
+
 // Helper: Extract value at JSONPath from MCP response (with substitution, escaping, and unwrapping)
 func (tc *scenarioConfig) getMCPValueAtJSONPath(jsonPath string) (interface{}, error) {
 	// Substitute any {{value:key}} patterns
@@ -2264,10 +2284,8 @@ func (tc *scenarioConfig) theMCPResponseAtJSONPathShouldEqual(jsonPath, expected
 		return tc.logError(err)
 	}
 
-	// JSONPath filters return arrays - unwrap single-element arrays for scalar comparison
-	if arr, ok := foundValue.([]interface{}); ok && len(arr) == 1 {
-		foundValue = arr[0]
-	}
+	// Conditionally unwrap single-element arrays from filter results
+	foundValue = unwrapIfFilterResult(foundValue, jsonPath)
 
 	// Convert to string for comparison
 	var actualValue string
@@ -2302,10 +2320,8 @@ func (tc *scenarioConfig) theMCPResponseAtJSONPathShouldBeArray(jsonPath string)
 		return tc.logError(err)
 	}
 
-	// JSONPath filters return arrays - unwrap single-element filter results
-	if arr, ok := foundValue.([]interface{}); ok && len(arr) == 1 {
-		foundValue = arr[0]
-	}
+	// Conditionally unwrap single-element arrays from filter results
+	foundValue = unwrapIfFilterResult(foundValue, jsonPath)
 
 	if _, ok := foundValue.([]interface{}); !ok {
 		return tc.logError(fmt.Errorf("value at JSONPath %s is not an array, got type %T with value: %v", jsonPath, foundValue, foundValue))
@@ -2320,10 +2336,8 @@ func (tc *scenarioConfig) theMCPResponseAtJSONPathShouldNotBeEmpty(jsonPath stri
 		return tc.logError(err)
 	}
 
-	// JSONPath filters return arrays - unwrap single-element arrays for scalar check
-	if arr, ok := foundValue.([]interface{}); ok && len(arr) == 1 {
-		foundValue = arr[0]
-	}
+	// Conditionally unwrap single-element arrays from filter results
+	foundValue = unwrapIfFilterResult(foundValue, jsonPath)
 
 	// Check if value is empty based on type
 	switch v := foundValue.(type) {
@@ -2352,10 +2366,8 @@ func (tc *scenarioConfig) theMCPResponseAtJSONPathShouldHaveAtLeastNItems(jsonPa
 		return tc.logError(err)
 	}
 
-	// JSONPath filters return arrays - unwrap single-element filter results
-	if arr, ok := foundValue.([]interface{}); ok && len(arr) == 1 {
-		foundValue = arr[0]
-	}
+	// Conditionally unwrap single-element arrays from filter results
+	foundValue = unwrapIfFilterResult(foundValue, jsonPath)
 
 	arr, ok := foundValue.([]interface{})
 	if !ok {
