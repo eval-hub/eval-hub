@@ -1,0 +1,23 @@
+{
+    "name": "my-custom-evaluator",
+    "title": "Custom Internal Evaluator",
+    "description": "Internal evaluation adapter for domain-specific benchmarks",
+    "tags": [
+        "custom",
+        "internal"
+    ],
+    "agent": {
+        "evaluates": [
+            "accuracy",
+            "reasoning",
+            "custom-metrics"
+        ],
+        "target_type": "model"
+    },
+    "benchmarks": [
+        {
+            "id": "custom_domain_test",
+            "name": "Domain-Specific Test"
+        }
+    ]
+}

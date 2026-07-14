@@ -802,3 +802,159 @@ Feature: Collections Endpoint
     And the response should equal the value "3" at path "$.benchmarks[0].weight"
     And the response should equal the value "2" at path "$.benchmarks[1].weight"
     And the response should equal the value "3" at path "$.benchmarks[2].weight"
+
+  Scenario: Update collection to add agent metadata via PUT
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/collections" with body:
+      """
+      {
+        "name": "test-collection-update-agent",
+        "description": "Test collection for agent metadata update",
+        "category": "test",
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness"
+          }
+        ]
+      }
+      """
+    Then the response code should be 201
+    And the "resource.id" field in the response should be saved as "value:collection_id"
+    When I send a PUT request to "/api/v1/evaluations/collections/{{value:collection_id}}" with body:
+      """
+      {
+        "name": "test-collection-update-agent",
+        "category": "test",
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness"
+          }
+        ],
+        "agent": {
+          "summary": "Updated collection for testing model accuracy",
+          "evaluates": ["accuracy"]
+        }
+      }
+      """
+    Then the response code should be 200
+    And the response should contain the value "Updated collection for testing model accuracy" at path "agent.summary"
+    And the array at path "agent.evaluates" in the response should have length 1
+
+  Scenario: Create and get collection with agent metadata
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/collections" with body:
+      """
+      {
+        "name": "reasoning-benchmark-suite",
+        "title": "Reasoning Benchmark Suite",
+        "category": "reasoning",
+        "description": "Comprehensive collection of reasoning benchmarks for evaluating logical thinking and problem-solving capabilities",
+        "tags": [
+          "reasoning",
+          "logic",
+          "collection"
+        ],
+        "agent": {
+          "evaluates": [
+            "reasoning",
+            "logic",
+            "problem-solving"
+          ],
+          "summary": "Collection of benchmarks testing logical reasoning and problem-solving abilities",
+          "recommended_when": [
+            "User wants to assess model reasoning capabilities",
+            "User needs comprehensive logic evaluation",
+            "User is comparing reasoning performance across models"
+          ],
+          "complements": [
+            "math-benchmark-suite",
+            "knowledge-benchmark-suite"
+          ],
+          "hints": [
+            "Includes both deductive and inductive reasoning tasks",
+            "Best used with models that support chain-of-thought prompting"
+          ],
+          "result_interpretation": [
+            "Higher scores indicate stronger reasoning abilities",
+            "Scores above 0.7 suggest good logical reasoning capability"
+          ]
+        },
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness"
+          },
+          {
+            "id": "hellaswag",
+            "provider_id": "lm_evaluation_harness"
+          }
+        ]
+      }
+      """
+    Then the response code should be 201
+    And the array at path "agent.evaluates" in the response should have length at least 1
+    And the array at path "agent.result_interpretation" in the response should have length at least 2
+    When I send a GET request to "/api/v1/evaluations/collections/{id}"
+    Then the response code should be 200
+    And the response should contain "agent"
+    And the array at path "agent.hints" in the response should have length at least 2
+
+  @negative
+  Scenario: PATCH collection agent metadata is not supported
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/collections" with body:
+      """
+      {
+        "name": "test-collection-patch-not-supported",
+        "description": "Test collection",
+        "category": "general",
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness"
+          }
+        ]
+      }
+      """
+    Then the response code should be 201
+    When I send a PATCH request to "/api/v1/evaluations/collections/{id}" with body:
+      """
+      [
+        {
+          "op": "add",
+          "path": "/agent",
+          "value": {
+            "evaluates": ["accuracy"],
+            "summary": "Test collection for accuracy evaluation"
+          }
+        }
+      ]
+      """
+    Then the response code should be 400
+    And the response should contain the value "unallowed_patch" at path "$.message_code"
+
+  @negative
+  Scenario: Create collection with agent summary too long
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/collections" with body:
+      """
+      {
+        "name": "test-collection-summary-too-long",
+        "description": "Test collection for validation",
+        "category": "general",
+        "agent": {
+          "evaluates": ["accuracy"],
+          "summary": "This is a test summary that exceeds the maximum allowed length of 200 characters for the summary field. The validation should reject this request because it contains more than 200 characters in total. Extra padding text here."
+        },
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness"
+          }
+        ]
+      }
+      """
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"

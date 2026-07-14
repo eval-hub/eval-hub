@@ -14,7 +14,7 @@ Feature: MCP Tools
     And the MCP response should contain "lm_evaluation_harness"
     And the MCP response should contain "lighteval"
     And the MCP response should contain "garak"
-  
+
   Scenario: Discover providers filtered by target_type model returns only model providers
     When I call MCP tool "discover_providers" with arguments:
       """
@@ -64,7 +64,18 @@ Feature: MCP Tools
     And the MCP response should contain "providers"
     And the MCP response array at path "providers" should have length 0
 
-  Scenario: Discover providers includes agent metadata when available
+  Scenario: Discover providers filtered by non-matching evaluates returns empty
+    When I call MCP tool "discover_providers" with arguments:
+      """
+      {
+        "evaluates": ["nonexistent_capability_xyz"]
+      }
+      """
+    Then the MCP tool call should succeed
+    And the MCP response should contain "providers"
+    And the MCP response array at path "providers" should have length 0
+
+  Scenario: Discover providers includes complete agent metadata structure
     When I call MCP tool "discover_providers" with arguments:
       """
       {
@@ -72,11 +83,155 @@ Feature: MCP Tools
       }
       """
     Then the MCP tool call should succeed
-    And the MCP response should contain "summary"
-    And the MCP response should contain "evaluates"
-    And the MCP response should contain "hints"
-    And the MCP response should contain "recommended_when"
-  
+    And the MCP response array at path "providers" should have length at least 1
+    And the MCP response at JSONPath "$.providers[?(@.id==\"lm_evaluation_harness\")].target_type" should equal "model"
+    And the MCP response at JSONPath "$.providers[?(@.id==\"lm_evaluation_harness\")].summary" should not be empty
+    And the MCP response at JSONPath "$.providers[?(@.id==\"lm_evaluation_harness\")].evaluates" should be an array
+    And the MCP response at JSONPath "$.providers[?(@.id==\"lm_evaluation_harness\")].evaluates" should have at least 1 items
+    And the MCP response at JSONPath "$.providers[?(@.id==\"lm_evaluation_harness\")].hints" should be an array
+    And the MCP response at JSONPath "$.providers[?(@.id==\"lm_evaluation_harness\")].hints" should have at least 1 items
+    And the MCP response at JSONPath "$.providers[?(@.id==\"lm_evaluation_harness\")].recommended_when" should be an array
+    And the MCP response at JSONPath "$.providers[?(@.id==\"lm_evaluation_harness\")].recommended_when" should have at least 1 items
+    And the MCP response at JSONPath "$.providers[?(@.id==\"lm_evaluation_harness\")].complements" should be an array
+    And the MCP response at JSONPath "$.providers[?(@.id==\"lm_evaluation_harness\")].complements" should have at least 1 items
+    And the MCP response at JSONPath "$.providers[?(@.id==\"lm_evaluation_harness\")].result_interpretation" should be an array
+    And the MCP response at JSONPath "$.providers[?(@.id==\"lm_evaluation_harness\")].result_interpretation" should have at least 1 items
+
+  Scenario: Discover providers filtered by multiple evaluates capabilities validates AND logic
+    When I call MCP tool "discover_providers" with arguments:
+      """
+      {
+        "evaluates": ["accuracy", "reasoning"]
+      }
+      """
+    Then the MCP tool call should succeed
+    And the MCP response array at path "providers" should have length at least 1
+    # Verify lm_evaluation_harness matches (has both accuracy AND reasoning)
+    And the MCP response should contain "lm_evaluation_harness"
+    And the MCP response at JSONPath "$.providers[?(@.id==\"lm_evaluation_harness\")].evaluates" should be an array
+    And the MCP response at JSONPath "$.providers[?(@.id==\"lm_evaluation_harness\")].evaluates" should have at least 2 items
+
+  Scenario: User provider with agent metadata appears in discover_providers with complete fields
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider_with_agent_metadata_full.json"
+    Then the response code should be 201
+    When I call MCP tool "discover_providers" with arguments:
+      """
+      {
+        "target_type": "model"
+      }
+      """
+    Then the MCP tool call should succeed
+    And the MCP response array at path "providers" should have length at least 2
+    And the MCP response at JSONPath "$.providers[?(@.name==\"my-custom-evaluator\")].title" should equal "Custom Internal Evaluator"
+    And the MCP response at JSONPath "$.providers[?(@.name==\"my-custom-evaluator\")].summary" should equal "Custom evaluator for internal domain-specific benchmarks"
+    And the MCP response at JSONPath "$.providers[?(@.name==\"my-custom-evaluator\")].target_type" should equal "model"
+    And the MCP response at JSONPath "$.providers[?(@.name==\"my-custom-evaluator\")].evaluates" should be an array
+    And the MCP response at JSONPath "$.providers[?(@.name==\"my-custom-evaluator\")].evaluates" should have at least 3 items
+    And the MCP response at JSONPath "$.providers[?(@.name==\"my-custom-evaluator\")].hints" should be an array
+    And the MCP response at JSONPath "$.providers[?(@.name==\"my-custom-evaluator\")].hints" should have at least 2 items
+    And the MCP response at JSONPath "$.providers[?(@.name==\"my-custom-evaluator\")].result_interpretation" should be an array
+    And the MCP response at JSONPath "$.providers[?(@.name==\"my-custom-evaluator\")].result_interpretation" should have at least 2 items
+    And the MCP response at JSONPath "$.providers[?(@.name==\"my-custom-evaluator\")].recommended_when" should be an array
+    And the MCP response at JSONPath "$.providers[?(@.name==\"my-custom-evaluator\")].recommended_when" should have at least 2 items
+    And the MCP response at JSONPath "$.providers[?(@.name==\"my-custom-evaluator\")].complements" should be an array
+    And the MCP response at JSONPath "$.providers[?(@.name==\"my-custom-evaluator\")].complements" should have at least 1 items
+
+  Scenario: Discover providers then submit evaluation job with known provider
+    When I call MCP tool "discover_providers" with arguments:
+      """
+      {
+        "target_type": "model",
+        "evaluates": ["accuracy"]
+      }
+      """
+    Then the MCP tool call should succeed
+    And the MCP response should contain "lm_evaluation_harness"
+    When I call MCP tool "submit_evaluation" with arguments:
+      """
+      {
+        "name": "discovered_provider_job",
+        "description": "Job using provider discovered via discover_providers",
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}"
+        },
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness"
+          }
+        ]
+      }
+      """
+    Then the MCP tool call should succeed
+    And the MCP response should contain the value "pending" at path "$.state"
+
+  Scenario: Discover providers filtered by target_type agent returns matching providers
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/providers" with body:
+      """
+      {
+        "name": "test-agent-provider-mcp",
+        "title": "Test Agent Provider for MCP",
+        "description": "Agent provider for MCP discover test",
+        "agent": {
+          "evaluates": ["reasoning", "planning"],
+          "target_type": "agent",
+          "summary": "Evaluates AI agent capabilities"
+        },
+        "benchmarks": [
+          {
+            "id": "test_agent_benchmark",
+            "name": "Agent Test Benchmark"
+          }
+        ]
+      }
+      """
+    Then the response code should be 201
+    # Now discover providers with target_type agent filter
+    When I call MCP tool "discover_providers" with arguments:
+      """
+      {
+        "target_type": "agent"
+      }
+      """
+    Then the MCP tool call should succeed
+    And the MCP response should contain "test-agent-provider-mcp"
+    And the MCP response at JSONPath "$.providers[?(@.name==\"test-agent-provider-mcp\")].target_type" should equal "agent"
+
+  Scenario: Discover providers filtered by target_type inference_server returns matching providers
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/providers" with body:
+      """
+      {
+        "name": "test-inference-server-provider-mcp",
+        "title": "Test Inference Server Provider for MCP",
+        "description": "Inference server provider for MCP discover test",
+        "agent": {
+          "evaluates": ["throughput", "latency"],
+          "target_type": "inference_server",
+          "summary": "Evaluates inference server performance"
+        },
+        "benchmarks": [
+          {
+            "id": "test_server_benchmark",
+            "name": "Server Performance Benchmark"
+          }
+        ]
+      }
+      """
+    Then the response code should be 201
+    When I call MCP tool "discover_providers" with arguments:
+      """
+      {
+        "target_type": "inference_server"
+      }
+      """
+    Then the MCP tool call should succeed
+    And the MCP response should contain "test-inference-server-provider-mcp"
+    And the MCP response at JSONPath "$.providers[?(@.name==\"test-inference-server-provider-mcp\")].target_type" should equal "inference_server"
+
   Scenario: Submit evaluation job via MCP with benchmarks
     When I call MCP tool "submit_evaluation" with arguments:
       """
@@ -468,22 +623,27 @@ Feature: MCP Tools
     And the MCP resource should contain the value "lm_evaluation_harness" at path "$.resource.id"
     And the MCP resource should contain the value "LM Evaluation Harness" at path "$.name"
   
-  Scenario: Read benchmarks resource via MCP
+  Scenario: Read benchmarks resource via MCP includes agent metadata
     When I read MCP resource "evalhub://benchmarks"
     Then the MCP resource read should succeed
     And the MCP resource should contain "arc_easy"
     And the MCP resource should contain "hellaswag"
+    And the MCP resource should contain "agent"
+    And the MCP resource should contain "result_interpretation"
   
   Scenario: Read benchmarks filtered by label via MCP
     When I read MCP resource "evalhub://benchmarks?label=reasoning"
     Then the MCP resource read should succeed
     And the MCP resource should contain "arc_easy"
 
-  Scenario: Read specific benchmark resource by ID via MCP
+  Scenario: Read specific benchmark resource by ID via MCP includes agent metadata
     When I read MCP resource "evalhub://benchmarks/arc_easy"
     Then the MCP resource read should succeed
     And the MCP resource should contain the value "arc_easy" at path "$.id"
     And the MCP resource should contain the value "reasoning" at path "$.category"
+    And the MCP resource should contain "agent"
+    And the MCP resource should contain "result_interpretation"
+    And the MCP resource should contain "score_ranges"
 
   Scenario: Read collections resource via MCP
     When I read MCP resource "evalhub://collections"
