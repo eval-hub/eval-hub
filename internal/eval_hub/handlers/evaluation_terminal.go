@@ -26,7 +26,7 @@ func (h *Handlers) onEvaluationJobUpdated(
 		return
 	}
 
-	h.exportEvaluationResults(ctx, storage, job.Resource.ID, logger)
+	h.exportEvaluationResults(ctx, job, logger)
 
 	if h.serviceConfig == nil || !h.serviceConfig.IsOTELJobContainerLogsEnabled() || h.runtime == nil {
 		return
