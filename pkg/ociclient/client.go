@@ -397,7 +397,7 @@ func (c *Client) do(req *http.Request) (*http.Response, error) {
 		return resp, nil
 	}
 	_ = resp.Body.Close()
-	if err := c.auth.refreshToken(); err != nil {
+	if err := c.auth.refreshToken(req.Context()); err != nil {
 		return nil, fmt.Errorf("refresh registry token: %w", err)
 	}
 	retry, err := c.cloneRequest(req)

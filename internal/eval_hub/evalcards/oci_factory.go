@@ -86,7 +86,10 @@ func buildOCIHTTPClientTLS(caCertPath string, insecureSkipVerify bool, logger *s
 		}
 		return nil, fmt.Errorf("read oci ca cert %q: %w", caCertPath, err)
 	}
-	pool := x509.NewCertPool()
+	pool, err := x509.SystemCertPool()
+	if err != nil {
+		pool = x509.NewCertPool()
+	}
 	if !pool.AppendCertsFromPEM(caPEM) {
 		return nil, fmt.Errorf("parse oci ca cert %q", caCertPath)
 	}

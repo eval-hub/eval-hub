@@ -8,6 +8,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/evalcards"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/k8s"
+	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/ociclient"
 )
 
@@ -34,8 +35,9 @@ func (g *kubernetesDockerConfigSecretGetter) GetDockerConfigJSON(ctx context.Con
 	return ociclient.DockerConfigJSONFromSecret(secret.Data)
 }
 
-// newOCIPublisherFactory wires the real OCI exporter in cluster mode. Local mode and startup
-// failures fall back to the noop factory so the API service can still start without registry access.
+// newOCIPublisherFactory wires the real OCI exporter in cluster mode. Local mode uses a noop
+// factory; cluster initialization failures return an error-aware factory so OCI export requests
+// fail explicitly instead of being silently discarded.
 func newOCIPublisherFactory(logger *slog.Logger, serviceConfig *config.Config) evalcards.OCIPublisherFactory {
 	if serviceConfig == nil || serviceConfig.Service == nil || serviceConfig.Service.LocalMode {
 		return evalcards.NewNoopOCIPublisherFactory()
@@ -43,19 +45,31 @@ func newOCIPublisherFactory(logger *slog.Logger, serviceConfig *config.Config) e
 	helper, err := k8s.NewKubernetesHelper()
 	if err != nil {
 		if logger != nil {
-			logger.Warn("OCI export disabled: kubernetes client unavailable", "error", err)
+			logger.Warn("OCI export unavailable: kubernetes client initialization failed", "error", err)
 		}
-		return evalcards.NewNoopOCIPublisherFactory()
+		return newUnavailableOCIPublisherFactory(fmt.Errorf("oci export unavailable: kubernetes client: %w", err))
 	}
 	httpClient, err := evalcards.NewOCIHTTPClient(serviceConfig, serviceConfig.IsOTELEnabled(), logger)
 	if err != nil {
 		if logger != nil {
-			logger.Warn("OCI export disabled: failed to create oci http client", "error", err)
+			logger.Warn("OCI export unavailable: failed to create oci http client", "error", err)
 		}
-		return evalcards.NewNoopOCIPublisherFactory()
+		return newUnavailableOCIPublisherFactory(fmt.Errorf("oci export unavailable: http client: %w", err))
 	}
 	return evalcards.NewOCIPublisherFactory(
 		newKubernetesDockerConfigSecretGetter(helper),
 		httpClient,
 	)
+}
+
+type unavailableOCIPublisherFactory struct {
+	err error
+}
+
+func newUnavailableOCIPublisherFactory(err error) evalcards.OCIPublisherFactory {
+	return &unavailableOCIPublisherFactory{err: err}
+}
+
+func (f *unavailableOCIPublisherFactory) NewPublisher(_ context.Context, _ *api.EvaluationJobResource) (evalcards.OCIPublisher, error) {
+	return nil, f.err
 }

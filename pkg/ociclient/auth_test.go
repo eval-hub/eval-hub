@@ -1,6 +1,7 @@
 package ociclient
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -75,7 +76,7 @@ func TestAuthenticatorRefreshToken(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	auth := newAuthenticator(srv.URL, "org/repo", Credentials{Username: "user", Password: "pass"}, srv.Client())
-	if err := auth.refreshToken(); err != nil {
+	if err := auth.refreshToken(context.Background()); err != nil {
 		t.Fatalf("refreshToken() err = %v", err)
 	}
 	if auth.token != "registry-token" {
@@ -101,7 +102,7 @@ func TestAuthenticatorRefreshTokenAccessTokenField(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	auth := newAuthenticator(srv.URL, "org/repo", Credentials{Username: "user", Password: "pass"}, srv.Client())
-	if err := auth.refreshToken(); err != nil {
+	if err := auth.refreshToken(context.Background()); err != nil {
 		t.Fatalf("refreshToken() err = %v", err)
 	}
 	if auth.token != "access-token" {
@@ -123,7 +124,7 @@ func TestAuthenticatorRefreshTokenNoAuthRequired(t *testing.T) {
 
 	auth := newAuthenticator(srv.URL, "org/repo", Credentials{}, srv.Client())
 	auth.token = "stale"
-	if err := auth.refreshToken(); err != nil {
+	if err := auth.refreshToken(context.Background()); err != nil {
 		t.Fatalf("refreshToken() err = %v", err)
 	}
 	if auth.token != "" {
@@ -149,8 +150,46 @@ func TestAuthenticatorCreateNewTokenErrors(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	auth := newAuthenticator(srv.URL, "org/repo", Credentials{Username: "user", Password: "bad"}, srv.Client())
-	if err := auth.refreshToken(); err == nil {
+	if err := auth.refreshToken(context.Background()); err == nil {
 		t.Fatal("expected token request failure")
+	}
+}
+
+func TestValidateTokenRealmURL(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		registry string
+		nextURL  string
+		wantErr  bool
+	}{
+		{name: "https realm for https registry", registry: "https://quay.io", nextURL: "https://quay.io/v2/token", wantErr: false},
+		{name: "http realm for http registry", registry: "http://registry.local:5000", nextURL: "http://registry.local:5000/token", wantErr: false},
+		{name: "http realm for https registry", registry: "https://quay.io", nextURL: "http://quay.io/v2/token", wantErr: true},
+		{name: "unsupported scheme", registry: "https://quay.io", nextURL: "ftp://quay.io/token", wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := validateTokenRealmURL(tc.registry, tc.nextURL)
+			if tc.wantErr && err == nil {
+				t.Fatal("expected error")
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("validateTokenRealmURL() err = %v", err)
+			}
+		})
+	}
+}
+
+func TestCreateNewTokenRejectsInsecureRealmBeforeBasicAuth(t *testing.T) {
+	t.Parallel()
+
+	auth := newAuthenticator("https://registry.example", "org/repo", Credentials{Username: "user", Password: "pass"}, http.DefaultClient)
+	err := auth.createNewToken(context.Background(), "http://registry.example/token")
+	if err == nil {
+		t.Fatal("expected insecure token realm error")
 	}
 }
 

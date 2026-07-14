@@ -1,10 +1,12 @@
 package ociclient
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -45,8 +47,8 @@ func (a *authenticator) authorize(req *http.Request) {
 // refreshToken performs the OCI Distribution token flow after a 401 response. Registries issue
 // short-lived Bearer tokens scoped to repository push/pull; this exchanges dockerconfigjson
 // credentials for that token.
-func (a *authenticator) refreshToken() error {
-	nextURL, err := a.initiateChallenge()
+func (a *authenticator) refreshToken(ctx context.Context) error {
+	nextURL, err := a.initiateChallenge(ctx)
 	if err != nil {
 		return err
 	}
@@ -54,19 +56,19 @@ func (a *authenticator) refreshToken() error {
 		a.token = ""
 		return nil
 	}
-	return a.createNewToken(nextURL)
+	return a.createNewToken(ctx, nextURL)
 }
 
 // initiateChallenge probes GET /v2/ and parses the WWW-Authenticate Bearer challenge to find
 // the token endpoint URL. An empty return means the registry did not require authentication.
-func (a *authenticator) initiateChallenge() (string, error) {
+func (a *authenticator) initiateChallenge(ctx context.Context) (string, error) {
 	scheme := "https"
 	if strings.HasPrefix(a.registry, "http://") {
 		scheme = "http"
 	}
 	host := strings.TrimPrefix(strings.TrimPrefix(a.registry, "https://"), "http://")
 	authURL := scheme + "://" + host + "/v2"
-	req, err := http.NewRequest(http.MethodGet, authURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, authURL, nil)
 	if err != nil {
 		return "", err
 	}
@@ -103,8 +105,11 @@ func (a *authenticator) initiateChallenge() (string, error) {
 
 // createNewToken requests a Bearer token from the registry token service using HTTP basic auth
 // with the dockerconfigjson username and password.
-func (a *authenticator) createNewToken(nextURL string) error {
-	req, err := http.NewRequest(http.MethodGet, nextURL, nil)
+func (a *authenticator) createNewToken(ctx context.Context, nextURL string) error {
+	if err := validateTokenRealmURL(a.registry, nextURL); err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, nextURL, nil)
 	if err != nil {
 		return err
 	}
@@ -139,6 +144,25 @@ func (a *authenticator) createNewToken(nextURL string) error {
 		return fmt.Errorf("auth response missing token")
 	}
 	return nil
+}
+
+// validateTokenRealmURL rejects insecure HTTP token endpoints when the registry is configured for HTTPS.
+func validateTokenRealmURL(registry, nextURL string) error {
+	parsed, err := url.Parse(nextURL)
+	if err != nil {
+		return fmt.Errorf("parse token realm url: %w", err)
+	}
+	switch parsed.Scheme {
+	case "https":
+		return nil
+	case "http":
+		if strings.HasPrefix(registry, "https://") {
+			return fmt.Errorf("insecure token realm %q for https registry", nextURL)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported token realm scheme %q", parsed.Scheme)
+	}
 }
 
 // parseBearerRealm extracts the token service URL from a WWW-Authenticate: Bearer header and
