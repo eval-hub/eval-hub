@@ -78,9 +78,12 @@ When running in local server mode, the tests will:
 | `@collections` | Used to run just the collections tests |
 | `@evaluations` | Used to run just the evaluations tests |
 | `@providers` | Used to run just the providers tests |
+| `@mcp` | MCP tool and resource scenarios in `mcp.feature` |
 | `@cluster` | Tests that require the Kubernetes cluster runtime (default `make test-fvt` excludes them via `~@cluster` in `FVT_TAGS`) |
 | `@local_runtime` | Scenarios that require a **fully functional local evaluation runtime**—eval-hub in local mode (embedded FVT server with `LocalMode`, or a binary started with `--local`). Use for flows such as local evaluation jobs that run to completion. Distinct from `@cluster`. **Excluded by default for `make test-fvt`/CI** via `~@local_runtime` in Makefile `FVT_TAGS`; `suite_test.go` only defaults to `~@ignore`, so plain `go test ./tests/features/...` does not exclude `@local_runtime` unless you set `GODOG_TAGS` |
 | `@local` | Still used on some evaluation scenarios in `evaluations.feature` for local (non-cluster) job flows; prefer `@local_runtime` for new scenarios that depend on full local job/runtime execution |
+| `@gpu` | GPU resource management scenarios in `gpu_resources.feature`; requires a cluster with GPU test setup (see `GPU_TESTING.md`) |
+| `@kueue` | Scenarios that require Kueue queue integration (`evaluation_jobs.feature`, `gpu_resources.feature`) |
 | `@negative` | Used to mark this as a negative test |
 | `@mlflow` | Tests that only work when running with a configured mlflow service |
 | `@slow` | Tests that take more than the normal timeout (currently 1 hour) |
@@ -89,6 +92,8 @@ When running in local server mode, the tests will:
 | `@disconnected` | Used by the Jenkins jobs and set when running on a disconnected cluster |
 | `@hardware_profile` | Hardware profile API and Kubernetes Job adapter resource tests in `evaluation_jobs.feature`; require pipeline env vars (see below). |
 | `@metrics` | Prometheus `/metrics` scrape tests in `metrics.feature`; in cluster/remote mode require `METRICS_URL` (see below). |
+| `@logs` | Evaluation job log collection scenarios in `evaluation_local_jobs.feature` and `evaluation_jobs.feature` |
+| `@gha-wheel-sanity` | Local-runtime wheel validation scenario run by `scripts/gha_wheel_sanity_test.sh` during GHA wheel checks |
 
 ### Metrics tests (`@metrics`)
 
