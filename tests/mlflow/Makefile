@@ -5,7 +5,7 @@ VENV_DIR ?= .venv
 PYTHON ?= 3.14
 
 MLFLOW_OLD_VERSION ?= 3.8.1
-MLFLOW_LATEST_VERSION ?= 3.13.0
+MLFLOW_LATEST_VERSION ?= 3.14.0
 MLFLOW_VERSION ?= $(MLFLOW_LATEST_VERSION)
 
 MLFLOW_HOST ?= 127.0.0.1
@@ -14,6 +14,8 @@ MLFLOW_BACKEND_STORE_URI ?= sqlite:///bin/mlflow.db
 MLFLOW_DEFAULT_ARTIFACT_ROOT ?= ./bin/mlruns
 MLFLOW_TRACKING_URI ?= http://127.0.0.1:5000
 MLFLOW_ENABLE_WORKSPACES ?= false
+MLFLOW_DISABLE_SECURITY_MIDDLEWARE ?= false
+MLFLOW_LOG_FILE ?= bin/mlflow_$(MLFLOW_PORT).log
 
 help: ## Show MLflow dev targets
 	@grep -E '^[a-zA-Z0-9_.-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
@@ -47,12 +49,14 @@ start-mlflow: install-mlflow ## Run MLflow server locally in the background
 	@echo "   Port: $(MLFLOW_PORT)"
 	@echo "   Backend: $(MLFLOW_BACKEND_STORE_URI)"
 	@echo "   Artifacts: $(MLFLOW_DEFAULT_ARTIFACT_ROOT)"
+	@echo "   Log file: $(MLFLOW_LOG_FILE)"
 	@echo ""
 	@MLFLOW_HOST=$(MLFLOW_HOST) \
 	 MLFLOW_PORT=$(MLFLOW_PORT) \
 	 MLFLOW_BACKEND_STORE_URI=$(MLFLOW_BACKEND_STORE_URI) \
 	 MLFLOW_DEFAULT_ARTIFACT_ROOT=$(MLFLOW_DEFAULT_ARTIFACT_ROOT) \
 	 MLFLOW_ENABLE_WORKSPACES=$(MLFLOW_ENABLE_WORKSPACES) \
+	 MLFLOW_LOG_FILE=$(MLFLOW_LOG_FILE) \
 	 VENV_DIR=$(VENV_DIR) \
 	 ./scripts/run_mlflow.sh
 	@echo "   MLflow server started in background. Use 'make stop-mlflow' to stop it."
@@ -60,8 +64,15 @@ start-mlflow: install-mlflow ## Run MLflow server locally in the background
 	@echo "   To use the server in your tests:"
 	@echo "   export MLFLOW_TRACKING_URI=$(MLFLOW_TRACKING_URI)"
 	@echo ""
+	@echo "   Server logs:"
+	@echo "   tail -f $(MLFLOW_LOG_FILE)"
+	@echo ""
 	@echo "   To stop the server:"
 	@echo "   make stop-mlflow"
+	@echo ""
+	@echo "Tailing the log file:"
+	@echo ""
+	@tail -f bin/mlflow_5000.log
 
 stop-mlflow: ## Stop MLflow server (if running)
 	./scripts/stop_mlflow.sh
