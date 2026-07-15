@@ -18,7 +18,8 @@ func TestEvaluationJobResourceSchemaFiles(t *testing.T) {
 			"state": "pending",
 			"message": {
 				"message": "Evaluation job created",
-				"message_code": "evaluation_job_created"
+				"message_code": "evaluation_job_created",
+				"message_origin": "server"
 			}
 		},
 		"results": {},
@@ -52,7 +53,8 @@ func TestEvaluationJobResourceSchemaFiles(t *testing.T) {
 			"state": "pending",
 			"message": {
 				"message": "Evaluation job created",
-				"message_code": "evaluation_job_created"
+				"message_code": "evaluation_job_created",
+				"message_origin": "server"
 			}
 		},
 		"results": {},

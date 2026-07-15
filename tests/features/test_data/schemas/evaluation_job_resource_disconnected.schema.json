@@ -44,6 +44,9 @@
       },
       "description": "Benchmarks to run. Mutually exclusive with collection."
     },
+    "collection": {
+      "$ref": "#/$defs/CollectionRef"
+    },
     "pass_criteria": {
       "$ref": "#/$defs/PassCriteria"
     },
@@ -102,20 +105,7 @@
           "type": "string"
         },
         "message": {
-          "type": "object",
-          "required": [
-            "message",
-            "message_code"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "message": {
-              "type": "string"
-            },
-            "message_code": {
-              "type": "string"
-            }
-          }
+          "$ref": "#/$defs/MessageInfo"
         },
         "benchmarks": {
           "type": "array"
@@ -155,6 +145,87 @@
           "type": "object",
           "additionalProperties": true,
           "description": "Model-specific parameters."
+        },
+        "card_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Optional model card URL."
+        }
+      }
+    },
+    "MessageInfo": {
+      "type": "object",
+      "required": [
+        "message",
+        "message_code"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "message_code": {
+          "type": "string"
+        },
+        "message_origin": {
+          "type": "string",
+          "enum": [
+            "server",
+            "runtime"
+          ],
+          "description": "Origin of the status or error message."
+        }
+      }
+    },
+    "CollectionRef": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Collection identifier."
+        },
+        "benchmarks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvaluationBenchmarkConfig"
+          },
+          "description": "Optional benchmark overrides for the collection."
+        }
+      }
+    },
+    "BenchmarkHardwareConfig": {
+      "type": "object",
+      "required": [
+        "hardware_profile_ref"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "hardware_profile_ref": {
+          "$ref": "#/$defs/HardwareProfileRef"
+        }
+      }
+    },
+    "HardwareProfileRef": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "HardwareProfile custom resource name."
+        },
+        "namespace": {
+          "type": "string",
+          "minLength": 1,
+          "description": "HardwareProfile namespace; defaults to job tenant when omitted."
         }
       }
     },
@@ -201,6 +272,9 @@
         },
         "pass_criteria": {
           "$ref": "#/$defs/PassCriteria"
+        },
+        "hardware_config": {
+          "$ref": "#/$defs/BenchmarkHardwareConfig"
         },
         "parameters": {
           "type": "object",
