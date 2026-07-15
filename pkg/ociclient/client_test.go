@@ -188,6 +188,97 @@ func TestUploadBlobChunked(t *testing.T) {
 	}
 }
 
+func TestUploadBlobChunkedFollowsRotatedLocation(t *testing.T) {
+	t.Parallel()
+
+	const chunkSize = 1024
+	payload := bytes.Repeat([]byte("b"), chunkSize*2+10)
+	var patchURLs []string
+	var finalizeURL string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v2":
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodHead && strings.HasPrefix(r.URL.Path, "/v2/test-org/test-repo/blobs/"):
+			w.WriteHeader(http.StatusNotFound)
+		case r.Method == http.MethodPost && r.URL.Path == "/v2/test-org/test-repo/blobs/uploads/":
+			w.Header().Set("Location", "/v2/test-org/test-repo/blobs/uploads/upload-1")
+			w.WriteHeader(http.StatusAccepted)
+		case r.Method == http.MethodPatch && r.URL.Path == "/v2/test-org/test-repo/blobs/uploads/upload-1":
+			patchURLs = append(patchURLs, r.URL.Path)
+			w.Header().Set("Location", "/v2/test-org/test-repo/blobs/uploads/upload-2")
+			_, _ = io.Copy(io.Discard, r.Body)
+			w.WriteHeader(http.StatusAccepted)
+		case r.Method == http.MethodPatch && r.URL.Path == "/v2/test-org/test-repo/blobs/uploads/upload-2":
+			patchURLs = append(patchURLs, r.URL.Path)
+			w.Header().Set("Location", "http://"+r.Host+"/v2/test-org/test-repo/blobs/uploads/upload-3")
+			_, _ = io.Copy(io.Discard, r.Body)
+			w.WriteHeader(http.StatusAccepted)
+		case r.Method == http.MethodPatch && r.URL.Path == "/v2/test-org/test-repo/blobs/uploads/upload-3":
+			patchURLs = append(patchURLs, r.URL.Path)
+			_, _ = io.Copy(io.Discard, r.Body)
+			w.WriteHeader(http.StatusAccepted)
+		case r.Method == http.MethodPut && r.URL.Path == "/v2/test-org/test-repo/blobs/uploads/upload-3":
+			finalizeURL = r.URL.Path
+			w.WriteHeader(http.StatusCreated)
+		case r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/blobs/uploads/"):
+			t.Fatalf("unexpected finalize URL %q", r.URL.Path)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "test-org/test-repo", Credentials{}, srv.Client())
+	if err != nil {
+		t.Fatalf("NewClient() err = %v", err)
+	}
+
+	if _, _, err := client.UploadBlob(context.Background(), bytes.NewReader(payload), UploadBlobOptions{ChunkSize: chunkSize}); err != nil {
+		t.Fatalf("UploadBlob() err = %v", err)
+	}
+	if len(patchURLs) != 3 {
+		t.Fatalf("patch URLs = %v, want 3 PATCH requests", patchURLs)
+	}
+	if patchURLs[0] != "/v2/test-org/test-repo/blobs/uploads/upload-1" {
+		t.Fatalf("first PATCH URL = %q", patchURLs[0])
+	}
+	if patchURLs[1] != "/v2/test-org/test-repo/blobs/uploads/upload-2" {
+		t.Fatalf("second PATCH URL = %q", patchURLs[1])
+	}
+	if patchURLs[2] != "/v2/test-org/test-repo/blobs/uploads/upload-3" {
+		t.Fatalf("third PATCH URL = %q", patchURLs[2])
+	}
+	if finalizeURL != "/v2/test-org/test-repo/blobs/uploads/upload-3" {
+		t.Fatalf("finalize URL = %q", finalizeURL)
+	}
+}
+
+func TestUploadLocationFromResponse(t *testing.T) {
+	t.Parallel()
+
+	client := &Client{registry: "https://registry.example"}
+
+	t.Run("missing location keeps current URL", func(t *testing.T) {
+		t.Parallel()
+		resp := &http.Response{Header: http.Header{}}
+		got, err := client.uploadLocationFromResponse(resp, "https://registry.example/upload-1")
+		if err != nil || got != "https://registry.example/upload-1" {
+			t.Fatalf("uploadLocationFromResponse() = %q err=%v", got, err)
+		}
+	})
+
+	t.Run("relative location resolves against registry", func(t *testing.T) {
+		t.Parallel()
+		resp := &http.Response{Header: http.Header{"Location": {"/v2/org/repo/blobs/uploads/upload-2"}}}
+		got, err := client.uploadLocationFromResponse(resp, "https://registry.example/upload-1")
+		if err != nil || got != "https://registry.example/v2/org/repo/blobs/uploads/upload-2" {
+			t.Fatalf("uploadLocationFromResponse() = %q err=%v", got, err)
+		}
+	})
+}
+
 func TestUploadBlobSkipsKnownDigest(t *testing.T) {
 	t.Parallel()
 

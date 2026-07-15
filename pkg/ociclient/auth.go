@@ -195,11 +195,11 @@ func parseBearerRealm(header string) (string, error) {
 		sep = "&"
 	}
 	if service != "" {
-		realm += sep + "service=" + service
+		realm += sep + "service=" + url.QueryEscape(service)
 		sep = "&"
 	}
 	if scope != "" {
-		realm += sep + "scope=" + scope
+		realm += sep + "scope=" + url.QueryEscape(scope)
 	}
 	return realm, nil
 }

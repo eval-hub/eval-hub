@@ -195,6 +195,16 @@ func (c *Client) blobExists(ctx context.Context, digest string) (bool, error) {
 	}
 }
 
+// uploadLocationFromResponse reads the OCI Distribution upload Location header and
+// resolves it to an absolute URL. When absent, currentURL is returned unchanged.
+func (c *Client) uploadLocationFromResponse(resp *http.Response, currentURL string) (string, error) {
+	location := resp.Header.Get("Location")
+	if location == "" {
+		return currentURL, nil
+	}
+	return c.resolveLocation(location)
+}
+
 // startBlobUpload begins an OCI blob upload session and returns the upload URL from the Location header.
 func (c *Client) startBlobUpload(ctx context.Context) (string, error) {
 	startURL := c.registryURL("/v2/" + c.repository + "/blobs/uploads/")
@@ -211,11 +221,14 @@ func (c *Client) startBlobUpload(ctx context.Context) (string, error) {
 		body, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("start blob upload failed with status %d: %s", resp.StatusCode, string(body))
 	}
-	location := resp.Header.Get("Location")
-	if location == "" {
+	uploadURL, err := c.uploadLocationFromResponse(resp, "")
+	if err != nil {
+		return "", err
+	}
+	if uploadURL == "" {
 		return "", fmt.Errorf("start blob upload missing Location header")
 	}
-	return c.resolveLocation(location)
+	return uploadURL, nil
 }
 
 // uploadBlobMonolithic performs a single-shot blob upload (POST then PUT with digest and body).
@@ -268,8 +281,9 @@ func (c *Client) uploadBlobChunked(ctx context.Context, r io.Reader, chunkSize i
 				return "", 0, hashErr
 			}
 			end := offset + int64(n) - 1
-			if patchErr := c.patchBlobChunk(ctx, uploadURL, offset, end, chunk); patchErr != nil {
-				return "", 0, patchErr
+			uploadURL, err = c.patchBlobChunk(ctx, uploadURL, offset, end, chunk)
+			if err != nil {
+				return "", 0, err
 			}
 			offset += int64(n)
 		}
@@ -288,23 +302,25 @@ func (c *Client) uploadBlobChunked(ctx context.Context, r io.Reader, chunkSize i
 	return digest, offset, nil
 }
 
-// patchBlobChunk uploads one chunk to an in-progress blob upload session.
-func (c *Client) patchBlobChunk(ctx context.Context, uploadURL string, start, end int64, chunk []byte) error {
+// patchBlobChunk uploads one chunk to an in-progress blob upload session and returns the
+// upload URL for subsequent PATCH or PUT requests, following Location headers per the
+// OCI Distribution spec.
+func (c *Client) patchBlobChunk(ctx context.Context, uploadURL string, start, end int64, chunk []byte) (string, error) {
 	req, err := c.newRequestWithBody(ctx, http.MethodPatch, uploadURL, chunk)
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("Content-Range", strconv.FormatInt(start, 10)+"-"+strconv.FormatInt(end, 10))
 	resp, err := c.do(req)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("patch blob chunk failed with status %d: %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("patch blob chunk failed with status %d: %s", resp.StatusCode, string(body))
 	}
-	return nil
+	return c.uploadLocationFromResponse(resp, uploadURL)
 }
 
 // completeBlobUpload finalizes a chunked upload by sending PUT with the content digest.
