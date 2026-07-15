@@ -42,6 +42,10 @@ func TestUpdateEvaluationJobEvalCard(t *testing.T) {
 	testUpdateEvaluationJobEvalCard(t, drivers[0], getDBName())
 }
 
+func TestGetEvaluationJobEvalCard(t *testing.T) {
+	testGetEvaluationJobEvalCard(t, drivers[0], getDBName())
+}
+
 // TestStorage tests the storage implementation and provides
 // a simple way to debug the storage implementation.
 func TestEvaluationsStorage(t *testing.T) {
@@ -69,6 +73,7 @@ func TestGetEvaluationJobs_Postgres(t *testing.T) {
 	testUpdateEvaluationJob_PersistsPhase(t, drivers[1], databaseName)
 	testUpdateEvaluationJob_PersistsAdditionalInfo(t, drivers[1], databaseName)
 	testUpdateEvaluationJobEvalCard(t, drivers[1], databaseName)
+	testGetEvaluationJobEvalCard(t, drivers[1], databaseName)
 	testEvaluationsStorage(t, drivers[1], databaseName)
 }
 
@@ -1597,5 +1602,64 @@ func testUpdateEvaluationJobEvalCard(t *testing.T, driver string, databaseName s
 	}
 	if string(gotEvalCardAgain) != string(cardJSON) {
 		t.Fatalf("GetEvaluationJobEvalCard = %s, want original %s", gotEvalCardAgain, cardJSON)
+	}
+}
+
+func testGetEvaluationJobEvalCard(t *testing.T, driver string, databaseName string) {
+	store, err := getTestStorage(t, driver, databaseName)
+	if err != nil {
+		t.Fatalf("failed to create storage: %v", err)
+	}
+
+	jobID := common.GUID()
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{
+				ID:        jobID,
+				Tenant:    api.Tenant(getTenant("team-a")),
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			},
+			MLFlowExperimentID: "exp-1",
+		},
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{State: api.OverallStateCompleted},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model:      api.ModelRef{URL: "http://model", Name: "m"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
+		},
+	}
+	if err := store.CreateEvaluationJob(job); err != nil {
+		t.Fatalf("CreateEvaluationJob: %v", err)
+	}
+
+	got, err := store.GetEvaluationJobEvalCard(jobID)
+	if err != nil {
+		t.Fatalf("GetEvaluationJobEvalCard before persist: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("GetEvaluationJobEvalCard = %s, want nil before persist", got)
+	}
+
+	if err := store.UpdateEvaluationJobEvalCard(jobID, nil); err != nil {
+		t.Fatalf("UpdateEvaluationJobEvalCard with empty payload: %v", err)
+	}
+	got, err = store.GetEvaluationJobEvalCard(jobID)
+	if err != nil {
+		t.Fatalf("GetEvaluationJobEvalCard after empty persist: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("GetEvaluationJobEvalCard = %s, want nil after empty persist", got)
+	}
+
+	_, err = store.GetEvaluationJobEvalCard("missing-job-id")
+	if err == nil {
+		t.Fatal("expected error for missing job eval card lookup")
+	}
+
+	_, err = store.GetEvaluationJobEvalCard("")
+	if err == nil {
+		t.Fatal("expected error for empty job id eval card lookup")
 	}
 }

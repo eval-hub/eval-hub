@@ -23,11 +23,12 @@ func (s *stubResultsExporter) Export(_ context.Context, _ *api.EvaluationJobReso
 type evalCardPersistStorage struct {
 	noopStorage
 	called bool
+	err    error
 }
 
 func (s *evalCardPersistStorage) UpdateEvaluationJobEvalCard(_ string, _ []byte) error {
 	s.called = true
-	return nil
+	return s.err
 }
 
 func testEvaluationJob() *api.EvaluationJobResource {
@@ -81,5 +82,17 @@ func TestExportEvaluationResultsNilJob(t *testing.T) {
 	h.exportEvaluationResults(context.Background(), storage, nil, nil)
 	if storage.called {
 		t.Fatal("expected eval card persistence to be skipped for nil job")
+	}
+}
+
+func TestExportEvaluationResultsPersistError(t *testing.T) {
+	t.Parallel()
+	storage := &evalCardPersistStorage{err: errors.New("persist failed")}
+	h := &Handlers{resultsExporter: &stubResultsExporter{cardURL: "https://example.com/card.json"}}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	h.exportEvaluationResults(context.Background(), storage, testEvaluationJob(), logger)
+	if !storage.called {
+		t.Fatal("expected eval card persistence to be attempted")
 	}
 }
