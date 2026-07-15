@@ -89,6 +89,12 @@ if [[ "$BACKEND_URI" == sqlite://* ]]; then
     fi
 fi
 
+LOG_DIR=$(dirname "${MLFLOW_LOG_FILE}")
+if [ "$LOG_DIR" != "." ] && [ ! -d "$LOG_DIR" ]; then
+    echo -e "${YELLOW}📁 Creating log directory: $LOG_DIR${NC}"
+    mkdir -p "$LOG_DIR"
+fi
+
 echo -e "${GREEN}✅ Starting MLflow server...${NC}"
 MLFLOW_VERSION=$(mlflow --version 2>/dev/null | head -n 1)
 echo -e "${BLUE}📍 MLflow version: ${MLFLOW_VERSION}${NC}"
