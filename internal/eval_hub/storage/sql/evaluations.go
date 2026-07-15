@@ -58,22 +58,32 @@ func (s *sqlStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, er
 }
 
 func (s *sqlStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api.EvaluationJobResource, error) {
-	// Build the SELECT query
-	query := shared.EntityQuery{Resource: api.Resource{ID: id, Tenant: s.tenant}}
-	selectQuery, selectArgs, queryArgs := s.statementsFactory.CreateEvaluationGetEntityStatement(&query)
+	return s.scanEvaluationJobTransactional(txn, id, false)
+}
 
-	// Query the database
+func (s *sqlStorage) getEvaluationJobTransactionalForUpdate(txn *sql.Tx, id string) (*api.EvaluationJobResource, error) {
+	return s.scanEvaluationJobTransactional(txn, id, true)
+}
+
+func (s *sqlStorage) scanEvaluationJobTransactional(txn *sql.Tx, id string, forUpdate bool) (*api.EvaluationJobResource, error) {
+	query := shared.EntityQuery{Resource: api.Resource{ID: id, Tenant: s.tenant}}
+	var selectQuery string
+	var selectArgs, queryArgs []any
+	if forUpdate {
+		selectQuery, selectArgs, queryArgs = s.statementsFactory.CreateEvaluationGetEntityForUpdateStatement(&query)
+	} else {
+		selectQuery, selectArgs, queryArgs = s.statementsFactory.CreateEvaluationGetEntityStatement(&query)
+	}
+
 	err := s.queryRow(txn, selectQuery, selectArgs...).Scan(queryArgs...)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
 		}
-		// For now we differentiate between no rows found and other errors but this might be confusing
 		s.logger.Error("Failed to get evaluation job", "error", err, "id", id)
 		return nil, se.WithRollback(se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error()))
 	}
 
-	// Unmarshal the entity JSON into EvaluationJobConfig
 	var evaluationJobEntity EvaluationJobEntity
 	err = json.Unmarshal([]byte(query.EntityJSON), &evaluationJobEntity)
 	if err != nil {
@@ -152,7 +162,7 @@ func (s *sqlStorage) UpdateEvaluationJobStatus(id string, state api.OverallState
 	s.logger.Debug("Updating evaluation job status", "id", id, "state", state, "message", message)
 	err := s.withTransaction("update evaluation job status", id, func(txn *sql.Tx) error {
 		// get the evaluation job
-		evaluationJob, err := s.getEvaluationJobTransactional(txn, id)
+		evaluationJob, err := s.getEvaluationJobTransactionalForUpdate(txn, id)
 		if err != nil {
 			return err
 		}
@@ -337,6 +347,9 @@ func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runSt
 		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID &&
 			benchmark.ProviderID == runStatus.BenchmarkStatusEvent.ProviderID &&
 			benchmark.BenchmarkIndex == runStatus.BenchmarkStatusEvent.BenchmarkIndex {
+			if api.IsBenchmarkTerminalState(benchmark.Status) && !api.IsBenchmarkTerminalState(benchmarkStatus.Status) {
+				return
+			}
 			job.Status.Benchmarks[index] = *benchmarkStatus
 			return
 		}
@@ -374,7 +387,7 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 	return s.withTransaction("update evaluation job", id, func(txn *sql.Tx) error {
 		s.logger.Info("Updating evaluation job", "id", id, "status", runStatus.BenchmarkStatusEvent.Status, "runStatus", runStatus)
 
-		job, err := s.getEvaluationJobTransactional(txn, id)
+		job, err := s.getEvaluationJobTransactionalForUpdate(txn, id)
 		if err != nil {
 			return err
 		}

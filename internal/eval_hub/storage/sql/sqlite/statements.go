@@ -102,6 +102,11 @@ func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shar
 	return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE %s;`, where), whereArgs, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
 }
 
+func (s *sqliteStatementsFactory) CreateEvaluationGetEntityForUpdateStatement(query *shared.EntityQuery) (string, []any, []any) {
+	// SQLite serializes writers via SetMaxOpenConns(1); FOR UPDATE is unsupported.
+	return s.CreateEvaluationGetEntityStatement(query)
+}
+
 // entityFilterCondition returns the SQL condition and args for a filter key.
 func (s *sqliteStatementsFactory) CreateEntityFilterCondition(key string, value any, index int, tableName string) (condition string, args []any) {
 	switch key {
