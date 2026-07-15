@@ -28,7 +28,7 @@ func TestParseBearerRealm(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseBearerRealm() err = %v", err)
 	}
-	want := "https://auth.example/token?service=registry&scope=repository:org/repo:pull"
+	want := "https://auth.example/token?service=registry&scope=repository%3Aorg%2Frepo%3Apull"
 	if got != want {
 		t.Fatalf("parseBearerRealm() = %q, want %q", got, want)
 	}
