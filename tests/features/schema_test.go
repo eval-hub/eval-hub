@@ -106,6 +106,39 @@ func TestEvaluationJobResourceSchemaFiles(t *testing.T) {
 			payload: disconnectedSample,
 		},
 		{
+			name:   "connected response with message_origin",
+			schema: "schemas/evaluation_job_resource_connected.schema.json",
+			payload: `{
+				"resource": {
+					"id": "00000000-0000-0000-0000-000000000001",
+					"tenant": "test-tenant",
+					"created_at": "2026-01-01T00:00:00Z",
+					"owner": "test-user"
+				},
+				"status": {
+					"state": "pending",
+					"message": {
+						"message": "Evaluation job created",
+						"message_code": "evaluation_job_created",
+						"message_origin": "server"
+					}
+				},
+				"results": {},
+				"name": "test-evaluation-job",
+				"model": {
+					"name": "test",
+					"url": "http://test.com"
+				},
+				"benchmarks": [{
+					"id": "arc_easy",
+					"provider_id": "lm_evaluation_harness",
+					"parameters": {
+						"tokenizer": "google/flan-t5-small"
+					}
+				}]
+			}`,
+		},
+		{
 			name:     "request body rejected by response schema",
 			schema:   "schemas/evaluation_job_resource_connected.schema.json",
 			payload:  requestOnlySample,
