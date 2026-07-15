@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"time"
 
@@ -25,6 +26,9 @@ func (noopStorage) CreateEvaluationJob(_ *api.EvaluationJobResource) error {
 func (noopStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) {
 	return nil, nil
 }
+func (noopStorage) GetEvaluationJobEvalCard(_ string) (json.RawMessage, error) {
+	return nil, nil
+}
 func (noopStorage) GetEvaluationJobs(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
 	return &abstractions.QueryResults[api.EvaluationJobResource]{}, nil
 }
@@ -35,7 +39,8 @@ func (noopStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
 func (noopStorage) UpdateEvaluationJobStatus(_ string, _ api.OverallState, _ *api.MessageInfo) error {
 	return nil
 }
-func (noopStorage) CreateCollection(_ *api.CollectionResource) error { return nil }
+func (noopStorage) UpdateEvaluationJobEvalCard(_ string, _ []byte) error { return nil }
+func (noopStorage) CreateCollection(_ *api.CollectionResource) error     { return nil }
 func (noopStorage) GetCollection(_ string) (*api.CollectionResource, error) {
 	return nil, nil
 }

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -251,6 +252,7 @@ type EvaluationJobResults struct {
 	Test                *EvaluationTest   `json:"test,omitempty"`
 	Benchmarks          []BenchmarkResult `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 	MLFlowExperimentURL string            `json:"mlflow_experiment_url,omitempty"`
+	EvalCard            json.RawMessage   `json:"eval_card,omitempty"`
 }
 
 // OCICoordinates represents OCI artifact coordinates for persistence

@@ -101,7 +101,7 @@ type CardJobStatus struct {
 // Differences from api.BenchmarkResult:
 //   - Adds status, error_message, and warning_message (from api.BenchmarkStatus / api.BenchmarkStatusEvent).
 //   - Omits benchmark_index.
-//   - Uses CardBenchmarkTest instead of api.BenchmarkTest.
+//   - Uses CardBenchmarkTest (same score/threshold types as api.BenchmarkTest; omits primary_score_metric).
 type CardBenchmarkResult struct {
 	ID             string             `json:"id"`
 	ProviderID     string             `json:"provider_id"`
@@ -120,12 +120,11 @@ type CardBenchmarkResult struct {
 // CardBenchmarkTest holds pass/fail details for a single benchmark in the card.
 //
 // Differences from api.BenchmarkTest:
-//   - primary_score and threshold are strings instead of float32.
 //   - Omits primary_score_metric.
 type CardBenchmarkTest struct {
-	PrimaryScore string `json:"primary_score,omitempty"`
-	Threshold    string `json:"threshold,omitempty"`
-	Pass         bool   `json:"pass"`
+	PrimaryScore float32 `json:"primary_score"`
+	Threshold    float32 `json:"threshold"`
+	Pass         bool    `json:"pass"`
 }
 
 // CardCollectionResult holds collection-level results in the card.

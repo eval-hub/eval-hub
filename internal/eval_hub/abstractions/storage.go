@@ -2,6 +2,7 @@ package abstractions
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -69,11 +70,13 @@ type Storage interface {
 	// Evaluation job operations
 	CreateEvaluationJob(evaluation *api.EvaluationJobResource) error
 	GetEvaluationJob(id string) (*api.EvaluationJobResource, error)
+	GetEvaluationJobEvalCard(id string) (json.RawMessage, error)
 	GetEvaluationJobs(filter *QueryFilter) (*QueryResults[api.EvaluationJobResource], error)
 	DeleteEvaluationJob(id string) error
 	UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error
 	// UpdateEvaluationJobStatus is used to update the status of an evaluation job and is internal - do we need it here?
 	UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error
+	UpdateEvaluationJobEvalCard(id string, evalCardJSON []byte) error
 
 	// Collection operations
 	CreateCollection(collection *api.CollectionResource) error

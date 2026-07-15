@@ -12,3 +12,9 @@ properties:
   test:
     $ref: ./EvaluationTest.yaml
     description: Test result
+  eval_card:
+    type: object
+    description: >-
+      Persisted evaluation card JSON. Included only when the query parameter
+      `include=eval_card` is set on `GET /api/v1/evaluations/jobs/{id}`.
+    additionalProperties: true

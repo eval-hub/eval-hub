@@ -11,6 +11,7 @@ type SQLStatementsFactory interface {
 	GetLogger() *slog.Logger
 
 	GetTablesSchema() string
+	GetSchemaMigrations() []string
 
 	GetAllowedFilterColumns(tableName string) []string
 	CreateEntityFilterCondition(key string, value any, index int, tableName string) (condition string, args []any)
@@ -18,6 +19,8 @@ type SQLStatementsFactory interface {
 	// evaluations operations
 	CreateEvaluationAddEntityStatement(evaluation *api.EvaluationJobResource, entity string) (string, []any)
 	CreateEvaluationGetEntityStatement(query *EntityQuery) (string, []any, []any)
+	CreateEvaluationGetEvalCardStatement(tenant api.Tenant, id string) (string, []any)
+	CreateUpdateEvaluationEvalCardStatement(tenant api.Tenant, id string, evalCardJSON string) (string, []any)
 
 	// collections operations
 	CreateCollectionAddEntityStatement(collection *api.CollectionResource, entity string) (string, []any)

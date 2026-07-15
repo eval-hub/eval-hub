@@ -11,6 +11,15 @@ get:
       schema:
         type: string
         title: Id
+    - name: include
+      in: query
+      required: false
+      schema:
+        type: string
+        description: >-
+          Optional comma-separated list of additional fields to include in the
+          response. Supported values: `eval_card`.
+      example: eval_card
   responses:
     '200':
       description: Successful Response

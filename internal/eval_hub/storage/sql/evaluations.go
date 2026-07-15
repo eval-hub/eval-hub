@@ -89,6 +89,40 @@ func (s *sqlStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api
 	return job, nil
 }
 
+func (s *sqlStorage) GetEvaluationJobEvalCard(id string) (json.RawMessage, error) {
+	selectQuery, selectArgs := s.statementsFactory.CreateEvaluationGetEvalCardStatement(s.tenant, id)
+
+	var evalCard sql.NullString
+	err := s.queryRow(nil, selectQuery, selectArgs...).Scan(&evalCard)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
+		}
+		s.logger.Error("Failed to get evaluation job eval card", "error", err, "id", id)
+		return nil, se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
+	}
+	if !evalCard.Valid || evalCard.String == "" {
+		return nil, nil
+	}
+	return json.RawMessage(evalCard.String), nil
+}
+
+func (s *sqlStorage) UpdateEvaluationJobEvalCard(id string, evalCardJSON []byte) error {
+	if len(evalCardJSON) == 0 {
+		return nil
+	}
+	updateQuery, args := s.statementsFactory.CreateUpdateEvaluationEvalCardStatement(s.tenant, id, string(evalCardJSON))
+	result, err := s.exec(nil, updateQuery, args...)
+	if err != nil {
+		s.logger.Error("Failed to persist evaluation job eval card", "error", err, "id", id)
+		return se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error())
+	}
+	if rows, err := result.RowsAffected(); err == nil && rows == 0 {
+		s.logger.Debug("Evaluation job eval card already persisted", "id", id)
+	}
+	return nil
+}
+
 func (s *sqlStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
 	var txn *sql.Tx
 	return listEntities[api.EvaluationJobResource](s, txn, shared.TABLE_EVALUATIONS, filter)
