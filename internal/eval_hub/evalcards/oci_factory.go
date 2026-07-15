@@ -70,6 +70,9 @@ func buildOCIHTTPClientTLS(caCertPath string, insecureSkipVerify bool, logger *s
 		MinVersion: tls.VersionTLS12,
 	}
 	if insecureSkipVerify {
+		if logger != nil {
+			logger.Warn("OCI TLS verification disabled", "insecure_skip_verify", true)
+		}
 		tlsConfig.InsecureSkipVerify = true
 		return tlsConfig, nil
 	}

@@ -185,8 +185,10 @@ func (c *Client) blobExists(ctx context.Context, digest string) (bool, error) {
 	switch resp.StatusCode {
 	case http.StatusOK:
 		return true, nil
-	case http.StatusNotFound, http.StatusUnauthorized:
+	case http.StatusNotFound:
 		return false, nil
+	case http.StatusUnauthorized:
+		return false, fmt.Errorf("blob head: unauthorized (credentials rejected for %s)", digest)
 	default:
 		body, _ := io.ReadAll(resp.Body)
 		return false, fmt.Errorf("blob head failed with status %d: %s", resp.StatusCode, string(body))
