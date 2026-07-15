@@ -166,7 +166,7 @@ func validateTokenRealmURL(registry, nextURL string) error {
 }
 
 // parseBearerRealm extracts the token service URL from a WWW-Authenticate: Bearer header and
-// re-attaches service/scope query parameters required by the registry token endpoint.
+// re-attaches service/scope query parameters required by the registry token endpoint
 func parseBearerRealm(header string) (string, error) {
 	header = strings.TrimSpace(header)
 	if !strings.HasPrefix(strings.ToLower(header), "bearer ") {
