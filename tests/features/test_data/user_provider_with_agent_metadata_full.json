@@ -1,0 +1,74 @@
+{
+    "name": "my-custom-evaluator",
+    "title": "Custom Internal Evaluator",
+    "description": "Internal evaluation adapter for domain-specific benchmarks",
+    "tags": [
+        "custom",
+        "internal"
+    ],
+    "agent": {
+        "evaluates": [
+            "accuracy",
+            "reasoning",
+            "custom-metrics"
+        ],
+        "recommended_when": [
+            "User wants to test domain-specific models",
+            "User needs custom evaluation metrics"
+        ],
+        "target_type": "model",
+        "summary": "Custom evaluator for internal domain-specific benchmarks",
+        "complements": [
+            "lm_evaluation_harness"
+        ],
+        "hints": [
+            "Requires custom dataset configuration",
+            "Best used for specialized model validation"
+        ],
+        "result_interpretation": [
+            "Higher accuracy indicates better domain alignment",
+            "Scores above 0.5 meet minimum quality threshold"
+        ]
+    },
+    "benchmarks": [
+        {
+            "id": "custom_domain_test",
+            "name": "Domain-Specific Test",
+            "description": "Custom benchmark for internal domain testing",
+            "category": "reasoning",
+            "metrics": [
+                "acc",
+                "f1"
+            ],
+            "num_few_shot": 0,
+            "dataset_size": 1000,
+            "tags": [
+                "custom",
+                "domain"
+            ],
+            "primary_score": {
+                "metric": "acc"
+            },
+            "pass_criteria": {
+                "threshold": 0.5
+            },
+            "agent": {
+                "result_interpretation": "Accuracy from 0-1; higher is better for domain tasks",
+                "score_ranges": [
+                    {
+                        "range": "0.0-0.5",
+                        "meaning": "Below acceptable threshold"
+                    },
+                    {
+                        "range": "0.5-0.75",
+                        "meaning": "Meets minimum requirements"
+                    },
+                    {
+                        "range": "0.75-1.0",
+                        "meaning": "Excellent domain alignment"
+                    }
+                ]
+            }
+        }
+    ]
+}

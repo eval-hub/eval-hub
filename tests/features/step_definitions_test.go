@@ -1891,6 +1891,13 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the MCP error should contain "([^"]*)"$`, tc.theMCPErrorShouldContain)
 	ctx.Step(`^the "([^"]*)" field in the MCP response should be saved as "([^"]*)"$`, tc.theMCPFieldShouldBeSaved)
 	ctx.Step(`^the MCP response array at path "([^"]*)" should have length (\d+)$`, tc.theMCPResponseArrayAtPathShouldHaveLength)
+	ctx.Step(`^the MCP response array at path "([^"]*)" should have length at least (\d+)$`, tc.theMCPResponseArrayAtPathShouldHaveLengthAtLeast)
+
+	// MCP JSONPath validation steps (with filter expression support)
+	ctx.Step(`^the MCP response at JSONPath "(.+?)" should equal "(.+?)"$`, tc.theMCPResponseAtJSONPathShouldEqual)
+	ctx.Step(`^the MCP response at JSONPath "(.+?)" should be an array$`, tc.theMCPResponseAtJSONPathShouldBeArray)
+	ctx.Step(`^the MCP response at JSONPath "(.+?)" should not be empty$`, tc.theMCPResponseAtJSONPathShouldNotBeEmpty)
+	ctx.Step(`^the MCP response at JSONPath "(.+?)" should have at least (\d+) items$`, tc.theMCPResponseAtJSONPathShouldHaveAtLeastNItems)
 
 	// MCP Resource steps
 	ctx.Step(`^I read MCP resource "([^"]*)"$`, tc.iReadMCPResource)
@@ -2165,6 +2172,217 @@ func (tc *scenarioConfig) theMCPResponseArrayAtPathShouldHaveLength(jsonPath str
 	if len(arr) != length {
 		return tc.logError(fmt.Errorf("expected array at path %s to have length %d, got %d", jsonPath, length, len(arr)))
 	}
+	return nil
+}
+
+func (tc *scenarioConfig) theMCPResponseArrayAtPathShouldHaveLengthAtLeast(jsonPath string, minLengthStr string) error {
+	resultJSON, err := tc.getMCPResultJSON()
+	if err != nil {
+		return tc.logError(err)
+	}
+
+	jsonParsed, err := gabs.ParseJSON(resultJSON)
+	if err != nil {
+		return tc.logError(fmt.Errorf("failed to parse MCP JSON response: %w", err))
+	}
+
+	pathObj, err := jsonParsed.JSONPointer(getJsonPointer(jsonPath))
+	if err != nil {
+		return tc.logError(fmt.Errorf("path %v does not exist in MCP response", jsonPath))
+	}
+
+	arr, ok := pathObj.Data().([]interface{})
+	if !ok {
+		return tc.logError(fmt.Errorf("value at path %s is not an array in MCP response, got %T", jsonPath, pathObj.Data()))
+	}
+
+	minLength, err := strconv.Atoi(minLengthStr)
+	if err != nil {
+		return tc.logError(fmt.Errorf("expected integer length, got %q: %w", minLengthStr, err))
+	}
+
+	if len(arr) < minLength {
+		return tc.logError(fmt.Errorf("expected array at path %s to have length at least %d, got %d", jsonPath, minLength, len(arr)))
+	}
+	return nil
+}
+
+// MCP JSONPath validation steps (with filter expression support)
+
+// Helper: Check if JSONPath uses filter or wildcard syntax
+func jsonPathUsesFilterOrWildcard(jsonPath string) bool {
+	return strings.Contains(jsonPath, "[?(") || strings.Contains(jsonPath, "[*]") || strings.Contains(jsonPath, "..")
+}
+
+// Helper: Conditionally unwrap single-element arrays from JSONPath filter results
+func unwrapIfFilterResult(value interface{}, jsonPath string) interface{} {
+	// Only unwrap if the JSONPath uses filter/wildcard syntax
+	if !jsonPathUsesFilterOrWildcard(jsonPath) {
+		return value
+	}
+
+	// Filter expressions return arrays - unwrap single-element results
+	if arr, ok := value.([]interface{}); ok && len(arr) == 1 {
+		return arr[0]
+	}
+
+	return value
+}
+
+// Helper: Extract value at JSONPath from MCP response (with substitution, escaping, and unwrapping)
+func (tc *scenarioConfig) getMCPValueAtJSONPath(jsonPath string) (interface{}, error) {
+	// Substitute any {{value:key}} patterns
+	var err error
+	jsonPath, err = tc.substituteValues(jsonPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to substitute values in JSONPath: %w", err)
+	}
+
+	// Unescape quotes in JSONPath (from Gherkin escaping)
+	jsonPath = strings.ReplaceAll(jsonPath, `\"`, `"`)
+
+	resultJSON, err := tc.getMCPResultJSON()
+	if err != nil {
+		return nil, err
+	}
+
+	tc.logDebug("MCP response JSON for JSONPath: %s\n", string(resultJSON))
+	tc.logDebug("JSONPath: %s\n", jsonPath)
+
+	// Parse JSON to map
+	var respMap map[string]interface{}
+	if err := json.Unmarshal(resultJSON, &respMap); err != nil {
+		return nil, fmt.Errorf("failed to parse MCP JSON response: %w", err)
+	}
+
+	// Ensure path starts with $
+	path := jsonPath
+	if !strings.HasPrefix(path, "$") {
+		path = "$." + path
+	}
+
+	// Get value at JSONPath
+	foundValue, err := jsonpath.Get(path, respMap)
+	if err != nil {
+		return nil, fmt.Errorf("JSONPath %s does not exist in MCP response: %w\nJSON: %s", jsonPath, err, string(resultJSON))
+	}
+
+	return foundValue, nil
+}
+
+func (tc *scenarioConfig) theMCPResponseAtJSONPathShouldEqual(jsonPath, expected string) error {
+	// Substitute expected value
+	var err error
+	expected, err = tc.substituteValues(expected)
+	if err != nil {
+		return tc.logError(fmt.Errorf("failed to substitute values in expected: %w", err))
+	}
+
+	// Get value at JSONPath using helper
+	foundValue, err := tc.getMCPValueAtJSONPath(jsonPath)
+	if err != nil {
+		return tc.logError(err)
+	}
+
+	// Conditionally unwrap single-element arrays from filter results
+	foundValue = unwrapIfFilterResult(foundValue, jsonPath)
+
+	// Convert to string for comparison
+	var actualValue string
+	switch v := foundValue.(type) {
+	case string:
+		actualValue = v
+	case float64:
+		actualValue = strconv.FormatFloat(v, 'f', -1, 64)
+	case bool:
+		actualValue = strconv.FormatBool(v)
+	case nil:
+		actualValue = ""
+	default:
+		// For complex types, marshal to JSON
+		jsonBytes, err := json.Marshal(v)
+		if err != nil {
+			return tc.logError(fmt.Errorf("failed to marshal value at JSONPath %s: %w", jsonPath, err))
+		}
+		actualValue = string(jsonBytes)
+	}
+
+	if actualValue != expected {
+		return tc.logError(fmt.Errorf("expected MCP response at JSONPath %s to equal %q but got %q", jsonPath, expected, actualValue))
+	}
+
+	return nil
+}
+
+func (tc *scenarioConfig) theMCPResponseAtJSONPathShouldBeArray(jsonPath string) error {
+	foundValue, err := tc.getMCPValueAtJSONPath(jsonPath)
+	if err != nil {
+		return tc.logError(err)
+	}
+
+	// Conditionally unwrap single-element arrays from filter results
+	foundValue = unwrapIfFilterResult(foundValue, jsonPath)
+
+	if _, ok := foundValue.([]interface{}); !ok {
+		return tc.logError(fmt.Errorf("value at JSONPath %s is not an array, got type %T with value: %v", jsonPath, foundValue, foundValue))
+	}
+
+	return nil
+}
+
+func (tc *scenarioConfig) theMCPResponseAtJSONPathShouldNotBeEmpty(jsonPath string) error {
+	foundValue, err := tc.getMCPValueAtJSONPath(jsonPath)
+	if err != nil {
+		return tc.logError(err)
+	}
+
+	// Conditionally unwrap single-element arrays from filter results
+	foundValue = unwrapIfFilterResult(foundValue, jsonPath)
+
+	// Check if value is empty based on type
+	switch v := foundValue.(type) {
+	case string:
+		if v == "" {
+			return tc.logError(fmt.Errorf("value at JSONPath %s is empty string", jsonPath))
+		}
+	case []interface{}:
+		if len(v) == 0 {
+			return tc.logError(fmt.Errorf("array at JSONPath %s is empty", jsonPath))
+		}
+	case map[string]interface{}:
+		if len(v) == 0 {
+			return tc.logError(fmt.Errorf("object at JSONPath %s is empty", jsonPath))
+		}
+	case nil:
+		return tc.logError(fmt.Errorf("value at JSONPath %s is null", jsonPath))
+	}
+
+	return nil
+}
+
+func (tc *scenarioConfig) theMCPResponseAtJSONPathShouldHaveAtLeastNItems(jsonPath string, minCountStr string) error {
+	foundValue, err := tc.getMCPValueAtJSONPath(jsonPath)
+	if err != nil {
+		return tc.logError(err)
+	}
+
+	// Conditionally unwrap single-element arrays from filter results
+	foundValue = unwrapIfFilterResult(foundValue, jsonPath)
+
+	arr, ok := foundValue.([]interface{})
+	if !ok {
+		return tc.logError(fmt.Errorf("value at JSONPath %s is not an array, got type %T", jsonPath, foundValue))
+	}
+
+	minCount, err := strconv.Atoi(minCountStr)
+	if err != nil {
+		return tc.logError(fmt.Errorf("expected integer count, got %q: %w", minCountStr, err))
+	}
+
+	if len(arr) < minCount {
+		return tc.logError(fmt.Errorf("array at JSONPath %s has %d items, expected at least %d", jsonPath, len(arr), minCount))
+	}
+
 	return nil
 }
 

@@ -548,3 +548,320 @@ Feature: Providers Endpoint
     When I send a GET request to "/api/v1/evaluations/providers?name=test-provider-3&tags=test-tag-3"
     Then the response code should be 200
     And the array at path "items" in the response should have length 1
+
+  Scenario: System provider includes complete agent metadata structure
+    Given the service is running
+    When I send a GET request to "/api/v1/evaluations/providers/lm_evaluation_harness"
+    Then the response code should be 200
+    And the response should contain "agent"
+    And the response should contain the value "model" at path "agent.target_type"
+    And the array at path "agent.evaluates" in the response should have length at least 1
+    And the array at path "agent.recommended_when" in the response should have length at least 1
+    And the array at path "agent.complements" in the response should have length at least 2
+
+  Scenario: Create user provider with full agent metadata returns all fields
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider_with_agent_metadata_full.json"
+    Then the response code should be 201
+    And the response should contain "agent"
+    And the response should contain the value "internal domain-specific benchmarks" at path "agent.summary"
+    And the response should contain the value "model" at path "agent.target_type"
+    And the array at path "agent.evaluates" in the response should have length at least 2
+    And the array at path "agent.recommended_when" in the response should have length at least 1
+    And the array at path "agent.complements" in the response should have length at least 1
+    And the array at path "agent.hints" in the response should have length at least 2
+    And the array at path "agent.result_interpretation" in the response should have length at least 2
+
+  Scenario: Create user provider with partial agent metadata
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider_with_agent_metadata_partial.json"
+    Then the response code should be 201
+    And the response should contain "agent"
+    And the array at path "agent.evaluates" in the response should have length at least 2
+
+  Scenario: Update user provider to PUT agent metadata
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider.json"
+    Then the response code should be 201
+    When I send a PUT request to "/api/v1/evaluations/providers/{id}" with body "file:/user_provider_with_agent_metadata_partial.json"
+    Then the response code should be 200
+    And the array at path "agent.evaluates" in the response should have length at least 2
+
+  Scenario: Update user provider to modify agent metadata
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider_with_agent_metadata_partial.json"
+    Then the response code should be 201
+    When I send a PUT request to "/api/v1/evaluations/providers/{id}" with body:
+      """
+      {
+        "name": "my-custom-evaluator-updated",
+        "title": "Updated title",
+        "description": "Internal evaluation adapter for domain-specific benchmarks - Updated",
+        "tags": [
+          "updated"
+        ],
+        "agent": {
+          "evaluates": [
+            "logic_reasoning",
+            "language_modeling",
+            "science",
+            "safety",
+            "multilingual",
+            "code",
+            "medical"
+          ]
+        },
+        "benchmarks": [
+          {
+            "id": "custom_domain_test-updated",
+            "name": "Domain-Specific Test-updated"
+          }
+        ]
+      }
+      """
+    Then the response code should be 200
+    And the array at path "agent.evaluates" in the response should have length at least 5
+    And the response should contain the value "my-custom-evaluator-updated" at path "name"
+    And the response should contain the value "Updated title" at path "title"
+
+  Scenario: Patch user provider agent metadata - remove agent
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/providers" with body "file:/user_provider_with_agent_metadata_partial.json"
+    Then the response code should be 201
+    When I send a PATCH request to "/api/v1/evaluations/providers/{id}" with body:
+      """
+      [
+        {
+          "op": "remove",
+          "path": "/agent"
+        }
+      ]
+      """
+    Then the response code should be 200
+    And the response should not contain the value "model" at path "agent.target_type"
+
+  @negative
+  Scenario: Create provider with invalid target_type
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/providers" with body:
+      """
+      {
+        "name": "my-custom-evaluator-invalid-target-type",
+        "agent": {
+          "evaluates": [
+            "accuracy"
+          ],
+          "target_type": "invalid_model"
+        },
+        "benchmarks": [
+          {
+            "id": "custom_domain_test",
+            "name": "Domain-Specific Test"
+          }
+        ]
+      }
+      """
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+
+  @negative
+  Scenario: Create provider with summary too long
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/providers" with body:
+      """
+      {
+        "name": "my-custom-evaluator-summary-too-long",
+        "title": "Custom Internal Evaluator",
+        "description": "Internal evaluation adapter for domain-specific benchmarks",
+        "tags": [
+          "custom",
+          "internal"
+        ],
+        "agent": {
+          "evaluates": [
+            "accuracy"
+          ],
+          "target_type": "model",
+          "summary": "This is a test summary that exceeds the maximum allowed length of 200 characters for the summary field. The validation should reject this request because it contains more than 200 characters in total. Extra padding text here."
+        },
+        "benchmarks": [
+          {
+            "id": "custom_domain_test",
+            "name": "Domain-Specific Test"
+          }
+        ]
+      }
+      """
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+
+  Scenario: System provider includes benchmark agent metadata
+    Given the service is running
+    When I send a GET request to "/api/v1/evaluations/providers/lm_evaluation_harness"
+    Then the response code should be 200
+    And the array at path "benchmarks[0].agent.score_ranges" in the response should have length at least 2
+
+  Scenario: Create provider with benchmark agent metadata
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/providers" with body:
+      """
+      {
+        "name": "my-custom-evaluator-with-benchmark-metadata",
+        "title": "Custom Internal Evaluator",
+        "description": "Internal evaluation adapter for domain-specific benchmarks",
+        "tags": [
+          "custom",
+          "internal"
+        ],
+        "benchmarks": [
+          {
+            "id": "custom_domain_test",
+            "name": "Domain-Specific Test",
+            "description": "Custom benchmark for internal domain testing",
+            "category": "reasoning",
+            "metrics": [
+              "acc",
+              "f1"
+            ],
+            "num_few_shot": 0,
+            "dataset_size": 1000,
+            "tags": [
+              "custom",
+              "domain"
+            ],
+            "primary_score": {
+              "metric": "acc"
+            },
+            "pass_criteria": {
+              "threshold": 0.5
+            },
+            "agent": {
+              "result_interpretation": "Accuracy from 0-1; higher is better for domain tasks",
+              "score_ranges": [
+                {
+                  "range": "0.0-0.5",
+                  "meaning": "Below acceptable threshold"
+                },
+                {
+                  "range": "0.5-0.75",
+                  "meaning": "Meets minimum requirements"
+                },
+                {
+                  "range": "0.75-1.0",
+                  "meaning": "Excellent domain alignment"
+                }
+              ]
+            }
+          }
+        ]
+      }
+      """
+    Then the response code should be 201
+    And the response should contain the value "Accuracy from 0-1" at path "benchmarks[0].agent.result_interpretation"
+    And the array at path "benchmarks[0].agent.score_ranges" in the response should have length at least 2
+
+  @negative
+  Scenario: Create benchmark with score_range missing meaning field
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/providers" with body:
+      """
+      {
+        "name": "my-custom-evaluator-missing-meaning",
+        "benchmarks": [
+          {
+            "id": "custom_domain_test",
+            "metrics": [
+              "acc",
+              "f1"
+            ],
+            "agent": {
+              "result_interpretation": "Accuracy from 0-1; higher is better for domain tasks",
+              "score_ranges": [
+                {
+                  "range": "0.0-0.5"
+                }
+              ]
+            }
+          }
+        ]
+      }
+      """
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+
+  @negative
+  Scenario: Create benchmark with score_range missing range field
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/providers" with body:
+      """
+      {
+        "name": "my-custom-evaluator-missing-range",
+        "benchmarks": [
+          {
+            "id": "custom_domain_test",
+            "metrics": [
+              "acc",
+              "f1"
+            ],
+            "agent": {
+              "result_interpretation": "Accuracy from 0-1; higher is better for domain tasks",
+              "score_ranges": [
+                {
+                  "meaning": "Excellent domain alignment"
+                }
+              ]
+            }
+          }
+        ]
+      }
+      """
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+
+  Scenario: Create provider with target_type agent
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/providers" with body:
+      """
+      {
+        "name": "test-agent-provider",
+        "title": "Test Agent Provider",
+        "description": "Provider for testing agent target_type",
+        "agent": {
+          "evaluates": ["reasoning", "planning"],
+          "target_type": "agent",
+          "summary": "Evaluates AI agent capabilities"
+        },
+        "benchmarks": [
+          {
+            "id": "test_agent_benchmark",
+            "name": "Agent Test Benchmark"
+          }
+        ]
+      }
+      """
+    Then the response code should be 201
+    And the response should contain the value "agent" at path "agent.target_type"
+
+  Scenario: Create provider with target_type inference_server
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/providers" with body:
+      """
+      {
+        "name": "test-inference-server-provider",
+        "title": "Test Inference Server Provider",
+        "description": "Provider for testing inference_server target_type",
+        "agent": {
+          "evaluates": ["throughput", "latency"],
+          "target_type": "inference_server",
+          "summary": "Evaluates inference server performance"
+        },
+        "benchmarks": [
+          {
+            "id": "test_server_benchmark",
+            "name": "Server Performance Benchmark"
+          }
+        ]
+      }
+      """
+    Then the response code should be 201
+    And the response should contain the value "inference_server" at path "agent.target_type"
