@@ -65,38 +65,9 @@ start-mlflow: install-mlflow ## Run MLflow server locally in the background
 	@echo "   export MLFLOW_TRACKING_URI=$(MLFLOW_TRACKING_URI)"
 
 start-mlflow-with-logs: start-mlflow ## Run MLflow server locally in the background and tail the log file
-	@echo "🛑 Stopping MLflow server..."
-	-@make stop-mlflow
-	-@rm -f bin/mlflow.db tests/features/test_mlflow_${MLFLOW_PORT}.db
-	@echo "🚀 Starting MLflow server..."
-	@echo "   Host: $(MLFLOW_HOST)"
-	@echo "   Port: $(MLFLOW_PORT)"
-	@echo "   Backend: $(MLFLOW_BACKEND_STORE_URI)"
-	@echo "   Artifacts: $(MLFLOW_DEFAULT_ARTIFACT_ROOT)"
-	@echo "   Log file: $(MLFLOW_LOG_FILE)"
-	@echo ""
-	@MLFLOW_HOST=$(MLFLOW_HOST) \
-	 MLFLOW_PORT=$(MLFLOW_PORT) \
-	 MLFLOW_BACKEND_STORE_URI=$(MLFLOW_BACKEND_STORE_URI) \
-	 MLFLOW_DEFAULT_ARTIFACT_ROOT=$(MLFLOW_DEFAULT_ARTIFACT_ROOT) \
-	 MLFLOW_ENABLE_WORKSPACES=$(MLFLOW_ENABLE_WORKSPACES) \
-	 MLFLOW_LOG_FILE=$(MLFLOW_LOG_FILE) \
-	 VENV_DIR=$(VENV_DIR) \
-	 ./scripts/run_mlflow.sh
-	@echo "   MLflow server started in background. Use 'make stop-mlflow' to stop it."
-	@echo ""
-	@echo "   To use the server in your tests:"
-	@echo "   export MLFLOW_TRACKING_URI=$(MLFLOW_TRACKING_URI)"
-	@echo ""
-	@echo "   Server logs:"
-	@echo "   tail -f $(MLFLOW_LOG_FILE)"
-	@echo ""
-	@echo "   To stop the server:"
-	@echo "   make stop-mlflow"
-	@echo ""
-	@echo "Tailing the log file:"
-	@echo ""
-	@tail -f bin/mlflow_5000.log
+	`@echo` "Tailing the log file:"
+	`@echo` ""
+	`@tail` -f $(MLFLOW_LOG_FILE)
 
 stop-mlflow: ## Stop MLflow server (if running)
 	./scripts/stop_mlflow.sh
