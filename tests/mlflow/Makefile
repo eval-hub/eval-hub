@@ -51,7 +51,7 @@ start-mlflow: install-mlflow ## Run MLflow server locally in the background
 	@echo "   Artifacts: $(MLFLOW_DEFAULT_ARTIFACT_ROOT)"
 	@echo "   Log file: $(MLFLOW_LOG_FILE)"
 	@echo ""
-	`@MLFLOW_HOST`=$(MLFLOW_HOST) \
+	@MLFLOW_HOST=$(MLFLOW_HOST) \
 	 MLFLOW_PORT=$(MLFLOW_PORT) \
 	 MLFLOW_BACKEND_STORE_URI=$(MLFLOW_BACKEND_STORE_URI) \
 	 MLFLOW_DEFAULT_ARTIFACT_ROOT=$(MLFLOW_DEFAULT_ARTIFACT_ROOT) \
@@ -66,9 +66,9 @@ start-mlflow: install-mlflow ## Run MLflow server locally in the background
 	@echo "   export MLFLOW_TRACKING_URI=$(MLFLOW_TRACKING_URI)"
 
 start-mlflow-with-logs: start-mlflow ## Run MLflow server locally in the background and tail the log file
-	`@echo` "Tailing the log file:"
-	`@echo` ""
-	`@tail` -f $(MLFLOW_LOG_FILE)
+	@echo "Tailing the log file:"
+	@echo ""
+	@tail -f $(MLFLOW_LOG_FILE)
 
 stop-mlflow: ## Stop MLflow server (if running)
 	./scripts/stop_mlflow.sh
