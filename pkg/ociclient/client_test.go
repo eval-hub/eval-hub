@@ -223,7 +223,9 @@ func TestUploadBlobChunkedFollowsRotatedLocation(t *testing.T) {
 			finalizeURL = r.URL.Path
 			w.WriteHeader(http.StatusCreated)
 		case r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/blobs/uploads/"):
-			t.Fatalf("unexpected finalize URL %q", r.URL.Path)
+			t.Errorf("unexpected finalize URL %q", r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		default:
 			http.NotFound(w, r)
 		}
