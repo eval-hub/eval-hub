@@ -114,6 +114,14 @@
             },
             "message_code": {
               "type": "string"
+            },
+            "message_origin": {
+              "type": "string",
+              "enum": [
+                "server",
+                "runtime"
+              ],
+              "description": "Origin of the status message (server or runtime adapter)."
             }
           }
         },
