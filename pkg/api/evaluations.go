@@ -204,6 +204,7 @@ type BenchmarkStatus struct {
 	WarningMessage *MessageInfo `json:"warning_message,omitempty"`
 	StartedAt      DateTime     `json:"started_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
 	CompletedAt    DateTime     `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
+	UpdatedAt      DateTime     `json:"updated_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
 }
 
 // BenchmarkStatusEvent is used when the job runtime needs to update the status of a benchmark

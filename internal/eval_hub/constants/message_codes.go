@@ -10,4 +10,8 @@ const (
 	// MESSAGE_CODE_GPU_UNAVAILABLE is set when an evaluation job's Kueue workload is inadmissible
 	// because the requested queue does not have sufficient GPU capacity.
 	MESSAGE_CODE_GPU_UNAVAILABLE = "gpu_unavailable"
+
+	// MESSAGE_CODE_BENCHMARK_TIMEOUT is set when a benchmark is failed by the
+	// watchdog because it exceeded the configured staleness timeout.
+	MESSAGE_CODE_BENCHMARK_TIMEOUT = "benchmark_timeout"
 )

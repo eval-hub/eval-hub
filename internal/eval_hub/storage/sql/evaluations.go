@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
@@ -423,6 +424,7 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 			StartedAt:      runStatus.BenchmarkStatusEvent.StartedAt,
 			CompletedAt:    runStatus.BenchmarkStatusEvent.CompletedAt,
 			BenchmarkIndex: runStatus.BenchmarkStatusEvent.BenchmarkIndex,
+			UpdatedAt:      api.DateTimeToString(time.Now()),
 		}
 		s.updateBenchmarkStatus(job, runStatus, &benchmark)
 

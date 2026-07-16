@@ -36,6 +36,13 @@ type ServiceConfig struct {
 	// MaxRequestBodyBytes limits incoming request bodies via http.MaxBytesReader.
 	// Zero or unset uses DefaultMaxRequestBodyBytes. -1 disables the limit.
 	MaxRequestBodyBytes int64 `mapstructure:"max_request_body_bytes,omitempty"`
+	// BenchmarkTimeout is the maximum duration a benchmark may remain in a non-terminal
+	// state without receiving a status update before the watchdog marks it as failed.
+	// Zero or unset uses the default (10m). Negative disables the watchdog.
+	BenchmarkTimeout time.Duration `mapstructure:"benchmark_timeout,omitempty"`
+	// BenchmarkWatchdogInterval is how often the watchdog checks for stuck benchmarks.
+	// Zero or unset uses the default (1m).
+	BenchmarkWatchdogInterval time.Duration `mapstructure:"benchmark_watchdog_interval,omitempty"`
 }
 
 // TLSEnabled returns true when both TLS cert and key paths are configured.
@@ -53,10 +60,12 @@ func (c *ServiceConfig) ValidateTLSConfig() error {
 }
 
 const (
-	defaultReadTimeout       = 15 * time.Second
-	defaultWriteTimeout      = 15 * time.Second
-	defaultIdleTimeout       = 60 * time.Second
-	defaultReadHeaderTimeout = 15 * time.Second
+	defaultReadTimeout              = 15 * time.Second
+	defaultWriteTimeout             = 15 * time.Second
+	defaultIdleTimeout              = 60 * time.Second
+	defaultReadHeaderTimeout        = 15 * time.Second
+	defaultBenchmarkTimeout         = 10 * time.Minute
+	defaultBenchmarkWatchdogInterval = 1 * time.Minute
 )
 
 // EffectiveReadTimeout returns http.Server ReadTimeout. When unset or non-positive, returns 15s.
@@ -113,6 +122,29 @@ func (c *ServiceConfig) EffectiveMaxRequestBodyBytes() int64 {
 		return DefaultMaxRequestBodyBytes
 	}
 	return c.MaxRequestBodyBytes
+}
+
+// EffectiveBenchmarkTimeout returns the per-benchmark staleness timeout.
+// When unset or zero, returns 10m. Negative means the watchdog is disabled.
+func (c *ServiceConfig) EffectiveBenchmarkTimeout() time.Duration {
+	if c == nil || c.BenchmarkTimeout == 0 {
+		return defaultBenchmarkTimeout
+	}
+	return c.BenchmarkTimeout
+}
+
+// BenchmarkWatchdogEnabled returns true when the benchmark watchdog should run.
+func (c *ServiceConfig) BenchmarkWatchdogEnabled() bool {
+	return c != nil && c.BenchmarkTimeout >= 0
+}
+
+// EffectiveBenchmarkWatchdogInterval returns the watchdog polling interval.
+// When unset or non-positive, returns 1m.
+func (c *ServiceConfig) EffectiveBenchmarkWatchdogInterval() time.Duration {
+	if c == nil || c.BenchmarkWatchdogInterval <= 0 {
+		return defaultBenchmarkWatchdogInterval
+	}
+	return c.BenchmarkWatchdogInterval
 }
 
 // ValidateHTTPConfig returns an error when HTTP-related settings are invalid.

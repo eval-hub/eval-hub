@@ -19,6 +19,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/watchdog"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/otel"
 )
@@ -191,6 +192,13 @@ func main() {
 	// Start config watcher to reload system providers and collections on file changes
 	watcherDone, watcherCancel := config.SetupWatcher(logger, validate, storage, args.ConfigDir)
 
+	// Start benchmark watchdog to detect and fail stuck benchmarks
+	var watchdogDone chan struct{}
+	var watchdogCancel context.CancelFunc
+	if serviceConfig.Service.BenchmarkWatchdogEnabled() {
+		watchdogDone, watchdogCancel = watchdog.SetupWatchdog(logger, storage, serviceConfig.Service)
+	}
+
 	// Start metrics server in a goroutine
 	if metricsSrv != nil {
 		go func() {
@@ -216,6 +224,13 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
+
+	// Stop benchmark watchdog
+	if watchdogCancel != nil {
+		logger.Info("Shutting down benchmark watchdog...")
+		watchdogCancel()
+		<-watchdogDone
+	}
 
 	// Stop config watcher
 	logger.Info("Shutting down API config watcher...")
