@@ -1,5 +1,5 @@
 [[IgnoredVulns]]
 id = "GO-2026-5932"
-# ignoreUntil = 2022-11-09 # Optional exception expiry date
+ignoreUntil = 2026-12-31 # Force a re-verification for this exception
 # https://pkg.go.dev/vuln/GO-2026-5932
 reason = "We do not use OpenPGP in EvalHub"
