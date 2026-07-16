@@ -1261,10 +1261,10 @@ Feature: Evaluation Jobs
     Then the response code should be 200
     And the response content type should be "text/plain"
     And the response body should contain "benchmark_id=arc_easy"
-    And the response body should contain "EVALUATION COMPLETE"
+    And the response body should contain "Evaluation completed successfully"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}/benchmarks/0/logs"
     Then the response code should be 200
     And the response content type should be "text/plain"
-    And the response body should contain "EVALUATION COMPLETE"
+    And the response body should contain "Evaluation completed successfully"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
