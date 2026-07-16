@@ -23,6 +23,16 @@ type terminalTestStorage struct {
 	job *api.EvaluationJobResource
 }
 
+type terminalEvalCardStorage struct {
+	terminalTestStorage
+	persistCalled bool
+}
+
+func (s *terminalEvalCardStorage) UpdateEvaluationJobEvalCard(_ string, _ []byte) error {
+	s.persistCalled = true
+	return nil
+}
+
 func (s *terminalTestStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) {
 	return s.job, nil
 }
@@ -82,11 +92,13 @@ func TestOnEvaluationJobUpdatedSkipsExportWhenTerminalStateUnchanged(t *testing.
 func TestOnEvaluationJobUpdatedExportsOnFailedTransition(t *testing.T) {
 	t.Parallel()
 	exporter := &terminalTestExporter{}
-	storage := &terminalTestStorage{
-		job: &api.EvaluationJobResource{
-			Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
-			Status: &api.EvaluationJobStatus{
-				EvaluationJobState: api.EvaluationJobState{State: api.OverallStateFailed},
+	storage := &terminalEvalCardStorage{
+		terminalTestStorage: terminalTestStorage{
+			job: &api.EvaluationJobResource{
+				Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
+				Status: &api.EvaluationJobStatus{
+					EvaluationJobState: api.EvaluationJobState{State: api.OverallStateFailed},
+				},
 			},
 		},
 	}
@@ -102,6 +114,9 @@ func TestOnEvaluationJobUpdatedExportsOnFailedTransition(t *testing.T) {
 
 	if !exporter.called {
 		t.Fatal("expected export when job transitions to failed")
+	}
+	if !storage.persistCalled {
+		t.Fatal("expected eval card to be persisted when job transitions to failed")
 	}
 }
 

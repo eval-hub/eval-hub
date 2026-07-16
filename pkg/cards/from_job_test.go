@@ -97,8 +97,8 @@ func TestNewEvaluationCardFromDirectBenchmarkJob(t *testing.T) {
 	if card.Results.Benchmarks[0].Status != api.StateCompleted {
 		t.Fatalf("status = %q", card.Results.Benchmarks[0].Status)
 	}
-	if card.Results.Benchmarks[0].Test.PrimaryScore != "0.95" {
-		t.Fatalf("primary_score = %q", card.Results.Benchmarks[0].Test.PrimaryScore)
+	if card.Results.Benchmarks[0].Test.PrimaryScore != 0.95 {
+		t.Fatalf("primary_score = %v", card.Results.Benchmarks[0].Test.PrimaryScore)
 	}
 	if card.Results.Status == nil {
 		t.Fatal("expected overall job status")
@@ -273,8 +273,8 @@ func TestNewEvaluationCardFromResultsWithoutStatusBenchmarks(t *testing.T) {
 	if card.Results.Benchmarks[0].Status != "" {
 		t.Fatalf("status = %q, want empty when built from results only", card.Results.Benchmarks[0].Status)
 	}
-	if card.Results.Benchmarks[0].Test.PrimaryScore != "0.9" {
-		t.Fatalf("primary_score = %q", card.Results.Benchmarks[0].Test.PrimaryScore)
+	if card.Results.Benchmarks[0].Test.PrimaryScore != 0.9 {
+		t.Fatalf("primary_score = %v", card.Results.Benchmarks[0].Test.PrimaryScore)
 	}
 }
 

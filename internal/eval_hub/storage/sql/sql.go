@@ -304,6 +304,15 @@ func (s *sqlStorage) ensureSchema() error {
 		return err
 	}
 
+	for _, migration := range s.statementsFactory.GetSchemaMigrations() {
+		if _, err := s.exec(nil, migration); err != nil {
+			if strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
+				continue
+			}
+			return err
+		}
+	}
+
 	return nil
 }
 

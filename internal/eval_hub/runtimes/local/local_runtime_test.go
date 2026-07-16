@@ -48,6 +48,9 @@ func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobResource) error { 
 func (f *fakeStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) {
 	return nil, nil
 }
+func (f *fakeStorage) GetEvaluationJobEvalCard(_ string) (json.RawMessage, error) {
+	return nil, nil
+}
 func (f *fakeStorage) GetEvaluationJobs(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
 	return nil, nil
 }
@@ -56,7 +59,8 @@ func (f *fakeStorage) UpdateEvaluationJobStatus(_ string, _ api.OverallState, _ 
 	f.called = true
 	return nil
 }
-func (f *fakeStorage) CreateCollection(_ *api.CollectionResource) error { return nil }
+func (f *fakeStorage) UpdateEvaluationJobEvalCard(_ string, _ []byte) error { return nil }
+func (f *fakeStorage) CreateCollection(_ *api.CollectionResource) error     { return nil }
 func (f *fakeStorage) GetCollection(id string) (*api.CollectionResource, error) {
 	if cr, ok := f.collectionConfigs[id]; ok {
 		return &cr, nil

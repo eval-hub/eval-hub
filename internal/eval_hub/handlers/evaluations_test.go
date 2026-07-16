@@ -38,6 +38,7 @@ type fakeStorage struct {
 	lastStatusID      string
 	lastStatus        api.OverallState
 	job               *api.EvaluationJobResource
+	evalCard          json.RawMessage
 	deleteID          string
 	providerConfigs   map[string]api.ProviderResource
 	collectionConfigs map[string]api.CollectionResource
@@ -49,6 +50,7 @@ func (f *fakeStorage) WithLogger(_ *slog.Logger) abstractions.Storage {
 		lastStatusID:      f.lastStatusID,
 		lastStatus:        f.lastStatus,
 		job:               f.job,
+		evalCard:          f.evalCard,
 		deleteID:          f.deleteID,
 		providerConfigs:   f.providerConfigs,
 		collectionConfigs: f.collectionConfigs,
@@ -60,6 +62,7 @@ func (f *fakeStorage) WithContext(_ context.Context) abstractions.Storage {
 		lastStatusID:      f.lastStatusID,
 		lastStatus:        f.lastStatus,
 		job:               f.job,
+		evalCard:          f.evalCard,
 		deleteID:          f.deleteID,
 		providerConfigs:   f.providerConfigs,
 		collectionConfigs: f.collectionConfigs,
@@ -71,6 +74,7 @@ func (f *fakeStorage) WithTenant(_ api.Tenant) abstractions.Storage {
 		lastStatusID:      f.lastStatusID,
 		lastStatus:        f.lastStatus,
 		job:               f.job,
+		evalCard:          f.evalCard,
 		deleteID:          f.deleteID,
 		providerConfigs:   f.providerConfigs,
 		collectionConfigs: f.collectionConfigs,
@@ -82,6 +86,7 @@ func (f *fakeStorage) WithOwner(_ api.User) abstractions.Storage {
 		lastStatusID:      f.lastStatusID,
 		lastStatus:        f.lastStatus,
 		job:               f.job,
+		evalCard:          f.evalCard,
 		deleteID:          f.deleteID,
 		providerConfigs:   f.providerConfigs,
 		collectionConfigs: f.collectionConfigs,
@@ -102,11 +107,19 @@ func (f *fakeStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, er
 	return f.job, nil
 }
 
+func (f *fakeStorage) GetEvaluationJobEvalCard(_ string) (json.RawMessage, error) {
+	return f.evalCard, nil
+}
+
 func (f *fakeStorage) GetEvaluationJobs(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
 	return &abstractions.QueryResults[api.EvaluationJobResource]{Items: []api.EvaluationJobResource{}, TotalCount: 0}, nil
 }
 
 func (f *fakeStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
+	return nil
+}
+
+func (f *fakeStorage) UpdateEvaluationJobEvalCard(_ string, _ []byte) error {
 	return nil
 }
 
@@ -677,6 +690,77 @@ func TestHandleGetEvaluation(t *testing.T) {
 	}
 	if got.Resource.ID != "job-get" {
 		t.Errorf("expected id job-get, got %s", got.Resource.ID)
+	}
+}
+
+func TestHandleGetEvaluation_IncludesEvalCardWhenRequested(t *testing.T) {
+	evalCard := json.RawMessage(`{"card_version":"1.0","schema_version":"1.0"}`)
+	storage := &fakeStorage{
+		job: &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{ID: "job-get"},
+			},
+		},
+		evalCard: evalCard,
+	}
+	validate := validation.NewValidator()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+
+	req := &deleteRequest{
+		MockRequest: createMockRequest("GET", "/api/v1/evaluations/jobs/job-get?include=eval_card"),
+		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: "job-get"},
+		queryValues: map[string][]string{"include": {"eval_card"}},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
+
+	h.HandleGetEvaluation(ctx, req, resp)
+
+	if recorder.Code != 200 {
+		t.Fatalf("expected status 200, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+	var got api.EvaluationJobResource
+	if err := json.NewDecoder(recorder.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.Results == nil || len(got.Results.EvalCard) == 0 {
+		t.Fatal("expected eval_card in results")
+	}
+	if string(got.Results.EvalCard) != string(evalCard) {
+		t.Fatalf("eval_card = %s, want %s", got.Results.EvalCard, evalCard)
+	}
+}
+
+func TestHandleGetEvaluation_OmitsEvalCardByDefault(t *testing.T) {
+	storage := &fakeStorage{
+		job: &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{ID: "job-get"},
+			},
+		},
+		evalCard: json.RawMessage(`{"card_version":"1.0"}`),
+	}
+	validate := validation.NewValidator()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+
+	req := &deleteRequest{
+		MockRequest: createMockRequest("GET", "/api/v1/evaluations/jobs/job-get"),
+		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: "job-get"},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
+
+	h.HandleGetEvaluation(ctx, req, resp)
+
+	if recorder.Code != 200 {
+		t.Fatalf("expected status 200, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), `"eval_card"`) {
+		t.Fatalf("expected eval_card to be omitted, got body %s", recorder.Body.String())
 	}
 }
 

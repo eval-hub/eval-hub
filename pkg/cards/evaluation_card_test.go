@@ -64,8 +64,8 @@ func TestEvaluationCardJSONRoundTrip(t *testing.T) {
 						"dataset_sha": "abc123",
 					},
 					Test: &CardBenchmarkTest{
-						PrimaryScore: "0.95",
-						Threshold:    "0.3",
+						PrimaryScore: 0.95,
+						Threshold:    0.3,
 						Pass:         true,
 					},
 				},

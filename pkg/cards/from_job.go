@@ -167,14 +167,10 @@ func toCardBenchmarkTest(test *api.BenchmarkTest) *CardBenchmarkTest {
 		return nil
 	}
 	return &CardBenchmarkTest{
-		PrimaryScore: formatCardScore(test.PrimaryScore),
-		Threshold:    formatCardScore(test.Threshold),
+		PrimaryScore: test.PrimaryScore,
+		Threshold:    test.Threshold,
 		Pass:         test.Pass,
 	}
-}
-
-func formatCardScore(value float32) string {
-	return fmt.Sprintf("%g", value)
 }
 
 func benchmarkKey(id, providerID string, benchmarkIndex int) string {

@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
     experiment_id VARCHAR(255) NOT NULL,
     entity TEXT NOT NULL,
+    eval_card TEXT,
     PRIMARY KEY (id)
 );
 
@@ -78,6 +79,12 @@ func (s *sqliteStatementsFactory) GetTablesSchema() string {
 	return TABLES_SCHEMA
 }
 
+func (s *sqliteStatementsFactory) GetSchemaMigrations() []string {
+	return []string{
+		`ALTER TABLE evaluations ADD COLUMN eval_card TEXT;`,
+	}
+}
+
 // allowedFilterColumns returns the set of column/param names allowed in filter for each table.
 func (s *sqliteStatementsFactory) GetAllowedFilterColumns(tableName string) []string {
 	allColumns := []string{"owner", "name", "tags"}
@@ -100,6 +107,11 @@ func (s *sqliteStatementsFactory) CreateEvaluationAddEntityStatement(evaluation 
 func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
 	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, query.Resource.ID)
 	return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE %s;`, where), whereArgs, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
+}
+
+func (s *sqliteStatementsFactory) CreateEvaluationGetEvalCardStatement(tenant api.Tenant, id string) (string, []any) {
+	where, whereArgs := s.getWhereStatement(tenant, id)
+	return fmt.Sprintf(`SELECT eval_card FROM evaluations WHERE %s;`, where), whereArgs
 }
 
 // entityFilterCondition returns the SQL condition and args for a filter key.
@@ -170,6 +182,13 @@ func (s *sqliteStatementsFactory) ScanRowForEntity(tenant api.Tenant, tableName 
 	default:
 		return rows.Scan(&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON)
 	}
+}
+
+func (s *sqliteStatementsFactory) CreateUpdateEvaluationEvalCardStatement(tenant api.Tenant, id string, evalCardJSON string) (string, []any) {
+	if !tenant.IsEmpty() {
+		return `UPDATE evaluations SET eval_card = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ? AND eval_card IS NULL;`, []any{evalCardJSON, id, tenant.String()}
+	}
+	return `UPDATE evaluations SET eval_card = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND eval_card IS NULL;`, []any{evalCardJSON, id}
 }
 
 func (s *sqliteStatementsFactory) CreateDeleteEntityStatement(tenant api.Tenant, tableName string, id string) (string, []any) {

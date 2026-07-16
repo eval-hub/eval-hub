@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
     experiment_id VARCHAR(255) NOT NULL,
     entity JSONB NOT NULL,
+    eval_card JSONB,
     PRIMARY KEY (id)
 );
 
@@ -69,6 +70,12 @@ func (s *postgresStatementsFactory) GetTablesSchema() string {
 	return TABLES_SCHEMA
 }
 
+func (s *postgresStatementsFactory) GetSchemaMigrations() []string {
+	return []string{
+		`ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS eval_card JSONB;`,
+	}
+}
+
 func (s *postgresStatementsFactory) CreateEvaluationAddEntityStatement(evaluation *api.EvaluationJobResource, entity string) (string, []any) {
 	return INSERT_EVALUATION_STATEMENT, []any{evaluation.Resource.ID, evaluation.Resource.Tenant, evaluation.Resource.Owner, evaluation.Status.State, evaluation.Resource.MLFlowExperimentID, entity}
 }
@@ -79,6 +86,13 @@ func (s *postgresStatementsFactory) CreateEvaluationGetEntityStatement(query *sh
 		return `SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE id = $1;`, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
 	}
 	return `SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE id = $1 AND tenant_id = $2;`, []any{&query.Resource.ID, query.Resource.Tenant.String()}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
+}
+
+func (s *postgresStatementsFactory) CreateEvaluationGetEvalCardStatement(tenant api.Tenant, id string) (string, []any) {
+	if tenant.IsEmpty() {
+		return `SELECT eval_card FROM evaluations WHERE id = $1;`, []any{id}
+	}
+	return `SELECT eval_card FROM evaluations WHERE id = $1 AND tenant_id = $2;`, []any{id, tenant.String()}
 }
 
 // allowedFilterColumns returns the set of column/param names allowed in filter for each table.
@@ -166,6 +180,13 @@ func (s *postgresStatementsFactory) ScanRowForEntity(tenant api.Tenant, tableNam
 	default:
 		return rows.Scan(&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON)
 	}
+}
+
+func (s *postgresStatementsFactory) CreateUpdateEvaluationEvalCardStatement(tenant api.Tenant, id string, evalCardJSON string) (string, []any) {
+	if !tenant.IsEmpty() {
+		return `UPDATE evaluations SET eval_card = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND tenant_id = $3 AND eval_card IS NULL;`, []any{evalCardJSON, id, tenant.String()}
+	}
+	return `UPDATE evaluations SET eval_card = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND eval_card IS NULL;`, []any{evalCardJSON, id}
 }
 
 func (s *postgresStatementsFactory) CreateDeleteEntityStatement(tenant api.Tenant, tableName string, id string) (string, []any) {

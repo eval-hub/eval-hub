@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -417,6 +418,29 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 	)
 }
 
+func requestIncludesEvalCard(r http_wrappers.RequestWrapper) bool {
+	include, err := GetParam(r, "include", true, "")
+	if err != nil || include == "" {
+		return false
+	}
+	for _, part := range strings.Split(include, ",") {
+		if strings.TrimSpace(part) == "eval_card" {
+			return true
+		}
+	}
+	return false
+}
+
+func attachEvalCardToResponse(job *api.EvaluationJobResource, evalCard json.RawMessage) {
+	if job == nil || len(evalCard) == 0 {
+		return
+	}
+	if job.Results == nil {
+		job.Results = &api.EvaluationJobResults{}
+	}
+	job.Results.EvalCard = append(json.RawMessage(nil), evalCard...)
+}
+
 // HandleGetEvaluation handles GET /api/v1/evaluations/jobs/{id}
 func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.getStorage(ctx)
@@ -430,6 +454,8 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 		return
 	}
 
+	includeEvalCard := requestIncludesEvalCard(r)
+
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
@@ -437,6 +463,14 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
+			}
+			if includeEvalCard {
+				evalCard, err := storage.WithContext(runtimeCtx).GetEvaluationJobEvalCard(evaluationJobID)
+				if err != nil {
+					w.Error(err, ctx.RequestID)
+					return err
+				}
+				attachEvalCardToResponse(response, evalCard)
 			}
 			w.WriteJSON(response, 200)
 			return nil
