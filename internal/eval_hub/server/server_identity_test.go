@@ -24,13 +24,46 @@ func TestClusterModeRequiresIdentityHeaders(t *testing.T) {
 		t.Fatalf("SetupRoutes: %v", err)
 	}
 
-	t.Run("health does not require identity headers", func(t *testing.T) {
+	t.Run("healthz does not require identity headers", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("healthz: got status %d body %s", w.Code, w.Body.String())
+		}
+		var body map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode healthz body: %v", err)
+		}
+		if body["status"] != "healthy" {
+			t.Fatalf("healthz status: got %v want healthy", body["status"])
+		}
+		if _, ok := body["git_hash"]; ok {
+			t.Fatal("healthz must not expose git_hash")
+		}
+	})
+
+	t.Run("health requires identity headers", func(t *testing.T) {
 		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("health without headers: got status %d body %s", w.Code, w.Body.String())
+		}
+		assertMessageCode(t, w, "missing_tenant_header")
+	})
+
+	t.Run("health succeeds with identity headers", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+		req.Header.Set("X-Tenant", "test-tenant")
+		req.Header.Set("X-User", "test-user")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
 		if w.Code != http.StatusOK {
-			t.Fatalf("health: got status %d body %s", w.Code, w.Body.String())
+			t.Fatalf("health with headers: got status %d body %s", w.Code, w.Body.String())
 		}
 	})
 

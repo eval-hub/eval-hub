@@ -89,6 +89,7 @@ Every API route registered via `server.handle()` is wrapped with `otelhttp.NewHa
 
 Routes **without** child handler spans (otelhttp parent span only):
 
+- `/healthz`
 - `/api/v1/health`
 - OpenAPI and docs routes
 
