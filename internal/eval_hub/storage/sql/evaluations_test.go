@@ -684,6 +684,74 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 		}
 	})
 
+	t.Run("UpdateEvaluationJob truncates endpoint HTTP error detail for persistence", func(t *testing.T) {
+		jobID := common.GUID()
+		now := time.Now()
+		job := &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{
+					ID:        jobID,
+					Tenant:    api.Tenant(tenant),
+					CreatedAt: now,
+					UpdatedAt: now,
+				},
+				MLFlowExperimentID: "experiment-1",
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{
+					State: api.OverallStateRunning,
+					Message: &api.MessageInfo{
+						Message:     "Job is running",
+						MessageCode: "JOB_RUNNING",
+					},
+				},
+			},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
+				Benchmarks: []api.EvaluationBenchmarkConfig{benchmarkConfig},
+			},
+		}
+		if err := store.CreateEvaluationJob(job); err != nil {
+			t.Fatalf("CreateEvaluationJob: %v", err)
+		}
+
+		full := "Model endpoint returned HTTP 404: 404 Client Error: Not Found for url: http://localhost:8080/v1/completions"
+		status := &api.StatusEvent{
+			BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+				ID:             benchmarkConfig.ID,
+				ProviderID:     benchmarkConfig.ProviderID,
+				BenchmarkIndex: 0,
+				Status:         api.StateFailed,
+				ErrorMessage: &api.MessageInfo{
+					Message:     full,
+					MessageCode: "ADAPTER_FAIL",
+				},
+			},
+		}
+		status.BenchmarkStatusEvent.StampRuntimeMessageOrigins()
+		if err := store.UpdateEvaluationJob(jobID, status); err != nil {
+			t.Fatalf("UpdateEvaluationJob: %v", err)
+		}
+
+		got, err := store.GetEvaluationJob(jobID)
+		if err != nil {
+			t.Fatalf("GetEvaluationJob: %v", err)
+		}
+		if len(got.Status.Benchmarks) == 0 || got.Status.Benchmarks[0].ErrorMessage == nil {
+			t.Fatal("expected persisted benchmark error message")
+		}
+		want := "Model endpoint returned HTTP 404"
+		if got.Status.Benchmarks[0].ErrorMessage.Message != want {
+			t.Fatalf("persisted error message = %q, want %q", got.Status.Benchmarks[0].ErrorMessage.Message, want)
+		}
+		if got.Status.Message == nil || !strings.Contains(got.Status.Message.Message, want) {
+			t.Fatalf("overall message = %q, want it to contain truncated benchmark error %q", got.Status.Message, want)
+		}
+		if strings.Contains(got.Status.Benchmarks[0].ErrorMessage.Message, "localhost:8080") {
+			t.Fatalf("persisted error still contains sidecar URL detail: %q", got.Status.Benchmarks[0].ErrorMessage.Message)
+		}
+	})
+
 	t.Run("UpdateEvaluationJob persists runtime origin for failed benchmark errors", func(t *testing.T) {
 		jobID := common.GUID()
 		now := time.Now()

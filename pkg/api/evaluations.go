@@ -2,8 +2,16 @@ package api
 
 import (
 	"fmt"
+	"log/slog"
+	"regexp"
+	"strings"
 	"time"
 )
+
+// endpointReturnedHTTPDetailRegExp matches adapter errors like:
+// "Model endpoint returned HTTP 404: 404 Client Error: Not Found for url: http://localhost:8080/..."
+// Capture group 1 is the prefix kept for persistence (through the HTTP status code).
+var endpointReturnedHTTPDetailRegExp = regexp.MustCompile(`(?i)^(.+\bendpoint returned HTTP \d+)\s*:\s*\S`)
 
 // State represents the evaluation state enum
 type State string
@@ -114,6 +122,29 @@ func (e *BenchmarkStatusEvent) StampRuntimeMessageOrigins() {
 	}
 	WithMessageOrigin(e.ErrorMessage, MessageOriginRuntime)
 	WithMessageOrigin(e.WarningMessage, MessageOriginRuntime)
+}
+
+// TruncateEndpointHTTPErrorDetail shortens ErrorMessage when it matches
+// "<prefix> endpoint returned HTTP <code>: <detail>" to
+// "<prefix> endpoint returned HTTP <code>". The full original message is logged
+// before the shortened value replaces it. Non-matching messages are left unchanged.
+func (e *BenchmarkStatusEvent) TruncateEndpointHTTPErrorDetail(logger *slog.Logger) {
+	if e == nil || e.ErrorMessage == nil {
+		return
+	}
+	m := endpointReturnedHTTPDetailRegExp.FindStringSubmatch(e.ErrorMessage.Message)
+	if m == nil {
+		return
+	}
+	fullMessage := e.ErrorMessage.Message
+	persistedMessage := strings.TrimSpace(m[1])
+	if logger != nil {
+		logger.Info("Truncated endpoint HTTP error detail for persistence",
+			"full_message", fullMessage,
+			"persisted_message", persistedMessage,
+		)
+	}
+	e.ErrorMessage.Message = persistedMessage
 }
 
 type PrimaryScore struct {
