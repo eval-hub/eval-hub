@@ -194,23 +194,68 @@ func testUpdateEvaluationJob_ConcurrentBenchmarkCompletions(t *testing.T, driver
 		t.Fatalf("complete truthfulqa_mc1: %v", err)
 	}
 
-	var wg sync.WaitGroup
-	errs := make(chan error, 2)
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		errs <- completeBenchmark("toxigen", 0)
-	}()
-	go func() {
-		defer wg.Done()
-		errs <- completeBenchmark("bigbench_hhh_alignment_multiple_choice", 2)
-	}()
-	wg.Wait()
-	close(errs)
-	for err := range errs {
-		if err != nil {
-			t.Fatalf("concurrent completion: %v", err)
+	// Hold the first UpdateEvaluationJob transaction after its locked read so a
+	// second update must contend on the same row (postgres FOR UPDATE). Only the
+	// first hook invocation blocks; later ones return immediately so a missing
+	// FOR UPDATE lets the second update finish and fail the contention check.
+	locked := make(chan struct{})
+	release := make(chan struct{})
+	var holdGate sync.Mutex
+	var holdingTxn bool
+	t.Cleanup(func() {
+		sql.SetEvaluationJobUpdateAfterLockedReadHook(nil)
+		select {
+		case <-release:
+		default:
+			close(release)
 		}
+	})
+	sql.SetEvaluationJobUpdateAfterLockedReadHook(func(_, _ string) {
+		holdGate.Lock()
+		if holdingTxn {
+			holdGate.Unlock()
+			return
+		}
+		holdingTxn = true
+		holdGate.Unlock()
+		close(locked)
+		<-release
+	})
+
+	doneFirst := make(chan error, 1)
+	doneSecond := make(chan error, 1)
+	go func() {
+		doneFirst <- completeBenchmark("toxigen", 0)
+	}()
+
+	select {
+	case <-locked:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for first transaction to acquire row lock")
+	}
+
+	go func() {
+		doneSecond <- completeBenchmark("bigbench_hhh_alignment_multiple_choice", 2)
+	}()
+
+	if driver == "postgres" || driver == "pgx" {
+		select {
+		case err := <-doneFirst:
+			t.Fatalf("first update completed while holding row lock: %v", err)
+		case err := <-doneSecond:
+			t.Fatalf("second update completed before row lock released (FOR UPDATE not contending): %v", err)
+		case <-time.After(1 * time.Second):
+			// Expected: second txn is blocked on SELECT ... FOR UPDATE.
+		}
+	}
+
+	close(release)
+
+	if err := <-doneFirst; err != nil {
+		t.Fatalf("complete toxigen: %v", err)
+	}
+	if err := <-doneSecond; err != nil {
+		t.Fatalf("complete bigbench: %v", err)
 	}
 
 	final, err := store.GetEvaluationJob(jobID)

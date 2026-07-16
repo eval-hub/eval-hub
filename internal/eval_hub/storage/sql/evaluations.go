@@ -391,6 +391,8 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 		if err != nil {
 			return err
 		}
+		// Test hook: no-op unless a test installs a callback (see test_hooks.go).
+		invokeEvaluationJobUpdateAfterLockedReadHook(id, runStatus.BenchmarkStatusEvent.ID)
 
 		// Guard: reject benchmark updates if job is already in a terminal state.
 		// We pass OverallStateRunning as the target to leverage checkEvaluationJobState's terminal-state check.
