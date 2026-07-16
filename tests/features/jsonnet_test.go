@@ -550,6 +550,134 @@ func TestEvaluateEvaluationJobJsonnetConnected(t *testing.T) {
 	}
 }
 
+func TestEvaluateEvaluationJobPvcJsonnet(t *testing.T) {
+	tc := &scenarioConfig{
+		values: map[string]string{},
+		jsonnetHarnessEnv: map[string]string{
+			"ENVIRONMENT_ID": "connected",
+		},
+	}
+	path, err := filepath.Abs(filepath.Join(testDataRoot(), "evaluation_job_pvc.jsonnet"))
+	if err != nil {
+		t.Fatalf("abs path: %v", err)
+	}
+	out, err := tc.evaluateJsonnetFile(path)
+	if err != nil {
+		t.Fatalf("evaluateJsonnetFile: %v", err)
+	}
+	t.Logf("PVC job: %s", out)
+	var job struct {
+		Name       string `json:"name"`
+		Benchmarks []struct {
+			ID          string         `json:"id"`
+			Parameters  map[string]any `json:"parameters"`
+			TestDataRef struct {
+				PVC struct {
+					ClaimName string `json:"claim_name"`
+					SubPath   string `json:"sub_path"`
+				} `json:"pvc"`
+			} `json:"test_data_ref"`
+		} `json:"benchmarks"`
+	}
+	if err := json.Unmarshal([]byte(out), &job); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if job.Name != "test-evaluation-job-pvc" {
+		t.Errorf("name = %q, want test-evaluation-job-pvc", job.Name)
+	}
+	if len(job.Benchmarks) != 1 {
+		t.Fatalf("benchmarks = %#v, want one benchmark", job.Benchmarks)
+	}
+	b := job.Benchmarks[0]
+	if b.ID != "arc_easy" {
+		t.Errorf("benchmark id = %q, want arc_easy", b.ID)
+	}
+	if b.Parameters["tokenizer"] != "/test_data/tokenizer" {
+		t.Errorf("tokenizer = %v, want /test_data/tokenizer", b.Parameters["tokenizer"])
+	}
+	if b.TestDataRef.PVC.ClaimName != "evalhub-offline-test-data" {
+		t.Errorf("claim_name = %q, want evalhub-offline-test-data", b.TestDataRef.PVC.ClaimName)
+	}
+	if b.TestDataRef.PVC.SubPath != "staging" {
+		t.Errorf("sub_path = %q, want staging", b.TestDataRef.PVC.SubPath)
+	}
+}
+
+func TestEvaluateEvaluationJobPvcAndS3Jsonnet(t *testing.T) {
+	tc := &scenarioConfig{
+		values:            map[string]string{},
+		jsonnetHarnessEnv: map[string]string{},
+	}
+	path, err := filepath.Abs(filepath.Join(testDataRoot(), "evaluation_job_pvc_and_s3.jsonnet"))
+	if err != nil {
+		t.Fatalf("abs path: %v", err)
+	}
+	out, err := tc.evaluateJsonnetFile(path)
+	if err != nil {
+		t.Fatalf("evaluateJsonnetFile: %v", err)
+	}
+	var job struct {
+		Benchmarks []struct {
+			TestDataRef struct {
+				PVC *struct {
+					ClaimName string `json:"claim_name"`
+				} `json:"pvc"`
+				S3 *struct {
+					Bucket string `json:"bucket"`
+				} `json:"s3"`
+			} `json:"test_data_ref"`
+		} `json:"benchmarks"`
+	}
+	if err := json.Unmarshal([]byte(out), &job); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(job.Benchmarks) != 1 {
+		t.Fatalf("benchmarks = %#v, want one", job.Benchmarks)
+	}
+	ref := job.Benchmarks[0].TestDataRef
+	if ref.PVC == nil || ref.S3 == nil {
+		t.Fatalf("test_data_ref = %+v, want both pvc and s3 set for negative payload", ref)
+	}
+}
+
+func TestEvaluateEvaluationJobPvcMissingJsonnet(t *testing.T) {
+	tc := &scenarioConfig{
+		values:            map[string]string{},
+		jsonnetHarnessEnv: map[string]string{},
+	}
+	path, err := filepath.Abs(filepath.Join(testDataRoot(), "evaluation_job_pvc_missing.jsonnet"))
+	if err != nil {
+		t.Fatalf("abs path: %v", err)
+	}
+	out, err := tc.evaluateJsonnetFile(path)
+	if err != nil {
+		t.Fatalf("evaluateJsonnetFile: %v", err)
+	}
+	var job struct {
+		Benchmarks []struct {
+			TestDataRef struct {
+				PVC struct {
+					ClaimName string `json:"claim_name"`
+					SubPath   string `json:"sub_path"`
+				} `json:"pvc"`
+			} `json:"test_data_ref"`
+		} `json:"benchmarks"`
+	}
+	if err := json.Unmarshal([]byte(out), &job); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(job.Benchmarks) != 1 {
+		t.Fatalf("benchmarks = %#v, want one", job.Benchmarks)
+	}
+	pvc := job.Benchmarks[0].TestDataRef.PVC
+	if pvc.ClaimName != "evalhub-offline-test-data-does-not-exist" {
+		t.Errorf("claim_name = %q, want evalhub-offline-test-data-does-not-exist", pvc.ClaimName)
+	}
+	if pvc.SubPath != "" {
+		t.Errorf("sub_path = %q, want empty", pvc.SubPath)
+	}
+}
+
 func TestEvaluateEvaluationJobJsonnetWithQueue(t *testing.T) {
 	queueJobJson := `
 	{
