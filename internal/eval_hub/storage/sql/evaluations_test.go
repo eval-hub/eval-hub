@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -65,6 +66,213 @@ func TestGetEvaluationJobs_Postgres(t *testing.T) {
 	testUpdateEvaluationJob_PersistsPhase(t, drivers[1], databaseName)
 	testUpdateEvaluationJob_PersistsAdditionalInfo(t, drivers[1], databaseName)
 	testEvaluationsStorage(t, drivers[1], databaseName)
+	testUpdateBenchmarkStatus_RejectsTerminalDowngrade(t, drivers[1], databaseName)
+	testUpdateEvaluationJob_ConcurrentBenchmarkCompletions(t, drivers[1], databaseName)
+}
+
+func TestUpdateBenchmarkStatus_RejectsTerminalDowngrade(t *testing.T) {
+	testUpdateBenchmarkStatus_RejectsTerminalDowngrade(t, drivers[0], getDBName())
+}
+
+func TestUpdateEvaluationJob_ConcurrentBenchmarkCompletions(t *testing.T) {
+	testUpdateEvaluationJob_ConcurrentBenchmarkCompletions(t, drivers[0], getDBName())
+}
+
+func testUpdateBenchmarkStatus_RejectsTerminalDowngrade(t *testing.T, driver string, databaseName string) {
+	store, err := getTestStorage(t, driver, databaseName)
+	if err != nil {
+		t.Fatalf("failed to create storage: %v", err)
+	}
+
+	jobID := common.GUID()
+	now := time.Now()
+	config := &api.EvaluationJobConfig{
+		Model: api.ModelRef{URL: "http://test.com", Name: "test"},
+		Benchmarks: []api.EvaluationBenchmarkConfig{
+			{Ref: api.Ref{ID: "b1"}, ProviderID: "prov1"},
+			{Ref: api.Ref{ID: "b2"}, ProviderID: "prov2"},
+		},
+	}
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{
+				ID:        jobID,
+				Tenant:    api.Tenant(getTenant("team-a")),
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+		},
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{State: api.OverallStateRunning},
+		},
+		EvaluationJobConfig: *config,
+	}
+	if err := store.CreateEvaluationJob(job); err != nil {
+		t.Fatalf("CreateEvaluationJob: %v", err)
+	}
+
+	if err := store.UpdateEvaluationJob(jobID, &api.StatusEvent{
+		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			ID: "b1", ProviderID: "prov1", BenchmarkIndex: 0,
+			Status: api.StateCompleted, CompletedAt: api.DateTimeToString(now),
+		},
+	}); err != nil {
+		t.Fatalf("UpdateEvaluationJob completed: %v", err)
+	}
+
+	if err := store.UpdateEvaluationJob(jobID, &api.StatusEvent{
+		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			ID: "b1", ProviderID: "prov1", BenchmarkIndex: 0,
+			Status: api.StateRunning, Phase: api.JobPhasePersistingArtifacts,
+		},
+	}); err != nil {
+		t.Fatalf("UpdateEvaluationJob running: %v", err)
+	}
+
+	final, err := store.GetEvaluationJob(jobID)
+	if err != nil {
+		t.Fatalf("GetEvaluationJob: %v", err)
+	}
+	if len(final.Status.Benchmarks) != 1 {
+		t.Fatalf("expected 1 benchmark status, got %d", len(final.Status.Benchmarks))
+	}
+	if final.Status.Benchmarks[0].ID != "b1" {
+		t.Fatalf("benchmark id = %s, want b1", final.Status.Benchmarks[0].ID)
+	}
+	if final.Status.Benchmarks[0].Status != api.StateCompleted {
+		t.Fatalf("benchmark status = %s, want completed", final.Status.Benchmarks[0].Status)
+	}
+	if final.Status.State != api.OverallStateRunning {
+		t.Fatalf("overall state = %s, want running", final.Status.State)
+	}
+}
+
+func testUpdateEvaluationJob_ConcurrentBenchmarkCompletions(t *testing.T, driver string, databaseName string) {
+	store, err := getTestStorage(t, driver, databaseName)
+	if err != nil {
+		t.Fatalf("failed to create storage: %v", err)
+	}
+
+	jobID := common.GUID()
+	now := time.Now()
+	config := &api.EvaluationJobConfig{
+		Model: api.ModelRef{URL: "http://test.com", Name: "test"},
+		Benchmarks: []api.EvaluationBenchmarkConfig{
+			{Ref: api.Ref{ID: "toxigen"}, ProviderID: "garak"},
+			{Ref: api.Ref{ID: "truthfulqa_mc1"}, ProviderID: "garak"},
+			{Ref: api.Ref{ID: "bigbench_hhh_alignment_multiple_choice"}, ProviderID: "garak"},
+		},
+	}
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{
+				ID:        jobID,
+				Tenant:    api.Tenant(getTenant("team-a")),
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+		},
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{State: api.OverallStateRunning},
+		},
+		EvaluationJobConfig: *config,
+	}
+	if err := store.CreateEvaluationJob(job); err != nil {
+		t.Fatalf("CreateEvaluationJob: %v", err)
+	}
+
+	completeBenchmark := func(id string, index int) error {
+		return store.UpdateEvaluationJob(jobID, &api.StatusEvent{
+			BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+				ID: id, ProviderID: "garak", BenchmarkIndex: index,
+				Status: api.StateCompleted, CompletedAt: api.DateTimeToString(now),
+			},
+		})
+	}
+
+	if err := completeBenchmark("truthfulqa_mc1", 1); err != nil {
+		t.Fatalf("complete truthfulqa_mc1: %v", err)
+	}
+
+	// Hold the first UpdateEvaluationJob transaction after its locked read so a
+	// second update must contend on the same row (postgres FOR UPDATE). Only the
+	// first hook invocation blocks; later ones return immediately so a missing
+	// FOR UPDATE lets the second update finish and fail the contention check.
+	locked := make(chan struct{})
+	release := make(chan struct{})
+	var holdGate sync.Mutex
+	var holdingTxn bool
+	t.Cleanup(func() {
+		sql.SetEvaluationJobUpdateAfterLockedReadHook(nil)
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	})
+	sql.SetEvaluationJobUpdateAfterLockedReadHook(func(_, _ string) {
+		holdGate.Lock()
+		if holdingTxn {
+			holdGate.Unlock()
+			return
+		}
+		holdingTxn = true
+		holdGate.Unlock()
+		close(locked)
+		<-release
+	})
+
+	doneFirst := make(chan error, 1)
+	doneSecond := make(chan error, 1)
+	go func() {
+		doneFirst <- completeBenchmark("toxigen", 0)
+	}()
+
+	select {
+	case <-locked:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for first transaction to acquire row lock")
+	}
+
+	go func() {
+		doneSecond <- completeBenchmark("bigbench_hhh_alignment_multiple_choice", 2)
+	}()
+
+	if driver == "postgres" || driver == "pgx" {
+		select {
+		case err := <-doneFirst:
+			t.Fatalf("first update completed while holding row lock: %v", err)
+		case err := <-doneSecond:
+			t.Fatalf("second update completed before row lock released (FOR UPDATE not contending): %v", err)
+		case <-time.After(1 * time.Second):
+			// Expected: second txn is blocked on SELECT ... FOR UPDATE.
+		}
+	}
+
+	close(release)
+
+	if err := <-doneFirst; err != nil {
+		t.Fatalf("complete toxigen: %v", err)
+	}
+	if err := <-doneSecond; err != nil {
+		t.Fatalf("complete bigbench: %v", err)
+	}
+
+	final, err := store.GetEvaluationJob(jobID)
+	if err != nil {
+		t.Fatalf("GetEvaluationJob: %v", err)
+	}
+	if final.Status.State != api.OverallStateCompleted {
+		t.Fatalf("overall state = %s, want completed", final.Status.State)
+	}
+	if len(final.Status.Benchmarks) != 3 {
+		t.Fatalf("expected 3 benchmark statuses, got %d", len(final.Status.Benchmarks))
+	}
+	for _, benchmark := range final.Status.Benchmarks {
+		if benchmark.Status != api.StateCompleted {
+			t.Fatalf("benchmark %s status = %s, want completed", benchmark.ID, benchmark.Status)
+		}
+	}
 }
 
 func testGetEvaluationJobs_TenantFilter(t *testing.T, driver string, databaseName string) {

@@ -18,6 +18,7 @@ type SQLStatementsFactory interface {
 	// evaluations operations
 	CreateEvaluationAddEntityStatement(evaluation *api.EvaluationJobResource, entity string) (string, []any)
 	CreateEvaluationGetEntityStatement(query *EntityQuery) (string, []any, []any)
+	CreateEvaluationGetEntityForUpdateStatement(query *EntityQuery) (string, []any, []any)
 
 	// collections operations
 	CreateCollectionAddEntityStatement(collection *api.CollectionResource, entity string) (string, []any)
