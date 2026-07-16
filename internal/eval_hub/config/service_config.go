@@ -60,11 +60,11 @@ func (c *ServiceConfig) ValidateTLSConfig() error {
 }
 
 const (
-	defaultReadTimeout              = 15 * time.Second
-	defaultWriteTimeout             = 15 * time.Second
-	defaultIdleTimeout              = 60 * time.Second
-	defaultReadHeaderTimeout        = 15 * time.Second
-	defaultBenchmarkTimeout         = 10 * time.Minute
+	defaultReadTimeout               = 15 * time.Second
+	defaultWriteTimeout              = 15 * time.Second
+	defaultIdleTimeout               = 60 * time.Second
+	defaultReadHeaderTimeout         = 15 * time.Second
+	defaultBenchmarkTimeout          = 10 * time.Minute
 	defaultBenchmarkWatchdogInterval = 1 * time.Minute
 )
 
