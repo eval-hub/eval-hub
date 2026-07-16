@@ -1974,6 +1974,12 @@ components:
         message_code:
           type: string
           description: Machine-readable code
+        message_origin:
+          type: string
+          description: Origin of the message
+          enum:
+            - server
+            - runtime
       required:
         - message
         - message_code

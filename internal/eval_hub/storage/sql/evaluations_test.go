@@ -790,6 +790,8 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 				}, api.MessageOriginServer),
 			},
 		}
+		// Stamp defaults missing origins only; an explicit server origin must be kept.
+		status.BenchmarkStatusEvent.StampRuntimeMessageOrigins()
 		if err := store.UpdateEvaluationJob(jobID, status); err != nil {
 			t.Fatalf("UpdateEvaluationJob: %v", err)
 		}
