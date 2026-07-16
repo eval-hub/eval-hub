@@ -5,11 +5,13 @@ on:
     tags: [ 'v*' ]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
