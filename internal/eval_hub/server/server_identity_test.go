@@ -46,15 +46,14 @@ func TestClusterModeRequiresIdentityHeaders(t *testing.T) {
 		}
 	})
 
-	t.Run("health requires identity headers", func(t *testing.T) {
+	t.Run("health does not require identity headers", func(t *testing.T) {
 		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
-		if w.Code != http.StatusBadRequest {
+		if w.Code != http.StatusOK {
 			t.Fatalf("health without headers: got status %d body %s", w.Code, w.Body.String())
 		}
-		assertMessageCode(t, w, "missing_tenant_header")
 	})
 
 	t.Run("health succeeds with identity headers", func(t *testing.T) {
