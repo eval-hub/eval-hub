@@ -1726,6 +1726,13 @@ func checkModelEndpoint() {
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, resp.Body)
 
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		logDebug("WARNING: Model endpoint %s returned non-2xx status %d, treating as not ready\n", modelURL, resp.StatusCode)
+		logDebug("Evaluation job scenarios will be skipped.\n")
+		modelEndpointConnectivity = modelEndpointUnreachable
+		return
+	}
+
 	logDebug("Model endpoint %s is reachable (status: %d)\n", modelURL, resp.StatusCode)
 	modelEndpointConnectivity = modelEndpointReachable
 }
