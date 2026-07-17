@@ -24,6 +24,28 @@ func TestClusterModeRequiresIdentityHeaders(t *testing.T) {
 		t.Fatalf("SetupRoutes: %v", err)
 	}
 
+	t.Run("healthz does not require identity headers", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("healthz: got status %d body %s", w.Code, w.Body.String())
+		}
+		var body map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode healthz body: %v", err)
+		}
+		if body["status"] != "healthy" {
+			t.Fatalf("healthz status: got %v want healthy", body["status"])
+		}
+		for _, field := range []string{"build", "build_date", "git_hash", "timestamp", "version"} {
+			if _, ok := body[field]; ok {
+				t.Fatalf("healthz must not expose %q", field)
+			}
+		}
+	})
+
 	t.Run("health requires identity headers", func(t *testing.T) {
 		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)

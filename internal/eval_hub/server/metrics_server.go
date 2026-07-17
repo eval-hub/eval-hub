@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net"
 	"net/http"
@@ -10,7 +9,6 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -28,17 +26,6 @@ func NewMetricsServer(logger *slog.Logger, promConfig *config.PrometheusConfig) 
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", withRequestID(promhttp.Handler()))
-	// /healthz is the kubelet probe endpoint. It lives here (plain HTTP, 0.0.0.0:8081) so
-	// the kubelet can reach it via the pod IP without going through kube-rbac-proxy.
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(handlers.HealthzResponse{Status: handlers.STATUS_HEALTHY})
-	})
 
 	return &MetricsServer{
 		httpServer: &http.Server{

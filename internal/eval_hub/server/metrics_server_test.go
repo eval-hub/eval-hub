@@ -1,7 +1,6 @@
 package server_test
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -68,40 +67,6 @@ func TestMetricsServerHandler(t *testing.T) {
 
 		if w.Code != http.StatusNotFound {
 			t.Errorf("expected 404 for /api/v1/health, got %d", w.Code)
-		}
-	})
-
-	t.Run("GET /healthz returns 200 with status=healthy", func(t *testing.T) {
-		t.Parallel()
-		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, req)
-
-		if w.Code != http.StatusOK {
-			t.Errorf("expected 200, got %d (body: %s)", w.Code, w.Body.String())
-		}
-		var body map[string]any
-		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-			t.Fatalf("decode /healthz body: %v", err)
-		}
-		if body["status"] != "healthy" {
-			t.Errorf("status: got %v, want healthy", body["status"])
-		}
-		for _, disallowed := range []string{"build", "build_date", "git_hash", "timestamp"} {
-			if _, ok := body[disallowed]; ok {
-				t.Errorf("/healthz must not expose %q", disallowed)
-			}
-		}
-	})
-
-	t.Run("POST /healthz returns 405", func(t *testing.T) {
-		t.Parallel()
-		req := httptest.NewRequest(http.MethodPost, "/healthz", strings.NewReader(""))
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, req)
-
-		if w.Code != http.StatusMethodNotAllowed {
-			t.Errorf("expected 405, got %d", w.Code)
 		}
 	})
 }
