@@ -12,6 +12,9 @@ on:
       - 'Makefile'
       - '.github/workflows/ci-python-mcp.yml'
 
+permissions:  # added using https://github.com/step-security/secure-repo
+  contents: read
+
 jobs:
   test-mcp-wheel:
     runs-on: ubuntu-latest
