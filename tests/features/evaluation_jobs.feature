@@ -68,7 +68,7 @@ Feature: Evaluation Jobs
     And the response should contain the value "arc_easy" at path "$.benchmarks[0].id"
     And the response should contain the value "garak|lm_evaluation_harness" at path "$.benchmarks[0].provider_id"
     And the response should contain the value "3" at path "$.benchmarks[0].parameters.num_fewshot"
-    And the response should contain the value "5" at path "$.benchmarks[0].parameters.limit"
+    And the response should contain the value "10" at path "$.benchmarks[0].parameters.num_examples"
     And the response should contain the value "{{env:FVT_BENCHMARK_TOKENIZER|google/flan-t5-small}}" at path "$.benchmarks[0].parameters.tokenizer"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
@@ -78,7 +78,7 @@ Feature: Evaluation Jobs
     And the response should contain the value "arc_easy" at path "$.benchmarks[0].id"
     And the response should contain the value "garak|lm_evaluation_harness" at path "$.benchmarks[0].provider_id"
     And the response should contain the value "3" at path "$.benchmarks[0].parameters.num_fewshot"
-    And the response should contain the value "5" at path "$.benchmarks[0].parameters.limit"
+    And the response should contain the value "10" at path "$.benchmarks[0].parameters.num_examples"
     And the response should contain the value "{{env:FVT_BENCHMARK_TOKENIZER|google/flan-t5-small}}" at path "$.benchmarks[0].parameters.tokenizer"
     And the response should not contain the value "collection" at path "$.collection"
     And I wait for the evaluation job status to be "completed"
@@ -430,42 +430,42 @@ Feature: Evaluation Jobs
               "id": "leaderboard_ifeval",
               "provider_id": "lm_evaluation_harness",
               "parameters": {
-                "limit": 1
+                "num_examples": 1
               }
             },
             {
               "id": "leaderboard_bbh",
               "provider_id": "lm_evaluation_harness",
               "parameters": {
-                "limit": 2
+                "num_examples": 2
               }
             },
             {
               "id": "leaderboard_gpqa",
               "provider_id": "lm_evaluation_harness",
               "parameters": {
-                "limit": 1
+                "num_examples": 1
               }
             },
             {
               "id": "leaderboard_mmlu_pro",
               "provider_id": "lm_evaluation_harness",
               "parameters": {
-                "limit": 2
+                "num_examples": 2
               }
             },
             {
               "id": "leaderboard_musr",
               "provider_id": "lm_evaluation_harness",
               "parameters": {
-                "limit": 1
+                "num_examples": 1
               }
             },
             {
               "id": "leaderboard_math_hard",
               "provider_id": "lm_evaluation_harness",
               "parameters": {
-                "limit": 2
+                "num_examples": 2
               }
             }
           ]
@@ -499,12 +499,12 @@ Feature: Evaluation Jobs
     And the response should contain the value "leaderboard_mmlu_pro" at path "$.results.benchmarks[*].id"
     And the response should contain the value "leaderboard_musr" at path "$.results.benchmarks[*].id"
     And the response should contain the value "leaderboard_math_hard" at path "$.results.benchmarks[*].id"
-    And the response should equal the value "1" at path "$.collection.benchmarks[0].parameters.limit"
-    And the response should equal the value "2" at path "$.collection.benchmarks[1].parameters.limit"
-    And the response should equal the value "1" at path "$.collection.benchmarks[2].parameters.limit"
-    And the response should equal the value "2" at path "$.collection.benchmarks[3].parameters.limit"
-    And the response should equal the value "1" at path "$.collection.benchmarks[4].parameters.limit"
-    And the response should equal the value "2" at path "$.collection.benchmarks[5].parameters.limit"
+    And the response should equal the value "1" at path "$.collection.benchmarks[0].parameters.num_examples"
+    And the response should equal the value "2" at path "$.collection.benchmarks[1].parameters.num_examples"
+    And the response should equal the value "1" at path "$.collection.benchmarks[2].parameters.num_examples"
+    And the response should equal the value "2" at path "$.collection.benchmarks[3].parameters.num_examples"
+    And the response should equal the value "1" at path "$.collection.benchmarks[4].parameters.num_examples"
+    And the response should equal the value "2" at path "$.collection.benchmarks[5].parameters.num_examples"
     # TODO: Add specific metric validations once we verify actual response structure
 
   # This scenario requires HuggingFace authentication for all benchmarks to run
@@ -522,42 +522,42 @@ Feature: Evaluation Jobs
               "id": "truthfulqa_mc1",
               "provider_id": "lm_evaluation_harness",
               "parameters": {
-                "limit": 5
+                "num_examples": 5
               }
             },
             {
               "id": "toxigen",
               "provider_id": "lm_evaluation_harness",
               "parameters": {
-                "limit": 3
+                "num_examples": 3
               }
             },
             {
               "id": "winogender",
               "provider_id": "lm_evaluation_harness",
               "parameters": {
-                "limit": 1
+                "num_examples": 1
               }
             },
             {
               "id": "crows_pairs_english",
               "provider_id": "lm_evaluation_harness",
               "parameters": {
-                "limit": 4
+                "num_examples": 4
               }
             },
             {
               "id": "bbq",
               "provider_id": "lm_evaluation_harness",
               "parameters": {
-                "limit": 2
+                "num_examples": 2
               }
             },
             {
               "id": "ethics_cm",
               "provider_id": "lm_evaluation_harness",
               "parameters": {
-                "limit": 6
+                "num_examples": 6
               }
             }
           ]
@@ -591,12 +591,12 @@ Feature: Evaluation Jobs
     And the response should contain the value "crows_pairs_english" at path "$.results.benchmarks[*].id"
     And the response should contain the value "bbq" at path "$.results.benchmarks[*].id"
     And the response should contain the value "ethics_cm" at path "$.results.benchmarks[*].id"
-    And the response should equal the value "5" at path "$.collection.benchmarks[0].parameters.limit"
-    And the response should equal the value "3" at path "$.collection.benchmarks[1].parameters.limit"
-    And the response should equal the value "1" at path "$.collection.benchmarks[2].parameters.limit"
-    And the response should equal the value "4" at path "$.collection.benchmarks[3].parameters.limit"
-    And the response should equal the value "2" at path "$.collection.benchmarks[4].parameters.limit"
-    And the response should equal the value "6" at path "$.collection.benchmarks[5].parameters.limit"
+    And the response should equal the value "5" at path "$.collection.benchmarks[0].parameters.num_examples"
+    And the response should equal the value "3" at path "$.collection.benchmarks[1].parameters.num_examples"
+    And the response should equal the value "1" at path "$.collection.benchmarks[2].parameters.num_examples"
+    And the response should equal the value "4" at path "$.collection.benchmarks[3].parameters.num_examples"
+    And the response should equal the value "2" at path "$.collection.benchmarks[4].parameters.num_examples"
+    And the response should equal the value "6" at path "$.collection.benchmarks[5].parameters.num_examples"
   # TODO: Add specific metric validations once we verify actual response structure
 
   @negative
@@ -672,7 +672,6 @@ Feature: Evaluation Jobs
             "parameters": {
               "num_examples": 10,
               "num_fewshot": 3,
-              "limit": 5,
               "tokenizer": "google/flan-t5-small"
             }
           }
@@ -814,7 +813,7 @@ Feature: Evaluation Jobs
               "id": "toxigen",
               "provider_id": "invalid_provider",
               "parameters": {
-                "limit": 5
+                "num_examples": 5
               }
             }
           ]
@@ -842,7 +841,7 @@ Feature: Evaluation Jobs
               "id": "",
               "provider_id": "lm_evaluation_harness",
               "parameters": {
-                "limit": 5
+                "num_examples": 5
               }
             }
           ]
@@ -870,7 +869,7 @@ Feature: Evaluation Jobs
               "id": null,
               "provider_id": "lm_evaluation_harness",
               "parameters": {
-                "limit": 5
+                "num_examples": 5
               }
             }
           ]
@@ -899,7 +898,7 @@ Feature: Evaluation Jobs
               "id": "toxigen_typo",
               "provider_id": "lm_evaluation_harness",
               "parameters": {
-                "limit": 5
+                "num_examples": 5
               }
             }
           ]
@@ -955,7 +954,6 @@ Feature: Evaluation Jobs
             "parameters": {
               "num_examples": 10,
               "num_fewshot": 3,
-              "limit": 5,
               "tokenizer": "google/flan-t5-small"
             }
           }
@@ -988,7 +986,6 @@ Feature: Evaluation Jobs
             "parameters": {
               "num_examples": 10,
               "num_fewshot": 3,
-              "limit": 5,
               "tokenizer": "google/flan-t5-small"
             }
           }
@@ -1094,7 +1091,6 @@ Feature: Evaluation Jobs
             "parameters": {
               "num_examples": 10,
               "num_fewshot": 3,
-              "limit": 5,
               "tokenizer": "google/flan-t5-small"
             }
           }
@@ -1127,7 +1123,6 @@ Feature: Evaluation Jobs
             "parameters": {
               "num_examples": 10,
               "num_fewshot": 3,
-              "limit": 5,
               "tokenizer": "google/flan-t5-small"
             }
           }
