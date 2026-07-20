@@ -1693,6 +1693,8 @@ func tidyUpTests() {
 }
 
 func checkModelEndpoint() {
+	modelEndpointConnectivity = modelEndpointUnchecked
+
 	modelURL := os.Getenv("MODEL_URL")
 	if modelURL == "" {
 		logDebug("MODEL_URL not set, skipping model endpoint pre-flight check\n")
@@ -1711,30 +1713,43 @@ func checkModelEndpoint() {
 		},
 	}
 
-	resp, err := client.Get(modelURL) //nolint:gosec
-	if err != nil {
-		var dnsErr *net.DNSError
-		if errors.As(err, &dnsErr) {
-			logDebug("WARNING: Cannot resolve model endpoint DNS for %s (test runner may be outside the cluster), proceeding with tests\n", modelURL)
+	maxRetries := 3
+	numRetries := 0
+	shouldRetry := func() bool { return numRetries < maxRetries }
+	notReadyStatus := func(statusCode int) bool { return statusCode == 503 }
+	retryDelay := 10 * time.Second
+
+	for shouldRetry() {
+		resp, err := client.Get(modelURL) //nolint:gosec // This is a test, we don't need to be too strict about the HTTP client
+		if err != nil {
+			var dnsErr *net.DNSError
+			if errors.As(err, &dnsErr) {
+				logDebug("WARNING: Cannot resolve model endpoint DNS for %s (test runner may be outside the cluster), proceeding with tests\n", modelURL)
+				return
+			}
+			logDebug("WARNING: Model endpoint %s is not reachable: %v\n", modelURL, err)
+			logDebug("Evaluation job scenarios will be skipped.\n")
+			modelEndpointConnectivity = modelEndpointUnreachable
 			return
 		}
-		logDebug("WARNING: Model endpoint %s is not reachable: %v\n", modelURL, err)
-		logDebug("Evaluation job scenarios will be skipped.\n")
-		modelEndpointConnectivity = modelEndpointUnreachable
-		return
-	}
-	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
+		defer resp.Body.Close()
+		_, _ = io.Copy(io.Discard, resp.Body)
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		logDebug("WARNING: Model endpoint %s returned non-2xx status %d, treating as not ready\n", modelURL, resp.StatusCode)
-		logDebug("Evaluation job scenarios will be skipped.\n")
-		modelEndpointConnectivity = modelEndpointUnreachable
-		return
+		if shouldRetry() && notReadyStatus(resp.StatusCode) {
+			logDebug("WARNING: Model endpoint %s is not ready (code %d), waiting for %d before retrying\n", modelURL, resp.StatusCode, retryDelay)
+			time.Sleep(retryDelay)
+		} else if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			logDebug("WARNING: Model endpoint %s returned non-2xx status %d, treating as unreachable\n", modelURL, resp.StatusCode)
+			logDebug("Evaluation job scenarios will be skipped.\n")
+			modelEndpointConnectivity = modelEndpointUnreachable
+			return
+		} else {
+			logDebug("Model endpoint %s is reachable (status: %d)\n", modelURL, resp.StatusCode)
+			modelEndpointConnectivity = modelEndpointReachable
+			return
+		}
+		numRetries++
 	}
-
-	logDebug("Model endpoint %s is reachable (status: %d)\n", modelURL, resp.StatusCode)
-	modelEndpointConnectivity = modelEndpointReachable
 }
 
 func (tc *scenarioConfig) theModelEndpointIsReachable() error {
