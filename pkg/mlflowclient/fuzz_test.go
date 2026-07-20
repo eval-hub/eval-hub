@@ -20,14 +20,19 @@ func FuzzBuildArtifactUploadEndpoint(f *testing.F) {
 		got, err := buildArtifactUploadEndpoint(artifactPath)
 		segments := strings.Split(artifactPath, "/")
 		nonEmpty := 0
+		hasTraversal := false
 		for _, segment := range segments {
-			if segment != "" {
-				nonEmpty++
+			if segment == "" {
+				continue
+			}
+			nonEmpty++
+			if segment == "." || segment == ".." {
+				hasTraversal = true
 			}
 		}
-		if nonEmpty == 0 {
+		if nonEmpty == 0 || hasTraversal {
 			if err == nil {
-				t.Fatal("expected error for empty artifact path")
+				t.Fatal("expected error for empty or traversal artifact path")
 			}
 			if got != "" {
 				t.Fatalf("expected empty endpoint on error, got %q", got)
