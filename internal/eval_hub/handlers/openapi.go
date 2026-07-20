@@ -80,8 +80,10 @@ func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_
 func (h *Handlers) HandleDocs(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	// Get the base URL for the OpenAPI spec (so without the "/docs" path)
 	baseURL := strings.TrimSuffix(r.URI(), r.Path())
+	// be safe against XSS attacks
+	baseURL = template.HTMLEscapeString(baseURL)
 
-	swaggerVersion := "5.32.4"
+	swaggerVersion := "5.32.9"
 	if r.Header("SWAGGER_VERSION") != "" {
 		swaggerVersion = r.Header("SWAGGER_VERSION")
 	}
