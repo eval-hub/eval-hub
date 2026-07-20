@@ -1732,20 +1732,30 @@ func checkModelEndpoint() {
 			modelEndpointConnectivity = modelEndpointUnreachable
 			return
 		}
-		defer resp.Body.Close()
+		status := resp.StatusCode
 		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+		logDebug("Model endpoint preflight GET %s returned HTTP %d\n", modelURL, status)
 
-		if shouldRetry() && notReadyStatus(resp.StatusCode) {
-			logDebug("WARNING: Model endpoint %s is not ready (code %d), waiting for %d before retrying\n", modelURL, resp.StatusCode, retryDelay)
+		// 401/404 on the OpenAI-compatible base URL (/v1) still means the server is up;
+		// unauthenticated GET often cannot list models.
+		reachableWithoutAuth := status == http.StatusUnauthorized || status == http.StatusNotFound
+
+		if shouldRetry() && notReadyStatus(status) {
+			logDebug("WARNING: Model endpoint %s is not ready (HTTP %d), waiting %s before retrying\n", modelURL, status, retryDelay)
 			time.Sleep(retryDelay)
-		} else if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			logDebug("WARNING: Model endpoint %s returned non-2xx status %d, treating as unreachable\n", modelURL, resp.StatusCode)
-			logDebug("Evaluation job scenarios will be skipped.\n")
-			modelEndpointConnectivity = modelEndpointUnreachable
+		} else if status >= 200 && status < 300 {
+			logDebug("Model endpoint %s is reachable (HTTP %d)\n", modelURL, status)
+			modelEndpointConnectivity = modelEndpointReachable
+			return
+		} else if reachableWithoutAuth {
+			logDebug("Model endpoint %s is reachable (HTTP %d; auth/path expected for /v1 base URL)\n", modelURL, status)
+			modelEndpointConnectivity = modelEndpointReachable
 			return
 		} else {
-			logDebug("Model endpoint %s is reachable (status: %d)\n", modelURL, resp.StatusCode)
-			modelEndpointConnectivity = modelEndpointReachable
+			logDebug("WARNING: Model endpoint %s returned HTTP %d, treating as unreachable\n", modelURL, status)
+			logDebug("Evaluation job scenarios will be skipped.\n")
+			modelEndpointConnectivity = modelEndpointUnreachable
 			return
 		}
 		numRetries++
