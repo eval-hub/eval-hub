@@ -63,30 +63,48 @@ func TestBenchmarkStatusEventNilStampRuntimeMessageOrigins(t *testing.T) {
 	event.StampRuntimeMessageOrigins()
 }
 
-func TestTruncateEndpointHTTPErrorDetail(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+func TestRewriteSidecarURLsInMessage(t *testing.T) {
+	const sidecar = "http://localhost:8080"
+	targets := SidecarURLTargets{
+		EvalHub:       "https://evalhub.demo.svc.cluster.local:8443",
+		MLFlow:        "https://mlflow.example.com",
+		OCI:           "https://quay.io",
+		OCIRepository: "org/repo",
+		Model:         "https://api.openai.com/v1",
+	}
+
 	tests := []struct {
 		name string
 		in   string
 		want string
 	}{
 		{
-			name: "model endpoint with requests detail",
+			name: "model path rewrites to model host",
 			in:   "Model endpoint returned HTTP 404: 404 Client Error: Not Found for url: http://localhost:8080/v1/completions",
-			want: "Model endpoint returned HTTP 404",
+			want: "Model endpoint returned HTTP 404: 404 Client Error: Not Found for url: https://api.openai.com/v1/completions",
 		},
 		{
-			name: "mlflow endpoint with 502 detail",
-			in:   "MLflow endpoint returned HTTP 502: 502 Server Error: Bad Gateway for url: http://localhost:8080/api/2.0/mlflow/runs/create",
-			want: "MLflow endpoint returned HTTP 502",
+			name: "mlflow path rewrites to mlflow host",
+			in:   "MLflow endpoint returned HTTP 502: Bad Gateway for url: http://localhost:8080/api/2.0/mlflow/runs/create",
+			want: "MLflow endpoint returned HTTP 502: Bad Gateway for url: https://mlflow.example.com/api/2.0/mlflow/runs/create",
 		},
 		{
-			name: "no detail after status code",
-			in:   "Model endpoint returned HTTP 404",
-			want: "Model endpoint returned HTTP 404",
+			name: "eval-hub path rewrites to eval-hub host",
+			in:   "callback failed for url: http://localhost:8080/api/v1/evaluations/jobs/j1/events",
+			want: "callback failed for url: https://evalhub.demo.svc.cluster.local:8443/api/v1/evaluations/jobs/j1/events",
 		},
 		{
-			name: "unrelated message with colon",
+			name: "oci path rewrites to oci host",
+			in:   "OCI push failed for url: http://localhost:8080/v2/org/repo/blobs/uploads/",
+			want: "OCI push failed for url: https://quay.io/v2/org/repo/blobs/uploads/",
+		},
+		{
+			name: "preserves query string",
+			in:   "error for url: http://localhost:8080/v1/completions?stream=true",
+			want: "error for url: https://api.openai.com/v1/completions?stream=true",
+		},
+		{
+			name: "unrelated message unchanged",
 			in:   "Connection failed: timeout talking to sidecar",
 			want: "Connection failed: timeout talking to sidecar",
 		},
@@ -98,37 +116,94 @@ func TestTruncateEndpointHTTPErrorDetail(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			event := &BenchmarkStatusEvent{
-				ErrorMessage: &MessageInfo{Message: tt.in, MessageCode: "E"},
-			}
-			event.TruncateEndpointHTTPErrorDetail(logger)
-			if event.ErrorMessage.Message != tt.want {
-				t.Fatalf("TruncateEndpointHTTPErrorDetail() message = %q, want %q", event.ErrorMessage.Message, tt.want)
+			got := RewriteSidecarURLsInMessage(tt.in, sidecar, targets)
+			if got != tt.want {
+				t.Fatalf("RewriteSidecarURLsInMessage() = %q, want %q", got, tt.want)
 			}
 		})
 	}
+}
 
-	t.Run("nil receiver and nil error message are no-ops", func(t *testing.T) {
-		var event *BenchmarkStatusEvent
-		event.TruncateEndpointHTTPErrorDetail(logger)
+func TestRewriteSidecarURLsInMessageFallbackStripHost(t *testing.T) {
+	const sidecar = "http://localhost:8080"
+	empty := SidecarURLTargets{}
+
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "model path strips host when model target missing",
+			in:   "Model endpoint returned HTTP 404: Not Found for url: http://localhost:8080/v1/completions",
+			want: "Model endpoint returned HTTP 404: Not Found for url: /v1/completions",
+		},
+		{
+			name: "mlflow path strips host when mlflow target missing",
+			in:   "error for url: http://localhost:8080/api/2.0/mlflow/runs/create",
+			want: "error for url: /api/2.0/mlflow/runs/create",
+		},
+		{
+			name: "bare sidecar base becomes slash",
+			in:   "failed contacting http://localhost:8080",
+			want: "failed contacting /",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := RewriteSidecarURLsInMessage(tt.in, sidecar, empty)
+			if got != tt.want {
+				t.Fatalf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBenchmarkStatusEventRewriteSidecarURLsInMessages(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	targets := SidecarURLTargets{Model: "https://model.example"}
+	event := &BenchmarkStatusEvent{
+		ErrorMessage: &MessageInfo{
+			Message:     "err for url: http://localhost:8080/v1/chat",
+			MessageCode: "E",
+		},
+		WarningMessage: &MessageInfo{
+			Message:     "warn for url: http://localhost:8080/v1/chat",
+			MessageCode: "W",
+		},
+	}
+	event.RewriteSidecarURLsInMessages("http://localhost:8080", targets, logger)
+
+	want := "err for url: https://model.example/v1/chat"
+	if event.ErrorMessage.Message != want {
+		t.Fatalf("error message = %q, want %q", event.ErrorMessage.Message, want)
+	}
+	wantWarn := "warn for url: https://model.example/v1/chat"
+	if event.WarningMessage.Message != wantWarn {
+		t.Fatalf("warning message = %q, want %q", event.WarningMessage.Message, wantWarn)
+	}
+
+	t.Run("nil receiver and nil messages are no-ops", func(t *testing.T) {
+		var nilEvent *BenchmarkStatusEvent
+		nilEvent.RewriteSidecarURLsInMessages("http://localhost:8080", targets, logger)
 
 		empty := &BenchmarkStatusEvent{}
-		empty.TruncateEndpointHTTPErrorDetail(logger)
+		empty.RewriteSidecarURLsInMessages("http://localhost:8080", targets, logger)
 	})
 
-	t.Run("logs full message before truncating", func(t *testing.T) {
+	t.Run("logs original message before rewriting", func(t *testing.T) {
 		var buf bytes.Buffer
 		log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
-		full := "Model endpoint returned HTTP 500: upstream boom"
-		event := &BenchmarkStatusEvent{
-			ErrorMessage: &MessageInfo{Message: full, MessageCode: "E"},
+		originalMessage := "Model endpoint returned HTTP 500: boom for url: http://localhost:8080/v1/x"
+		ev := &BenchmarkStatusEvent{
+			ErrorMessage: &MessageInfo{Message: originalMessage, MessageCode: "E"},
 		}
-		event.TruncateEndpointHTTPErrorDetail(log)
-		if event.ErrorMessage.Message != "Model endpoint returned HTTP 500" {
-			t.Fatalf("message = %q", event.ErrorMessage.Message)
+		ev.RewriteSidecarURLsInMessages("http://localhost:8080", targets, log)
+		if !strings.Contains(buf.String(), originalMessage) {
+			t.Fatalf("log = %q, want original message", buf.String())
 		}
-		if !strings.Contains(buf.String(), full) {
-			t.Fatalf("log = %q, want full original message", buf.String())
+		if strings.Contains(ev.ErrorMessage.Message, "localhost:8080") {
+			t.Fatalf("persisted message still has sidecar host: %q", ev.ErrorMessage.Message)
 		}
 	})
 }

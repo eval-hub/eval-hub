@@ -892,7 +892,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 		}
 	})
 
-	t.Run("UpdateEvaluationJob truncates endpoint HTTP error detail for persistence", func(t *testing.T) {
+	t.Run("UpdateEvaluationJob persists endpoint HTTP error detail without truncation", func(t *testing.T) {
 		jobID := common.GUID()
 		now := time.Now()
 		job := &api.EvaluationJobResource{
@@ -923,7 +923,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 			t.Fatalf("CreateEvaluationJob: %v", err)
 		}
 
-		full := "Model endpoint returned HTTP 404: 404 Client Error: Not Found for url: http://localhost:8080/v1/completions"
+		originalMessage := "Model endpoint returned HTTP 404: 404 Client Error: Not Found for url: http://localhost:8080/v1/completions"
 		status := &api.StatusEvent{
 			BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 				ID:             benchmarkConfig.ID,
@@ -931,7 +931,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 				BenchmarkIndex: 0,
 				Status:         api.StateFailed,
 				ErrorMessage: &api.MessageInfo{
-					Message:     full,
+					Message:     originalMessage,
 					MessageCode: "ADAPTER_FAIL",
 				},
 			},
@@ -948,15 +948,11 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 		if len(got.Status.Benchmarks) == 0 || got.Status.Benchmarks[0].ErrorMessage == nil {
 			t.Fatal("expected persisted benchmark error message")
 		}
-		want := "Model endpoint returned HTTP 404"
-		if got.Status.Benchmarks[0].ErrorMessage.Message != want {
-			t.Fatalf("persisted error message = %q, want %q", got.Status.Benchmarks[0].ErrorMessage.Message, want)
+		if got.Status.Benchmarks[0].ErrorMessage.Message != originalMessage {
+			t.Fatalf("persisted error message = %q, want full detail %q", got.Status.Benchmarks[0].ErrorMessage.Message, originalMessage)
 		}
-		if got.Status.Message == nil || !strings.Contains(got.Status.Message.Message, want) {
-			t.Fatalf("overall message = %q, want it to contain truncated benchmark error %q", got.Status.Message, want)
-		}
-		if strings.Contains(got.Status.Benchmarks[0].ErrorMessage.Message, "localhost:8080") {
-			t.Fatalf("persisted error still contains sidecar URL detail: %q", got.Status.Benchmarks[0].ErrorMessage.Message)
+		if got.Status.Message == nil || !strings.Contains(got.Status.Message.Message, originalMessage) {
+			t.Fatalf("overall message = %q, want it to contain full benchmark error %q", got.Status.Message, originalMessage)
 		}
 	})
 
