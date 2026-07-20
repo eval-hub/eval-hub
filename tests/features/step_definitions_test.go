@@ -1742,7 +1742,7 @@ func checkModelEndpoint() {
 		// (that can mask a bad MODEL_URL).
 		reachableWithoutAuth := status == http.StatusUnauthorized
 
-		if shouldRetry() && notReadyStatus(status) {
+		if numRetries < maxRetries-1 && notReadyStatus(status) {
 			logDebug("WARNING: Model endpoint %s is not ready (HTTP %d), waiting %s before retrying\n", modelURL, status, retryDelay)
 			time.Sleep(retryDelay)
 		} else if status >= 200 && status < 300 {
