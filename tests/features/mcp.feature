@@ -395,7 +395,6 @@ Feature: MCP Tools
             "provider_id": "lm_evaluation_harness",
             "parameters": {
               "num_fewshot": 0,
-              "limit": 5,
               "num_examples": 10
             }
           }
@@ -494,7 +493,6 @@ Feature: MCP Tools
             "provider_id": "lm_evaluation_harness",
             "parameters": {
               "num_fewshot": 0,
-              "limit": 3,
               "num_examples": 3
             }
           },
@@ -503,7 +501,6 @@ Feature: MCP Tools
             "provider_id": "lm_evaluation_harness",
             "parameters": {
               "num_fewshot": 0,
-              "limit": 3,
               "num_examples": 3
             }
           }
@@ -546,7 +543,6 @@ Feature: MCP Tools
             "provider_id": "lm_evaluation_harness",
             "parameters": {
               "num_fewshot": 0,
-              "limit": 5,
               "num_examples": 5
             }
           }
@@ -591,7 +587,6 @@ Feature: MCP Tools
             "provider_id": "lm_evaluation_harness",
             "parameters": {
               "num_fewshot": 0,
-              "limit": 5,
               "num_examples": 5
             }
           }
