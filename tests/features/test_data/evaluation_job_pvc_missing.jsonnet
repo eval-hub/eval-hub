@@ -13,7 +13,6 @@ test.mergeOptional(
           parameters: {
             tokenizer: '/test_data/tokenizer',
             num_examples: 5,
-            limit: 5,
           },
           test_data_ref: {
             pvc: {

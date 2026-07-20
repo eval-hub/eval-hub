@@ -10,7 +10,6 @@ local test = import 'test.libsonnet';
       parameters: {
         tokenizer: '/test_data/tokenizer',
         num_examples: 10,
-        limit: 5,
       },
       test_data_ref: {
         pvc: {

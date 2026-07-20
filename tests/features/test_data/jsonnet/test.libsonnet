@@ -75,7 +75,6 @@ local harness = std.parseJson(std.extVar('harness'));
     $.benchmark('arc_easy', 'lm_evaluation_harness', {
       num_examples: 10,
       num_fewshot: 3,
-      limit: 5,
     } + parameters),
 
   // arc_easy with PVC offline test data (claim_name + staging sub_path by default).
@@ -83,7 +82,6 @@ local harness = std.parseJson(std.extVar('harness'));
     $.pvcBenchmark('arc_easy', 'lm_evaluation_harness', {
       num_examples: 10,
       num_fewshot: 3,
-      limit: 5,
     } + parameters),
 
   // Default benchmark for evaluation_job.jsonnet (disconnected vs connected FVT).
@@ -123,7 +121,7 @@ local harness = std.parseJson(std.extVar('harness'));
       },
     },
 
-  // num_examples caps runtime for OOB collection FVT without conflicting with collection limit.
+  // num_examples caps runtime for OOB collection FVT.
   oobCollectionParameterOverrides(numExamples)::
     {
       num_examples: numExamples,
