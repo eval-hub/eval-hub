@@ -1737,9 +1737,10 @@ func checkModelEndpoint() {
 		_ = resp.Body.Close()
 		logDebug("Model endpoint preflight GET %s returned HTTP %d\n", modelURL, status)
 
-		// 401/404 on the OpenAI-compatible base URL (/v1) still means the server is up;
-		// unauthenticated GET often cannot list models.
-		reachableWithoutAuth := status == http.StatusUnauthorized || status == http.StatusNotFound
+		// 401 on the OpenAI-compatible base URL (/v1) still means the server is up;
+		// unauthenticated GET often cannot list models. Do not treat 404 as reachable
+		// (that can mask a bad MODEL_URL).
+		reachableWithoutAuth := status == http.StatusUnauthorized
 
 		if shouldRetry() && notReadyStatus(status) {
 			logDebug("WARNING: Model endpoint %s is not ready (HTTP %d), waiting %s before retrying\n", modelURL, status, retryDelay)
@@ -1749,7 +1750,7 @@ func checkModelEndpoint() {
 			modelEndpointConnectivity = modelEndpointReachable
 			return
 		} else if reachableWithoutAuth {
-			logDebug("Model endpoint %s is reachable (HTTP %d; auth/path expected for /v1 base URL)\n", modelURL, status)
+			logDebug("Model endpoint %s is reachable (HTTP %d; auth expected for /v1 base URL)\n", modelURL, status)
 			modelEndpointConnectivity = modelEndpointReachable
 			return
 		} else {
