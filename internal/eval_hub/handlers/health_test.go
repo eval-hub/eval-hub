@@ -53,5 +53,37 @@ func TestHandleHealth(t *testing.T) {
 			}
 		}
 	})
+}
 
+func TestHandleHealthz(t *testing.T) {
+	h := handlers.New(nil, nil, nil, nil, nil, nil)
+
+	r := createMockRequest("GET", "/healthz")
+	w := httptest.NewRecorder()
+	ctx := createExecutionContext()
+	h.HandleHealthz(ctx, r, &MockResponseWrapper{w})
+
+	if w.Code != 200 {
+		t.Errorf("Expected status code %d, got %d", 200, w.Code)
+	}
+
+	contentType := w.Header().Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("Expected Content-Type application/json, got %s", contentType)
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	if response["status"] != "healthy" {
+		t.Errorf("Expected status 'healthy', got %v", response["status"])
+	}
+
+	for _, field := range []string{"build", "build_date", "git_hash", "timestamp", "version"} {
+		if _, ok := response[field]; ok {
+			t.Errorf("healthz response must not include %q", field)
+		}
+	}
 }

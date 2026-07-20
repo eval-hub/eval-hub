@@ -22,6 +22,11 @@ type HealthResponse struct {
 	GitHash   string    `json:"git_hash,omitempty"`
 }
 
+// HealthzResponse is the minimal payload for kubelet probes (no version/build details).
+type HealthzResponse struct {
+	Status string `json:"status"`
+}
+
 func (h *Handlers) HandleHealth(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper, build string, buildDate string, gitHash string) {
 	// We do not want to flood logs with health checks from readiness and liveness probes,
 	// so all health checks are set to log at debug level. The logger is overridden with this
@@ -38,4 +43,11 @@ func (h *Handlers) HandleHealth(ctx *executioncontext.ExecutionContext, r http_w
 		GitHash:   gitHash,
 	}
 	w.WriteJSON(healthInfo, 200)
+}
+
+// HandleHealthz responds with a minimal healthy status for kubelet probes.
+// It must not expose build/version details and must not require identity headers.
+func (h *Handlers) HandleHealthz(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+	ctx.Ctx = context.WithValue(ctx.Ctx, logging.LogLevelKey, slog.LevelDebug)
+	w.WriteJSON(HealthzResponse{Status: STATUS_HEALTHY}, 200)
 }
