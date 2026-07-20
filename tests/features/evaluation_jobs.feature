@@ -1268,3 +1268,68 @@ Feature: Evaluation Jobs
     And the response body should contain "Evaluation completed successfully"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
+
+  # Requires PVC evalhub-offline-test-data in the tenant namespace with offline data under staging/
+  # (tokenizer + datasets). Override with TEST_DATA_PVC_CLAIM_NAME / TEST_DATA_PVC_SUB_PATH if needed.
+  @pvc
+  Scenario: Evaluation job with PVC test data completes successfully
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_pvc.json"
+    Then the response code should be 202
+    And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
+    And the response should contain the value "pending" at path "$.status.state"
+    And the response should contain the value "arc_easy" at path "$.benchmarks[0].id"
+    And the response should contain the value "lm_evaluation_harness" at path "$.benchmarks[0].provider_id"
+    And the response should contain the value "/test_data/tokenizer" at path "$.benchmarks[0].parameters.tokenizer"
+    And the response should contain the value "{{env:TEST_DATA_PVC_CLAIM_NAME|evalhub-offline-test-data}}" at path "$.benchmarks[0].test_data_ref.pvc.claim_name"
+    And the response should contain the value "{{env:TEST_DATA_PVC_SUB_PATH|staging}}" at path "$.benchmarks[0].test_data_ref.pvc.sub_path"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    And the response should contain the value "completed" at path "$.status.benchmarks[0].status"
+    And the response should contain the value "arc_easy" at path "$.status.benchmarks[0].id"
+    And the response should contain "results"
+    And the array at path "results.benchmarks" in the response should have length 1
+    And the response should contain the value "arc_easy" at path "$.results.benchmarks[0].id"
+    And the response should contain at least the value "0.2" at path "$.results.benchmarks[0].metrics.acc"
+    And the response should contain at least the value "0.2" at path "$.results.benchmarks[0].metrics.acc_norm"
+    And the response should contain the value "{{env:TEST_DATA_PVC_CLAIM_NAME|evalhub-offline-test-data}}" at path "$.benchmarks[0].test_data_ref.pvc.claim_name"
+    And the response should contain the value "{{env:TEST_DATA_PVC_SUB_PATH|staging}}" at path "$.benchmarks[0].test_data_ref.pvc.sub_path"
+    And the response should contain the value "/test_data/tokenizer" at path "$.benchmarks[0].parameters.tokenizer"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
+  @pvc
+  @negative
+  Scenario: Cannot create evaluation job with both PVC and S3 test data
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_pvc_and_s3.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+    And the response should contain the value "s3 and pvc are mutually exclusive" at path "$.message"
+
+  # Requires trustyai-service-operator eval-job failure reconciler (unschedulable PVC → FAILED after ~2m grace).
+  # Default missing claim: evalhub-offline-test-data-does-not-exist (override with TEST_DATA_PVC_MISSING_CLAIM_NAME).
+  @pvc
+  @negative
+  Scenario: Evaluation job with missing PVC fails after scheduling grace
+    Given the service is running
+    And I set the wait deadline to "2m30s"
+    And I set the wait interval to "10s"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_pvc_missing.json"
+    Then the response code should be 202
+    And the response should contain the value "pending" at path "$.status.state"
+    And the response should contain the value "{{env:TEST_DATA_PVC_MISSING_CLAIM_NAME|evalhub-offline-test-data-does-not-exist}}" at path "$.benchmarks[0].test_data_ref.pvc.claim_name"
+    And I wait for the evaluation job status to be "failed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "failed" at path "$.status.state"
+    And the response should contain the value "failed" at path "$.status.benchmarks[0].status"
+    And the response should contain the value "arc_easy" at path "$.status.benchmarks[0].id"
+    And the response should contain the value "not found" at path "$.status.message.message"
+    And the response should contain the value "{{env:TEST_DATA_PVC_MISSING_CLAIM_NAME|evalhub-offline-test-data-does-not-exist}}" at path "$.status.message.message"
+    And the response should contain the value "not found" at path "$.status.benchmarks[0].error_message.message"
+    And the response should contain the value "{{env:TEST_DATA_PVC_MISSING_CLAIM_NAME|evalhub-offline-test-data-does-not-exist}}" at path "$.status.benchmarks[0].error_message.message"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204

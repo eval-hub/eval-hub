@@ -154,6 +154,7 @@ func TestServerSetupRoutes(t *testing.T) {
 		status int
 		body   string
 	}{
+		{http.MethodGet, "/healthz", http.StatusOK, ""},
 		{http.MethodGet, "/api/v1/health", http.StatusOK, ""},
 		{http.MethodGet, "/openapi.yaml", http.StatusOK, ""},
 		{http.MethodGet, "/docs", http.StatusOK, ""},
@@ -170,6 +171,7 @@ func TestServerSetupRoutes(t *testing.T) {
 		// Providers
 		{http.MethodGet, "/api/v1/evaluations/providers", http.StatusOK, ""},
 		// Error cases
+		{http.MethodPost, "/healthz", http.StatusMethodNotAllowed, ""},
 		{http.MethodPost, "/api/v1/health", http.StatusMethodNotAllowed, ""},
 		{http.MethodGet, "/nonexistent", http.StatusNotFound, ""},
 
@@ -236,6 +238,52 @@ func TestServerSetupRoutes(t *testing.T) {
 			t.Errorf("Expected status %d for %s when deleting evaluation job %s, got %d", http.StatusNoContent, path, id, w.Code)
 		}
 	}
+}
+
+func TestHealthzEndpoint(t *testing.T) {
+	srv, err := createServer(t, 8080)
+	if err != nil {
+		t.Fatalf("createServer: %v", err)
+	}
+	handler, err := srv.SetupRoutes()
+	if err != nil {
+		t.Fatalf("SetupRoutes: %v", err)
+	}
+
+	t.Run("GET returns healthy status without build metadata", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("got status %d body %s", w.Code, w.Body.String())
+		}
+		if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+			t.Errorf("Content-Type: got %q want application/json", ct)
+		}
+
+		var body map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body["status"] != "healthy" {
+			t.Errorf("status: got %v want healthy", body["status"])
+		}
+		for _, field := range []string{"build", "build_date", "git_hash", "timestamp", "version"} {
+			if _, ok := body[field]; ok {
+				t.Errorf("/healthz must not expose %q", field)
+			}
+		}
+	})
+
+	t.Run("POST returns 405", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/healthz", strings.NewReader(""))
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != http.StatusMethodNotAllowed {
+			t.Errorf("got status %d want 405", w.Code)
+		}
+	})
 }
 
 func TestServerShutdown(t *testing.T) {
