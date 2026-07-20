@@ -88,3 +88,4 @@ fi
 
 echo "❌ MLflow server on port ${PORT} is still running after 5 seconds"
 exit 1
+exit 1
