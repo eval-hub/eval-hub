@@ -173,17 +173,23 @@ test: ## Run unit tests (including fuzz seed corpora and a short fuzzing pass)
 	@echo "Unit tests complete"
 
 test-fuzz: ## Run mutational fuzzing briefly for each Fuzz* test
-	@echo "Running fuzz tests (fuzztime=$(FUZZTIME))..."
-	@failed=0; \
+	`@echo` "Running fuzz tests (fuzztime=$(FUZZTIME))..."
+	`@failed`=0; \
 	for pkg in $(FUZZ_PACKAGES); do \
-		for fuzz in $$(go test "$$pkg" -list='^Fuzz' 2>/dev/null | grep '^Fuzz' || true); do \
+		list_output=$$(go test "$$pkg" -list='^Fuzz' 2>&1); \
+		if [ $$? -ne 0 ]; then \
+			echo "$$list_output"; \
+			echo "failed to list fuzz tests in $$pkg"; \
+			failed=1; \
+			continue; \
+		fi; \
+		for fuzz in $$(echo "$$list_output" | grep '^Fuzz'); do \
 			echo "Fuzzing $$pkg $$fuzz..."; \
 			go test "$$pkg" -run='^$$' -fuzz="^$${fuzz}$$" -fuzztime=$(FUZZTIME) || failed=1; \
 		done; \
 	done; \
 	if [ $$failed -ne 0 ]; then exit 1; fi
-	@echo "Fuzz tests complete"
-
+	`@echo` "Fuzz tests complete"
 test-coverage: $(BIN_DIR) ## Run unit tests with coverage
 	@echo "Running unit tests with coverage..."
 	@go test -v -race -coverprofile=$(BIN_DIR)/coverage.out -covermode=atomic ./internal/... ./cmd/... ./pkg/...
