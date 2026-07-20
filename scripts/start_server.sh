@@ -23,7 +23,7 @@ fi
 
 # This assumes that the service has already been built
 # Always run in local mode (CORS enabled)
-${EXE} --local > ${LOGFILE} 2>&1 &
+${EXE} --local > "${LOGFILE}" 2>&1 &
 
 SERVICE_PID=$!
 
@@ -39,7 +39,7 @@ maxCount=20
 while [[ "${waiting}" == "true" ]];do
   echo "Trying heartbeat (curl ${CURL_OPTS} ${SERVER_URL}) ..."
   # this is not configurable
-  response=$(curl ${CURL_OPTS} ${SERVER_URL})
+  response=$(curl "${CURL_OPTS}" "${SERVER_URL}")
   if [[ "${response}" == *'"status":"healthy"'* ]]; then
     waiting=false
     echo "${response}"
