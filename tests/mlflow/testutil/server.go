@@ -50,7 +50,8 @@ type Server struct {
 }
 
 // StartMLFlowServer installs (if needed) and starts MLflow via make start-mlflow.
-// On failure it fails the test.
+// Server start or health-check failures fail the test (t.Fatalf). If the
+// tests/mlflow directory cannot be found, the test is skipped (t.Skipf).
 func StartMLFlowServer(t *testing.T, opts ServerOptions) *Server {
 	t.Helper()
 

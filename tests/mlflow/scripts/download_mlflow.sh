@@ -64,7 +64,8 @@ else
 fi
 
 if [ -x "${VENV_DIR}/bin/mlflow" ]; then
-    MLFLOW_INSTALLED_VERSION=$("${VENV_DIR}/bin/mlflow" --version 2>/dev/null | head -n 1)
+    # mlflow --version prints "mlflow, version X.Y.Z"; compare the package version exactly.
+    MLFLOW_INSTALLED_VERSION=$("${PYTHON}" -c "import mlflow; print(mlflow.__version__)")
     echo "✅ MLflow installed successfully!"
     echo "   Version: ${MLFLOW_INSTALLED_VERSION}"
     if [[ -n "${REQUESTED_VERSION}" ]] && [[ "${MLFLOW_INSTALLED_VERSION}" != "${REQUESTED_VERSION}" ]]; then

@@ -25,8 +25,8 @@ mkdir -p bin
 # Default values
 HOST=${MLFLOW_HOST:-"127.0.0.1"}
 PORT=${MLFLOW_PORT:-"5000"}
-BACKEND_URI=${MLFLOW_BACKEND_STORE_URI:-"sqlite:///bin/mlflow.db"}
-DEFAULT_ARTIFACT_ROOT=${MLFLOW_DEFAULT_ARTIFACT_ROOT:-"./bin/mlruns"}
+BACKEND_URI=${MLFLOW_BACKEND_STORE_URI:-"sqlite:///bin/mlflow_${PORT}.db"}
+DEFAULT_ARTIFACT_ROOT=${MLFLOW_DEFAULT_ARTIFACT_ROOT:-"./bin/mlruns_${PORT}"}
 MLFLOW_LOG_FILE=${MLFLOW_LOG_FILE:-"bin/mlflow_${PORT}.log"}
 PID_FILE="bin/mlflow_${PORT}.pid"
 ENABLE_WORKSPACES=""
