@@ -692,7 +692,6 @@ func TestEvaluateEvaluationJobJsonnetWithQueue(t *testing.T) {
             "parameters": {
               "num_examples": 10,
               "num_fewshot": 3,
-              "limit": 5,
               "tokenizer": "google/flan-t5-small"
             }
           }

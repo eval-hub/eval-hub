@@ -33,7 +33,6 @@ func TestEvaluationJobResourceSchemaFiles(t *testing.T) {
 			"id": "arc_easy",
 			"provider_id": "lm_evaluation_harness",
 			"parameters": {
-				"limit": 5,
 				"num_examples": 10,
 				"num_fewshot": 3,
 				"tokenizer": "google/flan-t5-small"
@@ -67,7 +66,6 @@ func TestEvaluationJobResourceSchemaFiles(t *testing.T) {
 			"id": "arc_easy",
 			"provider_id": "lm_evaluation_harness",
 			"parameters": {
-				"limit": 5,
 				"num_examples": 10,
 				"num_fewshot": 3,
 				"tokenizer": "/test_data/tokenizer"

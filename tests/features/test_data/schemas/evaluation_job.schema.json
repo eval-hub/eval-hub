@@ -268,7 +268,6 @@
           "id": "arc_easy",
           "provider_id": "lm_evaluation_harness",
           "parameters": {
-            "limit": 5,
             "num_examples": 10,
             "num_fewshot": 3,
             "tokenizer": "/test_data/tokenizer"
