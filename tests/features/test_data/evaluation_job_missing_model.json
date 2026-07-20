@@ -5,7 +5,7 @@
       "provider_id": "garak",
       "parameters": {
         "num_fewshot": 3,
-        "limit": 5,
+        "num_examples": 5,
         "tokenizer": "google/flan-t5-small"
       }
     }

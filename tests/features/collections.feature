@@ -469,7 +469,7 @@ Feature: Collections Endpoint
                     "threshold": 0.5
                 },
                 "parameters": {
-                    "limit": 10,
+                    "num_examples": 10,
                     "num_fewshot": 0,
                     "tokenizer": "google/flan-t5-small"
                 }
@@ -485,7 +485,7 @@ Feature: Collections Endpoint
                     "threshold": 0.5
                 },
                 "parameters": {
-                    "limit": 10,
+                    "num_examples": 10,
                     "num_fewshot": 0,
                     "tokenizer": "google/flan-t5-small"
                 }
@@ -544,7 +544,6 @@ Feature: Collections Endpoint
             "parameters": {
               "num_examples": 10,
               "num_fewshot": 3,
-              "limit": 5,
               "tokenizer": "google/flan-t5-small"
             }
           },
