@@ -56,9 +56,11 @@ func FuzzRequestPathForRouting(f *testing.F) {
 	f.Fuzz(func(t *testing.T, uri string) {
 		path := requestPathForRouting(uri)
 		// Query and fragment must never affect MLflow routing decisions.
-		routable := isMLflowProxyPath(path)
-		if strings.Contains(uri, "?") || strings.Contains(uri, "#") {
-			_ = routable
+		if i := strings.IndexAny(uri, "?#"); i >= 0 {
+			basePath := requestPathForRouting(uri[:i])
+			if isMLflowProxyPath(path) != isMLflowProxyPath(basePath) {
+				t.Fatalf("routing decision for %q changed after stripping query/fragment", uri)
+			}
 		}
 		// Deterministic.
 		if path != requestPathForRouting(uri) {
