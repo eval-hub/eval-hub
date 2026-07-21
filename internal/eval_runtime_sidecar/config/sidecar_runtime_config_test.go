@@ -65,7 +65,6 @@ func TestLoadSidecarRuntimeConfig_OCISnakeCase(t *testing.T) {
   "eval_hub": { "base_url": "https://eval.example" },
   "oci": {
     "ca_cert_path": "/etc/certs/ca.pem",
-    "insecure_skip_verify": true,
     "http_timeout": 30000000000
   }
 }`
@@ -81,9 +80,6 @@ func TestLoadSidecarRuntimeConfig_OCISnakeCase(t *testing.T) {
 	}
 	if cfg.Sidecar.OCI.CACertPath != "/etc/certs/ca.pem" {
 		t.Errorf("oci.ca_cert_path = %q", cfg.Sidecar.OCI.CACertPath)
-	}
-	if !cfg.Sidecar.OCI.InsecureSkipVerify {
-		t.Error("oci.insecure_skip_verify should be true")
 	}
 	if cfg.Sidecar.OCI.HTTPTimeout != 30_000_000_000 {
 		t.Errorf("oci.http_timeout = %v", cfg.Sidecar.OCI.HTTPTimeout)

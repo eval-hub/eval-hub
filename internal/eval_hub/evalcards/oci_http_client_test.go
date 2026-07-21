@@ -32,11 +32,12 @@ func TestNewOCIHTTPClientDefaults(t *testing.T) {
 func TestNewOCIHTTPClientAppliesConfig(t *testing.T) {
 	t.Parallel()
 
+	caPath := writeTestCACert(t)
 	cfg := &config.Config{
 		Sidecar: &config.SidecarConfig{
 			OCI: &config.SidecarOCIConfig{
-				HTTPTimeout:        45 * time.Second,
-				InsecureSkipVerify: true,
+				HTTPTimeout: 45 * time.Second,
+				CACertPath:  caPath,
 			},
 		},
 	}
@@ -48,8 +49,11 @@ func TestNewOCIHTTPClientAppliesConfig(t *testing.T) {
 		t.Fatalf("timeout = %v, want 45s", client.Timeout)
 	}
 	transport, ok := client.Transport.(*http.Transport)
-	if !ok || transport.TLSClientConfig == nil || !transport.TLSClientConfig.InsecureSkipVerify {
-		t.Fatal("expected insecure TLS config from sidecar.oci settings")
+	if !ok || transport.TLSClientConfig == nil || transport.TLSClientConfig.RootCAs == nil {
+		t.Fatal("expected TLS config with custom root CAs from sidecar.oci settings")
+	}
+	if transport.TLSClientConfig.InsecureSkipVerify {
+		t.Fatal("expected TLS verification to remain enabled")
 	}
 }
 
@@ -57,7 +61,7 @@ func TestBuildOCIHTTPClientTLSMissingCAUsesSystemRoots(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	tlsConfig, err := buildOCIHTTPClientTLS(filepath.Join(t.TempDir(), "missing-ca.crt"), false, logger)
+	tlsConfig, err := buildOCIHTTPClientTLS(filepath.Join(t.TempDir(), "missing-ca.crt"), logger)
 	if err != nil {
 		t.Fatalf("buildOCIHTTPClientTLS() err = %v", err)
 	}
@@ -73,7 +77,7 @@ func TestBuildOCIHTTPClientTLSInvalidPEM(t *testing.T) {
 	if err := os.WriteFile(caPath, []byte("not-a-cert"), 0o600); err != nil {
 		t.Fatalf("WriteFile() err = %v", err)
 	}
-	if _, err := buildOCIHTTPClientTLS(caPath, false, nil); err == nil {
+	if _, err := buildOCIHTTPClientTLS(caPath, nil); err == nil {
 		t.Fatal("expected error for invalid CA PEM")
 	}
 }
@@ -82,7 +86,7 @@ func TestBuildOCIHTTPClientTLSValidCA(t *testing.T) {
 	t.Parallel()
 
 	caPath := writeTestCACert(t)
-	tlsConfig, err := buildOCIHTTPClientTLS(caPath, false, nil)
+	tlsConfig, err := buildOCIHTTPClientTLS(caPath, nil)
 	if err != nil {
 		t.Fatalf("buildOCIHTTPClientTLS() err = %v", err)
 	}
@@ -124,7 +128,7 @@ func TestNewOCIHTTPClientWithOTELEnabled(t *testing.T) {
 func TestBuildOCIHTTPClientTLSReadError(t *testing.T) {
 	t.Parallel()
 
-	if _, err := buildOCIHTTPClientTLS(t.TempDir(), false, nil); err == nil {
+	if _, err := buildOCIHTTPClientTLS(t.TempDir(), nil); err == nil {
 		t.Fatal("expected read error when CA path is a directory")
 	}
 }
