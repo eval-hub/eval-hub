@@ -140,9 +140,10 @@ grep -rn "go1\.<old_minor>\.<old_patch>\|go-toolset:<old_major_minor>" . \
 
 Update any that are pinned to the old version.
 
-### Step 6 — Run `go mod tidy`
+### Step 6 — Update dependencies and run `go mod tidy`
 
 ```bash
+go get -t -u ./...
 go mod tidy
 ```
 
