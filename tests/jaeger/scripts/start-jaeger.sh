@@ -27,7 +27,6 @@ fi
 JAEGER_DIR="$PROJECT_ROOT/bin/jaeger-${JAEGER_VERSION}-${DOWNLOAD_NAME}"
 # Jaeger v2 uses 'jaeger' binary
 JAEGER_BINARY="$JAEGER_DIR/jaeger"
-JAEGER_DOWNLOAD_URL="https://github.com/jaegertracing/jaeger/releases/download/v${JAEGER_VERSION}/jaeger-${JAEGER_VERSION}-${DOWNLOAD_NAME}.tar.gz"
 
 # Colors for output
 RED='\033[0;31m'
@@ -75,7 +74,8 @@ download_jaeger() {
     echo -e "${BLUE}🔗 Using download tag: v${download_tag}${NC}"
 
     # Create temp file
-    local temp_file=$(mktemp)
+    local temp_file
+    temp_file=$(mktemp)
 
     # Download with progress
     if curl -L -o "$temp_file" "$url"; then
