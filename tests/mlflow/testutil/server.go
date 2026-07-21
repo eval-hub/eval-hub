@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -25,6 +26,10 @@ const (
 	healthTimeout  = 30 * time.Second
 	healthInterval = 500 * time.Millisecond
 )
+
+// startMu serializes install/start/stop against the shared tests/mlflow/.venv.
+// Script-level locking also applies cross-process; this covers same-process callers.
+var startMu sync.Mutex
 
 // ServerOptions configures MLflow server startup (passed to tests/mlflow Makefile targets).
 type ServerOptions struct {
@@ -45,7 +50,8 @@ type Server struct {
 }
 
 // StartMLFlowServer installs (if needed) and starts MLflow via make start-mlflow.
-// On failure it skips the test instead of failing.
+// Server start or health-check failures fail the test (t.Fatalf). If the
+// tests/mlflow directory cannot be found, the test is skipped (t.Skipf).
 func StartMLFlowServer(t *testing.T, opts ServerOptions) *Server {
 	t.Helper()
 
@@ -57,6 +63,9 @@ func StartMLFlowServer(t *testing.T, opts ServerOptions) *Server {
 
 	opts = opts.withDefaults()
 	trackingURI := fmt.Sprintf("http://%s:%d", opts.Host, opts.Port)
+
+	startMu.Lock()
+	defer startMu.Unlock()
 
 	if err := runMakeTarget(t, dir, startTimeout, "start-mlflow", opts); err != nil {
 		opts.Logger.Error("Skipping tests: failed to start MLflow server", "error", err, "version", opts.Version, "workspaces", opts.EnableWorkspaces, "port", opts.Port)
@@ -78,6 +87,8 @@ func StartMLFlowServer(t *testing.T, opts ServerOptions) *Server {
 		dir:         dir,
 	}
 	t.Cleanup(func() {
+		startMu.Lock()
+		defer startMu.Unlock()
 		srv.stop(t)
 	})
 	opts.Logger.Info("MLflow server ready", "trackingURI", trackingURI, "version", opts.Version, "workspaces", opts.EnableWorkspaces)
