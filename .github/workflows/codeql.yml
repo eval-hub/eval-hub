@@ -26,6 +26,8 @@ permissions:
 jobs:
   analyze:
     name: Analyze
+    # Only run on the canonical repo, not forks
+    if: github.repository == 'eval-hub/eval-hub'
     runs-on: ubuntu-latest
     permissions:
       actions: read
