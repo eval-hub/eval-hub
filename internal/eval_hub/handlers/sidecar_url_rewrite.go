@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -15,6 +16,11 @@ const (
 	defaultEvalHubPort       = "8443"
 	defaultSidecarListenPort = 8080
 	inClusterNamespaceFile   = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+)
+
+var (
+	inClusterNamespaceOnce sync.Once
+	inClusterNamespace     string
 )
 
 // rewriteSidecarURLsInBenchmarkStatus replaces sidecar localhost URLs in status
@@ -90,11 +96,14 @@ func evalHubServiceURL(tenantNamespace string) string {
 }
 
 func readInClusterNamespace() string {
-	content, err := os.ReadFile(inClusterNamespaceFile)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(content))
+	inClusterNamespaceOnce.Do(func() {
+		content, err := os.ReadFile(inClusterNamespaceFile)
+		if err != nil {
+			return
+		}
+		inClusterNamespace = strings.TrimSpace(string(content))
+	})
+	return inClusterNamespace
 }
 
 func normalizeRegistryURL(host string) string {
