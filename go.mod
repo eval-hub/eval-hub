@@ -1,8 +1,8 @@
 module github.com/eval-hub/eval-hub
 
-go 1.26.4
+go 1.26.5
 
-// toolchain go1.26.4
+// toolchain go1.26.5
 
 require (
 	github.com/Jeffail/gabs/v2 v2.7.0
@@ -155,7 +155,7 @@ require (
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
-	k8s.io/kube-openapi v0.0.0-20260721042612-c26577a1ec9a // indirect
+	k8s.io/kube-openapi v0.0.0-20260721132016-d427ff9ee9ad // indirect
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3 // indirect
 	modernc.org/libc v1.74.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
