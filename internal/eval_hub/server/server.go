@@ -221,14 +221,12 @@ func (s *Server) setupHealthRoutes(h *handlers.Handlers, router *http.ServeMux) 
 		}
 	})
 
-	// /api/v1/health is the detailed health check; requires identity headers in cluster mode.
+	// /api/v1/health is the detailed health check; unauthenticated like /healthz so the
+	// application can handle all methods (including returning 405 for non-GET).
 	s.handleFunc(router, "/api/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
 		req := s.newRequestWrapper(w, r)
-		if !s.canContinueRequest(ctx, resp) {
-			return
-		}
 		switch req.Method() {
 		case http.MethodGet:
 			h.HandleHealth(ctx, req, resp, s.serviceConfig.Service.Build, s.serviceConfig.Service.BuildDate, s.serviceConfig.Service.GitHash)
