@@ -125,6 +125,9 @@ func buildArtifactUploadEndpoint(artifactPath string) (string, error) {
 		if segment == "" {
 			continue
 		}
+		if segment == "." || segment == ".." {
+			return "", fmt.Errorf("artifact path contains invalid segment %q", segment)
+		}
 		escaped = append(escaped, url.PathEscape(segment))
 	}
 	if len(escaped) == 0 {

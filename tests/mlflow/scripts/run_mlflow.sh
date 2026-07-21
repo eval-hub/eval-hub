@@ -20,25 +20,27 @@ if [ -d "${VENV_DIR}/bin" ]; then
     export PATH="${MLFLOW_DIR}/${VENV_DIR}/bin:${PATH}"
 fi
 
-# for now we wipe out the mlflow db and mlruns directory
-if ! rm -rf bin/mlflow*.db bin/mlruns; then
-    echo -e "${YELLOW}❌ Failed to wipe out mlflow db and mlruns directory${NC}"
-    exit 1
-fi
-echo -e "${GREEN}✅ Wiped out mlflow db and mlruns directory${NC}"
-
 mkdir -p bin
 
 # Default values
 HOST=${MLFLOW_HOST:-"127.0.0.1"}
 PORT=${MLFLOW_PORT:-"5000"}
-BACKEND_URI=${MLFLOW_BACKEND_STORE_URI:-"sqlite:///bin/mlflow.db"}
-DEFAULT_ARTIFACT_ROOT=${MLFLOW_DEFAULT_ARTIFACT_ROOT:-"./bin/mlruns"}
+BACKEND_URI=${MLFLOW_BACKEND_STORE_URI:-"sqlite:///bin/mlflow_${PORT}.db"}
+DEFAULT_ARTIFACT_ROOT=${MLFLOW_DEFAULT_ARTIFACT_ROOT:-"./bin/mlruns_${PORT}"}
 MLFLOW_LOG_FILE=${MLFLOW_LOG_FILE:-"bin/mlflow_${PORT}.log"}
+PID_FILE="bin/mlflow_${PORT}.pid"
 ENABLE_WORKSPACES=""
 if [[ "${MLFLOW_ENABLE_WORKSPACES:-false}" == "true" ]]; then
     ENABLE_WORKSPACES="--enable-workspaces"
 fi
+
+# Wipe only this instance's store/artifacts so other port-specific servers stay intact.
+if [[ "${BACKEND_URI}" == sqlite://* ]]; then
+    DB_PATH="${BACKEND_URI#sqlite:///}"
+    rm -f "${DB_PATH}"
+fi
+rm -rf "${DEFAULT_ARTIFACT_ROOT}"
+echo -e "${GREEN}✅ Wiped out mlflow db and mlruns directory for port ${PORT}${NC}"
 
 log_to_file() {
     printf '%s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*" >> "${MLFLOW_LOG_FILE}"
@@ -125,6 +127,7 @@ mlflow server \
     >> "${MLFLOW_LOG_FILE}" 2>&1 &
 
 MLFLOW_PID=$!
+echo "${MLFLOW_PID}" > "${PID_FILE}"
 
 # Function to check if server is ready
 wait_for_server() {
@@ -185,7 +188,7 @@ if wait_for_server; then
     echo "Server logs: ${MLFLOW_LOG_FILE}"
     exit 0
 else
-    # Server didn't start properly - try to clean up
-    ./scripts/stop_mlflow.sh || true
+    # Server didn't start properly - try to clean up this port only
+    MLFLOW_PORT="${PORT}" ./scripts/stop_mlflow.sh || true
     exit 1
 fi

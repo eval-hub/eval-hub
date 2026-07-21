@@ -53,7 +53,7 @@ evaluate_model:
           Use the `evalhub://benchmarks` resource to browse available benchmarks,
           or `evalhub://collections` for curated benchmark suites.
           You can filter benchmarks by label (e.g. `evalhub://benchmarks?label=safety`).
-          
+
           **Step 3: Configure experiment**
           Optionally set up MLflow experiment tracking with a name and tags for organizing your evaluation results.
 
@@ -74,7 +74,7 @@ evaluate_model:
           Use the `evalhub://benchmarks` resource to browse available benchmarks,
           or `evalhub://collections` for curated benchmark suites.
           You can filter benchmarks by label (e.g. `evalhub://benchmarks?label=safety`).
-          
+
           **Step 3: Configure experiment**
           Optionally set up MLflow experiment tracking with a name and tags for organizing your evaluation results.
 
@@ -103,7 +103,7 @@ compare_runs:
           First, let's identify which evaluation jobs you want to compare.
           Use the `evalhub://jobs` resource to list available jobs,
           or filter by status with `evalhub://jobs?status=completed` to see only finished evaluations.
-          Select two or more job IDs to proceed.  
+          Select two or more job IDs to proceed.
       with_jobs:
         user: "I want to compare evaluation jobs: {job_ids}. Help me through the process step by step."
         assistant: |

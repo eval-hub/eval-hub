@@ -68,6 +68,15 @@ func TestBuildArtifactUploadEndpoint(t *testing.T) {
 	if _, err := buildArtifactUploadEndpoint("/"); err == nil {
 		t.Fatal("expected error for slash-only artifact path")
 	}
+	if _, err := buildArtifactUploadEndpoint("../etc/passwd"); err == nil {
+		t.Fatal("expected error for path with .. segment")
+	}
+	if _, err := buildArtifactUploadEndpoint("1/./artifacts/file.json"); err == nil {
+		t.Fatal("expected error for path with . segment")
+	}
+	if _, err := buildArtifactUploadEndpoint("1/../artifacts/file.json"); err == nil {
+		t.Fatal("expected error for path with embedded .. segment")
+	}
 }
 
 func TestUploadArtifactValidationErrors(t *testing.T) {
