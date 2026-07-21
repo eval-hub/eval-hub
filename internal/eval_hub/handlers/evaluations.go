@@ -496,6 +496,9 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 			if jobErr == nil && job != nil && job.Status != nil {
 				previousState = job.Status.State
 			}
+			if status.BenchmarkStatusEvent != nil {
+				h.rewriteSidecarURLsInBenchmarkStatus(status.BenchmarkStatusEvent, job, ctx.Logger)
+			}
 
 			err = scoped.UpdateEvaluationJob(evaluationJobID, status)
 			if err != nil {

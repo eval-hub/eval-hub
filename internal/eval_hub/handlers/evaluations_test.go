@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
@@ -845,6 +846,63 @@ func TestHandleUpdateEvaluationStampsRuntimeMessageOrigins(t *testing.T) {
 	}
 	if event.WarningMessage == nil || event.WarningMessage.MessageOrigin != api.MessageOriginRuntime {
 		t.Fatalf("expected runtime warning origin, got %+v", event.WarningMessage)
+	}
+}
+
+func TestHandleUpdateEvaluationRewritesSidecarURLsInMessages(t *testing.T) {
+	t.Parallel()
+	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{
+		job: &api.EvaluationJobResource{
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Model: api.ModelRef{URL: "https://api.openai.com/v1", Name: "gpt"},
+				Exports: &api.EvaluationExports{
+					OCI: &api.EvaluationExportsOCI{
+						Coordinates: api.OCICoordinates{
+							OCIHost:       "quay.io",
+							OCIRepository: "org/repo",
+						},
+					},
+				},
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{State: api.OverallStateRunning},
+			},
+		},
+	}}
+	validate := testhelpers.NewValidator(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	cfg := &config.Config{
+		MLFlow:  &config.MLFlowConfig{TrackingURI: "https://mlflow.example.com"},
+		Sidecar: &config.SidecarConfig{BaseURL: "http://localhost:8080"},
+	}
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, cfg, nil)
+
+	body := `{"benchmark_status_event":{"provider_id":"p1","id":"b1","status":"failed","error_message":{"message":"Model endpoint returned HTTP 404: Not Found for url: http://localhost:8080/v1/completions","message_code":"ADAPTER_FAIL"},"warning_message":{"message":"MLflow warn for url: http://localhost:8080/api/2.0/mlflow/runs/create","message_code":"ADAPTER_WARN"}}}`
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs/job-rewrite/events"),
+		body:        []byte(body),
+	}
+	reqWithPath := &updateEvaluationRequest{
+		bodyRequest: req,
+		pathValues:  map[string]string{"job_id": "job-rewrite"},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-rewrite", logger, "test-user", "test-tenant")
+
+	h.HandleUpdateEvaluation(ctx, reqWithPath, resp)
+
+	if recorder.Code != 204 {
+		t.Fatalf("expected status 204, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+	event := storage.lastStatusEvent.BenchmarkStatusEvent
+	wantErr := "Model endpoint returned HTTP 404: Not Found for url: https://api.openai.com/v1/completions"
+	if event.ErrorMessage == nil || event.ErrorMessage.Message != wantErr {
+		t.Fatalf("error message = %#v, want %q", event.ErrorMessage, wantErr)
+	}
+	wantWarn := "MLflow warn for url: https://mlflow.example.com/api/2.0/mlflow/runs/create"
+	if event.WarningMessage == nil || event.WarningMessage.Message != wantWarn {
+		t.Fatalf("warning message = %#v, want %q", event.WarningMessage, wantWarn)
 	}
 }
 
