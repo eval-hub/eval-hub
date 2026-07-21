@@ -1103,7 +1103,7 @@ paths:
                         image: quay.io/trustyai/trustyai-garak-lls-provider-dsp:latest
                         entrypoint:
                           - python
-                          - '-m'
+                          - -m
                           - llama_stack_provider_trustyai_garak.evalhub
                         cpu_request: 500m
                         memory_request: 512Mi
