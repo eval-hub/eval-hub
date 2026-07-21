@@ -161,12 +161,19 @@ func rewriteMessageInfo(m *MessageInfo, sidecarBaseURL string, targets SidecarUR
 
 // RewriteSidecarURLsInMessage replaces scheme+host of sidecarBaseURL occurrences with
 // the real target resolved from the URL path (eval-hub, MLflow, OCI, or model).
+// Only URLs whose host exactly matches the sidecar base URL host are rewritten;
+// text and URLs that merely share a host prefix are left unchanged.
 // When no target is available, scheme+host are removed and path/query/fragment are kept.
 func RewriteSidecarURLsInMessage(message, sidecarBaseURL string, targets SidecarURLTargets) string {
 	base := strings.TrimRight(strings.TrimSpace(sidecarBaseURL), "/")
 	if message == "" || base == "" || !strings.Contains(message, base) {
 		return message
 	}
+	sidecarURL, err := url.Parse(base)
+	if err != nil || sidecarURL.Host == "" {
+		return message
+	}
+	sidecarHost := sidecarURL.Host
 
 	var b strings.Builder
 	remaining := message
@@ -187,14 +194,17 @@ func RewriteSidecarURLsInMessage(message, sidecarBaseURL string, targets Sidecar
 			urlStr = rest[:end]
 			remaining = rest[end:]
 		}
-		b.WriteString(rewriteSidecarURL(urlStr, targets))
+		b.WriteString(rewriteSidecarURL(urlStr, sidecarHost, targets))
 	}
 	return b.String()
 }
 
-func rewriteSidecarURL(urlStr string, targets SidecarURLTargets) string {
+func rewriteSidecarURL(urlStr, sidecarHost string, targets SidecarURLTargets) string {
 	u, err := url.Parse(urlStr)
 	if err != nil || u.Host == "" {
+		return urlStr
+	}
+	if u.Host != sidecarHost {
 		return urlStr
 	}
 	path := u.EscapedPath()

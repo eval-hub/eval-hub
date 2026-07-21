@@ -109,6 +109,16 @@ func TestRewriteSidecarURLsInMessage(t *testing.T) {
 			want: "Connection failed: timeout talking to sidecar",
 		},
 		{
+			name: "prefix-sharing host unchanged",
+			in:   "error for url: http://localhost:8080.evil.com/v1/completions",
+			want: "error for url: http://localhost:8080.evil.com/v1/completions",
+		},
+		{
+			name: "prefix-sharing port unchanged",
+			in:   "error for url: http://localhost:80809/v1/completions",
+			want: "error for url: http://localhost:80809/v1/completions",
+		},
+		{
 			name: "empty",
 			in:   "",
 			want: "",
