@@ -61,6 +61,8 @@ jobs:
         make clean build test-all-coverage
 
     - name: Upload coverage reports to Codecov
+      # Only upload from the canonical repo, not forks
+      if: github.repository == 'eval-hub/eval-hub'
       continue-on-error: ${{ github.actor == 'dependabot[bot]' }}  # Don't fail CI on Dependabot PRs since they can't access secrets
       uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
       with:
