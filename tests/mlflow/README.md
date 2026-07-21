@@ -36,8 +36,8 @@ Run `make help` for a short list.
 | `help` | List targets and descriptions |
 | `init-python` | Create `$(VENV_DIR)` with `uv venv` (default `.venv`, Python `3.14`) |
 | `install-mlflow` | Depends on `init-python`; installs MLflow with `uv pip` into the venv |
-| `start-mlflow` | Stop any existing server, then start MLflow in the background |
-| `stop-mlflow` | Stop processes matching `mlflow.server` |
+| `start-mlflow` | Install (locked), stop this port, then start MLflow in the background |
+| `stop-mlflow` | Stop the server on `MLFLOW_PORT` only (PID file / port listen) |
 | `test-godog-server` | Start server, run godog tests (`-tags=godog`), then stop server |
 | `clean` | Remove `bin/` (SQLite DB, logs, artifact root) |
 | `cls` | Clear the terminal |
