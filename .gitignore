@@ -243,8 +243,14 @@ mlflow.log
 .idea/
 .serena/
 
-# Claude - for now everything is ignored
-.claude/
+# Claude - for now everything is ignored except certain skills.
+# Ignore contents (not the directory itself) so negation can re-include paths.
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/golang-version-update/
+.claude/skills/golang-version-update/*
+!.claude/skills/golang-version-update/SKILL.md
 
 .agentready/
 

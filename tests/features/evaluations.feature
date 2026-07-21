@@ -401,7 +401,7 @@ Feature: Evaluations Endpoint
     And the response should contain the value "arc_easy" at path "$.status.benchmarks[0].id"
     And the response should contain the value "arc_easy" at path "$.results.benchmarks[0].id"
     And the response should contain the value "lm_evaluation_harness" at path "$.results.benchmarks[0].provider_id"
-    And the response should contain the value "5" at path "$.benchmarks[0].parameters.limit"
+    And the response should contain the value "10" at path "$.benchmarks[0].parameters.num_examples"
     And the response should contain the value "google/flan-t5-small" at path "$.benchmarks[0].parameters.tokenizer"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204

@@ -1693,6 +1693,8 @@ func tidyUpTests() {
 }
 
 func checkModelEndpoint() {
+	modelEndpointConnectivity = modelEndpointUnchecked
+
 	modelURL := os.Getenv("MODEL_URL")
 	if modelURL == "" {
 		logDebug("MODEL_URL not set, skipping model endpoint pre-flight check\n")
@@ -1711,23 +1713,54 @@ func checkModelEndpoint() {
 		},
 	}
 
-	resp, err := client.Get(modelURL) //nolint:gosec
-	if err != nil {
-		var dnsErr *net.DNSError
-		if errors.As(err, &dnsErr) {
-			logDebug("WARNING: Cannot resolve model endpoint DNS for %s (test runner may be outside the cluster), proceeding with tests\n", modelURL)
+	maxRetries := 3
+	numRetries := 0
+	shouldRetry := func() bool { return numRetries < maxRetries }
+	notReadyStatus := func(statusCode int) bool { return statusCode == 503 }
+	retryDelay := 10 * time.Second
+
+	for shouldRetry() {
+		resp, err := client.Get(modelURL) //nolint:gosec // This is a test, we don't need to be too strict about the HTTP client
+		if err != nil {
+			var dnsErr *net.DNSError
+			if errors.As(err, &dnsErr) {
+				logDebug("WARNING: Cannot resolve model endpoint DNS for %s (test runner may be outside the cluster), proceeding with tests\n", modelURL)
+				return
+			}
+			logDebug("WARNING: Model endpoint %s is not reachable: %v\n", modelURL, err)
+			logDebug("Evaluation job scenarios will be skipped.\n")
+			modelEndpointConnectivity = modelEndpointUnreachable
 			return
 		}
-		logDebug("WARNING: Model endpoint %s is not reachable: %v\n", modelURL, err)
-		logDebug("Evaluation job scenarios will be skipped.\n")
-		modelEndpointConnectivity = modelEndpointUnreachable
-		return
-	}
-	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
+		status := resp.StatusCode
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+		logDebug("Model endpoint preflight GET %s returned HTTP %d\n", modelURL, status)
 
-	logDebug("Model endpoint %s is reachable (status: %d)\n", modelURL, resp.StatusCode)
-	modelEndpointConnectivity = modelEndpointReachable
+		// 401 on the OpenAI-compatible base URL (/v1) still means the server is up;
+		// unauthenticated GET often cannot list models. Do not treat 404 as reachable
+		// (that can mask a bad MODEL_URL).
+		reachableWithoutAuth := status == http.StatusUnauthorized
+
+		if numRetries < maxRetries-1 && notReadyStatus(status) {
+			logDebug("WARNING: Model endpoint %s is not ready (HTTP %d), waiting %s before retrying\n", modelURL, status, retryDelay)
+			time.Sleep(retryDelay)
+		} else if status >= 200 && status < 300 {
+			logDebug("Model endpoint %s is reachable (HTTP %d)\n", modelURL, status)
+			modelEndpointConnectivity = modelEndpointReachable
+			return
+		} else if reachableWithoutAuth {
+			logDebug("Model endpoint %s is reachable (HTTP %d; auth expected for /v1 base URL)\n", modelURL, status)
+			modelEndpointConnectivity = modelEndpointReachable
+			return
+		} else {
+			logDebug("WARNING: Model endpoint %s returned HTTP %d, treating as unreachable\n", modelURL, status)
+			logDebug("Evaluation job scenarios will be skipped.\n")
+			modelEndpointConnectivity = modelEndpointUnreachable
+			return
+		}
+		numRetries++
+	}
 }
 
 func (tc *scenarioConfig) theModelEndpointIsReachable() error {

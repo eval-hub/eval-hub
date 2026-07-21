@@ -6,8 +6,8 @@ grep_opts="-r"
 
 for dir in ./docs/src/components/response ./docs/src/components/examples ./docs/src/components/schemas ; do
   FILES=""
-  for file in ${dir}/*.yaml; do
-    f=$(basename -- ${file})
+  for file in "${dir}"/*.yaml; do
+    f=$(basename -- "${file}")
     FILES="${FILES} ${file}"
     if ! grep ${grep_opts} -e "/${f}" ./docs/src > /dev/null ; then
       echo "Found no occurences of ${file}"

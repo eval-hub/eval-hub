@@ -7,7 +7,7 @@ Feature: MCP Tools
   Background:
     Given the service is running
     And I set the wait deadline to "{{env:WAIT_DEADLINE|30m}}"
-  
+
   Scenario: Discover all providers via MCP returns unfiltered list
     When I call MCP tool "discover_providers" with arguments "{}"
     Then the MCP tool call should succeed
@@ -256,7 +256,7 @@ Feature: MCP Tools
       """
     Then the MCP tool call should succeed
     And the MCP response should contain the value "pending" at path "$.state"
-  
+
   Scenario: Submit evaluation job via MCP with collection
     When I call MCP tool "submit_evaluation" with arguments:
       """
@@ -305,7 +305,7 @@ Feature: MCP Tools
       """
     Then the MCP tool call should succeed
     And the MCP response should contain the value "pending" at path "$.state"
-  
+
   Scenario: Get job status via MCP after creating job
     When I call MCP tool "submit_evaluation" with arguments:
       """
@@ -336,7 +336,7 @@ Feature: MCP Tools
     And the MCP response should contain the value "{{value:status_job_id}}" at path "$.job_id"
     And the MCP response should contain the value "pending" at path "$.state"
     And the MCP response should contain the value "0" at path "$.progress_percent"
-  
+
   Scenario: Cancel job via MCP
     When I call MCP tool "submit_evaluation" with arguments:
       """
@@ -373,7 +373,7 @@ Feature: MCP Tools
     Then the MCP tool call should succeed
     And the MCP response should contain "cancelled"
 
-  @cluster 
+  @cluster
   Scenario: Submit evaluation job via MCP to cluster and wait for completion
     Given the model endpoint is reachable
     And I set the wait interval to "10s"
@@ -395,7 +395,6 @@ Feature: MCP Tools
             "provider_id": "lm_evaluation_harness",
             "parameters": {
               "num_fewshot": 0,
-              "limit": 5,
               "num_examples": 10
             }
           }
@@ -415,7 +414,7 @@ Feature: MCP Tools
     And the MCP response should contain the value "completed" at path "$.state"
     And the MCP response should contain the value "100" at path "$.progress_percent"
 
-  @cluster 
+  @cluster
   Scenario: Submit evaluation job with collection via MCP to cluster and wait for completion
     Given the model endpoint is reachable
     And I set the wait interval to "10s"
@@ -471,8 +470,8 @@ Feature: MCP Tools
     Then the MCP tool call should succeed
     And the MCP response should contain the value "completed" at path "$.state"
     And the MCP response should contain the value "100" at path "$.progress_percent"
-  
-  @cluster 
+
+  @cluster
   Scenario: Submit evaluation job with multiple benchmarks via MCP to cluster and wait for completion
     Given the model endpoint is reachable
     And I set the wait interval to "10s"
@@ -494,7 +493,6 @@ Feature: MCP Tools
             "provider_id": "lm_evaluation_harness",
             "parameters": {
               "num_fewshot": 0,
-              "limit": 3,
               "num_examples": 3
             }
           },
@@ -503,7 +501,6 @@ Feature: MCP Tools
             "provider_id": "lm_evaluation_harness",
             "parameters": {
               "num_fewshot": 0,
-              "limit": 3,
               "num_examples": 3
             }
           }
@@ -522,7 +519,7 @@ Feature: MCP Tools
     Then the MCP tool call should succeed
     And the MCP response should contain the value "completed" at path "$.state"
     And the MCP response should contain the value "100" at path "$.progress_percent"
- 
+
   @cluster
   @mlflow
   Scenario: Submit evaluation job with MLflow tracking via MCP to cluster and wait for completion
@@ -546,7 +543,6 @@ Feature: MCP Tools
             "provider_id": "lm_evaluation_harness",
             "parameters": {
               "num_fewshot": 0,
-              "limit": 5,
               "num_examples": 5
             }
           }
@@ -569,7 +565,7 @@ Feature: MCP Tools
     And the MCP response should contain the value "completed" at path "$.state"
     And the MCP response should contain the value "100" at path "$.progress_percent"
 
-  @cluster 
+  @cluster
   Scenario: Verify benchmark results and metrics via MCP resource after cluster job completion
     Given the model endpoint is reachable
     And I set the wait interval to "10s"
@@ -591,7 +587,6 @@ Feature: MCP Tools
             "provider_id": "lm_evaluation_harness",
             "parameters": {
               "num_fewshot": 0,
-              "limit": 5,
               "num_examples": 5
             }
           }
@@ -622,7 +617,7 @@ Feature: MCP Tools
     Then the MCP resource read should succeed
     And the MCP resource should contain the value "lm_evaluation_harness" at path "$.resource.id"
     And the MCP resource should contain the value "LM Evaluation Harness" at path "$.name"
-  
+
   Scenario: Read benchmarks resource via MCP includes agent metadata
     When I read MCP resource "evalhub://benchmarks"
     Then the MCP resource read should succeed
@@ -630,7 +625,7 @@ Feature: MCP Tools
     And the MCP resource should contain "hellaswag"
     And the MCP resource should contain "agent"
     And the MCP resource should contain "result_interpretation"
-  
+
   Scenario: Read benchmarks filtered by label via MCP
     When I read MCP resource "evalhub://benchmarks?label=reasoning"
     Then the MCP resource read should succeed

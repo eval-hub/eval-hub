@@ -13,7 +13,7 @@ local thresholdZeroBenchmark() =
       threshold: 0.5,
     },
     parameters: {
-      limit: 10,
+      num_examples: 10,
       num_fewshot: 0,
       tokenizer: test.defaultTokenizer(),
     },
