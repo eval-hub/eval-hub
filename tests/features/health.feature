@@ -33,11 +33,11 @@ Feature: Health Check Endpoint
     And I set the header "X-User" to "{{env:X_USER|test-user}}"
     And the service is running
     When I send a POST request to "/api/v1/health"
-    Then the response code should be 405
+    Then the response code should be 403
     When I send a PUT request to "/api/v1/health"
-    Then the response code should be 405
+    Then the response code should be 403
     When I send a DELETE request to "/api/v1/health"
-    Then the response code should be 405
+    Then the response code should be 403
 
   @negative
   Scenario: Healthz endpoint rejects non-GET methods
