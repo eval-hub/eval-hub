@@ -21,7 +21,37 @@ Maintainers will acknowledge the report, investigate, and coordinate remediation
 
 This repository runs automated security checks in CI, including:
 
+- CodeQL analysis for Go and Python (`.github/workflows/codeql.yml`)
 - Gosec static analysis for Go code
 - OpenSSF Scorecard for repository security posture
 
 Results may appear under the repository **Security** tab when SARIF upload is enabled.
+
+### Neutral CodeQL / “configuration not found” on pull requests
+
+If a PR shows a grey (neutral) **CodeQL** / **Code scanning results** check with a warning like:
+
+> Code scanning cannot determine the alerts introduced by this pull request, because 1 configuration present on `refs/heads/main` was not found: Actions workflow (`codeql.yml`) — `/language:<lang>`
+
+then `main` still has a stored Code scanning analysis for a language (or category) that the current workflow no longer uploads on pull requests. That often happens after a language is removed from the CodeQL matrix (for example, dropping `ruby` while leaving old `/language:ruby` analyses on `main`).
+
+GitHub treats `neutral` as a passing required check, but the warning remains until the leftover analyses are deleted.
+
+**Cleanup (maintainers):**
+
+1. List leftover analyses for the missing category on `main` (replace `/language:ruby` as needed):
+
+   ```bash
+   gh api 'repos/eval-hub/eval-hub/code-scanning/analyses?ref=refs/heads/main&per_page=100' --paginate \
+     --jq '.[] | select(.category == "/language:ruby") | {id, category, created_at, commit_sha, deletable, results_count}'
+   ```
+
+2. Delete the reported analysis ID (listing alone does not remove it):
+
+   ```bash
+   gh api -X DELETE 'repos/eval-hub/eval-hub/code-scanning/analyses/<ANALYSIS_ID>?confirm_delete=true'
+   ```
+
+3. List again. GitHub only exposes the tip of each analysis chain, so another ID for the same category may appear. Repeat delete until the filter returns nothing.
+
+4. Re-run checks on open PRs (or push a new commit). Existing PRs keep the old warning until Code scanning runs again against the cleaned `main` configuration.
