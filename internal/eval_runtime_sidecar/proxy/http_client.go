@@ -44,6 +44,7 @@ func newHTTPClient(timeout time.Duration, tlsConfig *tls.Config, isOTELEnabled b
 // When insecureSkipVerify is true, custom CA files are not read: verification is off, so loading a CA
 // would not affect trust and skipping avoids failing on missing paths in local/test environments.
 // When caCertPath is empty and insecureSkipVerify is false, system roots are used (default *tls.Config).
+// OCI callers always pass insecureSkipVerify=false; skip-verify is not supported for registry TLS.
 func buildTLSConfig(caCertPath string, insecureSkipVerify bool, logger *slog.Logger, certLabel string) (*tls.Config, error) {
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12,
@@ -164,8 +165,8 @@ func NewModelHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logger
 
 // NewOCIHTTPClient creates an HTTP client for the OCI registry from config (TLS, timeout).
 // Registry host comes from the job spec, not this config. When Sidecar.OCI is nil, defaults
-// are used; non-nil sidecar.oci in sidecar_config.json supplies optional CA, insecure, and
-// http_timeout overrides.
+// are used; non-nil sidecar.oci in sidecar_config.json supplies optional CA and http_timeout
+// overrides. TLS verification is always enabled.
 // Returns (nil, nil) only when Sidecar is nil.
 func NewOCIHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logger *slog.Logger) (*http.Client, error) {
 	if serviceConfig == nil || serviceConfig.Sidecar == nil {
@@ -180,11 +181,7 @@ func NewOCIHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logger *
 	if ociConfig != nil && ociConfig.CACertPath != "" {
 		caCertPath = ociConfig.CACertPath
 	}
-	insecureSkipVerify := DefaultInsecureSkipVerify
-	if ociConfig != nil && ociConfig.InsecureSkipVerify {
-		insecureSkipVerify = ociConfig.InsecureSkipVerify
-	}
-	tlsConfig, err := buildTLSConfig(caCertPath, insecureSkipVerify, logger, "OCI")
+	tlsConfig, err := buildTLSConfig(caCertPath, false, logger, "OCI")
 	if err != nil {
 		return nil, err
 	}

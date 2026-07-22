@@ -29,21 +29,19 @@ type DockerConfigSecretGetter interface {
 }
 
 // NewOCIHTTPClient creates an HTTP client for OCI registry export using optional sidecar.oci TLS
-// settings. Cluster registries often use private CAs or self-signed certs; this mirrors the
-// sidecar OCI proxy TLS configuration for eval-hub's outbound export calls.
+// settings. Cluster registries often use private CAs; this mirrors the sidecar OCI proxy TLS
+// configuration for eval-hub's outbound export calls. TLS verification is always enabled.
 func NewOCIHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logger *slog.Logger) (*http.Client, error) {
 	timeout := defaultOCIHTTPTimeout
 	caCertPath := ""
-	insecureSkipVerify := false
 	if serviceConfig != nil && serviceConfig.Sidecar != nil && serviceConfig.Sidecar.OCI != nil {
 		oci := serviceConfig.Sidecar.OCI
 		if oci.HTTPTimeout > 0 {
 			timeout = oci.HTTPTimeout
 		}
 		caCertPath = oci.CACertPath
-		insecureSkipVerify = oci.InsecureSkipVerify
 	}
-	tlsConfig, err := buildOCIHTTPClientTLS(caCertPath, insecureSkipVerify, logger)
+	tlsConfig, err := buildOCIHTTPClientTLS(caCertPath, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -62,22 +60,12 @@ func NewOCIHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logger *
 
 // buildOCIHTTPClientTLS loads registry TLS settings for the export HTTP client. It falls back to
 // the cluster service CA bundle and, when absent, to system roots so export works in dev and prod.
-func buildOCIHTTPClientTLS(caCertPath string, insecureSkipVerify bool, logger *slog.Logger) (*tls.Config, error) {
-	if caCertPath == "" && !insecureSkipVerify {
+func buildOCIHTTPClientTLS(caCertPath string, logger *slog.Logger) (*tls.Config, error) {
+	if caCertPath == "" {
 		caCertPath = defaultOCICACertPath
 	}
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12,
-	}
-	if insecureSkipVerify {
-		if logger != nil {
-			logger.Warn("OCI TLS verification disabled", "insecure_skip_verify", true)
-		}
-		tlsConfig.InsecureSkipVerify = true
-		return tlsConfig, nil
-	}
-	if caCertPath == "" {
-		return nil, nil
 	}
 	caPEM, err := os.ReadFile(caCertPath) // #nosec G304 -- CA path from service configuration
 	if err != nil {
