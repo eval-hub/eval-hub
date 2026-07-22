@@ -39,19 +39,21 @@ GitHub treats `neutral` as a passing required check, but the warning remains unt
 
 **Cleanup (maintainers):**
 
-1. List leftover analyses for the missing category on `main` (replace `/language:ruby` as needed):
+1. List leftover analyses for the missing category on `main` (replace `/language:ruby` as needed). Only the newest analysis in each set is deletable (`deletable: true`); older IDs in the same chain cannot be deleted directly:
 
    ```bash
    gh api 'repos/eval-hub/eval-hub/code-scanning/analyses?ref=refs/heads/main&per_page=100' --paginate \
-     --jq '.[] | select(.category == "/language:ruby") | {id, category, created_at, commit_sha, deletable, results_count}'
+     --jq '[.[] | select(.category == "/language:ruby" and .deletable == true)] | sort_by(.created_at) | reverse | .[0] | {id, category, created_at, commit_sha, deletable, results_count}'
    ```
 
-2. Delete the reported analysis ID (listing alone does not remove it):
+2. Delete that deletable analysis ID (listing alone does not remove it):
 
    ```bash
    gh api -X DELETE 'repos/eval-hub/eval-hub/code-scanning/analyses/<ANALYSIS_ID>?confirm_delete=true'
    ```
 
-3. List again. GitHub only exposes the tip of each analysis chain, so another ID for the same category may appear. Repeat delete until the filter returns nothing.
+   A successful delete returns `next_analysis_url` and `confirm_delete_url` for the previous analysis in the set. Use `confirm_delete_url` (or DELETE with `?confirm_delete=true`) to keep removing analyses until both URLs are `null`. Prefer `confirm_delete_url` when clearing a leftover language entirely; `next_analysis_url` stops before the last analysis in the set.
+
+3. List again with the same filter. If another deletable analysis remains for the category, repeat steps 2–3 until the filter returns nothing (or `null`).
 
 4. Re-run checks on open PRs (or push a new commit). Existing PRs keep the old warning until Code scanning runs again against the cleaned `main` configuration.
