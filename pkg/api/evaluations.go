@@ -110,13 +110,22 @@ func WithMessageOrigin(m *MessageInfo, origin MessageOrigin) *MessageInfo {
 	return m
 }
 
-// StampRuntimeMessageOrigins sets runtime origin on benchmark error and warning messages.
+// DefaultMessageOrigin sets origin on message when unset (nil-safe).
+func DefaultMessageOrigin(m *MessageInfo, origin MessageOrigin) *MessageInfo {
+	if m != nil && m.MessageOrigin == "" {
+		m.MessageOrigin = origin
+	}
+	return m
+}
+
+// StampRuntimeMessageOrigins defaults missing origins on benchmark error and
+// warning messages to runtime, preserving any origin already set on the event.
 func (e *BenchmarkStatusEvent) StampRuntimeMessageOrigins() {
 	if e == nil {
 		return
 	}
-	WithMessageOrigin(e.ErrorMessage, MessageOriginRuntime)
-	WithMessageOrigin(e.WarningMessage, MessageOriginRuntime)
+	DefaultMessageOrigin(e.ErrorMessage, MessageOriginRuntime)
+	DefaultMessageOrigin(e.WarningMessage, MessageOriginRuntime)
 }
 
 // SidecarURLTargets holds real upstream base URLs used to rewrite sidecar localhost
