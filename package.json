@@ -1,6 +1,6 @@
 {
   "devDependencies": {
-    "@redocly/cli": "2.39.0",
+    "@redocly/cli": "2.40.0",
     "cucumber-html-reporter": "7.2.0"
   },
   "overrides": {
