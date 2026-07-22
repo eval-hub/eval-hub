@@ -10,9 +10,9 @@ install-postgres:
 else ifeq ($(UNAME), Linux)
 install-postgres:
 	sudo apt-get update
-	sudo apt-get install -y gnupg2 lsb-release ubuntu-keyring
-	curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor | tee /etc/apt/trusted.gpg.d/apt.postgresql.org.gpg >/dev/null
-	echo "deb [signed-by=/etc/apt/trusted.gpg.d/apt.postgresql.org.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | tee /etc/apt/sources.list.d/pgdg.list
+	sudo apt-get install -y ca-certificates curl gnupg lsb-release
+	curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/apt.postgresql.org.gpg >/dev/null
+	echo "deb [signed-by=/etc/apt/trusted.gpg.d/apt.postgresql.org.gpg] http://apt.postgresql.org/pub/repos/apt $$(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
 	sudo apt-get update
 	sudo apt-get install -y postgresql-${POSTGRES_VERSION}
 else
