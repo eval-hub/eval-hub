@@ -227,7 +227,7 @@ func (tc *testContext) cleanup(ctx context.Context) error {
 			tc.applyAPIHeaders(req)
 			resp, reqErr := tc.client.Do(req)
 			if reqErr == nil && resp != nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 			}
 		}
 	}
@@ -444,7 +444,7 @@ func (tc *testContext) iSendRequestWithBody(method, path, bodyFile string) error
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer tc.response.Body.Close()
+	defer func() { _ = tc.response.Body.Close() }()
 
 	tc.body, err = io.ReadAll(tc.response.Body)
 	if err != nil {
@@ -2235,14 +2235,6 @@ func (tc *testContext) allConfigMapsShouldBeDeletedCount(expected int) error {
 	return tc.allConfigMapsShouldBeDeleted()
 }
 
-func (tc *testContext) responseBodyShouldContain(substr string) error {
-	body := strings.ToLower(string(tc.body))
-	if !strings.Contains(body, strings.ToLower(substr)) {
-		return fmt.Errorf("response does not contain %q: %s", substr, string(tc.body))
-	}
-	return nil
-}
-
 func (tc *testContext) listJobsByJobID() ([]batchv1.Job, error) {
 	return tc.listJobsByJobIDWithCache(false)
 }
@@ -2310,68 +2302,4 @@ func (tc *testContext) logK8sOp(resource, action, jobID string) {
 		return
 	}
 	fmt.Printf("[K8S] %s %s (job_id=%s, namespace=%s)\n", action, resource, jobID, tc.namespace)
-}
-
-func (tc *testContext) firstBenchmarkID() string {
-	if len(tc.lastBenchmarkIDs) > 0 {
-		return tc.lastBenchmarkIDs[0]
-	}
-	if tc.lastBenchmarkID != "" {
-		return tc.lastBenchmarkID
-	}
-	return ""
-}
-
-func (tc *testContext) fetchBenchmarkStatuses() ([]string, error) {
-	req, err := http.NewRequest("GET", tc.baseURL+"/api/v1/evaluations/jobs/"+tc.lastJobID, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	tc.applyAPIHeaders(req)
-	resp, err := tc.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, string(body))
-	}
-	var data map[string]interface{}
-	if err := json.Unmarshal(body, &data); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	status, ok := data["status"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("response missing status")
-	}
-	benchmarks, ok := status["benchmarks"].([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("response missing benchmark statuses")
-	}
-	var result []string
-	for _, item := range benchmarks {
-		if bm, ok := item.(map[string]interface{}); ok {
-			if st, ok := bm["status"].(string); ok && st != "" {
-				result = append(result, st)
-			}
-		}
-	}
-	return result, nil
-}
-
-// ============================================================================
-// Stub for Undefined Steps
-// ============================================================================
-
-func (tc *testContext) stubStepNoArgs() error {
-	return godog.ErrSkip
-}
-
-func (tc *testContext) stubStepInt(_ int) error {
-	return godog.ErrSkip
-}
-
-func (tc *testContext) stubStepString(_ string) error {
-	return godog.ErrSkip
 }

@@ -740,7 +740,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 		if evaluationId == "" {
 			t.Fatalf("Evaluation ID is empty")
 		}
-		if job.EvaluationJobConfig.Collection != nil {
+		if job.Collection != nil {
 			t.Fatalf("Collection is not nil")
 		}
 	})

@@ -31,7 +31,7 @@ const (
 	modelURLSuffix     = "_url"
 )
 
-// xModelCredError is an internal sentinel header set by the Director when ref resolution fails.
+// xModelCredError is an internal sentinel header set by Rewrite when ref resolution fails.
 // The modelRoundTripper checks for it and returns 400 to the eval container instead of
 // forwarding a request with a literal ref token.
 const xModelCredError = "X-Model-Cred-Error" // #nosec G101 -- internal HTTP header name, not a credential

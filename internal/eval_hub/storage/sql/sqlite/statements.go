@@ -218,7 +218,7 @@ func (s *sqliteStatementsFactory) getWhereStatement(tenant api.Tenant, id string
 		if sb.Len() > 0 {
 			sb.WriteString(" AND ")
 		}
-		sb.WriteString(fmt.Sprintf("(tenant_id = ? OR owner = '%s')", abstractions.OwnerSystem))
+		fmt.Fprintf(&sb, "(tenant_id = ? OR owner = '%s')", abstractions.OwnerSystem)
 		args = append(args, tenant.String())
 	}
 	return sb.String(), args

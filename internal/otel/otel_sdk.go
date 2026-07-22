@@ -243,7 +243,7 @@ func createResource(ctx context.Context, config *config.OTELConfig, logger *slog
 		attrs = append(attrs, attribute.String(key, value))
 	}
 
-	var res *resource.Resource = resource.Default()
+	res := resource.Default()
 
 	pr, createErr := createProcessResource(ctx, config)
 	if pr != nil {

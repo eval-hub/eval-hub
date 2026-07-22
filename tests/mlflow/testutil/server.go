@@ -170,7 +170,7 @@ func runMakeTarget(t *testing.T, dir string, timeout time.Duration, target strin
 	if err != nil {
 		return fmt.Errorf("open make output log %s: %w", logPath, err)
 	}
-	defer logFile.Close()
+	defer func() { _ = logFile.Close() }()
 
 	if _, err := fmt.Fprintf(logFile, "\n--- make %s (%s) at %s ---\n", target, opts.Version, time.Now().Format(time.RFC3339)); err != nil {
 		return fmt.Errorf("write make log header: %w", err)
@@ -223,7 +223,7 @@ func waitForHealth(trackingURI string, timeout time.Duration) error {
 	for time.Now().Before(deadline) {
 		resp, err := client.Get(healthURL)
 		if err == nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
 				return nil
 			}

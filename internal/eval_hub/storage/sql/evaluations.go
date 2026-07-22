@@ -534,8 +534,8 @@ func (s *sqlStorage) computeJobTestResult(job *api.EvaluationJobResource, collec
 }
 
 func getPassCriteriaThreshold(job *api.EvaluationJobResource, collection *api.CollectionResource) float32 {
-	if job.EvaluationJobConfig.PassCriteria != nil && job.EvaluationJobConfig.PassCriteria.Threshold != nil {
-		return *job.EvaluationJobConfig.PassCriteria.Threshold
+	if job.PassCriteria != nil && job.PassCriteria.Threshold != nil {
+		return *job.PassCriteria.Threshold
 	}
 	if collection != nil && collection.PassCriteria != nil && collection.PassCriteria.Threshold != nil {
 		return *collection.PassCriteria.Threshold

@@ -261,8 +261,7 @@ func (tp *OCITokenProducer) initiateChallenge() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
-
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusUnauthorized {
 		return "", nil
 	}
@@ -296,8 +295,7 @@ func (tp *OCITokenProducer) createNewToken(nextURL string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("auth request failed with status %d: %s", resp.StatusCode, string(body))

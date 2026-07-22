@@ -45,7 +45,7 @@ func TestProviderStorage_GPURuntimeRoundTrip(t *testing.T) {
 	if err := store.CreateProvider(provider); err != nil {
 		t.Fatalf("CreateProvider failed: %v", err)
 	}
-	defer store.DeleteProvider("gpu-provider-1")
+	defer func() { _ = store.DeleteProvider("gpu-provider-1") }()
 
 	got, err := store.GetProvider("gpu-provider-1")
 	if err != nil {

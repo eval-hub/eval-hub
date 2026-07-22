@@ -99,7 +99,7 @@ func (r *stubRuntime) GetEvaluationLogs(
 
 func TestNewServer(t *testing.T) {
 	t.Run("creates server with default port", func(t *testing.T) {
-		os.Unsetenv("PORT")
+		_ = os.Unsetenv("PORT")
 		srv, err := createServer(t, 8080)
 		if err != nil {
 			t.Fatalf("NewServer() returned error: %v", err)

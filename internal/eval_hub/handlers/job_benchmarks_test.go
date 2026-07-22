@@ -310,7 +310,7 @@ func TestGetJobBenchmarks(t *testing.T) {
 		if !reflect.DeepEqual(got[1].Parameters, want1) {
 			t.Fatalf("second benchmark parameters = %#v, want %#v", got[1].Parameters, want1)
 		}
-		if got[0].Ref.ID != "a-ref" || got[1].Ref.ID != "b-ref" {
+		if got[0].ID != "a-ref" || got[1].ID != "b-ref" {
 			t.Fatalf("Refs = %+v, %+v", got[0].Ref, got[1].Ref)
 		}
 	})

@@ -11,7 +11,7 @@ import (
 
 type contextKeyAuthInput struct{}
 
-// ContextWithAuthInput returns a context that carries authInput for the reverse proxy Director.
+// ContextWithAuthInput returns a context that carries authInput for the reverse proxy Rewrite hook.
 func ContextWithAuthInput(ctx context.Context, authInput AuthTokenInput) context.Context {
 	return context.WithValue(ctx, contextKeyAuthInput{}, authInput)
 }
@@ -107,24 +107,18 @@ func SetAuthHeader(req *http.Request, token string) {
 // The returned proxy is safe to reuse for many requests.
 func NewReverseProxy(target *url.URL, client *http.Client, logger *slog.Logger, modifyResponse func(*http.Response) error) *httputil.ReverseProxy {
 	transport := &roundTripperFromClient{client: client}
-	proxy := httputil.NewSingleHostReverseProxy(target)
-	proxy.Transport = transport
+	proxy := &httputil.ReverseProxy{Transport: transport}
 
-	proxy.Director = func(req *http.Request) {
-		req.URL.Scheme = target.Scheme
-		req.URL.Host = target.Host
-		req.Host = target.Host
-		if target.Path != "" && target.Path != "/" {
-			req.URL.Path = strings.TrimSuffix(target.Path, "/") + req.URL.Path
-		}
-		req.RequestURI = "" // required for client requests
-		// Content-Type and X-Tenant are already on req (copied from incoming by ReverseProxy)
-		authInput, ok := AuthInputFromContext(req.Context())
+	proxy.Rewrite = func(pr *httputil.ProxyRequest) {
+		pr.SetURL(target)
+		pr.Out.RequestURI = "" // required for client requests
+		// Content-Type and X-Tenant are already on Out (copied from inbound by ReverseProxy)
+		authInput, ok := AuthInputFromContext(pr.In.Context())
 		if ok {
 			authToken := ResolveAuthToken(logger, authInput)
-			SetAuthHeader(req, authToken)
+			SetAuthHeader(pr.Out, authToken)
 		}
-		logger.Info("Proxying request", "method", req.Method, "url", req.URL.String(), "headers", headersForLog(req.Header))
+		logger.Info("Proxying request", "method", pr.Out.Method, "url", pr.Out.URL.String(), "headers", headersForLog(pr.Out.Header))
 	}
 
 	proxy.ModifyResponse = func(resp *http.Response) error {

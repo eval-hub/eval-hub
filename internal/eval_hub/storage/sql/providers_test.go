@@ -138,7 +138,7 @@ func TestProviderStorage(t *testing.T) {
 		if err := store.CreateProvider(providerWithTags); err != nil {
 			t.Fatalf("CreateProvider failed: %v", err)
 		}
-		defer store.DeleteProvider("provider-2")
+		defer func() { _ = store.DeleteProvider("provider-2") }()
 
 		filter := &abstractions.QueryFilter{
 			Limit:  10,

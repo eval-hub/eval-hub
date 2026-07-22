@@ -189,7 +189,7 @@ func (t *ociTarget) Export(ctx context.Context, job *api.EvaluationJobResource, 
 	if err != nil {
 		return "", err
 	}
-	defer publisher.Close()
+	defer func() { _ = publisher.Close() }()
 
 	cardJSON, err := json.Marshal(card)
 	if err != nil {

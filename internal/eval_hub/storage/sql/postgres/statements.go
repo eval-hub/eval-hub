@@ -204,7 +204,7 @@ func (s *postgresStatementsFactory) getWhereStatement(tenant api.Tenant, id stri
 	var sb strings.Builder
 	var args []any
 	if id != "" {
-		sb.WriteString(fmt.Sprintf(`id = $%d`, index))
+		fmt.Fprintf(&sb, `id = $%d`, index)
 		index++
 		args = append(args, id)
 	}
@@ -214,7 +214,7 @@ func (s *postgresStatementsFactory) getWhereStatement(tenant api.Tenant, id stri
 		if sb.Len() > 0 {
 			sb.WriteString(" AND ")
 		}
-		sb.WriteString(fmt.Sprintf("(tenant_id = $%d OR owner = '%s')", index, abstractions.OwnerSystem))
+		fmt.Fprintf(&sb, "(tenant_id = $%d OR owner = '%s')", index, abstractions.OwnerSystem)
 		args = append(args, tenant.String())
 	}
 	return sb.String(), args

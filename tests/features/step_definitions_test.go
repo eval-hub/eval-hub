@@ -406,6 +406,9 @@ func (a *apiFeature) startLocalServer(port int) error {
 
 	// Create a test server
 	handler, err := a.server.SetupRoutes()
+	if err != nil {
+		return err
+	}
 	a.httpServer = &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
 		Handler: handler,
@@ -418,7 +421,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 	}
 
 	go func() {
-		a.httpServer.Serve(listener)
+		_ = a.httpServer.Serve(listener)
 	}()
 
 	if serviceConfig.IsPrometheusEnabled() {
@@ -522,7 +525,7 @@ func (a *apiFeature) cleanup(ctx context.Context, _ *godog.Scenario, _ error) (c
 	if a.httpServer != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		a.httpServer.Shutdown(ctx)
+		_ = a.httpServer.Shutdown(ctx)
 	}
 
 	return ctx, nil
@@ -540,7 +543,7 @@ func (tc *scenarioConfig) logError(err error, withStack ...bool) error {
 	var sb = strings.Builder{}
 	sb.WriteString("Error")
 	if reqId, exists := tc.reqHeaders[server.TRANSACTION_ID_HEADER]; exists && reqId != "" {
-		sb.WriteString(fmt.Sprintf(" (%s)", reqId))
+		fmt.Fprintf(&sb, " (%s)", reqId)
 	}
 	sb.WriteString(": ")
 	if len(withStack) > 0 && withStack[0] {
@@ -1072,14 +1075,14 @@ func (tc *scenarioConfig) iSendARequestImpl(method, path, body, caller string) e
 
 	defer func() {
 		// we do this for now as request ids are supposed to be unique per request
-		tc.iUnsetHeader(server.TRANSACTION_ID_HEADER)
+		_ = tc.iUnsetHeader(server.TRANSACTION_ID_HEADER)
 	}()
 
 	tc.body, err = io.ReadAll(tc.response.Body)
 	if err != nil {
 		return err
 	}
-	defer tc.response.Body.Close()
+	defer func() { _ = tc.response.Body.Close() }()
 
 	if len(tc.body) > 0 && len(tc.body) < 1024*5 {
 		tc.logDebug("Response status %d for %s %s with body %s\n", tc.response.StatusCode, method, endpoint, string(tc.body))
@@ -1641,7 +1644,7 @@ func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, 
 			}
 			err = tc.theResponseStatusShouldBe(204)
 			if err != nil {
-				err = tc.logError(fmt.Errorf("failed to delete asset %s expected status %d but got %d: %w", tc.lastURL, 204, tc.response.StatusCode, err))
+				_ = tc.logError(fmt.Errorf("failed to delete asset %s expected status %d but got %d: %w", tc.lastURL, 204, tc.response.StatusCode, err))
 				// return ctx, err
 			} else {
 				tc.logDebug("Deleted asset %s with status %d\n", path, tc.response.StatusCode)
@@ -1682,7 +1685,7 @@ func waitForService() {
 
 func tidyUpTests() {
 	if apiFeat != nil {
-		apiFeat.cleanup(context.Background(), nil, nil)
+		_, _ = apiFeat.cleanup(context.Background(), nil, nil)
 	}
 	if s, ok := logger.Writer().(*os.File); ok {
 		err := s.Close()

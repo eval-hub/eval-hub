@@ -44,7 +44,7 @@ func (w *Watcher) Watch(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 
 	providerDir := w.resolveDir("providers")
 	collectionDir := w.resolveDir("collections")

@@ -52,7 +52,7 @@ func (tc *mcpTestContext) reset() {
 
 func (tc *mcpTestContext) cleanup() {
 	if tc.clientSession != nil {
-		tc.clientSession.Close()
+		_ = tc.clientSession.Close()
 	}
 	if tc.cancel != nil {
 		tc.cancel()

@@ -31,7 +31,7 @@ func TestNewStorageConnMaxLifetime(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewStorage failed with duration string: %v", err)
 		}
-		s.Close()
+		_ = s.Close()
 	})
 
 	t.Run("accepts config without conn_max_lifetime", func(t *testing.T) {
@@ -43,7 +43,7 @@ func TestNewStorageConnMaxLifetime(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewStorage failed without conn_max_lifetime: %v", err)
 		}
-		s.Close()
+		_ = s.Close()
 	})
 }
 
@@ -62,7 +62,7 @@ func TestNewStorageOTELMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStorage with OTEL metrics: %v", err)
 	}
-	s.Close()
+	_ = s.Close()
 }
 
 func TestSQLStorage(t *testing.T) {
