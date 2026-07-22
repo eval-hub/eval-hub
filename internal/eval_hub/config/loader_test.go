@@ -194,7 +194,7 @@ secrets:
 
 	t.Run("loading config from secrets directory", func(t *testing.T) {
 		// create a secret and store in /tmp/db_password
-		secret := "mysecret"
+		secret := testPassword()
 		secretPath := "/tmp/db_password"
 		err := os.WriteFile(secretPath, []byte(secret), 0600)
 		if err != nil {
@@ -250,52 +250,59 @@ func TestRedactedJSON(t *testing.T) {
 	}
 
 	t.Run("redacts password with [redacted]", func(t *testing.T) {
+		password := testPassword()
 		v := outer{
-			Database: inner{Password: "s3cret", Driver: "pgx"},
+			Database: inner{Password: password, Driver: "pgx"},
 			Name:     "test",
 		}
 		result := config.RedactedJSON(v, []string{"database.password"})
-		if !contains(result, `"password":"[redacted]"`) {
+		if strings.Contains(result, password) {
+			t.Fatalf("Expected password %q to be redacted, got %s", password, result)
+		}
+		if !strings.Contains(result, `"password":"[redacted]"`) {
 			t.Fatalf("Expected password to be [redacted], got %s", result)
 		}
-		if !contains(result, `"name":"test"`) {
+		if !strings.Contains(result, `"name":"test"`) {
 			t.Fatalf("Expected name to be preserved, got %s", result)
 		}
 	})
 
 	t.Run("sanitises URL by stripping password", func(t *testing.T) {
+		password := testPassword()
 		v := outer{
 			Database: inner{
-				URL:    "postgres://user:p4ss@db-host:5432/evalhub",
+				URL:    fmt.Sprintf("postgres://user:%s@db-host:5432/evalhub", password),
 				Driver: "pgx",
 			},
 		}
 		result := config.RedactedJSON(v, []string{"database.url"})
-		if contains(result, "p4ss") {
+		if strings.Contains(result, password) {
 			t.Fatalf("Password should be stripped from URL, got %s", result)
 		}
-		if !contains(result, "user@db-host:5432") {
+		if !strings.Contains(result, "user@db-host:5432") {
 			t.Fatalf("Expected sanitised URL with user and host, got %s", result)
 		}
 	})
 
 	t.Run("no redacted fields returns full JSON", func(t *testing.T) {
+		password := testPassword()
 		v := outer{
-			Database: inner{Password: "s3cret"},
+			Database: inner{Password: password},
 			Name:     "test",
 		}
 		result := config.RedactedJSON(v, nil)
-		if !contains(result, "s3cret") {
+		if !strings.Contains(result, password) {
 			t.Fatalf("Expected unredacted output, got %s", result)
 		}
 	})
 
 	t.Run("non-existent field path is a no-op", func(t *testing.T) {
+		password := testPassword()
 		v := outer{
-			Database: inner{Password: "s3cret"},
+			Database: inner{Password: password},
 		}
 		result := config.RedactedJSON(v, []string{"database.missing"})
-		if !contains(result, "s3cret") {
+		if !strings.Contains(result, password) {
 			t.Fatalf("Expected password to be untouched, got %s", result)
 		}
 	})
@@ -450,6 +457,6 @@ func providerIDs(providers map[string]api.ProviderResource) []string {
 	return ids
 }
 
-func contains(s, substr string) bool {
-	return strings.Contains(s, substr)
+func testPassword() string {
+	return fmt.Sprintf("pw-%d", time.Now().UnixNano())
 }

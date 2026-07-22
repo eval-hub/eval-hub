@@ -32,9 +32,8 @@ type SidecarModelConfig struct {
 // Whether the OCI reverse proxy runs is determined from the job spec (exports.oci), not from
 // the presence of this block; when nil, the sidecar uses defaults for registry TLS.
 type SidecarOCIConfig struct {
-	CACertPath         string        `mapstructure:"ca_cert_path,omitempty" json:"ca_cert_path,omitempty"`                 // optional PEM CA for registry TLS
-	InsecureSkipVerify bool          `mapstructure:"insecure_skip_verify,omitempty" json:"insecure_skip_verify,omitempty"` // skip TLS verify for registry (e.g. self-signed)
-	HTTPTimeout        time.Duration `mapstructure:"http_timeout,omitempty" json:"http_timeout,omitempty"`                 // HTTP client timeout for registry requests (e.g. 30s)
+	CACertPath  string        `mapstructure:"ca_cert_path,omitempty" json:"ca_cert_path,omitempty"` // optional PEM CA for registry TLS
+	HTTPTimeout time.Duration `mapstructure:"http_timeout,omitempty" json:"http_timeout,omitempty"` // HTTP client timeout for registry requests (e.g. 30s)
 }
 
 type EvalHubClientConfig struct {
