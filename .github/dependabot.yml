@@ -9,6 +9,14 @@ updates:
     directory: /
     schedule:
       interval: daily
+    groups:
+      golang-dependencies:
+        # for now we only do this for version updates
+        # "security-updates" are still done one by one
+        applies-to: version-updates
+        patterns:
+          - "*"       # A wildcard that matches all dependencies in the package
+                      # ecosystem. Note: using "*" may open a large pull request
 
   - package-ecosystem: npm
     directory: /
