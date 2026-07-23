@@ -63,23 +63,6 @@ func clientScheme(r *http.Request) string {
 	return "http"
 }
 
-// headersForLog returns a copy of h suitable for logging, with Authorization values obfuscated.
-func headersForLog(h http.Header) http.Header {
-	out := h.Clone()
-	if v := out.Get("Authorization"); v != "" {
-		if strings.HasPrefix(v, "Bearer ") {
-			out.Set("Authorization", "Bearer ***")
-		} else if strings.HasPrefix(v, "Basic ") {
-			out.Set("Authorization", "Basic ***")
-		} else {
-			out.Set("Authorization", "***")
-		}
-	} else {
-		out.Set("Authorization", "Empty")
-	}
-	return out
-}
-
 // roundTripperFromClient adapts *http.Client to http.RoundTripper so ReverseProxy can use client's Transport, timeout, etc.
 type roundTripperFromClient struct {
 	client *http.Client
@@ -113,12 +96,17 @@ func NewReverseProxy(target *url.URL, client *http.Client, logger *slog.Logger, 
 		pr.SetURL(target)
 		pr.Out.RequestURI = "" // required for client requests
 		// Content-Type and X-Tenant are already on Out (copied from inbound by ReverseProxy)
+		reqID := getOrCreateRequestID(pr.In)
+		pr.Out.Header.Set(globalTransactionIDHeader, reqID)
+		reqLog := logger.With("request_id", reqID)
 		authInput, ok := AuthInputFromContext(pr.In.Context())
 		if ok {
-			authToken := ResolveAuthToken(logger, authInput)
+			authToken := ResolveAuthToken(reqLog, authInput)
 			SetAuthHeader(pr.Out, authToken)
 		}
-		logger.Info("Proxying request", "method", pr.Out.Method, "url", pr.Out.URL.String(), "headers", headersForLog(pr.Out.Header))
+		// Do not log request headers: CodeQL treats http.Header as sensitive even when
+		// Authorization is masked (go/clear-text-logging).
+		reqLog.Info("Proxying request", "method", pr.Out.Method, "url", pr.Out.URL.String())
 	}
 
 	proxy.ModifyResponse = func(resp *http.Response) error {
@@ -128,13 +116,13 @@ func NewReverseProxy(target *url.URL, client *http.Client, logger *slog.Logger, 
 			}
 		}
 		if resp.Request != nil {
-			logger.Info("Response from proxy", "method", resp.Request.Method, "url", resp.Request.URL.String(), "status", resp.StatusCode)
+			loggerForRequest(logger, resp.Request).Info("Response from proxy", "method", resp.Request.Method, "url", resp.Request.URL.String(), "status", resp.StatusCode)
 		}
 		return nil
 	}
 
 	proxy.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {
-		logger.Error("Error proxying request", "method", req.Method, "url", req.URL.String(), "error", err)
+		loggerForRequest(logger, req).Error("Error proxying request", "method", req.Method, "url", req.URL.String(), "error", err)
 		http.Error(w, err.Error(), http.StatusBadGateway)
 	}
 

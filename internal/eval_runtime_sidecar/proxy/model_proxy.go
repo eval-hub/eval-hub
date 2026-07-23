@@ -127,7 +127,9 @@ func NewModelReverseProxy(defaultTarget *url.URL, client *http.Client, logger *s
 		pr.Out.URL.Host = target.Host
 		pr.Out.Host = target.Host
 		pr.Out.RequestURI = ""
-		reqLog.Info("Proxying model request", "method", pr.Out.Method, "url", pr.Out.URL.String(), "headers", headersForLog(pr.Out.Header))
+		// Do not log request headers: CodeQL treats http.Header as sensitive even when
+		// Authorization is masked (go/clear-text-logging).
+		reqLog.Info("Proxying model request", "method", pr.Out.Method, "url", pr.Out.URL.String())
 	}
 
 	rp.ModifyResponse = func(resp *http.Response) error {
