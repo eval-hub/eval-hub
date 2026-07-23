@@ -77,7 +77,7 @@ MLFLOW_TRACKING_URI=http://127.0.0.1:5001 make test-godog-server
 - **`bin/mlartifacts_<port>/`** — Proxied artifact files (eval cards, etc.)
 - **`bin/mlflow_<port>.log`** — Server stdout/stderr from the last `start-mlflow`
 
-`make clean` removes `bin/` only; it does not delete `.venv`. To recreate Python from scratch:
+`make clean` removes `bin/` and any stray root `mlartifacts/`; it does not delete `.venv`. To recreate Python from scratch:
 
 ```bash
 rm -rf .venv && make init-python install-mlflow

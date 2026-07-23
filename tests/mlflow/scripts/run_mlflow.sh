@@ -36,13 +36,29 @@ if [[ "${MLFLOW_ENABLE_WORKSPACES:-false}" == "true" ]]; then
     ENABLE_WORKSPACES="--enable-workspaces"
 fi
 
+# True for filesystem paths; false for remote/proxy URIs (s3://, mlflow-artifacts:/, …).
+is_local_path() {
+    case "$1" in
+        *://*|*:/*) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
 # Wipe only this instance's store/artifacts so other port-specific servers stay intact.
+# Never rm -rf remote artifact URIs.
 if [[ "${BACKEND_URI}" == sqlite://* ]]; then
     DB_PATH="${BACKEND_URI#sqlite:///}"
     rm -f "${DB_PATH}"
 fi
-rm -rf "${DEFAULT_ARTIFACT_ROOT}" "${ARTIFACTS_DESTINATION}"
-echo -e "${GREEN}✅ Wiped out mlflow db, mlruns, and mlartifacts directories for port ${PORT}${NC}"
+if is_local_path "${DEFAULT_ARTIFACT_ROOT}"; then
+    rm -rf "${DEFAULT_ARTIFACT_ROOT}"
+fi
+if is_local_path "${ARTIFACTS_DESTINATION}"; then
+    rm -rf "${ARTIFACTS_DESTINATION}"
+else
+    echo -e "${YELLOW}⚠️  Skipping wipe of non-local artifacts destination: ${ARTIFACTS_DESTINATION}${NC}"
+fi
+echo -e "${GREEN}✅ Wiped out mlflow db and local artifact directories for port ${PORT}${NC}"
 
 log_to_file() {
     printf '%s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*" >> "${MLFLOW_LOG_FILE}"
@@ -78,12 +94,12 @@ if ! command -v mlflow &> /dev/null; then
     exit 1
 fi
 
-# Create artifact directories if they don't exist
-if [ ! -d "$DEFAULT_ARTIFACT_ROOT" ]; then
+# Create local artifact directories if they don't exist (skip remote URIs).
+if is_local_path "$DEFAULT_ARTIFACT_ROOT" && [ ! -d "$DEFAULT_ARTIFACT_ROOT" ]; then
     echo -e "${YELLOW}📁 Creating artifact root directory: $DEFAULT_ARTIFACT_ROOT${NC}"
     mkdir -p "$DEFAULT_ARTIFACT_ROOT"
 fi
-if [ ! -d "$ARTIFACTS_DESTINATION" ]; then
+if is_local_path "$ARTIFACTS_DESTINATION" && [ ! -d "$ARTIFACTS_DESTINATION" ]; then
     echo -e "${YELLOW}📁 Creating artifacts destination directory: $ARTIFACTS_DESTINATION${NC}"
     mkdir -p "$ARTIFACTS_DESTINATION"
 fi
