@@ -281,12 +281,15 @@ func TestCreateBenchmarkResourcesSetsAnnotations(t *testing.T) {
 
 func TestBuildInternalModelRefSecretMultiModel(t *testing.T) {
 	// Multi-model credential secret: *_api-key keys become refs, *_url keys become the sidecar
-	// proxy URL, ca_cert is excluded (projected directly from the real secret into the adapter).
+	// proxy URL with the original path preserved, ca_cert is excluded (projected directly
+	// from the real secret into the adapter).
 	data := map[string][]byte{
 		"model-1_api-key": []byte("sk-model1"),
 		"model-1_url":     []byte("https://api.openai.com/v1"),
 		"model-2_api-key": []byte("sk-model2"),
 		"model-2_url":     []byte("https://azure.example.com/v1"),
+		"judge_url":       []byte("https://my-vllm.example.com/v1"),
+		"attacker_url":    []byte("https://attacker.example.com"),
 		"ca_cert":         []byte("-----BEGIN CERTIFICATE-----"),
 	}
 	clientset := fake.NewClientset()
@@ -301,8 +304,10 @@ func TestBuildInternalModelRefSecretMultiModel(t *testing.T) {
 	cases := map[string]string{
 		"model-1_api-key": "model-1_api-key:ref",
 		"model-2_api-key": "model-2_api-key:ref",
-		"model-1_url":     sidecarURL,
-		"model-2_url":     sidecarURL,
+		"model-1_url":     "http://localhost:8080/v1",
+		"model-2_url":     "http://localhost:8080/v1",
+		"judge_url":       "http://localhost:8080/v1",
+		"attacker_url":    "http://localhost:8080",
 	}
 	for k, want := range cases {
 		got := string(secret.Data[k])
@@ -312,6 +317,17 @@ func TestBuildInternalModelRefSecretMultiModel(t *testing.T) {
 	}
 	if _, ok := secret.Data["ca_cert"]; ok {
 		t.Error("ca_cert must not appear in the internalModelRef secret")
+	}
+}
+
+func TestBuildInternalModelRefSecretInvalidURL(t *testing.T) {
+	data := map[string][]byte{
+		"judge_url": []byte("://bad"),
+	}
+	helper := &KubernetesHelper{clientset: fake.NewClientset()}
+	_, err := buildInternalModelRefSecret(context.Background(), "default", "bad-url-ref", data, "http://localhost:8080", nil, helper)
+	if err == nil {
+		t.Fatal("expected error for invalid *_url value")
 	}
 }
 
@@ -1196,7 +1212,7 @@ func findConfigMapVolumeName(t *testing.T, volumes []corev1.Volume) string {
 //   - model-auth-internal volume (adapter) → present iff secret is configured
 //   - projected sources: 2 (ref+real) when api-key present; 1 (real only) when ca_cert-only
 //   - ephemeral internalModelRef secret → created iff api-key (or *_api-key) present
-//   - ref secret keys → api-key→"api-key:ref", *_api-key→"<k>:ref", *_url→sidecarURL
+//   - ref secret keys → api-key→"api-key:ref", *_api-key→"<k>:ref", *_url→sidecarURL+path
 //   - adapter projected passthrough keys → ca_cert / hf-token projected optional when present in real secret
 //
 // TestModelAuthCombinations is a table-driven end-to-end test covering every meaningful
@@ -1388,7 +1404,7 @@ func TestModelAuthCombinations(t *testing.T) {
 			wantInternalRefFirstSrc:   true,
 			wantRealSecretOptional:    true,
 			wantAuthMountInSidecarCfg: true,
-			refKeys:                   []refSecretExpect{{"model-1_url", "http://localhost:8080"}},
+			refKeys:                   []refSecretExpect{{"model-1_url", "http://localhost:8080/v1"}},
 		},
 		{
 			name: "multi-model api-keys + urls",
@@ -1407,9 +1423,9 @@ func TestModelAuthCombinations(t *testing.T) {
 			wantAuthMountInSidecarCfg: true,
 			refKeys: []refSecretExpect{
 				{"model-1_api-key", "model-1_api-key:ref"},
-				{"model-1_url", "http://localhost:8080"},
+				{"model-1_url", "http://localhost:8080/v1"},
 				{"model-2_api-key", "model-2_api-key:ref"},
-				{"model-2_url", "http://localhost:8080"},
+				{"model-2_url", "http://localhost:8080/v1"},
 			},
 		},
 		{
@@ -1428,7 +1444,7 @@ func TestModelAuthCombinations(t *testing.T) {
 			wantAuthMountInSidecarCfg: true,
 			refKeys: []refSecretExpect{
 				{"model-1_api-key", "model-1_api-key:ref"},
-				{"model-1_url", "http://localhost:8080"},
+				{"model-1_url", "http://localhost:8080/v1"},
 			},
 			passthroughItemKeys: []string{"ca_cert"},
 		},

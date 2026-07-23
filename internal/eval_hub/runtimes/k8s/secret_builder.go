@@ -64,7 +64,8 @@ func inspectModelSecret(ctx context.Context, namespace, secretName string, helpe
 //   - "api-key"          → value becomes "api-key:ref" (sidecar injects real key)
 //   - "*_api-key" suffix → value becomes "<key>:ref"   (sidecar injects real key)
 //   - "*_sa_token" suffix → value becomes "<key>:ref"   (sidecar injects SA token when value empty)
-//   - "*_url" suffix     → value becomes sidecarProxyURL (adapter routes through sidecar)
+//   - "*_url" suffix     → value becomes sidecarProxyURL with the original URL path preserved
+//     (same rewrite as primary model.url via rewriteModelURLForSidecar)
 //   - "hf-token"         → omitted; projected directly from the model credential secret
 //   - "ca_cert"          → omitted; projected directly from the model credential secret
 //   - all other keys     → omitted (conservative; avoids leaking unknown fields)
@@ -84,11 +85,15 @@ func buildInternalModelRefSecret(
 	}
 
 	refData := make(map[string][]byte, len(data))
-	for k := range data {
+	for k, v := range data {
 		switch {
 		case isModelCredentialKey(k):
 			if strings.HasSuffix(k, modelURLSuffix) {
-				refData[k] = []byte(sidecarProxyURL)
+				rewritten, err := rewriteModelURLForSidecar(sidecarProxyURL, string(v))
+				if err != nil {
+					return nil, fmt.Errorf("model credential secret key %q: %w", k, err)
+				}
+				refData[k] = []byte(rewritten)
 			} else {
 				refData[k] = []byte(k + modelRefValueSuffix)
 			}
