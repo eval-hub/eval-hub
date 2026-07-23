@@ -24,7 +24,7 @@ func TailFileLines(path string, n int) (string, error) {
 		}
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	info, err := f.Stat()
 	if err != nil {

@@ -13,11 +13,11 @@ func TestHelpFlag(t *testing.T) {
 
 	code := run([]string{"--help"})
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	if code != 0 {
@@ -38,11 +38,11 @@ func TestVersionFlag(t *testing.T) {
 
 	code := run([]string{"--version"})
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	if code != 0 {
@@ -70,11 +70,11 @@ func TestVersionFlagWithBuildInfo(t *testing.T) {
 
 	code := run([]string{"--version"})
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	if code != 0 {

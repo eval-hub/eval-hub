@@ -98,7 +98,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("open dest root: %w", err)
 	}
-	defer destRoot.Close()
+	defer func() { _ = destRoot.Close() }()
 
 	slog.Info("starting download", "bucket", bucket, "key", keyPrefix)
 
@@ -176,13 +176,12 @@ func downloadObject(ctx context.Context, client *s3.Client, destRoot *os.Root, b
 	if err != nil {
 		return 0, fmt.Errorf("get object %q: %w", key, err)
 	}
-	defer resp.Body.Close()
-
+	defer func() { _ = resp.Body.Close() }()
 	file, err := destRoot.Create(rel)
 	if err != nil {
 		return 0, fmt.Errorf("create file %q: %w", key, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	written, err := io.Copy(file, resp.Body)
 	if err != nil {

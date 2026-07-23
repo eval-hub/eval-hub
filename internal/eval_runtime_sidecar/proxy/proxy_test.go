@@ -98,7 +98,7 @@ func TestNewReverseProxy(t *testing.T) {
 		}
 		w.Header().Set("X-Backend", "ok")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	}))
 	defer backend.Close()
 
@@ -134,7 +134,7 @@ func TestNewReverseProxyWithPathPrefix(t *testing.T) {
 			t.Errorf("backend path = %s, want /mlflow/api/2.0/mlflow/experiments/get-by-name", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	}))
 	defer backend.Close()
 

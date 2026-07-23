@@ -65,8 +65,7 @@ func (c *Client) UploadArtifact(artifactPath string, content io.Reader, contentT
 	if err != nil {
 		return "", fmt.Errorf("failed to upload artifact: %w", err)
 	}
-	defer resp.Body.Close()
-
+	defer func() { _ = resp.Body.Close() }()
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to read upload response body: %w", err)

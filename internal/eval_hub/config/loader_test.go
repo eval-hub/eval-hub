@@ -32,10 +32,7 @@ func TestLoadConfig(t *testing.T) {
 	})
 
 	t.Run("setting environment variables", func(t *testing.T) {
-		os.Setenv("MLFLOW_TRACKING_URI", "http://localhost:9999")
-		t.Cleanup(func() {
-			os.Unsetenv("MLFLOW_TRACKING_URI")
-		})
+		t.Setenv("MLFLOW_TRACKING_URI", "http://localhost:9999")
 		serviceConfig, err := config.LoadConfig(logger, version, "local", time.Now().Format(time.RFC3339), "../../../tests")
 		if err != nil {
 			t.Fatalf("Failed to load config: %v", err)
@@ -76,10 +73,7 @@ database:
 			t.Fatalf("Failed to write operator config: %v", err)
 		}
 
-		os.Setenv("CONFIG_PATH", filepath.Join(operatorDir, "config.yaml"))
-		t.Cleanup(func() {
-			os.Unsetenv("CONFIG_PATH")
-		})
+		t.Setenv("CONFIG_PATH", filepath.Join(operatorDir, "config.yaml"))
 
 		serviceConfig, err := config.LoadConfig(logger, version, "local", time.Now().Format(time.RFC3339), baseDir)
 		if err != nil {
@@ -127,10 +121,7 @@ secrets:
 			t.Fatalf("Failed to write operator config: %v", err)
 		}
 
-		os.Setenv("CONFIG_PATH", filepath.Join(operatorDir, "config.yaml"))
-		t.Cleanup(func() {
-			os.Unsetenv("CONFIG_PATH")
-		})
+		t.Setenv("CONFIG_PATH", filepath.Join(operatorDir, "config.yaml"))
 
 		serviceConfig, err := config.LoadConfig(logger, version, "local", time.Now().Format(time.RFC3339), baseDir)
 		if err != nil {
@@ -177,10 +168,7 @@ secrets:
 			t.Fatalf("Failed to write operator config: %v", err)
 		}
 
-		os.Setenv("CONFIG_PATH", filepath.Join(operatorDir, "config.yaml"))
-		t.Cleanup(func() {
-			os.Unsetenv("CONFIG_PATH")
-		})
+		t.Setenv("CONFIG_PATH", filepath.Join(operatorDir, "config.yaml"))
 
 		// Should NOT fail looking for /tmp/db_password
 		serviceConfig, err := config.LoadConfig(logger, version, "local", time.Now().Format(time.RFC3339), baseDir)
@@ -201,7 +189,11 @@ secrets:
 			t.Fatalf("Failed to create secret: %v", err)
 		}
 		t.Cleanup(func() {
-			os.Remove(secretPath)
+			t.Cleanup(func() {
+				if err := os.Remove(secretPath); err != nil && !os.IsNotExist(err) {
+					t.Errorf("remove test secret: %v", err)
+				}
+			})
 		})
 		serviceConfig, err := config.LoadConfig(logger, version, "local", time.Now().Format(time.RFC3339), "", "../../../tests/secrets")
 		if err != nil {
@@ -314,7 +306,9 @@ func TestLoadProviderConfigs(t *testing.T) {
 	t.Run("loads providers from explicit config dir", func(t *testing.T) {
 		dir := t.TempDir()
 		provDir := filepath.Join(dir, "providers")
-		os.MkdirAll(provDir, 0755)
+		if err := os.MkdirAll(provDir, 0755); err != nil {
+			t.Fatalf("MkdirAll providers: %v", err)
+		}
 		writeProviderYAML(t, provDir, "alpha", "Alpha Provider")
 
 		providers, err := config.LoadProviderConfigs(logger, testhelpers.NewValidator(t), dir)
@@ -332,7 +326,9 @@ func TestLoadProviderConfigs(t *testing.T) {
 	t.Run("loads multiple providers from explicit dir", func(t *testing.T) {
 		dir := t.TempDir()
 		provDir := filepath.Join(dir, "providers")
-		os.MkdirAll(provDir, 0755)
+		if err := os.MkdirAll(provDir, 0755); err != nil {
+			t.Fatalf("MkdirAll providers: %v", err)
+		}
 		writeProviderYAML(t, provDir, "alpha", "Alpha")
 		writeProviderYAML(t, provDir, "beta", "Beta")
 		writeProviderYAML(t, provDir, "gamma", "Gamma")
@@ -349,9 +345,13 @@ func TestLoadProviderConfigs(t *testing.T) {
 	t.Run("fail providers with missing id", func(t *testing.T) {
 		dir := t.TempDir()
 		provDir := filepath.Join(dir, "providers")
-		os.MkdirAll(provDir, 0755)
+		if err := os.MkdirAll(provDir, 0755); err != nil {
+			t.Fatalf("MkdirAll providers: %v", err)
+		}
 		content := "name: No ID Provider\ndescription: missing id field\n"
-		os.WriteFile(filepath.Join(provDir, "noid.yaml"), []byte(content), 0600)
+		if err := os.WriteFile(filepath.Join(provDir, "noid.yaml"), []byte(content), 0600); err != nil {
+			t.Fatalf("Failed to write noid.yaml: %v", err)
+		}
 
 		providers, err := config.LoadProviderConfigs(logger, testhelpers.NewValidator(t), dir)
 		if err == nil {
@@ -365,10 +365,16 @@ func TestLoadProviderConfigs(t *testing.T) {
 	t.Run("ignores non-yaml files", func(t *testing.T) {
 		dir := t.TempDir()
 		provDir := filepath.Join(dir, "providers")
-		os.MkdirAll(provDir, 0755)
+		if err := os.MkdirAll(provDir, 0755); err != nil {
+			t.Fatalf("MkdirAll providers: %v", err)
+		}
 		writeProviderYAML(t, provDir, "alpha", "Alpha")
-		os.WriteFile(filepath.Join(provDir, "readme.txt"), []byte("ignore me"), 0600)
-		os.MkdirAll(filepath.Join(provDir, "subdir"), 0755)
+		if err := os.WriteFile(filepath.Join(provDir, "readme.txt"), []byte("ignore me"), 0600); err != nil {
+			t.Fatalf("Failed to write readme.txt: %v", err)
+		}
+		if err := os.MkdirAll(filepath.Join(provDir, "subdir"), 0755); err != nil {
+			t.Fatalf("MkdirAll subdir: %v", err)
+		}
 
 		providers, err := config.LoadProviderConfigs(logger, testhelpers.NewValidator(t), dir)
 		if err != nil {
@@ -405,7 +411,9 @@ func TestLoadProviderConfigs(t *testing.T) {
 	t.Run("provider fields are correctly parsed", func(t *testing.T) {
 		dir := t.TempDir()
 		provDir := filepath.Join(dir, "providers")
-		os.MkdirAll(provDir, 0755)
+		if err := os.MkdirAll(provDir, 0755); err != nil {
+			t.Fatalf("MkdirAll providers: %v", err)
+		}
 		content := `id: mytest
 name: My Test Provider
 description: A test provider for unit testing
@@ -416,7 +424,9 @@ benchmarks:
     description: First benchmark
     category: safety
 `
-		os.WriteFile(filepath.Join(provDir, "mytest.yaml"), []byte(content), 0600)
+		if err := os.WriteFile(filepath.Join(provDir, "mytest.yaml"), []byte(content), 0600); err != nil {
+			t.Fatalf("Failed to write mytest.yaml: %v", err)
+		}
 
 		providers, err := config.LoadProviderConfigs(logger, testhelpers.NewValidator(t), dir)
 		if err != nil {

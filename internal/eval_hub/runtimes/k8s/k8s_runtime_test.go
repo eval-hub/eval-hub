@@ -435,7 +435,7 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnvIntegration(t *testing
 	for _, volume := range job.Spec.Template.Spec.Volumes {
 		if volume.Name == modelAuthVolumeName {
 			foundVolume = true
-			if volume.VolumeSource.Secret == nil || volume.VolumeSource.Secret.SecretName != "model-auth-secret" {
+			if volume.Secret == nil || volume.Secret.SecretName != "model-auth-secret" {
 				t.Fatalf("expected model auth secret volume to reference %q", "model-auth-secret")
 			}
 		}
@@ -557,7 +557,7 @@ func TestCreateBenchmarkResourcesAddsInitContainerForS3TestDataIntegration(t *te
 		}
 		if volume.Name == testDataSecretVolumeName {
 			foundSecretVolume = true
-			if volume.VolumeSource.Secret == nil || volume.VolumeSource.Secret.SecretName != "s3-secret" {
+			if volume.Secret == nil || volume.Secret.SecretName != "s3-secret" {
 				t.Fatalf("expected secret volume %q with secret %q", testDataSecretVolumeName, "s3-secret")
 			}
 		}

@@ -117,10 +117,10 @@ func (h *KubernetesHelper) CreateConfigMap(
 	}
 	if opts != nil {
 		if len(opts.Labels) > 0 {
-			cm.ObjectMeta.Labels = opts.Labels
+			cm.Labels = opts.Labels
 		}
 		if len(opts.Annotations) > 0 {
-			cm.ObjectMeta.Annotations = opts.Annotations
+			cm.Annotations = opts.Annotations
 		}
 	}
 	return h.clientset.CoreV1().ConfigMaps(namespace).Create(ctx, cm, metav1.CreateOptions{})
@@ -264,7 +264,7 @@ func (h *KubernetesHelper) GetPodLogs(ctx context.Context, namespace, podName st
 	if err != nil {
 		return "", err
 	}
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 	data, err := io.ReadAll(stream)
 	if err != nil {
 		return "", err

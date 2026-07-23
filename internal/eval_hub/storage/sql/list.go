@@ -11,7 +11,6 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
-	se "github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -70,7 +69,7 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 		s.logger.Error(fmt.Sprintf("Failed to list %s", typeName), "error", err)
 		return nil, serviceerrors.NewServiceError(messages.QueryFailed, "Type", typeName, "Error", err.Error())
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	// Process rows (use make so empty result serializes to [] not null)
 	items := make([]T, 0)
@@ -112,7 +111,7 @@ func scanResource[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 		err = json.Unmarshal([]byte(query.EntityJSON), &storedEntity)
 		if err == nil {
 			resource, err := constructEvaluationResource(s.logger, &query, query.Status, &storedEntity)
-			var t T = any(*resource).(T)
+			t := any(*resource).(T)
 			return &t, err
 		}
 	case shared.TABLE_PROVIDERS:
@@ -123,7 +122,7 @@ func scanResource[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 				Resource:       query.Resource,
 				ProviderConfig: storedEntity,
 			}
-			var t T = any(*resource).(T)
+			t := any(*resource).(T)
 			return &t, nil
 		}
 	case shared.TABLE_COLLECTIONS:
@@ -134,11 +133,11 @@ func scanResource[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 				Resource:         query.Resource,
 				CollectionConfig: storedEntity,
 			}
-			var t T = any(*resource).(T)
+			t := any(*resource).(T)
 			return &t, nil
 		}
 	default:
-		err = se.NewServiceError(messages.InternalServerError, "Error", fmt.Sprintf("Unknown table name: %s", tableName))
+		err = serviceerrors.NewServiceError(messages.InternalServerError, "Error", fmt.Sprintf("Unknown table name: %s", tableName))
 	}
 
 	return nil, err
@@ -148,17 +147,17 @@ func constructEvaluationResource(logger *slog.Logger, query *shared.EntityQuery,
 	if query == nil {
 		logger.Error("Failed to construct evaluation job resource", "error", "Missing evaluation query")
 		// Post-read validation: no writes done, so do not request rollback.
-		return nil, se.NewServiceError(messages.InternalServerError, "Error", "Evaluation resource query does not exist")
+		return nil, serviceerrors.NewServiceError(messages.InternalServerError, "Error", "Evaluation resource query does not exist")
 	}
 	if evaluationEntity == nil {
 		logger.Error("Failed to construct evaluation job resource", "error", "Evaluation entity does not exist", "id", query.Resource.ID)
 		// Post-read validation: no writes done, so do not request rollback.
-		return nil, se.NewServiceError(messages.InternalServerError, "Error", "Evaluation entity does not exist")
+		return nil, serviceerrors.NewServiceError(messages.InternalServerError, "Error", "Evaluation entity does not exist")
 	}
 	if evaluationEntity.Config == nil {
 		logger.Error("Failed to construct evaluation job resource", "error", "Evaluation config does not exist", "id", query.Resource.ID)
 		// Post-read validation: no writes done, so do not request rollback.
-		return nil, se.NewServiceError(messages.InternalServerError, "Error", "Evaluation config does not exist")
+		return nil, serviceerrors.NewServiceError(messages.InternalServerError, "Error", "Evaluation config does not exist")
 	}
 	if evaluationEntity.Status == nil {
 		evaluationEntity.Status = &api.EvaluationJobStatus{}

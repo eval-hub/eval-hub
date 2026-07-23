@@ -243,14 +243,14 @@ func connectWithResources(t *testing.T, ds EvalHubDiscovery) (context.Context, *
 	if err != nil {
 		t.Fatalf("server.Connect failed: %v", err)
 	}
-	t.Cleanup(func() { serverSession.Close() })
+	t.Cleanup(func() { _ = serverSession.Close() })
 
 	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v0.0.1"}, nil)
 	clientSession, err := client.Connect(ctx, clientTransport, nil)
 	if err != nil {
 		t.Fatalf("client.Connect failed: %v", err)
 	}
-	t.Cleanup(func() { clientSession.Close() })
+	t.Cleanup(func() { _ = clientSession.Close() })
 
 	return ctx, clientSession
 }
@@ -707,14 +707,14 @@ func TestRegisterHandlersNilClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("server.Connect failed: %v", err)
 	}
-	defer serverSession.Close()
+	defer func() { _ = serverSession.Close() }()
 
 	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "v0.0.1"}, nil)
 	clientSession, err := client.Connect(ctx, clientTransport, nil)
 	if err != nil {
 		t.Fatalf("client.Connect failed: %v", err)
 	}
-	defer clientSession.Close()
+	defer func() { _ = clientSession.Close() }()
 
 	result, err := clientSession.ListResources(ctx, nil)
 	if err != nil {

@@ -505,7 +505,7 @@ func deleteGPUTestProvidersAPI(headers map[string]string) error {
 			logDebug("WARNING: Failed to delete GPU test provider %s: %v\n", id, err)
 			continue
 		}
-		delResp.Body.Close()
+		_ = delResp.Body.Close()
 		if delResp.StatusCode != http.StatusNoContent && delResp.StatusCode != http.StatusNotFound {
 			logDebug("WARNING: Delete provider %s returned %d\n", id, delResp.StatusCode)
 		} else {
@@ -533,7 +533,7 @@ func createGPUTestProviderViaAPI(headers map[string]string, bodyFile string) (st
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
@@ -1204,7 +1204,7 @@ func (tc *scenarioConfig) gpuTestProviderIsLoaded() error {
 	if err != nil {
 		return tc.logError(fmt.Errorf("failed to check GPU test provider: %w", err))
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return tc.logError(err)

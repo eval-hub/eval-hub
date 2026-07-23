@@ -45,8 +45,7 @@ func (c *Client) ProbeWorkspacesEnabled() (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to execute server-info request: %w", err)
 	}
-	defer resp.Body.Close()
-
+	defer func() { _ = resp.Body.Close() }()
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return false, fmt.Errorf("failed to read server-info response: %w", err)

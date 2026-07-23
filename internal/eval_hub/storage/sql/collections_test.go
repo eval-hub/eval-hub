@@ -48,17 +48,17 @@ func TestCollections_PassCriteria(t *testing.T) {
 			t.Errorf("expected 2 collections, got %d", len(res.Items))
 		}
 		for _, coll := range res.Items {
-			if coll.CollectionConfig.PassCriteria == nil || coll.CollectionConfig.PassCriteria.Threshold == nil {
+			if coll.PassCriteria == nil || coll.PassCriteria.Threshold == nil {
 				t.Fatalf("collection %s is missing pass criteria", coll.Resource.ID)
 			}
-			passCriteria := *coll.CollectionConfig.PassCriteria.Threshold
+			passCriteria := *coll.PassCriteria.Threshold
 			if passCriteria < 0.0 {
 				t.Errorf("expected pass criteria to be at least 0.0, got %f", passCriteria)
 			}
 			// calculate the weighted average score
 			weightedAverage := float32(0.0)
 			totalWeight := float32(0.0)
-			for _, benchmark := range coll.CollectionConfig.Benchmarks {
+			for _, benchmark := range coll.Benchmarks {
 				if benchmark.PassCriteria == nil || benchmark.PassCriteria.Threshold == nil {
 					t.Fatalf("collection %s benchmark %s is missing pass criteria", coll.Resource.ID, benchmark.ID)
 				}
@@ -129,7 +129,7 @@ func TestCollections_BenchmarksExist(t *testing.T) {
 			t.Errorf("expected 2 collections, got %d", len(res.Items))
 		}
 		for _, coll := range res.Items {
-			for _, benchmark := range coll.CollectionConfig.Benchmarks {
+			for _, benchmark := range coll.Benchmarks {
 				if benchmark.ProviderID == "" {
 					t.Fatalf("expected provider ID for benchmark %s", benchmark.ID)
 				}

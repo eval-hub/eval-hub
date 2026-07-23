@@ -65,7 +65,7 @@ func TestCorsMiddleware_HeadersSet(t *testing.T) {
 			// Create a mock handler that returns 200 OK
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("OK"))
+				_, _ = w.Write([]byte("OK"))
 			})
 
 			// Wrap with CORS middleware
@@ -174,7 +174,7 @@ func TestCorsMiddleware_PassThrough(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			called = true
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("test response"))
+			_, _ = w.Write([]byte("test response"))
 		})
 
 		wrapped := CorsMiddleware(handler, &config.Config{})
@@ -202,7 +202,7 @@ func TestCorsMiddleware_PassThrough(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			called = true
 			w.WriteHeader(http.StatusCreated)
-			w.Write([]byte("created"))
+			_, _ = w.Write([]byte("created"))
 		})
 
 		wrapped := CorsMiddleware(handler, &config.Config{})

@@ -23,7 +23,7 @@ func TestSetupOTELExportsMetricsViaOTLPGRPC(t *testing.T) {
 	t.Run("exports otelhttp server duration", func(t *testing.T) {
 		collector, shutdownOTEL := setupOTELWithCollector(t)
 		defer collector.Shutdown()
-		defer shutdownOTEL(context.Background())
+		defer func() { _ = shutdownOTEL(context.Background()) }()
 
 		handler := otelhttp.NewHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -48,7 +48,7 @@ func TestSetupOTELExportsMetricsViaOTLPGRPC(t *testing.T) {
 	t.Run("exports semconv HTTP request metrics via middleware", func(t *testing.T) {
 		collector, shutdownOTEL := setupOTELWithCollector(t)
 		defer collector.Shutdown()
-		defer shutdownOTEL(context.Background())
+		defer func() { _ = shutdownOTEL(context.Background()) }()
 
 		handler := server.HTTPMetricsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)

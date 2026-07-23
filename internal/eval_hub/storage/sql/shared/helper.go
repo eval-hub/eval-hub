@@ -134,7 +134,6 @@ func CreateFilterStatement(s SQLStatementsFactory, where string, whereArgs []any
 	}
 	if offset > 0 {
 		cond, condArgs := s.CreateEntityFilterCondition("OFFSET", offset, index, tableName)
-		index += len(condArgs)
 		sb.WriteString(" ")
 		sb.WriteString(cond)
 		args = append(args, condArgs...)

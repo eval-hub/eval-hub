@@ -209,23 +209,6 @@ func (s *updateEvaluationStorage) UpdateEvaluationJob(_ string, status *api.Stat
 	return s.updateErr
 }
 
-type deleteRequest struct {
-	*MockRequest
-	queryValues map[string][]string
-	pathValues  map[string]string
-}
-
-func (r *deleteRequest) Query(key string) []string {
-	if values, ok := r.queryValues[key]; ok {
-		return values
-	}
-	return []string{}
-}
-
-func (r *deleteRequest) PathValue(name string) string {
-	return r.pathValues[name]
-}
-
 func TestResolveProvider_FromMap(t *testing.T) {
 	providers := map[string]api.ProviderResource{
 		"p1": {Resource: api.Resource{ID: "p1"}},

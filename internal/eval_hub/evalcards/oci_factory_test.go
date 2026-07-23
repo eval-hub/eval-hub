@@ -70,7 +70,7 @@ func TestOCIPublisherFactoryNewPublisher(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPublisher() err = %v", err)
 	}
-	defer publisher.Close()
+	defer func() { _ = publisher.Close() }()
 
 	cardJSON, err := json.Marshal(&cards.EvaluationCard{CardVersion: cards.CardVersion})
 	if err != nil {

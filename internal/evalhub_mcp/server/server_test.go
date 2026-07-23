@@ -254,8 +254,7 @@ func TestHealthEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("health request failed: %v", err)
 	}
-	defer resp.Body.Close()
-
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("health status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
@@ -286,8 +285,7 @@ func TestHealthEndpointLegacyHTTPSSE(t *testing.T) {
 	if err != nil {
 		t.Fatalf("health request failed: %v", err)
 	}
-	defer resp.Body.Close()
-
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("health status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
@@ -299,7 +297,7 @@ func TestRunHTTPPortInUse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("setting up listener: %v", err)
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 	port := l.Addr().(*net.TCPAddr).Port
 
 	cfg := &config.Config{
@@ -337,7 +335,7 @@ func freePort(t *testing.T) int {
 		t.Fatalf("finding free port: %v", err)
 	}
 	port := l.Addr().(*net.TCPAddr).Port
-	l.Close()
+	_ = l.Close()
 	return port
 }
 
@@ -348,7 +346,7 @@ func waitForPort(t *testing.T, host string, port int, timeout time.Duration) {
 	for time.Now().Before(deadline) {
 		conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
 		if err == nil {
-			conn.Close()
+			_ = conn.Close()
 			return
 		}
 		time.Sleep(50 * time.Millisecond)

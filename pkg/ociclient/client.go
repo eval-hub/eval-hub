@@ -181,7 +181,7 @@ func (c *Client) blobExists(ctx context.Context, digest string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	switch resp.StatusCode {
 	case http.StatusOK:
 		return true, nil
@@ -216,7 +216,7 @@ func (c *Client) startBlobUpload(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("start blob upload failed with status %d: %s", resp.StatusCode, string(body))
@@ -251,7 +251,7 @@ func (c *Client) uploadBlobMonolithic(ctx context.Context, content []byte, diges
 	if err != nil {
 		return err
 	}
-	defer putResp.Body.Close()
+	defer func() { _ = putResp.Body.Close() }()
 	if putResp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(putResp.Body)
 		return fmt.Errorf("complete blob upload failed with status %d: %s", putResp.StatusCode, string(body))
@@ -315,7 +315,7 @@ func (c *Client) patchBlobChunk(ctx context.Context, uploadURL string, start, en
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("patch blob chunk failed with status %d: %s", resp.StatusCode, string(body))
@@ -339,7 +339,7 @@ func (c *Client) completeBlobUpload(ctx context.Context, uploadURL, digest strin
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("complete blob upload failed with status %d: %s", resp.StatusCode, string(body))
@@ -358,7 +358,7 @@ func (c *Client) putManifest(ctx context.Context, tag string, manifestJSON []byt
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("put manifest failed with status %d: %s", resp.StatusCode, string(body))

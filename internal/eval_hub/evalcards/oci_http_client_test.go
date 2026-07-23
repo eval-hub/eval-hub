@@ -158,7 +158,7 @@ func writeTestCACert(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("Create() err = %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if err := pem.Encode(f, &pem.Block{Type: "CERTIFICATE", Bytes: der}); err != nil {
 		t.Fatalf("pem.Encode() err = %v", err)
 	}

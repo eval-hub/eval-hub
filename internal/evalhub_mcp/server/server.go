@@ -226,7 +226,7 @@ func serveHTTP(ctx context.Context, mcpHandler http.Handler, cfg *config.Config,
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `{"status":"ok"}`)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 	mux.Handle("/", mcpHandler)
 

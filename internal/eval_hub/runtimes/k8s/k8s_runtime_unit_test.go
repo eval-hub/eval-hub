@@ -474,7 +474,7 @@ func TestCreateBenchmarkResourcesAddsInitContainerForS3TestData(t *testing.T) {
 		}
 		if volume.Name == testDataSecretVolumeName {
 			foundSecretVolume = true
-			if volume.VolumeSource.Secret == nil || volume.VolumeSource.Secret.SecretName != "s3-secret" {
+			if volume.Secret == nil || volume.Secret.SecretName != "s3-secret" {
 				t.Fatalf("expected secret volume %q with secret %q", testDataSecretVolumeName, "s3-secret")
 			}
 		}
@@ -544,13 +544,13 @@ func TestCreateBenchmarkResourcesMountsPVCTestData(t *testing.T) {
 	var foundPVCVolume bool
 	for _, volume := range job.Spec.Template.Spec.Volumes {
 		if volume.Name == testDataVolumeName {
-			if volume.VolumeSource.PersistentVolumeClaim == nil {
+			if volume.PersistentVolumeClaim == nil {
 				t.Fatalf("expected PVC volume source for %q", testDataVolumeName)
 			}
-			if volume.VolumeSource.PersistentVolumeClaim.ClaimName != "eval-datasets-pvc" {
-				t.Fatalf("expected claimName %q, got %q", "eval-datasets-pvc", volume.VolumeSource.PersistentVolumeClaim.ClaimName)
+			if volume.PersistentVolumeClaim.ClaimName != "eval-datasets-pvc" {
+				t.Fatalf("expected claimName %q, got %q", "eval-datasets-pvc", volume.PersistentVolumeClaim.ClaimName)
 			}
-			if !volume.VolumeSource.PersistentVolumeClaim.ReadOnly {
+			if !volume.PersistentVolumeClaim.ReadOnly {
 				t.Fatal("expected PVC volume to be read-only")
 			}
 			foundPVCVolume = true
@@ -1194,8 +1194,8 @@ func sampleProviders(providerID string) map[string]api.ProviderResource {
 func findConfigMapVolumeName(t *testing.T, volumes []corev1.Volume) string {
 	t.Helper()
 	for _, v := range volumes {
-		if v.VolumeSource.ConfigMap != nil {
-			return v.VolumeSource.ConfigMap.Name
+		if v.ConfigMap != nil {
+			return v.ConfigMap.Name
 		}
 	}
 	t.Fatal("expected a ConfigMap-backed volume on the pod")

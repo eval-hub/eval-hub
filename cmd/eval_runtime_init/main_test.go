@@ -90,7 +90,7 @@ func TestDownloadObjectRejectsInvalidKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenRoot() = %v", err)
 	}
-	defer destRoot.Close()
+	defer func() { _ = destRoot.Close() }()
 
 	_, err = downloadObject(context.Background(), nil, destRoot, "bucket", "datasets/run-1", "datasets/run-1/../../etc/passwd")
 	if err == nil {
@@ -129,7 +129,7 @@ func TestDownloadObjectWritesNestedFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenRoot() = %v", err)
 	}
-	defer destRoot.Close()
+	defer func() { _ = destRoot.Close() }()
 
 	written, err := downloadObject(ctx, client, destRoot, "bucket", "data/", objectKey)
 	if err != nil {

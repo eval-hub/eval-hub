@@ -8,7 +8,6 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
-	se "github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -56,16 +55,16 @@ func (s *sqlStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 	err := s.queryRow(txn, selectQuery, selectArgs...).Scan(queryArgs...)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, se.NewServiceError(messages.ResourceNotFound, "Type", "collection", "ResourceId", id)
+			return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "collection", "ResourceId", id)
 		}
 		// For now we differentiate between no rows found and other errors but this might be confusing
 		s.logger.Error("Failed to get collection", "error", err, "id", id)
-		return nil, se.NewServiceError(messages.DatabaseOperationFailed, "Type", "collection", "ResourceId", id, "Error", err.Error())
+		return nil, serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "collection", "ResourceId", id, "Error", err.Error())
 	}
 
 	// now check that the tenant_id is allowed to see this resource
 	if !s.isVisibleResource(&query.Resource) {
-		return nil, se.NewServiceError(messages.ResourceNotFound, "Type", "collection", "ResourceId", id)
+		return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "collection", "ResourceId", id)
 	}
 
 	// Unmarshal the entity JSON into EvaluationJobConfig
@@ -73,7 +72,7 @@ func (s *sqlStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 	err = json.Unmarshal([]byte(query.EntityJSON), &collectionConfig)
 	if err != nil {
 		s.logger.Error("Failed to unmarshal collection config", "error", err, "id", id)
-		return nil, se.NewServiceError(messages.JSONUnmarshalFailed, "Type", "collection", "Error", err.Error())
+		return nil, serviceerrors.NewServiceError(messages.JSONUnmarshalFailed, "Type", "collection", "Error", err.Error())
 	}
 
 	collectionResource := api.CollectionResource{
@@ -101,7 +100,7 @@ func (s *sqlStorage) UpdateCollection(id string, collection *api.CollectionConfi
 			return err
 		}
 		if persistedCollection.Resource.IsSystemResource() {
-			return se.NewServiceError(
+			return serviceerrors.NewServiceError(
 				messages.ReadOnlyCollection,
 				"CollectionID", id,
 			)
@@ -138,7 +137,7 @@ func (s *sqlStorage) deleteCollectionTxn(txn *sql.Tx, id string) error {
 	_, err := s.exec(txn, deleteQuery, args...)
 	if err != nil {
 		s.logger.Error("Failed to delete collection", "error", err, "id", id)
-		return se.NewServiceError(messages.DatabaseOperationFailed, "Type", "collection", "ResourceId", id, "Error", err.Error())
+		return serviceerrors.NewServiceError(messages.DatabaseOperationFailed, "Type", "collection", "ResourceId", id, "Error", err.Error())
 	}
 
 	s.logger.Debug("Deleted collection", "id", id)
@@ -153,7 +152,7 @@ func (s *sqlStorage) DeleteCollection(id string) error {
 			return err
 		}
 		if persistedCollection.Resource.IsSystemResource() {
-			return se.NewServiceError(
+			return serviceerrors.NewServiceError(
 				messages.ReadOnlyCollection,
 				"CollectionID", persistedCollection.Resource.ID,
 			)
@@ -171,7 +170,7 @@ func (s *sqlStorage) PatchCollection(id string, patches *api.Patch) (*api.Collec
 			return err
 		}
 		if persistedCollection.Resource.Owner == "system" {
-			return se.NewServiceError(
+			return serviceerrors.NewServiceError(
 				messages.ReadOnlyCollection,
 				"CollectionID", id,
 			)
