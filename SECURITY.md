@@ -57,3 +57,37 @@ GitHub treats `neutral` as a passing required check, but the warning remains unt
 3. List again with the same filter. If another deletable analysis remains for the category, repeat steps 2–3 until the filter returns nothing (or `null`).
 
 4. Re-run checks on open PRs (or push a new commit). Existing PRs keep the old warning until Code scanning runs again against the cleaned `main` configuration.
+
+### OpenSSF Scorecard: pin pip installs by hash
+
+Scorecard’s **Pinned-Dependencies** check flags workflow steps that run `pip install` with version pins only (for example `pip install pyyaml==6.0.3`). Version pins are not enough; Scorecard expects hash verification via a requirements file:
+
+```bash
+python -m pip install --require-hashes -r <requirements.txt>
+```
+
+Inline `pip install pkg==version --hash=...` is often still flagged. Prefer `-r` plus `--require-hashes`.
+
+The TrustyAI operator ConfigMap sync workflow (`.github/workflows/check-trustyai-service-operator-configmap-sync.yml`) installs Python deps this way from:
+
+| File | Role |
+|------|------|
+| `.github/requirements-configmap-sync.in` | Direct pins (`pip`, `pyyaml`, `requests`) — edit this when bumping versions |
+| `.github/requirements-configmap-sync.txt` | Generated lockfile with transitive deps and SHA-256 hashes — do not hand-edit |
+
+**Regenerate the lockfile** after changing the `.in` file ([uv](https://docs.astral.sh/uv/) required):
+
+```bash
+uv pip compile --generate-hashes \
+  .github/requirements-configmap-sync.in \
+  -o .github/requirements-configmap-sync.txt
+```
+
+Commit both the `.in` and `.txt` changes together. Verify locally in a clean venv if needed:
+
+```bash
+python3 -m venv /tmp/reqcheck
+/tmp/reqcheck/bin/pip install --require-hashes -r .github/requirements-configmap-sync.txt
+```
+
+Apply the same pattern for any new GitHub Actions `pip install` steps so Scorecard does not reopen `pipCommand not pinned by hash` alerts.
