@@ -93,6 +93,8 @@ type MessageOrigin string
 const (
 	MessageOriginServer  MessageOrigin = "server"
 	MessageOriginRuntime MessageOrigin = "runtime"
+	MessageOriginAdapter MessageOrigin = "adapter"
+	MessageOriginSDK     MessageOrigin = "sdk"
 )
 
 // MessageInfo represents a message from a downstream service

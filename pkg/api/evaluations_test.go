@@ -75,16 +75,16 @@ func TestBenchmarkStatusEventStampRuntimeMessageOrigins(t *testing.T) {
 
 	t.Run("preserves origins already set on the event", func(t *testing.T) {
 		event := &BenchmarkStatusEvent{
-			ErrorMessage:   &MessageInfo{Message: "err", MessageCode: "E", MessageOrigin: MessageOriginServer},
-			WarningMessage: &MessageInfo{Message: "warn", MessageCode: "W", MessageOrigin: MessageOriginServer},
+			ErrorMessage:   &MessageInfo{Message: "err", MessageCode: "E", MessageOrigin: MessageOriginAdapter},
+			WarningMessage: &MessageInfo{Message: "warn", MessageCode: "W", MessageOrigin: MessageOriginSDK},
 		}
 		event.StampRuntimeMessageOrigins()
 
-		if event.ErrorMessage.MessageOrigin != MessageOriginServer {
-			t.Fatalf("expected server error origin to be preserved, got %q", event.ErrorMessage.MessageOrigin)
+		if event.ErrorMessage.MessageOrigin != MessageOriginAdapter {
+			t.Fatalf("expected adapter error origin to be preserved, got %q", event.ErrorMessage.MessageOrigin)
 		}
-		if event.WarningMessage.MessageOrigin != MessageOriginServer {
-			t.Fatalf("expected server warning origin to be preserved, got %q", event.WarningMessage.MessageOrigin)
+		if event.WarningMessage.MessageOrigin != MessageOriginSDK {
+			t.Fatalf("expected sdk warning origin to be preserved, got %q", event.WarningMessage.MessageOrigin)
 		}
 	})
 }

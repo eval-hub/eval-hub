@@ -2849,7 +2849,9 @@
             "description": "Origin of the message",
             "enum": [
               "server",
-              "runtime"
+              "runtime",
+              "adapter",
+              "sdk"
             ]
           }
         },
