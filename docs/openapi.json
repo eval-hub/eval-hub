@@ -41,7 +41,7 @@
     "/api/v1/health": {
       "get": {
         "summary": "Health Check",
-        "description": "Health check endpoint suitable for liveness and readiness probes.\nDoes not require identity headers. Build and version metadata are not\nincluded; those will be exposed via a future `/api/v1/version` API.\n",
+        "description": "Health check endpoint suitable for liveness and readiness probes.\n",
         "operationId": "get_health",
         "tags": [
           "Health"
@@ -66,8 +66,8 @@
               }
             }
           },
-          "405": {
-            "$ref": "#/components/responses/MethodNotAllowed"
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           }
         }
       }
@@ -4169,13 +4169,60 @@
         ]
       }
     },
+    "examples": {
+      "NotFoundError": {
+        "summary": "Not found error with status code 404",
+        "value": {
+          "message": "The resource was not found.",
+          "message_code": "not_found",
+          "trace": "b12692e1-8582-4628-88ca-7a13fefb73e2"
+        }
+      },
+      "BadRequestError": {
+        "summary": "Bad request error with status code 400",
+        "value": {
+          "message": "The field 'state' is not valid.",
+          "message_code": "invalid_value",
+          "trace": "b12692e1-8582-4628-88ca-7a13fefb73e2"
+        }
+      },
+      "AuthenticationError": {
+        "summary": "Authentication error with status code 401",
+        "value": {
+          "message": "The bearer token is not valid.",
+          "message_code": "invalid_auth_token",
+          "trace": "b12692e1-8582-4628-88ca-7a13fefb73e2"
+        }
+      },
+      "AuthorizationError": {
+        "summary": "Authorization error with status code 403",
+        "value": {
+          "message": "The user does not have access to the endpoint.",
+          "message_code": "endpoint_access_forbidden",
+          "trace": "b12692e1-8582-4628-88ca-7a13fefb73e2"
+        }
+      },
+      "ConflictError": {
+        "summary": "Conflict error with status code 409",
+        "value": {
+          "message": "The job 'f02b16a2-1990-4626-b24d-1cff3febdbfb' can not be cancelled because it is 'completed'.",
+          "message_code": "conflict",
+          "trace": "b12692e1-8582-4628-88ca-7a13fefb73e2"
+        }
+      }
+    },
     "responses": {
-      "MethodNotAllowed": {
-        "description": "Method Not Allowed",
+      "NotFound": {
+        "description": "Not Found",
         "content": {
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/Error"
+            },
+            "examples": {
+              "NotFoundError": {
+                "$ref": "#/components/examples/NotFoundError"
+              }
             }
           }
         }
@@ -4225,21 +4272,6 @@
           }
         }
       },
-      "NotFound": {
-        "description": "Not Found",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
-            },
-            "examples": {
-              "NotFoundError": {
-                "$ref": "#/components/examples/NotFoundError"
-              }
-            }
-          }
-        }
-      },
       "Conflict": {
         "description": "Conflict",
         "content": {
@@ -4253,48 +4285,6 @@
               }
             }
           }
-        }
-      }
-    },
-    "examples": {
-      "BadRequestError": {
-        "summary": "Bad request error with status code 400",
-        "value": {
-          "message": "The field 'state' is not valid.",
-          "message_code": "invalid_value",
-          "trace": "b12692e1-8582-4628-88ca-7a13fefb73e2"
-        }
-      },
-      "AuthenticationError": {
-        "summary": "Authentication error with status code 401",
-        "value": {
-          "message": "The bearer token is not valid.",
-          "message_code": "invalid_auth_token",
-          "trace": "b12692e1-8582-4628-88ca-7a13fefb73e2"
-        }
-      },
-      "AuthorizationError": {
-        "summary": "Authorization error with status code 403",
-        "value": {
-          "message": "The user does not have access to the endpoint.",
-          "message_code": "endpoint_access_forbidden",
-          "trace": "b12692e1-8582-4628-88ca-7a13fefb73e2"
-        }
-      },
-      "NotFoundError": {
-        "summary": "Not found error with status code 404",
-        "value": {
-          "message": "The resource was not found.",
-          "message_code": "not_found",
-          "trace": "b12692e1-8582-4628-88ca-7a13fefb73e2"
-        }
-      },
-      "ConflictError": {
-        "summary": "Conflict error with status code 409",
-        "value": {
-          "message": "The job 'f02b16a2-1990-4626-b24d-1cff3febdbfb' can not be cancelled because it is 'completed'.",
-          "message_code": "conflict",
-          "trace": "b12692e1-8582-4628-88ca-7a13fefb73e2"
         }
       }
     }
