@@ -51,7 +51,7 @@
     "/api/v1/health": {
       "get": {
         "summary": "Health Check",
-        "description": "Health check endpoint.",
+        "description": "Health check endpoint suitable for liveness and readiness probes.\n",
         "operationId": "get_health",
         "tags": [
           "Health"
@@ -69,34 +69,12 @@
                     "summary": "Healthy service response",
                     "value": {
                       "status": "healthy",
-                      "version": "N.N.N",
-                      "timestamp": "2026-05-27T18:42:11Z",
-                      "git_hash": "abc1234",
-                      "uptime": 86400000000000
-                    }
-                  },
-                  "degraded": {
-                    "summary": "Degraded service response",
-                    "value": {
-                      "status": "degraded",
-                      "version": "N.N.N",
-                      "timestamp": "2026-05-27T18:42:11Z",
-                      "git_hash": "abc1234",
-                      "uptime": 172800000000000
+                      "timestamp": "2026-05-27T18:42:11Z"
                     }
                   }
                 }
               }
             }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -2883,29 +2861,15 @@
             "type": "string",
             "description": "Overall status (e.g. healthy, degraded)"
           },
-          "version": {
-            "type": "string",
-            "description": "Service version"
-          },
           "timestamp": {
             "type": "string",
             "format": "date-time",
             "description": "Server timestamp"
-          },
-          "git_hash": {
-            "type": "string",
-            "description": "Commit hash"
-          },
-          "uptime": {
-            "type": "integer",
-            "description": "Uptime in nanoseconds (or use string for duration)"
           }
         },
         "required": [
           "status",
-          "version",
-          "timestamp",
-          "uptime"
+          "timestamp"
         ]
       },
       "Error": {
@@ -4472,6 +4436,14 @@
       }
     },
     "examples": {
+      "NotFoundError": {
+        "summary": "Not found error with status code 404",
+        "value": {
+          "message": "The resource was not found.",
+          "message_code": "not_found",
+          "trace": "b12692e1-8582-4628-88ca-7a13fefb73e2"
+        }
+      },
       "BadRequestError": {
         "summary": "Bad request error with status code 400",
         "value": {
@@ -4496,14 +4468,6 @@
           "trace": "b12692e1-8582-4628-88ca-7a13fefb73e2"
         }
       },
-      "NotFoundError": {
-        "summary": "Not found error with status code 404",
-        "value": {
-          "message": "The resource was not found.",
-          "message_code": "not_found",
-          "trace": "b12692e1-8582-4628-88ca-7a13fefb73e2"
-        }
-      },
       "ConflictError": {
         "summary": "Conflict error with status code 409",
         "value": {
@@ -4514,6 +4478,21 @@
       }
     },
     "responses": {
+      "NotFound": {
+        "description": "Not Found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "examples": {
+              "NotFoundError": {
+                "$ref": "#/components/examples/NotFoundError"
+              }
+            }
+          }
+        }
+      },
       "BadRequest": {
         "description": "Bad Request",
         "content": {
@@ -4554,21 +4533,6 @@
             "examples": {
               "AuthorizationError": {
                 "$ref": "#/components/examples/AuthorizationError"
-              }
-            }
-          }
-        }
-      },
-      "NotFound": {
-        "description": "Not Found",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
-            },
-            "examples": {
-              "NotFoundError": {
-                "$ref": "#/components/examples/NotFoundError"
               }
             }
           }

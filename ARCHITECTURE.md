@@ -45,7 +45,7 @@ Domain types are largely **`pkg/api`** structs; errors to clients are shaped via
 
 Evaluation handlers take **`ExecutionContext`** (not raw `*http.Request` alone): request ID, tenant, user, logger, cancelable context, and service config. That keeps logging fields consistent and avoids threading globals. Basic routes (health, OpenAPI) may use plain `http` handlers.
 
-In cluster deployments, **kube-rbac-proxy** performs authentication and authorization, then forwards API requests to eval-hub with **`X-Tenant`** (namespace) and **`X-User`** (authenticated identity). eval-hub requires both headers on evaluation API routes and on detailed **`GET /api/v1/health`** in cluster mode; **local mode** (`--local`) does not require them. **`GET /healthz`** is unauthenticated (status only) for kubelet probes and must not go through the proxy for auth. eval-hub does not validate Bearer tokens itself.
+In cluster deployments, **kube-rbac-proxy** performs authentication and authorization, then forwards API requests to eval-hub with **`X-Tenant`** (namespace) and **`X-User`** (authenticated identity). eval-hub requires both headers on evaluation API routes in cluster mode; **local mode** (`--local`) does not require them. **`GET /api/v1/health`** does not require identity headers (probe-friendly) and omits build/version fields. eval-hub does not validate Bearer tokens itself.
 
 ---
 

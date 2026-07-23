@@ -208,30 +208,15 @@ func (s *Server) handle(router *http.ServeMux, pattern string, handler http.Hand
 }
 
 func (s *Server) setupHealthRoutes(h *handlers.Handlers, router *http.ServeMux) {
-	// /healthz is for kubelet probes: unauthenticated, status-only (no build/version details).
-	s.handleFunc(router, "/healthz", func(w http.ResponseWriter, r *http.Request) {
-		ctx := s.newExecutionContext(r)
-		resp := NewRespWrapper(w, ctx)
-		req := s.newRequestWrapper(w, r)
-		switch req.Method() {
-		case http.MethodGet:
-			h.HandleHealthz(ctx, req, resp)
-		default:
-			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
-		}
-	})
-
-	// /api/v1/health is the detailed health check; requires identity headers in cluster mode.
+	// /api/v1/health is unauthenticated (no identity headers) so it can be used for probes.
+	// Build/version metadata is not included; that belongs on a future /api/v1/version API.
 	s.handleFunc(router, "/api/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
 		req := s.newRequestWrapper(w, r)
-		if !s.canContinueRequest(ctx, resp) {
-			return
-		}
 		switch req.Method() {
 		case http.MethodGet:
-			h.HandleHealth(ctx, req, resp, s.serviceConfig.Service.Build, s.serviceConfig.Service.BuildDate, s.serviceConfig.Service.GitHash)
+			h.HandleHealth(ctx, req, resp)
 		default:
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}

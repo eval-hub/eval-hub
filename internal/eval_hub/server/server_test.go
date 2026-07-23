@@ -154,7 +154,6 @@ func TestServerSetupRoutes(t *testing.T) {
 		status int
 		body   string
 	}{
-		{http.MethodGet, "/healthz", http.StatusOK, ""},
 		{http.MethodGet, "/api/v1/health", http.StatusOK, ""},
 		{http.MethodGet, "/openapi.yaml", http.StatusOK, ""},
 		{http.MethodGet, "/docs", http.StatusOK, ""},
@@ -171,7 +170,6 @@ func TestServerSetupRoutes(t *testing.T) {
 		// Providers
 		{http.MethodGet, "/api/v1/evaluations/providers", http.StatusOK, ""},
 		// Error cases
-		{http.MethodPost, "/healthz", http.StatusMethodNotAllowed, ""},
 		{http.MethodPost, "/api/v1/health", http.StatusMethodNotAllowed, ""},
 		{http.MethodGet, "/nonexistent", http.StatusNotFound, ""},
 
@@ -240,7 +238,7 @@ func TestServerSetupRoutes(t *testing.T) {
 	}
 }
 
-func TestHealthzEndpoint(t *testing.T) {
+func TestHealthEndpoint(t *testing.T) {
 	srv, err := createServer(t, 8080)
 	if err != nil {
 		t.Fatalf("createServer: %v", err)
@@ -251,7 +249,7 @@ func TestHealthzEndpoint(t *testing.T) {
 	}
 
 	t.Run("GET returns healthy status without build metadata", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
 
@@ -269,15 +267,18 @@ func TestHealthzEndpoint(t *testing.T) {
 		if body["status"] != "healthy" {
 			t.Errorf("status: got %v want healthy", body["status"])
 		}
-		for _, field := range []string{"build", "build_date", "git_hash", "timestamp", "version"} {
+		if _, ok := body["timestamp"]; !ok {
+			t.Error("response missing timestamp")
+		}
+		for _, field := range []string{"build", "build_date", "git_hash", "version"} {
 			if _, ok := body[field]; ok {
-				t.Errorf("/healthz must not expose %q", field)
+				t.Errorf("/api/v1/health must not expose %q", field)
 			}
 		}
 	})
 
 	t.Run("POST returns 405", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/healthz", strings.NewReader(""))
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/health", strings.NewReader(""))
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
 		if w.Code != http.StatusMethodNotAllowed {

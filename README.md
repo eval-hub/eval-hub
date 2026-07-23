@@ -48,7 +48,6 @@ exclude (
 The API is available at `http://localhost:8080`. Verify it is running:
 
 ```bash
-curl http://localhost:8080/healthz
 curl http://localhost:8080/api/v1/health
 ```
 
@@ -158,8 +157,7 @@ All endpoints are versioned under `/api/v1`. Full specification at [eval-hub.git
 | `/api/v1/evaluations/providers` | GET, POST | List or create providers |
 | `/api/v1/evaluations/providers/{id}` | GET, PUT, PATCH, DELETE | Manage a provider |
 | `/api/v1/evaluations/jobs/{id}/events` | POST | Submit job events |
-| `/healthz` | GET | Probe health check (status only; for kubelet) |
-| `/api/v1/health` | GET | Detailed health check (requires identity headers in cluster mode) |
+| `/api/v1/health` | GET | Health check (no identity headers; no build/version fields) |
 | `/metrics` | GET | Prometheus metrics |
 
 Detailed API documentation: [eval-hub.github.io/eval-hub](https://eval-hub.github.io/eval-hub/)
