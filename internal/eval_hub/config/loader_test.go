@@ -189,7 +189,11 @@ secrets:
 			t.Fatalf("Failed to create secret: %v", err)
 		}
 		t.Cleanup(func() {
-			_ = os.Remove(secretPath)
+			t.Cleanup(func() {
+				if err := os.Remove(secretPath); err != nil && !os.IsNotExist(err) {
+					t.Errorf("remove test secret: %v", err)
+				}
+			})
 		})
 		serviceConfig, err := config.LoadConfig(logger, version, "local", time.Now().Format(time.RFC3339), "", "../../../tests/secrets")
 		if err != nil {
