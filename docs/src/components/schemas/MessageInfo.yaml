@@ -13,6 +13,8 @@ properties:
     enum:
       - server
       - runtime
+      - adapter
+      - sdk
 required:
   - message
   - message_code
