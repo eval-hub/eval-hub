@@ -42,7 +42,7 @@ require (
 	go.opentelemetry.io/otel/sdk/log v0.20.0
 	go.opentelemetry.io/otel/sdk/metric v1.44.0
 	go.opentelemetry.io/otel/trace v1.44.0
-	go.opentelemetry.io/proto/otlp v1.10.0
+	go.opentelemetry.io/proto/otlp v1.11.0
 	go.uber.org/zap v1.28.0
 	go.yaml.in/yaml/v4 v4.0.0-rc.6
 	google.golang.org/grpc v1.82.1
