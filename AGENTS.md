@@ -220,7 +220,7 @@ Cluster traffic reaches eval-hub through **kube-rbac-proxy**, which handles Bear
 - **`X-Tenant`** — tenant namespace; required on evaluation API routes in cluster mode only
 - **`X-User`** — authenticated caller identity; required in cluster mode; used for resource ownership
 
-**`GET /api/v1/health`** is unauthenticated (no identity headers) and returns `status` and `timestamp` only. Build/version metadata will move to a future `/api/v1/version` API.
+**`GET /api/v1/health`** is unauthenticated (no identity headers) and returns `status` and `timestamp` only.
 
 eval-hub does not perform in-process TokenReview/SAR; it trusts these headers from the proxy and applies tenant/user scoping in storage and handlers.
 
