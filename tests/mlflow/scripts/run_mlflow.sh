@@ -27,6 +27,8 @@ HOST=${MLFLOW_HOST:-"127.0.0.1"}
 PORT=${MLFLOW_PORT:-"5000"}
 BACKEND_URI=${MLFLOW_BACKEND_STORE_URI:-"sqlite:///bin/mlflow_${PORT}.db"}
 DEFAULT_ARTIFACT_ROOT=${MLFLOW_DEFAULT_ARTIFACT_ROOT:-"./bin/mlruns_${PORT}"}
+# Proxied uploads (/api/2.0/mlflow-artifacts) are stored here when --serve-artifacts is on (default).
+ARTIFACTS_DESTINATION=${MLFLOW_ARTIFACTS_DESTINATION:-"./bin/mlartifacts_${PORT}"}
 MLFLOW_LOG_FILE=${MLFLOW_LOG_FILE:-"bin/mlflow_${PORT}.log"}
 PID_FILE="bin/mlflow_${PORT}.pid"
 ENABLE_WORKSPACES=""
@@ -39,8 +41,8 @@ if [[ "${BACKEND_URI}" == sqlite://* ]]; then
     DB_PATH="${BACKEND_URI#sqlite:///}"
     rm -f "${DB_PATH}"
 fi
-rm -rf "${DEFAULT_ARTIFACT_ROOT}"
-echo -e "${GREEN}✅ Wiped out mlflow db and mlruns directory for port ${PORT}${NC}"
+rm -rf "${DEFAULT_ARTIFACT_ROOT}" "${ARTIFACTS_DESTINATION}"
+echo -e "${GREEN}✅ Wiped out mlflow db, mlruns, and mlartifacts directories for port ${PORT}${NC}"
 
 log_to_file() {
     printf '%s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*" >> "${MLFLOW_LOG_FILE}"
@@ -64,6 +66,7 @@ echo -e "  ${YELLOW}Host:${NC} $HOST"
 echo -e "  ${YELLOW}Port:${NC} $PORT"
 echo -e "  ${YELLOW}Backend Store URI:${NC} $BACKEND_URI"
 echo -e "  ${YELLOW}Default Artifact Root:${NC} $DEFAULT_ARTIFACT_ROOT"
+echo -e "  ${YELLOW}Artifacts Destination:${NC} $ARTIFACTS_DESTINATION"
 echo ""
 
 # Check if MLflow is installed in the venv (or on PATH)
@@ -75,10 +78,14 @@ if ! command -v mlflow &> /dev/null; then
     exit 1
 fi
 
-# Create artifact root directory if it doesn't exist
+# Create artifact directories if they don't exist
 if [ ! -d "$DEFAULT_ARTIFACT_ROOT" ]; then
     echo -e "${YELLOW}📁 Creating artifact root directory: $DEFAULT_ARTIFACT_ROOT${NC}"
     mkdir -p "$DEFAULT_ARTIFACT_ROOT"
+fi
+if [ ! -d "$ARTIFACTS_DESTINATION" ]; then
+    echo -e "${YELLOW}📁 Creating artifacts destination directory: $ARTIFACTS_DESTINATION${NC}"
+    mkdir -p "$ARTIFACTS_DESTINATION"
 fi
 
 # Create backend database directory if using SQLite
@@ -112,8 +119,9 @@ log_to_file "Host: ${HOST}"
 log_to_file "Port: ${PORT}"
 log_to_file "Backend store URI: ${BACKEND_URI}"
 log_to_file "Default artifact root: ${DEFAULT_ARTIFACT_ROOT}"
+log_to_file "Artifacts destination: ${ARTIFACTS_DESTINATION}"
 log_to_file "Enable workspaces: ${MLFLOW_ENABLE_WORKSPACES:-false}"
-log_to_file "Command: mlflow server --host ${HOST} --port ${PORT} ${ENABLE_WORKSPACES} --backend-store-uri ${BACKEND_URI} --default-artifact-root ${DEFAULT_ARTIFACT_ROOT}"
+log_to_file "Command: mlflow server --host ${HOST} --port ${PORT} ${ENABLE_WORKSPACES} --backend-store-uri ${BACKEND_URI} --default-artifact-root ${DEFAULT_ARTIFACT_ROOT} --artifacts-destination ${ARTIFACTS_DESTINATION}"
 
 # Log to file only — do not write server output to stdout. Background processes that
 # keep stdout open will cause "make start-mlflow" (and go test exec) to hang waiting
@@ -124,6 +132,7 @@ mlflow server \
     ${ENABLE_WORKSPACES} \
     --backend-store-uri "$BACKEND_URI" \
     --default-artifact-root "$DEFAULT_ARTIFACT_ROOT" \
+    --artifacts-destination "$ARTIFACTS_DESTINATION" \
     >> "${MLFLOW_LOG_FILE}" 2>&1 &
 
 MLFLOW_PID=$!

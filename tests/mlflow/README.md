@@ -39,7 +39,7 @@ Run `make help` for a short list.
 | `start-mlflow` | Install (locked), stop this port, then start MLflow in the background |
 | `stop-mlflow` | Stop the server on `MLFLOW_PORT` only (PID file / port listen) |
 | `test-godog-server` | Start server, run godog tests (`-tags=godog`), then stop server |
-| `clean` | Remove `bin/` (SQLite DB, logs, artifact root) |
+| `clean` | Remove `bin/` (SQLite DB, logs, artifact dirs) and any stray `mlartifacts/` |
 | `cls` | Clear the terminal |
 
 Typical workflow: **`init-python` → `install-mlflow` → `start-mlflow`**.
@@ -55,8 +55,9 @@ Override defaults on the `make` command line or in the environment:
 | `MLFLOW_VERSION` | `3.13.0` | MLflow package version for `uv pip install` (see **MLflow version note** below) |
 | `MLFLOW_HOST` | `127.0.0.1` | Server bind address |
 | `MLFLOW_PORT` | `5000` | Server port |
-| `MLFLOW_BACKEND_STORE_URI` | `sqlite:///bin/mlflow.db` | Tracking store URI |
-| `MLFLOW_DEFAULT_ARTIFACT_ROOT` | `./bin/mlruns` | Artifact storage directory |
+| `MLFLOW_BACKEND_STORE_URI` | `sqlite:///bin/mlflow_<port>.db` | Tracking store URI |
+| `MLFLOW_DEFAULT_ARTIFACT_ROOT` | `./bin/mlruns_<port>` | Experiment artifact root (metadata location) |
+| `MLFLOW_ARTIFACTS_DESTINATION` | `./bin/mlartifacts_<port>` | Proxied artifact storage (`--serve-artifacts`; uploads via `/api/2.0/mlflow-artifacts`) |
 | `MLFLOW_TRACKING_URI` | `http://127.0.0.1:5000` | Used by `test-godog-server` and client apps |
 
 Examples:
@@ -71,9 +72,10 @@ MLFLOW_TRACKING_URI=http://127.0.0.1:5001 make test-godog-server
 ## What gets created
 
 - **`.venv/`** — Python environment with `mlflow` CLI (`tests/mlflow/.venv/bin/mlflow`)
-- **`bin/mlflow.db`** — SQLite tracking backend (when using default `MLFLOW_BACKEND_STORE_URI`)
-- **`bin/mlruns/`** — Local artifact store
-- **`bin/mlflow.log`** — Server stdout/stderr from the last `start-mlflow`
+- **`bin/mlflow_<port>.db`** — SQLite tracking backend (when using default `MLFLOW_BACKEND_STORE_URI`)
+- **`bin/mlruns_<port>/`** — Experiment artifact root (metadata)
+- **`bin/mlartifacts_<port>/`** — Proxied artifact files (eval cards, etc.)
+- **`bin/mlflow_<port>.log`** — Server stdout/stderr from the last `start-mlflow`
 
 `make clean` removes `bin/` only; it does not delete `.venv`. To recreate Python from scratch:
 

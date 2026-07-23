@@ -33,13 +33,14 @@ var startMu sync.Mutex
 
 // ServerOptions configures MLflow server startup (passed to tests/mlflow Makefile targets).
 type ServerOptions struct {
-	Version          string
-	EnableWorkspaces bool
-	Host             string
-	Port             int
-	BackendStoreURI  string
-	ArtifactRoot     string
-	Logger           *slog.Logger
+	Version              string
+	EnableWorkspaces     bool
+	Host                 string
+	Port                 int
+	BackendStoreURI      string
+	ArtifactRoot         string
+	ArtifactsDestination string
+	Logger               *slog.Logger
 }
 
 // Server represents a running MLflow tracking server started for a test.
@@ -118,6 +119,9 @@ func (opts ServerOptions) withDefaults() ServerOptions {
 	if opts.ArtifactRoot == "" {
 		opts.ArtifactRoot = fmt.Sprintf("./bin/mlruns_test_%d", opts.Port)
 	}
+	if opts.ArtifactsDestination == "" {
+		opts.ArtifactsDestination = fmt.Sprintf("./bin/mlartifacts_test_%d", opts.Port)
+	}
 	return opts
 }
 
@@ -133,6 +137,7 @@ func (opts ServerOptions) env() []string {
 		"MLFLOW_PORT=" + strconv.Itoa(opts.Port),
 		"MLFLOW_BACKEND_STORE_URI=" + opts.BackendStoreURI,
 		"MLFLOW_DEFAULT_ARTIFACT_ROOT=" + opts.ArtifactRoot,
+		"MLFLOW_ARTIFACTS_DESTINATION=" + opts.ArtifactsDestination,
 		"MLFLOW_ENABLE_WORKSPACES=" + enableWorkspaces,
 		"MLFLOW_TRACKING_URI=" + fmt.Sprintf("http://%s:%d", opts.Host, opts.Port),
 	}
