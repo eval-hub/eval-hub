@@ -188,13 +188,6 @@ make test-fvt-server
 
 This runs the tests with verbose output enabled.
 
-Generate the FVT HTML report (requires Node dev deps):
-
-```bash
-npm install
-make fvt-report
-```
-
 ### Using Go Test Directly
 
 Run all feature tests:

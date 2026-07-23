@@ -259,10 +259,6 @@ make test
 # Run only FVT tests (no server)
 make test-fvt
 
-# Generate FVT HTML report (requires Node dev deps)
-npm ci
-make fvt-report
-
 # Run tests with coverage
 make test-coverage
 
