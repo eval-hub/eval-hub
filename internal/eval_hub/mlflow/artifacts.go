@@ -100,15 +100,20 @@ func CreateEvaluationCardRun(client *mlflowclient.Client, experimentID, jobID, r
 }
 
 // PersistEvalCard uploads the evaluation card JSON artifact to a new MLflow run in the job's experiment.
+// It returns the MLflow run ID and the artifact URL.
 func PersistEvalCard(
 	client *mlflowclient.Client,
 	experimentID, jobID, runName, artifactLocation string,
 	cardJSON []byte,
-) (string, error) {
-	runID, err := CreateEvaluationCardRun(client, experimentID, jobID, runName)
+) (runID string, artifactURL string, err error) {
+	runID, err = CreateEvaluationCardRun(client, experimentID, jobID, runName)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	artifactPath := BuildRunArtifactPath(experimentID, runID, EvalCardArtifactFileName, artifactLocation)
-	return client.UploadArtifact(artifactPath, bytes.NewReader(cardJSON), "application/json")
+	artifactURL, err = client.UploadArtifact(artifactPath, bytes.NewReader(cardJSON), "application/json")
+	if err != nil {
+		return "", "", err
+	}
+	return runID, artifactURL, nil
 }

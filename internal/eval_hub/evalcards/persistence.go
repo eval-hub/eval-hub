@@ -142,7 +142,7 @@ func (t *mlflowTarget) Export(ctx context.Context, job *api.EvaluationJobResourc
 		artifactLocation = job.Experiment.ArtifactLocation
 	}
 
-	artifactURL, err := evalhubmlflow.PersistEvalCard(
+	runID, artifactURL, err := evalhubmlflow.PersistEvalCard(
 		client,
 		job.Resource.MLFlowExperimentID,
 		job.Resource.ID,
@@ -153,12 +153,22 @@ func (t *mlflowTarget) Export(ctx context.Context, job *api.EvaluationJobResourc
 	if err != nil {
 		return "", err
 	}
+
+	if runID != "" && job.Results != nil {
+		for i := range job.Results.Benchmarks {
+			if job.Results.Benchmarks[i].MLFlowRunID == "" {
+				job.Results.Benchmarks[i].MLFlowRunID = runID
+			}
+		}
+	}
+
 	if t.logger != nil {
 		t.logger.Info(
 			"Uploaded evaluation card artifact to MLflow",
 			"job_id", job.Resource.ID,
 			"experiment_id", job.Resource.MLFlowExperimentID,
 			"artifact_url", artifactURL,
+			"mlflow_run_id", runID,
 		)
 	}
 	return artifactURL, nil

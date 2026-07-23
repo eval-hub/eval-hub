@@ -168,6 +168,52 @@ func TestMLflowTargetExport(t *testing.T) {
 	}
 }
 
+func TestMLflowTargetExportSetsRunIDOnBenchmarkResults(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/runs/create"):
+			_ = json.NewEncoder(w).Encode(mlflowclient.CreateRunResponse{
+				Run: mlflowclient.Run{Info: mlflowclient.RunInfo{RunID: "new-run-42"}},
+			})
+		case r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/mlflow-artifacts/artifacts/"):
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	target := NewMLflowTarget(mlflowclient.NewClient(srv.URL), nil)
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource:           api.Resource{ID: "job-1"},
+			MLFlowExperimentID: "8",
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Name:       "demo",
+			Experiment: &api.ExperimentConfig{Name: "exp"},
+		},
+		Results: &api.EvaluationJobResults{
+			Benchmarks: []api.BenchmarkResult{
+				{ID: "b1", ProviderID: "p1"},
+				{ID: "b2", ProviderID: "p1", MLFlowRunID: "existing-run"},
+			},
+		},
+	}
+	_, err := target.Export(context.Background(), job, &cards.EvaluationCard{CardVersion: cards.CardVersion})
+	if err != nil {
+		t.Fatalf("Export() err = %v", err)
+	}
+	if job.Results.Benchmarks[0].MLFlowRunID != "new-run-42" {
+		t.Fatalf("benchmark[0].MLFlowRunID = %q, want %q", job.Results.Benchmarks[0].MLFlowRunID, "new-run-42")
+	}
+	if job.Results.Benchmarks[1].MLFlowRunID != "existing-run" {
+		t.Fatalf("benchmark[1].MLFlowRunID = %q, want %q (should preserve existing)", job.Results.Benchmarks[1].MLFlowRunID, "existing-run")
+	}
+}
+
 func TestOCITargetEnabled(t *testing.T) {
 	target := NewOCITarget(nil, nil)
 	job := &api.EvaluationJobResource{

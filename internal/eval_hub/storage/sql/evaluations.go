@@ -220,6 +220,21 @@ func (s *sqlStorage) UpdateEvaluationJobStatus(id string, state api.OverallState
 	return err
 }
 
+func (s *sqlStorage) UpdateEvaluationJobResults(id string, results *api.EvaluationJobResults) error {
+	return s.withTransaction("update evaluation job results", id, func(txn *sql.Tx) error {
+		job, err := s.getEvaluationJobTransactionalForUpdate(txn, id)
+		if err != nil {
+			return err
+		}
+		entity := EvaluationJobEntity{
+			Config:  &job.EvaluationJobConfig,
+			Status:  job.Status,
+			Results: results,
+		}
+		return s.updateEvaluationJobTxn(txn, id, job.Status.State, &entity)
+	})
+}
+
 func (s *sqlStorage) updateEvaluationJobTxn(txn *sql.Tx, id string, status api.OverallState, evaluationJob *EvaluationJobEntity) error {
 	entityJSON, err := json.Marshal(evaluationJob)
 	if err != nil {

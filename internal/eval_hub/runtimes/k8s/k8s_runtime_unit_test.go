@@ -67,6 +67,9 @@ func (f *fakeStorage) UpdateEvaluationJobStatus(_ string, _ api.OverallState, _ 
 	f.called = true
 	return nil
 }
+func (f *fakeStorage) UpdateEvaluationJobResults(_ string, _ *api.EvaluationJobResults) error {
+	return nil
+}
 func (f *fakeStorage) CreateCollection(_ *api.CollectionResource) error {
 	return nil
 }

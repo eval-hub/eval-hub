@@ -103,12 +103,15 @@ func TestPersistEvalCard(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	client := mlflowclient.NewClient(srv.URL).WithContext(t.Context())
-	url, err := PersistEvalCard(client, "exp-1", "job-1", "demo-job", "", []byte(`{"card_version":"1.0"}`))
+	runID, url, err := PersistEvalCard(client, "exp-1", "job-1", "demo-job", "", []byte(`{"card_version":"1.0"}`))
 	if err != nil {
 		t.Fatalf("PersistEvalCard() err = %v", err)
 	}
 	if createCalled != 1 {
 		t.Fatalf("create run calls = %d, want 1", createCalled)
+	}
+	if runID != "run-1" {
+		t.Fatalf("runID = %q, want %q", runID, "run-1")
 	}
 	if !strings.Contains(uploadedPath, "exp-1/run-1/artifacts/evaluation-card.json") {
 		t.Fatalf("uploaded path = %q", uploadedPath)
@@ -139,7 +142,7 @@ func TestPersistEvalCardWithArtifactLocation(t *testing.T) {
 
 	client := mlflowclient.NewClient(srv.URL).WithContext(t.Context())
 	artifactLocation := "/mlflow/artifacts/workspaces/sagar/8"
-	_, err := PersistEvalCard(client, "8", "job-1", "demo-job", artifactLocation, []byte(`{"card_version":"1.0"}`))
+	_, _, err := PersistEvalCard(client, "8", "job-1", "demo-job", artifactLocation, []byte(`{"card_version":"1.0"}`))
 	if err != nil {
 		t.Fatalf("PersistEvalCard() err = %v", err)
 	}
