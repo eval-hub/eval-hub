@@ -123,7 +123,7 @@
                 "adapter",
                 "sdk"
               ],
-              "description": "Origin of the status message (server, runtime, adapter, or sdk)."
+              "description": "Origin of the status message."
             }
           }
         },
