@@ -4,32 +4,10 @@ properties:
   status:
     type: string
     description: Overall status (e.g. healthy, degraded)
-  version:
-    type: string
-    description: Service version
   timestamp:
     type: string
     format: date-time
     description: Server timestamp
-  git_hash:
-    type: string
-    description: Commit hash
-  # TODO
-  # components:
-  #  type: object
-  #  additionalProperties:
-  #    type: object
-  #    additionalProperties: true
-  #  description: Per-component health
-  uptime:
-    type: integer
-    description: Uptime in nanoseconds (or use string for duration)
-  # TODO
-  # active_evaluations:
-  #  type: integer
-  #  description: Number of active evaluations
 required:
   - status
-  - version
   - timestamp
-  - uptime

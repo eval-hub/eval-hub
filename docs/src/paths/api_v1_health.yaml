@@ -1,6 +1,9 @@
 get:
   summary: Health Check
-  description: Health check endpoint.
+  description: |
+    Health check endpoint suitable for liveness and readiness probes.
+    Does not require identity headers. Build and version metadata are not
+    included; those will be exposed via a future `/api/v1/version` API.
   operationId: get_health
   tags:
     - Health
@@ -16,40 +19,6 @@ get:
               summary: Healthy service response
               value:
                 status: healthy
-                version: 'N.N.N'
                 timestamp: '2026-05-27T18:42:11Z'
-                git_hash: abc1234
-                # components:
-                #   database:
-                #     status: healthy
-                #     latency_ms: 2
-                #   mlflow:
-                #     status: healthy
-                #     latency_ms: 15
-                uptime: 86400000000000
-                # active_evaluations: 5
-            degraded:
-              summary: Degraded service response
-              value:
-                status: degraded
-                version: 'N.N.N'
-                timestamp: '2026-05-27T18:42:11Z'
-                git_hash: abc1234
-                # components:
-                #   database:
-                #     status: healthy
-                #     latency_ms: 3
-                #   mlflow:
-                #     status: degraded
-                #     latency_ms: 4500
-                #     error: 'connection timeout after 4000ms'
-                uptime: 172800000000000
-                # active_evaluations: 12
-    '400':
-      $ref: ../components/responses/BadRequest.yaml
-    '401':
-      $ref: ../components/responses/Unauthorized.yaml
-    '403':
-      $ref: ../components/responses/Forbidden.yaml
-    '404':
-      $ref: ../components/responses/NotFound.yaml
+    '405':
+      $ref: ../components/responses/MethodNotAllowed.yaml

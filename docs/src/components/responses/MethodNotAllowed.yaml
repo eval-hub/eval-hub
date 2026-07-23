@@ -1,0 +1,5 @@
+description: Method Not Allowed
+content:
+  application/json:
+    schema:
+      $ref: ../../components/schemas/Error.yaml
