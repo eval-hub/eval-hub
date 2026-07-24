@@ -9,9 +9,7 @@ description: >
 allowed-tools:
   - Read
   - Edit
-  - Write
   - Bash(grep *)
-  - Bash(find *)
   - Bash(git *)
   - Bash(gh *)
   - Bash(go *)
@@ -19,7 +17,6 @@ allowed-tools:
   - Bash(curl *)
   - Bash(jq *)
   - Bash(sort *)
-  - Bash(skopeo *)
   - Bash(sed *)
 ---
 
@@ -60,17 +57,7 @@ If an open PR already bumps the Go version, report its number and **stop**.
 
 ### Step 3 — Query the go-toolset registry for available tags
 
-List available go-toolset tags from `registry.access.redhat.com/ubi9/go-toolset`:
-
-```bash
-skopeo list-tags docker://registry.access.redhat.com/ubi9/go-toolset 2>/dev/null \
-  | jq -r '.Tags[]' \
-  | grep -E '^1\.[0-9]+(\.[0-9]+)?$' \
-  | sort -t. -k1,1n -k2,2n -k3,3n \
-  | tail -20
-```
-
-If `skopeo` is not available, fall back to the registry tags API (paginated via `Link: rel="next"`):
+List available go-toolset tags from the registry tags API (paginated via `Link: rel="next"`):
 
 ```bash
 url='https://registry.access.redhat.com/v2/ubi9/go-toolset/tags/list?n=100'
