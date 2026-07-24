@@ -27,8 +27,9 @@ to a given server release.
 
 ### Client guidance (pre-1.0)
 
-- Prefer an SDK release that targets the same EvalHub **minor** line as the server you call
-  (for example SDK `0.4.x` with server `0.4.x`).
+- Align the SDK with a given server only when that SDK release explicitly documents
+  support for it (see [eval-hub-sdk](https://github.com/eval-hub/eval-hub-sdk) releases).
+  Matching version numbers alone is not a guarantee.
 - Older clients may continue to work against newer servers when only additive API changes
   landed, but that is not a guarantee before `1.0.0`.
 - When in doubt, compare the server OpenAPI for your deployed version with the SDK’s
@@ -50,9 +51,14 @@ Behavioural contracts live in the OpenAPI specification for that release.
 ### What does not count as a breaking change
 
 - Adding new endpoints
-- Adding new optional fields to requests or responses
+- Adding new optional fields to requests
 - Adding new query parameters with defaults that preserve existing behaviour
 - Bug fixes that align behaviour with documented API contracts
+
+Adding new fields to responses is generally compatible for clients that ignore unknown
+properties. It may break strict clients that reject unknown fields or enforce a closed
+schema; treat that as a client-side constraint rather than a server API break unless
+release notes say otherwise.
 
 Release notes (or the PR description for a version bump) should call out intentional
 breaking changes when they occur.
@@ -71,14 +77,17 @@ following tags on pushes to observed branches (`main`, `develop`) and on version
 | `<version>` | Tag push (`v1.2.3`) | `1.2.3` |
 | `<major>.<minor>` | Tag push (`v1.2.3`) | `1.2` |
 
-Non-release branch images may carry a Quay expiry annotation; semver tags from `v*`
-releases are intended for durable pins.
+Non-release branch images may carry a Quay expiry annotation. Only full
+`major.minor.patch` tags from `v*` releases (for example `1.2.3`) are durable pins.
+`<major>.<minor>` tags (for example `1.2`) are mutable and move when later patch
+releases of that minor line are published.
 
 ### Production deployments
 
-Production environments should pin a specific semver tag (for example `0.4.4`) rather
-than `latest`. The `latest` tag is useful for development and testing but may point to an
-unreleased commit on `main` or `develop`.
+Production environments should pin a specific full `major.minor.patch` tag (for example
+`0.4.4`) rather than `latest` or a mutable `<major>.<minor>` tag. The `latest` tag is
+useful for development and testing but may point to an unreleased commit on `main` or
+`develop`.
 
 ## Keeping this document useful
 
