@@ -21,6 +21,40 @@ The go.mod must not be updated until the same version exists in go-toolset.
 If there are other files in the repository that require updating due to new golang version then mention them in the PR.
 Use `go-version-file: "go.mod"` in the github actions where possible.
 
+Use the project skill [`.claude/skills/golang-version-update/SKILL.md`](.claude/skills/golang-version-update/SKILL.md)
+for the full procedure (registry check, file updates, `go mod tidy`, tests, and PR).
+
+##### Run from Cursor
+
+In Agent chat, ask in natural language, for example:
+
+- “Bump the Go version using the golang-version-update skill”
+- “Check whether we can update Go / go-toolset”
+
+Cursor loads the skill from `.claude/skills/golang-version-update/` and follows it.
+Optionally attach `@.claude/skills/golang-version-update/SKILL.md` to force the procedure into context.
+
+##### Run from Claude Code terminal
+
+From the repo root, start Claude Code (`claude`), then invoke the skill by name:
+
+```text
+/golang-version-update
+```
+
+Or ask naturally (the skill auto-matches on its description), for example:
+
+- “Bump Go to the latest version supported by ubi9/go-toolset”
+
+Type `/` in Claude Code to list available skills if needed.
+
+##### After the skill runs
+
+Expect a summary (previous/new Go version, files touched, test results).
+
+- **CVE-driven Go upgrades:** Follow the CVE-fix flow above — check for an existing open PR that provides the fix; if one exists, report its number and skip the rest; otherwise create a PR with the fix.
+- **Non-CVE Go upgrades:** Create a PR only if requested; still skip if an open Go bump PR already exists.
+
 #### npm devDependencies
 
 Ensure that version pinning is correct and pins to a **single version**,
