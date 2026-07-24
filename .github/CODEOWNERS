@@ -1,31 +1,31 @@
 # Global fallback — all PRs need at least one approval
-* @ruivieira @julpayne
+* @ruivieira @julpayne @ppadashe-psp
 
 # Go service
-/cmd/ @ruivieira @julpayne
-/internal/eval_hub/ @ruivieira @julpayne @gnaulak-redhat
-/internal/handlers/ @ruivieira @julpayne
-/internal/storage/ @ruivieira @julpayne @nbs-rh
-/pkg/ @ruivieira @julpayne @scheruku-rh @nbs-rh
+/cmd/ @ruivieira @julpayne @ppadashe-psp
+/internal/eval_hub/ @ruivieira @julpayne @gnaulak-redhat @ppadashe-psp
+/internal/handlers/ @ruivieira @julpayne @ppadashe-psp
+/internal/storage/ @ruivieira @julpayne @nbs-rh @ppadashe-psp
+/pkg/ @ruivieira @julpayne @scheruku-rh @nbs-rh @ppadashe-psp
 
 # K8s runtime
-/internal/runtimes/ @ruivieira @julpayne @scheruku-rh
+/internal/runtimes/ @ruivieira @julpayne @scheruku-rh @ppadashe-psp
 
 # Sidecar
-/eval_runtime_sidecar/ @ruivieira @julpayne @nbs-rh @scheruku-rh
+/eval_runtime_sidecar/ @ruivieira @julpayne @nbs-rh @scheruku-rh @ppadashe-psp
 
 # Python server
-/src/ @ruivieira @julpayne @gnaulak-redhat
-/python-server/ @ruivieira @julpayne @gnaulak-redhat
+/src/ @ruivieira @julpayne @gnaulak-redhat @ppadashe-psp
+/python-server/ @ruivieira @julpayne @gnaulak-redhat @ppadashe-psp
 
 # MCP
-/python-mcp/ @ruivieira @julpayne @gnaulak-redhat
+/python-mcp/ @ruivieira @julpayne @gnaulak-redhat @ppadashe-psp
 
 # Config and providers
-/config/ @ruivieira @julpayne @gnaulak-redhat
+/config/ @ruivieira @julpayne @gnaulak-redhat @ppadashe-psp
 
 # CI workflows
-/.github/workflows/ @ruivieira @julpayne @gnaulak-redhat
+/.github/workflows/ @ruivieira @julpayne @gnaulak-redhat @ppadashe-psp
 
 # Tests
-/tests/ @ruivieira @julpayne @scheruku-rh @nbs-rh
+/tests/ @ruivieira @julpayne @scheruku-rh @nbs-rh @gnaulak-redhat @ppadashe-psp
