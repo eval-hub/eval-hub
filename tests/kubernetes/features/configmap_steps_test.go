@@ -25,7 +25,10 @@ func (tc *testContext) configMapShouldBeCreatedWithNamePattern(pattern string) e
 	regexPattern = strings.ReplaceAll(regexPattern, "{benchmark_id}", ".*")
 	regexPattern = strings.ReplaceAll(regexPattern, "{provider_id}", ".*")
 	regexPattern = strings.ReplaceAll(regexPattern, "{hash}", ".*")
-	regex := regexp.MustCompile(regexPattern)
+	regex, err := regexp.Compile("^" + regexPattern + "$")
+	if err != nil {
+		return fmt.Errorf("invalid ConfigMap name pattern %q: %w", pattern, err)
+	}
 
 	// List ConfigMaps with job_id label if we have it
 	listOptions := metav1.ListOptions{}
@@ -174,35 +177,7 @@ func (tc *testContext) configMapDataShouldContainField(dataKey, field string) er
 	if tc.currentConfigMap == nil {
 		return fmt.Errorf("no current ConfigMap")
 	}
-
-	data, exists := tc.currentConfigMap.Data[dataKey]
-	if !exists {
-		return fmt.Errorf("ConfigMap %s does not have data key %s", tc.currentConfigMap.Name, dataKey)
-	}
-
-	var jobSpec map[string]interface{}
-	if err := json.Unmarshal([]byte(data), &jobSpec); err != nil {
-		return fmt.Errorf("failed to parse %s: %w", dataKey, err)
-	}
-
-	// Handle nested fields like "model.url"
-	parts := strings.Split(field, ".")
-	current := jobSpec
-	for i, part := range parts {
-		if i == len(parts)-1 {
-			if _, exists := current[part]; !exists {
-				return fmt.Errorf("%s does not contain field %s", dataKey, field)
-			}
-		} else {
-			next, ok := current[part].(map[string]interface{})
-			if !ok {
-				return fmt.Errorf("%s field %s is not an object", dataKey, part)
-			}
-			current = next
-		}
-	}
-
-	return nil
+	return tc.configMapDataShouldContainFieldWithConfigMap(tc.currentConfigMap, dataKey, field)
 }
 
 func (tc *testContext) configMapDataShouldContainFieldAsObject(dataKey, field string) error {
@@ -291,6 +266,16 @@ func (tc *testContext) configMapDataShouldContainEmptyObject(benchmark, dataKey,
 	return nil
 }
 
+func (tc *testContext) listConfigMapsByBenchmarkID(benchmark string) ([]corev1.ConfigMap, error) {
+	maps, err := tc.k8sClient.CoreV1().ConfigMaps(tc.namespace).List(context.Background(), metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("benchmark_id=%s", benchmark),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list ConfigMaps: %w", err)
+	}
+	return maps.Items, nil
+}
+
 func (tc *testContext) findConfigMapForBenchmark(benchmark, dataKey string) (*corev1.ConfigMap, error) {
 	// Find ConfigMap for specific benchmark (retry for async creation)
 	deadline := time.Now().Add(30 * time.Second)
@@ -303,13 +288,11 @@ func (tc *testContext) findConfigMapForBenchmark(benchmark, dataKey string) (*co
 			}
 			configMaps = maps
 		} else {
-			maps, err := tc.k8sClient.CoreV1().ConfigMaps(tc.namespace).List(context.Background(), metav1.ListOptions{
-				LabelSelector: fmt.Sprintf("benchmark_id=%s", benchmark),
-			})
+			maps, err := tc.listConfigMapsByBenchmarkID(benchmark)
 			if err != nil {
-				return nil, fmt.Errorf("failed to list ConfigMaps: %w", err)
+				return nil, err
 			}
-			configMaps = maps.Items
+			configMaps = maps
 		}
 
 		for i := range configMaps {
@@ -330,12 +313,10 @@ func (tc *testContext) findConfigMapForBenchmark(benchmark, dataKey string) (*co
 		}
 		if tc.lastJobID != "" {
 			// Fallback: try by benchmark_id label in case job_id mismatch.
-			maps, err := tc.k8sClient.CoreV1().ConfigMaps(tc.namespace).List(context.Background(), metav1.ListOptions{
-				LabelSelector: fmt.Sprintf("benchmark_id=%s", benchmark),
-			})
+			maps, err := tc.listConfigMapsByBenchmarkID(benchmark)
 			if err == nil {
-				for i := range maps.Items {
-					candidate := &maps.Items[i]
+				for i := range maps {
+					candidate := &maps[i]
 					if candidate.Labels["benchmark_id"] == benchmark {
 						return candidate, nil
 					}

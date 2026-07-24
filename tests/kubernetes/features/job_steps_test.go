@@ -21,7 +21,10 @@ func (tc *testContext) jobShouldBeCreatedWithNamePattern(pattern string) error {
 	regexPattern = strings.ReplaceAll(regexPattern, "{benchmark_id}", ".*")
 	regexPattern = strings.ReplaceAll(regexPattern, "{provider_id}", ".*")
 	regexPattern = strings.ReplaceAll(regexPattern, "{hash}", ".*")
-	regex := regexp.MustCompile(regexPattern)
+	regex, err := regexp.Compile("^" + regexPattern + "$")
+	if err != nil {
+		return fmt.Errorf("invalid Job name pattern %q: %w", pattern, err)
+	}
 
 	// List Jobs with job_id label if we have it
 	listOptions := metav1.ListOptions{}
@@ -54,6 +57,25 @@ func (tc *testContext) jobShouldBeCreatedWithNamePattern(pattern string) error {
 	return fmt.Errorf("no Job found matching pattern %s (searched %d Jobs)", pattern, len(jobs.Items))
 }
 
+// matchLabel checks that labels[label] exists and optionally matches *target.
+// On success it updates *target to the actual label value.
+func (tc *testContext) matchLabel(labels map[string]string, label, entity string, target *string) error {
+	if tc.currentJob == nil {
+		return fmt.Errorf("no current Job")
+	}
+	actualValue, exists := labels[label]
+	if !exists {
+		return fmt.Errorf("%s does not have label %s", entity, label)
+	}
+	if target != nil && *target != "" && actualValue != *target {
+		return fmt.Errorf("%s label %s expected %s, got %s", entity, label, *target, actualValue)
+	}
+	if target != nil {
+		*target = actualValue
+	}
+	return nil
+}
+
 func (tc *testContext) jobShouldHaveLabel(label, value string) error {
 	if tc.currentJob == nil {
 		return fmt.Errorf("no current Job")
@@ -73,54 +95,21 @@ func (tc *testContext) jobShouldHaveLabelMatchingJobID(label string) error {
 	if tc.currentJob == nil {
 		return fmt.Errorf("no current Job")
 	}
-
-	actualValue, exists := tc.currentJob.Labels[label]
-	if !exists {
-		return fmt.Errorf("Job %s does not have label %s", tc.currentJob.Name, label)
-	}
-
-	if tc.lastJobID != "" && actualValue != tc.lastJobID {
-		return fmt.Errorf("Job %s label %s expected %s, got %s", tc.currentJob.Name, label, tc.lastJobID, actualValue)
-	}
-
-	tc.lastJobID = actualValue
-	return nil
+	return tc.matchLabel(tc.currentJob.Labels, label, fmt.Sprintf("Job %s", tc.currentJob.Name), &tc.lastJobID)
 }
 
 func (tc *testContext) jobShouldHaveLabelMatchingProviderID(label string) error {
 	if tc.currentJob == nil {
 		return fmt.Errorf("no current Job")
 	}
-
-	actualValue, exists := tc.currentJob.Labels[label]
-	if !exists {
-		return fmt.Errorf("Job %s does not have label %s", tc.currentJob.Name, label)
-	}
-
-	if tc.lastProviderID != "" && actualValue != tc.lastProviderID {
-		return fmt.Errorf("Job %s label %s expected %s, got %s", tc.currentJob.Name, label, tc.lastProviderID, actualValue)
-	}
-
-	tc.lastProviderID = actualValue
-	return nil
+	return tc.matchLabel(tc.currentJob.Labels, label, fmt.Sprintf("Job %s", tc.currentJob.Name), &tc.lastProviderID)
 }
 
 func (tc *testContext) jobShouldHaveLabelMatchingBenchmarkID(label string) error {
 	if tc.currentJob == nil {
 		return fmt.Errorf("no current Job")
 	}
-
-	actualValue, exists := tc.currentJob.Labels[label]
-	if !exists {
-		return fmt.Errorf("Job %s does not have label %s", tc.currentJob.Name, label)
-	}
-
-	if tc.lastBenchmarkID != "" && actualValue != tc.lastBenchmarkID {
-		return fmt.Errorf("Job %s label %s expected %s, got %s", tc.currentJob.Name, label, tc.lastBenchmarkID, actualValue)
-	}
-
-	tc.lastBenchmarkID = actualValue
-	return nil
+	return tc.matchLabel(tc.currentJob.Labels, label, fmt.Sprintf("Job %s", tc.currentJob.Name), &tc.lastBenchmarkID)
 }
 
 func (tc *testContext) jobPodTemplateShouldHaveLabel(label, value string) error {
@@ -141,45 +130,21 @@ func (tc *testContext) jobPodTemplateShouldHaveLabelMatchingJobID(label string) 
 	if tc.currentJob == nil {
 		return fmt.Errorf("no current Job")
 	}
-	actualValue, exists := tc.currentJob.Spec.Template.Labels[label]
-	if !exists {
-		return fmt.Errorf("Job %s pod template does not have label %s", tc.currentJob.Name, label)
-	}
-	if tc.lastJobID != "" && actualValue != tc.lastJobID {
-		return fmt.Errorf("Job %s pod template label %s expected %s, got %s", tc.currentJob.Name, label, tc.lastJobID, actualValue)
-	}
-	tc.lastJobID = actualValue
-	return nil
+	return tc.matchLabel(tc.currentJob.Spec.Template.Labels, label, fmt.Sprintf("Job %s pod template", tc.currentJob.Name), &tc.lastJobID)
 }
 
 func (tc *testContext) jobPodTemplateShouldHaveLabelMatchingProviderID(label string) error {
 	if tc.currentJob == nil {
 		return fmt.Errorf("no current Job")
 	}
-	actualValue, exists := tc.currentJob.Spec.Template.Labels[label]
-	if !exists {
-		return fmt.Errorf("Job %s pod template does not have label %s", tc.currentJob.Name, label)
-	}
-	if tc.lastProviderID != "" && actualValue != tc.lastProviderID {
-		return fmt.Errorf("Job %s pod template label %s expected %s, got %s", tc.currentJob.Name, label, tc.lastProviderID, actualValue)
-	}
-	tc.lastProviderID = actualValue
-	return nil
+	return tc.matchLabel(tc.currentJob.Spec.Template.Labels, label, fmt.Sprintf("Job %s pod template", tc.currentJob.Name), &tc.lastProviderID)
 }
 
 func (tc *testContext) jobPodTemplateShouldHaveLabelMatchingBenchmarkID(label string) error {
 	if tc.currentJob == nil {
 		return fmt.Errorf("no current Job")
 	}
-	actualValue, exists := tc.currentJob.Spec.Template.Labels[label]
-	if !exists {
-		return fmt.Errorf("Job %s pod template does not have label %s", tc.currentJob.Name, label)
-	}
-	if tc.lastBenchmarkID != "" && actualValue != tc.lastBenchmarkID {
-		return fmt.Errorf("Job %s pod template label %s expected %s, got %s", tc.currentJob.Name, label, tc.lastBenchmarkID, actualValue)
-	}
-	tc.lastBenchmarkID = actualValue
-	return nil
+	return tc.matchLabel(tc.currentJob.Spec.Template.Labels, label, fmt.Sprintf("Job %s pod template", tc.currentJob.Name), &tc.lastBenchmarkID)
 }
 
 func (tc *testContext) jobSpecShouldHaveRetryAttempts(field string) error {

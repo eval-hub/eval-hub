@@ -56,15 +56,10 @@ func (tc *testContext) volumeShouldReferenceConfigMap(volumeName, suffix string)
 }
 
 func (tc *testContext) containerShouldHaveVolumeMount(mountName, path string) error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
+	container, err := tc.firstContainer()
+	if err != nil {
+		return err
 	}
-
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	for _, mount := range container.VolumeMounts {
 		if mount.Name == mountName && mount.MountPath == path {
 			return nil
@@ -75,13 +70,10 @@ func (tc *testContext) containerShouldHaveVolumeMount(mountName, path string) er
 }
 
 func (tc *testContext) containerShouldHaveVolumeMountWithSubPath(mountName, path, subPath string) error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
+	container, err := tc.firstContainer()
+	if err != nil {
+		return err
 	}
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	for _, mount := range container.VolumeMounts {
 		if mount.Name == mountName && mount.MountPath == path && mount.SubPath == subPath {
 			return nil
@@ -135,15 +127,10 @@ func (tc *testContext) sidecarContainerShouldHaveVolumeMountWithSubPath(mountNam
 }
 
 func (tc *testContext) volumeMountShouldHaveSubPath(mountName, subPath string) error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
+	container, err := tc.firstContainer()
+	if err != nil {
+		return err
 	}
-
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	for _, mount := range container.VolumeMounts {
 		if mount.Name == mountName {
 			if mount.SubPath != subPath {
@@ -157,15 +144,10 @@ func (tc *testContext) volumeMountShouldHaveSubPath(mountName, subPath string) e
 }
 
 func (tc *testContext) volumeMountShouldBeReadOnly(mountName string) error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
+	container, err := tc.firstContainer()
+	if err != nil {
+		return err
 	}
-
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	for _, mount := range container.VolumeMounts {
 		if mount.Name == mountName {
 			if !mount.ReadOnly {

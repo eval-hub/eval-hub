@@ -164,18 +164,22 @@ func (tc *testContext) trySetCurrentResources() {
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		if tc.currentJob == nil {
-			jobs, err := tc.k8sClient.BatchV1().Jobs(tc.namespace).List(context.Background(), metav1.ListOptions{
+			listCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			jobs, err := tc.k8sClient.BatchV1().Jobs(tc.namespace).List(listCtx, metav1.ListOptions{
 				LabelSelector: fmt.Sprintf("job_id=%s", tc.lastJobID),
 			})
+			cancel()
 			if err == nil && len(jobs.Items) > 0 {
 				tc.currentJob = &jobs.Items[0]
 				tc.jobs = append(tc.jobs, tc.currentJob)
 			}
 		}
 		if tc.currentConfigMap == nil {
-			configMaps, err := tc.k8sClient.CoreV1().ConfigMaps(tc.namespace).List(context.Background(), metav1.ListOptions{
+			listCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			configMaps, err := tc.k8sClient.CoreV1().ConfigMaps(tc.namespace).List(listCtx, metav1.ListOptions{
 				LabelSelector: fmt.Sprintf("job_id=%s", tc.lastJobID),
 			})
+			cancel()
 			if err == nil && len(configMaps.Items) > 0 {
 				tc.currentConfigMap = &configMaps.Items[0]
 				tc.configMaps = append(tc.configMaps, tc.currentConfigMap)

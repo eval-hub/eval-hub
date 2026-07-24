@@ -3,11 +3,24 @@ package features
 import (
 	"fmt"
 	"strings"
+
+	corev1 "k8s.io/api/core/v1"
 )
 
 // ============================================================================
 // Container Steps
 // ============================================================================
+
+// firstContainer returns the first pod-template container on the current Job.
+func (tc *testContext) firstContainer() (*corev1.Container, error) {
+	if tc.currentJob == nil {
+		return nil, fmt.Errorf("no current Job")
+	}
+	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
+		return nil, fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
+	}
+	return &tc.currentJob.Spec.Template.Spec.Containers[0], nil
+}
 
 func (tc *testContext) jobPodTemplateShouldHaveContainer(containerName string) error {
 	if tc.currentJob == nil {
@@ -24,15 +37,10 @@ func (tc *testContext) jobPodTemplateShouldHaveContainer(containerName string) e
 }
 
 func (tc *testContext) containerShouldHaveValue(field, value string) error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
+	container, err := tc.firstContainer()
+	if err != nil {
+		return err
 	}
-
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 
 	if field == "imagePullPolicy" {
 		actualValue := string(container.ImagePullPolicy)
@@ -46,13 +54,10 @@ func (tc *testContext) containerShouldHaveValue(field, value string) error {
 }
 
 func (tc *testContext) containerShouldHaveImage() error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
+	container, err := tc.firstContainer()
+	if err != nil {
+		return err
 	}
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	if container.Image == "" {
 		return fmt.Errorf("Container %s has no image", container.Name)
 	}
@@ -60,20 +65,23 @@ func (tc *testContext) containerShouldHaveImage() error {
 }
 
 func (tc *testContext) containerSecurityContextShouldHaveBoolValue(field, value string) error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
+	container, err := tc.firstContainer()
+	if err != nil {
+		return err
 	}
-
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	if container.SecurityContext == nil {
 		return fmt.Errorf("Container %s has no securityContext", container.Name)
 	}
 
-	expectedValue := value == "true"
+	var expectedValue bool
+	switch value {
+	case "true":
+		expectedValue = true
+	case "false":
+		expectedValue = false
+	default:
+		return fmt.Errorf("invalid boolean value %q, expected \"true\" or \"false\"", value)
+	}
 
 	if field == "allowPrivilegeEscalation" {
 		if container.SecurityContext.AllowPrivilegeEscalation == nil {
@@ -99,15 +107,10 @@ func (tc *testContext) containerSecurityContextShouldHaveBoolValue(field, value 
 }
 
 func (tc *testContext) containerSecurityContextCapabilitiesShouldDrop(capability string) error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
+	container, err := tc.firstContainer()
+	if err != nil {
+		return err
 	}
-
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	if container.SecurityContext == nil || container.SecurityContext.Capabilities == nil {
 		return fmt.Errorf("Container %s has no capabilities", container.Name)
 	}
@@ -122,15 +125,10 @@ func (tc *testContext) containerSecurityContextCapabilitiesShouldDrop(capability
 }
 
 func (tc *testContext) containerSecurityContextSeccompProfile(profileType string) error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
+	container, err := tc.firstContainer()
+	if err != nil {
+		return err
 	}
-
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	if container.SecurityContext == nil || container.SecurityContext.SeccompProfile == nil {
 		return fmt.Errorf("Container %s has no seccomp profile", container.Name)
 	}
@@ -144,13 +142,10 @@ func (tc *testContext) containerSecurityContextSeccompProfile(profileType string
 }
 
 func (tc *testContext) containerShouldHaveCPURequestSet() error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
+	container, err := tc.firstContainer()
+	if err != nil {
+		return err
 	}
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	cpuRequest := container.Resources.Requests.Cpu()
 	if cpuRequest == nil || cpuRequest.IsZero() {
 		return fmt.Errorf("Container %s has no CPU request", container.Name)
@@ -159,13 +154,10 @@ func (tc *testContext) containerShouldHaveCPURequestSet() error {
 }
 
 func (tc *testContext) containerShouldHaveMemoryRequestSet() error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
+	container, err := tc.firstContainer()
+	if err != nil {
+		return err
 	}
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	memRequest := container.Resources.Requests.Memory()
 	if memRequest == nil || memRequest.IsZero() {
 		return fmt.Errorf("Container %s has no memory request", container.Name)
@@ -174,13 +166,10 @@ func (tc *testContext) containerShouldHaveMemoryRequestSet() error {
 }
 
 func (tc *testContext) containerShouldHaveCPULimitSet() error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
+	container, err := tc.firstContainer()
+	if err != nil {
+		return err
 	}
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	cpuLimit := container.Resources.Limits.Cpu()
 	if cpuLimit == nil || cpuLimit.IsZero() {
 		return fmt.Errorf("Container %s has no CPU limit", container.Name)
@@ -189,13 +178,10 @@ func (tc *testContext) containerShouldHaveCPULimitSet() error {
 }
 
 func (tc *testContext) containerShouldHaveMemoryLimitSet() error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
+	container, err := tc.firstContainer()
+	if err != nil {
+		return err
 	}
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	memLimit := container.Resources.Limits.Memory()
 	if memLimit == nil || memLimit.IsZero() {
 		return fmt.Errorf("Container %s has no memory limit", container.Name)

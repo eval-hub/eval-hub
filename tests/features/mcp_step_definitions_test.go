@@ -6,12 +6,23 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Jeffail/gabs/v2"
 	"github.com/PaesslerAG/jsonpath"
 	"github.com/cucumber/godog"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// mcpCallContext returns a cancellable context bounded by the FVT HTTP client
+// timeout (TEST_TIMEOUT / default 60s), so hung MCP calls fail the scenario.
+func (tc *scenarioConfig) mcpCallContext() (context.Context, context.CancelFunc) {
+	timeout := 60 * time.Second
+	if tc.apiFeature != nil && tc.apiFeature.client != nil && tc.apiFeature.client.Timeout > 0 {
+		timeout = tc.apiFeature.client.Timeout
+	}
+	return context.WithTimeout(context.Background(), timeout)
+}
 
 // InitializeMCPSteps registers MCP tool/resource/prompt step definitions.
 func InitializeMCPSteps(ctx *godog.ScenarioContext, tc *scenarioConfig) {
@@ -82,7 +93,8 @@ func (tc *scenarioConfig) iCallMCPToolWithArguments(toolName, argsJSON string) e
 		return tc.logError(fmt.Errorf("failed to substitute values in MCP args: %w", err))
 	}
 
-	ctx := context.Background()
+	ctx, cancel := tc.mcpCallContext()
+	defer cancel()
 	result, err := tc.apiFeature.mcpClientSession.CallTool(ctx, &mcp.CallToolParams{
 		Name:      toolName,
 		Arguments: json.RawMessage(substitutedArgs),
@@ -376,9 +388,9 @@ func (tc *scenarioConfig) getMCPValueAtJSONPath(jsonPath string) (interface{}, e
 	tc.logDebug("MCP response JSON for JSONPath: %s\n", string(resultJSON))
 	tc.logDebug("JSONPath: %s\n", jsonPath)
 
-	// Parse JSON to map
-	var respMap map[string]interface{}
-	if err := json.Unmarshal(resultJSON, &respMap); err != nil {
+	// Parse JSON to a generic root so top-level arrays and objects both work
+	var root interface{}
+	if err := json.Unmarshal(resultJSON, &root); err != nil {
 		return nil, fmt.Errorf("failed to parse MCP JSON response: %w", err)
 	}
 
@@ -389,7 +401,7 @@ func (tc *scenarioConfig) getMCPValueAtJSONPath(jsonPath string) (interface{}, e
 	}
 
 	// Get value at JSONPath
-	foundValue, err := jsonpath.Get(path, respMap)
+	foundValue, err := jsonpath.Get(path, root)
 	if err != nil {
 		return nil, fmt.Errorf("JSONPath %s does not exist in MCP response: %w\nJSON: %s", jsonPath, err, string(resultJSON))
 	}
@@ -522,7 +534,8 @@ func (tc *scenarioConfig) iReadMCPResource(uri string) error {
 	// Substitute any {{value:key}} or {{env:VAR|default}} patterns in URI
 	uri, _ = tc.substituteValues(uri)
 
-	ctx := context.Background()
+	ctx, cancel := tc.mcpCallContext()
+	defer cancel()
 	result, err := tc.apiFeature.mcpClientSession.ReadResource(ctx, &mcp.ReadResourceParams{URI: uri})
 
 	tc.mcpResourceError = err
@@ -649,7 +662,8 @@ func (tc *scenarioConfig) iGetMCPPrompt(name, argsJSON string) error {
 		}
 	}
 
-	ctx := context.Background()
+	ctx, cancel := tc.mcpCallContext()
+	defer cancel()
 	result, err := tc.apiFeature.mcpClientSession.GetPrompt(ctx, &mcp.GetPromptParams{
 		Name:      name,
 		Arguments: args,

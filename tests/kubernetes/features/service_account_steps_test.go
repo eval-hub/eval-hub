@@ -27,15 +27,10 @@ func (tc *testContext) environmentVariableIsSet(name, value string) error {
 }
 
 func (tc *testContext) containerCommandShouldBeValidArray() error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
+	container, err := tc.firstContainer()
+	if err != nil {
+		return err
 	}
-
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	if len(container.Command) == 0 {
 		return fmt.Errorf("Container %s has no command", container.Name)
 	}
@@ -44,15 +39,10 @@ func (tc *testContext) containerCommandShouldBeValidArray() error {
 }
 
 func (tc *testContext) containerCommandShouldNotContainEmptyStrings() error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
+	container, err := tc.firstContainer()
+	if err != nil {
+		return err
 	}
-
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	for _, cmd := range container.Command {
 		if cmd == "" {
 			return fmt.Errorf("Container %s command contains empty string", container.Name)
@@ -63,15 +53,10 @@ func (tc *testContext) containerCommandShouldNotContainEmptyStrings() error {
 }
 
 func (tc *testContext) containerCommandShouldHaveTrimmedWhitespace() error {
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
+	container, err := tc.firstContainer()
+	if err != nil {
+		return err
 	}
-
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
-	}
-
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	for _, cmd := range container.Command {
 		if strings.TrimSpace(cmd) != cmd {
 			return fmt.Errorf("Container %s command element has untrimmed whitespace: %q", container.Name, cmd)
@@ -84,16 +69,12 @@ func (tc *testContext) containerCommandShouldHaveTrimmedWhitespace() error {
 func (tc *testContext) containerShouldHaveProviderEnvVars() error {
 	// Validates that provider environment variables are present
 	// This is a general check that the container has env vars
-	if tc.currentJob == nil {
-		return fmt.Errorf("no current Job")
-	}
-
-	if len(tc.currentJob.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("Job %s has no containers", tc.currentJob.Name)
+	container, err := tc.firstContainer()
+	if err != nil {
+		return err
 	}
 
 	// Just verify that there are env vars
-	container := tc.currentJob.Spec.Template.Spec.Containers[0]
 	if len(container.Env) == 0 {
 		return fmt.Errorf("Container %s has no environment variables", container.Name)
 	}
