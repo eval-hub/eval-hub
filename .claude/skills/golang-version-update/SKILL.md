@@ -29,6 +29,17 @@ allowed-tools:
 Update the Go toolchain version across the repository, gated on availability
 in the Red Hat UBI9 go-toolset container image.
 
+Policy (go-toolset gate, Containerfile, CI) lives in `CLAUDE.md`.
+
+## How to invoke
+
+**Cursor:** In Agent chat, ask e.g. “Bump the Go version using the golang-version-update skill”
+(or “Check whether we can update Go / go-toolset”). Optionally attach
+`@.claude/skills/golang-version-update/SKILL.md`.
+
+**Claude Code terminal:** From the repo root run `claude`, then `/golang-version-update`
+(or ask naturally; type `/` to list skills).
+
 ## Procedure
 
 Follow these steps **in order**. Do not skip steps.

@@ -60,7 +60,9 @@ If a `.pre-commit-config.yaml` file exists, run `pre-commit install && pre-commi
 
 ### Go Version
 
-**Do not modify the Go version in `go.mod`.** The version specified there is the source of truth. If your local Go toolchain is older, use `GOTOOLCHAIN=auto` to let Go automatically download the required version. Never downgrade `go.mod` to match a locally installed toolchain.
+The version in `go.mod` is the source of truth for local development. If your local Go toolchain is older, use `GOTOOLCHAIN=auto` to let Go automatically download the required version. Never downgrade `go.mod` to match a locally installed toolchain.
+
+For intentional Go upgrades, follow `CLAUDE.md` (CVE fixing → Updating the golang version) and the `golang-version-update` skill at `.claude/skills/golang-version-update/SKILL.md`. The target version must exist in `registry.access.redhat.com/ubi9/go-toolset` before updating `go.mod`.
 
 ### Version Bumps
 
