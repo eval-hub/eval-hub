@@ -22,7 +22,7 @@ func (tc *testContext) mlflowIsConfigured() error {
 func (tc *testContext) environmentVariableIsSet(name, value string) error {
 	actual, ok := os.LookupEnv(name)
 	if os.Getenv("K8S_TEST_DEBUG") == "true" {
-		fmt.Printf("[DEBUG] checking env %s=%q (expected %q)\n", name, actual, value)
+		fmt.Printf("[DEBUG] checking env %s (set=%t)\n", name, ok)
 	}
 	if !ok {
 		return fmt.Errorf("environment variable %s is not set", name)
