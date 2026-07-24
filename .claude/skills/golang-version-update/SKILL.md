@@ -10,7 +10,6 @@ allowed-tools:
   - Read
   - Edit
   - Write
-  - WebFetch
   - Bash(grep *)
   - Bash(find *)
   - Bash(git *)
@@ -61,23 +60,38 @@ If an open PR already bumps the Go version, report its number and **stop**.
 
 ### Step 3 — Query the go-toolset registry for available tags
 
-Use the Red Hat container catalog API to list available go-toolset tags:
+List available go-toolset tags from `registry.access.redhat.com/ubi9/go-toolset`:
 
 ```bash
 skopeo list-tags docker://registry.access.redhat.com/ubi9/go-toolset 2>/dev/null \
   | jq -r '.Tags[]' \
-  | grep -E '^[0-9]+\.[0-9]+(\.[0-9]+)?(-[0-9]+)?$' \
+  | grep -E '^1\.[0-9]+(\.[0-9]+)?$' \
   | sort -t. -k1,1n -k2,2n -k3,3n \
   | tail -20
 ```
 
-If `skopeo` is not available, fall back to the Red Hat catalog API:
+If `skopeo` is not available, fall back to the registry tags API (paginated via `Link: rel="next"`):
 
 ```bash
-curl -s "https://catalog.redhat.com/api/containers/v1/repositories/registry/registry.access.redhat.com/repository/ubi9/go-toolset/tags?page_size=100&page=0" \
-  | jq -r '.data[].name' \
-  | grep -E '^[0-9]+\.[0-9]+(\.[0-9]+)?(-[0-9]+)?$' \
+url='https://registry.access.redhat.com/v2/ubi9/go-toolset/tags/list?n=100'
+while [ -n "$url" ]; do
+  resp=$(curl -sS -D /tmp/go-toolset-headers.txt "$url")
+  echo "$resp" | jq -r '.tags[]'
+  next=$(grep -i '^link:' /tmp/go-toolset-headers.txt | tr -d '\r' \
+    | sed -n 's/.*<\([^>]*\)>; *rel="next".*/\1/p')
+  if [ -n "$next" ]; then
+    case "$next" in
+      http*) url="$next" ;;
+      /*) url="https://registry.access.redhat.com${next}" ;;
+      *) url="" ;;
+    esac
+  else
+    url=""
+  fi
+done \
+  | grep -E '^1\.[0-9]+(\.[0-9]+)?$' \
   | sort -t. -k1,1n -k2,2n -k3,3n \
+  | uniq \
   | tail -20
 ```
 
