@@ -50,8 +50,10 @@ Type `/` in Claude Code to list available skills if needed.
 
 ##### After the skill runs
 
-Expect a summary (previous/new Go version, files touched, test results). Create a PR only if
-requested, following the CVE-fix flow above (skip if an open Go bump PR already exists).
+Expect a summary (previous/new Go version, files touched, test results).
+
+- **CVE-driven Go upgrades:** Follow the CVE-fix flow above — check for an existing open PR that provides the fix; if one exists, report its number and skip the rest; otherwise create a PR with the fix.
+- **Non-CVE Go upgrades:** Create a PR only if requested; still skip if an open Go bump PR already exists.
 
 #### npm devDependencies
 
