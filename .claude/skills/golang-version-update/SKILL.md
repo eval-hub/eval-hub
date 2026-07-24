@@ -62,7 +62,14 @@ List available go-toolset tags from the registry tags API (paginated via `Link: 
 ```bash
 url='https://registry.access.redhat.com/v2/ubi9/go-toolset/tags/list?n=100'
 while [ -n "$url" ]; do
-  resp=$(curl -sS -D /tmp/go-toolset-headers.txt "$url")
+  resp=$(curl -fsS -D /tmp/go-toolset-headers.txt "$url") || {
+    echo "error: failed to fetch go-toolset tags from $url" >&2
+    exit 1
+  }
+  if ! echo "$resp" | jq -e 'has("tags") and (.tags | type == "array")' >/dev/null; then
+    echo "error: invalid go-toolset tags response (missing tags array) from $url" >&2
+    exit 1
+  fi
   echo "$resp" | jq -r '.tags[]'
   next=$(grep -i '^link:' /tmp/go-toolset-headers.txt | tr -d '\r' \
     | sed -n 's/.*<\([^>]*\)>; *rel="next".*/\1/p')
