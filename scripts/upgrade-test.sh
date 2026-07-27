@@ -100,33 +100,31 @@ for phase in "${phases[@]}"; do
     fi
 done
 
-cleanup_requested=false
+cleanup_pending=false
 for phase in "${phases[@]}"; do
     if [[ "$phase" == "post-upgrade-cleanup" ]]; then
-        cleanup_requested=true
+        cleanup_pending=true
         break
     fi
 done
 
-cleanup_done=false
-
 run_cleanup_on_exit() {
     local exit_status=$?
-    if [[ "$cleanup_requested" == true && "$cleanup_done" == false ]]; then
-        cleanup_done=true
+    if [[ "$cleanup_pending" == true ]]; then
+        cleanup_pending=false
         echo "==> Running post-upgrade-cleanup (exit trap)"
         run_phase "post-upgrade-cleanup" || true
     fi
     exit "$exit_status"
 }
 
-if [[ "$cleanup_requested" == true ]]; then
+if [[ "$cleanup_pending" == true ]]; then
     trap run_cleanup_on_exit EXIT
 fi
 
 for phase in "${phases[@]}"; do
     if [[ "$phase" == "post-upgrade-cleanup" ]]; then
-        cleanup_done=true
+        cleanup_pending=false
     fi
     run_phase "${phase}"
 done

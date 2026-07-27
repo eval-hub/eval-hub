@@ -128,16 +128,9 @@ func initializeScenario(ctx *godog.ScenarioContext) {
 
 	ctx.Step(`^I send a (GET|DELETE|POST|PUT) request to "([^"]*)"$`, s.iSendRequestTo)
 	ctx.Step(`^I send a (POST|PUT|PATCH) request to "([^"]*)" with body "([^"]*)"$`, s.iSendRequestToWithBody)
-	ctx.Step(`^I send a (POST|PUT|PATCH) request to "([^"]*)" with body:$`, s.iSendRequestToWithInlineBody)
 
 	ctx.Step(`^the response code should be (\d+)$`, s.theResponseCodeShouldBe)
-	ctx.Step(`^the response code should be (\d+) or (\d+)$`, s.theResponseCodeShouldBeOr)
-	ctx.Step(`^the response should be JSON$`, s.theResponseShouldBeJSON)
-	ctx.Step(`^the response should contain "([^"]*)" with value "([^"]*)"$`, s.theResponseShouldContainWithValue)
-	ctx.Step(`^the response should contain "([^"]*)"$`, s.theResponseShouldContain)
 	ctx.Step(`^the response should contain the value "([^"]*)" at path "([^"]*)"$`, s.theResponseShouldContainAtJSONPath)
-	ctx.Step(`^the response should contain at least the value "([^"]*)" at path "([^"]*)"$`, s.theResponseShouldContainAtJSONPathAtLeast)
-	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least (\d+)$`, s.theArrayAtPathShouldHaveLengthAtLeast)
 
 	ctx.Step(`^the "([^"]*)" field in the response should be saved as "([^"]*)"$`, s.theFieldShouldBeSaved)
 	ctx.Step(`^I wait for the evaluation job status to be "([^"]*)"$`, s.iWaitForEvaluationJobStatus)
@@ -429,13 +422,6 @@ func (s *scenarioState) iSendRequestToWithBody(method, path, body string) error 
 	return s.iSendRequestImpl(method, path, body)
 }
 
-func (s *scenarioState) iSendRequestToWithInlineBody(method, path string, body *godog.DocString) error {
-	if body == nil {
-		return fmt.Errorf("inline body is missing")
-	}
-	return s.iSendRequestImpl(method, path, body.Content)
-}
-
 func (s *scenarioState) iSendRequestImpl(method, path, body string) error {
 	endpoint, err := s.getEndpoint(path)
 	if err != nil {
@@ -491,53 +477,6 @@ func (s *scenarioState) theResponseCodeShouldBe(code int) error {
 	return nil
 }
 
-func (s *scenarioState) theResponseCodeShouldBeOr(code1, code2 int) error {
-	if s.response.StatusCode != code1 && s.response.StatusCode != code2 {
-		return fmt.Errorf("expected status %d or %d, got %d: %s", code1, code2, s.response.StatusCode, string(s.body))
-	}
-	return nil
-}
-
-func (s *scenarioState) theResponseShouldBeJSON() error {
-	var data interface{}
-	if err := json.Unmarshal(s.body, &data); err != nil {
-		return fmt.Errorf("response is not valid JSON: %w", err)
-	}
-	return nil
-}
-
-func (s *scenarioState) theResponseShouldContainWithValue(key, expected string) error {
-	var data map[string]interface{}
-	if err := json.Unmarshal(s.body, &data); err != nil {
-		return err
-	}
-	if expanded, err := s.substituteValues(expected); err == nil {
-		expected = expanded
-	}
-	actual, ok := data[key]
-	if !ok {
-		return fmt.Errorf("response does not contain key %q", key)
-	}
-	if fmt.Sprintf("%v", actual) != expected {
-		return fmt.Errorf("expected %s=%q, got %q", key, expected, actual)
-	}
-	return nil
-}
-
-func (s *scenarioState) theResponseShouldContain(key string) error {
-	var data map[string]interface{}
-	if err := json.Unmarshal(s.body, &data); err != nil {
-		return err
-	}
-	if expanded, err := s.substituteValues(key); err == nil {
-		key = expanded
-	}
-	if _, ok := data[key]; !ok {
-		return fmt.Errorf("response does not contain key %q in %s", key, strings.TrimSpace(string(s.body)))
-	}
-	return nil
-}
-
 // ---------------------------------------------------------------------------
 // JSONPath assertions
 // ---------------------------------------------------------------------------
@@ -586,46 +525,6 @@ func (s *scenarioState) theResponseShouldContainAtJSONPath(expectedValue, jsonPa
 		}
 	}
 	return fmt.Errorf("expected %q to contain %q at path %s", foundValue, expectedValue, jsonPath)
-}
-
-func (s *scenarioState) theResponseShouldContainAtJSONPathAtLeast(expectedValue, jsonPath string) error {
-	expanded, err := s.substituteValues(expectedValue)
-	if err != nil {
-		return err
-	}
-
-	foundValue, err := s.getJsonPath(jsonPath)
-	if err != nil {
-		return err
-	}
-
-	expectedFloat, err := strconv.ParseFloat(expanded, 64)
-	if err != nil {
-		return fmt.Errorf("expected value %q is not a number: %w", expanded, err)
-	}
-	foundFloat, err := strconv.ParseFloat(foundValue, 64)
-	if err != nil {
-		return fmt.Errorf("found value %q is not a number: %w", foundValue, err)
-	}
-	if foundFloat < expectedFloat {
-		return fmt.Errorf("expected value at %s >= %v, got %v", jsonPath, expectedFloat, foundFloat)
-	}
-	return nil
-}
-
-func (s *scenarioState) theArrayAtPathShouldHaveLengthAtLeast(jsonPath string, minLength int) error {
-	raw, err := s.getJsonPathValue(jsonPath)
-	if err != nil {
-		return err
-	}
-	arr, ok := raw.([]interface{})
-	if !ok {
-		return fmt.Errorf("value at path %s is not an array, got %T", jsonPath, raw)
-	}
-	if len(arr) < minLength {
-		return fmt.Errorf("expected array at %s to have length >= %d, got %d", jsonPath, minLength, len(arr))
-	}
-	return nil
 }
 
 // ---------------------------------------------------------------------------
@@ -908,11 +807,6 @@ func (s *scenarioState) iLoadUpgradeState(path string) error {
 		return fmt.Errorf("parse upgrade state: %w", err)
 	}
 	s.loadedState = &state
-	for i, job := range state.Jobs {
-		s.values[fmt.Sprintf("job_id_%d", i)] = job.ID
-		s.values[fmt.Sprintf("job_name_%d", i)] = job.Name
-		s.values[fmt.Sprintf("job_state_%d", i)] = job.State
-	}
 	if len(state.Jobs) > 0 {
 		s.values["job_id"] = state.Jobs[0].ID
 		s.lastId = state.Jobs[0].ID
