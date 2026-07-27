@@ -1,6 +1,9 @@
 type: object
 title: HardwareProfileRef
-description: Reference to an OpenDataHub HardwareProfile custom resource.
+description: >
+  Reference to an OpenDataHub HardwareProfile custom resource in the platform
+  namespace (`EVALHUB_HARDWARE_PROFILES_NAMESPACE`, typically `opendatahub` or
+  `redhat-ods-applications`).
 required:
   - name
 properties:
@@ -14,12 +17,3 @@ properties:
     examples:
       - default-profile
       - gpu-profile-v1
-  namespace:
-    type: string
-    pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
-    description: >
-      Namespace of the `HardwareProfile` custom resource. When omitted, the
-      server defaults to the evaluation job tenant namespace (from the
-      `X-Tenant` request header in cluster mode).
-    examples:
-      - my-tenant-namespace

@@ -16,7 +16,10 @@ properties:
   queue:
     $ref: ./QueueConfig.yaml
     description: >
-      Optional scheduling queue for Kubernetes-backed evaluation jobs (e.g. Kueue).
+      Deprecated on create. Requests that include `queue` are rejected with
+      `evaluation_job_queue_not_supported`. Use a queue-backed HardwareProfile
+      and `hardware_config.hardware_profile_ref` instead. May still appear on
+      GET responses for legacy jobs.
   custom:
     type: object
     additionalProperties: true

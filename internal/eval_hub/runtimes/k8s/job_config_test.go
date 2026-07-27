@@ -647,7 +647,7 @@ func TestBuildJobConfigEmptyTenantFallsBack(t *testing.T) {
 	}
 }
 
-func TestBuildJobConfigKueueQueueNameWhenSpecified(t *testing.T) {
+func TestBuildJobConfigKueueQueueNameFromHardwareProfile(t *testing.T) {
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{ID: "job-kueue"},
@@ -660,9 +660,48 @@ func TestBuildJobConfigKueueQueueNameWhenSpecified(t *testing.T) {
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{Ref: api.Ref{ID: "bench-1"}},
 			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
+			},
+		},
+	}
+	profile := &hardwareProfileResources{
+		schedulingType: hardwareProfileSchedulingQueue,
+		queueName:      "my-queue",
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, profile)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.queueKind != "kueue" || cfg.queueName != "my-queue" {
+		t.Fatalf("expected queueKind kueue and queueName my-queue, got kind %q name %q", cfg.queueKind, cfg.queueName)
+	}
+}
+
+func TestBuildJobConfigIgnoresEvaluationQueue(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-legacy-queue"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}},
+			},
 			Queue: &api.QueueConfig{
 				Kind: "kueue",
-				Name: "my-queue",
+				Name: "legacy-queue",
 			},
 		},
 	}
@@ -681,8 +720,8 @@ func TestBuildJobConfigKueueQueueNameWhenSpecified(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
-	if cfg.queueKind != "kueue" || cfg.queueName != "my-queue" {
-		t.Fatalf("expected queueKind kueue and queueName my-queue, got kind %q name %q", cfg.queueKind, cfg.queueName)
+	if cfg.queueKind != "" || cfg.queueName != "" {
+		t.Fatalf("expected evaluation.Queue to be ignored, got kind %q name %q", cfg.queueKind, cfg.queueName)
 	}
 }
 
@@ -718,45 +757,6 @@ func TestBuildJobConfigKueueQueueNameWhenNoQueue(t *testing.T) {
 	}
 	if cfg.queueKind != "" || cfg.queueName != "" {
 		t.Fatalf("expected empty queue kind and name when no queue specified, got kind %q name %q", cfg.queueKind, cfg.queueName)
-	}
-}
-
-func TestBuildJobConfigKueueQueueNameIgnoresNonKueueKind(t *testing.T) {
-	evaluation := &api.EvaluationJobResource{
-		Resource: api.EvaluationResource{
-			Resource: api.Resource{ID: "job-other-kind"},
-		},
-		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
-				URL:  "http://model",
-				Name: "model",
-			},
-			Benchmarks: []api.EvaluationBenchmarkConfig{
-				{Ref: api.Ref{ID: "bench-1"}},
-			},
-			Queue: &api.QueueConfig{
-				Kind: "other",
-				Name: "my-queue",
-			},
-		},
-	}
-	provider := &api.ProviderResource{
-		Resource: api.Resource{ID: "provider-1"},
-		ProviderConfig: api.ProviderConfig{
-			Runtime: &api.Runtime{
-				K8s: &api.K8sRuntime{
-					Image: "adapter:latest",
-				},
-			},
-		},
-	}
-
-	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
-	if err != nil {
-		t.Fatalf("buildJobConfig returned error: %v", err)
-	}
-	if cfg.queueKind != "other" || cfg.queueName != "my-queue" {
-		t.Fatalf("expected queueKind other and queueName my-queue, got kind %q name %q", cfg.queueKind, cfg.queueName)
 	}
 }
 
@@ -980,13 +980,12 @@ func TestResolveGPUConfig(t *testing.T) {
 
 func TestBuildJobConfigGPU(t *testing.T) {
 	benchmark := api.EvaluationBenchmarkConfig{Ref: api.Ref{ID: "bench-1"}}
-	newEvaluation := func(queue *api.QueueConfig) *api.EvaluationJobResource {
+	newEvaluation := func() *api.EvaluationJobResource {
 		return &api.EvaluationJobResource{
 			Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-gpu"}},
 			EvaluationJobConfig: api.EvaluationJobConfig{
 				Model:      api.ModelRef{URL: "http://model", Name: "model"},
 				Benchmarks: []api.EvaluationBenchmarkConfig{benchmark},
-				Queue:      queue,
 			},
 		}
 	}
@@ -1015,7 +1014,7 @@ func TestBuildJobConfigGPU(t *testing.T) {
 	}
 
 	t.Run("gpu config and node_selector propagated when no queue", func(t *testing.T) {
-		cfg, err := buildJobConfig(newEvaluation(nil), gpuProvider, &benchmark, 0, nil, nil)
+		cfg, err := buildJobConfig(newEvaluation(), gpuProvider, &benchmark, 0, nil, nil)
 		if err != nil {
 			t.Fatalf("buildJobConfig: %v", err)
 		}
@@ -1030,9 +1029,12 @@ func TestBuildJobConfigGPU(t *testing.T) {
 		}
 	})
 
-	t.Run("node_selector suppressed when queue is set but GPU resources remain", func(t *testing.T) {
-		q := &api.QueueConfig{Kind: "kueue", Name: "gpu-queue"}
-		cfg, err := buildJobConfig(newEvaluation(q), gpuProvider, &benchmark, 0, nil, nil)
+	t.Run("node_selector suppressed when hardware profile queue is set but GPU resources remain", func(t *testing.T) {
+		profile := &hardwareProfileResources{
+			schedulingType: hardwareProfileSchedulingQueue,
+			queueName:      "gpu-queue",
+		}
+		cfg, err := buildJobConfig(newEvaluation(), gpuProvider, &benchmark, 0, nil, profile)
 		if err != nil {
 			t.Fatalf("buildJobConfig: %v", err)
 		}
@@ -1053,7 +1055,7 @@ func TestBuildJobConfigGPU(t *testing.T) {
 	})
 
 	t.Run("nil gpu config leaves jobConfig without GPU", func(t *testing.T) {
-		cfg, err := buildJobConfig(newEvaluation(nil), cpuProvider, &benchmark, 0, nil, nil)
+		cfg, err := buildJobConfig(newEvaluation(), cpuProvider, &benchmark, 0, nil, nil)
 		if err != nil {
 			t.Fatalf("buildJobConfig: %v", err)
 		}

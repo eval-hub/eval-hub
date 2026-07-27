@@ -652,6 +652,7 @@ func TestCreateBenchmarkResourcesDeletesConfigMapOnJobFailure(t *testing.T) {
 }
 
 func TestCreateBenchmarkResourcesAppliesHardwareProfile(t *testing.T) {
+	t.Setenv(hardwareProfilesNamespaceEnv, "default")
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 	evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
@@ -716,37 +717,8 @@ func TestCreateBenchmarkResourcesAppliesHardwareProfile(t *testing.T) {
 	}
 }
 
-func TestCreateBenchmarkResourcesHardwareProfileUsesExplicitNamespace(t *testing.T) {
-	providerID := "provider-1"
-	evaluation := sampleEvaluation(providerID)
-	evaluation.Resource.Tenant = "tenant-a"
-	evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
-		HardwareProfileRef: api.HardwareProfileRef{
-			Name:      "cpu-profile",
-			Namespace: "custom-ns",
-		},
-	}
-
-	profile := testHardwareProfileUnstructured("custom-ns", "cpu-profile")
-	clientset := fake.NewClientset()
-	runtime := &K8sRuntime{
-		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		helper: &KubernetesHelper{
-			clientset:     clientset,
-			dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme(), profile),
-		},
-		serviceConfig: &config.Config{
-			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
-		},
-	}
-
-	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
-	if err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage); err != nil {
-		t.Fatalf("createBenchmarkResources returned error: %v", err)
-	}
-}
-
 func TestCreateBenchmarkResourcesHardwareProfileNotFound(t *testing.T) {
+	t.Setenv(hardwareProfilesNamespaceEnv, "default")
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 	evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
@@ -776,6 +748,7 @@ func TestCreateBenchmarkResourcesHardwareProfileNotFound(t *testing.T) {
 }
 
 func TestCreateBenchmarkResourcesInvalidHardwareProfileSpec(t *testing.T) {
+	t.Setenv(hardwareProfilesNamespaceEnv, "default")
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 	evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{

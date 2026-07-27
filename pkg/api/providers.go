@@ -69,8 +69,8 @@ type Runtime struct {
 //
 // NodeSelector is an optional map of node label key→value pairs added to the evaluation pod
 // to target a specific GPU model or node pool (e.g. {"nvidia.com/gpu.product": "NVIDIA-H100-SXM5-80GB"}).
-// NodeSelector is ignored when the evaluation job is submitted with a queue — in that case
-// Kueue's ResourceFlavors govern node selection.
+// NodeSelector is ignored when a queue-backed HardwareProfile is applied — in that case
+// Kueue's ResourceFlavors govern node selection. A Node-scheduled HardwareProfile overrides it.
 type GPUConfig struct {
 	Resource     string            `mapstructure:"resource" yaml:"resource" json:"resource,omitempty"`
 	Count        int               `mapstructure:"count" yaml:"count" json:"count"`

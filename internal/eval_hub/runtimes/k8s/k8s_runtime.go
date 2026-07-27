@@ -183,7 +183,20 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		ref := benchmark.HardwareConfig.HardwareProfileRef
 		profileName := strings.TrimSpace(ref.Name)
 		if profileName != "" {
-			profileNamespace := resolveHardwareProfileNamespace(ref.Namespace, string(evaluation.Resource.Tenant))
+			// Create already validated existence/disabled via ValidateHardwareProfiles.
+			// Re-fetch here only to apply resources and scheduling to the Job.
+			profileNamespace, err := hardwareProfilesNamespace()
+			if err != nil {
+				logger.Error(
+					"hardware profiles namespace is not configured",
+					"error", err,
+					"env", hardwareProfilesNamespaceEnv,
+					"job_id", evaluation.Resource.ID,
+					"benchmark_id", benchmarkID,
+					"profile", profileName,
+				)
+				return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
+			}
 			profileCR, err := r.helper.GetHardwareProfile(ctx, profileNamespace, profileName)
 			if err != nil {
 				return fmt.Errorf("job %s benchmark %s: fetch hardware profile %q in namespace %q: %w",
@@ -380,6 +393,60 @@ func buildBenchmarkFailureStatus(benchmark *api.EvaluationBenchmarkConfig, bench
 
 func (r *K8sRuntime) Name() string {
 	return "kubernetes"
+}
+
+// ValidateHardwareProfiles ensures referenced HardwareProfiles exist, are enabled,
+// and can be parsed. Called from the create handler before the job is persisted.
+func (r *K8sRuntime) ValidateHardwareProfiles(benchmarks []api.EvaluationBenchmarkConfig) error {
+	ctx := r.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	logger := r.logger
+	for _, benchmark := range benchmarks {
+		if benchmark.HardwareConfig == nil {
+			continue
+		}
+		ref := benchmark.HardwareConfig.HardwareProfileRef
+		profileName := strings.TrimSpace(ref.Name)
+		if profileName == "" {
+			continue
+		}
+		profileNamespace, err := hardwareProfilesNamespace()
+		if err != nil {
+			if logger != nil {
+				logger.Error(
+					"hardware profiles namespace is not configured",
+					"error", err,
+					"env", hardwareProfilesNamespaceEnv,
+					"profile", profileName,
+				)
+			}
+			return serviceerrors.NewServiceError(messages.HardwareProfileFetchFailed, "Name", profileName, "Error", "hardware profile lookup is not available")
+		}
+		profileCR, err := r.helper.GetHardwareProfile(ctx, profileNamespace, profileName)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return serviceerrors.NewServiceError(messages.HardwareProfileNotFound, "Name", profileName)
+			}
+			if logger != nil {
+				logger.Error(
+					"failed to fetch hardware profile",
+					"error", err,
+					"namespace", profileNamespace,
+					"profile", profileName,
+				)
+			}
+			return serviceerrors.NewServiceError(messages.HardwareProfileFetchFailed, "Name", profileName, "Error", err.Error())
+		}
+		if isHardwareProfileDisabled(profileCR) {
+			return serviceerrors.NewServiceError(messages.HardwareProfileDisabled, "Name", profileName)
+		}
+		if _, err := parseHardwareProfileResources(profileCR); err != nil {
+			return serviceerrors.NewServiceError(messages.HardwareProfileInvalid, "Name", profileName, "Error", err.Error())
+		}
+	}
+	return nil
 }
 
 // rewriteModelURLForSidecar returns a URL with the scheme and host of sidecarBaseURL

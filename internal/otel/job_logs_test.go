@@ -133,3 +133,6 @@ func (r *stubLogsRuntime) GetEvaluationLogs(_ *api.EvaluationJobResource, _ []ap
 	close(r.exported)
 	return r.logs, nil
 }
+func (r *stubLogsRuntime) ValidateHardwareProfiles(_ []api.EvaluationBenchmarkConfig) error {
+	return nil
+}

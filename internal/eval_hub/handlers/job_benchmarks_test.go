@@ -124,8 +124,7 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 			ProviderID: "prov-a",
 			HardwareConfig: &api.BenchmarkHardwareConfig{
 				HardwareProfileRef: api.HardwareProfileRef{
-					Name:      "default-profile",
-					Namespace: "opendatahub",
+					Name: "default-profile",
 				},
 			},
 		}}

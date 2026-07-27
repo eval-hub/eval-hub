@@ -3,6 +3,7 @@ package k8s
 import (
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -57,12 +58,132 @@ func TestParseHardwareProfileResources(t *testing.T) {
 	}
 }
 
-func TestResolveHardwareProfileNamespace(t *testing.T) {
-	if got := resolveHardwareProfileNamespace("custom-ns", "tenant-ns"); got != "custom-ns" {
-		t.Fatalf("namespace = %q, want custom-ns", got)
+func TestParseHardwareProfileNodeScheduling(t *testing.T) {
+	t.Parallel()
+	profile := &unstructured.Unstructured{
+		Object: map[string]any{
+			"spec": map[string]any{
+				"scheduling": map[string]any{
+					"type": "Node",
+					"node": map[string]any{
+						"nodeSelector": map[string]any{
+							"node.kubernetes.io/instance-type": "g6.12xlarge",
+						},
+						"tolerations": []any{
+							map[string]any{
+								"effect":   "NoExecute",
+								"key":      "kubernetes.io/hostname",
+								"operator": "Equal",
+								"value":    "ip-10-0-68-201.ec2.internal",
+							},
+						},
+					},
+				},
+			},
+		},
 	}
-	if got := resolveHardwareProfileNamespace("", "my-tenant"); got != "my-tenant" {
-		t.Fatalf("empty namespace with tenant = %q, want my-tenant", got)
+	got, err := parseHardwareProfileResources(profile)
+	if err != nil {
+		t.Fatalf("parseHardwareProfileResources: %v", err)
+	}
+	if got.schedulingType != hardwareProfileSchedulingNode {
+		t.Fatalf("schedulingType = %q, want Node", got.schedulingType)
+	}
+	if got.nodeSelector["node.kubernetes.io/instance-type"] != "g6.12xlarge" {
+		t.Fatalf("nodeSelector = %v", got.nodeSelector)
+	}
+	if len(got.tolerations) != 1 {
+		t.Fatalf("tolerations len = %d, want 1", len(got.tolerations))
+	}
+	if got.tolerations[0].Key != "kubernetes.io/hostname" || got.tolerations[0].Effect != corev1.TaintEffectNoExecute {
+		t.Fatalf("toleration = %+v", got.tolerations[0])
+	}
+}
+
+func TestParseHardwareProfileQueueScheduling(t *testing.T) {
+	t.Parallel()
+	profile := &unstructured.Unstructured{
+		Object: map[string]any{
+			"spec": map[string]any{
+				"scheduling": map[string]any{
+					"type": "Queue",
+					"kueue": map[string]any{
+						"localQueueName": "default",
+						"priorityClass":  "high-priority",
+					},
+				},
+			},
+		},
+	}
+	got, err := parseHardwareProfileResources(profile)
+	if err != nil {
+		t.Fatalf("parseHardwareProfileResources: %v", err)
+	}
+	if got.schedulingType != hardwareProfileSchedulingQueue {
+		t.Fatalf("schedulingType = %q, want Queue", got.schedulingType)
+	}
+	if got.queueName != "default" {
+		t.Fatalf("queueName = %q, want default", got.queueName)
+	}
+	if got.priorityClassName != "high-priority" {
+		t.Fatalf("priorityClassName = %q, want high-priority", got.priorityClassName)
+	}
+}
+
+func TestParseHardwareProfileQueueSchedulingIgnoresNonePriority(t *testing.T) {
+	t.Parallel()
+	profile := &unstructured.Unstructured{
+		Object: map[string]any{
+			"spec": map[string]any{
+				"scheduling": map[string]any{
+					"type": "Queue",
+					"kueue": map[string]any{
+						"localQueueName": "default",
+						"priorityClass":  "None",
+					},
+				},
+			},
+		},
+	}
+	got, err := parseHardwareProfileResources(profile)
+	if err != nil {
+		t.Fatalf("parseHardwareProfileResources: %v", err)
+	}
+	if got.priorityClassName != "" {
+		t.Fatalf("priorityClassName = %q, want empty for None", got.priorityClassName)
+	}
+}
+
+func TestIsHardwareProfileDisabled(t *testing.T) {
+	t.Parallel()
+	disabled := &unstructured.Unstructured{}
+	disabled.SetAnnotations(map[string]string{hardwareProfileDisabledAnnotation: "true"})
+	if !isHardwareProfileDisabled(disabled) {
+		t.Fatal("expected disabled profile")
+	}
+	enabled := &unstructured.Unstructured{}
+	enabled.SetAnnotations(map[string]string{hardwareProfileDisabledAnnotation: "false"})
+	if isHardwareProfileDisabled(enabled) {
+		t.Fatal("expected enabled profile")
+	}
+	if isHardwareProfileDisabled(&unstructured.Unstructured{}) {
+		t.Fatal("expected enabled when annotation missing")
+	}
+}
+
+func TestHardwareProfilesNamespace(t *testing.T) {
+	t.Setenv(hardwareProfilesNamespaceEnv, "opendatahub")
+	got, err := hardwareProfilesNamespace()
+	if err != nil || got != "opendatahub" {
+		t.Fatalf("namespace = %q err=%v, want opendatahub", got, err)
+	}
+}
+
+func TestHardwareProfilesNamespaceRequiresEnv(t *testing.T) {
+	t.Setenv(hardwareProfilesNamespaceEnv, "")
+	_, err := hardwareProfilesNamespace()
+	if err == nil {
+		t.Fatal("expected error when env unset")
 	}
 }
 
@@ -96,6 +217,52 @@ func TestApplyHardwareProfileResourcesPartialFallback(t *testing.T) {
 	}
 	if cfg.gpuResource != "nvidia.com/gpu" || cfg.gpuCount != 2 {
 		t.Fatalf("expected provider GPU fallback, got resource=%q count=%d", cfg.gpuResource, cfg.gpuCount)
+	}
+}
+
+func TestApplyHardwareProfileNodeSchedulingOverridesProviderSelector(t *testing.T) {
+	t.Parallel()
+	cfg := &jobConfig{
+		nodeSelector: map[string]string{"nvidia.com/gpu.product": "provider-gpu"},
+	}
+	profile := &hardwareProfileResources{
+		schedulingType: hardwareProfileSchedulingNode,
+		nodeSelector:   map[string]string{"node.kubernetes.io/instance-type": "g6.12xlarge"},
+		tolerations: []corev1.Toleration{{
+			Key:      "kubernetes.io/hostname",
+			Operator: corev1.TolerationOpEqual,
+			Value:    "node-a",
+			Effect:   corev1.TaintEffectNoExecute,
+		}},
+	}
+	applyHardwareProfileResources(cfg, profile)
+	if cfg.nodeSelector["node.kubernetes.io/instance-type"] != "g6.12xlarge" {
+		t.Fatalf("nodeSelector = %v", cfg.nodeSelector)
+	}
+	if len(cfg.tolerations) != 1 || cfg.tolerations[0].Value != "node-a" {
+		t.Fatalf("tolerations = %+v", cfg.tolerations)
+	}
+}
+
+func TestApplyHardwareProfileQueueSchedulingClearsNodeSelector(t *testing.T) {
+	t.Parallel()
+	cfg := &jobConfig{
+		nodeSelector: map[string]string{"nvidia.com/gpu.product": "provider-gpu"},
+	}
+	profile := &hardwareProfileResources{
+		schedulingType:    hardwareProfileSchedulingQueue,
+		queueName:         "gpu-queue",
+		priorityClassName: "high-priority",
+	}
+	applyHardwareProfileResources(cfg, profile)
+	if cfg.queueKind != "kueue" || cfg.queueName != "gpu-queue" {
+		t.Fatalf("queue = %s/%s", cfg.queueKind, cfg.queueName)
+	}
+	if cfg.priorityClassName != "high-priority" {
+		t.Fatalf("priorityClassName = %q", cfg.priorityClassName)
+	}
+	if len(cfg.nodeSelector) != 0 {
+		t.Fatalf("expected nil nodeSelector, got %v", cfg.nodeSelector)
 	}
 }
 
@@ -198,13 +365,6 @@ func TestParseHardwareProfileResourcesErrorsAndEdgeCases(t *testing.T) {
 	})
 }
 
-func TestResolveHardwareProfileNamespaceTrimsWhitespace(t *testing.T) {
-	t.Parallel()
-	if got := resolveHardwareProfileNamespace("  custom-ns  ", "tenant-ns"); got != "custom-ns" {
-		t.Fatalf("namespace = %q, want custom-ns", got)
-	}
-}
-
 func TestApplyHardwareProfileResourcesNilGuards(t *testing.T) {
 	t.Parallel()
 	cfg := &jobConfig{cpuRequest: "100m"}
@@ -278,9 +438,9 @@ func TestQuantityStringFromUnstructured(t *testing.T) {
 func TestStringFromUnstructured(t *testing.T) {
 	t.Parallel()
 	if got := stringFromUnstructured("profile"); got != "profile" {
-		t.Fatalf("string = %q, want profile", got)
+		t.Fatalf("got %q", got)
 	}
-	if got := stringFromUnstructured(42); got != "" {
-		t.Fatalf("non-string = %q, want empty", got)
+	if got := stringFromUnstructured(1); got != "" {
+		t.Fatalf("got %q", got)
 	}
 }

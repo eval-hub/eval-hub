@@ -371,8 +371,7 @@ type TestDataRef struct {
 }
 
 type HardwareProfileRef struct {
-	Name      string `mapstructure:"name" json:"name" validate:"required,rfc1123_dns_label"`
-	Namespace string `mapstructure:"namespace" json:"namespace,omitempty" validate:"omitempty,rfc1123_dns_label"`
+	Name string `mapstructure:"name" json:"name" validate:"required,rfc1123_dns_label"`
 }
 
 type BenchmarkHardwareConfig struct {
@@ -509,11 +508,11 @@ type CollectionRef struct {
 	Benchmarks []EvaluationBenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 }
 
-// QueueConfig represents an optional scheduling queue for evaluation jobs.
-// When Kind is empty, the evaluation job API handler normalizes it to "kueue" before persist/runtime.
+// QueueConfig is retained so GET responses for legacy jobs that stored a queue still deserialize.
+// Creating a new evaluation job with queue is rejected; use a queue-backed HardwareProfile instead.
 type QueueConfig struct {
-	Kind string `json:"kind,omitempty" validate:"omitempty,oneof=kueue"`
-	Name string `json:"name" validate:"required,rfc1123_dns_label"`
+	Kind string `json:"kind,omitempty"`
+	Name string `json:"name,omitempty"`
 }
 
 // EvaluationJobConfig represents evaluation job request schema

@@ -238,6 +238,41 @@ var (
 		"The request is missing a required header {{.Header}}.",
 		"missing_user_header",
 	)
+
+	// EvaluationJobQueueNotSupported The 'queue' field is not supported on create.
+	EvaluationJobQueueNotSupported = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The 'queue' field is not supported; create a queue-backed HardwareProfile and provide hardware_config.hardware_profile_ref instead.",
+		"evaluation_job_queue_not_supported",
+	)
+
+	// HardwareProfileDisabled The hardware profile '{{.Name}}' is disabled.
+	HardwareProfileDisabled = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The hardware profile '{{.Name}}' is disabled.",
+		"hardware_profile_disabled",
+	)
+
+	// HardwareProfileNotFound The hardware profile '{{.Name}}' was not found.
+	HardwareProfileNotFound = createMessage(
+		constants.HTTPCodeNotFound,
+		"The hardware profile '{{.Name}}' was not found.",
+		"hardware_profile_not_found",
+	)
+
+	// HardwareProfileFetchFailed Failed to fetch hardware profile '{{.Name}}': '{{.Error}}'.
+	HardwareProfileFetchFailed = createMessage(
+		constants.HTTPCodeBadRequest,
+		"Failed to fetch hardware profile '{{.Name}}': '{{.Error}}'.",
+		"hardware_profile_fetch_failed",
+	)
+
+	// HardwareProfileInvalid The hardware profile '{{.Name}}' is invalid: '{{.Error}}'.
+	HardwareProfileInvalid = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The hardware profile '{{.Name}}' is invalid: '{{.Error}}'.",
+		"hardware_profile_invalid",
+	)
 )
 
 type MessageCode struct {

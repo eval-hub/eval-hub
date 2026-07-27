@@ -97,6 +97,10 @@ func (r *stubRuntime) GetEvaluationLogs(
 	return "", nil
 }
 
+func (r *stubRuntime) ValidateHardwareProfiles(_ []api.EvaluationBenchmarkConfig) error {
+	return nil
+}
+
 func TestNewServer(t *testing.T) {
 	t.Run("creates server with default port", func(t *testing.T) {
 		_ = os.Unsetenv("PORT")

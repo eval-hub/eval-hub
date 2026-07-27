@@ -98,19 +98,6 @@ func (h *Handlers) getStorage(ctx *executioncontext.ExecutionContext) abstractio
 	return h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 }
 
-// ApplyEvaluationJobQueueDefaults trims queue name/kind and sets kind to "kueue" when empty.
-// Call after validating a decoded EvaluationJobConfig (e.g. before persisting or starting a job).
-func ApplyEvaluationJobQueueDefaults(cfg *api.EvaluationJobConfig) {
-	if cfg == nil || cfg.Queue == nil {
-		return
-	}
-	cfg.Queue.Name = strings.TrimSpace(cfg.Queue.Name)
-	cfg.Queue.Kind = strings.TrimSpace(cfg.Queue.Kind)
-	if cfg.Queue.Kind == "" {
-		cfg.Queue.Kind = "kueue"
-	}
-}
-
 // HandleCreateEvaluation handles POST /api/v1/evaluations/jobs
 func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.getStorage(ctx)
@@ -121,6 +108,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 
 	evaluation := &api.EvaluationJobConfig{}
 	var collection *api.CollectionResource
+	var benchmarks []api.EvaluationBenchmarkConfig
 
 	err := h.withSpan(
 		ctx,
@@ -134,6 +122,9 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 			if err != nil {
 				return err
 			}
+			if evaluation.Queue != nil {
+				return serviceerrors.NewServiceError(messages.EvaluationJobQueueNotSupported)
+			}
 			if evaluation.Collection != nil && evaluation.Collection.ID != "" {
 				collection, err = storage.WithContext(runtimeCtx).GetCollection(evaluation.Collection.ID)
 				if err != nil {
@@ -144,11 +135,17 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				}
 			}
 			jobForResolve := &api.EvaluationJobResource{EvaluationJobConfig: *evaluation}
-			benchmarks, err := GetJobBenchmarks(jobForResolve, collection)
+			benchmarks, err = GetJobBenchmarks(jobForResolve, collection)
 			if err != nil {
 				return err
 			}
-			return h.validateBenchmarkReferences(ctx, benchmarks)
+			if err := h.validateBenchmarkReferences(ctx, benchmarks); err != nil {
+				return err
+			}
+			if h.runtime != nil {
+				return h.runtime.WithLogger(ctx.Logger).WithContext(runtimeCtx).ValidateHardwareProfiles(benchmarks)
+			}
+			return nil
 		},
 		"validation",
 		"validate-evaluation-job",
@@ -159,8 +156,6 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		w.Error(err, ctx.RequestID)
 		return
 	}
-
-	ApplyEvaluationJobQueueDefaults(evaluation)
 
 	mlflowExperimentID := ""
 	mlflowExperimentURL := ""

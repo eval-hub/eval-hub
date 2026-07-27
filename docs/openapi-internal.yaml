@@ -184,7 +184,7 @@ paths:
                   pass_criteria:
                     threshold: 0.5
               CreateEvaluationWithAuthAndQueue:
-                summary: Evaluate an authenticated model with Kueue scheduling
+                summary: Evaluate an authenticated model with HardwareProfile Kueue scheduling
                 value:
                   name: granite-3.1-8b-gpu-eval
                   description: GPU-scheduled evaluation with model authentication
@@ -202,11 +202,11 @@ paths:
                       parameters:
                         num_fewshot: 0
                         limit: 100
+                      hardware_config:
+                        hardware_profile_ref:
+                          name: gpu-queue-profile
                   pass_criteria:
                     threshold: 0.5
-                  queue:
-                    kind: kueue
-                    name: gpu-local-queue
               CreateEvaluationWithExperiment:
                 summary: Evaluate with MLFlow experiment tracking
                 value:
@@ -2322,7 +2322,8 @@ components:
     HardwareProfileRef:
       type: object
       title: HardwareProfileRef
-      description: Reference to an OpenDataHub HardwareProfile custom resource.
+      description: |
+        Reference to an OpenDataHub HardwareProfile custom resource in the platform namespace (`EVALHUB_HARDWARE_PROFILES_NAMESPACE`, typically `opendatahub` or `redhat-ods-applications`).
       required:
         - name
       properties:
@@ -2334,18 +2335,11 @@ components:
           examples:
             - default-profile
             - gpu-profile-v1
-        namespace:
-          type: string
-          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-          description: |
-            Namespace of the `HardwareProfile` custom resource. When omitted, the server defaults to the evaluation job tenant namespace (from the `X-Tenant` request header in cluster mode).
-          examples:
-            - my-tenant-namespace
     BenchmarkHardwareConfig:
       type: object
       title: BenchmarkHardwareConfig
       description: |
-        Optional per-benchmark hardware override for Kubernetes runtimes. When `hardware_profile_ref` is set, the server fetches the named OpenDataHub `HardwareProfile` custom resource and applies its CPU, memory, and GPU resource values to the evaluation Job adapter container. Values missing from the profile fall back to the provider `runtime.k8s` configuration (and built-in defaults when those are unset).
+        Optional per-benchmark hardware override for Kubernetes runtimes. When `hardware_profile_ref` is set, the server fetches the named OpenDataHub `HardwareProfile` custom resource and applies its CPU, memory, and GPU resource values plus optional scheduling (`spec.scheduling`) to the evaluation Job. Node scheduling applies `nodeSelector` and `tolerations`; Queue scheduling applies the Kueue LocalQueue name and optional priority class. Values missing from the profile fall back to the provider `runtime.k8s` configuration (and built-in defaults when those are unset). Disabled profiles (`opendatahub.io/disabled: "true"`) are rejected on create.
       properties:
         hardware_profile_ref:
           $ref: '#/components/schemas/HardwareProfileRef'
@@ -2608,7 +2602,7 @@ components:
       type: object
       title: QueueConfig
       description: |
-        Optional workload scheduling queue for Kubernetes runtimes (e.g. Kueue LocalQueue).
+        Deprecated on create. Legacy evaluation jobs may still return this field on GET. To schedule with Kueue, create a queue-backed HardwareProfile (`spec.scheduling.type: Queue`) and set `hardware_config.hardware_profile_ref` on the benchmark.
       required:
         - name
       properties:
@@ -2618,12 +2612,12 @@ components:
             - kueue
           default: kueue
           description: |
-            Queue integration to use. When omitted, the server behaves as if `kueue` was set. Only `kueue` is supported today.
+            Queue integration previously used on create. Only `kueue` was supported. Create requests that include `queue` are rejected.
         name:
           type: string
           pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
           description: |
-            Queue resource name (for Kueue, the LocalQueue name). Must conform to RFC 1123 DNS label naming (lowercase letters, digits, and internal hyphens). Set on the Job as label `kueue.x-k8s.io/queue-name`.
+            Legacy LocalQueue name persisted on older jobs. Must conform to RFC 1123 DNS label naming. New jobs should obtain the queue name from a HardwareProfile instead.
     EvaluationJobConfigCommon2:
       type: object
       title: EvaluationJobConfigCommon2
@@ -2641,7 +2635,7 @@ components:
         queue:
           $ref: '#/components/schemas/QueueConfig'
           description: |
-            Optional scheduling queue for Kubernetes-backed evaluation jobs (e.g. Kueue).
+            Deprecated on create. Requests that include `queue` are rejected with `evaluation_job_queue_not_supported`. Use a queue-backed HardwareProfile and `hardware_config.hardware_profile_ref` instead. May still appear on GET responses for legacy jobs.
         custom:
           type: object
           additionalProperties: true
@@ -2859,7 +2853,7 @@ components:
           additionalProperties:
             type: string
           description: |
-            Optional node label key/value pairs added to the evaluation pod to target a GPU model or node pool (for example `nvidia.com/gpu.product: NVIDIA-H100-SXM5-80GB`). Ignored when the evaluation job is submitted with a queue; in that case Kueue ResourceFlavors govern node selection.
+            Optional node label key/value pairs added to the evaluation pod to target a GPU model or node pool (for example `nvidia.com/gpu.product: NVIDIA-H100-SXM5-80GB`). Ignored when a HardwareProfile with Queue scheduling is applied; in that case Kueue ResourceFlavors govern node selection. Overridden when a HardwareProfile with Node scheduling provides its own nodeSelector.
           examples:
             - nvidia.com/gpu.product: NVIDIA-H100-SXM5-80GB
     EnvVar:

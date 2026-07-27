@@ -150,6 +150,9 @@ func (r *fakeRuntime) GetEvaluationLogs(
 	}
 	return "", nil
 }
+func (r *fakeRuntime) ValidateHardwareProfiles(_ []api.EvaluationBenchmarkConfig) error {
+	return nil
+}
 
 type listEvaluationsRequest struct {
 	*MockRequest
@@ -235,42 +238,6 @@ func TestResolveProvider_NotFound(t *testing.T) {
 	if !strings.Contains(err.Error(), "provider resource 'missing' was not found") {
 		t.Fatalf("expected: provider resource 'missing' was not found, got %q", err.Error())
 	}
-}
-
-func TestApplyEvaluationJobQueueDefaults(t *testing.T) {
-	t.Parallel()
-	t.Run("nil config", func(t *testing.T) {
-		t.Parallel()
-		handlers.ApplyEvaluationJobQueueDefaults(nil)
-	})
-	t.Run("nil queue", func(t *testing.T) {
-		t.Parallel()
-		cfg := &api.EvaluationJobConfig{}
-		handlers.ApplyEvaluationJobQueueDefaults(cfg)
-		if cfg.Queue != nil {
-			t.Fatal("expected Queue to stay nil")
-		}
-	})
-	t.Run("empty kind defaults to kueue", func(t *testing.T) {
-		t.Parallel()
-		cfg := &api.EvaluationJobConfig{
-			Queue: &api.QueueConfig{Name: "  q1  ", Kind: "  "},
-		}
-		handlers.ApplyEvaluationJobQueueDefaults(cfg)
-		if cfg.Queue.Kind != "kueue" || cfg.Queue.Name != "q1" {
-			t.Fatalf("got kind %q name %q", cfg.Queue.Kind, cfg.Queue.Name)
-		}
-	})
-	t.Run("preserves explicit kind", func(t *testing.T) {
-		t.Parallel()
-		cfg := &api.EvaluationJobConfig{
-			Queue: &api.QueueConfig{Name: "q", Kind: "other"},
-		}
-		handlers.ApplyEvaluationJobQueueDefaults(cfg)
-		if cfg.Queue.Kind != "other" {
-			t.Fatalf("got kind %q", cfg.Queue.Kind)
-		}
-	})
 }
 
 /* TODO: Fix this test
@@ -1093,7 +1060,7 @@ func TestHandleListEvaluations_WriteJSON_logsExtraArgs(t *testing.T) {
 	}
 }
 
-func TestHandleCreateEvaluationRejectsInvalidQueueName(t *testing.T) {
+func TestHandleCreateEvaluationRejectsQueue(t *testing.T) {
 	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	storage := &fakeStorage{}
@@ -1101,32 +1068,32 @@ func TestHandleCreateEvaluationRejectsInvalidQueueName(t *testing.T) {
 	validate := testhelpers.NewValidator(t)
 	h := handlers.New(storage, validate, runtime, nil, nil, nil)
 
-	invalidNames := []string{
-		"user-queue!@#$%",
-		"-starts-with-dash",
-		"ends-with-dash-",
-		"has spaces",
-		".starts-with-dot",
+	bodies := []string{
+		`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"b","provider_id":"p"}],"queue":{"name":"my-queue"}}`,
+		`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"b","provider_id":"p"}],"queue":{"kind":"invalid-kind","name":"my-queue"}}`,
+		`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"b","provider_id":"p"}],"queue":{}}`,
 	}
-	for _, name := range invalidNames {
-		t.Run(name, func(t *testing.T) {
+	for i, body := range bodies {
+		t.Run(fmt.Sprintf("case_%d", i), func(t *testing.T) {
 			t.Parallel()
-			body := fmt.Sprintf(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"b","provider_id":"p"}],"queue":{"name":%q}}`, name)
 			req := &bodyRequest{
 				MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
 				body:        []byte(body),
 			}
-			ctx := executioncontext.NewExecutionContext(context.Background(), "req-invalid-queue", logger, "test-user", "test-tenant")
+			ctx := executioncontext.NewExecutionContext(context.Background(), "req-queue-rejected", logger, "test-user", "test-tenant")
 			recorder := httptest.NewRecorder()
 			resp := MockResponseWrapper{recorder: recorder}
 
 			h.HandleCreateEvaluation(ctx, req, resp)
 
 			if runtime.called {
-				t.Fatalf("did not expect runtime to be invoked for queue name %q", name)
+				t.Fatal("did not expect runtime to be invoked when queue is set")
 			}
 			if recorder.Code != 400 {
-				t.Fatalf("expected status 400 for queue name %q, got %d", name, recorder.Code)
+				t.Fatalf("expected status 400, got %d body=%s", recorder.Code, recorder.Body.String())
+			}
+			if !strings.Contains(recorder.Body.String(), "evaluation_job_queue_not_supported") {
+				t.Fatalf("expected evaluation_job_queue_not_supported, got %s", recorder.Body.String())
 			}
 		})
 	}
