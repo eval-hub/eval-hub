@@ -769,25 +769,25 @@ run-pre-upgrade:
 	@echo "Running pre-upgrade tests for ${SOURCE_RELEASE} ..."
 	@test -n "$(JUNIT_XML)" || { echo "ERROR: JUNIT_XML is not set or is empty."; exit 1; }
 	@mkdir -p $(dir $(JUNIT_XML))
-	UPGRADE_STATE_JSON=$(UPGRADE_STATE_JSON) go test -timeout=$(UPGRADE_TEST_TIMEOUT) -count=1 ./tests/upgrade/... --godog.tags=@pre-upgrade --godog.format=junit:${PWD}/$(JUNIT_XML),pretty -v
+	UPGRADE_STATE_JSON=$(abspath $(UPGRADE_STATE_JSON)) go test -timeout=$(UPGRADE_TEST_TIMEOUT) -count=1 ./tests/upgrade/... --godog.tags=@pre-upgrade --godog.format=junit:$(abspath $(JUNIT_XML)),pretty -v
 
 run-post-upgrade-verify:
 	@echo "Running post-upgrade verification tests for ${SOURCE_RELEASE} to ${TARGET_RELEASE} ..."
 	@test -n "$(JUNIT_XML)" || { echo "ERROR: JUNIT_XML is not set or is empty."; exit 1; }
 	@mkdir -p $(dir $(JUNIT_XML))
-	UPGRADE_STATE_JSON=$(UPGRADE_STATE_JSON) go test -timeout=$(UPGRADE_TEST_TIMEOUT) -count=1 ./tests/upgrade/... --godog.tags=@post-upgrade-verify --godog.format=junit:${PWD}/$(JUNIT_XML),pretty -v
+	UPGRADE_STATE_JSON=$(abspath $(UPGRADE_STATE_JSON)) go test -timeout=$(UPGRADE_TEST_TIMEOUT) -count=1 ./tests/upgrade/... --godog.tags=@post-upgrade-verify --godog.format=junit:$(abspath $(JUNIT_XML)),pretty -v
 
 run-post-upgrade:
 	@echo "Running post-upgrade tests for ${TARGET_RELEASE} ..."
 	@test -n "$(JUNIT_XML)" || { echo "ERROR: JUNIT_XML is not set or is empty."; exit 1; }
 	@mkdir -p $(dir $(JUNIT_XML))
-	go test -timeout=$(UPGRADE_TEST_TIMEOUT) -count=1 ./tests/upgrade/... --godog.tags=@post-upgrade --godog.format=junit:${PWD}/$(JUNIT_XML),pretty -v
+	go test -timeout=$(UPGRADE_TEST_TIMEOUT) -count=1 ./tests/upgrade/... --godog.tags=@post-upgrade --godog.format=junit:$(abspath $(JUNIT_XML)),pretty -v
 
 run-post-upgrade-cleanup:
 	@echo "Running post-upgrade cleanup for ${TARGET_RELEASE} ..."
 	@test -n "$(JUNIT_XML)" || { echo "ERROR: JUNIT_XML is not set or is empty."; exit 1; }
 	@mkdir -p $(dir $(JUNIT_XML))
-	go test -timeout=$(UPGRADE_TEST_TIMEOUT) -count=1 ./tests/upgrade/... --godog.tags=@post-upgrade-cleanup --godog.format=junit:${PWD}/$(JUNIT_XML),pretty -v || true
+	go test -timeout=$(UPGRADE_TEST_TIMEOUT) -count=1 ./tests/upgrade/... --godog.tags=@post-upgrade-cleanup --godog.format=junit:$(abspath $(JUNIT_XML)),pretty -v || true
 	@echo "Post-upgrade cleanup complete"
 
 run-atris-upgrade: run-pre-upgrade run-post-upgrade-verify run-post-upgrade run-post-upgrade-cleanup
