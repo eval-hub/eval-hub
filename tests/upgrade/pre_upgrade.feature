@@ -22,4 +22,4 @@ Feature: Pre-Upgrade — Create Test Fixtures
     And the response should contain the value "arc_easy" at path "$.results.benchmarks[0].id"
     And the response should contain the value "{{value:job_id}}" at path "$.resource.id"
     And the response should contain the value "pre-upgrade-job1" at path "$.name"
-    And I collect all jobs and save upgrade state to "test-reports/upgrade-state.json" expecting current job "pre-upgrade-job1" in "completed" state
+    And I collect all jobs and save upgrade state to "{{env:UPGRADE_STATE_JSON}}" expecting current job "pre-upgrade-job1" in "completed" state
