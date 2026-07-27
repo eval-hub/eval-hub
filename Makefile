@@ -760,59 +760,33 @@ test-mcp-vscode: start-service build-mcp ## Run VS Code/Cursor MCP test scripts 
 ## Atris Upgrade Tests
 ## ------------------------------------------------------------------------------------------------
 
+UPGRADE_STATE_JSON ?= test-reports/upgrade-state.json
+
 .PHONY: run-pre-upgrade run-post-upgrade-verify run-post-upgrade run-post-upgrade-cleanup run-atris-upgrade
 
 run-pre-upgrade:
 	@echo "Running pre-upgrade tests for ${SOURCE_RELEASE} ..."
-	@test -n "$(JUNIT_XML)" || { \
-		echo "ERROR: JUNIT_XML is not set or is empty."; \
-		exit 1; \
-	}
+	@test -n "$(JUNIT_XML)" || { echo "ERROR: JUNIT_XML is not set or is empty."; exit 1; }
 	@mkdir -p $(dir $(JUNIT_XML))
-	@echo "TODO"
-	@printf '%s\n' \
-		'<?xml version="1.0" encoding="UTF-8"?>' \
-		'<testsuites name="EvalHub Upgrade Tests" tests="0" skipped="0" failures="0" errors="0" time="0.0">' \
-		'</testsuites>' \
-		> "$(JUNIT_XML)"
-	@echo "Results saved to ${JUNIT_XML}"
-	@echo "Pre-upgrade tests complete"
+	UPGRADE_STATE_JSON=$(UPGRADE_STATE_JSON) go test ./tests/upgrade/... --godog.tags=@pre-upgrade --godog.format=junit:${PWD}/$(JUNIT_XML),pretty -v
 
 run-post-upgrade-verify:
 	@echo "Running post-upgrade verification tests for ${SOURCE_RELEASE} to ${TARGET_RELEASE} ..."
-	@test -n "$(JUNIT_XML)" || { \
-		echo "ERROR: JUNIT_XML is not set or is empty."; \
-		exit 1; \
-	}
+	@test -n "$(JUNIT_XML)" || { echo "ERROR: JUNIT_XML is not set or is empty."; exit 1; }
 	@mkdir -p $(dir $(JUNIT_XML))
-	@echo "TODO"
-	@printf '%s\n' \
-		'<?xml version="1.0" encoding="UTF-8"?>' \
-		'<testsuites name="EvalHub Upgrade Tests" tests="0" skipped="0" failures="0" errors="0" time="0.0">' \
-		'</testsuites>' \
-		> "$(JUNIT_XML)"
-	@echo "Results saved to ${JUNIT_XML}"
-	@echo "Post-upgrade verification tests complete"
+	UPGRADE_STATE_JSON=$(UPGRADE_STATE_JSON) go test ./tests/upgrade/... --godog.tags=@post-upgrade-verify --godog.format=junit:${PWD}/$(JUNIT_XML),pretty -v
 
 run-post-upgrade:
 	@echo "Running post-upgrade tests for ${TARGET_RELEASE} ..."
-	@test -n "$(JUNIT_XML)" || { \
-		echo "ERROR: JUNIT_XML is not set or is empty."; \
-		exit 1; \
-	}
+	@test -n "$(JUNIT_XML)" || { echo "ERROR: JUNIT_XML is not set or is empty."; exit 1; }
 	@mkdir -p $(dir $(JUNIT_XML))
-	@echo "TODO"
-	@printf '%s\n' \
-		'<?xml version="1.0" encoding="UTF-8"?>' \
-		'<testsuites name="EvalHub Upgrade Tests" tests="0" skipped="0" failures="0" errors="0" time="0.0">' \
-		'</testsuites>' \
-		> "$(JUNIT_XML)"
-	@echo "Results saved to ${JUNIT_XML}"
-	@echo "Post-upgrade tests complete"
+	go test ./tests/upgrade/... --godog.tags=@post-upgrade --godog.format=junit:${PWD}/$(JUNIT_XML),pretty -v
 
 run-post-upgrade-cleanup:
 	@echo "Running post-upgrade cleanup for ${TARGET_RELEASE} ..."
-	@echo "TODO"
+	@test -n "$(JUNIT_XML)" || { echo "ERROR: JUNIT_XML is not set or is empty."; exit 1; }
+	@mkdir -p $(dir $(JUNIT_XML))
+	go test ./tests/upgrade/... --godog.tags=@post-upgrade-cleanup --godog.format=junit:${PWD}/$(JUNIT_XML),pretty -v || true
 	@echo "Post-upgrade cleanup complete"
 
 run-atris-upgrade: run-pre-upgrade run-post-upgrade-verify run-post-upgrade run-post-upgrade-cleanup
