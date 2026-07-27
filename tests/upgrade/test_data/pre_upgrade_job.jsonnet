@@ -9,7 +9,7 @@ local test = import 'test.libsonnet';
       provider_id: 'lm_evaluation_harness',
       parameters: {
         num_examples: 5,
-        num_fewshot: 0,
+        num_few_shot: 0,
         tokenizer: 'ibm-granite/granite-3.3-2b-instruct',
       },
     },
