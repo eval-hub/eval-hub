@@ -143,7 +143,7 @@ func initializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I wait for the evaluation job status to be "([^"]*)"$`, s.iWaitForEvaluationJobStatus)
 	ctx.Step(`^I collect all jobs and save upgrade state to "([^"]*)" expecting current job "([^"]*)" in "([^"]*)" state$`, s.iCollectAndSaveUpgradeState)
 	ctx.Step(`^I load the upgrade state from "([^"]*)"$`, s.iLoadUpgradeState)
-	ctx.Step(`^I hard-delete all evaluation jobs$`, s.iHardDeleteAllEvaluationJobs)
+	ctx.Step(`^I hard-delete all evaluation jobs containing "([^"]*)" in its job name$`, s.iHardDeleteAllEvaluationJobsContaining)
 	ctx.Step(`^I verify all jobs from upgrade state exist$`, s.iVerifyAllJobsFromUpgradeStateExist)
 }
 
@@ -783,7 +783,11 @@ func resolveRepoPath(path string) string {
 func (s *scenarioState) paginateJobs(visit func(*gabs.Container) error) error {
 	endpoint := "/api/v1/evaluations/jobs"
 	for endpoint != "" {
-		req, err := http.NewRequest(http.MethodGet, s.api.baseURL.JoinPath(endpoint).String(), nil)
+		ref, err := url.Parse(endpoint)
+		if err != nil {
+			return fmt.Errorf("parse endpoint %q: %w", endpoint, err)
+		}
+		req, err := http.NewRequest(http.MethodGet, s.api.baseURL.ResolveReference(ref).String(), nil)
 		if err != nil {
 			return fmt.Errorf("build list request: %w", err)
 		}
@@ -831,10 +835,22 @@ func (s *scenarioState) iCollectAndSaveUpgradeState(path, expectedName, expected
 	var allJobs []upgradeJob
 	var currentJob *upgradeJob
 	if err := s.paginateJobs(func(item *gabs.Container) error {
+		id, ok := item.Path("resource.id").Data().(string)
+		if !ok {
+			return fmt.Errorf("job missing resource.id or not a string")
+		}
+		name, ok := item.Path("name").Data().(string)
+		if !ok {
+			return fmt.Errorf("job missing name or not a string")
+		}
+		state, ok := item.Path("status.state").Data().(string)
+		if !ok {
+			return fmt.Errorf("job missing status.state or not a string")
+		}
 		job := upgradeJob{
-			ID:    item.Path("resource.id").Data().(string),
-			Name:  item.Path("name").Data().(string),
-			State: item.Path("status.state").Data().(string),
+			ID:    id,
+			Name:  name,
+			State: state,
 		}
 		if v := item.Path("resource.created_at").Data(); v != nil {
 			job.CreatedAt, _ = v.(string)
@@ -929,11 +945,11 @@ func (s *scenarioState) iVerifyAllJobsFromUpgradeStateExist() error {
 	return nil
 }
 
-func (s *scenarioState) iHardDeleteAllEvaluationJobs() error {
+func (s *scenarioState) iHardDeleteAllEvaluationJobsContaining(substring string) error {
 	var jobIDs []string
 	if err := s.paginateJobs(func(item *gabs.Container) error {
 		name, _ := item.Path("name").Data().(string)
-		if strings.Contains(name, "-upgrade-") {
+		if strings.Contains(name, substring) {
 			if id, ok := item.Path("resource.id").Data().(string); ok {
 				jobIDs = append(jobIDs, id)
 			}

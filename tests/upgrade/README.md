@@ -32,19 +32,27 @@ Creates an evaluation job, waits for completion, then collects all jobs on the c
 | `MODEL_AUTH_SECRET_REF` | Secret reference for model auth (omits `model.auth` from the job payload if unset) |
 | `X_USER`                | User identity header (default: `upgrade-test-user`) |
 | `UPGRADE_STATE_JSON`    | State file path (default: `test-reports/upgrade-state.json`) |
-| `JUNIT_XML`             | Output path for JUnit XML report     |
+
+## Required Makefile variables
+
+| Variable                | Description                          |
+|-------------------------|--------------------------------------|
+| `JUNIT_XML`             | Output path for JUnit XML report (required by all make targets) |
 
 ### Running
 
 Fill up the env var in .env file under project directory
+
 ```bash
 source .env
 ```
+
 and then execute the follow make target for each step
 
 Or, export the env variables
 
 ### make run-pre-upgrade
+
 ```bash
 SERVER_URL=$SERVER_URL \
 AUTH_TOKEN=$AUTH_TOKEN \
@@ -58,7 +66,9 @@ make run-pre-upgrade
 ```
 
 ### make run-post-upgrade-verify
+
 This step is dependent on UPGRADE_STATE_JSON generated from the prior step of run-pre-upgrade
+
 ```bash
 SERVER_URL=$SERVER_URL \
 AUTH_TOKEN=$AUTH_TOKEN \
@@ -69,7 +79,9 @@ make run-post-upgrade-verify
 ```
 
 ### make run-post-upgrade
+
 This can run independent of other targets.
+
 ```bash
 SERVER_URL=$SERVER_URL \
 AUTH_TOKEN=$AUTH_TOKEN \
@@ -83,7 +95,8 @@ make run-post-upgrade
 
 
 ### make run-post-upgrade-cleanup
-Clean up al evaluation jobs which has "*-upgrade-*" in it's job name. This can run independent of other targets.
+
+Clean up all evaluation jobs which have "*-upgrade-*" in their job name. This can run independent of other targets.
 
 ```bash
 SERVER_URL=$SERVER_URL \
@@ -92,7 +105,6 @@ X_TENANT=$X_TENANT \
 JUNIT_XML=test-reports/post-upgrade-cleanup.xml \
 make run-post-upgrade-cleanup
 ```
-
 
 ### Generated files
 
