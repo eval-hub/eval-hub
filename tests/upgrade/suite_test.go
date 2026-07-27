@@ -206,17 +206,11 @@ func (s *scenarioState) getValue(id string) (string, error) {
 // ---------------------------------------------------------------------------
 
 func (s *scenarioState) getEndpoint(path string) (string, error) {
-	for strings.Contains(path, fmt.Sprintf("{{%s", valuePrefix)) {
-		match := templateTokenRe.FindStringSubmatch(path)
-		if len(match) <= 1 {
-			break
-		}
-		v, err := s.getValue(match[1])
-		if err != nil {
-			return "", err
-		}
-		path = strings.ReplaceAll(path, fmt.Sprintf("{{%s}}", match[1]), v)
+	expanded, err := s.substituteValues(path)
+	if err != nil {
+		return "", err
 	}
+	path = expanded
 
 	if strings.Contains(path, "{id}") {
 		if s.lastId == "" {
@@ -780,9 +774,14 @@ func resolveRepoPath(path string) string {
 	return filepath.Join(repoRoot(), path)
 }
 
+const maxPaginationPages = 200
+
 func (s *scenarioState) paginateJobs(visit func(*gabs.Container) error) error {
 	endpoint := "/api/v1/evaluations/jobs"
-	for endpoint != "" {
+	for page := 0; endpoint != ""; page++ {
+		if page >= maxPaginationPages {
+			return fmt.Errorf("pagination exceeded %d pages", maxPaginationPages)
+		}
 		ref, err := url.Parse(endpoint)
 		if err != nil {
 			return fmt.Errorf("parse endpoint %q: %w", endpoint, err)
@@ -818,7 +817,11 @@ func (s *scenarioState) paginateJobs(visit func(*gabs.Container) error) error {
 		}
 
 		if next := parsed.Path("next.href"); next != nil && next.Data() != nil {
-			endpoint = next.Data().(string)
+			href, ok := next.Data().(string)
+			if !ok {
+				return fmt.Errorf("next.href is not a string: %T", next.Data())
+			}
+			endpoint = href
 		} else {
 			endpoint = ""
 		}

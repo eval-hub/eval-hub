@@ -98,6 +98,36 @@ for phase in "${phases[@]}"; do
         usage >&2
         exit 1
     fi
+done
+
+cleanup_requested=false
+for phase in "${phases[@]}"; do
+    if [[ "$phase" == "post-upgrade-cleanup" ]]; then
+        cleanup_requested=true
+        break
+    fi
+done
+
+cleanup_done=false
+
+run_cleanup_on_exit() {
+    local exit_status=$?
+    if [[ "$cleanup_requested" == true && "$cleanup_done" == false ]]; then
+        cleanup_done=true
+        echo "==> Running post-upgrade-cleanup (exit trap)"
+        run_phase "post-upgrade-cleanup" || true
+    fi
+    exit "$exit_status"
+}
+
+if [[ "$cleanup_requested" == true ]]; then
+    trap run_cleanup_on_exit EXIT
+fi
+
+for phase in "${phases[@]}"; do
+    if [[ "$phase" == "post-upgrade-cleanup" ]]; then
+        cleanup_done=true
+    fi
     run_phase "${phase}"
 done
 
