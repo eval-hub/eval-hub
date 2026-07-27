@@ -106,6 +106,22 @@ JUNIT_XML=test-reports/post-upgrade-cleanup.xml \
 make run-post-upgrade-cleanup
 ```
 
+### make run-atris-upgrade
+
+Quick dev target that chains all four phases in order. Each phase overwrites the same `JUNIT_XML` file, so only the last phase's report is kept. CI pipelines and `scripts/upgrade-test.sh` use per-phase `JUNIT_XML` paths instead.
+
+```bash
+SERVER_URL=$SERVER_URL \
+AUTH_TOKEN=$AUTH_TOKEN \
+X_TENANT=$X_TENANT \
+MODEL_URL=$MODEL_URL \
+MODEL_NAME=$MODEL_NAME \
+MODEL_AUTH_SECRET_REF=$MODEL_AUTH_SECRET_REF \
+UPGRADE_STATE_JSON=test-reports/upgrade-state.json \
+JUNIT_XML=test-reports/upgrade.xml \
+make run-atris-upgrade
+```
+
 ### Generated files
 
 - `test-reports/upgrade-state.json` from `UPGRADE_STATE_JSON` -- all evaluation jobs on the cluster (id, name, state), used by post-upgrade phases
