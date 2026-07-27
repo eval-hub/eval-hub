@@ -41,15 +41,16 @@ Creates an evaluation job, waits for completion, then collects all jobs on the c
 
 ### Running
 
-Fill up the env var in .env file under project directory
+Export the required environment variables, then execute the make target for each step.
 
 ```bash
-source .env
+export SERVER_URL=https://....openshiftapps.com
+export X_TENANT=dataplane
+export MODEL_URL=https://vllm-sim2-evalhub-test.....openshiftapps.com/v1
+export MODEL_NAME=ibm-granite/granite-3.3-2b-instruct
+export MODEL_AUTH_SECRET_REF=vllm-sim2-secret
+export AUTH_TOKEN="..."
 ```
-
-and then execute the follow make target for each step
-
-Or, export the env variables
 
 ### make run-pre-upgrade
 
