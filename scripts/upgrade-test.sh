@@ -124,10 +124,15 @@ fi
 
 for phase in "${phases[@]}"; do
     if [[ "$phase" == "post-upgrade-cleanup" ]]; then
-        cleanup_pending=false
+        continue
     fi
     run_phase "${phase}"
 done
+
+if [[ "$cleanup_pending" == true ]]; then
+    cleanup_pending=false
+    run_phase "post-upgrade-cleanup"
+fi
 
 echo "==> All requested phases complete"
 echo "    Reports: ${REPORT_DIR}/"
