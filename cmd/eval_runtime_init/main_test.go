@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -111,16 +112,40 @@ func TestLoadAWSConfig(t *testing.T) {
 	}
 }
 
+// TestDownloadObjectFlatFile exercises the parallel multipart path of the Transfer Manager
+// by setting a small PartSizeBytes so the mock body (20 bytes) is split across multiple
+// Range requests. The mock server honours Range headers and returns Content-Range responses,
+// driving the TM fan-out. Destination assertions remain: flat file, correct contents.
 func TestDownloadObjectFlatFile(t *testing.T) {
 	t.Parallel()
 
 	const objectKey = "data/file.txt"
+	const body = "ABCDEFGHIJKLMNOPQRST" // 20 bytes, split into 4 parts of 5 bytes each
+	const partSize = 5
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/bucket/"+objectKey {
-			_, _ = io.Copy(w, strings.NewReader("flat"))
+		if r.Method != http.MethodGet || r.URL.Path != "/bucket/"+objectKey {
+			http.NotFound(w, r)
 			return
 		}
-		http.NotFound(w, r)
+		rng := r.Header.Get("Range")
+		if rng == "" {
+			// Non-range request: return full body
+			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(body)))
+			_, _ = io.WriteString(w, body)
+			return
+		}
+		// Parse "bytes=start-end"
+		var start, end int
+		fmt.Sscanf(rng, "bytes=%d-%d", &start, &end)
+		if end >= len(body) {
+			end = len(body) - 1
+		}
+		chunk := body[start : end+1]
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(body)))
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(chunk)))
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = io.WriteString(w, chunk)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -136,7 +161,10 @@ func TestDownloadObjectFlatFile(t *testing.T) {
 		o.BaseEndpoint = aws.String(srv.URL)
 		o.UsePathStyle = true
 	})
-	tm := transfermanager.New(client)
+	// Small PartSizeBytes forces the TM to split 20-byte body into multiple parallel Range requests
+	tm := transfermanager.New(client, func(o *transfermanager.Options) {
+		o.PartSizeBytes = partSize
+	})
 
 	dir := t.TempDir()
 	destRoot, err := os.OpenRoot(dir)
@@ -150,16 +178,16 @@ func TestDownloadObjectFlatFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("downloadObject() = %v, want nil error", err)
 	}
-	if written != int64(len("flat")) {
-		t.Fatalf("downloadObject() wrote %d bytes, want %d", written, len("flat"))
+	if written != int64(len(body)) {
+		t.Fatalf("downloadObject() wrote %d bytes, want %d", written, len(body))
 	}
 
 	got, err := os.ReadFile(filepath.Join(dir, "file.txt"))
 	if err != nil {
 		t.Fatalf("ReadFile() = %v", err)
 	}
-	if string(got) != "flat" {
-		t.Fatalf("file contents = %q, want %q", got, "flat")
+	if string(got) != body {
+		t.Fatalf("file contents = %q, want %q", got, body)
 	}
 }
 
