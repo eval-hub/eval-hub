@@ -3425,6 +3425,7 @@
                 "$ref": "#/components/schemas/TestDataRefS3"
               }
             },
+            "additionalProperties": false,
             "required": [
               "s3"
             ],
@@ -3437,6 +3438,7 @@
                 "$ref": "#/components/schemas/TestDataRefPVC"
               }
             },
+            "additionalProperties": false,
             "required": [
               "pvc"
             ],

@@ -2320,6 +2320,7 @@ components:
           properties:
             s3:
               $ref: '#/components/schemas/TestDataRefS3'
+          additionalProperties: false
           required:
             - s3
           title: S3
@@ -2327,6 +2328,7 @@ components:
           properties:
             pvc:
               $ref: '#/components/schemas/TestDataRefPVC'
+          additionalProperties: false
           required:
             - pvc
           title: PVC
