@@ -466,6 +466,11 @@ check-unused-components:
 
 documentation: check-unused-components generate-public-docs verify-api-docs
 
+show-local-api-docs:
+	open docs/index.html
+
+doc-build: documentation show-local-api-docs
+
 update-redocly-cli:
 	rm -f package-lock.json
 	npm install --save-exact @redocly/cli@latest
