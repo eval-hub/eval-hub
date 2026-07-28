@@ -1,6 +1,6 @@
 {
   "devDependencies": {
-    "@redocly/cli": "2.40.0"
+    "@redocly/cli": "2.41.0"
   },
   "scripts": {
     "lint-openapi": "redocly lint docs/src/openapi.yaml",
