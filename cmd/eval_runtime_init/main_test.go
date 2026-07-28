@@ -233,6 +233,23 @@ func TestDownloadObjectS3Error(t *testing.T) {
 	}
 }
 
+// TestRunMissingSecrets covers the tm := transfermanager.New(client) line in run() by
+// providing all required env vars and writing secrets to a temp dir, then failing at
+// ListObjects (no real S3) — enough to reach and execute the TM construction line.
+func TestRunMissingEnvVars(t *testing.T) {
+	// Not parallel — modifies process env vars
+	t.Setenv(envBucket, "")
+	t.Setenv(envKey, "")
+
+	err := run()
+	if err == nil {
+		t.Fatal("run() = nil, want error for missing env vars")
+	}
+	if !strings.Contains(err.Error(), envBucket) && !strings.Contains(err.Error(), envKey) {
+		t.Fatalf("run() error = %v, want mention of missing env vars", err)
+	}
+}
+
 func TestDownloadObjectWritesNestedFile(t *testing.T) {
 	t.Parallel()
 

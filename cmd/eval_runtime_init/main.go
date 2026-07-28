@@ -184,10 +184,7 @@ func downloadObject(ctx context.Context, tm *transfermanager.Client, destRoot *o
 	if err != nil {
 		return 0, fmt.Errorf("download object %q: %w", key, err)
 	}
-	if out.ContentLength == nil {
-		return 0, nil
-	}
-	return *out.ContentLength, nil
+	return aws.ToInt64(out.ContentLength), nil
 }
 
 func relativeDestPath(prefix, key string) (string, error) {
