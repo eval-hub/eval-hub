@@ -80,7 +80,7 @@ fi
 check_required_vars
 
 phases=("$@")
-if [[ ${#phases[@]} -eq 0 || "${phases[0]}" == "all" ]]; then
+if [[ ${#phases[@]} -eq 0 || ( ${#phases[@]} -eq 1 && "${phases[0]}" == "all" ) ]]; then
     phases=("${ALL_PHASES[@]}")
 fi
 

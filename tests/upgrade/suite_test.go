@@ -55,7 +55,8 @@ type scenarioState struct {
 }
 
 type upgradeState struct {
-	Jobs []upgradeJob `json:"jobs"`
+	CurrentJobID string       `json:"current_job_id,omitempty"`
+	Jobs         []upgradeJob `json:"jobs"`
 }
 
 type upgradeJob struct {
@@ -96,6 +97,10 @@ func TestMain(m *testing.M) {
 	uri, err := url.Parse(serverURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: invalid SERVER_URL: %v\n", err)
+		os.Exit(1)
+	}
+	if uri.Scheme == "" || uri.Host == "" {
+		fmt.Fprintf(os.Stderr, "ERROR: invalid SERVER_URL %q: must include scheme and host (e.g. https://host:port)\n", serverURL)
 		os.Exit(1)
 	}
 
@@ -471,6 +476,9 @@ func (s *scenarioState) iSendRequestImpl(method, path, body string) error {
 // ---------------------------------------------------------------------------
 
 func (s *scenarioState) theResponseCodeShouldBe(code int) error {
+	if s.response == nil {
+		return fmt.Errorf("expected status %d but no response was received", code)
+	}
 	if s.response.StatusCode != code {
 		return fmt.Errorf("expected status %d, got %d: %s", code, s.response.StatusCode, string(s.body))
 	}
@@ -729,10 +737,11 @@ func (s *scenarioState) paginateJobs(visit func(*gabs.Container) error) error {
 }
 
 func (s *scenarioState) iCollectAndSaveUpgradeState(path, expectedName, expectedState string) error {
-	if expanded, err := s.substituteValues(path); err == nil {
-		path = expanded
+	expanded, err := s.substituteValues(path)
+	if err != nil {
+		return fmt.Errorf("substitute state path: %w", err)
 	}
-	path = resolveRepoPath(path)
+	path = resolveRepoPath(expanded)
 
 	var allJobs []upgradeJob
 	var currentJob *upgradeJob
@@ -779,7 +788,7 @@ func (s *scenarioState) iCollectAndSaveUpgradeState(path, expectedName, expected
 		return fmt.Errorf("current job %s has state %q, expected %q", s.lastId, currentJob.State, expectedState)
 	}
 
-	state := upgradeState{Jobs: allJobs}
+	state := upgradeState{CurrentJobID: currentJob.ID, Jobs: allJobs}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("create state dir: %w", err)
 	}
@@ -794,10 +803,11 @@ func (s *scenarioState) iCollectAndSaveUpgradeState(path, expectedName, expected
 }
 
 func (s *scenarioState) iLoadUpgradeState(path string) error {
-	if expanded, err := s.substituteValues(path); err == nil {
-		path = expanded
+	expanded, err := s.substituteValues(path)
+	if err != nil {
+		return fmt.Errorf("substitute state path: %w", err)
 	}
-	path = resolveRepoPath(path)
+	path = resolveRepoPath(expanded)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("read upgrade state %s: %w", path, err)
@@ -807,7 +817,10 @@ func (s *scenarioState) iLoadUpgradeState(path string) error {
 		return fmt.Errorf("parse upgrade state: %w", err)
 	}
 	s.loadedState = &state
-	if len(state.Jobs) > 0 {
+	if state.CurrentJobID != "" {
+		s.values["job_id"] = state.CurrentJobID
+		s.lastId = state.CurrentJobID
+	} else if len(state.Jobs) > 0 {
 		s.values["job_id"] = state.Jobs[0].ID
 		s.lastId = state.Jobs[0].ID
 	}
