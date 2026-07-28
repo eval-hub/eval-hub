@@ -24,6 +24,7 @@ oneOf:
     properties:
       s3:
         $ref: ./TestDataRefS3.yaml
+    additionalProperties: false
     required:
       - s3
     title: S3
@@ -31,6 +32,7 @@ oneOf:
     properties:
       pvc:
         $ref: ./TestDataRefPVC.yaml
+    additionalProperties: false
     required:
       - pvc
     title: PVC
