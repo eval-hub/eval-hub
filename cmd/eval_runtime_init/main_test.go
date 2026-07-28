@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -92,7 +93,7 @@ func TestDownloadObjectRejectsInvalidKey(t *testing.T) {
 	}
 	defer func() { _ = destRoot.Close() }()
 
-	_, err = downloadObject(context.Background(), nil, destRoot, "bucket", "datasets/run-1", "datasets/run-1/../../etc/passwd")
+	_, err = downloadObject(context.Background(), transfermanager.New(nil), destRoot, "bucket", "datasets/run-1", "datasets/run-1/../../etc/passwd")
 	if err == nil {
 		t.Fatal("downloadObject() = nil, want relative path error")
 	}
@@ -123,6 +124,7 @@ func TestDownloadObjectWritesNestedFile(t *testing.T) {
 		o.BaseEndpoint = aws.String(srv.URL)
 		o.UsePathStyle = true
 	})
+	tm := transfermanager.New(client)
 
 	dir := t.TempDir()
 	destRoot, err := os.OpenRoot(dir)
@@ -131,7 +133,7 @@ func TestDownloadObjectWritesNestedFile(t *testing.T) {
 	}
 	defer func() { _ = destRoot.Close() }()
 
-	written, err := downloadObject(ctx, client, destRoot, "bucket", "data/", objectKey)
+	written, err := downloadObject(ctx, tm, destRoot, "bucket", "data/", objectKey)
 	if err != nil {
 		t.Fatalf("downloadObject() = %v, want nil error", err)
 	}

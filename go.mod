@@ -53,7 +53,10 @@ require (
 	modernc.org/sqlite v1.54.0
 )
 
-require github.com/go-openapi/swag/pools v0.27.3 // indirect
+require (
+	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.3.5 // indirect
+	github.com/go-openapi/swag/pools v0.27.3 // indirect
+)
 
 require (
 	github.com/PaesslerAG/gval v1.2.4 // indirect
