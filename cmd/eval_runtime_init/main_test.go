@@ -99,6 +99,109 @@ func TestDownloadObjectRejectsInvalidKey(t *testing.T) {
 	}
 }
 
+func TestLoadAWSConfig(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := loadAWSConfig(context.Background(), "us-east-1", "access-key", "secret-key")
+	if err != nil {
+		t.Fatalf("loadAWSConfig() = %v, want nil error", err)
+	}
+	if cfg.Region != "us-east-1" {
+		t.Fatalf("loadAWSConfig() region = %q, want %q", cfg.Region, "us-east-1")
+	}
+}
+
+func TestDownloadObjectFlatFile(t *testing.T) {
+	t.Parallel()
+
+	const objectKey = "data/file.txt"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/bucket/"+objectKey {
+			_, _ = io.Copy(w, strings.NewReader("flat"))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+
+	ctx := context.Background()
+	cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion("us-east-1"),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("ak", "sk", "")),
+	)
+	if err != nil {
+		t.Fatalf("LoadDefaultConfig() = %v", err)
+	}
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(srv.URL)
+		o.UsePathStyle = true
+	})
+	tm := transfermanager.New(client)
+
+	dir := t.TempDir()
+	destRoot, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatalf("OpenRoot() = %v", err)
+	}
+	defer func() { _ = destRoot.Close() }()
+
+	// prefix == "data/" and key == "data/file.txt" → rel == "file.txt", no subdirectory created
+	written, err := downloadObject(ctx, tm, destRoot, "bucket", "data/", objectKey)
+	if err != nil {
+		t.Fatalf("downloadObject() = %v, want nil error", err)
+	}
+	if written != int64(len("flat")) {
+		t.Fatalf("downloadObject() wrote %d bytes, want %d", written, len("flat"))
+	}
+
+	got, err := os.ReadFile(filepath.Join(dir, "file.txt"))
+	if err != nil {
+		t.Fatalf("ReadFile() = %v", err)
+	}
+	if string(got) != "flat" {
+		t.Fatalf("file contents = %q, want %q", got, "flat")
+	}
+}
+
+func TestDownloadObjectS3Error(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+	}))
+	t.Cleanup(srv.Close)
+
+	ctx := context.Background()
+	cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion("us-east-1"),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("ak", "sk", "")),
+		config.WithRetryMaxAttempts(1),
+	)
+	if err != nil {
+		t.Fatalf("LoadDefaultConfig() = %v", err)
+	}
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(srv.URL)
+		o.UsePathStyle = true
+	})
+	tm := transfermanager.New(client)
+
+	dir := t.TempDir()
+	destRoot, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatalf("OpenRoot() = %v", err)
+	}
+	defer func() { _ = destRoot.Close() }()
+
+	_, err = downloadObject(ctx, tm, destRoot, "bucket", "data/", "data/file.txt")
+	if err == nil {
+		t.Fatal("downloadObject() = nil, want error on S3 failure")
+	}
+	if !strings.Contains(err.Error(), "download object") {
+		t.Fatalf("downloadObject() error = %v, want substring %q", err, "download object")
+	}
+}
+
 func TestDownloadObjectWritesNestedFile(t *testing.T) {
 	t.Parallel()
 
