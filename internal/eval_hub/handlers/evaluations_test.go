@@ -16,7 +16,9 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -117,8 +119,10 @@ func (f *fakeStorage) DeleteEvaluationJob(id string) error {
 }
 
 type fakeRuntime struct {
-	err    error
-	called bool
+	err              error
+	validateHWErr    error
+	called           bool
+	validateHWCalled bool
 }
 
 func (r *fakeRuntime) WithLogger(_ *slog.Logger) abstractions.Runtime { return r }
@@ -151,7 +155,8 @@ func (r *fakeRuntime) GetEvaluationLogs(
 	return "", nil
 }
 func (r *fakeRuntime) ValidateHardwareProfiles(_ []api.EvaluationBenchmarkConfig) error {
-	return nil
+	r.validateHWCalled = true
+	return r.validateHWErr
 }
 
 type listEvaluationsRequest struct {
@@ -1133,5 +1138,86 @@ func TestHandleCreateEvaluationRejectsInvalidHardwareProfileRef(t *testing.T) {
 				t.Fatalf("expected status 400 for hardware profile ref %q, got %d", name, recorder.Code)
 			}
 		})
+	}
+}
+
+func TestHandleCreateEvaluationRejectsWhenHardwareProfileValidationFails(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	providerConfigs := map[string]api.ProviderResource{
+		"garak": {
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-1"},
+				},
+			},
+		},
+	}
+	storage := &fakeStorage{providerConfigs: providerConfigs}
+	runtime := &fakeRuntime{
+		validateHWErr: serviceerrors.NewServiceError(messages.HardwareProfileNotFound, "Name", "missing-profile"),
+	}
+	validate := testhelpers.NewValidator(t)
+	h := handlers.New(storage, validate, runtime, nil, nil, nil)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-hwp-validate", logger, "test-user", "test-tenant")
+
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+		body:        []byte(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1","provider_id":"garak","hardware_config":{"hardware_profile_ref":{"name":"missing-profile"}}}]}`),
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCreateEvaluation(ctx, req, resp)
+
+	if !runtime.validateHWCalled {
+		t.Fatal("expected ValidateHardwareProfiles to be invoked")
+	}
+	if runtime.called {
+		t.Fatal("did not expect RunEvaluationJob when hardware profile validation fails")
+	}
+	if recorder.Code != 404 {
+		t.Fatalf("expected status 404, got %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "hardware_profile_not_found") {
+		t.Fatalf("expected hardware_profile_not_found, got %s", recorder.Body.String())
+	}
+}
+
+func TestHandleCreateEvaluationCallsValidateHardwareProfilesOnSuccess(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	providerConfigs := map[string]api.ProviderResource{
+		"garak": {
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-1"},
+				},
+			},
+		},
+	}
+	storage := &fakeStorage{providerConfigs: providerConfigs}
+	runtime := &fakeRuntime{}
+	validate := testhelpers.NewValidator(t)
+	h := handlers.New(storage, validate, runtime, nil, nil, nil)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-hwp-ok", logger, "test-user", "test-tenant")
+
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+		body:        []byte(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1","provider_id":"garak","hardware_config":{"hardware_profile_ref":{"name":"cpu-profile"}}}]}`),
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCreateEvaluation(ctx, req, resp)
+
+	if !runtime.validateHWCalled {
+		t.Fatal("expected ValidateHardwareProfiles to be invoked")
+	}
+	if !runtime.called {
+		t.Fatal("expected RunEvaluationJob after successful hardware profile validation")
+	}
+	if recorder.Code != 202 {
+		t.Fatalf("expected status 202, got %d body=%s", recorder.Code, recorder.Body.String())
 	}
 }

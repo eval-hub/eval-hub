@@ -813,6 +813,139 @@ func TestCreateBenchmarkResourcesIgnoresEmptyHardwareProfileName(t *testing.T) {
 	}
 }
 
+func TestCreateBenchmarkResourcesRequiresHardwareProfilesNamespace(t *testing.T) {
+	t.Setenv(hardwareProfilesNamespaceEnv, "")
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
+		HardwareProfileRef: api.HardwareProfileRef{Name: "cpu-profile"},
+	}
+
+	clientset := fake.NewClientset()
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{
+			clientset:     clientset,
+			dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme()),
+		},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
+		},
+	}
+
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
+	if err == nil {
+		t.Fatal("expected error when hardware profiles namespace env is unset")
+	}
+	if !strings.Contains(err.Error(), hardwareProfilesNamespaceEnv) && !strings.Contains(err.Error(), "not set") {
+		t.Fatalf("expected namespace configuration error, got: %v", err)
+	}
+}
+
+func TestCreateBenchmarkResourcesAppliesNodeAndQueueScheduling(t *testing.T) {
+	t.Setenv(hardwareProfilesNamespaceEnv, "default")
+	providerID := "provider-1"
+
+	t.Run("node scheduling", func(t *testing.T) {
+		evaluation := sampleEvaluation(providerID)
+		evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
+			HardwareProfileRef: api.HardwareProfileRef{Name: "node-profile"},
+		}
+		profile := testHardwareProfileUnstructured("default", "node-profile")
+		profile.Object["spec"] = map[string]any{
+			"scheduling": map[string]any{
+				"type": "Node",
+				"node": map[string]any{
+					"nodeSelector": map[string]any{"node.kubernetes.io/instance-type": "g6.12xlarge"},
+					"tolerations": []any{
+						map[string]any{
+							"key":      "nvidia.com/gpu",
+							"operator": "Exists",
+							"effect":   "NoSchedule",
+						},
+					},
+				},
+			},
+		}
+		clientset := fake.NewClientset()
+		runtime := &K8sRuntime{
+			logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+			helper: &KubernetesHelper{
+				clientset:     clientset,
+				dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme(), profile),
+			},
+			serviceConfig: &config.Config{
+				Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
+			},
+		}
+		storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+		if err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage); err != nil {
+			t.Fatalf("createBenchmarkResources: %v", err)
+		}
+		jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+		if len(jobs) != 1 {
+			t.Fatalf("expected 1 job, got %d", len(jobs))
+		}
+		podSpec := jobs[0].Spec.Template.Spec
+		if podSpec.NodeSelector["node.kubernetes.io/instance-type"] != "g6.12xlarge" {
+			t.Fatalf("nodeSelector = %v", podSpec.NodeSelector)
+		}
+		if len(podSpec.Tolerations) != 1 || podSpec.Tolerations[0].Key != "nvidia.com/gpu" {
+			t.Fatalf("tolerations = %+v", podSpec.Tolerations)
+		}
+	})
+
+	t.Run("queue scheduling", func(t *testing.T) {
+		evaluation := sampleEvaluation(providerID)
+		evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
+			HardwareProfileRef: api.HardwareProfileRef{Name: "queue-profile"},
+		}
+		profile := testHardwareProfileUnstructured("default", "queue-profile")
+		profile.Object["spec"] = map[string]any{
+			"scheduling": map[string]any{
+				"type": "Queue",
+				"kueue": map[string]any{
+					"localQueueName": "gpu-queue",
+					"priorityClass":  "high-priority",
+				},
+			},
+		}
+		clientset := fake.NewClientset()
+		runtime := &K8sRuntime{
+			logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+			helper: &KubernetesHelper{
+				clientset:     clientset,
+				dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme(), profile),
+			},
+			serviceConfig: &config.Config{
+				Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
+			},
+		}
+		storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+		if err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage); err != nil {
+			t.Fatalf("createBenchmarkResources: %v", err)
+		}
+		jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+		if len(jobs) != 1 {
+			t.Fatalf("expected 1 job, got %d", len(jobs))
+		}
+		labels := jobs[0].Labels
+		if labels[labelKueueQueueNameKey] != "gpu-queue" {
+			t.Fatalf("queue label = %q", labels[labelKueueQueueNameKey])
+		}
+		if labels[labelKueuePriorityClassKey] != "high-priority" {
+			t.Fatalf("priority label = %q", labels[labelKueuePriorityClassKey])
+		}
+		if jobs[0].Spec.Template.Spec.PriorityClassName != "high-priority" {
+			t.Fatalf("PriorityClassName = %q", jobs[0].Spec.Template.Spec.PriorityClassName)
+		}
+		if len(jobs[0].Spec.Template.Spec.NodeSelector) != 0 {
+			t.Fatalf("expected empty nodeSelector for queue profile, got %v", jobs[0].Spec.Template.Spec.NodeSelector)
+		}
+	})
+}
+
 func adapterContainerFromJob(job *batchv1.Job) (*corev1.Container, error) {
 	for i := range job.Spec.Template.Spec.Containers {
 		if job.Spec.Template.Spec.Containers[i].Name == adapterContainerName {

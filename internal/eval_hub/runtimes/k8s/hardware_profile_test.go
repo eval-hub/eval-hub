@@ -444,3 +444,257 @@ func TestStringFromUnstructured(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestInt64PtrFromUnstructured(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in   any
+		want *int64
+	}{
+		{in: int64(7), want: int64Ptr(7)},
+		{in: int32(3), want: int64Ptr(3)},
+		{in: 5, want: int64Ptr(5)},
+		{in: float64(9), want: int64Ptr(9)},
+		{in: "nope", want: nil},
+		{in: nil, want: nil},
+	}
+	for _, tc := range cases {
+		got := int64PtrFromUnstructured(tc.in)
+		if tc.want == nil {
+			if got != nil {
+				t.Fatalf("int64PtrFromUnstructured(%#v) = %v, want nil", tc.in, *got)
+			}
+			continue
+		}
+		if got == nil || *got != *tc.want {
+			t.Fatalf("int64PtrFromUnstructured(%#v) = %v, want %d", tc.in, got, *tc.want)
+		}
+	}
+}
+
+func int64Ptr(v int64) *int64 { return &v }
+
+func TestParseHardwareProfileSchedulingEdgeCases(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty scheduling", func(t *testing.T) {
+		t.Parallel()
+		got, err := parseHardwareProfileResources(&unstructured.Unstructured{
+			Object: map[string]any{"spec": map[string]any{"scheduling": map[string]any{}}},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.schedulingType != "" {
+			t.Fatalf("schedulingType = %q, want empty", got.schedulingType)
+		}
+	})
+
+	t.Run("invalid scheduling type", func(t *testing.T) {
+		t.Parallel()
+		_, err := parseHardwareProfileResources(&unstructured.Unstructured{
+			Object: map[string]any{"spec": map[string]any{"scheduling": "bad"}},
+		})
+		if err == nil {
+			t.Fatal("expected error for invalid scheduling type")
+		}
+	})
+
+	t.Run("node with empty node map", func(t *testing.T) {
+		t.Parallel()
+		got, err := parseHardwareProfileResources(&unstructured.Unstructured{
+			Object: map[string]any{
+				"spec": map[string]any{
+					"scheduling": map[string]any{
+						"type": "Node",
+						"node": map[string]any{},
+					},
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.schedulingType != hardwareProfileSchedulingNode {
+			t.Fatalf("schedulingType = %q", got.schedulingType)
+		}
+		if got.nodeSelector != nil || len(got.tolerations) != 0 {
+			t.Fatalf("expected empty node settings, got selector=%v tolerations=%v", got.nodeSelector, got.tolerations)
+		}
+	})
+
+	t.Run("queue with empty kueue map", func(t *testing.T) {
+		t.Parallel()
+		got, err := parseHardwareProfileResources(&unstructured.Unstructured{
+			Object: map[string]any{
+				"spec": map[string]any{
+					"scheduling": map[string]any{
+						"type":  "Queue",
+						"kueue": map[string]any{},
+					},
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.queueName != "" || got.priorityClassName != "" {
+			t.Fatalf("expected empty queue settings, got %+v", got)
+		}
+	})
+
+	t.Run("tolerationSeconds and non-map tolerations", func(t *testing.T) {
+		t.Parallel()
+		got, err := parseHardwareProfileResources(&unstructured.Unstructured{
+			Object: map[string]any{
+				"spec": map[string]any{
+					"scheduling": map[string]any{
+						"type": "Node",
+						"node": map[string]any{
+							"tolerations": []any{
+								"ignored",
+								map[string]any{
+									"key":               "nvidia.com/gpu",
+									"operator":          "Exists",
+									"effect":            "NoSchedule",
+									"tolerationSeconds": int64(30),
+								},
+							},
+						},
+					},
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(got.tolerations) != 1 {
+			t.Fatalf("tolerations len = %d, want 1", len(got.tolerations))
+		}
+		if got.tolerations[0].TolerationSeconds == nil || *got.tolerations[0].TolerationSeconds != 30 {
+			t.Fatalf("tolerationSeconds = %v, want 30", got.tolerations[0].TolerationSeconds)
+		}
+	})
+
+	t.Run("accelerator without identifier skipped", func(t *testing.T) {
+		t.Parallel()
+		got, err := parseHardwareProfileResources(&unstructured.Unstructured{
+			Object: map[string]any{
+				"spec": map[string]any{
+					"identifiers": []any{
+						map[string]any{
+							"resourceType": "Accelerator",
+							"defaultCount": int64(1),
+						},
+					},
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.gpuResource != "" || got.gpuCount != 0 {
+			t.Fatalf("expected skipped accelerator, got %+v", got)
+		}
+	})
+
+	t.Run("invalid node map type", func(t *testing.T) {
+		t.Parallel()
+		_, err := parseHardwareProfileResources(&unstructured.Unstructured{
+			Object: map[string]any{
+				"spec": map[string]any{
+					"scheduling": map[string]any{
+						"type": "Node",
+						"node": "bad",
+					},
+				},
+			},
+		})
+		if err == nil {
+			t.Fatal("expected error for invalid node type")
+		}
+	})
+
+	t.Run("invalid nodeSelector type", func(t *testing.T) {
+		t.Parallel()
+		_, err := parseHardwareProfileResources(&unstructured.Unstructured{
+			Object: map[string]any{
+				"spec": map[string]any{
+					"scheduling": map[string]any{
+						"type": "Node",
+						"node": map[string]any{
+							"nodeSelector": "bad",
+						},
+					},
+				},
+			},
+		})
+		if err == nil {
+			t.Fatal("expected error for invalid nodeSelector type")
+		}
+	})
+
+	t.Run("invalid tolerations type", func(t *testing.T) {
+		t.Parallel()
+		_, err := parseHardwareProfileResources(&unstructured.Unstructured{
+			Object: map[string]any{
+				"spec": map[string]any{
+					"scheduling": map[string]any{
+						"type": "Node",
+						"node": map[string]any{
+							"tolerations": "bad",
+						},
+					},
+				},
+			},
+		})
+		if err == nil {
+			t.Fatal("expected error for invalid tolerations type")
+		}
+	})
+
+	t.Run("invalid kueue map type", func(t *testing.T) {
+		t.Parallel()
+		_, err := parseHardwareProfileResources(&unstructured.Unstructured{
+			Object: map[string]any{
+				"spec": map[string]any{
+					"scheduling": map[string]any{
+						"type":  "Queue",
+						"kueue": "bad",
+					},
+				},
+			},
+		})
+		if err == nil {
+			t.Fatal("expected error for invalid kueue type")
+		}
+	})
+
+	t.Run("empty tolerations slice", func(t *testing.T) {
+		t.Parallel()
+		got, err := parseHardwareProfileTolerations(nil)
+		if err != nil || got != nil {
+			t.Fatalf("got (%v, %v), want (nil, nil)", got, err)
+		}
+	})
+}
+
+func TestCopyStringMap(t *testing.T) {
+	t.Parallel()
+	if copyStringMap(nil) != nil {
+		t.Fatal("expected nil for empty input")
+	}
+	in := map[string]string{"a": "1"}
+	out := copyStringMap(in)
+	out["a"] = "2"
+	if in["a"] != "1" {
+		t.Fatal("expected copy to be independent")
+	}
+}
+
+func TestIsHardwareProfileDisabledNil(t *testing.T) {
+	t.Parallel()
+	if isHardwareProfileDisabled(nil) {
+		t.Fatal("nil profile should not be disabled")
+	}
+}
