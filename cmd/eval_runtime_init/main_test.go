@@ -137,7 +137,10 @@ func TestDownloadObjectFlatFile(t *testing.T) {
 		}
 		// Parse "bytes=start-end"
 		var start, end int
-		fmt.Sscanf(rng, "bytes=%d-%d", &start, &end)
+		if _, err := fmt.Sscanf(rng, "bytes=%d-%d", &start, &end); err != nil {
+			http.Error(w, "bad range", http.StatusBadRequest)
+			return
+		}
 		if end >= len(body) {
 			end = len(body) - 1
 		}
