@@ -835,7 +835,7 @@ Feature: MCP Tools
     Then the MCP tool call should fail
     And the MCP error should contain "resource_not_found"
 
-  @mlflow @cluster
+  @mlflow @cluster 
   Scenario: MCP can retrieve completed job that has evalcard exported
     Given the service is running
     And the model endpoint is reachable
@@ -869,6 +869,7 @@ Feature: MCP Tools
       """
     Then the response code should be 202
     And the "resource.id" field in the response should be saved as "value:mcp_job_id"
+    And the "resource.mlflow_experiment_id" field in the response should be saved as "value:mlflow_experiment_id"
     And I wait for the evaluation job status to be "completed"
     When I call MCP tool "get_job_status" with arguments:
       """
@@ -878,6 +879,8 @@ Feature: MCP Tools
       """
     Then the MCP tool call should succeed
     And the MCP response should contain the value "completed" at path "$.state"
+    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:mcp_job_id}}"
+    Then the MLflow artifact should exist
  
   @mlflow @cluster
   Scenario: MCP resource returns job with mlflow_run_id for completed job with evalcard
@@ -916,4 +919,5 @@ Feature: MCP Tools
     And I wait for the evaluation job status to be "completed"
     When I read MCP resource "evalhub://jobs/{{value:mcp_resource_job_id}}"
     Then the MCP resource read should succeed
+    And the MCP resource should contain "benchmarks"
     And the MCP resource should contain "mlflow_run_id"

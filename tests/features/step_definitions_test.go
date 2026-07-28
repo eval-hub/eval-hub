@@ -195,6 +195,28 @@ func getMLflowHTTPClient() *http.Client {
 	}
 }
 
+// mlflowBaseURL returns the MLflow base URL from MLFLOW_URL env or default cluster internal URL
+func mlflowBaseURL() string {
+	baseURL := os.Getenv("MLFLOW_URL")
+	if baseURL == "" {
+		baseURL = "https://mlflow.redhat-ods-applications.svc.cluster.local:8443"
+	}
+	return strings.TrimRight(baseURL, "/")
+}
+
+// mlflowWorkspace resolves the MLflow workspace using X_TENANT env → X-Tenant header → "tenant" fallback
+func (tc *scenarioConfig) mlflowWorkspace() string {
+	workspace := os.Getenv("X_TENANT")
+	if workspace == "" {
+		if tenant, ok := tc.reqHeaders["X-Tenant"]; ok && tenant != "" {
+			workspace = tenant
+		} else {
+			workspace = "tenant" // fallback
+		}
+	}
+	return workspace
+}
+
 func isMetricsScrapePath(path string) bool {
 	path = strings.TrimSpace(path)
 	if path == "/metrics" {
@@ -1995,24 +2017,11 @@ func (tc *scenarioConfig) iFetchMLflowArtifact(artifactPath, runIDPattern string
 }
 
 func (tc *scenarioConfig) fetchMLflowArtifactWithExperimentID(artifactPath, experimentID, runID string) error {
-	// Get MLflow base URL from environment or use default cluster internal URL
-	mlflowBaseURL := os.Getenv("MLFLOW_URL")
-	if mlflowBaseURL == "" {
-		mlflowBaseURL = "https://mlflow.redhat-ods-applications.svc.cluster.local:8443"
-	}
-
-	// Get MLflow workspace (tenant namespace)
-	workspace := os.Getenv("X_TENANT")
-	if workspace == "" {
-		if tenant, ok := tc.reqHeaders["X-Tenant"]; ok && tenant != "" {
-			workspace = tenant
-		} else {
-			workspace = "tenant" // fallback
-		}
-	}
+	baseURL := mlflowBaseURL()
+	workspace := tc.mlflowWorkspace()
 
 	artifactURL := fmt.Sprintf("%s/mlflow/api/2.0/mlflow-artifacts/artifacts/%s/%s/artifacts/%s",
-		strings.TrimRight(mlflowBaseURL, "/"), experimentID, runID, artifactPath)
+		baseURL, experimentID, runID, artifactPath)
 
 	tc.logDebug("Fetching MLflow artifact from: %s\n", artifactURL)
 	tc.logDebug("Using workspace: %s\n", workspace)
@@ -2151,13 +2160,10 @@ func (tc *scenarioConfig) iFetchMLflowArtifactByExperimentAndJob(artifactName, e
 	}
 
 	// Search for the MLflow run with the matching evaluation_job_id tag
-	// First, get all runs for the experiment
-	mlflowBaseURL := os.Getenv("MLFLOW_URL")
-	if mlflowBaseURL == "" {
-		mlflowBaseURL = "https://mlflow.redhat-ods-applications.svc.cluster.local:8443"
-	}
+	baseURL := mlflowBaseURL()
+	workspace := tc.mlflowWorkspace()
 
-	searchURL := fmt.Sprintf("%s/mlflow/api/2.0/mlflow/runs/search", strings.TrimRight(mlflowBaseURL, "/"))
+	searchURL := fmt.Sprintf("%s/mlflow/api/2.0/mlflow/runs/search", baseURL)
 	searchBody := map[string]interface{}{
 		"experiment_ids": []string{experimentIDResolved},
 		"filter":         fmt.Sprintf("tags.evaluation_job_id = '%s'", jobIDResolved),
@@ -2174,7 +2180,7 @@ func (tc *scenarioConfig) iFetchMLflowArtifactByExperimentAndJob(artifactName, e
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-MLFLOW-WORKSPACE", tc.reqHeaders["X-Tenant"])
+	req.Header.Set("X-MLFLOW-WORKSPACE", workspace)
 
 	// Add Authorization header (required for external MLflow access)
 	authToken := os.Getenv("AUTH_TOKEN")
@@ -2278,6 +2284,12 @@ func (tc *scenarioConfig) theMLflowArtifactFieldShouldMatchISO8601(fieldPath str
 }
 
 func (tc *scenarioConfig) iWaitForEvaluationJobStatusToMatch(statusPattern string) error {
+	// Compile regex once before polling loop for fail-fast validation and performance
+	re, err := regexp.Compile(statusPattern)
+	if err != nil {
+		return tc.logError(fmt.Errorf("invalid status pattern %q: %w", statusPattern, err))
+	}
+
 	deadline := time.Now().Add(tc.waitDeadline)
 	var lastErr error
 	var lastStatus string
@@ -2302,12 +2314,7 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatusToMatch(statusPattern strin
 			}
 
 			// Check if state matches the pattern (supports regex like "completed|failed")
-			matched, err := regexp.MatchString(statusPattern, status)
-			if err != nil {
-				return tc.logError(fmt.Errorf("invalid status pattern %q: %w", statusPattern, err))
-			}
-
-			if matched {
+			if re.MatchString(status) {
 				tc.logDebug("Job reached status matching %q: %s\n", statusPattern, status)
 				return nil
 			}

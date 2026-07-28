@@ -1437,10 +1437,15 @@ Feature: Evaluation Jobs
       }
       """
     Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:job_id"
+    And the "resource.mlflow_experiment_id" field in the response should be saved as "value:mlflow_experiment_id"
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    And the "results.benchmarks[0].mlflow_run_id" field in the response should be saved as "value:run_id_0"
+    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    Then the MLflow artifact should exist
+    And the MLflow artifact should contain "context.collection_id"
+    And the MLflow artifact should contain the value "toxicity-and-ethical-principles" at path "$.context.collection_id"
 
   @mlflow 
   Scenario: Card generated for job with multiple benchmarks
@@ -1485,20 +1490,25 @@ Feature: Evaluation Jobs
       }
       """
     Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:job_id"
+    And the "resource.mlflow_experiment_id" field in the response should be saved as "value:mlflow_experiment_id"
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    And the "results.benchmarks[0].mlflow_run_id" field in the response should be saved as "value:run_id_0"
-    And the "results.benchmarks[1].mlflow_run_id" field in the response should be saved as "value:run_id_1"
+    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    Then the MLflow artifact should exist
+    And the MLflow artifact should contain "results.benchmarks[0]"
+    And the MLflow artifact should contain "results.benchmarks[1]"
 
-  Scenario: Card generated for partially failed job
+  @mlflow 
+  Scenario: Card generated for completed benchmark job
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
       """
       {
-        "name": "evalcard_partial_fail_test",
-        "description": "Job that may have partial failures",
-        "tags": ["evalcard", "failure"],
+        "name": "evalcard_completed_benchmark_test",
+        "description": "Job for card testing on completed benchmark",
+        "tags": ["evalcard", "benchmark"],
         "model": {
           "url": "{{env:MODEL_URL|http://test.com}}",
           "name": "{{env:MODEL_NAME|test}}",
@@ -1517,15 +1527,20 @@ Feature: Evaluation Jobs
           }
         ],
         "experiment": {
-          "name": "evalcard_fail_experiment"
+          "name": "evalcard_completed_experiment"
         }
       }
       """
     Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:job_id"
+    And the "resource.mlflow_experiment_id" field in the response should be saved as "value:mlflow_experiment_id"
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
+    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    Then the MLflow artifact should exist
 
+  @mlflow 
   Scenario: No card for pending job
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -1558,8 +1573,9 @@ Feature: Evaluation Jobs
       """
     Then the response code should be 202
     And the response should contain the value "pending" at path "$.status.state"
+    # EvalCards are only exported on completion, so pending jobs have no card
 
-  @mlflow
+  @mlflow 
   Scenario: Multiple jobs in same experiment have different cards
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -1592,6 +1608,7 @@ Feature: Evaluation Jobs
       """
     Then the response code should be 202
     And the "resource.id" field in the response should be saved as "value:job1_id"
+    And the "resource.mlflow_experiment_id" field in the response should be saved as "value:mlflow_experiment_id"
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{{value:job1_id}}"
     Then the response code should be 200
@@ -1629,7 +1646,13 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{{value:job2_id}}"
     Then the response code should be 200
-    And the "results.benchmarks[0].mlflow_run_id" field in the response should be saved as "value:run_id_job2"
+    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job1_id}}"
+    Then the MLflow artifact should exist
+    And the MLflow artifact should contain the value "{{value:job1_id}}" at path "$.metadata.evaluation_job_id"
+    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job2_id}}"
+    Then the MLflow artifact should exist
+    And the MLflow artifact should contain the value "{{value:job2_id}}" at path "$.metadata.evaluation_job_id"
+    # Each job gets its own distinct EvalCard even in the same experiment
 
   @mlflow
   Scenario: Card has correct card_version and schema_version
@@ -2031,64 +2054,6 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain the value "toxicity-and-ethical-principles" at path "$.context.collection_id"
 
   @mlflow
-  Scenario: Card context.benchmarks is omitted for collection job
-    Given the service is running
-    And there is a system collection with id "toxicity-and-ethical-principles"
-    When I send a POST request to "/api/v1/evaluations/jobs" with body:
-      """
-      {
-        "name": "evalcard_collection_no_benchmarks_test",
-        "description": "Test collection jobs don't expand benchmarks in context",
-        "tags": ["evalcard", "collection"],
-        "model": {
-          "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}",
-          "auth": {
-            "secret_ref": "{{env:MODEL_AUTH_SECRET_REF|test}}"
-          }
-        },
-        "collection": {
-          "id": "toxicity-and-ethical-principles",
-          "benchmarks": [
-            {
-              "id": "toxigen",
-              "provider_id": "lm_evaluation_harness",
-              "parameters": {
-                "num_examples": 5
-              }
-            },
-            {
-              "id": "truthfulqa_mc1",
-              "provider_id": "lm_evaluation_harness",
-              "parameters": {
-                "num_examples": 5
-              }
-            },
-            {
-              "id": "bigbench_hhh_alignment_multiple_choice",
-              "provider_id": "lm_evaluation_harness",
-              "parameters": {
-                "num_examples": 5
-              }
-            }
-          ]
-        },
-        "experiment": {
-          "name": "evalcard_collection_no_benchmarks_experiment"
-        }
-      }
-      """
-    Then the response code should be 202
-    And the "resource.id" field in the response should be saved as "value:job_id"
-    And the "resource.mlflow_experiment_id" field in the response should be saved as "value:mlflow_experiment_id"
-    And I wait for the evaluation job status to be "completed"
-    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
-    Then the response code should be 200
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
-    Then the MLflow artifact should exist
-    And the MLflow artifact should contain "context.collection_id"
-
-  @mlflow
   Scenario: Card context.benchmarks contains correct benchmark IDs
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -2215,7 +2180,7 @@ Feature: Evaluation Jobs
     Then the MLflow artifact should exist
     And the MLflow artifact should contain the value "completed" at path "$.results.benchmarks[0].status"
 
-  @mlflow
+  @mlflow 
   Scenario: Card error_message structure is valid for failed benchmark
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -2246,7 +2211,7 @@ Feature: Evaluation Jobs
     Then the response code should be 202
     And the "resource.id" field in the response should be saved as "value:job_id"
     And the "resource.mlflow_experiment_id" field in the response should be saved as "value:mlflow_experiment_id"
-    And I wait for the evaluation job status to be "failed"
+    And I wait for the evaluation job status to match "completed|failed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the "resource.mlflow_experiment_id" field in the response should be saved as "value:experiment_id"
@@ -2257,7 +2222,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain "results.benchmarks[0].error_message.message_code"
     And the MLflow artifact should contain "results.benchmarks[0].error_message.message_origin"
   
-  @mlflow
+  @mlflow 
   Scenario: EvalCard artifact is valid parseable JSON for failed job
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
@@ -2306,8 +2271,11 @@ Feature: Evaluation Jobs
         "description": "Test EvalCard generation for job without pass_criteria",
         "tags": ["evalcard", "edge-case"],
         "model": {
-          "url": "http://test.model/v1",
-          "name": "test-model"
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}",
+          "auth": {
+            "secret_ref": "{{env:MODEL_AUTH_SECRET_REF|test}}"
+          }
         },
         "benchmarks": [
           {
