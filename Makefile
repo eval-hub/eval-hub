@@ -468,7 +468,7 @@ documentation: check-unused-components generate-public-docs verify-api-docs
 
 update-redocly-cli:
 	rm -f package-lock.json
-	npm install @redocly/cli@latest
+	npm install --save-exact @redocly/cli@latest
 
 # Local image build (same Containerfile and BUILD_DATE as .github/workflows/ci.yml docker-build-push; pass GIT_HASH for embedded evalhub-mcp metadata).
 DOCKER_IMAGE_LOCAL ?= eval-hub:local
