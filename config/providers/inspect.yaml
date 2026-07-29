@@ -616,7 +616,7 @@ parameters:
   #
   # Per-role pattern:
   #   {role}_model   — fully-qualified provider/model string
-  #   {role}_url     — base URL override (overrides global OPENAI_BASE_URL)
+  #   {role}_base_url — base URL override (overrides global OPENAI_BASE_URL)
   #   {role}_api_key — API key override (overrides global OPENAI_API_KEY)
   #
   # ---------------------------------------------------------------------------
