@@ -1080,6 +1080,30 @@ Feature: Evaluation Jobs
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
       """
       {
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}"
+        },
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+              "num_examples": 10,
+              "num_fewshot": 3,
+              "tokenizer": "google/flan-t5-small"
+            }
+          }
+        ],
+        "name": "test-job-special-chars-queue",
+        "queue": {
+          "kind": "kueue",
+          "name": "user-queue!@#$%"
+        }
+      }
+      """
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
 
   @hardware_profile
   Scenario: Create evaluation job with hardware profile persists reference in API response
