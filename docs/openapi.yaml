@@ -2476,21 +2476,15 @@ components:
       title: QueueConfig
       description: |
         Deprecated on create. Legacy evaluation jobs may still return this field on GET. To schedule with Kueue, create a queue-backed HardwareProfile (`spec.scheduling.type: Queue`) and set `hardware_config.hardware_profile_ref` on the benchmark.
-      required:
-        - name
       properties:
         kind:
           type: string
-          enum:
-            - kueue
-          default: kueue
           description: |
-            Queue integration previously used on create. Only `kueue` was supported. Create requests that include `queue` are rejected.
+            Queue integration previously used on create. Create requests that include `queue` are rejected.
         name:
           type: string
-          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
           description: |
-            Legacy LocalQueue name persisted on older jobs. Must conform to RFC 1123 DNS label naming. New jobs should obtain the queue name from a HardwareProfile instead.
+            Legacy LocalQueue name persisted on older jobs. New jobs should obtain the queue name from a HardwareProfile instead.
     EvaluationJobConfigCommon2:
       type: object
       title: EvaluationJobConfigCommon2
