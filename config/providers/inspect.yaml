@@ -3,7 +3,7 @@
 #   Petri  — auditor/target/judge pipeline, 170+ seeds, 38 judge dimensions
 #   Bloom  — automated scenario generation from behavior descriptions
 #   Dish   — real-scaffold testing (research preview, via task_args pass-through)
-# Also supports 35 curated inspect-evals benchmarks across safety, coding, math, knowledge, and agent evaluation.
+# Also supports 36 curated inspect-evals benchmarks across safety, coding, math, knowledge, and agent evaluation.
 
 id: inspect
 name: Inspect AI
