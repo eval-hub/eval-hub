@@ -74,7 +74,8 @@ type jobConfig struct {
 	testDataPVC                pvcTestDataConfig
 	testDataInitImage          string
 	sidecarConfig              *config.SidecarConfig
-	// queueKind and queueName come from a queue-backed HardwareProfile when set.
+	// queueKind and queueName come from a queue-backed HardwareProfile when set,
+	// otherwise from evaluation.Queue (API layer normalizes empty kind to kueue).
 	queueKind string
 	queueName string
 }
@@ -207,8 +208,8 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 
 	// GPU resource requests/limits are always propagated to the pod spec so that Kueue can
 	// account for GPU quota. Provider nodeSelector is the default; a HardwareProfile with
-	// Node scheduling overrides it, and a Queue-backed profile clears it so Kueue
-	// ResourceFlavors govern placement.
+	// Node scheduling overrides it, and a Queue-backed profile (or evaluation.Queue) clears
+	// it so Kueue ResourceFlavors govern placement.
 	gpuResource, gpuCount := resolveGPUConfig(runtime.K8s.GPU)
 	nodeSelector := resolveNodeSelector(runtime.K8s.GPU)
 
@@ -260,7 +261,25 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		},
 	}
 	applyHardwareProfileResources(out, hardwareProfile)
+	applyEvaluationQueueIfUnset(out, evaluation.Queue)
 	return out, nil
+}
+
+// applyEvaluationQueueIfUnset sets queue from evaluation.Queue when a HardwareProfile
+// did not already provide a LocalQueue name. Clears nodeSelector/tolerations so Kueue
+// ResourceFlavors govern placement.
+func applyEvaluationQueueIfUnset(cfg *jobConfig, queue *api.QueueConfig) {
+	if cfg == nil || queue == nil || cfg.queueName != "" {
+		return
+	}
+	queueName := strings.TrimSpace(queue.Name)
+	if queueName == "" {
+		return
+	}
+	cfg.queueName = queueName
+	cfg.queueKind = strings.TrimSpace(queue.Kind)
+	cfg.nodeSelector = nil
+	cfg.tolerations = nil
 }
 
 // sidecarImageAndResources returns image and resources for the sidecar container from

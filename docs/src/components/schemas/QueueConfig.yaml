@@ -1,10 +1,10 @@
 type: object
 title: QueueConfig
 description: >
-  Deprecated on create. Legacy evaluation jobs may still return this field on
-  GET. To schedule with Kueue, create a queue-backed HardwareProfile
-  (`spec.scheduling.type: Queue`) and set `hardware_config.hardware_profile_ref`
-  on the benchmark.
+  Optional workload scheduling queue for Kubernetes runtimes (e.g. Kueue
+  LocalQueue). When a benchmark also references a queue-backed HardwareProfile
+  (`spec.scheduling.type: Queue`), that profile's LocalQueue name takes
+  precedence over this field at job scheduling time.
 required:
   - name
 properties:
@@ -14,12 +14,12 @@ properties:
       - kueue
     default: kueue
     description: >
-      Queue integration previously used on create. Only `kueue` was supported.
-      Create requests that include `queue` are rejected.
+      Queue integration to use. When omitted, the server behaves as if `kueue` was set.
+      Only `kueue` is supported today.
   name:
     type: string
     pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
     description: >
-      Legacy LocalQueue name persisted on older jobs. Must conform to RFC 1123
-      DNS label naming. New jobs should obtain the queue name from a
-      HardwareProfile instead.
+      Queue resource name (for Kueue, the LocalQueue name). Must conform to RFC 1123
+      DNS label naming (lowercase letters, digits, and internal hyphens). Set on the
+      Job as label `kueue.x-k8s.io/queue-name`.

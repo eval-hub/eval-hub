@@ -944,6 +944,72 @@ func TestCreateBenchmarkResourcesAppliesNodeAndQueueScheduling(t *testing.T) {
 			t.Fatalf("expected empty nodeSelector for queue profile, got %v", jobs[0].Spec.Template.Spec.NodeSelector)
 		}
 	})
+
+	t.Run("evaluation queue when no hardware profile queue", func(t *testing.T) {
+		evaluation := sampleEvaluation(providerID)
+		evaluation.Queue = &api.QueueConfig{Kind: "kueue", Name: "eval-local-queue"}
+		clientset := fake.NewClientset()
+		runtime := &K8sRuntime{
+			logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+			helper: &KubernetesHelper{
+				clientset:     clientset,
+				dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme()),
+			},
+			serviceConfig: &config.Config{
+				Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
+			},
+		}
+		storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+		if err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage); err != nil {
+			t.Fatalf("createBenchmarkResources: %v", err)
+		}
+		jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+		if len(jobs) != 1 {
+			t.Fatalf("expected 1 job, got %d", len(jobs))
+		}
+		if jobs[0].Labels[labelKueueQueueNameKey] != "eval-local-queue" {
+			t.Fatalf("queue label = %q", jobs[0].Labels[labelKueueQueueNameKey])
+		}
+	})
+
+	t.Run("hardware profile queue wins over evaluation queue", func(t *testing.T) {
+		evaluation := sampleEvaluation(providerID)
+		evaluation.Queue = &api.QueueConfig{Kind: "kueue", Name: "eval-local-queue"}
+		evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
+			HardwareProfileRef: api.HardwareProfileRef{Name: "queue-profile"},
+		}
+		profile := testHardwareProfileUnstructured("default", "queue-profile")
+		profile.Object["spec"] = map[string]any{
+			"scheduling": map[string]any{
+				"type": "Queue",
+				"kueue": map[string]any{
+					"localQueueName": "profile-queue",
+				},
+			},
+		}
+		clientset := fake.NewClientset()
+		runtime := &K8sRuntime{
+			logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+			helper: &KubernetesHelper{
+				clientset:     clientset,
+				dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme(), profile),
+			},
+			serviceConfig: &config.Config{
+				Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
+			},
+		}
+		storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+		if err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage); err != nil {
+			t.Fatalf("createBenchmarkResources: %v", err)
+		}
+		jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+		if len(jobs) != 1 {
+			t.Fatalf("expected 1 job, got %d", len(jobs))
+		}
+		if jobs[0].Labels[labelKueueQueueNameKey] != "profile-queue" {
+			t.Fatalf("queue label = %q, want profile-queue", jobs[0].Labels[labelKueueQueueNameKey])
+		}
+	})
 }
 
 func adapterContainerFromJob(job *batchv1.Job) (*corev1.Container, error) {

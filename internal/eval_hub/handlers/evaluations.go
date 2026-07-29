@@ -98,6 +98,19 @@ func (h *Handlers) getStorage(ctx *executioncontext.ExecutionContext) abstractio
 	return h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 }
 
+// ApplyEvaluationJobQueueDefaults trims queue name/kind and sets kind to "kueue" when empty.
+// Call after validating a decoded EvaluationJobConfig (e.g. before persisting or starting a job).
+func ApplyEvaluationJobQueueDefaults(cfg *api.EvaluationJobConfig) {
+	if cfg == nil || cfg.Queue == nil {
+		return
+	}
+	cfg.Queue.Name = strings.TrimSpace(cfg.Queue.Name)
+	cfg.Queue.Kind = strings.TrimSpace(cfg.Queue.Kind)
+	if cfg.Queue.Kind == "" {
+		cfg.Queue.Kind = "kueue"
+	}
+}
+
 // HandleCreateEvaluation handles POST /api/v1/evaluations/jobs
 func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.getStorage(ctx)
@@ -121,9 +134,6 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 			err = serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, evaluation)
 			if err != nil {
 				return err
-			}
-			if evaluation.Queue != nil {
-				return serviceerrors.NewServiceError(messages.EvaluationJobQueueNotSupported)
 			}
 			if evaluation.Collection != nil && evaluation.Collection.ID != "" {
 				collection, err = storage.WithContext(runtimeCtx).GetCollection(evaluation.Collection.ID)
@@ -156,6 +166,8 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		w.Error(err, ctx.RequestID)
 		return
 	}
+
+	ApplyEvaluationJobQueueDefaults(evaluation)
 
 	mlflowExperimentID := ""
 	mlflowExperimentURL := ""

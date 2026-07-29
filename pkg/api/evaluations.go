@@ -508,11 +508,13 @@ type CollectionRef struct {
 	Benchmarks []EvaluationBenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 }
 
-// QueueConfig is retained so GET responses for legacy jobs that stored a queue still deserialize.
-// Creating a new evaluation job with queue is rejected; use a queue-backed HardwareProfile instead.
+// QueueConfig represents an optional scheduling queue for evaluation jobs.
+// When Kind is empty, the evaluation job API handler normalizes it to "kueue" before persist/runtime.
+// When a benchmark also references a queue-backed HardwareProfile, that profile's LocalQueue
+// takes precedence over this field at job scheduling time.
 type QueueConfig struct {
-	Kind string `json:"kind,omitempty"`
-	Name string `json:"name,omitempty"`
+	Kind string `json:"kind,omitempty" validate:"omitempty,oneof=kueue"`
+	Name string `json:"name" validate:"required,rfc1123_dns_label"`
 }
 
 // EvaluationJobConfig represents evaluation job request schema

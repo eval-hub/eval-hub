@@ -174,20 +174,56 @@ func TestEvaluationJobConfig_ExperimentNameWhitespaceOnlyFails(t *testing.T) {
 	}
 }
 
-func TestQueueConfig_AcceptedWithoutStructValidation(t *testing.T) {
-	// Queue field validation was removed so create can reject any queue payload
-	// with a dedicated message; legacy GET payloads may still contain queue.
+func TestQueueConfig_InvalidNameRejected(t *testing.T) {
 	validate := newTestValidator(t)
-	cfg := api.EvaluationJobConfig{
-		Name:  "test-job",
-		Model: api.ModelRef{URL: "http://test.com", Name: "model"},
-		Benchmarks: []api.EvaluationBenchmarkConfig{
-			{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
-		},
-		Queue: &api.QueueConfig{Kind: "anything", Name: "user-queue!@#$%"},
+	invalid := []string{
+		"user-queue!@#$%",
+		"-starts-with-dash",
+		"ends-with-dash-",
+		"has spaces",
+		".starts-with-dot",
+		"ends-with-dot.",
+		"Uppercase-Queue",
+		"my_queue",
+		"queue.name",
 	}
-	if err := validate.Struct(cfg); err != nil {
-		t.Fatalf("expected queue config to pass struct validation, got: %v", err)
+	for _, name := range invalid {
+		cfg := api.EvaluationJobConfig{
+			Name:  "test-job",
+			Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
+			},
+			Queue: &api.QueueConfig{Kind: "kueue", Name: name},
+		}
+		err := validate.Struct(cfg)
+		if err == nil {
+			t.Errorf("expected validation error for queue name %q", name)
+		}
+	}
+}
+
+func TestQueueConfig_ValidNameAccepted(t *testing.T) {
+	validate := newTestValidator(t)
+	valid := []string{
+		"my-queue",
+		"queue1",
+		"a",
+		"gpu-profile-v1",
+	}
+	for _, name := range valid {
+		cfg := api.EvaluationJobConfig{
+			Name:  "test-job",
+			Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
+			},
+			Queue: &api.QueueConfig{Kind: "kueue", Name: name},
+		}
+		err := validate.Struct(cfg)
+		if err != nil {
+			t.Errorf("expected no error for queue name %q, got: %v", name, err)
+		}
 	}
 }
 

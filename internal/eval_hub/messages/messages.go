@@ -239,13 +239,6 @@ var (
 		"missing_user_header",
 	)
 
-	// EvaluationJobQueueNotSupported The 'queue' field is not supported on create.
-	EvaluationJobQueueNotSupported = createMessage(
-		constants.HTTPCodeBadRequest,
-		"The 'queue' field is not supported; create a queue-backed HardwareProfile and provide hardware_config.hardware_profile_ref instead.",
-		"evaluation_job_queue_not_supported",
-	)
-
 	// HardwareProfileDisabled The hardware profile '{{.Name}}' is disabled.
 	HardwareProfileDisabled = createMessage(
 		constants.HTTPCodeBadRequest,
