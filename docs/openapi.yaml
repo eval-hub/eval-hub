@@ -2315,19 +2315,23 @@ components:
 
         Do not put credentials in the Eval Hub API request body; only reference an existing
         Secret via **`secret_ref`** (for S3).
-      additionalProperties: false
-      properties:
-        s3:
-          $ref: '#/components/schemas/TestDataRefS3'
-        pvc:
-          $ref: '#/components/schemas/TestDataRefPVC'
-      minProperties: 1
-      maxProperties: 1
       oneOf:
-        - required:
+        - type: object
+          properties:
+            s3:
+              $ref: '#/components/schemas/TestDataRefS3'
+          additionalProperties: false
+          required:
             - s3
-        - required:
+          title: S3
+        - type: object
+          properties:
+            pvc:
+              $ref: '#/components/schemas/TestDataRefPVC'
+          additionalProperties: false
+          required:
             - pvc
+          title: PVC
     EvaluationBenchmarkConfig:
       type: object
       description: |

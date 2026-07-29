@@ -3417,27 +3417,32 @@
       "TestDataRef": {
         "type": "object",
         "description": "Reference to external test data for a benchmark. Exactly one of `s3` or `pvc` must be set.\n\n**`s3`** — When the evaluation runs as a **Kubernetes Job**, Eval Hub schedules an\n**init container** on the evaluation job pod before the adapter runs. That init container:\n\n- Reads **`bucket`**, **`key`**, and **`secret_ref`** from the job spec (same JSON\n  mounted into the pod).\n- Uses credentials from the Kubernetes **Secret** named by **`secret_ref`**\n  (read-only mount; typical sources include an ODH/RHOAI S3 connection Secret).\n- Lists and downloads all objects under the **`key`** prefix into a shared\n  **`emptyDir`** volume at **`/test_data`**, preserving relative paths.\n- Exits; the **adapter container** mounts `/test_data` and reads the files.\n\n**`pvc`** — The PersistentVolumeClaim is mounted **read-only** directly into the evaluation\ncontainer at **`/test_data`**. No init container is used; the PVC must already contain the\ndata and must exist in the same namespace as the evaluation job.\n\nDo not put credentials in the Eval Hub API request body; only reference an existing\nSecret via **`secret_ref`** (for S3).\n",
-        "additionalProperties": false,
-        "properties": {
-          "s3": {
-            "$ref": "#/components/schemas/TestDataRefS3"
-          },
-          "pvc": {
-            "$ref": "#/components/schemas/TestDataRefPVC"
-          }
-        },
-        "minProperties": 1,
-        "maxProperties": 1,
         "oneOf": [
           {
+            "type": "object",
+            "properties": {
+              "s3": {
+                "$ref": "#/components/schemas/TestDataRefS3"
+              }
+            },
+            "additionalProperties": false,
             "required": [
               "s3"
-            ]
+            ],
+            "title": "S3"
           },
           {
+            "type": "object",
+            "properties": {
+              "pvc": {
+                "$ref": "#/components/schemas/TestDataRefPVC"
+              }
+            },
+            "additionalProperties": false,
             "required": [
               "pvc"
-            ]
+            ],
+            "title": "PVC"
           }
         ]
       },
