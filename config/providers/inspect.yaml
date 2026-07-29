@@ -835,7 +835,7 @@ parameters:
       auditing strategies.
 
   - name: realism_filter
-    type: boolean
+    type: [boolean, number]
     default: false
     description: >
       Petri/Bloom. Filter auditor outputs by realism score. Can be a
