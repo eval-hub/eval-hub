@@ -2047,7 +2047,7 @@ func (tc *scenarioConfig) fetchMLflowArtifactWithExperimentID(artifactPath, expe
 		tc.mlflowArtifactError = err
 		return tc.logError(fmt.Errorf("failed to fetch MLflow artifact: %w", err))
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -2193,7 +2193,7 @@ func (tc *scenarioConfig) iFetchMLflowArtifactByExperimentAndJob(artifactName, e
 	if err != nil {
 		return tc.logError(fmt.Errorf("failed to search MLflow runs: %w", err))
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
