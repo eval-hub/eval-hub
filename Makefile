@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp start-service stop-service start-sidecar stop-sidecar lint validate-configs test test-fuzz test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp start-service stop-service start-sidecar stop-sidecar lint validate-configs test test-fuzz test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build
 
 GOPATH := $(shell go env GOPATH)
 GOBIN := $(shell go env GOPATH)/bin
@@ -466,6 +466,12 @@ check-unused-components:
 
 documentation: check-unused-components generate-public-docs verify-api-docs
 
+show-local-api-docs:
+	open docs/index.html
+
+doc-build: documentation
+	$(MAKE) show-local-api-docs
+
 update-redocly-cli:
 	rm -f package-lock.json
 	npm install --save-exact @redocly/cli@latest
@@ -760,59 +766,34 @@ test-mcp-vscode: start-service build-mcp ## Run VS Code/Cursor MCP test scripts 
 ## Atris Upgrade Tests
 ## ------------------------------------------------------------------------------------------------
 
+UPGRADE_STATE_JSON ?= test-reports/upgrade-state.json
+UPGRADE_TEST_TIMEOUT ?= 15m
+
 .PHONY: run-pre-upgrade run-post-upgrade-verify run-post-upgrade run-post-upgrade-cleanup run-atris-upgrade
 
 run-pre-upgrade:
 	@echo "Running pre-upgrade tests for ${SOURCE_RELEASE} ..."
-	@test -n "$(JUNIT_XML)" || { \
-		echo "ERROR: JUNIT_XML is not set or is empty."; \
-		exit 1; \
-	}
+	@test -n "$(JUNIT_XML)" || { echo "ERROR: JUNIT_XML is not set or is empty."; exit 1; }
 	@mkdir -p $(dir $(JUNIT_XML))
-	@echo "TODO"
-	@printf '%s\n' \
-		'<?xml version="1.0" encoding="UTF-8"?>' \
-		'<testsuites name="EvalHub Upgrade Tests" tests="0" skipped="0" failures="0" errors="0" time="0.0">' \
-		'</testsuites>' \
-		> "$(JUNIT_XML)"
-	@echo "Results saved to ${JUNIT_XML}"
-	@echo "Pre-upgrade tests complete"
+	UPGRADE_STATE_JSON=$(abspath $(UPGRADE_STATE_JSON)) go test -timeout=$(UPGRADE_TEST_TIMEOUT) -count=1 ./tests/upgrade/... --godog.tags=@pre-upgrade --godog.format=junit:$(abspath $(JUNIT_XML)),pretty -v
 
 run-post-upgrade-verify:
 	@echo "Running post-upgrade verification tests for ${SOURCE_RELEASE} to ${TARGET_RELEASE} ..."
-	@test -n "$(JUNIT_XML)" || { \
-		echo "ERROR: JUNIT_XML is not set or is empty."; \
-		exit 1; \
-	}
+	@test -n "$(JUNIT_XML)" || { echo "ERROR: JUNIT_XML is not set or is empty."; exit 1; }
 	@mkdir -p $(dir $(JUNIT_XML))
-	@echo "TODO"
-	@printf '%s\n' \
-		'<?xml version="1.0" encoding="UTF-8"?>' \
-		'<testsuites name="EvalHub Upgrade Tests" tests="0" skipped="0" failures="0" errors="0" time="0.0">' \
-		'</testsuites>' \
-		> "$(JUNIT_XML)"
-	@echo "Results saved to ${JUNIT_XML}"
-	@echo "Post-upgrade verification tests complete"
+	UPGRADE_STATE_JSON=$(abspath $(UPGRADE_STATE_JSON)) go test -timeout=$(UPGRADE_TEST_TIMEOUT) -count=1 ./tests/upgrade/... --godog.tags=@post-upgrade-verify --godog.format=junit:$(abspath $(JUNIT_XML)),pretty -v
 
 run-post-upgrade:
 	@echo "Running post-upgrade tests for ${TARGET_RELEASE} ..."
-	@test -n "$(JUNIT_XML)" || { \
-		echo "ERROR: JUNIT_XML is not set or is empty."; \
-		exit 1; \
-	}
+	@test -n "$(JUNIT_XML)" || { echo "ERROR: JUNIT_XML is not set or is empty."; exit 1; }
 	@mkdir -p $(dir $(JUNIT_XML))
-	@echo "TODO"
-	@printf '%s\n' \
-		'<?xml version="1.0" encoding="UTF-8"?>' \
-		'<testsuites name="EvalHub Upgrade Tests" tests="0" skipped="0" failures="0" errors="0" time="0.0">' \
-		'</testsuites>' \
-		> "$(JUNIT_XML)"
-	@echo "Results saved to ${JUNIT_XML}"
-	@echo "Post-upgrade tests complete"
+	UPGRADE_STATE_JSON=$(abspath $(UPGRADE_STATE_JSON)) go test -timeout=$(UPGRADE_TEST_TIMEOUT) -count=1 ./tests/upgrade/... --godog.tags=@post-upgrade --godog.format=junit:$(abspath $(JUNIT_XML)),pretty -v
 
 run-post-upgrade-cleanup:
 	@echo "Running post-upgrade cleanup for ${TARGET_RELEASE} ..."
-	@echo "TODO"
+	@test -n "$(JUNIT_XML)" || { echo "ERROR: JUNIT_XML is not set or is empty."; exit 1; }
+	@mkdir -p $(dir $(JUNIT_XML))
+	UPGRADE_STATE_JSON=$(abspath $(UPGRADE_STATE_JSON)) go test -timeout=$(UPGRADE_TEST_TIMEOUT) -count=1 ./tests/upgrade/... --godog.tags=@post-upgrade-cleanup --godog.format=junit:$(abspath $(JUNIT_XML)),pretty -v || true
 	@echo "Post-upgrade cleanup complete"
 
 run-atris-upgrade: run-pre-upgrade run-post-upgrade-verify run-post-upgrade run-post-upgrade-cleanup
