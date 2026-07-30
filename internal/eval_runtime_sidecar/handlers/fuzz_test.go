@@ -52,6 +52,8 @@ func FuzzRequestPathForRouting(f *testing.F) {
 	f.Add("://bad")
 	f.Add("")
 	f.Add("/path?x=1&y=2#z")
+	// url.Parse rejects control chars in the query; routing must still ignore query/fragment.
+	f.Add("/api/2.0/mlflow?\x00")
 
 	f.Fuzz(func(t *testing.T, uri string) {
 		path := requestPathForRouting(uri)

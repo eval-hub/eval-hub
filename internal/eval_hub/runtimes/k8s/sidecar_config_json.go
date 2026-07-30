@@ -42,7 +42,7 @@ func sidecarForJobPod(cfg *config.Config, jc *jobConfig) (*config.SidecarConfig,
 			export.MLFlow.Workspace = jc.mlflowWorkspace
 			if cfg != nil && cfg.MLFlow != nil {
 				export.MLFlow.HTTPTimeout = cfg.MLFlow.HTTPTimeout
-				export.MLFlow.InsecureSkipVerify = cfg.MLFlow.InsecureSkipVerify
+				export.MLFlow.InsecureSkipVerify = cfg.MLFlow.IsInsecureSkipVerify()
 				if jc.serviceCAConfigMap != "" {
 					export.MLFlow.CACertPath = serviceCAMountPath + "/" + serviceCABundleFile
 				} else {

@@ -76,11 +76,6 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.
 			logger.Info("Loaded MLflow CA certificate", "path", config.MLFlow.CACertPath)
 		}
 
-		if config.MLFlow.InsecureSkipVerify {
-			tlsConfig.InsecureSkipVerify = true
-			logger.Warn("MLflow TLS certificate verification is disabled")
-		}
-
 		config.MLFlow.TLSConfig = tlsConfig
 	}
 

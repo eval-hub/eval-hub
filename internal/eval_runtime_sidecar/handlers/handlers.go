@@ -81,6 +81,10 @@ func (h *Handlers) HandleProxyCall(w http.ResponseWriter, r *http.Request) {
 func requestPathForRouting(uri string) string {
 	u, err := url.Parse(uri)
 	if err != nil {
+		// url.Parse rejects control chars (e.g. NUL in the query); still strip ?/# so routing ignores them.
+		if i := strings.IndexAny(uri, "?#"); i >= 0 {
+			return uri[:i]
+		}
 		return uri
 	}
 	return u.EscapedPath()
