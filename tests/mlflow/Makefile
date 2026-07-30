@@ -2,7 +2,7 @@
 
 # Local Python environment (uv). Isolated from the repo-root .venv used for FVT.
 VENV_DIR ?= .venv
-PYTHON ?= 3.14
+PYTHON ?= 3.12
 
 MLFLOW_OLD_VERSION ?= 3.8.1
 MLFLOW_LATEST_VERSION ?= 3.14.0

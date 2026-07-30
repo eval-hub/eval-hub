@@ -199,7 +199,7 @@ Configuration is loaded from `config/config.yaml`, overridden by environment var
 | `DB_DRIVER` | Database driver (`sqlite` or `pgx`) | `sqlite` |
 | `DB_URL` | Database connection string | SQLite in-memory |
 | `MLFLOW_TRACKING_URI` | MLflow tracking server | `http://localhost:5000` |
-| `MLFLOW_INSECURE_SKIP_VERIFY` | Skip TLS verification for MLflow | `false` |
+| `MLFLOW_CA_CERT_PATH` | PEM CA bundle for MLflow TLS verification | (system roots) |
 | `LOG_LEVEL` | Logging level | `INFO` |
 | `EVALHUB_HARDWARE_PROFILES_NAMESPACE` | Platform namespace where OpenDataHub `HardwareProfile` CRs are fetched (Kubernetes runtime). Required for `hardware_config.hardware_profile_name` evaluations; typically `opendatahub` or `redhat-ods-applications`. Set by the TrustyAI Service Operator deployment. | _(unset — hardware profile lookups fail)_ |
 

@@ -34,7 +34,7 @@ Run `make help` for a short list.
 | Target | Description |
 |--------|-------------|
 | `help` | List targets and descriptions |
-| `init-python` | Create `$(VENV_DIR)` with `uv venv` (default `.venv`, Python `3.14`) |
+| `init-python` | Create `$(VENV_DIR)` with `uv venv` (default `.venv`, Python `3.12`) |
 | `install-mlflow` | Depends on `init-python`; installs MLflow with `uv pip` into the venv |
 | `start-mlflow` | Install (locked), stop this port, then start MLflow in the background |
 | `stop-mlflow` | Stop the server on `MLFLOW_PORT` only (PID file / port listen) |
@@ -51,7 +51,7 @@ Override defaults on the `make` command line or in the environment:
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `VENV_DIR` | `.venv` | uv virtualenv location (under `tests/mlflow`) |
-| `PYTHON` | `3.14` | Python version passed to `uv venv` |
+| `PYTHON` | `3.12` | Python version passed to `uv venv` |
 | `MLFLOW_VERSION` | `3.13.0` | MLflow package version for `uv pip install` (see **MLflow version note** below) |
 | `MLFLOW_HOST` | `127.0.0.1` | Server bind address |
 | `MLFLOW_PORT` | `5000` | Server port |

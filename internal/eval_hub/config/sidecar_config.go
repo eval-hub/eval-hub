@@ -47,16 +47,16 @@ type EvalHubClientConfig struct {
 }
 
 // SidecarMLFlowConfig holds sidecar-specific MLflow settings (e.g. token cache TTL).
-// CACertPath and InsecureSkipVerify may also be set under sidecar.mlflow in YAML; when writing
-// sidecar_config.json for job pods, those fields are overwritten from top-level mlflow config.
+// CACertPath may also be set under sidecar.mlflow in YAML; when writing sidecar_config.json
+// for job pods, that field is overwritten from top-level mlflow config. TLS verification
+// is always enabled for MLflow; use CACertPath for custom CAs.
 type SidecarMLFlowConfig struct {
-	TrackingURI        string        `mapstructure:"tracking_uri,omitempty" json:"tracking_uri,omitempty"`
-	TokenPath          string        `mapstructure:"token_path,omitempty" json:"token_path,omitempty"`
-	Workspace          string        `mapstructure:"workspace,omitempty" json:"workspace,omitempty"`
-	TokenCacheTimeout  time.Duration `mapstructure:"token_cache_timeout" json:"token_cache_timeout,omitempty"`
-	HTTPTimeout        time.Duration `mapstructure:"http_timeout" json:"http_timeout,omitempty"`
-	CACertPath         string        `mapstructure:"ca_cert_path,omitempty" json:"ca_cert_path,omitempty"`
-	InsecureSkipVerify bool          `mapstructure:"insecure_skip_verify,omitempty" json:"insecure_skip_verify,omitempty"`
+	TrackingURI       string        `mapstructure:"tracking_uri,omitempty" json:"tracking_uri,omitempty"`
+	TokenPath         string        `mapstructure:"token_path,omitempty" json:"token_path,omitempty"`
+	Workspace         string        `mapstructure:"workspace,omitempty" json:"workspace,omitempty"`
+	TokenCacheTimeout time.Duration `mapstructure:"token_cache_timeout" json:"token_cache_timeout,omitempty"`
+	HTTPTimeout       time.Duration `mapstructure:"http_timeout" json:"http_timeout,omitempty"`
+	CACertPath        string        `mapstructure:"ca_cert_path,omitempty" json:"ca_cert_path,omitempty"`
 }
 
 type ServiceAccountConfig struct {
