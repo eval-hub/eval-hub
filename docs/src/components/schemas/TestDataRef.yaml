@@ -1,6 +1,6 @@
 type: object
 description: |
-  Reference to external test data for a benchmark. Exactly one of `s3` or `pvc` must be set.
+  Reference to external test data for a benchmark. Exactly one of `s3`, `pvc`, or `git` must be set.
 
   **`s3`** — When the evaluation runs as a **Kubernetes Job**, Eval Hub schedules an
   **init container** on the evaluation job pod before the adapter runs. That init container:
@@ -17,8 +17,12 @@ description: |
   container at **`/test_data`**. No init container is used; the PVC must already contain the
   data and must exist in the same namespace as the evaluation job.
 
+  **`git`** — The specified repository is cloned and checked out at the given ref into
+  **`/test_data`** before the adapter runs. The resolved commit SHA is recorded as
+  **`commit_sha`** within the `git` object on the evaluation job for reproducibility.
+
   Do not put credentials in the Eval Hub API request body; only reference an existing
-  Secret via **`secret_ref`** (for S3).
+  Secret via **`secret_ref`** (for S3 or git).
 oneOf:
   - type: object
     properties:
@@ -36,3 +40,11 @@ oneOf:
     required:
       - pvc
     title: PVC
+  - type: object
+    properties:
+      git:
+        $ref: ./TestDataRefGit.yaml
+    additionalProperties: false
+    required:
+      - git
+    title: Git
