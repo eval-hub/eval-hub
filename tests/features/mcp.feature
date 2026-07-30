@@ -834,3 +834,90 @@ Feature: MCP Tools
       """
     Then the MCP tool call should fail
     And the MCP error should contain "resource_not_found"
+
+  @mlflow @cluster 
+  Scenario: MCP can retrieve completed job that has evalcard exported
+    Given the service is running
+    And the model endpoint is reachable
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+      """
+      {
+        "name": "evalcard_mcp_test",
+        "description": "Job for MCP card testing",
+        "tags": ["evalcard", "mcp"],
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}",
+          "auth": {
+            "secret_ref": "{{env:MODEL_AUTH_SECRET_REF|test}}"
+          }
+        },
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+              "num_examples": 5,
+              "tokenizer": "google/flan-t5-small"
+            }
+          }
+        ],
+        "experiment": {
+          "name": "evalcard_mcp_experiment"
+        }
+      }
+      """
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:mcp_job_id"
+    And the "resource.mlflow_experiment_id" field in the response should be saved as "value:mlflow_experiment_id"
+    And I wait for the evaluation job status to be "completed"
+    When I call MCP tool "get_job_status" with arguments:
+      """
+      {
+        "job_id": "{{value:mcp_job_id}}"
+      }
+      """
+    Then the MCP tool call should succeed
+    And the MCP response should contain the value "completed" at path "$.state"
+    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:mcp_job_id}}"
+    Then the MLflow artifact should exist
+ 
+  @mlflow @cluster
+  Scenario: MCP resource returns job with mlflow_run_id for completed job with evalcard
+    Given the service is running
+    And the model endpoint is reachable
+    When I send a POST request to "/api/v1/evaluations/jobs" with body:
+      """
+      {
+        "name": "evalcard_mcp_resource_test",
+        "description": "Test MCP resource includes mlflow_run_id",
+        "tags": ["evalcard", "mcp", "resource"],
+        "model": {
+          "url": "{{env:MODEL_URL|http://test.com}}",
+          "name": "{{env:MODEL_NAME|test}}",
+          "auth": {
+            "secret_ref": "{{env:MODEL_AUTH_SECRET_REF|test}}"
+          }
+        },
+        "benchmarks": [
+          {
+            "id": "arc_easy",
+            "provider_id": "lm_evaluation_harness",
+            "parameters": {
+              "num_examples": 5,
+              "tokenizer": "google/flan-t5-small"
+            }
+          }
+        ],
+        "experiment": {
+          "name": "evalcard_mcp_resource_experiment"
+        }
+      }
+      """
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:mcp_resource_job_id"
+    And I wait for the evaluation job status to be "completed"
+    When I read MCP resource "evalhub://jobs/{{value:mcp_resource_job_id}}"
+    Then the MCP resource read should succeed
+    And the MCP resource should contain "benchmarks"
+    And the MCP resource should contain "mlflow_run_id"
