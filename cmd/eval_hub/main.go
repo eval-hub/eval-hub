@@ -25,7 +25,7 @@ import (
 
 var (
 	// Version can be set during the compilation
-	Version string = "0.4.5"
+	Version string = "1.0.0"
 	// Build is set during the compilation
 	Build string
 	// BuildDate is set during the compilation
