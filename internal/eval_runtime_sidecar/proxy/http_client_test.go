@@ -112,9 +112,11 @@ func TestNewMLFlowHTTPClient(t *testing.T) {
 	})
 }
 
-func TestNewMLFlowHTTPClient_PreservesSidecarInsecureSkipVerify(t *testing.T) {
+func TestNewMLFlowHTTPClient_IgnoresSidecarInsecureSkipVerify(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sidecar_config.json")
+	// insecure_skip_verify is intentionally not part of SidecarMLFlowConfig; unknown JSON
+	// fields are ignored and the MLflow client must keep TLS verification enabled.
 	json := `{
   "eval_hub": { "base_url": "https://hub.example" },
   "mlflow": {
@@ -130,8 +132,8 @@ func TestNewMLFlowHTTPClient_PreservesSidecarInsecureSkipVerify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadSidecarRuntimeConfig: %v", err)
 	}
-	if !cfg.MLFlow.IsInsecureSkipVerify() {
-		t.Fatal("expected MLFlow.IsInsecureSkipVerify after loading sidecar JSON")
+	if cfg.MLFlow.IsInsecureSkipVerify() {
+		t.Fatal("sidecar must not enable MLFlow InsecureSkipVerify from JSON")
 	}
 
 	client, err := NewMLFlowHTTPClient(cfg, false, slog.Default())
@@ -145,7 +147,7 @@ func TestNewMLFlowHTTPClient_PreservesSidecarInsecureSkipVerify(t *testing.T) {
 	if !ok || transport.TLSClientConfig == nil {
 		t.Fatal("expected http.Transport with TLSClientConfig")
 	}
-	if !transport.TLSClientConfig.InsecureSkipVerify {
-		t.Error("expected InsecureSkipVerify from sidecar_config.json to reach NewMLFlowHTTPClient")
+	if transport.TLSClientConfig.InsecureSkipVerify {
+		t.Error("expected MLflow client to keep TLS verification enabled")
 	}
 }

@@ -3,6 +3,7 @@ package k8s
 import (
 	"crypto/tls"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -73,13 +74,13 @@ func TestSidecarForJobPodIncludesOTEL(t *testing.T) {
 	}
 }
 
-func TestSidecarForJobPodDerivesMLFlowInsecureSkipVerify(t *testing.T) {
+func TestSidecarForJobPodCopiesMLFlowSettings(t *testing.T) {
 	cfg := &config.Config{
 		Sidecar: &config.SidecarConfig{Port: 8080},
 		MLFlow: &config.MLFlowConfig{
 			HTTPTimeout: 30 * time.Second,
 			CACertPath:  "/etc/mlflow/ca.crt",
-			TLSConfig:   &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+			TLSConfig:   &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // service-side only; must not reach sidecar JSON
 		},
 	}
 	jc := &jobConfig{
@@ -102,5 +103,13 @@ func TestSidecarForJobPodDerivesMLFlowInsecureSkipVerify(t *testing.T) {
 	}
 	if export.MLFlow.Workspace != "ws-1" {
 		t.Fatalf("Workspace = %q", export.MLFlow.Workspace)
+	}
+
+	data, err := json.Marshal(export.MLFlow)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(data), "insecure_skip_verify") {
+		t.Fatalf("sidecar MLflow JSON must not include insecure_skip_verify: %s", data)
 	}
 }
