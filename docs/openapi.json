@@ -3226,9 +3226,51 @@
           "sub_path": "benchmark-a/v1"
         }
       },
+      "TestDataRefGit": {
+        "type": "object",
+        "description": "Git repository test data. Only applies when Eval Hub runs the benchmark as a\n**Kubernetes Job** (cluster execution). It does not apply to local-only evaluation runs.\n\nThe repository is cloned and checked out at **`ref`** into **`/test_data`** before\nthe adapter runs. If **`sub_path`** is provided, only that subdirectory is exposed.\n\nThe resolved commit SHA is recorded as **`commit_sha`** within this object on the\nevaluation job response, providing commit-level reproducibility.\n\n**Private repositories** — supply a **`secret_ref`** pointing to a Kubernetes Secret\nof type `kubernetes.io/basic-auth` in the same namespace as the evaluation job:\n\n```yaml\napiVersion: v1\nkind: Secret\nmetadata:\n  name: my-git-credentials\ntype: kubernetes.io/basic-auth\nstringData:\n  username: my-username\n  password: ghp_xxxxxxxxxxxx  # Personal Access Token or password\n```\n\n**Public repositories** — omit `secret_ref`; the repository is cloned over HTTPS\nwithout credentials.\n\nDo not put credentials in the Eval Hub API request body; only reference an existing\nSecret via **`secret_ref`**.\n",
+        "required": [
+          "url",
+          "ref"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "HTTPS URL of the git repository to clone. SSH URLs are not supported.\n",
+            "example": "https://github.com/my-org/my-eval-datasets.git"
+          },
+          "ref": {
+            "type": "string",
+            "description": "Git ref to check out — a branch name, tag name, or full commit SHA.\nThe init container resolves whichever type is provided; no `type` field is needed.\n\n- **Branch**: `main`, `feat/my-branch`\n- **Tag**: `v1.2.0`, `release-3.6`\n- **Commit SHA**: `a3f9c12e8b...` (7–40 hex characters)\n",
+            "example": "main"
+          },
+          "sub_path": {
+            "type": "string",
+            "description": "Optional path within the cloned repository to mount at `/test_data` instead of\nthe repository root. Useful when the repository contains data for multiple\nbenchmarks in separate directories.\n",
+            "example": "datasets/lm-eval"
+          },
+          "secret_ref": {
+            "type": "string",
+            "description": "Name of a Kubernetes **`Secret`** of type `kubernetes.io/basic-auth` in the\nevaluation job namespace, mounted read-only into the git-clone init container.\nOmit for public repositories.\n",
+            "example": "my-git-credentials"
+          },
+          "commit_sha": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Resolved commit SHA of the cloned repository. Populated by Eval Hub after the\ngit-clone init container completes — not set on job submission. Provides\ncommit-level reproducibility: the exact data state used for this evaluation run,\nregardless of whether `ref` was a branch, tag, or SHA.\n",
+            "example": "a3f9c12e8b4d6f1c2e9a7b3d5f0e8c4a2b6d9e1f"
+          }
+        },
+        "example": {
+          "url": "https://github.com/my-org/my-eval-datasets.git",
+          "ref": "main",
+          "sub_path": "datasets/lm-eval",
+          "secret_ref": "my-git-credentials"
+        }
+      },
       "TestDataRef": {
         "type": "object",
-        "description": "Reference to external test data for a benchmark. Exactly one of `s3` or `pvc` must be set.\n\n**`s3`** — When the evaluation runs as a **Kubernetes Job**, Eval Hub schedules an\n**init container** on the evaluation job pod before the adapter runs. That init container:\n\n- Reads **`bucket`**, **`key`**, and **`secret_ref`** from the job spec (same JSON\n  mounted into the pod).\n- Uses credentials from the Kubernetes **Secret** named by **`secret_ref`**\n  (read-only mount; typical sources include an ODH/RHOAI S3 connection Secret).\n- Lists and downloads all objects under the **`key`** prefix into a shared\n  **`emptyDir`** volume at **`/test_data`**, preserving relative paths.\n- Exits; the **adapter container** mounts `/test_data` and reads the files.\n\n**`pvc`** — The PersistentVolumeClaim is mounted **read-only** directly into the evaluation\ncontainer at **`/test_data`**. No init container is used; the PVC must already contain the\ndata and must exist in the same namespace as the evaluation job.\n\nDo not put credentials in the Eval Hub API request body; only reference an existing\nSecret via **`secret_ref`** (for S3).\n",
+        "description": "Reference to external test data for a benchmark. Exactly one of `s3`, `pvc`, or `git` must be set.\n\n**`s3`** — When the evaluation runs as a **Kubernetes Job**, Eval Hub schedules an\n**init container** on the evaluation job pod before the adapter runs. That init container:\n\n- Reads **`bucket`**, **`key`**, and **`secret_ref`** from the job spec (same JSON\n  mounted into the pod).\n- Uses credentials from the Kubernetes **Secret** named by **`secret_ref`**\n  (read-only mount; typical sources include an ODH/RHOAI S3 connection Secret).\n- Lists and downloads all objects under the **`key`** prefix into a shared\n  **`emptyDir`** volume at **`/test_data`**, preserving relative paths.\n- Exits; the **adapter container** mounts `/test_data` and reads the files.\n\n**`pvc`** — The PersistentVolumeClaim is mounted **read-only** directly into the evaluation\ncontainer at **`/test_data`**. No init container is used; the PVC must already contain the\ndata and must exist in the same namespace as the evaluation job.\n\n**`git`** — The specified repository is cloned and checked out at the given ref into\n**`/test_data`** before the adapter runs. The resolved commit SHA is recorded as\n**`commit_sha`** within the `git` object on the evaluation job for reproducibility.\n\nDo not put credentials in the Eval Hub API request body; only reference an existing\nSecret via **`secret_ref`** (for S3 or git).\n",
         "oneOf": [
           {
             "type": "object",
@@ -3255,6 +3297,19 @@
               "pvc"
             ],
             "title": "PVC"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "git": {
+                "$ref": "#/components/schemas/TestDataRefGit"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "git"
+            ],
+            "title": "Git"
           }
         ]
       },

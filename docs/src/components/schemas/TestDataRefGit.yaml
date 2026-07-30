@@ -1,0 +1,77 @@
+type: object
+description: |
+  Git repository test data. Only applies when Eval Hub runs the benchmark as a
+  **Kubernetes Job** (cluster execution). It does not apply to local-only evaluation runs.
+
+  The repository is cloned and checked out at **`ref`** into **`/test_data`** before
+  the adapter runs. If **`sub_path`** is provided, only that subdirectory is exposed.
+
+  The resolved commit SHA is recorded as **`commit_sha`** within this object on the
+  evaluation job response, providing commit-level reproducibility.
+
+  **Private repositories** — supply a **`secret_ref`** pointing to a Kubernetes Secret
+  of type `kubernetes.io/basic-auth` in the same namespace as the evaluation job:
+
+  ```yaml
+  apiVersion: v1
+  kind: Secret
+  metadata:
+    name: my-git-credentials
+  type: kubernetes.io/basic-auth
+  stringData:
+    username: my-username
+    password: ghp_xxxxxxxxxxxx  # Personal Access Token or password
+  ```
+
+  **Public repositories** — omit `secret_ref`; the repository is cloned over HTTPS
+  without credentials.
+
+  Do not put credentials in the Eval Hub API request body; only reference an existing
+  Secret via **`secret_ref`**.
+required:
+  - url
+  - ref
+properties:
+  url:
+    type: string
+    description: |
+      HTTPS URL of the git repository to clone. SSH URLs are not supported.
+    example: https://github.com/my-org/my-eval-datasets.git
+  ref:
+    type: string
+    description: |
+      Git ref to check out — a branch name, tag name, or full commit SHA.
+      The init container resolves whichever type is provided; no `type` field is needed.
+
+      - **Branch**: `main`, `feat/my-branch`
+      - **Tag**: `v1.2.0`, `release-3.6`
+      - **Commit SHA**: `a3f9c12e8b...` (7–40 hex characters)
+    example: main
+  sub_path:
+    type: string
+    description: |
+      Optional path within the cloned repository to mount at `/test_data` instead of
+      the repository root. Useful when the repository contains data for multiple
+      benchmarks in separate directories.
+    example: datasets/lm-eval
+  secret_ref:
+    type: string
+    description: |
+      Name of a Kubernetes **`Secret`** of type `kubernetes.io/basic-auth` in the
+      evaluation job namespace, mounted read-only into the git-clone init container.
+      Omit for public repositories.
+    example: my-git-credentials
+  commit_sha:
+    type: string
+    readOnly: true
+    description: |
+      Resolved commit SHA of the cloned repository. Populated by Eval Hub after the
+      git-clone init container completes — not set on job submission. Provides
+      commit-level reproducibility: the exact data state used for this evaluation run,
+      regardless of whether `ref` was a branch, tag, or SHA.
+    example: a3f9c12e8b4d6f1c2e9a7b3d5f0e8c4a2b6d9e1f
+example:
+  url: https://github.com/my-org/my-eval-datasets.git
+  ref: main
+  sub_path: datasets/lm-eval
+  secret_ref: my-git-credentials
