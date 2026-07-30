@@ -1060,15 +1060,15 @@ Feature: Evaluation Jobs
     Then the response code should be 202
     And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
     And the "resource.id" field in the response should be saved as "value:job2_id"
+    And I wait for the evaluation job "{{value:job1_id}}" status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{{value:job1_id}}"
     Then the response code should be 200
-    And I wait for the evaluation job status to be "completed"
     And the response should contain the value "completed" at path "$.status.state"
     And the response should contain the value "kueue" at path "$.queue.kind"
     And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And I wait for the evaluation job "{{value:job2_id}}" status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{{value:job2_id}}"
     Then the response code should be 200
-    And I wait for the evaluation job status to be "completed"
     And the response should contain the value "completed" at path "$.status.state"
     And the response should contain the value "kueue" at path "$.queue.kind"
     And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"

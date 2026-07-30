@@ -278,6 +278,9 @@ func applyEvaluationQueueIfUnset(cfg *jobConfig, queue *api.QueueConfig) {
 	}
 	cfg.queueName = queueName
 	cfg.queueKind = strings.TrimSpace(queue.Kind)
+	if cfg.queueKind == "" {
+		cfg.queueKind = "kueue"
+	}
 	cfg.nodeSelector = nil
 	cfg.tolerations = nil
 }

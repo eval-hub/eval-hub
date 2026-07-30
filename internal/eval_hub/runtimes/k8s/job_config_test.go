@@ -735,6 +735,26 @@ func TestBuildJobConfigKueueQueueNameFromEvaluationQueue(t *testing.T) {
 	}
 }
 
+func TestApplyEvaluationQueueIfUnsetDefaultsEmptyKindToKueue(t *testing.T) {
+	cfg := &jobConfig{
+		nodeSelector: map[string]string{"nvidia.com/gpu.product": "A100"},
+		tolerations:  []corev1.Toleration{{Key: "nvidia.com/gpu", Operator: corev1.TolerationOpExists}},
+	}
+	applyEvaluationQueueIfUnset(cfg, &api.QueueConfig{Name: "  eval-queue  ", Kind: "  "})
+	if cfg.queueKind != "kueue" || cfg.queueName != "eval-queue" {
+		t.Fatalf("expected queueKind kueue and queueName eval-queue, got kind %q name %q", cfg.queueKind, cfg.queueName)
+	}
+	if cfg.nodeSelector != nil || cfg.tolerations != nil {
+		t.Fatalf("expected cleared placement constraints, got selector=%v tolerations=%v", cfg.nodeSelector, cfg.tolerations)
+	}
+
+	cfg = &jobConfig{}
+	applyEvaluationQueueIfUnset(cfg, &api.QueueConfig{Name: "other-queue", Kind: "custom"})
+	if cfg.queueKind != "custom" || cfg.queueName != "other-queue" {
+		t.Fatalf("expected preserved custom kind, got kind %q name %q", cfg.queueKind, cfg.queueName)
+	}
+}
+
 func TestBuildJobConfigHardwareProfileQueueTakesPrecedenceOverEvaluationQueue(t *testing.T) {
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{

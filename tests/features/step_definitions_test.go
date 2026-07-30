@@ -775,6 +775,25 @@ func (tc *scenarioConfig) iSetWaitIntervalTo(paramValue string) error {
 }
 
 func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) error {
+	return tc.iWaitForEvaluationJobStatusByID("", expectedStatus)
+}
+
+func (tc *scenarioConfig) iWaitForEvaluationJobStatusByID(jobIDExpr, expectedStatus string) error {
+	jobID := tc.lastId
+	if strings.TrimSpace(jobIDExpr) != "" && jobIDExpr != "{id}" {
+		resolved, err := tc.getValue(jobIDExpr)
+		if err != nil {
+			return err
+		}
+		jobID = resolved
+	}
+	if jobID == "" {
+		return tc.logError(fmt.Errorf("job ID is empty for %q", jobIDExpr))
+	}
+	prevID := tc.lastId
+	tc.lastId = jobID
+	defer func() { tc.lastId = prevID }()
+
 	deadline := time.Now().Add(tc.waitDeadline)
 	var lastErr error
 	var lastStatus string
@@ -1960,6 +1979,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least "([^"]*)"$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^I wait for the evaluation job status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatus)
+	ctx.Step(`^I wait for the evaluation job "([^"]*)" status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatusByID)
 	ctx.Step(`^I set the wait deadline to "([^"]*)"$`, tc.iSetWaitDeadlineTo)
 	ctx.Step(`^I set the wait interval to "([^"]*)"$`, tc.iSetWaitIntervalTo)
 	// Other steps
