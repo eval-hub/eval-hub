@@ -656,7 +656,7 @@ func TestCreateBenchmarkResourcesAppliesHardwareProfile(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 	evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
-		HardwareProfileRef: api.HardwareProfileRef{Name: "cpu-profile"},
+		HardwareProfileName: "cpu-profile",
 	}
 
 	profile := testHardwareProfileUnstructured("default", "cpu-profile")
@@ -717,12 +717,69 @@ func TestCreateBenchmarkResourcesAppliesHardwareProfile(t *testing.T) {
 	}
 }
 
+func TestCreateBenchmarkResourcesAppliesDirectHardwareConfig(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
+		CPU:    &api.HardwareResourceQuantity{Request: "1", Limit: "2"},
+		Memory: &api.HardwareResourceQuantity{Request: "1Gi", Limit: "2Gi"},
+		GPU:    &api.HardwareGPUConfig{Name: "nvidia.com/gpu", Count: 1},
+		Queue:  &api.QueueConfig{Kind: "kueue", Name: "my-queue"},
+	}
+
+	clientset := fake.NewClientset()
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{
+			clientset:     clientset,
+			dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme()),
+		},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
+		},
+	}
+
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
+	if err != nil {
+		t.Fatalf("createBenchmarkResources returned error: %v", err)
+	}
+
+	jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(jobs))
+	}
+	adapter, err := adapterContainerFromJob(&jobs[0])
+	if err != nil {
+		t.Fatalf("adapter container: %v", err)
+	}
+	if cpu := adapter.Resources.Requests.Cpu().String(); cpu != "1" {
+		t.Fatalf("cpu request = %q, want 1", cpu)
+	}
+	if memory := adapter.Resources.Requests.Memory().String(); memory != "1Gi" {
+		t.Fatalf("memory request = %q, want 1Gi", memory)
+	}
+	if cpuLimit := adapter.Resources.Limits.Cpu().String(); cpuLimit != "2" {
+		t.Fatalf("cpu limit = %q, want 2", cpuLimit)
+	}
+	if memoryLimit := adapter.Resources.Limits.Memory().String(); memoryLimit != "2Gi" {
+		t.Fatalf("memory limit = %q, want 2Gi", memoryLimit)
+	}
+	gpuQty := adapter.Resources.Requests["nvidia.com/gpu"]
+	if gpuQty.IsZero() || gpuQty.Value() != 1 {
+		t.Fatalf("gpu request = %s, want 1", gpuQty.String())
+	}
+	if jobs[0].Labels[labelKueueQueueNameKey] != "my-queue" {
+		t.Fatalf("kueue queue label = %q, want my-queue", jobs[0].Labels[labelKueueQueueNameKey])
+	}
+}
+
 func TestCreateBenchmarkResourcesHardwareProfileNotFound(t *testing.T) {
 	t.Setenv(hardwareProfilesNamespaceEnv, "default")
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 	evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
-		HardwareProfileRef: api.HardwareProfileRef{Name: "missing-profile"},
+		HardwareProfileName: "missing-profile",
 	}
 
 	clientset := fake.NewClientset()
@@ -752,7 +809,7 @@ func TestCreateBenchmarkResourcesInvalidHardwareProfileSpec(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 	evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
-		HardwareProfileRef: api.HardwareProfileRef{Name: "bad-profile"},
+		HardwareProfileName: "bad-profile",
 	}
 
 	profile := testHardwareProfileUnstructured("default", "bad-profile")
@@ -792,7 +849,7 @@ func TestCreateBenchmarkResourcesIgnoresEmptyHardwareProfileName(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 	evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
-		HardwareProfileRef: api.HardwareProfileRef{Name: "   "},
+		HardwareProfileName: "   ",
 	}
 
 	clientset := fake.NewClientset()
@@ -818,7 +875,7 @@ func TestCreateBenchmarkResourcesRequiresHardwareProfilesNamespace(t *testing.T)
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 	evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
-		HardwareProfileRef: api.HardwareProfileRef{Name: "cpu-profile"},
+		HardwareProfileName: "cpu-profile",
 	}
 
 	clientset := fake.NewClientset()
@@ -850,7 +907,7 @@ func TestCreateBenchmarkResourcesAppliesNodeAndQueueScheduling(t *testing.T) {
 	t.Run("node scheduling", func(t *testing.T) {
 		evaluation := sampleEvaluation(providerID)
 		evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
-			HardwareProfileRef: api.HardwareProfileRef{Name: "node-profile"},
+			HardwareProfileName: "node-profile",
 		}
 		profile := testHardwareProfileUnstructured("default", "node-profile")
 		profile.Object["spec"] = map[string]any{
@@ -899,7 +956,7 @@ func TestCreateBenchmarkResourcesAppliesNodeAndQueueScheduling(t *testing.T) {
 	t.Run("queue scheduling", func(t *testing.T) {
 		evaluation := sampleEvaluation(providerID)
 		evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
-			HardwareProfileRef: api.HardwareProfileRef{Name: "queue-profile"},
+			HardwareProfileName: "queue-profile",
 		}
 		profile := testHardwareProfileUnstructured("default", "queue-profile")
 		profile.Object["spec"] = map[string]any{
@@ -945,9 +1002,11 @@ func TestCreateBenchmarkResourcesAppliesNodeAndQueueScheduling(t *testing.T) {
 		}
 	})
 
-	t.Run("evaluation queue when no hardware profile queue", func(t *testing.T) {
+	t.Run("hardware_config queue when no hardware profile queue", func(t *testing.T) {
 		evaluation := sampleEvaluation(providerID)
-		evaluation.Queue = &api.QueueConfig{Kind: "kueue", Name: "eval-local-queue"}
+		evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
+			Queue: &api.QueueConfig{Kind: "kueue", Name: "eval-local-queue"},
+		}
 		clientset := fake.NewClientset()
 		runtime := &K8sRuntime{
 			logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -972,11 +1031,10 @@ func TestCreateBenchmarkResourcesAppliesNodeAndQueueScheduling(t *testing.T) {
 		}
 	})
 
-	t.Run("hardware profile queue wins over evaluation queue", func(t *testing.T) {
+	t.Run("hardware profile queue wins over hardware_config queue", func(t *testing.T) {
 		evaluation := sampleEvaluation(providerID)
-		evaluation.Queue = &api.QueueConfig{Kind: "kueue", Name: "eval-local-queue"}
 		evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
-			HardwareProfileRef: api.HardwareProfileRef{Name: "queue-profile"},
+			HardwareProfileName: "queue-profile",
 		}
 		profile := testHardwareProfileUnstructured("default", "queue-profile")
 		profile.Object["spec"] = map[string]any{

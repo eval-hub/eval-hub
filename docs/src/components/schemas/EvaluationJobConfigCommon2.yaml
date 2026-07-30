@@ -13,12 +13,6 @@ properties:
     description: >
       Optional exports configuration for the evaluation job.
       When provided, the evaluation job results will be exported to the specified location.
-  queue:
-    $ref: ./QueueConfig.yaml
-    description: >
-      Optional scheduling queue for Kubernetes-backed evaluation jobs (e.g. Kueue).
-      When a benchmark references a queue-backed HardwareProfile, that profile's
-      LocalQueue takes precedence over this field.
   custom:
     type: object
     additionalProperties: true

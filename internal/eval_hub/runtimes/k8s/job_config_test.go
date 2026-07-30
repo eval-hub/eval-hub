@@ -686,10 +686,10 @@ func TestBuildJobConfigKueueQueueNameFromHardwareProfile(t *testing.T) {
 	}
 }
 
-func TestBuildJobConfigKueueQueueNameFromEvaluationQueue(t *testing.T) {
+func TestBuildJobConfigKueueQueueNameFromHardwareConfig(t *testing.T) {
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
-			Resource: api.Resource{ID: "job-eval-queue"},
+			Resource: api.Resource{ID: "job-hw-queue"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Model: api.ModelRef{
@@ -697,11 +697,15 @@ func TestBuildJobConfigKueueQueueNameFromEvaluationQueue(t *testing.T) {
 				Name: "model",
 			},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
-				{Ref: api.Ref{ID: "bench-1"}},
-			},
-			Queue: &api.QueueConfig{
-				Kind: "kueue",
-				Name: "eval-queue",
+				{
+					Ref: api.Ref{ID: "bench-1"},
+					HardwareConfig: &api.BenchmarkHardwareConfig{
+						Queue: &api.QueueConfig{
+							Kind: "kueue",
+							Name: "eval-queue",
+						},
+					},
+				},
 			},
 		},
 	}
@@ -731,16 +735,16 @@ func TestBuildJobConfigKueueQueueNameFromEvaluationQueue(t *testing.T) {
 		t.Fatalf("expected queueKind kueue and queueName eval-queue, got kind %q name %q", cfg.queueKind, cfg.queueName)
 	}
 	if cfg.nodeSelector != nil {
-		t.Fatalf("expected nil nodeSelector when evaluation.Queue is set, got %v", cfg.nodeSelector)
+		t.Fatalf("expected nil nodeSelector when hardware_config.queue is set, got %v", cfg.nodeSelector)
 	}
 }
 
-func TestApplyEvaluationQueueIfUnsetDefaultsEmptyKindToKueue(t *testing.T) {
+func TestApplyQueueIfUnsetDefaultsEmptyKindToKueue(t *testing.T) {
 	cfg := &jobConfig{
 		nodeSelector: map[string]string{"nvidia.com/gpu.product": "A100"},
 		tolerations:  []corev1.Toleration{{Key: "nvidia.com/gpu", Operator: corev1.TolerationOpExists}},
 	}
-	applyEvaluationQueueIfUnset(cfg, &api.QueueConfig{Name: "  eval-queue  ", Kind: "  "})
+	applyQueueIfUnset(cfg, &api.QueueConfig{Name: "  eval-queue  ", Kind: "  "})
 	if cfg.queueKind != "kueue" || cfg.queueName != "eval-queue" {
 		t.Fatalf("expected queueKind kueue and queueName eval-queue, got kind %q name %q", cfg.queueKind, cfg.queueName)
 	}
@@ -749,13 +753,13 @@ func TestApplyEvaluationQueueIfUnsetDefaultsEmptyKindToKueue(t *testing.T) {
 	}
 
 	cfg = &jobConfig{}
-	applyEvaluationQueueIfUnset(cfg, &api.QueueConfig{Name: "other-queue", Kind: "custom"})
+	applyQueueIfUnset(cfg, &api.QueueConfig{Name: "other-queue", Kind: "custom"})
 	if cfg.queueKind != "custom" || cfg.queueName != "other-queue" {
 		t.Fatalf("expected preserved custom kind, got kind %q name %q", cfg.queueKind, cfg.queueName)
 	}
 }
 
-func TestBuildJobConfigHardwareProfileQueueTakesPrecedenceOverEvaluationQueue(t *testing.T) {
+func TestBuildJobConfigHardwareProfileQueueTakesPrecedenceOverHardwareConfigQueue(t *testing.T) {
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{ID: "job-queue-precedence"},
@@ -766,11 +770,15 @@ func TestBuildJobConfigHardwareProfileQueueTakesPrecedenceOverEvaluationQueue(t 
 				Name: "model",
 			},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
-				{Ref: api.Ref{ID: "bench-1"}},
-			},
-			Queue: &api.QueueConfig{
-				Kind: "kueue",
-				Name: "eval-queue",
+				{
+					Ref: api.Ref{ID: "bench-1"},
+					HardwareConfig: &api.BenchmarkHardwareConfig{
+						Queue: &api.QueueConfig{
+							Kind: "kueue",
+							Name: "eval-queue",
+						},
+					},
+				},
 			},
 		},
 	}

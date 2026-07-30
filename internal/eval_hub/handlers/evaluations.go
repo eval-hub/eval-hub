@@ -98,16 +98,31 @@ func (h *Handlers) getStorage(ctx *executioncontext.ExecutionContext) abstractio
 	return h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 }
 
-// ApplyEvaluationJobQueueDefaults trims queue name/kind and sets kind to "kueue" when empty.
-// Call after validating a decoded EvaluationJobConfig (e.g. before persisting or starting a job).
-func ApplyEvaluationJobQueueDefaults(cfg *api.EvaluationJobConfig) {
-	if cfg == nil || cfg.Queue == nil {
+// ApplyHardwareConfigQueueDefaults trims queue name/kind on each benchmark's
+// hardware_config.queue (including collection overrides) and sets kind to "kueue"
+// when empty. Call after validating a decoded EvaluationJobConfig.
+func ApplyHardwareConfigQueueDefaults(cfg *api.EvaluationJobConfig) {
+	if cfg == nil {
 		return
 	}
-	cfg.Queue.Name = strings.TrimSpace(cfg.Queue.Name)
-	cfg.Queue.Kind = strings.TrimSpace(cfg.Queue.Kind)
-	if cfg.Queue.Kind == "" {
-		cfg.Queue.Kind = "kueue"
+	for i := range cfg.Benchmarks {
+		applyQueueDefaults(cfg.Benchmarks[i].HardwareConfig)
+	}
+	if cfg.Collection != nil {
+		for i := range cfg.Collection.Benchmarks {
+			applyQueueDefaults(cfg.Collection.Benchmarks[i].HardwareConfig)
+		}
+	}
+}
+
+func applyQueueDefaults(hw *api.BenchmarkHardwareConfig) {
+	if hw == nil || hw.Queue == nil {
+		return
+	}
+	hw.Queue.Name = strings.TrimSpace(hw.Queue.Name)
+	hw.Queue.Kind = strings.TrimSpace(hw.Queue.Kind)
+	if hw.Queue.Kind == "" {
+		hw.Queue.Kind = "kueue"
 	}
 }
 
@@ -167,7 +182,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	ApplyEvaluationJobQueueDefaults(evaluation)
+	ApplyHardwareConfigQueueDefaults(evaluation)
 
 	mlflowExperimentID := ""
 	mlflowExperimentURL := ""

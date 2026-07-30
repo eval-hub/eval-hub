@@ -14,9 +14,7 @@
         "num_examples": 10
       },
       "hardware_config": {
-        "hardware_profile_ref": {
-          "name": "{{env:TEST_CPU_QUEUE_HARDWARE_PROFILE}}"
-        }
+        "hardware_profile_name": "{{env:TEST_CPU_QUEUE_HARDWARE_PROFILE}}"
       }
     }
   ],

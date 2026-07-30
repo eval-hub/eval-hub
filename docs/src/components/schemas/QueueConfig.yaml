@@ -1,10 +1,10 @@
 type: object
 title: QueueConfig
 description: >
-  Optional workload scheduling queue for Kubernetes runtimes (e.g. Kueue
-  LocalQueue). When a benchmark also references a queue-backed HardwareProfile
-  (`spec.scheduling.type: Queue`), that profile's LocalQueue name takes
-  precedence over this field at job scheduling time.
+  Optional workload scheduling queue under a benchmark's direct
+  `hardware_config.queue` (e.g. Kueue LocalQueue). When a benchmark references a
+  queue-backed HardwareProfile (`spec.scheduling.type: Queue`), that profile's
+  LocalQueue name takes precedence over this field at job scheduling time.
 required:
   - name
 properties:

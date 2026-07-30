@@ -192,9 +192,14 @@ func TestQueueConfig_InvalidNameRejected(t *testing.T) {
 			Name:  "test-job",
 			Model: api.ModelRef{URL: "http://test.com", Name: "model"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
-				{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
+				{
+					Ref:        api.Ref{ID: "b1"},
+					ProviderID: "provider-1",
+					HardwareConfig: &api.BenchmarkHardwareConfig{
+						Queue: &api.QueueConfig{Kind: "kueue", Name: name},
+					},
+				},
 			},
-			Queue: &api.QueueConfig{Kind: "kueue", Name: name},
 		}
 		err := validate.Struct(cfg)
 		if err == nil {
@@ -216,9 +221,14 @@ func TestQueueConfig_ValidNameAccepted(t *testing.T) {
 			Name:  "test-job",
 			Model: api.ModelRef{URL: "http://test.com", Name: "model"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
-				{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
+				{
+					Ref:        api.Ref{ID: "b1"},
+					ProviderID: "provider-1",
+					HardwareConfig: &api.BenchmarkHardwareConfig{
+						Queue: &api.QueueConfig{Kind: "kueue", Name: name},
+					},
+				},
 			},
-			Queue: &api.QueueConfig{Kind: "kueue", Name: name},
 		}
 		err := validate.Struct(cfg)
 		if err != nil {
@@ -248,7 +258,7 @@ func TestBenchmarkHardwareConfig_InvalidNameRejected(t *testing.T) {
 					Ref:        api.Ref{ID: "b1"},
 					ProviderID: "provider-1",
 					HardwareConfig: &api.BenchmarkHardwareConfig{
-						HardwareProfileRef: api.HardwareProfileRef{Name: name},
+						HardwareProfileName: name,
 					},
 				},
 			},
@@ -276,15 +286,89 @@ func TestBenchmarkHardwareConfig_ValidNameAccepted(t *testing.T) {
 					Ref:        api.Ref{ID: "b1"},
 					ProviderID: "provider-1",
 					HardwareConfig: &api.BenchmarkHardwareConfig{
-						HardwareProfileRef: api.HardwareProfileRef{Name: name},
+						HardwareProfileName: name,
 					},
 				},
 			},
 		}
 		err := validate.Struct(cfg)
 		if err != nil {
-			t.Errorf("expected no error for hardware profile ref %q, got: %v", name, err)
+			t.Errorf("expected no error for hardware profile name %q, got: %v", name, err)
 		}
+	}
+}
+
+func TestBenchmarkHardwareConfig_ProfileWithDirectFieldsRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	cases := []struct {
+		name string
+		hw   *api.BenchmarkHardwareConfig
+	}{
+		{
+			name: "with cpu",
+			hw: &api.BenchmarkHardwareConfig{
+				HardwareProfileName: "my-hw-spec",
+				CPU:                 &api.HardwareResourceQuantity{Request: "1", Limit: "2"},
+			},
+		},
+		{
+			name: "with memory",
+			hw: &api.BenchmarkHardwareConfig{
+				HardwareProfileName: "my-hw-spec",
+				Memory:              &api.HardwareResourceQuantity{Request: "1Gi"},
+			},
+		},
+		{
+			name: "with gpu",
+			hw: &api.BenchmarkHardwareConfig{
+				HardwareProfileName: "my-hw-spec",
+				GPU:                 &api.HardwareGPUConfig{Name: "nvidia.com/gpu", Count: 1},
+			},
+		},
+		{
+			name: "with queue",
+			hw: &api.BenchmarkHardwareConfig{
+				HardwareProfileName: "my-hw-spec",
+				Queue:               &api.QueueConfig{Kind: "kueue", Name: "my-queue"},
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := api.EvaluationJobConfig{
+				Name:  "test-job",
+				Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+				Benchmarks: []api.EvaluationBenchmarkConfig{
+					{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1", HardwareConfig: tc.hw},
+				},
+			}
+			if err := validate.Struct(cfg); err == nil {
+				t.Fatal("expected validation error")
+			}
+		})
+	}
+}
+
+func TestBenchmarkHardwareConfig_DirectFieldsAccepted(t *testing.T) {
+	validate := newTestValidator(t)
+	cfg := api.EvaluationJobConfig{
+		Name:  "test-job",
+		Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+		Benchmarks: []api.EvaluationBenchmarkConfig{
+			{
+				Ref:        api.Ref{ID: "b1"},
+				ProviderID: "provider-1",
+				HardwareConfig: &api.BenchmarkHardwareConfig{
+					Queue:  &api.QueueConfig{Kind: "kueue", Name: "my-queue"},
+					CPU:    &api.HardwareResourceQuantity{Request: "1", Limit: "2"},
+					Memory: &api.HardwareResourceQuantity{Request: "1Gi", Limit: "2Gi"},
+					GPU:    &api.HardwareGPUConfig{Name: "nvidia.com/gpu", Count: 1},
+				},
+			},
+		},
+	}
+	if err := validate.Struct(cfg); err != nil {
+		t.Fatalf("expected no error for direct hardware_config, got: %v", err)
 	}
 }
 

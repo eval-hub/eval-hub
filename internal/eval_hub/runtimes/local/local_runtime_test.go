@@ -223,7 +223,7 @@ func TestLocalRuntimeValidateHardwareProfiles(t *testing.T) {
 		Ref:        api.Ref{ID: "bench-1"},
 		ProviderID: "provider-1",
 		HardwareConfig: &api.BenchmarkHardwareConfig{
-			HardwareProfileRef: api.HardwareProfileRef{Name: "any-profile"},
+			HardwareProfileName: "any-profile",
 		},
 	}})
 	if err != nil {

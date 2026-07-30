@@ -299,9 +299,7 @@
                           "limit": 100
                         },
                         "hardware_config": {
-                          "hardware_profile_ref": {
-                            "name": "gpu-queue-profile"
-                          }
+                          "hardware_profile_name": "gpu-queue-profile"
                         }
                       }
                     ],
@@ -3328,21 +3326,72 @@
           "threshold"
         ]
       },
-      "HardwareProfileRef": {
+      "QueueConfig": {
         "type": "object",
-        "title": "HardwareProfileRef",
-        "description": "Reference to an OpenDataHub HardwareProfile custom resource in the platform namespace (`EVALHUB_HARDWARE_PROFILES_NAMESPACE`, typically `opendatahub` or `redhat-ods-applications`).\n",
+        "title": "QueueConfig",
+        "description": "Optional workload scheduling queue under a benchmark's direct `hardware_config.queue` (e.g. Kueue LocalQueue). When a benchmark references a queue-backed HardwareProfile (`spec.scheduling.type: Queue`), that profile's LocalQueue name takes precedence over this field at job scheduling time.\n",
         "required": [
           "name"
         ],
         "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "kueue"
+            ],
+            "default": "kueue",
+            "description": "Queue integration to use. When omitted, the server behaves as if `kueue` was set. Only `kueue` is supported today.\n"
+          },
           "name": {
             "type": "string",
             "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
-            "description": "Name of the `HardwareProfile` custom resource (`hardwareprofiles.infrastructure.opendatahub.io`). Must conform to RFC 1123 DNS label naming (lowercase letters, digits, and internal hyphens).\n",
+            "description": "Queue resource name (for Kueue, the LocalQueue name). Must conform to RFC 1123 DNS label naming (lowercase letters, digits, and internal hyphens). Set on the Job as label `kueue.x-k8s.io/queue-name`.\n"
+          }
+        }
+      },
+      "HardwareResourceQuantity": {
+        "type": "object",
+        "title": "HardwareResourceQuantity",
+        "description": "Optional Kubernetes CPU or memory request and limit quantities for a benchmark's direct `hardware_config` override.\n",
+        "properties": {
+          "request": {
+            "type": "string",
+            "description": "Kubernetes resource request quantity (for example `1`, `250m`, or `1Gi`).\n",
             "examples": [
-              "default-profile",
-              "gpu-profile-v1"
+              "1",
+              "250m",
+              "1Gi"
+            ]
+          },
+          "limit": {
+            "type": "string",
+            "description": "Kubernetes resource limit quantity (for example `2`, `1`, or `2Gi`).\n",
+            "examples": [
+              "2",
+              "1",
+              "2Gi"
+            ]
+          }
+        }
+      },
+      "HardwareGPUConfig": {
+        "type": "object",
+        "title": "HardwareGPUConfig",
+        "description": "Optional GPU resource override for a benchmark's direct `hardware_config`. Kubernetes sets GPU requests and limits to the same value (`count`).\n",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Kubernetes extended resource name (for example `nvidia.com/gpu` or `amd.com/gpu`).\n",
+            "examples": [
+              "nvidia.com/gpu"
+            ]
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Number of GPU units to request on the evaluation Job. Applied as both request and limit.\n",
+            "examples": [
+              1
             ]
           }
         }
@@ -3350,10 +3399,28 @@
       "BenchmarkHardwareConfig": {
         "type": "object",
         "title": "BenchmarkHardwareConfig",
-        "description": "Optional per-benchmark hardware override for Kubernetes runtimes. When `hardware_profile_ref` is set, the server fetches the named OpenDataHub `HardwareProfile` custom resource and applies its CPU, memory, and GPU resource values plus optional scheduling (`spec.scheduling`) to the evaluation Job. Node scheduling applies `nodeSelector` and `tolerations`; Queue scheduling applies the Kueue LocalQueue name and optional priority class. Values missing from the profile fall back to the provider `runtime.k8s` configuration (and built-in defaults when those are unset). Disabled profiles (`opendatahub.io/disabled: \"true\"`) are rejected on create.\n",
+        "description": "Optional per-benchmark hardware override for Kubernetes runtimes.\nTwo mutually exclusive modes:\n- **Profile mode:** set `hardware_profile_name` to fetch a named OpenDataHub\n  `HardwareProfile` custom resource and apply its CPU, memory, and GPU resource\n  values plus optional scheduling (`spec.scheduling`) to the evaluation Job.\n  Node scheduling applies `nodeSelector` and `tolerations`; Queue scheduling\n  applies the Kueue LocalQueue name and optional priority class. When\n  `hardware_profile_name` is set, `queue`, `cpu`, `memory`, and `gpu` must not\n  be present — the request is rejected. Disabled profiles\n  (`opendatahub.io/disabled: \"true\"`) are rejected on create.\n\n- **Direct mode:** omit `hardware_profile_name` and set `queue`, `cpu`,\n  `memory`, and/or `gpu` directly. Values missing from these fields fall back\n  to the provider `runtime.k8s` configuration (and built-in defaults when those\n  are unset).\n",
         "properties": {
-          "hardware_profile_ref": {
-            "$ref": "#/components/schemas/HardwareProfileRef"
+          "hardware_profile_name": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "description": "Name of the OpenDataHub `HardwareProfile` custom resource (`hardwareprofiles.infrastructure.opendatahub.io`) in the platform namespace (`EVALHUB_HARDWARE_PROFILES_NAMESPACE`, typically `opendatahub` or `redhat-ods-applications`). Must conform to RFC 1123 DNS label naming. Mutually exclusive with `queue`, `cpu`, `memory`, and `gpu`.\n",
+            "examples": [
+              "default-profile",
+              "gpu-profile-v1"
+            ]
+          },
+          "queue": {
+            "$ref": "#/components/schemas/QueueConfig"
+          },
+          "cpu": {
+            "$ref": "#/components/schemas/HardwareResourceQuantity"
+          },
+          "memory": {
+            "$ref": "#/components/schemas/HardwareResourceQuantity"
+          },
+          "gpu": {
+            "$ref": "#/components/schemas/HardwareGPUConfig"
           }
         }
       },
@@ -3626,29 +3693,6 @@
         "additionalProperties": false,
         "title": "EvaluationExports"
       },
-      "QueueConfig": {
-        "type": "object",
-        "title": "QueueConfig",
-        "description": "Optional workload scheduling queue for Kubernetes runtimes (e.g. Kueue LocalQueue). When a benchmark also references a queue-backed HardwareProfile (`spec.scheduling.type: Queue`), that profile's LocalQueue name takes precedence over this field at job scheduling time.\n",
-        "required": [
-          "name"
-        ],
-        "properties": {
-          "kind": {
-            "type": "string",
-            "enum": [
-              "kueue"
-            ],
-            "default": "kueue",
-            "description": "Queue integration to use. When omitted, the server behaves as if `kueue` was set. Only `kueue` is supported today.\n"
-          },
-          "name": {
-            "type": "string",
-            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
-            "description": "Queue resource name (for Kueue, the LocalQueue name). Must conform to RFC 1123 DNS label naming (lowercase letters, digits, and internal hyphens). Set on the Job as label `kueue.x-k8s.io/queue-name`.\n"
-          }
-        }
-      },
       "EvaluationJobConfigCommon2": {
         "type": "object",
         "title": "EvaluationJobConfigCommon2",
@@ -3661,10 +3705,6 @@
           "exports": {
             "$ref": "#/components/schemas/EvaluationExports",
             "description": "Optional exports configuration for the evaluation job. When provided, the evaluation job results will be exported to the specified location.\n"
-          },
-          "queue": {
-            "$ref": "#/components/schemas/QueueConfig",
-            "description": "Optional scheduling queue for Kubernetes-backed evaluation jobs (e.g. Kueue). When a benchmark references a queue-backed HardwareProfile, that profile's LocalQueue takes precedence over this field.\n"
           },
           "custom": {
             "type": "object",

@@ -24,7 +24,7 @@ func TestValidateHardwareProfiles(t *testing.T) {
 			Ref:        api.Ref{ID: "bench-1"},
 			ProviderID: "provider-1",
 			HardwareConfig: &api.BenchmarkHardwareConfig{
-				HardwareProfileRef: api.HardwareProfileRef{Name: name},
+				HardwareProfileName: name,
 			},
 		}}
 	}

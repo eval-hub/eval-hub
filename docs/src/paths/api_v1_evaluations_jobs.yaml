@@ -78,8 +78,7 @@ post:
                     num_fewshot: 0
                     limit: 100
                   hardware_config:
-                    hardware_profile_ref:
-                      name: "gpu-queue-profile"
+                    hardware_profile_name: "gpu-queue-profile"
               pass_criteria:
                 threshold: 0.5
           CreateEvaluationWithExperiment:

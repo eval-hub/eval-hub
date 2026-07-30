@@ -117,7 +117,7 @@ If `SERVER_URL` is set but `METRICS_URL` is not, `@metrics` scenarios are **skip
 
 ### Hardware profile tests (`@hardware_profile`)
 
-These scenarios validate that evaluation job APIs accept and persist `hardware_config.hardware_profile_ref`, and that the created Kubernetes Job adapter container receives CPU/memory from the referenced profile. They do **not** create `HardwareProfile` CRs or fetch profile specs in the test binary — the pipeline supplies the profile name and expected adapter resources via environment variables.
+These scenarios validate that evaluation job APIs accept and persist `hardware_config.hardware_profile_name`, and that the created Kubernetes Job adapter container receives CPU/memory from the referenced profile. They do **not** create `HardwareProfile` CRs or fetch profile specs in the test binary — the pipeline supplies the profile name and expected adapter resources via environment variables.
 
 **Pipeline / cluster prerequisites** (outside the test binary):
 

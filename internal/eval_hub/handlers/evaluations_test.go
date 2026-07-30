@@ -245,38 +245,80 @@ func TestResolveProvider_NotFound(t *testing.T) {
 	}
 }
 
-func TestApplyEvaluationJobQueueDefaults(t *testing.T) {
+func TestApplyHardwareConfigQueueDefaults(t *testing.T) {
 	t.Parallel()
 	t.Run("nil config", func(t *testing.T) {
 		t.Parallel()
-		handlers.ApplyEvaluationJobQueueDefaults(nil)
+		handlers.ApplyHardwareConfigQueueDefaults(nil)
 	})
-	t.Run("nil queue", func(t *testing.T) {
+	t.Run("nil hardware config queue", func(t *testing.T) {
 		t.Parallel()
-		cfg := &api.EvaluationJobConfig{}
-		handlers.ApplyEvaluationJobQueueDefaults(cfg)
-		if cfg.Queue != nil {
-			t.Fatal("expected Queue to stay nil")
+		cfg := &api.EvaluationJobConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"},
+			},
+		}
+		handlers.ApplyHardwareConfigQueueDefaults(cfg)
+		if cfg.Benchmarks[0].HardwareConfig != nil {
+			t.Fatal("expected HardwareConfig to stay nil")
 		}
 	})
 	t.Run("empty kind defaults to kueue", func(t *testing.T) {
 		t.Parallel()
 		cfg := &api.EvaluationJobConfig{
-			Queue: &api.QueueConfig{Name: "  q1  ", Kind: "  "},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{
+					Ref:        api.Ref{ID: "b1"},
+					ProviderID: "p1",
+					HardwareConfig: &api.BenchmarkHardwareConfig{
+						Queue: &api.QueueConfig{Name: "  q1  ", Kind: "  "},
+					},
+				},
+			},
 		}
-		handlers.ApplyEvaluationJobQueueDefaults(cfg)
-		if cfg.Queue.Kind != "kueue" || cfg.Queue.Name != "q1" {
-			t.Fatalf("got kind %q name %q", cfg.Queue.Kind, cfg.Queue.Name)
+		handlers.ApplyHardwareConfigQueueDefaults(cfg)
+		q := cfg.Benchmarks[0].HardwareConfig.Queue
+		if q.Kind != "kueue" || q.Name != "q1" {
+			t.Fatalf("got kind %q name %q", q.Kind, q.Name)
 		}
 	})
 	t.Run("preserves explicit kind", func(t *testing.T) {
 		t.Parallel()
 		cfg := &api.EvaluationJobConfig{
-			Queue: &api.QueueConfig{Name: "q", Kind: "other"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{
+					Ref:        api.Ref{ID: "b1"},
+					ProviderID: "p1",
+					HardwareConfig: &api.BenchmarkHardwareConfig{
+						Queue: &api.QueueConfig{Name: "q", Kind: "other"},
+					},
+				},
+			},
 		}
-		handlers.ApplyEvaluationJobQueueDefaults(cfg)
-		if cfg.Queue.Kind != "other" {
-			t.Fatalf("got kind %q", cfg.Queue.Kind)
+		handlers.ApplyHardwareConfigQueueDefaults(cfg)
+		if cfg.Benchmarks[0].HardwareConfig.Queue.Kind != "other" {
+			t.Fatalf("got kind %q", cfg.Benchmarks[0].HardwareConfig.Queue.Kind)
+		}
+	})
+	t.Run("collection overrides", func(t *testing.T) {
+		t.Parallel()
+		cfg := &api.EvaluationJobConfig{
+			Collection: &api.CollectionRef{
+				ID: "c1",
+				Benchmarks: []api.EvaluationBenchmarkConfig{
+					{
+						ProviderID: "p1",
+						HardwareConfig: &api.BenchmarkHardwareConfig{
+							Queue: &api.QueueConfig{Name: "  cq  "},
+						},
+					},
+				},
+			},
+		}
+		handlers.ApplyHardwareConfigQueueDefaults(cfg)
+		q := cfg.Collection.Benchmarks[0].HardwareConfig.Queue
+		if q.Kind != "kueue" || q.Name != "cq" {
+			t.Fatalf("got kind %q name %q", q.Kind, q.Name)
 		}
 	})
 }
@@ -1119,7 +1161,7 @@ func TestHandleCreateEvaluationRejectsInvalidQueueName(t *testing.T) {
 	for _, name := range invalidNames {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			body := fmt.Sprintf(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"b","provider_id":"p"}],"queue":{"name":%q}}`, name)
+			body := fmt.Sprintf(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"b","provider_id":"p","hardware_config":{"queue":{"name":%q}}}]}`, name)
 			req := &bodyRequest{
 				MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
 				body:        []byte(body),
@@ -1156,7 +1198,7 @@ func TestHandleCreateEvaluationRejectsInvalidHardwareProfileRef(t *testing.T) {
 	for _, name := range invalidNames {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			body := fmt.Sprintf(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"b","provider_id":"p","hardware_config":{"hardware_profile_ref":{"name":%q}}}]}`, name)
+			body := fmt.Sprintf(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"b","provider_id":"p","hardware_config":{"hardware_profile_name":%q}}]}`, name)
 			req := &bodyRequest{
 				MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
 				body:        []byte(body),
@@ -1199,7 +1241,7 @@ func TestHandleCreateEvaluationRejectsWhenHardwareProfileValidationFails(t *test
 
 	req := &bodyRequest{
 		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
-		body:        []byte(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1","provider_id":"garak","hardware_config":{"hardware_profile_ref":{"name":"missing-profile"}}}]}`),
+		body:        []byte(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1","provider_id":"garak","hardware_config":{"hardware_profile_name":"missing-profile"}}]}`),
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
@@ -1240,7 +1282,7 @@ func TestHandleCreateEvaluationCallsValidateHardwareProfilesOnSuccess(t *testing
 
 	req := &bodyRequest{
 		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
-		body:        []byte(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1","provider_id":"garak","hardware_config":{"hardware_profile_ref":{"name":"cpu-profile"}}}]}`),
+		body:        []byte(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1","provider_id":"garak","hardware_config":{"hardware_profile_name":"cpu-profile"}}]}`),
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}

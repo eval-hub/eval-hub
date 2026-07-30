@@ -1,0 +1,21 @@
+type: object
+title: HardwareGPUConfig
+description: >
+  Optional GPU resource override for a benchmark's direct `hardware_config`.
+  Kubernetes sets GPU requests and limits to the same value (`count`).
+properties:
+  name:
+    type: string
+    description: >
+      Kubernetes extended resource name (for example `nvidia.com/gpu` or
+      `amd.com/gpu`).
+    examples:
+      - nvidia.com/gpu
+  count:
+    type: integer
+    minimum: 1
+    description: >
+      Number of GPU units to request on the evaluation Job. Applied as both
+      request and limit.
+    examples:
+      - 1

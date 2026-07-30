@@ -2,12 +2,14 @@ local test = import 'test.libsonnet';
 
 {
   model: test.model(),
-  benchmarks: [test.arcEasyBenchmark({})],
+  benchmarks: [
+    test.arcEasyBenchmark({}) + {
+      hardware_config: {
+        queue: test.queueConfig(),
+      },
+    },
+  ],
   name: 'test-evaluation-job-queue-tags-criteria',
-  queue: {
-    kind: 'kueue',
-    name: test.env('QUEUE_NAME', 'user-queue'),
-  },
   tags: [
     'integration-test',
     'kueue-enabled',
