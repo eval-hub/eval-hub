@@ -120,13 +120,15 @@ Create a file called `export_test.go` in the package under test and re-export sy
 
 SQLite in-memory is the default (`database.driver: sqlite` in `config/config.yaml`). To use PostgreSQL locally there are two approaches: a container or a native install. Both use targets in `tests/postgres/Makefile`.
 
+> **Note:** The credentials and auth settings below are for local development and testing only. For production deployments, use strong passwords, TLS, and appropriate authentication mechanisms.
+
 #### Option 1: Container (Podman/Docker)
 
 No system-level install required. The container creates the database, user, and permissions automatically.
 
 ```bash
 cd tests/postgres
-POSTGRES_PASSWORD=secret make start-postgres-container
+make start-postgres-container
 ```
 
 To stop and remove:
