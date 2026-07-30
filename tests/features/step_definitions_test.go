@@ -2231,8 +2231,15 @@ func (tc *scenarioConfig) mlflowArtifactExists(artifactPath, experimentID, runID
 		return false, tc.logError(fmt.Errorf("failed to fetch MLflow artifact: %w", err))
 	}
 	defer func() { _ = resp.Body.Close() }()
-	_, _ = io.ReadAll(resp.Body)
-	return resp.StatusCode == http.StatusOK, nil
+	body, _ := io.ReadAll(resp.Body)
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return true, nil
+	case http.StatusNotFound:
+		return false, nil
+	default:
+		return false, tc.logError(fmt.Errorf("MLflow artifact fetch returned status %d: %s", resp.StatusCode, string(body)))
+	}
 }
 
 func (tc *scenarioConfig) resolveMLflowExperimentAndJobIDs(experimentID, jobID string) (string, string, error) {
