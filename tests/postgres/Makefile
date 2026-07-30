@@ -39,7 +39,6 @@ endif
 
 POSTGRES_DATABASE_NAME ?= eval_hub
 POSTGRES_USER ?= eval_hub
-POSTGRES_PASSWORD ?= secret
 POSTGRES_URL ?= postgres://${POSTGRES_USER}@localhost:5432/${POSTGRES_DATABASE_NAME}
 
 create-database: ; $(info POSTGRES_URL = ${POSTGRES_URL})

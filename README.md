@@ -128,7 +128,7 @@ No system-level install required. The container creates the database, user, and 
 
 ```bash
 cd tests/postgres
-make start-postgres-container
+POSTGRES_PASSWORD=<your-password> make start-postgres-container
 ```
 
 To stop and remove:
@@ -144,14 +144,14 @@ Configure EvalHub in `config/config.yaml`:
 ```yaml
 database:
   driver: pgx
-  url: postgres://eval_hub:secret@localhost:5432/eval_hub
+  url: postgres://eval_hub:<your-password>@localhost:5432/eval_hub
 ```
 
 Or override via environment variables:
 
 ```bash
 export DB_DRIVER=pgx
-export DB_URL="postgres://eval_hub:secret@localhost:5432/eval_hub"
+export DB_URL="postgres://eval_hub:<your-password>@localhost:5432/eval_hub"
 ```
 
 #### Option 2: Native install (Homebrew on macOS, apt on Linux)
