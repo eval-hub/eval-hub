@@ -118,17 +118,73 @@ Create a file called `export_test.go` in the package under test and re-export sy
 
 ### Database
 
-SQLite in-memory is the default. For PostgreSQL, use the targets in `tests/postgres/Makefile`:
+SQLite in-memory is the default (`database.driver: sqlite` in `config/config.yaml`). To use PostgreSQL locally there are two approaches: a container or a native install. Both use targets in `tests/postgres/Makefile`.
+
+> **Note:** The credentials and auth settings below are for local development and testing only. For production deployments, use strong passwords, TLS, and appropriate authentication mechanisms.
+
+#### Option 1: Container (Podman/Docker)
+
+No system-level install required. The container creates the database, user, and permissions automatically.
 
 ```bash
-make -C tests/postgres install-postgres && make -C tests/postgres start-postgres
-make -C tests/postgres create-database && make -C tests/postgres create-user && make -C tests/postgres grant-permissions
+cd tests/postgres
+POSTGRES_PASSWORD=<your-password> make start-postgres-container
 ```
 
-Then set `DB_URL` to a PostgreSQL connection string:
+To stop and remove:
 
 ```bash
-export DB_URL="postgres://user@localhost:5432/eval_hub"
+cd tests/postgres
+make stop-postgres-container
+make delete-postgres-container
+```
+
+Configure EvalHub in `config/config.yaml`:
+
+```yaml
+database:
+  driver: pgx
+  url: postgres://eval_hub:<your-password>@localhost:5432/eval_hub
+```
+
+Or override via environment variables:
+
+```bash
+export DB_DRIVER=pgx
+export DB_URL="postgres://eval_hub:<your-password>@localhost:5432/eval_hub"
+```
+
+#### Option 2: Native install (Homebrew on macOS, apt on Linux)
+
+```bash
+cd tests/postgres
+make install-postgres
+make start-postgres
+make create-user
+make create-database
+make grant-permissions
+```
+
+To stop:
+
+```bash
+cd tests/postgres
+make stop-postgres
+```
+
+Configure EvalHub in `config/config.yaml` (no password needed with trust/peer auth):
+
+```yaml
+database:
+  driver: pgx
+  url: postgres://eval_hub@localhost:5432/eval_hub
+```
+
+Or override via environment variables:
+
+```bash
+export DB_DRIVER=pgx
+export DB_URL="postgres://eval_hub@localhost:5432/eval_hub"
 ```
 
 ## Configuration
@@ -138,6 +194,7 @@ Configuration is loaded from `config/config.yaml`, overridden by environment var
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `PORT` | API listen port | `8080` |
+| `DB_DRIVER` | Database driver (`sqlite` or `pgx`) | `sqlite` |
 | `DB_URL` | Database connection string | SQLite in-memory |
 | `MLFLOW_TRACKING_URI` | MLflow tracking server | `http://localhost:5000` |
 | `MLFLOW_INSECURE_SKIP_VERIFY` | Skip TLS verification for MLflow | `false` |
