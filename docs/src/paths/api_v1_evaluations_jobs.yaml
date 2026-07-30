@@ -58,7 +58,7 @@ post:
                 id: "standard-safety-collection"
               pass_criteria:
                 threshold: 0.5
-          CreateEvaluationWithAuthAndQueue:
+          CreateEvaluationWithAuthAndHardwareProfile:
             summary: Evaluate an authenticated model with HardwareProfile Kueue scheduling
             value:
               name: "granite-3.1-8b-gpu-eval"

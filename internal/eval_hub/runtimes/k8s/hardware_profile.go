@@ -252,11 +252,12 @@ func applyHardwareProfileResources(cfg *jobConfig, profile *hardwareProfileResou
 		if profile.queueName != "" {
 			cfg.queueKind = "kueue"
 			cfg.queueName = profile.queueName
+			// Kueue ResourceFlavors govern placement; drop provider/profile node constraints
+			// only when a LocalQueue is actually configured.
+			cfg.nodeSelector = nil
+			cfg.tolerations = nil
 		}
 		cfg.priorityClassName = profile.priorityClassName
-		// Kueue ResourceFlavors govern placement; drop any provider/profile node constraints.
-		cfg.nodeSelector = nil
-		cfg.tolerations = nil
 	case hardwareProfileSchedulingNode:
 		if len(profile.nodeSelector) > 0 {
 			cfg.nodeSelector = copyStringMap(profile.nodeSelector)

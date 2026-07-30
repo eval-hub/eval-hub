@@ -122,7 +122,7 @@ These scenarios validate that evaluation job APIs accept and persist `hardware_c
 **Pipeline / cluster prerequisites** (outside the test binary):
 
 1. Confirm `hardwareprofiles.infrastructure.opendatahub.io` CRD is installed (e.g. `oc get crd hardwareprofiles.infrastructure.opendatahub.io`).
-2. Ensure a `HardwareProfile` exists in the tenant namespace (`X_TENANT`).
+2. Ensure the EvalHub deployment sets `EVALHUB_HARDWARE_PROFILES_NAMESPACE` to the platform namespace that holds HardwareProfiles (typically `opendatahub` or `redhat-ods-applications`), and that a `HardwareProfile` exists there.
 3. Export its name and expected adapter resources (must match the profile's `defaultCount` / `maxCount` for CPU and memory):
 
 ```bash

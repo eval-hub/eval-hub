@@ -253,10 +253,10 @@ var (
 		"hardware_profile_not_found",
 	)
 
-	// HardwareProfileFetchFailed Failed to fetch hardware profile '{{.Name}}': '{{.Error}}'.
+	// HardwareProfileFetchFailed Failed to fetch hardware profile '{{.Name}}'.
 	HardwareProfileFetchFailed = createMessage(
-		constants.HTTPCodeBadRequest,
-		"Failed to fetch hardware profile '{{.Name}}': '{{.Error}}'.",
+		constants.HTTPCodeInternalServerError,
+		"Failed to fetch hardware profile '{{.Name}}'.",
 		"hardware_profile_fetch_failed",
 	)
 

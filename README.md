@@ -75,6 +75,8 @@ spec:
   env:
     - name: MLFLOW_TRACKING_URI
       value: "http://mlflow:5000"
+    - name: EVALHUB_HARDWARE_PROFILES_NAMESPACE
+      value: "opendatahub"  # or redhat-ods-applications on RHOAI
 ```
 
 Apply the CR to your cluster:
@@ -142,6 +144,7 @@ Configuration is loaded from `config/config.yaml`, overridden by environment var
 | `MLFLOW_TRACKING_URI` | MLflow tracking server | `http://localhost:5000` |
 | `MLFLOW_INSECURE_SKIP_VERIFY` | Skip TLS verification for MLflow | `false` |
 | `LOG_LEVEL` | Logging level | `INFO` |
+| `EVALHUB_HARDWARE_PROFILES_NAMESPACE` | Platform namespace where OpenDataHub `HardwareProfile` CRs are fetched (Kubernetes runtime). Required for `hardware_config.hardware_profile_ref` evaluations; typically `opendatahub` or `redhat-ods-applications`. Set by the TrustyAI Service Operator deployment. | _(unset — hardware profile lookups fail)_ |
 
 Provider configurations live in `config/providers/` as YAML files. The default set includes lm-evaluation-harness (167 benchmarks), RAGAS, Garak, GuideLLM, LightEval, and MTEB.
 

@@ -422,7 +422,7 @@ func (r *K8sRuntime) ValidateHardwareProfiles(benchmarks []api.EvaluationBenchma
 					"profile", profileName,
 				)
 			}
-			return serviceerrors.NewServiceError(messages.HardwareProfileFetchFailed, "Name", profileName, "Error", "hardware profile lookup is not available")
+			return serviceerrors.NewServiceError(messages.HardwareProfileFetchFailed, "Name", profileName)
 		}
 		profileCR, err := r.helper.GetHardwareProfile(ctx, profileNamespace, profileName)
 		if err != nil {
@@ -437,7 +437,7 @@ func (r *K8sRuntime) ValidateHardwareProfiles(benchmarks []api.EvaluationBenchma
 					"profile", profileName,
 				)
 			}
-			return serviceerrors.NewServiceError(messages.HardwareProfileFetchFailed, "Name", profileName, "Error", err.Error())
+			return serviceerrors.NewServiceError(messages.HardwareProfileFetchFailed, "Name", profileName)
 		}
 		if isHardwareProfileDisabled(profileCR) {
 			return serviceerrors.NewServiceError(messages.HardwareProfileDisabled, "Name", profileName)

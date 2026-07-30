@@ -248,6 +248,11 @@ func TestApplyHardwareProfileQueueSchedulingClearsNodeSelector(t *testing.T) {
 	t.Parallel()
 	cfg := &jobConfig{
 		nodeSelector: map[string]string{"nvidia.com/gpu.product": "provider-gpu"},
+		tolerations: []corev1.Toleration{{
+			Key:      "nvidia.com/gpu",
+			Operator: corev1.TolerationOpExists,
+			Effect:   corev1.TaintEffectNoSchedule,
+		}},
 	}
 	profile := &hardwareProfileResources{
 		schedulingType:    hardwareProfileSchedulingQueue,
@@ -263,6 +268,38 @@ func TestApplyHardwareProfileQueueSchedulingClearsNodeSelector(t *testing.T) {
 	}
 	if len(cfg.nodeSelector) != 0 {
 		t.Fatalf("expected nil nodeSelector, got %v", cfg.nodeSelector)
+	}
+	if len(cfg.tolerations) != 0 {
+		t.Fatalf("expected nil tolerations, got %+v", cfg.tolerations)
+	}
+}
+
+func TestApplyHardwareProfileQueueSchedulingWithoutQueuePreservesNodeSelector(t *testing.T) {
+	t.Parallel()
+	cfg := &jobConfig{
+		nodeSelector: map[string]string{"nvidia.com/gpu.product": "provider-gpu"},
+		tolerations: []corev1.Toleration{{
+			Key:      "nvidia.com/gpu",
+			Operator: corev1.TolerationOpExists,
+			Effect:   corev1.TaintEffectNoSchedule,
+		}},
+	}
+	profile := &hardwareProfileResources{
+		schedulingType:    hardwareProfileSchedulingQueue,
+		priorityClassName: "high-priority",
+	}
+	applyHardwareProfileResources(cfg, profile)
+	if cfg.queueKind != "" || cfg.queueName != "" {
+		t.Fatalf("expected empty queue, got %s/%s", cfg.queueKind, cfg.queueName)
+	}
+	if cfg.priorityClassName != "high-priority" {
+		t.Fatalf("priorityClassName = %q", cfg.priorityClassName)
+	}
+	if cfg.nodeSelector["nvidia.com/gpu.product"] != "provider-gpu" {
+		t.Fatalf("nodeSelector = %v, want provider placement preserved", cfg.nodeSelector)
+	}
+	if len(cfg.tolerations) != 1 {
+		t.Fatalf("tolerations = %+v, want provider toleration preserved", cfg.tolerations)
 	}
 }
 
