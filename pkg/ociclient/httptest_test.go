@@ -19,9 +19,9 @@ func startTestServer(t *testing.T, handler http.Handler) (*httptest.Server, *htt
 	client := &http.Client{
 		Transport: &http.Transport{
 			DisableKeepAlives: true,
-			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				var d net.Dialer
-				c, err := d.DialContext(ctx, srv.Listener.Addr().Network(), srv.Listener.Addr().String())
+				c, err := d.DialContext(ctx, network, addr)
 				if err != nil {
 					return nil, err
 				}

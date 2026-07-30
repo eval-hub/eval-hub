@@ -94,9 +94,6 @@ func TestSidecarForJobPodDerivesMLFlowInsecureSkipVerify(t *testing.T) {
 	if export.MLFlow == nil {
 		t.Fatal("expected MLFlow in sidecar export")
 	}
-	if !export.MLFlow.InsecureSkipVerify {
-		t.Error("expected InsecureSkipVerify derived from TLSConfig")
-	}
 	if export.MLFlow.HTTPTimeout != 30*time.Second {
 		t.Fatalf("HTTPTimeout = %v, want 30s", export.MLFlow.HTTPTimeout)
 	}

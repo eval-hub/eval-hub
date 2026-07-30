@@ -44,13 +44,14 @@ func LoadSidecarRuntimeConfig(sidecarJSONPath, version, build, buildDate string)
 	}
 
 	if sc.MLFlow != nil && strings.TrimSpace(sc.MLFlow.TrackingURI) != "" {
-		cfg.MLFlow = &config.MLFlowConfig{
+		mlflow := &config.MLFlowConfig{
 			TrackingURI: strings.TrimSpace(sc.MLFlow.TrackingURI),
 			HTTPTimeout: sc.MLFlow.HTTPTimeout,
 			CACertPath:  sc.MLFlow.CACertPath,
 			TokenPath:   sc.MLFlow.TokenPath,
 			Workspace:   sc.MLFlow.Workspace,
 		}
+		cfg.MLFlow = mlflow
 	}
 
 	if sc.OTEL != nil {

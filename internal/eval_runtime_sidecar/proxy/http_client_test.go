@@ -2,9 +2,13 @@ package proxy
 
 import (
 	"log/slog"
+	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	sidecarconfig "github.com/eval-hub/eval-hub/internal/eval_runtime_sidecar/config"
 )
 
 func TestNewEvalHubHTTPClient(t *testing.T) {
@@ -106,4 +110,42 @@ func TestNewMLFlowHTTPClient(t *testing.T) {
 			t.Error("expected non-zero timeout")
 		}
 	})
+}
+
+func TestNewMLFlowHTTPClient_PreservesSidecarInsecureSkipVerify(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sidecar_config.json")
+	json := `{
+  "eval_hub": { "base_url": "https://hub.example" },
+  "mlflow": {
+    "tracking_uri": "https://mlflow.example/ml",
+    "insecure_skip_verify": true
+  }
+}`
+	if err := os.WriteFile(path, []byte(json), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := sidecarconfig.LoadSidecarRuntimeConfig(path, "v1", "b1", "d1")
+	if err != nil {
+		t.Fatalf("LoadSidecarRuntimeConfig: %v", err)
+	}
+	if !cfg.MLFlow.IsInsecureSkipVerify() {
+		t.Fatal("expected MLFlow.IsInsecureSkipVerify after loading sidecar JSON")
+	}
+
+	client, err := NewMLFlowHTTPClient(cfg, false, slog.Default())
+	if err != nil {
+		t.Fatalf("NewMLFlowHTTPClient: %v", err)
+	}
+	if client == nil {
+		t.Fatal("expected non-nil client")
+	}
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok || transport.TLSClientConfig == nil {
+		t.Fatal("expected http.Transport with TLSClientConfig")
+	}
+	if !transport.TLSClientConfig.InsecureSkipVerify {
+		t.Error("expected InsecureSkipVerify from sidecar_config.json to reach NewMLFlowHTTPClient")
+	}
 }
