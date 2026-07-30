@@ -197,7 +197,7 @@ Configuration is loaded from `config/config.yaml`, overridden by environment var
 | `DB_DRIVER` | Database driver (`sqlite` or `pgx`) | `sqlite` |
 | `DB_URL` | Database connection string | SQLite in-memory |
 | `MLFLOW_TRACKING_URI` | MLflow tracking server | `http://localhost:5000` |
-| `MLFLOW_INSECURE_SKIP_VERIFY` | Skip TLS verification for MLflow | `false` |
+| `MLFLOW_CA_CERT_PATH` | PEM CA bundle for MLflow TLS verification | (system roots) |
 | `LOG_LEVEL` | Logging level | `INFO` |
 
 Provider configurations live in `config/providers/` as YAML files. The default set includes lm-evaluation-harness (167 benchmarks), RAGAS, Garak, GuideLLM, LightEval, and MTEB.
