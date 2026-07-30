@@ -1,8 +1,10 @@
 package k8s
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/otel"
@@ -68,5 +70,40 @@ func TestSidecarForJobPodIncludesOTEL(t *testing.T) {
 	}
 	if !json.Valid(data) {
 		t.Fatalf("invalid JSON: %s", data)
+	}
+}
+
+func TestSidecarForJobPodDerivesMLFlowInsecureSkipVerify(t *testing.T) {
+	cfg := &config.Config{
+		Sidecar: &config.SidecarConfig{Port: 8080},
+		MLFlow: &config.MLFlowConfig{
+			HTTPTimeout: 30 * time.Second,
+			CACertPath:  "/etc/mlflow/ca.crt",
+			TLSConfig:   &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+		},
+	}
+	jc := &jobConfig{
+		mlflowTrackingURI: "https://mlflow.example.com",
+		mlflowWorkspace:   "ws-1",
+	}
+
+	export, err := sidecarForJobPod(cfg, jc)
+	if err != nil {
+		t.Fatalf("sidecarForJobPod: %v", err)
+	}
+	if export.MLFlow == nil {
+		t.Fatal("expected MLFlow in sidecar export")
+	}
+	if !export.MLFlow.InsecureSkipVerify {
+		t.Error("expected InsecureSkipVerify derived from TLSConfig")
+	}
+	if export.MLFlow.HTTPTimeout != 30*time.Second {
+		t.Fatalf("HTTPTimeout = %v, want 30s", export.MLFlow.HTTPTimeout)
+	}
+	if export.MLFlow.CACertPath != "/etc/mlflow/ca.crt" {
+		t.Fatalf("CACertPath = %q", export.MLFlow.CACertPath)
+	}
+	if export.MLFlow.Workspace != "ws-1" {
+		t.Fatalf("Workspace = %q", export.MLFlow.Workspace)
 	}
 }
