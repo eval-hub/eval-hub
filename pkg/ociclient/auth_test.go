@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -57,7 +58,7 @@ func TestAuthenticatorRefreshToken(t *testing.T) {
 	t.Parallel()
 
 	const tokenPath = "/token"
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v2":
 			w.Header().Set("WWW-Authenticate", `Bearer realm="http://`+r.Host+tokenPath+`",service="test"`)
@@ -72,7 +73,9 @@ func TestAuthenticatorRefreshToken(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	auth := newAuthenticator(srv.URL, "org/repo", Credentials{Username: "user", Password: "pass"}, httpClient)
+	t.Cleanup(srv.Close)
+
+	auth := newAuthenticator(srv.URL, "org/repo", Credentials{Username: "user", Password: "pass"}, srv.Client())
 	if err := auth.refreshToken(context.Background()); err != nil {
 		t.Fatalf("refreshToken() err = %v", err)
 	}
@@ -85,7 +88,7 @@ func TestAuthenticatorRefreshTokenAccessTokenField(t *testing.T) {
 	t.Parallel()
 
 	const tokenPath = "/token"
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v2":
 			w.Header().Set("WWW-Authenticate", `Bearer realm="http://`+r.Host+tokenPath+`",service="test"`)
@@ -96,7 +99,9 @@ func TestAuthenticatorRefreshTokenAccessTokenField(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	auth := newAuthenticator(srv.URL, "org/repo", Credentials{Username: "user", Password: "pass"}, httpClient)
+	t.Cleanup(srv.Close)
+
+	auth := newAuthenticator(srv.URL, "org/repo", Credentials{Username: "user", Password: "pass"}, srv.Client())
 	if err := auth.refreshToken(context.Background()); err != nil {
 		t.Fatalf("refreshToken() err = %v", err)
 	}
@@ -108,14 +113,16 @@ func TestAuthenticatorRefreshTokenAccessTokenField(t *testing.T) {
 func TestAuthenticatorRefreshTokenNoAuthRequired(t *testing.T) {
 	t.Parallel()
 
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/v2" {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 		http.NotFound(w, r)
 	}))
-	auth := newAuthenticator(srv.URL, "org/repo", Credentials{}, httpClient)
+	t.Cleanup(srv.Close)
+
+	auth := newAuthenticator(srv.URL, "org/repo", Credentials{}, srv.Client())
 	auth.token = "stale"
 	if err := auth.refreshToken(context.Background()); err != nil {
 		t.Fatalf("refreshToken() err = %v", err)
@@ -129,7 +136,7 @@ func TestAuthenticatorCreateNewTokenErrors(t *testing.T) {
 	t.Parallel()
 
 	const tokenPath = "/token"
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v2":
 			w.Header().Set("WWW-Authenticate", `Bearer realm="http://`+r.Host+tokenPath+`",service="test"`)
@@ -140,7 +147,9 @@ func TestAuthenticatorCreateNewTokenErrors(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	auth := newAuthenticator(srv.URL, "org/repo", Credentials{Username: "user", Password: "bad"}, httpClient)
+	t.Cleanup(srv.Close)
+
+	auth := newAuthenticator(srv.URL, "org/repo", Credentials{Username: "user", Password: "bad"}, srv.Client())
 	if err := auth.refreshToken(context.Background()); err == nil {
 		t.Fatal("expected token request failure")
 	}
@@ -160,14 +169,16 @@ func TestAuthenticatorRefreshTokenCancelledContext(t *testing.T) {
 func TestAuthenticatorInitiateChallengeMissingWWWAuthenticate(t *testing.T) {
 	t.Parallel()
 
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/v2" {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 		http.NotFound(w, r)
 	}))
-	auth := newAuthenticator(srv.URL, "org/repo", Credentials{}, httpClient)
+	t.Cleanup(srv.Close)
+
+	auth := newAuthenticator(srv.URL, "org/repo", Credentials{}, srv.Client())
 	if _, err := auth.initiateChallenge(context.Background()); err == nil {
 		t.Fatal("expected missing WWW-Authenticate error")
 	}
@@ -176,14 +187,16 @@ func TestAuthenticatorInitiateChallengeMissingWWWAuthenticate(t *testing.T) {
 func TestAuthenticatorCreateNewTokenMissingToken(t *testing.T) {
 	t.Parallel()
 
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/token" {
 			_ = json.NewEncoder(w).Encode(map[string]string{})
 			return
 		}
 		http.NotFound(w, r)
 	}))
-	auth := newAuthenticator(srv.URL, "org/repo", Credentials{}, httpClient)
+	t.Cleanup(srv.Close)
+
+	auth := newAuthenticator(srv.URL, "org/repo", Credentials{}, srv.Client())
 	if err := auth.createNewToken(context.Background(), srv.URL+"/token"); err == nil {
 		t.Fatal("expected missing token error")
 	}

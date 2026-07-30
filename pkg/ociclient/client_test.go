@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -20,7 +21,7 @@ func TestPushEvaluationCard(t *testing.T) {
 	var mu sync.Mutex
 	tokenPath := "/token"
 
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v2":
 			w.Header().Set("WWW-Authenticate", `Bearer realm="http://`+r.Host+tokenPath+`",service="test"`)
@@ -48,7 +49,9 @@ func TestPushEvaluationCard(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	client, err := NewClient(srv.URL, "test-org/test-repo", Credentials{Username: "user", Password: "pass"}, httpClient)
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "test-org/test-repo", Credentials{Username: "user", Password: "pass"}, srv.Client())
 	if err != nil {
 		t.Fatalf("NewClient() err = %v", err)
 	}
@@ -98,7 +101,7 @@ func TestPushEvaluationCardSkipsExistingBlob(t *testing.T) {
 	t.Parallel()
 
 	uploads := 0
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v2":
 			w.WriteHeader(http.StatusOK)
@@ -113,7 +116,9 @@ func TestPushEvaluationCardSkipsExistingBlob(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	client, err := NewClient(srv.URL, "test-org/test-repo", Credentials{}, httpClient)
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "test-org/test-repo", Credentials{}, srv.Client())
 	if err != nil {
 		t.Fatalf("NewClient() err = %v", err)
 	}
@@ -133,7 +138,7 @@ func TestUploadBlobChunked(t *testing.T) {
 	var patchRanges []string
 	var finalizeDigest string
 
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v2":
 			w.WriteHeader(http.StatusOK)
@@ -153,7 +158,9 @@ func TestUploadBlobChunked(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	client, err := NewClient(srv.URL, "test-org/test-repo", Credentials{}, httpClient)
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "test-org/test-repo", Credentials{}, srv.Client())
 	if err != nil {
 		t.Fatalf("NewClient() err = %v", err)
 	}
@@ -189,7 +196,7 @@ func TestUploadBlobChunkedFollowsRotatedLocation(t *testing.T) {
 	var patchURLs []string
 	var finalizeURL string
 
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v2":
 			w.WriteHeader(http.StatusOK)
@@ -223,7 +230,9 @@ func TestUploadBlobChunkedFollowsRotatedLocation(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	client, err := NewClient(srv.URL, "test-org/test-repo", Credentials{}, httpClient)
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "test-org/test-repo", Credentials{}, srv.Client())
 	if err != nil {
 		t.Fatalf("NewClient() err = %v", err)
 	}
@@ -276,7 +285,7 @@ func TestUploadBlobSkipsKnownDigest(t *testing.T) {
 	t.Parallel()
 
 	uploads := 0
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v2":
 			w.WriteHeader(http.StatusOK)
@@ -289,7 +298,9 @@ func TestUploadBlobSkipsKnownDigest(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	client, err := NewClient(srv.URL, "test-org/test-repo", Credentials{}, httpClient)
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "test-org/test-repo", Credentials{}, srv.Client())
 	if err != nil {
 		t.Fatalf("NewClient() err = %v", err)
 	}
@@ -363,7 +374,7 @@ func TestPushEvaluationCardRetriesAuthOnUnauthorized(t *testing.T) {
 	var headAttempts int
 	var firstAuth, retryAuth string
 	var mu sync.Mutex
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v2":
 			w.Header().Set("WWW-Authenticate", `Bearer realm="http://`+r.Host+tokenPath+`",service="test"`)
@@ -396,7 +407,9 @@ func TestPushEvaluationCardRetriesAuthOnUnauthorized(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	client, err := NewClient(srv.URL, "org/repo", Credentials{Username: "user", Password: "pass"}, httpClient)
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "org/repo", Credentials{Username: "user", Password: "pass"}, srv.Client())
 	if err != nil {
 		t.Fatalf("NewClient() err = %v", err)
 	}
@@ -422,7 +435,7 @@ func TestPutManifestRetriesAuthWithReplayableBody(t *testing.T) {
 	const tokenPath = "/token"
 	var putAttempts int
 	var replayedBody bool
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v2":
 			w.Header().Set("WWW-Authenticate", `Bearer realm="http://`+r.Host+tokenPath+`",service="test"`)
@@ -444,7 +457,9 @@ func TestPutManifestRetriesAuthWithReplayableBody(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	client, err := NewClient(srv.URL, "org/repo", Credentials{Username: "user", Password: "pass"}, httpClient)
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "org/repo", Credentials{Username: "user", Password: "pass"}, srv.Client())
 	if err != nil {
 		t.Fatalf("NewClient() err = %v", err)
 	}
@@ -463,7 +478,7 @@ func TestEnsureBlobUsesMonolithicUploadForSmallContent(t *testing.T) {
 	t.Parallel()
 
 	var patchCalls int
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v2":
 			w.WriteHeader(http.StatusOK)
@@ -481,7 +496,9 @@ func TestEnsureBlobUsesMonolithicUploadForSmallContent(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	client, err := NewClient(srv.URL, "org/repo", Credentials{}, httpClient)
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "org/repo", Credentials{}, srv.Client())
 	if err != nil {
 		t.Fatalf("NewClient() err = %v", err)
 	}
@@ -502,7 +519,7 @@ func TestEnsureBlobUsesChunkedUploadForLargeContent(t *testing.T) {
 	t.Parallel()
 
 	var patchCalls int
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v2":
 			w.WriteHeader(http.StatusOK)
@@ -521,7 +538,9 @@ func TestEnsureBlobUsesChunkedUploadForLargeContent(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	client, err := NewClient(srv.URL, "org/repo", Credentials{}, httpClient)
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "org/repo", Credentials{}, srv.Client())
 	if err != nil {
 		t.Fatalf("NewClient() err = %v", err)
 	}
@@ -555,14 +574,16 @@ func TestResolveLocation(t *testing.T) {
 func TestBlobExistsServerError(t *testing.T) {
 	t.Parallel()
 
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodHead {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		http.NotFound(w, r)
 	}))
-	client, err := NewClient(srv.URL, "org/repo", Credentials{}, httpClient)
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "org/repo", Credentials{}, srv.Client())
 	if err != nil {
 		t.Fatalf("NewClient() err = %v", err)
 	}
@@ -574,14 +595,16 @@ func TestBlobExistsServerError(t *testing.T) {
 func TestStartBlobUploadMissingLocation(t *testing.T) {
 	t.Parallel()
 
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/blobs/uploads/") {
 			w.WriteHeader(http.StatusAccepted)
 			return
 		}
 		http.NotFound(w, r)
 	}))
-	client, err := NewClient(srv.URL, "org/repo", Credentials{}, httpClient)
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "org/repo", Credentials{}, srv.Client())
 	if err != nil {
 		t.Fatalf("NewClient() err = %v", err)
 	}
@@ -593,14 +616,16 @@ func TestStartBlobUploadMissingLocation(t *testing.T) {
 func TestPutManifestError(t *testing.T) {
 	t.Parallel()
 
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/v2/org/repo/manifests/") {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 		http.NotFound(w, r)
 	}))
-	client, err := NewClient(srv.URL, "org/repo", Credentials{}, httpClient)
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "org/repo", Credentials{}, srv.Client())
 	if err != nil {
 		t.Fatalf("NewClient() err = %v", err)
 	}
@@ -652,7 +677,7 @@ func TestDoRefreshTokenFailure(t *testing.T) {
 	t.Parallel()
 
 	const tokenPath = "/token"
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodHead:
 			w.WriteHeader(http.StatusUnauthorized)
@@ -665,7 +690,9 @@ func TestDoRefreshTokenFailure(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	client, err := NewClient(srv.URL, "org/repo", Credentials{Username: "user", Password: "bad"}, httpClient)
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "org/repo", Credentials{Username: "user", Password: "bad"}, srv.Client())
 	if err != nil {
 		t.Fatalf("NewClient() err = %v", err)
 	}
@@ -677,7 +704,7 @@ func TestDoRefreshTokenFailure(t *testing.T) {
 func TestUploadBlobMonolithicFailure(t *testing.T) {
 	t.Parallel()
 
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v2":
 			w.WriteHeader(http.StatusOK)
@@ -692,7 +719,9 @@ func TestUploadBlobMonolithicFailure(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	client, err := NewClient(srv.URL, "org/repo", Credentials{}, httpClient)
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "org/repo", Credentials{}, srv.Client())
 	if err != nil {
 		t.Fatalf("NewClient() err = %v", err)
 	}
@@ -704,7 +733,7 @@ func TestUploadBlobMonolithicFailure(t *testing.T) {
 func TestPatchBlobChunkFailure(t *testing.T) {
 	t.Parallel()
 
-	srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v2":
 			w.WriteHeader(http.StatusOK)
@@ -717,7 +746,9 @@ func TestPatchBlobChunkFailure(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	client, err := NewClient(srv.URL, "org/repo", Credentials{}, httpClient)
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "org/repo", Credentials{}, srv.Client())
 	if err != nil {
 		t.Fatalf("NewClient() err = %v", err)
 	}
