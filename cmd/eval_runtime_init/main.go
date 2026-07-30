@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path"
@@ -15,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -89,6 +89,7 @@ func run() error {
 			options.UsePathStyle = true
 		}
 	})
+	tm := transfermanager.New(client)
 
 	if err := os.MkdirAll(destDir, 0o750); err != nil {
 		return fmt.Errorf("create dest dir: %w", err)
@@ -123,7 +124,7 @@ func run() error {
 				continue
 			}
 			found = true
-			written, err := downloadObject(ctx, client, destRoot, bucket, keyPrefix, *obj.Key)
+			written, err := downloadObject(ctx, tm, destRoot, bucket, keyPrefix, *obj.Key)
 			if err != nil {
 				return err
 			}
@@ -157,7 +158,7 @@ func loadAWSConfig(ctx context.Context, region, accessKey, secretKey string) (aw
 	return cfg, nil
 }
 
-func downloadObject(ctx context.Context, client *s3.Client, destRoot *os.Root, bucket, prefix, key string) (int64, error) {
+func downloadObject(ctx context.Context, tm *transfermanager.Client, destRoot *os.Root, bucket, prefix, key string) (int64, error) {
 	rel, err := relativeDestPath(prefix, key)
 	if err != nil {
 		return 0, err
@@ -169,25 +170,21 @@ func downloadObject(ctx context.Context, client *s3.Client, destRoot *os.Root, b
 		}
 	}
 
-	resp, err := client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-	})
-	if err != nil {
-		return 0, fmt.Errorf("get object %q: %w", key, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
 	file, err := destRoot.Create(rel)
 	if err != nil {
 		return 0, fmt.Errorf("create file %q: %w", key, err)
 	}
 	defer func() { _ = file.Close() }()
 
-	written, err := io.Copy(file, resp.Body)
+	out, err := tm.DownloadObject(ctx, &transfermanager.DownloadObjectInput{
+		Bucket:   aws.String(bucket),
+		Key:      aws.String(key),
+		WriterAt: file,
+	})
 	if err != nil {
-		return 0, fmt.Errorf("write file %q: %w", key, err)
+		return 0, fmt.Errorf("download object %q: %w", key, err)
 	}
-	return written, nil
+	return aws.ToInt64(out.ContentLength), nil
 }
 
 func relativeDestPath(prefix, key string) (string, error) {
