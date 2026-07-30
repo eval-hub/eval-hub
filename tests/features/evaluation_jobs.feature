@@ -1499,7 +1499,9 @@ Feature: Evaluation Jobs
       """
     Then the response code should be 202
     And the response should contain the value "pending" at path "$.status.state"
-    # EvalCards are only exported on completion, so pending jobs have no card
+    And the "resource.id" field in the response should be saved as "value:job_id"
+    And the "resource.mlflow_experiment_id" field in the response should be saved as "value:mlflow_experiment_id"
+    And the MLflow artifact "evaluation-card.json" should not exist for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
 
   @mlflow 
   Scenario: Multiple jobs in same experiment have different cards

@@ -52,7 +52,7 @@ type jobConfig struct {
 	memoryLimit         string
 	gpuResource         string            // Kubernetes extended resource name (e.g. "nvidia.com/gpu")
 	gpuCount            int               // number of GPU units to request (0 = CPU-only)
-	nodeSelector        map[string]string // pod nodeSelector; nil when a HardwareProfile queue is set
+	nodeSelector        map[string]string // pod nodeSelector; nil when a queue is set (HardwareProfile or evaluation.Queue)
 	tolerations         []corev1.Toleration
 	priorityClassName   string // pod PriorityClassName and/or Kueue priority-class label
 	jobSpec             shared.JobSpec
