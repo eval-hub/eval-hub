@@ -819,9 +819,15 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatus(expectedStatus string) err
 
 var errTestFileNotFound = errors.New("test file not found")
 
+// fvtDisconnected reports whether FVT is targeting a disconnected cluster
+// (ENVIRONMENT_ID contains "disconnected").
+func fvtDisconnected() bool {
+	return strings.Contains(strings.ToLower(os.Getenv("ENVIRONMENT_ID")), "disconnected")
+}
+
 // fvtBenchmarkTokenizer returns the expected benchmark tokenizer for FVT assertions and payloads.
 func fvtBenchmarkTokenizer() string {
-	if strings.Contains(strings.ToLower(os.Getenv("ENVIRONMENT_ID")), "disconnected") {
+	if fvtDisconnected() {
 		return "/test_data/tokenizer"
 	}
 	return "google/flan-t5-small"

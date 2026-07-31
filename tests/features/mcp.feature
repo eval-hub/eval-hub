@@ -377,30 +377,7 @@ Feature: MCP Tools
   Scenario: Submit evaluation job via MCP to cluster and wait for completion
     Given the model endpoint is reachable
     And I set the wait interval to "10s"
-    When I call MCP tool "submit_evaluation" with arguments:
-      """
-      {
-        "name": "mcp_cluster_test",
-        "description": "Cluster test via MCP",
-        "model": {
-          "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}",
-          "auth": {
-            "secret_ref": "{{env:MODEL_AUTH_SECRET_REF|test}}"
-          }
-        },
-        "benchmarks": [
-          {
-            "id": "arc_easy",
-            "provider_id": "lm_evaluation_harness",
-            "parameters": {
-              "num_fewshot": 0,
-              "num_examples": 10
-            }
-          }
-        ]
-      }
-      """
+    When I call MCP tool "submit_evaluation" with arguments "file:/mcp_submit_cluster.json"
     Then the MCP tool call should succeed
     And the "job_id" field in the MCP response should be saved as "value:cluster_job_id"
     And I wait for the evaluation job status to be "completed"
@@ -418,46 +395,7 @@ Feature: MCP Tools
   Scenario: Submit evaluation job with collection via MCP to cluster and wait for completion
     Given the model endpoint is reachable
     And I set the wait interval to "10s"
-    When I call MCP tool "submit_evaluation" with arguments:
-      """
-      {
-        "name": "mcp_cluster_collection_test",
-        "description": "Cluster collection test via MCP",
-        "model": {
-          "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}",
-          "auth": {
-            "secret_ref": "{{env:MODEL_AUTH_SECRET_REF|test}}"
-          }
-        },
-        "collection": {
-          "id": "toxicity-and-ethical-principles",
-          "benchmarks": [
-            {
-              "id": "toxigen",
-              "provider_id": "lm_evaluation_harness",
-              "parameters": {
-                "num_examples": 5
-              }
-            },
-            {
-              "id": "truthfulqa_mc1",
-              "provider_id": "lm_evaluation_harness",
-              "parameters": {
-                "num_examples": 5
-              }
-            },
-            {
-              "id": "bigbench_hhh_alignment_multiple_choice",
-              "provider_id": "lm_evaluation_harness",
-              "parameters": {
-                "num_examples": 5
-              }
-            }
-          ]
-        }
-      }
-      """
+    When I call MCP tool "submit_evaluation" with arguments "file:/mcp_submit_cluster_collection.json"
     Then the MCP tool call should succeed
     And the "job_id" field in the MCP response should be saved as "value:cluster_collection_job_id"
     And I wait for the evaluation job status to be "completed"
@@ -475,38 +413,7 @@ Feature: MCP Tools
   Scenario: Submit evaluation job with multiple benchmarks via MCP to cluster and wait for completion
     Given the model endpoint is reachable
     And I set the wait interval to "10s"
-    When I call MCP tool "submit_evaluation" with arguments:
-      """
-      {
-        "name": "mcp_cluster_multi_benchmark_test",
-        "description": "Cluster multi-benchmark test via MCP",
-        "model": {
-          "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}",
-          "auth": {
-            "secret_ref": "{{env:MODEL_AUTH_SECRET_REF|test}}"
-          }
-        },
-        "benchmarks": [
-          {
-            "id": "arc_easy",
-            "provider_id": "lm_evaluation_harness",
-            "parameters": {
-              "num_fewshot": 0,
-              "num_examples": 3
-            }
-          },
-          {
-            "id": "truthfulqa_mc1",
-            "provider_id": "lm_evaluation_harness",
-            "parameters": {
-              "num_fewshot": 0,
-              "num_examples": 3
-            }
-          }
-        ]
-      }
-      """
+    When I call MCP tool "submit_evaluation" with arguments "file:/mcp_submit_cluster_multi_benchmark.json"
     Then the MCP tool call should succeed
     And the "job_id" field in the MCP response should be saved as "value:cluster_multi_job_id"
     And I wait for the evaluation job status to be "completed"
@@ -525,33 +432,7 @@ Feature: MCP Tools
   Scenario: Submit evaluation job with MLflow tracking via MCP to cluster and wait for completion
     Given the model endpoint is reachable
     And I set the wait interval to "10s"
-    When I call MCP tool "submit_evaluation" with arguments:
-      """
-      {
-        "name": "mcp_cluster_mlflow_test",
-        "description": "Cluster MLflow tracking test via MCP",
-        "model": {
-          "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}",
-          "auth": {
-            "secret_ref": "{{env:MODEL_AUTH_SECRET_REF|test}}"
-          }
-        },
-        "benchmarks": [
-          {
-            "id": "arc_easy",
-            "provider_id": "lm_evaluation_harness",
-            "parameters": {
-              "num_fewshot": 0,
-              "num_examples": 5
-            }
-          }
-        ],
-        "experiment": {
-          "name": "mcp_cluster_mlflow_experiment"
-        }
-      }
-      """
+    When I call MCP tool "submit_evaluation" with arguments "file:/mcp_submit_cluster_mlflow.json"
     Then the MCP tool call should succeed
     And the "job_id" field in the MCP response should be saved as "value:cluster_mlflow_job_id"
     And I wait for the evaluation job status to be "completed"
@@ -569,30 +450,7 @@ Feature: MCP Tools
   Scenario: Verify benchmark results and metrics via MCP resource after cluster job completion
     Given the model endpoint is reachable
     And I set the wait interval to "10s"
-    When I call MCP tool "submit_evaluation" with arguments:
-      """
-      {
-        "name": "mcp_cluster_results_validation",
-        "description": "Cluster test to validate benchmark results via MCP resource",
-        "model": {
-          "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}",
-          "auth": {
-            "secret_ref": "{{env:MODEL_AUTH_SECRET_REF|test}}"
-          }
-        },
-        "benchmarks": [
-          {
-            "id": "arc_easy",
-            "provider_id": "lm_evaluation_harness",
-            "parameters": {
-              "num_fewshot": 0,
-              "num_examples": 5
-            }
-          }
-        ]
-      }
-      """
+    When I call MCP tool "submit_evaluation" with arguments "file:/mcp_submit_cluster_results.json"
     Then the MCP tool call should succeed
     And the "job_id" field in the MCP response should be saved as "value:cluster_results_job_id"
     And I wait for the evaluation job status to be "completed"
@@ -839,34 +697,7 @@ Feature: MCP Tools
   Scenario: MCP can retrieve completed job that has evalcard exported
     Given the service is running
     And the model endpoint is reachable
-    When I send a POST request to "/api/v1/evaluations/jobs" with body:
-      """
-      {
-        "name": "evalcard_mcp_test",
-        "description": "Job for MCP card testing",
-        "tags": ["evalcard", "mcp"],
-        "model": {
-          "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}",
-          "auth": {
-            "secret_ref": "{{env:MODEL_AUTH_SECRET_REF|test}}"
-          }
-        },
-        "benchmarks": [
-          {
-            "id": "arc_easy",
-            "provider_id": "lm_evaluation_harness",
-            "parameters": {
-              "num_examples": 5,
-              "tokenizer": "google/flan-t5-small"
-            }
-          }
-        ],
-        "experiment": {
-          "name": "evalcard_mcp_experiment"
-        }
-      }
-      """
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_mcp.json"
     Then the response code should be 202
     And the "resource.id" field in the response should be saved as "value:mcp_job_id"
     And the "resource.mlflow_experiment_id" field in the response should be saved as "value:mlflow_experiment_id"
@@ -886,34 +717,7 @@ Feature: MCP Tools
   Scenario: MCP resource returns job with mlflow_run_id for completed job with evalcard
     Given the service is running
     And the model endpoint is reachable
-    When I send a POST request to "/api/v1/evaluations/jobs" with body:
-      """
-      {
-        "name": "evalcard_mcp_resource_test",
-        "description": "Test MCP resource includes mlflow_run_id",
-        "tags": ["evalcard", "mcp", "resource"],
-        "model": {
-          "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}",
-          "auth": {
-            "secret_ref": "{{env:MODEL_AUTH_SECRET_REF|test}}"
-          }
-        },
-        "benchmarks": [
-          {
-            "id": "arc_easy",
-            "provider_id": "lm_evaluation_harness",
-            "parameters": {
-              "num_examples": 5,
-              "tokenizer": "google/flan-t5-small"
-            }
-          }
-        ],
-        "experiment": {
-          "name": "evalcard_mcp_resource_experiment"
-        }
-      }
-      """
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_mcp_resource.json"
     Then the response code should be 202
     And the "resource.id" field in the response should be saved as "value:mcp_resource_job_id"
     And I wait for the evaluation job status to be "completed"

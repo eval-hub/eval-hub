@@ -10,7 +10,7 @@
       "parameters": {
         "num_examples": 10,
         "num_fewshot": 3,
-        "tokenizer": "google/flan-t5-small"
+        "tokenizer": "{{env:FVT_BENCHMARK_TOKENIZER|google/flan-t5-small}}"
       }
     }
   ],
