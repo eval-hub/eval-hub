@@ -15,7 +15,7 @@
             "provider_id": "lm_evaluation_harness",
             "parameters": {
                 "num_examples": 5,
-                "tokenizer": "google/flan-t5-small"
+                "tokenizer": "{{env:FVT_BENCHMARK_TOKENIZER|google/flan-t5-small}}"
             }
         },
         {
@@ -23,7 +23,7 @@
             "provider_id": "lm_evaluation_harness",
             "parameters": {
                 "num_examples": 10,
-                "tokenizer": "google/flan-t5-small"
+                "tokenizer": "{{env:FVT_BENCHMARK_TOKENIZER|google/flan-t5-small}}"
             }
         }
     ],

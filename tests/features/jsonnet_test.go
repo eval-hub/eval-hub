@@ -875,6 +875,9 @@ func TestEvaluateOobCollectionJobJsonnetDisconnectedAware(t *testing.T) {
 		minBenchmarks  int
 	}{
 		{"evaluation_job_oob_toxicity.jsonnet", "toxicity-and-ethical-principles", 3},
+		{"mcp_submit_cluster_collection.jsonnet", "toxicity-and-ethical-principles", 3},
+		{"evalcard_collection.jsonnet", "toxicity-and-ethical-principles", 3},
+		{"evalcard_collection_id.jsonnet", "toxicity-and-ethical-principles", 3},
 	}
 	for _, disconnected := range []bool{false, true} {
 		mode := "connected"
@@ -1092,6 +1095,51 @@ func TestEvaluateFVTJsonnetPayloadFiles(t *testing.T) {
 			minBenchmarks: 1,
 			wantQueueKind: "kueue",
 			wantQueueName: "  user-queue  ",
+		},
+		{
+			file:          "mcp_submit_cluster.jsonnet",
+			wantName:      "mcp_cluster_test",
+			minBenchmarks: 1,
+		},
+		{
+			file:          "mcp_submit_cluster_multi_benchmark.jsonnet",
+			wantName:      "mcp_cluster_multi_benchmark_test",
+			minBenchmarks: 2,
+		},
+		{
+			file:          "mcp_submit_cluster_results.jsonnet",
+			wantName:      "mcp_cluster_results_validation",
+			minBenchmarks: 1,
+		},
+		{
+			file:          "evalcard_benchmark.jsonnet",
+			wantName:      "evalcard_benchmark_test",
+			minBenchmarks: 1,
+		},
+		{
+			file:          "evalcard_multi_benchmark.jsonnet",
+			wantName:      "evalcard_multibenchmark_test",
+			minBenchmarks: 2,
+		},
+		{
+			file:          "evalcard_arc_easy.jsonnet",
+			wantName:      "evalcard_arc_easy_test",
+			minBenchmarks: 1,
+		},
+		{
+			file:          "evalcard_mcp.jsonnet",
+			wantName:      "evalcard_mcp_test",
+			minBenchmarks: 1,
+		},
+		{
+			file:          "evalcard_mcp_resource.jsonnet",
+			wantName:      "evalcard_mcp_resource_test",
+			minBenchmarks: 1,
+		},
+		{
+			file:          "evalcard_no_pass_criteria.jsonnet",
+			wantName:      "evalcard_no_pass_criteria_test",
+			minBenchmarks: 1,
 		},
 	}
 

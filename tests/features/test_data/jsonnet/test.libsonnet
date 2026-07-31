@@ -163,6 +163,37 @@ local harness = std.parseJson(std.extVar('harness'));
       },
     } else {},
 
+  // EvalCard @mlflow FVT job: disconnected-aware arc_easy + experiment (always present).
+  evalCardArcEasyJob(name, description, tags, experimentName, numExamples=5)::
+    {
+      name: name,
+      description: description,
+      tags: tags,
+      model: $.model(),
+      benchmarks: [
+        $.benchmark('arc_easy', 'lm_evaluation_harness', {
+          num_examples: numExamples,
+        }),
+      ],
+      experiment: {
+        name: experimentName,
+      },
+    },
+
+  // EvalCard collection job against toxicity-and-ethical-principles (disconnected-aware overrides).
+  evalCardToxicityCollectionJob(name, description, tags, experimentName)::
+    $.oobCollectionRefJobWithLimit(
+      name,
+      'toxicity-and-ethical-principles',
+      $.toxicityAndEthicalPrinciplesBenchmarkIds(),
+    ) + {
+      description: description,
+      tags: tags,
+      experiment: {
+        name: experimentName,
+      },
+    },
+
   // Merge base with an optional object; optional may be null (adds nothing).
   mergeOptional(base, optional)::
     if optional == null then base else base + optional,
