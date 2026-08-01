@@ -126,4 +126,3 @@ func (c *fvtK8sClient) waitForEventOnJob(ctx context.Context, namespace, jobName
 		}
 	}
 }
-
