@@ -91,6 +91,10 @@ const (
 	annotationBenchmarkIDKey         = "eval-hub.github.io/benchmark_id"
 	labelKueueQueueNameKey           = "kueue.x-k8s.io/queue-name"
 	labelKueuePriorityClassKey       = "kueue.x-k8s.io/priority-class"
+	labelEvaluationPhaseKey          = "trustyai.opendatahub.io/evaluation-phase"
+	// EvaluationPhasePending is the initial value of the evaluation-phase label, set at Job creation.
+	// Subsequent phases are patched by the lifecycle signal code (KubernetesHelper.PatchJobPhaseLabel).
+	EvaluationPhasePending = "Pending"
 )
 
 var (

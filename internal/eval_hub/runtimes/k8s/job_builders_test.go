@@ -131,6 +131,25 @@ func TestBuildConfigMapSidecarConfigJSONContent(t *testing.T) {
 	}
 }
 
+func TestBuildJobHasEvaluationPhasePendingLabel(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "job-123",
+		resourceGUID:   "guid-123",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+	}
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob: %v", err)
+	}
+	if got := job.Labels[labelEvaluationPhaseKey]; got != EvaluationPhasePending {
+		t.Fatalf("expected Job label %q=%q, got %q", labelEvaluationPhaseKey, EvaluationPhasePending, got)
+	}
+}
+
 func TestBuildJobRequiresAdapterImage(t *testing.T) {
 	cfg := &jobConfig{
 		jobID:          "job-123",
