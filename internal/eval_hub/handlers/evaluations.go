@@ -507,7 +507,7 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 			}
 
 			if h.runtime != nil && status.BenchmarkStatusEvent != nil && job != nil {
-				h.runtime.NotifyJobPhaseTransition(runtimeCtx, job, status.BenchmarkStatusEvent.BenchmarkIndex, status.BenchmarkStatusEvent.Status)
+				h.runtime.WithLogger(ctx.Logger).NotifyJobPhaseTransition(runtimeCtx, job, status.BenchmarkStatusEvent.BenchmarkIndex, status.BenchmarkStatusEvent.Status)
 			}
 
 			h.onEvaluationJobUpdated(runtimeCtx, scoped, func() (*api.EvaluationJobResource, error) {
