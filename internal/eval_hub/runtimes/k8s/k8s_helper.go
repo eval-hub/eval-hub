@@ -29,6 +29,7 @@ type KubernetesHelper struct {
 	clientset     kubernetes.Interface
 	dynamicClient dynamic.Interface
 	recorder      record.EventRecorder
+	broadcaster   record.EventBroadcaster
 }
 
 var hardwareProfileGVR = schema.GroupVersionResource{
@@ -75,7 +76,16 @@ func NewKubernetesHelper() (*KubernetesHelper, error) {
 		clientset:     clientset,
 		dynamicClient: dynamicClient,
 		recorder:      recorder,
+		broadcaster:   broadcaster,
 	}, nil
+}
+
+// Close shuts down the event broadcaster, stopping its background goroutines.
+// It should be called when the helper is no longer needed.
+func (h *KubernetesHelper) Close() {
+	if h.broadcaster != nil {
+		h.broadcaster.Shutdown()
+	}
 }
 
 // NewKubernetesHelperWithClientset returns a helper backed by the given clientset.
