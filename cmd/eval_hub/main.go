@@ -261,6 +261,8 @@ func main() {
 
 	// stop Kubernetes EventBroadcaster goroutines started by the runtime (cluster mode only)
 	if closer, ok := runtime.(io.Closer); ok {
-		closer.Close()
+		if err := closer.Close(); err != nil {
+			logger.Error("Failed to close runtime", "error", err.Error())
+		}
 	}
 }
