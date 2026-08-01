@@ -1989,6 +1989,9 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 
 	// Hardware profile steps (Kubernetes client-go via KUBECONFIG-first FVT helper)
 	InitializeHardwareProfileSteps(ctx, tc)
+
+	// Kubernetes lifecycle signal steps (event emission and evaluation-phase label)
+	InitializeLifecycleSignalSteps(ctx, tc)
 }
 
 // --- MLflow Artifact Step Definitions ---
