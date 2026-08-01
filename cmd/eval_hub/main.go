@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"io"
 	"log"
 	"log/slog"
 
@@ -256,5 +257,10 @@ func main() {
 	} else {
 		logger.Info("API Server shutdown gracefully")
 		_ = logShutdown() // ignore the error
+	}
+
+	// stop Kubernetes EventBroadcaster goroutines started by the runtime (cluster mode only)
+	if closer, ok := runtime.(io.Closer); ok {
+		closer.Close()
 	}
 }
