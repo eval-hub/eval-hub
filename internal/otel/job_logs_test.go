@@ -133,3 +133,5 @@ func (r *stubLogsRuntime) GetEvaluationLogs(_ *api.EvaluationJobResource, _ []ap
 	close(r.exported)
 	return r.logs, nil
 }
+func (r *stubLogsRuntime) NotifyJobPhaseTransition(_ context.Context, _ *api.EvaluationJobResource, _ int, _ api.State) {
+}

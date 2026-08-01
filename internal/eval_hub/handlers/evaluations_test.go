@@ -150,6 +150,8 @@ func (r *fakeRuntime) GetEvaluationLogs(
 	}
 	return "", nil
 }
+func (r *fakeRuntime) NotifyJobPhaseTransition(_ context.Context, _ *api.EvaluationJobResource, _ int, _ api.State) {
+}
 
 type listEvaluationsRequest struct {
 	*MockRequest
