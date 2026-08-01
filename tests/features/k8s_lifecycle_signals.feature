@@ -27,7 +27,7 @@ Feature: Kubernetes Lifecycle Signals
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
     And I wait for the Kubernetes evaluation Job to be created
-    And the evaluation Job should have label "trustyai.opendatahub.io/evaluation-phase" equal to "Pending"
+    And I wait for the evaluation Job to have label "trustyai.opendatahub.io/evaluation-phase" equal to "Pending" within "30s"
     And I wait for the evaluation Job to have label "trustyai.opendatahub.io/evaluation-phase" equal to "Running" within "5m"
     And I wait for the evaluation job status to be "completed"
     And the evaluation Job should have label "trustyai.opendatahub.io/evaluation-phase" equal to "Completed"
