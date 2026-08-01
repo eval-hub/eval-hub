@@ -114,19 +114,20 @@ func (tc *scenarioConfig) iWaitForEvaluationJobToHaveLabelEqualToWithin(state *l
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
+	var lastObserved string
 	for {
 		select {
 		case <-ctx.Done():
-			actual, _ := state.k8s.getJobPhaseLabel(context.Background(), namespace, tc.lastId)
 			return tc.logError(fmt.Errorf(
 				"timeout waiting for label %s=%s on eval job %s (last observed: %q)",
-				labelKey, expectedValue, tc.lastId, actual,
+				labelKey, expectedValue, tc.lastId, lastObserved,
 			))
 		case <-ticker.C:
 			actual, err := state.k8s.getJobPhaseLabel(ctx, namespace, tc.lastId)
 			if err != nil {
 				continue
 			}
+			lastObserved = actual
 			if actual == expectedValue {
 				logDebug("Label %s=%s observed on eval job %s\n", labelKey, actual, tc.lastId)
 				return nil
