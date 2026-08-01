@@ -308,6 +308,9 @@ func (h *KubernetesHelper) EmitEvent(job *batchv1.Job, eventtype, reason, messag
 	if job == nil {
 		return fmt.Errorf("job is required")
 	}
+	if eventtype != corev1.EventTypeNormal && eventtype != corev1.EventTypeWarning {
+		return fmt.Errorf("unsupported event type %q: must be %q or %q", eventtype, corev1.EventTypeNormal, corev1.EventTypeWarning)
+	}
 	h.recorder.Eventf(job, eventtype, reason, messageFmt, args...)
 	return nil
 }

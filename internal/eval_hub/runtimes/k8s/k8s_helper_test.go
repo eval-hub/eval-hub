@@ -122,6 +122,15 @@ func TestEmitEventRequiresRecorder(t *testing.T) {
 	}
 }
 
+func TestEmitEventRejectsUnsupportedEventType(t *testing.T) {
+	fakeRecorder := record.NewFakeRecorder(10)
+	helper := NewKubernetesHelperWithRecorder(fake.NewSimpleClientset(), fakeRecorder)
+	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "job-1", Namespace: "default"}}
+	if err := helper.EmitEvent(job, "Unknown", "Reason", "msg"); err == nil {
+		t.Fatal("expected error for unsupported event type")
+	}
+}
+
 func TestEmitEventRequiresJob(t *testing.T) {
 	fakeRecorder := record.NewFakeRecorder(10)
 	helper := NewKubernetesHelperWithRecorder(fake.NewSimpleClientset(), fakeRecorder)
