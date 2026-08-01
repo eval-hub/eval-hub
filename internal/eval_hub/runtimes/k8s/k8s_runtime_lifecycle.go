@@ -4,10 +4,15 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
 	corev1 "k8s.io/api/core/v1"
 )
+
+// lifecycleSignalTimeout caps each NotifyJobPhaseTransition call. Lifecycle signals are
+// best-effort; slow API operations should not hold the caller indefinitely.
+const lifecycleSignalTimeout = 10 * time.Second
 
 // NotifyJobPhaseTransition patches the evaluation-phase label on the backing Kubernetes Job and
 // emits a Kubernetes Event for the transition. Both operations are best-effort: failures are
@@ -17,15 +22,18 @@ func (r *K8sRuntime) NotifyJobPhaseTransition(ctx context.Context, evaluation *a
 	if !ok {
 		return
 	}
+	signalCtx, cancel := context.WithTimeout(ctx, lifecycleSignalTimeout)
+	defer cancel()
+
 	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
 	labelSelector := fmt.Sprintf(
 		"%s=%s,%s=%s",
 		labelJobIDKey, sanitizeLabelValue(evaluation.Resource.ID),
 		labelBenchmarkIndexKey, sanitizeLabelValue(strconv.Itoa(benchmarkIndex)),
 	)
-	jobs, err := r.helper.ListJobs(ctx, namespace, labelSelector)
+	jobs, err := r.helper.ListJobs(signalCtx, namespace, labelSelector)
 	if err != nil {
-		r.logger.WarnContext(ctx, "lifecycle signal: list jobs failed",
+		r.logger.WarnContext(signalCtx, "lifecycle signal: list jobs failed",
 			"job_id", evaluation.Resource.ID,
 			"benchmark_index", benchmarkIndex,
 			"phase", phase,
@@ -35,8 +43,8 @@ func (r *K8sRuntime) NotifyJobPhaseTransition(ctx context.Context, evaluation *a
 	}
 	for i := range jobs {
 		job := &jobs[i]
-		if patchErr := r.helper.PatchJobPhaseLabel(ctx, namespace, job.Name, phase); patchErr != nil {
-			r.logger.WarnContext(ctx, "lifecycle signal: patch phase label failed",
+		if patchErr := r.helper.PatchJobPhaseLabel(signalCtx, namespace, job.Name, phase); patchErr != nil {
+			r.logger.WarnContext(signalCtx, "lifecycle signal: patch phase label failed",
 				"job_name", job.Name,
 				"phase", phase,
 				"error", patchErr,
@@ -44,7 +52,7 @@ func (r *K8sRuntime) NotifyJobPhaseTransition(ctx context.Context, evaluation *a
 		}
 		messageFmt := "benchmark %d phase transition: %s"
 		if emitErr := r.helper.EmitEvent(job, eventtype, reason, messageFmt, benchmarkIndex, phase); emitErr != nil {
-			r.logger.WarnContext(ctx, "lifecycle signal: emit event failed",
+			r.logger.WarnContext(signalCtx, "lifecycle signal: emit event failed",
 				"job_name", job.Name,
 				"reason", reason,
 				"error", emitErr,
