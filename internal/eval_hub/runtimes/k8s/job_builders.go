@@ -93,6 +93,10 @@ const (
 	annotationProviderIDKey          = "eval-hub.github.io/provider_id"
 	annotationBenchmarkIDKey         = "eval-hub.github.io/benchmark_id"
 	labelKueueQueueNameKey           = "kueue.x-k8s.io/queue-name"
+	labelEvaluationPhaseKey          = "trustyai.opendatahub.io/evaluation-phase"
+	// EvaluationPhasePending is the initial value of the evaluation-phase label, set at Job creation.
+	// Subsequent phases are patched by the lifecycle signal code (KubernetesHelper.PatchJobPhaseLabel).
+	EvaluationPhasePending = "Pending"
 )
 
 var (
@@ -899,12 +903,13 @@ func jobLabels(cfg *jobConfig) map[string]string {
 		return map[string]string{}
 	}
 	m := map[string]string{
-		labelAppKey:            labelAppValue,
-		labelComponentKey:      labelComponentValue,
-		labelJobIDKey:          sanitizeLabelValue(cfg.jobID),
-		labelProviderIDKey:     sanitizeLabelValue(cfg.providerID),
-		labelBenchmarkIDKey:    sanitizeLabelValue(cfg.benchmarkID),
-		labelBenchmarkIndexKey: sanitizeLabelValue(strconv.Itoa(cfg.benchmarkIndex)),
+		labelAppKey:             labelAppValue,
+		labelComponentKey:       labelComponentValue,
+		labelJobIDKey:           sanitizeLabelValue(cfg.jobID),
+		labelProviderIDKey:      sanitizeLabelValue(cfg.providerID),
+		labelBenchmarkIDKey:     sanitizeLabelValue(cfg.benchmarkID),
+		labelBenchmarkIndexKey:  sanitizeLabelValue(strconv.Itoa(cfg.benchmarkIndex)),
+		labelEvaluationPhaseKey: EvaluationPhasePending,
 	}
 	if cfg.evalHubInstanceName != "" && cfg.evalHubCRNamespace != "" {
 		m[labelEvalHubInstanceNameKey] = sanitizeLabelValue(cfg.evalHubInstanceName)
