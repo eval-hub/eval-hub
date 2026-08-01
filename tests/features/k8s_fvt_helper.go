@@ -7,7 +7,6 @@ import (
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -128,17 +127,3 @@ func (c *fvtK8sClient) waitForEventOnJob(ctx context.Context, namespace, jobName
 	}
 }
 
-// listEventsForJob returns all Kubernetes Events for the Job backing the given eval-hub job ID.
-func (c *fvtK8sClient) listEventsForJob(ctx context.Context, namespace, jobName string) ([]corev1.Event, error) {
-	fieldSelector := fmt.Sprintf(
-		"involvedObject.name=%s,involvedObject.kind=Job,involvedObject.namespace=%s",
-		jobName, namespace,
-	)
-	list, err := c.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
-		FieldSelector: fieldSelector,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return list.Items, nil
-}
