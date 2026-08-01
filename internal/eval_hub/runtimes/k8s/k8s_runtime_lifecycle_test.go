@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -11,7 +12,9 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
+	ktesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/record"
 )
 
@@ -146,6 +149,48 @@ func TestNotifyJobPhaseTransitionNoJobFound(t *testing.T) {
 	}
 	// No matching job — should be a no-op with no panic.
 	runtime.NotifyJobPhaseTransition(context.Background(), evaluation, 0, api.StateRunning)
+}
+
+func TestNotifyJobPhaseTransitionListJobsError(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	clientset := fake.NewSimpleClientset()
+	clientset.PrependReactor("list", "jobs", func(_ ktesting.Action) (bool, kruntime.Object, error) {
+		return true, nil, fmt.Errorf("api unavailable")
+	})
+	rt := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+	}
+	rt.NotifyJobPhaseTransition(context.Background(), evaluation, 0, api.StateRunning)
+}
+
+func TestNotifyJobPhaseTransitionPatchLabelError(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "eval-job",
+			Namespace: "default",
+			Labels: map[string]string{
+				labelJobIDKey:          sanitizeLabelValue(evaluation.Resource.ID),
+				labelBenchmarkIndexKey: "0",
+			},
+		},
+	}
+	clientset := fake.NewSimpleClientset(job)
+	clientset.PrependReactor("patch", "jobs", func(_ ktesting.Action) (bool, kruntime.Object, error) {
+		return true, nil, fmt.Errorf("patch forbidden")
+	})
+	fakeRecorder := record.NewFakeRecorder(10)
+	rt := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: NewKubernetesHelperWithRecorder(clientset, fakeRecorder),
+	}
+	rt.NotifyJobPhaseTransition(context.Background(), evaluation, 0, api.StateRunning)
+	// drain any event that may have been emitted despite the patch error
+	select {
+	case <-fakeRecorder.Events:
+	default:
+	}
 }
 
 func TestNotifyJobPhaseTransitionFailedState(t *testing.T) {

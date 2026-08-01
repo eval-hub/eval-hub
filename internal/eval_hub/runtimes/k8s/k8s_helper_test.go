@@ -12,6 +12,16 @@ import (
 	"k8s.io/client-go/tools/record"
 )
 
+func TestCloseWithNilBroadcaster(t *testing.T) {
+	h := &KubernetesHelper{}
+	h.Close() // must not panic when broadcaster is nil
+}
+
+func TestCloseShutdownsBroadcaster(t *testing.T) {
+	h := &KubernetesHelper{broadcaster: record.NewBroadcaster()}
+	h.Close() // must not panic
+}
+
 func TestCreateConfigMapRequiresNamespaceAndName(t *testing.T) {
 	helper := &KubernetesHelper{}
 	if _, err := helper.CreateConfigMap(context.Background(), "", "name", map[string]string{}, nil); err == nil {
