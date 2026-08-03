@@ -285,11 +285,12 @@ func (tc *scenarioConfig) iSendARequestImpl(method, path, body, caller string) e
 		_ = tc.iUnsetHeader(server.TRANSACTION_ID_HEADER)
 	}()
 
+	defer func() { _ = tc.response.Body.Close() }()
+
 	tc.body, err = io.ReadAll(tc.response.Body)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tc.response.Body.Close() }()
 
 	if len(tc.body) > 0 && len(tc.body) < 1024*5 {
 		tc.logDebug("Response status %d for %s %s with body %s\n", tc.response.StatusCode, method, endpoint, string(tc.body))
