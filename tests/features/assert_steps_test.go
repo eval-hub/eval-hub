@@ -327,7 +327,11 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPathImpl(expectedValue s
 
 func (tc *scenarioConfig) theResponseShouldNotContainAtJSONPath(expectedValue string, jsonPath string) error {
 	_, found, _ := tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "contains")
-	if strings.Contains(strings.TrimSpace(found), strings.TrimSpace(expectedValue)) {
+	expanded, err := tc.substituteValues(expectedValue)
+	if err != nil {
+		return err
+	}
+	if strings.Contains(strings.TrimSpace(found), strings.TrimSpace(expanded)) {
 		return tc.logError(fmt.Errorf("expected %s to not contain %s but found %s in %s", jsonPath, expectedValue, found, asPrettyJson(string(tc.body))))
 	}
 	return nil
@@ -335,7 +339,11 @@ func (tc *scenarioConfig) theResponseShouldNotContainAtJSONPath(expectedValue st
 
 func (tc *scenarioConfig) theResponseShouldNotEqualAtJSONPath(expectedValue string, jsonPath string) error {
 	_, found, _ := tc.theResponseShouldContainAtJSONPathImpl(expectedValue, jsonPath, "==")
-	if strings.TrimSpace(found) == strings.TrimSpace(expectedValue) {
+	expanded, err := tc.substituteValues(expectedValue)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(found) == strings.TrimSpace(expanded) {
 		return tc.logError(fmt.Errorf("expected %s to not equal %s but found %s in %s", jsonPath, expectedValue, found, asPrettyJson(string(tc.body))))
 	}
 	return nil
