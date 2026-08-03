@@ -2,6 +2,7 @@ package validation
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
@@ -186,6 +187,7 @@ func TestQueueConfig_InvalidNameRejected(t *testing.T) {
 		"Uppercase-Queue",
 		"my_queue",
 		"queue.name",
+		strings.Repeat("a", 64),
 	}
 	for _, name := range invalid {
 		cfg := api.EvaluationJobConfig{
@@ -215,6 +217,7 @@ func TestQueueConfig_ValidNameAccepted(t *testing.T) {
 		"queue1",
 		"a",
 		"gpu-profile-v1",
+		strings.Repeat("a", 63),
 	}
 	for _, name := range valid {
 		cfg := api.EvaluationJobConfig{
@@ -248,6 +251,7 @@ func TestBenchmarkHardwareConfig_InvalidNameRejected(t *testing.T) {
 		"GPU-Profile",
 		"cpu_profile",
 		"gpu.profile.v1",
+		strings.Repeat("a", 64),
 	}
 	for _, name := range invalid {
 		cfg := api.EvaluationJobConfig{
@@ -265,7 +269,7 @@ func TestBenchmarkHardwareConfig_InvalidNameRejected(t *testing.T) {
 		}
 		err := validate.Struct(cfg)
 		if err == nil {
-			t.Errorf("expected validation error for hardware profile ref %q", name)
+			t.Errorf("expected validation error for hardware profile name %q", name)
 		}
 	}
 }
@@ -276,6 +280,7 @@ func TestBenchmarkHardwareConfig_ValidNameAccepted(t *testing.T) {
 		"default-profile",
 		"gpu-profile-v1",
 		"a",
+		strings.Repeat("a", 63),
 	}
 	for _, name := range valid {
 		cfg := api.EvaluationJobConfig{

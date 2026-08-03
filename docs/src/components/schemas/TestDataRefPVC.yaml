@@ -16,10 +16,12 @@ required:
 properties:
   claim_name:
     type: string
-    pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+    maxLength: 63
+    pattern: '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
     description: |
       Name of the PersistentVolumeClaim in the evaluation job namespace (same as Kubernetes
-      `PersistentVolumeClaimVolumeSource.claimName`). Must be a valid RFC 1123 DNS label.
+      `PersistentVolumeClaimVolumeSource.claimName`). Must be a valid RFC 1123 DNS label
+      (lowercase letters, digits, and internal hyphens; max 63 characters).
   sub_path:
     type: string
     description: |

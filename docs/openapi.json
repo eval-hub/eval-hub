@@ -3156,8 +3156,9 @@
           },
           "name": {
             "type": "string",
-            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
-            "description": "Queue resource name (for Kueue, the LocalQueue name). Must conform to RFC 1123 DNS label naming (lowercase letters, digits, and internal hyphens). Set on the Job as label `kueue.x-k8s.io/queue-name`.\n"
+            "maxLength": 63,
+            "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$",
+            "description": "Queue resource name (for Kueue, the LocalQueue name). Must conform to RFC 1123 DNS label naming (lowercase letters, digits, and internal hyphens; max 63 characters). Set on the Job as label `kueue.x-k8s.io/queue-name`.\n"
           }
         }
       },
@@ -3215,8 +3216,9 @@
         "properties": {
           "hardware_profile_name": {
             "type": "string",
-            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
-            "description": "Name of the OpenDataHub `HardwareProfile` custom resource (`hardwareprofiles.infrastructure.opendatahub.io`) in the platform namespace (`EVALHUB_HARDWARE_PROFILES_NAMESPACE`, typically `opendatahub` or `redhat-ods-applications`). Must conform to RFC 1123 DNS label naming. Mutually exclusive with `queue`, `cpu`, `memory`, and `gpu`.\n",
+            "maxLength": 63,
+            "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$",
+            "description": "Name of the OpenDataHub `HardwareProfile` custom resource (`hardwareprofiles.infrastructure.opendatahub.io`) in the platform namespace (`EVALHUB_HARDWARE_PROFILES_NAMESPACE`, typically `opendatahub` or `redhat-ods-applications`). Must conform to RFC 1123 DNS label naming (lowercase letters, digits, and internal hyphens; max 63 characters). Mutually exclusive with `queue`, `cpu`, `memory`, and `gpu`.\n",
             "examples": [
               "default-profile",
               "gpu-profile-v1"
@@ -3273,8 +3275,9 @@
         "properties": {
           "claim_name": {
             "type": "string",
-            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
-            "description": "Name of the PersistentVolumeClaim in the evaluation job namespace (same as Kubernetes\n`PersistentVolumeClaimVolumeSource.claimName`). Must be a valid RFC 1123 DNS label.\n"
+            "maxLength": 63,
+            "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$",
+            "description": "Name of the PersistentVolumeClaim in the evaluation job namespace (same as Kubernetes\n`PersistentVolumeClaimVolumeSource.claimName`). Must be a valid RFC 1123 DNS label\n(lowercase letters, digits, and internal hyphens; max 63 characters).\n"
           },
           "sub_path": {
             "type": "string",

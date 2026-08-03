@@ -21,8 +21,9 @@ var (
 		"resource_id": "required,min=1,max=36",
 	}
 
-	// RFC 1123 DNS label: lowercase alphanumeric, internal hyphens, no leading/trailing hyphen.
-	rfc1123DNSLabelRegex = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+	// RFC 1123 DNS label: lowercase alphanumeric, internal hyphens, no leading/trailing
+	// hyphen, max 63 characters (1 + up to 61 middle + 1, or a single alphanumeric).
+	rfc1123DNSLabelRegex = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$`)
 )
 
 func NewValidator() (*validator.Validate, error) {
