@@ -83,7 +83,6 @@ sidecar:
   #   ca_cert_path: /etc/pki/ca-trust/source/anchors/registry-ca.crt  # optional
   #   insecure_skip_verify: false
   sidecar_container:
-    image: quay.io/rh-ee-nbs/nbs-dev:eval-hub_v27
     resources:
       requests:
         cpu: 100m
