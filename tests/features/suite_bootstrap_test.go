@@ -331,9 +331,9 @@ func (a *apiFeature) cleanup(ctx context.Context, _ *godog.Scenario, _ error) (c
 		cancel()
 	}
 	if a.httpServer != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		_ = a.httpServer.Shutdown(ctx)
+		_ = a.httpServer.Shutdown(shutdownCtx)
 	}
 
 	return ctx, nil
