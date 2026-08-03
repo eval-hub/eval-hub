@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.43.2
 	github.com/aws/aws-sdk-go-v2/config v1.32.33
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.32
-	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.3.5
+	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.3.7
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.106.2
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-logr/logr v1.4.4
@@ -46,7 +46,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.11.0
 	go.uber.org/zap v1.28.0
 	go.yaml.in/yaml/v4 v4.0.0-rc.6
-	google.golang.org/grpc v1.82.1
+	google.golang.org/grpc v1.83.0
 	gopkg.in/evanphx/json-patch.v4 v4.13.0
 	k8s.io/api v0.36.3
 	k8s.io/apimachinery v0.36.3
