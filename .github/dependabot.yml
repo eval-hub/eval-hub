@@ -4,6 +4,18 @@ updates:
     directory: /
     schedule:
       interval: daily
+    groups:
+      # Composite actions (e.g. codeql-action/init vs analyze) are separate
+      # Dependabot deps; group by prefix so related bumps share one PR.
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
+      docker-actions:
+        patterns:
+          - "docker/*"
+      github-actions-core:
+        patterns:
+          - "actions/*"
 
   - package-ecosystem: gomod
     directory: /
