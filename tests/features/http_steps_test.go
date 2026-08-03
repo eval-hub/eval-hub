@@ -347,7 +347,7 @@ func (tc *scenarioConfig) requireMetricsURLForRemoteServer(ctx context.Context, 
 	// Not a @metrics scenario.
 	// Input: any scenario without the @metrics tag.
 	// Behavior: no-op; other features are unaffected by METRICS_URL requirements.
-	if !scenarioHasTag(sc, "metrics") {
+	if !scenarioHasTag(scenarioTagNames(sc), "metrics") {
 		return ctx, nil
 	}
 

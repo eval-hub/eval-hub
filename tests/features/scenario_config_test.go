@@ -243,14 +243,27 @@ func resolveMetricsBaseURL(apiBase *url.URL) (*url.URL, error) {
 	return apiBase, nil
 }
 
-func scenarioHasTag(sc *godog.Scenario, tag string) bool {
-	for _, t := range sc.Tags {
-		tagName := strings.TrimPrefix(t.Name, "@")
-		if tagName == tag {
+// scenarioHasTag reports whether tag appears in tags, with or without a leading "@".
+// Tags are plain strings so callers (and unit tests) stay independent of cucumber
+// messages package versions that godog.Scenario aliases across.
+func scenarioHasTag(tags []string, tag string) bool {
+	for _, t := range tags {
+		if strings.TrimPrefix(t, "@") == tag {
 			return true
 		}
 	}
 	return false
+}
+
+func scenarioTagNames(sc *godog.Scenario) []string {
+	if sc == nil || len(sc.Tags) == 0 {
+		return nil
+	}
+	names := make([]string, len(sc.Tags))
+	for i, t := range sc.Tags {
+		names[i] = t.Name
+	}
+	return names
 }
 
 func (tc *scenarioConfig) logDebug(format string, a ...any) {
