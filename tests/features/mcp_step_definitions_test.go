@@ -87,10 +87,9 @@ func (tc *scenarioConfig) iCallMCPToolWithArguments(toolName, argsJSON string) e
 		return tc.logError(fmt.Errorf("MCP client session not initialized"))
 	}
 
-	// Substitute values ({{value:key}}) like HTTP steps do
-	substitutedArgs, err := tc.substituteValues(argsJSON)
+	substitutedArgs, err := tc.resolveMCPArgs(argsJSON)
 	if err != nil {
-		return tc.logError(fmt.Errorf("failed to substitute values in MCP args: %w", err))
+		return err
 	}
 
 	ctx, cancel := tc.mcpCallContext()
@@ -112,6 +111,24 @@ func (tc *scenarioConfig) iCallMCPToolWithArguments(toolName, argsJSON string) e
 	}
 
 	return nil
+}
+
+// resolveMCPArgs loads file:/ payloads (jsonnet/JSON via getFile) then applies {{...}} substitution,
+// matching HTTP getRequestBody so connected/disconnected defaults stay consistent.
+func (tc *scenarioConfig) resolveMCPArgs(argsJSON string) (string, error) {
+	body := argsJSON
+	var err error
+	if strings.HasPrefix(body, "file:/") {
+		body, err = tc.getFile(strings.TrimPrefix(body, "file:/"))
+		if err != nil {
+			return "", err
+		}
+	}
+	body, err = tc.substituteValues(body)
+	if err != nil {
+		return "", tc.logError(fmt.Errorf("failed to substitute values in MCP args: %w", err))
+	}
+	return body, nil
 }
 
 func (tc *scenarioConfig) iCallMCPToolWithInlineArguments(toolName string, argsJSON *godog.DocString) error {
