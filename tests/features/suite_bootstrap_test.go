@@ -358,7 +358,7 @@ func tidyUpTests() {
 	if apiFeat != nil {
 		_, _ = apiFeat.cleanup(context.Background(), nil, nil)
 	}
-	if s, ok := logger.Writer().(*os.File); ok {
+	if s, ok := getLogger().Writer().(*os.File); ok {
 		err := s.Close()
 		if err != nil {
 			panic(fmt.Sprintf("Failed to close logger file: %v\n", err))
