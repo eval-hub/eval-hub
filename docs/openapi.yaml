@@ -2142,7 +2142,6 @@ components:
         The evaluation job request configuration.
       required:
         - name
-        - model
       properties:
         name:
           type: string
@@ -2163,7 +2162,7 @@ components:
           description: |
             The model to evaluate.
 
-            **Note that if `pre_recorded_data` is set for all `test_data_ref.type` in the `benchmarks` section then model will not be `required` for the job run.**
+            **Note that if `pre_recorded_data` is set for all `test_data_ref.type` in the `benchmarks` section then `model` will not be `required` for the job run, in all other cases a `model` is required.**
     Ref:
       type: object
       description: Reference by ID

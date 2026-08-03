@@ -3260,8 +3260,7 @@
         "title": "EvaluationJobConfigCommon1",
         "description": "The evaluation job request configuration.\n",
         "required": [
-          "name",
-          "model"
+          "name"
         ],
         "properties": {
           "name": {
@@ -3281,7 +3280,7 @@
           },
           "model": {
             "$ref": "#/components/schemas/ModelRef",
-            "description": "The model to evaluate.\n\n**Note that if `pre_recorded_data` is set for all `test_data_ref.type` in the `benchmarks` section then model will not be `required` for the job run.**\n"
+            "description": "The model to evaluate.\n\n**Note that if `pre_recorded_data` is set for all `test_data_ref.type` in the `benchmarks` section then `model` will not be `required` for the job run, in all other cases a `model` is required.**\n"
           }
         }
       },
