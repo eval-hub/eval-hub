@@ -160,7 +160,10 @@ func getMLflowTLSConfig() *tls.Config {
 			insecure = parsed
 		}
 	}
-	return &tls.Config{InsecureSkipVerify: insecure} //nolint:gosec
+	return &tls.Config{
+		MinVersion:         tls.VersionTLS12,
+		InsecureSkipVerify: insecure, //nolint:gosec
+	}
 }
 
 // getMLflowHTTPClient returns an HTTP client configured for MLflow API calls
