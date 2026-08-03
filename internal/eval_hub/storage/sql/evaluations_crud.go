@@ -107,10 +107,6 @@ func (s *sqlStorage) DeleteEvaluationJob(id string) error {
 	// Execute the DELETE query
 	result, err := s.exec(nil, deleteQuery, args...)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			s.logger.Debug("Evaluation job not found", "id", id)
-			return se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
-		}
 		s.logger.Error("Failed to delete evaluation job", "error", err, "id", id)
 		return se.WithRollback(se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error()))
 	}

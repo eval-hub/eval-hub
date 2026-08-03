@@ -21,6 +21,18 @@ func TestBuildK8sNameDiffersAcrossGUIDs(t *testing.T) {
 	}
 }
 
+func TestBuildK8sNameRespectsMaxLengthWithSpecSuffix(t *testing.T) {
+	longJobID := strings.Repeat("a", 80)
+	longGUID := strings.Repeat("b", 40)
+	name := buildK8sName(longJobID, longGUID, specSuffix)
+	if len(name) > maxK8sNameLength {
+		t.Fatalf("expected name length <= %d, got %d (%q)", maxK8sNameLength, len(name), name)
+	}
+	if !strings.HasSuffix(name, specSuffix) {
+		t.Fatalf("expected configMap suffix %q on truncated name, got %q", specSuffix, name)
+	}
+}
+
 func TestJobLabelsNilConfig(t *testing.T) {
 	labels := jobLabels(nil)
 	if len(labels) != 0 {

@@ -312,7 +312,7 @@ func (tc *scenarioConfig) theResponseShouldContainAtJSONPathImpl(expectedValue s
 				return false, foundValue, nil
 			}
 		case "matches":
-			expr, err := regexp.Compile(value)
+			expr, err := regexp.Compile(strings.TrimSpace(value))
 			if err != nil {
 				return false, foundValue, tc.logError(fmt.Errorf("invalid regex %q: %w", strings.TrimSpace(value), err))
 			}

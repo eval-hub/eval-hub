@@ -43,6 +43,24 @@ func findContainer(containers []corev1.Container, name string) *corev1.Container
 	return nil
 }
 
+func findVolume(volumes []corev1.Volume, name string) *corev1.Volume {
+	for i := range volumes {
+		if volumes[i].Name == name {
+			return &volumes[i]
+		}
+	}
+	return nil
+}
+
+func findVolumeMount(mounts []corev1.VolumeMount, name string) *corev1.VolumeMount {
+	for i := range mounts {
+		if mounts[i].Name == name {
+			return &mounts[i]
+		}
+	}
+	return nil
+}
+
 func TestBuildConfigMap(t *testing.T) {
 
 	cfg := &jobConfig{

@@ -318,15 +318,11 @@ func (tc *scenarioConfig) iSendARequestImpl(method, path, body, caller string) e
 	}
 
 	if method == http.MethodDelete {
-		_, assetName, _, err := tc.getAssetDetails(endpoint)
+		_, assetName, id, err := tc.getAssetDetails(endpoint)
 		if err != nil {
 			return err
 		}
 		if assetName != "" {
-			_, _, id, err := tc.getAssetDetails(endpoint)
-			if err != nil {
-				return err
-			}
 			if id == "" {
 				return tc.logError(fmt.Errorf("no ID found in path %s", endpoint))
 			}

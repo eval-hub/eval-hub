@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
-	corev1 "k8s.io/api/core/v1"
 )
 
 func TestBuildJobWithOCICredentials(t *testing.T) {
@@ -26,41 +25,31 @@ func TestBuildJobWithOCICredentials(t *testing.T) {
 	}
 
 	// Check volume exists with correct secret name
-	var foundVolume bool
-	for _, v := range job.Spec.Template.Spec.Volumes {
-		if v.Name == ociCredentialsVolumeName {
-			foundVolume = true
-			if v.Secret == nil {
-				t.Fatalf("expected secret volume source for %s", ociCredentialsVolumeName)
-			}
-			if v.Secret.SecretName != "my-pull-secret" {
-				t.Fatalf("expected secret name %q, got %q", "my-pull-secret", v.Secret.SecretName)
-			}
-		}
-	}
-	if !foundVolume {
+	foundVolume := findVolume(job.Spec.Template.Spec.Volumes, ociCredentialsVolumeName)
+	if foundVolume == nil {
 		t.Fatalf("expected volume %s to be present", ociCredentialsVolumeName)
+	}
+	if foundVolume.Secret == nil {
+		t.Fatalf("expected secret volume source for %s", ociCredentialsVolumeName)
+	}
+	if foundVolume.Secret.SecretName != "my-pull-secret" {
+		t.Fatalf("expected secret name %q, got %q", "my-pull-secret", foundVolume.Secret.SecretName)
 	}
 
 	// Check volume mount exists with correct path and subPath
 	container := job.Spec.Template.Spec.Containers[0]
-	var foundMount bool
-	for _, m := range container.VolumeMounts {
-		if m.Name == ociCredentialsVolumeName {
-			foundMount = true
-			if m.MountPath != ociCredentialsMountPath {
-				t.Fatalf("expected mount path %q, got %q", ociCredentialsMountPath, m.MountPath)
-			}
-			if m.SubPath != ociCredentialsSubPath {
-				t.Fatalf("expected sub path %q, got %q", ociCredentialsSubPath, m.SubPath)
-			}
-			if !m.ReadOnly {
-				t.Fatalf("expected mount to be read-only")
-			}
-		}
-	}
-	if !foundMount {
+	foundMount := findVolumeMount(container.VolumeMounts, ociCredentialsVolumeName)
+	if foundMount == nil {
 		t.Fatalf("expected volume mount %s to be present", ociCredentialsVolumeName)
+	}
+	if foundMount.MountPath != ociCredentialsMountPath {
+		t.Fatalf("expected mount path %q, got %q", ociCredentialsMountPath, foundMount.MountPath)
+	}
+	if foundMount.SubPath != ociCredentialsSubPath {
+		t.Fatalf("expected sub path %q, got %q", ociCredentialsSubPath, foundMount.SubPath)
+	}
+	if !foundMount.ReadOnly {
+		t.Fatalf("expected mount to be read-only")
 	}
 
 	// Check env var exists
@@ -93,41 +82,24 @@ func TestBuildJobTerminationFileVolume(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
-	var foundVol bool
-	for _, v := range job.Spec.Template.Spec.Volumes {
-		if v.Name == terminationFileVolumeName {
-			foundVol = true
-			if v.EmptyDir == nil {
-				t.Fatalf("expected EmptyDir for %s", terminationFileVolumeName)
-			}
-		}
-	}
-	if !foundVol {
+	foundVol := findVolume(job.Spec.Template.Spec.Volumes, terminationFileVolumeName)
+	if foundVol == nil {
 		t.Fatalf("expected volume %q", terminationFileVolumeName)
 	}
-	adapter := job.Spec.Template.Spec.Containers[0]
-	var adapterMount bool
-	for _, m := range adapter.VolumeMounts {
-		if m.Name == terminationFileVolumeName && m.MountPath == adapterTerminationSharedMountPath {
-			adapterMount = true
-			break
-		}
+	if foundVol.EmptyDir == nil {
+		t.Fatalf("expected EmptyDir for %s", terminationFileVolumeName)
 	}
-	if !adapterMount {
+	adapter := job.Spec.Template.Spec.Containers[0]
+	adapterMount := findVolumeMount(adapter.VolumeMounts, terminationFileVolumeName)
+	if adapterMount == nil || adapterMount.MountPath != adapterTerminationSharedMountPath {
 		t.Fatalf("adapter should mount %q at %q", terminationFileVolumeName, adapterTerminationSharedMountPath)
 	}
 	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
 	if sidecar == nil {
 		t.Fatal("expected sidecar init container")
 	}
-	var sidecarMount bool
-	for _, m := range sidecar.VolumeMounts {
-		if m.Name == terminationFileVolumeName && m.MountPath == adapterTerminationSharedMountPath {
-			sidecarMount = true
-			break
-		}
-	}
-	if !sidecarMount {
+	sidecarMount := findVolumeMount(sidecar.VolumeMounts, terminationFileVolumeName)
+	if sidecarMount == nil || sidecarMount.MountPath != adapterTerminationSharedMountPath {
 		t.Fatalf("sidecar should mount %q at %q", terminationFileVolumeName, adapterTerminationSharedMountPath)
 	}
 }
@@ -332,13 +304,7 @@ func TestBuildJobWithModelAuthSecret(t *testing.T) {
 	}
 
 	// Adapter must have the projected passthrough volume, not the raw secret volume.
-	var foundVolume *corev1.Volume
-	for i := range job.Spec.Template.Spec.Volumes {
-		if job.Spec.Template.Spec.Volumes[i].Name == modelInternalAuthVolumeName {
-			foundVolume = &job.Spec.Template.Spec.Volumes[i]
-			break
-		}
-	}
+	foundVolume := findVolume(job.Spec.Template.Spec.Volumes, modelInternalAuthVolumeName)
 	if foundVolume == nil {
 		t.Fatalf("expected projected volume %s on adapter", modelInternalAuthVolumeName)
 	}
@@ -357,27 +323,20 @@ func TestBuildJobWithModelAuthSecret(t *testing.T) {
 	}
 
 	container := job.Spec.Template.Spec.Containers[0]
-	var foundMount bool
-	for _, m := range container.VolumeMounts {
-		if m.Name == modelInternalAuthVolumeName {
-			foundMount = true
-			if m.MountPath != modelAuthMountPath {
-				t.Fatalf("expected mount path %q, got %q", modelAuthMountPath, m.MountPath)
-			}
-			if !m.ReadOnly {
-				t.Fatal("expected mount to be read-only")
-			}
-		}
-	}
-	if !foundMount {
+	foundMount := findVolumeMount(container.VolumeMounts, modelInternalAuthVolumeName)
+	if foundMount == nil {
 		t.Fatalf("expected volume mount %s to be present on adapter", modelInternalAuthVolumeName)
+	}
+	if foundMount.MountPath != modelAuthMountPath {
+		t.Fatalf("expected mount path %q, got %q", modelAuthMountPath, foundMount.MountPath)
+	}
+	if !foundMount.ReadOnly {
+		t.Fatal("expected mount to be read-only")
 	}
 
 	// Raw secret volume must not be mounted on the adapter container (it belongs to the sidecar).
-	for _, m := range container.VolumeMounts {
-		if m.Name == modelAuthVolumeName {
-			t.Fatalf("unexpected raw secret mount %s on adapter container; direct-mount path is gone", modelAuthVolumeName)
-		}
+	if findVolumeMount(container.VolumeMounts, modelAuthVolumeName) != nil {
+		t.Fatalf("unexpected raw secret mount %s on adapter container; direct-mount path is gone", modelAuthVolumeName)
 	}
 }
 
@@ -399,8 +358,8 @@ func TestBuildJobWithoutModelAuthSecret(t *testing.T) {
 	}
 
 	for _, v := range job.Spec.Template.Spec.Volumes {
-		if v.Name == modelAuthVolumeName {
-			t.Fatalf("expected no %s volume when modelAuthSecretRef is empty", modelAuthVolumeName)
+		if v.Name == modelAuthVolumeName || v.Name == modelInternalAuthVolumeName {
+			t.Fatalf("expected no %s volume when modelAuthSecretRef is empty", v.Name)
 		}
 	}
 	container := job.Spec.Template.Spec.Containers[0]
@@ -411,6 +370,11 @@ func TestBuildJobWithoutModelAuthSecret(t *testing.T) {
 	}
 }
 
+// TestBuildJobSATokenSidecarOnly verifies that:
+//   - pod-level AutomountServiceAccountToken is explicitly disabled
+//   - the evalhub-sa-token projected volume exists on the pod and is mounted in the sidecar
+//   - the adapter container has no evalhub-sa-token mount
+//   - the adapter has the pod-namespace DownwardAPI volume mounted at k8sSAMountPath
 func TestBuildJobSATokenSidecarOnly(t *testing.T) {
 	cfg := &jobConfig{
 		jobID:          "sa-token-job",
@@ -433,26 +397,21 @@ func TestBuildJobSATokenSidecarOnly(t *testing.T) {
 	}
 
 	// Pod volumes must contain the evalhub-sa-token projected volume.
-	var foundPodVolume bool
-	for _, v := range job.Spec.Template.Spec.Volumes {
-		if v.Name == evalhubSATokenVolumeName {
-			foundPodVolume = true
-			if v.Projected == nil {
-				t.Fatal("evalhub-sa-token volume must be a projected volume")
-			}
-			hasSAToken := false
-			for _, src := range v.Projected.Sources {
-				if src.ServiceAccountToken != nil {
-					hasSAToken = true
-				}
-			}
-			if !hasSAToken {
-				t.Fatal("evalhub-sa-token projected volume must contain a ServiceAccountToken source")
-			}
+	foundPodVolume := findVolume(job.Spec.Template.Spec.Volumes, evalhubSATokenVolumeName)
+	if foundPodVolume == nil {
+		t.Fatalf("expected pod volume %q", evalhubSATokenVolumeName)
+	}
+	if foundPodVolume.Projected == nil {
+		t.Fatal("evalhub-sa-token volume must be a projected volume")
+	}
+	hasSAToken := false
+	for _, src := range foundPodVolume.Projected.Sources {
+		if src.ServiceAccountToken != nil {
+			hasSAToken = true
 		}
 	}
-	if !foundPodVolume {
-		t.Fatalf("expected pod volume %q", evalhubSATokenVolumeName)
+	if !hasSAToken {
+		t.Fatal("evalhub-sa-token projected volume must contain a ServiceAccountToken source")
 	}
 
 	// Sidecar must mount evalhub-sa-token at the standard SA token path.
@@ -460,20 +419,15 @@ func TestBuildJobSATokenSidecarOnly(t *testing.T) {
 	if sidecar == nil {
 		t.Fatal("sidecar init container not found")
 	}
-	var foundSidecarMount bool
-	for _, m := range sidecar.VolumeMounts {
-		if m.Name == evalhubSATokenVolumeName {
-			foundSidecarMount = true
-			if m.MountPath != k8sSAMountPath {
-				t.Errorf("sidecar SA token mount path: got %q, want %q", m.MountPath, k8sSAMountPath)
-			}
-			if !m.ReadOnly {
-				t.Error("sidecar SA token mount must be read-only")
-			}
-		}
-	}
-	if !foundSidecarMount {
+	foundSidecarMount := findVolumeMount(sidecar.VolumeMounts, evalhubSATokenVolumeName)
+	if foundSidecarMount == nil {
 		t.Fatalf("sidecar must mount %q", evalhubSATokenVolumeName)
+	}
+	if foundSidecarMount.MountPath != k8sSAMountPath {
+		t.Errorf("sidecar SA token mount path: got %q, want %q", foundSidecarMount.MountPath, k8sSAMountPath)
+	}
+	if !foundSidecarMount.ReadOnly {
+		t.Error("sidecar SA token mount must be read-only")
 	}
 
 	// Adapter must NOT mount evalhub-sa-token.
@@ -481,48 +435,36 @@ func TestBuildJobSATokenSidecarOnly(t *testing.T) {
 	if adapter == nil {
 		t.Fatal("adapter container not found")
 	}
-	for _, m := range adapter.VolumeMounts {
-		if m.Name == evalhubSATokenVolumeName {
-			t.Fatalf("adapter must not have %q volume mount", evalhubSATokenVolumeName)
-		}
+	if findVolumeMount(adapter.VolumeMounts, evalhubSATokenVolumeName) != nil {
+		t.Fatalf("adapter must not have %q volume mount", evalhubSATokenVolumeName)
 	}
 
 	// Adapter must have the pod-namespace DownwardAPI volume mounted at k8sSAMountPath
 	// so the SDK can read the namespace file to set X-Tenant on sidecar requests.
-	var foundNamespaceVolume bool
-	for _, v := range job.Spec.Template.Spec.Volumes {
-		if v.Name == adapterNamespaceVolumeName {
-			foundNamespaceVolume = true
-			if v.Projected == nil {
-				t.Fatal("pod-namespace volume must be a projected volume")
-			}
-			hasDownwardAPI := false
-			for _, src := range v.Projected.Sources {
-				if src.DownwardAPI != nil {
-					hasDownwardAPI = true
-				}
-			}
-			if !hasDownwardAPI {
-				t.Fatal("pod-namespace projected volume must contain a DownwardAPI source")
-			}
-		}
-	}
-	if !foundNamespaceVolume {
+	foundNamespaceVolume := findVolume(job.Spec.Template.Spec.Volumes, adapterNamespaceVolumeName)
+	if foundNamespaceVolume == nil {
 		t.Fatalf("expected pod-namespace DownwardAPI volume %q on pod", adapterNamespaceVolumeName)
 	}
-	var foundNamespaceMount bool
-	for _, m := range adapter.VolumeMounts {
-		if m.Name == adapterNamespaceVolumeName {
-			foundNamespaceMount = true
-			if m.MountPath != k8sSAMountPath {
-				t.Errorf("adapter namespace mount path: got %q, want %q", m.MountPath, k8sSAMountPath)
-			}
-			if !m.ReadOnly {
-				t.Error("adapter namespace mount must be read-only")
-			}
+	if foundNamespaceVolume.Projected == nil {
+		t.Fatal("pod-namespace volume must be a projected volume")
+	}
+	hasDownwardAPI := false
+	for _, src := range foundNamespaceVolume.Projected.Sources {
+		if src.DownwardAPI != nil {
+			hasDownwardAPI = true
 		}
 	}
-	if !foundNamespaceMount {
+	if !hasDownwardAPI {
+		t.Fatal("pod-namespace projected volume must contain a DownwardAPI source")
+	}
+	foundNamespaceMount := findVolumeMount(adapter.VolumeMounts, adapterNamespaceVolumeName)
+	if foundNamespaceMount == nil {
 		t.Fatalf("adapter must mount %q at %q", adapterNamespaceVolumeName, k8sSAMountPath)
+	}
+	if foundNamespaceMount.MountPath != k8sSAMountPath {
+		t.Errorf("adapter namespace mount path: got %q, want %q", foundNamespaceMount.MountPath, k8sSAMountPath)
+	}
+	if !foundNamespaceMount.ReadOnly {
+		t.Error("adapter namespace mount must be read-only")
 	}
 }
