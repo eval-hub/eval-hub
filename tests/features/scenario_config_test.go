@@ -334,7 +334,10 @@ func (tc *scenarioConfig) substituteValues(body string) (string, error) {
 	re := regexp.MustCompile(`\{\{([^}]*)\}\}`)
 	for strings.Contains(body, "{{") {
 		match := re.FindStringSubmatch(body)
-		if len(match) > 1 {
+		if len(match) <= 1 {
+			return "", tc.logError(fmt.Errorf("unterminated substitution token in body: %s", body))
+		}
+		{
 			if after, ok := strings.CutPrefix(match[1], mlflowPrefix); ok {
 				// Use the literal after mlflow: as the experiment name. When MLflow is configured,
 				// it could be resolved from MLflow; for tests without MLflow, this allows name-based
