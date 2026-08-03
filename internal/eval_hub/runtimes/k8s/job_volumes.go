@@ -322,7 +322,8 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 	}
 
 	// Mount OCI credentials on the sidecar so it can proxy calls to the OCI registry.
-	// The volume is already on the pod from the runtime container; we only add the mount here.
+	// The runtime container declares the same volume; mergeVolumesByName deduplicates it by name,
+	// so declaring it here keeps this builder self-contained.
 	if cfg.ociCredentialsSecret != "" {
 		volumes = append(volumes, corev1.Volume{
 			Name: ociCredentialsVolumeName,
