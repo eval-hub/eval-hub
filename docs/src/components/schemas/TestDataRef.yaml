@@ -28,6 +28,8 @@ oneOf:
     properties:
       s3:
         $ref: ./TestDataRefS3.yaml
+      type:
+        $ref: ./TestDataRefType.yaml
     additionalProperties: false
     required:
       - s3
@@ -36,6 +38,8 @@ oneOf:
     properties:
       pvc:
         $ref: ./TestDataRefPVC.yaml
+      type:
+        $ref: ./TestDataRefType.yaml
     additionalProperties: false
     required:
       - pvc
@@ -44,6 +48,8 @@ oneOf:
     properties:
       git:
         $ref: ./TestDataRefGit.yaml
+      type:
+        $ref: ./TestDataRefType.yaml
     additionalProperties: false
     required:
       - git

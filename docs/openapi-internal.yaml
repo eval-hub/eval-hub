@@ -2289,6 +2289,8 @@ components:
           $ref: '#/components/schemas/ModelRef'
           description: |
             The model to evaluate.
+
+            **Note that if `pre_recorded_data` is set for all `test_data_ref.type` in the `benchmarks` section then model will not be `required` for the job run.**
     Ref:
       type: object
       description: Reference by ID
@@ -2389,6 +2391,14 @@ components:
         bucket: my-eval-bucket
         key: datasets/benchmark-a/v1
         secret_ref: my-s3-connection-secret
+    TestDataRefType:
+      type: string
+      description: |
+        The type of test data being referenced, the default is `data_set` if not specified. If `pre_recorded_data` is set for all benchmarks then a model section will not be mandatory for the job run.
+      enum:
+        - data_set
+        - pre_recorded_data
+      default: data_set
     TestDataRefPVC:
       type: object
       description: |
@@ -2529,6 +2539,8 @@ components:
           properties:
             s3:
               $ref: '#/components/schemas/TestDataRefS3'
+            type:
+              $ref: '#/components/schemas/TestDataRefType'
           additionalProperties: false
           required:
             - s3
@@ -2537,6 +2549,8 @@ components:
           properties:
             pvc:
               $ref: '#/components/schemas/TestDataRefPVC'
+            type:
+              $ref: '#/components/schemas/TestDataRefType'
           additionalProperties: false
           required:
             - pvc
@@ -2545,6 +2559,8 @@ components:
           properties:
             git:
               $ref: '#/components/schemas/TestDataRefGit'
+            type:
+              $ref: '#/components/schemas/TestDataRefType'
           additionalProperties: false
           required:
             - git

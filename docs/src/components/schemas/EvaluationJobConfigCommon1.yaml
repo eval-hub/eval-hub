@@ -22,5 +22,7 @@ properties:
       The evaluation job tags.
   model:
     $ref: ./ModelRef.yaml
-    description: >
+    description: |
       The model to evaluate.
+
+      **Note that if `pre_recorded_data` is set for all `test_data_ref.type` in the `benchmarks` section then model will not be `required` for the job run.**

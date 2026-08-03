@@ -21,7 +21,41 @@ These are the files in the `docs` directory.
 | **openapi-internal.yaml/.json** | **Generated.** Internal API bundle produced by `make generate-public-docs`. Full spec from `src/openapi.yaml` including `x-internal` content. For internal tooling and docs. |
 | **index-public.html** | **Generated.** Public Redoc docs page produced by `make generate-public-docs`. Copied to `index.html`. |
 | **index-private.html** | **Generated.** Internal Redoc docs page with `x-internal` content included. |
-| **3.4EA2/** | Legacy versioned snapshot of the spec (3.4 EA2 release); kept for reference. Do not use for code generation or serving. |
+
+## YAML `description:` block scalars
+
+In OpenAPI YAML under `docs/src/`, multi-line `description:` values use YAML [block scalars](https://yaml.org/spec/1.2.2/#81-block-scalar-styles). The character(s) immediately after `description:` control how line breaks and the final newline are handled:
+
+| Indicator | Style | Meaning |
+|-----------|--------|---------|
+| *(none)* | Plain / flow | Single-line string on the same line as `description:`. Fine for short text with no intentional line breaks. |
+| `\|` | Literal | Newlines in the indented block are **kept**. Use for multi-paragraph docs, lists, or any text where line breaks should appear in the rendered description. |
+| `>` | Folded | Single newlines in the indented block are **folded into spaces** (paragraphs separated by a blank line stay as separate paragraphs). Use for long prose that should read as continuous sentences. |
+| `\|-` / `>-` | Literal / folded + **strip** | Same as `\|` or `>`, but the **final** newline of the block is removed. Prefer when a trailing `\n` would be undesirable (for example short field descriptions). |
+| `\|+` / `>+` | Literal / folded + **keep** | Same as `\|` or `>`, but **all** trailing newlines at the end of the block are kept. Rarely needed for API descriptions. |
+
+Examples:
+
+```yaml
+# Literal: blank lines and newlines are preserved
+description: |
+  First paragraph.
+
+  Second paragraph with a real line break above.
+
+# Folded: adjacent lines become one paragraph; blank line starts a new one
+description: >
+  This line and the next are joined with a space
+  into a single paragraph.
+
+  This is a second paragraph.
+
+# Folded + strip: fold lines and drop the final newline
+description: >-
+  Short multi-line source that renders as one line without a trailing newline.
+```
+
+This repository commonly uses `|` for structured multi-paragraph schema docs and `>` / `>-` for flowing prose on paths and fields.
 
 ## Generating the public (and internal) docs
 
