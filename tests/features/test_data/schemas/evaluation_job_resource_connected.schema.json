@@ -53,9 +53,6 @@
     "exports": {
       "$ref": "#/$defs/EvaluationExports"
     },
-    "queue": {
-      "$ref": "#/$defs/QueueConfig"
-    },
     "custom": {
       "type": "object",
       "additionalProperties": true

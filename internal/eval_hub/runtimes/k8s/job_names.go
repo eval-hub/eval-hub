@@ -74,6 +74,9 @@ func jobLabels(cfg *jobConfig) map[string]string {
 	}
 	if cfg.queueKind == "kueue" && cfg.queueName != "" {
 		m[labelKueueQueueNameKey] = cfg.queueName
+		if cfg.priorityClassName != "" {
+			m[labelKueuePriorityClassKey] = sanitizeLabelValue(cfg.priorityClassName)
+		}
 	}
 	return m
 }

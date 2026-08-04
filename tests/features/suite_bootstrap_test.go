@@ -571,6 +571,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least "([^"]*)"$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^I wait for the evaluation job status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatus)
+	ctx.Step(`^I wait for the evaluation job "([^"]*)" status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatusByID)
 	ctx.Step(`^I set the wait deadline to "([^"]*)"$`, tc.iSetWaitDeadlineTo)
 	ctx.Step(`^I set the wait interval to "([^"]*)"$`, tc.iSetWaitIntervalTo)
 	// Other steps
@@ -583,6 +584,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I fetch the MLflow artifact "([^"]*)" for run "([^"]*)"$`, tc.iFetchMLflowArtifact)
 	ctx.Step(`^I fetch the MLflow artifact "([^"]*)" for experiment "([^"]*)" and job "([^"]*)"$`, tc.iFetchMLflowArtifactByExperimentAndJob)
 	ctx.Step(`^the MLflow artifact should exist$`, tc.theMLflowArtifactShouldExist)
+	ctx.Step(`^the MLflow artifact "([^"]*)" should not exist for experiment "([^"]*)" and job "([^"]*)"$`, tc.theMLflowArtifactShouldNotExistForExperimentAndJob)
 	ctx.Step(`^the MLflow artifact should contain "([^"]*)"$`, tc.theMLflowArtifactShouldContain)
 	ctx.Step(`^the MLflow artifact should contain the value "([^"]*)" at path "([^"]*)"$`, tc.theMLflowArtifactShouldContainValueAtPath)
 	ctx.Step(`^the MLflow artifact should be valid JSON$`, tc.theMLflowArtifactShouldBeValidJSON)

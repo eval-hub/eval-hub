@@ -26,7 +26,8 @@ properties:
     description: >
       Optional node label key/value pairs added to the evaluation pod to target a GPU model
       or node pool (for example `nvidia.com/gpu.product: NVIDIA-H100-SXM5-80GB`). Ignored
-      when the evaluation job is submitted with a queue; in that case Kueue ResourceFlavors
-      govern node selection.
+      when a HardwareProfile with Queue scheduling is applied; in that case Kueue
+      ResourceFlavors govern node selection. Overridden when a HardwareProfile with
+      Node scheduling provides its own nodeSelector.
     examples:
       - nvidia.com/gpu.product: NVIDIA-H100-SXM5-80GB

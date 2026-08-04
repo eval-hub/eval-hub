@@ -90,6 +90,7 @@ const (
 	annotationProviderIDKey          = "eval-hub.github.io/provider_id"
 	annotationBenchmarkIDKey         = "eval-hub.github.io/benchmark_id"
 	labelKueueQueueNameKey           = "kueue.x-k8s.io/queue-name"
+	labelKueuePriorityClassKey       = "kueue.x-k8s.io/priority-class"
 )
 
 var (
@@ -226,6 +227,8 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 				Spec: corev1.PodSpec{
 					RestartPolicy:                corev1.RestartPolicyNever,
 					NodeSelector:                 cfg.nodeSelector,
+					Tolerations:                  cfg.tolerations,
+					PriorityClassName:            cfg.priorityClassName,
 					InitContainers:               initContainers,
 					Containers:                   containers,
 					Volumes:                      jobVolumes,

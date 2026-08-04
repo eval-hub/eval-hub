@@ -1,12 +1,43 @@
 type: object
 title: BenchmarkHardwareConfig
 description: >
-  Optional per-benchmark hardware override for Kubernetes runtimes. When
-  `hardware_profile_ref` is set, the server fetches the named OpenDataHub
-  `HardwareProfile` custom resource and applies its CPU, memory, and GPU resource
-  values to the evaluation Job adapter container. Values missing from the profile
-  fall back to the provider `runtime.k8s` configuration (and built-in defaults
-  when those are unset).
+  Optional per-benchmark hardware override for Kubernetes runtimes.
+
+  Two mutually exclusive modes:
+
+  - **Profile mode:** set `hardware_profile_name` to fetch a named OpenDataHub
+    `HardwareProfile` custom resource and apply its CPU, memory, and GPU resource
+    values plus optional scheduling (`spec.scheduling`) to the evaluation Job.
+    Node scheduling applies `nodeSelector` and `tolerations`; Queue scheduling
+    applies the Kueue LocalQueue name and optional priority class. When
+    `hardware_profile_name` is set, `queue`, `cpu`, `memory`, and `gpu` must not
+    be present — the request is rejected. Disabled profiles
+    (`opendatahub.io/disabled: "true"`) are rejected on create.
+
+  - **Direct mode:** omit `hardware_profile_name` and set `queue`, `cpu`,
+    `memory`, and/or `gpu` directly. Values missing from these fields fall back
+    to the provider `runtime.k8s` configuration (and built-in defaults when those
+    are unset).
 properties:
-  hardware_profile_ref:
-    $ref: ./HardwareProfileRef.yaml
+  hardware_profile_name:
+    type: string
+    maxLength: 63
+    pattern: '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+    description: >
+      Name of the OpenDataHub `HardwareProfile` custom resource
+      (`hardwareprofiles.infrastructure.opendatahub.io`) in the platform
+      namespace (`EVALHUB_HARDWARE_PROFILES_NAMESPACE`, typically `opendatahub`
+      or `redhat-ods-applications`). Must conform to RFC 1123 DNS label naming
+      (lowercase letters, digits, and internal hyphens; max 63 characters).
+      Mutually exclusive with `queue`, `cpu`, `memory`, and `gpu`.
+    examples:
+      - default-profile
+      - gpu-profile-v1
+  queue:
+    $ref: ./QueueConfig.yaml
+  cpu:
+    $ref: ./HardwareResourceQuantity.yaml
+  memory:
+    $ref: ./HardwareResourceQuantity.yaml
+  gpu:
+    $ref: ./HardwareGPUConfig.yaml

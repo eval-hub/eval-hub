@@ -159,13 +159,41 @@ type TestDataRef struct {
 	PVC *PVCTestDataRef `mapstructure:"pvc" json:"pvc,omitempty"`
 }
 
-type HardwareProfileRef struct {
-	Name      string `mapstructure:"name" json:"name" validate:"required,rfc1123_dns_label"`
-	Namespace string `mapstructure:"namespace" json:"namespace,omitempty" validate:"omitempty,rfc1123_dns_label"`
+// HardwareResourceQuantity holds optional Kubernetes CPU or memory request/limit quantities.
+type HardwareResourceQuantity struct {
+	Request string `mapstructure:"request" json:"request,omitempty"`
+	Limit   string `mapstructure:"limit" json:"limit,omitempty"`
 }
 
+// HardwareGPUConfig holds optional GPU resource overrides for a benchmark.
+// Name is the Kubernetes extended resource (e.g. "nvidia.com/gpu").
+// Count is the number of GPUs requested on the Job (requests == limits).
+type HardwareGPUConfig struct {
+	Name  string `mapstructure:"name" json:"name,omitempty"`
+	Count int    `mapstructure:"count" json:"count,omitempty"`
+}
+
+// BenchmarkHardwareConfig is an optional per-benchmark hardware override for Kubernetes runtimes.
+//
+// Two mutually exclusive modes:
+//   - Profile mode: set HardwareProfileName to fetch an OpenDataHub HardwareProfile CR.
+//     Queue, CPU, Memory, and GPU must not be set.
+//   - Direct mode: omit HardwareProfileName and set Queue, CPU, Memory, and/or GPU directly.
+//     Values missing from direct fields fall back to the provider runtime.k8s configuration.
 type BenchmarkHardwareConfig struct {
-	HardwareProfileRef HardwareProfileRef `mapstructure:"hardware_profile_ref" json:"hardware_profile_ref,omitempty"`
+	HardwareProfileName string                    `mapstructure:"hardware_profile_name" json:"hardware_profile_name,omitempty" validate:"omitempty,rfc1123_dns_label"`
+	Queue               *QueueConfig              `mapstructure:"queue" json:"queue,omitempty"`
+	CPU                 *HardwareResourceQuantity `mapstructure:"cpu" json:"cpu,omitempty"`
+	Memory              *HardwareResourceQuantity `mapstructure:"memory" json:"memory,omitempty"`
+	GPU                 *HardwareGPUConfig        `mapstructure:"gpu" json:"gpu,omitempty"`
+}
+
+// HasDirectFields reports whether any inline (non-profile) hardware fields are set.
+func (h *BenchmarkHardwareConfig) HasDirectFields() bool {
+	if h == nil {
+		return false
+	}
+	return h.Queue != nil || h.CPU != nil || h.Memory != nil || h.GPU != nil
 }
 
 // EvaluationBenchmarkConfig represents a benchmark reference in an evaluation job request or persisted job config.
@@ -298,8 +326,14 @@ type CollectionRef struct {
 	Benchmarks []EvaluationBenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 }
 
-// QueueConfig represents an optional scheduling queue for evaluation jobs.
+// QueueConfig represents an optional scheduling queue under hardware_config
+// (or the deprecated evaluation.queue field).
 // When Kind is empty, the evaluation job API handler normalizes it to "kueue" before persist/runtime.
+// Precedence at job scheduling time (highest first):
+//  1. Queue-backed HardwareProfile referenced by benchmark.hardware_config.hardware_profile_name
+//  2. benchmark.hardware_config.queue (direct mode)
+//  3. evaluation.hardware_config (fallback when a benchmark has no hardware_config)
+//  4. evaluation.queue (deprecated)
 type QueueConfig struct {
 	Kind string `json:"kind,omitempty" validate:"omitempty,oneof=kueue"`
 	Name string `json:"name" validate:"required,rfc1123_dns_label"`
@@ -307,17 +341,32 @@ type QueueConfig struct {
 
 // EvaluationJobConfig represents evaluation job request schema
 type EvaluationJobConfig struct {
-	Name         string                      `json:"name" validate:"required"`
-	Description  *string                     `json:"description,omitempty"`
-	Tags         []string                    `json:"tags,omitempty" validate:"omitempty,dive,tagname"`
-	Model        ModelRef                    `json:"model" validate:"required"`
-	PassCriteria *PassCriteria               `json:"pass_criteria,omitempty"`
-	Benchmarks   []EvaluationBenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,required_without=Collection,dive"`
-	Collection   *CollectionRef              `json:"collection,omitempty" validate:"omitempty,required_without=Benchmarks"`
-	Experiment   *ExperimentConfig           `json:"experiment,omitempty"`
-	Custom       *map[string]any             `json:"custom,omitempty"`
-	Exports      *EvaluationExports          `json:"exports,omitempty"`
-	Queue        *QueueConfig                `json:"queue,omitempty"`
+	Name           string                      `json:"name" validate:"required"`
+	Description    *string                     `json:"description,omitempty"`
+	Tags           []string                    `json:"tags,omitempty" validate:"omitempty,dive,tagname"`
+	Model          ModelRef                    `json:"model" validate:"required"`
+	PassCriteria   *PassCriteria               `json:"pass_criteria,omitempty"`
+	Benchmarks     []EvaluationBenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,required_without=Collection,dive"`
+	Collection     *CollectionRef              `json:"collection,omitempty" validate:"omitempty,required_without=Benchmarks"`
+	Experiment     *ExperimentConfig           `json:"experiment,omitempty"`
+	Custom         *map[string]any             `json:"custom,omitempty"`
+	Exports        *EvaluationExports          `json:"exports,omitempty"`
+	HardwareConfig *BenchmarkHardwareConfig    `json:"hardware_config,omitempty"`
+	// Queue is deprecated. Prefer benchmark.hardware_config or evaluation.hardware_config.
+	// Used only when neither hardware_config is set. Will be removed in a future release.
+	Queue *QueueConfig `json:"queue,omitempty"`
+}
+
+// EffectiveHardwareConfig returns the per-benchmark hardware_config when set,
+// otherwise the evaluation-level hardware_config fallback.
+func EffectiveHardwareConfig(benchmark *EvaluationBenchmarkConfig, evaluation *EvaluationJobConfig) *BenchmarkHardwareConfig {
+	if benchmark != nil && benchmark.HardwareConfig != nil {
+		return benchmark.HardwareConfig
+	}
+	if evaluation != nil {
+		return evaluation.HardwareConfig
+	}
+	return nil
 }
 
 type EvaluationResource struct {

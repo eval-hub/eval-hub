@@ -52,7 +52,9 @@ type jobConfig struct {
 	memoryLimit         string
 	gpuResource         string            // Kubernetes extended resource name (e.g. "nvidia.com/gpu")
 	gpuCount            int               // number of GPU units to request (0 = CPU-only)
-	nodeSelector        map[string]string // pod nodeSelector from GPU config; nil when queue is set
+	nodeSelector        map[string]string // pod nodeSelector; nil when a queue is set (HardwareProfile or hardware_config.queue)
+	tolerations         []corev1.Toleration
+	priorityClassName   string // pod PriorityClassName and/or Kueue priority-class label
 	jobSpec             shared.JobSpec
 	serviceAccountName  string
 	serviceCAConfigMap  string
@@ -72,7 +74,9 @@ type jobConfig struct {
 	testDataPVC                pvcTestDataConfig
 	testDataInitImage          string
 	sidecarConfig              *config.SidecarConfig
-	// queueKind and queueName come from evaluation.Queue when set (API layer normalizes empty kind to kueue).
+	// queueKind and queueName come from a queue-backed HardwareProfile when set,
+	// otherwise from effective hardware_config.queue, else deprecated evaluation.queue
+	// (API layer normalizes empty kind to kueue).
 	queueKind string
 	queueName string
 }
@@ -203,21 +207,12 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		testDataPVCSubPath = strings.TrimSpace(benchmarkConfig.TestDataRef.PVC.SubPath)
 	}
 
-	var queueKind, queueName string
-	if evaluation.Queue != nil {
-		queueName = strings.TrimSpace(evaluation.Queue.Name)
-		queueKind = strings.TrimSpace(evaluation.Queue.Kind)
-	}
-
 	// GPU resource requests/limits are always propagated to the pod spec so that Kueue can
-	// account for GPU quota. When a queue is specified, nodeSelector is omitted — Kueue's
-	// admission controller selects the appropriate ResourceFlavor (which encodes node labels)
-	// and mutates the pod at admission time.
+	// account for GPU quota. Provider nodeSelector is the default; a HardwareProfile with
+	// Node scheduling overrides it, and a Queue-backed profile (or hardware_config.queue /
+	// deprecated evaluation.queue) clears it so Kueue ResourceFlavors govern placement.
 	gpuResource, gpuCount := resolveGPUConfig(runtime.K8s.GPU)
-	var nodeSelector map[string]string
-	if queueName == "" {
-		nodeSelector = resolveNodeSelector(runtime.K8s.GPU)
-	}
+	nodeSelector := resolveNodeSelector(runtime.K8s.GPU)
 
 	adapterPullPolicy := resolveImagePullPolicy(runtime.K8s.ImagePullPolicy)
 
@@ -256,8 +251,6 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		sidecarResources:           sidecarResources,
 		sidecarBaseURL:             sidecarBaseURL,
 		evalHubURL:                 evalHubURL,
-		queueKind:                  queueKind,
-		queueName:                  queueName,
 		testDataS3: s3TestDataConfig{
 			bucket:    testDataS3Bucket,
 			key:       testDataS3Key,
@@ -269,7 +262,88 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		},
 	}
 	applyHardwareProfileResources(out, hardwareProfile)
+	effectiveHW := api.EffectiveHardwareConfig(benchmarkConfig, &evaluation.EvaluationJobConfig)
+	if err := applyDirectHardwareConfig(out, effectiveHW); err != nil {
+		return nil, err
+	}
+	// Deprecated evaluation.queue: only when neither hardware_config supplied a queue.
+	applyQueueIfUnset(out, evaluation.Queue)
 	return out, nil
+}
+
+// applyDirectHardwareConfig applies inline hardware_config fields (queue/cpu/memory/gpu)
+// when no hardware_profile_name is set. Profile mode is handled separately via
+// applyHardwareProfileResources.
+func applyDirectHardwareConfig(cfg *jobConfig, hw *api.BenchmarkHardwareConfig) error {
+	if cfg == nil || hw == nil {
+		return nil
+	}
+	if strings.TrimSpace(hw.HardwareProfileName) != "" {
+		return nil
+	}
+	if hw.CPU != nil {
+		if request := strings.TrimSpace(hw.CPU.Request); request != "" {
+			if _, err := resource.ParseQuantity(request); err != nil {
+				return fmt.Errorf("hardware_config.cpu.request: %w", err)
+			}
+			cfg.cpuRequest = request
+		}
+		if limit := strings.TrimSpace(hw.CPU.Limit); limit != "" {
+			if _, err := resource.ParseQuantity(limit); err != nil {
+				return fmt.Errorf("hardware_config.cpu.limit: %w", err)
+			}
+			cfg.cpuLimit = limit
+		}
+	}
+	if hw.Memory != nil {
+		if request := strings.TrimSpace(hw.Memory.Request); request != "" {
+			if _, err := resource.ParseQuantity(request); err != nil {
+				return fmt.Errorf("hardware_config.memory.request: %w", err)
+			}
+			cfg.memoryRequest = request
+		}
+		if limit := strings.TrimSpace(hw.Memory.Limit); limit != "" {
+			if _, err := resource.ParseQuantity(limit); err != nil {
+				return fmt.Errorf("hardware_config.memory.limit: %w", err)
+			}
+			cfg.memoryLimit = limit
+		}
+	}
+	if hw.GPU != nil {
+		if name := strings.TrimSpace(hw.GPU.Name); name != "" {
+			cfg.gpuResource = name
+		}
+		if hw.GPU.Count < 0 {
+			return fmt.Errorf("hardware_config.gpu.count must be at least 1")
+		}
+		if hw.GPU.Count > 0 {
+			cfg.gpuCount = hw.GPU.Count
+		}
+	}
+	if hw.Queue != nil {
+		applyQueueIfUnset(cfg, hw.Queue)
+	}
+	return nil
+}
+
+// applyQueueIfUnset sets queue from hardware_config.queue or deprecated evaluation.queue
+// when a HardwareProfile did not already provide a LocalQueue name. Clears
+// nodeSelector/tolerations so Kueue ResourceFlavors govern placement.
+func applyQueueIfUnset(cfg *jobConfig, queue *api.QueueConfig) {
+	if cfg == nil || queue == nil || cfg.queueName != "" {
+		return
+	}
+	queueName := strings.TrimSpace(queue.Name)
+	if queueName == "" {
+		return
+	}
+	cfg.queueName = queueName
+	cfg.queueKind = strings.TrimSpace(queue.Kind)
+	if cfg.queueKind == "" {
+		cfg.queueKind = "kueue"
+	}
+	cfg.nodeSelector = nil
+	cfg.tolerations = nil
 }
 
 // sidecarImageAndResources returns image and resources for the sidecar container from

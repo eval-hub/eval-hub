@@ -376,3 +376,7 @@ func (r *LocalRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJo
 func (r *LocalRuntime) Name() string {
 	return "local"
 }
+
+func (r *LocalRuntime) ValidateHardwareProfiles(_ []api.EvaluationBenchmarkConfig) error {
+	return nil
+}

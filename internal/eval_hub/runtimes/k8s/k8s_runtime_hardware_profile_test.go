@@ -128,9 +128,7 @@ func TestRunEvaluationJobWithHardwareProfileCreatesResources(t *testing.T) {
 					Ref:        api.Ref{ID: benchmarkID},
 					ProviderID: "lm_evaluation_harness",
 					HardwareConfig: &api.BenchmarkHardwareConfig{
-						HardwareProfileRef: api.HardwareProfileRef{
-							Name: profileName,
-						},
+						HardwareProfileName: profileName,
 					},
 				},
 			},
