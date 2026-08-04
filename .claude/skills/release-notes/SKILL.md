@@ -69,22 +69,27 @@ Accept an explicit tag/version from the user (e.g. `v1.0.0` or `1.0.0`).
 If none is given:
 
 1. Read `VERSION` (unprefixed SemVer, e.g. `1.0.0`).
-2. Use that as the target; the GitHub tag form is `v` + version (e.g. `v1.0.0`).
+2. Use that as the target.
 
-Normalize:
+**Validate before any shell interpolation.** The supplied value (user input or
+`VERSION`) MUST match `^v?[0-9]+\.[0-9]+\.[0-9]+$`. Reject anything else and
+stop; do not interpolate unvalidated strings into Git or `gh` commands.
 
-- **Version:** `X.Y.Z` (no `v`)
-- **Tag:** `vX.Y.Z`
+Normalize a valid value to the canonical tag form:
+
+- **Tag (`target_tag`):** `vX.Y.Z` (always with a leading `v`)
+- **Version:** `X.Y.Z` (no `v`; strip a leading `v` if present)
+
+Use only `target_tag` in all Git/`gh` commands below.
 
 Confirm the tag exists locally or on the remote (`git fetch --tags` if needed):
 
 ```bash
-git rev-parse --verify "refs/tags/vX.Y.Z^{}"
+git rev-parse --verify "refs/tags/${target_tag}^{}"
 ```
 
-If the tag does not exist yet, still draft notes for the range
-`previous_tag..HEAD` (or `previous_tag..main`) and say the release is not
-published.
+If the tag does not exist yet, still draft notes using the ranges in Step 2–3
+(with `HEAD` or `main` as the upper bound) and say the release is not published.
 
 ### Step 2 — Find the previous release tag
 
@@ -92,31 +97,64 @@ published.
 git tag --list 'v*' --sort=-v:refname
 ```
 
-Pick the highest SemVer tag **strictly older** than the target. If none,
-treat the range as the full history to the target (first release) and say so.
+Pick the highest SemVer tag **strictly older** than `target_tag`. Store it as
+`previous_tag`.
+
+**If a previous tag exists** — use ranges `previous_tag..target_tag` (or
+`previous_tag..HEAD` / `previous_tag..main` when the target tag is not
+published yet).
+
+**If none (first release)** — there is no `previous_tag`. Do **not** invent or
+reference an undefined `previous_tag`. Use the first-release branch:
+
+- Commit range: `target_tag` (or `HEAD` / `main` if the tag is not published)
+- PR time window: from the repository’s earliest commit date through the
+  target tag’s (or `HEAD`’s) committer date
+- State clearly that this is the first release
 
 ### Step 3 — Collect change inputs (not the notes)
 
-Gather material between `previous_tag` and `target_tag` (or `HEAD`):
+Gather material for the range from Step 2.
 
-**Merged PRs** (preferred):
+**Merged PRs** (preferred) — derive both merge-time bounds from tags (or the
+first-release upper bound only):
 
 ```bash
-gh pr list --state merged --limit 200 \
-  --search "merged:>=YYYY-MM-DD" \
+# Upper bound (always): committer date of target_tag, or HEAD if unpublished
+upper_ref="$target_tag"   # use HEAD if the target tag is not published yet
+upper_date=$(git log -1 --format=%cI "$upper_ref")
+
+# Lower bound (previous-release path only; omit for first release)
+lower_date=$(git log -1 --format=%cI "$previous_tag")
+```
+
+Search with both bounds when `previous_tag` exists; for a first release use
+only `merged:<=${upper_date}`. Read up to **1000** matching PRs
+(`--limit 1000`). If the result count equals that limit, split the date window
+and merge pages until every matching PR is collected:
+
+```bash
+# previous-release path (both bounds); drop merged:>=… for first release
+gh pr list --state merged --limit 1000 \
+  --search "merged:>=${lower_date} merged:<=${upper_date}" \
   --json number,title,labels,mergedAt,author,body
 ```
 
-Prefer filtering by merge time of the previous tag when possible:
-
-```bash
-git log -1 --format=%cI previous_tag
-```
+**Verify before drafting:** every collected PR’s `mergedAt` MUST fall within
+the intended window (strictly after `previous_tag` when present, and on or
+before `upper_ref`). Confirm each PR’s merge commit is reachable in
+`previous_tag..target_tag` (or the first-release range). Drop any PR outside
+that window.
 
 **Conventional commits** (supplement; do not dump raw):
 
 ```bash
-git log previous_tag..target_tag --pretty=format:'%s' --no-merges
+# previous-release path
+git log "${previous_tag}..${target_tag}" --pretty=format:'%s' --no-merges
+
+# first-release path (no previous_tag)
+git log "${target_tag}" --pretty=format:'%s' --no-merges
+# or, if target tag unpublished: git log HEAD --pretty=format:'%s' --no-merges
 ```
 
 Group by type prefix (`feat`, `fix`, `perf`, `refactor`, `docs`, `build`,
@@ -157,16 +195,26 @@ Do **not** publish or overwrite a release body without explicit confirmation.
 
 ### Step 6 — Apply to GitHub (only if confirmed)
 
+Use the validated `target_tag` (e.g. `v1.0.0`) in every command.
+
 If the release **exists**:
 
 ```bash
-gh release edit "vX.Y.Z" --notes-file /tmp/evalhub-release-notes.md
+gh release edit "${target_tag}" --notes-file /tmp/evalhub-release-notes.md
+```
+
+If the release **does not exist** and the user confirmed **publication** (not a
+draft):
+
+```bash
+gh release create "${target_tag}" --title "${target_tag}" \
+  --notes-file /tmp/evalhub-release-notes.md
 ```
 
 If the release **does not exist** and the user wants a **draft**:
 
 ```bash
-gh release create "vX.Y.Z" --draft --title "vX.Y.Z" \
+gh release create "${target_tag}" --draft --title "${target_tag}" \
   --notes-file /tmp/evalhub-release-notes.md
 ```
 
@@ -187,8 +235,23 @@ Summarize:
 
 ## Commit / PR when adding skill-only changes
 
-If this work is only documentation/skill files, use:
+If this work is only documentation/skill files, commit with `git commit -s`
+(DCO sign-off). Do **not** add a `Signed-off-by` line yourself; `-s` appends it
+from the author’s configured `user.name` and `user.email`.
+
+Use a Conventional Commits subject (example for the initial skill; adapt the
+subject for later skill-only edits):
 
 ```text
 chore(skills): add release-notes skill for OpenSSF-compliant GitHub releases
 ```
+
+Append **one** approved AI attribution trailer at the end of the commit message
+body (after the subject and any description), for example:
+
+```text
+Assisted-by: Cursor
+```
+
+or `Made-with: Cursor` / `Generated with: Claude Code` as appropriate. Do not
+stack multiple attribution trailers.
