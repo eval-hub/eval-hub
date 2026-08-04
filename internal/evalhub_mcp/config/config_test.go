@@ -30,9 +30,6 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Tenant != "" {
 		t.Errorf("expected empty default tenant, got %q", cfg.Tenant)
 	}
-	if cfg.Insecure {
-		t.Error("expected default insecure to be false")
-	}
 	if cfg.ListPageLimit != evalhubclient.DefaultListPageLimit {
 		t.Errorf("expected default list_page_limit %d, got %d", evalhubclient.DefaultListPageLimit, cfg.ListPageLimit)
 	}
@@ -60,7 +57,6 @@ func TestLoadEnvVars(t *testing.T) {
 	t.Setenv("EVALHUB_BASE_URL", "http://env-host:9090")
 	t.Setenv("EVALHUB_TOKEN", "env-token")
 	t.Setenv("EVALHUB_TENANT", "env-tenant")
-	t.Setenv("EVALHUB_INSECURE", "true")
 
 	cfg, err := Load(nil, nil)
 	if err != nil {
@@ -76,9 +72,6 @@ func TestLoadEnvVars(t *testing.T) {
 	}
 	if cfg.Tenant != "env-tenant" {
 		t.Errorf("expected tenant from env, got %q", cfg.Tenant)
-	}
-	if !cfg.Insecure {
-		t.Error("expected insecure=true from env")
 	}
 }
 
@@ -132,20 +125,17 @@ func TestLoadCLIFlagsOverrideYAMLAndEnv(t *testing.T) {
 
 	configFile := writeConfig(t, `
     base_url: http://yaml-host:8080
-    insecure: false
 `)
 
 	transport := "http"
 	host := "0.0.0.0"
 	port := 4000
-	insecure := true
 
 	flags := &Flags{
 		ConfigPath: configFile,
 		Transport:  &transport,
 		Host:       &host,
 		Port:       &port,
-		Insecure:   &insecure,
 	}
 	cfg, err := Load(flags, nil)
 	if err != nil {
@@ -160,9 +150,6 @@ func TestLoadCLIFlagsOverrideYAMLAndEnv(t *testing.T) {
 	}
 	if cfg.Port != 4000 {
 		t.Errorf("expected CLI port 4000, got %d", cfg.Port)
-	}
-	if !cfg.Insecure {
-		t.Error("expected CLI insecure=true to override YAML")
 	}
 	if cfg.BaseURL != "http://env-host:9090" {
 		t.Errorf("expected YAML base_url (not env), got %q", cfg.BaseURL)
@@ -201,40 +188,21 @@ func TestLoadMalformedYAML(t *testing.T) {
 	}
 }
 
-func TestLoadProfileInsecurePointer(t *testing.T) {
+func TestLoadProfileWithEnvOverride(t *testing.T) {
 	clearEnv(t)
 	defer clearEnv(t)
+	t.Setenv("EVALHUB_TOKEN", "my-token")
 
 	configFile := writeConfig(t, `
-    base_url: http://localhost:8080
-    insecure: false
+    token: old-token
 `)
 
 	cfg, err := Load(&Flags{ConfigPath: configFile}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.Insecure {
-		t.Error("expected YAML insecure=false to override env insecure=true")
-	}
-}
-
-func TestLoadProfileInsecurePointerWithEnvOverride(t *testing.T) {
-	clearEnv(t)
-	defer clearEnv(t)
-	t.Setenv("EVALHUB_INSECURE", "true")
-
-	configFile := writeConfig(t, `
-    base_url: http://localhost:8080
-    insecure: false
-`)
-
-	cfg, err := Load(&Flags{ConfigPath: configFile}, nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !cfg.Insecure {
-		t.Error("expected YAML insecure=false to override env insecure=true")
+	if cfg.Token != "my-token" {
+		t.Error("expected env token to override YAML token")
 	}
 }
 
@@ -348,16 +316,6 @@ func TestValidateBaseURL(t *testing.T) {
 			t.Error("expected invalid URL to fail validation")
 		}
 	})
-}
-
-func TestEnvVarInsecureInvalidValue(t *testing.T) {
-	clearEnv(t)
-	t.Setenv("EVALHUB_INSECURE", "not-a-bool")
-
-	_, err := Load(nil, nil)
-	if err == nil {
-		t.Fatal("expected error for invalid EVALHUB_INSECURE value")
-	}
 }
 
 func TestLoadEmptyProfilesSection(t *testing.T) {
@@ -610,7 +568,7 @@ func TestLoadFlagsTLS(t *testing.T) {
 func clearEnv(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{
-		"EVALHUB_BASE_URL", "EVALHUB_TOKEN", "EVALHUB_TENANT", "EVALHUB_INSECURE",
+		"EVALHUB_BASE_URL", "EVALHUB_TOKEN", "EVALHUB_TENANT",
 		"EVALHUB_TRANSPORT", "EVALHUB_HOST", "EVALHUB_PORT",
 		"EVALHUB_LIST_PAGE_LIMIT", "EVALHUB_TLS_CERT_FILE", "EVALHUB_TLS_KEY_FILE",
 		"EVALHUB_AUTH_TYPE", "EVALHUB_CA_CERT_PATH",

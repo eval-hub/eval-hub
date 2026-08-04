@@ -43,7 +43,6 @@ mcp_stdio_start() {
   [[ -n "${EVALHUB_BASE_URL:-}" ]] && env_args+=(EVALHUB_BASE_URL="$EVALHUB_BASE_URL")
   [[ -n "${EVALHUB_TOKEN:-}" ]] && env_args+=(EVALHUB_TOKEN="$EVALHUB_TOKEN")
   [[ -n "${EVALHUB_TENANT:-}" ]] && env_args+=(EVALHUB_TENANT="$EVALHUB_TENANT")
-  [[ -n "${EVALHUB_INSECURE:-}" ]] && env_args+=(EVALHUB_INSECURE="$EVALHUB_INSECURE")
 
   if [[ ${#env_args[@]} -gt 0 ]]; then
     env "${env_args[@]}" "${cmd[@]}" \

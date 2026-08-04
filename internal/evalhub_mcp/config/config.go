@@ -30,7 +30,6 @@ type Config struct {
 	BaseURL       string `mapstructure:"base_url,omitempty" validate:"omitempty,url"`
 	Token         string `mapstructure:"token"`
 	Tenant        string `mapstructure:"tenant"`
-	Insecure      bool   `mapstructure:"insecure"`
 	Transport     string `mapstructure:"transport" validate:"required,oneof=stdio http http-sse"` // default stdio; use http for remote
 	Host          string `mapstructure:"host"      validate:"required"`
 	Port          int    `mapstructure:"port,omitempty" validate:"omitempty,min=1,max=65535"`
@@ -45,7 +44,6 @@ type Flags struct {
 	Transport   *string
 	Host        *string
 	Port        *int
-	Insecure    *bool
 	AuthType    *string
 	ConfigPath  string
 	TLSCertFile *string
@@ -172,7 +170,6 @@ func applyYAMLConfig(cfg *Config, path string) (*Config, error) {
 		"base_url", "EVALHUB_BASE_URL",
 		"token", "EVALHUB_TOKEN",
 		"tenant", "EVALHUB_TENANT",
-		"insecure", "EVALHUB_INSECURE",
 		"transport", "EVALHUB_TRANSPORT",
 		"host", "EVALHUB_HOST",
 		"port", "EVALHUB_PORT",
@@ -190,7 +187,6 @@ func applyYAMLConfig(cfg *Config, path string) (*Config, error) {
 		v.SetDefault("base_url", cfg.BaseURL)
 		v.SetDefault("token", cfg.Token)
 		v.SetDefault("tenant", cfg.Tenant)
-		v.SetDefault("insecure", cfg.Insecure)
 		v.SetDefault("transport", cfg.Transport)
 		v.SetDefault("host", cfg.Host)
 		v.SetDefault("port", cfg.Port)
@@ -245,9 +241,6 @@ func applyFlags(cfg *Config, flags *Flags) {
 	}
 	if flags.Port != nil {
 		cfg.Port = *flags.Port
-	}
-	if flags.Insecure != nil {
-		cfg.Insecure = *flags.Insecure
 	}
 	if flags.TLSCertFile != nil {
 		cfg.TLSCertFile = *flags.TLSCertFile
