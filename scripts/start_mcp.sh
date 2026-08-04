@@ -19,8 +19,8 @@ run_mcp() {
   # When using a config file, ignore stale EVALHUB_* from the shell (e.g. a bad test.env export).
   # Unset in this script (not a subshell) so SERVICE_PID=$! is the MCP process for PID_FILE and stop_server.sh.
   if [[ "${CONFIG_FILE}" != "" ]]; then
-    unset EVALHUB_BASE_URL EVALHUB_TOKEN EVALHUB_TENANT EVALHUB_INSECURE
-    unset EVALHUB_TRANSPORT EVALHUB_HOST EVALHUB_PORT EVALHUB_LIST_PAGE_LIMIT
+    unset EVALHUB_BASE_URL EVALHUB_TOKEN EVALHUB_TENANT
+    unset EVALHUB_TRANSPORT EVALHUB_HOST EVALHUB_PORT EVALHUB_LIST_PAGE_LIMIT EVALHUB_CA_CERT_PATH
     "${EXE}" --transport "${TRANSPORT}" --port "${MCP_PORT}" --config "${CONFIG_FILE}" >> "${LOGFILE}" 2>&1 &
   else
     "${EXE}" --transport "${TRANSPORT}" --port "${MCP_PORT}" >> "${LOGFILE}" 2>&1 &

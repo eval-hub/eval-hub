@@ -142,29 +142,6 @@ func (c *Client) WithTimeout(timeout time.Duration) *Client {
 	return cp
 }
 
-// WithInsecureSkipVerify returns a copy of the client that skips TLS certificate verification.
-// Use only in development or test environments.
-func (c *Client) WithInsecureSkipVerify() *Client {
-	cp := c.clone()
-
-	// http.Transport contains a sync.Mutex and cannot be copied by value, so we
-	// always build a fresh transport. We do carry over any existing TLSClientConfig
-	// via its own safe Clone() so caller-configured cipher suites etc. are kept.
-	var tlsCfg *tls.Config
-	if existing, ok := c.httpClient.Transport.(*http.Transport); ok && existing.TLSClientConfig != nil {
-		tlsCfg = existing.TLSClientConfig.Clone()
-	} else {
-		tlsCfg = &tls.Config{} //nolint:gosec
-	}
-	tlsCfg.InsecureSkipVerify = true // #nosec G402
-
-	cp.httpClient = &http.Client{
-		Timeout:   c.httpClient.Timeout,
-		Transport: &http.Transport{TLSClientConfig: tlsCfg},
-	}
-	return cp
-}
-
 // WithCACert returns a copy of the client that trusts the PEM-encoded CA certificate(s)
 // in pemData in addition to the system certificate pool. Use this to trust a cluster-internal
 // CA (e.g. the OpenShift service CA) without disabling all certificate verification.

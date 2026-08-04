@@ -186,9 +186,9 @@ make build-mcp
 go test -v ./cmd/evalhub_mcp/ ./internal/evalhub_mcp/...
 ```
 
-**CLI flags:** `--transport stdio|http|http-sse` (`http` = Streamable HTTP, default for remote; `http-sse` = legacy HTTP+SSE only), `--host`, `--port`, `--config`, `--insecure`, `--version`
+**CLI flags:** `--transport stdio|http|http-sse` (`http` = Streamable HTTP, default for remote; `http-sse` = legacy HTTP+SSE only), `--host`, `--port`, `--config`, `--version`
 
-**Configuration precedence:** CLI flags > env vars (`EVALHUB_BASE_URL`, `EVALHUB_TOKEN`, `EVALHUB_TENANT`, `EVALHUB_INSECURE`, `EVALHUB_LIST_PAGE_LIMIT`) > YAML config (`~/.evalhub/config.yaml`)
+**Configuration precedence:** CLI flags > env vars (`EVALHUB_BASE_URL`, `EVALHUB_TOKEN`, `EVALHUB_TENANT`, `EVALHUB_CA_CERT_PATH`, `EVALHUB_LIST_PAGE_LIMIT`) > YAML config (`~/.evalhub/config.yaml`)
 
 **Architecture:**
 

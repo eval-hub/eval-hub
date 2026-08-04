@@ -38,7 +38,6 @@ func run(args []string) int {
 	host := fs.String("host", "localhost", "Host to bind HTTP server to")
 	port := fs.Int("port", 3001, "Port for HTTP server")
 	configPath := fs.String("config", "", "Path to configuration file")
-	insecure := fs.Bool("insecure", false, "Disable TLS certificate verification")
 	tlsCertFile := fs.String("tls-cert", "", "Path to TLS certificate file")
 	tlsKeyFile := fs.String("tls-key", "", "Path to TLS private key file")
 	authType := fs.String("auth-type", "none", "Inbound HTTP authentication: none or rbac-proxy")
@@ -71,9 +70,6 @@ func run(args []string) int {
 	}
 	if fs.Changed("port") {
 		flags.Port = port
-	}
-	if fs.Changed("insecure") {
-		flags.Insecure = insecure
 	}
 	if fs.Changed("tls-cert") {
 		flags.TLSCertFile = tlsCertFile
