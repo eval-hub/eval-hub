@@ -35,6 +35,21 @@ Git history and `gh` PR lists are **inputs only**. The published body must be a
 curated summary. GitHub `--generate-notes` alone is **not** sufficient output
 for this skill.
 
+## OpenSSF allowed implementations (may)
+
+> The release notes MAY be implemented in a variety of ways. Many projects
+> provide them in a file named "NEWS", "CHANGELOG", or "ChangeLog", optionally
+> with extensions such as ".txt", ".md", or ".html". Historically the term
+> "change log" meant a log of every change, but to meet these criteria what is
+> needed is a human-readable summary. The release notes MAY instead be provided
+> by version control system mechanisms such as the GitHub Releases workflow.
+
+**EvalHub choice:** publish curated notes via the **GitHub Releases** body for
+each tagged release (`vX.Y.Z`). Do not add a `NEWS` / `CHANGELOG` file unless
+the user explicitly asks for that as an additional channel. Either approach is
+valid under OpenSSF as long as the content is a human-readable summary (not a
+raw change log of every commit).
+
 ## How to invoke
 
 **Cursor:** Ask e.g. “Generate release notes for v1.0.0 using the release-notes

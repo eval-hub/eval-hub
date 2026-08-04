@@ -8,6 +8,10 @@ Each GitHub release must include human-readable release notes (OpenSSF): a summa
 of major changes and upgrade impact — **not** raw `git log` or unedited
 `--generate-notes` output.
 
+OpenSSF allows several delivery mechanisms (e.g. `NEWS` / `CHANGELOG` files, or
+version-control release UIs). This project uses the **GitHub Releases** workflow
+as the primary channel.
+
 Use the project skill [`.claude/skills/release-notes/SKILL.md`](.claude/skills/release-notes/SKILL.md)
 to draft and (after confirmation) apply notes for a given tag/version.
 
