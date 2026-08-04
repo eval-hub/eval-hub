@@ -177,8 +177,13 @@ func getMLflowHTTPClient() *http.Client {
 }
 
 // mlflowBaseURL returns the MLflow base URL from the MLFLOW_URL env var.
-func mlflowBaseURL() string {
-	return strings.TrimRight(os.Getenv("MLFLOW_URL"), "/")
+// It fails when MLFLOW_URL is unset or empty after trailing-slash trimming.
+func mlflowBaseURL() (string, error) {
+	baseURL := strings.TrimRight(os.Getenv("MLFLOW_URL"), "/")
+	if baseURL == "" {
+		return "", fmt.Errorf("MLFLOW_URL environment variable is required")
+	}
+	return baseURL, nil
 }
 
 // mlflowWorkspace resolves the MLflow workspace using X_TENANT env → X-Tenant header → "tenant" fallback

@@ -9,6 +9,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
@@ -46,7 +47,10 @@ func (tc *scenarioConfig) iFetchMLflowArtifact(artifactPath, runIDPattern string
 }
 
 func (tc *scenarioConfig) fetchMLflowArtifactWithExperimentID(artifactPath, experimentID, runID string) error {
-	baseURL := mlflowBaseURL()
+	baseURL, err := mlflowBaseURL()
+	if err != nil {
+		return tc.logError(err)
+	}
 	workspace := tc.mlflowWorkspace()
 
 	artifactURL := fmt.Sprintf("%s/mlflow/api/2.0/mlflow-artifacts/artifacts/%s/%s/artifacts/%s",
@@ -220,7 +224,10 @@ func (tc *scenarioConfig) theMLflowArtifactShouldNotExistForExperimentAndJob(art
 }
 
 func (tc *scenarioConfig) mlflowArtifactExists(artifactPath, experimentID, runID string) (bool, error) {
-	baseURL := mlflowBaseURL()
+	baseURL, err := mlflowBaseURL()
+	if err != nil {
+		return false, tc.logError(err)
+	}
 	workspace := tc.mlflowWorkspace()
 	artifactURL := fmt.Sprintf("%s/mlflow/api/2.0/mlflow-artifacts/artifacts/%s/%s/artifacts/%s",
 		baseURL, experimentID, runID, artifactPath)
@@ -263,7 +270,10 @@ func (tc *scenarioConfig) resolveMLflowExperimentAndJobIDs(experimentID, jobID s
 }
 
 func (tc *scenarioConfig) findMLflowRunIDForJob(experimentIDResolved, jobIDResolved string) (string, error) {
-	baseURL := mlflowBaseURL()
+	baseURL, err := mlflowBaseURL()
+	if err != nil {
+		return "", tc.logError(err)
+	}
 	workspace := tc.mlflowWorkspace()
 
 	searchURL := fmt.Sprintf("%s/mlflow/api/2.0/mlflow/runs/search", baseURL)
@@ -427,4 +437,31 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatusToMatch(statusPattern strin
 		return tc.logError(fmt.Errorf("timeout waiting for job status to match %q, last error: %w, last status: %s", statusPattern, lastErr, lastStatus))
 	}
 	return tc.logError(fmt.Errorf("timeout waiting for job status to match %q, last status: %s", statusPattern, lastStatus))
+}
+
+func TestMlflowBaseURL(t *testing.T) {
+	t.Run("requires MLFLOW_URL", func(t *testing.T) {
+		t.Setenv("MLFLOW_URL", "")
+		if _, err := mlflowBaseURL(); err == nil {
+			t.Fatal("expected error when MLFLOW_URL is unset")
+		}
+	})
+
+	t.Run("rejects slash-only MLFLOW_URL", func(t *testing.T) {
+		t.Setenv("MLFLOW_URL", "///")
+		if _, err := mlflowBaseURL(); err == nil {
+			t.Fatal("expected error when MLFLOW_URL is empty after trimming")
+		}
+	})
+
+	t.Run("trims trailing slashes", func(t *testing.T) {
+		t.Setenv("MLFLOW_URL", "https://mlflow.example.com/")
+		got, err := mlflowBaseURL()
+		if err != nil {
+			t.Fatalf("mlflowBaseURL: %v", err)
+		}
+		if got != "https://mlflow.example.com" {
+			t.Fatalf("got %q, want https://mlflow.example.com", got)
+		}
+	})
 }
