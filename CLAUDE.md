@@ -2,6 +2,41 @@
 
 @AGENTS.md
 
+## Release notes
+
+Each GitHub release must include human-readable release notes (OpenSSF): a summary
+of major changes and upgrade impact — **not** raw `git log` or unedited
+`--generate-notes` output.
+
+OpenSSF allows several delivery mechanisms (e.g. `NEWS` / `CHANGELOG` files, or
+version-control release UIs). This project uses the **GitHub Releases** workflow
+as the primary channel.
+
+Use the project skill [`.claude/skills/release-notes/SKILL.md`](.claude/skills/release-notes/SKILL.md)
+to draft and (after confirmation) apply notes for a given tag/version.
+
+##### Run from Cursor
+
+In Agent chat, ask for example:
+
+- “Generate release notes for v1.0.0 using the release-notes skill”
+- “Draft OpenSSF-compliant release notes for the next release”
+
+Optionally attach `@.claude/skills/release-notes/SKILL.md`.
+
+##### Run from Claude Code terminal
+
+```text
+/release-notes
+```
+
+Or ask naturally (e.g. “Draft release notes for v1.0.0”).
+
+##### After the skill runs
+
+Expect a curated markdown body with Summary and Upgrade impact. The skill must
+not publish or overwrite a GitHub release body without explicit confirmation.
+
 ## CVE fixing
 
 ### Instructions for CVE fixing
