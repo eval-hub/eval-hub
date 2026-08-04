@@ -195,13 +195,9 @@ func getMLflowHTTPClient() *http.Client {
 	}
 }
 
-// mlflowBaseURL returns the MLflow base URL from MLFLOW_URL env or default cluster internal URL
+// mlflowBaseURL returns the MLflow base URL from the MLFLOW_URL env var.
 func mlflowBaseURL() string {
-	baseURL := os.Getenv("MLFLOW_URL")
-	if baseURL == "" {
-		baseURL = "https://mlflow.redhat-ods-applications.svc.cluster.local:8443"
-	}
-	return strings.TrimRight(baseURL, "/")
+	return strings.TrimRight(os.Getenv("MLFLOW_URL"), "/")
 }
 
 // mlflowWorkspace resolves the MLflow workspace using X_TENANT env → X-Tenant header → "tenant" fallback
