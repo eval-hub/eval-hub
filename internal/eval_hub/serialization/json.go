@@ -43,6 +43,10 @@ func formatValidationError(errs validator.ValidationErrors) string {
 		if param := e.Param(); param != "" {
 			return fmt.Sprintf("test_data_ref: %s", param)
 		}
+	case "hardware_config_exclusive":
+		if param := e.Param(); param != "" {
+			return fmt.Sprintf("hardware_config: %s", param)
+		}
 	}
 	return errs.Error()
 }

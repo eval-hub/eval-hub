@@ -1,7 +1,12 @@
 type: object
 title: QueueConfig
 description: >
-  Optional workload scheduling queue for Kubernetes runtimes (e.g. Kueue LocalQueue).
+  Optional workload scheduling queue under a benchmark's or evaluation's direct
+  `hardware_config.queue` (e.g. Kueue LocalQueue), or the deprecated top-level
+  `evaluation.queue` field. Prefer `benchmark.hardware_config` or
+  `evaluation.hardware_config`. Precedence at job scheduling time (highest
+  first): queue-backed HardwareProfile; then `hardware_config.queue` (benchmark,
+  else evaluation-level fallback); then deprecated `evaluation.queue`.
 required:
   - name
 properties:
@@ -15,8 +20,9 @@ properties:
       Only `kueue` is supported today.
   name:
     type: string
-    pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+    maxLength: 63
+    pattern: '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
     description: >
       Queue resource name (for Kueue, the LocalQueue name). Must conform to RFC 1123
-      DNS label naming (lowercase letters, digits, and internal hyphens). Set on the
-      Job as label `kueue.x-k8s.io/queue-name`.
+      DNS label naming (lowercase letters, digits, and internal hyphens; max 63
+      characters). Set on the Job as label `kueue.x-k8s.io/queue-name`.

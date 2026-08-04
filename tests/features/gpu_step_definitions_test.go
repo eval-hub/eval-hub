@@ -1141,6 +1141,30 @@ func (tc *scenarioConfig) localQueueExists(localQueueName, namespace string) err
 	return nil
 }
 
+func (tc *scenarioConfig) queueBackedHardwareProfileIsConfigured() error {
+	name := strings.TrimSpace(os.Getenv("TEST_QUEUE_HARDWARE_PROFILE"))
+	if name == "" {
+		tc.logDebug(
+			"Skipping scenario: missing TEST_QUEUE_HARDWARE_PROFILE (pipeline should create a queue-backed HardwareProfile for LocalQueue test-local-queue and export its name)\n",
+		)
+		return godog.ErrSkip
+	}
+	logDebug("Using queue-backed hardware profile %q\n", name)
+	return nil
+}
+
+func (tc *scenarioConfig) cpuQueueBackedHardwareProfileIsConfigured() error {
+	name := strings.TrimSpace(os.Getenv("TEST_CPU_QUEUE_HARDWARE_PROFILE"))
+	if name == "" {
+		tc.logDebug(
+			"Skipping scenario: missing TEST_CPU_QUEUE_HARDWARE_PROFILE (pipeline should create a queue-backed HardwareProfile for LocalQueue cpu-local-queue and export its name)\n",
+		)
+		return godog.ErrSkip
+	}
+	logDebug("Using cpu-queue-backed hardware profile %q\n", name)
+	return nil
+}
+
 func (tc *scenarioConfig) resourceFlavorHasNodeSelector(flavorName, selectorKeyValue string) error {
 	// Skip if GPU_PRODUCT is not set (nodeSelector tests are skipped)
 	if os.Getenv("GPU_PRODUCT") == "" {
@@ -1291,5 +1315,7 @@ func InitializeGPUSteps(ctx *godog.ScenarioContext, tc *scenarioConfig) {
 	ctx.Step(`^ClusterQueue "([^"]*)" with GPU ResourceFlavor "([^"]*)" exists$`, tc.clusterQueueWithGPUFlavorExists)
 	ctx.Step(`^ClusterQueue "([^"]*)" without GPU ResourceFlavor exists$`, tc.clusterQueueWithoutGPUExists)
 	ctx.Step(`^LocalQueue "([^"]*)" in namespace "([^"]*)" exists$`, tc.localQueueExists)
+	ctx.Step(`^the queue-backed hardware profile is configured$`, tc.queueBackedHardwareProfileIsConfigured)
+	ctx.Step(`^the cpu-queue-backed hardware profile is configured$`, tc.cpuQueueBackedHardwareProfileIsConfigured)
 	ctx.Step(`^ResourceFlavor "([^"]*)" has nodeSelector "([^"]*)"$`, tc.resourceFlavorHasNodeSelector)
 }

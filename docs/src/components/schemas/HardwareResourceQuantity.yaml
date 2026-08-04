@@ -1,0 +1,22 @@
+type: object
+title: HardwareResourceQuantity
+description: >
+  Optional Kubernetes CPU or memory request and limit quantities for a
+  benchmark's direct `hardware_config` override.
+properties:
+  request:
+    type: string
+    description: >
+      Kubernetes resource request quantity (for example `1`, `250m`, or `1Gi`).
+    examples:
+      - "1"
+      - 250m
+      - 1Gi
+  limit:
+    type: string
+    description: >
+      Kubernetes resource limit quantity (for example `2`, `1`, or `2Gi`).
+    examples:
+      - "2"
+      - "1"
+      - 2Gi
