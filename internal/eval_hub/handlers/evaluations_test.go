@@ -16,7 +16,9 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -117,8 +119,11 @@ func (f *fakeStorage) DeleteEvaluationJob(id string) error {
 }
 
 type fakeRuntime struct {
-	err    error
-	called bool
+	err                  error
+	validateHWErr        error
+	called               bool
+	validateHWCalled     bool
+	validateHWBenchmarks []api.EvaluationBenchmarkConfig
 }
 
 func (r *fakeRuntime) WithLogger(_ *slog.Logger) abstractions.Runtime { return r }
@@ -149,6 +154,11 @@ func (r *fakeRuntime) GetEvaluationLogs(
 		return "", r.err
 	}
 	return "", nil
+}
+func (r *fakeRuntime) ValidateHardwareProfiles(benchmarks []api.EvaluationBenchmarkConfig) error {
+	r.validateHWCalled = true
+	r.validateHWBenchmarks = benchmarks
+	return r.validateHWErr
 }
 
 type listEvaluationsRequest struct {
@@ -237,38 +247,103 @@ func TestResolveProvider_NotFound(t *testing.T) {
 	}
 }
 
-func TestApplyEvaluationJobQueueDefaults(t *testing.T) {
+func TestApplyHardwareConfigQueueDefaults(t *testing.T) {
 	t.Parallel()
 	t.Run("nil config", func(t *testing.T) {
 		t.Parallel()
-		handlers.ApplyEvaluationJobQueueDefaults(nil)
+		handlers.ApplyHardwareConfigQueueDefaults(nil)
 	})
-	t.Run("nil queue", func(t *testing.T) {
+	t.Run("nil hardware config queue", func(t *testing.T) {
 		t.Parallel()
-		cfg := &api.EvaluationJobConfig{}
-		handlers.ApplyEvaluationJobQueueDefaults(cfg)
-		if cfg.Queue != nil {
-			t.Fatal("expected Queue to stay nil")
+		cfg := &api.EvaluationJobConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"},
+			},
+		}
+		handlers.ApplyHardwareConfigQueueDefaults(cfg)
+		if cfg.Benchmarks[0].HardwareConfig != nil {
+			t.Fatal("expected HardwareConfig to stay nil")
 		}
 	})
 	t.Run("empty kind defaults to kueue", func(t *testing.T) {
 		t.Parallel()
 		cfg := &api.EvaluationJobConfig{
-			Queue: &api.QueueConfig{Name: "  q1  ", Kind: "  "},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{
+					Ref:        api.Ref{ID: "b1"},
+					ProviderID: "p1",
+					HardwareConfig: &api.BenchmarkHardwareConfig{
+						Queue: &api.QueueConfig{Name: "  q1  ", Kind: "  "},
+					},
+				},
+			},
 		}
-		handlers.ApplyEvaluationJobQueueDefaults(cfg)
-		if cfg.Queue.Kind != "kueue" || cfg.Queue.Name != "q1" {
-			t.Fatalf("got kind %q name %q", cfg.Queue.Kind, cfg.Queue.Name)
+		handlers.ApplyHardwareConfigQueueDefaults(cfg)
+		q := cfg.Benchmarks[0].HardwareConfig.Queue
+		if q.Kind != "kueue" || q.Name != "q1" {
+			t.Fatalf("got kind %q name %q", q.Kind, q.Name)
 		}
 	})
 	t.Run("preserves explicit kind", func(t *testing.T) {
 		t.Parallel()
 		cfg := &api.EvaluationJobConfig{
-			Queue: &api.QueueConfig{Name: "q", Kind: "other"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{
+					Ref:        api.Ref{ID: "b1"},
+					ProviderID: "p1",
+					HardwareConfig: &api.BenchmarkHardwareConfig{
+						Queue: &api.QueueConfig{Name: "q", Kind: "other"},
+					},
+				},
+			},
 		}
-		handlers.ApplyEvaluationJobQueueDefaults(cfg)
-		if cfg.Queue.Kind != "other" {
-			t.Fatalf("got kind %q", cfg.Queue.Kind)
+		handlers.ApplyHardwareConfigQueueDefaults(cfg)
+		if cfg.Benchmarks[0].HardwareConfig.Queue.Kind != "other" {
+			t.Fatalf("got kind %q", cfg.Benchmarks[0].HardwareConfig.Queue.Kind)
+		}
+	})
+	t.Run("collection overrides", func(t *testing.T) {
+		t.Parallel()
+		cfg := &api.EvaluationJobConfig{
+			Collection: &api.CollectionRef{
+				ID: "c1",
+				Benchmarks: []api.EvaluationBenchmarkConfig{
+					{
+						ProviderID: "p1",
+						HardwareConfig: &api.BenchmarkHardwareConfig{
+							Queue: &api.QueueConfig{Name: "  cq  "},
+						},
+					},
+				},
+			},
+		}
+		handlers.ApplyHardwareConfigQueueDefaults(cfg)
+		q := cfg.Collection.Benchmarks[0].HardwareConfig.Queue
+		if q.Kind != "kueue" || q.Name != "cq" {
+			t.Fatalf("got kind %q name %q", q.Kind, q.Name)
+		}
+	})
+	t.Run("evaluation hardware_config queue defaults", func(t *testing.T) {
+		t.Parallel()
+		cfg := &api.EvaluationJobConfig{
+			HardwareConfig: &api.BenchmarkHardwareConfig{
+				Queue: &api.QueueConfig{Name: "  eval-hw  ", Kind: "  "},
+			},
+		}
+		handlers.ApplyHardwareConfigQueueDefaults(cfg)
+		q := cfg.HardwareConfig.Queue
+		if q.Kind != "kueue" || q.Name != "eval-hw" {
+			t.Fatalf("got kind %q name %q", q.Kind, q.Name)
+		}
+	})
+	t.Run("deprecated evaluation queue defaults", func(t *testing.T) {
+		t.Parallel()
+		cfg := &api.EvaluationJobConfig{
+			Queue: &api.QueueConfig{Name: "  legacy  ", Kind: "  "},
+		}
+		handlers.ApplyHardwareConfigQueueDefaults(cfg)
+		if cfg.Queue.Kind != "kueue" || cfg.Queue.Name != "legacy" {
+			t.Fatalf("got kind %q name %q", cfg.Queue.Kind, cfg.Queue.Name)
 		}
 	})
 }
@@ -1108,27 +1183,51 @@ func TestHandleCreateEvaluationRejectsInvalidQueueName(t *testing.T) {
 		"has spaces",
 		".starts-with-dot",
 	}
-	for _, name := range invalidNames {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			body := fmt.Sprintf(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"b","provider_id":"p"}],"queue":{"name":%q}}`, name)
-			req := &bodyRequest{
-				MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
-				body:        []byte(body),
-			}
-			ctx := executioncontext.NewExecutionContext(context.Background(), "req-invalid-queue", logger, "test-user", "test-tenant")
-			recorder := httptest.NewRecorder()
-			resp := MockResponseWrapper{recorder: recorder}
+	locations := []struct {
+		name string
+		body func(queueName string) string
+	}{
+		{
+			name: "benchmark_hardware_config",
+			body: func(queueName string) string {
+				return fmt.Sprintf(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"b","provider_id":"p","hardware_config":{"queue":{"name":%q}}}]}`, queueName)
+			},
+		},
+		{
+			name: "evaluation_hardware_config",
+			body: func(queueName string) string {
+				return fmt.Sprintf(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"b","provider_id":"p"}],"hardware_config":{"queue":{"name":%q}}}`, queueName)
+			},
+		},
+		{
+			name: "deprecated_evaluation_queue",
+			body: func(queueName string) string {
+				return fmt.Sprintf(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"b","provider_id":"p"}],"queue":{"name":%q}}`, queueName)
+			},
+		},
+	}
+	for _, loc := range locations {
+		for _, name := range invalidNames {
+			t.Run(loc.name+"/"+name, func(t *testing.T) {
+				t.Parallel()
+				req := &bodyRequest{
+					MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+					body:        []byte(loc.body(name)),
+				}
+				ctx := executioncontext.NewExecutionContext(context.Background(), "req-invalid-queue", logger, "test-user", "test-tenant")
+				recorder := httptest.NewRecorder()
+				resp := MockResponseWrapper{recorder: recorder}
 
-			h.HandleCreateEvaluation(ctx, req, resp)
+				h.HandleCreateEvaluation(ctx, req, resp)
 
-			if runtime.called {
-				t.Fatalf("did not expect runtime to be invoked for queue name %q", name)
-			}
-			if recorder.Code != 400 {
-				t.Fatalf("expected status 400 for queue name %q, got %d", name, recorder.Code)
-			}
-		})
+				if runtime.called {
+					t.Fatalf("did not expect runtime to be invoked for queue name %q", name)
+				}
+				if recorder.Code != 400 {
+					t.Fatalf("expected status 400 for queue name %q, got %d", name, recorder.Code)
+				}
+			})
+		}
 	}
 }
 
@@ -1148,7 +1247,7 @@ func TestHandleCreateEvaluationRejectsInvalidHardwareProfileRef(t *testing.T) {
 	for _, name := range invalidNames {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			body := fmt.Sprintf(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"b","provider_id":"p","hardware_config":{"hardware_profile_ref":{"name":%q}}}]}`, name)
+			body := fmt.Sprintf(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"b","provider_id":"p","hardware_config":{"hardware_profile_name":%q}}]}`, name)
 			req := &bodyRequest{
 				MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
 				body:        []byte(body),
@@ -1166,5 +1265,145 @@ func TestHandleCreateEvaluationRejectsInvalidHardwareProfileRef(t *testing.T) {
 				t.Fatalf("expected status 400 for hardware profile ref %q, got %d", name, recorder.Code)
 			}
 		})
+	}
+}
+
+func TestHandleCreateEvaluationRejectsWhenHardwareProfileValidationFails(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	providerConfigs := map[string]api.ProviderResource{
+		"garak": {
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-1"},
+				},
+			},
+		},
+	}
+	storage := &fakeStorage{providerConfigs: providerConfigs}
+	runtime := &fakeRuntime{
+		validateHWErr: serviceerrors.NewServiceError(messages.HardwareProfileNotFound, "Name", "missing-profile"),
+	}
+	validate := testhelpers.NewValidator(t)
+	h := handlers.New(storage, validate, runtime, nil, nil, nil)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-hwp-validate", logger, "test-user", "test-tenant")
+
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+		body:        []byte(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1","provider_id":"garak","hardware_config":{"hardware_profile_name":"missing-profile"}}]}`),
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCreateEvaluation(ctx, req, resp)
+
+	if !runtime.validateHWCalled {
+		t.Fatal("expected ValidateHardwareProfiles to be invoked")
+	}
+	if runtime.called {
+		t.Fatal("did not expect RunEvaluationJob when hardware profile validation fails")
+	}
+	if recorder.Code != 404 {
+		t.Fatalf("expected status 404, got %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "hardware_profile_not_found") {
+		t.Fatalf("expected hardware_profile_not_found, got %s", recorder.Body.String())
+	}
+}
+
+func TestHandleCreateEvaluationCallsValidateHardwareProfilesOnSuccess(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	providerConfigs := map[string]api.ProviderResource{
+		"garak": {
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-1"},
+				},
+			},
+		},
+	}
+	storage := &fakeStorage{providerConfigs: providerConfigs}
+	runtime := &fakeRuntime{}
+	validate := testhelpers.NewValidator(t)
+	h := handlers.New(storage, validate, runtime, nil, nil, nil)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-hwp-ok", logger, "test-user", "test-tenant")
+
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+		body:        []byte(`{"name":"test-job","model":{"url":"http://test.com","name":"test"},"benchmarks":[{"id":"bench-1","provider_id":"garak","hardware_config":{"hardware_profile_name":"cpu-profile"}}]}`),
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCreateEvaluation(ctx, req, resp)
+
+	if !runtime.validateHWCalled {
+		t.Fatal("expected ValidateHardwareProfiles to be invoked")
+	}
+	if !runtime.called {
+		t.Fatal("expected RunEvaluationJob after successful hardware profile validation")
+	}
+	if recorder.Code != 202 {
+		t.Fatalf("expected status 202, got %d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestHandleCreateEvaluationValidatesEvaluationHardwareConfigFallback(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	providerConfigs := map[string]api.ProviderResource{
+		"garak": {
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-1"},
+				},
+			},
+		},
+	}
+	storage := &fakeStorage{providerConfigs: providerConfigs}
+	runtime := &fakeRuntime{}
+	validate := testhelpers.NewValidator(t)
+	h := handlers.New(storage, validate, runtime, nil, nil, nil)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-eval-hw-fallback", logger, "test-user", "test-tenant")
+
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+		body: []byte(`{
+			"name":"test-job",
+			"model":{"url":"http://test.com","name":"test"},
+			"benchmarks":[{"id":"bench-1","provider_id":"garak"}],
+			"hardware_config":{"hardware_profile_name":"fallback-profile"}
+		}`),
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCreateEvaluation(ctx, req, resp)
+
+	if !runtime.validateHWCalled {
+		t.Fatal("expected ValidateHardwareProfiles to be invoked")
+	}
+	if len(runtime.validateHWBenchmarks) != 1 {
+		t.Fatalf("expected 1 benchmark for validation, got %d", len(runtime.validateHWBenchmarks))
+	}
+	hw := runtime.validateHWBenchmarks[0].HardwareConfig
+	if hw == nil || hw.HardwareProfileName != "fallback-profile" {
+		t.Fatalf("expected evaluation.hardware_config applied as fallback for validation, got %#v", hw)
+	}
+	if recorder.Code != 202 {
+		t.Fatalf("expected status 202, got %d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	var created api.EvaluationJobResource
+	if err := json.Unmarshal(recorder.Body.Bytes(), &created); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	// Response keeps evaluation-level hardware_config and does not copy it onto the benchmark.
+	if created.Benchmarks[0].HardwareConfig != nil {
+		t.Fatal("expected response benchmark hardware_config to remain nil")
+	}
+	if created.HardwareConfig == nil || created.HardwareConfig.HardwareProfileName != "fallback-profile" {
+		t.Fatalf("expected response evaluation.hardware_config, got %#v", created.HardwareConfig)
 	}
 }

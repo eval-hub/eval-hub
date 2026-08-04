@@ -58,8 +58,8 @@ post:
                 id: "standard-safety-collection"
               pass_criteria:
                 threshold: 0.5
-          CreateEvaluationWithAuthAndQueue:
-            summary: Evaluate an authenticated model with Kueue scheduling
+          CreateEvaluationWithAuthAndHardwareProfile:
+            summary: Evaluate an authenticated model with HardwareProfile Kueue scheduling
             value:
               name: "granite-3.1-8b-gpu-eval"
               description: "GPU-scheduled evaluation with model authentication"
@@ -77,11 +77,10 @@ post:
                   parameters:
                     num_fewshot: 0
                     limit: 100
+                  hardware_config:
+                    hardware_profile_name: "gpu-queue-profile"
               pass_criteria:
                 threshold: 0.5
-              queue:
-                kind: "kueue"
-                name: "gpu-local-queue"
           CreateEvaluationWithExperiment:
             summary: Evaluate with MLFlow experiment tracking
             value:

@@ -913,28 +913,28 @@ Feature: Evaluation Jobs
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_kueue.json"
     Then the response code should be 202
-    And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the response should contain the value "kueue" at path "$.benchmarks[0].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.benchmarks[0].hardware_config.queue.name"
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "completed" at path "$.status.state"
-    And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the response should contain the value "kueue" at path "$.benchmarks[0].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.benchmarks[0].hardware_config.queue.name"
 
   @kueue
   Scenario: Create evaluation job with queue name only
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_kueue_name_only.json"
     Then the response code should be 202
-    And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the response should contain the value "kueue" at path "$.benchmarks[0].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.benchmarks[0].hardware_config.queue.name"
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "completed" at path "$.status.state"
-    And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the response should contain the value "kueue" at path "$.benchmarks[0].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.benchmarks[0].hardware_config.queue.name"
 
   @kueue
   @negative
@@ -955,14 +955,16 @@ Feature: Evaluation Jobs
               "num_examples": 10,
               "num_fewshot": 3,
               "tokenizer": "{{env:FVT_BENCHMARK_TOKENIZER|google/flan-t5-small}}"
+            },
+            "hardware_config": {
+              "queue": {
+                "kind": "invalid-kind",
+                "name": "{{env:QUEUE_NAME|user-queue}}"
+              }
             }
           }
         ],
-        "name": "test-invalid-queue-kind",
-        "queue": {
-          "kind": "invalid-kind",
-          "name": "{{env:QUEUE_NAME|user-queue}}"
-        }
+        "name": "test-invalid-queue-kind"
       }
       """
     Then the response code should be 400
@@ -987,13 +989,15 @@ Feature: Evaluation Jobs
               "num_examples": 10,
               "num_fewshot": 3,
               "tokenizer": "{{env:FVT_BENCHMARK_TOKENIZER|google/flan-t5-small}}"
+            },
+            "hardware_config": {
+              "queue": {
+                "kind": "kueue"
+              }
             }
           }
         ],
-        "name": "missing-queue-name",
-        "queue": {
-          "kind": "kueue"
-        }
+        "name": "missing-queue-name"
       }
       """
     Then the response code should be 400
@@ -1005,16 +1009,16 @@ Feature: Evaluation Jobs
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_kueue_oob_toxicity.json"
     Then the response code should be 202
-    And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the response should contain the value "kueue" at path "$.collection.benchmarks[0].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.collection.benchmarks[0].hardware_config.queue.name"
     And the response should contain the value "toxicity-and-ethical-principles" at path "$.collection.id"
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "completed" at path "$.status.state"
     And the response should contain the value "toxicity-and-ethical-principles" at path "$.collection.id"
-    And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the response should contain the value "kueue" at path "$.collection.benchmarks[0].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.collection.benchmarks[0].hardware_config.queue.name"
 
   @kueue
   @mlflow
@@ -1023,8 +1027,8 @@ Feature: Evaluation Jobs
     And queue is enabled for payloads
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
-    And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the response should contain the value "kueue" at path "$.benchmarks[0].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.benchmarks[0].hardware_config.queue.name"
     And the "resource.mlflow_experiment_id" field in the response should be saved as "value:exp_id"
     And the response should contain the value "my-test-experiment" at path "$.experiment.name"
     And the response should contain the value "mlflow" at path "$.results.mlflow_experiment_url"
@@ -1033,8 +1037,8 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the response should contain the value "kueue" at path "$.benchmarks[0].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.benchmarks[0].hardware_config.queue.name"
     And the response should contain the value "environment" at path "$.experiment.tags[0].key"
     And the response should contain the value "test" at path "$.experiment.tags[0].value"
     And the response should contain the value "{{value:exp_id}}" at path "$.resource.mlflow_experiment_id"
@@ -1054,24 +1058,24 @@ Feature: Evaluation Jobs
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_kueue_shared_job1.json"
     Then the response code should be 202
-    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.benchmarks[0].hardware_config.queue.name"
     And the "resource.id" field in the response should be saved as "value:job1_id"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_kueue_shared_job2.json"
     Then the response code should be 202
-    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.benchmarks[0].hardware_config.queue.name"
     And the "resource.id" field in the response should be saved as "value:job2_id"
+    And I wait for the evaluation job "{{value:job1_id}}" status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{{value:job1_id}}"
     Then the response code should be 200
-    And I wait for the evaluation job status to be "completed"
     And the response should contain the value "completed" at path "$.status.state"
-    And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the response should contain the value "kueue" at path "$.benchmarks[0].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.benchmarks[0].hardware_config.queue.name"
+    And I wait for the evaluation job "{{value:job2_id}}" status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{{value:job2_id}}"
     Then the response code should be 200
-    And I wait for the evaluation job status to be "completed"
     And the response should contain the value "completed" at path "$.status.state"
-    And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the response should contain the value "kueue" at path "$.benchmarks[0].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.benchmarks[0].hardware_config.queue.name"
 
   @kueue
   @negative
@@ -1092,26 +1096,27 @@ Feature: Evaluation Jobs
               "num_examples": 10,
               "num_fewshot": 3,
               "tokenizer": "{{env:FVT_BENCHMARK_TOKENIZER|google/flan-t5-small}}"
+            },
+            "hardware_config": {
+              "queue": {
+                "kind": "kueue",
+                "name": "user-queue!@#$%"
+              }
             }
           }
         ],
-        "name": "test-job-special-chars-queue",
-        "queue": {
-          "kind": "kueue",
-          "name": "user-queue!@#$%"
-        }
+        "name": "test-job-special-chars-queue"
       }
       """
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
 
-  @kueue
-  @negative
-  Scenario: Queue with null name is rejected
+  Scenario: Create evaluation job rejects hardware_profile_name combined with direct fields
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body:
       """
       {
+        "name": "test-job-hardware-config-exclusive",
         "model": {
           "url": "{{env:MODEL_URL|http://test.com}}",
           "name": "{{env:MODEL_NAME|test}}"
@@ -1124,14 +1129,16 @@ Feature: Evaluation Jobs
               "num_examples": 10,
               "num_fewshot": 3,
               "tokenizer": "{{env:FVT_BENCHMARK_TOKENIZER|google/flan-t5-small}}"
+            },
+            "hardware_config": {
+              "hardware_profile_name": "my-hw-spec",
+              "cpu": {
+                "request": "1",
+                "limit": "2"
+              }
             }
           }
-        ],
-        "name": "test-job-null-queue",
-        "queue": {
-          "kind": "kueue",
-          "name": null
-        }
+        ]
       }
       """
     Then the response code should be 400
@@ -1161,9 +1168,7 @@ Feature: Evaluation Jobs
               "tokenizer": "{{env:FVT_BENCHMARK_TOKENIZER|google/flan-t5-small}}"
             },
             "hardware_config": {
-              "hardware_profile_ref": {
-                "name": "{{env:TEST_HARDWARE_PROFILE}}"
-              }
+              "hardware_profile_name": "{{env:TEST_HARDWARE_PROFILE}}"
             }
           }
         ]
@@ -1171,7 +1176,7 @@ Feature: Evaluation Jobs
       """
     Then the response code should be 202
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
-    And the response should contain the value "{{env:TEST_HARDWARE_PROFILE}}" at path "$.benchmarks[0].hardware_config.hardware_profile_ref.name"
+    And the response should contain the value "{{env:TEST_HARDWARE_PROFILE}}" at path "$.benchmarks[0].hardware_config.hardware_profile_name"
     And I wait for the Kubernetes evaluation Job to be created
     And the Job adapter container should have CPU request "{{env:TEST_HARDWARE_PROFILE_CPU_REQUEST}}"
     And the Job adapter container should have memory request "{{env:TEST_HARDWARE_PROFILE_MEMORY_REQUEST}}"
@@ -1179,49 +1184,7 @@ Feature: Evaluation Jobs
     And the Job adapter container should have memory limit "{{env:TEST_HARDWARE_PROFILE_MEMORY_LIMIT}}"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    And the response should contain the value "{{env:TEST_HARDWARE_PROFILE}}" at path "$.benchmarks[0].hardware_config.hardware_profile_ref.name"
-    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
-    Then the response code should be 204
-
-  @hardware_profile
-  Scenario: Create evaluation job with explicit hardware profile namespace in API response
-    Given the service is running
-    And the test hardware profile is configured
-    When I send a POST request to "/api/v1/evaluations/jobs" with body:
-      """
-      {
-        "name": "test-evaluation-job-hardware-profile-explicit-ns",
-        "model": {
-          "url": "{{env:MODEL_URL|http://test.com}}",
-          "name": "{{env:MODEL_NAME|test}}",
-          "auth": {
-            "secret_ref": "{{env:MODEL_AUTH_SECRET_REF|test}}"
-          }
-        },
-        "benchmarks": [
-          {
-            "id": "arc_easy",
-            "provider_id": "lm_evaluation_harness",
-            "parameters": {
-              "num_examples": 3,
-              "tokenizer": "{{env:FVT_BENCHMARK_TOKENIZER|google/flan-t5-small}}"
-            },
-            "hardware_config": {
-              "hardware_profile_ref": {
-                "name": "{{env:TEST_HARDWARE_PROFILE}}",
-                "namespace": "{{env:X_TENANT|test-tenant}}"
-              }
-            }
-          }
-        ]
-      }
-      """
-    Then the response code should be 202
-    And the response should contain the value "{{env:TEST_HARDWARE_PROFILE}}" at path "$.benchmarks[0].hardware_config.hardware_profile_ref.name"
-    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.benchmarks[0].hardware_config.hardware_profile_ref.namespace"
-    And I wait for the Kubernetes evaluation Job to be created
-    And the Job adapter container should have CPU request "{{env:TEST_HARDWARE_PROFILE_CPU_REQUEST}}"
-    And the Job adapter container should have memory request "{{env:TEST_HARDWARE_PROFILE_MEMORY_REQUEST}}"
+    And the response should contain the value "{{env:TEST_HARDWARE_PROFILE}}" at path "$.benchmarks[0].hardware_config.hardware_profile_name"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -1230,8 +1193,8 @@ Feature: Evaluation Jobs
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_kueue_tags_criteria.json"
     Then the response code should be 202
-    And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the response should contain the value "kueue" at path "$.benchmarks[0].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.benchmarks[0].hardware_config.queue.name"
     And the response should contain the value "integration-test" at path "$.tags[0]"
     And the response should contain the value "kueue-enabled" at path "$.tags[1]"
     And the response should equal the value "0.8" at path "$.pass_criteria.threshold"
@@ -1239,8 +1202,8 @@ Feature: Evaluation Jobs
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "completed" at path "$.status.state"
-    And the response should contain the value "kueue" at path "$.queue.kind"
-    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.queue.name"
+    And the response should contain the value "kueue" at path "$.benchmarks[0].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.benchmarks[0].hardware_config.queue.name"
     And the response should contain the value "integration-test" at path "$.tags[0]"
     And the response should contain the value "kueue-enabled" at path "$.tags[1]"
     And the response should equal the value "0.8" at path "$.pass_criteria.threshold"
@@ -1397,7 +1360,9 @@ Feature: Evaluation Jobs
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_arc_easy.json"
     Then the response code should be 202
     And the response should contain the value "pending" at path "$.status.state"
-    # EvalCards are only exported on completion, so pending jobs have no card
+    And the "resource.id" field in the response should be saved as "value:job_id"
+    And the "resource.mlflow_experiment_id" field in the response should be saved as "value:mlflow_experiment_id"
+    And the MLflow artifact "evaluation-card.json" should not exist for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
 
   @mlflow 
   Scenario: Multiple jobs in same experiment have different cards

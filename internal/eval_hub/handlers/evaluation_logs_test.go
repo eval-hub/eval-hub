@@ -56,6 +56,9 @@ func (r *logsRuntime) GetEvaluationLogs(
 	}
 	return r.logs, nil
 }
+func (r *logsRuntime) ValidateHardwareProfiles(_ []api.EvaluationBenchmarkConfig) error {
+	return nil
+}
 
 type logsRequest struct {
 	*MockRequest

@@ -238,6 +238,34 @@ var (
 		"The request is missing a required header {{.Header}}.",
 		"missing_user_header",
 	)
+
+	// HardwareProfileDisabled The hardware profile '{{.Name}}' is disabled.
+	HardwareProfileDisabled = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The hardware profile '{{.Name}}' is disabled.",
+		"hardware_profile_disabled",
+	)
+
+	// HardwareProfileNotFound The hardware profile '{{.Name}}' was not found.
+	HardwareProfileNotFound = createMessage(
+		constants.HTTPCodeNotFound,
+		"The hardware profile '{{.Name}}' was not found.",
+		"hardware_profile_not_found",
+	)
+
+	// HardwareProfileFetchFailed Failed to fetch hardware profile '{{.Name}}'.
+	HardwareProfileFetchFailed = createMessage(
+		constants.HTTPCodeInternalServerError,
+		"Failed to fetch hardware profile '{{.Name}}'.",
+		"hardware_profile_fetch_failed",
+	)
+
+	// HardwareProfileInvalid The hardware profile '{{.Name}}' is invalid: '{{.Error}}'.
+	HardwareProfileInvalid = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The hardware profile '{{.Name}}' is invalid: '{{.Error}}'.",
+		"hardware_profile_invalid",
+	)
 )
 
 type MessageCode struct {

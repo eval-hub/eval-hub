@@ -13,10 +13,25 @@ properties:
     description: >
       Optional exports configuration for the evaluation job.
       When provided, the evaluation job results will be exported to the specified location.
+  hardware_config:
+    $ref: ./BenchmarkHardwareConfig.yaml
+    description: >
+      Optional evaluation-level hardware override for Kubernetes-backed jobs.
+      Applied as a fallback for every benchmark that does not specify its own
+      `hardware_config`. Prefer per-benchmark `hardware_config` when individual
+      benchmarks need different hardware. When neither is set, the deprecated
+      top-level `queue` field may still supply a scheduling queue.
   queue:
     $ref: ./QueueConfig.yaml
+    deprecated: true
     description: >
-      Optional scheduling queue for Kubernetes-backed evaluation jobs (e.g. Kueue).
+      Deprecated. Prefer `benchmark.hardware_config` or evaluation-level
+      `hardware_config` instead. This field will be discontinued in a future
+      release. Retained for backward compatibility: when neither
+      `benchmark.hardware_config` nor evaluation `hardware_config` is set,
+      this queue is applied to scheduled jobs. When a benchmark references a
+      queue-backed HardwareProfile (or sets `hardware_config.queue`), that
+      configuration takes precedence over this field.
   custom:
     type: object
     additionalProperties: true
