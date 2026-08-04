@@ -214,6 +214,22 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		logger.Error("kubernetes job config error", "benchmark_id", benchmarkID, "error", err)
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
 	}
+
+	// Validate PVC existence before creating Kubernetes resources. When the PVC does not
+	// exist the pod will never start; detecting this early transitions the job to failed
+	// instead of leaving it in pending indefinitely.
+	if hasPVCTestData(jobConfig) {
+		_, err := r.helper.GetPVC(ctx, jobConfig.namespace, jobConfig.testDataPVC.claimName)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return fmt.Errorf("job %s benchmark %s: PersistentVolumeClaim %q not found in namespace %q",
+					evaluation.Resource.ID, benchmarkID, jobConfig.testDataPVC.claimName, jobConfig.namespace)
+			}
+			return fmt.Errorf("job %s benchmark %s: failed to check PersistentVolumeClaim %q in namespace %q: %w",
+				evaluation.Resource.ID, benchmarkID, jobConfig.testDataPVC.claimName, jobConfig.namespace, err)
+		}
+	}
+
 	if r.serviceConfig == nil || r.serviceConfig.Service == nil {
 		return fmt.Errorf("service config is required")
 	}

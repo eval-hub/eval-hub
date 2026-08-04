@@ -514,7 +514,13 @@ func TestCreateBenchmarkResourcesMountsPVCTestData(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewClientset()
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "eval-datasets-pvc",
+			Namespace: "default",
+		},
+	}
+	clientset := fake.NewClientset(pvc)
 	runtime := &K8sRuntime{
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper: &KubernetesHelper{clientset: clientset},
@@ -587,7 +593,13 @@ func TestCreateBenchmarkResourcesMountsPVCTestDataNoSubPath(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewClientset()
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "my-pvc",
+			Namespace: "default",
+		},
+	}
+	clientset := fake.NewClientset(pvc)
 	runtime := &K8sRuntime{
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper: &KubernetesHelper{clientset: clientset},
@@ -2066,5 +2078,142 @@ func TestModelAuthCombinations(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCreateBenchmarkResourcesFailsWhenPVCNotFound(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Benchmarks[0].TestDataRef = &api.TestDataRef{
+		PVC: &api.PVCTestDataRef{
+			ClaimName: "does-not-exist-pvc",
+			SubPath:   "data/v1",
+		},
+	}
+
+	// No PVC in the fake clientset — the Get call will return NotFound.
+	clientset := fake.NewClientset()
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{},
+		},
+	}
+
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
+	if err == nil {
+		t.Fatal("expected error when PVC does not exist, got nil")
+	}
+	if !strings.Contains(err.Error(), "PersistentVolumeClaim") {
+		t.Fatalf("expected PersistentVolumeClaim in error message, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "does-not-exist-pvc") {
+		t.Fatalf("expected PVC name in error message, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("expected 'not found' in error message, got: %v", err)
+	}
+
+	// No Job or ConfigMap should have been created.
+	jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+	if len(jobs) != 0 {
+		t.Fatalf("expected no jobs to be created when PVC is missing, got %d", len(jobs))
+	}
+	configMaps := listConfigMapsByJobID(t, clientset, evaluation.Resource.ID)
+	if len(configMaps) != 0 {
+		t.Fatalf("expected no configmaps to be created when PVC is missing, got %d", len(configMaps))
+	}
+}
+
+func TestRunEvaluationJobMarksBenchmarkFailedWhenPVCNotFound(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Benchmarks[0].TestDataRef = &api.TestDataRef{
+		PVC: &api.PVCTestDataRef{
+			ClaimName: "missing-pvc",
+		},
+	}
+
+	clientset := fake.NewSimpleClientset()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	runtime := &K8sRuntime{
+		logger: logger,
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{},
+		},
+	}
+
+	statusCh := make(chan *api.StatusEvent, 1)
+	storage := &fakeStorage{logger: logger, ctx: context.Background(), runStatusChan: statusCh, providerConfigs: sampleProviders(providerID)}
+	var store abstractions.Storage = storage
+
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("RunEvaluationJob failed to resolve benchmarks: %v", err)
+	}
+
+	if err := runtime.RunEvaluationJob(evaluation, benchmarks, store); err != nil {
+		t.Fatalf("expected no error from RunEvaluationJob, got %v", err)
+	}
+
+	select {
+	case runStatus := <-statusCh:
+		if runStatus == nil {
+			t.Fatal("expected run status, got nil")
+		}
+		if runStatus.BenchmarkStatusEvent.Status != api.StateFailed {
+			t.Fatalf("expected status failed, got %s", runStatus.BenchmarkStatusEvent.Status)
+		}
+		if runStatus.BenchmarkStatusEvent.ErrorMessage == nil {
+			t.Fatal("expected error message on failed benchmark status")
+		}
+		if !strings.Contains(runStatus.BenchmarkStatusEvent.ErrorMessage.Message, "PersistentVolumeClaim") {
+			t.Fatalf("expected PVC-related error message, got: %s", runStatus.BenchmarkStatusEvent.ErrorMessage.Message)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected UpdateEvaluationJob to be called within 2 seconds")
+	}
+}
+
+func TestCreateBenchmarkResourcesSucceedsWhenPVCExists(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Benchmarks[0].TestDataRef = &api.TestDataRef{
+		PVC: &api.PVCTestDataRef{
+			ClaimName: "existing-pvc",
+			SubPath:   "data/v1",
+		},
+	}
+
+	// Pre-create the PVC so the existence check passes.
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "existing-pvc",
+			Namespace: "default",
+		},
+	}
+	clientset := fake.NewClientset(pvc)
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{},
+		},
+	}
+
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+	err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
+	if err != nil {
+		t.Fatalf("expected no error when PVC exists, got %v", err)
+	}
+
+	// Job and ConfigMap should have been created.
+	jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(jobs))
 	}
 }

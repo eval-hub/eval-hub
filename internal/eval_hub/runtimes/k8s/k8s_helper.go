@@ -239,6 +239,14 @@ func (h *KubernetesHelper) SetSecretOwner(ctx context.Context, namespace, name s
 	return err
 }
 
+// GetPVC returns the PersistentVolumeClaim with the given name in namespace.
+func (h *KubernetesHelper) GetPVC(ctx context.Context, namespace, name string) (*corev1.PersistentVolumeClaim, error) {
+	if namespace == "" || name == "" {
+		return nil, fmt.Errorf("namespace and name are required")
+	}
+	return h.clientset.CoreV1().PersistentVolumeClaims(namespace).Get(ctx, name, metav1.GetOptions{})
+}
+
 // ListPods returns Pods matching the label selector.
 func (h *KubernetesHelper) ListPods(ctx context.Context, namespace, labelSelector string) ([]corev1.Pod, error) {
 	if namespace == "" {

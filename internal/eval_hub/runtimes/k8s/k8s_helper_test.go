@@ -110,3 +110,37 @@ func TestGetPodLogsReturnsStreamContent(t *testing.T) {
 		t.Fatalf("got %q, want fake logs", got)
 	}
 }
+
+func TestGetPVCRequiresNamespaceAndName(t *testing.T) {
+	helper := &KubernetesHelper{}
+	if _, err := helper.GetPVC(context.Background(), "", "pvc-1"); err == nil {
+		t.Fatal("expected error for missing namespace")
+	}
+	if _, err := helper.GetPVC(context.Background(), "default", ""); err == nil {
+		t.Fatal("expected error for missing name")
+	}
+}
+
+func TestGetPVCReturnsPVC(t *testing.T) {
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "my-pvc", Namespace: "default"},
+	}
+	clientset := fake.NewClientset(pvc)
+	helper := &KubernetesHelper{clientset: clientset}
+	got, err := helper.GetPVC(context.Background(), "default", "my-pvc")
+	if err != nil {
+		t.Fatalf("GetPVC: %v", err)
+	}
+	if got.Name != "my-pvc" {
+		t.Fatalf("got name %q, want my-pvc", got.Name)
+	}
+}
+
+func TestGetPVCReturnsNotFoundError(t *testing.T) {
+	clientset := fake.NewClientset()
+	helper := &KubernetesHelper{clientset: clientset}
+	_, err := helper.GetPVC(context.Background(), "default", "nonexistent")
+	if err == nil {
+		t.Fatal("expected error for nonexistent PVC")
+	}
+}
