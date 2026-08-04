@@ -1292,7 +1292,7 @@ Feature: Evaluation Jobs
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
   
-  @mlflow 
+  @mlflow @test_invokes_mlflow
   Scenario: Card generated for completed job with benchmarks
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_benchmark.json"
@@ -1310,7 +1310,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain the value "{{env:MODEL_NAME|test}}" at path "$.context.model.name"
     And the MLflow artifact should contain "arc_easy"
   
-  @mlflow 
+  @mlflow @test_invokes_mlflow
   Scenario: Card generated for completed job with collection
     Given the service is running
     And there is a system collection with id "toxicity-and-ethical-principles"
@@ -1326,7 +1326,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain "context.collection_id"
     And the MLflow artifact should contain the value "toxicity-and-ethical-principles" at path "$.context.collection_id"
 
-  @mlflow 
+  @mlflow @test_invokes_mlflow
   Scenario: Card generated for job with multiple benchmarks
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_multi_benchmark.json"
@@ -1341,7 +1341,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain "results.benchmarks[0]"
     And the MLflow artifact should contain "results.benchmarks[1]"
 
-  @mlflow 
+  @mlflow @test_invokes_mlflow
   Scenario: Card generated for completed benchmark job
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_arc_easy.json"
@@ -1354,7 +1354,7 @@ Feature: Evaluation Jobs
     When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
 
-  @mlflow 
+  @mlflow @test_invokes_mlflow
   Scenario: No card for pending job
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_arc_easy.json"
@@ -1364,7 +1364,7 @@ Feature: Evaluation Jobs
     And the "resource.mlflow_experiment_id" field in the response should be saved as "value:mlflow_experiment_id"
     And the MLflow artifact "evaluation-card.json" should not exist for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
 
-  @mlflow 
+  @mlflow @test_invokes_mlflow
   Scenario: Multiple jobs in same experiment have different cards
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_shared_exp_job1.json"
@@ -1389,7 +1389,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain the value "{{value:job2_id}}" at path "$.metadata.evaluation_job_id"
     # Each job gets its own distinct EvalCard even in the same experiment
 
-  @mlflow
+  @mlflow @test_invokes_mlflow
   Scenario: Card has correct card_version and schema_version
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_arc_easy.json"
@@ -1404,7 +1404,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain the value "1.0" at path "$.card_version"
     And the MLflow artifact should contain the value "1.0" at path "$.schema_version"
 
-  @mlflow
+  @mlflow @test_invokes_mlflow
   Scenario: Card metadata contains all required timestamps in ISO 8601 format
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_arc_easy.json"
@@ -1421,7 +1421,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact field "metadata.created_at" should match ISO 8601 format
     And the MLflow artifact field "metadata.updated_at" should match ISO 8601 format
 
-  @mlflow
+  @mlflow @test_invokes_mlflow
   Scenario: Card structure has all top-level fields
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_arc_easy.json"
@@ -1439,7 +1439,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain "context"
     And the MLflow artifact should contain "results"
 
-  @mlflow
+  @mlflow @test_invokes_mlflow
   Scenario: Card context.model contains url and name
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_arc_easy.json"
@@ -1454,7 +1454,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain "context.model.url"
     And the MLflow artifact should contain "context.model.name"
 
-  @mlflow
+  @mlflow @test_invokes_mlflow
   Scenario: Card context.benchmarks exists for benchmark job
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_arc_easy.json"
@@ -1470,7 +1470,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain "context.benchmarks[0].id"
     And the MLflow artifact should contain "context.benchmarks[0].provider_id"
 
-  @mlflow
+  @mlflow @test_invokes_mlflow
   Scenario: Card results.benchmarks contains metrics
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_arc_easy.json"
@@ -1485,7 +1485,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain "results.benchmarks"
     And the MLflow artifact should contain "results.benchmarks[0].metrics"
 
-  @mlflow
+  @mlflow @test_invokes_mlflow
   Scenario: Card results.benchmarks contains mlflow_run_id
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_arc_easy.json"
@@ -1499,7 +1499,7 @@ Feature: Evaluation Jobs
     Then the MLflow artifact should exist
     And the MLflow artifact should contain "results.benchmarks[0].mlflow_run_id"
 
-  @mlflow
+  @mlflow @test_invokes_mlflow
   Scenario: Card results.status.state matches job status
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_arc_easy.json"
@@ -1513,7 +1513,7 @@ Feature: Evaluation Jobs
     Then the MLflow artifact should exist
     And the MLflow artifact should contain the value "completed" at path "$.results.status.state"
 
-  @mlflow
+  @mlflow @test_invokes_mlflow
   Scenario: Card context.collection_id exists for collection job
     Given the service is running
     And there is a system collection with id "toxicity-and-ethical-principles"
@@ -1529,7 +1529,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain "context.collection_id"
     And the MLflow artifact should contain the value "toxicity-and-ethical-principles" at path "$.context.collection_id"
 
-  @mlflow
+  @mlflow @test_invokes_mlflow
   Scenario: Card context.benchmarks contains correct benchmark IDs
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_arc_easy.json"
@@ -1544,7 +1544,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain the value "arc_easy" at path "$.context.benchmarks[0].id"
     And the MLflow artifact should contain the value "lm_evaluation_harness" at path "$.context.benchmarks[0].provider_id"
 
-  @mlflow
+  @mlflow @test_invokes_mlflow
   Scenario: Card results.benchmarks array has expected structure
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_arc_easy.json"
@@ -1561,7 +1561,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain "results.benchmarks[0].status"
     And the MLflow artifact should contain "results.benchmarks[0].metrics"
 
-  @mlflow
+  @mlflow @test_invokes_mlflow
   Scenario: Card results.benchmarks.status matches benchmark state for completed job
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_arc_easy.json"
@@ -1575,7 +1575,7 @@ Feature: Evaluation Jobs
     Then the MLflow artifact should exist
     And the MLflow artifact should contain the value "completed" at path "$.results.benchmarks[0].status"
 
-  @mlflow 
+  @mlflow @test_invokes_mlflow
   Scenario: Card error_message structure is valid for failed benchmark
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_invalid_model.json"
@@ -1593,7 +1593,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain "results.benchmarks[0].error_message.message_code"
     And the MLflow artifact should contain "results.benchmarks[0].error_message.message_origin"
   
-  @mlflow 
+  @mlflow @test_invokes_mlflow
   Scenario: EvalCard artifact is valid parseable JSON for failed job
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_invalid_model_json.json"
@@ -1608,7 +1608,7 @@ Feature: Evaluation Jobs
     Then the MLflow artifact should exist
     And the MLflow artifact should be valid JSON
  
-  @mlflow
+  @mlflow @test_invokes_mlflow
   Scenario: Card generated for job with no pass_criteria
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_no_pass_criteria.json"

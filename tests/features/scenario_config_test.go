@@ -32,6 +32,7 @@ const (
 	regexpPrefix = "regex:"
 
 	envMetricsURL = "METRICS_URL"
+	envMlflowURL  = "MLFLOW_URL"
 )
 
 // modelEndpointStatus captures preflight outcome from checkModelEndpoint for steps that gate on connectivity.
@@ -179,9 +180,9 @@ func getMLflowHTTPClient() *http.Client {
 // mlflowBaseURL returns the MLflow base URL from the MLFLOW_URL env var.
 // It fails when MLFLOW_URL is unset or empty after trailing-slash trimming.
 func mlflowBaseURL() (string, error) {
-	baseURL := strings.TrimRight(os.Getenv("MLFLOW_URL"), "/")
+	baseURL := strings.TrimRight(os.Getenv(envMlflowURL), "/")
 	if baseURL == "" {
-		return "", fmt.Errorf("MLFLOW_URL environment variable is required")
+		return "", fmt.Errorf("%s environment variable is required", envMlflowURL)
 	}
 	return baseURL, nil
 }

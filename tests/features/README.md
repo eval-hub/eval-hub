@@ -86,6 +86,7 @@ When running in local server mode, the tests will:
 | `@kueue` | Scenarios that require Kueue queue integration (`evaluation_jobs.feature`, `gpu_resources.feature`) |
 | `@negative` | Used to mark this as a negative test |
 | `@mlflow` | Tests that only work when running with a configured mlflow service |
+| `@test_invokes_mlflow` | Scenarios that fetch/search MLflow artifacts from the FVT runner (require `MLFLOW_URL` at the job). Filter via Jenkins/`GODOG_TAGS`; not skipped inside the suite |
 | `@slow` | Tests that take more than the normal timeout (currently 1 hour) |
 | `@ignore` | Can be used to ignore a test |
 | `@connected` | Used by the Jenkins jobs and set when running on a connected cluster |

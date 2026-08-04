@@ -441,21 +441,21 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatusToMatch(statusPattern strin
 
 func TestMlflowBaseURL(t *testing.T) {
 	t.Run("requires MLFLOW_URL", func(t *testing.T) {
-		t.Setenv("MLFLOW_URL", "")
+		t.Setenv(envMlflowURL, "")
 		if _, err := mlflowBaseURL(); err == nil {
 			t.Fatal("expected error when MLFLOW_URL is unset")
 		}
 	})
 
 	t.Run("rejects slash-only MLFLOW_URL", func(t *testing.T) {
-		t.Setenv("MLFLOW_URL", "///")
+		t.Setenv(envMlflowURL, "///")
 		if _, err := mlflowBaseURL(); err == nil {
 			t.Fatal("expected error when MLFLOW_URL is empty after trimming")
 		}
 	})
 
 	t.Run("trims trailing slashes", func(t *testing.T) {
-		t.Setenv("MLFLOW_URL", "https://mlflow.example.com/")
+		t.Setenv(envMlflowURL, "https://mlflow.example.com/")
 		got, err := mlflowBaseURL()
 		if err != nil {
 			t.Fatalf("mlflowBaseURL: %v", err)
