@@ -77,6 +77,10 @@ When updating the project version, edit these four source files:
 
 Then run `make documentation` to regenerate the bundled docs. Do **not** hand-edit the generated files under `docs/` (`openapi.yaml`, `openapi.json`, `openapi-internal.yaml`, `openapi-internal.json`, `index*.html`).
 
+For each GitHub release, publish curated release notes (human-readable summary and
+upgrade impact — not raw `git log`). Use the `release-notes` skill at
+`.claude/skills/release-notes/SKILL.md` (see also `CLAUDE.md`).
+
 ### Dependencies
 
 ```bash
