@@ -167,3 +167,105 @@ func TestEvaluationJobConfigHardwareConfigRejectsProfileWithDirectFields(t *test
 		t.Fatalf("error = %q, want hardware_config exclusivity message", got)
 	}
 }
+
+func TestEvaluationJobConfigEvaluationLevelHardwareConfigRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	validate := testhelpers.NewValidator(t)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-eval-hw", logger, "test-user", "test-tenant")
+
+	body := []byte(`{
+		"name":"test-job",
+		"model":{"url":"http://test.com","name":"model"},
+		"benchmarks":[{"id":"b1","provider_id":"provider-1"}],
+		"hardware_config":{
+			"queue":{"kind":"kueue","name":"fallback-queue"},
+			"cpu":{"request":"1","limit":"2"}
+		},
+		"queue":{"kind":"kueue","name":"legacy-queue"}
+	}`)
+
+	cfg := &api.EvaluationJobConfig{}
+	if err := serialization.Unmarshal(validate, ctx, body, cfg); err != nil {
+		t.Fatalf("unmarshal request: %v", err)
+	}
+	if cfg.HardwareConfig == nil || cfg.HardwareConfig.Queue == nil || cfg.HardwareConfig.Queue.Name != "fallback-queue" {
+		t.Fatalf("unexpected evaluation.hardware_config: %#v", cfg.HardwareConfig)
+	}
+	if cfg.Queue == nil || cfg.Queue.Name != "legacy-queue" {
+		t.Fatalf("unexpected evaluation.queue: %#v", cfg.Queue)
+	}
+	if cfg.Benchmarks[0].HardwareConfig != nil {
+		t.Fatal("expected benchmark hardware_config to stay nil")
+	}
+
+	job := &api.EvaluationJobResource{
+		Resource:            api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
+		EvaluationJobConfig: *cfg,
+	}
+	encoded, err := json.Marshal(job)
+	if err != nil {
+		t.Fatalf("marshal job: %v", err)
+	}
+	var response map[string]any
+	if err := json.Unmarshal(encoded, &response); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	hw, ok := response["hardware_config"].(map[string]any)
+	if !ok {
+		t.Fatalf("hardware_config missing in response: %s", string(encoded))
+	}
+	queue, ok := hw["queue"].(map[string]any)
+	if !ok || queue["name"] != "fallback-queue" {
+		t.Fatalf("unexpected hardware_config.queue in response: %s", string(encoded))
+	}
+	topQueue, ok := response["queue"].(map[string]any)
+	if !ok || topQueue["name"] != "legacy-queue" {
+		t.Fatalf("unexpected evaluation.queue in response: %s", string(encoded))
+	}
+}
+
+func TestEvaluationJobConfigEvaluationLevelHardwareConfigRejectsProfileWithDirectFields(t *testing.T) {
+	t.Parallel()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	validate := testhelpers.NewValidator(t)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-eval-hw-exclusive", logger, "test-user", "test-tenant")
+
+	body := []byte(`{
+		"name":"test-job",
+		"model":{"url":"http://test.com","name":"model"},
+		"benchmarks":[{"id":"b1","provider_id":"provider-1"}],
+		"hardware_config":{
+			"hardware_profile_name":"my-hw-spec",
+			"cpu":{"request":"1","limit":"2"}
+		}
+	}`)
+
+	cfg := &api.EvaluationJobConfig{}
+	err := serialization.Unmarshal(validate, ctx, body, cfg)
+	if err == nil {
+		t.Fatal("expected validation error for evaluation.hardware_config exclusivity")
+	}
+	if got := err.Error(); !strings.Contains(got, "hardware_config") || !strings.Contains(got, "hardware_profile_name") {
+		t.Fatalf("error = %q, want hardware_config exclusivity message", got)
+	}
+}
+
+func TestEffectiveHardwareConfig(t *testing.T) {
+	t.Parallel()
+
+	benchHW := &api.BenchmarkHardwareConfig{Queue: &api.QueueConfig{Name: "bench"}}
+	evalHW := &api.BenchmarkHardwareConfig{Queue: &api.QueueConfig{Name: "eval"}}
+
+	if got := api.EffectiveHardwareConfig(nil, nil); got != nil {
+		t.Fatalf("got %#v, want nil", got)
+	}
+	if got := api.EffectiveHardwareConfig(&api.EvaluationBenchmarkConfig{}, &api.EvaluationJobConfig{HardwareConfig: evalHW}); got != evalHW {
+		t.Fatalf("got %#v, want evaluation fallback", got)
+	}
+	if got := api.EffectiveHardwareConfig(&api.EvaluationBenchmarkConfig{HardwareConfig: benchHW}, &api.EvaluationJobConfig{HardwareConfig: evalHW}); got != benchHW {
+		t.Fatalf("got %#v, want benchmark config", got)
+	}
+}

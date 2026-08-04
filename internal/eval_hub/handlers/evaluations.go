@@ -99,8 +99,9 @@ func (h *Handlers) getStorage(ctx *executioncontext.ExecutionContext) abstractio
 }
 
 // ApplyHardwareConfigQueueDefaults trims queue name/kind on each benchmark's
-// hardware_config.queue (including collection overrides) and sets kind to "kueue"
-// when empty. Call after validating a decoded EvaluationJobConfig.
+// hardware_config.queue (including collection overrides), evaluation-level
+// hardware_config.queue, and the deprecated evaluation.queue field, and sets
+// kind to "kueue" when empty. Call after validating a decoded EvaluationJobConfig.
 func ApplyHardwareConfigQueueDefaults(cfg *api.EvaluationJobConfig) {
 	if cfg == nil {
 		return
@@ -111,6 +112,14 @@ func ApplyHardwareConfigQueueDefaults(cfg *api.EvaluationJobConfig) {
 	if cfg.Collection != nil {
 		for i := range cfg.Collection.Benchmarks {
 			applyQueueDefaults(cfg.Collection.Benchmarks[i].HardwareConfig)
+		}
+	}
+	applyQueueDefaults(cfg.HardwareConfig)
+	if cfg.Queue != nil {
+		cfg.Queue.Name = strings.TrimSpace(cfg.Queue.Name)
+		cfg.Queue.Kind = strings.TrimSpace(cfg.Queue.Kind)
+		if cfg.Queue.Kind == "" {
+			cfg.Queue.Kind = "kueue"
 		}
 	}
 }
@@ -124,6 +133,23 @@ func applyQueueDefaults(hw *api.BenchmarkHardwareConfig) {
 	if hw.Queue.Kind == "" {
 		hw.Queue.Kind = "kueue"
 	}
+}
+
+// benchmarksWithHardwareConfigFallback returns a copy of benchmarks where nil
+// hardware_config is filled from the evaluation-level fallback. Used only for
+// create-time HardwareProfile validation; persisted job config is unchanged.
+func benchmarksWithHardwareConfigFallback(benchmarks []api.EvaluationBenchmarkConfig, fallback *api.BenchmarkHardwareConfig) []api.EvaluationBenchmarkConfig {
+	if fallback == nil {
+		return benchmarks
+	}
+	out := make([]api.EvaluationBenchmarkConfig, len(benchmarks))
+	copy(out, benchmarks)
+	for i := range out {
+		if out[i].HardwareConfig == nil {
+			out[i].HardwareConfig = fallback
+		}
+	}
+	return out
 }
 
 // HandleCreateEvaluation handles POST /api/v1/evaluations/jobs
@@ -168,7 +194,9 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				return err
 			}
 			if h.runtime != nil {
-				return h.runtime.WithLogger(ctx.Logger).WithContext(runtimeCtx).ValidateHardwareProfiles(benchmarks)
+				return h.runtime.WithLogger(ctx.Logger).WithContext(runtimeCtx).ValidateHardwareProfiles(
+					benchmarksWithHardwareConfigFallback(benchmarks, evaluation.HardwareConfig),
+				)
 			}
 			return nil
 		},

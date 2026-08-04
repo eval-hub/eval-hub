@@ -179,8 +179,9 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		return err
 	}
 	var hardwareProfile *hardwareProfileResources
-	if benchmark.HardwareConfig != nil {
-		profileName := strings.TrimSpace(benchmark.HardwareConfig.HardwareProfileName)
+	effectiveHW := api.EffectiveHardwareConfig(benchmark, &evaluation.EvaluationJobConfig)
+	if effectiveHW != nil {
+		profileName := strings.TrimSpace(effectiveHW.HardwareProfileName)
 		if profileName != "" {
 			// Create already validated existence/disabled via ValidateHardwareProfiles.
 			// Re-fetch here only to apply resources and scheduling to the Job.

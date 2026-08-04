@@ -75,7 +75,8 @@ type jobConfig struct {
 	testDataInitImage          string
 	sidecarConfig              *config.SidecarConfig
 	// queueKind and queueName come from a queue-backed HardwareProfile when set,
-	// otherwise from hardware_config.queue (API layer normalizes empty kind to kueue).
+	// otherwise from effective hardware_config.queue, else deprecated evaluation.queue
+	// (API layer normalizes empty kind to kueue).
 	queueKind string
 	queueName string
 }
@@ -208,8 +209,8 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 
 	// GPU resource requests/limits are always propagated to the pod spec so that Kueue can
 	// account for GPU quota. Provider nodeSelector is the default; a HardwareProfile with
-	// Node scheduling overrides it, and a Queue-backed profile (or hardware_config.queue) clears
-	// it so Kueue ResourceFlavors govern placement.
+	// Node scheduling overrides it, and a Queue-backed profile (or hardware_config.queue /
+	// deprecated evaluation.queue) clears it so Kueue ResourceFlavors govern placement.
 	gpuResource, gpuCount := resolveGPUConfig(runtime.K8s.GPU)
 	nodeSelector := resolveNodeSelector(runtime.K8s.GPU)
 
@@ -261,9 +262,12 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		},
 	}
 	applyHardwareProfileResources(out, hardwareProfile)
-	if err := applyDirectHardwareConfig(out, benchmarkConfig.HardwareConfig); err != nil {
+	effectiveHW := api.EffectiveHardwareConfig(benchmarkConfig, &evaluation.EvaluationJobConfig)
+	if err := applyDirectHardwareConfig(out, effectiveHW); err != nil {
 		return nil, err
 	}
+	// Deprecated evaluation.queue: only when neither hardware_config supplied a queue.
+	applyQueueIfUnset(out, evaluation.Queue)
 	return out, nil
 }
 
@@ -322,9 +326,9 @@ func applyDirectHardwareConfig(cfg *jobConfig, hw *api.BenchmarkHardwareConfig) 
 	return nil
 }
 
-// applyQueueIfUnset sets queue from hardware_config.queue when a HardwareProfile
-// did not already provide a LocalQueue name. Clears nodeSelector/tolerations so Kueue
-// ResourceFlavors govern placement.
+// applyQueueIfUnset sets queue from hardware_config.queue or deprecated evaluation.queue
+// when a HardwareProfile did not already provide a LocalQueue name. Clears
+// nodeSelector/tolerations so Kueue ResourceFlavors govern placement.
 func applyQueueIfUnset(cfg *jobConfig, queue *api.QueueConfig) {
 	if cfg == nil || queue == nil || cfg.queueName != "" {
 		return

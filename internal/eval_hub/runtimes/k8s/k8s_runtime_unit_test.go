@@ -1068,6 +1068,143 @@ func TestCreateBenchmarkResourcesAppliesNodeAndQueueScheduling(t *testing.T) {
 			t.Fatalf("queue label = %q, want profile-queue", jobs[0].Labels[labelKueueQueueNameKey])
 		}
 	})
+
+	t.Run("evaluation queue when no hardware_config", func(t *testing.T) {
+		evaluation := sampleEvaluation(providerID)
+		evaluation.Queue = &api.QueueConfig{Kind: "kueue", Name: "eval-local-queue"}
+		clientset := fake.NewClientset()
+		runtime := &K8sRuntime{
+			logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+			helper: &KubernetesHelper{
+				clientset:     clientset,
+				dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme()),
+			},
+			serviceConfig: &config.Config{
+				Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
+			},
+		}
+		storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+		if err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage); err != nil {
+			t.Fatalf("createBenchmarkResources: %v", err)
+		}
+		jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+		if len(jobs) != 1 {
+			t.Fatalf("expected 1 job, got %d", len(jobs))
+		}
+		if jobs[0].Labels[labelKueueQueueNameKey] != "eval-local-queue" {
+			t.Fatalf("queue label = %q", jobs[0].Labels[labelKueueQueueNameKey])
+		}
+	})
+
+	t.Run("evaluation hardware_config fallback when benchmark has none", func(t *testing.T) {
+		evaluation := sampleEvaluation(providerID)
+		evaluation.HardwareConfig = &api.BenchmarkHardwareConfig{
+			Queue: &api.QueueConfig{Kind: "kueue", Name: "fallback-queue"},
+			CPU:   &api.HardwareResourceQuantity{Request: "1", Limit: "2"},
+		}
+		evaluation.Queue = &api.QueueConfig{Kind: "kueue", Name: "legacy-queue"}
+		clientset := fake.NewClientset()
+		runtime := &K8sRuntime{
+			logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+			helper: &KubernetesHelper{
+				clientset:     clientset,
+				dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme()),
+			},
+			serviceConfig: &config.Config{
+				Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
+			},
+		}
+		storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+		if err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage); err != nil {
+			t.Fatalf("createBenchmarkResources: %v", err)
+		}
+		jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+		if len(jobs) != 1 {
+			t.Fatalf("expected 1 job, got %d", len(jobs))
+		}
+		if jobs[0].Labels[labelKueueQueueNameKey] != "fallback-queue" {
+			t.Fatalf("queue label = %q, want fallback-queue", jobs[0].Labels[labelKueueQueueNameKey])
+		}
+		adapter, err := adapterContainerFromJob(&jobs[0])
+		if err != nil {
+			t.Fatalf("adapter container: %v", err)
+		}
+		if cpu := adapter.Resources.Requests.Cpu().String(); cpu != "1" {
+			t.Fatalf("cpu request = %q, want 1", cpu)
+		}
+	})
+
+	t.Run("benchmark hardware_config wins over evaluation hardware_config and queue", func(t *testing.T) {
+		evaluation := sampleEvaluation(providerID)
+		evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
+			Queue: &api.QueueConfig{Kind: "kueue", Name: "bench-queue"},
+		}
+		evaluation.HardwareConfig = &api.BenchmarkHardwareConfig{
+			Queue: &api.QueueConfig{Kind: "kueue", Name: "fallback-queue"},
+		}
+		evaluation.Queue = &api.QueueConfig{Kind: "kueue", Name: "legacy-queue"}
+		clientset := fake.NewClientset()
+		runtime := &K8sRuntime{
+			logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+			helper: &KubernetesHelper{
+				clientset:     clientset,
+				dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme()),
+			},
+			serviceConfig: &config.Config{
+				Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
+			},
+		}
+		storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+		if err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage); err != nil {
+			t.Fatalf("createBenchmarkResources: %v", err)
+		}
+		jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+		if len(jobs) != 1 {
+			t.Fatalf("expected 1 job, got %d", len(jobs))
+		}
+		if jobs[0].Labels[labelKueueQueueNameKey] != "bench-queue" {
+			t.Fatalf("queue label = %q, want bench-queue", jobs[0].Labels[labelKueueQueueNameKey])
+		}
+	})
+
+	t.Run("hardware profile queue wins over evaluation queue", func(t *testing.T) {
+		evaluation := sampleEvaluation(providerID)
+		evaluation.Queue = &api.QueueConfig{Kind: "kueue", Name: "eval-local-queue"}
+		evaluation.Benchmarks[0].HardwareConfig = &api.BenchmarkHardwareConfig{
+			HardwareProfileName: "queue-profile",
+		}
+		profile := testHardwareProfileUnstructured("default", "queue-profile")
+		profile.Object["spec"] = map[string]any{
+			"scheduling": map[string]any{
+				"type": "Queue",
+				"kueue": map[string]any{
+					"localQueueName": "profile-queue",
+				},
+			},
+		}
+		clientset := fake.NewClientset()
+		runtime := &K8sRuntime{
+			logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+			helper: &KubernetesHelper{
+				clientset:     clientset,
+				dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme(), profile),
+			},
+			serviceConfig: &config.Config{
+				Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
+			},
+		}
+		storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+		if err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage); err != nil {
+			t.Fatalf("createBenchmarkResources: %v", err)
+		}
+		jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+		if len(jobs) != 1 {
+			t.Fatalf("expected 1 job, got %d", len(jobs))
+		}
+		if jobs[0].Labels[labelKueueQueueNameKey] != "profile-queue" {
+			t.Fatalf("queue label = %q, want profile-queue", jobs[0].Labels[labelKueueQueueNameKey])
+		}
+	})
 }
 
 func adapterContainerFromJob(job *batchv1.Job) (*corev1.Container, error) {

@@ -3329,7 +3329,7 @@
       "QueueConfig": {
         "type": "object",
         "title": "QueueConfig",
-        "description": "Optional workload scheduling queue under a benchmark's direct `hardware_config.queue` (e.g. Kueue LocalQueue). When a benchmark references a queue-backed HardwareProfile (`spec.scheduling.type: Queue`), that profile's LocalQueue name takes precedence over this field at job scheduling time.\n",
+        "description": "Optional workload scheduling queue under a benchmark's or evaluation's direct `hardware_config.queue` (e.g. Kueue LocalQueue), or the deprecated top-level `evaluation.queue` field. Prefer `benchmark.hardware_config` or `evaluation.hardware_config`. Precedence at job scheduling time (highest first): queue-backed HardwareProfile; then `hardware_config.queue` (benchmark, else evaluation-level fallback); then deprecated `evaluation.queue`.\n",
         "required": [
           "name"
         ],
@@ -3763,6 +3763,15 @@
           "exports": {
             "$ref": "#/components/schemas/EvaluationExports",
             "description": "Optional exports configuration for the evaluation job. When provided, the evaluation job results will be exported to the specified location.\n"
+          },
+          "hardware_config": {
+            "$ref": "#/components/schemas/BenchmarkHardwareConfig",
+            "description": "Optional evaluation-level hardware override for Kubernetes-backed jobs. Applied as a fallback for every benchmark that does not specify its own `hardware_config`. Prefer per-benchmark `hardware_config` when individual benchmarks need different hardware. When neither is set, the deprecated top-level `queue` field may still supply a scheduling queue.\n"
+          },
+          "queue": {
+            "$ref": "#/components/schemas/QueueConfig",
+            "deprecated": true,
+            "description": "Deprecated. Prefer `benchmark.hardware_config` or evaluation-level `hardware_config` instead. This field will be discontinued in a future release. Retained for backward compatibility: when neither `benchmark.hardware_config` nor evaluation `hardware_config` is set, this queue is applied to scheduled jobs. When a benchmark references a queue-backed HardwareProfile (or sets `hardware_config.queue`), that configuration takes precedence over this field.\n"
           },
           "custom": {
             "type": "object",

@@ -190,23 +190,52 @@ func TestQueueConfig_InvalidNameRejected(t *testing.T) {
 		strings.Repeat("a", 64),
 	}
 	for _, name := range invalid {
-		cfg := api.EvaluationJobConfig{
-			Name:  "test-job",
-			Model: api.ModelRef{URL: "http://test.com", Name: "model"},
-			Benchmarks: []api.EvaluationBenchmarkConfig{
-				{
-					Ref:        api.Ref{ID: "b1"},
-					ProviderID: "provider-1",
-					HardwareConfig: &api.BenchmarkHardwareConfig{
-						Queue: &api.QueueConfig{Kind: "kueue", Name: name},
+		t.Run("benchmark_hardware_config/"+name, func(t *testing.T) {
+			cfg := api.EvaluationJobConfig{
+				Name:  "test-job",
+				Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+				Benchmarks: []api.EvaluationBenchmarkConfig{
+					{
+						Ref:        api.Ref{ID: "b1"},
+						ProviderID: "provider-1",
+						HardwareConfig: &api.BenchmarkHardwareConfig{
+							Queue: &api.QueueConfig{Kind: "kueue", Name: name},
+						},
 					},
 				},
-			},
-		}
-		err := validate.Struct(cfg)
-		if err == nil {
-			t.Errorf("expected validation error for queue name %q", name)
-		}
+			}
+			if err := validate.Struct(cfg); err == nil {
+				t.Errorf("expected validation error for queue name %q", name)
+			}
+		})
+		t.Run("evaluation_hardware_config/"+name, func(t *testing.T) {
+			cfg := api.EvaluationJobConfig{
+				Name:  "test-job",
+				Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+				Benchmarks: []api.EvaluationBenchmarkConfig{
+					{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
+				},
+				HardwareConfig: &api.BenchmarkHardwareConfig{
+					Queue: &api.QueueConfig{Kind: "kueue", Name: name},
+				},
+			}
+			if err := validate.Struct(cfg); err == nil {
+				t.Errorf("expected validation error for evaluation.hardware_config.queue name %q", name)
+			}
+		})
+		t.Run("deprecated_evaluation_queue/"+name, func(t *testing.T) {
+			cfg := api.EvaluationJobConfig{
+				Name:  "test-job",
+				Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+				Benchmarks: []api.EvaluationBenchmarkConfig{
+					{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
+				},
+				Queue: &api.QueueConfig{Kind: "kueue", Name: name},
+			}
+			if err := validate.Struct(cfg); err == nil {
+				t.Errorf("expected validation error for evaluation.queue name %q", name)
+			}
+		})
 	}
 }
 
@@ -220,23 +249,52 @@ func TestQueueConfig_ValidNameAccepted(t *testing.T) {
 		strings.Repeat("a", 63),
 	}
 	for _, name := range valid {
-		cfg := api.EvaluationJobConfig{
-			Name:  "test-job",
-			Model: api.ModelRef{URL: "http://test.com", Name: "model"},
-			Benchmarks: []api.EvaluationBenchmarkConfig{
-				{
-					Ref:        api.Ref{ID: "b1"},
-					ProviderID: "provider-1",
-					HardwareConfig: &api.BenchmarkHardwareConfig{
-						Queue: &api.QueueConfig{Kind: "kueue", Name: name},
+		t.Run("benchmark_hardware_config/"+name, func(t *testing.T) {
+			cfg := api.EvaluationJobConfig{
+				Name:  "test-job",
+				Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+				Benchmarks: []api.EvaluationBenchmarkConfig{
+					{
+						Ref:        api.Ref{ID: "b1"},
+						ProviderID: "provider-1",
+						HardwareConfig: &api.BenchmarkHardwareConfig{
+							Queue: &api.QueueConfig{Kind: "kueue", Name: name},
+						},
 					},
 				},
-			},
-		}
-		err := validate.Struct(cfg)
-		if err != nil {
-			t.Errorf("expected no error for queue name %q, got: %v", name, err)
-		}
+			}
+			if err := validate.Struct(cfg); err != nil {
+				t.Errorf("expected no error for queue name %q, got: %v", name, err)
+			}
+		})
+		t.Run("evaluation_hardware_config/"+name, func(t *testing.T) {
+			cfg := api.EvaluationJobConfig{
+				Name:  "test-job",
+				Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+				Benchmarks: []api.EvaluationBenchmarkConfig{
+					{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
+				},
+				HardwareConfig: &api.BenchmarkHardwareConfig{
+					Queue: &api.QueueConfig{Kind: "kueue", Name: name},
+				},
+			}
+			if err := validate.Struct(cfg); err != nil {
+				t.Errorf("expected no error for evaluation.hardware_config.queue name %q, got: %v", name, err)
+			}
+		})
+		t.Run("deprecated_evaluation_queue/"+name, func(t *testing.T) {
+			cfg := api.EvaluationJobConfig{
+				Name:  "test-job",
+				Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+				Benchmarks: []api.EvaluationBenchmarkConfig{
+					{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
+				},
+				Queue: &api.QueueConfig{Kind: "kueue", Name: name},
+			}
+			if err := validate.Struct(cfg); err != nil {
+				t.Errorf("expected no error for evaluation.queue name %q, got: %v", name, err)
+			}
+		})
 	}
 }
 

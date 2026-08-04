@@ -739,6 +739,219 @@ func TestBuildJobConfigKueueQueueNameFromHardwareConfig(t *testing.T) {
 	}
 }
 
+func TestBuildJobConfigKueueQueueNameFromEvaluationQueue(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-eval-queue"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}},
+			},
+			Queue: &api.QueueConfig{
+				Kind: "kueue",
+				Name: "eval-queue",
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+					GPU: &api.GPUConfig{
+						Resource: "nvidia.com/gpu",
+						Count:    1,
+						NodeSelector: map[string]string{
+							"nvidia.com/gpu.product": "A100",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.queueKind != "kueue" || cfg.queueName != "eval-queue" {
+		t.Fatalf("expected queueKind kueue and queueName eval-queue, got kind %q name %q", cfg.queueKind, cfg.queueName)
+	}
+	if cfg.nodeSelector != nil {
+		t.Fatalf("expected nil nodeSelector when evaluation.queue is set, got %v", cfg.nodeSelector)
+	}
+}
+
+func TestBuildJobConfigUsesEvaluationHardwareConfigFallback(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-eval-hw"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{URL: "http://model", Name: "model"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}},
+			},
+			HardwareConfig: &api.BenchmarkHardwareConfig{
+				Queue:  &api.QueueConfig{Kind: "kueue", Name: "fallback-queue"},
+				CPU:    &api.HardwareResourceQuantity{Request: "1", Limit: "2"},
+				Memory: &api.HardwareResourceQuantity{Request: "1Gi", Limit: "2Gi"},
+			},
+			// Deprecated queue must not win when evaluation.hardware_config is set.
+			Queue: &api.QueueConfig{Kind: "kueue", Name: "legacy-queue"},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image:         "adapter:latest",
+					CPURequest:    "100m",
+					MemoryRequest: "128Mi",
+					CPULimit:      "200m",
+					MemoryLimit:   "256Mi",
+				},
+			},
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.queueKind != "kueue" || cfg.queueName != "fallback-queue" {
+		t.Fatalf("expected evaluation.hardware_config.queue, got kind %q name %q", cfg.queueKind, cfg.queueName)
+	}
+	if cfg.cpuRequest != "1" || cfg.cpuLimit != "2" {
+		t.Fatalf("cpu = %s/%s, want 1/2", cfg.cpuRequest, cfg.cpuLimit)
+	}
+	if cfg.memoryRequest != "1Gi" || cfg.memoryLimit != "2Gi" {
+		t.Fatalf("memory = %s/%s, want 1Gi/2Gi", cfg.memoryRequest, cfg.memoryLimit)
+	}
+}
+
+func TestBuildJobConfigBenchmarkHardwareConfigTakesPrecedenceOverEvaluationFallback(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-bench-hw-wins"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{URL: "http://model", Name: "model"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{
+					Ref: api.Ref{ID: "bench-1"},
+					HardwareConfig: &api.BenchmarkHardwareConfig{
+						Queue: &api.QueueConfig{Kind: "kueue", Name: "bench-queue"},
+						CPU:   &api.HardwareResourceQuantity{Request: "3", Limit: "4"},
+					},
+				},
+			},
+			HardwareConfig: &api.BenchmarkHardwareConfig{
+				Queue: &api.QueueConfig{Kind: "kueue", Name: "fallback-queue"},
+				CPU:   &api.HardwareResourceQuantity{Request: "1", Limit: "2"},
+			},
+			Queue: &api.QueueConfig{Kind: "kueue", Name: "legacy-queue"},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{Image: "adapter:latest"},
+			},
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.queueName != "bench-queue" {
+		t.Fatalf("queueName = %q, want bench-queue", cfg.queueName)
+	}
+	if cfg.cpuRequest != "3" || cfg.cpuLimit != "4" {
+		t.Fatalf("cpu = %s/%s, want 3/4 from benchmark.hardware_config", cfg.cpuRequest, cfg.cpuLimit)
+	}
+}
+
+func TestBuildJobConfigHardwareProfileQueueTakesPrecedenceOverEvaluationQueue(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-profile-over-eval-queue"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{URL: "http://model", Name: "model"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}},
+			},
+			Queue: &api.QueueConfig{Kind: "kueue", Name: "eval-queue"},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{Image: "adapter:latest"},
+			},
+		},
+	}
+	profile := &hardwareProfileResources{
+		schedulingType: hardwareProfileSchedulingQueue,
+		queueName:      "profile-queue",
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, profile)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.queueKind != "kueue" || cfg.queueName != "profile-queue" {
+		t.Fatalf("expected hardware profile queue to win, got kind %q name %q", cfg.queueKind, cfg.queueName)
+	}
+}
+
+func TestBuildJobConfigBenchmarkHardwareConfigTakesPrecedenceOverEvaluationQueue(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-hw-over-eval-queue"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: api.ModelRef{URL: "http://model", Name: "model"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{
+					Ref: api.Ref{ID: "bench-1"},
+					HardwareConfig: &api.BenchmarkHardwareConfig{
+						Queue: &api.QueueConfig{Kind: "kueue", Name: "bench-queue"},
+					},
+				},
+			},
+			Queue: &api.QueueConfig{Kind: "kueue", Name: "eval-queue"},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{Image: "adapter:latest"},
+			},
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.queueName != "bench-queue" {
+		t.Fatalf("queueName = %q, want bench-queue", cfg.queueName)
+	}
+}
+
 func TestApplyQueueIfUnsetDefaultsEmptyKindToKueue(t *testing.T) {
 	cfg := &jobConfig{
 		nodeSelector: map[string]string{"nvidia.com/gpu.product": "A100"},

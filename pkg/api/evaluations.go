@@ -537,11 +537,14 @@ type CollectionRef struct {
 	Benchmarks []EvaluationBenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 }
 
-// QueueConfig represents an optional scheduling queue under hardware_config.
+// QueueConfig represents an optional scheduling queue under hardware_config
+// (or the deprecated evaluation.queue field).
 // When Kind is empty, the evaluation job API handler normalizes it to "kueue" before persist/runtime.
 // Precedence at job scheduling time (highest first):
-//  1. Queue-backed HardwareProfile referenced by hardware_config.hardware_profile_name
-//  2. hardware_config.queue (direct mode)
+//  1. Queue-backed HardwareProfile referenced by benchmark.hardware_config.hardware_profile_name
+//  2. benchmark.hardware_config.queue (direct mode)
+//  3. evaluation.hardware_config (fallback when a benchmark has no hardware_config)
+//  4. evaluation.queue (deprecated)
 type QueueConfig struct {
 	Kind string `json:"kind,omitempty" validate:"omitempty,oneof=kueue"`
 	Name string `json:"name" validate:"required,rfc1123_dns_label"`
@@ -549,16 +552,32 @@ type QueueConfig struct {
 
 // EvaluationJobConfig represents evaluation job request schema
 type EvaluationJobConfig struct {
-	Name         string                      `json:"name" validate:"required"`
-	Description  *string                     `json:"description,omitempty"`
-	Tags         []string                    `json:"tags,omitempty" validate:"omitempty,dive,tagname"`
-	Model        ModelRef                    `json:"model" validate:"required"`
-	PassCriteria *PassCriteria               `json:"pass_criteria,omitempty"`
-	Benchmarks   []EvaluationBenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,required_without=Collection,dive"`
-	Collection   *CollectionRef              `json:"collection,omitempty" validate:"omitempty,required_without=Benchmarks"`
-	Experiment   *ExperimentConfig           `json:"experiment,omitempty"`
-	Custom       *map[string]any             `json:"custom,omitempty"`
-	Exports      *EvaluationExports          `json:"exports,omitempty"`
+	Name           string                      `json:"name" validate:"required"`
+	Description    *string                     `json:"description,omitempty"`
+	Tags           []string                    `json:"tags,omitempty" validate:"omitempty,dive,tagname"`
+	Model          ModelRef                    `json:"model" validate:"required"`
+	PassCriteria   *PassCriteria               `json:"pass_criteria,omitempty"`
+	Benchmarks     []EvaluationBenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,required_without=Collection,dive"`
+	Collection     *CollectionRef              `json:"collection,omitempty" validate:"omitempty,required_without=Benchmarks"`
+	Experiment     *ExperimentConfig           `json:"experiment,omitempty"`
+	Custom         *map[string]any             `json:"custom,omitempty"`
+	Exports        *EvaluationExports          `json:"exports,omitempty"`
+	HardwareConfig *BenchmarkHardwareConfig    `json:"hardware_config,omitempty"`
+	// Queue is deprecated. Prefer benchmark.hardware_config or evaluation.hardware_config.
+	// Used only when neither hardware_config is set. Will be removed in a future release.
+	Queue *QueueConfig `json:"queue,omitempty"`
+}
+
+// EffectiveHardwareConfig returns the per-benchmark hardware_config when set,
+// otherwise the evaluation-level hardware_config fallback.
+func EffectiveHardwareConfig(benchmark *EvaluationBenchmarkConfig, evaluation *EvaluationJobConfig) *BenchmarkHardwareConfig {
+	if benchmark != nil && benchmark.HardwareConfig != nil {
+		return benchmark.HardwareConfig
+	}
+	if evaluation != nil {
+		return evaluation.HardwareConfig
+	}
+	return nil
 }
 
 type EvaluationResource struct {
