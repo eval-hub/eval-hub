@@ -53,7 +53,7 @@ func (tc *scenarioConfig) fetchMLflowArtifactWithExperimentID(artifactPath, expe
 	}
 	workspace := tc.mlflowWorkspace()
 
-	artifactURL := fmt.Sprintf("%s/mlflow/api/2.0/mlflow-artifacts/artifacts/%s/%s/artifacts/%s",
+	artifactURL := fmt.Sprintf("%s/api/2.0/mlflow-artifacts/artifacts/%s/%s/artifacts/%s",
 		baseURL, experimentID, runID, artifactPath)
 
 	tc.logDebug("Fetching MLflow artifact from: %s\n", artifactURL)
@@ -229,7 +229,7 @@ func (tc *scenarioConfig) mlflowArtifactExists(artifactPath, experimentID, runID
 		return false, tc.logError(err)
 	}
 	workspace := tc.mlflowWorkspace()
-	artifactURL := fmt.Sprintf("%s/mlflow/api/2.0/mlflow-artifacts/artifacts/%s/%s/artifacts/%s",
+	artifactURL := fmt.Sprintf("%s/api/2.0/mlflow-artifacts/artifacts/%s/%s/artifacts/%s",
 		baseURL, experimentID, runID, artifactPath)
 
 	req, err := http.NewRequest("GET", artifactURL, nil)
@@ -276,7 +276,7 @@ func (tc *scenarioConfig) findMLflowRunIDForJob(experimentIDResolved, jobIDResol
 	}
 	workspace := tc.mlflowWorkspace()
 
-	searchURL := fmt.Sprintf("%s/mlflow/api/2.0/mlflow/runs/search", baseURL)
+	searchURL := fmt.Sprintf("%s/api/2.0/mlflow/runs/search", baseURL)
 	searchBody := map[string]interface{}{
 		"experiment_ids": []string{experimentIDResolved},
 		"filter":         fmt.Sprintf("tags.evaluation_job_id = '%s'", jobIDResolved),
@@ -440,22 +440,22 @@ func (tc *scenarioConfig) iWaitForEvaluationJobStatusToMatch(statusPattern strin
 }
 
 func TestMlflowBaseURL(t *testing.T) {
-	t.Run("requires MLFLOW_URL", func(t *testing.T) {
-		t.Setenv(envMlflowURL, "")
+	t.Run("requires MLFLOW_TRACKING_URI", func(t *testing.T) {
+		t.Setenv(envMlflowTrackingURI, "")
 		if _, err := mlflowBaseURL(); err == nil {
-			t.Fatal("expected error when MLFLOW_URL is unset")
+			t.Fatal("expected error when MLFLOW_TRACKING_URI is unset")
 		}
 	})
 
-	t.Run("rejects slash-only MLFLOW_URL", func(t *testing.T) {
-		t.Setenv(envMlflowURL, "///")
+	t.Run("rejects slash-only MLFLOW_TRACKING_URI", func(t *testing.T) {
+		t.Setenv(envMlflowTrackingURI, "///")
 		if _, err := mlflowBaseURL(); err == nil {
-			t.Fatal("expected error when MLFLOW_URL is empty after trimming")
+			t.Fatal("expected error when MLFLOW_TRACKING_URI is empty after trimming")
 		}
 	})
 
 	t.Run("trims trailing slashes", func(t *testing.T) {
-		t.Setenv(envMlflowURL, "https://mlflow.example.com/")
+		t.Setenv(envMlflowTrackingURI, "https://mlflow.example.com/")
 		got, err := mlflowBaseURL()
 		if err != nil {
 			t.Fatalf("mlflowBaseURL: %v", err)

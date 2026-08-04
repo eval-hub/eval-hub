@@ -31,8 +31,8 @@ const (
 	envPrefix    = "env:"
 	regexpPrefix = "regex:"
 
-	envMetricsURL = "METRICS_URL"
-	envMlflowURL  = "MLFLOW_URL"
+	envMetricsURL        = "METRICS_URL"
+	envMlflowTrackingURI = "MLFLOW_TRACKING_URI"
 )
 
 // modelEndpointStatus captures preflight outcome from checkModelEndpoint for steps that gate on connectivity.
@@ -177,12 +177,12 @@ func getMLflowHTTPClient() *http.Client {
 	}
 }
 
-// mlflowBaseURL returns the MLflow base URL from the MLFLOW_URL env var.
-// It fails when MLFLOW_URL is unset or empty after trailing-slash trimming.
+// mlflowBaseURL returns the MLflow base URL from the MLFLOW_TRACKING_URI env var.
+// It fails when MLFLOW_TRACKING_URI is unset or empty after trailing-slash trimming.
 func mlflowBaseURL() (string, error) {
-	baseURL := strings.TrimRight(os.Getenv(envMlflowURL), "/")
+	baseURL := strings.TrimRight(os.Getenv(envMlflowTrackingURI), "/")
 	if baseURL == "" {
-		return "", fmt.Errorf("%s environment variable is required", envMlflowURL)
+		return "", fmt.Errorf("%s environment variable is required", envMlflowTrackingURI)
 	}
 	return baseURL, nil
 }
