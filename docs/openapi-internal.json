@@ -3259,8 +3259,7 @@
         "title": "EvaluationJobConfigCommon1",
         "description": "The evaluation job request configuration.\n",
         "required": [
-          "name",
-          "model"
+          "name"
         ],
         "properties": {
           "name": {
@@ -3280,7 +3279,7 @@
           },
           "model": {
             "$ref": "#/components/schemas/ModelRef",
-            "description": "The model to evaluate.\n"
+            "description": "The model to evaluate.\n\n**Note that if `pre_recorded_data` is set for all `test_data_ref.type` in the `benchmarks` section then `model` will not be `required` for the job run, in all other cases a `model` is required.**\n"
           }
         }
       },
@@ -3454,6 +3453,15 @@
           "secret_ref": "my-s3-connection-secret"
         }
       },
+      "TestDataRefType": {
+        "type": "string",
+        "description": "The type of test data being referenced, the default is `data_set` if not specified. If `pre_recorded_data` is set for all benchmarks then a model section will not be mandatory for the job run.\n",
+        "enum": [
+          "data_set",
+          "pre_recorded_data"
+        ],
+        "default": "data_set"
+      },
       "TestDataRefPVC": {
         "type": "object",
         "description": "PersistentVolumeClaim (PVC) test data. Only applies when Eval Hub runs the benchmark as a\n**Kubernetes Job** (cluster execution). It does not apply to local-only evaluation runs.\n\nThe PVC is mounted **read-only** directly into the evaluation container at **`/test_data`**.\nNo init container is scheduled — the data must already reside on the PVC before job submission.\n\n**Requirements:**\n- The PersistentVolumeClaim named by **`claim_name`** must already exist in the **same namespace**\n  as the evaluation job.\n- Eval Hub does not create, provision, or manage the PVC — this is the tenant's responsibility.\n- The evaluation adapter reads data from `/test_data` identically to S3-backed jobs.\n",
@@ -3528,6 +3536,9 @@
             "properties": {
               "s3": {
                 "$ref": "#/components/schemas/TestDataRefS3"
+              },
+              "type": {
+                "$ref": "#/components/schemas/TestDataRefType"
               }
             },
             "additionalProperties": false,
@@ -3541,6 +3552,9 @@
             "properties": {
               "pvc": {
                 "$ref": "#/components/schemas/TestDataRefPVC"
+              },
+              "type": {
+                "$ref": "#/components/schemas/TestDataRefType"
               }
             },
             "additionalProperties": false,
@@ -3554,6 +3568,9 @@
             "properties": {
               "git": {
                 "$ref": "#/components/schemas/TestDataRefGit"
+              },
+              "type": {
+                "$ref": "#/components/schemas/TestDataRefType"
               }
             },
             "additionalProperties": false,
