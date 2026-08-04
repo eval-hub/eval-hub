@@ -1,0 +1,8 @@
+type: string
+description: >
+  The type of test data being referenced, the default is `data_set` if not specified.
+  If `pre_recorded_data` is set for all benchmarks then a model section will not be mandatory for the job run.
+enum:
+  - data_set # A dataset of files that can be used to train a model.
+  - pre_recorded_data # A dataset of pre-recorded data that can be used to test a model.
+default: data_set

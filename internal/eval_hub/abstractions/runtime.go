@@ -34,6 +34,9 @@ type Runtime interface {
 		benchmarkIndex *int,
 		opts api.EvaluationLogOptions,
 	) (string, error)
+	// ValidateHardwareProfiles validates HardwareProfile refs on create (exist, enabled,
+	// namespace configured). No-op for runtimes that do not use cluster HardwareProfiles.
+	ValidateHardwareProfiles(benchmarks []api.EvaluationBenchmarkConfig) error
 }
 
 // This interface must be decoupled from the service HTTP layer

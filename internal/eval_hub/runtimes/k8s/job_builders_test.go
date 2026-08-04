@@ -179,9 +179,12 @@ func TestJobLabelsEvalHubInstance(t *testing.T) {
 }
 
 func TestJobLabelsKueueQueueName(t *testing.T) {
-	labels := jobLabels(&jobConfig{jobID: "j", providerID: "p", benchmarkID: "b", benchmarkIndex: 0, queueKind: "kueue", queueName: "my-queue"})
+	labels := jobLabels(&jobConfig{jobID: "j", providerID: "p", benchmarkID: "b", benchmarkIndex: 0, queueKind: "kueue", queueName: "my-queue", priorityClassName: "high-priority"})
 	if labels[labelKueueQueueNameKey] != "my-queue" {
 		t.Fatalf("expected kueue queue label %q, got %q", "my-queue", labels[labelKueueQueueNameKey])
+	}
+	if labels[labelKueuePriorityClassKey] != "high-priority" {
+		t.Fatalf("expected kueue priority label %q, got %q", "high-priority", labels[labelKueuePriorityClassKey])
 	}
 	noQueue := jobLabels(&jobConfig{jobID: "j", providerID: "p", benchmarkID: "b", benchmarkIndex: 0})
 	if _, ok := noQueue[labelKueueQueueNameKey]; ok {

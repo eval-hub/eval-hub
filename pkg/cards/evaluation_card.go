@@ -10,7 +10,7 @@ const (
 // EvaluationCard is the top-level evaluation card document.
 //
 // Differences from api.EvaluationJobResource:
-//   - Adds card_version and schema_version; no api.Resource (id, tenant, owner), top-level status, or job config fields (name, description, tags, experiment, custom, exports, queue).
+//   - Adds card_version and schema_version; no api.Resource (id, tenant, owner), top-level status, or job config fields (name, description, tags, experiment, custom, exports).
 //   - Splits content into metadata, context, and results instead of resource + status + EvaluationJobConfig.
 //   - Overall job status is nested under results.status instead of a top-level status field.
 type EvaluationCard struct {
@@ -37,7 +37,7 @@ type EvaluationCardMetadata struct {
 // For direct benchmark jobs, benchmarks are taken from job.Benchmarks.
 //
 // Differences from api.EvaluationJobConfig:
-//   - Contains only model, collection_id, and benchmarks; omits name, description, tags, pass_criteria, experiment, custom, exports, and queue.
+//   - Contains only model, collection_id, and benchmarks; omits name, description, tags, pass_criteria, experiment, custom, and exports.
 //   - collection_id is a flat string field; api uses a nested api.CollectionRef (id plus optional benchmark overrides).
 type EvaluationCardContext struct {
 	Model        CardModelRef          `json:"model"`

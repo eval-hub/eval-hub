@@ -21,8 +21,9 @@ var (
 		"resource_id": "required,min=1,max=36",
 	}
 
-	// RFC 1123 DNS label: lowercase alphanumeric, internal hyphens, no leading/trailing hyphen.
-	rfc1123DNSLabelRegex = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+	// RFC 1123 DNS label: lowercase alphanumeric, internal hyphens, no leading/trailing
+	// hyphen, max 63 characters (1 + up to 61 middle + 1, or a single alphanumeric).
+	rfc1123DNSLabelRegex = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$`)
 )
 
 func NewValidator() (*validator.Validate, error) {
@@ -60,6 +61,8 @@ func registerCustomValidators(instance *validator.Validate) error {
 	instance.RegisterStructValidation(evaluationJobConfigBenchmarksMin, api.EvaluationJobConfig{})
 	// Exactly one of s3 or pvc must be set in TestDataRef.
 	instance.RegisterStructValidation(validateTestDataRefMutualExclusion, api.TestDataRef{})
+	// hardware_profile_name is mutually exclusive with inline queue/cpu/memory/gpu.
+	instance.RegisterStructValidation(validateBenchmarkHardwareConfigExclusive, api.BenchmarkHardwareConfig{})
 	return nil
 }
 
@@ -113,6 +116,27 @@ func validateTestDataRefMutualExclusion(sl validator.StructLevel) {
 	}
 	if ref.S3 == nil && ref.PVC == nil {
 		sl.ReportError(ref.S3, "s3", "s3", "test_data_ref_required", "one of s3 or pvc must be set")
+	}
+}
+
+// validateBenchmarkHardwareConfigExclusive rejects combining a hardware profile name
+// with inline queue/cpu/memory/gpu overrides.
+func validateBenchmarkHardwareConfigExclusive(sl validator.StructLevel) {
+	hw, ok := sl.Current().Interface().(api.BenchmarkHardwareConfig)
+	if !ok {
+		return
+	}
+	if strings.TrimSpace(hw.HardwareProfileName) == "" {
+		return
+	}
+	if hw.HasDirectFields() {
+		sl.ReportError(
+			hw.HardwareProfileName,
+			"hardware_profile_name",
+			"HardwareProfileName",
+			"hardware_config_exclusive",
+			"hardware_profile_name cannot be combined with queue, cpu, memory, or gpu",
+		)
 	}
 }
 

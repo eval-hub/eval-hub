@@ -4,7 +4,11 @@
   "title": "EvaluationJobConfig",
   "description": "Evaluation job request body (benchmarks variant). Matches pkg/api.EvaluationJobConfig and docs OpenAPI EvaluationJobConfigBenchmarks.",
   "type": "object",
-  "required": ["name", "model", "benchmarks"],
+  "required": [
+    "name",
+    "model",
+    "benchmarks"
+  ],
   "additionalProperties": false,
   "properties": {
     "name": {
@@ -47,9 +51,6 @@
     "exports": {
       "$ref": "#/$defs/EvaluationExports"
     },
-    "queue": {
-      "$ref": "#/$defs/QueueConfig"
-    },
     "custom": {
       "type": "object",
       "additionalProperties": true
@@ -58,7 +59,10 @@
   "$defs": {
     "ModelRef": {
       "type": "object",
-      "required": ["url", "name"],
+      "required": [
+        "url",
+        "name"
+      ],
       "additionalProperties": false,
       "properties": {
         "url": {
@@ -84,7 +88,9 @@
     },
     "ModelAuth": {
       "type": "object",
-      "required": ["secret_ref"],
+      "required": [
+        "secret_ref"
+      ],
       "additionalProperties": false,
       "properties": {
         "secret_ref": {
@@ -96,7 +102,10 @@
     },
     "EvaluationBenchmarkConfig": {
       "type": "object",
-      "required": ["id", "provider_id"],
+      "required": [
+        "id",
+        "provider_id"
+      ],
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -132,7 +141,9 @@
     },
     "PrimaryScore": {
       "type": "object",
-      "required": ["metric"],
+      "required": [
+        "metric"
+      ],
       "additionalProperties": false,
       "properties": {
         "metric": {
@@ -146,7 +157,9 @@
     },
     "PassCriteria": {
       "type": "object",
-      "required": ["threshold"],
+      "required": [
+        "threshold"
+      ],
       "additionalProperties": false,
       "properties": {
         "threshold": {
@@ -157,7 +170,9 @@
     },
     "TestDataRef": {
       "type": "object",
-      "required": ["s3"],
+      "required": [
+        "s3"
+      ],
       "additionalProperties": false,
       "properties": {
         "s3": {
@@ -168,7 +183,11 @@
     },
     "S3TestDataRef": {
       "type": "object",
-      "required": ["bucket", "key", "secret_ref"],
+      "required": [
+        "bucket",
+        "key",
+        "secret_ref"
+      ],
       "additionalProperties": false,
       "properties": {
         "bucket": {
@@ -212,7 +231,10 @@
     },
     "ExperimentTag": {
       "type": "object",
-      "required": ["key", "value"],
+      "required": [
+        "key",
+        "value"
+      ],
       "additionalProperties": false,
       "properties": {
         "key": {
@@ -239,12 +261,16 @@
     },
     "QueueConfig": {
       "type": "object",
-      "required": ["name"],
+      "required": [
+        "name"
+      ],
       "additionalProperties": false,
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["kueue"]
+          "enum": [
+            "kueue"
+          ]
         },
         "name": {
           "type": "string",
@@ -258,7 +284,9 @@
   "examples": [
     {
       "name": "test-evaluation-job",
-      "tags": ["environment"],
+      "tags": [
+        "environment"
+      ],
       "model": {
         "name": "test",
         "url": "http://test.com"

@@ -123,18 +123,15 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 			Ref:        api.Ref{ID: "bench-1"},
 			ProviderID: "prov-a",
 			HardwareConfig: &api.BenchmarkHardwareConfig{
-				HardwareProfileRef: api.HardwareProfileRef{
-					Name:      "default-profile",
-					Namespace: "opendatahub",
-				},
+				HardwareProfileName: "default-profile",
 			},
 		}}
 		got := mergeBenchmarkParameters(benchmark, job)
 		if got.HardwareConfig == nil {
 			t.Fatal("expected hardware_config from collection override")
 		}
-		if got.HardwareConfig.HardwareProfileRef.Name != "default-profile" {
-			t.Fatalf("name = %q, want default-profile", got.HardwareConfig.HardwareProfileRef.Name)
+		if got.HardwareConfig.HardwareProfileName != "default-profile" {
+			t.Fatalf("name = %q, want default-profile", got.HardwareConfig.HardwareProfileName)
 		}
 	})
 
@@ -147,15 +144,15 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 		job := []api.EvaluationBenchmarkConfig{{
 			ProviderID: "prov-a",
 			HardwareConfig: &api.BenchmarkHardwareConfig{
-				HardwareProfileRef: api.HardwareProfileRef{Name: "shared-profile"},
+				HardwareProfileName: "shared-profile",
 			},
 		}}
 		got := mergeBenchmarkParameters(benchmark, job)
 		if got.HardwareConfig == nil {
 			t.Fatal("expected provider-level hardware_config")
 		}
-		if got.HardwareConfig.HardwareProfileRef.Name != "shared-profile" {
-			t.Fatalf("name = %q, want shared-profile", got.HardwareConfig.HardwareProfileRef.Name)
+		if got.HardwareConfig.HardwareProfileName != "shared-profile" {
+			t.Fatalf("name = %q, want shared-profile", got.HardwareConfig.HardwareProfileName)
 		}
 	})
 

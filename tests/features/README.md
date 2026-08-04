@@ -117,12 +117,12 @@ If `SERVER_URL` is set but `METRICS_URL` is not, `@metrics` scenarios are **skip
 
 ### Hardware profile tests (`@hardware_profile`)
 
-These scenarios validate that evaluation job APIs accept and persist `hardware_config.hardware_profile_ref`, and that the created Kubernetes Job adapter container receives CPU/memory from the referenced profile. They do **not** create `HardwareProfile` CRs or fetch profile specs in the test binary — the pipeline supplies the profile name and expected adapter resources via environment variables.
+These scenarios validate that evaluation job APIs accept and persist `hardware_config.hardware_profile_name`, and that the created Kubernetes Job adapter container receives CPU/memory from the referenced profile. They do **not** create `HardwareProfile` CRs or fetch profile specs in the test binary — the pipeline supplies the profile name and expected adapter resources via environment variables.
 
 **Pipeline / cluster prerequisites** (outside the test binary):
 
 1. Confirm `hardwareprofiles.infrastructure.opendatahub.io` CRD is installed (e.g. `oc get crd hardwareprofiles.infrastructure.opendatahub.io`).
-2. Ensure a `HardwareProfile` exists in the tenant namespace (`X_TENANT`).
+2. Ensure the EvalHub deployment sets `EVALHUB_HARDWARE_PROFILES_NAMESPACE` to the platform namespace that holds HardwareProfiles (typically `opendatahub` or `redhat-ods-applications`), and that a `HardwareProfile` exists there.
 3. Export its name and expected adapter resources (must match the profile's `defaultCount` / `maxCount` for CPU and memory):
 
 ```bash

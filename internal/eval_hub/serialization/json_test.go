@@ -101,3 +101,36 @@ func TestUnmarshal_TestDataRefRequiredValidationError(t *testing.T) {
 		t.Fatalf("error = %q", got)
 	}
 }
+
+func TestUnmarshal_HardwareConfigExclusiveValidationError(t *testing.T) {
+	validate := testhelpers.NewValidator(t)
+	logger := logging.FallbackLogger()
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user", "tenant")
+
+	body := []byte(`{
+		"name":"test-job",
+		"model":{"name":"m","url":"http://example.com"},
+		"benchmarks":[{
+			"id":"bench-1",
+			"provider_id":"provider-1",
+			"hardware_config":{
+				"hardware_profile_name":"my-hw-spec",
+				"cpu":{"request":"1","limit":"2"}
+			}
+		}]
+	}`)
+	cfg := &api.EvaluationJobConfig{}
+
+	err := Unmarshal(validate, ctx, body, cfg)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	var svcErr *serviceerrors.ServiceError
+	if !errors.As(err, &svcErr) {
+		t.Fatalf("expected ServiceError, got %T: %v", err, err)
+	}
+	got := svcErr.Error()
+	if !strings.Contains(got, "hardware_config: hardware_profile_name cannot be combined with queue, cpu, memory, or gpu") {
+		t.Fatalf("error = %q", got)
+	}
+}

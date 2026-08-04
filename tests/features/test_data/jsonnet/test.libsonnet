@@ -12,15 +12,6 @@ local harness = std.parseJson(std.extVar('harness'));
   value(name, default='')::
     if std.objectHas(harness, 'values') && std.objectHas(harness.values, name) then harness.values[name] else default,
 
-  // Collection reference from a saved value (e.g. collection_id); null when unset (use with mergeOptional).
-  collection(idKey='collection_id')::
-    local id = $.value(idKey);
-    if id != '' then {
-      collection: {
-        id: id,
-      },
-    },
-
   // Experiment name when MLflow is configured; empty otherwise (matches {{mlflow:...}}).
   mlflow(name)::
     if harness.mlflow_enabled then name else '',
@@ -49,6 +40,7 @@ local harness = std.parseJson(std.extVar('harness'));
     },
 
   // Evaluation/collection benchmark with disconnected-aware tokenizer and optional test_data_ref.
+  // When harness.queue_enabled is true, attaches hardware_config.queue for Kueue scheduling.
   benchmark(id, providerId, parameters)::
     local base = {
       id: id,
@@ -56,7 +48,7 @@ local harness = std.parseJson(std.extVar('harness'));
       parameters: {
         tokenizer: $.defaultTokenizer(),
       } + parameters,
-    };
+    } + $.hardwareConfigQueue();
     if harness.disconnected then base + { test_data_ref: $.testDataRef() } else base,
 
   // Benchmark that always mounts offline data from a PVC (tokenizer under /test_data).
@@ -68,6 +60,24 @@ local harness = std.parseJson(std.extVar('harness'));
         tokenizer: '/test_data/tokenizer',
       } + parameters,
       test_data_ref: $.pvcTestDataRef(),
+    } + $.hardwareConfigQueue(),
+
+  // Optional hardware_config.queue when queue is enabled for the scenario.
+  hardwareConfigQueue()::
+    if harness.queue_enabled then {
+      hardware_config: {
+        queue: {
+          kind: 'kueue',
+          name: $.env('QUEUE_NAME', '{{env:QUEUE_NAME|user-queue}}'),
+        },
+      },
+    } else {},
+
+  // Queue object for embedding under hardware_config (always present; used by @kueue payloads).
+  queueConfig()::
+    {
+      kind: 'kueue',
+      name: $.env('QUEUE_NAME', 'user-queue'),
     },
 
   // arc_easy benchmark with common FVT defaults; extra parameters override or extend.
@@ -144,7 +154,14 @@ local harness = std.parseJson(std.extVar('harness'));
       model: $.model(),
       collection: {
         id: collectionId,
-      },
+      } + if harness.queue_enabled then {
+        benchmarks: [{
+          provider_id: 'lm_evaluation_harness',
+          hardware_config: {
+            queue: $.queueConfig(),
+          },
+        }],
+      } else {},
     },
 
   // Same as oobCollectionRefJob with collection id from a saved scenario value.
@@ -208,12 +225,23 @@ local harness = std.parseJson(std.extVar('harness'));
       },
     },
 
-  // Queue block, or null when queue is not enabled (use with mergeOptional).
-  queue()::
-    if harness.queue_enabled then {
-      queue: {
-        kind: 'kueue',
-        name: $.env('QUEUE_NAME', '{{env:QUEUE_NAME|user-queue}}'),
-      },
+  // Collection reference from a saved value (e.g. collection_id); null when unset (use with mergeOptional).
+  // When queue is enabled, adds a provider-level hardware_config.queue override.
+  collection(idKey='collection_id')::
+    local id = $.value(idKey);
+    if id != '' then {
+      collection: {
+        id: id,
+      } + if harness.queue_enabled then {
+        benchmarks: [{
+          provider_id: 'lm_evaluation_harness',
+          hardware_config: {
+            queue: {
+              kind: 'kueue',
+              name: $.env('QUEUE_NAME', '{{env:QUEUE_NAME|user-queue}}'),
+            },
+          },
+        }],
+      } else {},
     },
 }
