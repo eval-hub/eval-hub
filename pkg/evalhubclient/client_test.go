@@ -279,31 +279,6 @@ func TestBackendUnreachable(t *testing.T) {
 	}
 }
 
-// ─── TLS InsecureSkipVerify ───────────────────────────────────────────────────
-
-func TestInsecureSkipVerify(t *testing.T) {
-	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(api.HealthResponse{Status: "ok"}) //nolint:errcheck
-	}))
-	t.Cleanup(srv.Close)
-
-	// Without InsecureSkipVerify the TLS server's self-signed cert will be rejected.
-	_, err := NewClient(srv.URL).WithMaxRetries(0).GetHealth()
-	if err == nil {
-		t.Fatal("expected TLS error without InsecureSkipVerify")
-	}
-
-	// With InsecureSkipVerify it should succeed.
-	got, err := NewClient(srv.URL).WithInsecureSkipVerify().GetHealth()
-	if err != nil {
-		t.Fatalf("GetHealth with InsecureSkipVerify: %v", err)
-	}
-	if got.Status != "ok" {
-		t.Errorf("Status = %q, want ok", got.Status)
-	}
-}
-
 // ─── Providers ────────────────────────────────────────────────────────────────
 
 func TestListProviders(t *testing.T) {

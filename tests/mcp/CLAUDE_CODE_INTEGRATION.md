@@ -20,7 +20,13 @@ Before starting integration verification, ensure:
    export EVALHUB_TENANT="<your-tenant>"
    ```
 
-   For dev/self-signed TLS environments, you may also need the `--insecure` flag on the binary.
+   For a backend that uses a private or cluster CA (self-signed or OpenShift service CA), also set:
+
+   ```bash
+   export EVALHUB_CA_CERT_PATH="/path/to/ca-bundle.pem"
+   ```
+
+   TLS verification is always enabled; use a CA bundle instead of disabling verification.
 
 ---
 
@@ -165,11 +171,7 @@ evalhub-mcp --transport http --host localhost --port 3001
 
 **Expected**: Server starts and logs indicate it is listening on `http://localhost:3001`.
 
-If using a dev environment with self-signed certs to the EvalHub backend:
-
-```bash
-evalhub-mcp --transport http --host localhost --port 3001 --insecure
-```
+If the EvalHub backend uses a private CA, set `EVALHUB_CA_CERT_PATH` (or `ca_cert_path` in the config file) before starting the server.
 
 ### Step 8 — Register the MCP Server in Claude Code (HTTP)
 

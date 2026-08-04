@@ -62,10 +62,9 @@ func TestNewEvalHubClientNilWhenNoBaseURL(t *testing.T) {
 func TestNewEvalHubClientCreated(t *testing.T) {
 	t.Parallel()
 	cfg := &config.Config{
-		BaseURL:  "http://localhost:8080",
-		Token:    "test-token",
-		Tenant:   "test-tenant",
-		Insecure: true,
+		BaseURL: "http://localhost:8080",
+		Token:   "test-token",
+		Tenant:  "test-tenant",
 	}
 	client := NewEvalHubClient(cfg, discardLogger)
 	if client == nil {

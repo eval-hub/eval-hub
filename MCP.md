@@ -68,6 +68,8 @@ export EVALHUB_TOKEN="<your-token>"
 export EVALHUB_TENANT="<your-tenant>"
 ```
 
+For APIs that present a private or cluster CA (for example OpenShift service CA), set `ca_cert_path` / `EVALHUB_CA_CERT_PATH` to a PEM bundle. TLS certificate verification is always enabled; there is no skip-verify option.
+
 For stdio transport (Cursor, VS Code, Claude Code), pass these in the MCP client's `env` block rather than in HTTP headers.
 
 ### Configuration reference
@@ -77,14 +79,14 @@ YAML keys and environment variables (env overrides YAML):
 | Setting | YAML key | Environment variable |
 |---------|----------|----------------------|
 | Auth mode | `auth_type` | `EVALHUB_AUTH_TYPE` |
-| Skip TLS verification (eval-hub API) | `insecure` | `EVALHUB_INSECURE` |
 | Eval-hub API URL | `base_url` | `EVALHUB_BASE_URL` |
 | Eval-hub token | `token` | `EVALHUB_TOKEN` |
 | Eval-hub tenant | `tenant` | `EVALHUB_TENANT` |
+| Custom CA for eval-hub API TLS | `ca_cert_path` | `EVALHUB_CA_CERT_PATH` |
 | Transport | `transport` | `EVALHUB_TRANSPORT` |
 | HTTP host / port | `host`, `port` | `EVALHUB_HOST`, `EVALHUB_PORT` |
 
-CLI flags override YAML and environment variables when set: `--auth-type`, `--transport`, `--host`, `--port`, `--insecure`, `--tls-cert`, `--tls-key`.
+CLI flags override YAML and environment variables when set: `--auth-type`, `--transport`, `--host`, `--port`, `--tls-cert`, `--tls-key`.
 
 Load a config file with `--config /path/to/config.yaml` or `~/.evalhub/config.yaml`.
 

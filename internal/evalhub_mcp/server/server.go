@@ -87,9 +87,6 @@ func NewEvalHubClient(cfg *config.Config, logger *slog.Logger) *evalhubclient.Cl
 	if cfg.Tenant != "" {
 		client = client.WithTenant(cfg.Tenant)
 	}
-	if cfg.Insecure {
-		client = client.WithInsecureSkipVerify()
-	}
 	if cfg.CACertPath != "" {
 		pemData, err := os.ReadFile(cfg.CACertPath)
 		if err != nil {
@@ -103,7 +100,7 @@ func NewEvalHubClient(cfg *config.Config, logger *slog.Logger) *evalhubclient.Cl
 			}
 		}
 	}
-	logger.Info("EvalHub client created", "baseURL", cfg.BaseURL, "tenant", cfg.Tenant, "insecure", cfg.Insecure, "caCertPath", cfg.CACertPath)
+	logger.Info("EvalHub client created", "baseURL", cfg.BaseURL, "tenant", cfg.Tenant, "caCertPath", cfg.CACertPath)
 	return client
 }
 
