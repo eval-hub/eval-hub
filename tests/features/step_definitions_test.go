@@ -199,6 +199,9 @@ func getMLflowHTTPClient() *http.Client {
 func mlflowBaseURL() string {
 	baseURL := os.Getenv("MLFLOW_URL")
 	if baseURL == "" {
+		if strings.TrimSpace(os.Getenv("SERVER_URL")) != "" {
+			return ""
+		}
 		baseURL = "https://mlflow.redhat-ods-applications.svc.cluster.local:8443"
 	}
 	return strings.TrimRight(baseURL, "/")
@@ -1655,6 +1658,25 @@ func (tc *scenarioConfig) requireMetricsURLForRemoteServer(ctx context.Context, 
 	return ctx, godog.ErrSkip
 }
 
+func (tc *scenarioConfig) requireMLflowURLForRemoteServer(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
+	if !scenarioHasTag(sc, "mlflow") {
+		return ctx, nil
+	}
+
+	if strings.TrimSpace(os.Getenv("SERVER_URL")) == "" {
+		return ctx, nil
+	}
+
+	if strings.TrimSpace(os.Getenv("MLFLOW_URL")) != "" {
+		return ctx, nil
+	}
+
+	tc.logDebug(
+		"Skipping scenario: MLFLOW_URL is required when SERVER_URL is set (cluster-internal MLflow DNS is not resolvable from external test agents)\n",
+	)
+	return ctx, godog.ErrSkip
+}
+
 func (tc *scenarioConfig) saveScenarioName(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
 	tc.scenarioName = sc.Name
 	tc.jsonnetQueueEnabled = nil
@@ -1926,6 +1948,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 
 	ctx.Before(tc.saveScenarioName)
 	ctx.Before(tc.requireMetricsURLForRemoteServer)
+	ctx.Before(tc.requireMLflowURLForRemoteServer)
 	ctx.After(tc.assetCleanup)
 
 	ctx.Step(`^the service is running$`, tc.theServiceIsRunning)
