@@ -85,7 +85,7 @@ When running in local server mode, the tests will:
 | `@gpu` | GPU resource management scenarios in `gpu_resources.feature`; requires a cluster with GPU test setup (see `GPU_TESTING.md`) |
 | `@kueue` | Scenarios that require Kueue queue integration (`evaluation_jobs.feature`, `gpu_resources.feature`) |
 | `@negative` | Used to mark this as a negative test |
-| `@mlflow` | Tests that only work when running with a configured mlflow service |
+| `@mlflow` | Tests that only work when running with a configured mlflow service (`MLFLOW_TRACKING_URI`); includes API assertions and FVT steps that call the MLflow API. |
 | `@slow` | Tests that take more than the normal timeout (currently 1 hour) |
 | `@ignore` | Can be used to ignore a test |
 | `@connected` | Used by the Jenkins jobs and set when running on a connected cluster |
