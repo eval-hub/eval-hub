@@ -51,7 +51,7 @@ func BuildJobSpec(
 		ProviderID:     providerID,
 		BenchmarkID:    benchmarkConfig.ID,
 		BenchmarkIndex: benchmarkIndex,
-		Model:          evaluation.Model,
+		Model:          *evaluation.Model,
 		NumExamples:    numExamples,
 		Parameters:     benchmarkParams,
 		CallbackURL:    callbackURL,

@@ -87,7 +87,7 @@ func testUpdateBenchmarkStatus_RejectsTerminalDowngrade(t *testing.T, driver str
 	jobID := common.GUID()
 	now := time.Now()
 	config := &api.EvaluationJobConfig{
-		Model: api.ModelRef{URL: "http://test.com", Name: "test"},
+		Model: &api.ModelRef{URL: "http://test.com", Name: "test"},
 		Benchmarks: []api.EvaluationBenchmarkConfig{
 			{Ref: api.Ref{ID: "b1"}, ProviderID: "prov1"},
 			{Ref: api.Ref{ID: "b2"}, ProviderID: "prov2"},
@@ -156,7 +156,7 @@ func testUpdateEvaluationJob_ConcurrentBenchmarkCompletions(t *testing.T, driver
 	jobID := common.GUID()
 	now := time.Now()
 	config := &api.EvaluationJobConfig{
-		Model: api.ModelRef{URL: "http://test.com", Name: "test"},
+		Model: &api.ModelRef{URL: "http://test.com", Name: "test"},
 		Benchmarks: []api.EvaluationBenchmarkConfig{
 			{Ref: api.Ref{ID: "toxigen"}, ProviderID: "garak"},
 			{Ref: api.Ref{ID: "truthfulqa_mc1"}, ProviderID: "garak"},
@@ -297,7 +297,7 @@ func testGetEvaluationJobs_TenantFilter(t *testing.T, driver string, databaseNam
 				EvaluationJobState: api.EvaluationJobState{State: api.OverallStatePending},
 			},
 			EvaluationJobConfig: api.EvaluationJobConfig{
-				Model:      api.ModelRef{URL: "http://model", Name: "m"},
+				Model:      &api.ModelRef{URL: "http://model", Name: "m"},
 				Benchmarks: []api.EvaluationBenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
 			},
 		}
@@ -375,7 +375,7 @@ func testUpdateEvaluationJob_PreservesProviderID(t *testing.T, driver string, da
 	// Create job without initializing benchmark statuses
 	// (simulating old behavior before initialization was added)
 	config := &api.EvaluationJobConfig{
-		Model: api.ModelRef{
+		Model: &api.ModelRef{
 			URL:  "http://test-model:8000",
 			Name: "test-model",
 		},
@@ -516,7 +516,7 @@ func testUpdateEvaluationJob_PersistsPhase(t *testing.T, driver string, database
 			},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{URL: "http://test-model:8000", Name: "test-model"},
+			Model: &api.ModelRef{URL: "http://test-model:8000", Name: "test-model"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{Ref: api.Ref{ID: "arc_easy"}, ProviderID: "lm_evaluation_harness"},
 			},
@@ -603,7 +603,7 @@ func testUpdateEvaluationJob_PersistsAdditionalInfo(t *testing.T, driver string,
 			},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{URL: "http://test-model:8000", Name: "test-model"},
+			Model: &api.ModelRef{URL: "http://test-model:8000", Name: "test-model"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{Ref: api.Ref{ID: "arc_easy"}, ProviderID: "lm_evaluation_harness"},
 			},
@@ -694,7 +694,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 
 	t.Run("CreateEvaluationJob creates a new evaluation job", func(t *testing.T) {
 		config := &api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://test.com",
 				Name: "test",
 			},
@@ -915,7 +915,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 				},
 			},
 			EvaluationJobConfig: api.EvaluationJobConfig{
-				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
+				Model:      &api.ModelRef{URL: "http://test.com", Name: "test"},
 				Benchmarks: []api.EvaluationBenchmarkConfig{benchmarkConfig},
 			},
 		}
@@ -979,7 +979,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 				},
 			},
 			EvaluationJobConfig: api.EvaluationJobConfig{
-				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
+				Model:      &api.ModelRef{URL: "http://test.com", Name: "test"},
 				Benchmarks: []api.EvaluationBenchmarkConfig{benchmarkConfig},
 			},
 		}
@@ -1042,7 +1042,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 				},
 			},
 			EvaluationJobConfig: api.EvaluationJobConfig{
-				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
+				Model:      &api.ModelRef{URL: "http://test.com", Name: "test"},
 				Benchmarks: []api.EvaluationBenchmarkConfig{benchmarkConfig},
 			},
 		}
@@ -1103,7 +1103,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 				},
 			},
 			EvaluationJobConfig: api.EvaluationJobConfig{
-				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
+				Model:      &api.ModelRef{URL: "http://test.com", Name: "test"},
 				Benchmarks: []api.EvaluationBenchmarkConfig{benchmarkConfig},
 			},
 		}
@@ -1166,7 +1166,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 				},
 			},
 			EvaluationJobConfig: api.EvaluationJobConfig{
-				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
+				Model:      &api.ModelRef{URL: "http://test.com", Name: "test"},
 				Benchmarks: []api.EvaluationBenchmarkConfig{benchmarkConfig},
 			},
 		}
@@ -1212,7 +1212,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 				},
 			},
 			EvaluationJobConfig: api.EvaluationJobConfig{
-				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
+				Model:      &api.ModelRef{URL: "http://test.com", Name: "test"},
 				Benchmarks: []api.EvaluationBenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
 			},
 		}
@@ -1255,7 +1255,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 				},
 			},
 			EvaluationJobConfig: api.EvaluationJobConfig{
-				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
+				Model:      &api.ModelRef{URL: "http://test.com", Name: "test"},
 				Benchmarks: []api.EvaluationBenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
 			},
 		}
@@ -1304,7 +1304,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 				},
 			},
 			EvaluationJobConfig: api.EvaluationJobConfig{
-				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
+				Model:      &api.ModelRef{URL: "http://test.com", Name: "test"},
 				Benchmarks: []api.EvaluationBenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
 			},
 		}
@@ -1347,7 +1347,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 				},
 			},
 			EvaluationJobConfig: api.EvaluationJobConfig{
-				Model:      api.ModelRef{URL: "http://test.com", Name: "test"},
+				Model:      &api.ModelRef{URL: "http://test.com", Name: "test"},
 				Benchmarks: []api.EvaluationBenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
 			},
 		}
@@ -1376,7 +1376,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 		for _, terminalState := range terminalStates {
 			jobID := common.GUID()
 			config := &api.EvaluationJobConfig{
-				Model: api.ModelRef{URL: "http://test.com", Name: "test"},
+				Model: &api.ModelRef{URL: "http://test.com", Name: "test"},
 				Benchmarks: []api.EvaluationBenchmarkConfig{
 					{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"},
 				},
@@ -1473,7 +1473,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 	t.Run("UpdateEvaluationJobStatus allows non-terminal transition and preserves Results/Benchmarks", func(t *testing.T) {
 		jobID := common.GUID()
 		config := &api.EvaluationJobConfig{
-			Model: api.ModelRef{URL: "http://test.com", Name: "test"},
+			Model: &api.ModelRef{URL: "http://test.com", Name: "test"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{Ref: api.Ref{ID: "bx"}, ProviderID: "garak"},
 			},
@@ -1591,7 +1591,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 	t.Run("CancelEvaluationJob cascades only to non-terminal benchmarks", func(t *testing.T) {
 		jobID := common.GUID()
 		config := &api.EvaluationJobConfig{
-			Model: api.ModelRef{URL: "http://test.com", Name: "test"},
+			Model: &api.ModelRef{URL: "http://test.com", Name: "test"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{Ref: api.Ref{ID: "b1"}, ProviderID: "prov1"},
 				{Ref: api.Ref{ID: "b2"}, ProviderID: "prov2"},
@@ -1760,7 +1760,7 @@ func TestGetEvaluationJobs_PassCriteria(t *testing.T) {
 
 func testGetEvaluationJobs_PassCriteria(jobThreshold *float32, collectionThreshold *float32, result float32) error {
 	config := api.EvaluationJobConfig{
-		Model: api.ModelRef{URL: "http://test.com", Name: "test"},
+		Model: &api.ModelRef{URL: "http://test.com", Name: "test"},
 		Benchmarks: []api.EvaluationBenchmarkConfig{
 			{
 				Ref:        api.Ref{ID: "b1"},

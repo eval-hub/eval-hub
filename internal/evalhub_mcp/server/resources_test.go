@@ -187,7 +187,7 @@ func testDataSource() *mockDataSource {
 				},
 				EvaluationJobConfig: api.EvaluationJobConfig{
 					Name:  "test-eval-1",
-					Model: api.ModelRef{URL: "http://model:8080", Name: "test-model"},
+					Model: &api.ModelRef{URL: "http://model:8080", Name: "test-model"},
 				},
 			},
 			{
@@ -200,7 +200,7 @@ func testDataSource() *mockDataSource {
 				},
 				EvaluationJobConfig: api.EvaluationJobConfig{
 					Name:  "test-eval-2",
-					Model: api.ModelRef{URL: "http://model:8080", Name: "test-model"},
+					Model: &api.ModelRef{URL: "http://model:8080", Name: "test-model"},
 				},
 				Results: &api.EvaluationJobResults{
 					Benchmarks: []api.BenchmarkResult{
@@ -215,7 +215,7 @@ func testDataSource() *mockDataSource {
 				},
 				EvaluationJobConfig: api.EvaluationJobConfig{
 					Name:  "test-eval-3",
-					Model: api.ModelRef{URL: "http://model:8080", Name: "test-model"},
+					Model: &api.ModelRef{URL: "http://model:8080", Name: "test-model"},
 				},
 			},
 		},

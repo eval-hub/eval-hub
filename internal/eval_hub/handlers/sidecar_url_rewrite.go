@@ -52,7 +52,7 @@ func (h *Handlers) sidecarURLTargets(job *api.EvaluationJobResource) api.Sidecar
 		EvalHub: evalHubServiceURL(tenantFromJob(job)),
 		MLFlow:  mlflowTrackingURIFromConfig(h.serviceConfig),
 	}
-	if job == nil {
+	if (job == nil) || (job.Model == nil) {
 		return targets
 	}
 	targets.Model = strings.TrimSpace(job.Model.URL)

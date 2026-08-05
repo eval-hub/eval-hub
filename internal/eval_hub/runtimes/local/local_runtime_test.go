@@ -145,7 +145,7 @@ func sampleEvaluation(providerID string) *api.EvaluationJobResource {
 			Resource: api.Resource{ID: "job-1"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model.example",
 				Name: "model-1",
 			},
