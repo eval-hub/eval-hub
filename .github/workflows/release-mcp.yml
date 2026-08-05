@@ -11,6 +11,7 @@ jobs:
   build-release:
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: write
 
     steps:
@@ -37,23 +38,81 @@ jobs:
       run: cd bin && sha256sum evalhub-mcp-* > checksums-sha256.txt
 
     # GitHub Release creation and SLSA provenance are owned by signed-release.yml.
-    # This job only uploads MCP binaries into that release (draft or published).
+    # Wait until that workflow creates the release (no fixed short deadline — keep
+    # polling while Signed release is queued or running).
     - name: Wait for GitHub Release
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         TAG: ${{ github.ref_name }}
+        SHA: ${{ github.sha }}
       run: |
         set -euo pipefail
-        for i in $(seq 1 60); do
+        attempt=0
+        while true; do
+          attempt=$((attempt + 1))
           if gh release view "${TAG}" >/dev/null 2>&1; then
             echo "Release ${TAG} is available"
             exit 0
           fi
-          echo "Waiting for release ${TAG} (attempt ${i}/60)..."
-          sleep 10
+
+          # Runs for this commit from signed-release.yml (covers queue + execution).
+          mapfile -t RUN_LINES < <(
+            gh run list --workflow=signed-release.yml --commit "${SHA}" --limit 20 \
+              --json databaseId,status,conclusion \
+              --jq '.[] | "\(.databaseId)\t\(.status)\t\(.conclusion // "")"'
+          )
+
+          active=0
+          concluded_ok=0
+          concluded_fail=0
+          for line in "${RUN_LINES[@]:-}"; do
+            [[ -z "${line}" ]] && continue
+            status="$(echo "${line}" | cut -f2)"
+            conclusion="$(echo "${line}" | cut -f3)"
+            case "${status}" in
+              queued|pending|in_progress|waiting|requested)
+                active=$((active + 1))
+                ;;
+              completed)
+                if [[ "${conclusion}" == "success" ]]; then
+                  concluded_ok=$((concluded_ok + 1))
+                else
+                  concluded_fail=$((concluded_fail + 1))
+                fi
+                ;;
+            esac
+          done
+
+          if [[ "${active}" -gt 0 ]]; then
+            echo "Waiting for Signed release workflow (active=${active}, poll=${attempt})..."
+            sleep 15
+            continue
+          fi
+
+          if [[ "${#RUN_LINES[@]}" -eq 0 ]]; then
+            if [[ "${attempt}" -ge 40 ]]; then
+              echo "::error::Signed release workflow never started for commit ${SHA}."
+              exit 1
+            fi
+            echo "Signed release workflow not listed yet for ${SHA}; waiting (poll=${attempt})..."
+            sleep 15
+            continue
+          fi
+
+          # All known runs finished and the release still does not exist.
+          if [[ "${concluded_ok}" -eq 0 ]]; then
+            echo "::error::Signed release finished without creating GitHub Release ${TAG} (failed/cancelled runs=${concluded_fail}). MCP does not call gh release create."
+            exit 1
+          fi
+
+          # Rare race: run succeeded but release not visible yet.
+          echo "Signed release succeeded but release ${TAG} not visible yet; retrying (poll=${attempt})..."
+          sleep 15
+          if [[ "${attempt}" -ge 20 ]]; then
+            echo "::error::Signed release succeeded for ${SHA} but GitHub Release ${TAG} never became available."
+            exit 1
+          fi
         done
-        echo "::error::Timed out waiting for GitHub Release ${TAG}. The signed-release workflow must create the release; MCP does not call gh release create."
-        exit 1
 
     - name: Upload MCP assets to GitHub Release
       env:

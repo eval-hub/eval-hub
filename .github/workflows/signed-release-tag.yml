@@ -110,7 +110,28 @@ jobs:
               exit 1
             fi
             echo "Creating draft release ${TAG}"
-            gh release create "${TAG}" --draft --title "${TAG}" --generate-notes
+            # Curated placeholder body (not git log / --generate-notes). Maintainers
+            # replace via the release-notes skill when publishing human-readable notes.
+            cat > /tmp/evalhub-release-notes.md <<EOF
+            ## Summary
+
+            EvalHub **${TAG}** is published as a signed GitHub Release with project
+            source assets and SLSA provenance (\`*.intoto.jsonl\`).
+
+            ## Upgrade impact
+
+            - Prefer assets from this GitHub Release over unverified copies.
+            - Verify the source archive with \`slsa-verifier\` (see \`SECURITY.md\`).
+            - Optional MCP binaries may be attached by the Release MCP workflow; treat
+              them as the same release version as this tag.
+            - Replace this body with curated release notes (major changes and upgrade
+              impact) via the release-notes skill when ready — do not leave raw
+              \`git log\` or unedited \`--generate-notes\` output as the final notes.
+            EOF
+            # Strip leading indentation from the heredoc for readable GitHub markdown.
+            sed -i 's/^            //' /tmp/evalhub-release-notes.md
+            gh release create "${TAG}" --draft --title "${TAG}" \
+              --notes-file /tmp/evalhub-release-notes.md
           fi
 
           # Upload project-level assets (clobber if re-running). Fail clearly on immutable releases.
@@ -155,6 +176,7 @@ jobs:
     if: inputs.publish && needs.prepare.outputs.skip != 'true' && needs.provenance.result == 'success'
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: write
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -162,12 +184,87 @@ jobs:
         with:
           egress-policy: audit
 
+      - name: Wait for MCP release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # Undraft only after Release MCP has uploaded binaries (immutable-release friendly).
+          attempt=0
+          while true; do
+            attempt=$((attempt + 1))
+            ASSETS="$(gh release view "${TAG}" --json assets --jq '[.assets[].name]')"
+            mcp_bins="$(echo "${ASSETS}" | jq '[.[] | select(startswith("evalhub-mcp-"))] | length')"
+            has_checksums="$(echo "${ASSETS}" | jq 'any(.[]; . == "checksums-sha256.txt")')"
+            if [[ "${mcp_bins}" -ge 1 && "${has_checksums}" == "true" ]]; then
+              echo "MCP assets present on ${TAG} (binaries=${mcp_bins})"
+              exit 0
+            fi
+
+            mapfile -t RUN_LINES < <(
+              gh run list --workflow=release-mcp.yml --commit "${SHA}" --limit 20 \
+                --json databaseId,status,conclusion \
+                --jq '.[] | "\(.databaseId)\t\(.status)\t\(.conclusion // "")"'
+            )
+
+            active=0
+            concluded_ok=0
+            concluded_fail=0
+            for line in "${RUN_LINES[@]:-}"; do
+              [[ -z "${line}" ]] && continue
+              status="$(echo "${line}" | cut -f2)"
+              conclusion="$(echo "${line}" | cut -f3)"
+              case "${status}" in
+                queued|pending|in_progress|waiting|requested)
+                  active=$((active + 1))
+                  ;;
+                completed)
+                  if [[ "${conclusion}" == "success" ]]; then
+                    concluded_ok=$((concluded_ok + 1))
+                  else
+                    concluded_fail=$((concluded_fail + 1))
+                  fi
+                  ;;
+              esac
+            done
+
+            if [[ "${active}" -gt 0 ]]; then
+              echo "Waiting for Release MCP upload (active=${active}, poll=${attempt})..."
+              sleep 15
+              continue
+            fi
+
+            if [[ "${#RUN_LINES[@]}" -eq 0 ]]; then
+              if [[ "${attempt}" -ge 40 ]]; then
+                echo "::error::Release MCP workflow never started for commit ${SHA}."
+                exit 1
+              fi
+              echo "Release MCP workflow not listed yet for ${SHA}; waiting (poll=${attempt})..."
+              sleep 15
+              continue
+            fi
+
+            if [[ "${concluded_ok}" -eq 0 ]]; then
+              echo "::error::Release MCP finished without uploading assets to ${TAG} (failed/cancelled runs=${concluded_fail}). Leaving release as draft."
+              exit 1
+            fi
+
+            echo "Release MCP succeeded but MCP assets not visible yet; retrying (poll=${attempt})..."
+            sleep 15
+            if [[ "${attempt}" -ge 20 ]]; then
+              echo "::error::Release MCP succeeded for ${SHA} but MCP assets never appeared on ${TAG}."
+              exit 1
+            fi
+          done
+
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           set -euo pipefail
-          # Undraft after assets + provenance are attached (immutable-release friendly).
+          # Undraft after provenance and MCP binaries are attached.
           gh release edit "${TAG}" --draft=false
           echo "Published release ${TAG}"
