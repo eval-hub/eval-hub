@@ -495,6 +495,7 @@ func TestBuildJobWithGitTestDataPublicRepo(t *testing.T) {
 	initContainer := findContainer(job.Spec.Template.Spec.InitContainers, initContainerName)
 	if initContainer == nil {
 		t.Fatal("expected git init container")
+		return
 	}
 	if len(initContainer.Command) != 1 || initContainer.Command[0] != defaultTestDataInitCmd {
 		t.Fatalf("expected init container command %q, got %v", defaultTestDataInitCmd, initContainer.Command)
@@ -547,6 +548,7 @@ func TestBuildJobWithGitTestDataPublicRepo(t *testing.T) {
 	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
 	if sidecar == nil {
 		t.Fatal("expected sidecar init container")
+		return
 	}
 	for _, m := range sidecar.VolumeMounts {
 		if m.Name == testDataVolumeName {
@@ -582,6 +584,7 @@ func TestBuildJobWithGitTestDataPrivateRepo(t *testing.T) {
 	initContainer := findContainer(job.Spec.Template.Spec.InitContainers, initContainerName)
 	if initContainer == nil {
 		t.Fatal("expected git init container")
+		return
 	}
 
 	var foundSubPath bool

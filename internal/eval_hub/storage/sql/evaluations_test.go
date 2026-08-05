@@ -1821,10 +1821,10 @@ func testUpdateEvaluationJobGitSHA_DirectJob(t *testing.T, driver string, databa
 	if err != nil {
 		t.Fatalf("GetEvaluationJob: %v", err)
 	}
-	if len(got.EvaluationJobConfig.Benchmarks) == 0 {
+	if len(got.Benchmarks) == 0 {
 		t.Fatal("expected at least one benchmark")
 	}
-	b := got.EvaluationJobConfig.Benchmarks[0]
+	b := got.Benchmarks[0]
 	if b.TestDataRef == nil || b.TestDataRef.Git == nil {
 		t.Fatal("TestDataRef.Git is nil after update")
 	}
@@ -1908,10 +1908,10 @@ func testUpdateEvaluationJobGitSHA_CollectionOverride(t *testing.T, driver strin
 	if err != nil {
 		t.Fatalf("GetEvaluationJob: %v", err)
 	}
-	if got.EvaluationJobConfig.Collection == nil || len(got.EvaluationJobConfig.Collection.Benchmarks) == 0 {
+	if got.Collection == nil || len(got.Collection.Benchmarks) == 0 {
 		t.Fatal("Collection.Benchmarks is empty after update")
 	}
-	b := got.EvaluationJobConfig.Collection.Benchmarks[0]
+	b := got.Collection.Benchmarks[0]
 	if b.TestDataRef == nil || b.TestDataRef.Git == nil {
 		t.Fatal("Collection.Benchmarks[0].TestDataRef.Git is nil after update")
 	}
