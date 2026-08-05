@@ -65,6 +65,39 @@ func TestApplyAuthHeader(t *testing.T) {
 	})
 }
 
+func TestGetExperimentsURL(t *testing.T) {
+	t.Parallel()
+
+	t.Run("uses base URL by default", func(t *testing.T) {
+		t.Parallel()
+		c := NewClient("http://localhost:5000")
+		want := "http://localhost:5000/api/2.0/mlflow/experiments"
+		if got := c.GetExperimentsURL(); got != want {
+			t.Fatalf("GetExperimentsURL() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("uses display base URL when set", func(t *testing.T) {
+		t.Parallel()
+		c := NewClient("http://internal.svc:8443/mlflow").
+			WithDisplayBaseURL("https://external-route.apps.example.com/mlflow")
+		want := "https://external-route.apps.example.com/mlflow/api/2.0/mlflow/experiments"
+		if got := c.GetExperimentsURL(); got != want {
+			t.Fatalf("GetExperimentsURL() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("display base URL trailing slash stripped", func(t *testing.T) {
+		t.Parallel()
+		c := NewClient("http://internal.svc:8443").
+			WithDisplayBaseURL("https://external-route.apps.example.com/")
+		want := "https://external-route.apps.example.com/api/2.0/mlflow/experiments"
+		if got := c.GetExperimentsURL(); got != want {
+			t.Fatalf("GetExperimentsURL() = %q, want %q", got, want)
+		}
+	})
+}
+
 func TestCreateExperiment(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

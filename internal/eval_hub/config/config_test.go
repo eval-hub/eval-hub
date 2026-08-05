@@ -173,6 +173,24 @@ func TestRequiresIdentityHeaders(t *testing.T) {
 	})
 }
 
+func TestMLFlowConfig_ConnectionURI(t *testing.T) {
+	t.Run("returns TrackingURI when InternalURI empty", func(t *testing.T) {
+		c := &config.MLFlowConfig{TrackingURI: "https://external-route.apps.example.com/mlflow"}
+		if got := c.ConnectionURI(); got != "https://external-route.apps.example.com/mlflow" {
+			t.Errorf("ConnectionURI() = %q, want tracking URI", got)
+		}
+	})
+	t.Run("returns InternalURI when set", func(t *testing.T) {
+		c := &config.MLFlowConfig{
+			TrackingURI: "https://external-route.apps.example.com/mlflow",
+			InternalURI: "https://mlflow.ns.svc:8443/mlflow",
+		}
+		if got := c.ConnectionURI(); got != "https://mlflow.ns.svc:8443/mlflow" {
+			t.Errorf("ConnectionURI() = %q, want internal URI", got)
+		}
+	})
+}
+
 func TestServiceConfig_TLS(t *testing.T) {
 	t.Run("TLSEnabled false when incomplete", func(t *testing.T) {
 		cases := []*config.ServiceConfig{
