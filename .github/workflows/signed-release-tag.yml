@@ -1,0 +1,173 @@
+# Reusable workflow: create/update one GitHub Release with project-level assets
+# and SLSA provenance (*.intoto.jsonl). Called by signed-release.yml.
+name: Signed release (single tag)
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag (e.g. v1.0.0)
+        required: true
+        type: string
+      publish:
+        description: Undraft the release after provenance is attached
+        required: false
+        type: boolean
+        default: false
+      create_if_missing:
+        description: Create a draft release if the tag has no GitHub Release yet
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      digests: ${{ steps.hash.outputs.digests }}
+      skip: ${{ steps.check.outputs.skip }}
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Normalize tag
+        id: meta
+        env:
+          RAW_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          TAG="${RAW_TAG#refs/tags/}"
+          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-].+)?$ ]]; then
+            echo "Invalid tag: ${TAG}"
+            exit 1
+          fi
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.meta.outputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check existing provenance
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "skip=false" >> "${GITHUB_OUTPUT}"
+            echo "Release ${TAG} does not exist yet"
+            exit 0
+          fi
+          if gh release view "${TAG}" --json assets --jq '.assets[].name' | grep -E '\.intoto\.jsonl$' >/dev/null; then
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+            echo "Release ${TAG} already has *.intoto.jsonl; skipping"
+          else
+            echo "skip=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Build project release assets
+        if: steps.check.outputs.skip != 'true'
+        id: assets
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          ARCHIVE="eval-hub-${TAG}.tar.gz"
+          git archive --format=tar.gz --prefix="eval-hub-${TAG}/" -o "dist/${ARCHIVE}" "${TAG}"
+          (
+            cd dist
+            sha256sum "${ARCHIVE}" > SHA256SUMS
+          )
+          echo "archive=${ARCHIVE}" >> "${GITHUB_OUTPUT}"
+
+      - name: Ensure GitHub Release and upload assets
+        if: steps.check.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          ARCHIVE: ${{ steps.assets.outputs.archive }}
+          CREATE_IF_MISSING: ${{ inputs.create_if_missing }}
+        run: |
+          set -euo pipefail
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} exists; uploading project assets"
+          else
+            if [[ "${CREATE_IF_MISSING}" != "true" ]]; then
+              echo "Release ${TAG} does not exist and create_if_missing is false"
+              exit 1
+            fi
+            echo "Creating draft release ${TAG}"
+            gh release create "${TAG}" --draft --title "${TAG}" --generate-notes
+          fi
+
+          # Upload project-level assets (clobber if re-running). Fail clearly on immutable releases.
+          if ! gh release upload "${TAG}" "dist/${ARCHIVE}" "dist/SHA256SUMS" --clobber; then
+            echo "::error::Failed to upload assets to ${TAG}. If immutable releases are enabled, published releases cannot gain new assets; only new draft→publish releases can be signed."
+            exit 1
+          fi
+
+      - name: Compute subject digests
+        if: steps.check.outputs.skip != 'true'
+        id: hash
+        env:
+          ARCHIVE: ${{ steps.assets.outputs.archive }}
+        run: |
+          set -euo pipefail
+          # Subjects: project archive + SHA256SUMS (filenames only, as attached to the release)
+          (
+            cd dist
+            sha256sum "${ARCHIVE}" SHA256SUMS
+          ) | tee digests.txt
+          echo "digests=$(base64 -w0 digests.txt)" >> "${GITHUB_OUTPUT}"
+
+  provenance:
+    needs: prepare
+    if: needs.prepare.outputs.skip != 'true'
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects: ${{ needs.prepare.outputs.digests }}
+      upload-assets: true
+      upload-tag-name: ${{ needs.prepare.outputs.tag }}
+      # Keep draft releases as drafts while provenance uploads (new-tag / publish path).
+      # For backfill of already-published releases, pass false (do not convert to draft).
+      # SLSA generator must be referenced by tag (vX.Y.Z), not a commit SHA.
+      draft-release: ${{ inputs.publish && 'true' || 'false' }}
+
+  publish:
+    needs: [prepare, provenance]
+    if: inputs.publish && needs.prepare.outputs.skip != 'true' && needs.provenance.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Undraft after assets + provenance are attached (immutable-release friendly).
+          gh release edit "${TAG}" --draft=false
+          echo "Published release ${TAG}"

@@ -36,11 +36,32 @@ jobs:
     - name: Generate checksums
       run: cd bin && sha256sum evalhub-mcp-* > checksums-sha256.txt
 
-    - name: Create GitHub Release
+    # GitHub Release creation and SLSA provenance are owned by signed-release.yml.
+    # This job only uploads MCP binaries into that release (draft or published).
+    - name: Wait for GitHub Release
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAG: ${{ github.ref_name }}
       run: |
-        gh release create "${{ github.ref_name }}" \
-          --generate-notes \
+        set -euo pipefail
+        for i in $(seq 1 60); do
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} is available"
+            exit 0
+          fi
+          echo "Waiting for release ${TAG} (attempt ${i}/60)..."
+          sleep 10
+        done
+        echo "::error::Timed out waiting for GitHub Release ${TAG}. The signed-release workflow must create the release; MCP does not call gh release create."
+        exit 1
+
+    - name: Upload MCP assets to GitHub Release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAG: ${{ github.ref_name }}
+      run: |
+        set -euo pipefail
+        gh release upload "${TAG}" \
           bin/evalhub-mcp-* \
-          bin/checksums-sha256.txt
+          bin/checksums-sha256.txt \
+          --clobber
