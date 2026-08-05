@@ -1265,7 +1265,7 @@ Feature: Evaluation Jobs
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_pvc_and_s3.json"
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
-    And the response should contain the value "s3 and pvc are mutually exclusive" at path "$.message"
+    And the response should contain the value "exactly one of s3, pvc, or git must be set" at path "$.message"
 
   # Requires trustyai-service-operator eval-job failure reconciler (unschedulable PVC → FAILED after ~2m grace).
   # Default missing claim: evalhub-offline-test-data-does-not-exist (override with TEST_DATA_PVC_MISSING_CLAIM_NAME).
@@ -1292,7 +1292,7 @@ Feature: Evaluation Jobs
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
   
-  @mlflow
+  @mlflow 
   Scenario: Card generated for completed job with benchmarks
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_benchmark.json"
@@ -1310,7 +1310,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain the value "{{env:MODEL_NAME|test}}" at path "$.context.model.name"
     And the MLflow artifact should contain "arc_easy"
   
-  @mlflow
+  @mlflow 
   Scenario: Card generated for completed job with collection
     Given the service is running
     And there is a system collection with id "toxicity-and-ethical-principles"
@@ -1326,7 +1326,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain "context.collection_id"
     And the MLflow artifact should contain the value "toxicity-and-ethical-principles" at path "$.context.collection_id"
 
-  @mlflow
+  @mlflow 
   Scenario: Card generated for job with multiple benchmarks
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_multi_benchmark.json"
@@ -1341,7 +1341,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain "results.benchmarks[0]"
     And the MLflow artifact should contain "results.benchmarks[1]"
 
-  @mlflow
+  @mlflow 
   Scenario: Card generated for completed benchmark job
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_arc_easy.json"
@@ -1354,7 +1354,7 @@ Feature: Evaluation Jobs
     When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
 
-  @mlflow
+  @mlflow 
   Scenario: No card for pending job
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_arc_easy.json"
@@ -1364,7 +1364,7 @@ Feature: Evaluation Jobs
     And the "resource.mlflow_experiment_id" field in the response should be saved as "value:mlflow_experiment_id"
     And the MLflow artifact "evaluation-card.json" should not exist for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
 
-  @mlflow
+  @mlflow 
   Scenario: Multiple jobs in same experiment have different cards
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_shared_exp_job1.json"
@@ -1575,7 +1575,7 @@ Feature: Evaluation Jobs
     Then the MLflow artifact should exist
     And the MLflow artifact should contain the value "completed" at path "$.results.benchmarks[0].status"
 
-  @mlflow
+  @mlflow 
   Scenario: Card error_message structure is valid for failed benchmark
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_invalid_model.json"
@@ -1593,7 +1593,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain "results.benchmarks[0].error_message.message_code"
     And the MLflow artifact should contain "results.benchmarks[0].error_message.message_origin"
   
-  @mlflow
+  @mlflow 
   Scenario: EvalCard artifact is valid parseable JSON for failed job
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_invalid_model_json.json"

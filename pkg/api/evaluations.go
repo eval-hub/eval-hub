@@ -152,11 +152,25 @@ type PVCTestDataRef struct {
 	SubPath   string `json:"sub_path,omitempty" mapstructure:"sub_path,omitempty"`
 }
 
+// GitTestDataRef represents a git repository source for test data.
+// The repository is cloned and checked out at Ref into /test_data before the adapter runs.
+// Only HTTP(S) URLs are supported; SSH URLs (git@host:...) are rejected by validation.
+// Private, loopback, link-local, and cluster-local hosts are rejected (SSRF protection).
+type GitTestDataRef struct {
+	URL       string `json:"url" mapstructure:"url" validate:"required,http_url,git_clone_url"`
+	Ref       string `json:"ref" mapstructure:"ref" validate:"required"`
+	SubPath   string `json:"sub_path,omitempty" mapstructure:"sub_path,omitempty"`
+	SecretRef string `json:"secret_ref,omitempty" mapstructure:"secret_ref,omitempty" validate:"omitempty,rfc1123_dns_label"`
+	// CommitSHA is populated by eval-hub after the init container resolves the ref; not accepted on input.
+	CommitSHA string `json:"commit_sha,omitempty" mapstructure:"commit_sha,omitempty"`
+}
+
 // TestDataRef represents external test data sources.
-// Exactly one of s3 or pvc must be set.
+// Exactly one of s3, pvc, or git must be set.
 type TestDataRef struct {
 	S3  *S3TestDataRef  `mapstructure:"s3" json:"s3,omitempty"`
 	PVC *PVCTestDataRef `mapstructure:"pvc" json:"pvc,omitempty"`
+	Git *GitTestDataRef `mapstructure:"git" json:"git,omitempty"`
 }
 
 // HardwareResourceQuantity holds optional Kubernetes CPU or memory request/limit quantities.
@@ -261,6 +275,9 @@ type BenchmarkStatusEvent struct {
 	CompletedAt    DateTime       `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
 	MLFlowRunID    string         `json:"mlflow_run_id,omitempty"`
 	LogsPath       string         `json:"logs_path,omitempty"`
+	// GitCommitSHA is retried on each status event until loaded from .git-metadata, then
+	// injected on every subsequent event. The server skips the update if already persisted.
+	GitCommitSHA string `json:"git_commit_sha,omitempty"`
 }
 
 type EvaluationJobState struct {
@@ -268,6 +285,9 @@ type EvaluationJobState struct {
 	Message *MessageInfo `json:"message" validate:"required"`
 }
 
+// StatusEvent is the body of POST /api/v1/evaluations/jobs/{id}/events.
+// BenchmarkStatusEvent must be set. For git-source jobs the sidecar injects
+// GitCommitSHA into every BenchmarkStatusEvent; adapters must not set it.
 type StatusEvent struct {
 	BenchmarkStatusEvent *BenchmarkStatusEvent `json:"benchmark_status_event" validate:"required"`
 }

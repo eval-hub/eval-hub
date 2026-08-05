@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path"
@@ -16,19 +17,30 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+
+	"github.com/eval-hub/eval-hub/internal/runtimeenv"
 )
 
 const (
+	// S3 env vars
 	envBucket         = "TEST_DATA_S3_BUCKET"
 	envKey            = "TEST_DATA_S3_KEY"
-	envTimeout        = "TEST_DATA_S3_TIMEOUT"
-	secretDir         = "/var/run/secrets/test-data" // #nosec G101 -- K8s secret mount path
-	destDir           = "/test_data"
+	envS3Timeout      = "TEST_DATA_S3_TIMEOUT"
 	regionOptionalKey = "AWS_DEFAULT_REGION"
 	endpointKey       = "AWS_S3_ENDPOINT"
 	accessKeyIDKey    = "AWS_ACCESS_KEY_ID"
 	secretAccessKey   = "AWS_SECRET_ACCESS_KEY" // #nosec G101 -- env var name, not a credential value
-	defaultTimeout    = 10 * time.Minute
+
+	// Git env vars
+	envGitURL     = "TEST_DATA_GIT_URL"
+	envGitRef     = "TEST_DATA_GIT_REF"
+	envGitSubPath = "TEST_DATA_GIT_SUBPATH"
+	envGitTimeout = "TEST_DATA_GIT_TIMEOUT"
+
+	// Shared
+	secretDir      = "/var/run/secrets/test-data" // #nosec G101 -- K8s secret mount path
+	destDir        = runtimeenv.TestDataDir
+	defaultTimeout = 10 * time.Minute
 )
 
 func main() {
@@ -42,6 +54,14 @@ func main() {
 }
 
 func run() error {
+	if strings.TrimSpace(os.Getenv(envGitURL)) != "" {
+		return runGit()
+	}
+	return runS3()
+}
+
+// runS3 downloads test data from S3 into destDir.
+func runS3() error {
 	bucket := strings.TrimSpace(os.Getenv(envBucket))
 	keyPrefix := strings.TrimSpace(os.Getenv(envKey))
 	if bucket == "" || keyPrefix == "" {
@@ -50,10 +70,10 @@ func run() error {
 
 	keyPrefix = strings.TrimPrefix(keyPrefix, "/")
 	timeout := defaultTimeout
-	if raw := strings.TrimSpace(os.Getenv(envTimeout)); raw != "" {
+	if raw := strings.TrimSpace(os.Getenv(envS3Timeout)); raw != "" {
 		parsed, err := time.ParseDuration(raw)
 		if err != nil {
-			return fmt.Errorf("invalid %s: %w", envTimeout, err)
+			return fmt.Errorf("invalid %s: %w", envS3Timeout, err)
 		}
 		timeout = parsed
 	}
@@ -138,6 +158,54 @@ func run() error {
 	}
 	slog.Info("download complete", "files", fileCount, "mb", totalBytes/(1024*1024))
 	return nil
+}
+
+// copyDir copies the contents of src into dst, skipping the .git directory.
+func copyDir(src, dst string) error {
+	return filepath.WalkDir(src, func(p string, d os.DirEntry, err error) error { // #nosec G304 -- walks clone tree; IsLocal rejects escapes
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, p)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		// Guard against path traversal in malicious repo trees (e.g. symlinks or
+		// relative paths that resolve outside src). filepath.Rel always returns a
+		// clean path, but IsLocal catches any ".." segments that escape the root.
+		if !filepath.IsLocal(rel) {
+			return fmt.Errorf("repository contains path %q that escapes the clone root; refusing to copy", rel)
+		}
+		if d.IsDir() && d.Name() == ".git" {
+			return filepath.SkipDir
+		}
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o750)
+		}
+		return copyFile(p, target)
+	})
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src) // #nosec G304 -- src is a path within the cloned temp dir
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+	// 0600: init and adapter share the same pod UID under OpenShift SCC assignment.
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) // #nosec G304 -- dst under staged /test_data
+	if err != nil {
+		return err
+	}
+	if _, err = io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 func loadAWSConfig(ctx context.Context, region, accessKey, secretKey string) (aws.Config, error) {

@@ -57,9 +57,12 @@ func registerCustomValidators(instance *validator.Validate) error {
 	if err := instance.RegisterValidation("rfc1123_dns_label", validateRFC1123DNSLabel); err != nil {
 		return fmt.Errorf("register validator failed for rfc1123_dns_label: %w", err)
 	}
+	if err := instance.RegisterValidation("git_clone_url", validateGitCloneURL); err != nil {
+		return fmt.Errorf("register validator failed for git_clone_url: %w", err)
+	}
 	// Benchmarks min=1 only when Collection is not set (required_without handles presence; this enforces length)
 	instance.RegisterStructValidation(evaluationJobConfigBenchmarksMin, api.EvaluationJobConfig{})
-	// Exactly one of s3 or pvc must be set in TestDataRef.
+	// Exactly one of s3, pvc, or git must be set in TestDataRef.
 	instance.RegisterStructValidation(validateTestDataRefMutualExclusion, api.TestDataRef{})
 	// hardware_profile_name is mutually exclusive with inline queue/cpu/memory/gpu.
 	instance.RegisterStructValidation(validateBenchmarkHardwareConfigExclusive, api.BenchmarkHardwareConfig{})
@@ -68,6 +71,10 @@ func registerCustomValidators(instance *validator.Validate) error {
 
 func validateRFC1123DNSLabel(fl validator.FieldLevel) bool {
 	return rfc1123DNSLabelRegex.MatchString(fl.Field().String())
+}
+
+func validateGitCloneURL(fl validator.FieldLevel) bool {
+	return api.ValidateGitCloneURL(fl.Field().String()) == nil
 }
 
 // ValidateCollectionOverrides returns an error if any override references a
@@ -105,17 +112,27 @@ func ValidateCollectionOverrides(overrides []api.EvaluationBenchmarkConfig, coll
 	return nil
 }
 
-// validateTestDataRefMutualExclusion ensures exactly one of s3 or pvc is set.
+// validateTestDataRefMutualExclusion ensures exactly one of s3, pvc, or git is set.
 func validateTestDataRefMutualExclusion(sl validator.StructLevel) {
 	ref, ok := sl.Current().Interface().(api.TestDataRef)
 	if !ok {
 		return
 	}
-	if ref.S3 != nil && ref.PVC != nil {
-		sl.ReportError(ref.PVC, "pvc", "pvc", "test_data_ref_exclusive", "s3 and pvc are mutually exclusive")
+	set := 0
+	if ref.S3 != nil {
+		set++
 	}
-	if ref.S3 == nil && ref.PVC == nil {
-		sl.ReportError(ref.S3, "s3", "s3", "test_data_ref_required", "one of s3 or pvc must be set")
+	if ref.PVC != nil {
+		set++
+	}
+	if ref.Git != nil {
+		set++
+	}
+	if set > 1 {
+		sl.ReportError(ref, "test_data_ref", "test_data_ref", "test_data_ref_exclusive", "exactly one of s3, pvc, or git must be set")
+	}
+	if set == 0 {
+		sl.ReportError(ref, "test_data_ref", "test_data_ref", "test_data_ref_required", "one of s3, pvc, or git must be set")
 	}
 }
 

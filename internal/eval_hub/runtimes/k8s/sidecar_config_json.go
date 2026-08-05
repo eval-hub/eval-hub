@@ -33,6 +33,9 @@ func sidecarForJobPod(cfg *config.Config, jc *jobConfig) (*config.SidecarConfig,
 				export.EvalHub.InsecureSkipVerify = false
 			}
 		}
+		if hasGitTestData(jc) {
+			export.InitContainer = &config.InitContainerConfig{IsGitJob: true}
+		}
 		if jc.mlflowTrackingURI != "" {
 			if export.MLFlow == nil {
 				export.MLFlow = &config.SidecarMLFlowConfig{}
@@ -101,6 +104,10 @@ func cloneSidecarConfig(sc *config.SidecarConfig) *config.SidecarConfig {
 	if sc.Model != nil {
 		m := *sc.Model
 		out.Model = &m
+	}
+	if sc.InitContainer != nil {
+		ic := *sc.InitContainer
+		out.InitContainer = &ic
 	}
 	if sc.OTEL != nil {
 		o := *sc.OTEL

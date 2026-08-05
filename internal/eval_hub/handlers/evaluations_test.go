@@ -44,9 +44,10 @@ type fakeStorage struct {
 	deleteID          string
 	providerConfigs   map[string]api.ProviderResource
 	collectionConfigs map[string]api.CollectionResource
+	updateGitSHAFn    func(id string, benchmarkIndex int, sha string) error
 }
 
-func (f *fakeStorage) WithLogger(_ *slog.Logger) abstractions.Storage {
+func (f *fakeStorage) clone() *fakeStorage {
 	return &fakeStorage{
 		Storage:           f.Storage,
 		lastStatusID:      f.lastStatusID,
@@ -55,41 +56,14 @@ func (f *fakeStorage) WithLogger(_ *slog.Logger) abstractions.Storage {
 		deleteID:          f.deleteID,
 		providerConfigs:   f.providerConfigs,
 		collectionConfigs: f.collectionConfigs,
+		updateGitSHAFn:    f.updateGitSHAFn,
 	}
 }
-func (f *fakeStorage) WithContext(_ context.Context) abstractions.Storage {
-	return &fakeStorage{
-		Storage:           f.Storage,
-		lastStatusID:      f.lastStatusID,
-		lastStatus:        f.lastStatus,
-		job:               f.job,
-		deleteID:          f.deleteID,
-		providerConfigs:   f.providerConfigs,
-		collectionConfigs: f.collectionConfigs,
-	}
-}
-func (f *fakeStorage) WithTenant(_ api.Tenant) abstractions.Storage {
-	return &fakeStorage{
-		Storage:           f.Storage,
-		lastStatusID:      f.lastStatusID,
-		lastStatus:        f.lastStatus,
-		job:               f.job,
-		deleteID:          f.deleteID,
-		providerConfigs:   f.providerConfigs,
-		collectionConfigs: f.collectionConfigs,
-	}
-}
-func (f *fakeStorage) WithOwner(_ api.User) abstractions.Storage {
-	return &fakeStorage{
-		Storage:           f.Storage,
-		lastStatusID:      f.lastStatusID,
-		lastStatus:        f.lastStatus,
-		job:               f.job,
-		deleteID:          f.deleteID,
-		providerConfigs:   f.providerConfigs,
-		collectionConfigs: f.collectionConfigs,
-	}
-}
+
+func (f *fakeStorage) WithLogger(_ *slog.Logger) abstractions.Storage     { return f.clone() }
+func (f *fakeStorage) WithContext(_ context.Context) abstractions.Storage { return f.clone() }
+func (f *fakeStorage) WithTenant(_ api.Tenant) abstractions.Storage       { return f.clone() }
+func (f *fakeStorage) WithOwner(_ api.User) abstractions.Storage          { return f.clone() }
 
 func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobResource) error {
 	return nil
@@ -110,6 +84,13 @@ func (f *fakeStorage) GetEvaluationJobs(_ *abstractions.QueryFilter) (*abstracti
 }
 
 func (f *fakeStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
+	return nil
+}
+
+func (f *fakeStorage) UpdateEvaluationJobGitSHA(id string, benchmarkIndex int, sha string) error {
+	if f.updateGitSHAFn != nil {
+		return f.updateGitSHAFn(id, benchmarkIndex, sha)
+	}
 	return nil
 }
 
@@ -217,6 +198,10 @@ func (s *updateEvaluationStorage) WithOwner(_ api.User) abstractions.Storage    
 func (s *updateEvaluationStorage) UpdateEvaluationJob(_ string, status *api.StatusEvent) error {
 	s.lastStatusEvent = status
 	return s.updateErr
+}
+
+func (s *updateEvaluationStorage) UpdateEvaluationJobGitSHA(_ string, _ int, _ string) error {
+	return nil
 }
 
 func TestResolveProvider_FromMap(t *testing.T) {
@@ -344,6 +329,63 @@ func TestApplyHardwareConfigQueueDefaults(t *testing.T) {
 		handlers.ApplyHardwareConfigQueueDefaults(cfg)
 		if cfg.Queue.Kind != "kueue" || cfg.Queue.Name != "legacy" {
 			t.Fatalf("got kind %q name %q", cfg.Queue.Kind, cfg.Queue.Name)
+		}
+	})
+}
+
+func TestValidateReadOnlyGitFields(t *testing.T) {
+	t.Parallel()
+	t.Run("nil config", func(t *testing.T) {
+		t.Parallel()
+		if err := handlers.ValidateReadOnlyGitFields(nil); err != nil {
+			t.Errorf("unexpected error for nil config: %v", err)
+		}
+	})
+	t.Run("no git ref — no error", func(t *testing.T) {
+		t.Parallel()
+		cfg := &api.EvaluationJobConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{TestDataRef: &api.TestDataRef{S3: &api.S3TestDataRef{Bucket: "b", Key: "k", SecretRef: "s"}}},
+			},
+		}
+		if err := handlers.ValidateReadOnlyGitFields(cfg); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	t.Run("git ref without commit_sha — no error", func(t *testing.T) {
+		t.Parallel()
+		cfg := &api.EvaluationJobConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{TestDataRef: &api.TestDataRef{Git: &api.GitTestDataRef{URL: "https://github.com/org/repo.git", Ref: "main"}}},
+			},
+		}
+		if err := handlers.ValidateReadOnlyGitFields(cfg); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	t.Run("commit_sha set on benchmark — returns error", func(t *testing.T) {
+		t.Parallel()
+		cfg := &api.EvaluationJobConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{TestDataRef: &api.TestDataRef{Git: &api.GitTestDataRef{URL: "https://github.com/org/repo.git", Ref: "main", CommitSHA: "abc123"}}},
+			},
+		}
+		if err := handlers.ValidateReadOnlyGitFields(cfg); err == nil {
+			t.Error("expected error when commit_sha is set on benchmark")
+		}
+	})
+	t.Run("commit_sha set on collection override — returns error", func(t *testing.T) {
+		t.Parallel()
+		cfg := &api.EvaluationJobConfig{
+			Collection: &api.CollectionRef{
+				ID: "coll-1",
+				Benchmarks: []api.EvaluationBenchmarkConfig{
+					{TestDataRef: &api.TestDataRef{Git: &api.GitTestDataRef{URL: "https://github.com/org/repo.git", Ref: "main", CommitSHA: "smuggled"}}},
+				},
+			},
+		}
+		if err := handlers.ValidateReadOnlyGitFields(cfg); err == nil {
+			t.Error("expected error when commit_sha is set on collection override benchmark")
 		}
 	})
 }
@@ -998,6 +1040,34 @@ func TestHandleUpdateEvaluationRewritesSidecarURLsInMessages(t *testing.T) {
 	wantWarn := "MLflow warn for url: https://mlflow.example.com/api/2.0/mlflow/runs/create"
 	if event.WarningMessage == nil || event.WarningMessage.Message != wantWarn {
 		t.Fatalf("warning message = %#v, want %q", event.WarningMessage, wantWarn)
+	}
+}
+
+func TestHandleUpdateEvaluation_MissingBenchmarkStatusEventReturns400(t *testing.T) {
+	t.Parallel()
+	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{}}
+	validate := testhelpers.NewValidator(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+
+	// StatusEvent with no benchmark_status_event must be rejected by the required validator.
+	body := `{}`
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs/job-empty/events"),
+		body:        []byte(body),
+	}
+	reqWithPath := &updateEvaluationRequest{
+		bodyRequest: req,
+		pathValues:  map[string]string{"job_id": "job-empty"},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-empty", logger, "test-user", "test-tenant")
+
+	h.HandleUpdateEvaluation(ctx, reqWithPath, resp)
+
+	if recorder.Code != 400 {
+		t.Fatalf("expected 400, got %d: %s", recorder.Code, recorder.Body.String())
 	}
 }
 

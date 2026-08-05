@@ -46,3 +46,8 @@ properties:
   logs_path:
     type: string
     description: Path to logs
+  git_commit_sha:
+    type: string
+    description: >
+      Resolved git commit SHA injected by the sidecar into the status event for
+      git-source jobs. Eval Hub persists it after benchmark validation. Read-only.

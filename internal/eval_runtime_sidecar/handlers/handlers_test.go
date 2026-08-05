@@ -1,13 +1,19 @@
 package handlers
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 func TestNew(t *testing.T) {
@@ -208,6 +214,324 @@ func TestHandlers_HandleProxyCall(t *testing.T) {
 			t.Errorf("body = %q, want unknown proxy call (OCI not configured, no repository to match)", body)
 		}
 	})
+}
+
+func TestReadGitMetadata(t *testing.T) {
+	t.Run("returns SHA from file", func(t *testing.T) {
+		f, err := os.CreateTemp(t.TempDir(), "git-metadata-*")
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = f.WriteString("abc123def456\n")
+		_ = f.Close()
+		got, err := readGitMetadata(f.Name())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "abc123def456" {
+			t.Errorf("got %q, want %q", got, "abc123def456")
+		}
+	})
+	t.Run("returns error when file absent", func(t *testing.T) {
+		_, err := readGitMetadata(filepath.Join(t.TempDir(), "no-such-file"))
+		if err == nil {
+			t.Fatal("expected error for missing file")
+		}
+	})
+}
+
+func TestMaybeInjectGitSHA_InjectsBenchmarkStatusEvent(t *testing.T) {
+	// Write .git-metadata to a temp path; override the constant via the handler directly.
+	dir := t.TempDir()
+	metaPath := filepath.Join(dir, ".git-metadata")
+	if err := os.WriteFile(metaPath, []byte("cafebabe\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	h := &Handlers{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		serviceConfig: &config.Config{
+			Sidecar: &config.SidecarConfig{
+				InitContainer: &config.InitContainerConfig{IsGitJob: true},
+			},
+		},
+		gitSHA: "cafebabe",
+	}
+
+	evt := api.StatusEvent{
+		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			ProviderID: "p1", ID: "b1", Status: "running",
+		},
+	}
+	body, _ := json.Marshal(evt)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs/job-1/events", bytes.NewReader(body))
+
+	newReq := h.maybeInjectGitSHA(req)
+
+	rawOut, _ := io.ReadAll(newReq.Body)
+	var out api.StatusEvent
+	if err := json.Unmarshal(rawOut, &out); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	if out.BenchmarkStatusEvent == nil {
+		t.Fatal("BenchmarkStatusEvent is nil")
+	}
+	if out.BenchmarkStatusEvent.GitCommitSHA != "cafebabe" {
+		t.Errorf("GitCommitSHA = %q, want %q", out.BenchmarkStatusEvent.GitCommitSHA, "cafebabe")
+	}
+}
+
+func TestMaybeInjectGitSHA_SkipsNonBenchmarkBody(t *testing.T) {
+	h := &Handlers{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		gitSHA: "cafebabe",
+	}
+
+	// Body parses as a StatusEvent but has no BenchmarkStatusEvent — injection must be skipped.
+	body := []byte(`{"other_field":"value"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs/job-1/events", bytes.NewReader(body))
+
+	newReq := h.maybeInjectGitSHA(req)
+
+	rawOut, _ := io.ReadAll(newReq.Body)
+	if !bytes.Equal(rawOut, body) {
+		t.Errorf("body changed for non-benchmark body: got %s", rawOut)
+	}
+}
+
+func TestMaybeInjectGitSHA_NoopWhenGitSHAEmpty(t *testing.T) {
+	// When gitSHA is empty and metadata is missing, a body without git_commit_sha is unchanged.
+	h := &Handlers{
+		logger:          slog.New(slog.NewTextHandler(io.Discard, nil)),
+		gitSHA:          "",
+		gitMetadataPath: filepath.Join(t.TempDir(), "missing-git-metadata"),
+	}
+
+	body := []byte(`{"benchmark_status_event":{"provider_id":"p","id":"b","status":"running"}}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs/job-1/events", bytes.NewReader(body))
+
+	newReq := h.maybeInjectGitSHA(req)
+
+	rawOut, _ := io.ReadAll(newReq.Body)
+	if !bytes.Equal(rawOut, body) {
+		t.Errorf("body changed when gitSHA empty: got %s", rawOut)
+	}
+}
+
+func TestMaybeInjectGitSHA_RetriesWhenMetadataAppears(t *testing.T) {
+	dir := t.TempDir()
+	metaPath := filepath.Join(dir, ".git-metadata")
+
+	h := &Handlers{
+		logger:          slog.New(slog.NewTextHandler(io.Discard, nil)),
+		gitSHA:          "",
+		gitMetadataPath: metaPath,
+	}
+
+	evt := api.StatusEvent{
+		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			ProviderID: "p1", ID: "b1", Status: "running",
+		},
+	}
+	body, _ := json.Marshal(evt)
+
+	// First call: file missing — no injection.
+	req1 := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs/job-1/events", bytes.NewReader(body))
+	out1, _ := io.ReadAll(h.maybeInjectGitSHA(req1).Body)
+	var ev1 api.StatusEvent
+	_ = json.Unmarshal(out1, &ev1)
+	if ev1.BenchmarkStatusEvent != nil && ev1.BenchmarkStatusEvent.GitCommitSHA != "" {
+		t.Fatalf("first call: GitCommitSHA = %q, want empty", ev1.BenchmarkStatusEvent.GitCommitSHA)
+	}
+	if h.gitSHA != "" {
+		t.Fatalf("first call: gitSHA = %q, want empty", h.gitSHA)
+	}
+
+	// File appears — second call should load and inject.
+	if err := os.WriteFile(metaPath, []byte("retrydeadbeef\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	req2 := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs/job-1/events", bytes.NewReader(body))
+	out2, _ := io.ReadAll(h.maybeInjectGitSHA(req2).Body)
+	var ev2 api.StatusEvent
+	if err := json.Unmarshal(out2, &ev2); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if ev2.BenchmarkStatusEvent == nil || ev2.BenchmarkStatusEvent.GitCommitSHA != "retrydeadbeef" {
+		got := ""
+		if ev2.BenchmarkStatusEvent != nil {
+			got = ev2.BenchmarkStatusEvent.GitCommitSHA
+		}
+		t.Errorf("second call: GitCommitSHA = %q, want %q", got, "retrydeadbeef")
+	}
+	if h.gitSHA != "retrydeadbeef" {
+		t.Errorf("gitSHA = %q, want %q", h.gitSHA, "retrydeadbeef")
+	}
+}
+
+func TestMaybeInjectGitSHA_StripsClientSHAWhenStillEmpty(t *testing.T) {
+	h := &Handlers{
+		logger:          slog.New(slog.NewTextHandler(io.Discard, nil)),
+		gitSHA:          "",
+		gitMetadataPath: filepath.Join(t.TempDir(), "missing-git-metadata"),
+	}
+
+	evt := api.StatusEvent{
+		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			ProviderID: "p1", ID: "b1", Status: "running", GitCommitSHA: "forged",
+		},
+	}
+	body, _ := json.Marshal(evt)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs/job-1/events", bytes.NewReader(body))
+
+	out, _ := io.ReadAll(h.maybeInjectGitSHA(req).Body)
+	var got api.StatusEvent
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got.BenchmarkStatusEvent == nil {
+		t.Fatal("BenchmarkStatusEvent is nil")
+	}
+	if got.BenchmarkStatusEvent.GitCommitSHA != "" {
+		t.Errorf("GitCommitSHA = %q, want stripped empty", got.BenchmarkStatusEvent.GitCommitSHA)
+	}
+}
+
+func TestMaybeInjectGitSHA_InjectsWithPreSeededSHA(t *testing.T) {
+	// Verifies injection when gitSHA is pre-populated (simulating the startup read).
+	// readGitMetadata is unit-tested separately; here we confirm maybeInjectGitSHA
+	// injects correctly given a SHA already set on the Handlers struct.
+	h := &Handlers{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		serviceConfig: &config.Config{
+			Sidecar: &config.SidecarConfig{
+				InitContainer: &config.InitContainerConfig{IsGitJob: true},
+			},
+		},
+		gitSHA: "aabbccdd",
+	}
+
+	evt := api.StatusEvent{
+		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			ProviderID: "p1", ID: "b1", Status: "running",
+		},
+	}
+	body, _ := json.Marshal(evt)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs/job-once/events", bytes.NewReader(body))
+
+	newReq := h.maybeInjectGitSHA(req)
+
+	rawOut, _ := io.ReadAll(newReq.Body)
+	var out api.StatusEvent
+	if err := json.Unmarshal(rawOut, &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.BenchmarkStatusEvent == nil || out.BenchmarkStatusEvent.GitCommitSHA != "aabbccdd" {
+		got := ""
+		if out.BenchmarkStatusEvent != nil {
+			got = out.BenchmarkStatusEvent.GitCommitSHA
+		}
+		t.Errorf("GitCommitSHA = %q, want %q", got, "aabbccdd")
+	}
+	// gitSHA must remain set for subsequent injections.
+	if h.gitSHA != "aabbccdd" {
+		t.Errorf("gitSHA should remain set after injection, got %q", h.gitSHA)
+	}
+}
+
+func TestMaybeInjectGitSHA_InjectsOnEveryCall(t *testing.T) {
+	// gitSHA is set at startup and injected on every BenchmarkStatusEvent so the server
+	// can idempotently persist it (server skips if already set).
+	h := &Handlers{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		gitSHA: "firstsha",
+	}
+
+	body := func() []byte {
+		b, _ := json.Marshal(api.StatusEvent{
+			BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+				ProviderID: "p", ID: "b", Status: "running",
+			},
+		})
+		return b
+	}
+
+	for i, label := range []string{"first", "second", "third"} {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs/job-z/events", bytes.NewReader(body()))
+		out, _ := io.ReadAll(h.maybeInjectGitSHA(req).Body)
+		var ev api.StatusEvent
+		_ = json.Unmarshal(out, &ev)
+		if ev.BenchmarkStatusEvent == nil || ev.BenchmarkStatusEvent.GitCommitSHA != "firstsha" {
+			t.Errorf("call %d (%s): GitCommitSHA = %q, want %q", i+1, label, ev.BenchmarkStatusEvent.GitCommitSHA, "firstsha")
+		}
+		if h.gitSHA != "firstsha" {
+			t.Errorf("call %d (%s): gitSHA must remain set, got %q", i+1, label, h.gitSHA)
+		}
+	}
+}
+
+func TestIsEventsPath(t *testing.T) {
+	tests := []struct {
+		uri  string
+		want bool
+	}{
+		{"/api/v1/evaluations/jobs/abc-123/events", true},
+		{"/api/v1/evaluations/jobs/abc-123/events?foo=bar", true},
+		{"/api/v1/evaluations/jobs/abc-123", false},
+		{"/api/v1/evaluations/jobs", false},
+		{"/api/v1/evaluations/", false},
+		{"/api/v1/evaluations/jobs/abc-123/sub/events", false}, // extra path segment must not match
+	}
+	for _, tt := range tests {
+		if got := isEventsPath(tt.uri); got != tt.want {
+			t.Errorf("isEventsPath(%q) = %v, want %v", tt.uri, got, tt.want)
+		}
+	}
+}
+
+func TestHandleProxyCall_GitSHAInjectedOnEventsPost(t *testing.T) {
+	// End-to-end: sidecar has GitTestData + pre-populated gitSHA; a POST to /events
+	// should arrive at the upstream with GitCommitSHA set in the body.
+	var receivedSHA string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var evt api.StatusEvent
+		if json.Unmarshal(body, &evt) == nil && evt.BenchmarkStatusEvent != nil {
+			receivedSHA = evt.BenchmarkStatusEvent.GitCommitSHA
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer upstream.Close()
+
+	cfg := &config.Config{
+		Sidecar: &config.SidecarConfig{
+			EvalHub: &config.EvalHubClientConfig{
+				BaseURL:            upstream.URL,
+				InsecureSkipVerify: true,
+			},
+			InitContainer: &config.InitContainerConfig{IsGitJob: true},
+		},
+	}
+	h, err := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+	// Pre-populate gitSHA to avoid filesystem dependency on .git-metadata path.
+	h.gitSHA = "deadbeef"
+
+	evt := api.StatusEvent{
+		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			ProviderID: "p1", ID: "b1", Status: "running",
+		},
+	}
+	body, _ := json.Marshal(evt)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/evaluations/jobs/job-7/events", bytes.NewReader(body))
+	rw := httptest.NewRecorder()
+	h.HandleProxyCall(rw, req)
+
+	if receivedSHA != "deadbeef" {
+		t.Errorf("upstream received SHA %q, want %q", receivedSHA, "deadbeef")
+	}
 }
 
 func TestOciRouteMatch(t *testing.T) {

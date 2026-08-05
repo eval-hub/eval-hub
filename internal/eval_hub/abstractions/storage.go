@@ -74,6 +74,9 @@ type Storage interface {
 	UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error
 	// UpdateEvaluationJobStatus is used to update the status of an evaluation job and is internal - do we need it here?
 	UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error
+	// UpdateEvaluationJobGitSHA records the resolved commit SHA on the benchmark at benchmarkIndex.
+	// It is idempotent: if the SHA is already set the call is a no-op.
+	UpdateEvaluationJobGitSHA(id string, benchmarkIndex int, sha string) error
 
 	// Collection operations
 	CreateCollection(collection *api.CollectionResource) error

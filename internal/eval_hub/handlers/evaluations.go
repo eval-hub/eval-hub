@@ -152,6 +152,30 @@ func benchmarksWithHardwareConfigFallback(benchmarks []api.EvaluationBenchmarkCo
 	return out
 }
 
+// ValidateReadOnlyGitFields returns an error if commit_sha is set on any benchmark in the request.
+// commit_sha is server-populated after the init container resolves the ref and must not be accepted on create.
+func ValidateReadOnlyGitFields(cfg *api.EvaluationJobConfig) error {
+	if cfg == nil {
+		return nil
+	}
+	checkBenchmarks := func(benchmarks []api.EvaluationBenchmarkConfig) error {
+		for i := range benchmarks {
+			b := &benchmarks[i]
+			if b.TestDataRef != nil && b.TestDataRef.Git != nil && b.TestDataRef.Git.CommitSHA != "" {
+				return serviceerrors.NewServiceError(messages.GitCommitSHAReadOnly)
+			}
+		}
+		return nil
+	}
+	if err := checkBenchmarks(cfg.Benchmarks); err != nil {
+		return err
+	}
+	if cfg.Collection != nil {
+		return checkBenchmarks(cfg.Collection.Benchmarks)
+	}
+	return nil
+}
+
 // HandleCreateEvaluation handles POST /api/v1/evaluations/jobs
 func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
 	storage := h.getStorage(ctx)
@@ -188,6 +212,9 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 			jobForResolve := &api.EvaluationJobResource{EvaluationJobConfig: *evaluation}
 			benchmarks, err = GetJobBenchmarks(jobForResolve, collection)
 			if err != nil {
+				return err
+			}
+			if err := ValidateReadOnlyGitFields(evaluation); err != nil {
 				return err
 			}
 			if err := h.validateBenchmarkReferences(ctx, benchmarks); err != nil {
@@ -550,10 +577,29 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 				h.rewriteSidecarURLsInBenchmarkStatus(status.BenchmarkStatusEvent, job, ctx.Logger)
 			}
 
+			// Extract and clear GitCommitSHA before passing the event to UpdateEvaluationJob.
+			// SHA persistence must happen only after validateBenchmarkExists (inside UpdateEvaluationJob)
+			// confirms the benchmark belongs to this job — otherwise a forged SHA on an event with a
+			// wrong provider_id/id would persist even though the status update is then rejected.
+			var gitSHA string
+			if status.BenchmarkStatusEvent != nil {
+				gitSHA = status.BenchmarkStatusEvent.GitCommitSHA
+				status.BenchmarkStatusEvent.GitCommitSHA = "" // metadata, not benchmark state
+			}
+
 			err = scoped.UpdateEvaluationJob(evaluationJobID, status)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
+			}
+
+			// Persist git commit SHA only after benchmark membership was validated.
+			// Best-effort: a failure is logged but does not abort; the sidecar retries on every event.
+			if gitSHA != "" {
+				ctx.Logger.Debug("Persisting git commit SHA from status event", "id", evaluationJobID, "sha", gitSHA)
+				if err := scoped.UpdateEvaluationJobGitSHA(evaluationJobID, status.BenchmarkStatusEvent.BenchmarkIndex, gitSHA); err != nil {
+					ctx.Logger.Error("Failed to persist git commit SHA", "id", evaluationJobID, "error", err)
+				}
 			}
 
 			h.onEvaluationJobUpdated(runtimeCtx, scoped, func() (*api.EvaluationJobResource, error) {

@@ -615,3 +615,114 @@ func TestPVCTestDataRef_ValidClaimNameAccepted(t *testing.T) {
 		}
 	}
 }
+
+func TestTestDataRef_GitOnlyAccepted(t *testing.T) {
+	validate := newTestValidator(t)
+	ref := api.TestDataRef{
+		Git: &api.GitTestDataRef{URL: "https://github.com/org/repo.git", Ref: "main"},
+	}
+	if err := validate.Struct(ref); err != nil {
+		t.Fatalf("expected no error for valid git-only TestDataRef, got: %v", err)
+	}
+}
+
+func TestTestDataRef_GitWithSecretRefAccepted(t *testing.T) {
+	validate := newTestValidator(t)
+	ref := api.TestDataRef{
+		Git: &api.GitTestDataRef{URL: "https://github.com/org/repo.git", Ref: "main", SecretRef: "my-secret"},
+	}
+	if err := validate.Struct(ref); err != nil {
+		t.Fatalf("expected no error for git TestDataRef with secret_ref, got: %v", err)
+	}
+}
+
+func TestTestDataRef_GitAndS3Rejected(t *testing.T) {
+	validate := newTestValidator(t)
+	ref := api.TestDataRef{
+		Git: &api.GitTestDataRef{URL: "https://github.com/org/repo.git", Ref: "main"},
+		S3:  &api.S3TestDataRef{Bucket: "b", Key: "k", SecretRef: "s"},
+	}
+	if err := validate.Struct(ref); err == nil {
+		t.Fatal("expected validation error when both git and s3 are set")
+	}
+}
+
+func TestTestDataRef_GitAndPVCRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	ref := api.TestDataRef{
+		Git: &api.GitTestDataRef{URL: "https://github.com/org/repo.git", Ref: "main"},
+		PVC: &api.PVCTestDataRef{ClaimName: "my-pvc"},
+	}
+	if err := validate.Struct(ref); err == nil {
+		t.Fatal("expected validation error when both git and pvc are set")
+	}
+}
+
+func TestGitTestDataRef_MissingURLRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	ref := api.GitTestDataRef{Ref: "main"}
+	if err := validate.Struct(ref); err == nil {
+		t.Fatal("expected validation error for missing git URL")
+	}
+}
+
+func TestGitTestDataRef_MissingRefRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	ref := api.GitTestDataRef{URL: "https://github.com/org/repo.git"}
+	if err := validate.Struct(ref); err == nil {
+		t.Fatal("expected validation error for missing git ref")
+	}
+}
+
+func TestGitTestDataRef_InvalidSecretRefRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	ref := api.GitTestDataRef{URL: "https://github.com/org/repo.git", Ref: "main", SecretRef: "Invalid_Name"}
+	if err := validate.Struct(ref); err == nil {
+		t.Fatal("expected validation error for invalid secret_ref DNS label")
+	}
+}
+
+func TestGitTestDataRef_BlockedHostsRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	cases := []string{
+		"https://127.0.0.1/repo.git",
+		"https://10.0.0.1/repo.git",
+		"https://localhost/repo.git",
+		"https://git.default.svc.cluster.local/repo.git",
+		"https://169.254.169.254/repo.git",
+	}
+	for _, u := range cases {
+		ref := api.GitTestDataRef{URL: u, Ref: "main"}
+		if err := validate.Struct(ref); err == nil {
+			t.Errorf("expected validation error for git url %q", u)
+		}
+	}
+}
+
+func TestGitTestDataRef_PublicHostAccepted(t *testing.T) {
+	validate := newTestValidator(t)
+	ref := api.GitTestDataRef{URL: "https://github.com/org/repo.git", Ref: "main"}
+	if err := validate.Struct(ref); err != nil {
+		t.Fatalf("expected no error for public git host, got: %v", err)
+	}
+}
+
+func TestStatusEvent_BenchmarkStatusEventRequired(t *testing.T) {
+	validate := newTestValidator(t)
+	ev := api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+		ProviderID: "p1",
+		ID:         "b1",
+		Status:     "running",
+	}}
+	if err := validate.Struct(ev); err != nil {
+		t.Fatalf("expected no error for valid StatusEvent, got: %v", err)
+	}
+}
+
+func TestStatusEvent_MissingBenchmarkStatusEventRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	ev := api.StatusEvent{}
+	if err := validate.Struct(ev); err == nil {
+		t.Fatal("expected validation error when BenchmarkStatusEvent is nil")
+	}
+}
