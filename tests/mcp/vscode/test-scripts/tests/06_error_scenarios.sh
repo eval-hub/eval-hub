@@ -58,8 +58,8 @@ err02() {
     exec 5>"$stdin_fifo"
     exec 6<"$stdout_fifo"
 
-    # Initialize
-    printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}\n' >&5
+    # Initialize - this is just a test so the version can be anything
+    printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.X"}}}\n' >&5
     timeout "${STDIO_TIMEOUT:-10}" head -n1 <&6 >/dev/null 2>&1 || true
     printf '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}\n' >&5 || true
 
@@ -143,8 +143,8 @@ err03() {
       return
     fi
 
-    # Initialize (should succeed even with unreachable backend)
-    printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}\n' >&5
+    # Initialize (should succeed even with unreachable backend) - this is just a test so the version can be anything
+    printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.X"}}}\n' >&5
     timeout "${STDIO_TIMEOUT:-10}" head -n1 <&6 >/dev/null 2>&1 || true
     printf '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}\n' >&5 || true
 

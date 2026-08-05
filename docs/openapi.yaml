@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Eval Hub
   description: API REST server for evaluation backend orchestration
-  version: 1.0.0
+  version: 1.0.1
   contact:
     name: API Support
   license:

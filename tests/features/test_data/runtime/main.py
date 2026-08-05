@@ -46,7 +46,7 @@ class LocalTestAdapter(FrameworkAdapter):
             completed_at=datetime.now(UTC),
             evaluation_metadata={
                 "framework": "local_test_adapter",
-                "framework_version": "1.0.0",
+                "framework_version": "1.0.X",  # this is just a test so it can be anything
                 "num_few_shot": config.parameters.get("num_few_shot"),
                 "random_seed": config.parameters.get("random_seed"),
                 "parameters": config.parameters,
