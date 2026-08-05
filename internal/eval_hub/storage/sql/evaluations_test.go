@@ -827,7 +827,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 		}
 		additionalInfo := map[string]any{
 			"runtime": "local",
-			"version": "1.0.0",
+			"version": "1.0.X", // this is just a test so it can be anything
 		}
 		now := time.Now()
 		status := &api.StatusEvent{
