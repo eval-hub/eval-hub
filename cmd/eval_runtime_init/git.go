@@ -76,7 +76,7 @@ func runGit() error {
 		if !strings.HasPrefix(srcDir, cloneDir+string(filepath.Separator)) {
 			return fmt.Errorf("sub_path escapes repository root: %q", subPath)
 		}
-		info, err := os.Stat(srcDir) // #nosec G304 -- srcDir is Join(cloneDir, subPath) and verified inside cloneDir above
+		info, err := os.Stat(srcDir) // #nosec G304,G703 -- srcDir is Join(cloneDir, subPath) and verified inside cloneDir above
 		if err != nil {
 			return fmt.Errorf("sub_path %q not found in repository: %w", subPath, err)
 		}
@@ -88,7 +88,7 @@ func runGit() error {
 	// Fail fast if the repository has submodules: go-git does not populate them,
 	// so the cloned tree would contain empty stub directories. Use sub_path to
 	// point at a subdirectory that does not require submodules.
-	if _, err := os.Stat(filepath.Join(srcDir, ".gitmodules")); err == nil { // #nosec G304 -- path under verified clone/srcDir
+	if _, err := os.Stat(filepath.Join(srcDir, ".gitmodules")); err == nil { // #nosec G304,G703 -- path under verified clone/srcDir
 		return fmt.Errorf("repository contains submodules which are not supported; use sub_path to point to a directory that does not require submodules")
 	}
 
@@ -97,7 +97,7 @@ func runGit() error {
 	}
 
 	// 0600: init and sidecar share the same pod UID (OpenShift SCC / runAsNonRoot).
-	if err := os.WriteFile(runtimeenv.GitMetadataFile, []byte(commitSHA+"\n"), 0o600); err != nil { // #nosec G304 -- fixed runtimeenv path
+	if err := os.WriteFile(runtimeenv.GitMetadataFile, []byte(commitSHA+"\n"), 0o600); err != nil { // #nosec G304,G703 -- fixed runtimeenv path
 		return fmt.Errorf("write git metadata: %w", err)
 	}
 
