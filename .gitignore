@@ -252,6 +252,10 @@ mlflow.log
 !.claude/skills/golang-version-update/
 .claude/skills/golang-version-update/*
 !.claude/skills/golang-version-update/SKILL.md
+!.claude/skills/release-notes/
+.claude/skills/release-notes/*
+!.claude/skills/release-notes/SKILL.md
+!.claude/skills/release-notes/template.md
 
 .agentready/
 
