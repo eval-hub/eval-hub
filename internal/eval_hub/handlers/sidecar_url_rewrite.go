@@ -52,10 +52,12 @@ func (h *Handlers) sidecarURLTargets(job *api.EvaluationJobResource) api.Sidecar
 		EvalHub: evalHubServiceURL(tenantFromJob(job)),
 		MLFlow:  mlflowTrackingURIFromConfig(h.serviceConfig),
 	}
-	if (job == nil) || (job.Model == nil) {
+	if job == nil {
 		return targets
 	}
-	targets.Model = strings.TrimSpace(job.Model.URL)
+	if job.Model != nil {
+		targets.Model = strings.TrimSpace(job.Model.URL)
+	}
 	if job.Exports != nil && job.Exports.OCI != nil {
 		coords := job.Exports.OCI.Coordinates
 		targets.OCIRepository = strings.TrimSpace(coords.OCIRepository)

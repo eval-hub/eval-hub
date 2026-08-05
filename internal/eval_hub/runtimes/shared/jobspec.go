@@ -12,7 +12,7 @@ type JobSpec struct {
 	ProviderID     string              `json:"provider_id"`
 	BenchmarkID    string              `json:"benchmark_id"`
 	BenchmarkIndex int                 `json:"benchmark_index"`
-	Model          api.ModelRef        `json:"model"`
+	Model          *api.ModelRef       `json:"model,omitempty"`
 	NumExamples    *int                `json:"num_examples,omitempty"`
 	Parameters     map[string]any      `json:"parameters"`
 	ExperimentName string              `json:"experiment_name,omitempty"`
@@ -51,7 +51,7 @@ func BuildJobSpec(
 		ProviderID:     providerID,
 		BenchmarkID:    benchmarkConfig.ID,
 		BenchmarkIndex: benchmarkIndex,
-		Model:          *evaluation.Model,
+		Model:          evaluation.Model,
 		NumExamples:    numExamples,
 		Parameters:     benchmarkParams,
 		CallbackURL:    callbackURL,
