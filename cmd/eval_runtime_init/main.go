@@ -162,7 +162,7 @@ func runS3() error {
 
 // copyDir copies the contents of src into dst, skipping the .git directory.
 func copyDir(src, dst string) error {
-	return filepath.WalkDir(src, func(p string, d os.DirEntry, err error) error { // #nosec G304 -- walks clone tree; IsLocal rejects escapes
+	return filepath.WalkDir(src, func(p string, d os.DirEntry, err error) error { // #nosec G304,G703 -- walks clone tree; IsLocal rejects escapes
 		if err != nil {
 			return err
 		}
