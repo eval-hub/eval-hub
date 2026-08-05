@@ -31,7 +31,8 @@ const (
 	envPrefix    = "env:"
 	regexpPrefix = "regex:"
 
-	envMetricsURL = "METRICS_URL"
+	envMetricsURL        = "METRICS_URL"
+	envMlflowTrackingURI = "MLFLOW_TRACKING_URI"
 )
 
 // modelEndpointStatus captures preflight outcome from checkModelEndpoint for steps that gate on connectivity.
@@ -176,13 +177,14 @@ func getMLflowHTTPClient() *http.Client {
 	}
 }
 
-// mlflowBaseURL returns the MLflow base URL from MLFLOW_URL env or default cluster internal URL
-func mlflowBaseURL() string {
-	baseURL := os.Getenv("MLFLOW_URL")
+// mlflowBaseURL returns the MLflow base URL from the MLFLOW_TRACKING_URI env var.
+// It fails when MLFLOW_TRACKING_URI is unset or empty after trailing-slash trimming.
+func mlflowBaseURL() (string, error) {
+	baseURL := strings.TrimRight(os.Getenv(envMlflowTrackingURI), "/")
 	if baseURL == "" {
-		baseURL = "https://mlflow.redhat-ods-applications.svc.cluster.local:8443"
+		return "", fmt.Errorf("%s environment variable is required", envMlflowTrackingURI)
 	}
-	return strings.TrimRight(baseURL, "/")
+	return baseURL, nil
 }
 
 // mlflowWorkspace resolves the MLflow workspace using X_TENANT env → X-Tenant header → "tenant" fallback
