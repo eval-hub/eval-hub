@@ -655,6 +655,7 @@ func TestBuildJobSidecarMountsTestDataVolumeForGitSource(t *testing.T) {
 	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
 	if sidecar == nil {
 		t.Fatal("expected sidecar init container")
+		return
 	}
 
 	var found bool
@@ -689,6 +690,7 @@ func TestBuildJobSidecarDoesNotMountTestDataVolumeForNonGitSource(t *testing.T) 
 	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
 	if sidecar == nil {
 		t.Fatal("expected sidecar init container")
+		return
 	}
 
 	for _, m := range sidecar.VolumeMounts {
