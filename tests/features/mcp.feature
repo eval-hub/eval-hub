@@ -693,7 +693,7 @@ Feature: MCP Tools
     Then the MCP tool call should fail
     And the MCP error should contain "resource_not_found"
 
-  @mlflow @cluster 
+  @mlflow @cluster
   Scenario: MCP can retrieve completed job that has evalcard exported
     Given the service is running
     And the model endpoint is reachable

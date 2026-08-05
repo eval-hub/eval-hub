@@ -261,11 +261,12 @@ mcp_initialize() {
     return 0
   fi
 
+  # this is just a test so the version can be anything
   local result
   result=$(mcp_request "initialize" '{
     "protocolVersion": "2024-11-05",
     "capabilities": {},
-    "clientInfo": {"name": "evalhub-test-harness", "version": "1.0.0"}
+    "clientInfo": {"name": "evalhub-test-harness", "version": "1.0.X"}
   }')
 
   if ! echo "$result" | jq -e '.result' >/dev/null 2>&1; then
