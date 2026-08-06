@@ -2,12 +2,29 @@ package k8s
 
 import (
 	"context"
+	"strings"
 	"testing"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/record"
 )
+
+func TestCloseWithNilBroadcaster(t *testing.T) {
+	h := &KubernetesHelper{}
+	if err := h.Close(); err != nil { // must not panic when broadcaster is nil
+		t.Fatalf("Close: %v", err)
+	}
+}
+
+func TestCloseShutdownsBroadcaster(t *testing.T) {
+	h := &KubernetesHelper{broadcaster: record.NewBroadcaster()}
+	if err := h.Close(); err != nil { // must not panic
+		t.Fatalf("Close: %v", err)
+	}
+}
 
 func TestCreateConfigMapRequiresNamespaceAndName(t *testing.T) {
 	helper := &KubernetesHelper{}
@@ -108,5 +125,81 @@ func TestGetPodLogsReturnsStreamContent(t *testing.T) {
 	}
 	if got != "fake logs" {
 		t.Fatalf("got %q, want fake logs", got)
+	}
+}
+
+func TestEmitEventRequiresRecorder(t *testing.T) {
+	helper := &KubernetesHelper{}
+	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "job-1", Namespace: "default"}}
+	if err := helper.EmitEvent(job, corev1.EventTypeNormal, "Reason", "msg"); err == nil {
+		t.Fatal("expected error when recorder is nil")
+	}
+}
+
+func TestEmitEventRejectsUnsupportedEventType(t *testing.T) {
+	fakeRecorder := record.NewFakeRecorder(10)
+	helper := NewKubernetesHelperWithRecorder(fake.NewSimpleClientset(), fakeRecorder)
+	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "job-1", Namespace: "default"}}
+	if err := helper.EmitEvent(job, "Unknown", "Reason", "msg"); err == nil {
+		t.Fatal("expected error for unsupported event type")
+	}
+}
+
+func TestEmitEventRequiresJob(t *testing.T) {
+	fakeRecorder := record.NewFakeRecorder(10)
+	helper := NewKubernetesHelperWithRecorder(fake.NewSimpleClientset(), fakeRecorder)
+	if err := helper.EmitEvent(nil, corev1.EventTypeNormal, "Reason", "msg"); err == nil {
+		t.Fatal("expected error when job is nil")
+	}
+}
+
+func TestEmitEventWritesToRecorder(t *testing.T) {
+	fakeRecorder := record.NewFakeRecorder(10)
+	helper := NewKubernetesHelperWithRecorder(fake.NewSimpleClientset(), fakeRecorder)
+	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "job-1", Namespace: "default"}}
+	if err := helper.EmitEvent(job, corev1.EventTypeNormal, "EvaluationStarted", "evaluation started"); err != nil {
+		t.Fatalf("EmitEvent: %v", err)
+	}
+	select {
+	case msg := <-fakeRecorder.Events:
+		if !strings.Contains(msg, "EvaluationStarted") {
+			t.Fatalf("expected EvaluationStarted in event, got: %s", msg)
+		}
+	default:
+		t.Fatal("expected an event on the recorder channel")
+	}
+}
+
+func TestPatchJobPhaseLabelRequiresNamespaceAndName(t *testing.T) {
+	helper := &KubernetesHelper{}
+	if err := helper.PatchJobPhaseLabel(context.Background(), "", "job-1", "Running"); err == nil {
+		t.Fatal("expected error for missing namespace")
+	}
+	if err := helper.PatchJobPhaseLabel(context.Background(), "default", "", "Running"); err == nil {
+		t.Fatal("expected error for missing name")
+	}
+}
+
+func TestPatchJobPhaseLabelRequiresPhase(t *testing.T) {
+	helper := &KubernetesHelper{}
+	if err := helper.PatchJobPhaseLabel(context.Background(), "default", "job-1", ""); err == nil {
+		t.Fatal("expected error for missing phase")
+	}
+}
+
+func TestPatchJobPhaseLabelUpdatesLabel(t *testing.T) {
+	clientset := fake.NewSimpleClientset(&batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{Name: "job-1", Namespace: "default"},
+	})
+	helper := NewKubernetesHelperWithClientset(clientset)
+	if err := helper.PatchJobPhaseLabel(context.Background(), "default", "job-1", "Running"); err != nil {
+		t.Fatalf("PatchJobPhaseLabel: %v", err)
+	}
+	updated, err := clientset.BatchV1().Jobs("default").Get(context.Background(), "job-1", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if got := updated.Labels["trustyai.opendatahub.io/evaluation-phase"]; got != "Running" {
+		t.Fatalf("expected label value Running, got %q", got)
 	}
 }

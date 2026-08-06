@@ -98,6 +98,7 @@ const (
 	annotationBenchmarkIDKey         = "eval-hub.github.io/benchmark_id"
 	labelKueueQueueNameKey           = "kueue.x-k8s.io/queue-name"
 	labelKueuePriorityClassKey       = "kueue.x-k8s.io/priority-class"
+	labelEvaluationPhaseKey          = "trustyai.opendatahub.io/evaluation-phase"
 )
 
 var (

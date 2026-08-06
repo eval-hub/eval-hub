@@ -1847,7 +1847,7 @@ func testUpdateEvaluationJobResolvedSHA_CollectionOverride(t *testing.T, driver 
 	}
 
 	tenant := api.Tenant("tenant-1")
-	collID := "coll-1"
+	collID := common.GUID()
 	coll := &api.CollectionResource{
 		Resource: api.Resource{
 			ID:        collID,
@@ -1934,7 +1934,7 @@ func testUpdateEvaluationJobResolvedSHA_CollectionLocal(t *testing.T, driver str
 	}
 
 	tenant := api.Tenant("tenant-1")
-	collID := "coll-local-git"
+	collID := common.GUID()
 	coll := &api.CollectionResource{
 		Resource: api.Resource{
 			ID:        collID,

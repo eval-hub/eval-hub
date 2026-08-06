@@ -81,6 +81,9 @@ func runS3() error {
 		if err != nil {
 			return fmt.Errorf("invalid %s: %w", envS3Timeout, err)
 		}
+		if parsed <= 0 {
+			return fmt.Errorf("invalid %s: must be a positive duration", envS3Timeout)
+		}
 		timeout = parsed
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)

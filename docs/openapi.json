@@ -3442,7 +3442,7 @@
               },
               "test_data_ref": {
                 "$ref": "#/components/schemas/TestDataRef",
-                "description": "Optional external test data mounted at **`/test_data`** for **Kubernetes Job** runs.\nSet **`s3`** to download objects via a pre-run init container, or **`pvc`** to mount\nan existing PersistentVolumeClaim read-only with no init container. Omit if the\nbenchmark does not need mounted files.\n"
+                "description": "Optional external test data mounted at **`/test_data`** for **Kubernetes Job** runs.\nSet **`s3`** to download objects via a pre-run init container, **`pvc`** to mount\nan existing PersistentVolumeClaim read-only with no init container, or **`git`**\nto clone a repository via a pre-run init container. Omit if the benchmark does\nnot need mounted files.\n"
               }
             }
           }
@@ -4208,7 +4208,7 @@
               },
               "test_data_ref": {
                 "$ref": "#/components/schemas/TestDataRef",
-                "description": "Optional external test data mounted at **`/test_data`** for **Kubernetes Job** runs.\nSet **`s3`** to download objects via a pre-run init container, or **`pvc`** to mount\nan existing PersistentVolumeClaim read-only with no init container. Omit if the\nbenchmark does not need mounted files.\n"
+                "description": "Optional external test data mounted at **`/test_data`** for **Kubernetes Job** runs.\nSet **`s3`** to download objects via a pre-run init container, **`pvc`** to mount\nan existing PersistentVolumeClaim read-only with no init container, or **`git`**\nto clone a repository via a pre-run init container. Omit if the benchmark does\nnot need mounted files.\n"
               }
             }
           }

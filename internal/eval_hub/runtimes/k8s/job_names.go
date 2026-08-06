@@ -61,12 +61,13 @@ func jobLabels(cfg *jobConfig) map[string]string {
 		return map[string]string{}
 	}
 	m := map[string]string{
-		labelAppKey:            labelAppValue,
-		labelComponentKey:      labelComponentValue,
-		labelJobIDKey:          sanitizeLabelValue(cfg.jobID),
-		labelProviderIDKey:     sanitizeLabelValue(cfg.providerID),
-		labelBenchmarkIDKey:    sanitizeLabelValue(cfg.benchmarkID),
-		labelBenchmarkIndexKey: sanitizeLabelValue(strconv.Itoa(cfg.benchmarkIndex)),
+		labelAppKey:             labelAppValue,
+		labelComponentKey:       labelComponentValue,
+		labelJobIDKey:           sanitizeLabelValue(cfg.jobID),
+		labelProviderIDKey:      sanitizeLabelValue(cfg.providerID),
+		labelBenchmarkIDKey:     sanitizeLabelValue(cfg.benchmarkID),
+		labelBenchmarkIndexKey:  sanitizeLabelValue(strconv.Itoa(cfg.benchmarkIndex)),
+		labelEvaluationPhaseKey: EvaluationPhasePending,
 	}
 	if cfg.evalHubInstanceName != "" && cfg.evalHubCRNamespace != "" {
 		m[labelEvalHubInstanceNameKey] = sanitizeLabelValue(cfg.evalHubInstanceName)
