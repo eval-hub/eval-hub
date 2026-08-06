@@ -35,12 +35,16 @@ func newEvaluationCardMetadata(job *api.EvaluationJobResource) EvaluationCardMet
 }
 
 func newEvaluationCardContext(job *api.EvaluationJobResource) EvaluationCardContext {
-	context := EvaluationCardContext{
-		Model: CardModelRef{
+	var model *CardModelRef
+	if job.Model != nil {
+		model = &CardModelRef{
 			URL:          job.Model.URL,
 			Name:         job.Model.Name,
 			ModelCardURL: job.Model.CardURL,
-		},
+		}
+	}
+	context := EvaluationCardContext{
+		Model: model,
 	}
 
 	if job.Collection != nil && job.Collection.ID != "" {
