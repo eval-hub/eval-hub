@@ -1787,7 +1787,7 @@ func makeGitJob(id string, gitRef string) *api.EvaluationJobResource {
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Name:  "git-job",
-			Model: api.ModelRef{URL: "http://model:8000", Name: "m"},
+			Model: &api.ModelRef{URL: "http://model:8000", Name: "m"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref:        api.Ref{ID: "bench-1"},
@@ -1879,7 +1879,7 @@ func testUpdateEvaluationJobGitSHA_CollectionOverride(t *testing.T, driver strin
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Name:  "git-collection-job",
-			Model: api.ModelRef{URL: "http://model:8000", Name: "m"},
+			Model: &api.ModelRef{URL: "http://model:8000", Name: "m"},
 			// Benchmarks is intentionally empty — this is a collection-based job.
 			Collection: &api.CollectionRef{
 				ID: collID,
@@ -1972,7 +1972,7 @@ func testUpdateEvaluationJobGitSHA_CollectionLocal(t *testing.T, driver string, 
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Name:  "git-collection-local-job",
-			Model: api.ModelRef{URL: "http://model:8000", Name: "m"},
+			Model: &api.ModelRef{URL: "http://model:8000", Name: "m"},
 			Collection: &api.CollectionRef{
 				ID: collID,
 				// No benchmark overrides — git comes only from the collection.
