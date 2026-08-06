@@ -267,11 +267,11 @@ var (
 		"hardware_profile_invalid",
 	)
 
-	// GitCommitSHAReadOnly The field 'commit_sha' is read-only and must not be set on create.
-	GitCommitSHAReadOnly = createMessage(
+	// ResolvedSHAReadOnly The field 'resolved_sha' is read-only and must not be set on create.
+	ResolvedSHAReadOnly = createMessage(
 		constants.HTTPCodeBadRequest,
-		"The field 'commit_sha' is read-only and must not be set on create.",
-		"git_commit_sha_read_only",
+		"The field 'resolved_sha' is read-only and must not be set on create.",
+		"resolved_sha_read_only",
 	)
 )
 

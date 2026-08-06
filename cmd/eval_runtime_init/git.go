@@ -20,6 +20,9 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+// validateGitCloneURL is overridable in tests so file:// local repos can exercise runGit.
+var validateGitCloneURL = api.ValidateGitCloneURLResolved
+
 // runGit clones a git repository into destDir using go-git (pure Go, no git binary required)
 // and writes the resolved commit SHA to .git-metadata for the sidecar to report back.
 func runGit() error {
@@ -30,7 +33,7 @@ func runGit() error {
 	if repoURL == "" {
 		return fmt.Errorf("%s is required", envGitURL)
 	}
-	if err := api.ValidateGitCloneURLResolved(repoURL, nil); err != nil {
+	if err := validateGitCloneURL(repoURL, nil); err != nil {
 		return fmt.Errorf("%s: %w", envGitURL, err)
 	}
 	if ref == "" {
@@ -69,40 +72,77 @@ func runGit() error {
 
 	slog.Info("cloned", "commit_sha", commitSHA)
 
-	srcDir := cloneDir
+	cloneRoot, err := os.OpenRoot(cloneDir)
+	if err != nil {
+		return fmt.Errorf("open clone root: %w", err)
+	}
+	defer func() { _ = cloneRoot.Close() }()
+
+	srcRel := "."
 	if subPath != "" {
-		srcDir = filepath.Join(cloneDir, filepath.FromSlash(subPath))
-		// Guard against path traversal: srcDir must be strictly inside cloneDir.
-		if !strings.HasPrefix(srcDir, cloneDir+string(filepath.Separator)) {
+		cleanSub := filepath.Clean(filepath.FromSlash(subPath))
+		if cleanSub == "." || !filepath.IsLocal(cleanSub) {
 			return fmt.Errorf("sub_path escapes repository root: %q", subPath)
 		}
-		info, err := os.Stat(srcDir) // #nosec G304,G703 -- srcDir is Join(cloneDir, subPath) and verified inside cloneDir above
+		info, err := cloneRoot.Stat(cleanSub)
 		if err != nil {
 			return fmt.Errorf("sub_path %q not found in repository: %w", subPath, err)
 		}
 		if !info.IsDir() {
 			return fmt.Errorf("sub_path %q is not a directory", subPath)
 		}
+		srcRel = cleanSub
 	}
 
 	// Fail fast if the repository has submodules: go-git does not populate them,
 	// so the cloned tree would contain empty stub directories. Use sub_path to
 	// point at a subdirectory that does not require submodules.
-	if _, err := os.Stat(filepath.Join(srcDir, ".gitmodules")); err == nil { // #nosec G304,G703 -- path under verified clone/srcDir
+	gitmodules := ".gitmodules"
+	if srcRel != "." {
+		gitmodules = filepath.Join(srcRel, ".gitmodules")
+	}
+	if _, err := cloneRoot.Stat(gitmodules); err == nil {
 		return fmt.Errorf("repository contains submodules which are not supported; use sub_path to point to a directory that does not require submodules")
 	}
 
-	if err := copyDir(srcDir, destDir); err != nil {
+	srcRoot := cloneRoot
+	if srcRel != "." {
+		srcRoot, err = cloneRoot.OpenRoot(srcRel)
+		if err != nil {
+			return fmt.Errorf("open sub_path root: %w", err)
+		}
+		defer func() { _ = srcRoot.Close() }()
+	}
+
+	if err := copyDirFromRoot(srcRoot, destDir); err != nil {
 		return fmt.Errorf("copy to dest: %w", err)
 	}
 
 	// 0600: init and sidecar share the same pod UID (OpenShift SCC / runAsNonRoot).
-	if err := os.WriteFile(runtimeenv.GitMetadataFile, []byte(commitSHA+"\n"), 0o600); err != nil { // #nosec G304,G703 -- fixed runtimeenv path
+	if err := writeGitMetadata(commitSHA); err != nil {
 		return fmt.Errorf("write git metadata: %w", err)
 	}
 
 	slog.Info("git source ready", "dest", destDir, "commit_sha", commitSHA)
 	return nil
+}
+
+// writeGitMetadata writes the resolved commit SHA under InitMetadataDir via os.Root
+// so the path cannot escape the metadata directory.
+func writeGitMetadata(commitSHA string) error {
+	return writeGitMetadataTo(gitMetadataDir, commitSHA)
+}
+
+func writeGitMetadataTo(dir, commitSHA string) error {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return err
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+	return root.WriteFile(filepath.Base(runtimeenv.GitMetadataFile), []byte(commitSHA+"\n"), 0o600)
 }
 
 // resolveGitAuth reads basic-auth credentials from the mounted secret dir.
@@ -129,13 +169,18 @@ func resolveGitAuth() (*githttp.BasicAuth, error) {
 
 // readSecretRequired reads a key from the mounted secret dir and returns an error
 // if the file is missing or its content is empty after trimming.
-// filepath.Base rejects any key containing path separators (e.g. "../escape").
+// Keys must be a single path segment; reads go through os.Root so they cannot escape secretDir.
 func readSecretRequired(key string) (string, error) {
 	safe := filepath.Base(key)
-	if safe != key || key == "." || key == "/" {
+	if safe != key || key == "." || key == "/" || !filepath.IsLocal(key) {
 		return "", fmt.Errorf("secret key %q contains path separators and is not allowed", key)
 	}
-	content, err := os.ReadFile(filepath.Join(secretDir, key)) // #nosec G304 -- key is a single filename, path traversal rejected above
+	root, err := os.OpenRoot(secretDir)
+	if err != nil {
+		return "", fmt.Errorf("secret key %q not found in mounted secret: %w", key, err)
+	}
+	defer func() { _ = root.Close() }()
+	content, err := root.ReadFile(key)
 	if err != nil {
 		return "", fmt.Errorf("secret key %q not found in mounted secret: %w", key, err)
 	}

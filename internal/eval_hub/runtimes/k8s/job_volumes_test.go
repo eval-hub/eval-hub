@@ -522,8 +522,8 @@ func TestBuildJobWithGitTestDataPublicRepo(t *testing.T) {
 
 	// No secret volume for public repos.
 	for _, v := range job.Spec.Template.Spec.Volumes {
-		if v.Name == testDataGitSecretVolumeName {
-			t.Fatalf("expected no %s volume for public repo", testDataGitSecretVolumeName)
+		if v.Name == testDataGitAuthVolumeName {
+			t.Fatalf("expected no %s volume for public repo", testDataGitAuthVolumeName)
 		}
 	}
 
@@ -602,7 +602,7 @@ func TestBuildJobWithGitTestDataPrivateRepo(t *testing.T) {
 
 	var foundSecretVolume, foundSecretMount bool
 	for _, v := range job.Spec.Template.Spec.Volumes {
-		if v.Name == testDataGitSecretVolumeName {
+		if v.Name == testDataGitAuthVolumeName {
 			foundSecretVolume = true
 			if v.Secret == nil || v.Secret.SecretName != "my-git-secret" {
 				t.Fatalf("expected secret volume with secret %q", "my-git-secret")
@@ -610,7 +610,7 @@ func TestBuildJobWithGitTestDataPrivateRepo(t *testing.T) {
 		}
 	}
 	for _, m := range initContainer.VolumeMounts {
-		if m.Name == testDataGitSecretVolumeName && m.MountPath == testDataSecretMountPath && m.ReadOnly {
+		if m.Name == testDataGitAuthVolumeName && m.MountPath == testDataSecretMountPath && m.ReadOnly {
 			foundSecretMount = true
 		}
 	}
@@ -623,7 +623,7 @@ func TestBuildJobWithGitTestDataPrivateRepo(t *testing.T) {
 
 	// Secret must NOT be mounted in the adapter container.
 	for _, m := range job.Spec.Template.Spec.Containers[0].VolumeMounts {
-		if m.Name == testDataGitSecretVolumeName {
+		if m.Name == testDataGitAuthVolumeName {
 			t.Fatalf("adapter must not mount git secret volume")
 		}
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,8 @@ import (
 	gitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+
+	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 func TestLooksLikeHexSHA(t *testing.T) {
@@ -72,8 +75,17 @@ func newLocalBareRepo(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(wtDir, "README.md"), []byte("hi"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
+	if err := os.MkdirAll(filepath.Join(wtDir, "datasets", "lm-eval"), 0o750); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(wtDir, "datasets", "lm-eval", "data.txt"), []byte("samples"), 0o644); err != nil {
+		t.Fatalf("WriteFile data: %v", err)
+	}
 	if _, err := w.Add("README.md"); err != nil {
 		t.Fatalf("Add: %v", err)
+	}
+	if _, err := w.Add("datasets/lm-eval/data.txt"); err != nil {
+		t.Fatalf("Add data: %v", err)
 	}
 	hash, err := w.Commit("init", &git.CommitOptions{
 		Author: &object.Signature{Name: "test", Email: "t@t.com"},
@@ -425,5 +437,275 @@ func TestReadSecretRequired_EmptyValueRejected(t *testing.T) {
 	val := strings.TrimSpace("   ")
 	if val != "" {
 		t.Fatal("expected empty after TrimSpace")
+	}
+}
+
+func TestWriteGitMetadataTo(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	const sha = "abcdef0123456789"
+	if err := writeGitMetadataTo(dir, sha); err != nil {
+		t.Fatalf("writeGitMetadataTo: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, ".git-metadata"))
+	if err != nil {
+		t.Fatalf("read metadata: %v", err)
+	}
+	if strings.TrimSpace(string(got)) != sha {
+		t.Errorf("metadata = %q, want %q", strings.TrimSpace(string(got)), sha)
+	}
+}
+
+func TestCopyDirFromRoot_SkipsDotGitAndCopiesFiles(t *testing.T) {
+	t.Parallel()
+	src := t.TempDir()
+	dst := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(src, "data"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "data", "file.txt"), []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(src, ".git", "objects"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, ".git", "objects", "pack"), []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	root, err := os.OpenRoot(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = root.Close() }()
+
+	if err := copyDirFromRoot(root, dst); err != nil {
+		t.Fatalf("copyDirFromRoot: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(dst, "data", "file.txt"))
+	if err != nil {
+		t.Fatalf("copied file missing: %v", err)
+	}
+	if string(got) != "hello" {
+		t.Errorf("copied content = %q, want hello", got)
+	}
+	if _, err := os.Stat(filepath.Join(dst, ".git")); !os.IsNotExist(err) {
+		t.Errorf(".git should not be copied, stat err = %v", err)
+	}
+}
+
+func withRunGitTestEnv(t *testing.T, dest, meta, secret string) {
+	t.Helper()
+	origDest, origMeta, origSecret, origValidate := destDir, gitMetadataDir, secretDir, validateGitCloneURL
+	destDir, gitMetadataDir, secretDir = dest, meta, secret
+	validateGitCloneURL = func(string, func(string) ([]net.IP, error)) error { return nil }
+	t.Cleanup(func() {
+		destDir, gitMetadataDir, secretDir, validateGitCloneURL = origDest, origMeta, origSecret, origValidate
+		_ = os.Unsetenv(envGitURL)
+		_ = os.Unsetenv(envGitRef)
+		_ = os.Unsetenv(envGitSubPath)
+		_ = os.Unsetenv(envGitTimeout)
+	})
+}
+
+func TestRunGit_HappyPathAndSubPath(t *testing.T) {
+	repoDir := newLocalBareRepo(t)
+	dest := t.TempDir()
+	meta := t.TempDir()
+	secret := filepath.Join(t.TempDir(), "missing-secret")
+	withRunGitTestEnv(t, dest, meta, secret)
+
+	t.Setenv(envGitURL, "file://"+repoDir)
+	t.Setenv(envGitRef, "master")
+	if err := runGit(); err != nil {
+		t.Fatalf("runGit: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "README.md")); err != nil {
+		t.Fatalf("README.md missing after clone: %v", err)
+	}
+	sha, err := os.ReadFile(filepath.Join(meta, ".git-metadata"))
+	if err != nil {
+		t.Fatalf("metadata missing: %v", err)
+	}
+	if len(strings.TrimSpace(string(sha))) != 40 {
+		t.Errorf("metadata SHA = %q, want 40 hex chars", strings.TrimSpace(string(sha)))
+	}
+
+	// sub_path: only datasets/lm-eval content under dest
+	dest2 := t.TempDir()
+	meta2 := t.TempDir()
+	withRunGitTestEnv(t, dest2, meta2, secret)
+	t.Setenv(envGitURL, "file://"+repoDir)
+	t.Setenv(envGitRef, "master")
+	t.Setenv(envGitSubPath, "datasets/lm-eval")
+	if err := runGit(); err != nil {
+		t.Fatalf("runGit with sub_path: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest2, "data.txt")); err != nil {
+		t.Fatalf("sub_path data.txt missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest2, "README.md")); !os.IsNotExist(err) {
+		t.Error("README.md should not appear when using sub_path")
+	}
+}
+
+func TestRunGit_ValidationErrors(t *testing.T) {
+	dest := t.TempDir()
+	meta := t.TempDir()
+	secret := filepath.Join(t.TempDir(), "missing-secret")
+	withRunGitTestEnv(t, dest, meta, secret)
+
+	t.Run("missing url", func(t *testing.T) {
+		_ = os.Unsetenv(envGitURL)
+		t.Setenv(envGitRef, "master")
+		if err := runGit(); err == nil {
+			t.Fatal("expected error for missing URL")
+		}
+	})
+	t.Run("missing ref", func(t *testing.T) {
+		t.Setenv(envGitURL, "https://example.com/repo.git")
+		_ = os.Unsetenv(envGitRef)
+		if err := runGit(); err == nil {
+			t.Fatal("expected error for missing ref")
+		}
+	})
+	t.Run("invalid timeout", func(t *testing.T) {
+		t.Setenv(envGitURL, "https://example.com/repo.git")
+		t.Setenv(envGitRef, "master")
+		t.Setenv(envGitTimeout, "not-a-duration")
+		if err := runGit(); err == nil {
+			t.Fatal("expected error for invalid timeout")
+		}
+	})
+	t.Run("url validation failure", func(t *testing.T) {
+		validateGitCloneURL = api.ValidateGitCloneURLResolved
+		t.Cleanup(func() {
+			validateGitCloneURL = func(string, func(string) ([]net.IP, error)) error { return nil }
+		})
+		t.Setenv(envGitURL, "https://localhost/repo.git")
+		t.Setenv(envGitRef, "master")
+		_ = os.Unsetenv(envGitTimeout)
+		if err := runGit(); err == nil {
+			t.Fatal("expected SSRF validation error")
+		}
+	})
+	t.Run("sub_path escape", func(t *testing.T) {
+		repoDir := newLocalBareRepo(t)
+		t.Setenv(envGitURL, "file://"+repoDir)
+		t.Setenv(envGitRef, "master")
+		t.Setenv(envGitSubPath, "../escape")
+		if err := runGit(); err == nil {
+			t.Fatal("expected sub_path escape error")
+		}
+	})
+	t.Run("sub_path missing", func(t *testing.T) {
+		repoDir := newLocalBareRepo(t)
+		t.Setenv(envGitURL, "file://"+repoDir)
+		t.Setenv(envGitRef, "master")
+		t.Setenv(envGitSubPath, "does-not-exist")
+		if err := runGit(); err == nil {
+			t.Fatal("expected missing sub_path error")
+		}
+	})
+	t.Run("submodules rejected", func(t *testing.T) {
+		repoDir := newLocalBareRepo(t)
+		// Clone once into a temp worktree, add .gitmodules, push — easier: create non-bare with .gitmodules and push.
+		wtDir := t.TempDir()
+		wt, err := git.PlainClone(wtDir, false, &git.CloneOptions{URL: "file://" + repoDir})
+		if err != nil {
+			t.Fatalf("clone for submodule fixture: %v", err)
+		}
+		w, err := wt.Worktree()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(wtDir, ".gitmodules"), []byte("[submodule \"x\"]\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Add(".gitmodules"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Commit("add gitmodules", &git.CommitOptions{
+			Author: &object.Signature{Name: "test", Email: "t@t.com"},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err := wt.Push(&git.PushOptions{RemoteName: "origin"}); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv(envGitURL, "file://"+repoDir)
+		t.Setenv(envGitRef, "master")
+		_ = os.Unsetenv(envGitSubPath)
+		if err := runGit(); err == nil || !strings.Contains(err.Error(), "submodules") {
+			t.Fatalf("expected submodules error, got %v", err)
+		}
+	})
+}
+
+func TestResolveGitAuth_WithSecretDir(t *testing.T) {
+	secret := t.TempDir()
+	if err := os.WriteFile(filepath.Join(secret, "username"), []byte("u\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(secret, "password"), []byte("p\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	orig := secretDir
+	secretDir = secret
+	t.Cleanup(func() { secretDir = orig })
+
+	auth, err := resolveGitAuth()
+	if err != nil {
+		t.Fatalf("resolveGitAuth: %v", err)
+	}
+	if auth == nil || auth.Username != "u" || auth.Password != "p" {
+		t.Fatalf("auth = %+v, want u/p", auth)
+	}
+}
+
+func TestResolveGitAuth_MissingPassword(t *testing.T) {
+	secret := t.TempDir()
+	if err := os.WriteFile(filepath.Join(secret, "username"), []byte("u\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	orig := secretDir
+	secretDir = secret
+	t.Cleanup(func() { secretDir = orig })
+
+	if _, err := resolveGitAuth(); err == nil {
+		t.Fatal("expected error when password key missing")
+	}
+}
+
+func TestWriteGitMetadata_UsesPackageDir(t *testing.T) {
+	dir := t.TempDir()
+	orig := gitMetadataDir
+	gitMetadataDir = dir
+	t.Cleanup(func() { gitMetadataDir = orig })
+	if err := writeGitMetadata("abc123"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, ".git-metadata"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(got)) != "abc123" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestReadSecret_ViaOpenRoot(t *testing.T) {
+	secret := t.TempDir()
+	if err := os.WriteFile(filepath.Join(secret, "AWS_ACCESS_KEY_ID"), []byte("key\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	orig := secretDir
+	secretDir = secret
+	t.Cleanup(func() { secretDir = orig })
+	if got := readSecret("AWS_ACCESS_KEY_ID"); got != "key" {
+		t.Errorf("readSecret = %q, want key", got)
+	}
+	if got := readSecret("../escape"); got != "" {
+		t.Errorf("traversal should return empty, got %q", got)
 	}
 }

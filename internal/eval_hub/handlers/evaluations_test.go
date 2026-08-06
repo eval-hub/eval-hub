@@ -38,25 +38,25 @@ func (r *bodyRequest) BodyAsBytes() ([]byte, error) {
 
 type fakeStorage struct {
 	abstractions.Storage
-	lastStatusID      string
-	lastStatus        api.OverallState
-	job               *api.EvaluationJobResource
-	deleteID          string
-	providerConfigs   map[string]api.ProviderResource
-	collectionConfigs map[string]api.CollectionResource
-	updateGitSHAFn    func(id string, benchmarkIndex int, sha string) error
+	lastStatusID        string
+	lastStatus          api.OverallState
+	job                 *api.EvaluationJobResource
+	deleteID            string
+	providerConfigs     map[string]api.ProviderResource
+	collectionConfigs   map[string]api.CollectionResource
+	updateResolvedSHAFn func(id string, benchmarkIndex int, sha string) error
 }
 
 func (f *fakeStorage) clone() *fakeStorage {
 	return &fakeStorage{
-		Storage:           f.Storage,
-		lastStatusID:      f.lastStatusID,
-		lastStatus:        f.lastStatus,
-		job:               f.job,
-		deleteID:          f.deleteID,
-		providerConfigs:   f.providerConfigs,
-		collectionConfigs: f.collectionConfigs,
-		updateGitSHAFn:    f.updateGitSHAFn,
+		Storage:             f.Storage,
+		lastStatusID:        f.lastStatusID,
+		lastStatus:          f.lastStatus,
+		job:                 f.job,
+		deleteID:            f.deleteID,
+		providerConfigs:     f.providerConfigs,
+		collectionConfigs:   f.collectionConfigs,
+		updateResolvedSHAFn: f.updateResolvedSHAFn,
 	}
 }
 
@@ -87,9 +87,9 @@ func (f *fakeStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
 	return nil
 }
 
-func (f *fakeStorage) UpdateEvaluationJobGitSHA(id string, benchmarkIndex int, sha string) error {
-	if f.updateGitSHAFn != nil {
-		return f.updateGitSHAFn(id, benchmarkIndex, sha)
+func (f *fakeStorage) UpdateEvaluationJobResolvedSHA(id string, benchmarkIndex int, sha string) error {
+	if f.updateResolvedSHAFn != nil {
+		return f.updateResolvedSHAFn(id, benchmarkIndex, sha)
 	}
 	return nil
 }
@@ -200,8 +200,8 @@ func (s *updateEvaluationStorage) UpdateEvaluationJob(_ string, status *api.Stat
 	return s.updateErr
 }
 
-func (s *updateEvaluationStorage) UpdateEvaluationJobGitSHA(_ string, _ int, _ string) error {
-	return nil
+func (s *updateEvaluationStorage) UpdateEvaluationJobResolvedSHA(id string, benchmarkIndex int, sha string) error {
+	return s.fakeStorage.UpdateEvaluationJobResolvedSHA(id, benchmarkIndex, sha)
 }
 
 func TestResolveProvider_FromMap(t *testing.T) {
@@ -333,11 +333,11 @@ func TestApplyHardwareConfigQueueDefaults(t *testing.T) {
 	})
 }
 
-func TestValidateReadOnlyGitFields(t *testing.T) {
+func TestValidateReadOnlyResolvedSHA(t *testing.T) {
 	t.Parallel()
 	t.Run("nil config", func(t *testing.T) {
 		t.Parallel()
-		if err := handlers.ValidateReadOnlyGitFields(nil); err != nil {
+		if err := handlers.ValidateReadOnlyResolvedSHA(nil); err != nil {
 			t.Errorf("unexpected error for nil config: %v", err)
 		}
 	})
@@ -348,44 +348,44 @@ func TestValidateReadOnlyGitFields(t *testing.T) {
 				{TestDataRef: &api.TestDataRef{S3: &api.S3TestDataRef{Bucket: "b", Key: "k", SecretRef: "s"}}},
 			},
 		}
-		if err := handlers.ValidateReadOnlyGitFields(cfg); err != nil {
+		if err := handlers.ValidateReadOnlyResolvedSHA(cfg); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	})
-	t.Run("git ref without commit_sha — no error", func(t *testing.T) {
+	t.Run("git ref without resolved_sha — no error", func(t *testing.T) {
 		t.Parallel()
 		cfg := &api.EvaluationJobConfig{
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{TestDataRef: &api.TestDataRef{Git: &api.GitTestDataRef{URL: "https://github.com/org/repo.git", Ref: "main"}}},
 			},
 		}
-		if err := handlers.ValidateReadOnlyGitFields(cfg); err != nil {
+		if err := handlers.ValidateReadOnlyResolvedSHA(cfg); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	})
-	t.Run("commit_sha set on benchmark — returns error", func(t *testing.T) {
+	t.Run("resolved_sha set on benchmark — returns error", func(t *testing.T) {
 		t.Parallel()
 		cfg := &api.EvaluationJobConfig{
 			Benchmarks: []api.EvaluationBenchmarkConfig{
-				{TestDataRef: &api.TestDataRef{Git: &api.GitTestDataRef{URL: "https://github.com/org/repo.git", Ref: "main", CommitSHA: "abc123"}}},
+				{TestDataRef: &api.TestDataRef{Git: &api.GitTestDataRef{URL: "https://github.com/org/repo.git", Ref: "main"}, ResolvedSHA: "abc123"}},
 			},
 		}
-		if err := handlers.ValidateReadOnlyGitFields(cfg); err == nil {
-			t.Error("expected error when commit_sha is set on benchmark")
+		if err := handlers.ValidateReadOnlyResolvedSHA(cfg); err == nil {
+			t.Error("expected error when resolved_sha is set on benchmark")
 		}
 	})
-	t.Run("commit_sha set on collection override — returns error", func(t *testing.T) {
+	t.Run("resolved_sha set on collection override — returns error", func(t *testing.T) {
 		t.Parallel()
 		cfg := &api.EvaluationJobConfig{
 			Collection: &api.CollectionRef{
 				ID: "coll-1",
 				Benchmarks: []api.EvaluationBenchmarkConfig{
-					{TestDataRef: &api.TestDataRef{Git: &api.GitTestDataRef{URL: "https://github.com/org/repo.git", Ref: "main", CommitSHA: "smuggled"}}},
+					{TestDataRef: &api.TestDataRef{Git: &api.GitTestDataRef{URL: "https://github.com/org/repo.git", Ref: "main"}, ResolvedSHA: "smuggled"}},
 				},
 			},
 		}
-		if err := handlers.ValidateReadOnlyGitFields(cfg); err == nil {
-			t.Error("expected error when commit_sha is set on collection override benchmark")
+		if err := handlers.ValidateReadOnlyResolvedSHA(cfg); err == nil {
+			t.Error("expected error when resolved_sha is set on collection override benchmark")
 		}
 	})
 }
@@ -882,6 +882,64 @@ func TestHandleUpdateEvaluationRejectsCancelledStatus(t *testing.T) {
 	respBody := recorder.Body.String()
 	if !strings.Contains(respBody, "request_validation_failed") {
 		t.Fatalf("expected request_validation_failed in body, got %q", respBody)
+	}
+}
+
+func TestHandleUpdateEvaluation_PersistsResolvedSHAFromJobMeta(t *testing.T) {
+	t.Parallel()
+	var gotID string
+	var gotIndex int
+	var gotSHA string
+
+	base := &fakeStorage{
+		job: &api.EvaluationJobResource{
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Benchmarks: []api.EvaluationBenchmarkConfig{
+					{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"},
+				},
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{State: api.OverallStateRunning},
+			},
+		},
+		updateResolvedSHAFn: func(id string, benchmarkIndex int, sha string) error {
+			gotID, gotIndex, gotSHA = id, benchmarkIndex, sha
+			return nil
+		},
+	}
+	storage := &updateEvaluationStorage{fakeStorage: base}
+
+	validate := testhelpers.NewValidator(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+
+	body := `{"benchmark_status_event":{"provider_id":"p1","id":"b1","status":"running","benchmark_index":0,"job_meta":{"resolved_sha":"deadbeefcafebabe"}}}`
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs/job-sha/events"),
+		body:        []byte(body),
+	}
+	reqWithPath := &updateEvaluationRequest{
+		bodyRequest: req,
+		pathValues:  map[string]string{"job_id": "job-sha"},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-sha", logger, "test-user", "test-tenant")
+
+	h.HandleUpdateEvaluation(ctx, reqWithPath, resp)
+
+	if recorder.Code != 204 {
+		t.Fatalf("expected 204, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+	eventSeen := storage.lastStatusEvent
+	if eventSeen == nil || eventSeen.BenchmarkStatusEvent == nil {
+		t.Fatal("expected status event to be passed to storage")
+	}
+	if eventSeen.BenchmarkStatusEvent.JobMeta != nil {
+		t.Fatalf("JobMeta should be cleared before UpdateEvaluationJob, got %+v", eventSeen.BenchmarkStatusEvent.JobMeta)
+	}
+	if gotID != "job-sha" || gotIndex != 0 || gotSHA != "deadbeefcafebabe" {
+		t.Fatalf("UpdateEvaluationJobResolvedSHA(%q,%d,%q), want (job-sha,0,deadbeefcafebabe)", gotID, gotIndex, gotSHA)
 	}
 }
 

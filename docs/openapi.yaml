@@ -2331,6 +2331,16 @@ components:
         bucket: my-eval-bucket
         key: datasets/benchmark-a/v1
         secret_ref: my-s3-connection-secret
+    TestDataRefResolvedSHA:
+      type: string
+      readOnly: true
+      description: |
+        Resolved content identity for the test data source (e.g. git commit SHA).
+        After the init container writes `.git-metadata`, the runtime sidecar reads it and
+        injects the SHA into a status event; Eval Hub persists it here after benchmark
+        validation. Not set on job submission. Provides reproducibility of the exact data
+        state used for this evaluation run.
+      example: a3f9c12e8b4d6f1c2e9a7b3d5f0e8c4a2b6d9e1f
     TestDataRefType:
       type: string
       description: |
@@ -2381,8 +2391,9 @@ components:
         The repository is cloned and checked out at **`ref`** into **`/test_data`** before
         the adapter runs. If **`sub_path`** is provided, only that subdirectory is exposed.
 
-        The resolved commit SHA is recorded as **`commit_sha`** within this object on the
-        evaluation job response, providing commit-level reproducibility.
+        The resolved commit SHA is recorded as **`resolved_sha`** on the parent
+        **`test_data_ref`** object on the evaluation job response, providing commit-level
+        reproducibility.
 
         **Private repositories** — supply a **`secret_ref`** pointing to a Kubernetes Secret
         of type `kubernetes.io/basic-auth` in the same namespace as the evaluation job:
@@ -2436,15 +2447,6 @@ components:
             evaluation job namespace, mounted read-only into the git-clone init container.
             Omit for public repositories.
           example: my-git-credentials
-        commit_sha:
-          type: string
-          readOnly: true
-          description: |
-            Resolved commit SHA of the cloned repository. Populated by Eval Hub after the
-            git-clone init container completes — not set on job submission. Provides
-            commit-level reproducibility: the exact data state used for this evaluation run,
-            regardless of whether `ref` was a branch, tag, or SHA.
-          example: a3f9c12e8b4d6f1c2e9a7b3d5f0e8c4a2b6d9e1f
       example:
         url: https://github.com/my-org/my-eval-datasets.git
         ref: main
@@ -2472,7 +2474,7 @@ components:
 
         **`git`** — The specified repository is cloned and checked out at the given ref into
         **`/test_data`** before the adapter runs. The resolved commit SHA is recorded as
-        **`commit_sha`** within the `git` object on the evaluation job for reproducibility.
+        **`resolved_sha`** on this object on the evaluation job for reproducibility.
 
         Do not put credentials in the Eval Hub API request body; only reference an existing
         Secret via **`secret_ref`** (for S3 or git).
@@ -2481,6 +2483,8 @@ components:
           properties:
             s3:
               $ref: '#/components/schemas/TestDataRefS3'
+            resolved_sha:
+              $ref: '#/components/schemas/TestDataRefResolvedSHA'
             type:
               $ref: '#/components/schemas/TestDataRefType'
           additionalProperties: false
@@ -2491,6 +2495,8 @@ components:
           properties:
             pvc:
               $ref: '#/components/schemas/TestDataRefPVC'
+            resolved_sha:
+              $ref: '#/components/schemas/TestDataRefResolvedSHA'
             type:
               $ref: '#/components/schemas/TestDataRefType'
           additionalProperties: false
@@ -2501,6 +2507,8 @@ components:
           properties:
             git:
               $ref: '#/components/schemas/TestDataRefGit'
+            resolved_sha:
+              $ref: '#/components/schemas/TestDataRefResolvedSHA'
             type:
               $ref: '#/components/schemas/TestDataRefType'
           additionalProperties: false

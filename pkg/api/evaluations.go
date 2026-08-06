@@ -161,8 +161,6 @@ type GitTestDataRef struct {
 	Ref       string `json:"ref" mapstructure:"ref" validate:"required"`
 	SubPath   string `json:"sub_path,omitempty" mapstructure:"sub_path,omitempty"`
 	SecretRef string `json:"secret_ref,omitempty" mapstructure:"secret_ref,omitempty" validate:"omitempty,rfc1123_dns_label"`
-	// CommitSHA is populated by eval-hub after the init container resolves the ref; not accepted on input.
-	CommitSHA string `json:"commit_sha,omitempty" mapstructure:"commit_sha,omitempty"`
 }
 
 // TestDataRef represents external test data sources.
@@ -171,6 +169,9 @@ type TestDataRef struct {
 	S3  *S3TestDataRef  `mapstructure:"s3" json:"s3,omitempty"`
 	PVC *PVCTestDataRef `mapstructure:"pvc" json:"pvc,omitempty"`
 	Git *GitTestDataRef `mapstructure:"git" json:"git,omitempty"`
+	// ResolvedSHA is the resolved content identity for the test data source (e.g. git commit
+	// SHA). Populated by eval-hub after the init container resolves the ref; not accepted on input.
+	ResolvedSHA string `json:"resolved_sha,omitempty" mapstructure:"resolved_sha,omitempty"`
 }
 
 // HardwareResourceQuantity holds optional Kubernetes CPU or memory request/limit quantities.
@@ -259,6 +260,15 @@ type BenchmarkStatus struct {
 	CompletedAt    DateTime     `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
 }
 
+// JobMeta carries job-level metadata on status events that is not part of benchmark state.
+// The sidecar injects ResolvedSHA for git-source jobs; adapters must not set it.
+type JobMeta struct {
+	// ResolvedSHA is the resolved content identity for the job's test data (e.g. git commit SHA).
+	// Retried on each status event until loaded from .git-metadata, then injected on every
+	// subsequent event. The server skips the update if already persisted on the job.
+	ResolvedSHA string `json:"resolved_sha,omitempty"`
+}
+
 // BenchmarkStatusEvent is used when the job runtime needs to update the status of a benchmark
 type BenchmarkStatusEvent struct {
 	ProviderID     string         `json:"provider_id" validate:"required"`
@@ -275,9 +285,7 @@ type BenchmarkStatusEvent struct {
 	CompletedAt    DateTime       `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
 	MLFlowRunID    string         `json:"mlflow_run_id,omitempty"`
 	LogsPath       string         `json:"logs_path,omitempty"`
-	// GitCommitSHA is retried on each status event until loaded from .git-metadata, then
-	// injected on every subsequent event. The server skips the update if already persisted.
-	GitCommitSHA string `json:"git_commit_sha,omitempty"`
+	JobMeta        *JobMeta       `json:"job_meta,omitempty"`
 }
 
 type EvaluationJobState struct {
@@ -287,7 +295,7 @@ type EvaluationJobState struct {
 
 // StatusEvent is the body of POST /api/v1/evaluations/jobs/{id}/events.
 // BenchmarkStatusEvent must be set. For git-source jobs the sidecar injects
-// GitCommitSHA into every BenchmarkStatusEvent; adapters must not set it.
+// JobMeta.ResolvedSHA; adapters must not set it.
 type StatusEvent struct {
 	BenchmarkStatusEvent *BenchmarkStatusEvent `json:"benchmark_status_event" validate:"required"`
 }

@@ -78,16 +78,20 @@ func TestUpdateEvaluationJob_ConcurrentBenchmarkCompletions(t *testing.T) {
 	testUpdateEvaluationJob_ConcurrentBenchmarkCompletions(t, drivers[0], getDBName())
 }
 
-func TestUpdateEvaluationJobGitSHA_DirectJob(t *testing.T) {
-	testUpdateEvaluationJobGitSHA_DirectJob(t, drivers[0], getDBName())
+func TestUpdateEvaluationJobResolvedSHA_DirectJob(t *testing.T) {
+	testUpdateEvaluationJobResolvedSHA_DirectJob(t, drivers[0], getDBName())
 }
 
-func TestUpdateEvaluationJobGitSHA_CollectionOverride(t *testing.T) {
-	testUpdateEvaluationJobGitSHA_CollectionOverride(t, drivers[0], getDBName())
+func TestUpdateEvaluationJobResolvedSHA_CollectionOverride(t *testing.T) {
+	testUpdateEvaluationJobResolvedSHA_CollectionOverride(t, drivers[0], getDBName())
 }
 
-func TestUpdateEvaluationJobGitSHA_CollectionLocal(t *testing.T) {
-	testUpdateEvaluationJobGitSHA_CollectionLocal(t, drivers[0], getDBName())
+func TestUpdateEvaluationJobResolvedSHA_CollectionLocal(t *testing.T) {
+	testUpdateEvaluationJobResolvedSHA_CollectionLocal(t, drivers[0], getDBName())
+}
+
+func TestUpdateEvaluationJobResolvedSHA_EdgeCases(t *testing.T) {
+	testUpdateEvaluationJobResolvedSHA_EdgeCases(t, drivers[0], getDBName())
 }
 
 func testUpdateBenchmarkStatus_RejectsTerminalDowngrade(t *testing.T, driver string, databaseName string) {
@@ -1801,7 +1805,7 @@ func makeGitJob(id string, gitRef string) *api.EvaluationJobResource {
 	}
 }
 
-func testUpdateEvaluationJobGitSHA_DirectJob(t *testing.T, driver string, databaseName string) {
+func testUpdateEvaluationJobResolvedSHA_DirectJob(t *testing.T, driver string, databaseName string) {
 	store, err := getTestStorage(t, driver, databaseName)
 	if err != nil {
 		t.Fatalf("getTestStorage: %v", err)
@@ -1813,8 +1817,8 @@ func testUpdateEvaluationJobGitSHA_DirectJob(t *testing.T, driver string, databa
 	}
 
 	const sha = "aabbccdd1122334455667788"
-	if err := store.WithTenant(job.Resource.Tenant).UpdateEvaluationJobGitSHA(job.Resource.ID, 0, sha); err != nil {
-		t.Fatalf("UpdateEvaluationJobGitSHA: %v", err)
+	if err := store.WithTenant(job.Resource.Tenant).UpdateEvaluationJobResolvedSHA(job.Resource.ID, 0, sha); err != nil {
+		t.Fatalf("UpdateEvaluationJobResolvedSHA: %v", err)
 	}
 
 	got, err := store.WithTenant(job.Resource.Tenant).GetEvaluationJob(job.Resource.ID)
@@ -1828,15 +1832,15 @@ func testUpdateEvaluationJobGitSHA_DirectJob(t *testing.T, driver string, databa
 	if b.TestDataRef == nil || b.TestDataRef.Git == nil {
 		t.Fatal("TestDataRef.Git is nil after update")
 	}
-	if b.TestDataRef.Git.CommitSHA != sha {
-		t.Errorf("CommitSHA = %q, want %q", b.TestDataRef.Git.CommitSHA, sha)
+	if b.TestDataRef.ResolvedSHA != sha {
+		t.Errorf("ResolvedSHA = %q, want %q", b.TestDataRef.ResolvedSHA, sha)
 	}
 }
 
-// testUpdateEvaluationJobGitSHA_CollectionOverride verifies that the SHA is persisted when
+// testUpdateEvaluationJobResolvedSHA_CollectionOverride verifies that the SHA is persisted when
 // the git ref lives in a collection benchmark override (job.Collection.Benchmarks), not in
 // job.Benchmarks (which is empty for collection-based jobs).
-func testUpdateEvaluationJobGitSHA_CollectionOverride(t *testing.T, driver string, databaseName string) {
+func testUpdateEvaluationJobResolvedSHA_CollectionOverride(t *testing.T, driver string, databaseName string) {
 	store, err := getTestStorage(t, driver, databaseName)
 	if err != nil {
 		t.Fatalf("getTestStorage: %v", err)
@@ -1900,8 +1904,8 @@ func testUpdateEvaluationJobGitSHA_CollectionOverride(t *testing.T, driver strin
 	}
 
 	const sha = "deadbeef11223344556677"
-	if err := store.WithTenant(tenant).UpdateEvaluationJobGitSHA(jobID, 0, sha); err != nil {
-		t.Fatalf("UpdateEvaluationJobGitSHA: %v", err)
+	if err := store.WithTenant(tenant).UpdateEvaluationJobResolvedSHA(jobID, 0, sha); err != nil {
+		t.Fatalf("UpdateEvaluationJobResolvedSHA: %v", err)
 	}
 
 	got, err := store.WithTenant(tenant).GetEvaluationJob(jobID)
@@ -1915,15 +1919,15 @@ func testUpdateEvaluationJobGitSHA_CollectionOverride(t *testing.T, driver strin
 	if b.TestDataRef == nil || b.TestDataRef.Git == nil {
 		t.Fatal("Collection.Benchmarks[0].TestDataRef.Git is nil after update")
 	}
-	if b.TestDataRef.Git.CommitSHA != sha {
-		t.Errorf("CommitSHA = %q, want %q", b.TestDataRef.Git.CommitSHA, sha)
+	if b.TestDataRef.ResolvedSHA != sha {
+		t.Errorf("ResolvedSHA = %q, want %q", b.TestDataRef.ResolvedSHA, sha)
 	}
 }
 
-// testUpdateEvaluationJobGitSHA_CollectionLocal covers a collection job whose git ref lives
+// testUpdateEvaluationJobResolvedSHA_CollectionLocal covers a collection job whose git ref lives
 // only on the collection definition (no job-level benchmark override). The SHA must still
 // be materialized onto the job.
-func testUpdateEvaluationJobGitSHA_CollectionLocal(t *testing.T, driver string, databaseName string) {
+func testUpdateEvaluationJobResolvedSHA_CollectionLocal(t *testing.T, driver string, databaseName string) {
 	store, err := getTestStorage(t, driver, databaseName)
 	if err != nil {
 		t.Fatalf("getTestStorage: %v", err)
@@ -1984,8 +1988,8 @@ func testUpdateEvaluationJobGitSHA_CollectionLocal(t *testing.T, driver string, 
 	}
 
 	const sha = "cafebabefeedface00112233"
-	if err := store.WithTenant(tenant).UpdateEvaluationJobGitSHA(jobID, 0, sha); err != nil {
-		t.Fatalf("UpdateEvaluationJobGitSHA: %v", err)
+	if err := store.WithTenant(tenant).UpdateEvaluationJobResolvedSHA(jobID, 0, sha); err != nil {
+		t.Fatalf("UpdateEvaluationJobResolvedSHA: %v", err)
 	}
 
 	got, err := store.WithTenant(tenant).GetEvaluationJob(jobID)
@@ -1999,8 +2003,57 @@ func testUpdateEvaluationJobGitSHA_CollectionLocal(t *testing.T, driver string, 
 	if b.TestDataRef == nil || b.TestDataRef.Git == nil {
 		t.Fatal("Collection.Benchmarks[0].TestDataRef.Git is nil after update")
 	}
-	if b.TestDataRef.Git.CommitSHA != sha {
-		t.Errorf("CommitSHA = %q, want %q", b.TestDataRef.Git.CommitSHA, sha)
+	if b.TestDataRef.ResolvedSHA != sha {
+		t.Errorf("ResolvedSHA = %q, want %q", b.TestDataRef.ResolvedSHA, sha)
+	}
+}
+
+func testUpdateEvaluationJobResolvedSHA_EdgeCases(t *testing.T, driver string, databaseName string) {
+	store, err := getTestStorage(t, driver, databaseName)
+	if err != nil {
+		t.Fatalf("getTestStorage: %v", err)
+	}
+
+	job := makeGitJob(common.GUID(), "main")
+	if err := store.CreateEvaluationJob(job); err != nil {
+		t.Fatalf("CreateEvaluationJob: %v", err)
+	}
+	tenantStore := store.WithTenant(job.Resource.Tenant)
+
+	// Empty SHA is a no-op.
+	if err := tenantStore.UpdateEvaluationJobResolvedSHA(job.Resource.ID, 0, ""); err != nil {
+		t.Fatalf("empty sha: %v", err)
+	}
+
+	// Out-of-range index is a no-op (no error).
+	if err := tenantStore.UpdateEvaluationJobResolvedSHA(job.Resource.ID, 99, "aabbcc"); err != nil {
+		t.Fatalf("bad index: %v", err)
+	}
+
+	const sha = "edgecase11223344556677889900"
+	if err := tenantStore.UpdateEvaluationJobResolvedSHA(job.Resource.ID, 0, sha); err != nil {
+		t.Fatalf("first stamp: %v", err)
+	}
+	// Idempotent: second stamp with different SHA must not overwrite.
+	if err := tenantStore.UpdateEvaluationJobResolvedSHA(job.Resource.ID, 0, "should-not-overwrite"); err != nil {
+		t.Fatalf("second stamp: %v", err)
+	}
+	got, err := tenantStore.GetEvaluationJob(job.Resource.ID)
+	if err != nil {
+		t.Fatalf("GetEvaluationJob: %v", err)
+	}
+	if got.Benchmarks[0].TestDataRef.ResolvedSHA != sha {
+		t.Errorf("ResolvedSHA = %q, want %q", got.Benchmarks[0].TestDataRef.ResolvedSHA, sha)
+	}
+
+	// Benchmark without TestDataRef: no-op.
+	noRefJob := makeGitJob(common.GUID(), "main")
+	noRefJob.Benchmarks[0].TestDataRef = nil
+	if err := store.CreateEvaluationJob(noRefJob); err != nil {
+		t.Fatalf("CreateEvaluationJob noRef: %v", err)
+	}
+	if err := store.WithTenant(noRefJob.Resource.Tenant).UpdateEvaluationJobResolvedSHA(noRefJob.Resource.ID, 0, "zzzz"); err != nil {
+		t.Fatalf("no TestDataRef: %v", err)
 	}
 }
 

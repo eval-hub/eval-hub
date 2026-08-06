@@ -335,16 +335,16 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 	})
 }
 
-// UpdateEvaluationJobGitSHA records the resolved git commit SHA on the benchmark at benchmarkIndex.
-// It stamps the effective benchmark list from GetJobBenchmarks (collection definition merged with
-// job overrides, or job.Benchmarks for direct jobs). For collection jobs the stamped list is
-// written back to job.Collection.Benchmarks so the SHA persists on the job entity. Idempotent:
-// if the SHA is already set the call is a no-op.
-func (s *sqlStorage) UpdateEvaluationJobGitSHA(id string, benchmarkIndex int, sha string) error {
+// UpdateEvaluationJobResolvedSHA records the resolved test-data identity on the benchmark at
+// benchmarkIndex as TestDataRef.ResolvedSHA. It stamps the effective benchmark list from
+// GetJobBenchmarks (collection definition merged with job overrides, or job.Benchmarks for
+// direct jobs). For collection jobs the stamped list is written back to job.Collection.Benchmarks
+// so the SHA persists on the job entity. Idempotent: if the SHA is already set the call is a no-op.
+func (s *sqlStorage) UpdateEvaluationJobResolvedSHA(id string, benchmarkIndex int, sha string) error {
 	if sha == "" {
 		return nil
 	}
-	return s.withTransaction("update evaluation job git sha", id, func(txn *sql.Tx) error {
+	return s.withTransaction("update evaluation job resolved sha", id, func(txn *sql.Tx) error {
 		job, err := s.getEvaluationJobTransactionalForUpdate(txn, id)
 		if err != nil {
 			return err
@@ -355,14 +355,14 @@ func (s *sqlStorage) UpdateEvaluationJobGitSHA(id string, benchmarkIndex int, sh
 				return false
 			}
 			b := &benchmarks[benchmarkIndex]
-			if b.TestDataRef == nil || b.TestDataRef.Git == nil {
+			if b.TestDataRef == nil {
 				return false
 			}
-			if b.TestDataRef.Git.CommitSHA != "" {
-				s.logger.Info("Git commit SHA already set on benchmark; skipping", "id", id, "slice", sliceName, "benchmark_index", benchmarkIndex)
+			if b.TestDataRef.ResolvedSHA != "" {
+				s.logger.Info("Resolved SHA already set on benchmark; skipping", "id", id, "slice", sliceName, "benchmark_index", benchmarkIndex)
 				return false
 			}
-			b.TestDataRef.Git.CommitSHA = sha
+			b.TestDataRef.ResolvedSHA = sha
 			return true
 		}
 
@@ -379,11 +379,11 @@ func (s *sqlStorage) UpdateEvaluationJobGitSHA(id string, benchmarkIndex int, sh
 		}
 		updated := stamp(benchmarks, "effective")
 		if !updated {
-			s.logger.Info("Git SHA already set or benchmark has no git ref; skipping update", "id", id, "benchmark_index", benchmarkIndex)
+			s.logger.Info("Resolved SHA already set or benchmark has no test_data_ref; skipping update", "id", id, "benchmark_index", benchmarkIndex)
 			return nil
 		}
 		// Materialize the effective list onto the job so collection-local TestDataRef
-		// (including CommitSHA) is stored with the job, not only on the shared collection.
+		// (including ResolvedSHA) is stored with the job, not only on the shared collection.
 		if job.Collection != nil {
 			job.Collection.Benchmarks = benchmarks
 		}

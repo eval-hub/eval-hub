@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path"
@@ -37,10 +38,15 @@ const (
 	envGitSubPath = "TEST_DATA_GIT_SUBPATH"
 	envGitTimeout = "TEST_DATA_GIT_TIMEOUT"
 
-	// Shared
+	defaultTimeout = 10 * time.Minute
+)
+
+// Paths and URL validation are package vars so unit tests can redirect mounts and
+// exercise runGit against local file:// repos without writing under /.
+var (
 	secretDir      = "/var/run/secrets/test-data" // #nosec G101 -- K8s secret mount path
 	destDir        = runtimeenv.TestDataDir
-	defaultTimeout = 10 * time.Minute
+	gitMetadataDir = runtimeenv.InitMetadataDir
 )
 
 func main() {
@@ -160,44 +166,47 @@ func runS3() error {
 	return nil
 }
 
-// copyDir copies the contents of src into dst, skipping the .git directory.
-func copyDir(src, dst string) error {
-	return filepath.WalkDir(src, func(p string, d os.DirEntry, err error) error { // #nosec G304,G703 -- walks clone tree; IsLocal rejects escapes
+// copyDirFromRoot copies the contents of srcRoot into dst, skipping the .git directory.
+// All reads are confined by os.Root; destination writes use a second Root under dst.
+func copyDirFromRoot(srcRoot *os.Root, dst string) error {
+	if err := os.MkdirAll(dst, 0o750); err != nil {
+		return err
+	}
+	dstRoot, err := os.OpenRoot(dst)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = dstRoot.Close() }()
+
+	return fs.WalkDir(srcRoot.FS(), ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		rel, err := filepath.Rel(src, p)
-		if err != nil {
-			return err
-		}
-		if rel == "." {
+		if p == "." {
 			return nil
 		}
-		// Guard against path traversal in malicious repo trees (e.g. symlinks or
-		// relative paths that resolve outside src). filepath.Rel always returns a
-		// clean path, but IsLocal catches any ".." segments that escape the root.
+		// fs.WalkDir yields slash-separated paths; reject escapes before opening.
+		rel := filepath.FromSlash(p)
 		if !filepath.IsLocal(rel) {
-			return fmt.Errorf("repository contains path %q that escapes the clone root; refusing to copy", rel)
+			return fmt.Errorf("repository contains path %q that escapes the clone root; refusing to copy", p)
 		}
 		if d.IsDir() && d.Name() == ".git" {
-			return filepath.SkipDir
+			return fs.SkipDir
 		}
-		target := filepath.Join(dst, rel)
 		if d.IsDir() {
-			return os.MkdirAll(target, 0o750)
+			return dstRoot.MkdirAll(rel, 0o750)
 		}
-		return copyFile(p, target)
+		return copyFileBetweenRoots(srcRoot, dstRoot, rel)
 	})
 }
 
-func copyFile(src, dst string) error {
-	in, err := os.Open(src) // #nosec G304 -- src is a path within the cloned temp dir
+func copyFileBetweenRoots(srcRoot, dstRoot *os.Root, rel string) error {
+	in, err := srcRoot.Open(rel)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = in.Close() }()
-	// 0600: init and adapter share the same pod UID under OpenShift SCC assignment.
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) // #nosec G304 -- dst under staged /test_data
+	out, err := dstRoot.OpenFile(rel, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}
@@ -272,10 +281,15 @@ func relativeDestPath(prefix, key string) (string, error) {
 }
 
 func readSecret(name string) string {
-	if name == "" {
+	if name == "" || !filepath.IsLocal(name) || filepath.Base(name) != name {
 		return ""
 	}
-	content, err := os.ReadFile(filepath.Join(secretDir, name)) // #nosec G304 -- name is a fixed secret key
+	root, err := os.OpenRoot(secretDir)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = root.Close() }()
+	content, err := root.ReadFile(name)
 	if err != nil {
 		return ""
 	}

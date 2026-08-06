@@ -101,7 +101,7 @@ func (h *Handlers) HandleHealth(w http.ResponseWriter, _ *http.Request) {
 // The SHA is loaded from .git-metadata at startup when possible, and retried while still empty.
 func (h *Handlers) HandleProxyCall(w http.ResponseWriter, r *http.Request) {
 	if h.isGitJob() && r.Method == http.MethodPost && isEventsPath(r.RequestURI) {
-		r = h.maybeInjectGitSHA(r)
+		r = h.maybeInjectResolvedSHA(r)
 	}
 
 	proxyHandler, tokenParams, err := h.parseProxyCall(r)
@@ -131,16 +131,17 @@ func isEventsPath(uri string) bool {
 	return eventsPathRe.MatchString(requestPathForRouting(uri))
 }
 
-// maybeInjectGitSHA ensures a commit SHA is loaded (retrying if still empty), then injects it
-// into every BenchmarkStatusEvent body. If the SHA is still unavailable, any client-supplied
-// git_commit_sha is stripped so a failed metadata read cannot become a forge path. The server
-// skips persist if the SHA is already stored. Non-BenchmarkStatusEvent bodies are unchanged.
-func (h *Handlers) maybeInjectGitSHA(r *http.Request) *http.Request {
+// maybeInjectResolvedSHA ensures a commit SHA is loaded (retrying if still empty), then injects
+// it into JobMeta.ResolvedSHA on every BenchmarkStatusEvent body. If the SHA is still unavailable,
+// any client-supplied job_meta.resolved_sha is stripped so a failed metadata read cannot become a
+// forge path. The server skips persist if the SHA is already stored. Non-BenchmarkStatusEvent
+// bodies are unchanged.
+func (h *Handlers) maybeInjectResolvedSHA(r *http.Request) *http.Request {
 	h.tryLoadGitSHA()
 
 	rawBody, err := io.ReadAll(r.Body)
 	if err != nil {
-		h.logger.Error("failed to read request body for git SHA injection", "error", err)
+		h.logger.Error("failed to read request body for resolved SHA injection", "error", err)
 		r.Body = io.NopCloser(bytes.NewReader(rawBody))
 		return r
 	}
@@ -154,26 +155,30 @@ func (h *Handlers) maybeInjectGitSHA(r *http.Request) *http.Request {
 	}
 
 	sha := h.currentGitSHA()
+	clientSHA := ""
+	if ev.BenchmarkStatusEvent.JobMeta != nil {
+		clientSHA = ev.BenchmarkStatusEvent.JobMeta.ResolvedSHA
+	}
 	if sha != "" {
-		ev.BenchmarkStatusEvent.GitCommitSHA = sha
-	} else if ev.BenchmarkStatusEvent.GitCommitSHA == "" {
+		ev.BenchmarkStatusEvent.JobMeta = &api.JobMeta{ResolvedSHA: sha}
+	} else if clientSHA == "" {
 		// Nothing to inject or strip.
 		r.Body = io.NopCloser(bytes.NewReader(rawBody))
 		return r
 	} else {
 		// Metadata still missing — drop any client-supplied SHA.
-		ev.BenchmarkStatusEvent.GitCommitSHA = ""
+		ev.BenchmarkStatusEvent.JobMeta = nil
 	}
 
 	injected, err := json.Marshal(ev)
 	if err != nil {
-		h.logger.Error("failed to marshal status event with git SHA", "error", err)
+		h.logger.Error("failed to marshal status event with resolved SHA", "error", err)
 		r.Body = io.NopCloser(bytes.NewReader(rawBody))
 		return r
 	}
 
 	if sha != "" {
-		h.logger.Info("injected git commit SHA into status event", "sha", sha)
+		h.logger.Info("injected resolved SHA into status event", "sha", sha)
 	}
 	newReq := r.Clone(r.Context())
 	newReq.Body = io.NopCloser(bytes.NewReader(injected))
@@ -218,8 +223,20 @@ func (h *Handlers) gitMetadataFile() string {
 }
 
 // readGitMetadata reads the commit SHA written by the init container.
+// Reads are confined to the metadata directory via os.Root.
 func readGitMetadata(path string) (string, error) {
-	data, err := os.ReadFile(filepath.Clean(path)) // #nosec G304 -- fixed path written by trusted init container
+	clean := filepath.Clean(path)
+	dir := filepath.Dir(clean)
+	base := filepath.Base(clean)
+	if !filepath.IsLocal(base) {
+		return "", fmt.Errorf("invalid git metadata path: %q", path)
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = root.Close() }()
+	data, err := root.ReadFile(base)
 	if err != nil {
 		return "", err
 	}

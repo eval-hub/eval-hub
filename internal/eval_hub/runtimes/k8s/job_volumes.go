@@ -456,7 +456,7 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 
 		if cfg.testDataGit.secretRef != "" {
 			volumes = append(volumes, corev1.Volume{
-				Name: testDataGitSecretVolumeName,
+				Name: testDataGitAuthVolumeName,
 				VolumeSource: corev1.VolumeSource{
 					Secret: &corev1.SecretVolumeSource{
 						SecretName: cfg.testDataGit.secretRef,
@@ -464,7 +464,7 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 				},
 			})
 			gitInitVolumeMounts = append(gitInitVolumeMounts, corev1.VolumeMount{
-				Name:      testDataGitSecretVolumeName,
+				Name:      testDataGitAuthVolumeName,
 				MountPath: testDataSecretMountPath,
 				ReadOnly:  true,
 			})

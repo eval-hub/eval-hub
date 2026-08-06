@@ -16,6 +16,6 @@ const (
 	// writes after a successful git clone (mode 0600; init and sidecar share the
 	// pod UID). It contains the resolved commit SHA (one line, no trailing
 	// whitespace). The sidecar retries reading it on each BenchmarkStatusEvent
-	// proxy call until loaded, then injects the SHA into every event.
+	// proxy call until loaded, then injects it as JobMeta.ResolvedSHA on every event.
 	GitMetadataFile = InitMetadataDir + "/.git-metadata"
 )

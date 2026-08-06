@@ -71,8 +71,8 @@ const (
 	envTestDataGitURLName           = "TEST_DATA_GIT_URL"
 	envTestDataGitRefName           = "TEST_DATA_GIT_REF"
 	envTestDataGitSubPathName       = "TEST_DATA_GIT_SUBPATH"
-	testDataGitSecretVolumeName     = "test-data-git-secret" // #nosec G101 -- K8s volume name, not a credential
-	initMetadataVolumeName          = "init-metadata"        // emptyDir shared between init container and sidecar only
+	testDataGitAuthVolumeName       = "test-data-git-auth"
+	initMetadataVolumeName          = "init-metadata" // emptyDir shared between init container and sidecar only
 	initMetadataMountPath           = runtimeenv.InitMetadataDir
 	defaultInitCPURequest           = "100m"
 	defaultInitCPULimit             = "500m"
