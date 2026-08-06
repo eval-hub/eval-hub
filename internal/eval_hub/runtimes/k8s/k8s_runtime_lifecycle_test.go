@@ -154,7 +154,9 @@ func TestNotifyJobPhaseTransitionNoJobFound(t *testing.T) {
 func TestNotifyJobPhaseTransitionListJobsError(t *testing.T) {
 	evaluation := sampleEvaluation("provider-1")
 	clientset := fake.NewSimpleClientset()
+	var listCalled int
 	clientset.PrependReactor("list", "jobs", func(_ ktesting.Action) (bool, kruntime.Object, error) {
+		listCalled++
 		return true, nil, fmt.Errorf("api unavailable")
 	})
 	rt := &K8sRuntime{
@@ -162,6 +164,9 @@ func TestNotifyJobPhaseTransitionListJobsError(t *testing.T) {
 		helper: &KubernetesHelper{clientset: clientset},
 	}
 	rt.NotifyJobPhaseTransition(context.Background(), evaluation, 0, api.StateRunning)
+	if listCalled != 1 {
+		t.Fatalf("expected list jobs to be called once, got %d", listCalled)
+	}
 }
 
 func TestNotifyJobPhaseTransitionPatchLabelError(t *testing.T) {
@@ -177,7 +182,9 @@ func TestNotifyJobPhaseTransitionPatchLabelError(t *testing.T) {
 		},
 	}
 	clientset := fake.NewSimpleClientset(job)
+	var patchCalled int
 	clientset.PrependReactor("patch", "jobs", func(_ ktesting.Action) (bool, kruntime.Object, error) {
+		patchCalled++
 		return true, nil, fmt.Errorf("patch forbidden")
 	})
 	fakeRecorder := record.NewFakeRecorder(10)
@@ -186,10 +193,16 @@ func TestNotifyJobPhaseTransitionPatchLabelError(t *testing.T) {
 		helper: NewKubernetesHelperWithRecorder(clientset, fakeRecorder),
 	}
 	rt.NotifyJobPhaseTransition(context.Background(), evaluation, 0, api.StateRunning)
-	// drain any event that may have been emitted despite the patch error
+	if patchCalled != 1 {
+		t.Fatalf("expected patch to be called once, got %d", patchCalled)
+	}
 	select {
-	case <-fakeRecorder.Events:
+	case msg := <-fakeRecorder.Events:
+		if !strings.Contains(msg, "EvaluationRunning") {
+			t.Fatalf("expected EvaluationRunning in event, got: %s", msg)
+		}
 	default:
+		t.Fatal("expected an event to be emitted even when patch fails")
 	}
 }
 
