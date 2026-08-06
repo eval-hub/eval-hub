@@ -115,6 +115,7 @@ type scenarioConfig struct {
 	ociManifestBody       []byte
 	ociManifestError      error
 	ociManifestStatusCode int
+	ociManifestData       map[string]interface{} // Parsed manifest JSON
 
 	// OCI artifact fetching (the actual EvalCard JSON blob)
 	ociArtifactBody  []byte

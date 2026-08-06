@@ -1680,11 +1680,17 @@ Feature: Evaluation Jobs
     Then the response code should be 200
     # Verify results artifact exists with custom annotations in OCI metadata
     When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "{{env:OCI_TAG_ANNOTATIONS|annotations-test}}"
-    Then the OCI artifact should exist
+    # Verify custom annotations in manifest
+    Then the OCI manifest should contain annotation "team" with value "ml-platform"
+    And the OCI manifest should contain annotation "environment" with value "test"
+    And the OCI manifest should contain annotation "cost-center" with value "research"
+    # Verify artifact content
+    And the OCI artifact should exist
     And the OCI artifact should be valid JSON
     And the OCI artifact should contain "benchmark_id"
     And the OCI artifact should contain "model_name"
     And the OCI artifact should contain "results"
+    And the OCI artifact should contain the value "{{value:job_id}}" at path "$.id"
 
   @oci
   Scenario: OCI export validation errors for missing required fields

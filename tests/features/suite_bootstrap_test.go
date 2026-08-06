@@ -595,6 +595,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	// OCI artifact steps
 	ctx.Step(`^I fetch the OCI manifest for repository "([^"]*)" and tag "([^"]*)"$`, tc.iFetchOCIManifestByRepoAndTag)
 	ctx.Step(`^the OCI manifest should not exist$`, tc.theOCIManifestShouldNotExist)
+	ctx.Step(`^the OCI manifest should contain annotation "([^"]*)" with value "([^"]*)"$`, tc.theOCIManifestShouldContainAnnotation)
 	ctx.Step(`^the OCI artifact should exist$`, tc.theOCIArtifactShouldExist)
 	ctx.Step(`^the OCI artifact should contain "([^"]*)"$`, tc.theOCIArtifactShouldContain)
 	ctx.Step(`^the OCI artifact should contain the value "([^"]*)" at path "([^"]*)"$`, tc.theOCIArtifactShouldContainValueAtPath)

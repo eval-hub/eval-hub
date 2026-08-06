@@ -83,12 +83,13 @@ func (tc *scenarioConfig) iFetchOCIManifestByRepoAndTag(repository, tag string) 
 	tc.ociManifestError = nil
 	tc.logDebug("OCI manifest fetched successfully (%d bytes)\n", len(body))
 
-	// Parse manifest to extract blob digest
+	// Parse manifest to extract blob digest and store for annotation verification
 	var manifestData map[string]interface{}
 	if err := json.Unmarshal(body, &manifestData); err != nil {
 		tc.ociManifestError = err
 		return tc.logError(fmt.Errorf("failed to parse OCI manifest JSON: %w", err))
 	}
+	tc.ociManifestData = manifestData // Store for later annotation assertions
 
 	// Validate layers array exists and is non-empty
 	layers, err := jsonpath.Get("$.layers", manifestData)
@@ -333,5 +334,50 @@ func (tc *scenarioConfig) theOCIArtifactShouldBeValidJSON() error {
 	}
 
 	tc.logDebug("OCI artifact is valid JSON\n")
+	return nil
+}
+
+// theOCIManifestShouldContainAnnotation verifies a specific annotation exists in the OCI manifest
+func (tc *scenarioConfig) theOCIManifestShouldContainAnnotation(key, expectedValue string) error {
+	if tc.ociManifestError != nil {
+		return tc.logError(fmt.Errorf("OCI manifest fetch failed: %w", tc.ociManifestError))
+	}
+	if tc.ociManifestData == nil {
+		return tc.logError(fmt.Errorf("OCI manifest data not available"))
+	}
+
+	// Resolve expected value from saved values if needed
+	expectedResolved, err := tc.getValue(expectedValue)
+	if err != nil {
+		return tc.logError(fmt.Errorf("failed to resolve expected value %q: %w", expectedValue, err))
+	}
+
+	// Extract annotations from manifest
+	annotations, err := jsonpath.Get("$.annotations", tc.ociManifestData)
+	if err != nil {
+		return tc.logError(fmt.Errorf("OCI manifest has no annotations field: %w", err))
+	}
+
+	annotationsMap, ok := annotations.(map[string]interface{})
+	if !ok {
+		return tc.logError(fmt.Errorf("OCI manifest annotations is not a map: %T", annotations))
+	}
+
+	// Check if annotation key exists and matches expected value
+	actualValue, exists := annotationsMap[key]
+	if !exists {
+		return tc.logError(fmt.Errorf("OCI manifest annotation %q not found. Available annotations: %v", key, annotationsMap))
+	}
+
+	actualStr, ok := actualValue.(string)
+	if !ok {
+		return tc.logError(fmt.Errorf("OCI manifest annotation %q is not a string: %T", key, actualValue))
+	}
+
+	if actualStr != expectedResolved {
+		return tc.logError(fmt.Errorf("OCI manifest annotation %q = %q, expected %q", key, actualStr, expectedResolved))
+	}
+
+	tc.logDebug("OCI manifest annotation %q = %q (verified)\n", key, actualStr)
 	return nil
 }
