@@ -82,10 +82,11 @@ func NewKubernetesHelper() (*KubernetesHelper, error) {
 
 // Close shuts down the event broadcaster, stopping its background goroutines.
 // It should be called when the helper is no longer needed.
-func (h *KubernetesHelper) Close() {
+func (h *KubernetesHelper) Close() error {
 	if h.broadcaster != nil {
 		h.broadcaster.Shutdown()
 	}
+	return nil
 }
 
 // NewKubernetesHelperWithClientset returns a helper backed by the given clientset.

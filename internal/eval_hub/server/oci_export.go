@@ -54,7 +54,7 @@ func newOCIPublisherFactory(logger *slog.Logger, serviceConfig *config.Config) (
 	}
 	httpClient, err := evalcards.NewOCIHTTPClient(serviceConfig, serviceConfig.IsOTELEnabled(), logger)
 	if err != nil {
-		helper.Close()
+		_ = helper.Close()
 		if logger != nil {
 			logger.Warn("OCI export unavailable: failed to create oci http client", "error", err)
 		}
@@ -63,7 +63,7 @@ func newOCIPublisherFactory(logger *slog.Logger, serviceConfig *config.Config) (
 	return evalcards.NewOCIPublisherFactory(
 		newKubernetesDockerConfigSecretGetter(helper),
 		httpClient,
-	), helper.Close
+	), func() { _ = helper.Close() }
 }
 
 type unavailableOCIPublisherFactory struct {
