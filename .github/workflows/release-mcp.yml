@@ -10,6 +10,7 @@ permissions:
 jobs:
   build-release:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       actions: read
       contents: write
@@ -48,6 +49,7 @@ jobs:
       run: |
         set -euo pipefail
         attempt=0
+        settle=0
         while true; do
           attempt=$((attempt + 1))
           if gh release view "${TAG}" >/dev/null 2>&1; then
@@ -106,9 +108,10 @@ jobs:
           fi
 
           # Rare race: run succeeded but release not visible yet.
-          echo "Signed release succeeded but release ${TAG} not visible yet; retrying (poll=${attempt})..."
+          settle=$((settle + 1))
+          echo "Signed release succeeded but release ${TAG} not visible yet; retrying (settle=${settle})..."
           sleep 15
-          if [[ "${attempt}" -ge 20 ]]; then
+          if [[ "${settle}" -ge 20 ]]; then
             echo "::error::Signed release succeeded for ${SHA} but GitHub Release ${TAG} never became available."
             exit 1
           fi

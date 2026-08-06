@@ -127,7 +127,7 @@ jobs:
             - Replace this body with curated release notes (major changes and upgrade
               impact) via the release-notes skill when ready — do not leave raw
               \`git log\` or unedited \`--generate-notes\` output as the final notes.
-            EOF
+          EOF
             # Strip leading indentation from the heredoc for readable GitHub markdown.
             sed -i 's/^            //' /tmp/evalhub-release-notes.md
             gh release create "${TAG}" --draft --title "${TAG}" \
@@ -178,6 +178,7 @@ jobs:
     needs: [prepare, provenance]
     if: inputs.publish && needs.prepare.outputs.skip != 'true' && needs.provenance.result == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       actions: read
       contents: write
@@ -196,6 +197,7 @@ jobs:
           set -euo pipefail
           # Undraft only after Release MCP has uploaded binaries (immutable-release friendly).
           attempt=0
+          settle=0
           while true; do
             attempt=$((attempt + 1))
             ASSETS="$(gh release view "${TAG}" --json assets --jq '[.assets[].name]')"
@@ -254,9 +256,10 @@ jobs:
               exit 1
             fi
 
-            echo "Release MCP succeeded but MCP assets not visible yet; retrying (poll=${attempt})..."
+            settle=$((settle + 1))
+            echo "Release MCP succeeded but MCP assets not visible yet; retrying (settle=${settle})..."
             sleep 15
-            if [[ "${attempt}" -ge 20 ]]; then
+            if [[ "${settle}" -ge 20 ]]; then
               echo "::error::Release MCP succeeded for ${SHA} but MCP assets never appeared on ${TAG}."
               exit 1
             fi
