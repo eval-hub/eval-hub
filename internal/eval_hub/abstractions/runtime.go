@@ -37,6 +37,11 @@ type Runtime interface {
 	// ValidateHardwareProfiles validates HardwareProfile refs on create (exist, enabled,
 	// namespace configured). No-op for runtimes that do not use cluster HardwareProfiles.
 	ValidateHardwareProfiles(benchmarks []api.EvaluationBenchmarkConfig) error
+	// NotifyJobPhaseTransition informs the runtime that a benchmark job has transitioned to a
+	// new phase. Implementations emit runtime-native signals (e.g., Kubernetes Events and label
+	// patches on the backing Job object). Errors are absorbed internally — lifecycle signals are
+	// best-effort and must never propagate to the caller.
+	NotifyJobPhaseTransition(ctx context.Context, evaluation *api.EvaluationJobResource, benchmarkIndex int, state api.State)
 }
 
 // This interface must be decoupled from the service HTTP layer

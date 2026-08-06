@@ -96,6 +96,8 @@ func (r *stubRuntime) GetEvaluationLogs(
 ) (string, error) {
 	return "", nil
 }
+func (r *stubRuntime) NotifyJobPhaseTransition(_ context.Context, _ *api.EvaluationJobResource, _ int, _ api.State) {
+}
 
 func (r *stubRuntime) ValidateHardwareProfiles(_ []api.EvaluationBenchmarkConfig) error {
 	return nil
