@@ -119,7 +119,7 @@ func TestRunEvaluationJobWithHardwareProfileCreatesResources(t *testing.T) {
 			Resource: api.Resource{ID: jobID, Tenant: api.Tenant(jobNamespace)},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},

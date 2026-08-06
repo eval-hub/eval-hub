@@ -93,7 +93,7 @@ func TestRunEvaluationJobCreatesResources(t *testing.T) {
 			Resource: api.Resource{ID: jobID},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},
@@ -227,7 +227,7 @@ func TestCreateBenchmarkResourcesDuplicateBenchmarkIDDoesNotCollide(t *testing.T
 			Resource: api.Resource{ID: uuid.NewString()},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},
@@ -302,7 +302,7 @@ func TestCreateBenchmarkResourcesSetsAnnotationsIntegration(t *testing.T) {
 			Resource: api.Resource{ID: uuid.NewString()},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},
@@ -398,7 +398,7 @@ func TestCreateBenchmarkResourcesAddsModelAuthVolumeAndEnvIntegration(t *testing
 			Resource: api.Resource{ID: uuid.NewString()},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 				Auth: &api.ModelAuth{SecretRef: "model-auth-secret"},
@@ -493,7 +493,7 @@ func TestCreateBenchmarkResourcesAddsInitContainerForS3TestDataIntegration(t *te
 			Resource: api.Resource{ID: uuid.NewString()},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},

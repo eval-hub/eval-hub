@@ -37,7 +37,7 @@ func TestEvaluationJobConfigBenchmarksMin_WithCollection(t *testing.T) {
 	// When Collection is set with ID, empty Benchmarks is allowed
 	cfg := api.EvaluationJobConfig{
 		Name:       "test-evaluation-job",
-		Model:      api.ModelRef{URL: "http://test.com", Name: "model"},
+		Model:      &api.ModelRef{URL: "http://test.com", Name: "model"},
 		Collection: &api.CollectionRef{ID: "coll-1"},
 		Benchmarks: []api.EvaluationBenchmarkConfig{},
 	}
@@ -52,7 +52,7 @@ func TestEvaluationJobConfigBenchmarksMin_WithoutCollection_EmptyBenchmarks(t *t
 	// When Collection is not set, Benchmarks must have at least 1 element
 	cfg := api.EvaluationJobConfig{
 		Name:       "test-evaluation-job",
-		Model:      api.ModelRef{URL: "http://test.com", Name: "model"},
+		Model:      &api.ModelRef{URL: "http://test.com", Name: "model"},
 		Benchmarks: []api.EvaluationBenchmarkConfig{},
 	}
 	err := validate.Struct(cfg)
@@ -73,7 +73,7 @@ func TestEvaluationJobConfigBenchmarksMin_WithoutCollection_WithBenchmark(t *tes
 	validate := newTestValidator(t)
 	cfg := api.EvaluationJobConfig{
 		Name:  "test-evaluation-job",
-		Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+		Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
 		Benchmarks: []api.EvaluationBenchmarkConfig{
 			{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
 		},
@@ -88,7 +88,7 @@ func TestEvaluationJobConfig_ExperimentWithoutNameFails(t *testing.T) {
 	validate := newTestValidator(t)
 	cfg := api.EvaluationJobConfig{
 		Name:  "test-evaluation-job",
-		Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+		Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
 		Benchmarks: []api.EvaluationBenchmarkConfig{
 			{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
 		},
@@ -118,7 +118,7 @@ func TestEvaluationJobConfig_ExperimentNameEmptyStringFails(t *testing.T) {
 	validate := newTestValidator(t)
 	cfg := api.EvaluationJobConfig{
 		Name:  "test-evaluation-job",
-		Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+		Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
 		Benchmarks: []api.EvaluationBenchmarkConfig{
 			{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
 		},
@@ -149,7 +149,7 @@ func TestEvaluationJobConfig_ExperimentNameWhitespaceOnlyFails(t *testing.T) {
 	ws := " \t "
 	cfg := api.EvaluationJobConfig{
 		Name:  "test-evaluation-job",
-		Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+		Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
 		Benchmarks: []api.EvaluationBenchmarkConfig{
 			{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
 		},
@@ -193,7 +193,7 @@ func TestQueueConfig_InvalidNameRejected(t *testing.T) {
 		t.Run("benchmark_hardware_config/"+name, func(t *testing.T) {
 			cfg := api.EvaluationJobConfig{
 				Name:  "test-job",
-				Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+				Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
 				Benchmarks: []api.EvaluationBenchmarkConfig{
 					{
 						Ref:        api.Ref{ID: "b1"},
@@ -211,7 +211,7 @@ func TestQueueConfig_InvalidNameRejected(t *testing.T) {
 		t.Run("evaluation_hardware_config/"+name, func(t *testing.T) {
 			cfg := api.EvaluationJobConfig{
 				Name:  "test-job",
-				Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+				Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
 				Benchmarks: []api.EvaluationBenchmarkConfig{
 					{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
 				},
@@ -226,7 +226,7 @@ func TestQueueConfig_InvalidNameRejected(t *testing.T) {
 		t.Run("deprecated_evaluation_queue/"+name, func(t *testing.T) {
 			cfg := api.EvaluationJobConfig{
 				Name:  "test-job",
-				Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+				Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
 				Benchmarks: []api.EvaluationBenchmarkConfig{
 					{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
 				},
@@ -252,7 +252,7 @@ func TestQueueConfig_ValidNameAccepted(t *testing.T) {
 		t.Run("benchmark_hardware_config/"+name, func(t *testing.T) {
 			cfg := api.EvaluationJobConfig{
 				Name:  "test-job",
-				Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+				Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
 				Benchmarks: []api.EvaluationBenchmarkConfig{
 					{
 						Ref:        api.Ref{ID: "b1"},
@@ -270,7 +270,7 @@ func TestQueueConfig_ValidNameAccepted(t *testing.T) {
 		t.Run("evaluation_hardware_config/"+name, func(t *testing.T) {
 			cfg := api.EvaluationJobConfig{
 				Name:  "test-job",
-				Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+				Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
 				Benchmarks: []api.EvaluationBenchmarkConfig{
 					{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
 				},
@@ -285,7 +285,7 @@ func TestQueueConfig_ValidNameAccepted(t *testing.T) {
 		t.Run("deprecated_evaluation_queue/"+name, func(t *testing.T) {
 			cfg := api.EvaluationJobConfig{
 				Name:  "test-job",
-				Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+				Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
 				Benchmarks: []api.EvaluationBenchmarkConfig{
 					{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
 				},
@@ -314,7 +314,7 @@ func TestBenchmarkHardwareConfig_InvalidNameRejected(t *testing.T) {
 	for _, name := range invalid {
 		cfg := api.EvaluationJobConfig{
 			Name:  "test-job",
-			Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+			Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref:        api.Ref{ID: "b1"},
@@ -343,7 +343,7 @@ func TestBenchmarkHardwareConfig_ValidNameAccepted(t *testing.T) {
 	for _, name := range valid {
 		cfg := api.EvaluationJobConfig{
 			Name:  "test-job",
-			Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+			Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref:        api.Ref{ID: "b1"},
@@ -400,7 +400,7 @@ func TestBenchmarkHardwareConfig_ProfileWithDirectFieldsRejected(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := api.EvaluationJobConfig{
 				Name:  "test-job",
-				Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+				Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
 				Benchmarks: []api.EvaluationBenchmarkConfig{
 					{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1", HardwareConfig: tc.hw},
 				},
@@ -416,7 +416,7 @@ func TestBenchmarkHardwareConfig_DirectFieldsAccepted(t *testing.T) {
 	validate := newTestValidator(t)
 	cfg := api.EvaluationJobConfig{
 		Name:  "test-job",
-		Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+		Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
 		Benchmarks: []api.EvaluationBenchmarkConfig{
 			{
 				Ref:        api.Ref{ID: "b1"},
@@ -439,7 +439,7 @@ func TestEvaluationJobConfig_ExperimentOmittedOk(t *testing.T) {
 	validate := newTestValidator(t)
 	cfg := api.EvaluationJobConfig{
 		Name:  "test-evaluation-job",
-		Model: api.ModelRef{URL: "http://test.com", Name: "model"},
+		Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
 		Benchmarks: []api.EvaluationBenchmarkConfig{
 			{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
 		},

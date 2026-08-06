@@ -73,7 +73,7 @@ var mockJobs = []api.EvaluationJobResource{
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Name:  "test-eval-1",
-			Model: api.ModelRef{URL: "http://model:8080", Name: "test-model"},
+			Model: &api.ModelRef{URL: "http://model:8080", Name: "test-model"},
 		},
 	},
 	{
@@ -86,7 +86,7 @@ var mockJobs = []api.EvaluationJobResource{
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Name:  "test-eval-2",
-			Model: api.ModelRef{URL: "http://model:8080", Name: "test-model"},
+			Model: &api.ModelRef{URL: "http://model:8080", Name: "test-model"},
 		},
 	},
 }
