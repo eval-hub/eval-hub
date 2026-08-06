@@ -110,6 +110,18 @@ type scenarioConfig struct {
 	// MLflow artifact fetching
 	mlflowArtifactBody  []byte
 	mlflowArtifactError error
+
+	// OCI manifest fetching
+	ociManifestBody       []byte
+	ociManifestError      error
+	ociManifestStatusCode int
+
+	// OCI artifact fetching (the actual EvalCard JSON blob)
+	ociArtifactBody  []byte
+	ociArtifactError error
+
+	// Shared HTTP client for OCI operations
+	ociHTTPClient *http.Client
 }
 
 func getLogger() *log.Logger {

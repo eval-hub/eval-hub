@@ -552,6 +552,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the response body should contain "([^"]*)"$`, tc.theResponseBodyShouldContain)
 	ctx.Step(`^the response should contain "([^"]*)" with value "([^"]*)"$`, tc.theResponseShouldContainWithValue)
 	ctx.Step(`^the response should contain "([^"]*)"$`, tc.theResponseShouldContain)
+	ctx.Step(`^the response should not contain "([^"]*)"$`, tc.theResponseShouldNotContain)
 	ctx.Step(`^the response should be JSON$`, tc.theResponseShouldBeJSON)
 	ctx.Step(`^the response should contain Prometheus metrics$`, tc.theResponseShouldContainPrometheusMetrics)
 	ctx.Step(`^the metrics should include "([^"]*)"$`, tc.theMetricsShouldInclude)
@@ -590,6 +591,14 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the MLflow artifact should be valid JSON$`, tc.theMLflowArtifactShouldBeValidJSON)
 	ctx.Step(`^the MLflow artifact field "([^"]*)" should match ISO 8601 format$`, tc.theMLflowArtifactFieldShouldMatchISO8601)
 	ctx.Step(`^I wait for the evaluation job status to match "([^"]*)"$`, tc.iWaitForEvaluationJobStatusToMatch)
+
+	// OCI artifact steps
+	ctx.Step(`^I fetch the OCI manifest for repository "([^"]*)" and tag "([^"]*)"$`, tc.iFetchOCIManifestByRepoAndTag)
+	ctx.Step(`^the OCI manifest should not exist$`, tc.theOCIManifestShouldNotExist)
+	ctx.Step(`^the OCI artifact should exist$`, tc.theOCIArtifactShouldExist)
+	ctx.Step(`^the OCI artifact should contain "([^"]*)"$`, tc.theOCIArtifactShouldContain)
+	ctx.Step(`^the OCI artifact should contain the value "([^"]*)" at path "([^"]*)"$`, tc.theOCIArtifactShouldContainValueAtPath)
+	ctx.Step(`^the OCI artifact should be valid JSON$`, tc.theOCIArtifactShouldBeValidJSON)
 
 	// GPU-specific steps
 	InitializeGPUSteps(ctx, tc)

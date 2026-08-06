@@ -89,6 +89,24 @@ func (tc *scenarioConfig) theResponseShouldContain(key string) error {
 	return nil
 }
 
+func (tc *scenarioConfig) theResponseShouldNotContain(key string) error {
+	var data map[string]interface{}
+	if err := json.Unmarshal(tc.body, &data); err != nil {
+		return tc.logError(err)
+	}
+
+	k, err := tc.getValue(key)
+	if err != nil {
+		return err
+	}
+
+	if _, ok := data[k]; ok {
+		return tc.logError(fmt.Errorf("response should not contain key %q but it exists in %s", k, asPrettyJson(string(tc.body))))
+	}
+
+	return nil
+}
+
 func (tc *scenarioConfig) theResponseShouldContainPrometheusMetrics() error {
 	bodyStr := string(tc.body)
 	if !strings.Contains(bodyStr, "# HELP") || !strings.Contains(bodyStr, "# TYPE") {
