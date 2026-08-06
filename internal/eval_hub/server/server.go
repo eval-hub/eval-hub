@@ -36,6 +36,7 @@ type Server struct {
 	runtime         abstractions.Runtime
 	mlflowClient    *mlflowclient.Client
 	resultsExporter evalcards.ResultsExporter
+	ociCleanup      func()
 }
 
 func (s *Server) isOTELEnabled() bool {
@@ -84,9 +85,10 @@ func NewServer(logger *slog.Logger,
 		return nil, fmt.Errorf("validator is required for the server")
 	}
 
+	ociFactory, ociCleanup := newOCIPublisherFactory(logger, serviceConfig)
 	resultsExporter := evalcards.NewManager(logger, evalcards.ManagerConfig{
 		MLFlowClient:        mlflowClient,
-		OCIPublisherFactory: newOCIPublisherFactory(logger, serviceConfig),
+		OCIPublisherFactory: ociFactory,
 	})
 
 	return &Server{
@@ -98,6 +100,7 @@ func NewServer(logger *slog.Logger,
 		runtime:         runtime,
 		mlflowClient:    mlflowClient,
 		resultsExporter: resultsExporter,
+		ociCleanup:      ociCleanup,
 	}, nil
 }
 
@@ -545,6 +548,9 @@ func (s *Server) Start() error {
 
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.logger.Info("Shutting down API server gracefully...")
+	if s.ociCleanup != nil {
+		s.ociCleanup()
+	}
 	return s.httpServer.Shutdown(ctx)
 }
 

@@ -3,6 +3,7 @@ package k8s
 // Helper wrapper around the Kubernetes clientset.
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 
@@ -11,10 +12,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/record"
 )
 
 // KubernetesHelper wraps the Kubernetes client-go client and exposes methods to interact with the cluster.
@@ -23,6 +28,8 @@ import (
 type KubernetesHelper struct {
 	clientset     kubernetes.Interface
 	dynamicClient dynamic.Interface
+	recorder      record.EventRecorder
+	broadcaster   record.EventBroadcaster
 }
 
 var hardwareProfileGVR = schema.GroupVersionResource{
@@ -62,16 +69,36 @@ func NewKubernetesHelper() (*KubernetesHelper, error) {
 	if err != nil {
 		return nil, err
 	}
+	broadcaster := record.NewBroadcaster()
+	broadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: clientset.CoreV1().Events("")})
+	recorder := broadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: "evalhub-server"})
 	return &KubernetesHelper{
 		clientset:     clientset,
 		dynamicClient: dynamicClient,
+		recorder:      recorder,
+		broadcaster:   broadcaster,
 	}, nil
+}
+
+// Close shuts down the event broadcaster, stopping its background goroutines.
+// It should be called when the helper is no longer needed.
+func (h *KubernetesHelper) Close() error {
+	if h.broadcaster != nil {
+		h.broadcaster.Shutdown()
+	}
+	return nil
 }
 
 // NewKubernetesHelperWithClientset returns a helper backed by the given clientset.
 // It is intended for unit tests that need deterministic Kubernetes API behavior.
 func NewKubernetesHelperWithClientset(clientset kubernetes.Interface) *KubernetesHelper {
 	return &KubernetesHelper{clientset: clientset}
+}
+
+// NewKubernetesHelperWithRecorder returns a helper backed by the given clientset and recorder.
+// It is intended for unit tests that need to assert on emitted Kubernetes Events.
+func NewKubernetesHelperWithRecorder(clientset kubernetes.Interface, recorder record.EventRecorder) *KubernetesHelper {
+	return &KubernetesHelper{clientset: clientset, recorder: recorder}
 }
 
 // GetHardwareProfile fetches a HardwareProfile custom resource by name in the given namespace.
@@ -270,6 +297,47 @@ func (h *KubernetesHelper) GetPodLogs(ctx context.Context, namespace, podName st
 		return "", err
 	}
 	return string(data), nil
+}
+
+// EmitEvent emits a Kubernetes Event against the given Job using the configured EventRecorder.
+// eventtype must be corev1.EventTypeNormal or corev1.EventTypeWarning.
+// Returns an error if the recorder is not configured or job is nil; the recorder records asynchronously.
+func (h *KubernetesHelper) EmitEvent(job *batchv1.Job, eventtype, reason, messageFmt string, args ...any) error {
+	if h.recorder == nil {
+		return fmt.Errorf("event recorder is not configured")
+	}
+	if job == nil {
+		return fmt.Errorf("job is required")
+	}
+	if eventtype != corev1.EventTypeNormal && eventtype != corev1.EventTypeWarning {
+		return fmt.Errorf("unsupported event type %q: must be %q or %q", eventtype, corev1.EventTypeNormal, corev1.EventTypeWarning)
+	}
+	h.recorder.Eventf(job, eventtype, reason, messageFmt, args...)
+	return nil
+}
+
+// PatchJobPhaseLabel patches the trustyai.opendatahub.io/evaluation-phase label on a Job.
+// Patching metadata labels does not restart the Job or its Pods.
+func (h *KubernetesHelper) PatchJobPhaseLabel(ctx context.Context, namespace, name, phase string) error {
+	if namespace == "" || name == "" {
+		return fmt.Errorf("namespace and name are required")
+	}
+	if phase == "" {
+		return fmt.Errorf("phase is required")
+	}
+	patch := map[string]any{
+		"metadata": map[string]any{
+			"labels": map[string]string{
+				"trustyai.opendatahub.io/evaluation-phase": phase,
+			},
+		},
+	}
+	patchBytes, err := json.Marshal(patch)
+	if err != nil {
+		return fmt.Errorf("marshal patch: %w", err)
+	}
+	_, err = h.clientset.BatchV1().Jobs(namespace).Patch(ctx, name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
+	return err
 }
 
 // CreateConfigMapOptions holds optional metadata for CreateConfigMap.

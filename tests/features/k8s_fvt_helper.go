@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -66,4 +67,62 @@ func (c *fvtK8sClient) listJobs(ctx context.Context, namespace, labelSelector st
 		return nil, err
 	}
 	return list.Items, nil
+}
+
+// getJobNameForEvalJob returns the name of the Kubernetes Job backing the given eval-hub job ID.
+func (c *fvtK8sClient) getJobNameForEvalJob(ctx context.Context, namespace, evalJobID string) (string, error) {
+	labelSelector := fmt.Sprintf("job_id=%s", evalJobID)
+	jobs, err := c.listJobs(ctx, namespace, labelSelector)
+	if err != nil {
+		return "", fmt.Errorf("list jobs for eval job %s: %w", evalJobID, err)
+	}
+	if len(jobs) == 0 {
+		return "", fmt.Errorf("no Kubernetes Job found for eval job %s in namespace %s", evalJobID, namespace)
+	}
+	return jobs[0].Name, nil
+}
+
+// getJobPhaseLabel returns the value of the trustyai.opendatahub.io/evaluation-phase label
+// on the Kubernetes Job backing the given eval-hub job ID, or "" if the label is absent.
+func (c *fvtK8sClient) getJobPhaseLabel(ctx context.Context, namespace, evalJobID string) (string, error) {
+	labelSelector := fmt.Sprintf("job_id=%s", evalJobID)
+	jobs, err := c.listJobs(ctx, namespace, labelSelector)
+	if err != nil {
+		return "", fmt.Errorf("list jobs for eval job %s: %w", evalJobID, err)
+	}
+	if len(jobs) == 0 {
+		return "", fmt.Errorf("no Kubernetes Job found for eval job %s in namespace %s", evalJobID, namespace)
+	}
+	return jobs[0].Labels["trustyai.opendatahub.io/evaluation-phase"], nil
+}
+
+// waitForEventOnJob polls the Kubernetes Events API until an event with the given reason is found
+// on the Job named jobName (involvedObject.kind=Job). It returns on the first match or when ctx
+// is cancelled.
+func (c *fvtK8sClient) waitForEventOnJob(ctx context.Context, namespace, jobName, reason string) error {
+	if namespace == "" || jobName == "" || reason == "" {
+		return fmt.Errorf("namespace, jobName and reason are required")
+	}
+	fieldSelector := fmt.Sprintf(
+		"involvedObject.name=%s,involvedObject.kind=Job,involvedObject.namespace=%s,reason=%s",
+		jobName, namespace, reason,
+	)
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout waiting for Kubernetes Event reason=%s on Job %s/%s", reason, namespace, jobName)
+		case <-ticker.C:
+			list, err := c.clientset.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
+				FieldSelector: fieldSelector,
+			})
+			if err != nil {
+				continue
+			}
+			if len(list.Items) > 0 {
+				return nil
+			}
+		}
+	}
 }

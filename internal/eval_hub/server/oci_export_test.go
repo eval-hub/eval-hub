@@ -19,9 +19,10 @@ import (
 func TestNewOCIPublisherFactoryLocalModeReturnsNoop(t *testing.T) {
 	t.Parallel()
 
-	factory := newOCIPublisherFactory(nil, &config.Config{
+	factory, cleanup := newOCIPublisherFactory(nil, &config.Config{
 		Service: &config.ServiceConfig{LocalMode: true},
 	})
+	defer cleanup()
 	publisher, err := factory.NewPublisher(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("NewPublisher() err = %v", err)
@@ -37,7 +38,8 @@ func TestNewOCIPublisherFactoryLocalModeReturnsNoop(t *testing.T) {
 func TestNewOCIPublisherFactoryNilConfigReturnsNoop(t *testing.T) {
 	t.Parallel()
 
-	factory := newOCIPublisherFactory(nil, nil)
+	factory, cleanup := newOCIPublisherFactory(nil, nil)
+	defer cleanup()
 	publisher, err := factory.NewPublisher(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("NewPublisher() err = %v", err)
@@ -59,12 +61,13 @@ func TestNewOCIPublisherFactoryReturnsErrorWhenHTTPClientInitFails(t *testing.T)
 		t.Fatalf("WriteFile() err = %v", err)
 	}
 
-	factory := newOCIPublisherFactory(nil, &config.Config{
+	factory, cleanup := newOCIPublisherFactory(nil, &config.Config{
 		Service: &config.ServiceConfig{LocalMode: false},
 		Sidecar: &config.SidecarConfig{
 			OCI: &config.SidecarOCIConfig{CACertPath: badCA},
 		},
 	})
+	defer cleanup()
 	_, err := factory.NewPublisher(context.Background(), &api.EvaluationJobResource{
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Exports: &api.EvaluationExports{OCI: &api.EvaluationExportsOCI{}},
@@ -122,9 +125,10 @@ func TestNewOCIPublisherFactoryClusterModeUsesRealFactory(t *testing.T) {
 		t.Skipf("kubernetes client unavailable: %v", err)
 	}
 
-	factory := newOCIPublisherFactory(nil, &config.Config{
+	factory, cleanup := newOCIPublisherFactory(nil, &config.Config{
 		Service: &config.ServiceConfig{LocalMode: false},
 	})
+	defer cleanup()
 	_, err := factory.NewPublisher(context.Background(), &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1", Tenant: "tenant-a"}},
 		EvaluationJobConfig: api.EvaluationJobConfig{

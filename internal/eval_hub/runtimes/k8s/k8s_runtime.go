@@ -54,6 +54,16 @@ func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 	}
 }
 
+// Close stops the Kubernetes EventBroadcaster background goroutines started by NewKubernetesHelper.
+// WithLogger/WithContext copies share the same helper pointer, so Close must be called exactly once
+// on the root runtime returned by NewK8sRuntime.
+func (r *K8sRuntime) Close() error {
+	if r.helper == nil {
+		return nil
+	}
+	return r.helper.Close()
+}
+
 func (r *K8sRuntime) RunEvaluationJob(
 	evaluation *api.EvaluationJobResource,
 	benchmarks []api.EvaluationBenchmarkConfig,
