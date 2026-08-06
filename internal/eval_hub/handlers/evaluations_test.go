@@ -949,7 +949,7 @@ func TestHandleUpdateEvaluationRewritesSidecarURLsInMessages(t *testing.T) {
 	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{
 		job: &api.EvaluationJobResource{
 			EvaluationJobConfig: api.EvaluationJobConfig{
-				Model: api.ModelRef{URL: "https://api.openai.com/v1", Name: "gpt"},
+				Model: &api.ModelRef{URL: "https://api.openai.com/v1", Name: "gpt"},
 				Exports: &api.EvaluationExports{
 					OCI: &api.EvaluationExportsOCI{
 						Coordinates: api.OCICoordinates{

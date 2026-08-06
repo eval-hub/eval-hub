@@ -55,7 +55,9 @@ func (h *Handlers) sidecarURLTargets(job *api.EvaluationJobResource) api.Sidecar
 	if job == nil {
 		return targets
 	}
-	targets.Model = strings.TrimSpace(job.Model.URL)
+	if job.Model != nil {
+		targets.Model = strings.TrimSpace(job.Model.URL)
+	}
 	if job.Exports != nil && job.Exports.OCI != nil {
 		coords := job.Exports.OCI.Coordinates
 		targets.OCIRepository = strings.TrimSpace(coords.OCIRepository)

@@ -40,7 +40,7 @@ type EvaluationCardMetadata struct {
 //   - Contains only model, collection_id, and benchmarks; omits name, description, tags, pass_criteria, experiment, custom, and exports.
 //   - collection_id is a flat string field; api uses a nested api.CollectionRef (id plus optional benchmark overrides).
 type EvaluationCardContext struct {
-	Model        CardModelRef          `json:"model"`
+	Model        *CardModelRef         `json:"model,omitempty"`
 	CollectionID string                `json:"collection_id,omitempty"`
 	Benchmarks   []CardBenchmarkConfig `json:"benchmarks,omitempty"`
 }

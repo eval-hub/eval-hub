@@ -356,7 +356,7 @@ func buildJobConfig(input SubmitEvaluationInput) api.EvaluationJobConfig {
 	config := api.EvaluationJobConfig{
 		Name:       input.Name,
 		Tags:       input.Tags,
-		Model:      input.Model,
+		Model:      &input.Model,
 		Benchmarks: input.Benchmarks,
 	}
 
