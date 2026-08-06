@@ -10,9 +10,24 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// lifecycleSignalTimeout caps each NotifyJobPhaseTransition call. Lifecycle signals are
-// best-effort; slow API operations should not hold the caller indefinitely.
-const lifecycleSignalTimeout = 10 * time.Second
+const (
+	// lifecycleSignalTimeout caps each NotifyJobPhaseTransition call. Lifecycle signals are
+	// best-effort; slow API operations should not hold the caller indefinitely.
+	lifecycleSignalTimeout = 10 * time.Second
+
+	// Evaluation phase label values — written to the trustyai.opendatahub.io/evaluation-phase
+	// label on the backing Kubernetes Job. Pending is stamped at creation; the rest are patched
+	// on each lifecycle transition via PatchJobPhaseLabel.
+	EvaluationPhasePending   = "Pending"
+	EvaluationPhaseRunning   = "Running"
+	EvaluationPhaseCompleted = "Completed"
+	EvaluationPhaseFailed    = "Failed"
+
+	// Kubernetes Event reasons emitted on lifecycle transitions.
+	eventReasonRunning   = "EvaluationRunning"
+	eventReasonCompleted = "EvaluationCompleted"
+	eventReasonFailed    = "EvaluationFailed"
+)
 
 // NotifyJobPhaseTransition patches the evaluation-phase label on the backing Kubernetes Job and
 // emits a Kubernetes Event for the transition. Both operations are best-effort: failures are
@@ -68,11 +83,11 @@ func (r *K8sRuntime) NotifyJobPhaseTransition(ctx context.Context, evaluation *a
 func lifecycleSignal(state api.State) (phase, eventtype, reason string, ok bool) {
 	switch state {
 	case api.StateRunning:
-		return "Running", corev1.EventTypeNormal, "EvaluationRunning", true
+		return EvaluationPhaseRunning, corev1.EventTypeNormal, eventReasonRunning, true
 	case api.StateCompleted:
-		return "Completed", corev1.EventTypeNormal, "EvaluationCompleted", true
+		return EvaluationPhaseCompleted, corev1.EventTypeNormal, eventReasonCompleted, true
 	case api.StateFailed:
-		return "Failed", corev1.EventTypeWarning, "EvaluationFailed", true
+		return EvaluationPhaseFailed, corev1.EventTypeWarning, eventReasonFailed, true
 	default:
 		return "", "", "", false
 	}
