@@ -79,6 +79,9 @@ func TestNotifyJobPhaseTransitionPatchesLabel(t *testing.T) {
 	if got := updated.Labels[labelEvaluationPhaseKey]; got != "Running" {
 		t.Fatalf("expected label value Running, got %q", got)
 	}
+	if got := updated.Annotations[annotationEvaluationStatusKey]; got == "" {
+		t.Fatal("expected evaluation-status annotation to be set")
+	}
 }
 
 func TestNotifyJobPhaseTransitionEmitsEvent(t *testing.T) {
@@ -193,8 +196,8 @@ func TestNotifyJobPhaseTransitionPatchLabelError(t *testing.T) {
 		helper: NewKubernetesHelperWithRecorder(clientset, fakeRecorder),
 	}
 	rt.NotifyJobPhaseTransition(context.Background(), evaluation, 0, api.StateRunning)
-	if patchCalled != 1 {
-		t.Fatalf("expected patch to be called once, got %d", patchCalled)
+	if patchCalled != 2 {
+		t.Fatalf("expected patch to be called twice (phase label + status annotation), got %d", patchCalled)
 	}
 	select {
 	case msg := <-fakeRecorder.Events:
@@ -233,6 +236,9 @@ func TestNotifyJobPhaseTransitionFailedState(t *testing.T) {
 	}
 	if got := updated.Labels[labelEvaluationPhaseKey]; got != "Failed" {
 		t.Fatalf("expected label value Failed, got %q", got)
+	}
+	if got := updated.Annotations[annotationEvaluationStatusKey]; got == "" {
+		t.Fatal("expected evaluation-status annotation to be set for Failed state")
 	}
 
 	select {

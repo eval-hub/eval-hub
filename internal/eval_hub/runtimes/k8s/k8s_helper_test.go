@@ -203,3 +203,44 @@ func TestPatchJobPhaseLabelUpdatesLabel(t *testing.T) {
 		t.Fatalf("expected label value Running, got %q", got)
 	}
 }
+
+func TestPatchJobStatusAnnotationRequiresNamespaceAndName(t *testing.T) {
+	helper := &KubernetesHelper{}
+	if err := helper.PatchJobStatusAnnotation(context.Background(), "", "job", map[string]any{}); err == nil {
+		t.Fatal("expected error for missing namespace")
+	}
+	if err := helper.PatchJobStatusAnnotation(context.Background(), "default", "", map[string]any{}); err == nil {
+		t.Fatal("expected error for missing name")
+	}
+}
+
+func TestPatchJobStatusAnnotationSetsAnnotation(t *testing.T) {
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{Name: "job-1", Namespace: "default"},
+	}
+	clientset := fake.NewSimpleClientset(job)
+	helper := &KubernetesHelper{clientset: clientset}
+
+	payload := map[string]any{
+		"phase":           "Running",
+		"evaluation_id":   "eval-123",
+		"benchmark_index": 0,
+	}
+	if err := helper.PatchJobStatusAnnotation(context.Background(), "default", "job-1", payload); err != nil {
+		t.Fatalf("PatchJobStatusAnnotation: %v", err)
+	}
+	updated, err := clientset.BatchV1().Jobs("default").Get(context.Background(), "job-1", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	got := updated.Annotations[annotationEvaluationStatusKey]
+	if got == "" {
+		t.Fatal("expected evaluation-status annotation to be set")
+	}
+	if !strings.Contains(got, "eval-123") {
+		t.Fatalf("expected evaluation_id in annotation, got: %s", got)
+	}
+	if !strings.Contains(got, "Running") {
+		t.Fatalf("expected phase in annotation, got: %s", got)
+	}
+}

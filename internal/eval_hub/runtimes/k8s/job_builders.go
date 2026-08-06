@@ -92,6 +92,7 @@ const (
 	labelKueueQueueNameKey           = "kueue.x-k8s.io/queue-name"
 	labelKueuePriorityClassKey       = "kueue.x-k8s.io/priority-class"
 	labelEvaluationPhaseKey          = "trustyai.opendatahub.io/evaluation-phase"
+	annotationEvaluationStatusKey    = "trustyai.opendatahub.io/evaluation-status"
 )
 
 var (
