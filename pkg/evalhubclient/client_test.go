@@ -636,7 +636,7 @@ func TestGetJob(t *testing.T) {
 func TestCreateJob(t *testing.T) {
 	cfg := api.EvaluationJobConfig{
 		Name:  "bench-run",
-		Model: api.ModelRef{URL: "http://llm:8000", Name: "llama3"},
+		Model: &api.ModelRef{URL: "http://llm:8000", Name: "llama3"},
 	}
 	want := api.EvaluationJobResource{EvaluationJobConfig: cfg}
 	srv, capture := newCapturingServer(t, http.StatusAccepted, mustMarshal(t, want))
@@ -682,7 +682,7 @@ func TestCancelJob(t *testing.T) {
 // ─── Content-Type / Accept header conditionals ───────────────────────────────
 
 func TestContentTypeSetWhenBodyPresent(t *testing.T) {
-	cfg := api.EvaluationJobConfig{Name: "j", Model: api.ModelRef{URL: "http://m", Name: "m"}}
+	cfg := api.EvaluationJobConfig{Name: "j", Model: &api.ModelRef{URL: "http://m", Name: "m"}}
 	srv, capture := newCapturingServer(t, http.StatusAccepted, mustMarshal(t, api.EvaluationJobResource{}))
 
 	_, err := newTestClient(srv).CreateJob(cfg)

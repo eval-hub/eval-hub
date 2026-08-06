@@ -10,7 +10,7 @@ func TestBuildJobConfigHardwareProfileOverridesProvider(t *testing.T) {
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-hwp"}},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{URL: "http://model", Name: "model"},
+			Model: &api.ModelRef{URL: "http://model", Name: "model"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{Ref: api.Ref{ID: "bench-1"}, ProviderID: "provider-1"},
 			},
@@ -70,7 +70,7 @@ func TestBuildJobConfigWithoutHardwareProfileUnchanged(t *testing.T) {
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-no-hwp"}},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{URL: "http://model", Name: "model"},
+			Model: &api.ModelRef{URL: "http://model", Name: "model"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{Ref: api.Ref{ID: "bench-1"}, ProviderID: "provider-1"},
 			},
@@ -102,7 +102,7 @@ func TestBuildJobConfigDirectHardwareConfigOverridesProvider(t *testing.T) {
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-direct-hw"}},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{URL: "http://model", Name: "model"},
+			Model: &api.ModelRef{URL: "http://model", Name: "model"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref:        api.Ref{ID: "bench-1"},
@@ -164,7 +164,7 @@ func TestBuildJobConfigDirectHardwareConfigPartialOverride(t *testing.T) {
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-partial-hw"}},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{URL: "http://model", Name: "model"},
+			Model: &api.ModelRef{URL: "http://model", Name: "model"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref:        api.Ref{ID: "bench-1"},

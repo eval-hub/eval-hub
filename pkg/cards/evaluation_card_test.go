@@ -18,7 +18,7 @@ func TestEvaluationCardJSONRoundTrip(t *testing.T) {
 			UpdatedAt:       "2026-07-07T01:00:00Z",
 		},
 		Context: EvaluationCardContext{
-			Model: CardModelRef{
+			Model: &CardModelRef{
 				URL:  "https://vllm.example.com/v1",
 				Name: "meta-llama/Llama-3.2-1B-Instruct",
 			},

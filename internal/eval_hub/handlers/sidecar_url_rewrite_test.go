@@ -34,7 +34,7 @@ func TestSidecarURLTargets(t *testing.T) {
 	}
 	job := &api.EvaluationJobResource{
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{URL: "https://model.example/v1", Name: "m"},
+			Model: &api.ModelRef{URL: "https://model.example/v1", Name: "m"},
 			Exports: &api.EvaluationExports{
 				OCI: &api.EvaluationExportsOCI{
 					Coordinates: api.OCICoordinates{

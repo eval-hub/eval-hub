@@ -15,7 +15,7 @@ func baseEvaluation() *api.EvaluationJobResource {
 			Resource: api.Resource{ID: "job-1"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model.example",
 				Name: "model-1",
 			},
@@ -257,7 +257,7 @@ func TestJobSpecSerialization(t *testing.T) {
 			Resource: api.Resource{ID: "test-job-001"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model.example.com",
 				Name: "test-model",
 			},
