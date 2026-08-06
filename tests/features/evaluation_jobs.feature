@@ -1267,13 +1267,14 @@ Feature: Evaluation Jobs
     And the response should contain the value "request_validation_failed" at path "$.message_code"
     And the response should contain the value "s3 and pvc are mutually exclusive" at path "$.message"
 
-  # Requires trustyai-service-operator eval-job failure reconciler (unschedulable PVC → FAILED after ~2m grace).
+  # Requires trustyai-service-operator eval-job failure reconciler (unschedulable PVC → FAILED after scheduling grace).
+  # Wait deadline must exceed that grace period with margin.
   # Default missing claim: evalhub-offline-test-data-does-not-exist (override with TEST_DATA_PVC_MISSING_CLAIM_NAME).
   @pvc
   @negative
   Scenario: Evaluation job with missing PVC fails after scheduling grace
     Given the service is running
-    And I set the wait deadline to "2m30s"
+    And I set the wait deadline to "5m"
     And I set the wait interval to "10s"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_pvc_missing.json"
     Then the response code should be 202
