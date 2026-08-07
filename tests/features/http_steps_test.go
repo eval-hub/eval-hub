@@ -389,6 +389,24 @@ func (tc *scenarioConfig) requireMetricsURLForRemoteServer(ctx context.Context, 
 	return ctx, godog.ErrSkip
 }
 
+func (tc *scenarioConfig) requireOCIConfiguration(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
+	// Not an @oci scenario - no-op
+	if !scenarioHasTag(scenarioTagNames(sc), "oci") {
+		return ctx, nil
+	}
+
+	// OCI configuration present - run the scenario
+	if ociConfiguration == ociConfigPresent {
+		return ctx, nil
+	}
+
+	// OCI configuration missing - skip scenario with clear message
+	tc.logDebug(
+		"Skipping @oci scenario: OCI_REGISTRY, OCI_REPOSITORY, and OCI_SECRET_NAME environment variables are required\n",
+	)
+	return ctx, godog.ErrSkip
+}
+
 func (tc *scenarioConfig) saveScenarioName(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
 	tc.scenarioName = sc.Name
 	tc.jsonnetQueueEnabled = nil

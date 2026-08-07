@@ -44,6 +44,15 @@ const (
 	modelEndpointReachable
 )
 
+// ociConfigStatus captures OCI configuration presence for skipping @oci scenarios
+type ociConfigStatus int
+
+const (
+	ociConfigUnchecked ociConfigStatus = iota
+	ociConfigMissing
+	ociConfigPresent
+)
+
 var (
 	// testConfig to be used throughout all the test suites
 	// for the global configuration
@@ -53,6 +62,7 @@ var (
 	logger *log.Logger
 
 	modelEndpointConnectivity modelEndpointStatus
+	ociConfiguration          ociConfigStatus
 )
 
 type apiFeature struct {
@@ -110,6 +120,19 @@ type scenarioConfig struct {
 	// MLflow artifact fetching
 	mlflowArtifactBody  []byte
 	mlflowArtifactError error
+
+	// OCI manifest fetching
+	ociManifestBody       []byte
+	ociManifestError      error
+	ociManifestStatusCode int
+	ociManifestData       map[string]interface{} // Parsed manifest JSON
+
+	// OCI artifact fetching (the actual EvalCard JSON blob)
+	ociArtifactBody  []byte
+	ociArtifactError error
+
+	// Shared HTTP client for OCI operations
+	ociHTTPClient *http.Client
 }
 
 func getLogger() *log.Logger {
