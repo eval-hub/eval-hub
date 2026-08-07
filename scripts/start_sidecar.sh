@@ -19,8 +19,10 @@ fi
 if [[ -f "${CONFIG_FILE}" ]]; then
   SIDECAR_JSON="${CONFIG_FILE}"
 else
-  TMP_JSON="/tmp/sidecar_runtime_$$.json"
-  printf '{"base_url":"http://localhost:8080","eval_hub":{"base_url":"http://localhost:8080"},"mlflow":{"tracking_uri":"http://localhost:5000"}}\n' > "${TMP_JSON}"
+  TMP_JSON="$(mktemp /tmp/sidecar_runtime_XXXXXX.json)" || { echo "Failed to create temp config"; exit 2; }
+  chmod 600 "${TMP_JSON}"
+  trap 'rm -f "${TMP_JSON}"' EXIT
+  printf '{"base_url":"http://localhost:8080","eval_hub":{"base_url":"http://localhost:8080"},"mlflow":{"tracking_uri":"http://localhost:5000"}}\n' > "${TMP_JSON}" || { echo "Failed to write temp config"; exit 2; }
   SIDECAR_JSON="${TMP_JSON}"
 fi
 "${EXE}" --sidecarconfig "${SIDECAR_JSON}" >> "${LOGFILE}" 2>&1 &

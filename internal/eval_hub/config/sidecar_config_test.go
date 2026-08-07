@@ -8,7 +8,7 @@ func TestResolvePort(t *testing.T) {
 	tests := []struct {
 		name        string
 		baseURL     string
-		wantPort    int
+		wantPort    int32
 		wantBaseURL string
 		wantErr     bool
 	}{
@@ -16,8 +16,11 @@ func TestResolvePort(t *testing.T) {
 		{"custom port", "http://localhost:9090", 9090, "http://localhost:9090", false},
 		{"https with port", "https://sidecar.example:8443", 8443, "https://sidecar.example:8443", false},
 		{"trailing slash", "http://localhost:8080/", 8080, "http://localhost:8080/", false},
-		{"no port uses default", "http://localhost", DefaultSidecarPort, "http://localhost", false},
 		{"empty URL is no-op", "", 0, "", false},
+		{"no port is rejected", "http://localhost", 0, "", true},
+		{"ftp scheme rejected", "ftp://localhost:2121", 0, "", true},
+		{"opaque URL rejected", "localhost:9090", 0, "", true},
+		{"hostless URL rejected", "http://:8080", 0, "", true},
 		{"port out of range", "http://localhost:70000", 0, "", true},
 		{"invalid port string", "http://localhost:abc", 0, "", true},
 	}

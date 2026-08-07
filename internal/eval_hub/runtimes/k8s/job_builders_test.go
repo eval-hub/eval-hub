@@ -11,6 +11,10 @@ import (
 )
 
 func TestBuildJobUsesJobConfigSidecarPort(t *testing.T) {
+	sc := &config.SidecarConfig{BaseURL: "http://localhost:9090"}
+	if err := sc.ResolvePort(); err != nil {
+		t.Fatalf("ResolvePort: %v", err)
+	}
 	cfg := &jobConfig{
 		jobID:          "job-port",
 		resourceGUID:   "guid-port",
@@ -19,7 +23,7 @@ func TestBuildJobUsesJobConfigSidecarPort(t *testing.T) {
 		providerID:     "provider-1",
 		benchmarkID:    "bench-1",
 		adapterImage:   "adapter:latest",
-		sidecarConfig:  &config.SidecarConfig{BaseURL: "http://localhost:9090", Port: 9090},
+		sidecarConfig:  sc,
 	}
 
 	job, err := buildJob(cfg)

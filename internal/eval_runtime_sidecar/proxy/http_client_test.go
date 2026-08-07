@@ -7,6 +7,28 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 )
 
+func TestSchemeRequiresTLS(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		url    string
+		expect bool
+	}{
+		{"empty defaults to true", "", true},
+		{"http does not require TLS", "http://localhost:8080", false},
+		{"https requires TLS", "https://evalhub.example.com", true},
+		{"unparseable defaults to true", "://bad", true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := schemeRequiresTLS(tc.url); got != tc.expect {
+				t.Errorf("schemeRequiresTLS(%q) = %v, want %v", tc.url, got, tc.expect)
+			}
+		})
+	}
+}
+
 func TestNewEvalHubHTTPClient(t *testing.T) {
 	logger := slog.Default()
 
@@ -48,6 +70,41 @@ func TestNewEvalHubHTTPClient(t *testing.T) {
 		}
 		if client.Timeout == 0 {
 			t.Error("expected non-zero timeout")
+		}
+	})
+
+	t.Run("http URL skips TLS config without insecure_skip_verify", func(t *testing.T) {
+		cfg := &config.Config{
+			Sidecar: &config.SidecarConfig{
+				EvalHub: &config.EvalHubClientConfig{
+					BaseURL: "http://localhost:8080",
+				},
+			},
+		}
+		client, err := NewEvalHubHTTPClient(cfg, false, logger)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if client == nil {
+			t.Fatal("expected non-nil client")
+		}
+	})
+
+	t.Run("https URL with insecure_skip_verify does not require CA cert", func(t *testing.T) {
+		cfg := &config.Config{
+			Sidecar: &config.SidecarConfig{
+				EvalHub: &config.EvalHubClientConfig{
+					BaseURL:            "https://evalhub.example.com",
+					InsecureSkipVerify: true,
+				},
+			},
+		}
+		client, err := NewEvalHubHTTPClient(cfg, false, logger)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if client == nil {
+			t.Fatal("expected non-nil client")
 		}
 	})
 }
@@ -104,6 +161,21 @@ func TestNewMLFlowHTTPClient(t *testing.T) {
 		}
 		if client.Timeout == 0 {
 			t.Error("expected non-zero timeout")
+		}
+	})
+
+	t.Run("http TrackingURI skips TLS config", func(t *testing.T) {
+		cfg := &config.Config{
+			MLFlow: &config.MLFlowConfig{
+				TrackingURI: "http://localhost:5000",
+			},
+		}
+		client, err := NewMLFlowHTTPClient(cfg, false, logger)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if client == nil {
+			t.Fatal("expected non-nil client")
 		}
 	})
 }

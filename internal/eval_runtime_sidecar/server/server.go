@@ -15,7 +15,7 @@ import (
 
 type SidecarServer struct {
 	httpServer *http.Server
-	port       int
+	port       int32
 	logger     *slog.Logger
 	config     *config.Config
 }
@@ -48,7 +48,7 @@ func (s *SidecarServer) isOTELEnabled() bool {
 }
 
 func (s *SidecarServer) GetPort() int {
-	return s.port
+	return int(s.port)
 }
 
 func (s *SidecarServer) setupRoutes() (http.Handler, error) {
