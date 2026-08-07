@@ -372,10 +372,9 @@ func TestCloneRefAnnotatedTag_ReturnsCommitSHA(t *testing.T) {
 	_ = plumbing.NewHash(wantSHA)
 }
 
-func TestResolveGitAuth_NoSecretDir(t *testing.T) {
-	// Directly call readSecretRequired with a non-existent key to verify the error path.
-	// secretDir is a const pointing at the real mount path which does not exist in tests.
-	_, err := readSecretRequired("no-such-key")
+func TestReadSecret_MissingKey(t *testing.T) {
+	// secretDir defaults to the real mount path which does not exist in unit tests.
+	_, err := readSecret("no-such-key")
 	if err == nil {
 		t.Fatal("expected error for missing secret key file")
 	}
@@ -384,59 +383,34 @@ func TestResolveGitAuth_NoSecretDir(t *testing.T) {
 	}
 }
 
-func TestResolveGitAuth_SecretDirPresentWithKeys(t *testing.T) {
-	dir := t.TempDir()
-	// Write username and password files.
-	if err := os.WriteFile(filepath.Join(dir, "username"), []byte("myuser"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "password"), []byte("mypass"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	// Read them via readSecretRequired directly (secretDir is a const pointing at the real mount).
-	// We test the helper independently of resolveGitAuth to avoid const limitation.
-	gotUser, err := os.ReadFile(filepath.Join(dir, "username"))
-	if err != nil {
-		t.Fatalf("ReadFile username: %v", err)
-	}
-	gotPass, err := os.ReadFile(filepath.Join(dir, "password"))
-	if err != nil {
-		t.Fatalf("ReadFile password: %v", err)
-	}
-	if strings.TrimSpace(string(gotUser)) != "myuser" {
-		t.Errorf("username = %q, want %q", gotUser, "myuser")
-	}
-	if strings.TrimSpace(string(gotPass)) != "mypass" {
-		t.Errorf("password = %q, want %q", gotPass, "mypass")
-	}
-}
-
-func TestReadSecretRequired_PathTraversalRejected(t *testing.T) {
+func TestReadSecret_PathTraversalRejected(t *testing.T) {
 	t.Parallel()
 	for _, key := range []string{"../escape", "a/b", ".", "/"} {
-		_, err := readSecretRequired(key)
+		_, err := readSecret(key)
 		if err == nil {
-			t.Errorf("readSecretRequired(%q) = nil, want error for path traversal", key)
+			t.Errorf("readSecret(%q) = nil, want error for path traversal", key)
 		}
 		if err != nil && !strings.Contains(err.Error(), "path separators") {
-			t.Errorf("readSecretRequired(%q) error = %v, want mention of path separators", key, err)
+			t.Errorf("readSecret(%q) error = %v, want mention of path separators", key, err)
 		}
 	}
 }
 
-func TestReadSecretRequired_EmptyValueRejected(t *testing.T) {
+func TestReadSecret_EmptyValueRejected(t *testing.T) {
 	dir := t.TempDir()
-	// File exists but is blank.
 	if err := os.WriteFile(filepath.Join(dir, "username"), []byte("   "), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	// Override secretDir by reading directly; readSecretRequired uses package-level secretDir const.
-	// Test the trim+empty logic via the function, pointing it at a temp key name that maps to our file.
-	// Since secretDir is a const we can't override it in tests — exercise the empty-value path by
-	// checking that TrimSpace of "   " equals "".
-	val := strings.TrimSpace("   ")
-	if val != "" {
-		t.Fatal("expected empty after TrimSpace")
+	orig := secretDir
+	secretDir = dir
+	t.Cleanup(func() { secretDir = orig })
+
+	_, err := readSecret("username")
+	if err == nil {
+		t.Fatal("expected error for empty secret value")
+	}
+	if !strings.Contains(err.Error(), "empty") {
+		t.Errorf("error = %v, want mention of empty", err)
 	}
 }
 
@@ -702,10 +676,14 @@ func TestReadSecret_ViaOpenRoot(t *testing.T) {
 	orig := secretDir
 	secretDir = secret
 	t.Cleanup(func() { secretDir = orig })
-	if got := readSecret("AWS_ACCESS_KEY_ID"); got != "key" {
+	got, err := readSecret("AWS_ACCESS_KEY_ID")
+	if err != nil {
+		t.Fatalf("readSecret: %v", err)
+	}
+	if got != "key" {
 		t.Errorf("readSecret = %q, want key", got)
 	}
-	if got := readSecret("../escape"); got != "" {
-		t.Errorf("traversal should return empty, got %q", got)
+	if _, err := readSecret("../escape"); err == nil {
+		t.Error("traversal should return error")
 	}
 }

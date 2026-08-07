@@ -155,40 +155,16 @@ func resolveGitAuth() (*githttp.BasicAuth, error) {
 		return nil, nil
 	}
 
-	username, err := readSecretRequired("username")
+	username, err := readSecret("username")
 	if err != nil {
 		return nil, fmt.Errorf("git auth: %w", err)
 	}
-	password, err := readSecretRequired("password")
+	password, err := readSecret("password")
 	if err != nil {
 		return nil, fmt.Errorf("git auth: %w", err)
 	}
 
 	return &githttp.BasicAuth{Username: username, Password: password}, nil
-}
-
-// readSecretRequired reads a key from the mounted secret dir and returns an error
-// if the file is missing or its content is empty after trimming.
-// Keys must be a single path segment; reads go through os.Root so they cannot escape secretDir.
-func readSecretRequired(key string) (string, error) {
-	safe := filepath.Base(key)
-	if safe != key || key == "." || key == "/" || !filepath.IsLocal(key) {
-		return "", fmt.Errorf("secret key %q contains path separators and is not allowed", key)
-	}
-	root, err := os.OpenRoot(secretDir)
-	if err != nil {
-		return "", fmt.Errorf("secret key %q not found in mounted secret: %w", key, err)
-	}
-	defer func() { _ = root.Close() }()
-	content, err := root.ReadFile(key)
-	if err != nil {
-		return "", fmt.Errorf("secret key %q not found in mounted secret: %w", key, err)
-	}
-	val := strings.TrimSpace(string(content))
-	if val == "" {
-		return "", fmt.Errorf("secret key %q is present but empty", key)
-	}
-	return val, nil
 }
 
 type refKind int

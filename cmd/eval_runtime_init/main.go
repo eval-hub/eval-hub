@@ -89,22 +89,21 @@ func runS3() error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	accessKey := readSecret(accessKeyIDKey)
-	secretKey := readSecret(secretAccessKey)
-	region := readSecret(regionOptionalKey)
-	endpoint := readSecret(endpointKey)
-
-	if accessKey == "" {
-		return fmt.Errorf("missing required secret %s", accessKeyIDKey)
+	accessKey, err := readSecret(accessKeyIDKey)
+	if err != nil {
+		return fmt.Errorf("missing required secret %s: %w", accessKeyIDKey, err)
 	}
-	if secretKey == "" {
-		return fmt.Errorf("missing required secret %s", secretAccessKey)
+	secretKey, err := readSecret(secretAccessKey)
+	if err != nil {
+		return fmt.Errorf("missing required secret %s: %w", secretAccessKey, err)
 	}
-	if region == "" {
-		return fmt.Errorf("missing required secret %s", regionOptionalKey)
+	region, err := readSecret(regionOptionalKey)
+	if err != nil {
+		return fmt.Errorf("missing required secret %s: %w", regionOptionalKey, err)
 	}
-	if endpoint == "" {
-		return fmt.Errorf("missing required secret %s", endpointKey)
+	endpoint, err := readSecret(endpointKey)
+	if err != nil {
+		return fmt.Errorf("missing required secret %s: %w", endpointKey, err)
 	}
 
 	cfg, err := loadAWSConfig(ctx, region, accessKey, secretKey)
@@ -283,18 +282,25 @@ func relativeDestPath(prefix, key string) (string, error) {
 	return filepath.ToSlash(rel), nil
 }
 
-func readSecret(name string) string {
-	if name == "" || !filepath.IsLocal(name) || filepath.Base(name) != name {
-		return ""
+// readSecret reads a key from the mounted secret dir. Keys must be a single path
+// segment; reads go through os.Root so they cannot escape secretDir. Returns an
+// error if the key is invalid, missing, or empty after trimming.
+func readSecret(key string) (string, error) {
+	if key == "" || key == "." || key == "/" || !filepath.IsLocal(key) || filepath.Base(key) != key {
+		return "", fmt.Errorf("secret key %q contains path separators and is not allowed", key)
 	}
 	root, err := os.OpenRoot(secretDir)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("secret key %q not found in mounted secret: %w", key, err)
 	}
 	defer func() { _ = root.Close() }()
-	content, err := root.ReadFile(name)
+	content, err := root.ReadFile(key)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("secret key %q not found in mounted secret: %w", key, err)
 	}
-	return strings.TrimSpace(string(content))
+	val := strings.TrimSpace(string(content))
+	if val == "" {
+		return "", fmt.Errorf("secret key %q is present but empty", key)
+	}
+	return val, nil
 }
