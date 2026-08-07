@@ -30,6 +30,12 @@ func LoadSidecarRuntimeConfig(sidecarJSONPath, version, build, buildDate string)
 	if err := json.Unmarshal(data, &sc); err != nil {
 		return nil, fmt.Errorf("parse sidecar config JSON: %w", err)
 	}
+	if sc.BaseURL == "" {
+		sc.BaseURL = config.DefaultSidecarBaseURL
+	}
+	if err := sc.ResolvePort(); err != nil {
+		return nil, err
+	}
 	if sc.EvalHub == nil {
 		sc.EvalHub = &config.EvalHubClientConfig{}
 	}

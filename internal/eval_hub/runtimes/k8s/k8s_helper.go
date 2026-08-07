@@ -328,7 +328,7 @@ func (h *KubernetesHelper) PatchJobPhaseLabel(ctx context.Context, namespace, na
 	patch := map[string]any{
 		"metadata": map[string]any{
 			"labels": map[string]string{
-				"trustyai.opendatahub.io/evaluation-phase": phase,
+				labelEvaluationPhaseKey: phase,
 			},
 		},
 	}

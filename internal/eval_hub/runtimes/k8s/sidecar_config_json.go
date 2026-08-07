@@ -18,9 +18,7 @@ func sidecarForJobPod(cfg *config.Config, jc *jobConfig) (*config.SidecarConfig,
 	} else {
 		export = &config.SidecarConfig{}
 	}
-	if export.Port == 0 {
-		export.Port = int(defaultSidecarPort)
-	}
+	export.BaseURL = export.EffectiveBaseURL()
 
 	if jc != nil {
 		if jc.evalHubURL != "" {
@@ -85,7 +83,7 @@ func cloneSidecarConfig(sc *config.SidecarConfig) *config.SidecarConfig {
 	if sc == nil {
 		return nil
 	}
-	out := &config.SidecarConfig{Port: sc.Port, BaseURL: sc.BaseURL}
+	out := &config.SidecarConfig{BaseURL: sc.BaseURL, Port: sc.Port}
 	if sc.EvalHub != nil {
 		eh := *sc.EvalHub
 		out.EvalHub = &eh

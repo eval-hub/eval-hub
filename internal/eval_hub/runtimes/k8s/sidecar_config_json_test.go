@@ -47,7 +47,6 @@ func TestSidecarForJobPodIncludesOTEL(t *testing.T) {
 			ExporterType:     otel.ExporterTypeStdout,
 			ExporterInsecure: true,
 		},
-		Sidecar: &config.SidecarConfig{Port: 8080},
 	}
 	jc := &jobConfig{evalHubURL: "http://eval-hub:8080"}
 

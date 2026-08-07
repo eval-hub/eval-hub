@@ -1,7 +1,6 @@
 package k8s
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
@@ -105,7 +104,7 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 	}
 }
 
-func TestBuildJobConfigRejectsInvalidSidecarPort(t *testing.T) {
+func TestBuildJobConfigUsesBaseURL(t *testing.T) {
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{ID: "job-123"},
@@ -131,45 +130,7 @@ func TestBuildJobConfigRejectsInvalidSidecarPort(t *testing.T) {
 		},
 	}
 	serviceConfig := &config.Config{
-		Sidecar: &config.SidecarConfig{Port: 70000},
-	}
-
-	_, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, serviceConfig, nil)
-	if err == nil {
-		t.Fatal("buildJobConfig() = nil, want sidecar port error")
-	}
-	if !strings.Contains(err.Error(), "sidecar port") {
-		t.Fatalf("buildJobConfig() error = %v, want sidecar port error", err)
-	}
-}
-
-func TestBuildJobConfigUsesValidSidecarPort(t *testing.T) {
-	evaluation := &api.EvaluationJobResource{
-		Resource: api.EvaluationResource{
-			Resource: api.Resource{ID: "job-123"},
-		},
-		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: &api.ModelRef{
-				URL:  "http://model",
-				Name: "model",
-			},
-			Benchmarks: []api.EvaluationBenchmarkConfig{
-				{Ref: api.Ref{ID: "bench-1"}},
-			},
-		},
-	}
-	provider := &api.ProviderResource{
-		Resource: api.Resource{ID: "provider-1"},
-		ProviderConfig: api.ProviderConfig{
-			Runtime: &api.Runtime{
-				K8s: &api.K8sRuntime{
-					Image: "adapter:latest",
-				},
-			},
-		},
-	}
-	serviceConfig := &config.Config{
-		Sidecar: &config.SidecarConfig{Port: 9090},
+		Sidecar: &config.SidecarConfig{BaseURL: "http://localhost:9090"},
 	}
 
 	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, serviceConfig, nil)

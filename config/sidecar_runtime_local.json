@@ -1,8 +1,8 @@
 {
-  "port": 8080,
   "base_url": "http://localhost:8080",
   "eval_hub": {
-    "base_url": "http://localhost:8080"
+    "base_url": "http://localhost:8080",
+    "insecure_skip_verify": true
   },
   "mlflow": {
     "tracking_uri": "http://localhost:5000"

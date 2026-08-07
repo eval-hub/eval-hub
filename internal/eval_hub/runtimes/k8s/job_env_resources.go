@@ -8,13 +8,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
-func sidecarPortFromInt(port int) (int32, error) {
-	if port < 1 || port > 65535 {
-		return 0, fmt.Errorf("port %d out of range (1-65535)", port)
-	}
-	return int32(port), nil
-}
-
 func buildContainerCommand(entrypoint []string) []string {
 	if len(entrypoint) == 0 {
 		return nil
