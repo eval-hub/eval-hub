@@ -74,6 +74,18 @@ func TestLoadSidecarRuntimeConfig_DefaultBaseURLAndPort(t *testing.T) {
 	}
 }
 
+func TestLoadSidecarRuntimeConfig_InvalidBaseURL(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sidecar_config.json")
+	if err := os.WriteFile(path, []byte(`{"base_url":"http://localhost"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadSidecarRuntimeConfig(path, "", "", "")
+	if err == nil {
+		t.Fatal("expected error for base_url without explicit port")
+	}
+}
+
 func TestLoadSidecarRuntimeConfig_OCISnakeCase(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sidecar_config.json")

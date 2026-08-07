@@ -70,8 +70,8 @@ func buildTLSConfig(caCertPath string, insecureSkipVerify bool, logger *slog.Log
 	return tlsConfig, nil
 }
 
-// schemeRequiresTLS returns true when the URL scheme is "https" or cannot be
-// determined (empty/unparseable), so callers default to the safer TLS path.
+// schemeRequiresTLS returns false only for an explicit "http" scheme;
+// all other cases default to TLS. BaseURL scheme is validated by ResolvePort.
 func schemeRequiresTLS(rawURL string) bool {
 	if rawURL == "" {
 		return true
@@ -80,7 +80,7 @@ func schemeRequiresTLS(rawURL string) bool {
 	if err != nil {
 		return true
 	}
-	return u.Scheme == "https"
+	return u.Scheme != "http"
 }
 
 // NewHTTPClient creates an HTTP client for the eval-hub service from config.

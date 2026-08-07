@@ -2,6 +2,24 @@ package config
 
 import "testing"
 
+func TestEffectiveBaseURL(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns BaseURL when set", func(t *testing.T) {
+		sc := &SidecarConfig{BaseURL: "https://sidecar.example:9443"}
+		if got := sc.EffectiveBaseURL(); got != "https://sidecar.example:9443" {
+			t.Fatalf("EffectiveBaseURL() = %q, want %q", got, "https://sidecar.example:9443")
+		}
+	})
+
+	t.Run("returns default when BaseURL empty", func(t *testing.T) {
+		sc := &SidecarConfig{}
+		if got := sc.EffectiveBaseURL(); got != DefaultSidecarBaseURL {
+			t.Fatalf("EffectiveBaseURL() = %q, want %q", got, DefaultSidecarBaseURL)
+		}
+	})
+}
+
 func TestResolvePort(t *testing.T) {
 	t.Parallel()
 
@@ -21,7 +39,9 @@ func TestResolvePort(t *testing.T) {
 		{"ftp scheme rejected", "ftp://localhost:2121", 0, "", true},
 		{"opaque URL rejected", "localhost:9090", 0, "", true},
 		{"hostless URL rejected", "http://:8080", 0, "", true},
+		{"port zero rejected", "http://localhost:0", 0, "", true},
 		{"port out of range", "http://localhost:70000", 0, "", true},
+		{"negative port rejected", "http://localhost:-1", 0, "", true},
 		{"invalid port string", "http://localhost:abc", 0, "", true},
 	}
 	for _, tc := range tests {

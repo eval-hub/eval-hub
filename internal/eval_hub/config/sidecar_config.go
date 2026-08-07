@@ -56,14 +56,14 @@ func (sc *SidecarConfig) ResolvePort() error {
 	if portStr == "" {
 		return fmt.Errorf("sidecar base URL %q must include an explicit port", sc.BaseURL)
 	}
-	port, err := strconv.Atoi(portStr)
+	port, err := strconv.ParseInt(portStr, 10, 32)
 	if err != nil {
 		return fmt.Errorf("invalid port in sidecar base URL %q: %w", sc.BaseURL, err)
 	}
 	if port < 1 || port > 65535 {
 		return fmt.Errorf("sidecar port %d out of range (1-65535)", port)
 	}
-	sc.Port = int32(port) // #nosec G115 -- range validated above (1-65535)
+	sc.Port = int32(port)
 	return nil
 }
 

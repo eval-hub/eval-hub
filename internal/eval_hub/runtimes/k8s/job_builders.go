@@ -174,7 +174,11 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	}
 	probePort := int32(config.DefaultSidecarPort)
 	if cfg.sidecarConfig != nil && cfg.sidecarConfig.Port != 0 {
-		probePort = cfg.sidecarConfig.Port
+		p := cfg.sidecarConfig.Port
+		if p < 1 || p > 65535 {
+			return nil, fmt.Errorf("sidecar port %d out of range (1-65535)", p)
+		}
+		probePort = p
 	}
 
 	// Sidecar is added as an init container with restartPolicy=Always to be

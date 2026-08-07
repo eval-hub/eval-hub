@@ -17,6 +17,7 @@ func TestSchemeRequiresTLS(t *testing.T) {
 		{"empty defaults to true", "", true},
 		{"http does not require TLS", "http://localhost:8080", false},
 		{"https requires TLS", "https://evalhub.example.com", true},
+		{"no scheme defaults to true", "example.com", true},
 		{"unparseable defaults to true", "://bad", true},
 	}
 	for _, tc := range tests {
@@ -171,6 +172,136 @@ func TestNewMLFlowHTTPClient(t *testing.T) {
 			},
 		}
 		client, err := NewMLFlowHTTPClient(cfg, false, logger)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if client == nil {
+			t.Fatal("expected non-nil client")
+		}
+	})
+}
+
+func TestNewModelHTTPClient(t *testing.T) {
+	logger := slog.Default()
+
+	t.Run("returns nil when config is nil", func(t *testing.T) {
+		client, err := NewModelHTTPClient(nil, false, logger)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if client != nil {
+			t.Error("expected nil client when config is nil")
+		}
+	})
+
+	t.Run("returns nil when Sidecar is nil", func(t *testing.T) {
+		cfg := &config.Config{}
+		client, err := NewModelHTTPClient(cfg, false, logger)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if client != nil {
+			t.Error("expected nil client when Sidecar is nil")
+		}
+	})
+
+	t.Run("returns client with defaults when Model is nil", func(t *testing.T) {
+		cfg := &config.Config{Sidecar: &config.SidecarConfig{}}
+		client, err := NewModelHTTPClient(cfg, false, logger)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if client == nil {
+			t.Fatal("expected non-nil client")
+		}
+		if client.Timeout != DefaultHTTPTimeout {
+			t.Errorf("timeout = %v, want %v", client.Timeout, DefaultHTTPTimeout)
+		}
+	})
+
+	t.Run("http URL skips TLS config", func(t *testing.T) {
+		cfg := &config.Config{
+			Sidecar: &config.SidecarConfig{
+				Model: &config.SidecarModelConfig{
+					URL: "http://localhost:8080",
+				},
+			},
+		}
+		client, err := NewModelHTTPClient(cfg, false, logger)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if client == nil {
+			t.Fatal("expected non-nil client")
+		}
+	})
+
+	t.Run("https URL with insecure_skip_verify", func(t *testing.T) {
+		cfg := &config.Config{
+			Sidecar: &config.SidecarConfig{
+				Model: &config.SidecarModelConfig{
+					URL:                "https://model.example.com",
+					InsecureSkipVerify: true,
+				},
+			},
+		}
+		client, err := NewModelHTTPClient(cfg, false, logger)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if client == nil {
+			t.Fatal("expected non-nil client")
+		}
+	})
+}
+
+func TestNewOCIHTTPClient(t *testing.T) {
+	logger := slog.Default()
+
+	t.Run("returns nil when config is nil", func(t *testing.T) {
+		client, err := NewOCIHTTPClient(nil, false, logger)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if client != nil {
+			t.Error("expected nil client when config is nil")
+		}
+	})
+
+	t.Run("returns nil when Sidecar is nil", func(t *testing.T) {
+		cfg := &config.Config{}
+		client, err := NewOCIHTTPClient(cfg, false, logger)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if client != nil {
+			t.Error("expected nil client when Sidecar is nil")
+		}
+	})
+
+	t.Run("returns client with defaults when OCI is nil", func(t *testing.T) {
+		cfg := &config.Config{Sidecar: &config.SidecarConfig{}}
+		client, err := NewOCIHTTPClient(cfg, false, logger)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if client == nil {
+			t.Fatal("expected non-nil client")
+		}
+		if client.Timeout != DefaultHTTPTimeout {
+			t.Errorf("timeout = %v, want %v", client.Timeout, DefaultHTTPTimeout)
+		}
+	})
+
+	t.Run("uses custom timeout from OCI config", func(t *testing.T) {
+		cfg := &config.Config{
+			Sidecar: &config.SidecarConfig{
+				OCI: &config.SidecarOCIConfig{
+					HTTPTimeout: 60_000_000_000,
+				},
+			},
+		}
+		client, err := NewOCIHTTPClient(cfg, false, logger)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

@@ -42,6 +42,26 @@ func TestBuildJobUsesJobConfigSidecarPort(t *testing.T) {
 	}
 }
 
+func TestBuildJobRejectsOutOfRangeSidecarPort(t *testing.T) {
+	for _, port := range []int32{-1, 65536} {
+		cfg := &jobConfig{
+			jobID:        "job-port-bad",
+			resourceGUID: "guid-port-bad",
+			namespace:    "default",
+			providerID:   "provider-1",
+			benchmarkID:  "bench-1",
+			adapterImage: "adapter:latest",
+			sidecarConfig: &config.SidecarConfig{
+				Port: port,
+			},
+		}
+		_, err := buildJob(cfg)
+		if err == nil {
+			t.Fatalf("expected error for sidecar port %d", port)
+		}
+	}
+}
+
 func findContainer(containers []corev1.Container, name string) *corev1.Container {
 	for i := range containers {
 		if containers[i].Name == name {
