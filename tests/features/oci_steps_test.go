@@ -18,11 +18,9 @@ import (
 // --- OCI Artifact Step Definitions ---
 
 // ociBaseURL returns the base URL for OCI registry access (for test code to fetch artifacts)
+// Returns empty string if OCI_REGISTRY is not set (scenarios will be skipped by requireOCIConfiguration)
 func ociBaseURL() string {
 	baseURL := os.Getenv("OCI_REGISTRY")
-	if baseURL == "" {
-		baseURL = "http://localhost:5000"
-	}
 	return strings.TrimRight(baseURL, "/")
 }
 

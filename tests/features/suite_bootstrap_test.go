@@ -437,6 +437,33 @@ func checkModelEndpoint() {
 	}
 }
 
+func checkOCIConfiguration() {
+	ociConfiguration = ociConfigUnchecked
+
+	requiredVars := map[string]string{
+		"OCI_REGISTRY":    os.Getenv("OCI_REGISTRY"),
+		"OCI_REPOSITORY":  os.Getenv("OCI_REPOSITORY"),
+		"OCI_SECRET_NAME": os.Getenv("OCI_SECRET_NAME"),
+	}
+
+	var missingVars []string
+	for name, value := range requiredVars {
+		if value == "" {
+			missingVars = append(missingVars, name)
+		}
+	}
+
+	if len(missingVars) > 0 {
+		logDebug("OCI tests skipped - required environment variables not configured: %v\n", missingVars)
+		logDebug("Set OCI_REGISTRY, OCI_REPOSITORY, and OCI_SECRET_NAME to enable OCI export tests.\n")
+		ociConfiguration = ociConfigMissing
+		return
+	}
+
+	logDebug("OCI configuration detected - OCI export tests enabled\n")
+	ociConfiguration = ociConfigPresent
+}
+
 // A bit of a hack to have some checks that the regexes are working as expected
 func checkRegexes() {
 	tc := createScenarioConfig(apiFeat)
@@ -519,6 +546,7 @@ func InitializeTestSuite(ctx *godog.TestSuiteContext) {
 	ctx.BeforeSuite(setUpTestConf)
 	ctx.BeforeSuite(waitForService)
 	ctx.BeforeSuite(checkModelEndpoint)
+	ctx.BeforeSuite(checkOCIConfiguration)
 
 	// Initialize GPU test suite hooks
 	InitializeGPUTestSuite(ctx)
@@ -531,6 +559,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 
 	ctx.Before(tc.saveScenarioName)
 	ctx.Before(tc.requireMetricsURLForRemoteServer)
+	ctx.Before(tc.requireOCIConfiguration)
 	ctx.After(tc.assetCleanup)
 
 	ctx.Step(`^the service is running$`, tc.theServiceIsRunning)

@@ -13,7 +13,7 @@ local test = import 'jsonnet/test.libsonnet';
         oci_repository: 'evalhub/test-results',
       },
       k8s: {
-        connection: test.env('OCI_SECRET_NAME', 'oci-registry-credentials'),
+        connection: test.env('OCI_SECRET_NAME'),
       },
     },
   },

@@ -44,6 +44,15 @@ const (
 	modelEndpointReachable
 )
 
+// ociConfigStatus captures OCI configuration presence for skipping @oci scenarios
+type ociConfigStatus int
+
+const (
+	ociConfigUnchecked ociConfigStatus = iota
+	ociConfigMissing
+	ociConfigPresent
+)
+
 var (
 	// testConfig to be used throughout all the test suites
 	// for the global configuration
@@ -53,6 +62,7 @@ var (
 	logger *log.Logger
 
 	modelEndpointConnectivity modelEndpointStatus
+	ociConfiguration          ociConfigStatus
 )
 
 type apiFeature struct {
