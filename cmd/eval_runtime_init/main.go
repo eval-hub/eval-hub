@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path"
@@ -16,19 +18,35 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+
+	"github.com/eval-hub/eval-hub/internal/runtimeenv"
 )
 
 const (
+	// S3 env vars
 	envBucket         = "TEST_DATA_S3_BUCKET"
 	envKey            = "TEST_DATA_S3_KEY"
-	envTimeout        = "TEST_DATA_S3_TIMEOUT"
-	secretDir         = "/var/run/secrets/test-data" // #nosec G101 -- K8s secret mount path
-	destDir           = "/test_data"
+	envS3Timeout      = "TEST_DATA_S3_TIMEOUT"
 	regionOptionalKey = "AWS_DEFAULT_REGION"
 	endpointKey       = "AWS_S3_ENDPOINT"
 	accessKeyIDKey    = "AWS_ACCESS_KEY_ID"
 	secretAccessKey   = "AWS_SECRET_ACCESS_KEY" // #nosec G101 -- env var name, not a credential value
-	defaultTimeout    = 10 * time.Minute
+
+	// Git env vars
+	envGitURL     = "TEST_DATA_GIT_URL"
+	envGitRef     = "TEST_DATA_GIT_REF"
+	envGitSubPath = "TEST_DATA_GIT_SUBPATH"
+	envGitTimeout = "TEST_DATA_GIT_TIMEOUT"
+
+	defaultTimeout = 10 * time.Minute
+)
+
+// Paths and URL validation are package vars so unit tests can redirect mounts and
+// exercise runGit against local file:// repos without writing under /.
+var (
+	secretDir      = "/var/run/secrets/test-data" // #nosec G101 -- K8s secret mount path
+	destDir        = runtimeenv.TestDataDir
+	gitMetadataDir = runtimeenv.InitMetadataDir
 )
 
 func main() {
@@ -42,6 +60,14 @@ func main() {
 }
 
 func run() error {
+	if strings.TrimSpace(os.Getenv(envGitURL)) != "" {
+		return runGit()
+	}
+	return runS3()
+}
+
+// runS3 downloads test data from S3 into destDir.
+func runS3() error {
 	bucket := strings.TrimSpace(os.Getenv(envBucket))
 	keyPrefix := strings.TrimSpace(os.Getenv(envKey))
 	if bucket == "" || keyPrefix == "" {
@@ -50,32 +76,34 @@ func run() error {
 
 	keyPrefix = strings.TrimPrefix(keyPrefix, "/")
 	timeout := defaultTimeout
-	if raw := strings.TrimSpace(os.Getenv(envTimeout)); raw != "" {
+	if raw := strings.TrimSpace(os.Getenv(envS3Timeout)); raw != "" {
 		parsed, err := time.ParseDuration(raw)
 		if err != nil {
-			return fmt.Errorf("invalid %s: %w", envTimeout, err)
+			return fmt.Errorf("invalid %s: %w", envS3Timeout, err)
+		}
+		if parsed <= 0 {
+			return fmt.Errorf("invalid %s: must be a positive duration", envS3Timeout)
 		}
 		timeout = parsed
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	accessKey := readSecret(accessKeyIDKey)
-	secretKey := readSecret(secretAccessKey)
-	region := readSecret(regionOptionalKey)
-	endpoint := readSecret(endpointKey)
-
-	if accessKey == "" {
-		return fmt.Errorf("missing required secret %s", accessKeyIDKey)
+	accessKey, err := readSecret(accessKeyIDKey)
+	if err != nil {
+		return fmt.Errorf("missing required secret %s: %w", accessKeyIDKey, err)
 	}
-	if secretKey == "" {
-		return fmt.Errorf("missing required secret %s", secretAccessKey)
+	secretKey, err := readSecret(secretAccessKey)
+	if err != nil {
+		return fmt.Errorf("missing required secret %s: %w", secretAccessKey, err)
 	}
-	if region == "" {
-		return fmt.Errorf("missing required secret %s", regionOptionalKey)
+	region, err := readSecret(regionOptionalKey)
+	if err != nil {
+		return fmt.Errorf("missing required secret %s: %w", regionOptionalKey, err)
 	}
-	if endpoint == "" {
-		return fmt.Errorf("missing required secret %s", endpointKey)
+	endpoint, err := readSecret(endpointKey)
+	if err != nil {
+		return fmt.Errorf("missing required secret %s: %w", endpointKey, err)
 	}
 
 	cfg, err := loadAWSConfig(ctx, region, accessKey, secretKey)
@@ -138,6 +166,57 @@ func run() error {
 	}
 	slog.Info("download complete", "files", fileCount, "mb", totalBytes/(1024*1024))
 	return nil
+}
+
+// copyDirFromRoot copies the contents of srcRoot into dst, skipping the .git directory.
+// All reads are confined by os.Root; destination writes use a second Root under dst.
+func copyDirFromRoot(srcRoot *os.Root, dst string) error {
+	if err := os.MkdirAll(dst, 0o750); err != nil {
+		return err
+	}
+	dstRoot, err := os.OpenRoot(dst)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = dstRoot.Close() }()
+
+	return fs.WalkDir(srcRoot.FS(), ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if p == "." {
+			return nil
+		}
+		// fs.WalkDir yields slash-separated paths; reject escapes before opening.
+		rel := filepath.FromSlash(p)
+		if !filepath.IsLocal(rel) {
+			return fmt.Errorf("repository contains path %q that escapes the clone root; refusing to copy", p)
+		}
+		if d.IsDir() && d.Name() == ".git" {
+			return fs.SkipDir
+		}
+		if d.IsDir() {
+			return dstRoot.MkdirAll(rel, 0o750)
+		}
+		return copyFileBetweenRoots(srcRoot, dstRoot, rel)
+	})
+}
+
+func copyFileBetweenRoots(srcRoot, dstRoot *os.Root, rel string) error {
+	in, err := srcRoot.Open(rel)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+	out, err := dstRoot.OpenFile(rel, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err = io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 func loadAWSConfig(ctx context.Context, region, accessKey, secretKey string) (aws.Config, error) {
@@ -203,13 +282,25 @@ func relativeDestPath(prefix, key string) (string, error) {
 	return filepath.ToSlash(rel), nil
 }
 
-func readSecret(name string) string {
-	if name == "" {
-		return ""
+// readSecret reads a key from the mounted secret dir. Keys must be a single path
+// segment; reads go through os.Root so they cannot escape secretDir. Returns an
+// error if the key is invalid, missing, or empty after trimming.
+func readSecret(key string) (string, error) {
+	if key == "" || key == "." || key == "/" || !filepath.IsLocal(key) || filepath.Base(key) != key {
+		return "", fmt.Errorf("secret key %q contains path separators and is not allowed", key)
 	}
-	content, err := os.ReadFile(filepath.Join(secretDir, name)) // #nosec G304 -- name is a fixed secret key
+	root, err := os.OpenRoot(secretDir)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("secret key %q not found in mounted secret: %w", key, err)
 	}
-	return strings.TrimSpace(string(content))
+	defer func() { _ = root.Close() }()
+	content, err := root.ReadFile(key)
+	if err != nil {
+		return "", fmt.Errorf("secret key %q not found in mounted secret: %w", key, err)
+	}
+	val := strings.TrimSpace(string(content))
+	if val == "" {
+		return "", fmt.Errorf("secret key %q is present but empty", key)
+	}
+	return val, nil
 }

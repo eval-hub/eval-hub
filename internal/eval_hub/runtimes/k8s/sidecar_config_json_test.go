@@ -39,6 +39,47 @@ func TestOtelConfigForJobPod(t *testing.T) {
 	})
 }
 
+func TestSidecarForJobPodSetsIsGitJob(t *testing.T) {
+	cfg := &config.Config{
+		Sidecar: &config.SidecarConfig{Port: 8080},
+	}
+	jc := &jobConfig{
+		jobID:      "my-job-id",
+		evalHubURL: "http://eval-hub:8080",
+		testDataGit: gitTestDataConfig{
+			url: "https://github.com/org/repo.git",
+			ref: "main",
+		},
+	}
+
+	export, err := sidecarForJobPod(cfg, jc)
+	if err != nil {
+		t.Fatalf("sidecarForJobPod: %v", err)
+	}
+	if export.InitContainer == nil || !export.InitContainer.IsGitJob {
+		t.Fatal("expected InitContainer.IsGitJob=true in sidecar config for git source job")
+	}
+}
+
+func TestSidecarForJobPodIsGitJobFalseForNonGitJob(t *testing.T) {
+	cfg := &config.Config{
+		Sidecar: &config.SidecarConfig{Port: 8080},
+	}
+	jc := &jobConfig{
+		jobID:      "s3-job",
+		evalHubURL: "http://eval-hub:8080",
+		// no testDataGit fields
+	}
+
+	export, err := sidecarForJobPod(cfg, jc)
+	if err != nil {
+		t.Fatalf("sidecarForJobPod: %v", err)
+	}
+	if export.InitContainer != nil && export.InitContainer.IsGitJob {
+		t.Fatal("expected IsGitJob=false for non-git job")
+	}
+}
+
 func TestSidecarForJobPodIncludesOTEL(t *testing.T) {
 	cfg := &config.Config{
 		OTEL: &config.OTELConfig{
