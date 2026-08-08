@@ -27,6 +27,7 @@ const (
 	defaultNamespace            = "default"
 	evalHubInstanceNameEnv      = "EVALHUB_INSTANCE_NAME"
 	mlflowTrackingURIEnv        = "MLFLOW_TRACKING_URI"
+	mlflowInternalURIEnv        = "MLFLOW_INTERNAL_URI"
 	inClusterNamespaceFile      = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 	serviceAccountNameSuffix    = "-job"
 	serviceCAConfigMapSuffix    = "-service-ca"
@@ -123,8 +124,14 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	// Get EvalHub instance name from environment (set by operator in deployment)
 	evalHubInstanceName := strings.TrimSpace(os.Getenv(evalHubInstanceNameEnv))
 
-	// Get MLFlow configuration from environment (set by operator in deployment)
-	mlflowTrackingURI := strings.TrimSpace(os.Getenv(mlflowTrackingURIEnv))
+	// Get MLFlow configuration from environment (set by operator in deployment).
+	// Prefer MLFLOW_INTERNAL_URI (in-cluster service URL) for the sidecar's upstream
+	// connection to avoid TLS certificate mismatches when the Route uses passthrough
+	// termination and the service-ca cert only covers internal service names.
+	mlflowTrackingURI := strings.TrimSpace(os.Getenv(mlflowInternalURIEnv))
+	if mlflowTrackingURI == "" {
+		mlflowTrackingURI = strings.TrimSpace(os.Getenv(mlflowTrackingURIEnv))
+	}
 	// Job pod must send X-MLFLOW-WORKSPACE = tenant namespace so MLflow's kubernetes-auth
 	// checks RBAC in the correct namespace. Always use the job's namespace; the
 	// MLFLOW_WORKSPACE env var on EvalHub identifies EvalHub's own namespace,

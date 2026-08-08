@@ -36,6 +36,7 @@ const (
 type Client struct {
 	ctx                        context.Context
 	baseURL                    string
+	displayBaseURL             string
 	httpClient                 *http.Client
 	authToken                  string
 	authTokenPath              string
@@ -52,6 +53,7 @@ func (c *Client) copy() *Client {
 	cp := &Client{
 		ctx:               c.ctx,
 		baseURL:           c.baseURL,
+		displayBaseURL:    c.displayBaseURL,
 		httpClient:        c.httpClient,
 		authToken:         c.authToken,
 		authTokenPath:     c.authTokenPath,
@@ -166,6 +168,22 @@ func (c *Client) WithWorkspace(workspace string) *Client {
 	return cp
 }
 
+// WithDisplayBaseURL sets an alternative base URL used for user-facing URLs
+// (e.g. GetExperimentsURL). When the connection URL (baseURL) differs from the
+// URL users should see (e.g. internal service vs external route), set this to
+// the external URL so links in API responses remain valid for end users.
+func (c *Client) WithDisplayBaseURL(displayURL string) *Client {
+	if c == nil {
+		return nil
+	}
+	cp := c.copy()
+	if len(displayURL) > 0 && displayURL[len(displayURL)-1] == '/' {
+		displayURL = displayURL[:len(displayURL)-1]
+	}
+	cp.displayBaseURL = displayURL
+	return cp
+}
+
 func (c *Client) GetHTTPClient() *http.Client {
 	return c.httpClient
 }
@@ -179,7 +197,11 @@ func (c *Client) GetBaseURL() string {
 }
 
 func (c *Client) GetExperimentsURL() string {
-	return c.baseURL + experimentsBaseURL
+	base := c.baseURL
+	if c.displayBaseURL != "" {
+		base = c.displayBaseURL
+	}
+	return base + experimentsBaseURL
 }
 
 // resolveAuthToken returns the auth token to use for a request.

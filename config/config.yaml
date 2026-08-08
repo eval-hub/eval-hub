@@ -22,6 +22,7 @@ env_mappings:
   DB_DRIVER: database.driver
   DB_URL: database.url
   MLFLOW_TRACKING_URI: mlflow.tracking_uri
+  MLFLOW_INTERNAL_URI: mlflow.internal_uri
   MLFLOW_CA_CERT_PATH: mlflow.ca_cert_path
   MLFLOW_TOKEN_PATH: mlflow.token_path
   MLFLOW_WORKSPACE: mlflow.workspace

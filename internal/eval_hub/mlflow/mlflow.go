@@ -51,6 +51,15 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.
 		return nil, nil
 	}
 
+	// When an internal URI is configured (in-cluster service URL), use it for
+	// the actual connection to avoid TLS certificate mismatches with external
+	// route hostnames not covered by service-ca certificates.
+	connectionURL := url
+	if config.MLFlow.InternalURI != "" {
+		connectionURL = config.MLFlow.InternalURI
+		logger.Info("Using MLflow internal URI for connections", "internal_uri", connectionURL, "tracking_uri", url)
+	}
+
 	if config.MLFlow.HTTPTimeout == 0 {
 		config.MLFlow.HTTPTimeout = 30 * time.Second
 	}
@@ -86,10 +95,14 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.
 		},
 	}
 
-	client := mlflowclient.NewClient(url).
+	client := mlflowclient.NewClient(connectionURL).
 		WithContext(context.Background()).
 		WithLogger(logger).
 		WithHTTPClient(httpClient)
+
+	if connectionURL != url {
+		client = client.WithDisplayBaseURL(url)
+	}
 
 	// Configure auth token. Two modes are supported:
 	//   1. Token file path (WithTokenPath) — re-read on each request, supports

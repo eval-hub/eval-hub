@@ -110,6 +110,38 @@ func TestNewMLFlowClient(t *testing.T) {
 		}
 	})
 
+	t.Run("internal URI used for connection", func(t *testing.T) {
+		t.Parallel()
+		internalSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/api/3.0/mlflow/server-info":
+				_ = json.NewEncoder(w).Encode(mlflowclient.ServerInfoResponse{WorkspacesEnabled: false})
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		t.Cleanup(internalSrv.Close)
+
+		externalURL := "https://mlflow-route.apps.example.com/mlflow"
+		cfg := mlflowServiceConfig(t, externalURL, func(m *config.MLFlowConfig) {
+			m.InternalURI = internalSrv.URL
+		})
+		client, err := NewMLFlowClient(cfg, logger)
+		if err != nil {
+			t.Fatalf("NewMLFlowClient() err = %v", err)
+		}
+		if client == nil {
+			t.Fatal("expected non-nil client")
+		}
+		if client.GetBaseURL() != internalSrv.URL {
+			t.Fatalf("base URL = %q, want internal %q", client.GetBaseURL(), internalSrv.URL)
+		}
+		wantExperiments := externalURL + "/api/2.0/mlflow/experiments"
+		if client.GetExperimentsURL() != wantExperiments {
+			t.Fatalf("experiments URL = %q, want %q", client.GetExperimentsURL(), wantExperiments)
+		}
+	})
+
 	t.Run("invalid CA certificate path", func(t *testing.T) {
 		t.Parallel()
 		cfg := mlflowServiceConfig(t, "http://localhost:5000", func(m *config.MLFlowConfig) {
