@@ -511,6 +511,25 @@ benchmarks:
     metrics: [accuracy/accuracy]
     tags: [reasoning, math, inspect-evals]
 
+  # Telecom (GSMA Open-Telco)
+  - id: inspect/telemath
+    name: TeleMath
+    description: >
+      Telecom-domain mathematical problem solving — 500 numerical Q&A pairs covering
+      signal processing, networking, electrical engineering, information theory, and
+      related topics (GSMA Open-Telco / Inspect AI). Always uses the full GSMA/ot-full
+      telemath split; cap sample count with num_examples (or max_samples).
+    category: telecom
+    metrics:
+      - accuracy/accuracy
+      - accuracy/stderr
+    primary_score:
+      metric: accuracy/accuracy
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.30
+    tags: [telecom, math, reasoning, open-telco, inspect-ai]
+
   # Knowledge & reasoning
   - id: inspect/mmlu
     name: MMLU
@@ -879,9 +898,12 @@ parameters:
     type: integer
     default: null
     description: >
-      Limit samples per task. Strongly recommended for Petri/Bloom development
-      runs to control cost. Full Petri audits (170+ seeds × 30 turns × 3 models)
-      can be expensive.
+      Limit samples per task when benchmarks[].parameters.num_examples is not set.
+      Precedence for Inspect --limit: num_examples > max_samples > unlimited.
+      Strongly recommended for Petri/Bloom development runs to control cost.
+      Full Petri audits (170+ seeds × 30 turns × 3 models) can be expensive.
+      Prefer num_examples (API / collection parameters) for sample capping —
+      same contract as other EvalHub providers.
 
   - name: task_args
     type: object

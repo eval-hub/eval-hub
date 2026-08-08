@@ -1,0 +1,33 @@
+id: open-telco-v1
+name: Open-Telco v1
+category: telecom
+description: >
+  First slice of the GSMA Open-Telco suite for evaluating LLMs on telecom-domain
+  tasks. Starts with TeleMath (numerical mathematical reasoning for network
+  operations and engineering). Further Open-Telco benchmarks (TeleQnA, TeleLogs,
+  TeleTables, and others) will be added in later slices.
+  TeleMath uses the full GSMA/ot-full telemath split; set num_examples to cap
+  sample count for smoke or cost-controlled runs. Jobs that download HuggingFace
+  datasets should supply model.auth.secret_ref with an hf-token key.
+tags:
+  - telecom
+  - open-telco
+  - math
+  - reasoning
+  - inspect
+  - vllm
+pass_criteria:
+  # Provisional until first calibration runs against TeleMath baselines.
+  threshold: 0.30
+benchmarks:
+  - id: inspect/telemath
+    provider_id: inspect
+    weight: 1
+    primary_score:
+      metric: accuracy/accuracy
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.30
+    parameters:
+      # Cap samples for typical collection runs; omit for full 500-item eval.
+      num_examples: 50
