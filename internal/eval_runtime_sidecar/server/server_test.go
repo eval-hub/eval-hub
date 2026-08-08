@@ -35,30 +35,23 @@ func TestNewSidecarServer(t *testing.T) {
 		}
 	})
 
-	t.Run("uses default port 8080 when Sidecar is nil", func(t *testing.T) {
+	t.Run("returns error when sidecar config is nil", func(t *testing.T) {
 		cfg := &config.Config{}
-		srv, err := sidecarServer.NewSidecarServer(logger, cfg)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+		_, err := sidecarServer.NewSidecarServer(logger, cfg)
+		if err == nil {
+			t.Fatal("expected error when sidecar config is nil")
 		}
-		if srv.GetPort() != 8080 {
-			t.Errorf("expected port 8080, got %d", srv.GetPort())
-		}
-	})
-
-	t.Run("uses default port 8080 when Sidecar.Port is 0", func(t *testing.T) {
-		cfg := &config.Config{Sidecar: &config.SidecarConfig{}}
-		srv, err := sidecarServer.NewSidecarServer(logger, cfg)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if srv.GetPort() != 8080 {
-			t.Errorf("expected port 8080, got %d", srv.GetPort())
+		if err.Error() != "sidecar config is required" {
+			t.Errorf("unexpected error: %v", err)
 		}
 	})
 
-	t.Run("uses Sidecar.Port when set", func(t *testing.T) {
-		cfg := &config.Config{Sidecar: &config.SidecarConfig{BaseURL: "http://localhost:9090"}}
+	t.Run("uses port from Sidecar.BaseURL when set", func(t *testing.T) {
+		sc := &config.SidecarConfig{BaseURL: "http://localhost:9090"}
+		if err := sc.ResolvePort(); err != nil {
+			t.Fatal(err)
+		}
+		cfg := &config.Config{Sidecar: sc}
 		srv, err := sidecarServer.NewSidecarServer(logger, cfg)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -71,7 +64,11 @@ func TestNewSidecarServer(t *testing.T) {
 
 func TestSidecarServer_GetPort(t *testing.T) {
 	logger := slog.Default()
-	cfg := &config.Config{Sidecar: &config.SidecarConfig{BaseURL: "http://localhost:3000"}}
+	sc := &config.SidecarConfig{BaseURL: "http://localhost:3000"}
+	if err := sc.ResolvePort(); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{Sidecar: sc}
 	srv, err := sidecarServer.NewSidecarServer(logger, cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -85,7 +82,7 @@ func TestSidecarServer_SetupRoutes(t *testing.T) {
 	logger := slog.Default()
 	cfg := &config.Config{
 		Sidecar: &config.SidecarConfig{
-			Port: 8080,
+			BaseURL: "http://localhost:8080",
 			EvalHub: &config.EvalHubClientConfig{
 				BaseURL:            "http://localhost:8080",
 				InsecureSkipVerify: true,
@@ -113,7 +110,7 @@ func TestSidecarServer_HealthEndpoint(t *testing.T) {
 	logger := slog.Default()
 	cfg := &config.Config{
 		Sidecar: &config.SidecarConfig{
-			Port: 8080,
+			BaseURL: "http://localhost:8080",
 			EvalHub: &config.EvalHubClientConfig{
 				BaseURL:            "http://localhost:8080",
 				InsecureSkipVerify: true,
