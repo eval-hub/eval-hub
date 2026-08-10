@@ -121,9 +121,9 @@ Existing releases can be signed via **Actions → Signed release → Run workflo
 | `backfill_last_n` | When `tag` is empty, process this many recent unpublished-provenance releases (default `5`) |
 | `publish` | Set `true` only when the release should be undrafted after provenance (new releases). Leave `false` when backfilling already-published releases. |
 
-Provenance attached this way attests that GitHub Actions hashed the subject files during the backfill job; it does **not** claim those bytes were produced by the original historical build. New tagged releases use draft → assets → provenance → publish so all assets (including provenance) are present before the release is published.
+Provenance attached this way attests that GitHub Actions hashed the subject files during the backfill job; it does **not** claim those bytes were produced by the original historical build. New tagged releases use draft → project assets → provenance → publish so provenance is present before the release is published. Publish waits briefly for optional MCP binaries when that workflow is still running, but still undrafts if MCP fails or never uploads; MCP may attach binaries later with `gh release upload --clobber` on mutable releases.
 
-If the repository enables [immutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases), assets cannot be added to already-published releases; backfill will fail for those tags and only new draft→publish releases can be signed.
+If the repository enables [immutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases), assets cannot be added to already-published releases; backfill will fail for those tags and only new draft→publish releases can be signed. With immutable releases enabled, MCP binaries must land before publish or they cannot be added afterward.
 
 ### Post-merge validation
 

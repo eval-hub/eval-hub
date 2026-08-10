@@ -188,14 +188,17 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Wait for MCP release assets
+      - name: Wait for MCP release assets (best-effort)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.prepare.outputs.tag }}
           SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          # Undraft only after Release MCP has uploaded binaries (immutable-release friendly).
+          # Prefer attaching optional MCP binaries before undraft (immutable-release
+          # friendly when MCP succeeds). MCP failure must not block publish — the
+          # signed release is independent of MCP, and release-mcp.yml uses --clobber
+          # so binaries can still land on a published (mutable) release later.
           attempt=0
           settle=0
           while true; do
@@ -243,8 +246,8 @@ jobs:
 
             if [[ "${#RUN_LINES[@]}" -eq 0 ]]; then
               if [[ "${attempt}" -ge 40 ]]; then
-                echo "::error::Release MCP workflow never started for commit ${SHA}."
-                exit 1
+                echo "::warning::Release MCP workflow never started for commit ${SHA}; publishing without MCP assets."
+                exit 0
               fi
               echo "Release MCP workflow not listed yet for ${SHA}; waiting (poll=${attempt})..."
               sleep 15
@@ -252,16 +255,16 @@ jobs:
             fi
 
             if [[ "${concluded_ok}" -eq 0 ]]; then
-              echo "::error::Release MCP finished without uploading assets to ${TAG} (failed/cancelled runs=${concluded_fail}). Leaving release as draft."
-              exit 1
+              echo "::warning::Release MCP finished without uploading assets to ${TAG} (failed/cancelled runs=${concluded_fail}); publishing without MCP assets."
+              exit 0
             fi
 
             settle=$((settle + 1))
             echo "Release MCP succeeded but MCP assets not visible yet; retrying (settle=${settle})..."
             sleep 15
             if [[ "${settle}" -ge 20 ]]; then
-              echo "::error::Release MCP succeeded for ${SHA} but MCP assets never appeared on ${TAG}."
-              exit 1
+              echo "::warning::Release MCP succeeded for ${SHA} but MCP assets never appeared on ${TAG}; publishing without MCP assets."
+              exit 0
             fi
           done
 
@@ -271,6 +274,6 @@ jobs:
           TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           set -euo pipefail
-          # Undraft after provenance and MCP binaries are attached.
+          # Undraft after provenance is attached. MCP assets are preferred but optional.
           gh release edit "${TAG}" --draft=false
           echo "Published release ${TAG}"
