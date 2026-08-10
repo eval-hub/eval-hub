@@ -2,7 +2,6 @@ package k8s
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
@@ -11,26 +10,55 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-func TestBuildJobRejectsInvalidSidecarPort(t *testing.T) {
+func TestBuildJobUsesJobConfigSidecarPort(t *testing.T) {
+	sc := &config.SidecarConfig{BaseURL: "http://localhost:9090"}
+	if err := sc.ResolvePort(); err != nil {
+		t.Fatalf("ResolvePort: %v", err)
+	}
 	cfg := &jobConfig{
-		jobID:          "job-bad-port",
-		resourceGUID:   "guid-bp",
+		jobID:          "job-port",
+		resourceGUID:   "guid-port",
 		benchmarkIndex: 0,
 		namespace:      "default",
 		providerID:     "provider-1",
 		benchmarkID:    "bench-1",
 		adapterImage:   "adapter:latest",
-		sidecarConfig: &config.SidecarConfig{
-			Port: 70000,
-		},
+		sidecarConfig:  sc,
 	}
 
-	_, err := buildJob(cfg)
-	if err == nil {
-		t.Fatal("buildJob() = nil, want sidecar port error")
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob: %v", err)
 	}
-	if !strings.Contains(err.Error(), "sidecar port") {
-		t.Fatalf("buildJob() error = %v, want sidecar port error", err)
+	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
+	if sidecar == nil {
+		t.Fatal("sidecar init container not found")
+	}
+	if sidecar.StartupProbe == nil || sidecar.StartupProbe.HTTPGet == nil {
+		t.Fatal("expected startup probe with HTTPGet")
+	}
+	if got := sidecar.StartupProbe.HTTPGet.Port.IntValue(); got != 9090 {
+		t.Fatalf("startup probe port = %d, want 9090", got)
+	}
+}
+
+func TestBuildJobRejectsOutOfRangeSidecarPort(t *testing.T) {
+	for _, port := range []int32{-1, 65536} {
+		cfg := &jobConfig{
+			jobID:        "job-port-bad",
+			resourceGUID: "guid-port-bad",
+			namespace:    "default",
+			providerID:   "provider-1",
+			benchmarkID:  "bench-1",
+			adapterImage: "adapter:latest",
+			sidecarConfig: &config.SidecarConfig{
+				Port: port,
+			},
+		}
+		_, err := buildJob(cfg)
+		if err == nil {
+			t.Fatalf("expected error for sidecar port %d", port)
+		}
 	}
 }
 
@@ -114,7 +142,6 @@ func TestBuildConfigMapSidecarConfigJSONContent(t *testing.T) {
 		jobSpec:        shared.JobSpec{},
 		resourceGUID:   "guid-123",
 		sidecarConfig: &config.SidecarConfig{
-			Port:    8081,
 			BaseURL: "http://localhost:8081",
 		},
 	}
@@ -126,8 +153,11 @@ func TestBuildConfigMapSidecarConfigJSONContent(t *testing.T) {
 	if err := json.Unmarshal([]byte(cm.Data[sidecarConfigFileName]), &m); err != nil {
 		t.Fatal(err)
 	}
-	if m["port"].(float64) != 8081 {
-		t.Fatalf("port: %v", m["port"])
+	if m["base_url"] != "http://localhost:8081" {
+		t.Fatalf("base_url: %v", m["base_url"])
+	}
+	if _, ok := m["port"]; ok {
+		t.Fatalf("sidecar_config.json should not contain 'port', got %v", m["port"])
 	}
 }
 

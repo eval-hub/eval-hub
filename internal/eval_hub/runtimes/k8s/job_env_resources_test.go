@@ -8,24 +8,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-func TestSidecarPortFromInt(t *testing.T) {
-	t.Parallel()
-
-	got, err := sidecarPortFromInt(8080)
-	if err != nil {
-		t.Fatalf("sidecarPortFromInt(8080) = %v, want nil error", err)
-	}
-	if got != 8080 {
-		t.Fatalf("sidecarPortFromInt(8080) = %d, want 8080", got)
-	}
-
-	for _, port := range []int{0, -1, 65536} {
-		if _, err := sidecarPortFromInt(port); err == nil {
-			t.Fatalf("sidecarPortFromInt(%d) = nil error, want out of range error", port)
-		}
-	}
-}
-
 func TestBuildJobAdapterImagePullPolicy(t *testing.T) {
 	base := &jobConfig{
 		jobID:          "job-pull",

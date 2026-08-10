@@ -316,6 +316,31 @@ func (h *KubernetesHelper) EmitEvent(job *batchv1.Job, eventtype, reason, messag
 	return nil
 }
 
+// PatchJobStatusAnnotation patches the trustyai.opendatahub.io/evaluation-status annotation on a Job
+// with a JSON-encoded status payload. The annotation is best-effort; callers must not block on failures.
+func (h *KubernetesHelper) PatchJobStatusAnnotation(ctx context.Context, namespace, name string, payload map[string]any) error {
+	if namespace == "" || name == "" {
+		return fmt.Errorf("namespace and name are required")
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal annotation payload: %w", err)
+	}
+	patch := map[string]any{
+		"metadata": map[string]any{
+			"annotations": map[string]string{
+				annotationEvaluationStatusKey: string(data),
+			},
+		},
+	}
+	patchBytes, err := json.Marshal(patch)
+	if err != nil {
+		return fmt.Errorf("marshal patch: %w", err)
+	}
+	_, err = h.clientset.BatchV1().Jobs(namespace).Patch(ctx, name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
+	return err
+}
+
 // PatchJobPhaseLabel patches the trustyai.opendatahub.io/evaluation-phase label on a Job.
 // Patching metadata labels does not restart the Job or its Pods.
 func (h *KubernetesHelper) PatchJobPhaseLabel(ctx context.Context, namespace, name, phase string) error {
@@ -328,7 +353,7 @@ func (h *KubernetesHelper) PatchJobPhaseLabel(ctx context.Context, namespace, na
 	patch := map[string]any{
 		"metadata": map[string]any{
 			"labels": map[string]string{
-				"trustyai.opendatahub.io/evaluation-phase": phase,
+				labelEvaluationPhaseKey: phase,
 			},
 		},
 	}

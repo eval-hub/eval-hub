@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
@@ -17,44 +15,31 @@ import (
 
 type SidecarServer struct {
 	httpServer *http.Server
-	port       int
+	port       int32
 	logger     *slog.Logger
 	config     *config.Config
 }
 
 // NewSidecarServer creates a new sidecar HTTP server with the given logger and config.
 func NewSidecarServer(logger *slog.Logger,
-	config *config.Config,
+	cfg *config.Config,
 ) (*SidecarServer, error) {
 
 	if logger == nil {
 		return nil, fmt.Errorf("logger is required for the server")
 	}
-	if config == nil {
+	if cfg == nil {
 		return nil, fmt.Errorf("service config is required for the sidecar server")
 	}
 
-	port := 8080
-
-	if config.Sidecar != nil {
-		if baseURL := strings.TrimSpace(config.Sidecar.BaseURL); baseURL != "" {
-			if strings.Contains(baseURL, ":") {
-				parts := strings.Split(baseURL, ":")
-				portStr := parts[len(parts)-1]
-				portInt, err := strconv.Atoi(portStr)
-				if err != nil {
-					logger.Warn("invalid port in base URL, using default port 8080", "error", err)
-				} else {
-					port = portInt
-				}
-			}
-		}
+	if cfg.Sidecar == nil {
+		return nil, fmt.Errorf("sidecar config is required")
 	}
 
 	return &SidecarServer{
-		port:   port,
+		port:   cfg.Sidecar.Port,
 		logger: logger,
-		config: config,
+		config: cfg,
 	}, nil
 }
 
@@ -63,7 +48,7 @@ func (s *SidecarServer) isOTELEnabled() bool {
 }
 
 func (s *SidecarServer) GetPort() int {
-	return s.port
+	return int(s.port)
 }
 
 func (s *SidecarServer) setupRoutes() (http.Handler, error) {

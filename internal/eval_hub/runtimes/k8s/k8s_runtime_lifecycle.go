@@ -65,6 +65,19 @@ func (r *K8sRuntime) NotifyJobPhaseTransition(ctx context.Context, evaluation *a
 				"error", patchErr,
 			)
 		}
+		statusPayload := map[string]any{
+			"phase":           phase,
+			"timestamp":       time.Now().UTC().Format(time.RFC3339),
+			"evaluation_id":   evaluation.Resource.ID,
+			"benchmark_index": benchmarkIndex,
+		}
+		if annotErr := r.helper.PatchJobStatusAnnotation(signalCtx, namespace, job.Name, statusPayload); annotErr != nil {
+			r.logger.WarnContext(signalCtx, "lifecycle signal: patch status annotation failed",
+				"job_name", job.Name,
+				"phase", phase,
+				"error", annotErr,
+			)
+		}
 		messageFmt := "benchmark %d phase transition: %s"
 		if emitErr := r.helper.EmitEvent(job, eventtype, reason, messageFmt, benchmarkIndex, phase); emitErr != nil {
 			r.logger.WarnContext(signalCtx, "lifecycle signal: emit event failed",
