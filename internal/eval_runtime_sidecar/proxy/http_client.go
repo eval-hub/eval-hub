@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -69,6 +70,19 @@ func buildTLSConfig(caCertPath string, insecureSkipVerify bool, logger *slog.Log
 	return tlsConfig, nil
 }
 
+// schemeRequiresTLS returns false only for an explicit "http" scheme;
+// all other cases default to TLS. BaseURL scheme is validated by ResolvePort.
+func schemeRequiresTLS(rawURL string) bool {
+	if rawURL == "" {
+		return true
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return true
+	}
+	return u.Scheme != "http"
+}
+
 // NewHTTPClient creates an HTTP client for the eval-hub service from config.
 // Returns (nil, nil) when Sidecar.EvalHub is not configured.
 func NewEvalHubHTTPClient(config *config.Config, isOTELEnabled bool, logger *slog.Logger) (*http.Client, error) {
@@ -93,7 +107,7 @@ func NewEvalHubHTTPClient(config *config.Config, isOTELEnabled bool, logger *slo
 
 	var tlsConfig *tls.Config
 	var err error
-	if cfg != nil {
+	if cfg != nil && schemeRequiresTLS(cfg.BaseURL) {
 		tlsConfig, err = buildTLSConfig(caCertPath, insecureSkipVerify, logger, "EvalHub")
 		if err != nil {
 			return nil, err
@@ -120,9 +134,13 @@ func NewMLFlowHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logge
 	}
 
 	// TLS verification is always enabled for MLflow; use CACertPath for custom CAs.
-	tlsConfig, err := buildTLSConfig(mlflowConfig.CACertPath, false, logger, "MLflow")
-	if err != nil {
-		return nil, err
+	var tlsConfig *tls.Config
+	if schemeRequiresTLS(mlflowConfig.TrackingURI) {
+		var err error
+		tlsConfig, err = buildTLSConfig(mlflowConfig.CACertPath, false, logger, "MLflow")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	client := newHTTPClient(timeout, tlsConfig, isOTELEnabled, logger, "MLflow")
@@ -156,9 +174,17 @@ func NewModelHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logger
 	if mc != nil && mc.InsecureSkipVerify {
 		insecureSkipVerify = mc.InsecureSkipVerify
 	}
-	tlsConfig, err := buildTLSConfig(caCertPath, insecureSkipVerify, logger, "Model")
-	if err != nil {
-		return nil, err
+	targetURL := ""
+	if mc != nil {
+		targetURL = mc.URL
+	}
+	var tlsConfig *tls.Config
+	if schemeRequiresTLS(targetURL) {
+		var err error
+		tlsConfig, err = buildTLSConfig(caCertPath, insecureSkipVerify, logger, "Model")
+		if err != nil {
+			return nil, err
+		}
 	}
 	client := newHTTPClient(timeout, tlsConfig, isOTELEnabled, logger, "Model")
 	return client, nil
