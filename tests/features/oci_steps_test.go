@@ -59,7 +59,11 @@ func (tc *scenarioConfig) iFetchOCIManifestByRepoAndTag(repository, tag string) 
 		tc.ociManifestError = err
 		return tc.logError(fmt.Errorf("failed to fetch OCI manifest: %w", err))
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			tc.logDebug("Failed to close OCI manifest response body: %v\n", closeErr)
+		}
+	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -147,7 +151,11 @@ func (tc *scenarioConfig) iFetchOCIBlobByDigest(repository, digest string) error
 		tc.ociArtifactError = err
 		return tc.logError(fmt.Errorf("failed to fetch OCI blob: %w", err))
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			tc.logDebug("Failed to close OCI blob response body: %v\n", closeErr)
+		}
+	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -173,7 +181,11 @@ func (tc *scenarioConfig) iFetchOCIBlobByDigest(repository, digest string) error
 			tc.ociArtifactError = err
 			return tc.logError(fmt.Errorf("failed to create gzip reader: %w", err))
 		}
-		defer reader.Close()
+		defer func() {
+			if closeErr := reader.Close(); closeErr != nil {
+				tc.logDebug("Failed to close gzip reader: %v\n", closeErr)
+			}
+		}()
 
 		decompressed, err = io.ReadAll(reader)
 		if err != nil {

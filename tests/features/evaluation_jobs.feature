@@ -1629,6 +1629,7 @@ Feature: Evaluation Jobs
   @oci
   Scenario: EvalCard published to OCI registry when job completes with OCI export configured
     Given the service is running
+    And OCI is configured
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oci_export.json"
     Then the response code should be 202
     And the "resource.id" field in the response should be saved as "value:job_id"
@@ -1647,6 +1648,7 @@ Feature: Evaluation Jobs
   @oci
   Scenario: No EvalCard exported to OCI when evaluation job fails
     Given the service is running
+    And OCI is configured
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oci_invalid_model.json"
     Then the response code should be 202
     And the "resource.id" field in the response should be saved as "value:job_id"
@@ -1660,6 +1662,7 @@ Feature: Evaluation Jobs
   @oci
   Scenario: No EvalCard exported to OCI when exports.oci is not configured
     Given the service is running
+    And OCI is configured
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_no_oci.json"
     Then the response code should be 202
     And I wait for the evaluation job status to be "completed"
@@ -1672,6 +1675,7 @@ Feature: Evaluation Jobs
   @oci
   Scenario: OCI export with custom annotations
     Given the service is running
+    And OCI is configured
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oci_annotations.json"
     Then the response code should be 202
     And the "resource.id" field in the response should be saved as "value:job_id"
@@ -1695,6 +1699,7 @@ Feature: Evaluation Jobs
   @oci
   Scenario: OCI export validation errors for missing required fields
     Given the service is running
+    And OCI is configured
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oci_missing_host.json"
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
@@ -1702,6 +1707,7 @@ Feature: Evaluation Jobs
   @oci
   Scenario: Multiple jobs export to same OCI repository with different tags
     Given the service is running
+    And OCI is configured
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oci_shared_repo_1.json"
     Then the response code should be 202
     And the "resource.id" field in the response should be saved as "value:job_id_1"
@@ -1742,6 +1748,7 @@ Feature: Evaluation Jobs
   @mlflow
   Scenario: Both OCI and MLflow exports succeed for same job
     Given the service is running
+    And OCI is configured
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_dual_export.json"
     Then the response code should be 202
     And the "resource.id" field in the response should be saved as "value:job_id"
