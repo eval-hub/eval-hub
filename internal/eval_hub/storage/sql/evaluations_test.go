@@ -2026,16 +2026,16 @@ func testUpdateEvaluationJobResolvedSHA_EdgeCases(t *testing.T, driver string, d
 	}
 
 	// Out-of-range index is a no-op (no error).
-	if err := tenantStore.UpdateEvaluationJobResolvedSHA(job.Resource.ID, 99, "aabbcc"); err != nil {
+	if err := tenantStore.UpdateEvaluationJobResolvedSHA(job.Resource.ID, 99, "aabbccd"); err != nil {
 		t.Fatalf("bad index: %v", err)
 	}
 
-	const sha = "edgecase11223344556677889900"
+	const sha = "aabbccdd112233445566778899001122"
 	if err := tenantStore.UpdateEvaluationJobResolvedSHA(job.Resource.ID, 0, sha); err != nil {
 		t.Fatalf("first stamp: %v", err)
 	}
 	// Idempotent: second stamp with different SHA must not overwrite.
-	if err := tenantStore.UpdateEvaluationJobResolvedSHA(job.Resource.ID, 0, "should-not-overwrite"); err != nil {
+	if err := tenantStore.UpdateEvaluationJobResolvedSHA(job.Resource.ID, 0, "ffffffffffffffffffffffffffffff00"); err != nil {
 		t.Fatalf("second stamp: %v", err)
 	}
 	got, err := tenantStore.GetEvaluationJob(job.Resource.ID)
@@ -2046,13 +2046,18 @@ func testUpdateEvaluationJobResolvedSHA_EdgeCases(t *testing.T, driver string, d
 		t.Errorf("ResolvedSHA = %q, want %q", got.Benchmarks[0].TestDataRef.ResolvedSHA, sha)
 	}
 
+	// Invalid SHA format is rejected.
+	if err := tenantStore.UpdateEvaluationJobResolvedSHA(job.Resource.ID, 0, "not-a-sha"); err == nil {
+		t.Fatal("expected error for non-hex resolved_sha")
+	}
+
 	// Benchmark without TestDataRef: no-op.
 	noRefJob := makeGitJob(common.GUID(), "main")
 	noRefJob.Benchmarks[0].TestDataRef = nil
 	if err := store.CreateEvaluationJob(noRefJob); err != nil {
 		t.Fatalf("CreateEvaluationJob noRef: %v", err)
 	}
-	if err := store.WithTenant(noRefJob.Resource.Tenant).UpdateEvaluationJobResolvedSHA(noRefJob.Resource.ID, 0, "zzzz"); err != nil {
+	if err := store.WithTenant(noRefJob.Resource.Tenant).UpdateEvaluationJobResolvedSHA(noRefJob.Resource.ID, 0, "aabbccddeeff00"); err != nil {
 		t.Fatalf("no TestDataRef: %v", err)
 	}
 }

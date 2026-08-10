@@ -95,3 +95,30 @@ func isBlockedGitIP(ip net.IP) bool {
 		ip.IsUnspecified() ||
 		ip.IsMulticast()
 }
+
+// LooksLikeHexSHA reports whether s could be a git commit SHA — 7–40 hex chars
+// (case-insensitive). Used as a syntactic check for refs and for resolved_sha values.
+func LooksLikeHexSHA(s string) bool {
+	if len(s) < 7 || len(s) > 40 {
+		return false
+	}
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+			return false
+		}
+	}
+	return true
+}
+
+// ValidateResolvedSHA checks that sha is empty (callers treat empty as a no-op) or a
+// plausible content identity (see LooksLikeHexSHA). Rejects whitespace and arbitrary
+// strings so garbage cannot be persisted as resolved_sha.
+func ValidateResolvedSHA(sha string) error {
+	if sha == "" {
+		return nil
+	}
+	if !LooksLikeHexSHA(sha) {
+		return fmt.Errorf("resolved_sha %q must be 7-40 hex characters", sha)
+	}
+	return nil
+}

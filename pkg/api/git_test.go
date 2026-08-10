@@ -67,3 +67,70 @@ func TestValidateGitCloneURLResolved(t *testing.T) {
 		t.Fatalf("expected disallowed address error, got %v", err)
 	}
 }
+
+func TestLooksLikeHexSHA(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		ref  string
+		want bool
+	}{
+		{"abc1234", true},
+		{"abc1234def5678901234567890abcdef12345678", true},
+		{"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef", true},
+		{"DEADBEEF", true},
+		{"main", false},
+		{"feature/my-branch", false},
+		{"v1.2.3", false},
+		{"release-2024", false},
+		{"abc123-suffix", false},
+		{"abc12", false},
+		{"abc1234def5678901234567890abcdef123456789", false},
+		{"", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.ref, func(t *testing.T) {
+			t.Parallel()
+			if got := LooksLikeHexSHA(tt.ref); got != tt.want {
+				t.Errorf("LooksLikeHexSHA(%q) = %v, want %v", tt.ref, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateResolvedSHA(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		sha     string
+		wantErr string
+	}{
+		{name: "empty ok", sha: ""},
+		{name: "short 7", sha: "abcdef0"},
+		{name: "16 hex", sha: "deadbeefcafebabe"},
+		{name: "full 40", sha: "4e12bbaaddbba71b2fb51f0ac39101f63468d4ea"},
+		{name: "uppercase", sha: "DEADBEEF"},
+		{name: "too short", sha: "abcdef", wantErr: "7-40 hex"},
+		{name: "too long", sha: strings.Repeat("a", 41), wantErr: "7-40 hex"},
+		{name: "non hex", sha: "not-a-sha", wantErr: "7-40 hex"},
+		{name: "whitespace", sha: "deadbeef cafe", wantErr: "7-40 hex"},
+		{name: "newline", sha: "deadbeef\n", wantErr: "7-40 hex"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateResolvedSHA(tt.sha)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("ValidateResolvedSHA(%q) = %v, want nil", tt.sha, err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("ValidateResolvedSHA(%q) = nil, want error containing %q", tt.sha, tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("ValidateResolvedSHA(%q) = %v, want substring %q", tt.sha, err, tt.wantErr)
+			}
+		})
+	}
+}

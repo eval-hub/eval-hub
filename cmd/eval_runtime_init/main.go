@@ -202,6 +202,10 @@ func copyDirFromRoot(srcRoot *os.Root, dst string) error {
 	})
 }
 
+// copyFileBetweenRoots writes each file as 0600 (owner read/write only) and does not
+// preserve the source mode, including the execute bit. That is intentional: evaluation
+// test data is read by the adapter, not executed; OpenShift SCCs use static UIDs so
+// owner-only perms remain readable by the job containers that share the pod UID.
 func copyFileBetweenRoots(srcRoot, dstRoot *os.Root, rel string) error {
 	in, err := srcRoot.Open(rel)
 	if err != nil {

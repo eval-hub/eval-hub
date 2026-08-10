@@ -17,38 +17,6 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
-func TestLooksLikeHexSHA(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		ref  string
-		want bool
-	}{
-		// Commit SHAs (full and abbreviated)
-		{"abc1234", true}, // 7-char short SHA
-		{"abc1234def5678901234567890abcdef12345678", true}, // 40-char full SHA
-		{"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef", true},
-		// Non-hex → false
-		{"main", false},
-		{"feature/my-branch", false},
-		{"v1.2.3", false},
-		{"release-2024", false},
-		// Mixed hex+non-hex → false (contains '-')
-		{"abc123-suffix", false},
-		// Too short to be a SHA
-		{"abc12", false},
-		// Too long to be a SHA
-		{"abc1234def5678901234567890abcdef123456789", false}, // 41 chars
-	}
-	for _, tt := range tests {
-		t.Run(tt.ref, func(t *testing.T) {
-			t.Parallel()
-			if got := looksLikeHexSHA(tt.ref); got != tt.want {
-				t.Errorf("looksLikeHexSHA(%q) = %v, want %v", tt.ref, got, tt.want)
-			}
-		})
-	}
-}
-
 // newLocalBareRepo creates a bare git repo in dir with one commit on "main" and a tag "v1.0".
 func newLocalBareRepo(t *testing.T) string {
 	t.Helper()

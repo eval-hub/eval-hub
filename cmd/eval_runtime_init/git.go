@@ -175,20 +175,6 @@ const (
 	refKindCommit
 )
 
-// looksLikeHexSHA reports whether ref could be a commit SHA — 7–40 hex chars (case-insensitive).
-// This is a syntactic hint only; resolveRemoteRef is the authoritative lookup.
-func looksLikeHexSHA(ref string) bool {
-	if len(ref) < 7 || len(ref) > 40 {
-		return false
-	}
-	for _, c := range ref {
-		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
-			return false
-		}
-	}
-	return true
-}
-
 // errRefNotFound is returned by resolveRemoteRef when ref is not a branch or tag.
 // The caller uses this to fall back to commit-SHA handling.
 var errRefNotFound = fmt.Errorf("ref not found as branch or tag")
@@ -233,7 +219,7 @@ func cloneRef(ctx context.Context, cloneDir, repoURL, ref string, auth *githttp.
 			return "", err
 		}
 		// Not a branch or tag — treat as a commit SHA if it looks like one.
-		if !looksLikeHexSHA(ref) {
+		if !api.LooksLikeHexSHA(ref) {
 			return "", fmt.Errorf("ref %q not found as a branch or tag, and does not look like a commit SHA", ref)
 		}
 		kind = refKindCommit

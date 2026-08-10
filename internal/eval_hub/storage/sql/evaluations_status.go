@@ -344,6 +344,9 @@ func (s *sqlStorage) UpdateEvaluationJobResolvedSHA(id string, benchmarkIndex in
 	if sha == "" {
 		return nil
 	}
+	if err := api.ValidateResolvedSHA(sha); err != nil {
+		return err
+	}
 	return s.withTransaction("update evaluation job resolved sha", id, func(txn *sql.Tx) error {
 		job, err := s.getEvaluationJobTransactionalForUpdate(txn, id)
 		if err != nil {
