@@ -103,9 +103,8 @@ stop-service:
 # Sidecar (eval-runtime-sidecar) starter/stopper
 SIDECAR_PID_FILE ?= $(BIN_DIR)/sidecar.pid
 SIDECAR_LOG ?= $(BIN_DIR)/sidecar.log
-SIDECAR_PORT ?= 8081
-# Config dir containing sidecar_runtime_local.json (or minimal JSON is generated from SIDECAR_PORT)
-SIDECAR_CONFIG_DIR ?= config
+# Sidecar config JSON (port is derived from base_url in the file)
+SIDECAR_CONFIG_FILE ?= config/sidecar_runtime_local.json
 
 build-sidecar: $(BIN_DIR) ## Build only the sidecar binary
 	@echo "Building $(SIDECAR_BINARY_NAME) with ${LDFLAGS}"
@@ -117,10 +116,10 @@ build-mcp: $(BIN_DIR) ## Build the evalhub-mcp MCP server binary
 	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(MCP_BINARY_NAME) $(MCP_CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(MCP_BINARY_NAME)"
 
-start-sidecar: build-sidecar ## Run the sidecar in background (port $(SIDECAR_PORT), config from $(SIDECAR_CONFIG_DIR))
+start-sidecar: build-sidecar ## Run the sidecar in background (config from $(SIDECAR_CONFIG_FILE))
 	@rm -f "${SIDECAR_PID_FILE}" && true
-	@echo "Running $(SIDECAR_BINARY_NAME) on port $(SIDECAR_PORT) (config: $(SIDECAR_CONFIG_DIR))..."
-	@SIDECAR_PORT="$(SIDECAR_PORT)" ./scripts/start_sidecar.sh "${SIDECAR_PID_FILE}" "${BIN_DIR}/$(SIDECAR_BINARY_NAME)" "${SIDECAR_LOG}" "$(SIDECAR_PORT)" "$(SIDECAR_CONFIG_DIR)"
+	@echo "Running $(SIDECAR_BINARY_NAME) (config: $(SIDECAR_CONFIG_FILE))..."
+	@./scripts/start_sidecar.sh "${SIDECAR_PID_FILE}" "${BIN_DIR}/$(SIDECAR_BINARY_NAME)" "${SIDECAR_LOG}" "$(SIDECAR_CONFIG_FILE)"
 
 stop-sidecar: ## Stop the sidecar
 	-./scripts/stop_server.sh "${SIDECAR_PID_FILE}"

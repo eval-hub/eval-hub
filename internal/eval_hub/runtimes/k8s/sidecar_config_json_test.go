@@ -41,7 +41,7 @@ func TestOtelConfigForJobPod(t *testing.T) {
 
 func TestSidecarForJobPodSetsIsGitJob(t *testing.T) {
 	cfg := &config.Config{
-		Sidecar: &config.SidecarConfig{Port: 8080},
+		Sidecar: &config.SidecarConfig{BaseURL: config.DefaultSidecarBaseURL},
 	}
 	jc := &jobConfig{
 		jobID:      "my-job-id",
@@ -63,7 +63,7 @@ func TestSidecarForJobPodSetsIsGitJob(t *testing.T) {
 
 func TestSidecarForJobPodIsGitJobFalseForNonGitJob(t *testing.T) {
 	cfg := &config.Config{
-		Sidecar: &config.SidecarConfig{Port: 8080},
+		Sidecar: &config.SidecarConfig{BaseURL: config.DefaultSidecarBaseURL},
 	}
 	jc := &jobConfig{
 		jobID:      "s3-job",
@@ -80,6 +80,32 @@ func TestSidecarForJobPodIsGitJobFalseForNonGitJob(t *testing.T) {
 	}
 }
 
+func TestSidecarForJobPod_UsesEffectiveBaseURL(t *testing.T) {
+	t.Run("preserves explicit BaseURL from sidecar config", func(t *testing.T) {
+		cfg := &config.Config{
+			Sidecar: &config.SidecarConfig{BaseURL: "https://sidecar.example:9443"},
+		}
+		export, err := sidecarForJobPod(cfg, &jobConfig{evalHubURL: "http://eval-hub:8080"})
+		if err != nil {
+			t.Fatalf("sidecarForJobPod: %v", err)
+		}
+		if export.BaseURL != "https://sidecar.example:9443" {
+			t.Fatalf("BaseURL = %q, want %q", export.BaseURL, "https://sidecar.example:9443")
+		}
+	})
+
+	t.Run("falls back to default when BaseURL empty", func(t *testing.T) {
+		cfg := &config.Config{Sidecar: &config.SidecarConfig{}}
+		export, err := sidecarForJobPod(cfg, &jobConfig{evalHubURL: "http://eval-hub:8080"})
+		if err != nil {
+			t.Fatalf("sidecarForJobPod: %v", err)
+		}
+		if export.BaseURL != config.DefaultSidecarBaseURL {
+			t.Fatalf("BaseURL = %q, want default %q", export.BaseURL, config.DefaultSidecarBaseURL)
+		}
+	})
+}
+
 func TestSidecarForJobPodIncludesOTEL(t *testing.T) {
 	cfg := &config.Config{
 		OTEL: &config.OTELConfig{
@@ -88,7 +114,6 @@ func TestSidecarForJobPodIncludesOTEL(t *testing.T) {
 			ExporterType:     otel.ExporterTypeStdout,
 			ExporterInsecure: true,
 		},
-		Sidecar: &config.SidecarConfig{Port: 8080},
 	}
 	jc := &jobConfig{evalHubURL: "http://eval-hub:8080"}
 

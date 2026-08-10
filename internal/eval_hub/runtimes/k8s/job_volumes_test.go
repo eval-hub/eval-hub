@@ -640,7 +640,7 @@ func TestBuildJobSidecarMountsTestDataVolumeForGitSource(t *testing.T) {
 		adapterImage:      "adapter:latest",
 		defaultEnv:        []api.EnvVar{},
 		testDataInitImage: "quay.io/evalhub/evalhub:test",
-		sidecarConfig:     &config.SidecarConfig{Port: int(defaultSidecarPort)},
+		sidecarConfig:     &config.SidecarConfig{BaseURL: config.DefaultSidecarBaseURL},
 		testDataGit: gitTestDataConfig{
 			url: "https://github.com/org/repo.git",
 			ref: "main",
@@ -679,7 +679,7 @@ func TestBuildJobSidecarDoesNotMountTestDataVolumeForNonGitSource(t *testing.T) 
 		benchmarkID:    "bench-1",
 		adapterImage:   "adapter:latest",
 		defaultEnv:     []api.EnvVar{},
-		sidecarConfig:  &config.SidecarConfig{Port: int(defaultSidecarPort)},
+		sidecarConfig:  &config.SidecarConfig{BaseURL: config.DefaultSidecarBaseURL},
 	}
 
 	job, err := buildJob(cfg)

@@ -22,7 +22,6 @@ const (
 	defaultJobBackoffLimit = int32(0)
 	adapterContainerName   = "adapter"
 	sidecarContainerName   = "sidecar"
-	defaultSidecarPort     = int32(8080)
 	initContainerName      = "init"
 	jobSpecVolumeName      = "job-spec"
 	dataVolumeName         = "data"
@@ -181,14 +180,15 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 			VolumeMounts:    runtimeContainerVolumeMounts,
 		},
 	}
-	probePort := defaultSidecarPort
+	probePort := int32(config.DefaultSidecarPort)
 	if cfg.sidecarConfig != nil && cfg.sidecarConfig.Port != 0 {
-		p, err := sidecarPortFromInt(cfg.sidecarConfig.Port)
-		if err != nil {
-			return nil, fmt.Errorf("sidecar port: %w", err)
+		p := cfg.sidecarConfig.Port
+		if p < 1 || p > 65535 {
+			return nil, fmt.Errorf("sidecar port %d out of range (1-65535)", p)
 		}
 		probePort = p
 	}
+
 	// Sidecar is added as an init container with restartPolicy=Always to be
 	// promoted as a native sidecar container (KEP-753).
 	sidecarRestartPolicy := corev1.ContainerRestartPolicyAlways

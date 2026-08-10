@@ -2,12 +2,20 @@ package config
 
 import (
 	"crypto/tls"
+	"fmt"
+	"net/url"
+	"strconv"
 	"time"
 )
 
+const (
+	DefaultSidecarPort    = 8080
+	DefaultSidecarBaseURL = "http://localhost:8080"
+)
+
 type SidecarConfig struct {
-	Port             int                     `mapstructure:"port,omitempty" json:"port,omitempty"`
 	BaseURL          string                  `mapstructure:"base_url,omitempty" json:"base_url,omitempty"`
+	Port             int32                   `mapstructure:"-" json:"-"` // derived from BaseURL by ResolvePort; never serialised
 	EvalHub          *EvalHubClientConfig    `mapstructure:"eval_hub" json:"eval_hub,omitempty"`
 	MLFlow           *SidecarMLFlowConfig    `mapstructure:"mlflow,omitempty" json:"mlflow,omitempty"`
 	OCI              *SidecarOCIConfig       `mapstructure:"oci,omitempty" json:"oci,omitempty"`
@@ -21,6 +29,49 @@ type SidecarConfig struct {
 // The sidecar reads this at startup to configure init-container-specific behaviour.
 type InitContainerConfig struct {
 	IsGitJob bool `mapstructure:"is_git_job,omitempty" json:"is_git_job,omitempty"`
+}
+
+// EffectiveBaseURL returns BaseURL if non-empty, otherwise DefaultSidecarBaseURL.
+func (sc *SidecarConfig) EffectiveBaseURL() string {
+	if sc.BaseURL != "" {
+		return sc.BaseURL
+	}
+	return DefaultSidecarBaseURL
+}
+
+// ResolvePort extracts the listen port from BaseURL and stores it in Port.
+// When BaseURL is empty both fields are left at their zero values; each
+// consumer module is responsible for falling back to the defaults.
+// A non-empty BaseURL must use http/https, include a hostname, and carry
+// an explicit port (required for Kubernetes probe/container port alignment).
+// Call once after loading config to fail fast on malformed URLs.
+func (sc *SidecarConfig) ResolvePort() error {
+	if sc.BaseURL == "" {
+		return nil
+	}
+	u, err := url.Parse(sc.BaseURL)
+	if err != nil {
+		return fmt.Errorf("invalid sidecar base URL %q: %w", sc.BaseURL, err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("sidecar base URL %q must use http or https scheme", sc.BaseURL)
+	}
+	if u.Hostname() == "" {
+		return fmt.Errorf("sidecar base URL %q must include a hostname", sc.BaseURL)
+	}
+	portStr := u.Port()
+	if portStr == "" {
+		return fmt.Errorf("sidecar base URL %q must include an explicit port", sc.BaseURL)
+	}
+	port, err := strconv.ParseInt(portStr, 10, 32)
+	if err != nil {
+		return fmt.Errorf("invalid port in sidecar base URL %q: %w", sc.BaseURL, err)
+	}
+	if port < 1 || port > 65535 {
+		return fmt.Errorf("sidecar port %d out of range (1-65535)", port)
+	}
+	sc.Port = int32(port)
+	return nil
 }
 
 // SidecarModelConfig holds the model credential-injection proxy settings written into
