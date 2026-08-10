@@ -61,8 +61,6 @@ func registerCustomValidators(instance *validator.Validate) error {
 		return fmt.Errorf("register validator failed for git_clone_url: %w", err)
 	}
 	instance.RegisterStructValidation(evaluationJobConfig, api.EvaluationJobConfig{})
-	// Exactly one of s3, pvc, or git must be set in TestDataRef.
-	instance.RegisterStructValidation(validateTestDataRefMutualExclusion, api.TestDataRef{})
 	// hardware_profile_name is mutually exclusive with inline queue/cpu/memory/gpu.
 	instance.RegisterStructValidation(validateBenchmarkHardwareConfigExclusive, api.BenchmarkHardwareConfig{})
 	return nil
@@ -109,30 +107,6 @@ func ValidateCollectionOverrides(overrides []api.EvaluationBenchmarkConfig, coll
 		}
 	}
 	return nil
-}
-
-// validateTestDataRefMutualExclusion ensures exactly one of s3, pvc, or git is set.
-func validateTestDataRefMutualExclusion(sl validator.StructLevel) {
-	ref, ok := sl.Current().Interface().(api.TestDataRef)
-	if !ok {
-		return
-	}
-	set := 0
-	if ref.S3 != nil {
-		set++
-	}
-	if ref.PVC != nil {
-		set++
-	}
-	if ref.Git != nil {
-		set++
-	}
-	if set > 1 {
-		sl.ReportError(ref, "test_data_ref", "test_data_ref", "test_data_ref_exclusive", "exactly one of s3, pvc, or git must be set")
-	}
-	if set == 0 {
-		sl.ReportError(ref, "test_data_ref", "test_data_ref", "test_data_ref_required", "one of s3, pvc, or git must be set")
-	}
 }
 
 // validateBenchmarkHardwareConfigExclusive rejects combining a hardware profile name

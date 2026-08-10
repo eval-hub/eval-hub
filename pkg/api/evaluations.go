@@ -166,9 +166,9 @@ type GitTestDataRef struct {
 // TestDataRef represents external test data sources.
 // Exactly one of s3, pvc, or git must be set.
 type TestDataRef struct {
-	S3  *S3TestDataRef  `mapstructure:"s3" json:"s3,omitempty"`
-	PVC *PVCTestDataRef `mapstructure:"pvc" json:"pvc,omitempty"`
-	Git *GitTestDataRef `mapstructure:"git" json:"git,omitempty"`
+	S3  *S3TestDataRef  `mapstructure:"s3" json:"s3,omitempty" validate:"required_without_all=PVC Git,excluded_with=PVC Git"`
+	PVC *PVCTestDataRef `mapstructure:"pvc" json:"pvc,omitempty" validate:"required_without_all=S3 Git,excluded_with=S3 Git"`
+	Git *GitTestDataRef `mapstructure:"git" json:"git,omitempty" validate:"required_without_all=S3 PVC,excluded_with=S3 PVC"`
 	// ResolvedSHA is the resolved content identity for the test data source (e.g. git commit
 	// SHA). Populated by eval-hub after the init container resolves the ref; not accepted on input.
 	ResolvedSHA string `json:"resolved_sha,omitempty" mapstructure:"resolved_sha,omitempty"`

@@ -565,6 +565,55 @@ func TestTestDataRef_BothS3AndPVCRejected(t *testing.T) {
 	}
 }
 
+// TestRequiredWithoutAllFields exercises the required_without_all / excluded_with tags on TestDataRef.
+func TestRequiredWithoutAllFields(t *testing.T) {
+	validate := newTestValidator(t)
+	{
+		ref := api.TestDataRef{}
+		err := validate.Struct(ref)
+		if err == nil {
+			t.Fatal("expected validation error when neither s3 nor pvc nor git is set")
+		}
+	}
+	{
+		ref := api.TestDataRef{
+			S3: &api.S3TestDataRef{Bucket: "b", Key: "k", SecretRef: "s"},
+		}
+		err := validate.Struct(ref)
+		if err != nil {
+			t.Fatalf("expected no error when s3 is set, got: %v", err)
+		}
+	}
+	{
+		ref := api.TestDataRef{
+			PVC: &api.PVCTestDataRef{ClaimName: "my-pvc"},
+		}
+		err := validate.Struct(ref)
+		if err != nil {
+			t.Fatalf("expected no error when pvc is set, got: %v", err)
+		}
+	}
+	{
+		ref := api.TestDataRef{
+			Git: &api.GitTestDataRef{URL: "https://github.com/my-org/my-repo.git", Ref: "main"},
+		}
+		err := validate.Struct(ref)
+		if err != nil {
+			t.Fatalf("expected no error when git is set, got: %v", err)
+		}
+	}
+	{
+		ref := api.TestDataRef{
+			S3:  &api.S3TestDataRef{Bucket: "b", Key: "k", SecretRef: "s"},
+			Git: &api.GitTestDataRef{URL: "https://github.com/my-org/my-repo.git", Ref: "main"},
+		}
+		err := validate.Struct(ref)
+		if err == nil {
+			t.Fatal("expected validation error when both s3 and git are set")
+		}
+	}
+}
+
 func TestTestDataRef_NeitherS3NorPVCRejected(t *testing.T) {
 	validate := newTestValidator(t)
 	ref := api.TestDataRef{}
