@@ -410,6 +410,12 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 		return nil, err
 	}
 
+	if conf.Sidecar != nil {
+		if err := conf.Sidecar.ResolvePort(); err != nil {
+			return nil, err
+		}
+	}
+
 	// set the version, build, and build date
 	conf.Service.Version = version
 	conf.Service.Build = build

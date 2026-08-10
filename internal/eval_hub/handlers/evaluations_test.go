@@ -119,11 +119,14 @@ func (f *fakeStorage) DeleteEvaluationJob(id string) error {
 }
 
 type fakeRuntime struct {
-	err                  error
-	validateHWErr        error
-	called               bool
-	validateHWCalled     bool
-	validateHWBenchmarks []api.EvaluationBenchmarkConfig
+	err                    error
+	validateHWErr          error
+	called                 bool
+	validateHWCalled       bool
+	validateHWBenchmarks   []api.EvaluationBenchmarkConfig
+	notifiedJob            *api.EvaluationJobResource
+	notifiedBenchmarkIndex int
+	notifiedState          api.State
 }
 
 func (r *fakeRuntime) WithLogger(_ *slog.Logger) abstractions.Runtime { return r }
@@ -159,6 +162,11 @@ func (r *fakeRuntime) ValidateHardwareProfiles(benchmarks []api.EvaluationBenchm
 	r.validateHWCalled = true
 	r.validateHWBenchmarks = benchmarks
 	return r.validateHWErr
+}
+func (r *fakeRuntime) NotifyJobPhaseTransition(_ context.Context, job *api.EvaluationJobResource, benchmarkIndex int, state api.State) {
+	r.notifiedJob = job
+	r.notifiedBenchmarkIndex = benchmarkIndex
+	r.notifiedState = state
 }
 
 type listEvaluationsRequest struct {
@@ -949,7 +957,7 @@ func TestHandleUpdateEvaluationRewritesSidecarURLsInMessages(t *testing.T) {
 	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{
 		job: &api.EvaluationJobResource{
 			EvaluationJobConfig: api.EvaluationJobConfig{
-				Model: api.ModelRef{URL: "https://api.openai.com/v1", Name: "gpt"},
+				Model: &api.ModelRef{URL: "https://api.openai.com/v1", Name: "gpt"},
 				Exports: &api.EvaluationExports{
 					OCI: &api.EvaluationExportsOCI{
 						Coordinates: api.OCICoordinates{
@@ -1029,6 +1037,51 @@ func TestHandleUpdateEvaluationRejectsInvalidPhase(t *testing.T) {
 	respBody := recorder.Body.String()
 	if !strings.Contains(respBody, "request_validation_failed") {
 		t.Fatalf("expected request_validation_failed in body, but got %q", respBody)
+	}
+}
+
+func TestHandleUpdateEvaluationDispatchesPhaseTransitionNotification(t *testing.T) {
+	t.Parallel()
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-notify"},
+		},
+	}
+	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{job: job}}
+	runtime := &fakeRuntime{}
+	validate := testhelpers.NewValidator(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, runtime, nil, nil, nil)
+
+	body := `{"benchmark_status_event":{"provider_id":"p1","id":"b1","status":"running","benchmark_index":2}}`
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs/job-notify/events"),
+		body:        []byte(body),
+	}
+	reqWithPath := &updateEvaluationRequest{
+		bodyRequest: req,
+		pathValues:  map[string]string{"job_id": "job-notify"},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-notify", logger, "test-user", "test-tenant")
+
+	h.HandleUpdateEvaluation(ctx, reqWithPath, resp)
+
+	if recorder.Code != 204 {
+		t.Fatalf("expected status 204, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+	if runtime.notifiedJob == nil {
+		t.Fatal("expected NotifyJobPhaseTransition to be called with a non-nil job")
+	}
+	if runtime.notifiedJob.Resource.ID != job.Resource.ID {
+		t.Errorf("notified job ID = %q, want %q", runtime.notifiedJob.Resource.ID, job.Resource.ID)
+	}
+	if runtime.notifiedBenchmarkIndex != 2 {
+		t.Errorf("notified benchmark index = %d, want 2", runtime.notifiedBenchmarkIndex)
+	}
+	if runtime.notifiedState != api.StateRunning {
+		t.Errorf("notified state = %q, want %q", runtime.notifiedState, api.StateRunning)
 	}
 }
 

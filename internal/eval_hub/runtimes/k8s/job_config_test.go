@@ -1,7 +1,6 @@
 package k8s
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
@@ -26,7 +25,7 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 			MLFlowExperimentID: "",
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},
@@ -105,13 +104,13 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 	}
 }
 
-func TestBuildJobConfigRejectsInvalidSidecarPort(t *testing.T) {
+func TestBuildJobConfigUsesBaseURL(t *testing.T) {
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource: api.Resource{ID: "job-123"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},
@@ -131,45 +130,7 @@ func TestBuildJobConfigRejectsInvalidSidecarPort(t *testing.T) {
 		},
 	}
 	serviceConfig := &config.Config{
-		Sidecar: &config.SidecarConfig{Port: 70000},
-	}
-
-	_, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, serviceConfig, nil)
-	if err == nil {
-		t.Fatal("buildJobConfig() = nil, want sidecar port error")
-	}
-	if !strings.Contains(err.Error(), "sidecar port") {
-		t.Fatalf("buildJobConfig() error = %v, want sidecar port error", err)
-	}
-}
-
-func TestBuildJobConfigUsesValidSidecarPort(t *testing.T) {
-	evaluation := &api.EvaluationJobResource{
-		Resource: api.EvaluationResource{
-			Resource: api.Resource{ID: "job-123"},
-		},
-		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
-				URL:  "http://model",
-				Name: "model",
-			},
-			Benchmarks: []api.EvaluationBenchmarkConfig{
-				{Ref: api.Ref{ID: "bench-1"}},
-			},
-		},
-	}
-	provider := &api.ProviderResource{
-		Resource: api.Resource{ID: "provider-1"},
-		ProviderConfig: api.ProviderConfig{
-			Runtime: &api.Runtime{
-				K8s: &api.K8sRuntime{
-					Image: "adapter:latest",
-				},
-			},
-		},
-	}
-	serviceConfig := &config.Config{
-		Sidecar: &config.SidecarConfig{Port: 9090},
+		Sidecar: &config.SidecarConfig{BaseURL: "http://localhost:9090"},
 	}
 
 	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, serviceConfig, nil)
@@ -187,7 +148,7 @@ func TestBuildJobConfigModelAuthSecretRefPresent(t *testing.T) {
 			Resource: api.Resource{ID: "job-789"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 				Auth: &api.ModelAuth{SecretRef: "my-secret"},
@@ -225,7 +186,7 @@ func TestBuildJobConfigModelAuthSecretRefEmptyWhenNil(t *testing.T) {
 			Resource: api.Resource{ID: "job-790"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},
@@ -262,7 +223,7 @@ func TestBuildJobConfigTestDataS3(t *testing.T) {
 			Resource: api.Resource{ID: "job-901"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},
@@ -313,7 +274,7 @@ func TestBuildJobConfigAllowsNumExamplesOnly(t *testing.T) {
 			MLFlowExperimentID: "",
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},
@@ -361,7 +322,7 @@ func TestBuildJobConfigMissingRuntime(t *testing.T) {
 			MLFlowExperimentID: "",
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},
@@ -387,7 +348,7 @@ func TestBuildJobConfigMissingAdapterImage(t *testing.T) {
 			MLFlowExperimentID: "",
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},
@@ -413,7 +374,7 @@ func TestBuildJobConfigAllowsEmptyBenchmarkConfig(t *testing.T) {
 			MLFlowExperimentID: "",
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},
@@ -454,7 +415,7 @@ func TestBuildJobConfigWithOCIExports(t *testing.T) {
 			Resource: api.Resource{ID: "job-oci"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},
@@ -583,7 +544,7 @@ func TestBuildJobConfigUsesTenantNamespace(t *testing.T) {
 			Resource: api.Resource{ID: "job-tenant", Tenant: "team-a"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},
@@ -618,7 +579,7 @@ func TestBuildJobConfigEmptyTenantFallsBack(t *testing.T) {
 			Resource: api.Resource{ID: "job-no-tenant"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},
@@ -653,7 +614,7 @@ func TestBuildJobConfigKueueQueueNameFromHardwareProfile(t *testing.T) {
 			Resource: api.Resource{ID: "job-kueue"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},
@@ -692,7 +653,7 @@ func TestBuildJobConfigKueueQueueNameFromHardwareConfig(t *testing.T) {
 			Resource: api.Resource{ID: "job-hw-queue"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},
@@ -745,7 +706,7 @@ func TestBuildJobConfigKueueQueueNameFromEvaluationQueue(t *testing.T) {
 			Resource: api.Resource{ID: "job-eval-queue"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},
@@ -794,7 +755,7 @@ func TestBuildJobConfigUsesEvaluationHardwareConfigFallback(t *testing.T) {
 			Resource: api.Resource{ID: "job-eval-hw"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{URL: "http://model", Name: "model"},
+			Model: &api.ModelRef{URL: "http://model", Name: "model"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{Ref: api.Ref{ID: "bench-1"}},
 			},
@@ -843,7 +804,7 @@ func TestBuildJobConfigBenchmarkHardwareConfigTakesPrecedenceOverEvaluationFallb
 			Resource: api.Resource{ID: "job-bench-hw-wins"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{URL: "http://model", Name: "model"},
+			Model: &api.ModelRef{URL: "http://model", Name: "model"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref: api.Ref{ID: "bench-1"},
@@ -887,7 +848,7 @@ func TestBuildJobConfigHardwareProfileQueueTakesPrecedenceOverEvaluationQueue(t 
 			Resource: api.Resource{ID: "job-profile-over-eval-queue"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{URL: "http://model", Name: "model"},
+			Model: &api.ModelRef{URL: "http://model", Name: "model"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{Ref: api.Ref{ID: "bench-1"}},
 			},
@@ -922,7 +883,7 @@ func TestBuildJobConfigBenchmarkHardwareConfigTakesPrecedenceOverEvaluationQueue
 			Resource: api.Resource{ID: "job-hw-over-eval-queue"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{URL: "http://model", Name: "model"},
+			Model: &api.ModelRef{URL: "http://model", Name: "model"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
 					Ref: api.Ref{ID: "bench-1"},
@@ -978,7 +939,7 @@ func TestBuildJobConfigHardwareProfileQueueTakesPrecedenceOverHardwareConfigQueu
 			Resource: api.Resource{ID: "job-queue-precedence"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},
@@ -1025,7 +986,7 @@ func TestBuildJobConfigKueueQueueNameWhenNoQueue(t *testing.T) {
 			Resource: api.Resource{ID: "job-no-queue"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://model",
 				Name: "model",
 			},
@@ -1060,7 +1021,7 @@ func TestBuildJobConfigBenchmarkIndexPropagated(t *testing.T) {
 			Resource: api.Resource{ID: "job-idx"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{URL: "http://model", Name: "m"},
+			Model: &api.ModelRef{URL: "http://model", Name: "m"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{Ref: api.Ref{ID: "b0"}},
 				{Ref: api.Ref{ID: "b1"}},
@@ -1180,7 +1141,7 @@ func TestBuildJobConfigModelURLPreservesRealURLAndTargetURL(t *testing.T) {
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-rewrite"}},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:  "http://llm-inference.apps.example.com/llm/llama-3-1-8b-instruct/v1",
 				Name: "llama-3-1-8b-instruct",
 			},
@@ -1278,7 +1239,7 @@ func TestBuildJobConfigGPU(t *testing.T) {
 		return &api.EvaluationJobResource{
 			Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-gpu"}},
 			EvaluationJobConfig: api.EvaluationJobConfig{
-				Model:      api.ModelRef{URL: "http://model", Name: "model"},
+				Model:      &api.ModelRef{URL: "http://model", Name: "model"},
 				Benchmarks: []api.EvaluationBenchmarkConfig{benchmark},
 			},
 		}
@@ -1410,7 +1371,7 @@ func TestBuildJobConfigImagePullPolicyAlways(t *testing.T) {
 			Resource: api.Resource{ID: "job-123"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{URL: "http://model", Name: "model"},
+			Model: &api.ModelRef{URL: "http://model", Name: "model"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{Ref: api.Ref{ID: "bench-1"}},
 			},

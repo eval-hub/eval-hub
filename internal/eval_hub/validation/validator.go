@@ -57,8 +57,7 @@ func registerCustomValidators(instance *validator.Validate) error {
 	if err := instance.RegisterValidation("rfc1123_dns_label", validateRFC1123DNSLabel); err != nil {
 		return fmt.Errorf("register validator failed for rfc1123_dns_label: %w", err)
 	}
-	// Benchmarks min=1 only when Collection is not set (required_without handles presence; this enforces length)
-	instance.RegisterStructValidation(evaluationJobConfigBenchmarksMin, api.EvaluationJobConfig{})
+	instance.RegisterStructValidation(evaluationJobConfig, api.EvaluationJobConfig{})
 	// Exactly one of s3 or pvc must be set in TestDataRef.
 	instance.RegisterStructValidation(validateTestDataRefMutualExclusion, api.TestDataRef{})
 	// hardware_profile_name is mutually exclusive with inline queue/cpu/memory/gpu.
@@ -140,6 +139,11 @@ func validateBenchmarkHardwareConfigExclusive(sl validator.StructLevel) {
 	}
 }
 
+func evaluationJobConfig(sl validator.StructLevel) {
+	evaluationJobConfigBenchmarksMin(sl)
+	evaluationJobConfigModelRequired(sl)
+}
+
 // evaluationJobConfigBenchmarksMin ensures Benchmarks has at least one element when Collection is not present
 // and no benchmarks are provided when Collection is set.
 func evaluationJobConfigBenchmarksMin(sl validator.StructLevel) {
@@ -152,6 +156,15 @@ func evaluationJobConfigBenchmarksMin(sl validator.StructLevel) {
 		}
 		if len(cfg.Benchmarks) < 1 {
 			sl.ReportError(cfg.Benchmarks, "benchmarks", "benchmarks", "minimum one benchmark", "1")
+		}
+	}
+}
+
+// evaluationJobConfigModelRequired ensures Model is set.
+func evaluationJobConfigModelRequired(sl validator.StructLevel) {
+	if cfg, ok := sl.Current().Interface().(api.EvaluationJobConfig); ok {
+		if cfg.Model == nil {
+			sl.ReportError(cfg.Model, "model", "model", "model required", "model")
 		}
 	}
 }

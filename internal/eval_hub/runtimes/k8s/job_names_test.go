@@ -81,3 +81,10 @@ func TestJobLabelsKueueQueueName(t *testing.T) {
 		t.Fatal("expected no kueue queue label when queue kind is not kueue")
 	}
 }
+
+func TestJobLabelsIncludesEvaluationPhasePending(t *testing.T) {
+	labels := jobLabels(&jobConfig{jobID: "j", providerID: "p", benchmarkID: "b", benchmarkIndex: 0})
+	if got := labels[labelEvaluationPhaseKey]; got != EvaluationPhasePending {
+		t.Fatalf("expected evaluation-phase label %q, got %q", EvaluationPhasePending, got)
+	}
+}

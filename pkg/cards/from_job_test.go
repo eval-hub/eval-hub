@@ -18,7 +18,7 @@ func TestNewEvaluationCardFromDirectBenchmarkJob(t *testing.T) {
 			},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{
+			Model: &api.ModelRef{
 				URL:     "https://vllm.example.com/v1",
 				Name:    "meta-llama/Llama-3.2-1B-Instruct",
 				CardURL: "https://example.com/model-card",
@@ -121,7 +121,7 @@ func TestNewEvaluationCardFromCollectionJob(t *testing.T) {
 			Resource: api.Resource{ID: "job-456"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{URL: "https://vllm.example.com/v1", Name: "model"},
+			Model: &api.ModelRef{URL: "https://vllm.example.com/v1", Name: "model"},
 			Collection: &api.CollectionRef{
 				ID: "my-collection",
 			},
@@ -170,7 +170,7 @@ func TestNewEvaluationCardPartiallyFailedJobStatus(t *testing.T) {
 			Resource: api.Resource{ID: "job-789"},
 		},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{URL: "https://vllm.example.com/v1", Name: "model"},
+			Model: &api.ModelRef{URL: "https://vllm.example.com/v1", Name: "model"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{Ref: api.Ref{ID: "arc_easy"}, ProviderID: "lm_evaluation_harness"},
 				{Ref: api.Ref{ID: "arc_challenge"}, ProviderID: "lm_evaluation_harness"},
@@ -248,7 +248,7 @@ func TestNewEvaluationCardFromResultsWithoutStatusBenchmarks(t *testing.T) {
 	job := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-results-only"}},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{URL: "https://vllm.example.com/v1", Name: "model"},
+			Model: &api.ModelRef{URL: "https://vllm.example.com/v1", Name: "model"},
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{Ref: api.Ref{ID: "arc_easy"}, ProviderID: "lm_evaluation_harness"},
 			},
@@ -282,7 +282,7 @@ func TestNewEvaluationCardStatusOnlyResults(t *testing.T) {
 	job := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-status-only"}},
 		EvaluationJobConfig: api.EvaluationJobConfig{
-			Model: api.ModelRef{URL: "https://vllm.example.com/v1", Name: "model"},
+			Model: &api.ModelRef{URL: "https://vllm.example.com/v1", Name: "model"},
 		},
 		Status: &api.EvaluationJobStatus{
 			EvaluationJobState: api.EvaluationJobState{

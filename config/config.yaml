@@ -29,7 +29,6 @@ env_mappings:
   EVALHUB_INSECURE_SKIP_VERIFY: sidecar.eval_hub.insecure_skip_verify
   EVALHUB_TOKEN_CACHE_TIMEOUT: sidecar.eval_hub.token_cache_timeout
   MLFLOW_TOKEN_CACHE_TIMEOUT: sidecar.mlflow.token_cache_timeout
-  SIDECAR_PORT: sidecar.port
   METRICS_PORT: prometheus.port
   METRICS_HOST: prometheus.host
   OTEL_METRIC_EXPORT_INTERVAL: otel.metric_export_interval
@@ -64,7 +63,6 @@ prometheus:
 
 sidecar:
   base_url: http://localhost:8080  # URL for adapter/runtime to call sidecar proxy (cluster mode)
-  port: 8080
   eval_hub:
     # TLS for outbound calls to eval-hub (sidecar -> eval-hub API).
     # On cluster: job pods inject EVALHUB_CA_CERT_PATH and EVALHUB_INSECURE_SKIP_VERIFY; sidecar reads

@@ -79,6 +79,11 @@ func (h *Handlers) HandleProxyCall(w http.ResponseWriter, r *http.Request) {
 
 // requestPathForRouting returns the URL path only (no query or fragment) for proxy routing.
 func requestPathForRouting(uri string) string {
+	// Strip query/fragment first so invalid characters there cannot poison the path
+	// when url.Parse fails (e.g. control bytes in the query).
+	if i := strings.IndexAny(uri, "?#"); i >= 0 {
+		uri = uri[:i]
+	}
 	u, err := url.Parse(uri)
 	if err != nil {
 		return uri

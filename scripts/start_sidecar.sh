@@ -1,33 +1,32 @@
 #!/bin/bash
 
 # Start the eval-runtime-sidecar in the background.
-# Usage: start_sidecar.sh <PID_FILE> <EXE> <LOGFILE> <SIDECAR_PORT> <CONFIG_DIR>
-# CONFIG_DIR defaults to repo config/; uses sidecar_runtime_local.json if present,
-# else writes a minimal JSON using SIDECAR_PORT.
+# Usage: start_sidecar.sh <PID_FILE> <EXE> <LOGFILE> <CONFIG_FILE>
+# CONFIG_FILE defaults to config/sidecar_runtime_local.json.
+# If the file does not exist a minimal fallback JSON is generated
+# (port is derived from base_url by the binary).
 
 PID_FILE="$1"
 EXE="$2"
 LOGFILE="$3"
-SIDECAR_PORT="$4"
-CONFIG_DIR="${5:-config}"
+CONFIG_FILE="${4:-config/sidecar_runtime_local.json}"
 
 if [[ ! -f "${EXE}" ]]; then
   echo "The sidecar executable ${EXE} does not exist"
   exit 2
 fi
 
-export SIDECAR_PORT="${SIDECAR_PORT}"
-SIDECAR_JSON="${CONFIG_DIR}/sidecar_runtime_local.json"
-if [[ -f "${SIDECAR_JSON}" ]]; then
-  :
+if [[ -f "${CONFIG_FILE}" ]]; then
+  SIDECAR_JSON="${CONFIG_FILE}"
 else
-  TMP_JSON="/tmp/sidecar_runtime_$$.json"
-  PORT="${SIDECAR_PORT:-8080}"
-  printf '{"port":%s,"base_url":"http://localhost:%s","eval_hub":{"base_url":"http://localhost:8080"},"mlflow":{"tracking_uri":"http://localhost:5000"}}\n' "${PORT}" "${PORT}" > "${TMP_JSON}"
+  TMP_JSON="$(mktemp /tmp/sidecar_runtime_XXXXXX.json)" || { echo "Failed to create temp config"; exit 2; }
+  chmod 600 "${TMP_JSON}"
+  trap 'rm -f "${TMP_JSON}"' EXIT
+  printf '{"base_url":"http://localhost:8080","eval_hub":{"base_url":"http://localhost:8080"},"mlflow":{"tracking_uri":"http://localhost:5000"}}\n' > "${TMP_JSON}" || { echo "Failed to write temp config"; exit 2; }
   SIDECAR_JSON="${TMP_JSON}"
 fi
 "${EXE}" --sidecarconfig "${SIDECAR_JSON}" >> "${LOGFILE}" 2>&1 &
 SERVICE_PID=$!
 echo "${SERVICE_PID}" > "${PID_FILE}"
 sleep 2
-echo "Started the sidecar with PID ${SERVICE_PID} (port ${SIDECAR_PORT}, config ${CONFIG_DIR}), PID file ${PID_FILE}, log ${LOGFILE}"
+echo "Started the sidecar with PID ${SERVICE_PID} (config ${SIDECAR_JSON}), PID file ${PID_FILE}, log ${LOGFILE}"

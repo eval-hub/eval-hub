@@ -260,3 +260,5 @@ mlflow.log
 .agentready/
 
 tests/mcp/vscode/test-scripts/reports/
+
+internal/eval_runtime_sidecar/handlers/testdata/fuzz/

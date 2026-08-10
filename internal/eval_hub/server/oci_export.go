@@ -38,28 +38,32 @@ func (g *kubernetesDockerConfigSecretGetter) GetDockerConfigJSON(ctx context.Con
 // newOCIPublisherFactory wires the real OCI exporter in cluster mode. Local mode uses a noop
 // factory; cluster initialization failures return an error-aware factory so OCI export requests
 // fail explicitly instead of being silently discarded.
-func newOCIPublisherFactory(logger *slog.Logger, serviceConfig *config.Config) evalcards.OCIPublisherFactory {
+// The returned cleanup func must be called when the factory is no longer needed to stop the
+// Kubernetes EventBroadcaster goroutines started by NewKubernetesHelper.
+func newOCIPublisherFactory(logger *slog.Logger, serviceConfig *config.Config) (evalcards.OCIPublisherFactory, func()) {
+	noop := func() {}
 	if serviceConfig == nil || serviceConfig.Service == nil || serviceConfig.Service.LocalMode {
-		return evalcards.NewNoopOCIPublisherFactory()
+		return evalcards.NewNoopOCIPublisherFactory(), noop
 	}
 	helper, err := k8s.NewKubernetesHelper()
 	if err != nil {
 		if logger != nil {
 			logger.Warn("OCI export unavailable: kubernetes client initialization failed", "error", err)
 		}
-		return newUnavailableOCIPublisherFactory(fmt.Errorf("oci export unavailable: kubernetes client: %w", err))
+		return newUnavailableOCIPublisherFactory(fmt.Errorf("oci export unavailable: kubernetes client: %w", err)), noop
 	}
 	httpClient, err := evalcards.NewOCIHTTPClient(serviceConfig, serviceConfig.IsOTELEnabled(), logger)
 	if err != nil {
+		_ = helper.Close()
 		if logger != nil {
 			logger.Warn("OCI export unavailable: failed to create oci http client", "error", err)
 		}
-		return newUnavailableOCIPublisherFactory(fmt.Errorf("oci export unavailable: http client: %w", err))
+		return newUnavailableOCIPublisherFactory(fmt.Errorf("oci export unavailable: http client: %w", err)), noop
 	}
 	return evalcards.NewOCIPublisherFactory(
 		newKubernetesDockerConfigSecretGetter(helper),
 		httpClient,
-	)
+	), func() { _ = helper.Close() }
 }
 
 type unavailableOCIPublisherFactory struct {
