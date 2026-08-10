@@ -8,6 +8,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
 	"go.opentelemetry.io/otel/log/global"
 )
@@ -81,17 +82,17 @@ func emitContainerLogs(ctx context.Context, job *api.EvaluationJobResource, logs
 		}
 
 		var record otellog.Record
-		record.SetBody(otellog.StringValue(line))
+		record.SetBody(attribute.StringValue(line))
 		record.SetSeverity(otellog.SeverityInfo)
 		record.AddAttributes(
-			otellog.String("evalhub.job.id", jobID),
-			otellog.String("evalhub.log.source", "container"),
+			attribute.String("evalhub.job.id", jobID),
+			attribute.String("evalhub.log.source", "container"),
 		)
 		if jobState != "" {
-			record.AddAttributes(otellog.String("evalhub.job.state", jobState))
+			record.AddAttributes(attribute.String("evalhub.job.state", jobState))
 		}
 		if benchmarkID != "" {
-			record.AddAttributes(otellog.String("evalhub.benchmark.id", benchmarkID))
+			record.AddAttributes(attribute.String("evalhub.benchmark.id", benchmarkID))
 		}
 		otelLogger.Emit(ctx, record)
 	}
