@@ -10,7 +10,7 @@ func TestLoadSidecarRuntimeConfig(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sidecar_config.json")
 	json := `{
-  "port": 9090,
+  "base_url": "http://localhost:9090",
   "eval_hub": {
     "base_url": "https://hub.example:8443",
     "http_timeout": 5000000000
@@ -30,8 +30,8 @@ func TestLoadSidecarRuntimeConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadSidecarRuntimeConfig: %v", err)
 	}
-	if cfg.Sidecar.Port != 9090 {
-		t.Fatalf("port %d", cfg.Sidecar.Port)
+	if cfg.Sidecar.BaseURL != "http://localhost:9090" {
+		t.Fatalf("base_url %s", cfg.Sidecar.BaseURL)
 	}
 	if cfg.Sidecar.EvalHub.BaseURL != "https://hub.example:8443" {
 		t.Fatalf("eval_hub: %+v", cfg.Sidecar.EvalHub)
@@ -56,12 +56,42 @@ func TestLoadSidecarRuntimeConfig_EmptyEvalHub(t *testing.T) {
 	}
 }
 
+func TestLoadSidecarRuntimeConfig_DefaultBaseURLAndPort(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sidecar_config.json")
+	if err := os.WriteFile(path, []byte(`{"eval_hub":{"base_url":"https://hub.example"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadSidecarRuntimeConfig(path, "", "", "")
+	if err != nil {
+		t.Fatalf("LoadSidecarRuntimeConfig: %v", err)
+	}
+	if cfg.Sidecar.BaseURL != "http://localhost:8080" {
+		t.Fatalf("expected default base_url, got %q", cfg.Sidecar.BaseURL)
+	}
+	if cfg.Sidecar.Port != 8080 {
+		t.Fatalf("expected default port 8080, got %d", cfg.Sidecar.Port)
+	}
+}
+
+func TestLoadSidecarRuntimeConfig_InvalidBaseURL(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sidecar_config.json")
+	if err := os.WriteFile(path, []byte(`{"base_url":"http://localhost"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadSidecarRuntimeConfig(path, "", "", "")
+	if err == nil {
+		t.Fatal("expected error for base_url without explicit port")
+	}
+}
+
 func TestLoadSidecarRuntimeConfig_OCISnakeCase(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sidecar_config.json")
 	// Snake_case keys as in /meta/sidecar_config.json on the pod
 	json := `{
-  "port": 8080,
+  "base_url": "http://localhost:8080",
   "eval_hub": { "base_url": "https://eval.example" },
   "oci": {
     "ca_cert_path": "/etc/certs/ca.pem",
@@ -90,7 +120,7 @@ func TestLoadSidecarRuntimeConfig_OTEL(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sidecar_config.json")
 	json := `{
-  "port": 8080,
+  "base_url": "http://localhost:8080",
   "eval_hub": { "base_url": "https://eval.example" },
   "otel": {
     "enabled": true,

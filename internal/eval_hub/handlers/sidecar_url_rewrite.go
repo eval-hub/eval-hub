@@ -12,10 +12,9 @@ import (
 )
 
 const (
-	evalHubInstanceNameEnv   = "EVALHUB_INSTANCE_NAME"
-	defaultEvalHubPort       = "8443"
-	defaultSidecarListenPort = 8080
-	inClusterNamespaceFile   = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	evalHubInstanceNameEnv = "EVALHUB_INSTANCE_NAME"
+	defaultEvalHubPort     = "8443"
+	inClusterNamespaceFile = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 )
 
 var (
@@ -33,18 +32,10 @@ func (h *Handlers) rewriteSidecarURLsInBenchmarkStatus(event *api.BenchmarkStatu
 }
 
 func (h *Handlers) sidecarBaseURL() string {
-	port := defaultSidecarListenPort
-	baseURL := ""
-	if h.serviceConfig != nil && h.serviceConfig.Sidecar != nil {
-		if h.serviceConfig.Sidecar.Port != 0 {
-			port = h.serviceConfig.Sidecar.Port
-		}
-		baseURL = strings.TrimSpace(h.serviceConfig.Sidecar.BaseURL)
+	if h.serviceConfig == nil || h.serviceConfig.Sidecar == nil {
+		return config.DefaultSidecarBaseURL
 	}
-	if baseURL == "" {
-		baseURL = fmt.Sprintf("http://localhost:%d", port)
-	}
-	return baseURL
+	return h.serviceConfig.Sidecar.EffectiveBaseURL()
 }
 
 func (h *Handlers) sidecarURLTargets(job *api.EvaluationJobResource) api.SidecarURLTargets {
