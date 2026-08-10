@@ -14,9 +14,9 @@ func TestSidecarBaseURL(t *testing.T) {
 		t.Fatalf("default sidecarBaseURL = %q", got)
 	}
 
-	h.serviceConfig = &config.Config{Sidecar: &config.SidecarConfig{Port: 9090}}
+	h.serviceConfig = &config.Config{Sidecar: &config.SidecarConfig{BaseURL: "http://localhost:9090"}}
 	if got := h.sidecarBaseURL(); got != "http://localhost:9090" {
-		t.Fatalf("port-derived sidecarBaseURL = %q", got)
+		t.Fatalf("base_url-derived sidecarBaseURL = %q", got)
 	}
 
 	h.serviceConfig.Sidecar.BaseURL = "http://127.0.0.1:8080"

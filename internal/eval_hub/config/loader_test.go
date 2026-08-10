@@ -215,6 +215,57 @@ secrets:
 		}
 	})
 
+	t.Run("sidecar ResolvePort called on load", func(t *testing.T) {
+		dir := t.TempDir()
+		content := `
+service:
+  port: 8080
+  termination_file: "/tmp/termination-log"
+database:
+  driver: sqlite
+  url: "file::memory:?mode=memory&cache=shared"
+sidecar:
+  base_url: "http://localhost:9090"
+`
+		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := config.LoadConfig(logger, version, "local", time.Now().Format(time.RFC3339), "", dir)
+		if err != nil {
+			t.Fatalf("LoadConfig: %v", err)
+		}
+		if cfg.Sidecar == nil {
+			t.Fatal("expected Sidecar config")
+		}
+		if cfg.Sidecar.Port != 9090 {
+			t.Fatalf("Sidecar.Port = %d, want 9090", cfg.Sidecar.Port)
+		}
+	})
+
+	t.Run("sidecar ResolvePort error propagated", func(t *testing.T) {
+		dir := t.TempDir()
+		content := `
+service:
+  port: 8080
+  termination_file: "/tmp/termination-log"
+database:
+  driver: sqlite
+  url: "file::memory:?mode=memory&cache=shared"
+sidecar:
+  base_url: "http://localhost"
+`
+		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := config.LoadConfig(logger, version, "local", time.Now().Format(time.RFC3339), "", dir)
+		if err == nil {
+			t.Fatal("expected error for sidecar base_url without port")
+		}
+		if !strings.Contains(err.Error(), "explicit port") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
 	t.Run("loads providers from config dir", func(t *testing.T) {
 		_, err := config.LoadProviderConfigs(logger, testhelpers.NewValidator(t))
 		if err != nil {

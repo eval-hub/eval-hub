@@ -110,22 +110,10 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		return nil, fmt.Errorf("model url and name are required")
 	}
 
-	port := defaultSidecarPort
-	sidecarBaseURL := ""
+	sidecarBaseURL := config.DefaultSidecarBaseURL
 	if serviceConfig != nil && serviceConfig.Sidecar != nil {
-		if serviceConfig.Sidecar.Port != 0 {
-			p, err := sidecarPortFromInt(serviceConfig.Sidecar.Port)
-			if err != nil {
-				return nil, fmt.Errorf("sidecar port: %w", err)
-			}
-			port = p
-		}
-		sidecarBaseURL = strings.TrimSpace(serviceConfig.Sidecar.BaseURL)
+		sidecarBaseURL = serviceConfig.Sidecar.EffectiveBaseURL()
 	}
-	if sidecarBaseURL == "" {
-		sidecarBaseURL = fmt.Sprintf("http://localhost:%d", port)
-	}
-
 	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
 	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, benchmarkConfig, benchmarkIndex, &sidecarBaseURL)
 	if err != nil {
