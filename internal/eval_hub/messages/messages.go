@@ -266,6 +266,13 @@ var (
 		"The hardware profile '{{.Name}}' is invalid: '{{.Error}}'.",
 		"hardware_profile_invalid",
 	)
+
+	// ResolvedSHAReadOnly The field 'resolved_sha' is read-only and must not be set on create.
+	ResolvedSHAReadOnly = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The field 'resolved_sha' is read-only and must not be set on create.",
+		"resolved_sha_read_only",
+	)
 )
 
 type MessageCode struct {

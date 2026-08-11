@@ -19,7 +19,7 @@ description: |
 
   **`git`** — The specified repository is cloned and checked out at the given ref into
   **`/test_data`** before the adapter runs. The resolved commit SHA is recorded as
-  **`commit_sha`** within the `git` object on the evaluation job for reproducibility.
+  **`resolved_sha`** on this object on the evaluation job for reproducibility.
 
   Do not put credentials in the Eval Hub API request body; only reference an existing
   Secret via **`secret_ref`** (for S3 or git).
@@ -28,6 +28,8 @@ oneOf:
     properties:
       s3:
         $ref: ./TestDataRefS3.yaml
+      resolved_sha:
+        $ref: ./TestDataRefResolvedSHA.yaml
       type:
         $ref: ./TestDataRefType.yaml
     additionalProperties: false
@@ -38,6 +40,8 @@ oneOf:
     properties:
       pvc:
         $ref: ./TestDataRefPVC.yaml
+      resolved_sha:
+        $ref: ./TestDataRefResolvedSHA.yaml
       type:
         $ref: ./TestDataRefType.yaml
     additionalProperties: false
@@ -48,6 +52,8 @@ oneOf:
     properties:
       git:
         $ref: ./TestDataRefGit.yaml
+      resolved_sha:
+        $ref: ./TestDataRefResolvedSHA.yaml
       type:
         $ref: ./TestDataRefType.yaml
     additionalProperties: false

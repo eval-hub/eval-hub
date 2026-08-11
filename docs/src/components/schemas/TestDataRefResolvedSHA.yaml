@@ -1,0 +1,7 @@
+type: string
+readOnly: true
+description: |
+  Resolved content identity for the test data source (e.g. git commit SHA).
+  Server-populated after the evaluation run for reproducibility of the exact data
+  state used. Not set on job submission.
+example: a3f9c12e8b4d6f1c2e9a7b3d5f0e8c4a2b6d9e1f

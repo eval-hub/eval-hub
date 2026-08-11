@@ -1,0 +1,130 @@
+# Owns GitHub Release creation and SLSA provenance for Scorecard Signed-Releases.
+# Independent of the MCP binary publisher (release-mcp.yml only uploads binaries).
+name: Signed release
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: >
+          Single tag to sign or backfill (e.g. v1.0.0). Leave empty to backfill
+          the last N releases via backfill_last_n.
+        required: false
+        type: string
+        default: ''
+      backfill_last_n:
+        description: >
+          When tag is empty, number of recent GitHub Releases to backfill
+          (prefer 5 — Scorecard's Signed-Releases window).
+        required: false
+        type: string
+        default: '5'
+      publish:
+        description: >
+          Undraft the release after attaching provenance. Use true for new
+          releases; leave false when backfilling already-published releases.
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tags: ${{ steps.resolve.outputs.tags }}
+      publish: ${{ steps.resolve.outputs.publish }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Resolve tags to sign
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          BACKFILL_N: ${{ inputs.backfill_last_n }}
+          INPUT_PUBLISH: ${{ inputs.publish }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${EVENT_NAME}" == "push" ]]; then
+            TAG="${REF_NAME}"
+            echo "tags=$(jq -cn --arg t "${TAG}" '[ $t ]')" >> "${GITHUB_OUTPUT}"
+            echo "publish=true" >> "${GITHUB_OUTPUT}"
+            echo "Signing new tag ${TAG} (will publish after provenance)"
+            exit 0
+          fi
+
+          # workflow_dispatch
+          if [[ -n "${INPUT_TAG}" ]]; then
+            TAG="${INPUT_TAG#refs/tags/}"
+            echo "tags=$(jq -cn --arg t "${TAG}" '[ $t ]')" >> "${GITHUB_OUTPUT}"
+            echo "publish=${INPUT_PUBLISH}" >> "${GITHUB_OUTPUT}"
+            echo "Manual sign/backfill for ${TAG} (publish=${INPUT_PUBLISH})"
+            exit 0
+          fi
+
+          N="${BACKFILL_N:-5}"
+          if ! [[ "${N}" =~ ^[0-9]+$ ]] || [[ "${N}" -lt 1 ]] || [[ "${N}" -gt 30 ]]; then
+            echo "backfill_last_n must be an integer from 1 to 30 (got: ${N})"
+            exit 1
+          fi
+
+          # Prefer recent releases that already have custom assets; fall back to
+          # recent releases by date. Skip releases that already have provenance.
+          mapfile -t CANDIDATES < <(
+            gh release list --limit 30 --json tagName,isDraft,isPrerelease \
+              --jq '.[] | select(.isDraft == false) | .tagName'
+          )
+
+          TAGS=()
+          for TAG in "${CANDIDATES[@]}"; do
+            [[ "${#TAGS[@]}" -ge "${N}" ]] && break
+            ASSETS="$(gh release view "${TAG}" --json assets --jq '[.assets[].name] | @json')"
+            if echo "${ASSETS}" | jq -e 'any(.[]; test("\\.intoto\\.jsonl$"))' >/dev/null; then
+              echo "Skipping ${TAG}: already has *.intoto.jsonl"
+              continue
+            fi
+            TAGS+=("${TAG}")
+          done
+
+          if [[ "${#TAGS[@]}" -eq 0 ]]; then
+            echo "No releases need backfill (none found or all already signed)"
+            echo "tags=[]" >> "${GITHUB_OUTPUT}"
+            echo "publish=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          echo "tags=$(printf '%s\n' "${TAGS[@]}" | jq -R . | jq -sc .)" >> "${GITHUB_OUTPUT}"
+          echo "publish=false" >> "${GITHUB_OUTPUT}"
+          echo "Backfill tags: ${TAGS[*]}"
+
+  sign:
+    needs: resolve
+    if: needs.resolve.outputs.tags != '[]'
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        tag: ${{ fromJSON(needs.resolve.outputs.tags) }}
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: ./.github/workflows/signed-release-tag.yml
+    secrets: inherit
+    with:
+      tag: ${{ matrix.tag }}
+      publish: ${{ needs.resolve.outputs.publish == 'true' }}
+      create_if_missing: true
