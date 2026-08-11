@@ -991,9 +991,9 @@ parameters:
   - name: languages
     type: array
     default: [en]
-    description: ISO 639 language codes for EvalCard metadata.
+    description: ISO 639 language codes (optional; for job metadata).
 
   - name: languages_count
     type: integer
     default: 1
-    description: Number of languages in the evaluation dataset.
+    description: Number of languages in the evaluation dataset (optional).
