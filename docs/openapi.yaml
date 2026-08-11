@@ -2422,7 +2422,7 @@ components:
           description: |
             HTTP(S) URL of the git repository to clone. SSH URLs are not supported.
             Plain `http://` is allowed only for unauthenticated clones; when **`secret_ref`**
-            is set the URL must use **`https://`** so credentials are not sent in the clear.
+            is set the URL must use **`https://`**.
           example: https://github.com/my-org/my-eval-datasets.git
         ref:
           type: string
