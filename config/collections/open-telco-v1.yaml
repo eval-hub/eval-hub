@@ -19,8 +19,9 @@ tags:
   - inspect
   - vllm
 pass_criteria:
-  # Equal-weight average across four Open-Telco benchmarks.
-  threshold: 0.48
+  # Equal-weight average across four Open-Telco benchmarks:
+  # (0.50 + 0.70 + 0.25 + 0.45) / 4 = 0.475
+  threshold: 0.475
 benchmarks:
   - id: inspect/telemath
     provider_id: inspect
