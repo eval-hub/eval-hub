@@ -437,6 +437,33 @@ func checkModelEndpoint() {
 	}
 }
 
+func checkOCIConfiguration() {
+	ociConfiguration = ociConfigUnchecked
+
+	requiredVars := map[string]string{
+		"OCI_REGISTRY":    os.Getenv("OCI_REGISTRY"),
+		"OCI_REPOSITORY":  os.Getenv("OCI_REPOSITORY"),
+		"OCI_SECRET_NAME": os.Getenv("OCI_SECRET_NAME"),
+	}
+
+	var missingVars []string
+	for name, value := range requiredVars {
+		if value == "" {
+			missingVars = append(missingVars, name)
+		}
+	}
+
+	if len(missingVars) > 0 {
+		logDebug("OCI tests skipped - required environment variables not configured: %v\n", missingVars)
+		logDebug("Set OCI_REGISTRY, OCI_REPOSITORY, and OCI_SECRET_NAME to enable OCI export tests.\n")
+		ociConfiguration = ociConfigMissing
+		return
+	}
+
+	logDebug("OCI configuration detected - OCI export tests enabled\n")
+	ociConfiguration = ociConfigPresent
+}
+
 // A bit of a hack to have some checks that the regexes are working as expected
 func checkRegexes() {
 	tc := createScenarioConfig(apiFeat)
@@ -519,6 +546,7 @@ func InitializeTestSuite(ctx *godog.TestSuiteContext) {
 	ctx.BeforeSuite(setUpTestConf)
 	ctx.BeforeSuite(waitForService)
 	ctx.BeforeSuite(checkModelEndpoint)
+	ctx.BeforeSuite(checkOCIConfiguration)
 
 	// Initialize GPU test suite hooks
 	InitializeGPUTestSuite(ctx)
@@ -534,6 +562,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.After(tc.assetCleanup)
 
 	ctx.Step(`^the service is running$`, tc.theServiceIsRunning)
+	ctx.Step(`^OCI is configured$`, tc.ociIsConfigured)
 	ctx.Step(`^queue is enabled for payloads$`, tc.queueIsEnabledForJsonnetPayloads)
 	ctx.Step(`^the model endpoint is reachable$`, tc.theModelEndpointIsReachable)
 	ctx.Step(`^there are system providers$`, tc.thereAreSystemProviders)
@@ -552,6 +581,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the response body should contain "([^"]*)"$`, tc.theResponseBodyShouldContain)
 	ctx.Step(`^the response should contain "([^"]*)" with value "([^"]*)"$`, tc.theResponseShouldContainWithValue)
 	ctx.Step(`^the response should contain "([^"]*)"$`, tc.theResponseShouldContain)
+	ctx.Step(`^the response should not contain "([^"]*)"$`, tc.theResponseShouldNotContain)
 	ctx.Step(`^the response should be JSON$`, tc.theResponseShouldBeJSON)
 	ctx.Step(`^the response should contain Prometheus metrics$`, tc.theResponseShouldContainPrometheusMetrics)
 	ctx.Step(`^the metrics should include "([^"]*)"$`, tc.theMetricsShouldInclude)
@@ -590,6 +620,15 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the MLflow artifact should be valid JSON$`, tc.theMLflowArtifactShouldBeValidJSON)
 	ctx.Step(`^the MLflow artifact field "([^"]*)" should match ISO 8601 format$`, tc.theMLflowArtifactFieldShouldMatchISO8601)
 	ctx.Step(`^I wait for the evaluation job status to match "([^"]*)"$`, tc.iWaitForEvaluationJobStatusToMatch)
+
+	// OCI artifact steps
+	ctx.Step(`^I fetch the OCI manifest for repository "([^"]*)" and tag "([^"]*)"$`, tc.iFetchOCIManifestByRepoAndTag)
+	ctx.Step(`^the OCI manifest should not exist$`, tc.theOCIManifestShouldNotExist)
+	ctx.Step(`^the OCI manifest should contain annotation "([^"]*)" with value "([^"]*)"$`, tc.theOCIManifestShouldContainAnnotation)
+	ctx.Step(`^the OCI artifact should exist$`, tc.theOCIArtifactShouldExist)
+	ctx.Step(`^the OCI artifact should contain "([^"]*)"$`, tc.theOCIArtifactShouldContain)
+	ctx.Step(`^the OCI artifact should contain the value "([^"]*)" at path "([^"]*)"$`, tc.theOCIArtifactShouldContainValueAtPath)
+	ctx.Step(`^the OCI artifact should be valid JSON$`, tc.theOCIArtifactShouldBeValidJSON)
 
 	// GPU-specific steps
 	InitializeGPUSteps(ctx, tc)
