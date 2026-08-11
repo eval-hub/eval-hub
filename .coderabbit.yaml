@@ -4,4 +4,4 @@ reviews:
   auto_review:
     enabled: false
     labels:
-      - "ready-fir-review"
+      - "ready-for-review"
