@@ -1,5 +1,5 @@
 # Reusable workflow: create/update one GitHub Release with project-level assets
-# and SLSA provenance (*.intoto.jsonl). Called by signed-release.yml.
+# and SLSA provenance (via GitHub artifact attestations). Called by signed-release.yml.
 name: Signed release (single tag)
 
 on:
@@ -28,8 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     outputs:
-      digests: ${{ steps.hash.outputs.digests }}
       skip: ${{ steps.check.outputs.skip }}
       tag: ${{ steps.meta.outputs.tag }}
     steps:
@@ -70,9 +71,9 @@ jobs:
             echo "Release ${TAG} does not exist yet"
             exit 0
           fi
-          if gh release view "${TAG}" --json assets --jq '.assets[].name' | grep -E '\.intoto\.jsonl$' >/dev/null; then
+          if gh release view "${TAG}" --json assets --jq '.assets[].name' | grep -E '\.(intoto\.jsonl|sigstore\.json)$' >/dev/null; then
             echo "skip=true" >> "${GITHUB_OUTPUT}"
-            echo "Release ${TAG} already has *.intoto.jsonl; skipping"
+            echo "Release ${TAG} already has provenance; skipping"
           else
             echo "skip=false" >> "${GITHUB_OUTPUT}"
           fi
@@ -110,18 +111,16 @@ jobs:
               exit 1
             fi
             echo "Creating draft release ${TAG}"
-            # Curated placeholder body (not git log / --generate-notes). Maintainers
-            # replace via the release-notes skill when publishing human-readable notes.
             cat > /tmp/evalhub-release-notes.md <<EOF
             ## Summary
 
             EvalHub **${TAG}** is published as a signed GitHub Release with project
-            source assets and SLSA provenance (\`*.intoto.jsonl\`).
+            source assets and SLSA provenance (\`provenance.sigstore.json\`).
 
             ## Upgrade impact
 
             - Prefer assets from this GitHub Release over unverified copies.
-            - Verify the source archive with \`slsa-verifier\` (see \`SECURITY.md\`).
+            - Verify the source archive with \`gh attestation verify\` (see \`SECURITY.md\`).
             - Optional MCP binaries may be attached by the Release MCP workflow; treat
               them as the same release version as this tag.
             - Replace this body with curated release notes (major changes and upgrade
@@ -140,43 +139,32 @@ jobs:
             exit 1
           fi
 
-      - name: Compute subject digests
+      - name: Attest build provenance
         if: steps.check.outputs.skip != 'true'
-        id: hash
+        id: attest
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-path: |
+            dist/${{ steps.assets.outputs.archive }}
+            dist/SHA256SUMS
+
+      - name: Upload attestation bundle and trusted root to release
+        if: steps.check.outputs.skip != 'true'
         env:
-          ARCHIVE: ${{ steps.assets.outputs.archive }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
         run: |
           set -euo pipefail
-          # Subjects: project archive + SHA256SUMS (filenames only, as attached to the release)
-          (
-            cd dist
-            sha256sum "${ARCHIVE}" SHA256SUMS
-          ) | tee digests.txt
-          echo "digests=$(base64 -w0 digests.txt)" >> "${GITHUB_OUTPUT}"
-
-  provenance:
-    needs: prepare
-    if: needs.prepare.outputs.skip != 'true'
-    permissions:
-      actions: read
-      id-token: write
-      contents: write
-    # SHA-pinned (repo policy requires full SHA): compile-generator must be true
-    # because pre-built binary download needs a tag ref. Adds ~2m build time.
-    # Ref: https://github.com/slsa-framework/slsa-github-generator/releases/tag/v2.1.0
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
-    with:
-      base64-subjects: ${{ needs.prepare.outputs.digests }}
-      upload-assets: true
-      upload-tag-name: ${{ needs.prepare.outputs.tag }}
-      compile-generator: true
-      # Keep draft releases as drafts while provenance uploads (new-tag / publish path).
-      # For backfill of already-published releases, pass false (do not convert to draft).
-      draft-release: ${{ inputs.publish && 'true' || 'false' }}
+          gh attestation trusted-root > dist/trusted_root.jsonl
+          gh release upload "${TAG}" \
+            "${BUNDLE_PATH}#provenance.sigstore.json" \
+            "dist/trusted_root.jsonl#trusted_root.jsonl" \
+            --clobber
 
   publish:
-    needs: [prepare, provenance]
-    if: inputs.publish && needs.prepare.outputs.skip != 'true' && needs.provenance.result == 'success'
+    needs: [prepare]
+    if: inputs.publish && needs.prepare.outputs.skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -274,6 +262,10 @@ jobs:
           TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           set -euo pipefail
-          # Undraft after provenance is attached. MCP assets are preferred but optional.
+          BODY="$(gh release view "${TAG}" --json body --jq '.body')"
+          if echo "${BODY}" | grep -q "Replace this body with curated release notes"; then
+            echo "::warning::Release ${TAG} still has placeholder notes. Skipping undraft — replace the body with curated release notes before publishing."
+            exit 0
+          fi
           gh release edit "${TAG}" --draft=false
           echo "Published release ${TAG}"
