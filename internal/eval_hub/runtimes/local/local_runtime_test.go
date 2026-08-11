@@ -1134,6 +1134,46 @@ func TestNewLocalRuntimeSidecarEmptyBaseURL(t *testing.T) {
 	}
 }
 
+// TestNewLocalRuntimeSidecarMalformedBaseURL documents that malformed sidecar
+// BaseURLs are rejected at config load time by SidecarConfig.ResolvePort, so
+// they never reach NewLocalRuntime in production. The cases below would pass
+// ResolvePort validation only with a well-formed URL; a bare string like
+// "not-a-url" or a schemeless "localhost:8082" is caught before any runtime
+// is constructed. See config/sidecar_config_test.go TestResolvePort and
+// config/loader_test.go "sidecar ResolvePort error propagated".
+func TestNewLocalRuntimeSidecarMalformedBaseURL(t *testing.T) {
+	t.Parallel()
+
+	malformed := []string{
+		"not-a-url",
+		"://missing-scheme",
+		"ftp://localhost:8082",
+		"http://:8082",
+	}
+	for _, baseURL := range malformed {
+		sc := &config.SidecarConfig{BaseURL: baseURL}
+		err := sc.ResolvePort()
+		if err == nil {
+			t.Errorf("expected ResolvePort to reject %q, but it passed", baseURL)
+		}
+	}
+
+	// Valid URL passes ResolvePort and NewLocalRuntime accepts it.
+	sc := &config.SidecarConfig{LocalMode: true, BaseURL: "http://localhost:8082"}
+	if err := sc.ResolvePort(); err != nil {
+		t.Fatalf("ResolvePort unexpectedly failed for valid URL: %v", err)
+	}
+	cfg := &config.Config{Sidecar: sc}
+	rt, err := NewLocalRuntime(discardLogger(), cfg)
+	if err != nil {
+		t.Fatalf("NewLocalRuntime failed for valid sidecar config: %v", err)
+	}
+	lr := rt.(*LocalRuntime)
+	if lr.sidecarBaseURL != "http://localhost:8082" {
+		t.Fatalf("expected sidecarBaseURL %q, got %q", "http://localhost:8082", lr.sidecarBaseURL)
+	}
+}
+
 func TestNewLocalRuntimeSidecarWithoutLocalMode(t *testing.T) {
 	t.Parallel()
 	cfg := &config.Config{
