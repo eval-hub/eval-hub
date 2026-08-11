@@ -1439,6 +1439,8 @@ Feature: Evaluation Jobs
   @negative
   Scenario: Evaluation job with bad git ref fails
     Given the service is running
+    And I set the wait deadline to "5m"
+    And I set the wait interval to "10s"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_bad_ref.json"
     Then the response code should be 202
     And the response should contain the value "pending" at path "$.status.state"
@@ -1464,6 +1466,8 @@ Feature: Evaluation Jobs
   @negative
   Scenario: Evaluation job with missing git sub_path fails
     Given the service is running
+    And I set the wait deadline to "5m"
+    And I set the wait interval to "10s"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_bad_subpath.json"
     Then the response code should be 202
     And the response should contain the value "pending" at path "$.status.state"

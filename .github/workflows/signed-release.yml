@@ -92,8 +92,8 @@ jobs:
           for TAG in "${CANDIDATES[@]}"; do
             [[ "${#TAGS[@]}" -ge "${N}" ]] && break
             ASSETS="$(gh release view "${TAG}" --json assets --jq '[.assets[].name] | @json')"
-            if echo "${ASSETS}" | jq -e 'any(.[]; test("\\.intoto\\.jsonl$"))' >/dev/null; then
-              echo "Skipping ${TAG}: already has *.intoto.jsonl"
+            if echo "${ASSETS}" | jq -e 'any(.[]; test("\\.(intoto\\.jsonl|sigstore\\.json)$"))' >/dev/null; then
+              echo "Skipping ${TAG}: already has provenance"
               continue
             fi
             TAGS+=("${TAG}")
@@ -121,6 +121,7 @@ jobs:
     permissions:
       actions: read
       id-token: write
+      attestations: write
       contents: write
     uses: ./.github/workflows/signed-release-tag.yml
     secrets: inherit
