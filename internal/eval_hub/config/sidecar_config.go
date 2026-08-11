@@ -20,8 +20,15 @@ type SidecarConfig struct {
 	MLFlow           *SidecarMLFlowConfig    `mapstructure:"mlflow,omitempty" json:"mlflow,omitempty"`
 	OCI              *SidecarOCIConfig       `mapstructure:"oci,omitempty" json:"oci,omitempty"`
 	Model            *SidecarModelConfig     `mapstructure:"model,omitempty" json:"model,omitempty"`
+	InitContainer    *InitContainerConfig    `mapstructure:"init_container,omitempty" json:"init_container,omitempty"`
 	SidecarContainer *SidecarContainerConfig `mapstructure:"sidecar_container,omitempty" json:"sidecar_container,omitempty"`
 	OTEL             *OTELConfig             `mapstructure:"otel,omitempty" json:"otel,omitempty"`
+}
+
+// InitContainerConfig holds metadata written by eval-hub for the init container phase.
+// The sidecar reads this at startup to configure init-container-specific behaviour.
+type InitContainerConfig struct {
+	IsGitJob bool `mapstructure:"is_git_job,omitempty" json:"is_git_job,omitempty"`
 }
 
 // EffectiveBaseURL returns BaseURL if non-empty, otherwise DefaultSidecarBaseURL.
