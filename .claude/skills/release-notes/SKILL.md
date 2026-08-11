@@ -197,29 +197,31 @@ Do **not** publish or overwrite a release body without explicit confirmation.
 
 Use the validated `target_tag` (e.g. `v1.0.0`) in every command.
 
-If the release **exists**:
+**Release ownership:** `.github/workflows/signed-release.yml` creates the GitHub
+Release for `v*` tags (draft → project assets → SLSA provenance → publish).
+Prefer **editing notes on an existing release** rather than creating a competing
+release without provenance.
+
+If the release **exists** (preferred path):
 
 ```bash
 gh release edit "${target_tag}" --notes-file /tmp/evalhub-release-notes.md
 ```
 
-If the release **does not exist** and the user confirmed **publication** (not a
-draft):
+If the release **does not exist** yet (CI still running or tag not pushed), wait
+for `signed-release.yml` when possible. Only create a release manually if the
+user explicitly asks and understands Signed-Releases / provenance will need a
+backfill via **Actions → Signed release → Run workflow**:
 
 ```bash
-gh release create "${target_tag}" --title "${target_tag}" \
-  --notes-file /tmp/evalhub-release-notes.md
-```
-
-If the release **does not exist** and the user wants a **draft**:
-
-```bash
+# Avoid unless necessary — prefer CI ownership + gh release edit
 gh release create "${target_tag}" --draft --title "${target_tag}" \
   --notes-file /tmp/evalhub-release-notes.md
 ```
 
-Do not attach binaries here unless the user asks; MCP/asset releases are handled
-by `.github/workflows/release-mcp.yml`.
+Do not attach binaries or provenance here unless the user asks; project assets
+and `*.intoto.jsonl` are handled by `signed-release.yml`. Optional MCP binaries
+are uploaded by `.github/workflows/release-mcp.yml` into the same release.
 
 If CI already created a release with auto-generated notes, **replace** the body
 with the curated notes (after confirmation). Leaving only `--generate-notes`

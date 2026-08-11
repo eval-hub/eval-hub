@@ -91,3 +91,43 @@ python3 -m venv /tmp/reqcheck
 ```
 
 Apply the same pattern for any new GitHub Actions `pip install` steps so Scorecard does not reopen `pipCommand not pinned by hash` alerts.
+
+## Verifying GitHub Releases
+
+GitHub Releases for `v*` tags are created by `.github/workflows/signed-release.yml` with project-level assets (`eval-hub-<tag>.tar.gz`, `SHA256SUMS`) and SLSA provenance (`multiple.intoto.jsonl`). That satisfies OpenSSF Scorecard’s **Signed-Releases** check independently of optional MCP binary uploads from `.github/workflows/release-mcp.yml`.
+
+### Verify provenance with slsa-verifier
+
+1. Download a release asset and the provenance file from the GitHub Release (for example `eval-hub-vX.Y.Z.tar.gz` and `multiple.intoto.jsonl`).
+2. Install [`slsa-verifier`](https://github.com/slsa-framework/slsa-verifier).
+3. Verify:
+
+```bash
+slsa-verifier verify-artifact eval-hub-vX.Y.Z.tar.gz \
+  --provenance-path multiple.intoto.jsonl \
+  --source-uri github.com/eval-hub/eval-hub \
+  --source-tag vX.Y.Z
+```
+
+`SHA256SUMS` is an integrity aid for the archive; it is not a Scorecard-recognized signature. The Scorecard-recognized artifact is the `*.intoto.jsonl` provenance file.
+
+### Backfilled releases
+
+Existing releases can be signed via **Actions → Signed release → Run workflow** (`workflow_dispatch`):
+
+| Input | Use |
+|-------|-----|
+| `tag` | Sign/backfill one tag (e.g. `v1.0.0`) |
+| `backfill_last_n` | When `tag` is empty, process this many recent unpublished-provenance releases (default `5`) |
+| `publish` | Set `true` only when the release should be undrafted after provenance (new releases). Leave `false` when backfilling already-published releases. |
+
+Provenance attached this way attests that GitHub Actions hashed the subject files during the backfill job; it does **not** claim those bytes were produced by the original historical build. New tagged releases use draft → project assets → provenance → publish so provenance is present before the release is published. Publish waits briefly for optional MCP binaries when that workflow is still running, but still undrafts if MCP fails or never uploads; MCP may attach binaries later with `gh release upload --clobber` on mutable releases.
+
+If the repository enables [immutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases), assets cannot be added to already-published releases; backfill will fail for those tags and only new draft→publish releases can be signed. With immutable releases enabled, MCP binaries must land before publish or they cannot be added afterward.
+
+### Post-merge validation
+
+1. Merge the Signed-Releases workflows to `main`.
+2. Run **Signed release** with `backfill_last_n=5` (or specific tags) and confirm each release gains `multiple.intoto.jsonl` (and project archive/`SHA256SUMS` if they were missing).
+3. Optionally push a new `v*` tag and confirm draft→publish includes provenance without requiring the MCP workflow.
+4. Re-run **OpenSSF Scorecard** (`.github/workflows/scorecard.yml`) and check **Signed-Releases**.
