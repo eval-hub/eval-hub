@@ -18,15 +18,17 @@ const (
 	// Evaluation phase label values — written to the trustyai.opendatahub.io/evaluation-phase
 	// label on the backing Kubernetes Job. Pending is stamped at creation; the rest are patched
 	// on each lifecycle transition via PatchJobPhaseLabel.
-	EvaluationPhasePending   = "Pending"
-	EvaluationPhaseRunning   = "Running"
-	EvaluationPhaseCompleted = "Completed"
-	EvaluationPhaseFailed    = "Failed"
+	EvaluationPhasePending           = "Pending"
+	EvaluationPhaseRunning           = "Running"
+	EvaluationPhaseCompleted         = "Completed"
+	EvaluationPhaseFailed            = "Failed"
+	EvaluationPhaseThresholdViolated = "ThresholdViolated"
 
 	// Kubernetes Event reasons emitted on lifecycle transitions.
-	eventReasonRunning   = "EvaluationRunning"
-	eventReasonCompleted = "EvaluationCompleted"
-	eventReasonFailed    = "EvaluationFailed"
+	eventReasonRunning           = "EvaluationRunning"
+	eventReasonCompleted         = "EvaluationCompleted"
+	eventReasonFailed            = "EvaluationFailed"
+	eventReasonThresholdViolated = "EvaluationThresholdViolated"
 )
 
 // NotifyJobPhaseTransition patches the evaluation-phase label on the backing Kubernetes Job and
@@ -83,6 +85,47 @@ func (r *K8sRuntime) NotifyJobPhaseTransition(ctx context.Context, evaluation *a
 			r.logger.WarnContext(signalCtx, "lifecycle signal: emit event failed",
 				"job_name", job.Name,
 				"reason", reason,
+				"error", emitErr,
+			)
+		}
+	}
+}
+
+// NotifyThresholdViolation patches the evaluation-phase label to ThresholdViolated on the backing
+// Kubernetes Job and emits an EvaluationThresholdViolated Warning Event containing the metric name,
+// actual measured value, and configured threshold. Both operations are best-effort: failures are
+// logged at Warn level and never surfaced to the caller.
+func (r *K8sRuntime) NotifyThresholdViolation(ctx context.Context, evaluation *api.EvaluationJobResource, benchmarkIndex int, metricName string, actualValue, threshold float32) {
+	signalCtx, cancel := context.WithTimeout(ctx, lifecycleSignalTimeout)
+	defer cancel()
+
+	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
+	labelSelector := fmt.Sprintf(
+		"%s=%s,%s=%s",
+		labelJobIDKey, sanitizeLabelValue(evaluation.Resource.ID),
+		labelBenchmarkIndexKey, sanitizeLabelValue(strconv.Itoa(benchmarkIndex)),
+	)
+	jobs, err := r.helper.ListJobs(signalCtx, namespace, labelSelector)
+	if err != nil {
+		r.logger.WarnContext(signalCtx, "threshold violation signal: list jobs failed",
+			"job_id", evaluation.Resource.ID,
+			"benchmark_index", benchmarkIndex,
+			"error", err,
+		)
+		return
+	}
+	for i := range jobs {
+		job := &jobs[i]
+		if patchErr := r.helper.PatchJobPhaseLabel(signalCtx, namespace, job.Name, EvaluationPhaseThresholdViolated); patchErr != nil {
+			r.logger.WarnContext(signalCtx, "threshold violation signal: patch phase label failed",
+				"job_name", job.Name,
+				"error", patchErr,
+			)
+		}
+		messageFmt := "metric=%s actual=%.4f threshold=%.4f"
+		if emitErr := r.helper.EmitEvent(job, corev1.EventTypeWarning, eventReasonThresholdViolated, messageFmt, metricName, actualValue, threshold); emitErr != nil {
+			r.logger.WarnContext(signalCtx, "threshold violation signal: emit event failed",
+				"job_name", job.Name,
 				"error", emitErr,
 			)
 		}

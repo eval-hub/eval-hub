@@ -250,3 +250,114 @@ func TestNotifyJobPhaseTransitionFailedState(t *testing.T) {
 		t.Fatal("expected a Warning event for Failed state")
 	}
 }
+
+func TestNotifyThresholdViolationEmitsEnrichedEvent(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "eval-job",
+			Namespace: "default",
+			Labels: map[string]string{
+				labelJobIDKey:          sanitizeLabelValue(evaluation.Resource.ID),
+				labelBenchmarkIndexKey: "0",
+			},
+		},
+	}
+	clientset := fake.NewSimpleClientset(job)
+	fakeRecorder := record.NewFakeRecorder(10)
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: NewKubernetesHelperWithRecorder(clientset, fakeRecorder),
+	}
+
+	runtime.NotifyThresholdViolation(context.Background(), evaluation, 0, "accuracy", 0.4231, 0.7000)
+
+	select {
+	case msg := <-fakeRecorder.Events:
+		if !strings.Contains(msg, "EvaluationThresholdViolated") {
+			t.Fatalf("expected EvaluationThresholdViolated in event, got: %s", msg)
+		}
+		if !strings.Contains(msg, "accuracy") {
+			t.Fatalf("expected metric name 'accuracy' in event message, got: %s", msg)
+		}
+		if !strings.Contains(msg, "0.4231") {
+			t.Fatalf("expected actual value '0.4231' in event message, got: %s", msg)
+		}
+		if !strings.Contains(msg, "0.7000") {
+			t.Fatalf("expected threshold '0.7000' in event message, got: %s", msg)
+		}
+	default:
+		t.Fatal("expected an EvaluationThresholdViolated event on the recorder channel")
+	}
+}
+
+func TestNotifyThresholdViolationPatchesPhaseLabel(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "eval-job",
+			Namespace: "default",
+			Labels: map[string]string{
+				labelJobIDKey:          sanitizeLabelValue(evaluation.Resource.ID),
+				labelBenchmarkIndexKey: "0",
+			},
+		},
+	}
+	clientset := fake.NewSimpleClientset(job)
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+	}
+
+	runtime.NotifyThresholdViolation(context.Background(), evaluation, 0, "f1_score", 0.3, 0.6)
+
+	updated, err := clientset.BatchV1().Jobs("default").Get(context.Background(), "eval-job", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if got := updated.Labels[labelEvaluationPhaseKey]; got != EvaluationPhaseThresholdViolated {
+		t.Fatalf("expected label value %q, got %q", EvaluationPhaseThresholdViolated, got)
+	}
+}
+
+func TestNotifyThresholdViolationNoJobFound(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	clientset := fake.NewSimpleClientset()
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+	}
+	// No matching job — should be a no-op with no panic.
+	runtime.NotifyThresholdViolation(context.Background(), evaluation, 0, "accuracy", 0.4, 0.8)
+}
+
+func TestNotifyThresholdViolationEmitsWarningEventType(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "eval-job",
+			Namespace: "default",
+			Labels: map[string]string{
+				labelJobIDKey:          sanitizeLabelValue(evaluation.Resource.ID),
+				labelBenchmarkIndexKey: "2",
+			},
+		},
+	}
+	clientset := fake.NewSimpleClientset(job)
+	fakeRecorder := record.NewFakeRecorder(10)
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: NewKubernetesHelperWithRecorder(clientset, fakeRecorder),
+	}
+
+	runtime.NotifyThresholdViolation(context.Background(), evaluation, 2, "bleu", 0.1, 0.5)
+
+	select {
+	case msg := <-fakeRecorder.Events:
+		if !strings.Contains(msg, corev1.EventTypeWarning) {
+			t.Fatalf("expected Warning event type, got: %s", msg)
+		}
+	default:
+		t.Fatal("expected an event on the recorder channel")
+	}
+}
