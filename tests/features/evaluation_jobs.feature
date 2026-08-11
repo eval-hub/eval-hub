@@ -1625,3 +1625,148 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain "card_version"
     And the MLflow artifact should contain "results.benchmarks"
     And the MLflow artifact should contain the value "{{value:job_id}}" at path "$.metadata.evaluation_job_id"
+
+  @oci
+  Scenario: EvalCard published to OCI registry when job completes with OCI export configured
+    Given the service is running
+    And OCI is configured
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oci_export.json"
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:job_id"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "{{env:OCI_TAG|test-v1}}"
+    Then the OCI artifact should exist
+    And the OCI artifact should be valid JSON
+    And the OCI artifact should contain "benchmark_id"
+    And the OCI artifact should contain "model_name"
+    And the OCI artifact should contain "results"
+    And the OCI artifact should contain "arc_easy"
+    And the OCI artifact should contain the value "{{value:job_id}}" at path "$.id"
+
+  @oci
+  Scenario: No EvalCard exported to OCI when evaluation job fails
+    Given the service is running
+    And OCI is configured
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oci_invalid_model.json"
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:job_id"
+    And I wait for the evaluation job status to match "completed|failed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response should contain the value "failed" at path "$.status.state"
+    # Verify user tag does not exist when job fails
+    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "{{env:OCI_TAG_FAILED|failed-job-test}}"
+    Then the OCI manifest should not exist
+
+  @oci
+  Scenario: No EvalCard exported to OCI when exports.oci is not configured
+    Given the service is running
+    And OCI is configured
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_no_oci.json"
+    Then the response code should be 202
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    # Verify job spec does not contain OCI export configuration
+    And the response should not contain "exports"
+
+  @oci
+  Scenario: OCI export with custom annotations
+    Given the service is running
+    And OCI is configured
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oci_annotations.json"
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:job_id"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    # Verify results artifact exists with custom annotations in OCI metadata
+    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "{{env:OCI_TAG_ANNOTATIONS|annotations-test}}"
+    # Verify custom annotations in manifest
+    Then the OCI manifest should contain annotation "team" with value "ml-platform"
+    And the OCI manifest should contain annotation "environment" with value "test"
+    And the OCI manifest should contain annotation "cost-center" with value "research"
+    # Verify artifact content
+    And the OCI artifact should exist
+    And the OCI artifact should be valid JSON
+    And the OCI artifact should contain "benchmark_id"
+    And the OCI artifact should contain "model_name"
+    And the OCI artifact should contain "results"
+    And the OCI artifact should contain the value "{{value:job_id}}" at path "$.id"
+
+  @oci
+  Scenario: OCI export validation errors for missing required fields
+    Given the service is running
+    And OCI is configured
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oci_missing_host.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+
+  @oci
+  Scenario: Multiple jobs export to same OCI repository with different tags
+    Given the service is running
+    And OCI is configured
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oci_shared_repo_1.json"
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:job_id_1"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    # Verify first job's results exist
+    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "{{env:OCI_TAG_SHARED1|shared-repo-v1}}"
+    Then the OCI artifact should exist
+    And the OCI artifact should be valid JSON
+    And the OCI artifact should contain "benchmark_id"
+    And the OCI artifact should contain "model_name"
+    And the OCI artifact should contain "results"
+    And the OCI artifact should contain the value "{{value:job_id_1}}" at path "$.id"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oci_shared_repo_2.json"
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:job_id_2"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    # Verify second job's results exist (different tag, same repo)
+    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "{{env:OCI_TAG_SHARED2|shared-repo-v2}}"
+    Then the OCI artifact should exist
+    And the OCI artifact should be valid JSON
+    And the OCI artifact should contain "benchmark_id"
+    And the OCI artifact should contain "model_name"
+    And the OCI artifact should contain "results"
+    And the OCI artifact should contain the value "{{value:job_id_2}}" at path "$.id"
+    # Re-verify first job's artifact is still intact after second job completed
+    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "{{env:OCI_TAG_SHARED1|shared-repo-v1}}"
+    Then the OCI artifact should exist
+    And the OCI artifact should contain the value "{{value:job_id_1}}" at path "$.id"
+
+  # NOTE: This scenario has both @oci and @mlflow tags. Since @mlflow is excluded by default
+  # in FVT_TAGS, this scenario only runs when MLflow tests are explicitly enabled.
+  # This means the dual-export path has no coverage in standard CI runs.
+  @oci
+  @mlflow
+  Scenario: Both OCI and MLflow exports succeed for same job
+    Given the service is running
+    And OCI is configured
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_dual_export.json"
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:job_id"
+    And the "resource.mlflow_experiment_id" field in the response should be saved as "value:mlflow_experiment_id"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    # Verify OCI results artifact exists
+    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "{{env:OCI_TAG_DUAL|dual-export-test}}"
+    Then the OCI artifact should exist
+    And the OCI artifact should be valid JSON
+    And the OCI artifact should contain "benchmark_id"
+    And the OCI artifact should contain "model_name"
+    And the OCI artifact should contain "results"
+    And the OCI artifact should contain the value "{{value:job_id}}" at path "$.id"
+    # Verify MLflow has the EvalCard
+    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    Then the MLflow artifact should exist
+    And the MLflow artifact should contain "card_version"
+    And the MLflow artifact should contain "schema_version"
