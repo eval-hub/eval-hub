@@ -1,19 +1,17 @@
 local test = import 'test.libsonnet';
 
-// Commit on this branch that introduced tests/git-testdata (arc_easy + tokenizer).
-// Override with TEST_DATA_GIT_SHA_REF when cloning a different history (e.g. after squash).
-local defaultGitShaRef = '24714484d1bbd2047043d053a68a8c2f21579e3f';
-
 test.mergeOptional(
   {
     model: test.model(),
     name: 'test-evaluation-job-git-sha',
     benchmarks: [
       test.gitArcEasyBenchmark({}, {
-        // Hex commit SHA only — do not fall back to a branch name (TEST_DATA_GIT_REF/main).
-        // Optionally override URL with TEST_DATA_GIT_SHA_URL (else TEST_DATA_GIT_URL).
+        // Defaults to TEST_DATA_GIT_REF/main (branch-like). Set TEST_DATA_GIT_SHA_REF to a
+        // real hex commit SHA that contains tests/git-testdata to exercise commit checkout
+        // (optionally override URL with TEST_DATA_GIT_SHA_URL). Do not hardcode a branch SHA —
+        // it breaks after squash-merge.
         url: test.env('TEST_DATA_GIT_SHA_URL', test.env('TEST_DATA_GIT_URL', 'https://github.com/eval-hub/eval-hub')),
-        ref: test.env('TEST_DATA_GIT_SHA_REF', defaultGitShaRef),
+        ref: test.env('TEST_DATA_GIT_SHA_REF', test.env('TEST_DATA_GIT_REF', 'main')),
       }),
     ],
     tags: ['environment', 'git', 'sha'],

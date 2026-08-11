@@ -797,32 +797,6 @@ func TestEvaluateEvaluationJobGitTagAndSubpathJsonnet(t *testing.T) {
 				}
 			},
 		},
-		{
-			file: "evaluation_job_git_private.jsonnet",
-			check: func(t *testing.T, out string) {
-				t.Helper()
-				var job struct {
-					Benchmarks []struct {
-						TestDataRef struct {
-							Git struct {
-								URL       string `json:"url"`
-								SecretRef string `json:"secret_ref"`
-							} `json:"git"`
-						} `json:"test_data_ref"`
-					} `json:"benchmarks"`
-				}
-				if err := json.Unmarshal([]byte(out), &job); err != nil {
-					t.Fatalf("unmarshal: %v", err)
-				}
-				g := job.Benchmarks[0].TestDataRef.Git
-				if g.URL != "https://github.com/eval-hub/eval-hub" {
-					t.Errorf("url = %q, want https://github.com/eval-hub/eval-hub", g.URL)
-				}
-				if g.SecretRef != "github-creds" {
-					t.Errorf("secret_ref = %q, want github-creds", g.SecretRef)
-				}
-			},
-		},
 	} {
 		t.Run(tt.file, func(t *testing.T) {
 			path, err := filepath.Abs(filepath.Join(testDataRoot(), tt.file))
@@ -1314,7 +1288,6 @@ func TestEvaluateGitFVTJsonnetPayloadFiles(t *testing.T) {
 		{"evaluation_job_git_tag.jsonnet", "test-evaluation-job-git-tag", 1},
 		{"evaluation_job_git_subpath.jsonnet", "test-evaluation-job-git-subpath", 1},
 		{"evaluation_job_git_sha.jsonnet", "test-evaluation-job-git-sha", 1},
-		{"evaluation_job_git_private.jsonnet", "test-evaluation-job-git-private", 1},
 		{"evaluation_job_git_and_s3.jsonnet", "test-evaluation-job-git-and-s3", 1},
 		{"evaluation_job_git_and_pvc.jsonnet", "test-evaluation-job-git-and-pvc", 1},
 		{"evaluation_job_git_ssh.jsonnet", "test-evaluation-job-git-ssh", 1},

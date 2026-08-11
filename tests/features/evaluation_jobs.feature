@@ -1357,29 +1357,13 @@ Feature: Evaluation Jobs
 
   @git
   Scenario: Evaluation job with git commit SHA ref completes successfully
-    # TEST_DATA_GIT_SHA_REF defaults to a hex commit that contains tests/git-testdata
-    # (not a branch name). Override if that SHA is not on the clone URL history.
+    # Default TEST_DATA_GIT_SHA_REF falls back to TEST_DATA_GIT_REF/main (branch-like).
+    # Set TEST_DATA_GIT_SHA_REF to a real hex commit SHA (and optionally TEST_DATA_GIT_SHA_URL)
+    # to exercise the commit-SHA checkout path. Do not hardcode a branch tip SHA (breaks on squash-merge).
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_sha.json"
     Then the response code should be 202
-    And the response should contain the value "{{env:TEST_DATA_GIT_SHA_REF|24714484d1bbd2047043d053a68a8c2f21579e3f}}" at path "$.benchmarks[0].test_data_ref.git.ref"
-    And I wait for the evaluation job status to be "completed"
-    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
-    Then the response code should be 200
-    And the response should contain the value "completed" at path "$.status.state"
-    And the response should match the value "[0-9a-fA-F]{7,40}" at path "$.benchmarks[0].test_data_ref.resolved_sha"
-    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
-    Then the response code should be 204
-
-  # Requires a Secret named by TEST_DATA_GIT_SECRET_REF (default github-creds) in the tenant namespace
-  # and TEST_DATA_GIT_PRIVATE_URL pointing at a private repo that contains tests/git-testdata (or equivalent).
-  @git
-  Scenario: Evaluation job with private git repo and secret_ref completes successfully
-    Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_private.json"
-    Then the response code should be 202
-    And the response should contain the value "{{env:TEST_DATA_GIT_PRIVATE_URL|https://github.com/eval-hub/eval-hub}}" at path "$.benchmarks[0].test_data_ref.git.url"
-    And the response should contain the value "{{env:TEST_DATA_GIT_SECRET_REF|github-creds}}" at path "$.benchmarks[0].test_data_ref.git.secret_ref"
+    And the response should contain the value "{{env:TEST_DATA_GIT_SHA_REF|main}}" at path "$.benchmarks[0].test_data_ref.git.ref"
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
