@@ -57,9 +57,11 @@ func registerCustomValidators(instance *validator.Validate) error {
 	if err := instance.RegisterValidation("rfc1123_dns_label", validateRFC1123DNSLabel); err != nil {
 		return fmt.Errorf("register validator failed for rfc1123_dns_label: %w", err)
 	}
+	if err := instance.RegisterValidation("git_clone_url", validateGitCloneURL); err != nil {
+		return fmt.Errorf("register validator failed for git_clone_url: %w", err)
+	}
 	instance.RegisterStructValidation(evaluationJobConfig, api.EvaluationJobConfig{})
-	// Exactly one of s3 or pvc must be set in TestDataRef.
-	instance.RegisterStructValidation(validateTestDataRefMutualExclusion, api.TestDataRef{})
+	instance.RegisterStructValidation(validateGitTestDataRefAuth, api.GitTestDataRef{})
 	// hardware_profile_name is mutually exclusive with inline queue/cpu/memory/gpu.
 	instance.RegisterStructValidation(validateBenchmarkHardwareConfigExclusive, api.BenchmarkHardwareConfig{})
 	return nil
@@ -67,6 +69,22 @@ func registerCustomValidators(instance *validator.Validate) error {
 
 func validateRFC1123DNSLabel(fl validator.FieldLevel) bool {
 	return rfc1123DNSLabelRegex.MatchString(fl.Field().String())
+}
+
+func validateGitCloneURL(fl validator.FieldLevel) bool {
+	return api.ValidateGitCloneURL(fl.Field().String()) == nil
+}
+
+// validateGitTestDataRefAuth rejects http:// URLs when secret_ref is set so credentials
+// are not sent over cleartext.
+func validateGitTestDataRefAuth(sl validator.StructLevel) {
+	ref, ok := sl.Current().Interface().(api.GitTestDataRef)
+	if !ok {
+		return
+	}
+	if err := api.ValidateGitCloneURLAuth(ref.URL, strings.TrimSpace(ref.SecretRef) != ""); err != nil {
+		sl.ReportError(ref.URL, "url", "URL", "git_http_with_secret", err.Error())
+	}
 }
 
 // ValidateCollectionOverrides returns an error if any override references a
@@ -102,20 +120,6 @@ func ValidateCollectionOverrides(overrides []api.EvaluationBenchmarkConfig, coll
 		}
 	}
 	return nil
-}
-
-// validateTestDataRefMutualExclusion ensures exactly one of s3 or pvc is set.
-func validateTestDataRefMutualExclusion(sl validator.StructLevel) {
-	ref, ok := sl.Current().Interface().(api.TestDataRef)
-	if !ok {
-		return
-	}
-	if ref.S3 != nil && ref.PVC != nil {
-		sl.ReportError(ref.PVC, "pvc", "pvc", "test_data_ref_exclusive", "s3 and pvc are mutually exclusive")
-	}
-	if ref.S3 == nil && ref.PVC == nil {
-		sl.ReportError(ref.S3, "s3", "s3", "test_data_ref_required", "one of s3 or pvc must be set")
-	}
 }
 
 // validateBenchmarkHardwareConfigExclusive rejects combining a hardware profile name

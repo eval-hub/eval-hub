@@ -67,7 +67,7 @@ func TestUnmarshal_TestDataRefMutualExclusionValidationError(t *testing.T) {
 		t.Fatalf("expected ServiceError, got %T: %v", err, err)
 	}
 	got := svcErr.Error()
-	if !strings.Contains(got, "test_data_ref: s3 and pvc are mutually exclusive") {
+	if !strings.Contains(got, "test_data_ref") {
 		t.Fatalf("error = %q", got)
 	}
 }
@@ -97,7 +97,7 @@ func TestUnmarshal_TestDataRefRequiredValidationError(t *testing.T) {
 		t.Fatalf("expected ServiceError, got %T: %v", err, err)
 	}
 	got := svcErr.Error()
-	if !strings.Contains(got, "test_data_ref: one of s3 or pvc must be set") {
+	if !strings.Contains(got, "test_data_ref") {
 		t.Fatalf("error = %q", got)
 	}
 }

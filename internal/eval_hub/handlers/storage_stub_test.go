@@ -35,7 +35,8 @@ func (noopStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
 func (noopStorage) UpdateEvaluationJobStatus(_ string, _ api.OverallState, _ *api.MessageInfo) error {
 	return nil
 }
-func (noopStorage) CreateCollection(_ *api.CollectionResource) error { return nil }
+func (noopStorage) UpdateEvaluationJobResolvedSHA(_ string, _ int, _ string) error { return nil }
+func (noopStorage) CreateCollection(_ *api.CollectionResource) error               { return nil }
 func (noopStorage) GetCollection(_ string) (*api.CollectionResource, error) {
 	return nil, nil
 }
