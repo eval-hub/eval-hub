@@ -1357,13 +1357,12 @@ Feature: Evaluation Jobs
 
   @git
   Scenario: Evaluation job with git commit SHA ref completes successfully
-    # Default TEST_DATA_GIT_SHA_REF falls back to TEST_DATA_GIT_REF/main (branch-like).
-    # Set TEST_DATA_GIT_SHA_REF to a real 40-char commit SHA (and optionally TEST_DATA_GIT_SHA_URL)
-    # to exercise the commit-SHA checkout path.
+    # TEST_DATA_GIT_SHA_REF defaults to a hex commit that contains tests/git-testdata
+    # (not a branch name). Override if that SHA is not on the clone URL history.
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_sha.json"
     Then the response code should be 202
-    And the response should contain the value "{{env:TEST_DATA_GIT_SHA_REF|main}}" at path "$.benchmarks[0].test_data_ref.git.ref"
+    And the response should contain the value "{{env:TEST_DATA_GIT_SHA_REF|24714484d1bbd2047043d053a68a8c2f21579e3f}}" at path "$.benchmarks[0].test_data_ref.git.ref"
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
