@@ -756,6 +756,38 @@ func TestGitTestDataRef_PublicHostAccepted(t *testing.T) {
 	}
 }
 
+func TestGitTestDataRef_HTTPWithoutSecretAccepted(t *testing.T) {
+	validate := newTestValidator(t)
+	ref := api.GitTestDataRef{URL: "http://git.example.com/repo.git", Ref: "main"}
+	if err := validate.Struct(ref); err != nil {
+		t.Fatalf("expected no error for http without secret_ref, got: %v", err)
+	}
+}
+
+func TestGitTestDataRef_HTTPWithSecretRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	ref := api.GitTestDataRef{
+		URL:       "http://git.example.com/repo.git",
+		Ref:       "main",
+		SecretRef: "git-creds",
+	}
+	if err := validate.Struct(ref); err == nil {
+		t.Fatal("expected validation error for http url with secret_ref")
+	}
+}
+
+func TestGitTestDataRef_HTTPSWithSecretAccepted(t *testing.T) {
+	validate := newTestValidator(t)
+	ref := api.GitTestDataRef{
+		URL:       "https://github.com/org/repo.git",
+		Ref:       "main",
+		SecretRef: "git-creds",
+	}
+	if err := validate.Struct(ref); err != nil {
+		t.Fatalf("expected no error for https with secret_ref, got: %v", err)
+	}
+}
+
 func TestStatusEvent_BenchmarkStatusEventRequired(t *testing.T) {
 	validate := newTestValidator(t)
 	ev := api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{

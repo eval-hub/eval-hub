@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +15,7 @@ import (
 	git "github.com/go-git/go-git/v5"
 	gitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/transport/client"
 	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/go-git/go-git/v5/storage/memory"
 
@@ -62,6 +65,13 @@ func runGit() error {
 	if err != nil {
 		return err
 	}
+	if err := api.ValidateGitCloneURLAuth(repoURL, auth != nil); err != nil {
+		return fmt.Errorf("%s: %w", envGitURL, err)
+	}
+
+	// Re-validate every HTTP(S) redirect target so a public URL cannot bounce to a
+	// blocked host/IP (or cleartext HTTP when credentials are in use).
+	installSafeGitHTTPClient(auth != nil)
 
 	slog.Info("cloning repository", "url", repoURL, "ref", ref)
 
@@ -143,6 +153,44 @@ func writeGitMetadataTo(dir, commitSHA string) error {
 	}
 	defer func() { _ = root.Close() }()
 	return root.WriteFile(filepath.Base(runtimeenv.GitMetadataFile), []byte(commitSHA+"\n"), 0o600)
+}
+
+// installSafeGitHTTPClient replaces go-git's default http/https transports with a client
+// whose CheckRedirect re-runs SSRF and credential-scheme checks on every redirect target.
+func installSafeGitHTTPClient(withCredentials bool) {
+	safe := githttp.NewClient(newSafeGitHTTPClient(withCredentials))
+	client.InstallProtocol("http", safe)
+	client.InstallProtocol("https", safe)
+}
+
+// newSafeGitHTTPClient builds an http.Client that rejects unsafe redirect targets.
+// lookup may be nil to use net.LookupIP (production); tests inject a stub via
+// gitHTTPRedirectLookup.
+func newSafeGitHTTPClient(withCredentials bool) *http.Client {
+	return &http.Client{
+		Transport:     http.DefaultTransport,
+		CheckRedirect: gitHTTPCheckRedirect(withCredentials),
+	}
+}
+
+// gitHTTPRedirectLookup is the DNS lookup used when validating redirect targets.
+// Overridable in tests; nil means ValidateGitCloneURLResolved's default (net.LookupIP).
+var gitHTTPRedirectLookup func(host string) ([]net.IP, error)
+
+func gitHTTPCheckRedirect(withCredentials bool) func(req *http.Request, via []*http.Request) error {
+	return func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		}
+		target := req.URL.String()
+		if err := api.ValidateGitCloneURLResolved(target, gitHTTPRedirectLookup); err != nil {
+			return fmt.Errorf("redirect target blocked: %w", err)
+		}
+		if err := api.ValidateGitCloneURLAuth(target, withCredentials); err != nil {
+			return fmt.Errorf("redirect target blocked: %w", err)
+		}
+		return nil
+	}
 }
 
 // resolveGitAuth reads basic-auth credentials from the mounted secret dir.

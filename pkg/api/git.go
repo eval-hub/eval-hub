@@ -40,6 +40,26 @@ func ValidateGitCloneURL(raw string) error {
 	return nil
 }
 
+// ValidateGitCloneURLAuth rejects plain HTTP when credentials will be used for the clone,
+// so secret_ref / basic-auth material is not sent in the clear.
+func ValidateGitCloneURLAuth(raw string, withCredentials bool) error {
+	if !withCredentials {
+		return nil
+	}
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("invalid git url: %w", err)
+	}
+	if strings.EqualFold(u.Scheme, "http") {
+		return fmt.Errorf("git url with credentials must use https scheme")
+	}
+	return nil
+}
+
 // ValidateGitCloneURLResolved runs ValidateGitCloneURL then resolves the hostname
 // and rejects any address that is private, loopback, link-local, or unspecified.
 // lookup may be nil to use net.LookupIP.

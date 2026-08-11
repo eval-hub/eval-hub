@@ -155,6 +155,7 @@ type PVCTestDataRef struct {
 // GitTestDataRef represents a git repository source for test data.
 // The repository is cloned and checked out at Ref into /test_data before the adapter runs.
 // Only HTTP(S) URLs are supported; SSH URLs (git@host:...) are rejected by validation.
+// When SecretRef is set the URL must use https so credentials are not sent in the clear.
 // Private, loopback, link-local, and cluster-local hosts are rejected (SSRF protection).
 type GitTestDataRef struct {
 	URL       string `json:"url" mapstructure:"url" validate:"required,http_url,git_clone_url"`

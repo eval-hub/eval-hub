@@ -3493,7 +3493,7 @@
       },
       "TestDataRefGit": {
         "type": "object",
-        "description": "Git repository test data. Only applies when Eval Hub runs the benchmark as a\n**Kubernetes Job** (cluster execution). It does not apply to local-only evaluation runs.\n\nThe repository is cloned and checked out at **`ref`** into **`/test_data`** before\nthe adapter runs. If **`sub_path`** is provided, only that subdirectory is exposed.\n\nThe resolved commit SHA is recorded as **`resolved_sha`** on the parent\n**`test_data_ref`** object on the evaluation job response, providing commit-level\nreproducibility.\n\n**Private repositories** — supply a **`secret_ref`** pointing to a Kubernetes Secret\nof type `kubernetes.io/basic-auth` in the same namespace as the evaluation job:\n\n```yaml\napiVersion: v1\nkind: Secret\nmetadata:\n  name: my-git-credentials\ntype: kubernetes.io/basic-auth\nstringData:\n  username: my-username\n  password: ghp_xxxxxxxxxxxx  # Personal Access Token or password\n```\n\n**Public repositories** — omit `secret_ref`; the repository is cloned over HTTPS\nwithout credentials.\n\nDo not put credentials in the Eval Hub API request body; only reference an existing\nSecret via **`secret_ref`**.\n",
+        "description": "Git repository test data. Only applies when Eval Hub runs the benchmark as a\n**Kubernetes Job** (cluster execution). It does not apply to local-only evaluation runs.\n\nThe repository is cloned and checked out at **`ref`** into **`/test_data`** before\nthe adapter runs. If **`sub_path`** is provided, only that subdirectory is exposed.\n\nThe resolved commit SHA is recorded as **`resolved_sha`** on the parent\n**`test_data_ref`** object on the evaluation job response, providing commit-level\nreproducibility.\n\n**Public repositories** — omit `secret_ref`; the repository may be cloned over\nHTTP or HTTPS without credentials.\n\n**Private repositories** — supply a **`secret_ref`** and an **`https://`** URL\npointing to a Kubernetes Secret of type `kubernetes.io/basic-auth` in the same\nnamespace as the evaluation job:\n\n```yaml\napiVersion: v1\nkind: Secret\nmetadata:\n  name: my-git-credentials\ntype: kubernetes.io/basic-auth\nstringData:\n  username: my-username\n  password: ghp_xxxxxxxxxxxx  # Personal Access Token or password\n```\n\nDo not put credentials in the Eval Hub API request body; only reference an existing\nSecret via **`secret_ref`**.\n",
         "required": [
           "url",
           "ref"
@@ -3501,7 +3501,7 @@
         "properties": {
           "url": {
             "type": "string",
-            "description": "HTTPS URL of the git repository to clone. SSH URLs are not supported.\n",
+            "description": "HTTP(S) URL of the git repository to clone. SSH URLs are not supported.\nPlain `http://` is allowed only for unauthenticated clones; when **`secret_ref`**\nis set the URL must use **`https://`** so credentials are not sent in the clear.\n",
             "example": "https://github.com/my-org/my-eval-datasets.git"
           },
           "ref": {

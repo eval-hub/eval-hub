@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -654,4 +655,66 @@ func TestReadSecret_ViaOpenRoot(t *testing.T) {
 	if _, err := readSecret("../escape"); err == nil {
 		t.Error("traversal should return error")
 	}
+}
+
+func TestGitHTTPCheckRedirect(t *testing.T) {
+	orig := gitHTTPRedirectLookup
+	gitHTTPRedirectLookup = func(host string) ([]net.IP, error) {
+		switch host {
+		case "ok.example.com":
+			return []net.IP{net.ParseIP("1.2.3.4")}, nil
+		case "evil.example.com":
+			return []net.IP{net.ParseIP("10.0.0.5")}, nil
+		default:
+			return nil, &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}
+		}
+	}
+	t.Cleanup(func() { gitHTTPRedirectLookup = orig })
+
+	t.Run("allows safe https redirect", func(t *testing.T) {
+		check := gitHTTPCheckRedirect(false)
+		req, err := http.NewRequest(http.MethodGet, "https://ok.example.com/repo.git", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := check(req, []*http.Request{{}}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("blocks redirect to private IP host", func(t *testing.T) {
+		check := gitHTTPCheckRedirect(false)
+		req, err := http.NewRequest(http.MethodGet, "https://evil.example.com/repo.git", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = check(req, []*http.Request{{}})
+		if err == nil || !strings.Contains(err.Error(), "redirect target blocked") {
+			t.Fatalf("got %v, want redirect target blocked", err)
+		}
+	})
+
+	t.Run("blocks literal private IP redirect", func(t *testing.T) {
+		check := gitHTTPCheckRedirect(false)
+		req, err := http.NewRequest(http.MethodGet, "http://169.254.169.254/latest", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = check(req, []*http.Request{{}})
+		if err == nil || !strings.Contains(err.Error(), "redirect target blocked") {
+			t.Fatalf("got %v, want redirect target blocked", err)
+		}
+	})
+
+	t.Run("blocks http redirect when credentials are used", func(t *testing.T) {
+		check := gitHTTPCheckRedirect(true)
+		req, err := http.NewRequest(http.MethodGet, "http://ok.example.com/repo.git", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = check(req, []*http.Request{{}})
+		if err == nil || !strings.Contains(err.Error(), "must use https") {
+			t.Fatalf("got %v, want https required with credentials", err)
+		}
+	})
 }

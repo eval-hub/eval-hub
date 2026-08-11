@@ -61,6 +61,7 @@ func registerCustomValidators(instance *validator.Validate) error {
 		return fmt.Errorf("register validator failed for git_clone_url: %w", err)
 	}
 	instance.RegisterStructValidation(evaluationJobConfig, api.EvaluationJobConfig{})
+	instance.RegisterStructValidation(validateGitTestDataRefAuth, api.GitTestDataRef{})
 	// hardware_profile_name is mutually exclusive with inline queue/cpu/memory/gpu.
 	instance.RegisterStructValidation(validateBenchmarkHardwareConfigExclusive, api.BenchmarkHardwareConfig{})
 	return nil
@@ -72,6 +73,18 @@ func validateRFC1123DNSLabel(fl validator.FieldLevel) bool {
 
 func validateGitCloneURL(fl validator.FieldLevel) bool {
 	return api.ValidateGitCloneURL(fl.Field().String()) == nil
+}
+
+// validateGitTestDataRefAuth rejects http:// URLs when secret_ref is set so credentials
+// are not sent over cleartext.
+func validateGitTestDataRefAuth(sl validator.StructLevel) {
+	ref, ok := sl.Current().Interface().(api.GitTestDataRef)
+	if !ok {
+		return
+	}
+	if err := api.ValidateGitCloneURLAuth(ref.URL, strings.TrimSpace(ref.SecretRef) != ""); err != nil {
+		sl.ReportError(ref.URL, "url", "URL", "git_http_with_secret", err.Error())
+	}
 }
 
 // ValidateCollectionOverrides returns an error if any override references a

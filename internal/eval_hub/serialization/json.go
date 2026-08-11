@@ -47,6 +47,11 @@ func formatValidationError(errs validator.ValidationErrors) string {
 		if isTestDataRefSourceField(e.Field()) {
 			return "test_data_ref: one of s3, pvc, or git must be set"
 		}
+	case "git_http_with_secret":
+		if param := e.Param(); param != "" {
+			return param
+		}
+		return "git url with credentials must use https scheme"
 	case "hardware_config_exclusive":
 		if param := e.Param(); param != "" {
 			return fmt.Sprintf("hardware_config: %s", param)

@@ -68,6 +68,36 @@ func TestValidateGitCloneURLResolved(t *testing.T) {
 	}
 }
 
+func TestValidateGitCloneURLAuth(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name            string
+		url             string
+		withCredentials bool
+		wantErr         string
+	}{
+		{name: "https with creds", url: "https://github.com/org/repo.git", withCredentials: true},
+		{name: "http without creds", url: "http://git.example.com/repo.git", withCredentials: false},
+		{name: "http with creds", url: "http://git.example.com/repo.git", withCredentials: true, wantErr: "must use https"},
+		{name: "empty with creds", url: "", withCredentials: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateGitCloneURLAuth(tt.url, tt.withCredentials)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("ValidateGitCloneURLAuth(%q, %v) = %v, want nil", tt.url, tt.withCredentials, err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("ValidateGitCloneURLAuth(%q, %v) = %v, want substring %q", tt.url, tt.withCredentials, err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestLooksLikeHexSHA(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

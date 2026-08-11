@@ -2393,8 +2393,12 @@ components:
         **`test_data_ref`** object on the evaluation job response, providing commit-level
         reproducibility.
 
-        **Private repositories** — supply a **`secret_ref`** pointing to a Kubernetes Secret
-        of type `kubernetes.io/basic-auth` in the same namespace as the evaluation job:
+        **Public repositories** — omit `secret_ref`; the repository may be cloned over
+        HTTP or HTTPS without credentials.
+
+        **Private repositories** — supply a **`secret_ref`** and an **`https://`** URL
+        pointing to a Kubernetes Secret of type `kubernetes.io/basic-auth` in the same
+        namespace as the evaluation job:
 
         ```yaml
         apiVersion: v1
@@ -2407,9 +2411,6 @@ components:
           password: ghp_xxxxxxxxxxxx  # Personal Access Token or password
         ```
 
-        **Public repositories** — omit `secret_ref`; the repository is cloned over HTTPS
-        without credentials.
-
         Do not put credentials in the Eval Hub API request body; only reference an existing
         Secret via **`secret_ref`**.
       required:
@@ -2419,7 +2420,9 @@ components:
         url:
           type: string
           description: |
-            HTTPS URL of the git repository to clone. SSH URLs are not supported.
+            HTTP(S) URL of the git repository to clone. SSH URLs are not supported.
+            Plain `http://` is allowed only for unauthenticated clones; when **`secret_ref`**
+            is set the URL must use **`https://`** so credentials are not sent in the clear.
           example: https://github.com/my-org/my-eval-datasets.git
         ref:
           type: string
