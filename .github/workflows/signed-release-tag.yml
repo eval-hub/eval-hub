@@ -164,7 +164,7 @@ jobs:
     # SHA-pinned (repo policy requires full SHA): compile-generator must be true
     # because pre-built binary download needs a tag ref. Adds ~2m build time.
     # Ref: https://github.com/slsa-framework/slsa-github-generator/releases/tag/v2.1.0
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@bcb39c1a0aa1e68c09f445acae2ca1116e301104 # v2.1.0
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
     with:
       base64-subjects: ${{ needs.prepare.outputs.digests }}
       upload-assets: true
