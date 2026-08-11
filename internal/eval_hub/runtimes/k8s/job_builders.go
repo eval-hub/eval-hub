@@ -7,6 +7,7 @@ import (
 	"regexp"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/runtimeenv"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -66,6 +67,12 @@ const (
 	envEvalHubModeName              = "EVALHUB_MODE"
 	envTestDataS3BucketName         = "TEST_DATA_S3_BUCKET"
 	envTestDataS3KeyName            = "TEST_DATA_S3_KEY"
+	envTestDataGitURLName           = "TEST_DATA_GIT_URL"
+	envTestDataGitRefName           = "TEST_DATA_GIT_REF"
+	envTestDataGitSubPathName       = "TEST_DATA_GIT_SUBPATH"
+	testDataGitAuthVolumeName       = "test-data-git-auth"
+	initMetadataVolumeName          = "init-metadata" // emptyDir shared between init container and sidecar only
+	initMetadataMountPath           = runtimeenv.InitMetadataDir
 	defaultInitCPURequest           = "100m"
 	defaultInitCPULimit             = "500m"
 	defaultInitMemoryRequest        = "128Mi"

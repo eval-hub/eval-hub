@@ -159,15 +159,17 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		})
 	}
 
-	// Adapter must mount test-data volume when S3 test data is used so it can read data downloaded by init container.
-	if hasS3TestData(cfg) {
+	// PVC test data: mount the PVC directly — no init container required.
+	// Git and S3 are exclusive with PVC (enforced by the API validator).
+	// All test-data mounts are read-only on the adapter; result files go to /data.
+	if hasS3TestData(cfg) || hasGitTestData(cfg) {
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      testDataVolumeName,
 			MountPath: testDataMountPath,
+			ReadOnly:  true,
 		})
 	}
 
-	// PVC test data: mount the PVC directly — no init container required.
 	if hasPVCTestData(cfg) {
 		volumes = append(volumes, corev1.Volume{
 			Name: testDataVolumeName,
@@ -321,6 +323,17 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		})
 	}
 
+	// Mount the init-metadata volume on the sidecar so it can read .git-metadata written
+	// by the init container and report the resolved commit SHA to eval-hub.
+	// The volume is declared by initContainerVolumesAndMounts; only the mount is added here.
+	if hasGitTestData(cfg) {
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      initMetadataVolumeName,
+			MountPath: initMetadataMountPath,
+			ReadOnly:  true,
+		})
+	}
+
 	// Mount OCI credentials on the sidecar so it can proxy calls to the OCI registry.
 	// The runtime container declares the same volume; mergeVolumesByName deduplicates it by name,
 	// so declaring it here keeps this builder self-contained.
@@ -347,21 +360,22 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1.Volume, error) {
 	var initContainers []corev1.Container
 	var volumes []corev1.Volume
+
+	// Both S3 and git init containers use the same default resource limits.
+	initResources := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse(defaultInitCPURequest),
+			corev1.ResourceMemory: resource.MustParse(defaultInitMemoryRequest),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse(defaultInitCPULimit),
+			corev1.ResourceMemory: resource.MustParse(defaultInitMemoryLimit),
+		},
+	}
+
 	if hasS3TestData(cfg) {
 		if cfg.testDataInitImage == "" {
 			return nil, nil, fmt.Errorf("init image is required when S3 test data is configured")
-		}
-		initCommand := defaultTestDataInitCmd
-		initImage := cfg.testDataInitImage
-		initResources := corev1.ResourceRequirements{
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse(defaultInitCPURequest),
-				corev1.ResourceMemory: resource.MustParse(defaultInitMemoryRequest),
-			},
-			Limits: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse(defaultInitCPULimit),
-				corev1.ResourceMemory: resource.MustParse(defaultInitMemoryLimit),
-			},
 		}
 		volumes = append(volumes, corev1.Volume{
 			Name: testDataVolumeName,
@@ -380,9 +394,9 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 
 		initContainers = append(initContainers, corev1.Container{
 			Name:            initContainerName,
-			Image:           initImage,
+			Image:           cfg.testDataInitImage,
 			ImagePullPolicy: corev1.PullIfNotPresent,
-			Command:         []string{initCommand},
+			Command:         []string{defaultTestDataInitCmd},
 			Resources:       initResources,
 			Env: []corev1.EnvVar{
 				{Name: envTestDataS3BucketName, Value: cfg.testDataS3.bucket},
@@ -400,6 +414,71 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 					ReadOnly:  true,
 				},
 			},
+		})
+	}
+	if hasGitTestData(cfg) {
+		if cfg.testDataInitImage == "" {
+			return nil, nil, fmt.Errorf("init image is required when git test data is configured")
+		}
+		volumes = append(volumes,
+			corev1.Volume{
+				Name: testDataVolumeName,
+				VolumeSource: corev1.VolumeSource{
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
+				},
+			},
+			corev1.Volume{
+				Name: initMetadataVolumeName,
+				VolumeSource: corev1.VolumeSource{
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
+				},
+			},
+		)
+
+		envVars := []corev1.EnvVar{
+			{Name: envTestDataGitURLName, Value: cfg.testDataGit.url},
+			{Name: envTestDataGitRefName, Value: cfg.testDataGit.ref},
+		}
+		if cfg.testDataGit.subPath != "" {
+			envVars = append(envVars, corev1.EnvVar{Name: envTestDataGitSubPathName, Value: cfg.testDataGit.subPath})
+		}
+
+		gitInitVolumeMounts := []corev1.VolumeMount{
+			{
+				Name:      testDataVolumeName,
+				MountPath: testDataMountPath,
+			},
+			{
+				Name:      initMetadataVolumeName,
+				MountPath: initMetadataMountPath,
+			},
+		}
+
+		if cfg.testDataGit.secretRef != "" {
+			volumes = append(volumes, corev1.Volume{
+				Name: testDataGitAuthVolumeName,
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: cfg.testDataGit.secretRef,
+					},
+				},
+			})
+			gitInitVolumeMounts = append(gitInitVolumeMounts, corev1.VolumeMount{
+				Name:      testDataGitAuthVolumeName,
+				MountPath: testDataSecretMountPath,
+				ReadOnly:  true,
+			})
+		}
+
+		initContainers = append(initContainers, corev1.Container{
+			Name:            initContainerName,
+			Image:           cfg.testDataInitImage,
+			ImagePullPolicy: corev1.PullIfNotPresent,
+			Command:         []string{defaultTestDataInitCmd},
+			Resources:       initResources,
+			Env:             envVars,
+			SecurityContext: defaultSecurityContext(),
+			VolumeMounts:    gitInitVolumeMounts,
 		})
 	}
 	return initContainers, volumes, nil
@@ -443,6 +522,12 @@ func hasS3TestData(cfg *jobConfig) bool {
 
 func hasPVCTestData(cfg *jobConfig) bool {
 	return cfg.testDataPVC.claimName != ""
+}
+
+// hasGitTestData returns true when url and ref are both set.
+// secretRef is intentionally not required here — public repos need no auth.
+func hasGitTestData(cfg *jobConfig) bool {
+	return cfg.testDataGit.url != "" && cfg.testDataGit.ref != ""
 }
 
 func normalizeS3Key(key string) string {

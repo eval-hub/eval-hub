@@ -2458,6 +2458,14 @@ components:
         bucket: my-eval-bucket
         key: datasets/benchmark-a/v1
         secret_ref: my-s3-connection-secret
+    TestDataRefResolvedSHA:
+      type: string
+      readOnly: true
+      description: |
+        Resolved content identity for the test data source (e.g. git commit SHA).
+        Server-populated after the evaluation run for reproducibility of the exact data
+        state used. Not set on job submission.
+      example: a3f9c12e8b4d6f1c2e9a7b3d5f0e8c4a2b6d9e1f
     TestDataRefType:
       type: string
       description: |
@@ -2508,11 +2516,16 @@ components:
         The repository is cloned and checked out at **`ref`** into **`/test_data`** before
         the adapter runs. If **`sub_path`** is provided, only that subdirectory is exposed.
 
-        The resolved commit SHA is recorded as **`commit_sha`** within this object on the
-        evaluation job response, providing commit-level reproducibility.
+        The resolved commit SHA is recorded as **`resolved_sha`** on the parent
+        **`test_data_ref`** object on the evaluation job response, providing commit-level
+        reproducibility.
 
-        **Private repositories** — supply a **`secret_ref`** pointing to a Kubernetes Secret
-        of type `kubernetes.io/basic-auth` in the same namespace as the evaluation job:
+        **Public repositories** — omit `secret_ref`; the repository may be cloned over
+        HTTP or HTTPS without credentials.
+
+        **Private repositories** — supply a **`secret_ref`** and an **`https://`** URL
+        pointing to a Kubernetes Secret of type `kubernetes.io/basic-auth` in the same
+        namespace as the evaluation job:
 
         ```yaml
         apiVersion: v1
@@ -2525,9 +2538,6 @@ components:
           password: ghp_xxxxxxxxxxxx  # Personal Access Token or password
         ```
 
-        **Public repositories** — omit `secret_ref`; the repository is cloned over HTTPS
-        without credentials.
-
         Do not put credentials in the Eval Hub API request body; only reference an existing
         Secret via **`secret_ref`**.
       required:
@@ -2537,7 +2547,9 @@ components:
         url:
           type: string
           description: |
-            HTTPS URL of the git repository to clone. SSH URLs are not supported.
+            HTTP(S) URL of the git repository to clone. SSH URLs are not supported.
+            Plain `http://` is allowed only for unauthenticated clones; when **`secret_ref`**
+            is set the URL must use **`https://`**.
           example: https://github.com/my-org/my-eval-datasets.git
         ref:
           type: string
@@ -2563,15 +2575,6 @@ components:
             evaluation job namespace, mounted read-only into the git-clone init container.
             Omit for public repositories.
           example: my-git-credentials
-        commit_sha:
-          type: string
-          readOnly: true
-          description: |
-            Resolved commit SHA of the cloned repository. Populated by Eval Hub after the
-            git-clone init container completes — not set on job submission. Provides
-            commit-level reproducibility: the exact data state used for this evaluation run,
-            regardless of whether `ref` was a branch, tag, or SHA.
-          example: a3f9c12e8b4d6f1c2e9a7b3d5f0e8c4a2b6d9e1f
       example:
         url: https://github.com/my-org/my-eval-datasets.git
         ref: main
@@ -2599,7 +2602,7 @@ components:
 
         **`git`** — The specified repository is cloned and checked out at the given ref into
         **`/test_data`** before the adapter runs. The resolved commit SHA is recorded as
-        **`commit_sha`** within the `git` object on the evaluation job for reproducibility.
+        **`resolved_sha`** on this object on the evaluation job for reproducibility.
 
         Do not put credentials in the Eval Hub API request body; only reference an existing
         Secret via **`secret_ref`** (for S3 or git).
@@ -2608,6 +2611,8 @@ components:
           properties:
             s3:
               $ref: '#/components/schemas/TestDataRefS3'
+            resolved_sha:
+              $ref: '#/components/schemas/TestDataRefResolvedSHA'
             type:
               $ref: '#/components/schemas/TestDataRefType'
           additionalProperties: false
@@ -2618,6 +2623,8 @@ components:
           properties:
             pvc:
               $ref: '#/components/schemas/TestDataRefPVC'
+            resolved_sha:
+              $ref: '#/components/schemas/TestDataRefResolvedSHA'
             type:
               $ref: '#/components/schemas/TestDataRefType'
           additionalProperties: false
@@ -2628,6 +2635,8 @@ components:
           properties:
             git:
               $ref: '#/components/schemas/TestDataRefGit'
+            resolved_sha:
+              $ref: '#/components/schemas/TestDataRefResolvedSHA'
             type:
               $ref: '#/components/schemas/TestDataRefType'
           additionalProperties: false
@@ -2670,9 +2679,10 @@ components:
               $ref: '#/components/schemas/TestDataRef'
               description: |
                 Optional external test data mounted at **`/test_data`** for **Kubernetes Job** runs.
-                Set **`s3`** to download objects via a pre-run init container, or **`pvc`** to mount
-                an existing PersistentVolumeClaim read-only with no init container. Omit if the
-                benchmark does not need mounted files.
+                Set **`s3`** to download objects via a pre-run init container, **`pvc`** to mount
+                an existing PersistentVolumeClaim read-only with no init container, or **`git`**
+                to clone a repository via a pre-run init container. Omit if the benchmark does
+                not need mounted files.
     PassCriteriaWithDefault:
       type: object
       description: Pass/fail threshold criteria.
@@ -2904,6 +2914,17 @@ components:
               items:
                 type: string
               description: Non-fatal errors (e.g. partial list)
+    JobMeta:
+      type: object
+      description: |
+        Job-level metadata on status events that is not part of benchmark state.
+      properties:
+        resolved_sha:
+          type: string
+          description: |
+            Resolved content identity for the job's test data (e.g. git commit SHA).
+            Server-populated for git test data sources; not accepted on job create.
+          example: a3f9c12e8b4d6f1c2e9a7b3d5f0e8c4a2b6d9e1f
     BenchmarkStatusEvent:
       type: object
       description: Event payload to update benchmark status at runtime
@@ -2953,6 +2974,8 @@ components:
         logs_path:
           type: string
           description: Path to logs
+        job_meta:
+          $ref: '#/components/schemas/JobMeta'
     StatusEvent:
       type: object
       description: Status update event (e.g. for SSE)
@@ -3288,9 +3311,10 @@ components:
               $ref: '#/components/schemas/TestDataRef'
               description: |
                 Optional external test data mounted at **`/test_data`** for **Kubernetes Job** runs.
-                Set **`s3`** to download objects via a pre-run init container, or **`pvc`** to mount
-                an existing PersistentVolumeClaim read-only with no init container. Omit if the
-                benchmark does not need mounted files.
+                Set **`s3`** to download objects via a pre-run init container, **`pvc`** to mount
+                an existing PersistentVolumeClaim read-only with no init container, or **`git`**
+                to clone a repository via a pre-run init container. Omit if the benchmark does
+                not need mounted files.
     CollectionConfig:
       type: object
       description: Request to create or update a collection.
