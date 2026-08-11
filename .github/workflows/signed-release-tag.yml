@@ -148,7 +148,7 @@ jobs:
             dist/${{ steps.assets.outputs.archive }}
             dist/SHA256SUMS
 
-      - name: Upload attestation bundle to release
+      - name: Upload attestation bundle and trusted root to release
         if: steps.check.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -156,7 +156,11 @@ jobs:
           BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
         run: |
           set -euo pipefail
-          gh release upload "${TAG}" "${BUNDLE_PATH}#provenance.sigstore.json" --clobber
+          gh attestation trusted-root > dist/trusted_root.jsonl
+          gh release upload "${TAG}" \
+            "${BUNDLE_PATH}#provenance.sigstore.json" \
+            "dist/trusted_root.jsonl#trusted_root.jsonl" \
+            --clobber
 
   publish:
     needs: [prepare]
@@ -258,5 +262,10 @@ jobs:
           TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           set -euo pipefail
+          BODY="$(gh release view "${TAG}" --json body --jq '.body')"
+          if echo "${BODY}" | grep -q "Replace this body with curated release notes"; then
+            echo "::warning::Release ${TAG} still has placeholder notes. Skipping undraft — replace the body with curated release notes before publishing."
+            exit 0
+          fi
           gh release edit "${TAG}" --draft=false
           echo "Published release ${TAG}"
