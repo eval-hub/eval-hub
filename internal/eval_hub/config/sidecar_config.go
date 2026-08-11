@@ -14,6 +14,7 @@ const (
 )
 
 type SidecarConfig struct {
+	LocalMode        bool                    `mapstructure:"local_mode,omitempty" json:"local_mode,omitempty"`
 	BaseURL          string                  `mapstructure:"base_url,omitempty" json:"base_url,omitempty"`
 	Port             int32                   `mapstructure:"-" json:"-"` // derived from BaseURL by ResolvePort; never serialised
 	EvalHub          *EvalHubClientConfig    `mapstructure:"eval_hub" json:"eval_hub,omitempty"`

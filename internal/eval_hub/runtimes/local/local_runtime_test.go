@@ -923,6 +923,235 @@ func TestRunEvaluationJobCreatesLogFile(t *testing.T) {
 	}
 }
 
+// runSidecarEvalJob sets up a local runtime with sidecar enabled, runs an evaluation
+// job with model auth, and returns the benchmark output directory path.
+func runSidecarEvalJob(t *testing.T) string {
+	t.Helper()
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Model.Auth = &api.ModelAuth{SecretRef: "/home/user1/model-auth"}
+	dirName := localJobDir("job-1", 0, providerID, "bench-1")
+	sentinelPath := filepath.Join(dirName, "done")
+	providers := sampleLocalProviders(providerID, fmt.Sprintf("touch %s", sentinelPath))
+	cleanupDir(t, "job-1")
+
+	cfg := &config.Config{
+		Service: &config.ServiceConfig{Port: 8080},
+		Sidecar: &config.SidecarConfig{LocalMode: true, BaseURL: "http://localhost:8082"},
+	}
+	rt, _ := NewLocalRuntime(discardLogger(), cfg)
+	rt = rt.WithContext(testContext(t))
+
+	storage := &fakeStorage{providerConfigs: providers}
+
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("failed to resolve benchmarks: %v", err)
+	}
+
+	err = rt.RunEvaluationJob(evaluation, benchmarks, storage)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	waitForFile(t, sentinelPath, 5*time.Second)
+	return dirName
+}
+
+func TestRunEvaluationJobWithSidecarWritesSidecarJobInfo(t *testing.T) {
+	runSidecarEvalJob(t)
+
+	sidecarInfoPath := filepath.Join(localJobsBaseDir, "job-1", shared.SidecarJobInfoFileName)
+	data, err := os.ReadFile(sidecarInfoPath)
+	if err != nil {
+		t.Fatalf("expected sidecar-job-info.json to exist, got %v", err)
+	}
+
+	var info shared.SidecarJobInfo
+	if err := json.Unmarshal(data, &info); err != nil {
+		t.Fatalf("expected valid JSON, got %v", err)
+	}
+
+	if info.Model == nil {
+		t.Fatal("expected model config, got nil")
+	}
+	if info.Model.URL != "http://model.example" {
+		t.Fatalf("expected model URL %q, got %q", "http://model.example", info.Model.URL)
+	}
+	if info.Model.AuthSecretMountPath != "/home/user1/model-auth" {
+		t.Fatalf("expected auth path %q, got %q", "/home/user1/model-auth", info.Model.AuthSecretMountPath)
+	}
+	if info.Model.HTTPTimeout != shared.DefaultModelHTTPTimeout {
+		t.Fatalf("expected timeout %v, got %v", shared.DefaultModelHTTPTimeout, info.Model.HTTPTimeout)
+	}
+}
+
+func TestRunEvaluationJobWithSidecarRewritesJobSpec(t *testing.T) {
+	dirName := runSidecarEvalJob(t)
+
+	jobSpecPath := filepath.Join(dirName, "meta", "job.json")
+	data, err := os.ReadFile(jobSpecPath)
+	if err != nil {
+		t.Fatalf("expected job.json to exist, got %v", err)
+	}
+
+	var spec shared.JobSpec
+	if err := json.Unmarshal(data, &spec); err != nil {
+		t.Fatalf("expected valid JSON, got %v", err)
+	}
+
+	expectedModelURL := "http://localhost:8082/model/job-1"
+	if spec.Model.URL != expectedModelURL {
+		t.Fatalf("expected model URL %q, got %q", expectedModelURL, spec.Model.URL)
+	}
+
+	sidecarURL := "http://localhost:8082"
+	if spec.CallbackURL == nil {
+		t.Fatal("expected callback_url to be set, got nil")
+	}
+	if *spec.CallbackURL != sidecarURL {
+		t.Fatalf("expected callback_url %q, got %q", sidecarURL, *spec.CallbackURL)
+	}
+
+	if spec.Model.Auth == nil {
+		t.Fatal("expected model auth to be set, got nil")
+	}
+	if spec.Model.Auth.SecretRef != "/home/user1/model-auth" {
+		t.Fatalf("expected auth secret_ref %q, got %q", "/home/user1/model-auth", spec.Model.Auth.SecretRef)
+	}
+}
+
+func TestRunEvaluationJobWithoutSidecarNoRewrite(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	dirName := localJobDir("job-1", 0, providerID, "bench-1")
+	sentinelPath := filepath.Join(dirName, "done")
+	providers := sampleLocalProviders(providerID, fmt.Sprintf("touch %s", sentinelPath))
+	cleanupDir(t, "job-1")
+
+	callbackURL := "http://localhost:8080"
+	rt := &LocalRuntime{
+		logger:      discardLogger(),
+		ctx:         testContext(t),
+		tracker:     newTracker(),
+		callbackURL: &callbackURL,
+	}
+
+	storage := &fakeStorage{providerConfigs: providers}
+
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("failed to resolve benchmarks: %v", err)
+	}
+
+	err = rt.RunEvaluationJob(evaluation, benchmarks, storage)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	waitForFile(t, sentinelPath, 5*time.Second)
+
+	// Verify no sidecar-job-info.json was written
+	sidecarInfoPath := filepath.Join(localJobsBaseDir, "job-1", shared.SidecarJobInfoFileName)
+	if _, err := os.Stat(sidecarInfoPath); !os.IsNotExist(err) {
+		t.Fatalf("expected no sidecar-job-info.json when sidecar is disabled, but file exists")
+	}
+
+	// Verify job.json model URL is unchanged
+	jobSpecPath := filepath.Join(dirName, "meta", "job.json")
+	data, err := os.ReadFile(jobSpecPath)
+	if err != nil {
+		t.Fatalf("expected job.json to exist, got %v", err)
+	}
+
+	var spec shared.JobSpec
+	if err := json.Unmarshal(data, &spec); err != nil {
+		t.Fatalf("expected valid JSON, got %v", err)
+	}
+
+	if spec.Model.URL != "http://model.example" {
+		t.Fatalf("expected original model URL %q, got %q", "http://model.example", spec.Model.URL)
+	}
+
+	if spec.CallbackURL == nil || *spec.CallbackURL != callbackURL {
+		t.Fatalf("expected callback_url %q, got %v", callbackURL, spec.CallbackURL)
+	}
+}
+
+func TestNewLocalRuntimeWithSidecarConfig(t *testing.T) {
+	t.Parallel()
+	cfg := &config.Config{
+		Service: &config.ServiceConfig{Port: 8080},
+		Sidecar: &config.SidecarConfig{
+			LocalMode: true,
+			BaseURL:   "http://localhost:8082",
+		},
+	}
+	rt, err := NewLocalRuntime(discardLogger(), cfg)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	lr := rt.(*LocalRuntime)
+	if lr.sidecarBaseURL != "http://localhost:8082" {
+		t.Fatalf("expected sidecarBaseURL %q, got %q", "http://localhost:8082", lr.sidecarBaseURL)
+	}
+	if !lr.sidecarEnabled() {
+		t.Fatal("expected sidecar to be enabled")
+	}
+}
+
+func TestNewLocalRuntimeWithoutSidecarConfig(t *testing.T) {
+	t.Parallel()
+	cfg := &config.Config{
+		Service: &config.ServiceConfig{Port: 8080},
+	}
+	rt, err := NewLocalRuntime(discardLogger(), cfg)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	lr := rt.(*LocalRuntime)
+	if lr.sidecarBaseURL != "" {
+		t.Fatalf("expected empty sidecarBaseURL, got %q", lr.sidecarBaseURL)
+	}
+	if lr.sidecarEnabled() {
+		t.Fatal("expected sidecar to be disabled")
+	}
+}
+
+func TestNewLocalRuntimeSidecarEmptyBaseURL(t *testing.T) {
+	t.Parallel()
+	cfg := &config.Config{
+		Service: &config.ServiceConfig{Port: 8080},
+		Sidecar: &config.SidecarConfig{LocalMode: true},
+	}
+	rt, err := NewLocalRuntime(discardLogger(), cfg)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	lr := rt.(*LocalRuntime)
+	if lr.sidecarEnabled() {
+		t.Fatal("expected sidecar to be disabled when base_url is empty")
+	}
+}
+
+func TestNewLocalRuntimeSidecarWithoutLocalMode(t *testing.T) {
+	t.Parallel()
+	cfg := &config.Config{
+		Service: &config.ServiceConfig{Port: 8080},
+		Sidecar: &config.SidecarConfig{
+			BaseURL: "http://localhost:8080",
+		},
+	}
+	rt, err := NewLocalRuntime(discardLogger(), cfg)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	lr := rt.(*LocalRuntime)
+	if lr.sidecarEnabled() {
+		t.Fatal("expected sidecar to be disabled when local_mode is not set")
+	}
+}
+
 func TestDeleteEvaluationJobResources(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)

@@ -83,7 +83,7 @@ func cloneSidecarConfig(sc *config.SidecarConfig) *config.SidecarConfig {
 	if sc == nil {
 		return nil
 	}
-	out := &config.SidecarConfig{BaseURL: sc.BaseURL, Port: sc.Port}
+	out := &config.SidecarConfig{LocalMode: sc.LocalMode, BaseURL: sc.BaseURL, Port: sc.Port}
 	if sc.EvalHub != nil {
 		eh := *sc.EvalHub
 		out.EvalHub = &eh
