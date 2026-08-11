@@ -1021,6 +1021,107 @@ func TestRunEvaluationJobWithSidecarRewritesJobSpec(t *testing.T) {
 	}
 }
 
+func TestRunEvaluationJobWithSidecarModelDefaults(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Model.Auth = &api.ModelAuth{SecretRef: "/home/user1/model-auth"}
+	dirName := localJobDir("job-1", 0, providerID, "bench-1")
+	sentinelPath := filepath.Join(dirName, "done")
+	providers := sampleLocalProviders(providerID, fmt.Sprintf("touch %s", sentinelPath))
+	cleanupDir(t, "job-1")
+
+	customTimeout := 120 * time.Second
+	cfg := &config.Config{
+		Service: &config.ServiceConfig{Port: 8080},
+		Sidecar: &config.SidecarConfig{
+			LocalMode: true,
+			BaseURL:   "http://localhost:8082",
+			Model:     &config.SidecarModelConfig{HTTPTimeout: customTimeout},
+		},
+	}
+	rt, err := NewLocalRuntime(discardLogger(), cfg)
+	if err != nil {
+		t.Fatalf("NewLocalRuntime failed: %v", err)
+	}
+	rt = rt.WithContext(testContext(t))
+
+	storage := &fakeStorage{providerConfigs: providers}
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("failed to resolve benchmarks: %v", err)
+	}
+
+	err = rt.RunEvaluationJob(evaluation, benchmarks, storage)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	waitForFile(t, sentinelPath, 5*time.Second)
+
+	sidecarInfoPath := filepath.Join(localJobsBaseDir, "job-1", shared.SidecarJobInfoFileName)
+	data, err := os.ReadFile(sidecarInfoPath)
+	if err != nil {
+		t.Fatalf("expected sidecar-job-info.json to exist, got %v", err)
+	}
+
+	var info shared.SidecarJobInfo
+	if err := json.Unmarshal(data, &info); err != nil {
+		t.Fatalf("expected valid JSON, got %v", err)
+	}
+
+	if info.Model == nil {
+		t.Fatal("expected model config, got nil")
+	}
+	if info.Model.HTTPTimeout != customTimeout {
+		t.Fatalf("expected timeout %v, got %v", customTimeout, info.Model.HTTPTimeout)
+	}
+}
+
+func TestRunEvaluationJobSidecarRewriteError(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	cleanupDir(t, "job-1")
+
+	tctx := testContext(t)
+	logger := discardLogger()
+	statusCh := make(chan *api.StatusEvent, 1)
+	providers := sampleLocalProviders(providerID, "true")
+
+	rt := &LocalRuntime{
+		logger:         logger,
+		ctx:            tctx,
+		tracker:        newTracker(),
+		sidecarBaseURL: "/no-host",
+	}
+
+	storage := &fakeStorage{logger: logger, ctx: tctx, runStatusChan: statusCh, providerConfigs: providers}
+
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("failed to resolve benchmarks: %v", err)
+	}
+
+	err = rt.RunEvaluationJob(evaluation, benchmarks, storage)
+	if err != nil {
+		t.Fatalf("expected no synchronous error, got %v", err)
+	}
+
+	select {
+	case runStatus := <-statusCh:
+		if runStatus == nil {
+			t.Fatal("expected run status, got nil")
+		}
+		if runStatus.BenchmarkStatusEvent.Status != api.StateFailed {
+			t.Fatalf("expected status %q, got %q", api.StateFailed, runStatus.BenchmarkStatusEvent.Status)
+		}
+		if !strings.Contains(runStatus.BenchmarkStatusEvent.ErrorMessage.Message, "rewrite model URL for sidecar") {
+			t.Fatalf("expected error about sidecar rewrite, got %q", runStatus.BenchmarkStatusEvent.ErrorMessage.Message)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for failed benchmark status update")
+	}
+}
+
 func TestRunEvaluationJobWithoutSidecarNoRewrite(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
