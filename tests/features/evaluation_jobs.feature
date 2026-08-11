@@ -1292,6 +1292,206 @@ Feature: Evaluation Jobs
     And the response should contain the value "{{env:TEST_DATA_PVC_MISSING_CLAIM_NAME|evalhub-offline-test-data-does-not-exist}}" at path "$.status.benchmarks[0].error_message.message"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
+
+  # Git test-data source: init container clones into /test_data.
+  # Defaults: https://github.com/eval-hub/eval-hub @ main with sub_path tests/git-testdata
+  # (tokenizer + allenai ARC-Easy only). Override TEST_DATA_GIT_URL / REF / SUB_PATH if needed.
+  # Until tests/git-testdata is on the target ref, set TEST_DATA_GIT_REF to a branch that has it.
+  # Cluster needs egress to the git host (or an internal mirror via env). Opt in: GODOG_TAGS="@git".
+  @git
+  Scenario: Evaluation job with git test data completes successfully
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git.json"
+    Then the response code should be 202
+    And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
+    And the response should contain the value "pending" at path "$.status.state"
+    And the array at path "benchmarks" in the response should have length 2
+    And the response should contain the value "arc_easy" at path "$.benchmarks[0].id"
+    And the response should contain the value "lm_evaluation_harness" at path "$.benchmarks[0].provider_id"
+    And the response should contain the value "/test_data/tokenizer" at path "$.benchmarks[0].parameters.tokenizer"
+    And the response should contain the value "{{env:TEST_DATA_GIT_URL|https://github.com/eval-hub/eval-hub}}" at path "$.benchmarks[0].test_data_ref.git.url"
+    And the response should contain the value "{{env:TEST_DATA_GIT_REF|main}}" at path "$.benchmarks[0].test_data_ref.git.ref"
+    And the response should contain the value "{{env:TEST_DATA_GIT_SUB_PATH|tests/git-testdata}}" at path "$.benchmarks[0].test_data_ref.git.sub_path"
+    And the response should contain the value "truthfulqa_mc1" at path "$.benchmarks[1].id"
+    And the response should contain the value "{{env:TEST_DATA_GIT_NESTED_SUB_PATH|tests/git-testdata/staging_sub_path}}" at path "$.benchmarks[1].test_data_ref.git.sub_path"
+    # resolved_sha is server-populated after init; omitted/blank on create for every git benchmark
+    And the response should not contain the value "resolved_sha" at path "$.benchmarks[0].test_data_ref"
+    And the response should not contain the value "resolved_sha" at path "$.benchmarks[1].test_data_ref"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    And the response should contain the value "completed" at path "$.status.benchmarks[0].status"
+    And the response should contain the value "completed" at path "$.status.benchmarks[1].status"
+    And the response should contain the value "arc_easy" at path "$.status.benchmarks[0].id"
+    And the response should contain the value "truthfulqa_mc1" at path "$.status.benchmarks[1].id"
+    And the response should contain "results"
+    And the array at path "results.benchmarks" in the response should have length 2
+    And the response should contain the value "arc_easy" at path "$.results.benchmarks[0].id"
+    And the response should contain the value "truthfulqa_mc1" at path "$.results.benchmarks[1].id"
+    And the response should contain at least the value "0.2" at path "$.results.benchmarks[0].metrics.acc"
+    And the response should contain at least the value "0.2" at path "$.results.benchmarks[0].metrics.acc_norm"
+    And the response should contain the value "{{env:TEST_DATA_GIT_URL|https://github.com/eval-hub/eval-hub}}" at path "$.benchmarks[0].test_data_ref.git.url"
+    And the response should contain the value "{{env:TEST_DATA_GIT_REF|main}}" at path "$.benchmarks[0].test_data_ref.git.ref"
+    And the response should contain the value "{{env:TEST_DATA_GIT_SUB_PATH|tests/git-testdata}}" at path "$.benchmarks[0].test_data_ref.git.sub_path"
+    And the response should contain the value "{{env:TEST_DATA_GIT_NESTED_SUB_PATH|tests/git-testdata/staging_sub_path}}" at path "$.benchmarks[1].test_data_ref.git.sub_path"
+    And the response should match the value "[0-9a-fA-F]{7,40}" at path "$.benchmarks[0].test_data_ref.resolved_sha"
+    And the response should match the value "[0-9a-fA-F]{7,40}" at path "$.benchmarks[1].test_data_ref.resolved_sha"
+    And the response should contain the value "/test_data/tokenizer" at path "$.benchmarks[0].parameters.tokenizer"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
+  @git
+  Scenario: Evaluation job with git tag ref completes successfully
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_tag.json"
+    Then the response code should be 202
+    And the response should contain the value "{{env:TEST_DATA_GIT_TAG_REF|main}}" at path "$.benchmarks[0].test_data_ref.git.ref"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    And the response should match the value "[0-9a-fA-F]{7,40}" at path "$.benchmarks[0].test_data_ref.resolved_sha"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
+  @git
+  Scenario: Evaluation job with git commit SHA ref completes successfully
+    # Default TEST_DATA_GIT_SHA_REF falls back to TEST_DATA_GIT_REF/main (branch-like).
+    # Set TEST_DATA_GIT_SHA_REF to a real 40-char commit SHA (and optionally TEST_DATA_GIT_SHA_URL)
+    # to exercise the commit-SHA checkout path.
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_sha.json"
+    Then the response code should be 202
+    And the response should contain the value "{{env:TEST_DATA_GIT_SHA_REF|main}}" at path "$.benchmarks[0].test_data_ref.git.ref"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    And the response should match the value "[0-9a-fA-F]{7,40}" at path "$.benchmarks[0].test_data_ref.resolved_sha"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
+  # Requires a Secret named by TEST_DATA_GIT_SECRET_REF (default github-creds) in the tenant namespace
+  # and TEST_DATA_GIT_PRIVATE_URL pointing at a private repo that contains tests/git-testdata (or equivalent).
+  @git
+  Scenario: Evaluation job with private git repo and secret_ref completes successfully
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_private.json"
+    Then the response code should be 202
+    And the response should contain the value "{{env:TEST_DATA_GIT_PRIVATE_URL|https://github.com/eval-hub/eval-hub}}" at path "$.benchmarks[0].test_data_ref.git.url"
+    And the response should contain the value "{{env:TEST_DATA_GIT_SECRET_REF|github-creds}}" at path "$.benchmarks[0].test_data_ref.git.secret_ref"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    And the response should match the value "[0-9a-fA-F]{7,40}" at path "$.benchmarks[0].test_data_ref.resolved_sha"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
+  @git
+  @negative
+  Scenario: Cannot create evaluation job with both git and S3 test data
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_and_s3.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+    And the response should contain the value "exactly one of s3, pvc, or git must be set" at path "$.message"
+
+  @git
+  @negative
+  Scenario: Cannot create evaluation job with both git and PVC test data
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_and_pvc.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+    And the response should contain the value "exactly one of s3, pvc, or git must be set" at path "$.message"
+
+  @git
+  @negative
+  Scenario: Cannot create evaluation job with SSH git URL
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_ssh.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+    # SSH forms fail the http_url tag before git_clone_url (friendly scheme text is not surfaced).
+    And the response should contain the value "http_url" at path "$.message"
+
+  @git
+  @negative
+  Scenario: Cannot create evaluation job with blocked git host
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_blocked_host.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+    # Private/literal blocked hosts fail git_clone_url (default playground message today).
+    And the response should contain the value "git_clone_url" at path "$.message"
+
+  @git
+  @negative
+  Scenario: Cannot create evaluation job with client-supplied resolved_sha
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_resolved_sha_readonly.json"
+    Then the response code should be 400
+    And the response should contain the value "resolved_sha_read_only" at path "$.message_code"
+    And the response should contain the value "The field 'resolved_sha' is read-only and must not be set on create." at path "$.message"
+
+  @git
+  @negative
+  Scenario: Cannot create evaluation job with git missing url
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_missing_url.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+
+  @git
+  @negative
+  Scenario: Cannot create evaluation job with git missing ref
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_missing_ref.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+
+  @git
+  @negative
+  Scenario: Evaluation job with bad git ref fails
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_bad_ref.json"
+    Then the response code should be 202
+    And the response should contain the value "pending" at path "$.status.state"
+    And the response should contain the value "{{env:TEST_DATA_GIT_BAD_REF|this-ref-does-not-exist-evalhub-fvt}}" at path "$.benchmarks[0].test_data_ref.git.ref"
+    And I wait for the evaluation job status to be "failed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "failed" at path "$.status.state"
+    And the response should contain the value "failed" at path "$.status.benchmarks[0].status"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
+  @git
+  @negative
+  Scenario: Cannot create evaluation job with http git URL and secret_ref
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_http_with_secret.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+    And the response should contain the value "git url with credentials must use https scheme" at path "$.message"
+
+  @git
+  @negative
+  Scenario: Evaluation job with missing git sub_path fails
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_bad_subpath.json"
+    Then the response code should be 202
+    And the response should contain the value "pending" at path "$.status.state"
+    And the response should contain the value "{{env:TEST_DATA_GIT_BAD_SUB_PATH|this-path-does-not-exist-evalhub-fvt}}" at path "$.benchmarks[0].test_data_ref.git.sub_path"
+    And I wait for the evaluation job status to be "failed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "failed" at path "$.status.state"
+    And the response should contain the value "failed" at path "$.status.benchmarks[0].status"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
   
   @mlflow
   Scenario: Card generated for completed job with benchmarks

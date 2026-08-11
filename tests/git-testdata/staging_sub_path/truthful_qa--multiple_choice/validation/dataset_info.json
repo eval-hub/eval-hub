@@ -1,0 +1,70 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "multiple_choice",
+  "dataset_name": "truthful_qa",
+  "dataset_size": 610333,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/truthful_qa@741b8276f2d1982aa3d5b832d3ee81ed3b896490/multiple_choice/validation-00000-of-00001.parquet": {
+      "num_bytes": 271033,
+      "checksum": null
+    }
+  },
+  "download_size": 271033,
+  "features": {
+    "question": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "mc1_targets": {
+      "choices": {
+        "feature": {
+          "dtype": "string",
+          "_type": "Value"
+        },
+        "_type": "Sequence"
+      },
+      "labels": {
+        "feature": {
+          "dtype": "int32",
+          "_type": "Value"
+        },
+        "_type": "Sequence"
+      }
+    },
+    "mc2_targets": {
+      "choices": {
+        "feature": {
+          "dtype": "string",
+          "_type": "Value"
+        },
+        "_type": "Sequence"
+      },
+      "labels": {
+        "feature": {
+          "dtype": "int32",
+          "_type": "Value"
+        },
+        "_type": "Sequence"
+      }
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 881366,
+  "splits": {
+    "validation": {
+      "name": "validation",
+      "num_bytes": 610333,
+      "num_examples": 817,
+      "dataset_name": "truthful_qa"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}
