@@ -6,11 +6,16 @@ description: |
   The repository is cloned and checked out at **`ref`** into **`/test_data`** before
   the adapter runs. If **`sub_path`** is provided, only that subdirectory is exposed.
 
-  The resolved commit SHA is recorded as **`commit_sha`** within this object on the
-  evaluation job response, providing commit-level reproducibility.
+  The resolved commit SHA is recorded as **`resolved_sha`** on the parent
+  **`test_data_ref`** object on the evaluation job response, providing commit-level
+  reproducibility.
 
-  **Private repositories** — supply a **`secret_ref`** pointing to a Kubernetes Secret
-  of type `kubernetes.io/basic-auth` in the same namespace as the evaluation job:
+  **Public repositories** — omit `secret_ref`; the repository may be cloned over
+  HTTP or HTTPS without credentials.
+
+  **Private repositories** — supply a **`secret_ref`** and an **`https://`** URL
+  pointing to a Kubernetes Secret of type `kubernetes.io/basic-auth` in the same
+  namespace as the evaluation job:
 
   ```yaml
   apiVersion: v1
@@ -23,9 +28,6 @@ description: |
     password: ghp_xxxxxxxxxxxx  # Personal Access Token or password
   ```
 
-  **Public repositories** — omit `secret_ref`; the repository is cloned over HTTPS
-  without credentials.
-
   Do not put credentials in the Eval Hub API request body; only reference an existing
   Secret via **`secret_ref`**.
 required:
@@ -35,7 +37,9 @@ properties:
   url:
     type: string
     description: |
-      HTTPS URL of the git repository to clone. SSH URLs are not supported.
+      HTTP(S) URL of the git repository to clone. SSH URLs are not supported.
+      Plain `http://` is allowed only for unauthenticated clones; when **`secret_ref`**
+      is set the URL must use **`https://`**.
     example: https://github.com/my-org/my-eval-datasets.git
   ref:
     type: string
@@ -61,15 +65,6 @@ properties:
       evaluation job namespace, mounted read-only into the git-clone init container.
       Omit for public repositories.
     example: my-git-credentials
-  commit_sha:
-    type: string
-    readOnly: true
-    description: |
-      Resolved commit SHA of the cloned repository. Populated by Eval Hub after the
-      git-clone init container completes — not set on job submission. Provides
-      commit-level reproducibility: the exact data state used for this evaluation run,
-      regardless of whether `ref` was a branch, tag, or SHA.
-    example: a3f9c12e8b4d6f1c2e9a7b3d5f0e8c4a2b6d9e1f
 example:
   url: https://github.com/my-org/my-eval-datasets.git
   ref: main

@@ -31,6 +31,7 @@ allOf:
         $ref: ./TestDataRef.yaml
         description: |
           Optional external test data mounted at **`/test_data`** for **Kubernetes Job** runs.
-          Set **`s3`** to download objects via a pre-run init container, or **`pvc`** to mount
-          an existing PersistentVolumeClaim read-only with no init container. Omit if the
-          benchmark does not need mounted files.
+          Set **`s3`** to download objects via a pre-run init container, **`pvc`** to mount
+          an existing PersistentVolumeClaim read-only with no init container, or **`git`**
+          to clone a repository via a pre-run init container. Omit if the benchmark does
+          not need mounted files.

@@ -250,6 +250,23 @@ func TestRunMissingEnvVars(t *testing.T) {
 	}
 }
 
+func TestRunS3_RejectsNonPositiveTimeout(t *testing.T) {
+	t.Setenv(envBucket, "bucket")
+	t.Setenv(envKey, "prefix")
+	for _, raw := range []string{"0s", "-1s", "0"} {
+		t.Run(raw, func(t *testing.T) {
+			t.Setenv(envS3Timeout, raw)
+			err := runS3()
+			if err == nil {
+				t.Fatal("runS3() = nil, want error for non-positive timeout")
+			}
+			if !strings.Contains(err.Error(), envS3Timeout) {
+				t.Fatalf("runS3() error = %v, want mention of %s", err, envS3Timeout)
+			}
+		})
+	}
+}
+
 func TestDownloadObjectWritesNestedFile(t *testing.T) {
 	t.Parallel()
 
