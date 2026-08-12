@@ -3231,26 +3231,25 @@
         "type": "object",
         "description": "Model specification for evaluation requests",
         "required": [
-          "url",
           "name"
         ],
         "properties": {
           "url": {
             "type": "string",
-            "description": "Model URL"
+            "description": "The model URL.\n**Note that if `pre_recorded_data` is set for all `test_data_ref.type` in the `benchmarks` section then `url` will not be `required` for the job run, in all other cases a `url` is required.**\n"
           },
           "name": {
             "type": "string",
-            "description": "Model name"
+            "description": "The model name.\n"
           },
           "parameters": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Model specific parameters"
+            "description": "The model specific parameters.\n"
           },
           "auth": {
             "$ref": "#/components/schemas/ModelAuth",
-            "description": "The model authentication configuration"
+            "description": "The model authentication configuration.\n"
           }
         }
       },
@@ -3259,7 +3258,8 @@
         "title": "EvaluationJobConfigCommon1",
         "description": "The evaluation job request configuration.\n",
         "required": [
-          "name"
+          "name",
+          "model"
         ],
         "properties": {
           "name": {
@@ -3279,7 +3279,7 @@
           },
           "model": {
             "$ref": "#/components/schemas/ModelRef",
-            "description": "The model to evaluate.\n\n**Note that if `pre_recorded_data` is set for all `test_data_ref.type` in the `benchmarks` section then `model` will not be `required` for the job run, in all other cases a `model` is required.**\n"
+            "description": "The model to evaluate, or the model that was used to generate the pre-recorded data.\n"
           }
         }
       },

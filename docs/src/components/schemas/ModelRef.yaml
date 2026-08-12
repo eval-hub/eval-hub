@@ -1,19 +1,26 @@
 type: object
 description: Model specification for evaluation requests
 required:
-  - url
   - name
 properties:
   url:
     type: string
-    description: Model URL
+    description: >
+      The model URL.
+
+      **Note that if `pre_recorded_data` is set for all `test_data_ref.type`
+      in the `benchmarks` section then `url` will not be `required` for the job run,
+      in all other cases a `url` is required.**
   name:
     type: string
-    description: Model name
+    description: >
+      The model name.
   parameters:
     type: object
     additionalProperties: true
-    description: Model specific parameters
+    description: >
+      The model specific parameters.
   auth:
     $ref: ./ModelAuth.yaml
-    description: The model authentication configuration
+    description: >
+      The model authentication configuration.
