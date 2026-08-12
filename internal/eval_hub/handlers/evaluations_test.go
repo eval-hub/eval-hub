@@ -1588,3 +1588,109 @@ func TestHandleCreateEvaluationValidatesEvaluationHardwareConfigFallback(t *test
 		t.Fatalf("expected response evaluation.hardware_config, got %#v", created.HardwareConfig)
 	}
 }
+
+func TestHandleCreateEvaluationRejectsEmptyModelURL_WithRuntime(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	providerConfigs := map[string]api.ProviderResource{
+		"garak": {
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-1"},
+				},
+			},
+		},
+	}
+	storage := &fakeStorage{providerConfigs: providerConfigs}
+	runtime := &fakeRuntime{}
+	validate := testhelpers.NewValidator(t)
+	h := handlers.New(storage, validate, runtime, nil, nil, nil)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-model-url", logger, "test-user", "test-tenant")
+
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+		body:        []byte(`{"name":"test-job","model":{"name":"model"},"benchmarks":[{"id":"bench-1","provider_id":"garak"}]}`),
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCreateEvaluation(ctx, req, resp)
+
+	if recorder.Code == 202 {
+		t.Fatal("expected rejection when model URL is empty and benchmarks do not have pre_recorded_data")
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "model_url_required") {
+		t.Fatalf("expected model_url_required error in body, got: %s", body)
+	}
+}
+
+func TestHandleCreateEvaluationAcceptsEmptyModelURL_AllPreRecordedData(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	providerConfigs := map[string]api.ProviderResource{
+		"garak": {
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-1"},
+				},
+			},
+		},
+	}
+	storage := &fakeStorage{providerConfigs: providerConfigs}
+	runtime := &fakeRuntime{}
+	validate := testhelpers.NewValidator(t)
+	h := handlers.New(storage, validate, runtime, nil, nil, nil)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-pre-recorded", logger, "test-user", "test-tenant")
+
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+		body:        []byte(`{"name":"test-job","model":{"name":"model"},"benchmarks":[{"id":"bench-1","provider_id":"garak","test_data_ref":{"type":"pre_recorded_data","s3":{"bucket":"b","key":"k","secret_ref":"s"}}}]}`),
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCreateEvaluation(ctx, req, resp)
+
+	if recorder.Code != 202 {
+		t.Fatalf("expected 202 when all benchmarks have pre_recorded_data and model URL is empty, got %d: %s",
+			recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestHandleCreateEvaluationRejectsEmptyModelURL_MixedBenchmarks(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	providerConfigs := map[string]api.ProviderResource{
+		"garak": {
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-1"},
+					{ID: "bench-2"},
+				},
+			},
+		},
+	}
+	storage := &fakeStorage{providerConfigs: providerConfigs}
+	runtime := &fakeRuntime{}
+	validate := testhelpers.NewValidator(t)
+	h := handlers.New(storage, validate, runtime, nil, nil, nil)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-mixed", logger, "test-user", "test-tenant")
+
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+		body:        []byte(`{"name":"test-job","model":{"name":"model"},"benchmarks":[{"id":"bench-1","provider_id":"garak","test_data_ref":{"type":"pre_recorded_data","s3":{"bucket":"b","key":"k","secret_ref":"s"}}},{"id":"bench-2","provider_id":"garak"}]}`),
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCreateEvaluation(ctx, req, resp)
+
+	if recorder.Code == 202 {
+		t.Fatal("expected rejection when model URL is empty and only some benchmarks have pre_recorded_data")
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "model_url_required") {
+		t.Fatalf("expected model_url_required error in body, got: %s", body)
+	}
+}
