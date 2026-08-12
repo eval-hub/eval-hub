@@ -14,11 +14,11 @@ import (
 )
 
 // OCIAuthConfigPathDefault is the default path for the registry auth config file. Must match the OCI secret
-// mount path on adapter and sidecar: internal/runtimes/k8s/job_builders.go ociCredentialsMountPath.
+// mount path on adapter and sidecar: internal/eval_hub/runtimes/k8s/job_builders.go ociAuthMountPath.
 const OCIAuthConfigPathDefault = "/etc/evalhub/.docker/config.json"
 
 // JobSpecPathDefault is the default path for the job spec file. Must match the job-spec mount on the sidecar:
-// internal/runtimes/k8s/job_builders.go jobSpecMountPath + subPath jobSpecFileName.
+// internal/eval_hub/runtimes/k8s/job_builders.go jobSpecMountPath + subPath jobSpecFileName.
 const JobSpecPathDefault = "/meta/job.json"
 
 func newOciProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseProxy, *proxy.OCITokenProducer, string, error) {

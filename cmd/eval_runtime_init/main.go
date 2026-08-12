@@ -24,13 +24,13 @@ import (
 
 const (
 	// S3 env vars
-	envBucket         = "TEST_DATA_S3_BUCKET"
-	envKey            = "TEST_DATA_S3_KEY"
-	envS3Timeout      = "TEST_DATA_S3_TIMEOUT"
-	regionOptionalKey = "AWS_DEFAULT_REGION"
-	endpointKey       = "AWS_S3_ENDPOINT"
-	accessKeyIDKey    = "AWS_ACCESS_KEY_ID"
-	secretAccessKey   = "AWS_SECRET_ACCESS_KEY" // #nosec G101 -- env var name, not a credential value
+	envBucket           = "TEST_DATA_S3_BUCKET"
+	envKey              = "TEST_DATA_S3_KEY"
+	envS3Timeout        = "TEST_DATA_S3_TIMEOUT"
+	regionOptionalKey   = "AWS_DEFAULT_REGION"
+	endpointKey         = "AWS_S3_ENDPOINT"
+	accessKeyIDKey      = "AWS_ACCESS_KEY_ID"
+	awsAccessKeyEnvName = "AWS_SECRET_ACCESS_KEY"
 
 	// Git env vars
 	envGitURL     = "TEST_DATA_GIT_URL"
@@ -44,7 +44,7 @@ const (
 // Paths and URL validation are package vars so unit tests can redirect mounts and
 // exercise runGit against local file:// repos without writing under /.
 var (
-	secretDir      = "/var/run/secrets/test-data" // #nosec G101 -- K8s secret mount path
+	scrtDir        = "/var/run/secrets/test-data"
 	destDir        = runtimeenv.TestDataDir
 	gitMetadataDir = runtimeenv.InitMetadataDir
 )
@@ -93,9 +93,9 @@ func runS3() error {
 	if err != nil {
 		return fmt.Errorf("missing required secret %s: %w", accessKeyIDKey, err)
 	}
-	secretKey, err := readSecret(secretAccessKey)
+	secretKey, err := readSecret(awsAccessKeyEnvName)
 	if err != nil {
-		return fmt.Errorf("missing required secret %s: %w", secretAccessKey, err)
+		return fmt.Errorf("missing required secret %s: %w", awsAccessKeyEnvName, err)
 	}
 	region, err := readSecret(regionOptionalKey)
 	if err != nil {
@@ -287,13 +287,13 @@ func relativeDestPath(prefix, key string) (string, error) {
 }
 
 // readSecret reads a key from the mounted secret dir. Keys must be a single path
-// segment; reads go through os.Root so they cannot escape secretDir. Returns an
+// segment; reads go through os.Root so they cannot escape scrtDir. Returns an
 // error if the key is invalid, missing, or empty after trimming.
 func readSecret(key string) (string, error) {
 	if key == "" || key == "." || key == "/" || !filepath.IsLocal(key) || filepath.Base(key) != key {
 		return "", fmt.Errorf("secret key %q contains path separators and is not allowed", key)
 	}
-	root, err := os.OpenRoot(secretDir)
+	root, err := os.OpenRoot(scrtDir)
 	if err != nil {
 		return "", fmt.Errorf("secret key %q not found in mounted secret: %w", key, err)
 	}

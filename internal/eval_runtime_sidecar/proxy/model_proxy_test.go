@@ -13,6 +13,20 @@ import (
 	"testing"
 )
 
+func TestLoadSecretCache_OpenRootFails(t *testing.T) {
+	t.Parallel()
+	var logBuf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	missing := filepath.Join(t.TempDir(), "no-such-mount")
+	cache := loadSecretCache(missing, log)
+	if len(cache) != 0 {
+		t.Fatalf("cache = %#v, want empty", cache)
+	}
+	if !strings.Contains(logBuf.String(), "model secret mount unreadable") {
+		t.Fatalf("logs = %q, want unreadable mount warning", logBuf.String())
+	}
+}
+
 func TestGetOrCreateRequestID(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set(globalTransactionIDHeader, "incoming-req-id")

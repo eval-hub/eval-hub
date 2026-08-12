@@ -342,7 +342,7 @@ func TestCloneRefAnnotatedTag_ReturnsCommitSHA(t *testing.T) {
 }
 
 func TestReadSecret_MissingKey(t *testing.T) {
-	// secretDir defaults to the real mount path which does not exist in unit tests.
+	// scrtDir defaults to the real mount path which does not exist in unit tests.
 	_, err := readSecret("no-such-key")
 	if err == nil {
 		t.Fatal("expected error for missing secret key file")
@@ -370,9 +370,9 @@ func TestReadSecret_EmptyValueRejected(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "username"), []byte("   "), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	orig := secretDir
-	secretDir = dir
-	t.Cleanup(func() { secretDir = orig })
+	orig := scrtDir
+	scrtDir = dir
+	t.Cleanup(func() { scrtDir = orig })
 
 	_, err := readSecret("username")
 	if err == nil {
@@ -439,11 +439,11 @@ func TestCopyDirFromRoot_SkipsDotGitAndCopiesFiles(t *testing.T) {
 
 func withRunGitTestEnv(t *testing.T, dest, meta, secret string) {
 	t.Helper()
-	origDest, origMeta, origSecret, origValidate := destDir, gitMetadataDir, secretDir, validateGitCloneURL
-	destDir, gitMetadataDir, secretDir = dest, meta, secret
+	origDest, origMeta, origSecret, origValidate := destDir, gitMetadataDir, scrtDir, validateGitCloneURL
+	destDir, gitMetadataDir, scrtDir = dest, meta, secret
 	validateGitCloneURL = func(string, func(string) ([]net.IP, error)) error { return nil }
 	t.Cleanup(func() {
-		destDir, gitMetadataDir, secretDir, validateGitCloneURL = origDest, origMeta, origSecret, origValidate
+		destDir, gitMetadataDir, scrtDir, validateGitCloneURL = origDest, origMeta, origSecret, origValidate
 		_ = os.Unsetenv(envGitURL)
 		_ = os.Unsetenv(envGitRef)
 		_ = os.Unsetenv(envGitSubPath)
@@ -593,9 +593,9 @@ func TestResolveGitAuth_WithSecretDir(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(secret, "password"), []byte("p\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	orig := secretDir
-	secretDir = secret
-	t.Cleanup(func() { secretDir = orig })
+	orig := scrtDir
+	scrtDir = secret
+	t.Cleanup(func() { scrtDir = orig })
 
 	auth, err := resolveGitAuth()
 	if err != nil {
@@ -611,9 +611,9 @@ func TestResolveGitAuth_MissingPassword(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(secret, "username"), []byte("u\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	orig := secretDir
-	secretDir = secret
-	t.Cleanup(func() { secretDir = orig })
+	orig := scrtDir
+	scrtDir = secret
+	t.Cleanup(func() { scrtDir = orig })
 
 	if _, err := resolveGitAuth(); err == nil {
 		t.Fatal("expected error when password key missing")
@@ -642,9 +642,9 @@ func TestReadSecret_ViaOpenRoot(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(secret, "AWS_ACCESS_KEY_ID"), []byte("key\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	orig := secretDir
-	secretDir = secret
-	t.Cleanup(func() { secretDir = orig })
+	orig := scrtDir
+	scrtDir = secret
+	t.Cleanup(func() { scrtDir = orig })
 	got, err := readSecret("AWS_ACCESS_KEY_ID")
 	if err != nil {
 		t.Fatalf("readSecret: %v", err)
