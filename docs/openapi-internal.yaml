@@ -2475,7 +2475,7 @@ components:
     TestDataRefType:
       type: string
       description: |
-        The type of test data being referenced, the default is `data_set` if not specified. If `pre_recorded_data` is set for all benchmarks then a model section will not be mandatory for the job run.
+        The type of test data being referenced, the default is `data_set` if not specified. The `model` section remains required for all job runs; however, if `pre_recorded_data` is set for all benchmarks then `model.url` may be omitted.
       enum:
         - data_set
         - pre_recorded_data
