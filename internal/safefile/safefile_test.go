@@ -88,6 +88,33 @@ func TestOpenAndCreate(t *testing.T) {
 	}
 }
 
+func TestOpenAndCreate_RejectsNonLocal(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	for _, name := range []string{"", "..", "/etc/passwd"} {
+		if _, err := safefile.Open(dir, name); err == nil {
+			t.Fatalf("Open(%q): expected error", name)
+		}
+		if _, err := safefile.Create(dir, name); err == nil {
+			t.Fatalf("Create(%q): expected error", name)
+		}
+	}
+}
+
+func TestOpenRootFailures(t *testing.T) {
+	t.Parallel()
+	missingRoot := filepath.Join(t.TempDir(), "does-not-exist")
+	if _, err := safefile.ReadFile(missingRoot, "x.txt"); err == nil {
+		t.Fatal("ReadFile: expected OpenRoot error")
+	}
+	if _, err := safefile.Open(missingRoot, "x.txt"); err == nil {
+		t.Fatal("Open: expected OpenRoot error")
+	}
+	if _, err := safefile.Create(missingRoot, "x.txt"); err == nil {
+		t.Fatal("Create: expected OpenRoot error")
+	}
+}
+
 func TestReadFile_SymlinkEscape(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

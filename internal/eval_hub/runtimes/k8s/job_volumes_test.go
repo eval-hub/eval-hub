@@ -7,6 +7,42 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+func TestBuildJobSidecarMountsMLFlowToken(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:             "job-mlflow-token",
+		resourceGUID:      "guid-mlflow",
+		benchmarkIndex:    0,
+		namespace:         "default",
+		providerID:        "provider-1",
+		benchmarkID:       "bench-1",
+		adapterImage:      "adapter:latest",
+		defaultEnv:        []api.EnvVar{},
+		mlflowTrackingURI: "http://mlflow:5000",
+	}
+	job, err := buildJob(cfg)
+	if err != nil {
+		t.Fatalf("buildJob: %v", err)
+	}
+	foundVol := findVolume(job.Spec.Template.Spec.Volumes, mlflowTokenVolumeName)
+	if foundVol == nil {
+		t.Fatalf("expected volume %q", mlflowTokenVolumeName)
+	}
+	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
+	if sidecar == nil {
+		t.Fatal("expected sidecar init container")
+	}
+	foundMount := findVolumeMount(sidecar.VolumeMounts, mlflowTokenVolumeName)
+	if foundMount == nil {
+		t.Fatalf("expected sidecar mount %q", mlflowTokenVolumeName)
+	}
+	if foundMount.MountPath != mlflowAuthMountPath {
+		t.Fatalf("MountPath = %q, want %q", foundMount.MountPath, mlflowAuthMountPath)
+	}
+	if !foundMount.ReadOnly {
+		t.Fatal("expected read-only mlflow token mount")
+	}
+}
+
 func TestBuildJobWithOCICredentials(t *testing.T) {
 	cfg := &jobConfig{
 		jobID:                "job-oci",
