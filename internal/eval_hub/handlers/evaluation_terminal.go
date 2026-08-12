@@ -53,20 +53,20 @@ func (h *Handlers) onEvaluationJobUpdated(
 // notifyThresholdViolations emits EvaluationThresholdViolated signals for every benchmark result
 // that has a failing threshold test. Signals are best-effort: errors are absorbed by the runtime.
 func (h *Handlers) notifyThresholdViolations(ctx context.Context, job *api.EvaluationJobResource, logger *slog.Logger) {
-	for i, bench := range job.Results.Benchmarks {
+	for _, bench := range job.Results.Benchmarks {
 		if bench.Test == nil || bench.Test.Pass {
 			continue
 		}
 		if logger != nil {
 			logger.InfoContext(ctx, "threshold violation detected",
 				"job_id", job.Resource.ID,
-				"benchmark_index", i,
+				"benchmark_index", bench.BenchmarkIndex,
 				"metric", bench.Test.PrimaryScoreMetric,
 				"actual", bench.Test.PrimaryScore,
 				"threshold", bench.Test.Threshold,
 			)
 		}
-		h.runtime.NotifyThresholdViolation(ctx, job, i, bench.Test.PrimaryScoreMetric, bench.Test.PrimaryScore, bench.Test.Threshold)
+		h.runtime.NotifyThresholdViolation(ctx, job, bench.BenchmarkIndex, bench.Test.PrimaryScoreMetric, bench.Test.PrimaryScore, bench.Test.Threshold)
 	}
 }
 
