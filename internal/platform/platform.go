@@ -1,12 +1,14 @@
 package platform
 
 import (
-	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/eval-hub/eval-hub/internal/safefile"
 )
 
 func readFile(path string) string {
-	content, err := os.ReadFile(path) // #nosec G304 -- platform metadata path from Kubernetes downward API
+	content, err := safefile.ReadFile(filepath.Dir(path), filepath.Base(path))
 	if err != nil {
 		return ""
 	}

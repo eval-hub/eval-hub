@@ -8,11 +8,12 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
+	"github.com/eval-hub/eval-hub/internal/safefile"
 )
 
 // TokenResponse is the JSON response from an OCI registry token endpoint.
@@ -75,7 +76,7 @@ type registryAuthConfig struct {
 // and repository from exports.oci.coordinates using shared.JobSpec. Host is normalized to a URL (https:// if no scheme).
 // Returns ("", "", nil) when the file has no OCI exports; returns ("", "", err) on read/parse errors.
 func GetOCICoordinatesFromJobSpec(path string) (host, repository string, err error) {
-	data, err := os.ReadFile(path) // #nosec G304 -- job spec path from sidecar configuration
+	data, err := safefile.ReadFile(filepath.Dir(path), filepath.Base(path))
 	if err != nil {
 		return "", "", fmt.Errorf("read job spec: %w", err)
 	}
@@ -106,7 +107,7 @@ func LoadTokenProducerFromOCISecret(ociSecretMountPath, registryHost, repository
 	if httpClient == nil {
 		return nil, fmt.Errorf("oci http client is required")
 	}
-	data, err := os.ReadFile(ociSecretMountPath) // #nosec G304 -- OCI secret mount path from configuration
+	data, err := safefile.ReadFile(filepath.Dir(ociSecretMountPath), filepath.Base(ociSecretMountPath))
 	if err != nil {
 		return nil, fmt.Errorf("read OCI secret: %w", err)
 	}
