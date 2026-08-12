@@ -240,7 +240,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				}
 			}
 			if (evaluation.Model != nil) &&
-				(evaluation.Model.URL == "") &&
+				(strings.TrimSpace(evaluation.Model.URL) == "") &&
 				!allBenchmarksHavePreRecordedData(benchmarks) {
 				return serviceerrors.NewServiceError(messages.ModelURLRequired)
 			}
