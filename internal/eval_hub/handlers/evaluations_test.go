@@ -1616,8 +1616,8 @@ func TestHandleCreateEvaluationRejectsEmptyModelURL_WithRuntime(t *testing.T) {
 
 	h.HandleCreateEvaluation(ctx, req, resp)
 
-	if recorder.Code == 202 {
-		t.Fatal("expected rejection when model URL is empty and benchmarks do not have pre_recorded_data")
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
 	}
 	body := recorder.Body.String()
 	if !strings.Contains(body, "model_url_required") {
@@ -1686,8 +1686,8 @@ func TestHandleCreateEvaluationRejectsEmptyModelURL_MixedBenchmarks(t *testing.T
 
 	h.HandleCreateEvaluation(ctx, req, resp)
 
-	if recorder.Code == 202 {
-		t.Fatal("expected rejection when model URL is empty and only some benchmarks have pre_recorded_data")
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
 	}
 	body := recorder.Body.String()
 	if !strings.Contains(body, "model_url_required") {
