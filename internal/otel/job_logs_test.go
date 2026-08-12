@@ -138,3 +138,5 @@ func (r *stubLogsRuntime) ValidateHardwareProfiles(_ []api.EvaluationBenchmarkCo
 }
 func (r *stubLogsRuntime) NotifyJobPhaseTransition(_ context.Context, _ *api.EvaluationJobResource, _ int, _ api.State) {
 }
+func (r *stubLogsRuntime) NotifyThresholdViolation(_ context.Context, _ *api.EvaluationJobResource, _ int, _ string, _, _ float32) {
+}

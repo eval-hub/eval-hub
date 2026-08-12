@@ -2245,22 +2245,29 @@ components:
       type: object
       description: Model specification for evaluation requests
       required:
-        - url
         - name
       properties:
-        url:
-          type: string
-          description: Model URL
         name:
           type: string
-          description: Model name
+          description: |
+            The model name.
+        url:
+          type: string
+          description: |
+            The model URL.
+
+            Note that if `pre_recorded_data` is set for all `test_data_ref.type`
+            in the `benchmarks` section then `url` will not be `required` for the job run,
+            in all other cases a `url` is required.
         parameters:
           type: object
           additionalProperties: true
-          description: Model specific parameters
+          description: |
+            The model specific parameters.
         auth:
           $ref: '#/components/schemas/ModelAuth'
-          description: The model authentication configuration
+          description: |
+            The model authentication configuration.
     EvaluationJobConfigCommon1:
       type: object
       title: EvaluationJobConfigCommon1
@@ -2268,6 +2275,7 @@ components:
         The evaluation job request configuration.
       required:
         - name
+        - model
       properties:
         name:
           type: string
@@ -2286,9 +2294,7 @@ components:
         model:
           $ref: '#/components/schemas/ModelRef'
           description: |
-            The model to evaluate.
-
-            **Note that if `pre_recorded_data` is set for all `test_data_ref.type` in the `benchmarks` section then `model` will not be `required` for the job run, in all other cases a `model` is required.**
+            The model to evaluate, or the model that was used to generate the pre-recorded data.
     Ref:
       type: object
       description: Reference by ID
@@ -2469,7 +2475,7 @@ components:
     TestDataRefType:
       type: string
       description: |
-        The type of test data being referenced, the default is `data_set` if not specified. If `pre_recorded_data` is set for all benchmarks then a model section will not be mandatory for the job run.
+        The type of test data being referenced, the default is `data_set` if not specified. The `model` section remains required for all job runs; however, if `pre_recorded_data` is set for all benchmarks then `model.url` may be omitted.
       enum:
         - data_set
         - pre_recorded_data
