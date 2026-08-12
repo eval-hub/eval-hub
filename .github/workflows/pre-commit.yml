@@ -1,0 +1,46 @@
+name: Pre-commit file checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:  # added using https://github.com/step-security/secure-repo
+  contents: read
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install pre-commit
+        run: uv pip install --system pre-commit
+
+      - name: Run file hygiene checks
+        run: |
+          pre-commit run end-of-file-fixer --all-files
+          pre-commit run trailing-whitespace --all-files
+          pre-commit run check-yaml --all-files
+          pre-commit run check-json --all-files
+          pre-commit run check-toml --all-files
+          pre-commit run check-merge-conflict --all-files
+          pre-commit run check-added-large-files --all-files
