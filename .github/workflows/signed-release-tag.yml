@@ -71,11 +71,28 @@ jobs:
             echo "Release ${TAG} does not exist yet"
             exit 0
           fi
-          if gh release view "${TAG}" --json assets --jq '.assets[].name' | grep -E '\.(intoto\.jsonl|sigstore\.json)$' >/dev/null; then
+          if gh release view "${TAG}" --json assets --jq '.assets[].name' | grep -qF 'provenance.sigstore.json'; then
             echo "skip=true" >> "${GITHUB_OUTPUT}"
-            echo "Release ${TAG} already has provenance; skipping"
+            echo "Release ${TAG} already has provenance.sigstore.json; skipping"
           else
             echo "skip=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Remove stale attestation asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} does not exist yet; nothing to clean up"
+            exit 0
+          fi
+          if gh release view "${TAG}" --json assets --jq '.assets[].name' | grep -qF 'attestation.json'; then
+            gh release delete-asset "${TAG}" attestation.json --yes
+            echo "Removed stale attestation.json from ${TAG}"
+          else
+            echo "No stale attestation.json on ${TAG}"
           fi
 
       - name: Build project release assets
@@ -156,10 +173,14 @@ jobs:
           BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
         run: |
           set -euo pipefail
+          # Scorecard Signed-Releases matches asset *name*, not label.
+          # gh release upload '#' only sets the label, so we must rename
+          # the file itself to *.sigstore.json for Scorecard detection.
+          cp "${BUNDLE_PATH}" dist/provenance.sigstore.json
           gh attestation trusted-root > dist/trusted_root.jsonl
           gh release upload "${TAG}" \
-            "${BUNDLE_PATH}#provenance.sigstore.json" \
-            "dist/trusted_root.jsonl#trusted_root.jsonl" \
+            dist/provenance.sigstore.json \
+            dist/trusted_root.jsonl \
             --clobber
 
   publish:
