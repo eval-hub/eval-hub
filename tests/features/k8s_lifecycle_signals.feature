@@ -44,4 +44,3 @@ Feature: Kubernetes Lifecycle Signals
     And the evaluation Job should have label "trustyai.opendatahub.io/evaluation-phase" equal to "Failed"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
-
