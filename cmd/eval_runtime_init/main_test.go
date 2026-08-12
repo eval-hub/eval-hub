@@ -250,6 +250,29 @@ func TestRunMissingEnvVars(t *testing.T) {
 	}
 }
 
+func TestRunS3_MissingSecretAccessKey(t *testing.T) {
+	t.Setenv(envBucket, "bucket")
+	t.Setenv(envKey, "prefix")
+	t.Setenv(envS3Timeout, "30s")
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, accessKeyIDKey), []byte("AKIA"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Intentionally omit awsAccessKeyEnvName so readSecret fails on that key.
+	orig := scrtDir
+	scrtDir = dir
+	t.Cleanup(func() { scrtDir = orig })
+
+	err := runS3()
+	if err == nil {
+		t.Fatal("runS3() = nil, want missing secret access key error")
+	}
+	if !strings.Contains(err.Error(), awsAccessKeyEnvName) {
+		t.Fatalf("runS3() error = %v, want mention of %s", err, awsAccessKeyEnvName)
+	}
+}
+
 func TestRunS3_RejectsNonPositiveTimeout(t *testing.T) {
 	t.Setenv(envBucket, "bucket")
 	t.Setenv(envKey, "prefix")

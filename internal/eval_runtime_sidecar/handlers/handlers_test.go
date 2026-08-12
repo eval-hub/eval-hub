@@ -16,6 +16,26 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+func TestNewModelProxy_UsesServiceAccountAuthFileDefault(t *testing.T) {
+	logger := slog.Default()
+	cfg := &config.Config{
+		Sidecar: &config.SidecarConfig{
+			Model: &config.SidecarModelConfig{
+				URL:                 "http://model.example:8080",
+				InsecureSkipVerify:  true,
+				AuthSecretMountPath: t.TempDir(),
+			},
+		},
+	}
+	rp, err := newModelProxy(cfg, logger)
+	if err != nil {
+		t.Fatalf("newModelProxy: %v", err)
+	}
+	if rp == nil {
+		t.Fatal("expected non-nil model proxy")
+	}
+}
+
 func TestNew(t *testing.T) {
 	logger := slog.Default()
 

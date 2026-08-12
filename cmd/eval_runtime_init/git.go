@@ -199,7 +199,7 @@ func gitHTTPCheckRedirect(withCredentials bool) func(req *http.Request, via []*h
 // or empty, an error is returned — a mounted secret without these keys is a misconfiguration.
 func resolveGitAuth() (*githttp.BasicAuth, error) {
 	// No secret dir → public repo; auth not required.
-	if _, err := os.Stat(secretDir); os.IsNotExist(err) {
+	if _, err := os.Stat(scrtDir); os.IsNotExist(err) {
 		return nil, nil
 	}
 
