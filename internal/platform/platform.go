@@ -1,13 +1,14 @@
 package platform
 
 import (
+	"path/filepath"
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/safefile"
 )
 
 func readFile(path string) string {
-	content, err := safefile.ReadFile(path)
+	content, err := safefile.ReadFile(filepath.Dir(path), filepath.Base(path))
 	if err != nil {
 		return ""
 	}

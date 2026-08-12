@@ -41,8 +41,8 @@ func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_
 	exePath, _ := os.Executable()
 	if exePath != "" {
 		exeDir := filepath.Dir(exePath)
-		specPath := filepath.Join(exeDir, "docs", file)
-		contents, err := safefile.ReadFile(specPath)
+		docsDir := filepath.Join(exeDir, "docs")
+		contents, err := safefile.ReadFile(docsDir, file)
 		if err == nil {
 			found(contents, contentType)
 			return
@@ -61,13 +61,14 @@ func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_
 	// Find the OpenAPI spec file relative to the working directory
 	var paths []string
 	for _, dir := range dirs {
-		absPath, aerr := filepath.Abs(filepath.Join(dir, file))
+		absDir, aerr := filepath.Abs(dir)
 		if aerr != nil {
-			ctx.Logger.Error("Failed to get absolute path for OpenAPI spec", "path", absPath, "error", aerr.Error())
+			ctx.Logger.Error("Failed to get absolute path for OpenAPI spec", "path", dir, "error", aerr.Error())
 			continue
 		}
+		absPath := filepath.Join(absDir, file)
 		paths = append(paths, absPath)
-		contents, err := safefile.ReadFile(absPath)
+		contents, err := safefile.ReadFile(absDir, file)
 		if err == nil {
 			found(contents, contentType)
 			return

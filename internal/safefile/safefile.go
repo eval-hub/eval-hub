@@ -1,7 +1,8 @@
-// Package safefile opens and creates files confined to their parent directory
-// via os.Root, so path components cannot escape that directory (including via
-// symlinks). Prefer this over os.ReadFile/os.Open/os.Create when the path is
-// carried in a variable (gosec G304) and over filepath.Clean alone.
+// Package safefile opens and creates files under a caller-provided trusted root
+// via os.Root. Relative names are validated with filepath.IsLocal and resolved
+// only beneath that root, so ".." and symlinks (including intermediate
+// directories) cannot escape. Prefer this over os.ReadFile/os.Open/os.Create when
+// a path is carried in a variable (gosec G304) and over filepath.Clean alone.
 package safefile
 
 import (
@@ -10,60 +11,58 @@ import (
 	"path/filepath"
 )
 
-// split returns the parent directory and a single local path segment for path.
-func split(path string) (dir, name string, err error) {
-	clean := filepath.Clean(path)
-	if clean == "" || clean == "." {
-		return "", "", fmt.Errorf("invalid path %q", path)
+// cleanLocalPath validates and cleans a path that must stay within an OpenRoot directory.
+func cleanLocalPath(name string) (string, error) {
+	if name == "" || name == "." {
+		return "", fmt.Errorf("invalid path %q", name)
 	}
-	dir = filepath.Dir(clean)
-	name = filepath.Base(clean)
-	if name == "." || name == string(filepath.Separator) || !filepath.IsLocal(name) {
-		return "", "", fmt.Errorf("invalid path %q", path)
+	clean := filepath.Clean(filepath.FromSlash(name))
+	if !filepath.IsLocal(clean) {
+		return "", fmt.Errorf("path %q is not local to root", name)
 	}
-	return dir, name, nil
+	return clean, nil
 }
 
-// ReadFile reads the named file, confined to filepath.Dir(path).
-func ReadFile(path string) ([]byte, error) {
-	dir, name, err := split(path)
+// ReadFile reads name relative to trusted rootDir.
+func ReadFile(rootDir, name string) ([]byte, error) {
+	localName, err := cleanLocalPath(name)
 	if err != nil {
 		return nil, err
 	}
-	root, err := os.OpenRoot(dir)
+	root, err := os.OpenRoot(rootDir)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = root.Close() }()
-	return root.ReadFile(name)
+	return root.ReadFile(localName)
 }
 
-// Open opens the named file for reading, confined to filepath.Dir(path).
+// Open opens name relative to trusted rootDir for reading.
 // The returned file remains valid after the temporary Root is closed.
-func Open(path string) (*os.File, error) {
-	dir, name, err := split(path)
+func Open(rootDir, name string) (*os.File, error) {
+	localName, err := cleanLocalPath(name)
 	if err != nil {
 		return nil, err
 	}
-	root, err := os.OpenRoot(dir)
+	root, err := os.OpenRoot(rootDir)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = root.Close() }()
-	return root.Open(name)
+	return root.Open(localName)
 }
 
-// Create creates or truncates the named file, confined to filepath.Dir(path).
+// Create creates or truncates name relative to trusted rootDir.
 // The returned file remains valid after the temporary Root is closed.
-func Create(path string) (*os.File, error) {
-	dir, name, err := split(path)
+func Create(rootDir, name string) (*os.File, error) {
+	localName, err := cleanLocalPath(name)
 	if err != nil {
 		return nil, err
 	}
-	root, err := os.OpenRoot(dir)
+	root, err := os.OpenRoot(rootDir)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = root.Close() }()
-	return root.Create(name)
+	return root.Create(localName)
 }

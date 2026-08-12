@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
@@ -21,7 +22,7 @@ func LoadSidecarRuntimeConfig(sidecarJSONPath, version, build, buildDate string)
 	if strings.TrimSpace(sidecarJSONPath) == "" {
 		sidecarJSONPath = DefaultSidecarConfigPath
 	}
-	data, err := safefile.ReadFile(sidecarJSONPath)
+	data, err := safefile.ReadFile(filepath.Dir(sidecarJSONPath), filepath.Base(sidecarJSONPath))
 	if err != nil {
 		return nil, fmt.Errorf("read sidecar config %q: %w", sidecarJSONPath, err)
 	}

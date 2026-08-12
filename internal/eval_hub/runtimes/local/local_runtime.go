@@ -258,7 +258,7 @@ func (r *LocalRuntime) runBenchmark(
 
 	// Capture stdout/stderr to log file
 	logFilePath := filepath.Join(jobDir, "jobrun.log")
-	logFile, err := safefile.Create(logFilePath)
+	logFile, err := safefile.Create(jobDir, "jobrun.log")
 	if err != nil {
 		return fmt.Errorf("create log file: %w", err)
 	}

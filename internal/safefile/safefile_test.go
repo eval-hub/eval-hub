@@ -11,11 +11,10 @@ import (
 func TestReadFile(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	path := filepath.Join(dir, "data.txt")
-	if err := os.WriteFile(path, []byte("hello"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "data.txt"), []byte("hello"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got, err := safefile.ReadFile(path)
+	got, err := safefile.ReadFile(dir, "data.txt")
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
@@ -24,18 +23,37 @@ func TestReadFile(t *testing.T) {
 	}
 }
 
-func TestReadFile_RejectsEmptyAndDot(t *testing.T) {
+func TestReadFile_Nested(t *testing.T) {
 	t.Parallel()
-	for _, path := range []string{"", ".", "/"} {
-		if _, err := safefile.ReadFile(path); err == nil {
-			t.Fatalf("ReadFile(%q): expected error", path)
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "sub"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "sub", "data.txt"), []byte("nested"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := safefile.ReadFile(dir, "sub/data.txt")
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(got) != "nested" {
+		t.Fatalf("ReadFile = %q, want nested", got)
+	}
+}
+
+func TestReadFile_RejectsNonLocal(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	for _, name := range []string{"", ".", "/", "..", "../x", "/etc/passwd"} {
+		if _, err := safefile.ReadFile(dir, name); err == nil {
+			t.Fatalf("ReadFile(%q): expected error", name)
 		}
 	}
 }
 
 func TestReadFile_Missing(t *testing.T) {
 	t.Parallel()
-	_, err := safefile.ReadFile(filepath.Join(t.TempDir(), "missing"))
+	_, err := safefile.ReadFile(t.TempDir(), "missing")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -47,8 +65,7 @@ func TestReadFile_Missing(t *testing.T) {
 func TestOpenAndCreate(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	path := filepath.Join(dir, "out.txt")
-	f, err := safefile.Create(path)
+	f, err := safefile.Create(dir, "out.txt")
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -59,7 +76,7 @@ func TestOpenAndCreate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rf, err := safefile.Open(path)
+	rf, err := safefile.Open(dir, "out.txt")
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -83,8 +100,46 @@ func TestReadFile_SymlinkEscape(t *testing.T) {
 	if err := os.Symlink(outside, link); err != nil {
 		t.Skipf("symlink not supported: %v", err)
 	}
-	_, err := safefile.ReadFile(link)
+	_, err := safefile.ReadFile(dir, "link.txt")
 	if err == nil {
 		t.Fatal("expected symlink escape to fail")
+	}
+}
+
+func TestReadFile_SymlinkedIntermediateDir(t *testing.T) {
+	t.Parallel()
+	trusted := t.TempDir()
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(trusted, "via")); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+
+	// Escape via a symlinked intermediate directory must fail.
+	if _, err := safefile.ReadFile(trusted, "via/secret.txt"); err == nil {
+		t.Fatal("ReadFile through symlinked intermediate dir: expected error")
+	}
+	if _, err := safefile.Open(trusted, "via/secret.txt"); err == nil {
+		t.Fatal("Open through symlinked intermediate dir: expected error")
+	}
+	if _, err := safefile.Create(trusted, "via/out.txt"); err == nil {
+		t.Fatal("Create through symlinked intermediate dir: expected error")
+	}
+
+	// A real nested path under the trusted root still works.
+	if err := os.MkdirAll(filepath.Join(trusted, "real"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(trusted, "real", "ok.txt"), []byte("ok"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := safefile.ReadFile(trusted, "real/ok.txt")
+	if err != nil {
+		t.Fatalf("ReadFile nested under trusted root: %v", err)
+	}
+	if string(got) != "ok" {
+		t.Fatalf("ReadFile = %q, want ok", got)
 	}
 }

@@ -40,7 +40,7 @@ func RepoVersion() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	data, err := safefile.ReadFile(filepath.Join(root, "VERSION"))
+	data, err := safefile.ReadFile(root, "VERSION")
 	if err != nil {
 		return "", fmt.Errorf("read VERSION: %w", err)
 	}

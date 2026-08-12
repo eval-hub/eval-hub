@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
@@ -53,7 +54,7 @@ func buildTLSConfig(caCertPath string, insecureSkipVerify bool, logger *slog.Log
 		MaxVersion: tls.VersionTLS13,
 	}
 	if caCertPath != "" && !insecureSkipVerify {
-		caCert, err := safefile.ReadFile(caCertPath)
+		caCert, err := safefile.ReadFile(filepath.Dir(caCertPath), filepath.Base(caCertPath))
 		if err != nil {
 			return nil, fmt.Errorf("failed to read %s CA certificate at %s: %w", certLabel, caCertPath, err)
 		}
