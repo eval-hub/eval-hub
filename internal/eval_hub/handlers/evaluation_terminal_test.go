@@ -214,8 +214,6 @@ func (s *collectionTerminalStorage) GetCollection(_ string) (*api.CollectionReso
 	return s.collection, nil
 }
 
-func ptr32(v float32) *float32 { return &v }
-
 func benchWithTest(index int, pass bool, metric string, score, threshold float32) api.BenchmarkResult {
 	return api.BenchmarkResult{
 		BenchmarkIndex: index,
