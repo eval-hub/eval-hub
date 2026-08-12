@@ -14,7 +14,7 @@ import (
 )
 
 // OCIAuthConfigPathDefault is the default path for the registry auth config file. Must match the OCI secret
-// mount path on adapter and sidecar: internal/runtimes/k8s/job_builders.go ociCredentialsMountPath.
+// mount path on adapter and sidecar: internal/runtimes/k8s/job_builders.go ociAuthMountPath.
 const OCIAuthConfigPathDefault = "/etc/evalhub/.docker/config.json"
 
 // JobSpecPathDefault is the default path for the job spec file. Must match the job-spec mount on the sidecar:

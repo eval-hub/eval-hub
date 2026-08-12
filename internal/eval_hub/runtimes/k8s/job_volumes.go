@@ -111,8 +111,8 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		})
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      ociCredentialsVolumeName,
-			MountPath: ociCredentialsMountPath,
-			SubPath:   ociCredentialsSubPath,
+			MountPath: ociAuthMountPath,
+			SubPath:   ociDockerConfigSubPath,
 			ReadOnly:  true,
 		})
 	}
@@ -255,7 +255,7 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 	{
 		expSeconds := int64(3600)
 		volumes = append(volumes, corev1.Volume{
-			Name: evalhubSATokenVolumeName,
+			Name: evalhubSAVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				Projected: &corev1.ProjectedVolumeSource{
 					Sources: []corev1.VolumeProjection{
@@ -270,7 +270,7 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 			},
 		})
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      evalhubSATokenVolumeName,
+			Name:      evalhubSAVolumeName,
 			MountPath: k8sSAMountPath,
 			ReadOnly:  true,
 		})
@@ -299,7 +299,7 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		})
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      mlflowTokenVolumeName,
-			MountPath: mlflowTokenMountPath,
+			MountPath: mlflowAuthMountPath,
 			ReadOnly:  true,
 		})
 	}
@@ -348,8 +348,8 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		})
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      ociCredentialsVolumeName,
-			MountPath: ociCredentialsMountPath,
-			SubPath:   ociCredentialsSubPath,
+			MountPath: ociAuthMountPath,
+			SubPath:   ociDockerConfigSubPath,
 			ReadOnly:  true,
 		})
 	}
@@ -410,7 +410,7 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 				},
 				{
 					Name:      testDataSecretVolumeName,
-					MountPath: testDataSecretMountPath,
+					MountPath: testDataInitMountPath,
 					ReadOnly:  true,
 				},
 			},
@@ -465,7 +465,7 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 			})
 			gitInitVolumeMounts = append(gitInitVolumeMounts, corev1.VolumeMount{
 				Name:      testDataGitAuthVolumeName,
-				MountPath: testDataSecretMountPath,
+				MountPath: testDataInitMountPath,
 				ReadOnly:  true,
 			})
 		}

@@ -17,6 +17,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
+	"github.com/eval-hub/eval-hub/internal/safefile"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -257,7 +258,7 @@ func (r *LocalRuntime) runBenchmark(
 
 	// Capture stdout/stderr to log file
 	logFilePath := filepath.Join(jobDir, "jobrun.log")
-	logFile, err := os.Create(logFilePath) // #nosec G304 -- log path derived from trusted job metadata
+	logFile, err := safefile.Create(logFilePath)
 	if err != nil {
 		return fmt.Errorf("create log file: %w", err)
 	}

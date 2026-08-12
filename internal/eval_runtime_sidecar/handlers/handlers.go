@@ -264,7 +264,7 @@ func (h *Handlers) parseProxyCall(r *http.Request) (*httputil.ReverseProxy, *pro
 		if ehClientConfig != nil {
 			return h.evalHubProxy, &proxy.AuthTokenInput{
 				TargetEndpoint:    "eval-hub",
-				AuthTokenPath:     ServiceAccountTokenPathDefault,
+				AuthTokenPath:     ServiceAccountAuthFileDefault,
 				AuthToken:         ehClientConfig.Token,
 				TokenCacheTimeout: ehClientConfig.TokenCacheTimeout,
 			}, nil
@@ -273,7 +273,7 @@ func (h *Handlers) parseProxyCall(r *http.Request) (*httputil.ReverseProxy, *pro
 
 	case isMLflowProxyPath(requestPathForRouting(r.RequestURI)):
 		if h.serviceConfig.MLFlow != nil && strings.TrimSpace(h.serviceConfig.MLFlow.TrackingURI) != "" && h.mlflowProxy != nil {
-			tokenPath := MLFlowTokenPathDefault
+			tokenPath := MLFlowAuthFileDefault
 			if h.serviceConfig.Sidecar != nil && h.serviceConfig.Sidecar.MLFlow != nil {
 				if p := strings.TrimSpace(h.serviceConfig.Sidecar.MLFlow.TokenPath); p != "" {
 					tokenPath = p

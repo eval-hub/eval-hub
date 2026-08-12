@@ -39,7 +39,7 @@ func sidecarForJobPod(cfg *config.Config, jc *jobConfig) (*config.SidecarConfig,
 				export.MLFlow = &config.SidecarMLFlowConfig{}
 			}
 			export.MLFlow.TrackingURI = jc.mlflowTrackingURI
-			export.MLFlow.TokenPath = mlflowTokenMountPath + "/" + mlflowTokenFile
+			export.MLFlow.TokenPath = mlflowAuthMountPath + "/" + mlflowTokenFile
 			export.MLFlow.Workspace = jc.mlflowWorkspace
 			if cfg != nil && cfg.MLFlow != nil {
 				export.MLFlow.HTTPTimeout = cfg.MLFlow.HTTPTimeout

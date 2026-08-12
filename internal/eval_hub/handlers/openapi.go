@@ -9,6 +9,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/http_wrappers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
+	"github.com/eval-hub/eval-hub/internal/safefile"
 )
 
 var (
@@ -41,7 +42,7 @@ func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_
 	if exePath != "" {
 		exeDir := filepath.Dir(exePath)
 		specPath := filepath.Join(exeDir, "docs", file)
-		contents, err := os.ReadFile(specPath) // #nosec G304 -- bundled OpenAPI spec beside executable
+		contents, err := safefile.ReadFile(specPath)
 		if err == nil {
 			found(contents, contentType)
 			return
@@ -66,7 +67,7 @@ func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_
 			continue
 		}
 		paths = append(paths, absPath)
-		contents, err := os.ReadFile(absPath) // #nosec G304 -- OpenAPI spec from configured docs paths
+		contents, err := safefile.ReadFile(absPath)
 		if err == nil {
 			found(contents, contentType)
 			return

@@ -43,11 +43,11 @@ func TestBuildJobWithOCICredentials(t *testing.T) {
 	if foundMount == nil {
 		t.Fatalf("expected volume mount %s to be present", ociCredentialsVolumeName)
 	}
-	if foundMount.MountPath != ociCredentialsMountPath {
-		t.Fatalf("expected mount path %q, got %q", ociCredentialsMountPath, foundMount.MountPath)
+	if foundMount.MountPath != ociAuthMountPath {
+		t.Fatalf("expected mount path %q, got %q", ociAuthMountPath, foundMount.MountPath)
 	}
-	if foundMount.SubPath != ociCredentialsSubPath {
-		t.Fatalf("expected sub path %q, got %q", ociCredentialsSubPath, foundMount.SubPath)
+	if foundMount.SubPath != ociDockerConfigSubPath {
+		t.Fatalf("expected sub path %q, got %q", ociDockerConfigSubPath, foundMount.SubPath)
 	}
 	if !foundMount.ReadOnly {
 		t.Fatalf("expected mount to be read-only")
@@ -58,8 +58,8 @@ func TestBuildJobWithOCICredentials(t *testing.T) {
 	for _, e := range container.Env {
 		if e.Name == envOCIAuthConfigPathName {
 			foundEnv = true
-			if e.Value != ociCredentialsMountPath {
-				t.Fatalf("expected env value %q, got %q", ociCredentialsMountPath, e.Value)
+			if e.Value != ociAuthMountPath {
+				t.Fatalf("expected env value %q, got %q", ociAuthMountPath, e.Value)
 			}
 		}
 	}
@@ -398,9 +398,9 @@ func TestBuildJobSATokenSidecarOnly(t *testing.T) {
 	}
 
 	// Pod volumes must contain the evalhub-sa-token projected volume.
-	foundPodVolume := findVolume(job.Spec.Template.Spec.Volumes, evalhubSATokenVolumeName)
+	foundPodVolume := findVolume(job.Spec.Template.Spec.Volumes, evalhubSAVolumeName)
 	if foundPodVolume == nil {
-		t.Fatalf("expected pod volume %q", evalhubSATokenVolumeName)
+		t.Fatalf("expected pod volume %q", evalhubSAVolumeName)
 	}
 	if foundPodVolume.Projected == nil {
 		t.Fatal("evalhub-sa-token volume must be a projected volume")
@@ -420,9 +420,9 @@ func TestBuildJobSATokenSidecarOnly(t *testing.T) {
 	if sidecar == nil {
 		t.Fatal("sidecar init container not found")
 	}
-	foundSidecarMount := findVolumeMount(sidecar.VolumeMounts, evalhubSATokenVolumeName)
+	foundSidecarMount := findVolumeMount(sidecar.VolumeMounts, evalhubSAVolumeName)
 	if foundSidecarMount == nil {
-		t.Fatalf("sidecar must mount %q", evalhubSATokenVolumeName)
+		t.Fatalf("sidecar must mount %q", evalhubSAVolumeName)
 	}
 	if foundSidecarMount.MountPath != k8sSAMountPath {
 		t.Errorf("sidecar SA token mount path: got %q, want %q", foundSidecarMount.MountPath, k8sSAMountPath)
@@ -436,8 +436,8 @@ func TestBuildJobSATokenSidecarOnly(t *testing.T) {
 	if adapter == nil {
 		t.Fatal("adapter container not found")
 	}
-	if findVolumeMount(adapter.VolumeMounts, evalhubSATokenVolumeName) != nil {
-		t.Fatalf("adapter must not have %q volume mount", evalhubSATokenVolumeName)
+	if findVolumeMount(adapter.VolumeMounts, evalhubSAVolumeName) != nil {
+		t.Fatalf("adapter must not have %q volume mount", evalhubSAVolumeName)
 	}
 
 	// Adapter must have the pod-namespace DownwardAPI volume mounted at k8sSAMountPath
@@ -610,7 +610,7 @@ func TestBuildJobWithGitTestDataPrivateRepo(t *testing.T) {
 		}
 	}
 	for _, m := range initContainer.VolumeMounts {
-		if m.Name == testDataGitAuthVolumeName && m.MountPath == testDataSecretMountPath && m.ReadOnly {
+		if m.Name == testDataGitAuthVolumeName && m.MountPath == testDataInitMountPath && m.ReadOnly {
 			foundSecretMount = true
 		}
 	}
