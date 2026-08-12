@@ -712,7 +712,7 @@ Feature: MCP Tools
     And the MCP response should contain the value "completed" at path "$.state"
     When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:mcp_job_id}}"
     Then the MLflow artifact should exist
- 
+
   @mlflow @cluster
   Scenario: MCP resource returns job with mlflow_run_id for completed job with evalcard
     Given the service is running

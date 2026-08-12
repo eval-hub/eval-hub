@@ -26,3 +26,14 @@ FVT defaults clone this repository and check out this directory:
 - `TEST_DATA_GIT_NESTED_SUB_PATH` → `tests/git-testdata/staging_sub_path` (truthfulqa_mc1)
 
 Until this folder is on the target ref, set `TEST_DATA_GIT_REF` to a branch that has it.
+
+## Maintenance
+
+These files are a **vendored offline lm-eval cache** checked into git so FVT can clone a
+self-contained tree. They are not generated on every run. If benchmark tokenizer paths or
+HF offline layout change, refresh this directory (same sources as PVC/offline staging data)
+and re-run `@git` FVT before merging.
+
+Keeping a copy here is intentional: FVT validates git clone + checkout, not live Hugging
+Face downloads. Drift from other offline fixtures is low risk because scenarios only assert
+job completion and metrics thresholds, not byte-for-byte parity with PVC/S3 caches.
