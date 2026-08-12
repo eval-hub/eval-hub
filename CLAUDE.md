@@ -15,7 +15,7 @@ as the primary channel.
 Use the project skill [`.claude/skills/release-notes/SKILL.md`](.claude/skills/release-notes/SKILL.md)
 to draft and (after confirmation) apply notes for a given tag/version.
 
-##### Run from Cursor
+### Run release notes from Cursor
 
 In Agent chat, ask for example:
 
@@ -24,7 +24,7 @@ In Agent chat, ask for example:
 
 Optionally attach `@.claude/skills/release-notes/SKILL.md`.
 
-##### Run from Claude Code terminal
+### Run release notes from Claude Code terminal
 
 ```text
 /release-notes
@@ -32,7 +32,7 @@ Optionally attach `@.claude/skills/release-notes/SKILL.md`.
 
 Or ask naturally (e.g. “Draft release notes for v1.0.0”).
 
-##### After the skill runs
+### After the release notes skill runs
 
 Expect a curated markdown body with Summary and Upgrade impact. The skill must
 not publish or overwrite a GitHub release body without explicit confirmation.
@@ -59,7 +59,7 @@ Use `go-version-file: "go.mod"` in the github actions where possible.
 Use the project skill [`.claude/skills/golang-version-update/SKILL.md`](.claude/skills/golang-version-update/SKILL.md)
 for the full procedure (registry check, file updates, `go mod tidy`, tests, and PR).
 
-##### Run from Cursor
+##### Run golang update from Cursor
 
 In Agent chat, ask in natural language, for example:
 
@@ -69,7 +69,7 @@ In Agent chat, ask in natural language, for example:
 Cursor loads the skill from `.claude/skills/golang-version-update/` and follows it.
 Optionally attach `@.claude/skills/golang-version-update/SKILL.md` to force the procedure into context.
 
-##### Run from Claude Code terminal
+##### Run golang update from Claude Code terminal
 
 From the repo root, start Claude Code (`claude`), then invoke the skill by name:
 
@@ -79,11 +79,13 @@ From the repo root, start Claude Code (`claude`), then invoke the skill by name:
 
 Or ask naturally (the skill auto-matches on its description), for example:
 
-- “Bump Go to the latest version supported by ubi9/go-toolset”
+```text
+Bump Go to the latest version supported by ubi9/go-toolset
+```
 
 Type `/` in Claude Code to list available skills if needed.
 
-##### After the skill runs
+##### After the golang update skill runs
 
 Expect a summary (previous/new Go version, files touched, test results).
 
