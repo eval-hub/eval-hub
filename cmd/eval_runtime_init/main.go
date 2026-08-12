@@ -44,9 +44,9 @@ const (
 // Paths and URL validation are package vars so unit tests can redirect mounts and
 // exercise runGit against local file:// repos without writing under /.
 var (
-	scrtDir = "/var/run/secrets/test-data"
-	destDir          = runtimeenv.TestDataDir
-	gitMetadataDir   = runtimeenv.InitMetadataDir
+	scrtDir        = "/var/run/secrets/test-data"
+	destDir        = runtimeenv.TestDataDir
+	gitMetadataDir = runtimeenv.InitMetadataDir
 )
 
 func main() {
