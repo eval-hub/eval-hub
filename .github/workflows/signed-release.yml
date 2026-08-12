@@ -92,8 +92,8 @@ jobs:
           for TAG in "${CANDIDATES[@]}"; do
             [[ "${#TAGS[@]}" -ge "${N}" ]] && break
             ASSETS="$(gh release view "${TAG}" --json assets --jq '[.assets[].name] | @json')"
-            if echo "${ASSETS}" | jq -e 'any(.[]; test("\\.(intoto\\.jsonl|sigstore\\.json)$"))' >/dev/null; then
-              echo "Skipping ${TAG}: already has provenance"
+            if echo "${ASSETS}" | jq -e 'any(.[]; . == "provenance.sigstore.json")' >/dev/null; then
+              echo "Skipping ${TAG}: already has provenance.sigstore.json"
               continue
             fi
             TAGS+=("${TAG}")
