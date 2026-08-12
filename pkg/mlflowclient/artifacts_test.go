@@ -186,3 +186,68 @@ func TestUploadArtifactWithoutKnownContentLength(t *testing.T) {
 		t.Fatalf("UploadArtifact() err = %v", err)
 	}
 }
+
+func TestDownloadArtifactValidationErrors(t *testing.T) {
+	t.Parallel()
+
+	var nilClient *Client
+	if _, err := nilClient.DownloadArtifact("path"); err == nil {
+		t.Fatal("expected error for nil client")
+	}
+
+	client := NewClient("http://example.com").WithContext(t.Context())
+	if _, err := client.DownloadArtifact(""); err == nil {
+		t.Fatal("expected error for empty artifact path")
+	}
+}
+
+func TestDownloadArtifactErrorResponse(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"error_code":"RESOURCE_DOES_NOT_EXIST","message":"not found"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := NewClient(srv.URL).WithContext(t.Context())
+	_, err := client.DownloadArtifact("1/run-1/artifacts/missing.json")
+	if err == nil {
+		t.Fatal("expected download error")
+	}
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("error type = %T, want *APIError", err)
+	}
+	if apiErr.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", apiErr.StatusCode)
+	}
+}
+
+func TestDownloadArtifact(t *testing.T) {
+	t.Parallel()
+
+	const artifactPath = "1/run-1/artifacts/evaluation-card.json"
+	body := []byte(`{"card_version":"1.0"}`)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		if !strings.HasSuffix(r.URL.Path, artifactPath) {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := NewClient(srv.URL).WithContext(t.Context())
+	got, err := client.DownloadArtifact(artifactPath)
+	if err != nil {
+		t.Fatalf("DownloadArtifact() err = %v", err)
+	}
+	if string(got) != string(body) {
+		t.Fatalf("body = %q, want %q", string(got), string(body))
+	}
+}

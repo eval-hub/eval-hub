@@ -134,3 +134,62 @@ func buildArtifactUploadEndpoint(artifactPath string) (string, error) {
 	}
 	return artifactsAPIBasePath + "/" + strings.Join(escaped, "/"), nil
 }
+
+// DownloadArtifact fetches artifact content from the MLflow proxied artifact store.
+// artifactPath is the full artifact path (for example "1/abc123/artifacts/evaluation-card.json").
+func (c *Client) DownloadArtifact(artifactPath string) ([]byte, error) {
+	if c == nil {
+		return nil, fmt.Errorf("mlflow client is nil")
+	}
+	artifactPath = strings.TrimPrefix(strings.TrimSpace(artifactPath), "/")
+	if artifactPath == "" {
+		return nil, fmt.Errorf("artifact path is required")
+	}
+
+	endpoint, err := buildArtifactUploadEndpoint(artifactPath)
+	if err != nil {
+		return nil, err
+	}
+	artifactURL := c.baseURL + endpoint
+
+	if c.ctx == nil {
+		return nil, fmt.Errorf("context is nil for MLFlow request")
+	}
+
+	req, err := http.NewRequestWithContext(c.ctx, http.MethodGet, artifactURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create download request: %w", err)
+	}
+	c.applyAuthHeader(req)
+	if c.workspacesEnabled && c.workspace != "" {
+		req.Header.Set("X-MLFLOW-WORKSPACE", c.workspace)
+	}
+
+	c.logger.Info("MLFlow artifact download started", "endpoint", endpoint)
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download artifact: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read download response body: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		mlflowError := MLFlowError{}
+		if err := json.Unmarshal(respBody, &mlflowError); err == nil {
+			return nil, &APIError{
+				StatusCode:   resp.StatusCode,
+				ResponseBody: string(respBody),
+				MLFlowError:  &mlflowError,
+			}
+		}
+		return nil, &APIError{
+			StatusCode:   resp.StatusCode,
+			ResponseBody: string(respBody),
+		}
+	}
+
+	c.logger.Info("MLFlow artifact download successful", "endpoint", endpoint, "status", resp.StatusCode)
+	return respBody, nil
+}
