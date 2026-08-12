@@ -331,6 +331,63 @@ func TestNotifyThresholdViolationNoJobFound(t *testing.T) {
 	runtime.NotifyThresholdViolation(context.Background(), evaluation, 0, "accuracy", 0.4, 0.8)
 }
 
+func TestNotifyThresholdViolationListJobsError(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	clientset := fake.NewSimpleClientset()
+	var listCalled int
+	clientset.PrependReactor("list", "jobs", func(_ ktesting.Action) (bool, kruntime.Object, error) {
+		listCalled++
+		return true, nil, fmt.Errorf("api unavailable")
+	})
+	rt := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+	}
+	// Should not panic; error is absorbed internally.
+	rt.NotifyThresholdViolation(context.Background(), evaluation, 0, "accuracy", 0.4, 0.8)
+	if listCalled != 1 {
+		t.Fatalf("expected list jobs to be called once, got %d", listCalled)
+	}
+}
+
+func TestNotifyThresholdViolationPatchLabelError(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "eval-job",
+			Namespace: "default",
+			Labels: map[string]string{
+				labelJobIDKey:          sanitizeLabelValue(evaluation.Resource.ID),
+				labelBenchmarkIndexKey: "0",
+			},
+		},
+	}
+	clientset := fake.NewSimpleClientset(job)
+	var patchCalled int
+	clientset.PrependReactor("patch", "jobs", func(_ ktesting.Action) (bool, kruntime.Object, error) {
+		patchCalled++
+		return true, nil, fmt.Errorf("patch forbidden")
+	})
+	fakeRecorder := record.NewFakeRecorder(10)
+	rt := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: NewKubernetesHelperWithRecorder(clientset, fakeRecorder),
+	}
+	rt.NotifyThresholdViolation(context.Background(), evaluation, 0, "accuracy", 0.4, 0.8)
+	if patchCalled != 1 {
+		t.Fatalf("expected patch to be called once, got %d", patchCalled)
+	}
+	// Event should still be emitted even when the phase-label patch fails.
+	select {
+	case msg := <-fakeRecorder.Events:
+		if !strings.Contains(msg, "EvaluationThresholdViolated") {
+			t.Fatalf("expected EvaluationThresholdViolated in event, got: %s", msg)
+		}
+	default:
+		t.Fatal("expected an event to be emitted even when patch fails")
+	}
+}
+
 func TestNotifyThresholdViolationEmitsWarningEventType(t *testing.T) {
 	evaluation := sampleEvaluation("provider-1")
 	job := &batchv1.Job{

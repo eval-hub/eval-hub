@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"testing"
 
@@ -318,5 +319,74 @@ func TestNotifyThresholdViolations_MixedResults(t *testing.T) {
 	}
 	if rec.calls[0].benchmarkIndex != 2 {
 		t.Fatalf("expected violation for benchmark index 2, got %d", rec.calls[0].benchmarkIndex)
+	}
+}
+
+func TestOnEvaluationJobUpdatedFiresThresholdViolations(t *testing.T) {
+	t.Parallel()
+	rec := &violationRecorder{}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-tv"}},
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{State: api.OverallStateCompleted},
+		},
+		Results: &api.EvaluationJobResults{
+			Benchmarks: []api.BenchmarkResult{
+				benchWithTest(0, false, "accuracy", 0.2, 0.8),
+			},
+		},
+	}
+	h := &Handlers{runtime: rec}
+	h.onEvaluationJobUpdated(
+		context.Background(),
+		&terminalTestStorage{job: job},
+		func() (*api.EvaluationJobResource, error) { return job, nil },
+		api.OverallStateRunning,
+		logger,
+	)
+	if len(rec.calls) != 1 {
+		t.Fatalf("expected 1 violation call via onEvaluationJobUpdated, got %d", len(rec.calls))
+	}
+}
+
+func TestOnEvaluationJobUpdatedSkipsThresholdWhenNilResults(t *testing.T) {
+	t.Parallel()
+	rec := &violationRecorder{}
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-tv-nil"}},
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{State: api.OverallStateCompleted},
+		},
+	}
+	h := &Handlers{runtime: rec}
+	h.onEvaluationJobUpdated(
+		context.Background(),
+		&terminalTestStorage{job: job},
+		func() (*api.EvaluationJobResource, error) { return job, nil },
+		api.OverallStateRunning,
+		nil,
+	)
+	if len(rec.calls) != 0 {
+		t.Fatalf("expected no violation calls when Results is nil, got %d", len(rec.calls))
+	}
+}
+
+func TestNotifyThresholdViolations_WithLogger(t *testing.T) {
+	t.Parallel()
+	rec := &violationRecorder{}
+	h := &Handlers{runtime: rec}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-log"}},
+		Results: &api.EvaluationJobResults{
+			Benchmarks: []api.BenchmarkResult{
+				benchWithTest(1, false, "f1_score", 0.3, 0.7),
+			},
+		},
+	}
+	h.notifyThresholdViolations(context.Background(), job, logger)
+	if len(rec.calls) != 1 {
+		t.Fatalf("expected 1 violation call with non-nil logger, got %d", len(rec.calls))
 	}
 }
