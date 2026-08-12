@@ -42,6 +42,11 @@ type Runtime interface {
 	// patches on the backing Job object). Errors are absorbed internally — lifecycle signals are
 	// best-effort and must never propagate to the caller.
 	NotifyJobPhaseTransition(ctx context.Context, evaluation *api.EvaluationJobResource, benchmarkIndex int, state api.State)
+	// NotifyThresholdViolation informs the runtime that a benchmark result breached its configured
+	// threshold. Implementations emit an EvaluationThresholdViolated Kubernetes Event enriched with
+	// the metric name, actual measured value, and configured threshold, and patch the evaluation-phase
+	// label to ThresholdViolated. Errors are absorbed internally — signals are best-effort.
+	NotifyThresholdViolation(ctx context.Context, evaluation *api.EvaluationJobResource, benchmarkIndex int, metricName string, actualValue, threshold float32)
 }
 
 // This interface must be decoupled from the service HTTP layer

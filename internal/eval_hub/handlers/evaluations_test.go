@@ -149,6 +149,8 @@ func (r *fakeRuntime) NotifyJobPhaseTransition(_ context.Context, job *api.Evalu
 	r.notifiedBenchmarkIndex = benchmarkIndex
 	r.notifiedState = state
 }
+func (r *fakeRuntime) NotifyThresholdViolation(_ context.Context, _ *api.EvaluationJobResource, _ int, _ string, _, _ float32) {
+}
 
 type listEvaluationsRequest struct {
 	*MockRequest
