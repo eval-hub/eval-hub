@@ -33,14 +33,19 @@ jobs:
           python-version: '3.12'
 
       - name: Install pre-commit
-        run: uv pip install --system pre-commit
+        run: uv pip install --system pre-commit==4.6.2
 
       - name: Run file hygiene checks
         run: |
-          pre-commit run end-of-file-fixer --all-files
-          pre-commit run trailing-whitespace --all-files
-          pre-commit run check-yaml --all-files
-          pre-commit run check-json --all-files
-          pre-commit run check-toml --all-files
-          pre-commit run check-merge-conflict --all-files
-          pre-commit run check-added-large-files --all-files
+          failed=0
+          for hook in \
+            end-of-file-fixer \
+            trailing-whitespace \
+            check-yaml \
+            check-json \
+            check-toml \
+            check-merge-conflict \
+            check-added-large-files; do
+            pre-commit run "$hook" --all-files || failed=1
+          done
+          exit "$failed"
