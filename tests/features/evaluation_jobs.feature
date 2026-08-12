@@ -1292,7 +1292,7 @@ Feature: Evaluation Jobs
     And the response should contain the value "{{env:TEST_DATA_PVC_MISSING_CLAIM_NAME|evalhub-offline-test-data-does-not-exist}}" at path "$.status.benchmarks[0].error_message.message"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
-  
+
   @mlflow
   Scenario: Card generated for completed job with benchmarks
     Given the service is running
@@ -1310,7 +1310,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain the value "{{value:job_id}}" at path "$.metadata.evaluation_job_id"
     And the MLflow artifact should contain the value "{{env:MODEL_NAME|test}}" at path "$.context.model.name"
     And the MLflow artifact should contain "arc_easy"
-  
+
   @mlflow
   Scenario: Card generated for completed job with collection
     Given the service is running
@@ -1593,7 +1593,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain "results.benchmarks[0].error_message.message"
     And the MLflow artifact should contain "results.benchmarks[0].error_message.message_code"
     And the MLflow artifact should contain "results.benchmarks[0].error_message.message_origin"
-  
+
   @mlflow
   Scenario: EvalCard artifact is valid parseable JSON for failed job
     Given the service is running
@@ -1608,7 +1608,7 @@ Feature: Evaluation Jobs
     When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should be valid JSON
- 
+
   @mlflow
   Scenario: Card generated for job with no pass_criteria
     Given the service is running
