@@ -2251,7 +2251,10 @@ components:
           type: string
           description: |
             The model URL.
-            **Note that if `pre_recorded_data` is set for all `test_data_ref.type` in the `benchmarks` section then `url` will not be `required` for the job run, in all other cases a `url` is required.**
+
+            Note that if `pre_recorded_data` is set for all `test_data_ref.type`
+            in the `benchmarks` section then `url` will not be `required` for the job run,
+            in all other cases a `url` is required.
         name:
           type: string
           description: |

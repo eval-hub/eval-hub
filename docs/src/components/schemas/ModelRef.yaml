@@ -5,12 +5,12 @@ required:
 properties:
   url:
     type: string
-    description: >
+    description: |
       The model URL.
 
-      **Note that if `pre_recorded_data` is set for all `test_data_ref.type`
+      Note that if `pre_recorded_data` is set for all `test_data_ref.type`
       in the `benchmarks` section then `url` will not be `required` for the job run,
-      in all other cases a `url` is required.**
+      in all other cases a `url` is required.
   name:
     type: string
     description: >

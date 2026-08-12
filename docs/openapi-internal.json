@@ -3236,7 +3236,7 @@
         "properties": {
           "url": {
             "type": "string",
-            "description": "The model URL.\n**Note that if `pre_recorded_data` is set for all `test_data_ref.type` in the `benchmarks` section then `url` will not be `required` for the job run, in all other cases a `url` is required.**\n"
+            "description": "The model URL.\n\nNote that if `pre_recorded_data` is set for all `test_data_ref.type`\nin the `benchmarks` section then `url` will not be `required` for the job run,\nin all other cases a `url` is required.\n"
           },
           "name": {
             "type": "string",
