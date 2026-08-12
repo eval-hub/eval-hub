@@ -39,6 +39,17 @@ local harness = std.parseJson(std.extVar('harness'));
       },
     },
 
+  // Git test data reference (init container clones into /test_data).
+  // Defaults clone this repository and use tests/git-testdata (arc_easy + tokenizer).
+  gitTestDataRef(overrides={})::
+    {
+      git: {
+        url: $.env('TEST_DATA_GIT_URL', 'https://github.com/eval-hub/eval-hub'),
+        ref: $.env('TEST_DATA_GIT_REF', 'main'),
+        sub_path: $.env('TEST_DATA_GIT_SUB_PATH', 'tests/git-testdata'),
+      } + overrides,
+    },
+
   // Evaluation/collection benchmark with disconnected-aware tokenizer and optional test_data_ref.
   // When harness.queue_enabled is true, attaches hardware_config.queue for Kueue scheduling.
   benchmark(id, providerId, parameters)::
@@ -60,6 +71,17 @@ local harness = std.parseJson(std.extVar('harness'));
         tokenizer: '/test_data/tokenizer',
       } + parameters,
       test_data_ref: $.pvcTestDataRef(),
+    } + $.hardwareConfigQueue(),
+
+  // Benchmark that always clones offline data from git (tokenizer under /test_data).
+  gitBenchmark(id, providerId, parameters, gitOverrides={})::
+    {
+      id: id,
+      provider_id: providerId,
+      parameters: {
+        tokenizer: '/test_data/tokenizer',
+      } + parameters,
+      test_data_ref: $.gitTestDataRef(gitOverrides),
     } + $.hardwareConfigQueue(),
 
   // Optional hardware_config.queue when queue is enabled for the scenario.
@@ -93,6 +115,20 @@ local harness = std.parseJson(std.extVar('harness'));
       num_examples: 10,
       num_fewshot: 3,
     } + parameters),
+
+  // arc_easy with git offline test data (url/ref from env by default).
+  gitArcEasyBenchmark(parameters={}, gitOverrides={})::
+    $.gitBenchmark('arc_easy', 'lm_evaluation_harness', {
+      num_examples: 10,
+      num_fewshot: 3,
+    } + parameters, gitOverrides),
+
+  // truthfulqa_mc1 with git offline test data (used under tests/git-testdata/staging_sub_path).
+  gitTruthfulqaMc1Benchmark(parameters={}, gitOverrides={})::
+    $.gitBenchmark('truthfulqa_mc1', 'lm_evaluation_harness', {
+      num_examples: 10,
+      num_fewshot: 0,
+    } + parameters, gitOverrides),
 
   // Default benchmark for evaluation_job.jsonnet (disconnected vs connected FVT).
   defaultBenchmark():: $.arcEasyBenchmark({}),
