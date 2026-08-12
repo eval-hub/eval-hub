@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -56,10 +57,17 @@ func (tc *scenarioConfig) fetchMLflowArtifactWithExperimentID(artifactPath, expe
 	fullPath := fmt.Sprintf("%s/%s/artifacts/%s", experimentID, runID, artifactPath)
 	tc.logDebug("Fetching MLflow artifact: %s\n", fullPath)
 
-	body, err := client.DownloadArtifact(fullPath)
+	reader, err := client.DownloadArtifact(fullPath)
 	if err != nil {
 		tc.mlflowArtifactError = err
 		return tc.logError(fmt.Errorf("failed to fetch MLflow artifact: %w", err))
+	}
+	defer func() { _ = reader.Close() }()
+
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		tc.mlflowArtifactError = err
+		return tc.logError(fmt.Errorf("failed to read MLflow artifact body: %w", err))
 	}
 
 	tc.mlflowArtifactBody = body
@@ -199,7 +207,7 @@ func (tc *scenarioConfig) mlflowArtifactExists(artifactPath, experimentID, runID
 	}
 
 	fullPath := fmt.Sprintf("%s/%s/artifacts/%s", experimentID, runID, artifactPath)
-	_, err = client.DownloadArtifact(fullPath)
+	reader, err := client.DownloadArtifact(fullPath)
 	if err != nil {
 		var apiErr *mlflowclient.APIError
 		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound {
@@ -207,6 +215,7 @@ func (tc *scenarioConfig) mlflowArtifactExists(artifactPath, experimentID, runID
 		}
 		return false, tc.logError(fmt.Errorf("failed to check MLflow artifact: %w", err))
 	}
+	_ = reader.Close()
 	return true, nil
 }
 

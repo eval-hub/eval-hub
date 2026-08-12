@@ -243,9 +243,14 @@ func TestDownloadArtifact(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	client := NewClient(srv.URL).WithContext(t.Context())
-	got, err := client.DownloadArtifact(artifactPath)
+	reader, err := client.DownloadArtifact(artifactPath)
 	if err != nil {
 		t.Fatalf("DownloadArtifact() err = %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+	got, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("ReadAll() err = %v", err)
 	}
 	if string(got) != string(body) {
 		t.Fatalf("body = %q, want %q", string(got), string(body))

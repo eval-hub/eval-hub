@@ -135,9 +135,11 @@ func buildArtifactUploadEndpoint(artifactPath string) (string, error) {
 	return artifactsAPIBasePath + "/" + strings.Join(escaped, "/"), nil
 }
 
-// DownloadArtifact fetches artifact content from the MLflow proxied artifact store.
+// DownloadArtifact fetches artifact content from the MLflow proxied artifact store and
+// returns the response body as an io.ReadCloser for streaming. The caller is responsible
+// for closing the returned reader when done.
 // artifactPath is the full artifact path (for example "1/abc123/artifacts/evaluation-card.json").
-func (c *Client) DownloadArtifact(artifactPath string) ([]byte, error) {
+func (c *Client) DownloadArtifact(artifactPath string) (io.ReadCloser, error) {
 	if c == nil {
 		return nil, fmt.Errorf("mlflow client is nil")
 	}
@@ -170,12 +172,12 @@ func (c *Client) DownloadArtifact(artifactPath string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to download artifact: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read download response body: %w", err)
-	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		defer func() { _ = resp.Body.Close() }()
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read error response body: %w", err)
+		}
 		mlflowError := MLFlowError{}
 		if err := json.Unmarshal(respBody, &mlflowError); err == nil {
 			return nil, &APIError{
@@ -191,5 +193,5 @@ func (c *Client) DownloadArtifact(artifactPath string) ([]byte, error) {
 	}
 
 	c.logger.Info("MLFlow artifact download successful", "endpoint", endpoint, "status", resp.StatusCode)
-	return respBody, nil
+	return resp.Body, nil
 }

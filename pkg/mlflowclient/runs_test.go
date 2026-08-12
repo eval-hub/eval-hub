@@ -73,6 +73,12 @@ func TestSearchRuns(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
+		if len(req.ExperimentIDs) != 1 || req.ExperimentIDs[0] != "exp-1" {
+			t.Fatalf("experiment IDs = %v, want [exp-1]", req.ExperimentIDs)
+		}
+		if req.Filter != "demo-run" {
+			t.Fatalf("filter = %q, want demo-run", req.Filter)
+		}
 		_ = json.NewEncoder(w).Encode(SearchRunsResponse{
 			Runs: []Run{{Info: RunInfo{RunID: "run-123", ExperimentID: "exp-1"}}},
 		})
