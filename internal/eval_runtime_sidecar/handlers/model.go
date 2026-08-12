@@ -40,7 +40,7 @@ func newModelProxy(config *config.Config, logger *slog.Logger) (*httputil.Revers
 
 	secretMountPath := strings.TrimSpace(mc.AuthSecretMountPath)
 
-	rp := proxy.NewModelReverseProxy(target, modelHTTPClient, logger, secretMountPath, ServiceAccountTokenPathDefault)
+	rp := proxy.NewModelReverseProxy(target, modelHTTPClient, logger, secretMountPath, ServiceAccountAuthFileDefault)
 	logger.Info("Model proxy enabled", "url", targetURL)
 	return rp, nil
 }
