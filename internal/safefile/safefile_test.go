@@ -44,9 +44,15 @@ func TestReadFile_Nested(t *testing.T) {
 func TestReadFile_RejectsNonLocal(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	for _, name := range []string{"", ".", "/", "..", "../x", "/etc/passwd"} {
+	for _, name := range []string{"", ".", "/", "..", "../x", "/etc/passwd", "./", "sub/.."} {
 		if _, err := safefile.ReadFile(dir, name); err == nil {
 			t.Fatalf("ReadFile(%q): expected error", name)
+		}
+		if _, err := safefile.Open(dir, name); err == nil {
+			t.Fatalf("Open(%q): expected error", name)
+		}
+		if _, err := safefile.Create(dir, name); err == nil {
+			t.Fatalf("Create(%q): expected error", name)
 		}
 	}
 }

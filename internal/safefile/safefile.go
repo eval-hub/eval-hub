@@ -17,7 +17,7 @@ func cleanLocalPath(name string) (string, error) {
 		return "", fmt.Errorf("invalid path %q", name)
 	}
 	clean := filepath.Clean(filepath.FromSlash(name))
-	if !filepath.IsLocal(clean) {
+	if clean == "." || !filepath.IsLocal(clean) {
 		return "", fmt.Errorf("path %q is not local to root", name)
 	}
 	return clean, nil
