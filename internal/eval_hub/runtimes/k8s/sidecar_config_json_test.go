@@ -8,6 +8,31 @@ import (
 	"github.com/eval-hub/eval-hub/internal/otel"
 )
 
+func TestSidecarForJobPodSetsMLFlowTokenPath(t *testing.T) {
+	cfg := &config.Config{
+		Sidecar: &config.SidecarConfig{BaseURL: config.DefaultSidecarBaseURL},
+	}
+	jc := &jobConfig{
+		evalHubURL:        "http://eval-hub:8080",
+		mlflowTrackingURI: "http://mlflow:5000",
+		mlflowWorkspace:   "ws-1",
+	}
+	export, err := sidecarForJobPod(cfg, jc)
+	if err != nil {
+		t.Fatalf("sidecarForJobPod: %v", err)
+	}
+	if export.MLFlow == nil {
+		t.Fatal("expected MLFlow in sidecar export")
+	}
+	want := mlflowAuthMountPath + "/" + mlflowTokenFile
+	if export.MLFlow.TokenPath != want {
+		t.Fatalf("TokenPath = %q, want %q", export.MLFlow.TokenPath, want)
+	}
+	if export.MLFlow.TrackingURI != "http://mlflow:5000" {
+		t.Fatalf("TrackingURI = %q", export.MLFlow.TrackingURI)
+	}
+}
+
 func TestOtelConfigForJobPod(t *testing.T) {
 	t.Run("nil when OTEL disabled", func(t *testing.T) {
 		cfg := &config.Config{OTEL: &config.OTELConfig{Enabled: false}}

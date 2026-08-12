@@ -8,9 +8,11 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/safefile"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/ociclient"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -67,7 +69,7 @@ func buildOCIHTTPClientTLS(caCertPath string, logger *slog.Logger) (*tls.Config,
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12,
 	}
-	caPEM, err := os.ReadFile(caCertPath) // #nosec G304 -- CA path from service configuration
+	caPEM, err := safefile.ReadFile(filepath.Dir(caCertPath), filepath.Base(caCertPath))
 	if err != nil {
 		if os.IsNotExist(err) {
 			if logger != nil {
