@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	// import the postgres driver - "pgx"
@@ -46,6 +47,9 @@ type sqlStorage struct {
 	owner             api.User
 	maxArgLength      int
 	isolationLevel    sql.IsolationLevel
+	// systemResourcesMu serializes LoadSystemResources across With* clones that
+	// share the same DB pool (pointer is copied, not the mutex value).
+	systemResourcesMu *sync.Mutex
 }
 
 func NewStorage(
@@ -158,6 +162,7 @@ func NewStorage(
 		ctx:               context.Background(),
 		maxArgLength:      512,
 		isolationLevel:    isolationLevel,
+		systemResourcesMu: &sync.Mutex{},
 	}
 
 	// ping the database to verify the DSN provided by the user is valid and the server is accessible
@@ -359,6 +364,7 @@ func (s *sqlStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 		owner:             s.owner,
 		maxArgLength:      s.maxArgLength,
 		isolationLevel:    s.isolationLevel,
+		systemResourcesMu: s.systemResourcesMu,
 	}
 }
 
@@ -373,6 +379,7 @@ func (s *sqlStorage) WithContext(ctx context.Context) abstractions.Storage {
 		owner:             s.owner,
 		maxArgLength:      s.maxArgLength,
 		isolationLevel:    s.isolationLevel,
+		systemResourcesMu: s.systemResourcesMu,
 	}
 }
 
@@ -387,6 +394,7 @@ func (s *sqlStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
 		owner:             s.owner,
 		maxArgLength:      s.maxArgLength,
 		isolationLevel:    s.isolationLevel,
+		systemResourcesMu: s.systemResourcesMu,
 	}
 }
 
@@ -401,5 +409,6 @@ func (s *sqlStorage) WithOwner(owner api.User) abstractions.Storage {
 		owner:             owner,
 		maxArgLength:      s.maxArgLength,
 		isolationLevel:    s.isolationLevel,
+		systemResourcesMu: s.systemResourcesMu,
 	}
 }

@@ -144,6 +144,91 @@ func TestWatcher_DebouncesMutipleEvents(t *testing.T) {
 	}
 }
 
+func TestWatcher_SerializesOverlappingReloads(t *testing.T) {
+	logger := logging.FallbackLogger()
+	store := &blockingMockStorage{entered: make(chan struct{}, 1), release: make(chan struct{})}
+	validate := testhelpers.NewValidator(t)
+	w := NewWatcher(logger, validate, store, t.TempDir())
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		w.reload()
+	}()
+
+	select {
+	case <-store.entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for first reload to enter LoadSystemResources")
+	}
+
+	secondStarted := make(chan struct{})
+	go func() {
+		defer wg.Done()
+		close(secondStarted)
+		w.reload()
+	}()
+	<-secondStarted
+	// Give the second reload a chance to race past the mutex if serialization is broken.
+	time.Sleep(100 * time.Millisecond)
+	if store.getInFlight() != 1 {
+		t.Fatalf("expected exactly one in-flight LoadSystemResources while first holds lock, got %d", store.getInFlight())
+	}
+	if store.getLoadCalls() != 1 {
+		t.Fatalf("expected second reload to wait on mutex, loadCalls=%d", store.getLoadCalls())
+	}
+
+	close(store.release)
+	wg.Wait()
+	if store.getLoadCalls() != 2 {
+		t.Fatalf("expected both reloads to complete, loadCalls=%d", store.getLoadCalls())
+	}
+	if store.getInFlight() != 0 {
+		t.Fatalf("expected no in-flight loads after completion, got %d", store.getInFlight())
+	}
+}
+
+// blockingMockStorage blocks inside LoadSystemResources until release is closed.
+type blockingMockStorage struct {
+	abstractions.Storage
+	mu        sync.Mutex
+	loadCalls int
+	inFlight  int
+	entered   chan struct{}
+	release   chan struct{}
+}
+
+func (m *blockingMockStorage) LoadSystemResources(_ map[string]api.CollectionResource, _ map[string]api.ProviderResource) error {
+	m.mu.Lock()
+	m.loadCalls++
+	m.inFlight++
+	m.mu.Unlock()
+
+	select {
+	case m.entered <- struct{}{}:
+	default:
+	}
+	<-m.release
+
+	m.mu.Lock()
+	m.inFlight--
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *blockingMockStorage) getLoadCalls() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.loadCalls
+}
+
+func (m *blockingMockStorage) getInFlight() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.inFlight
+}
+
 func TestWatcher_StopsOnContextCancel(t *testing.T) {
 	dir := t.TempDir()
 	provDir := filepath.Join(dir, "providers")

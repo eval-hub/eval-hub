@@ -21,6 +21,12 @@ func (s *sqlStorage) CreateCollection(collection *api.CollectionResource) error 
 }
 
 func (s *sqlStorage) createCollectionTxn(txn *sql.Tx, collection *api.CollectionResource) error {
+	if collection.Resource.CreatedAt.IsZero() {
+		collection.Resource.CreatedAt = time.Now()
+	}
+	if collection.Resource.UpdatedAt.IsZero() {
+		collection.Resource.UpdatedAt = collection.Resource.CreatedAt
+	}
 	collectionJSON, err := s.createCollectionEntity(collection)
 	if err != nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)

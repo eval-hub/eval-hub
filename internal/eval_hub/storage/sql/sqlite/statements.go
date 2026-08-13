@@ -14,9 +14,9 @@ import (
 const (
 	INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (id, tenant_id, owner, status, experiment_id, entity) VALUES (?, ?, ?, ?, ?, ?);`
 
-	INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (id, tenant_id, owner, entity) VALUES (?, ?, ?, ?);`
+	INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (id, tenant_id, owner, created_at, updated_at, entity) VALUES (?, ?, ?, ?, ?, ?);`
 
-	INSERT_PROVIDER_STATEMENT = `INSERT INTO providers (id, tenant_id, owner, entity) VALUES (?, ?, ?, ?);`
+	INSERT_PROVIDER_STATEMENT = `INSERT INTO providers (id, tenant_id, owner, created_at, updated_at, entity) VALUES (?, ?, ?, ?, ?, ?);`
 
 	TABLES_SCHEMA = `
 CREATE TABLE IF NOT EXISTS evaluations (
@@ -185,6 +185,10 @@ func (s *sqliteStatementsFactory) CreateDeleteEntityStatement(tenant api.Tenant,
 	return fmt.Sprintf(`DELETE FROM %s WHERE id = ?;`, tableName), []any{id}
 }
 
+func (s *sqliteStatementsFactory) CreateDeleteSystemEntitiesStatement(tableName string) (string, []any) {
+	return fmt.Sprintf(`DELETE FROM %s WHERE owner = ?;`, tableName), []any{abstractions.OwnerSystem}
+}
+
 func (s *sqliteStatementsFactory) CreateUpdateEntityStatement(tenant api.Tenant, tableName, id string, entityJSON string, status *api.OverallState) (string, []any) {
 	// these WHERE statements are okay because we can only update user resources
 	switch tableName {
@@ -202,7 +206,7 @@ func (s *sqliteStatementsFactory) CreateUpdateEntityStatement(tenant api.Tenant,
 }
 
 func (s *sqliteStatementsFactory) CreateProviderAddEntityStatement(provider *api.ProviderResource, entity string) (string, []any) {
-	return INSERT_PROVIDER_STATEMENT, []any{provider.Resource.ID, provider.Resource.Tenant, provider.Resource.Owner, entity}
+	return INSERT_PROVIDER_STATEMENT, []any{provider.Resource.ID, provider.Resource.Tenant, provider.Resource.Owner, provider.Resource.CreatedAt, provider.Resource.UpdatedAt, entity}
 }
 
 func (s *sqliteStatementsFactory) getWhereStatement(tenant api.Tenant, id string) (string, []any) {
@@ -230,7 +234,7 @@ func (s *sqliteStatementsFactory) CreateProviderGetEntityStatement(query *shared
 }
 
 func (s *sqliteStatementsFactory) CreateCollectionAddEntityStatement(collection *api.CollectionResource, entity string) (string, []any) {
-	return INSERT_COLLECTION_STATEMENT, []any{collection.Resource.ID, collection.Resource.Tenant, collection.Resource.Owner, entity}
+	return INSERT_COLLECTION_STATEMENT, []any{collection.Resource.ID, collection.Resource.Tenant, collection.Resource.Owner, collection.Resource.CreatedAt, collection.Resource.UpdatedAt, entity}
 }
 
 func (s *sqliteStatementsFactory) CreateCollectionGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
