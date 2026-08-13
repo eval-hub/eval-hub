@@ -14,10 +14,11 @@ import (
 )
 
 type SidecarServer struct {
-	httpServer *http.Server
-	port       int32
-	logger     *slog.Logger
-	config     *config.Config
+	httpServer  *http.Server
+	port        int32
+	logger      *slog.Logger
+	config      *config.Config
+	bgCtxCancel context.CancelFunc
 }
 
 // NewSidecarServer creates a new sidecar HTTP server with the given logger and config.
@@ -53,7 +54,9 @@ func (s *SidecarServer) GetPort() int {
 
 func (s *SidecarServer) setupRoutes() (http.Handler, error) {
 	router := http.NewServeMux()
-	h, err := handlers.New(s.config, s.logger)
+	ctx, cancel := context.WithCancel(context.Background())
+	s.bgCtxCancel = cancel
+	h, err := handlers.New(ctx, s.config, s.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create handlers: %w", err)
 	}
@@ -115,6 +118,7 @@ func (s *SidecarServer) Start() error {
 
 func (s *SidecarServer) Shutdown(ctx context.Context) error {
 	s.logger.Info("Shutting down sidecar server gracefully...")
+	s.bgCtxCancel()
 	return s.httpServer.Shutdown(ctx)
 }
 

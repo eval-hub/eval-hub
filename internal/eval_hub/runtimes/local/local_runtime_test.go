@@ -345,8 +345,8 @@ func TestRunEvaluationJobPassesEnvVar(t *testing.T) {
 	outputFile := filepath.Join(dirName, "env_output.txt")
 	sentinelPath := filepath.Join(dirName, "done")
 
-	// Command writes EVALHUB_JOB_SPEC_PATH and TEST_VAR to output file
-	command := fmt.Sprintf("sh -c 'echo $EVALHUB_JOB_SPEC_PATH > %s && echo $TEST_VAR >> %s && touch %s'", outputFile, outputFile, sentinelPath)
+	// Command writes EVALHUB_JOB_SPEC_PATH, TEST_VAR, and EVALHUB_MODE to output file
+	command := fmt.Sprintf("sh -c 'echo $EVALHUB_JOB_SPEC_PATH > %s && echo $TEST_VAR >> %s && echo $EVALHUB_MODE >> %s && touch %s'", outputFile, outputFile, outputFile, sentinelPath)
 	providers := sampleLocalProviders(providerID, command)
 
 	rt := &LocalRuntime{
@@ -382,16 +382,19 @@ func TestRunEvaluationJobPassesEnvVar(t *testing.T) {
 		t.Fatal("expected env output, got empty file")
 	}
 
-	// Parse the two lines
+	// Parse the three lines
 	lines := strings.Split(output, "\n")
-	if len(lines) < 2 {
-		t.Fatalf("expected at least 2 lines in env output, got %d: %q", len(lines), output)
+	if len(lines) < 3 {
+		t.Fatalf("expected at least 3 lines in env output, got %d: %q", len(lines), output)
 	}
 	if lines[0] != absExpectedPath {
 		t.Fatalf("expected EVALHUB_JOB_SPEC_PATH=%q, got %q", absExpectedPath, lines[0])
 	}
 	if lines[1] != "test_value" {
 		t.Fatalf("expected TEST_VAR=%q, got %q", "test_value", lines[1])
+	}
+	if lines[2] != "local" {
+		t.Fatalf("EVALHUB_MODE = %q, want local", lines[2])
 	}
 }
 
