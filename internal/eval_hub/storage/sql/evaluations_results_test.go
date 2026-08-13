@@ -204,3 +204,43 @@ func TestComputeBenchmarkTestResult_BenchmarkPassCriteriaTakesPrecedence(t *test
 		t.Errorf("Threshold = %v, want 0.99 (benchmark override)", result.Threshold)
 	}
 }
+
+func TestComputeBenchmarkTestResult_AccMetric(t *testing.T) {
+	t.Parallel()
+	s := testResultsStorage()
+	job := jobWithBenchmark("toxigen", "lm_evaluation_harness",
+		&api.PrimaryScore{Metric: "acc", LowerIsBetter: false},
+		&api.PassCriteria{Threshold: threshold32(0.85)},
+	)
+	event := statusEvent("toxigen", "lm_evaluation_harness", map[string]any{
+		"acc":      float64(0.6914983164983165),
+		"acc_norm": float64(0.6372053872053872),
+	})
+	result := s.computeBenchmarkTestResult(nil, job, event, nil)
+	if result == nil {
+		t.Fatal("expected non-nil BenchmarkTest for toxigen acc metric")
+	}
+	if result.PrimaryScoreMetric != "acc" {
+		t.Errorf("PrimaryScoreMetric = %q, want acc", result.PrimaryScoreMetric)
+	}
+	if result.Pass {
+		t.Errorf("expected Pass=false for acc 0.69 below threshold 0.85")
+	}
+}
+
+func TestComputeBenchmarkTestResult_MissingPrimaryMetricReturnsNil(t *testing.T) {
+	t.Parallel()
+	s := testResultsStorage()
+	job := jobWithBenchmark("toxigen", "lm_evaluation_harness",
+		&api.PrimaryScore{Metric: "toxicity_score", LowerIsBetter: true},
+		&api.PassCriteria{Threshold: threshold32(0.3)},
+	)
+	event := statusEvent("toxigen", "lm_evaluation_harness", map[string]any{
+		"acc":      float64(0.69),
+		"acc_norm": float64(0.64),
+	})
+	result := s.computeBenchmarkTestResult(nil, job, event, nil)
+	if result != nil {
+		t.Fatalf("expected nil when primary metric is missing from metrics, got %+v", result)
+	}
+}
