@@ -5,7 +5,25 @@ VENV_DIR ?= .venv
 PYTHON ?= 3.12
 
 MLFLOW_OLD_VERSION ?= 3.8.1
-MLFLOW_LATEST_VERSION ?= 3.14.0
+
+# Fetch the latest stable MLflow version from GitHub Releases.
+# Falls back to a pinned version when the API is unreachable (offline, CI, rate-limited).
+MLFLOW_LATEST_VERSION_FALLBACK := 3.15.1
+ifndef MLFLOW_LATEST_VERSION
+MLFLOW_LATEST_VERSION := $(shell \
+  curl -sf --max-time 5 \
+    https://api.github.com/repos/mlflow/mlflow/releases/latest 2>/dev/null \
+  | grep -o '"tag_name": *"v[^"]*"' \
+  | grep -o '[0-9][0-9.]*')
+ifneq ($(MLFLOW_LATEST_VERSION),)
+$(info Fetched latest MLflow version from GitHub: $(MLFLOW_LATEST_VERSION))
+endif
+endif
+ifeq ($(MLFLOW_LATEST_VERSION),)
+MLFLOW_LATEST_VERSION := $(MLFLOW_LATEST_VERSION_FALLBACK)
+$(info GitHub API unavailable; using fallback MLflow version: $(MLFLOW_LATEST_VERSION))
+endif
+
 MLFLOW_VERSION ?= $(MLFLOW_LATEST_VERSION)
 
 MLFLOW_HOST ?= 127.0.0.1
