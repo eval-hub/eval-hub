@@ -180,6 +180,67 @@ func TestBuildJobSpecJSONHappyPath(t *testing.T) {
 	}
 }
 
+func TestBuildJobSpec_ModelNotAliasedToEvaluation(t *testing.T) {
+	eval := baseEvaluation()
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if spec.Model == eval.Model {
+		t.Fatal("expected job spec model to be a copy, not the same pointer as evaluation.Model")
+	}
+	spec.Model.URL = "http://localhost:8080/v1"
+	if eval.Model.URL != "http://model.example" {
+		t.Fatalf("mutating job spec model URL should not change evaluation.Model.URL, got %q", eval.Model.URL)
+	}
+}
+
+func TestBuildJobSpec_NilModel(t *testing.T) {
+	eval := baseEvaluation()
+	eval.Model = nil
+
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if spec.Model != nil {
+		t.Fatalf("expected nil Model, got %v", spec.Model)
+	}
+}
+
+func TestBuildJobSpec_ModelAuthNotAliased(t *testing.T) {
+	eval := baseEvaluation()
+	eval.Model.Auth = &api.ModelAuth{SecretRef: "model-token"}
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if spec.Model.Auth == eval.Model.Auth {
+		t.Fatal("expected job spec model auth to be a copy, not the same pointer as evaluation.Model.Auth")
+	}
+	spec.Model.Auth.SecretRef = "mutated"
+	if eval.Model.Auth.SecretRef != "model-token" {
+		t.Fatalf("mutating job spec model auth should not change evaluation.Model.Auth, got %q", eval.Model.Auth.SecretRef)
+	}
+}
+
+func TestBuildJobSpec_ModelParametersNotAliased(t *testing.T) {
+	eval := baseEvaluation()
+	eval.Model.Parameters = map[string]any{"temperature": 0.7}
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	spec.Model.Parameters["temperature"] = 1.0
+	if eval.Model.Parameters["temperature"] != 0.7 {
+		t.Fatalf("mutating job spec model parameters should not change evaluation.Model.Parameters, got %v", eval.Model.Parameters["temperature"])
+	}
+	spec.Model.Parameters["new_key"] = "value"
+	if _, exists := eval.Model.Parameters["new_key"]; exists {
+		t.Fatal("mutating job spec model parameters map should not affect evaluation.Model.Parameters")
+	}
+}
+
 func TestBuildJobSpecJSONNilCallbackURL(t *testing.T) {
 	eval := baseEvaluation()
 
