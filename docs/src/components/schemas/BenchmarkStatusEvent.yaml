@@ -21,7 +21,14 @@ properties:
   metrics:
     type: object
     additionalProperties: true
-    description: Benchmark metrics
+    description: Metric name to value (any scalar, list, or object)
+  metrics_schema:
+    type: array
+    description: >
+      Optional metadata for each metric. Each entry declares the name and type
+      of a metric in the metrics map. Omitted metrics default to numeric.
+    items:
+      $ref: ./MetricSchema.yaml
   additional_info:
     type: object
     additionalProperties: true

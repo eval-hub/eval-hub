@@ -13,7 +13,14 @@ properties:
   metrics:
     type: object
     additionalProperties: true
-    description: Metric name to value
+    description: Metric name to value (any scalar, list, or object)
+  metrics_schema:
+    type: array
+    description: >
+      Metadata for each metric. Each entry declares the name and type of a
+      metric in the metrics map. Metrics not listed default to numeric.
+    items:
+      $ref: ./MetricSchema.yaml
   additional_info:
     type: object
     additionalProperties: true

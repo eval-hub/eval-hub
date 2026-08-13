@@ -35,6 +35,9 @@ post:
                 status: completed
                 metrics:
                   accuracy: 0.95
+                metrics_schema:
+                  - name: accuracy
+                    type: numeric
                 artifacts:
                   logs: /data/logs/1234567890.log
                 started_at: '2026-01-12T10:45:32Z'

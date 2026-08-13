@@ -599,6 +599,9 @@ paths:
                     status: completed
                     metrics:
                       accuracy: 0.95
+                    metrics_schema:
+                      - name: accuracy
+                        type: numeric
                     artifacts:
                       logs: /data/logs/1234567890.log
                     started_at: '2026-01-12T10:45:32Z'
@@ -2155,6 +2158,26 @@ components:
               items:
                 $ref: '#/components/schemas/BenchmarkStatus'
               description: Per-benchmark status
+    MetricSchema:
+      type: object
+      description: Metadata for a single metric result.
+      required:
+        - name
+        - type
+      properties:
+        name:
+          type: string
+          description: Metric name — must match a key in the metrics map
+        type:
+          type: string
+          enum:
+            - numeric
+            - categorical
+            - array_ordered
+            - array_unordered
+            - time_series
+          description: |
+            The result type of this metric. Determines how downstream consumers render comparisons. Defaults to numeric for metrics not listed in metrics_schema.
     BenchmarkTest:
       type: object
       description: The test result of a single benchmark run
@@ -2186,7 +2209,13 @@ components:
         metrics:
           type: object
           additionalProperties: true
-          description: Metric name to value
+          description: Metric name to value (any scalar, list, or object)
+        metrics_schema:
+          type: array
+          description: |
+            Metadata for each metric. Each entry declares the name and type of a metric in the metrics map. Metrics not listed default to numeric.
+          items:
+            $ref: '#/components/schemas/MetricSchema'
         additional_info:
           type: object
           additionalProperties: true
@@ -2955,7 +2984,13 @@ components:
         metrics:
           type: object
           additionalProperties: true
-          description: Benchmark metrics
+          description: Metric name to value (any scalar, list, or object)
+        metrics_schema:
+          type: array
+          description: |
+            Optional metadata for each metric. Each entry declares the name and type of a metric in the metrics map. Omitted metrics default to numeric.
+          items:
+            $ref: '#/components/schemas/MetricSchema'
         additional_info:
           type: object
           additionalProperties: true

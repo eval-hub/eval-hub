@@ -139,6 +139,7 @@ func buildCardBenchmarkResults(job *api.EvaluationJobResource) []CardBenchmarkRe
 		if ok {
 			cardResult.Contacts = result.Contacts
 			cardResult.Metrics = result.Metrics
+			cardResult.MetricsSchema = result.MetricsSchema
 			cardResult.AdditionalInfo = result.AdditionalInfo
 			cardResult.Artifacts = result.Artifacts
 			cardResult.MLFlowRunID = result.MLFlowRunID
@@ -158,6 +159,7 @@ func toCardBenchmarkResult(result api.BenchmarkResult, status api.State) CardBen
 		Contacts:       result.Contacts,
 		Status:         status,
 		Metrics:        result.Metrics,
+		MetricsSchema:  result.MetricsSchema,
 		AdditionalInfo: result.AdditionalInfo,
 		Artifacts:      result.Artifacts,
 		MLFlowRunID:    result.MLFlowRunID,

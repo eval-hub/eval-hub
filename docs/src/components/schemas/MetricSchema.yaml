@@ -1,0 +1,21 @@
+type: object
+description: Metadata for a single metric result.
+required:
+  - name
+  - type
+properties:
+  name:
+    type: string
+    description: Metric name — must match a key in the metrics map
+  type:
+    type: string
+    enum:
+      - numeric
+      - categorical
+      - array_ordered
+      - array_unordered
+      - time_series
+    description: >
+      The result type of this metric. Determines how downstream consumers
+      render comparisons. Defaults to numeric for metrics not listed in
+      metrics_schema.
