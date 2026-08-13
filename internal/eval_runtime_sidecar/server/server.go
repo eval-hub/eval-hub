@@ -14,10 +14,12 @@ import (
 )
 
 type SidecarServer struct {
-	httpServer *http.Server
-	port       int32
-	logger     *slog.Logger
-	config     *config.Config
+	httpServer  *http.Server
+	port        int32
+	logger      *slog.Logger
+	config      *config.Config
+	bgCtx       context.Context
+	bgCtxCancel context.CancelFunc
 }
 
 // NewSidecarServer creates a new sidecar HTTP server with the given logger and config.
@@ -36,11 +38,15 @@ func NewSidecarServer(logger *slog.Logger,
 		return nil, fmt.Errorf("sidecar config is required")
 	}
 
-	return &SidecarServer{
+	s := &SidecarServer{
 		port:   cfg.Sidecar.Port,
 		logger: logger,
 		config: cfg,
-	}, nil
+	}
+	if cfg.Sidecar.LocalMode {
+		s.bgCtx, s.bgCtxCancel = context.WithCancel(context.Background())
+	}
+	return s, nil
 }
 
 func (s *SidecarServer) isOTELEnabled() bool {
@@ -53,7 +59,7 @@ func (s *SidecarServer) GetPort() int {
 
 func (s *SidecarServer) setupRoutes() (http.Handler, error) {
 	router := http.NewServeMux()
-	h, err := handlers.New(s.config, s.logger)
+	h, err := handlers.New(s.bgCtx, s.config, s.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create handlers: %w", err)
 	}
@@ -115,6 +121,9 @@ func (s *SidecarServer) Start() error {
 
 func (s *SidecarServer) Shutdown(ctx context.Context) error {
 	s.logger.Info("Shutting down sidecar server gracefully...")
+	if s.bgCtxCancel != nil {
+		s.bgCtxCancel()
+	}
 	return s.httpServer.Shutdown(ctx)
 }
 

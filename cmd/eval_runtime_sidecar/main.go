@@ -51,6 +51,9 @@ func main() {
 	if err != nil {
 		startUpFailed(terminationFilePath(), err, "Failed to load sidecar config", logger)
 	}
+	if svcConfig.Sidecar == nil {
+		startUpFailed(terminationFilePath(), fmt.Errorf("sidecar section missing from config"), "Invalid sidecar config", logger)
+	}
 
 	var otelShutdown func(context.Context) error
 	if svcConfig.IsOTELEnabled() {
@@ -76,6 +79,7 @@ func main() {
 		"version", version,
 		"build", build,
 		"build_date", buildDate,
+		"local_mode", svcConfig.Sidecar.LocalMode,
 		"mlflow_tracking", svcConfig.MLFlow != nil && svcConfig.MLFlow.TrackingURI != "",
 		"otel", svcConfig.IsOTELEnabled(),
 	)
