@@ -61,6 +61,7 @@ func registerCustomValidators(instance *validator.Validate) error {
 		return fmt.Errorf("register validator failed for git_clone_url: %w", err)
 	}
 	instance.RegisterStructValidation(evaluationJobConfig, api.EvaluationJobConfig{})
+	instance.RegisterStructValidation(validateBenchmarkStatusEventMetricsSchema, api.BenchmarkStatusEvent{})
 	instance.RegisterStructValidation(validateGitTestDataRefAuth, api.GitTestDataRef{})
 	// hardware_profile_name is mutually exclusive with inline queue/cpu/memory/gpu.
 	instance.RegisterStructValidation(validateBenchmarkHardwareConfigExclusive, api.BenchmarkHardwareConfig{})
@@ -145,6 +146,48 @@ func validateBenchmarkHardwareConfigExclusive(sl validator.StructLevel) {
 
 func evaluationJobConfig(sl validator.StructLevel) {
 	evaluationJobConfigBenchmarksMin(sl)
+}
+
+// validateBenchmarkStatusEventMetricsSchema ensures metrics_schema names exist in
+// metrics and that schema names are not duplicated.
+func validateBenchmarkStatusEventMetricsSchema(sl validator.StructLevel) {
+	event, ok := sl.Current().Interface().(api.BenchmarkStatusEvent)
+	if !ok || len(event.MetricsSchema) == 0 {
+		return
+	}
+	seen := make(map[string]struct{}, len(event.MetricsSchema))
+	for i, schema := range event.MetricsSchema {
+		if _, dup := seen[schema.Name]; dup {
+			sl.ReportError(
+				event.MetricsSchema,
+				"metrics_schema",
+				"MetricsSchema",
+				"metrics_schema_duplicate_name",
+				schema.Name,
+			)
+		} else {
+			seen[schema.Name] = struct{}{}
+		}
+		if event.Metrics == nil {
+			sl.ReportError(
+				schema.Name,
+				fmt.Sprintf("metrics_schema[%d].name", i),
+				"Name",
+				"metrics_schema_name_not_in_metrics",
+				schema.Name,
+			)
+			continue
+		}
+		if _, ok := event.Metrics[schema.Name]; !ok {
+			sl.ReportError(
+				schema.Name,
+				fmt.Sprintf("metrics_schema[%d].name", i),
+				"Name",
+				"metrics_schema_name_not_in_metrics",
+				schema.Name,
+			)
+		}
+	}
 }
 
 // evaluationJobConfigBenchmarksMin ensures Benchmarks has at least one element when Collection is not present
