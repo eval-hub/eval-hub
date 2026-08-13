@@ -21,6 +21,13 @@ type Watcher struct {
 	storage   abstractions.Storage
 	configDir string
 	debounce  time.Duration
+
+	// reloadMu serializes reload() so overlapping debounced callbacks cannot
+	// run LoadSystemResources concurrently. A second reload that starts while
+	// the first is still running waits, then re-reads configs from disk.
+	// This is in addition to the storage-level systemResourcesMu which guards
+	// LoadSystemResources itself against any direct callers.
+	reloadMu sync.Mutex
 }
 
 // NewWatcher creates a config watcher that monitors the given config directory
@@ -144,7 +151,11 @@ func isRelevantEvent(event fsnotify.Event) bool {
 
 // reload re-reads provider and collection configs from disk and updates
 // the storage layer. Errors are logged but do not stop the watcher.
+// Concurrent reload invocations are serialized so only one runs at a time.
 func (w *Watcher) reload() {
+	w.reloadMu.Lock()
+	defer w.reloadMu.Unlock()
+
 	w.logger.Info("Reloading system providers and collections")
 
 	providerConfigs, providerErr := LoadProviderConfigs(w.logger, w.validate, w.configDir)

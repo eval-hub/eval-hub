@@ -33,5 +33,7 @@ type SQLStatementsFactory interface {
 	CreateListEntitiesStatement(tenant api.Tenant, tableName string, limit, offset int, filter map[string]any) (string, []any)
 	ScanRowForEntity(tenant api.Tenant, ableName string, rows *sql.Rows, query *EntityQuery) error
 	CreateDeleteEntityStatement(tenant api.Tenant, tableName string, id string) (string, []any)
+	// CreateDeleteSystemEntitiesStatement deletes all owner=system rows in tableName.
+	CreateDeleteSystemEntitiesStatement(tableName string) (string, []any)
 	CreateUpdateEntityStatement(tenant api.Tenant, tableName, id string, entityJSON string, status *api.OverallState) (string, []any)
 }
