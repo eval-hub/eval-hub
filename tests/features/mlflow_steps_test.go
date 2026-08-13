@@ -1,16 +1,17 @@
 package features
 
 import (
-	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 
 	"github.com/PaesslerAG/jsonpath"
 )
@@ -47,50 +48,26 @@ func (tc *scenarioConfig) iFetchMLflowArtifact(artifactPath, runIDPattern string
 }
 
 func (tc *scenarioConfig) fetchMLflowArtifactWithExperimentID(artifactPath, experimentID, runID string) error {
-	baseURL, err := mlflowBaseURL()
-	if err != nil {
-		return tc.logError(err)
-	}
-	workspace := tc.mlflowWorkspace()
-
-	artifactURL := fmt.Sprintf("%s/api/2.0/mlflow-artifacts/artifacts/%s/%s/artifacts/%s",
-		baseURL, experimentID, runID, artifactPath)
-
-	tc.logDebug("Fetching MLflow artifact from: %s\n", artifactURL)
-	tc.logDebug("Using workspace: %s\n", workspace)
-
-	client := getMLflowHTTPClient()
-
-	req, err := http.NewRequest("GET", artifactURL, nil)
+	client, err := tc.mlflowClient()
 	if err != nil {
 		tc.mlflowArtifactError = err
-		return tc.logError(fmt.Errorf("failed to create MLflow artifact request: %w", err))
+		return tc.logError(err)
 	}
 
-	// Add authorization if token is available
-	if authToken := os.Getenv("AUTH_TOKEN"); authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+authToken)
-	}
+	fullPath := fmt.Sprintf("%s/%s/artifacts/%s", experimentID, runID, artifactPath)
+	tc.logDebug("Fetching MLflow artifact: %s\n", fullPath)
 
-	// Required for tenant-scoped MLflow access
-	req.Header.Set("X-MLFLOW-WORKSPACE", workspace)
-
-	resp, err := client.Do(req)
+	reader, err := client.DownloadArtifact(fullPath)
 	if err != nil {
 		tc.mlflowArtifactError = err
 		return tc.logError(fmt.Errorf("failed to fetch MLflow artifact: %w", err))
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _ = reader.Close() }()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(reader)
 	if err != nil {
 		tc.mlflowArtifactError = err
-		return tc.logError(fmt.Errorf("failed to read MLflow artifact response: %w", err))
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		tc.mlflowArtifactError = fmt.Errorf("MLflow artifact fetch returned status %d: %s", resp.StatusCode, string(body))
-		return tc.logError(tc.mlflowArtifactError)
+		return tc.logError(fmt.Errorf("failed to read MLflow artifact body: %w", err))
 	}
 
 	tc.mlflowArtifactBody = body
@@ -224,37 +201,22 @@ func (tc *scenarioConfig) theMLflowArtifactShouldNotExistForExperimentAndJob(art
 }
 
 func (tc *scenarioConfig) mlflowArtifactExists(artifactPath, experimentID, runID string) (bool, error) {
-	baseURL, err := mlflowBaseURL()
+	client, err := tc.mlflowClient()
 	if err != nil {
 		return false, tc.logError(err)
 	}
-	workspace := tc.mlflowWorkspace()
-	artifactURL := fmt.Sprintf("%s/api/2.0/mlflow-artifacts/artifacts/%s/%s/artifacts/%s",
-		baseURL, experimentID, runID, artifactPath)
 
-	req, err := http.NewRequest("GET", artifactURL, nil)
+	fullPath := fmt.Sprintf("%s/%s/artifacts/%s", experimentID, runID, artifactPath)
+	reader, err := client.DownloadArtifact(fullPath)
 	if err != nil {
-		return false, tc.logError(fmt.Errorf("failed to create MLflow artifact request: %w", err))
+		var apiErr *mlflowclient.APIError
+		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound {
+			return false, nil
+		}
+		return false, tc.logError(fmt.Errorf("failed to check MLflow artifact: %w", err))
 	}
-	if authToken := os.Getenv("AUTH_TOKEN"); authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+authToken)
-	}
-	req.Header.Set("X-MLFLOW-WORKSPACE", workspace)
-
-	resp, err := getMLflowHTTPClient().Do(req)
-	if err != nil {
-		return false, tc.logError(fmt.Errorf("failed to fetch MLflow artifact: %w", err))
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(resp.Body)
-	switch resp.StatusCode {
-	case http.StatusOK:
-		return true, nil
-	case http.StatusNotFound:
-		return false, nil
-	default:
-		return false, tc.logError(fmt.Errorf("MLflow artifact fetch returned status %d: %s", resp.StatusCode, string(body)))
-	}
+	_ = reader.Close()
+	return true, nil
 }
 
 func (tc *scenarioConfig) resolveMLflowExperimentAndJobIDs(experimentID, jobID string) (string, string, error) {
@@ -270,73 +232,23 @@ func (tc *scenarioConfig) resolveMLflowExperimentAndJobIDs(experimentID, jobID s
 }
 
 func (tc *scenarioConfig) findMLflowRunIDForJob(experimentIDResolved, jobIDResolved string) (string, error) {
-	baseURL, err := mlflowBaseURL()
+	client, err := tc.mlflowClient()
 	if err != nil {
 		return "", tc.logError(err)
 	}
-	workspace := tc.mlflowWorkspace()
 
-	searchURL := fmt.Sprintf("%s/api/2.0/mlflow/runs/search", baseURL)
-	searchBody := map[string]interface{}{
-		"experiment_ids": []string{experimentIDResolved},
-		"filter":         fmt.Sprintf("tags.evaluation_job_id = '%s'", jobIDResolved),
-	}
-
-	searchJSON, err := json.Marshal(searchBody)
-	if err != nil {
-		return "", tc.logError(fmt.Errorf("failed to marshal search request: %w", err))
-	}
-
-	req, err := http.NewRequest("POST", searchURL, bytes.NewBuffer(searchJSON))
-	if err != nil {
-		return "", tc.logError(fmt.Errorf("failed to create search request: %w", err))
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-MLFLOW-WORKSPACE", workspace)
-
-	if authToken := os.Getenv("AUTH_TOKEN"); authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+authToken)
-	}
-
-	client := getMLflowHTTPClient()
-	resp, err := client.Do(req)
+	resp, err := client.SearchRuns(&mlflowclient.SearchRunsRequest{
+		ExperimentIDs: []string{experimentIDResolved},
+		Filter:        fmt.Sprintf("tags.evaluation_job_id = '%s'", jobIDResolved),
+	})
 	if err != nil {
 		return "", tc.logError(fmt.Errorf("failed to search MLflow runs: %w", err))
 	}
-	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", tc.logError(fmt.Errorf("failed to read MLflow search response body: %w", err))
-	}
-	if resp.StatusCode != 200 {
-		return "", tc.logError(fmt.Errorf("MLflow run search failed with status %d: %s", resp.StatusCode, string(body)))
-	}
-
-	var searchResult map[string]interface{}
-	if err := json.Unmarshal(body, &searchResult); err != nil {
-		return "", tc.logError(fmt.Errorf("failed to parse search response: %w", err))
-	}
-
-	runs, ok := searchResult["runs"].([]interface{})
-	if !ok || len(runs) == 0 {
+	if len(resp.Runs) == 0 {
 		return "", nil
 	}
-
-	firstRun, ok := runs[0].(map[string]interface{})
-	if !ok {
-		return "", tc.logError(fmt.Errorf("unexpected MLflow run format: %T", runs[0]))
-	}
-	runInfo, ok := firstRun["info"].(map[string]interface{})
-	if !ok {
-		return "", tc.logError(fmt.Errorf("MLflow run missing 'info' field or wrong type"))
-	}
-	runID, ok := runInfo["run_id"].(string)
-	if !ok {
-		return "", tc.logError(fmt.Errorf("MLflow run_id is not a string: %T", runInfo["run_id"]))
-	}
-	return runID, nil
+	return resp.Runs[0].Info.RunID, nil
 }
 
 func (tc *scenarioConfig) theMLflowArtifactShouldBeValidJSON() error {
