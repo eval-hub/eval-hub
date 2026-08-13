@@ -14,9 +14,9 @@ import (
 const (
 	INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (id, tenant_id, owner, status, experiment_id, entity) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id;`
 
-	INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (id, tenant_id, owner, entity) VALUES ($1, $2, $3, $4) RETURNING id;`
+	INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (id, tenant_id, owner, created_at, updated_at, entity) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id;`
 
-	INSERT_PROVIDER_STATEMENT = `INSERT INTO providers (id, tenant_id, owner, entity) VALUES ($1, $2, $3, $4) RETURNING id;`
+	INSERT_PROVIDER_STATEMENT = `INSERT INTO providers (id, tenant_id, owner, created_at, updated_at, entity) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id;`
 
 	TABLES_SCHEMA = `
 CREATE TABLE IF NOT EXISTS evaluations (
@@ -180,6 +180,10 @@ func (s *postgresStatementsFactory) CreateDeleteEntityStatement(tenant api.Tenan
 	return fmt.Sprintf(`DELETE FROM %s WHERE id = $1;`, tableName), []any{id}
 }
 
+func (s *postgresStatementsFactory) CreateDeleteSystemEntitiesStatement(tableName string) (string, []any) {
+	return fmt.Sprintf(`DELETE FROM %s WHERE owner = $1;`, tableName), []any{abstractions.OwnerSystem}
+}
+
 func (s *postgresStatementsFactory) CreateUpdateEntityStatement(tenant api.Tenant, tableName, id string, entityJSON string, status *api.OverallState) (string, []any) {
 	// UPDATE "evaluations" SET "status" = ?, "entity" = ?, "updated_at" = CURRENT_TIMESTAMP WHERE "id" = ?;
 	switch tableName {
@@ -197,7 +201,7 @@ func (s *postgresStatementsFactory) CreateUpdateEntityStatement(tenant api.Tenan
 }
 
 func (s *postgresStatementsFactory) CreateProviderAddEntityStatement(provider *api.ProviderResource, entity string) (string, []any) {
-	return INSERT_PROVIDER_STATEMENT, []any{provider.Resource.ID, provider.Resource.Tenant, provider.Resource.Owner, entity}
+	return INSERT_PROVIDER_STATEMENT, []any{provider.Resource.ID, provider.Resource.Tenant, provider.Resource.Owner, provider.Resource.CreatedAt, provider.Resource.UpdatedAt, entity}
 }
 
 func (s *postgresStatementsFactory) getWhereStatement(tenant api.Tenant, id string, index int) (string, []any) {
@@ -226,7 +230,7 @@ func (s *postgresStatementsFactory) CreateProviderGetEntityStatement(query *shar
 }
 
 func (s *postgresStatementsFactory) CreateCollectionAddEntityStatement(collection *api.CollectionResource, entity string) (string, []any) {
-	return INSERT_COLLECTION_STATEMENT, []any{collection.Resource.ID, collection.Resource.Tenant, collection.Resource.Owner, entity}
+	return INSERT_COLLECTION_STATEMENT, []any{collection.Resource.ID, collection.Resource.Tenant, collection.Resource.Owner, collection.Resource.CreatedAt, collection.Resource.UpdatedAt, entity}
 }
 
 func (s *postgresStatementsFactory) CreateCollectionGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {

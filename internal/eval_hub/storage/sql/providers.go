@@ -3,6 +3,7 @@ package sql
 import (
 	"database/sql"
 	"encoding/json"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
@@ -17,6 +18,12 @@ func (s *sqlStorage) CreateProvider(provider *api.ProviderResource) error {
 }
 
 func (s *sqlStorage) createProviderTxn(txn *sql.Tx, provider *api.ProviderResource) error {
+	if provider.Resource.CreatedAt.IsZero() {
+		provider.Resource.CreatedAt = time.Now()
+	}
+	if provider.Resource.UpdatedAt.IsZero() {
+		provider.Resource.UpdatedAt = provider.Resource.CreatedAt
+	}
 	providerJSON, err := s.createProviderEntity(provider)
 	if err != nil {
 		return se.NewServiceError(messages.InternalServerError, "Error", err)
