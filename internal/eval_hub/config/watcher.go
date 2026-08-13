@@ -25,6 +25,8 @@ type Watcher struct {
 	// reloadMu serializes reload() so overlapping debounced callbacks cannot
 	// run LoadSystemResources concurrently. A second reload that starts while
 	// the first is still running waits, then re-reads configs from disk.
+	// This is in addition to the storage-level systemResourcesMu which guards
+	// LoadSystemResources itself against any direct callers.
 	reloadMu sync.Mutex
 }
 

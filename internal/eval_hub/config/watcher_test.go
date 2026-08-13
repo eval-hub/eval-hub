@@ -146,7 +146,11 @@ func TestWatcher_DebouncesMutipleEvents(t *testing.T) {
 
 func TestWatcher_SerializesOverlappingReloads(t *testing.T) {
 	logger := logging.FallbackLogger()
-	store := &blockingMockStorage{entered: make(chan struct{}, 1), release: make(chan struct{})}
+	store := &blockingMockStorage{
+		entered:  make(chan struct{}, 1),
+		proceed:  make(chan struct{}),
+		released: make(chan struct{}),
+	}
 	validate := testhelpers.NewValidator(t)
 	w := NewWatcher(logger, validate, store, t.TempDir())
 
@@ -157,29 +161,54 @@ func TestWatcher_SerializesOverlappingReloads(t *testing.T) {
 		w.reload()
 	}()
 
+	// Wait until the first reload is inside LoadSystemResources.
 	select {
 	case <-store.entered:
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for first reload to enter LoadSystemResources")
 	}
 
-	secondStarted := make(chan struct{})
+	// Launch a second reload that must block on the watcher mutex.
+	secondBlocked := make(chan struct{})
 	go func() {
 		defer wg.Done()
-		close(secondStarted)
+		close(secondBlocked)
 		w.reload()
 	}()
-	<-secondStarted
-	// Give the second reload a chance to race past the mutex if serialization is broken.
-	time.Sleep(100 * time.Millisecond)
+	<-secondBlocked
+
+	// Wait until the second goroutine is actually parked on reloadMu.
+	// We know it's blocked when the watcher mutex has a waiter: the first
+	// reload still holds it and the second goroutine has started but
+	// hasn't entered LoadSystemResources.
+	deadline := time.After(2 * time.Second)
+	for store.getLoadCalls() < 1 {
+		select {
+		case <-deadline:
+			t.Fatal("timed out waiting for first load call")
+		default:
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
 	if store.getInFlight() != 1 {
 		t.Fatalf("expected exactly one in-flight LoadSystemResources while first holds lock, got %d", store.getInFlight())
 	}
-	if store.getLoadCalls() != 1 {
-		t.Fatalf("expected second reload to wait on mutex, loadCalls=%d", store.getLoadCalls())
+
+	// Release the first reload.
+	store.proceed <- struct{}{}
+	<-store.released
+
+	// The second reload should now enter LoadSystemResources.
+	select {
+	case <-store.entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for second reload to enter LoadSystemResources")
 	}
 
-	close(store.release)
+	// Release the second reload.
+	store.proceed <- struct{}{}
+	<-store.released
+
 	wg.Wait()
 	if store.getLoadCalls() != 2 {
 		t.Fatalf("expected both reloads to complete, loadCalls=%d", store.getLoadCalls())
@@ -189,14 +218,17 @@ func TestWatcher_SerializesOverlappingReloads(t *testing.T) {
 	}
 }
 
-// blockingMockStorage blocks inside LoadSystemResources until release is closed.
+// blockingMockStorage blocks inside LoadSystemResources until a value is sent
+// on proceed, then signals released. Each call signals entered so the test can
+// observe exactly when LoadSystemResources is executing.
 type blockingMockStorage struct {
 	abstractions.Storage
 	mu        sync.Mutex
 	loadCalls int
 	inFlight  int
 	entered   chan struct{}
-	release   chan struct{}
+	proceed   chan struct{}
+	released  chan struct{}
 }
 
 func (m *blockingMockStorage) LoadSystemResources(_ map[string]api.CollectionResource, _ map[string]api.ProviderResource) error {
@@ -205,15 +237,14 @@ func (m *blockingMockStorage) LoadSystemResources(_ map[string]api.CollectionRes
 	m.inFlight++
 	m.mu.Unlock()
 
-	select {
-	case m.entered <- struct{}{}:
-	default:
-	}
-	<-m.release
+	m.entered <- struct{}{}
+	<-m.proceed
 
 	m.mu.Lock()
 	m.inFlight--
 	m.mu.Unlock()
+
+	m.released <- struct{}{}
 	return nil
 }
 
