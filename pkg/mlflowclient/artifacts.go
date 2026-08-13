@@ -176,7 +176,10 @@ func (c *Client) DownloadArtifact(artifactPath string) (io.ReadCloser, error) {
 		defer func() { _ = resp.Body.Close() }()
 		respBody, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read error response body: %w", err)
+			return nil, &APIError{
+				StatusCode:   resp.StatusCode,
+				ResponseBody: fmt.Sprintf("failed to read error response body: %v", err),
+			}
 		}
 		mlflowError := MLFlowError{}
 		if err := json.Unmarshal(respBody, &mlflowError); err == nil {
@@ -192,6 +195,6 @@ func (c *Client) DownloadArtifact(artifactPath string) (io.ReadCloser, error) {
 		}
 	}
 
-	c.logger.Info("MLFlow artifact download successful", "endpoint", endpoint, "status", resp.StatusCode)
+	c.logger.Info("MLFlow artifact download reader returned to client", "endpoint", endpoint, "status", resp.StatusCode)
 	return resp.Body, nil
 }

@@ -191,13 +191,17 @@ func TestDownloadArtifactValidationErrors(t *testing.T) {
 	t.Parallel()
 
 	var nilClient *Client
-	if _, err := nilClient.DownloadArtifact("path"); err == nil {
+	if reader, err := nilClient.DownloadArtifact("path"); err == nil {
 		t.Fatal("expected error for nil client")
+	} else if reader != nil {
+		_ = reader.Close()
 	}
 
 	client := NewClient("http://example.com").WithContext(t.Context())
-	if _, err := client.DownloadArtifact(""); err == nil {
+	if reader, err := client.DownloadArtifact(""); err == nil {
 		t.Fatal("expected error for empty artifact path")
+	} else if reader != nil {
+		_ = reader.Close()
 	}
 }
 
@@ -211,7 +215,10 @@ func TestDownloadArtifactErrorResponse(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	client := NewClient(srv.URL).WithContext(t.Context())
-	_, err := client.DownloadArtifact("1/run-1/artifacts/missing.json")
+	reader, err := client.DownloadArtifact("1/run-1/artifacts/missing.json")
+	if reader != nil {
+		_ = reader.Close()
+	}
 	if err == nil {
 		t.Fatal("expected download error")
 	}
