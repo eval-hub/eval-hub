@@ -21,7 +21,25 @@ properties:
   metrics:
     type: object
     additionalProperties: true
-    description: Benchmark metrics
+    description: >
+      Metrics reported by the evaluation adapter for this benchmark, keyed by
+      metric name. Each value may be a scalar, list, or object.
+    example:
+      accuracy: 0.95
+      toxicity_score: 0.12
+  metrics_schema:
+    type: array
+    description: >
+      Optional metadata describing how each metric in metrics should be
+      interpreted. Each entry names a metric key and its result type. Metrics
+      without an entry default to numeric.
+    example:
+      - name: accuracy
+        type: numeric
+      - name: toxicity_score
+        type: numeric
+    items:
+      $ref: ./MetricSchema.yaml
   additional_info:
     type: object
     additionalProperties: true

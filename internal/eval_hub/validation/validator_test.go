@@ -807,3 +807,267 @@ func TestStatusEvent_MissingBenchmarkStatusEventRejected(t *testing.T) {
 		t.Fatal("expected validation error when BenchmarkStatusEvent is nil")
 	}
 }
+
+func TestStatusEvent_MetricsSchemaUnknownNameRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	ev := api.StatusEvent{
+		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			ProviderID: "p1",
+			ID:         "b1",
+			Status:     api.StateCompleted,
+			Metrics: map[string]any{
+				"acc": 0.9,
+			},
+			MetricsSchema: []api.MetricSchema{
+				{Name: "acc", Type: api.ResultTypeNumeric},
+				{Name: "missing_metric", Type: api.ResultTypeNumeric},
+			},
+		},
+	}
+	err := validate.Struct(ev)
+	if err == nil {
+		t.Fatal("expected validation error when metrics_schema name is not in metrics")
+	}
+	valErr, ok := err.(validator.ValidationErrors)
+	if !ok {
+		t.Fatalf("expected validator.ValidationErrors, got %T: %v", err, err)
+	}
+	if !validationErrorsContainTag(valErr, "metrics_schema_name_not_in_metrics") {
+		t.Fatalf("expected metrics_schema_name_not_in_metrics error, got: %v", err)
+	}
+}
+
+func TestStatusEvent_MetricsSchemaNilMetricsRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	ev := api.StatusEvent{
+		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			ProviderID: "p1",
+			ID:         "b1",
+			Status:     api.StateCompleted,
+			MetricsSchema: []api.MetricSchema{
+				{Name: "acc", Type: api.ResultTypeNumeric},
+			},
+		},
+	}
+	err := validate.Struct(ev)
+	if err == nil {
+		t.Fatal("expected validation error when metrics_schema is set but metrics is nil")
+	}
+	valErr, ok := err.(validator.ValidationErrors)
+	if !ok {
+		t.Fatalf("expected validator.ValidationErrors, got %T: %v", err, err)
+	}
+	if !validationErrorsContainTag(valErr, "metrics_schema_name_not_in_metrics") {
+		t.Fatalf("expected metrics_schema_name_not_in_metrics error, got: %v", err)
+	}
+}
+
+func TestStatusEvent_MetricsSchemaDuplicateNameRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	ev := api.StatusEvent{
+		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			ProviderID: "p1",
+			ID:         "b1",
+			Status:     api.StateCompleted,
+			Metrics: map[string]any{
+				"acc": 0.9,
+			},
+			MetricsSchema: []api.MetricSchema{
+				{Name: "acc", Type: api.ResultTypeNumeric},
+				{Name: "acc", Type: api.ResultTypeNumeric},
+			},
+		},
+	}
+	err := validate.Struct(ev)
+	if err == nil {
+		t.Fatal("expected validation error when metrics_schema has duplicate names")
+	}
+	valErr, ok := err.(validator.ValidationErrors)
+	if !ok {
+		t.Fatalf("expected validator.ValidationErrors, got %T: %v", err, err)
+	}
+	if !validationErrorsContainTag(valErr, "metrics_schema_duplicate_name") {
+		t.Fatalf("expected metrics_schema_duplicate_name error, got: %v", err)
+	}
+}
+
+func validationErrorsContainTag(errs validator.ValidationErrors, tag string) bool {
+	for _, e := range errs {
+		if e.Tag() == tag {
+			return true
+		}
+	}
+	return false
+}
+
+// --- Tests for model struct tag validation ---
+
+func TestEvaluationJobConfig_ModelNilRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	cfg := api.EvaluationJobConfig{
+		Name:  "test-job",
+		Model: nil,
+		Benchmarks: []api.EvaluationBenchmarkConfig{
+			{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
+		},
+	}
+	err := validate.Struct(cfg)
+	if err == nil {
+		t.Fatal("expected validation error when Model is nil")
+	}
+}
+
+func TestEvaluationJobConfig_ModelURLEmpty_AcceptedByValidator(t *testing.T) {
+	validate := newTestValidator(t)
+	cfg := api.EvaluationJobConfig{
+		Name:  "test-job",
+		Model: &api.ModelRef{URL: "", Name: "model"},
+		Benchmarks: []api.EvaluationBenchmarkConfig{
+			{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
+		},
+	}
+	err := validate.Struct(cfg)
+	if err != nil {
+		t.Fatalf("expected no validation error for empty model URL (handler enforces this), got: %v", err)
+	}
+}
+
+func TestEvaluationJobConfig_ModelURLNotRequired_AllBenchmarksPreRecorded(t *testing.T) {
+	validate := newTestValidator(t)
+	cfg := api.EvaluationJobConfig{
+		Name:  "test-job",
+		Model: &api.ModelRef{URL: "", Name: "model"},
+		Benchmarks: []api.EvaluationBenchmarkConfig{
+			{
+				Ref:        api.Ref{ID: "b1"},
+				ProviderID: "provider-1",
+				TestDataRef: &api.TestDataRef{
+					Type: "pre_recorded_data",
+					S3:   &api.S3TestDataRef{Bucket: "b", Key: "k", SecretRef: "s"},
+				},
+			},
+			{
+				Ref:        api.Ref{ID: "b2"},
+				ProviderID: "provider-1",
+				TestDataRef: &api.TestDataRef{
+					Type: "pre_recorded_data",
+					PVC:  &api.PVCTestDataRef{ClaimName: "my-pvc"},
+				},
+			},
+		},
+	}
+	err := validate.Struct(cfg)
+	if err != nil {
+		t.Fatalf("expected no error when all benchmarks have pre_recorded_data, got: %v", err)
+	}
+}
+
+func TestEvaluationJobConfig_ModelURLNotRequired_Collection(t *testing.T) {
+	validate := newTestValidator(t)
+	cfg := api.EvaluationJobConfig{
+		Name:       "test-job",
+		Model:      &api.ModelRef{URL: "", Name: "model"},
+		Collection: &api.CollectionRef{ID: "coll-1"},
+	}
+	err := validate.Struct(cfg)
+	if err != nil {
+		t.Fatalf("expected no error when using a collection (URL check is in handler), got: %v", err)
+	}
+}
+
+func TestEvaluationJobConfig_ModelURLValid_NonPreRecordedBenchmarks(t *testing.T) {
+	validate := newTestValidator(t)
+	cfg := api.EvaluationJobConfig{
+		Name:  "test-job",
+		Model: &api.ModelRef{URL: "http://model.example.com/v1", Name: "model"},
+		Benchmarks: []api.EvaluationBenchmarkConfig{
+			{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
+		},
+	}
+	err := validate.Struct(cfg)
+	if err != nil {
+		t.Fatalf("expected no error when model URL is valid, got: %v", err)
+	}
+}
+
+func TestEvaluationJobConfig_ModelURLInvalid_Rejected(t *testing.T) {
+	validate := newTestValidator(t)
+	cfg := api.EvaluationJobConfig{
+		Name:  "test-job",
+		Model: &api.ModelRef{URL: "not-a-url", Name: "model"},
+		Benchmarks: []api.EvaluationBenchmarkConfig{
+			{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1"},
+		},
+	}
+	err := validate.Struct(cfg)
+	if err == nil {
+		t.Fatal("expected validation error for invalid model URL format")
+	}
+}
+
+// --- Tests for TestDataRef.Type field validation ---
+
+func TestTestDataRef_TypeValidValues(t *testing.T) {
+	validate := newTestValidator(t)
+	validTypes := []string{"", "data_set", "pre_recorded_data"}
+	for _, typ := range validTypes {
+		t.Run("type="+typ, func(t *testing.T) {
+			ref := api.TestDataRef{
+				Type: typ,
+				S3:   &api.S3TestDataRef{Bucket: "b", Key: "k", SecretRef: "s"},
+			}
+			if err := validate.Struct(ref); err != nil {
+				t.Fatalf("expected no error for type %q, got: %v", typ, err)
+			}
+		})
+	}
+}
+
+func TestTestDataRef_TypeInvalidValues(t *testing.T) {
+	validate := newTestValidator(t)
+	invalidTypes := []string{"unknown", "recorded", "dataset", "PRE_RECORDED_DATA"}
+	for _, typ := range invalidTypes {
+		t.Run("type="+typ, func(t *testing.T) {
+			ref := api.TestDataRef{
+				Type: typ,
+				S3:   &api.S3TestDataRef{Bucket: "b", Key: "k", SecretRef: "s"},
+			}
+			if err := validate.Struct(ref); err == nil {
+				t.Fatalf("expected validation error for type %q", typ)
+			}
+		})
+	}
+}
+
+func TestTestDataRef_PreRecordedDataWithS3(t *testing.T) {
+	validate := newTestValidator(t)
+	ref := api.TestDataRef{
+		Type: "pre_recorded_data",
+		S3:   &api.S3TestDataRef{Bucket: "b", Key: "k", SecretRef: "s"},
+	}
+	if err := validate.Struct(ref); err != nil {
+		t.Fatalf("expected no error for pre_recorded_data with S3, got: %v", err)
+	}
+}
+
+func TestTestDataRef_PreRecordedDataWithPVC(t *testing.T) {
+	validate := newTestValidator(t)
+	ref := api.TestDataRef{
+		Type: "pre_recorded_data",
+		PVC:  &api.PVCTestDataRef{ClaimName: "my-pvc"},
+	}
+	if err := validate.Struct(ref); err != nil {
+		t.Fatalf("expected no error for pre_recorded_data with PVC, got: %v", err)
+	}
+}
+
+func TestTestDataRef_PreRecordedDataWithGit(t *testing.T) {
+	validate := newTestValidator(t)
+	ref := api.TestDataRef{
+		Type: "pre_recorded_data",
+		Git:  &api.GitTestDataRef{URL: "https://github.com/org/repo.git", Ref: "main"},
+	}
+	if err := validate.Struct(ref); err != nil {
+		t.Fatalf("expected no error for pre_recorded_data with Git, got: %v", err)
+	}
+}

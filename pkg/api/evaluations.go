@@ -5,6 +5,28 @@ import (
 	"time"
 )
 
+// ResultType identifies what kind of data a metric produces, allowing downstream
+// consumers (e.g. the EvalHub UI) to select the correct comparison renderer
+// without falling back to fragile shape-based inference.
+type ResultType string
+
+const (
+	ResultTypeNumeric        ResultType = "numeric"
+	ResultTypeCategorical    ResultType = "categorical"
+	ResultTypeArrayOrdered   ResultType = "array_ordered"
+	ResultTypeArrayUnordered ResultType = "array_unordered"
+	ResultTypeTimeSeries     ResultType = "time_series"
+)
+
+// DefaultResultType is the backward-compatible default for results that predate the field.
+const DefaultResultType = ResultTypeNumeric
+
+// MetricSchema describes metadata for a single metric in metrics_schema.
+type MetricSchema struct {
+	Name string     `json:"name" validate:"required"`
+	Type ResultType `json:"type" validate:"required,oneof=numeric categorical array_ordered array_unordered time_series"`
+}
+
 // State represents the evaluation state enum
 type State string
 
@@ -73,7 +95,7 @@ func GetOverallState(s string) (OverallState, error) {
 
 // ModelRef represents model specification for evaluation requests
 type ModelRef struct {
-	URL        string         `json:"url" validate:"required"`
+	URL        string         `json:"url" validate:"omitempty,url"` // required if not all benchmarks have pre_recorded_data
 	Name       string         `json:"name" validate:"required"`
 	Auth       *ModelAuth     `json:"auth,omitempty"`
 	Parameters map[string]any `json:"parameters,omitempty"`
@@ -170,6 +192,11 @@ type TestDataRef struct {
 	S3  *S3TestDataRef  `mapstructure:"s3" json:"s3,omitempty" validate:"required_without_all=PVC Git,excluded_with=PVC Git"`
 	PVC *PVCTestDataRef `mapstructure:"pvc" json:"pvc,omitempty" validate:"required_without_all=S3 Git,excluded_with=S3 Git"`
 	Git *GitTestDataRef `mapstructure:"git" json:"git,omitempty" validate:"required_without_all=S3 PVC,excluded_with=S3 PVC"`
+	// Type is the type of test data source.
+	// - data_set: a data set from a data set provider or user-provided data set
+	// - pre_recorded_data: pre-recorded data from a model
+	// If Type is not set, it defaults to data_set.
+	Type string `mapstructure:"type" json:"type,omitempty" validate:"omitempty,oneof=data_set pre_recorded_data"`
 	// ResolvedSHA is the resolved content identity for the test data source (e.g. git commit
 	// SHA). Populated by eval-hub after the init container resolves the ref; not accepted on input.
 	ResolvedSHA string `json:"resolved_sha,omitempty" mapstructure:"resolved_sha,omitempty"`
@@ -278,6 +305,7 @@ type BenchmarkStatusEvent struct {
 	Status         State          `json:"status" validate:"required,oneof=pending running completed failed"`
 	Phase          JobPhase       `json:"phase,omitempty" validate:"omitempty,oneof=initializing loading_data running_evaluation post_processing persisting_artifacts completed"`
 	Metrics        map[string]any `json:"metrics,omitempty"`
+	MetricsSchema  []MetricSchema `json:"metrics_schema,omitempty" validate:"omitempty,dive"`
 	AdditionalInfo map[string]any `json:"additional_info,omitempty"`
 	Artifacts      map[string]any `json:"artifacts,omitempty"`
 	ErrorMessage   *MessageInfo   `json:"error_message,omitempty"`
@@ -307,6 +335,7 @@ type BenchmarkResult struct {
 	Contacts       []string       `json:"contacts,omitempty"`
 	BenchmarkIndex int            `json:"benchmark_index"`
 	Metrics        map[string]any `json:"metrics,omitempty"`
+	MetricsSchema  []MetricSchema `json:"metrics_schema,omitempty"`
 	AdditionalInfo map[string]any `json:"additional_info,omitempty"`
 	Artifacts      map[string]any `json:"artifacts,omitempty"`
 	MLFlowRunID    string         `json:"mlflow_run_id,omitempty"`
@@ -373,7 +402,7 @@ type EvaluationJobConfig struct {
 	Name           string                      `json:"name" validate:"required"`
 	Description    *string                     `json:"description,omitempty"`
 	Tags           []string                    `json:"tags,omitempty" validate:"omitempty,dive,tagname"`
-	Model          *ModelRef                   `json:"model,omitempty"`
+	Model          *ModelRef                   `json:"model" validate:"required"`
 	PassCriteria   *PassCriteria               `json:"pass_criteria,omitempty"`
 	Benchmarks     []EvaluationBenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,required_without=Collection,dive"`
 	Collection     *CollectionRef              `json:"collection,omitempty" validate:"omitempty,required_without=Benchmarks"`

@@ -13,7 +13,28 @@ properties:
   metrics:
     type: object
     additionalProperties: true
-    description: Metric name to value
+    description: >
+      Metrics produced by evaluating the model on this benchmark, keyed by metric
+      name. Each value may be a scalar, list, or object.
+    example:
+      acc: 0.691
+      acc_norm: 0.637
+      acc_stderr: 0.009
+  metrics_schema:
+    type: array
+    description: >
+      Metadata describing how each metric in metrics should be interpreted.
+      Each entry names a metric key and its result type. Metrics without an
+      entry default to numeric.
+    example:
+      - name: acc
+        type: numeric
+      - name: acc_norm
+        type: numeric
+      - name: acc_stderr
+        type: numeric
+    items:
+      $ref: ./MetricSchema.yaml
   additional_info:
     type: object
     additionalProperties: true
