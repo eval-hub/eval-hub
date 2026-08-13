@@ -1,8 +1,17 @@
 package proxy
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"log/slog"
+	"math/big"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 )
@@ -309,4 +318,47 @@ func TestNewOCIHTTPClient(t *testing.T) {
 			t.Fatal("expected non-nil client")
 		}
 	})
+}
+
+func TestBuildTLSConfig_LoadsCACert(t *testing.T) {
+	t.Parallel()
+	caPath := writeProxyTestCACert(t)
+	tlsCfg, err := buildTLSConfig(caPath, false, slog.Default(), "test")
+	if err != nil {
+		t.Fatalf("buildTLSConfig: %v", err)
+	}
+	if tlsCfg == nil || tlsCfg.RootCAs == nil {
+		t.Fatal("expected TLS config with RootCAs")
+	}
+}
+
+func writeProxyTestCACert(t *testing.T) string {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "proxy-test-ca"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("CreateCertificate: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "ca.crt")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	defer func() { _ = f.Close() }()
+	if err := pem.Encode(f, &pem.Block{Type: "CERTIFICATE", Bytes: der}); err != nil {
+		t.Fatalf("pem.Encode: %v", err)
+	}
+	return path
 }

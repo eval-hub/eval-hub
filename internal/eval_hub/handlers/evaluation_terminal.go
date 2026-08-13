@@ -28,6 +28,10 @@ func (h *Handlers) onEvaluationJobUpdated(
 
 	h.exportEvaluationResults(ctx, job, logger)
 
+	if h.runtime != nil && job.Results != nil {
+		h.notifyThresholdViolations(ctx, job, logger)
+	}
+
 	if h.serviceConfig == nil || !h.serviceConfig.IsOTELJobContainerLogsEnabled() || h.runtime == nil {
 		return
 	}
@@ -44,6 +48,26 @@ func (h *Handlers) onEvaluationJobUpdated(
 	}
 
 	otel.ExportJobContainerLogsAsync(ctx, h.runtime, job, benchmarks, logger)
+}
+
+// notifyThresholdViolations emits EvaluationThresholdViolated signals for every benchmark result
+// that has a failing threshold test. Signals are best-effort: errors are absorbed by the runtime.
+func (h *Handlers) notifyThresholdViolations(ctx context.Context, job *api.EvaluationJobResource, logger *slog.Logger) {
+	for _, bench := range job.Results.Benchmarks {
+		if bench.Test == nil || bench.Test.Pass {
+			continue
+		}
+		if logger != nil {
+			logger.InfoContext(ctx, "threshold violation detected",
+				"job_id", job.Resource.ID,
+				"benchmark_index", bench.BenchmarkIndex,
+				"metric", bench.Test.PrimaryScoreMetric,
+				"actual", bench.Test.PrimaryScore,
+				"threshold", bench.Test.Threshold,
+			)
+		}
+		h.runtime.NotifyThresholdViolation(ctx, job, bench.BenchmarkIndex, bench.Test.PrimaryScoreMetric, bench.Test.PrimaryScore, bench.Test.Threshold)
+	}
 }
 
 func (h *Handlers) resolveJobBenchmarksForStorage(storage abstractions.Storage, job *api.EvaluationJobResource) ([]api.EvaluationBenchmarkConfig, error) {

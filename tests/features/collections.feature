@@ -669,7 +669,7 @@ Feature: Collections Endpoint
     And there is a system collection with id "safety-and-fairness-v1"
     When I send a GET request to "/api/v1/evaluations/collections/safety-and-fairness-v1"
     Then the response code should be 200
-    And the response should contain "name" with value "Safety & Fairness"
+    And the response should contain "name" with value "Safety and Fairness"
 
   Scenario: Verify out of box collection retrieval - category - safety-and-fairness-v1
     Given the service is running

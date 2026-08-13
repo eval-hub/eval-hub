@@ -1292,7 +1292,194 @@ Feature: Evaluation Jobs
     And the response should contain the value "{{env:TEST_DATA_PVC_MISSING_CLAIM_NAME|evalhub-offline-test-data-does-not-exist}}" at path "$.status.benchmarks[0].error_message.message"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
-  
+
+  # Git test-data source: init container clones into /test_data.
+  # Defaults: https://github.com/eval-hub/eval-hub @ main with sub_path tests/git-testdata
+  # (tokenizer + allenai ARC-Easy only). Override TEST_DATA_GIT_URL / REF / SUB_PATH if needed.
+  # Until tests/git-testdata is on the target ref, set TEST_DATA_GIT_REF to a branch that has it.
+  # Cluster needs egress to the git host (or an internal mirror via env). Opt in: GODOG_TAGS="@git".
+  @git
+  Scenario: Evaluation job with git test data completes successfully
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git.json"
+    Then the response code should be 202
+    And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
+    And the response should contain the value "pending" at path "$.status.state"
+    And the array at path "benchmarks" in the response should have length 2
+    And the response should contain the value "arc_easy" at path "$.benchmarks[0].id"
+    And the response should contain the value "lm_evaluation_harness" at path "$.benchmarks[0].provider_id"
+    And the response should contain the value "/test_data/tokenizer" at path "$.benchmarks[0].parameters.tokenizer"
+    And the response should contain the value "{{env:TEST_DATA_GIT_URL|https://github.com/eval-hub/eval-hub}}" at path "$.benchmarks[0].test_data_ref.git.url"
+    And the response should contain the value "{{env:TEST_DATA_GIT_REF|main}}" at path "$.benchmarks[0].test_data_ref.git.ref"
+    And the response should contain the value "{{env:TEST_DATA_GIT_SUB_PATH|tests/git-testdata}}" at path "$.benchmarks[0].test_data_ref.git.sub_path"
+    And the response should contain the value "truthfulqa_mc1" at path "$.benchmarks[1].id"
+    And the response should contain the value "{{env:TEST_DATA_GIT_NESTED_SUB_PATH|tests/git-testdata/staging_sub_path}}" at path "$.benchmarks[1].test_data_ref.git.sub_path"
+    # resolved_sha is server-populated after init; omitted/blank on create for every git benchmark
+    And the response should not contain the value "resolved_sha" at path "$.benchmarks[0].test_data_ref"
+    And the response should not contain the value "resolved_sha" at path "$.benchmarks[1].test_data_ref"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    And the response should contain the value "completed" at path "$.status.benchmarks[0].status"
+    And the response should contain the value "completed" at path "$.status.benchmarks[1].status"
+    And the response should contain the value "arc_easy" at path "$.status.benchmarks[0].id"
+    And the response should contain the value "truthfulqa_mc1" at path "$.status.benchmarks[1].id"
+    And the response should contain "results"
+    And the array at path "results.benchmarks" in the response should have length 2
+    And the response should contain the value "arc_easy" at path "$.results.benchmarks[0].id"
+    And the response should contain the value "truthfulqa_mc1" at path "$.results.benchmarks[1].id"
+    And the response should contain at least the value "0.2" at path "$.results.benchmarks[0].metrics.acc"
+    And the response should contain at least the value "0.2" at path "$.results.benchmarks[0].metrics.acc_norm"
+    And the response should contain the value "{{env:TEST_DATA_GIT_URL|https://github.com/eval-hub/eval-hub}}" at path "$.benchmarks[0].test_data_ref.git.url"
+    And the response should contain the value "{{env:TEST_DATA_GIT_REF|main}}" at path "$.benchmarks[0].test_data_ref.git.ref"
+    And the response should contain the value "{{env:TEST_DATA_GIT_SUB_PATH|tests/git-testdata}}" at path "$.benchmarks[0].test_data_ref.git.sub_path"
+    And the response should contain the value "{{env:TEST_DATA_GIT_NESTED_SUB_PATH|tests/git-testdata/staging_sub_path}}" at path "$.benchmarks[1].test_data_ref.git.sub_path"
+    And the response should match the value "[0-9a-fA-F]{7,40}" at path "$.benchmarks[0].test_data_ref.resolved_sha"
+    And the response should match the value "[0-9a-fA-F]{7,40}" at path "$.benchmarks[1].test_data_ref.resolved_sha"
+    And the response should contain the value "/test_data/tokenizer" at path "$.benchmarks[0].parameters.tokenizer"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
+  @git
+  Scenario: Evaluation job with git tag ref completes successfully
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_tag.json"
+    Then the response code should be 202
+    And the response should contain the value "{{env:TEST_DATA_GIT_TAG_REF|main}}" at path "$.benchmarks[0].test_data_ref.git.ref"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    And the response should match the value "[0-9a-fA-F]{7,40}" at path "$.benchmarks[0].test_data_ref.resolved_sha"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
+  @git
+  Scenario: Evaluation job with git commit SHA ref completes successfully
+    # Default TEST_DATA_GIT_SHA_REF falls back to TEST_DATA_GIT_REF/main (branch-like).
+    # Set TEST_DATA_GIT_SHA_REF to a real hex commit SHA (and optionally TEST_DATA_GIT_SHA_URL)
+    # to exercise the commit-SHA checkout path. Do not hardcode a branch tip SHA (breaks on squash-merge).
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_sha.json"
+    Then the response code should be 202
+    And the response should contain the value "{{env:TEST_DATA_GIT_SHA_REF|main}}" at path "$.benchmarks[0].test_data_ref.git.ref"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    And the response should match the value "[0-9a-fA-F]{7,40}" at path "$.benchmarks[0].test_data_ref.resolved_sha"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
+  @git
+  @negative
+  Scenario: Cannot create evaluation job with both git and S3 test data
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_and_s3.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+    And the response should contain the value "exactly one of s3, pvc, or git must be set" at path "$.message"
+
+  @git
+  @negative
+  Scenario: Cannot create evaluation job with both git and PVC test data
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_and_pvc.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+    And the response should contain the value "exactly one of s3, pvc, or git must be set" at path "$.message"
+
+  @git
+  @negative
+  Scenario: Cannot create evaluation job with SSH git URL
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_ssh.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+    # SSH forms fail the http_url tag before git_clone_url (friendly scheme text is not surfaced).
+    And the response should contain the value "http_url" at path "$.message"
+
+  @git
+  @negative
+  Scenario: Cannot create evaluation job with blocked git host
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_blocked_host.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+    # Private/literal blocked hosts fail git_clone_url (default playground message today).
+    And the response should contain the value "git_clone_url" at path "$.message"
+
+  @git
+  @negative
+  Scenario: Cannot create evaluation job with client-supplied resolved_sha
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_resolved_sha_readonly.json"
+    Then the response code should be 400
+    And the response should contain the value "resolved_sha_read_only" at path "$.message_code"
+    And the response should contain the value "The field 'resolved_sha' is read-only and must not be set on create." at path "$.message"
+
+  @git
+  @negative
+  Scenario: Cannot create evaluation job with git missing url
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_missing_url.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+
+  @git
+  @negative
+  Scenario: Cannot create evaluation job with git missing ref
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_missing_ref.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+
+  @git
+  @negative
+  Scenario: Evaluation job with bad git ref fails
+    Given the service is running
+    And I set the wait deadline to "5m"
+    And I set the wait interval to "10s"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_bad_ref.json"
+    Then the response code should be 202
+    And the response should contain the value "pending" at path "$.status.state"
+    And the response should contain the value "{{env:TEST_DATA_GIT_BAD_REF|this-ref-does-not-exist-evalhub-fvt}}" at path "$.benchmarks[0].test_data_ref.git.ref"
+    And I wait for the evaluation job status to be "failed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "failed" at path "$.status.state"
+    And the response should contain the value "failed" at path "$.status.benchmarks[0].status"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
+  @git
+  @negative
+  Scenario: Cannot create evaluation job with http git URL and secret_ref
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_http_with_secret.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+    And the response should contain the value "git url with credentials must use https scheme" at path "$.message"
+
+  @git
+  @negative
+  Scenario: Evaluation job with missing git sub_path fails
+    Given the service is running
+    And I set the wait deadline to "5m"
+    And I set the wait interval to "10s"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_bad_subpath.json"
+    Then the response code should be 202
+    And the response should contain the value "pending" at path "$.status.state"
+    And the response should contain the value "{{env:TEST_DATA_GIT_BAD_SUB_PATH|this-path-does-not-exist-evalhub-fvt}}" at path "$.benchmarks[0].test_data_ref.git.sub_path"
+    And I wait for the evaluation job status to be "failed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "failed" at path "$.status.state"
+    And the response should contain the value "failed" at path "$.status.benchmarks[0].status"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
   @mlflow
   Scenario: Card generated for completed job with benchmarks
     Given the service is running
@@ -1310,7 +1497,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain the value "{{value:job_id}}" at path "$.metadata.evaluation_job_id"
     And the MLflow artifact should contain the value "{{env:MODEL_NAME|test}}" at path "$.context.model.name"
     And the MLflow artifact should contain "arc_easy"
-  
+
   @mlflow
   Scenario: Card generated for completed job with collection
     Given the service is running
@@ -1593,7 +1780,7 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain "results.benchmarks[0].error_message.message"
     And the MLflow artifact should contain "results.benchmarks[0].error_message.message_code"
     And the MLflow artifact should contain "results.benchmarks[0].error_message.message_origin"
-  
+
   @mlflow
   Scenario: EvalCard artifact is valid parseable JSON for failed job
     Given the service is running
@@ -1608,7 +1795,7 @@ Feature: Evaluation Jobs
     When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should be valid JSON
- 
+
   @mlflow
   Scenario: Card generated for job with no pass_criteria
     Given the service is running
@@ -1625,3 +1812,148 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain "card_version"
     And the MLflow artifact should contain "results.benchmarks"
     And the MLflow artifact should contain the value "{{value:job_id}}" at path "$.metadata.evaluation_job_id"
+
+  @oci
+  Scenario: EvalCard published to OCI registry when job completes with OCI export configured
+    Given the service is running
+    And OCI is configured
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oci_export.json"
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:job_id"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "{{env:OCI_TAG|test-v1}}"
+    Then the OCI artifact should exist
+    And the OCI artifact should be valid JSON
+    And the OCI artifact should contain "benchmark_id"
+    And the OCI artifact should contain "model_name"
+    And the OCI artifact should contain "results"
+    And the OCI artifact should contain "arc_easy"
+    And the OCI artifact should contain the value "{{value:job_id}}" at path "$.id"
+
+  @oci
+  Scenario: No EvalCard exported to OCI when evaluation job fails
+    Given the service is running
+    And OCI is configured
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oci_invalid_model.json"
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:job_id"
+    And I wait for the evaluation job status to match "completed|failed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response should contain the value "failed" at path "$.status.state"
+    # Verify user tag does not exist when job fails
+    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "{{env:OCI_TAG_FAILED|failed-job-test}}"
+    Then the OCI manifest should not exist
+
+  @oci
+  Scenario: No EvalCard exported to OCI when exports.oci is not configured
+    Given the service is running
+    And OCI is configured
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_no_oci.json"
+    Then the response code should be 202
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    # Verify job spec does not contain OCI export configuration
+    And the response should not contain "exports"
+
+  @oci
+  Scenario: OCI export with custom annotations
+    Given the service is running
+    And OCI is configured
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oci_annotations.json"
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:job_id"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    # Verify results artifact exists with custom annotations in OCI metadata
+    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "{{env:OCI_TAG_ANNOTATIONS|annotations-test}}"
+    # Verify custom annotations in manifest
+    Then the OCI manifest should contain annotation "team" with value "ml-platform"
+    And the OCI manifest should contain annotation "environment" with value "test"
+    And the OCI manifest should contain annotation "cost-center" with value "research"
+    # Verify artifact content
+    And the OCI artifact should exist
+    And the OCI artifact should be valid JSON
+    And the OCI artifact should contain "benchmark_id"
+    And the OCI artifact should contain "model_name"
+    And the OCI artifact should contain "results"
+    And the OCI artifact should contain the value "{{value:job_id}}" at path "$.id"
+
+  @oci
+  Scenario: OCI export validation errors for missing required fields
+    Given the service is running
+    And OCI is configured
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oci_missing_host.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+
+  @oci
+  Scenario: Multiple jobs export to same OCI repository with different tags
+    Given the service is running
+    And OCI is configured
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oci_shared_repo_1.json"
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:job_id_1"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    # Verify first job's results exist
+    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "{{env:OCI_TAG_SHARED1|shared-repo-v1}}"
+    Then the OCI artifact should exist
+    And the OCI artifact should be valid JSON
+    And the OCI artifact should contain "benchmark_id"
+    And the OCI artifact should contain "model_name"
+    And the OCI artifact should contain "results"
+    And the OCI artifact should contain the value "{{value:job_id_1}}" at path "$.id"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oci_shared_repo_2.json"
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:job_id_2"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    # Verify second job's results exist (different tag, same repo)
+    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "{{env:OCI_TAG_SHARED2|shared-repo-v2}}"
+    Then the OCI artifact should exist
+    And the OCI artifact should be valid JSON
+    And the OCI artifact should contain "benchmark_id"
+    And the OCI artifact should contain "model_name"
+    And the OCI artifact should contain "results"
+    And the OCI artifact should contain the value "{{value:job_id_2}}" at path "$.id"
+    # Re-verify first job's artifact is still intact after second job completed
+    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "{{env:OCI_TAG_SHARED1|shared-repo-v1}}"
+    Then the OCI artifact should exist
+    And the OCI artifact should contain the value "{{value:job_id_1}}" at path "$.id"
+
+  # NOTE: This scenario has both @oci and @mlflow tags. Since @mlflow is excluded by default
+  # in FVT_TAGS, this scenario only runs when MLflow tests are explicitly enabled.
+  # This means the dual-export path has no coverage in standard CI runs.
+  @oci
+  @mlflow
+  Scenario: Both OCI and MLflow exports succeed for same job
+    Given the service is running
+    And OCI is configured
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_dual_export.json"
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:job_id"
+    And the "resource.mlflow_experiment_id" field in the response should be saved as "value:mlflow_experiment_id"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    # Verify OCI results artifact exists
+    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "{{env:OCI_TAG_DUAL|dual-export-test}}"
+    Then the OCI artifact should exist
+    And the OCI artifact should be valid JSON
+    And the OCI artifact should contain "benchmark_id"
+    And the OCI artifact should contain "model_name"
+    And the OCI artifact should contain "results"
+    And the OCI artifact should contain the value "{{value:job_id}}" at path "$.id"
+    # Verify MLflow has the EvalCard
+    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    Then the MLflow artifact should exist
+    And the MLflow artifact should contain "card_version"
+    And the MLflow artifact should contain "schema_version"

@@ -149,6 +149,8 @@ func (r *fakeRuntime) NotifyJobPhaseTransition(_ context.Context, job *api.Evalu
 	r.notifiedBenchmarkIndex = benchmarkIndex
 	r.notifiedState = state
 }
+func (r *fakeRuntime) NotifyThresholdViolation(_ context.Context, _ *api.EvaluationJobResource, _ int, _ string, _, _ float32) {
+}
 
 type listEvaluationsRequest struct {
 	*MockRequest
@@ -1586,5 +1588,111 @@ func TestHandleCreateEvaluationValidatesEvaluationHardwareConfigFallback(t *test
 	}
 	if created.HardwareConfig == nil || created.HardwareConfig.HardwareProfileName != "fallback-profile" {
 		t.Fatalf("expected response evaluation.hardware_config, got %#v", created.HardwareConfig)
+	}
+}
+
+func TestHandleCreateEvaluationRejectsEmptyModelURL_WithRuntime(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	providerConfigs := map[string]api.ProviderResource{
+		"garak": {
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-1"},
+				},
+			},
+		},
+	}
+	storage := &fakeStorage{providerConfigs: providerConfigs}
+	runtime := &fakeRuntime{}
+	validate := testhelpers.NewValidator(t)
+	h := handlers.New(storage, validate, runtime, nil, nil, nil)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-model-url", logger, "test-user", "test-tenant")
+
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+		body:        []byte(`{"name":"test-job","model":{"name":"model"},"benchmarks":[{"id":"bench-1","provider_id":"garak"}]}`),
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCreateEvaluation(ctx, req, resp)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "model_url_required") {
+		t.Fatalf("expected model_url_required error in body, got: %s", body)
+	}
+}
+
+func TestHandleCreateEvaluationAcceptsEmptyModelURL_AllPreRecordedData(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	providerConfigs := map[string]api.ProviderResource{
+		"garak": {
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-1"},
+				},
+			},
+		},
+	}
+	storage := &fakeStorage{providerConfigs: providerConfigs}
+	runtime := &fakeRuntime{}
+	validate := testhelpers.NewValidator(t)
+	h := handlers.New(storage, validate, runtime, nil, nil, nil)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-pre-recorded", logger, "test-user", "test-tenant")
+
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+		body:        []byte(`{"name":"test-job","model":{"name":"model"},"benchmarks":[{"id":"bench-1","provider_id":"garak","test_data_ref":{"type":"pre_recorded_data","s3":{"bucket":"b","key":"k","secret_ref":"s"}}}]}`),
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCreateEvaluation(ctx, req, resp)
+
+	if recorder.Code != 202 {
+		t.Fatalf("expected 202 when all benchmarks have pre_recorded_data and model URL is empty, got %d: %s",
+			recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestHandleCreateEvaluationRejectsEmptyModelURL_MixedBenchmarks(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	providerConfigs := map[string]api.ProviderResource{
+		"garak": {
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "bench-1"},
+					{ID: "bench-2"},
+				},
+			},
+		},
+	}
+	storage := &fakeStorage{providerConfigs: providerConfigs}
+	runtime := &fakeRuntime{}
+	validate := testhelpers.NewValidator(t)
+	h := handlers.New(storage, validate, runtime, nil, nil, nil)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-mixed", logger, "test-user", "test-tenant")
+
+	req := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+		body:        []byte(`{"name":"test-job","model":{"name":"model"},"benchmarks":[{"id":"bench-1","provider_id":"garak","test_data_ref":{"type":"pre_recorded_data","s3":{"bucket":"b","key":"k","secret_ref":"s"}}},{"id":"bench-2","provider_id":"garak"}]}`),
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+
+	h.HandleCreateEvaluation(ctx, req, resp)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, recorder.Code)
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "model_url_required") {
+		t.Fatalf("expected model_url_required error in body, got: %s", body)
 	}
 }

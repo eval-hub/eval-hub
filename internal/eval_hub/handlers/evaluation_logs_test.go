@@ -44,6 +44,8 @@ func (r *logsRuntime) RunEvaluationJob(
 func (r *logsRuntime) DeleteEvaluationJobResources(_ *api.EvaluationJobResource) error { return nil }
 func (r *logsRuntime) NotifyJobPhaseTransition(_ context.Context, _ *api.EvaluationJobResource, _ int, _ api.State) {
 }
+func (r *logsRuntime) NotifyThresholdViolation(_ context.Context, _ *api.EvaluationJobResource, _ int, _ string, _, _ float32) {
+}
 func (r *logsRuntime) GetEvaluationLogs(
 	_ *api.EvaluationJobResource,
 	_ []api.EvaluationBenchmarkConfig,

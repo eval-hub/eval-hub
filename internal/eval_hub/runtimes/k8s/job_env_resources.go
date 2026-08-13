@@ -80,7 +80,7 @@ func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 	if cfg.ociCredentialsSecret != "" {
 		env = append(env, corev1.EnvVar{
 			Name:  envOCIAuthConfigPathName,
-			Value: ociCredentialsMountPath,
+			Value: ociAuthMountPath,
 		})
 		seen[envOCIAuthConfigPathName] = true
 	}

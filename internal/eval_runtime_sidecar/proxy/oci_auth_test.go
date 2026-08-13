@@ -8,6 +8,33 @@ import (
 	"testing"
 )
 
+func TestGetOCICoordinatesFromJobSpec(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "job.json")
+	const spec = `{
+		"id":"job-1",
+		"provider_id":"p",
+		"benchmark_id":"b",
+		"benchmark_index":0,
+		"parameters":{},
+		"exports":{"oci":{"coordinates":{"oci_host":"registry.example","oci_repository":"org/repo"}}}
+	}`
+	if err := os.WriteFile(path, []byte(spec), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	host, repo, err := GetOCICoordinatesFromJobSpec(path)
+	if err != nil {
+		t.Fatalf("GetOCICoordinatesFromJobSpec: %v", err)
+	}
+	if host != "https://registry.example" {
+		t.Fatalf("host = %q, want https://registry.example", host)
+	}
+	if repo != "org/repo" {
+		t.Fatalf("repo = %q, want org/repo", repo)
+	}
+}
+
 func TestCanonicalRegistryHost(t *testing.T) {
 	tests := []struct {
 		in, want string

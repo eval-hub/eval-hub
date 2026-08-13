@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
+	"github.com/eval-hub/eval-hub/internal/safefile"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -39,7 +40,7 @@ func RepoVersion() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	data, err := os.ReadFile(filepath.Join(root, "VERSION")) // #nosec G304 -- repo root resolved from test caller location
+	data, err := safefile.ReadFile(root, "VERSION")
 	if err != nil {
 		return "", fmt.Errorf("read VERSION: %w", err)
 	}

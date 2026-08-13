@@ -678,6 +678,282 @@ func TestEvaluateEvaluationJobPvcMissingJsonnet(t *testing.T) {
 	}
 }
 
+func TestEvaluateEvaluationJobGitJsonnet(t *testing.T) {
+	tc := &scenarioConfig{
+		values: map[string]string{},
+		jsonnetHarnessEnv: map[string]string{
+			"ENVIRONMENT_ID": "connected",
+		},
+	}
+	path, err := filepath.Abs(filepath.Join(testDataRoot(), "evaluation_job_git.jsonnet"))
+	if err != nil {
+		t.Fatalf("abs path: %v", err)
+	}
+	out, err := tc.evaluateJsonnetFile(path)
+	if err != nil {
+		t.Fatalf("evaluateJsonnetFile: %v", err)
+	}
+	t.Logf("git job: %s", out)
+	var job struct {
+		Name       string `json:"name"`
+		Benchmarks []struct {
+			ID          string         `json:"id"`
+			Parameters  map[string]any `json:"parameters"`
+			TestDataRef struct {
+				Git struct {
+					URL     string `json:"url"`
+					Ref     string `json:"ref"`
+					SubPath string `json:"sub_path"`
+				} `json:"git"`
+			} `json:"test_data_ref"`
+		} `json:"benchmarks"`
+	}
+	if err := json.Unmarshal([]byte(out), &job); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if job.Name != "test-evaluation-job-git" {
+		t.Errorf("name = %q, want test-evaluation-job-git", job.Name)
+	}
+	if len(job.Benchmarks) != 2 {
+		t.Fatalf("benchmarks = %#v, want two benchmarks", job.Benchmarks)
+	}
+	b0 := job.Benchmarks[0]
+	if b0.ID != "arc_easy" {
+		t.Errorf("benchmark[0] id = %q, want arc_easy", b0.ID)
+	}
+	if b0.Parameters["tokenizer"] != "/test_data/tokenizer" {
+		t.Errorf("tokenizer = %v, want /test_data/tokenizer", b0.Parameters["tokenizer"])
+	}
+	if b0.TestDataRef.Git.URL != "https://github.com/eval-hub/eval-hub" {
+		t.Errorf("git.url = %q, want https://github.com/eval-hub/eval-hub", b0.TestDataRef.Git.URL)
+	}
+	if b0.TestDataRef.Git.Ref != "main" {
+		t.Errorf("git.ref = %q, want main", b0.TestDataRef.Git.Ref)
+	}
+	if b0.TestDataRef.Git.SubPath != "tests/git-testdata" {
+		t.Errorf("git.sub_path = %q, want tests/git-testdata", b0.TestDataRef.Git.SubPath)
+	}
+	b1 := job.Benchmarks[1]
+	if b1.ID != "truthfulqa_mc1" {
+		t.Errorf("benchmark[1] id = %q, want truthfulqa_mc1", b1.ID)
+	}
+	if b1.TestDataRef.Git.SubPath != "tests/git-testdata/staging_sub_path" {
+		t.Errorf("git.sub_path = %q, want tests/git-testdata/staging_sub_path", b1.TestDataRef.Git.SubPath)
+	}
+}
+
+func TestEvaluateEvaluationJobGitTagAndSubpathJsonnet(t *testing.T) {
+	tc := &scenarioConfig{
+		values:            map[string]string{},
+		jsonnetHarnessEnv: map[string]string{},
+	}
+	for _, tt := range []struct {
+		file  string
+		check func(t *testing.T, out string)
+	}{
+		{
+			file: "evaluation_job_git_tag.jsonnet",
+			check: func(t *testing.T, out string) {
+				t.Helper()
+				var job struct {
+					Benchmarks []struct {
+						TestDataRef struct {
+							Git struct {
+								Ref string `json:"ref"`
+							} `json:"git"`
+						} `json:"test_data_ref"`
+					} `json:"benchmarks"`
+				}
+				if err := json.Unmarshal([]byte(out), &job); err != nil {
+					t.Fatalf("unmarshal: %v", err)
+				}
+				if job.Benchmarks[0].TestDataRef.Git.Ref != "main" {
+					t.Errorf("ref = %q, want main", job.Benchmarks[0].TestDataRef.Git.Ref)
+				}
+			},
+		},
+		{
+			file: "evaluation_job_git_subpath.jsonnet",
+			check: func(t *testing.T, out string) {
+				t.Helper()
+				var job struct {
+					Benchmarks []struct {
+						ID          string `json:"id"`
+						TestDataRef struct {
+							Git struct {
+								SubPath string `json:"sub_path"`
+							} `json:"git"`
+						} `json:"test_data_ref"`
+					} `json:"benchmarks"`
+				}
+				if err := json.Unmarshal([]byte(out), &job); err != nil {
+					t.Fatalf("unmarshal: %v", err)
+				}
+				if job.Benchmarks[0].ID != "truthfulqa_mc1" {
+					t.Errorf("id = %q, want truthfulqa_mc1", job.Benchmarks[0].ID)
+				}
+				if job.Benchmarks[0].TestDataRef.Git.SubPath != "tests/git-testdata/staging_sub_path" {
+					t.Errorf("sub_path = %q, want tests/git-testdata/staging_sub_path", job.Benchmarks[0].TestDataRef.Git.SubPath)
+				}
+			},
+		},
+	} {
+		t.Run(tt.file, func(t *testing.T) {
+			path, err := filepath.Abs(filepath.Join(testDataRoot(), tt.file))
+			if err != nil {
+				t.Fatalf("abs path: %v", err)
+			}
+			out, err := tc.evaluateJsonnetFile(path)
+			if err != nil {
+				t.Fatalf("evaluateJsonnetFile: %v", err)
+			}
+			tt.check(t, out)
+		})
+	}
+}
+
+func TestEvaluateEvaluationJobGitHttpWithSecretAndBadSubpathJsonnet(t *testing.T) {
+	tc := &scenarioConfig{
+		values:            map[string]string{},
+		jsonnetHarnessEnv: map[string]string{},
+	}
+	for _, tt := range []struct {
+		file  string
+		check func(t *testing.T, out string)
+	}{
+		{
+			file: "evaluation_job_git_http_with_secret.jsonnet",
+			check: func(t *testing.T, out string) {
+				t.Helper()
+				var job struct {
+					Benchmarks []struct {
+						TestDataRef struct {
+							Git struct {
+								URL       string `json:"url"`
+								SecretRef string `json:"secret_ref"`
+							} `json:"git"`
+						} `json:"test_data_ref"`
+					} `json:"benchmarks"`
+				}
+				if err := json.Unmarshal([]byte(out), &job); err != nil {
+					t.Fatalf("unmarshal: %v", err)
+				}
+				g := job.Benchmarks[0].TestDataRef.Git
+				if g.URL != "http://git.example.com/repo.git" {
+					t.Errorf("url = %q, want http://git.example.com/repo.git", g.URL)
+				}
+				if g.SecretRef != "github-creds" {
+					t.Errorf("secret_ref = %q, want github-creds", g.SecretRef)
+				}
+			},
+		},
+		{
+			file: "evaluation_job_git_bad_subpath.jsonnet",
+			check: func(t *testing.T, out string) {
+				t.Helper()
+				var job struct {
+					Benchmarks []struct {
+						TestDataRef struct {
+							Git struct {
+								SubPath string `json:"sub_path"`
+							} `json:"git"`
+						} `json:"test_data_ref"`
+					} `json:"benchmarks"`
+				}
+				if err := json.Unmarshal([]byte(out), &job); err != nil {
+					t.Fatalf("unmarshal: %v", err)
+				}
+				if job.Benchmarks[0].TestDataRef.Git.SubPath != "this-path-does-not-exist-evalhub-fvt" {
+					t.Errorf("sub_path = %q, want this-path-does-not-exist-evalhub-fvt", job.Benchmarks[0].TestDataRef.Git.SubPath)
+				}
+			},
+		},
+	} {
+		t.Run(tt.file, func(t *testing.T) {
+			path, err := filepath.Abs(filepath.Join(testDataRoot(), tt.file))
+			if err != nil {
+				t.Fatalf("abs path: %v", err)
+			}
+			out, err := tc.evaluateJsonnetFile(path)
+			if err != nil {
+				t.Fatalf("evaluateJsonnetFile: %v", err)
+			}
+			tt.check(t, out)
+		})
+	}
+}
+
+func TestEvaluateEvaluationJobGitAndS3Jsonnet(t *testing.T) {
+	tc := &scenarioConfig{
+		values:            map[string]string{},
+		jsonnetHarnessEnv: map[string]string{},
+	}
+	path, err := filepath.Abs(filepath.Join(testDataRoot(), "evaluation_job_git_and_s3.jsonnet"))
+	if err != nil {
+		t.Fatalf("abs path: %v", err)
+	}
+	out, err := tc.evaluateJsonnetFile(path)
+	if err != nil {
+		t.Fatalf("evaluateJsonnetFile: %v", err)
+	}
+	var job struct {
+		Benchmarks []struct {
+			TestDataRef struct {
+				Git *struct {
+					URL string `json:"url"`
+				} `json:"git"`
+				S3 *struct {
+					Bucket string `json:"bucket"`
+				} `json:"s3"`
+			} `json:"test_data_ref"`
+		} `json:"benchmarks"`
+	}
+	if err := json.Unmarshal([]byte(out), &job); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(job.Benchmarks) != 1 {
+		t.Fatalf("benchmarks = %#v, want one", job.Benchmarks)
+	}
+	ref := job.Benchmarks[0].TestDataRef
+	if ref.Git == nil || ref.S3 == nil {
+		t.Fatalf("test_data_ref = %+v, want both git and s3 set for negative payload", ref)
+	}
+}
+
+func TestEvaluateEvaluationJobGitAndPvcJsonnet(t *testing.T) {
+	tc := &scenarioConfig{
+		values:            map[string]string{},
+		jsonnetHarnessEnv: map[string]string{},
+	}
+	path, err := filepath.Abs(filepath.Join(testDataRoot(), "evaluation_job_git_and_pvc.jsonnet"))
+	if err != nil {
+		t.Fatalf("abs path: %v", err)
+	}
+	out, err := tc.evaluateJsonnetFile(path)
+	if err != nil {
+		t.Fatalf("evaluateJsonnetFile: %v", err)
+	}
+	var job struct {
+		Benchmarks []struct {
+			TestDataRef struct {
+				Git *struct {
+					URL string `json:"url"`
+				} `json:"git"`
+				PVC *struct {
+					ClaimName string `json:"claim_name"`
+				} `json:"pvc"`
+			} `json:"test_data_ref"`
+		} `json:"benchmarks"`
+	}
+	if err := json.Unmarshal([]byte(out), &job); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	ref := job.Benchmarks[0].TestDataRef
+	if ref.Git == nil || ref.PVC == nil {
+		t.Fatalf("test_data_ref = %+v, want both git and pvc set for negative payload", ref)
+	}
+}
+
 func TestEvaluateEvaluationJobJsonnetWithQueue(t *testing.T) {
 	queueJobJson := `
 	{
@@ -997,6 +1273,56 @@ func assertJsonnetBenchmarksDisconnectedAware(t *testing.T, file string, benchma
 		} else if b.TestDataRef != nil {
 			t.Errorf("%s benchmarks[%d].test_data_ref = %+v, want nil", file, i, b.TestDataRef.S3)
 		}
+	}
+}
+
+func TestEvaluateGitFVTJsonnetPayloadFiles(t *testing.T) {
+	// Render-check git FVT fixtures that are not in TestEvaluateFVTJsonnetPayloadFiles
+	// (that bulk test assumes disconnected-aware S3 test_data_ref / tokenizer defaults).
+	cases := []struct {
+		file          string
+		wantName      string
+		minBenchmarks int
+	}{
+		{"evaluation_job_git.jsonnet", "test-evaluation-job-git", 2},
+		{"evaluation_job_git_tag.jsonnet", "test-evaluation-job-git-tag", 1},
+		{"evaluation_job_git_subpath.jsonnet", "test-evaluation-job-git-subpath", 1},
+		{"evaluation_job_git_sha.jsonnet", "test-evaluation-job-git-sha", 1},
+		{"evaluation_job_git_and_s3.jsonnet", "test-evaluation-job-git-and-s3", 1},
+		{"evaluation_job_git_and_pvc.jsonnet", "test-evaluation-job-git-and-pvc", 1},
+		{"evaluation_job_git_ssh.jsonnet", "test-evaluation-job-git-ssh", 1},
+		{"evaluation_job_git_blocked_host.jsonnet", "test-evaluation-job-git-blocked-host", 1},
+		{"evaluation_job_git_resolved_sha_readonly.jsonnet", "test-evaluation-job-git-resolved-sha-readonly", 1},
+		{"evaluation_job_git_missing_url.jsonnet", "test-evaluation-job-git-missing-url", 1},
+		{"evaluation_job_git_missing_ref.jsonnet", "test-evaluation-job-git-missing-ref", 1},
+		{"evaluation_job_git_bad_ref.jsonnet", "test-evaluation-job-git-bad-ref", 1},
+		{"evaluation_job_git_http_with_secret.jsonnet", "test-evaluation-job-git-http-with-secret", 1},
+		{"evaluation_job_git_bad_subpath.jsonnet", "test-evaluation-job-git-bad-subpath", 1},
+	}
+	mlflowOff := false
+	for _, tc := range cases {
+		t.Run(tc.file, func(t *testing.T) {
+			sc := &scenarioConfig{
+				values:               map[string]string{},
+				jsonnetHarnessEnv:    map[string]string{"ENVIRONMENT_ID": "connected"},
+				jsonnetMlflowEnabled: &mlflowOff,
+			}
+			doc := evaluateJsonnetPayloadDocument(t, sc, tc.file)
+			if doc.Name != tc.wantName {
+				t.Errorf("name = %q, want %q", doc.Name, tc.wantName)
+			}
+			if len(doc.Benchmarks) < tc.minBenchmarks {
+				t.Fatalf("benchmarks = %d, want at least %d", len(doc.Benchmarks), tc.minBenchmarks)
+			}
+			for i, b := range doc.Benchmarks {
+				if b.ID == "" {
+					t.Errorf("benchmarks[%d].id is empty", i)
+				}
+				if b.ProviderID == "" {
+					t.Errorf("benchmarks[%d].provider_id is empty", i)
+				}
+			}
+		})
 	}
 }
 

@@ -39,7 +39,7 @@ func sidecarForJobPod(cfg *config.Config, jc *jobConfig) (*config.SidecarConfig,
 				export.MLFlow = &config.SidecarMLFlowConfig{}
 			}
 			export.MLFlow.TrackingURI = jc.mlflowTrackingURI
-			export.MLFlow.TokenPath = mlflowTokenMountPath + "/" + mlflowTokenFile
+			export.MLFlow.TokenPath = mlflowAuthMountPath + "/" + mlflowTokenFile
 			export.MLFlow.Workspace = jc.mlflowWorkspace
 			if cfg != nil && cfg.MLFlow != nil {
 				export.MLFlow.HTTPTimeout = cfg.MLFlow.HTTPTimeout
@@ -86,7 +86,7 @@ func cloneSidecarConfig(sc *config.SidecarConfig) *config.SidecarConfig {
 	if sc == nil {
 		return nil
 	}
-	out := &config.SidecarConfig{BaseURL: sc.BaseURL, Port: sc.Port}
+	out := &config.SidecarConfig{LocalMode: sc.LocalMode, BaseURL: sc.BaseURL, Port: sc.Port}
 	if sc.EvalHub != nil {
 		eh := *sc.EvalHub
 		out.EvalHub = &eh
