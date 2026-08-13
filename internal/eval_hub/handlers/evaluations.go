@@ -152,6 +152,18 @@ func benchmarksWithHardwareConfigFallback(benchmarks []api.EvaluationBenchmarkCo
 	return out
 }
 
+func allBenchmarksHavePreRecordedData(benchmarks []api.EvaluationBenchmarkConfig) bool {
+	if len(benchmarks) == 0 {
+		return false
+	}
+	for _, benchmark := range benchmarks {
+		if benchmark.TestDataRef == nil || benchmark.TestDataRef.Type != "pre_recorded_data" {
+			return false
+		}
+	}
+	return true
+}
+
 // ValidateReadOnlyResolvedSHA returns an error if resolved_sha is set on any benchmark in the request.
 // resolved_sha is server-populated after the init container resolves the ref and must not be accepted on create.
 func ValidateReadOnlyResolvedSHA(cfg *api.EvaluationJobConfig) error {
@@ -221,9 +233,16 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				return err
 			}
 			if h.runtime != nil {
-				return h.runtime.WithLogger(ctx.Logger).WithContext(runtimeCtx).ValidateHardwareProfiles(
+				if err := h.runtime.WithLogger(ctx.Logger).WithContext(runtimeCtx).ValidateHardwareProfiles(
 					benchmarksWithHardwareConfigFallback(benchmarks, evaluation.HardwareConfig),
-				)
+				); err != nil {
+					return err
+				}
+			}
+			if (evaluation.Model != nil) &&
+				(strings.TrimSpace(evaluation.Model.URL) == "") &&
+				!allBenchmarksHavePreRecordedData(benchmarks) {
+				return serviceerrors.NewServiceError(messages.ModelURLRequired)
 			}
 			return nil
 		},

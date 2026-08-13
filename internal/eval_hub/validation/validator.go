@@ -145,7 +145,6 @@ func validateBenchmarkHardwareConfigExclusive(sl validator.StructLevel) {
 
 func evaluationJobConfig(sl validator.StructLevel) {
 	evaluationJobConfigBenchmarksMin(sl)
-	evaluationJobConfigModelRequired(sl)
 }
 
 // evaluationJobConfigBenchmarksMin ensures Benchmarks has at least one element when Collection is not present
@@ -160,15 +159,6 @@ func evaluationJobConfigBenchmarksMin(sl validator.StructLevel) {
 		}
 		if len(cfg.Benchmarks) < 1 {
 			sl.ReportError(cfg.Benchmarks, "benchmarks", "benchmarks", "minimum one benchmark", "1")
-		}
-	}
-}
-
-// evaluationJobConfigModelRequired ensures Model is set.
-func evaluationJobConfigModelRequired(sl validator.StructLevel) {
-	if cfg, ok := sl.Current().Interface().(api.EvaluationJobConfig); ok {
-		if cfg.Model == nil {
-			sl.ReportError(cfg.Model, "model", "model", "model required", "model")
 		}
 	}
 }
