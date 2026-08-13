@@ -180,6 +180,21 @@ func TestBuildJobSpecJSONHappyPath(t *testing.T) {
 	}
 }
 
+func TestBuildJobSpec_ModelNotAliasedToEvaluation(t *testing.T) {
+	eval := baseEvaluation()
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if spec.Model == eval.Model {
+		t.Fatal("expected job spec model to be a copy, not the same pointer as evaluation.Model")
+	}
+	spec.Model.URL = "http://localhost:8080/v1"
+	if eval.Model.URL != "http://model.example" {
+		t.Fatalf("mutating job spec model URL should not change evaluation.Model.URL, got %q", eval.Model.URL)
+	}
+}
+
 func TestBuildJobSpecJSONNilCallbackURL(t *testing.T) {
 	eval := baseEvaluation()
 
