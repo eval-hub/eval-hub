@@ -135,30 +135,38 @@ func (s *sqlStorage) computeBenchmarkTestResult(txn *sql.Tx, job *api.Evaluation
 		}
 		if primaryScore != nil && primaryScore.Metric != "" {
 			primaryMetric := primaryScore.Metric
-			if primaryMetricValue, ok := benchmarkStatusEvent.Metrics[primaryMetric]; ok {
-				primaryMetricValueFloat, err := castAnyToFloat32(primaryMetricValue)
-				if err != nil {
-					s.logger.Error("Failed to cast primary metric value to float32", "error", err, "primary_metric", primaryMetric, "primary_metric_value", primaryMetricValue)
-					return nil
+			primaryMetricValue, ok := benchmarkStatusEvent.Metrics[primaryMetric]
+			if !ok {
+				if len(benchmarkStatusEvent.Metrics) > 0 {
+					s.logger.Error("Primary score metric not present in benchmark metrics; test section omitted",
+						"benchmark_id", benchmarkStatusEvent.ID,
+						"provider_id", benchmarkStatusEvent.ProviderID,
+						"primary_metric", primaryMetric)
 				}
-				var threshold float32
-				if benchmark.PassCriteria != nil && benchmark.PassCriteria.Threshold != nil {
-					threshold = *benchmark.PassCriteria.Threshold
-				} else if providerBench != nil && providerBench.PassCriteria != nil && providerBench.PassCriteria.Threshold != nil {
-					threshold = *providerBench.PassCriteria.Threshold
-				} else {
-					return nil
-				}
-				pass := primaryMetricValueFloat >= threshold
-				if primaryScore.LowerIsBetter {
-					pass = primaryMetricValueFloat <= threshold
-				}
-				return &api.BenchmarkTest{
-					PrimaryScore:       primaryMetricValueFloat,
-					PrimaryScoreMetric: primaryMetric,
-					Threshold:          threshold,
-					Pass:               pass,
-				}
+				return nil
+			}
+			primaryMetricValueFloat, err := castAnyToFloat32(primaryMetricValue)
+			if err != nil {
+				s.logger.Error("Failed to cast primary metric value to float32", "error", err, "primary_metric", primaryMetric, "primary_metric_value", primaryMetricValue)
+				return nil
+			}
+			var threshold float32
+			if benchmark.PassCriteria != nil && benchmark.PassCriteria.Threshold != nil {
+				threshold = *benchmark.PassCriteria.Threshold
+			} else if providerBench != nil && providerBench.PassCriteria != nil && providerBench.PassCriteria.Threshold != nil {
+				threshold = *providerBench.PassCriteria.Threshold
+			} else {
+				return nil
+			}
+			pass := primaryMetricValueFloat >= threshold
+			if primaryScore.LowerIsBetter {
+				pass = primaryMetricValueFloat <= threshold
+			}
+			return &api.BenchmarkTest{
+				PrimaryScore:       primaryMetricValueFloat,
+				PrimaryScoreMetric: primaryMetric,
+				Threshold:          threshold,
+				Pass:               pass,
 			}
 		}
 	}
