@@ -110,6 +110,7 @@ type CardBenchmarkResult struct {
 	ErrorMessage   *api.MessageInfo   `json:"error_message,omitempty"`
 	WarningMessage *api.MessageInfo   `json:"warning_message,omitempty"`
 	Metrics        map[string]any     `json:"metrics,omitempty"`
+	MetricsSchema  []api.MetricSchema `json:"metrics_schema,omitempty"`
 	AdditionalInfo map[string]any     `json:"additional_info,omitempty"`
 	Artifacts      map[string]any     `json:"artifacts,omitempty"`
 	MLFlowRunID    string             `json:"mlflow_run_id,omitempty"`

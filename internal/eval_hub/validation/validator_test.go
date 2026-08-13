@@ -808,6 +808,98 @@ func TestStatusEvent_MissingBenchmarkStatusEventRejected(t *testing.T) {
 	}
 }
 
+func TestStatusEvent_MetricsSchemaUnknownNameRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	ev := api.StatusEvent{
+		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			ProviderID: "p1",
+			ID:         "b1",
+			Status:     api.StateCompleted,
+			Metrics: map[string]any{
+				"acc": 0.9,
+			},
+			MetricsSchema: []api.MetricSchema{
+				{Name: "acc", Type: api.ResultTypeNumeric},
+				{Name: "missing_metric", Type: api.ResultTypeNumeric},
+			},
+		},
+	}
+	err := validate.Struct(ev)
+	if err == nil {
+		t.Fatal("expected validation error when metrics_schema name is not in metrics")
+	}
+	valErr, ok := err.(validator.ValidationErrors)
+	if !ok {
+		t.Fatalf("expected validator.ValidationErrors, got %T: %v", err, err)
+	}
+	if !validationErrorsContainTag(valErr, "metrics_schema_name_not_in_metrics") {
+		t.Fatalf("expected metrics_schema_name_not_in_metrics error, got: %v", err)
+	}
+}
+
+func TestStatusEvent_MetricsSchemaNilMetricsRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	ev := api.StatusEvent{
+		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			ProviderID: "p1",
+			ID:         "b1",
+			Status:     api.StateCompleted,
+			MetricsSchema: []api.MetricSchema{
+				{Name: "acc", Type: api.ResultTypeNumeric},
+			},
+		},
+	}
+	err := validate.Struct(ev)
+	if err == nil {
+		t.Fatal("expected validation error when metrics_schema is set but metrics is nil")
+	}
+	valErr, ok := err.(validator.ValidationErrors)
+	if !ok {
+		t.Fatalf("expected validator.ValidationErrors, got %T: %v", err, err)
+	}
+	if !validationErrorsContainTag(valErr, "metrics_schema_name_not_in_metrics") {
+		t.Fatalf("expected metrics_schema_name_not_in_metrics error, got: %v", err)
+	}
+}
+
+func TestStatusEvent_MetricsSchemaDuplicateNameRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	ev := api.StatusEvent{
+		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			ProviderID: "p1",
+			ID:         "b1",
+			Status:     api.StateCompleted,
+			Metrics: map[string]any{
+				"acc": 0.9,
+			},
+			MetricsSchema: []api.MetricSchema{
+				{Name: "acc", Type: api.ResultTypeNumeric},
+				{Name: "acc", Type: api.ResultTypeNumeric},
+			},
+		},
+	}
+	err := validate.Struct(ev)
+	if err == nil {
+		t.Fatal("expected validation error when metrics_schema has duplicate names")
+	}
+	valErr, ok := err.(validator.ValidationErrors)
+	if !ok {
+		t.Fatalf("expected validator.ValidationErrors, got %T: %v", err, err)
+	}
+	if !validationErrorsContainTag(valErr, "metrics_schema_duplicate_name") {
+		t.Fatalf("expected metrics_schema_duplicate_name error, got: %v", err)
+	}
+}
+
+func validationErrorsContainTag(errs validator.ValidationErrors, tag string) bool {
+	for _, e := range errs {
+		if e.Tag() == tag {
+			return true
+		}
+	}
+	return false
+}
+
 // --- Tests for model struct tag validation ---
 
 func TestEvaluationJobConfig_ModelNilRejected(t *testing.T) {

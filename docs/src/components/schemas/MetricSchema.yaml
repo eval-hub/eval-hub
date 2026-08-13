@@ -1,0 +1,22 @@
+type: object
+description: One entry in metrics_schema that names a metric and its result type.
+required:
+  - name
+  - type
+properties:
+  name:
+    type: string
+    description: Metric name that also appears as a key in the metrics map.
+    example: acc
+  type:
+    type: string
+    enum:
+      - numeric
+      - categorical
+      - array_ordered
+      - array_unordered
+      - time_series
+    description: >
+      Result type for this metric. One of numeric, categorical, array_ordered,
+      array_unordered, or time_series.
+    example: numeric

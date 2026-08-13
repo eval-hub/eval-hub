@@ -173,6 +173,8 @@ func constructEvaluationResource(logger *slog.Logger, query *shared.EntityQuery,
 	statusObject.State = overAllState
 	statusObject.Message = evaluationEntity.Status.Message
 
+	backfillMetricsSchema(evaluationEntity.Results)
+
 	return &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource:           query.Resource,
@@ -182,4 +184,31 @@ func constructEvaluationResource(logger *slog.Logger, query *shared.EntityQuery,
 		EvaluationJobConfig: *evaluationEntity.Config,
 		Results:             evaluationEntity.Results,
 	}, nil
+}
+
+// backfillMetricsSchema ensures every metric key in benchmark results has a corresponding
+// entry in MetricsSchema. Results stored before metrics_schema was introduced get a
+// default numeric entry for each metric key for backward compatibility.
+func backfillMetricsSchema(results *api.EvaluationJobResults) {
+	if results == nil {
+		return
+	}
+	for i := range results.Benchmarks {
+		b := &results.Benchmarks[i]
+		if len(b.Metrics) == 0 {
+			continue
+		}
+		existing := make(map[string]bool, len(b.MetricsSchema))
+		for _, s := range b.MetricsSchema {
+			existing[s.Name] = true
+		}
+		for k := range b.Metrics {
+			if !existing[k] {
+				b.MetricsSchema = append(b.MetricsSchema, api.MetricSchema{
+					Name: k,
+					Type: api.DefaultResultType,
+				})
+			}
+		}
+	}
 }
