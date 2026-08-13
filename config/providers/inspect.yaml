@@ -991,7 +991,7 @@ parameters:
   - name: languages
     type: array
     default: [en]
-    description: ISO 639 language codes (optional; for job metadata).
+    description: ISO 639 language codes (optional. when set, used in evaluation card).
 
   - name: languages_count
     type: integer
