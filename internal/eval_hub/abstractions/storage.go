@@ -96,6 +96,8 @@ type Storage interface {
 
 	// LoadSystemResources reloads system-owned providers and collections into
 	// the database. Existing system resources are deleted and replaced.
+	// CreatedAt is preserved for existing IDs; UpdatedAt is preserved only when
+	// the serialized config is unchanged.
 	LoadSystemResources(systemCollections map[string]api.CollectionResource, systemProviders map[string]api.ProviderResource) error
 
 	// Close the storage connection

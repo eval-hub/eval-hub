@@ -1,7 +1,9 @@
 package sql
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/json"
 	"slices"
 	"strings"
 	"time"
@@ -15,8 +17,10 @@ import (
 const systemResourceListPageSize = 200
 
 // LoadSystemResources reloads system-owned providers and collections into the
-// database. It deletes all existing system resources and inserts the new ones,
-// preserving CreatedAt/UpdatedAt timestamps for resources that already existed.
+// database. It deletes all existing system resources and inserts the new ones.
+// CreatedAt is preserved for IDs that already existed. UpdatedAt is preserved
+// only when the serialized config matches the snapshot; otherwise it is set to
+// the current time so consumers can detect definition changes.
 //
 // Concurrent calls are serialized via systemResourcesMu so overlapping config
 // watcher reloads cannot interleave delete/insert work.
@@ -52,16 +56,21 @@ func (s *sqlStorage) LoadSystemResources(systemCollections map[string]api.Collec
 					deletedCollections = append(deletedCollections, id)
 				}
 			}
+			now := time.Now()
 			for _, collection := range systemCollections {
 				// make sure that these are set
 				collection.Resource.Tenant = ""
 				collection.Resource.Owner = "system"
 				if existingCollection, ok := existingCollections[collection.Resource.ID]; ok {
 					collection.Resource.CreatedAt = existingCollection.Resource.CreatedAt
-					collection.Resource.UpdatedAt = existingCollection.Resource.UpdatedAt
+					if systemCollectionConfigEqual(existingCollection, collection) {
+						collection.Resource.UpdatedAt = existingCollection.Resource.UpdatedAt
+					} else {
+						collection.Resource.UpdatedAt = now
+					}
 				}
 				if collection.Resource.CreatedAt.IsZero() {
-					collection.Resource.CreatedAt = time.Now()
+					collection.Resource.CreatedAt = now
 				}
 				if collection.Resource.UpdatedAt.IsZero() {
 					collection.Resource.UpdatedAt = collection.Resource.CreatedAt
@@ -100,16 +109,21 @@ func (s *sqlStorage) LoadSystemResources(systemCollections map[string]api.Collec
 					deletedProviders = append(deletedProviders, id)
 				}
 			}
+			now := time.Now()
 			for _, provider := range systemProviders {
 				// make sure that these are set
 				provider.Resource.Tenant = ""
 				provider.Resource.Owner = "system"
 				if existingProvider, ok := existingProviders[provider.Resource.ID]; ok {
 					provider.Resource.CreatedAt = existingProvider.Resource.CreatedAt
-					provider.Resource.UpdatedAt = existingProvider.Resource.UpdatedAt
+					if systemProviderConfigEqual(existingProvider, provider) {
+						provider.Resource.UpdatedAt = existingProvider.Resource.UpdatedAt
+					} else {
+						provider.Resource.UpdatedAt = now
+					}
 				}
 				if provider.Resource.CreatedAt.IsZero() {
-					provider.Resource.CreatedAt = time.Now()
+					provider.Resource.CreatedAt = now
 				}
 				if provider.Resource.UpdatedAt.IsZero() {
 					provider.Resource.UpdatedAt = provider.Resource.CreatedAt
@@ -132,6 +146,24 @@ func (s *sqlStorage) LoadSystemResources(systemCollections map[string]api.Collec
 		s.logger.Info("Loaded system resources")
 		return nil
 	})
+}
+
+func systemProviderConfigEqual(existing, next api.ProviderResource) bool {
+	a, errA := json.Marshal(existing.ProviderConfig)
+	b, errB := json.Marshal(next.ProviderConfig)
+	if errA != nil || errB != nil {
+		return false
+	}
+	return bytes.Equal(a, b)
+}
+
+func systemCollectionConfigEqual(existing, next api.CollectionResource) bool {
+	a, errA := json.Marshal(existing.CollectionConfig)
+	b, errB := json.Marshal(next.CollectionConfig)
+	if errA != nil || errB != nil {
+		return false
+	}
+	return bytes.Equal(a, b)
 }
 
 func (s *sqlStorage) listAllSystemCollections(txn *sql.Tx) (map[string]api.CollectionResource, error) {
