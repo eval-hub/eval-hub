@@ -837,6 +837,31 @@ func TestStatusEvent_MetricsSchemaUnknownNameRejected(t *testing.T) {
 	}
 }
 
+func TestStatusEvent_MetricsSchemaNilMetricsRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	ev := api.StatusEvent{
+		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			ProviderID: "p1",
+			ID:         "b1",
+			Status:     api.StateCompleted,
+			MetricsSchema: []api.MetricSchema{
+				{Name: "acc", Type: api.ResultTypeNumeric},
+			},
+		},
+	}
+	err := validate.Struct(ev)
+	if err == nil {
+		t.Fatal("expected validation error when metrics_schema is set but metrics is nil")
+	}
+	valErr, ok := err.(validator.ValidationErrors)
+	if !ok {
+		t.Fatalf("expected validator.ValidationErrors, got %T: %v", err, err)
+	}
+	if !validationErrorsContainTag(valErr, "metrics_schema_name_not_in_metrics") {
+		t.Fatalf("expected metrics_schema_name_not_in_metrics error, got: %v", err)
+	}
+}
+
 func TestStatusEvent_MetricsSchemaDuplicateNameRejected(t *testing.T) {
 	validate := newTestValidator(t)
 	ev := api.StatusEvent{

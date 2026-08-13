@@ -3119,7 +3119,7 @@
       },
       "MetricSchema": {
         "type": "object",
-        "description": "Metadata for a single metric result.",
+        "description": "One entry in metrics_schema that names a metric and its result type.",
         "required": [
           "name",
           "type"
@@ -3127,7 +3127,8 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "Metric name — must match a key in the metrics map"
+            "description": "Metric name that also appears as a key in the metrics map.",
+            "example": "acc"
           },
           "type": {
             "type": "string",
@@ -3138,7 +3139,8 @@
               "array_unordered",
               "time_series"
             ],
-            "description": "The result type of this metric. Determines how downstream consumers render comparisons. Defaults to numeric for metrics not listed in metrics_schema.\n"
+            "description": "Result type for this metric. One of numeric, categorical, array_ordered, array_unordered, or time_series.\n",
+            "example": "numeric"
           }
         }
       },
@@ -3181,11 +3183,30 @@
           "metrics": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Metric name to value (any scalar, list, or object)"
+            "description": "Metrics produced by evaluating the model on this benchmark, keyed by metric name. Each value may be a scalar, list, or object.\n",
+            "example": {
+              "acc": 0.691,
+              "acc_norm": 0.637,
+              "acc_stderr": 0.009
+            }
           },
           "metrics_schema": {
             "type": "array",
-            "description": "Metadata for each metric. Each entry declares the name and type of a metric in the metrics map. Metrics not listed default to numeric.\n",
+            "description": "Metadata describing how each metric in metrics should be interpreted. Each entry names a metric key and its result type. Metrics without an entry default to numeric.\n",
+            "example": [
+              {
+                "name": "acc",
+                "type": "numeric"
+              },
+              {
+                "name": "acc_norm",
+                "type": "numeric"
+              },
+              {
+                "name": "acc_stderr",
+                "type": "numeric"
+              }
+            ],
             "items": {
               "$ref": "#/components/schemas/MetricSchema"
             }
@@ -4028,11 +4049,25 @@
           "metrics": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Metric name to value (any scalar, list, or object)"
+            "description": "Metrics reported by the evaluation adapter for this benchmark, keyed by metric name. Each value may be a scalar, list, or object.\n",
+            "example": {
+              "accuracy": 0.95,
+              "toxicity_score": 0.12
+            }
           },
           "metrics_schema": {
             "type": "array",
-            "description": "Optional metadata for each metric. Each entry declares the name and type of a metric in the metrics map. Omitted metrics default to numeric.\n",
+            "description": "Optional metadata describing how each metric in metrics should be interpreted. Each entry names a metric key and its result type. Metrics without an entry default to numeric.\n",
+            "example": [
+              {
+                "name": "accuracy",
+                "type": "numeric"
+              },
+              {
+                "name": "toxicity_score",
+                "type": "numeric"
+              }
+            ],
             "items": {
               "$ref": "#/components/schemas/MetricSchema"
             }
