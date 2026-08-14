@@ -391,7 +391,7 @@ func TestHandleGetCollection_ReturnsStoredBenchmarkURL(t *testing.T) {
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/collections/coll-1"),
 		queryValues: map[string][]string{},
-		pathValues:  map[string]string{constants.PATH_PARAMETER_COLLECTION_ID: "coll-1"},
+		pathValues:  map[string]string{constants.PathParameterCollectionID: "coll-1"},
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
@@ -517,7 +517,7 @@ func TestHandleGetCollection(t *testing.T) {
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/collections/coll-123"),
 		queryValues: map[string][]string{},
-		pathValues:  map[string]string{constants.PATH_PARAMETER_COLLECTION_ID: "coll-123"},
+		pathValues:  map[string]string{constants.PathParameterCollectionID: "coll-123"},
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
@@ -599,7 +599,7 @@ func TestHandleUpdateCollection(t *testing.T) {
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("PUT", "/api/v1/evaluations/collections/coll-update"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_COLLECTION_ID: "coll-update"},
+		pathValues:  map[string]string{constants.PathParameterCollectionID: "coll-update"},
 	}
 	req.SetBody([]byte(body))
 	recorder := httptest.NewRecorder()
@@ -690,7 +690,7 @@ func TestHandlePatchCollection_EnrichesFullBenchmarkElementBeforeStorage(t *test
 	body := `[{"op":"replace","path":"/benchmarks/0","value":{"id":"b1","provider_id":"p1"}}]`
 	req := &providersRequest{
 		MockRequest: createMockRequest("PATCH", "/api/v1/evaluations/collections/coll-patch-url"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_COLLECTION_ID: "coll-patch-url"},
+		pathValues:  map[string]string{constants.PathParameterCollectionID: "coll-patch-url"},
 	}
 	req.SetBody([]byte(body))
 	recorder := httptest.NewRecorder()
@@ -752,7 +752,7 @@ func TestHandlePatchCollection_EnrichesFullBenchmarksArrayBeforeStorage(t *testi
 	body := `[{"op":"replace","path":"/benchmarks","value":[{"id":"b1","provider_id":"p1"},{"id":"b2","provider_id":"p2"}]}]`
 	req := &providersRequest{
 		MockRequest: createMockRequest("PATCH", "/api/v1/evaluations/collections/coll-patch-url-array"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_COLLECTION_ID: "coll-patch-url-array"},
+		pathValues:  map[string]string{constants.PathParameterCollectionID: "coll-patch-url-array"},
 	}
 	req.SetBody([]byte(body))
 	recorder := httptest.NewRecorder()
@@ -800,7 +800,7 @@ func TestHandlePatchCollection(t *testing.T) {
 	body := `[{"op":"replace","path":"/name","value":"Patched Name"}]`
 	req := &providersRequest{
 		MockRequest: createMockRequest("PATCH", "/api/v1/evaluations/collections/coll-patch"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_COLLECTION_ID: "coll-patch"},
+		pathValues:  map[string]string{constants.PathParameterCollectionID: "coll-patch"},
 	}
 	req.SetBody([]byte(body))
 	recorder := httptest.NewRecorder()
@@ -822,7 +822,7 @@ func TestHandleDeleteCollection(t *testing.T) {
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("DELETE", "/api/v1/evaluations/collections/coll-del"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_COLLECTION_ID: "coll-del"},
+		pathValues:  map[string]string{constants.PathParameterCollectionID: "coll-del"},
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
@@ -894,7 +894,7 @@ func TestCollectionHandlers_PropagateTenantAndOwner(t *testing.T) {
 			name:    "GetCollection",
 			method:  "GET",
 			path:    "/api/v1/evaluations/collections/coll-1",
-			pathVal: map[string]string{constants.PATH_PARAMETER_COLLECTION_ID: "coll-1"},
+			pathVal: map[string]string{constants.PathParameterCollectionID: "coll-1"},
 			handler: func(h *handlers.Handlers, ctx *executioncontext.ExecutionContext, req *providersRequest, resp MockResponseWrapper) {
 				h.HandleGetCollection(ctx, req, resp)
 			},
@@ -904,7 +904,7 @@ func TestCollectionHandlers_PropagateTenantAndOwner(t *testing.T) {
 			method:  "PUT",
 			path:    "/api/v1/evaluations/collections/coll-1",
 			body:    `{"name":"Updated","benchmarks":[{"id":"b1","provider_id":"p1"}]}`,
-			pathVal: map[string]string{constants.PATH_PARAMETER_COLLECTION_ID: "coll-1"},
+			pathVal: map[string]string{constants.PathParameterCollectionID: "coll-1"},
 			handler: func(h *handlers.Handlers, ctx *executioncontext.ExecutionContext, req *providersRequest, resp MockResponseWrapper) {
 				h.HandleUpdateCollection(ctx, req, resp)
 			},
@@ -914,7 +914,7 @@ func TestCollectionHandlers_PropagateTenantAndOwner(t *testing.T) {
 			method:  "PATCH",
 			path:    "/api/v1/evaluations/collections/coll-1",
 			body:    `[{"op":"replace","path":"/name","value":"Patched"}]`,
-			pathVal: map[string]string{constants.PATH_PARAMETER_COLLECTION_ID: "coll-1"},
+			pathVal: map[string]string{constants.PathParameterCollectionID: "coll-1"},
 			handler: func(h *handlers.Handlers, ctx *executioncontext.ExecutionContext, req *providersRequest, resp MockResponseWrapper) {
 				h.HandlePatchCollection(ctx, req, resp)
 			},
@@ -923,7 +923,7 @@ func TestCollectionHandlers_PropagateTenantAndOwner(t *testing.T) {
 			name:    "DeleteCollection",
 			method:  "DELETE",
 			path:    "/api/v1/evaluations/collections/coll-1",
-			pathVal: map[string]string{constants.PATH_PARAMETER_COLLECTION_ID: "coll-1"},
+			pathVal: map[string]string{constants.PathParameterCollectionID: "coll-1"},
 			handler: func(h *handlers.Handlers, ctx *executioncontext.ExecutionContext, req *providersRequest, resp MockResponseWrapper) {
 				h.HandleDeleteCollection(ctx, req, resp)
 			},

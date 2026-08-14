@@ -13,7 +13,7 @@ import (
 
 func TestCreateDeleteSystemEntitiesStatement(t *testing.T) {
 	f := NewStatementsFactory(slog.Default())
-	stmt, args := f.CreateDeleteSystemEntitiesStatement(shared.TABLE_COLLECTIONS)
+	stmt, args := f.CreateDeleteSystemEntitiesStatement(shared.TableCollections)
 	if !strings.Contains(stmt, "DELETE FROM collections") {
 		t.Fatalf("unexpected statement: %s", stmt)
 	}

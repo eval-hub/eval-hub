@@ -30,7 +30,7 @@ func TestScopedEvalHubClientPropagatesRequestID(t *testing.T) {
 
 	base := evalhubclient.NewClient(srv.URL)
 	ctx := context.WithValue(context.Background(), requestContextKey{}, "mcp-req-42")
-	ctx = context.WithValue(ctx, requestLoggerContextKey{}, slog.New(slog.DiscardHandler).With(constants.LOG_REQUEST_ID, "mcp-req-42"))
+	ctx = context.WithValue(ctx, requestLoggerContextKey{}, slog.New(slog.DiscardHandler).With(constants.LogRequestID, "mcp-req-42"))
 
 	client := scopedEvalHubClient(ctx, base, slog.New(slog.DiscardHandler))
 	if _, err := client.GetHealth(); err != nil {
@@ -54,7 +54,7 @@ func TestScopedEvalHubClientUsesRequestLogger(t *testing.T) {
 	var buf bytes.Buffer
 	baseLogger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	ctx := context.WithValue(context.Background(), requestContextKey{}, "req-log")
-	ctx = context.WithValue(ctx, requestLoggerContextKey{}, baseLogger.With(constants.LOG_REQUEST_ID, "req-log"))
+	ctx = context.WithValue(ctx, requestLoggerContextKey{}, baseLogger.With(constants.LogRequestID, "req-log"))
 
 	client := scopedEvalHubClient(ctx, evalhubclient.NewClient(srv.URL), baseLogger)
 	if _, err := client.GetHealth(); err != nil {

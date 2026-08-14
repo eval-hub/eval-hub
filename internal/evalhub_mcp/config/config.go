@@ -82,7 +82,7 @@ func Load(flags *Flags, logger *slog.Logger) (*Config, error) {
 	normalizeAuthType(conf)
 
 	if logger != nil {
-		logger.Info("Loaded configuration", "config", logging.AsPrettyJson(conf, "token"), "config_path", configPath)
+		logger.Info("Loaded configuration", "config", logging.AsPrettyJSON(conf, "token"), "config_path", configPath)
 	}
 
 	return conf, nil

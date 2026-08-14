@@ -48,12 +48,12 @@ type contextKeyRequestID struct{}
 // injects it into the request context and response header, then delegates to next.
 func withRequestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestID := r.Header.Get(TRANSACTION_ID_HEADER)
+		requestID := r.Header.Get(TransactionIDHeader)
 		if requestID == "" {
 			requestID = uuid.New().String()
 		}
 		ctx := context.WithValue(r.Context(), contextKeyRequestID{}, requestID)
-		w.Header().Set(TRANSACTION_ID_HEADER, requestID)
+		w.Header().Set(TransactionIDHeader, requestID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

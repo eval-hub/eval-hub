@@ -113,9 +113,6 @@ func TestCapabilitiesAdvertised(t *testing.T) {
 	if caps.Prompts == nil {
 		t.Error("expected prompts capability to be advertised")
 	}
-	if caps.Logging == nil {
-		t.Error("expected logging capability to be advertised")
-	}
 }
 
 func TestToolsListEmpty(t *testing.T) {

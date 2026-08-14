@@ -522,7 +522,7 @@ func TestHandleListProvidersReturnsEmptyForInvalidProviderID(t *testing.T) {
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers/unknown"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_PROVIDER_ID: "unknown"},
+		pathValues:  map[string]string{constants.PathParameterProviderID: "unknown"},
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
@@ -558,7 +558,7 @@ func TestHandleUpdateProvider(t *testing.T) {
 	body := `{"name":"Updated Name","description":"Updated desc","benchmarks":[]}`
 	req := &providersRequest{
 		MockRequest: createMockRequest("PUT", "/api/v1/evaluations/providers/"+providerID),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_PROVIDER_ID: providerID},
+		pathValues:  map[string]string{constants.PathParameterProviderID: providerID},
 	}
 	req.SetBody([]byte(body))
 	recorder := httptest.NewRecorder()
@@ -596,7 +596,7 @@ func TestHandleUpdateProviderRejectsSystemProvider(t *testing.T) {
 	body := `{"name":"Hacked","description":"","benchmarks":[]}`
 	req := &providersRequest{
 		MockRequest: createMockRequest("PUT", "/api/v1/evaluations/providers/lm_evaluation_harness"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_PROVIDER_ID: "lm_evaluation_harness"},
+		pathValues:  map[string]string{constants.PathParameterProviderID: "lm_evaluation_harness"},
 	}
 	req.SetBody([]byte(body))
 	recorder := httptest.NewRecorder()
@@ -630,7 +630,7 @@ func TestHandlePatchProvider(t *testing.T) {
 	body := `[{"op":"replace","path":"/description","value":"Patched description"}]`
 	req := &providersRequest{
 		MockRequest: createMockRequest("PATCH", "/api/v1/evaluations/providers/"+providerID),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_PROVIDER_ID: providerID},
+		pathValues:  map[string]string{constants.PathParameterProviderID: providerID},
 	}
 	req.SetBody([]byte(body))
 	recorder := httptest.NewRecorder()
@@ -671,7 +671,7 @@ func TestHandlePatchProviderRejectsImmutablePaths(t *testing.T) {
 		body := fmt.Sprintf(`[{"op":"replace","path":"%s","value":"hacked"}]`, path)
 		req := &providersRequest{
 			MockRequest: createMockRequest("PATCH", "/api/v1/evaluations/providers/"+providerID),
-			pathValues:  map[string]string{constants.PATH_PARAMETER_PROVIDER_ID: providerID},
+			pathValues:  map[string]string{constants.PathParameterProviderID: providerID},
 		}
 		req.SetBody([]byte(body))
 		recorder := httptest.NewRecorder()
@@ -700,7 +700,7 @@ func TestHandlePatchProviderRejectsSystemProvider(t *testing.T) {
 	body := `[{"op":"replace","path":"/name","value":"Hacked"}]`
 	req := &providersRequest{
 		MockRequest: createMockRequest("PATCH", "/api/v1/evaluations/providers/lm_evaluation_harness"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_PROVIDER_ID: "lm_evaluation_harness"},
+		pathValues:  map[string]string{constants.PathParameterProviderID: "lm_evaluation_harness"},
 	}
 	req.SetBody([]byte(body))
 	recorder := httptest.NewRecorder()
@@ -756,7 +756,7 @@ func TestHandleDeleteProvider(t *testing.T) {
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("DELETE", "/api/v1/evaluations/providers/my-provider"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_PROVIDER_ID: "my-provider"},
+		pathValues:  map[string]string{constants.PathParameterProviderID: "my-provider"},
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}

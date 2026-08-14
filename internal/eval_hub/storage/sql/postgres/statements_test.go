@@ -13,7 +13,7 @@ import (
 
 func TestCreateDeleteSystemEntitiesStatement(t *testing.T) {
 	f := NewStatementsFactory(slog.Default())
-	stmt, args := f.CreateDeleteSystemEntitiesStatement(shared.TABLE_PROVIDERS)
+	stmt, args := f.CreateDeleteSystemEntitiesStatement(shared.TableProviders)
 	if !strings.Contains(stmt, "DELETE FROM providers") {
 		t.Fatalf("unexpected statement: %s", stmt)
 	}

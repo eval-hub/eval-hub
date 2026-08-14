@@ -11,7 +11,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/http_wrappers"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/httpwrappers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -23,7 +23,7 @@ type allowedPatch struct {
 	Prefix bool
 }
 
-func CreatePage(ctx *executioncontext.ExecutionContext, total int, offset int, limit int, r http_wrappers.RequestWrapper) (*api.Page, error) {
+func CreatePage(ctx *executioncontext.ExecutionContext, total int, offset int, limit int, r httpwrappers.RequestWrapper) (*api.Page, error) {
 	// Calculate pagination info
 	hasNext := offset+limit < total
 	var nextHref *api.HRef
@@ -59,7 +59,7 @@ func DecodeParam(v string) string {
 	return decoded
 }
 
-func GetParam[T string | int | bool](r http_wrappers.RequestWrapper, name string, optional bool, defaultValue T) (T, error) {
+func GetParam[T string | int | bool](r httpwrappers.RequestWrapper, name string, optional bool, defaultValue T) (T, error) {
 	rawValues := r.Query(name)
 	// Ignore empty repeated query values before joining
 	values := make([]string, 0, len(rawValues))
@@ -125,7 +125,7 @@ func CheckScope(filter *abstractions.QueryFilter) error {
 	return nil
 }
 
-func CommonListFilters(r http_wrappers.RequestWrapper, extraParams ...string) (*abstractions.QueryFilter, error) {
+func CommonListFilters(r httpwrappers.RequestWrapper, extraParams ...string) (*abstractions.QueryFilter, error) {
 	// note that a user can not search by tenant
 	limit, err := GetParam(r, "limit", true, 50)
 	if err != nil {
@@ -181,7 +181,7 @@ func CommonListFilters(r http_wrappers.RequestWrapper, extraParams ...string) (*
 	}, nil
 }
 
-func getAllParams(r http_wrappers.RequestWrapper, allowedParams ...string) []string {
+func getAllParams(r httpwrappers.RequestWrapper, allowedParams ...string) []string {
 	uri, err := url.Parse(r.URI())
 	if err != nil {
 		return []string{}

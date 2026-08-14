@@ -439,7 +439,7 @@ func gpuFTNewRequest(method, url string, body io.Reader, headers map[string]stri
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
-	req.Header.Set(server.TRANSACTION_ID_HEADER, gpuFTRequestTransactionID(requestID))
+	req.Header.Set(server.TransactionIDHeader, gpuFTRequestTransactionID(requestID))
 	if token, err := gpuFTAuthToken(headers["X-Tenant"]); err == nil && token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	} else if err != nil && os.Getenv("AUTH_TOKEN") == "" {

@@ -155,7 +155,7 @@ func (tc *scenarioConfig) iUnsetHeader(paramName string) error {
 }
 
 func (tc *scenarioConfig) iSetTransactionIdTo(paramValue string) error {
-	return tc.iSetHeaderTo(server.TRANSACTION_ID_HEADER, paramValue)
+	return tc.iSetHeaderTo(server.TransactionIDHeader, paramValue)
 }
 
 func (tc *scenarioConfig) iSendARequestTo(method, path string) error {
@@ -301,7 +301,7 @@ func (tc *scenarioConfig) iSendARequestImpl(method, path, body, caller string) e
 
 	defer func() {
 		// we do this for now as request ids are supposed to be unique per request
-		_ = tc.iUnsetHeader(server.TRANSACTION_ID_HEADER)
+		_ = tc.iUnsetHeader(server.TransactionIDHeader)
 	}()
 
 	defer func() { _ = tc.response.Body.Close() }()

@@ -126,7 +126,7 @@ func LogRequestSuccess(ctx *executioncontext.ExecutionContext, code int, _ any, 
 	LogWithCallerSkip(ctx.Ctx, ctx.Logger, slog.LevelInfo, 3, "Request successful", append([]any{"code", code, "duration", time.Since(ctx.StartedAt)}, arguments...)...)
 }
 
-func AsPrettyJson(s any, mask ...string) string {
+func AsPrettyJSON(s any, mask ...string) string {
 	ns, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return fmt.Sprintf("%v", s)
@@ -141,7 +141,7 @@ func AsPrettyJson(s any, mask ...string) string {
 		for _, m := range mask {
 			obj[m] = "*************"
 		}
-		return AsPrettyJson(obj)
+		return AsPrettyJSON(obj)
 	}
 	return string(ns)
 }

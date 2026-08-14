@@ -110,7 +110,7 @@ func (s *sqlStorage) updateEvaluationJobTxn(txn *sql.Tx, id string, status api.O
 		// we should never get here
 		return se.WithRollback(se.NewServiceError(messages.InternalServerError, "Error", err.Error()))
 	}
-	updateQuery, args := s.statementsFactory.CreateUpdateEntityStatement(s.tenant, shared.TABLE_EVALUATIONS, id, string(entityJSON), &status)
+	updateQuery, args := s.statementsFactory.CreateUpdateEntityStatement(s.tenant, shared.TableEvaluations, id, string(entityJSON), &status)
 
 	_, err = s.exec(txn, updateQuery, args...)
 	if err != nil {
@@ -174,7 +174,7 @@ func (s *sqlStorage) getOverallJobStatus(txn *sql.Tx, job *api.EvaluationJobReso
 		if err != nil {
 			return api.OverallStatePending, api.WithMessageOrigin(&api.MessageInfo{
 				Message:     "Evaluation job is pending",
-				MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
+				MessageCode: constants.MessageCodeEvaluationJobUpdated,
 			}, api.MessageOriginServer), err
 		}
 	}
@@ -183,7 +183,7 @@ func (s *sqlStorage) getOverallJobStatus(txn *sql.Tx, job *api.EvaluationJobReso
 	if err != nil || len(benchmarks) == 0 {
 		return api.OverallStatePending, api.WithMessageOrigin(&api.MessageInfo{
 			Message:     "Evaluation job is pending",
-			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
+			MessageCode: constants.MessageCodeEvaluationJobUpdated,
 		}, api.MessageOriginServer), err
 	}
 	total = len(benchmarks)
@@ -212,7 +212,7 @@ func (s *sqlStorage) getOverallJobStatus(txn *sql.Tx, job *api.EvaluationJobReso
 
 	return overallState, api.WithMessageOrigin(&api.MessageInfo{
 		Message:     stateMessage,
-		MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
+		MessageCode: constants.MessageCodeEvaluationJobUpdated,
 	}, api.MessageOriginServer), nil
 }
 

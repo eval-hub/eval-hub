@@ -370,7 +370,7 @@ func (r *LocalRuntime) failBenchmark(
 			Status:         api.StateFailed,
 			ErrorMessage: api.WithMessageOrigin(&api.MessageInfo{
 				Message:     errMsg,
-				MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED,
+				MessageCode: constants.MessageCodeEvaluationJobFailed,
 			}, api.MessageOriginServer),
 		},
 	}

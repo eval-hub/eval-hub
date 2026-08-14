@@ -16,7 +16,7 @@ func TestGetIsolationLevel(t *testing.T) {
 
 	t.Run("driver sqlite returns default when debug env unset", func(t *testing.T) {
 		isolationLevel := ""
-		cfg := &shared.SQLDatabaseConfig{Driver: sql.SQLITE_DRIVER}
+		cfg := &shared.SQLDatabaseConfig{Driver: sql.SQLiteDriver}
 		level, err := sql.GetIsolationLevel(isolationLevel, cfg, logger)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -28,7 +28,7 @@ func TestGetIsolationLevel(t *testing.T) {
 
 	t.Run("driver postgres returns read committed when debug env unset", func(t *testing.T) {
 		isolationLevel := ""
-		cfg := &shared.SQLDatabaseConfig{Driver: sql.POSTGRES_DRIVER}
+		cfg := &shared.SQLDatabaseConfig{Driver: sql.PostgresDriver}
 		level, err := sql.GetIsolationLevel(isolationLevel, cfg, logger)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -52,7 +52,7 @@ func TestGetIsolationLevel(t *testing.T) {
 
 	t.Run("debug env overrides driver with valid level", func(t *testing.T) {
 		isolationLevel := " Read Committed "
-		cfg := &shared.SQLDatabaseConfig{Driver: sql.SQLITE_DRIVER}
+		cfg := &shared.SQLDatabaseConfig{Driver: sql.SQLiteDriver}
 		level, err := sql.GetIsolationLevel(isolationLevel, cfg, logger)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -64,7 +64,7 @@ func TestGetIsolationLevel(t *testing.T) {
 
 	t.Run("debug env case-insensitive match", func(t *testing.T) {
 		isolationLevel := "serializable"
-		cfg := &shared.SQLDatabaseConfig{Driver: sql.SQLITE_DRIVER}
+		cfg := &shared.SQLDatabaseConfig{Driver: sql.SQLiteDriver}
 		level, err := sql.GetIsolationLevel(isolationLevel, cfg, logger)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -76,7 +76,7 @@ func TestGetIsolationLevel(t *testing.T) {
 
 	t.Run("debug env invalid level returns error", func(t *testing.T) {
 		isolationLevel := "not-a-real-level"
-		cfg := &shared.SQLDatabaseConfig{Driver: sql.SQLITE_DRIVER}
+		cfg := &shared.SQLDatabaseConfig{Driver: sql.SQLiteDriver}
 		_, err := sql.GetIsolationLevel(isolationLevel, cfg, logger)
 		if err == nil {
 			t.Fatal("expected error, got nil")
