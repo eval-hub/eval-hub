@@ -1663,7 +1663,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 
 		cancelMsg := &api.MessageInfo{
 			Message:     "Evaluation job cancelled",
-			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
+			MessageCode: constants.MessageCodeEvaluationJobCancelled,
 		}
 		if err := store.UpdateEvaluationJobStatus(jobID, api.OverallStateCancelled, cancelMsg); err != nil {
 			t.Fatalf("UpdateEvaluationJobStatus running->cancelled: %v", err)
@@ -1679,7 +1679,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 		if final.Status.Benchmarks[0].Status != api.StateCancelled {
 			t.Errorf("b1 should be cancelled, got %s", final.Status.Benchmarks[0].Status)
 		}
-		if final.Status.Benchmarks[0].ErrorMessage == nil || final.Status.Benchmarks[0].ErrorMessage.MessageCode != constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED {
+		if final.Status.Benchmarks[0].ErrorMessage == nil || final.Status.Benchmarks[0].ErrorMessage.MessageCode != constants.MessageCodeEvaluationJobCancelled {
 			t.Errorf("b1 should have cancellation error message")
 		}
 		// b2 was completed → should remain completed
@@ -1693,7 +1693,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 		if final.Status.Benchmarks[2].Status != api.StateCancelled {
 			t.Errorf("b3 should be cancelled, got %s", final.Status.Benchmarks[2].Status)
 		}
-		if final.Status.Benchmarks[2].ErrorMessage == nil || final.Status.Benchmarks[2].ErrorMessage.MessageCode != constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED {
+		if final.Status.Benchmarks[2].ErrorMessage == nil || final.Status.Benchmarks[2].ErrorMessage.MessageCode != constants.MessageCodeEvaluationJobCancelled {
 			t.Errorf("b3 should have cancellation error message")
 		}
 	})
@@ -1701,7 +1701,7 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 	t.Run("DeleteEvaluationJob deletes the evaluation job", func(t *testing.T) {
 		err := store.UpdateEvaluationJobStatus(evaluationId, api.OverallStateCancelled, &api.MessageInfo{
 			Message:     "Evaluation job cancelled",
-			MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
+			MessageCode: constants.MessageCodeEvaluationJobCancelled,
 		})
 		if err == nil {
 			t.Fatalf("Failed to get error when cancelling a deleted evaluation job")

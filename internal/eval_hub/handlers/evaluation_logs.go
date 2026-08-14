@@ -7,7 +7,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/http_wrappers"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/httpwrappers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/logging"
@@ -15,20 +15,20 @@ import (
 )
 
 // HandleGetEvaluationJobLogs handles GET /api/v1/evaluations/jobs/{id}/logs
-func (h *Handlers) HandleGetEvaluationJobLogs(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleGetEvaluationJobLogs(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
 	h.handleGetEvaluationLogs(ctx, req, w, nil)
 }
 
 // HandleGetEvaluationBenchmarkLogs handles GET /api/v1/evaluations/jobs/{id}/benchmarks/{benchmark_index}/logs
-func (h *Handlers) HandleGetEvaluationBenchmarkLogs(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
-	rawIndex := req.PathValue(constants.PATH_PARAMETER_BENCHMARK_INDEX)
+func (h *Handlers) HandleGetEvaluationBenchmarkLogs(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
+	rawIndex := req.PathValue(constants.PathParameterBenchmarkIndex)
 	if rawIndex == "" {
-		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PATH_PARAMETER_BENCHMARK_INDEX), ctx.RequestID)
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PathParameterBenchmarkIndex), ctx.RequestID)
 		return
 	}
 	benchmarkIndex, err := strconv.Atoi(rawIndex)
 	if err != nil || benchmarkIndex < 0 {
-		w.Error(serviceerrors.NewServiceError(messages.QueryParameterInvalid, "ParameterName", constants.PATH_PARAMETER_BENCHMARK_INDEX, "Type", "non-negative integer", "Value", rawIndex), ctx.RequestID)
+		w.Error(serviceerrors.NewServiceError(messages.QueryParameterInvalid, "ParameterName", constants.PathParameterBenchmarkIndex, "Type", "non-negative integer", "Value", rawIndex), ctx.RequestID)
 		return
 	}
 	h.handleGetEvaluationLogs(ctx, req, w, &benchmarkIndex)
@@ -36,16 +36,16 @@ func (h *Handlers) HandleGetEvaluationBenchmarkLogs(ctx *executioncontext.Execut
 
 func (h *Handlers) handleGetEvaluationLogs(
 	ctx *executioncontext.ExecutionContext,
-	req http_wrappers.RequestWrapper,
-	w http_wrappers.ResponseWrapper,
+	req httpwrappers.RequestWrapper,
+	w httpwrappers.ResponseWrapper,
 	benchmarkIndex *int,
 ) {
 	storage := h.getStorage(ctx)
 	logging.LogRequestStarted(ctx)
 
-	evaluationJobID := req.PathValue(constants.PATH_PARAMETER_JOB_ID)
+	evaluationJobID := req.PathValue(constants.PathParameterJobID)
 	if evaluationJobID == "" {
-		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PATH_PARAMETER_JOB_ID), ctx.RequestID)
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PathParameterJobID), ctx.RequestID)
 		return
 	}
 
@@ -104,7 +104,7 @@ func (h *Handlers) resolveJobBenchmarks(storage interface {
 	return GetJobBenchmarks(job, collection)
 }
 
-func parseEvaluationLogOptions(req http_wrappers.RequestWrapper) (api.EvaluationLogOptions, error) {
+func parseEvaluationLogOptions(req httpwrappers.RequestWrapper) (api.EvaluationLogOptions, error) {
 	tailLines, err := GetParam(req, "tail_lines", true, api.DefaultLogTailLines)
 	if err != nil {
 		return api.EvaluationLogOptions{}, err
@@ -148,7 +148,7 @@ func parseEvaluationLogOptions(req http_wrappers.RequestWrapper) (api.Evaluation
 	return opts, nil
 }
 
-func writePlainText(w http_wrappers.ResponseWrapper, ctx *executioncontext.ExecutionContext, code int, body string) {
+func writePlainText(w httpwrappers.ResponseWrapper, ctx *executioncontext.ExecutionContext, code int, body string) {
 	w.SetHeader("Content-Type", "text/plain; charset=utf-8")
 	if ctx.RequestID != "" {
 		w.SetHeader("X-Global-Transaction-Id", ctx.RequestID)

@@ -14,3 +14,5 @@ rules:
   no-server-example.com: off
   # Allow unused components (e.g. Benchmark) for future use or reference
   no-unused-components: off
+
+telemetry: off

@@ -43,7 +43,7 @@ func (s *sqlStorage) LoadSystemResources(systemCollections map[string]api.Collec
 				return serviceerrors.WithRollback(err)
 			}
 
-			deleteStmt, deleteArgs := s.statementsFactory.CreateDeleteSystemEntitiesStatement(shared.TABLE_COLLECTIONS)
+			deleteStmt, deleteArgs := s.statementsFactory.CreateDeleteSystemEntitiesStatement(shared.TableCollections)
 			if _, err := s.exec(txn, deleteStmt, deleteArgs...); err != nil {
 				return serviceerrors.WithRollback(err)
 			}
@@ -96,7 +96,7 @@ func (s *sqlStorage) LoadSystemResources(systemCollections map[string]api.Collec
 				return serviceerrors.WithRollback(err)
 			}
 
-			deleteStmt, deleteArgs := s.statementsFactory.CreateDeleteSystemEntitiesStatement(shared.TABLE_PROVIDERS)
+			deleteStmt, deleteArgs := s.statementsFactory.CreateDeleteSystemEntitiesStatement(shared.TableProviders)
 			if _, err := s.exec(txn, deleteStmt, deleteArgs...); err != nil {
 				return serviceerrors.WithRollback(err)
 			}

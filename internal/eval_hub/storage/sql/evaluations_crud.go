@@ -97,12 +97,12 @@ func (s *sqlStorage) scanEvaluationJobTransactional(txn *sql.Tx, id string, forU
 
 func (s *sqlStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
 	var txn *sql.Tx
-	return listEntities[api.EvaluationJobResource](s, txn, shared.TABLE_EVALUATIONS, filter)
+	return listEntities[api.EvaluationJobResource](s, txn, shared.TableEvaluations, filter)
 }
 
 func (s *sqlStorage) DeleteEvaluationJob(id string) error {
 	// Build the DELETE query
-	deleteQuery, args := s.statementsFactory.CreateDeleteEntityStatement(s.tenant, shared.TABLE_EVALUATIONS, id)
+	deleteQuery, args := s.statementsFactory.CreateDeleteEntityStatement(s.tenant, shared.TableEvaluations, id)
 
 	// Execute the DELETE query
 	result, err := s.exec(nil, deleteQuery, args...)

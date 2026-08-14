@@ -9,7 +9,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/http_wrappers"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/httpwrappers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/logging"
@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	TRANSACTION_ID_HEADER = "X-Global-Transaction-Id"
-	USER_HEADER           = "X-User"
-	TENANT_HEADER         = "X-Tenant"
+	TransactionIDHeader = "X-Global-Transaction-Id"
+	UserHeader          = "X-User"
+	TenantHeader        = "X-Tenant"
 )
 
 // newExecutionContext creates a new ExecutionContext with default values. This function
@@ -42,15 +42,15 @@ func (s *Server) newExecutionContext(r *http.Request) *executioncontext.Executio
 	// Enhance logger with request-specific fields
 	requestID, enhancedLogger := s.loggerWithRequest(r)
 
-	user := r.Header.Get(USER_HEADER)
-	tenant := r.Header.Get(TENANT_HEADER)
+	user := r.Header.Get(UserHeader)
+	tenant := r.Header.Get(TenantHeader)
 
 	// add the tenant and user to the logger
 	if tenant != "" {
-		enhancedLogger = enhancedLogger.With(constants.LOG_TENANT, tenant)
+		enhancedLogger = enhancedLogger.With(constants.LogTenant, tenant)
 	}
 	if user != "" {
-		enhancedLogger = enhancedLogger.With(constants.LOG_USER, user)
+		enhancedLogger = enhancedLogger.With(constants.LogUser, user)
 	}
 
 	// Use r.Context() so OTEL trace context (and the HTTP span from otelhttp) propagates
@@ -71,7 +71,7 @@ type ReqWrapper struct {
 
 // NewRequestWrapper wraps the request. When maxBodyBytes is >= 0, the body is limited with
 // [http.MaxBytesReader]. Pass -1 for maxBodyBytes to disable the limit.
-func NewRequestWrapper(w http.ResponseWriter, req *http.Request, maxBodyBytes int64) http_wrappers.RequestWrapper {
+func NewRequestWrapper(w http.ResponseWriter, req *http.Request, maxBodyBytes int64) httpwrappers.RequestWrapper {
 	if maxBodyBytes >= 0 {
 		req.Body = http.MaxBytesReader(w, req.Body, maxBodyBytes)
 	}
@@ -152,7 +152,7 @@ func (r RespWrapper) Write(buf []byte) (int, error) {
 func (r RespWrapper) WriteJSON(v any, code int, arguments ...any) {
 	r.SetHeader("Content-Type", "application/json")
 	if r.ctx.RequestID != "" {
-		r.SetHeader(TRANSACTION_ID_HEADER, r.ctx.RequestID)
+		r.SetHeader(TransactionIDHeader, r.ctx.RequestID)
 	}
 	r.SetStatusCode(code)
 
@@ -172,25 +172,25 @@ func (r RespWrapper) SetStatusCode(code int) {
 	r.Response.WriteHeader(code)
 }
 
-func (r RespWrapper) errorWithMessageCode(requestId string, messageCode *messages.MessageCode, messageParams ...any) {
+func (r RespWrapper) errorWithMessageCode(requestID string, messageCode *messages.MessageCode, messageParams ...any) {
 	msg := messages.GetErrorMessage(messageCode, messageParams...)
 
 	r.DeleteHeader("Content-Length")
 
 	r.SetHeader("X-Content-Type-Options", "nosniff")
-	r.WriteJSON(api.Error{Message: msg, MessageCode: messageCode.GetCode(), Trace: requestId}, messageCode.GetStatusCode())
+	r.WriteJSON(api.Error{Message: msg, MessageCode: messageCode.GetCode(), Trace: requestID}, messageCode.GetStatusCode())
 
 	logging.LogRequestFailed(r.ctx, messageCode.GetStatusCode(), msg, 2)
 }
 
-func (r RespWrapper) ErrorWithMessageCode(requestId string, messageCode *messages.MessageCode, messageParams ...any) {
-	r.errorWithMessageCode(requestId, messageCode, messageParams...)
+func (r RespWrapper) ErrorWithMessageCode(requestID string, messageCode *messages.MessageCode, messageParams ...any) {
+	r.errorWithMessageCode(requestID, messageCode, messageParams...)
 }
 
-func (r RespWrapper) Error(err error, requestId string) {
+func (r RespWrapper) Error(err error, requestID string) {
 	if e, ok := err.(abstractions.ServiceError); ok {
-		r.errorWithMessageCode(requestId, e.MessageCode(), e.MessageParams()...)
+		r.errorWithMessageCode(requestID, e.MessageCode(), e.MessageParams()...)
 		return
 	}
-	r.errorWithMessageCode(requestId, messages.UnknownError, "Error", err.Error())
+	r.errorWithMessageCode(requestID, messages.UnknownError, "Error", err.Error())
 }

@@ -102,7 +102,7 @@ func TestHandleGetEvaluationJobLogs(t *testing.T) {
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
 	req := &logsRequest{
 		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
 		queryValues: map[string][]string{
 			"tail_lines":    {"500"},
 			"timestamps":    {"true"},
@@ -160,8 +160,8 @@ func TestHandleGetEvaluationBenchmarkLogs(t *testing.T) {
 	req := &logsRequest{
 		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/benchmarks/0/logs"),
 		pathValues: map[string]string{
-			constants.PATH_PARAMETER_JOB_ID:          jobID,
-			constants.PATH_PARAMETER_BENCHMARK_INDEX: "0",
+			constants.PathParameterJobID:          jobID,
+			constants.PathParameterBenchmarkIndex: "0",
 		},
 		queryValues: map[string][]string{
 			"tail_lines": {"250"},
@@ -208,7 +208,7 @@ func TestHandleGetEvaluationJobLogsRejectsInvalidTailLines(t *testing.T) {
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-3", logger, "test-user", "test-tenant")
 	req := &logsRequest{
 		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs?tail_lines=0"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
 		queryValues: map[string][]string{"tail_lines": {"0"}},
 	}
 
@@ -243,7 +243,7 @@ func TestHandleGetEvaluationJobLogsRejectsEmptySinceSeconds(t *testing.T) {
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-4", logger, "test-user", "test-tenant")
 	req := &logsRequest{
 		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs?since_seconds="),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
 		queryValues: map[string][]string{"since_seconds": {""}},
 	}
 
@@ -281,7 +281,7 @@ func TestHandleGetEvaluationBenchmarkLogsMissingBenchmarkIndex(t *testing.T) {
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-6", logger, "test-user", "test-tenant")
 	req := &logsRequest{
 		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/job-1/benchmarks//logs"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: "job-1"},
+		pathValues:  map[string]string{constants.PathParameterJobID: "job-1"},
 	}
 
 	h.HandleGetEvaluationBenchmarkLogs(ctx, req, MockResponseWrapper{recorder: rec})
@@ -299,8 +299,8 @@ func TestHandleGetEvaluationBenchmarkLogsInvalidBenchmarkIndex(t *testing.T) {
 	req := &logsRequest{
 		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/job-1/benchmarks/abc/logs"),
 		pathValues: map[string]string{
-			constants.PATH_PARAMETER_JOB_ID:          "job-1",
-			constants.PATH_PARAMETER_BENCHMARK_INDEX: "abc",
+			constants.PathParameterJobID:          "job-1",
+			constants.PathParameterBenchmarkIndex: "abc",
 		},
 	}
 
@@ -324,7 +324,7 @@ func TestHandleGetEvaluationJobLogsNoRuntime(t *testing.T) {
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-8", logger, "test-user", "test-tenant")
 	req := &logsRequest{
 		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
 	}
 
 	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
@@ -353,7 +353,7 @@ func TestHandleGetEvaluationJobLogsRuntimeError(t *testing.T) {
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-9", logger, "test-user", "test-tenant")
 	req := &logsRequest{
 		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
 	}
 
 	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
@@ -377,7 +377,7 @@ func TestHandleGetEvaluationJobLogsRejectsTailLinesOverMax(t *testing.T) {
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-10", logger, "test-user", "test-tenant")
 	req := &logsRequest{
 		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
 		queryValues: map[string][]string{"tail_lines": {strconv.Itoa(api.MaxLogTailLines + 1)}},
 	}
 
@@ -402,7 +402,7 @@ func TestHandleGetEvaluationJobLogsRejectsNonPositiveSinceSeconds(t *testing.T) 
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-11", logger, "test-user", "test-tenant")
 	req := &logsRequest{
 		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
 		queryValues: map[string][]string{"since_seconds": {"0"}},
 	}
 
@@ -443,7 +443,7 @@ func TestHandleGetEvaluationJobLogsResolvesCollectionBenchmarks(t *testing.T) {
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-12", logger, "test-user", "test-tenant")
 	req := &logsRequest{
 		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
 	}
 
 	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
@@ -468,7 +468,7 @@ func TestHandleGetEvaluationJobLogsJobNotFound(t *testing.T) {
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-13", logger, "test-user", "test-tenant")
 	req := &logsRequest{
 		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
 	}
 
 	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
@@ -496,7 +496,7 @@ func TestHandleGetEvaluationJobLogsCollectionNotFound(t *testing.T) {
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-14", logger, "test-user", "test-tenant")
 	req := &logsRequest{
 		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
 	}
 
 	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
@@ -520,7 +520,7 @@ func TestHandleGetEvaluationJobLogsRejectsInvalidSinceSeconds(t *testing.T) {
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-15", logger, "test-user", "test-tenant")
 	req := &logsRequest{
 		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
 		queryValues: map[string][]string{"since_seconds": {"abc"}},
 	}
 
@@ -545,7 +545,7 @@ func TestHandleGetEvaluationJobLogsRejectsInvalidTimestamps(t *testing.T) {
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-16", logger, "test-user", "test-tenant")
 	req := &logsRequest{
 		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
 		queryValues: map[string][]string{"timestamps": {"not-a-bool"}},
 	}
 

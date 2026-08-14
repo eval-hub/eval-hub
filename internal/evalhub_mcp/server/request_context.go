@@ -15,7 +15,7 @@ type requestContextKey struct{}
 type requestLoggerContextKey struct{}
 
 func requestIDFromRequest(r *http.Request) string {
-	requestID := strings.TrimSpace(r.Header.Get(TRANSACTION_ID_HEADER))
+	requestID := strings.TrimSpace(r.Header.Get(TransactionIDHeader))
 	if requestID == "" {
 		requestID = uuid.New().String()
 	}
@@ -25,11 +25,11 @@ func requestIDFromRequest(r *http.Request) string {
 func withRequestContext(baseLogger *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestID := requestIDFromRequest(r)
-		w.Header().Set(TRANSACTION_ID_HEADER, requestID)
+		w.Header().Set(TransactionIDHeader, requestID)
 
 		ctx := context.WithValue(r.Context(), requestContextKey{}, requestID)
 		if baseLogger != nil {
-			ctx = context.WithValue(ctx, requestLoggerContextKey{}, baseLogger.With(constants.LOG_REQUEST_ID, requestID))
+			ctx = context.WithValue(ctx, requestLoggerContextKey{}, baseLogger.With(constants.LogRequestID, requestID))
 		}
 
 		next.ServeHTTP(w, r.WithContext(ctx))

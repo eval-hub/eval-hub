@@ -22,18 +22,18 @@ func TestWithRequestContextUsesExistingHeader(t *testing.T) {
 	handler := withRequestContext(discardLogger, inner)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set(TRANSACTION_ID_HEADER, "  req-123  ")
+	req.Header.Set(TransactionIDHeader, "  req-123  ")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
 	if gotID != "req-123" {
 		t.Fatalf("RequestIDFromContext() = %q, want %q", gotID, "req-123")
 	}
-	if rec.Header().Get(TRANSACTION_ID_HEADER) != "req-123" {
-		t.Fatalf("response header = %q, want %q", rec.Header().Get(TRANSACTION_ID_HEADER), "req-123")
+	if rec.Header().Get(TransactionIDHeader) != "req-123" {
+		t.Fatalf("response header = %q, want %q", rec.Header().Get(TransactionIDHeader), "req-123")
 	}
-	if req.Header.Get(TRANSACTION_ID_HEADER) != "  req-123  " {
-		t.Fatalf("request header was mutated: %q", req.Header.Get(TRANSACTION_ID_HEADER))
+	if req.Header.Get(TransactionIDHeader) != "  req-123  " {
+		t.Fatalf("request header was mutated: %q", req.Header.Get(TransactionIDHeader))
 	}
 }
 
@@ -56,8 +56,8 @@ func TestWithRequestContextGeneratesRequestID(t *testing.T) {
 	if _, err := uuid.Parse(gotID); err != nil {
 		t.Fatalf("generated request ID %q is not a UUID: %v", gotID, err)
 	}
-	if rec.Header().Get(TRANSACTION_ID_HEADER) != gotID {
-		t.Fatalf("response header = %q, want %q", rec.Header().Get(TRANSACTION_ID_HEADER), gotID)
+	if rec.Header().Get(TransactionIDHeader) != gotID {
+		t.Fatalf("response header = %q, want %q", rec.Header().Get(TransactionIDHeader), gotID)
 	}
 }
 
@@ -73,7 +73,7 @@ func TestRequestLoggerFromContext(t *testing.T) {
 	handler := withRequestContext(base, inner)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set(TRANSACTION_ID_HEADER, "req-log")
+	req.Header.Set(TransactionIDHeader, "req-log")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -92,7 +92,7 @@ func TestWrapRequestPropagatesRequestID(t *testing.T) {
 	handler := wrapRequest(&config.Config{AuthType: config.AuthTypeNone}, discardLogger, inner)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set(TRANSACTION_ID_HEADER, "wrapped-req")
+	req.Header.Set(TransactionIDHeader, "wrapped-req")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 

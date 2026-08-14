@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/http_wrappers"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/httpwrappers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/safefile"
 )
@@ -20,7 +20,7 @@ var (
 	}
 )
 
-func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper, dirs ...string) {
+func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper, dirs ...string) {
 	found := func(contents []byte, contentType string) {
 		w.SetHeader("Content-Type", contentType)
 		for key, value := range noCacheHeaders {
@@ -79,7 +79,7 @@ func (h *Handlers) HandleOpenAPI(ctx *executioncontext.ExecutionContext, r http_
 	w.ErrorWithMessageCode(ctx.RequestID, messages.InternalServerError, "Error", "Failed to read OpenAPI spec")
 }
 
-func (h *Handlers) HandleDocs(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleDocs(ctx *executioncontext.ExecutionContext, r httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
 	// Get the base URL for the OpenAPI spec (so without the "/docs" path)
 	baseURL := strings.TrimSuffix(r.URI(), r.Path())
 	// be safe against XSS attacks

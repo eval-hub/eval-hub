@@ -12,13 +12,13 @@ import (
 )
 
 const (
-	INSERT_EVALUATION_STATEMENT = `INSERT INTO evaluations (id, tenant_id, owner, status, experiment_id, entity) VALUES (?, ?, ?, ?, ?, ?);`
+	insertEvaluationStatement = `INSERT INTO evaluations (id, tenant_id, owner, status, experiment_id, entity) VALUES (?, ?, ?, ?, ?, ?);`
 
-	INSERT_COLLECTION_STATEMENT = `INSERT INTO collections (id, tenant_id, owner, created_at, updated_at, entity) VALUES (?, ?, ?, ?, ?, ?);`
+	insertCollectionStatement = `INSERT INTO collections (id, tenant_id, owner, created_at, updated_at, entity) VALUES (?, ?, ?, ?, ?, ?);`
 
-	INSERT_PROVIDER_STATEMENT = `INSERT INTO providers (id, tenant_id, owner, created_at, updated_at, entity) VALUES (?, ?, ?, ?, ?, ?);`
+	insertProviderStatement = `INSERT INTO providers (id, tenant_id, owner, created_at, updated_at, entity) VALUES (?, ?, ?, ?, ?, ?);`
 
-	TABLES_SCHEMA = `
+	tablesSchema = `
 CREATE TABLE IF NOT EXISTS evaluations (
     id VARCHAR(36) NOT NULL,
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -75,18 +75,18 @@ func (s *sqliteStatementsFactory) GetLogger() *slog.Logger {
 }
 
 func (s *sqliteStatementsFactory) GetTablesSchema() string {
-	return TABLES_SCHEMA
+	return tablesSchema
 }
 
 // allowedFilterColumns returns the set of column/param names allowed in filter for each table.
 func (s *sqliteStatementsFactory) GetAllowedFilterColumns(tableName string) []string {
 	allColumns := []string{"owner", "name", "tags"}
 	switch tableName {
-	case shared.TABLE_EVALUATIONS:
+	case shared.TableEvaluations:
 		return append(allColumns, "status", "experiment_id")
-	case shared.TABLE_PROVIDERS:
+	case shared.TableProviders:
 		return allColumns // "benchmarks" and "scope" are not allowed filters for providers from the database
-	case shared.TABLE_COLLECTIONS:
+	case shared.TableCollections:
 		return append(allColumns, "category") // "scope" is not allowed filter for collections from the database
 	default:
 		return nil
@@ -94,7 +94,7 @@ func (s *sqliteStatementsFactory) GetAllowedFilterColumns(tableName string) []st
 }
 
 func (s *sqliteStatementsFactory) CreateEvaluationAddEntityStatement(evaluation *api.EvaluationJobResource, entity string) (string, []any) {
-	return INSERT_EVALUATION_STATEMENT, []any{evaluation.Resource.ID, evaluation.Resource.Tenant, evaluation.Resource.Owner, evaluation.Status.State, evaluation.Resource.MLFlowExperimentID, entity}
+	return insertEvaluationStatement, []any{evaluation.Resource.ID, evaluation.Resource.Tenant, evaluation.Resource.Owner, evaluation.Status.State, evaluation.Resource.MLFlowExperimentID, entity}
 }
 
 func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
@@ -113,13 +113,13 @@ func (s *sqliteStatementsFactory) CreateEntityFilterCondition(key string, value 
 	case "name":
 		// evaluations: name at config.name; providers and collections: name at entity root
 		namePath := "$.name"
-		if tableName == shared.TABLE_EVALUATIONS {
+		if tableName == shared.TableEvaluations {
 			namePath = "$.config.name"
 		}
 		// name at top level
 		return fmt.Sprintf("json_extract(entity, '%s') = ?", namePath), []any{value}
 	case "category":
-		if tableName == shared.TABLE_COLLECTIONS {
+		if tableName == shared.TableCollections {
 			// collections: category at entity root
 			categoryPath := "$.category"
 			return fmt.Sprintf("json_extract(entity, '%s') = ?", categoryPath), []any{value}
@@ -130,7 +130,7 @@ func (s *sqliteStatementsFactory) CreateEntityFilterCondition(key string, value 
 		tagStr, _ := value.(string)
 		// evaluations: tags at config.tags; providers and collections: tags at entity root
 		tagsPath := "$.tags"
-		if tableName == shared.TABLE_EVALUATIONS {
+		if tableName == shared.TableEvaluations {
 			tagsPath = "$.config.tags"
 		}
 		return fmt.Sprintf("json_type(json_extract(entity, '%s')) = 'array' AND EXISTS (SELECT 1 FROM json_each(json_extract(entity, '%s')) WHERE value = ?)", tagsPath, tagsPath), []any{tagStr}
@@ -159,7 +159,7 @@ func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant,
 
 	var query string
 	switch tableName {
-	case shared.TABLE_EVALUATIONS:
+	case shared.TableEvaluations:
 		query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM %s%s;`, tableName, filterClause)
 	default:
 		query = fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, entity FROM %s%s;`, tableName, filterClause)
@@ -170,7 +170,7 @@ func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant,
 
 func (s *sqliteStatementsFactory) ScanRowForEntity(tenant api.Tenant, tableName string, rows *sql.Rows, query *shared.EntityQuery) error {
 	switch tableName {
-	case shared.TABLE_EVALUATIONS:
+	case shared.TableEvaluations:
 		return rows.Scan(&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON)
 	default:
 		return rows.Scan(&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON)
@@ -192,7 +192,7 @@ func (s *sqliteStatementsFactory) CreateDeleteSystemEntitiesStatement(tableName 
 func (s *sqliteStatementsFactory) CreateUpdateEntityStatement(tenant api.Tenant, tableName, id string, entityJSON string, status *api.OverallState) (string, []any) {
 	// these WHERE statements are okay because we can only update user resources
 	switch tableName {
-	case shared.TABLE_EVALUATIONS:
+	case shared.TableEvaluations:
 		if !tenant.IsEmpty() {
 			return fmt.Sprintf(`UPDATE %s SET status = ?, entity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?;`, tableName), []any{*status, entityJSON, id, tenant.String()}
 		}
@@ -206,7 +206,7 @@ func (s *sqliteStatementsFactory) CreateUpdateEntityStatement(tenant api.Tenant,
 }
 
 func (s *sqliteStatementsFactory) CreateProviderAddEntityStatement(provider *api.ProviderResource, entity string) (string, []any) {
-	return INSERT_PROVIDER_STATEMENT, []any{provider.Resource.ID, provider.Resource.Tenant, provider.Resource.Owner, provider.Resource.CreatedAt, provider.Resource.UpdatedAt, entity}
+	return insertProviderStatement, []any{provider.Resource.ID, provider.Resource.Tenant, provider.Resource.Owner, provider.Resource.CreatedAt, provider.Resource.UpdatedAt, entity}
 }
 
 func (s *sqliteStatementsFactory) getWhereStatement(tenant api.Tenant, id string) (string, []any) {
@@ -234,7 +234,7 @@ func (s *sqliteStatementsFactory) CreateProviderGetEntityStatement(query *shared
 }
 
 func (s *sqliteStatementsFactory) CreateCollectionAddEntityStatement(collection *api.CollectionResource, entity string) (string, []any) {
-	return INSERT_COLLECTION_STATEMENT, []any{collection.Resource.ID, collection.Resource.Tenant, collection.Resource.Owner, collection.Resource.CreatedAt, collection.Resource.UpdatedAt, entity}
+	return insertCollectionStatement, []any{collection.Resource.ID, collection.Resource.Tenant, collection.Resource.Owner, collection.Resource.CreatedAt, collection.Resource.UpdatedAt, entity}
 }
 
 func (s *sqliteStatementsFactory) CreateCollectionGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {

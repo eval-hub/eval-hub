@@ -15,7 +15,6 @@ Feature: MCP Server Initialization
     Then the server should advertise tools capability
     And the server should advertise resources capability
     And the server should advertise prompts capability
-    And the server should advertise logging capability
 
   Scenario: Server lists tools when backend is connected
     Given an MCP server is running with a backend

@@ -504,7 +504,7 @@ func TestHandleCancelEvaluationWithSoftDeleteDoesNotCleanupResources(t *testing.
 	req := &deleteRequest{
 		MockRequest: createMockRequest("DELETE", "/api/v1/evaluations/jobs/"+jobID),
 		queryValues: map[string][]string{"hard_delete": {"false"}},
-		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
@@ -546,7 +546,7 @@ func TestHandleDeleteEvaluationCleansUpResources(t *testing.T) {
 	req := &deleteRequest{
 		MockRequest: createMockRequest("DELETE", "/api/v1/evaluations/jobs/"+jobID),
 		queryValues: map[string][]string{"hard_delete": {"true"}},
-		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: jobID},
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
@@ -771,7 +771,7 @@ func TestHandleGetEvaluation(t *testing.T) {
 
 	req := &deleteRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/jobs/job-get"),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: "job-get"},
+		pathValues:  map[string]string{constants.PathParameterJobID: "job-get"},
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
@@ -842,7 +842,7 @@ func TestHandleUpdateEvaluation(t *testing.T) {
 	}
 	reqWithPath := &updateEvaluationRequest{
 		bodyRequest: req,
-		pathValues:  map[string]string{constants.PATH_PARAMETER_JOB_ID: "job-update"},
+		pathValues:  map[string]string{constants.PathParameterJobID: "job-update"},
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
