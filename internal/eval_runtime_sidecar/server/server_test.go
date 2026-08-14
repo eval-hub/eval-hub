@@ -168,8 +168,8 @@ func TestSidecarServer_ShutdownBeforeStart(t *testing.T) {
 		}()
 		select {
 		case err := <-done:
-			if err != nil {
-				t.Logf("Start returned (expected nil or ServerClosedError): %v", err)
+			if !errors.Is(err, &sidecarServer.ServerClosedError{}) {
+				t.Fatalf("Start after Shutdown = %v, want ServerClosedError", err)
 			}
 		case <-time.After(5 * time.Second):
 			t.Fatal("Start blocked despite a pending shutdown")
