@@ -2,9 +2,9 @@ package constants
 
 // Log field name constants
 const (
-	LogRequestID = "request_id"
-	LogMethod    = "method"
-	LogURI       = "uri"
+	LogRequestID  = "request_id"
+	LogMethod     = "method"
+	LogURI        = "uri"
 	LogRemoteUser = "remote_user"
 	LogTenant     = "tenant"
 	LogUser       = "user"
