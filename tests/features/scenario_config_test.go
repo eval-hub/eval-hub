@@ -1,6 +1,7 @@
 package features
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -20,6 +21,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
+	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 
 	"github.com/cucumber/godog"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -221,6 +223,20 @@ func (tc *scenarioConfig) mlflowWorkspace() string {
 		}
 	}
 	return workspace
+}
+
+func (tc *scenarioConfig) mlflowClient() (*mlflowclient.Client, error) {
+	baseURL, err := mlflowBaseURL()
+	if err != nil {
+		return nil, err
+	}
+	client := mlflowclient.NewClient(baseURL).
+		WithContext(context.Background()).
+		WithHTTPClient(getMLflowHTTPClient()).
+		WithToken(os.Getenv("AUTH_TOKEN")).
+		WithWorkspacesSupport(true).
+		WithWorkspace(tc.mlflowWorkspace())
+	return client, nil
 }
 
 func isMetricsScrapePath(path string) bool {

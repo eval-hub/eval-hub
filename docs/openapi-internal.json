@@ -875,6 +875,12 @@
                       "metrics": {
                         "accuracy": 0.95
                       },
+                      "metrics_schema": [
+                        {
+                          "name": "accuracy",
+                          "type": "numeric"
+                        }
+                      ],
                       "artifacts": {
                         "logs": "/data/logs/1234567890.log"
                       },
@@ -3111,6 +3117,33 @@
           }
         ]
       },
+      "MetricSchema": {
+        "type": "object",
+        "description": "One entry in metrics_schema that names a metric and its result type.",
+        "required": [
+          "name",
+          "type"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Metric name that also appears as a key in the metrics map.",
+            "example": "acc"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "numeric",
+              "categorical",
+              "array_ordered",
+              "array_unordered",
+              "time_series"
+            ],
+            "description": "Result type for this metric. One of numeric, categorical, array_ordered, array_unordered, or time_series.\n",
+            "example": "numeric"
+          }
+        }
+      },
       "BenchmarkTest": {
         "type": "object",
         "description": "The test result of a single benchmark run",
@@ -3150,7 +3183,33 @@
           "metrics": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Metric name to value"
+            "description": "Metrics produced by evaluating the model on this benchmark, keyed by metric name. Each value may be a scalar, list, or object.\n",
+            "example": {
+              "acc": 0.691,
+              "acc_norm": 0.637,
+              "acc_stderr": 0.009
+            }
+          },
+          "metrics_schema": {
+            "type": "array",
+            "description": "Metadata describing how each metric in metrics should be interpreted. Each entry names a metric key and its result type. Metrics without an entry default to numeric.\n",
+            "example": [
+              {
+                "name": "acc",
+                "type": "numeric"
+              },
+              {
+                "name": "acc_norm",
+                "type": "numeric"
+              },
+              {
+                "name": "acc_stderr",
+                "type": "numeric"
+              }
+            ],
+            "items": {
+              "$ref": "#/components/schemas/MetricSchema"
+            }
           },
           "additional_info": {
             "type": "object",
@@ -3990,7 +4049,28 @@
           "metrics": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Benchmark metrics"
+            "description": "Metrics reported by the evaluation adapter for this benchmark, keyed by metric name. Each value may be a scalar, list, or object.\n",
+            "example": {
+              "accuracy": 0.95,
+              "toxicity_score": 0.12
+            }
+          },
+          "metrics_schema": {
+            "type": "array",
+            "description": "Optional metadata describing how each metric in metrics should be interpreted. Each entry names a metric key and its result type. Metrics without an entry default to numeric.\n",
+            "example": [
+              {
+                "name": "accuracy",
+                "type": "numeric"
+              },
+              {
+                "name": "toxicity_score",
+                "type": "numeric"
+              }
+            ],
+            "items": {
+              "$ref": "#/components/schemas/MetricSchema"
+            }
           },
           "additional_info": {
             "type": "object",
