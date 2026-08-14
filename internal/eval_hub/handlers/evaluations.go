@@ -13,7 +13,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/common"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/http_wrappers"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/httpwrappers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
@@ -189,7 +189,7 @@ func ValidateReadOnlyResolvedSHA(cfg *api.EvaluationJobConfig) error {
 }
 
 // HandleCreateEvaluation handles POST /api/v1/evaluations/jobs
-func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
 	storage := h.getStorage(ctx)
 
 	logging.LogRequestStarted(ctx)
@@ -307,7 +307,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 						State: api.OverallStatePending,
 						Message: api.WithMessageOrigin(&api.MessageInfo{
 							Message:     "Evaluation job created",
-							MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CREATED,
+							MessageCode: constants.MessageCodeEvaluationJobCreated,
 						}, api.MessageOriginServer),
 					},
 				},
@@ -341,7 +341,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 					state := api.OverallStateFailed
 					message := api.WithMessageOrigin(&api.MessageInfo{
 						Message:     runErr.Error(),
-						MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED,
+						MessageCode: constants.MessageCodeEvaluationJobFailed,
 					}, api.MessageOriginServer)
 					metrics.RecordEvaluationJobRuntimeStartFailed(ctx.Ctx, h.runtimeName())
 					metrics.RecordEvaluationJobTerminalState(ctx.Ctx, api.OverallStatePending, state)
@@ -355,7 +355,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 			} else {
 				message := api.WithMessageOrigin(&api.MessageInfo{
 					Message:     "Evaluation job created but no runtime configured",
-					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_UPDATED,
+					MessageCode: constants.MessageCodeEvaluationJobUpdated,
 				}, api.MessageOriginServer)
 				if err := storage.WithContext(runtimeCtx).UpdateEvaluationJobStatus(job.Resource.ID, job.Status.State, message); err != nil {
 					ctx.Logger.Error("Failed to update evaluation status", "error", err, "job_id", job.Resource.ID)
@@ -432,7 +432,7 @@ func (h *Handlers) validateBenchmarkReferences(ctx *executioncontext.ExecutionCo
 }
 
 // HandleListEvaluations handles GET /api/v1/evaluations/jobs
-func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
 	storage := h.getStorage(ctx)
 
 	var ofilter *abstractions.QueryFilter
@@ -514,15 +514,15 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 }
 
 // HandleGetEvaluation handles GET /api/v1/evaluations/jobs/{id}
-func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
 	storage := h.getStorage(ctx)
 
 	logging.LogRequestStarted(ctx)
 
 	// Extract ID from path
-	evaluationJobID := r.PathValue(constants.PATH_PARAMETER_JOB_ID)
+	evaluationJobID := r.PathValue(constants.PathParameterJobID)
 	if evaluationJobID == "" {
-		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PATH_PARAMETER_JOB_ID), ctx.RequestID)
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PathParameterJobID), ctx.RequestID)
 		return
 	}
 
@@ -543,15 +543,15 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 	)
 }
 
-func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext, r httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
 	storage := h.getStorage(ctx)
 
 	logging.LogRequestStarted(ctx)
 
 	// Extract ID from path
-	evaluationJobID := r.PathValue(constants.PATH_PARAMETER_JOB_ID)
+	evaluationJobID := r.PathValue(constants.PathParameterJobID)
 	if evaluationJobID == "" {
-		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PATH_PARAMETER_JOB_ID), ctx.RequestID)
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PathParameterJobID), ctx.RequestID)
 		return
 	}
 
@@ -638,15 +638,15 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 }
 
 // HandleCancelEvaluation handles DELETE /api/v1/evaluations/jobs/{id}
-func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext, r httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
 	storage := h.getStorage(ctx)
 
 	logging.LogRequestStarted(ctx)
 
 	// Extract ID from path
-	evaluationJobID := r.PathValue(constants.PATH_PARAMETER_JOB_ID)
+	evaluationJobID := r.PathValue(constants.PathParameterJobID)
 	if evaluationJobID == "" {
-		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PATH_PARAMETER_JOB_ID), ctx.RequestID)
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PathParameterJobID), ctx.RequestID)
 		return
 	}
 
@@ -710,7 +710,7 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 				}
 				err = storage.WithContext(runtimeCtx).UpdateEvaluationJobStatus(evaluationJobID, api.OverallStateCancelled, api.WithMessageOrigin(&api.MessageInfo{
 					Message:     "Evaluation job cancelled",
-					MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_CANCELLED,
+					MessageCode: constants.MessageCodeEvaluationJobCancelled,
 				}, api.MessageOriginServer))
 				if err != nil {
 					ctx.Logger.Info("Failed to cancel evaluation job", "error", err.Error(), "id", evaluationJobID)

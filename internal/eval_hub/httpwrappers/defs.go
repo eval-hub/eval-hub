@@ -1,4 +1,4 @@
-package http_wrappers
+package httpwrappers
 
 import "github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 
@@ -16,8 +16,8 @@ type RequestWrapper interface {
 
 // Response abstraction of underlying HTTP library
 type ResponseWrapper interface {
-	Error(err error, requestId string)
-	ErrorWithMessageCode(requestId string, messageCode *messages.MessageCode, messageParams ...any)
+	Error(err error, requestID string)
+	ErrorWithMessageCode(requestID string, messageCode *messages.MessageCode, messageParams ...any)
 	SetHeader(key string, value string)
 	DeleteHeader(key string)
 	SetStatusCode(code int)

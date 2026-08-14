@@ -6,12 +6,12 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/http_wrappers"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/httpwrappers"
 	"github.com/eval-hub/eval-hub/internal/logging"
 )
 
 const (
-	STATUS_HEALTHY = "healthy"
+	statusHealthy = "healthy"
 )
 
 type HealthResponse struct {
@@ -19,7 +19,7 @@ type HealthResponse struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-func (h *Handlers) HandleHealth(ctx *executioncontext.ExecutionContext, r http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleHealth(ctx *executioncontext.ExecutionContext, r httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
 	// We do not want to flood logs with health checks from readiness and liveness probes,
 	// so all health checks are set to log at debug level. The logger is overridden with this
 	// at the start of HandleHealth, by setting the log level in the ExecutionContext.
@@ -28,7 +28,7 @@ func (h *Handlers) HandleHealth(ctx *executioncontext.ExecutionContext, r http_w
 	// a struct to store the health information and only
 	// serialize it when something changes
 	healthInfo := HealthResponse{
-		Status:    STATUS_HEALTHY,
+		Status:    statusHealthy,
 		Timestamp: time.Now().UTC(),
 	}
 	w.WriteJSON(healthInfo, 200)

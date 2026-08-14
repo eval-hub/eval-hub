@@ -11,7 +11,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/common"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/http_wrappers"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/httpwrappers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serialization"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
@@ -51,7 +51,7 @@ var (
 	}
 )
 
-func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
@@ -109,7 +109,7 @@ func (h *Handlers) HandleCreateProvider(ctx *executioncontext.ExecutionContext, 
 }
 
 // HandleListProviders handles GET /api/v1/evaluations/providers
-func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	var ofilter *abstractions.QueryFilter
@@ -196,21 +196,21 @@ func (h *Handlers) HandleListProviders(ctx *executioncontext.ExecutionContext, r
 	)
 }
 
-func (h *Handlers) HandleGetProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleGetProvider(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
-	providerId := req.PathValue(constants.PATH_PARAMETER_PROVIDER_ID)
-	if providerId == "" {
-		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PATH_PARAMETER_PROVIDER_ID), ctx.RequestID)
+	providerID := req.PathValue(constants.PathParameterProviderID)
+	if providerID == "" {
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PathParameterProviderID), ctx.RequestID)
 		return
 	}
 
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			provider, err := storage.WithContext(runtimeCtx).GetProvider(providerId)
+			provider, err := storage.WithContext(runtimeCtx).GetProvider(providerID)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -220,18 +220,18 @@ func (h *Handlers) HandleGetProvider(ctx *executioncontext.ExecutionContext, req
 		},
 		"storage",
 		"get-provider",
-		"provider.id", providerId,
+		"provider.id", providerID,
 	)
 }
 
-func (h *Handlers) HandleUpdateProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleUpdateProvider(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
-	providerId := req.PathValue(constants.PATH_PARAMETER_PROVIDER_ID)
-	if providerId == "" {
-		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PATH_PARAMETER_PROVIDER_ID), ctx.RequestID)
+	providerID := req.PathValue(constants.PathParameterProviderID)
+	if providerID == "" {
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PathParameterProviderID), ctx.RequestID)
 		return
 	}
 
@@ -249,7 +249,7 @@ func (h *Handlers) HandleUpdateProvider(ctx *executioncontext.ExecutionContext, 
 		},
 		"validation",
 		"validate-provider-update",
-		"provider.id", providerId,
+		"provider.id", providerID,
 	)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
@@ -259,7 +259,7 @@ func (h *Handlers) HandleUpdateProvider(ctx *executioncontext.ExecutionContext, 
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			provider, err := storage.WithContext(runtimeCtx).UpdateProvider(providerId, request)
+			provider, err := storage.WithContext(runtimeCtx).UpdateProvider(providerID, request)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -269,18 +269,18 @@ func (h *Handlers) HandleUpdateProvider(ctx *executioncontext.ExecutionContext, 
 		},
 		"storage",
 		"update-provider",
-		"provider.id", providerId,
+		"provider.id", providerID,
 	)
 }
 
-func (h *Handlers) HandlePatchProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandlePatchProvider(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
-	providerId := req.PathValue(constants.PATH_PARAMETER_PROVIDER_ID)
-	if providerId == "" {
-		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PATH_PARAMETER_PROVIDER_ID), ctx.RequestID)
+	providerID := req.PathValue(constants.PathParameterProviderID)
+	if providerID == "" {
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PathParameterProviderID), ctx.RequestID)
 		return
 	}
 
@@ -299,11 +299,11 @@ func (h *Handlers) HandlePatchProvider(ctx *executioncontext.ExecutionContext, r
 			if err := h.verifyPatches(runtimeCtx, patches, allowedProviderPatches); err != nil {
 				return err
 			}
-			return h.validatePatchedProviderConfig(ctx.WithContext(runtimeCtx), storage, providerId, patches)
+			return h.validatePatchedProviderConfig(ctx.WithContext(runtimeCtx), storage, providerID, patches)
 		},
 		"validation",
 		"validate-provider-patch",
-		"provider.id", providerId,
+		"provider.id", providerID,
 	)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
@@ -313,7 +313,7 @@ func (h *Handlers) HandlePatchProvider(ctx *executioncontext.ExecutionContext, r
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			provider, err := storage.WithContext(runtimeCtx).PatchProvider(providerId, &patches)
+			provider, err := storage.WithContext(runtimeCtx).PatchProvider(providerID, &patches)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -323,7 +323,7 @@ func (h *Handlers) HandlePatchProvider(ctx *executioncontext.ExecutionContext, r
 		},
 		"storage",
 		"patch-provider",
-		"provider.id", providerId,
+		"provider.id", providerID,
 	)
 }
 
@@ -359,14 +359,14 @@ func applyJSONPatches(doc []byte, patches *api.Patch) ([]byte, error) {
 	return patch.Apply(doc)
 }
 
-func (h *Handlers) HandleDeleteProvider(ctx *executioncontext.ExecutionContext, req http_wrappers.RequestWrapper, w http_wrappers.ResponseWrapper) {
+func (h *Handlers) HandleDeleteProvider(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 
 	logging.LogRequestStarted(ctx)
 
-	providerId := req.PathValue(constants.PATH_PARAMETER_PROVIDER_ID)
-	if providerId == "" {
-		err := serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PATH_PARAMETER_PROVIDER_ID)
+	providerID := req.PathValue(constants.PathParameterProviderID)
+	if providerID == "" {
+		err := serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PathParameterProviderID)
 		w.Error(err, ctx.RequestID)
 		return
 	}
@@ -374,7 +374,7 @@ func (h *Handlers) HandleDeleteProvider(ctx *executioncontext.ExecutionContext, 
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			err := storage.WithContext(runtimeCtx).DeleteProvider(providerId)
+			err := storage.WithContext(runtimeCtx).DeleteProvider(providerID)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -384,6 +384,6 @@ func (h *Handlers) HandleDeleteProvider(ctx *executioncontext.ExecutionContext, 
 		},
 		"storage",
 		"delete-provider",
-		"provider.id", providerId,
+		"provider.id", providerID,
 	)
 }

@@ -148,9 +148,7 @@ func (tc *mcpTestContext) theServerShouldAdvertiseCapability(capability string) 
 			return fmt.Errorf("prompts capability not advertised")
 		}
 	case "logging":
-		if caps.Logging == nil {
-			return fmt.Errorf("logging capability not advertised")
-		}
+		return fmt.Errorf("logging capability is deprecated (SEP-2577) and no longer advertised")
 	default:
 		return fmt.Errorf("unknown capability: %s", capability)
 	}

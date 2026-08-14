@@ -33,8 +33,8 @@ import (
 
 const (
 	// These are the only drivers currently supported
-	SQLITE_DRIVER   = "sqlite"
-	POSTGRES_DRIVER = "pgx"
+	SQLiteDriver   = "sqlite"
+	PostgresDriver = "pgx"
 )
 
 type sqlStorage struct {
@@ -74,9 +74,9 @@ func NewStorage(
 
 	// check that the driver is supported
 	switch sqlConfig.Driver {
-	case SQLITE_DRIVER:
+	case SQLiteDriver:
 		break
-	case POSTGRES_DRIVER:
+	case PostgresDriver:
 		break
 	default:
 		return nil, fmt.Errorf("unsupported driver: %s", (sqlConfig.Driver))
@@ -96,9 +96,9 @@ func NewStorage(
 	if useOTELOSQL {
 		var attrs []attribute.KeyValue
 		switch sqlConfig.Driver {
-		case SQLITE_DRIVER:
+		case SQLiteDriver:
 			attrs = append(attrs, semconv.DBSystemSqlite)
-		case POSTGRES_DRIVER:
+		case PostgresDriver:
 			attrs = append(attrs, semconv.DBSystemPostgreSQL)
 		}
 		if databaseName != "" {
@@ -137,12 +137,12 @@ func NewStorage(
 
 	var statementsFactory shared.SQLStatementsFactory
 	switch sqlConfig.Driver {
-	case SQLITE_DRIVER:
+	case SQLiteDriver:
 		statementsFactory, err = sqlite.Setup(logger, pool, &sqlConfig)
 		if err != nil {
 			return nil, err
 		}
-	case POSTGRES_DRIVER:
+	case PostgresDriver:
 		statementsFactory, err = postgres.Setup(logger, pool, &sqlConfig)
 		if err != nil {
 			return nil, err
@@ -211,9 +211,9 @@ func getIsolationLevel(isolationLevel string, config *shared.SQLDatabaseConfig, 
 	}
 
 	switch config.Driver {
-	case SQLITE_DRIVER:
+	case SQLiteDriver:
 		return sql.LevelDefault, nil
-	case POSTGRES_DRIVER:
+	case PostgresDriver:
 		// Read Committed matches PostgreSQL's default and avoids Serializable
 		// snapshot conflicts (SQLSTATE 40001) under concurrent job updates.
 		// Override with DEBUG_SQL_ISOLATION_LEVEL=Serializable when needed.

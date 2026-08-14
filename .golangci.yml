@@ -1,16 +1,32 @@
 version: "2"
 
 linters:
+  enable:
+    - depguard
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - staticcheck
+        text: "ST1003"
   settings:
     staticcheck:
       # Default: ["all", "-ST1000", "-ST1003", "-ST1016", "-ST1020", "-ST1021", "-ST1022"]
       # Also disable ST1005 (error strings should not be capitalized).
+      # ST1016 is enabled; ST1003 is suppressed in test files via linters.exclusions.rules.
       checks:
         - all
         - "-ST1000"
-        - "-ST1003"
         - "-ST1005"
-        - "-ST1016"
         - "-ST1020"
         - "-ST1021"
         - "-ST1022"
+    depguard:
+      rules:
+        banned-packages:
+          deny:
+            - pkg: "golang.org/x/crypto/openpgp"
+              desc: >-
+                GO-2026-5932: golang.org/x/crypto/openpgp is unmaintained, unsafe
+                by design, and has known security issues. Use
+                github.com/ProtonMail/go-crypto/openpgp instead.

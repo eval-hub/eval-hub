@@ -50,7 +50,7 @@ func TestHandleGetProvider_ReturnsGPUConfig(t *testing.T) {
 
 	req := &providersRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/providers/"+provider.Resource.ID),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_PROVIDER_ID: provider.Resource.ID},
+		pathValues:  map[string]string{constants.PathParameterProviderID: provider.Resource.ID},
 	}
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
@@ -131,7 +131,7 @@ func TestHandleUpdateProvider_PreservesGPUConfig(t *testing.T) {
 	}`
 	req := &providersRequest{
 		MockRequest: createMockRequest("PUT", "/api/v1/evaluations/providers/"+providerID),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_PROVIDER_ID: providerID},
+		pathValues:  map[string]string{constants.PathParameterProviderID: providerID},
 	}
 	req.SetBody([]byte(body))
 	recorder := httptest.NewRecorder()
@@ -229,7 +229,7 @@ func TestHandlePatchProvider_RejectsInvalidImagePullPolicy(t *testing.T) {
 	}]`
 	req := &providersRequest{
 		MockRequest: createMockRequest("PATCH", "/api/v1/evaluations/providers/"+providerID),
-		pathValues:  map[string]string{constants.PATH_PARAMETER_PROVIDER_ID: providerID},
+		pathValues:  map[string]string{constants.PathParameterProviderID: providerID},
 	}
 	req.SetBody([]byte(body))
 	recorder := httptest.NewRecorder()

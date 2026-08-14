@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp start-service stop-service start-sidecar stop-sidecar lint validate-configs test test-fuzz test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp start-service stop-service start-sidecar stop-sidecar lint golangci-lint validate-configs test test-fuzz test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build
 
 GOPATH := $(shell go env GOPATH)
 GOBIN := $(shell go env GOPATH)/bin
@@ -141,10 +141,21 @@ stop-mcp: ## Stop the MCP server
 start-inspector-mcp:
 	npx @modelcontextprotocol/inspector
 
-lint: ## Lint the code (runs go vet)
-	@echo "Linting code..."
-	@go vet ./...
-	@echo "Lint complete"
+lint: vet golangci-lint ## Lint the code (go vet + golangci-lint)
+
+GOLANGCI_LINT_VERSION ?= v2.12.2
+GOLANGCI_LINT_STAMP  := $(BIN_DIR)/.golangci-lint-$(GOLANGCI_LINT_VERSION)
+
+golangci-lint: $(GOLANGCI_LINT_STAMP) ## Run golangci-lint (uses .golangci.yml)
+	@echo "Running golangci-lint..."
+	@$(GOBIN)/golangci-lint run ./...
+	@echo "golangci-lint complete"
+
+$(GOLANGCI_LINT_STAMP): | $(BIN_DIR)
+	@echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION)..."
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	@rm -f $(BIN_DIR)/.golangci-lint-*
+	@touch $@
 
 validate-configs: ## Validate bundled provider and collection YAML (standalone CLI, not part of build)
 	@go run ./cmd/validate_configs

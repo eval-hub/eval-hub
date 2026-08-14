@@ -311,7 +311,7 @@ func scenarioTagNames(sc *godog.Scenario) []string {
 }
 
 func (tc *scenarioConfig) logDebug(format string, a ...any) {
-	if v, exists := tc.reqHeaders[server.TRANSACTION_ID_HEADER]; exists && v != "" {
+	if v, exists := tc.reqHeaders[server.TransactionIDHeader]; exists && v != "" {
 		format = fmt.Sprintf("(%s) %s", v, format)
 	}
 	fmt.Printf(format, a...)
@@ -321,7 +321,7 @@ func (tc *scenarioConfig) logDebug(format string, a ...any) {
 func (tc *scenarioConfig) logError(err error, withStack ...bool) error {
 	var sb = strings.Builder{}
 	sb.WriteString("Error")
-	if reqId, exists := tc.reqHeaders[server.TRANSACTION_ID_HEADER]; exists && reqId != "" {
+	if reqId, exists := tc.reqHeaders[server.TransactionIDHeader]; exists && reqId != "" {
 		fmt.Fprintf(&sb, " (%s)", reqId)
 	}
 	sb.WriteString(": ")

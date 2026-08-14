@@ -94,7 +94,7 @@ func (s *sqlStorage) GetCollections(filter *abstractions.QueryFilter) (*abstract
 }
 
 func (s *sqlStorage) getCollectionsTransactional(txn *sql.Tx, filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
-	return listEntities[api.CollectionResource](s, txn, shared.TABLE_COLLECTIONS, filter)
+	return listEntities[api.CollectionResource](s, txn, shared.TableCollections, filter)
 }
 
 func (s *sqlStorage) UpdateCollection(id string, collection *api.CollectionConfig) (*api.CollectionResource, error) {
@@ -129,7 +129,7 @@ func (s *sqlStorage) updateCollectionTransactional(txn *sql.Tx, collectionID str
 	if err != nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
 	}
-	updateCollectionStatement, args := s.statementsFactory.CreateUpdateEntityStatement(s.tenant, shared.TABLE_COLLECTIONS, collectionID, string(collectionJSON), nil)
+	updateCollectionStatement, args := s.statementsFactory.CreateUpdateEntityStatement(s.tenant, shared.TableCollections, collectionID, string(collectionJSON), nil)
 	_, err = s.exec(txn, updateCollectionStatement, args...)
 	if err != nil {
 		return serviceerrors.WithRollback(err)
@@ -138,7 +138,7 @@ func (s *sqlStorage) updateCollectionTransactional(txn *sql.Tx, collectionID str
 }
 
 func (s *sqlStorage) deleteCollectionTxn(txn *sql.Tx, id string) error {
-	deleteQuery, args := s.statementsFactory.CreateDeleteEntityStatement(s.tenant, shared.TABLE_COLLECTIONS, id)
+	deleteQuery, args := s.statementsFactory.CreateDeleteEntityStatement(s.tenant, shared.TableCollections, id)
 
 	_, err := s.exec(txn, deleteQuery, args...)
 	if err != nil {

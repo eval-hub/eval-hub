@@ -13,11 +13,11 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 )
 
-func TestAsPrettyJson_noMask(t *testing.T) {
+func TestAsPrettyJSON_noMask(t *testing.T) {
 	t.Parallel()
 
 	in := map[string]any{"url": "https://example.com", "count": 3}
-	out := AsPrettyJson(in)
+	out := AsPrettyJSON(in)
 
 	var parsed map[string]any
 	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
@@ -31,7 +31,7 @@ func TestAsPrettyJson_noMask(t *testing.T) {
 	}
 }
 
-func TestAsPrettyJson_maskTopLevelFields(t *testing.T) {
+func TestAsPrettyJSON_maskTopLevelFields(t *testing.T) {
 	t.Parallel()
 
 	type config struct {
@@ -40,7 +40,7 @@ func TestAsPrettyJson_maskTopLevelFields(t *testing.T) {
 	}
 
 	in := config{URL: "https://api.example", Token: "secret-token-value"}
-	out := AsPrettyJson(in, "token")
+	out := AsPrettyJSON(in, "token")
 
 	if strings.Contains(out, "secret-token-value") {
 		t.Fatalf("token should be masked, got:\n%s", out)
@@ -64,7 +64,7 @@ func TestAsPrettyJson_maskTopLevelFields(t *testing.T) {
 	}
 }
 
-func TestAsPrettyJson_multipleMaskKeys(t *testing.T) {
+func TestAsPrettyJSON_multipleMaskKeys(t *testing.T) {
 	t.Parallel()
 
 	in := map[string]any{
@@ -72,7 +72,7 @@ func TestAsPrettyJson_multipleMaskKeys(t *testing.T) {
 		"api_key":  "k1",
 		"public":   "visible",
 	}
-	out := AsPrettyJson(in, "password", "api_key")
+	out := AsPrettyJSON(in, "password", "api_key")
 
 	if strings.Contains(out, `"p1"`) || strings.Contains(out, `"k1"`) {
 		t.Fatalf("sensitive values should be masked, got:\n%s", out)
@@ -89,11 +89,11 @@ func TestAsPrettyJson_multipleMaskKeys(t *testing.T) {
 	}
 }
 
-func TestAsPrettyJson_maskAddsMissingKey(t *testing.T) {
+func TestAsPrettyJSON_maskAddsMissingKey(t *testing.T) {
 	t.Parallel()
 
 	in := map[string]any{"only": "one"}
-	out := AsPrettyJson(in, "missing_key")
+	out := AsPrettyJSON(in, "missing_key")
 
 	var parsed map[string]any
 	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
@@ -104,11 +104,11 @@ func TestAsPrettyJson_maskAddsMissingKey(t *testing.T) {
 	}
 }
 
-func TestAsPrettyJson_nonObjectRootWithMask_fallsBackToString(t *testing.T) {
+func TestAsPrettyJSON_nonObjectRootWithMask_fallsBackToString(t *testing.T) {
 	t.Parallel()
 
 	in := []int{1, 2, 3}
-	out := AsPrettyJson(in, "x")
+	out := AsPrettyJSON(in, "x")
 
 	// json.Unmarshal into map fails for arrays; implementation falls back to fmt.Sprintf("%v", s)
 	if out != "[masking failed: unsupported structure]" {
@@ -116,11 +116,11 @@ func TestAsPrettyJson_nonObjectRootWithMask_fallsBackToString(t *testing.T) {
 	}
 }
 
-func TestAsPrettyJson_marshalError_fallsBackToString(t *testing.T) {
+func TestAsPrettyJSON_marshalError_fallsBackToString(t *testing.T) {
 	t.Parallel()
 
 	ch := make(chan int)
-	out := AsPrettyJson(ch)
+	out := AsPrettyJSON(ch)
 	want := fmt.Sprintf("%v", ch)
 	if out != want {
 		t.Fatalf("marshal failure should fall back to %%v: got %q want %q", out, want)

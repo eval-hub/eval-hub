@@ -395,7 +395,7 @@ func buildBenchmarkFailureStatus(benchmark *api.EvaluationBenchmarkConfig, bench
 			Status:         api.StateFailed,
 			ErrorMessage: api.WithMessageOrigin(&api.MessageInfo{
 				Message:     runErr.Error(),
-				MessageCode: constants.MESSAGE_CODE_EVALUATION_JOB_FAILED,
+				MessageCode: constants.MessageCodeEvaluationJobFailed,
 			}, api.MessageOriginServer),
 		},
 	}

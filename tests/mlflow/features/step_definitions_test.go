@@ -27,20 +27,20 @@ type resource struct {
 	Name string
 }
 
-func (ctx *testContext) reset() {
-	ctx.experimentID = ""
-	ctx.experimentName = ""
-	ctx.lastError = nil
-	ctx.lastResponse = ""
+func (tc *testContext) reset() {
+	tc.experimentID = ""
+	tc.experimentName = ""
+	tc.lastError = nil
+	tc.lastResponse = ""
 }
 
-func (ctx *testContext) cleanup() {
+func (tc *testContext) cleanup() {
 	// Clean up created resources in reverse order
-	for i := len(ctx.createdResources) - 1; i >= 0; i-- {
-		resource := ctx.createdResources[i]
+	for i := len(tc.createdResources) - 1; i >= 0; i-- {
+		resource := tc.createdResources[i]
 		switch resource.Type {
 		case "experiment":
-			err := ctx.client.DeleteExperiment(resource.ID)
+			err := tc.client.DeleteExperiment(resource.ID)
 			if err != nil {
 				// we just report this, as this is just an attempt
 				// to clean up the resource we don't fail the tests for an error here
@@ -48,7 +48,7 @@ func (ctx *testContext) cleanup() {
 			}
 		}
 	}
-	ctx.createdResources = nil
+	tc.createdResources = nil
 }
 
 func InitializeScenario(ctx *godog.ScenarioContext) {

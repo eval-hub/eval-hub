@@ -17,11 +17,11 @@ import (
 
 func getTypeFromTableName(tableName string) string {
 	switch tableName {
-	case shared.TABLE_EVALUATIONS:
+	case shared.TableEvaluations:
 		return "evaluation jobs"
-	case shared.TABLE_PROVIDERS:
+	case shared.TableProviders:
 		return "providers"
-	case shared.TABLE_COLLECTIONS:
+	case shared.TableCollections:
 		return "collections"
 	}
 	return "unknown"
@@ -106,7 +106,7 @@ func scanResource[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 	}
 
 	switch tableName {
-	case shared.TABLE_EVALUATIONS:
+	case shared.TableEvaluations:
 		storedEntity := EvaluationJobEntity{}
 		err = json.Unmarshal([]byte(query.EntityJSON), &storedEntity)
 		if err == nil {
@@ -114,7 +114,7 @@ func scanResource[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 			t := any(*resource).(T)
 			return &t, err
 		}
-	case shared.TABLE_PROVIDERS:
+	case shared.TableProviders:
 		storedEntity := api.ProviderConfig{}
 		err = json.Unmarshal([]byte(query.EntityJSON), &storedEntity)
 		if err == nil {
@@ -125,7 +125,7 @@ func scanResource[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 			t := any(*resource).(T)
 			return &t, nil
 		}
-	case shared.TABLE_COLLECTIONS:
+	case shared.TableCollections:
 		storedEntity := api.CollectionConfig{}
 		err = json.Unmarshal([]byte(query.EntityJSON), &storedEntity)
 		if err == nil {
