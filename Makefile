@@ -144,15 +144,18 @@ start-inspector-mcp:
 lint: vet golangci-lint ## Lint the code (go vet + golangci-lint)
 
 GOLANGCI_LINT_VERSION ?= v2.12.2
+GOLANGCI_LINT_STAMP  := $(BIN_DIR)/.golangci-lint-$(GOLANGCI_LINT_VERSION)
 
-golangci-lint: $(GOBIN)/golangci-lint ## Run golangci-lint (uses .golangci.yml)
+golangci-lint: $(GOLANGCI_LINT_STAMP) ## Run golangci-lint (uses .golangci.yml)
 	@echo "Running golangci-lint..."
 	@$(GOBIN)/golangci-lint run ./...
 	@echo "golangci-lint complete"
 
-$(GOBIN)/golangci-lint:
+$(GOLANGCI_LINT_STAMP): | $(BIN_DIR)
 	@echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION)..."
 	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	@rm -f $(BIN_DIR)/.golangci-lint-*
+	@touch $@
 
 validate-configs: ## Validate bundled provider and collection YAML (standalone CLI, not part of build)
 	@go run ./cmd/validate_configs
