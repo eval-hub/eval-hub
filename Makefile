@@ -444,6 +444,7 @@ cls:
 
 .PHONY: generate-public-docs verify-api-docs generate-ignore-file
 
+REDOCLY_TELEMETRY ?= off
 REDOCLY_CLI ?= ${PWD}/node_modules/.bin/redocly
 
 ${REDOCLY_CLI}:
