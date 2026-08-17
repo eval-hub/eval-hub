@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestLoadSidecarRuntimeConfig(t *testing.T) {
@@ -114,6 +115,100 @@ func TestLoadSidecarRuntimeConfig_OCISnakeCase(t *testing.T) {
 	if cfg.Sidecar.OCI.HTTPTimeout != 30_000_000_000 {
 		t.Errorf("oci.http_timeout = %v", cfg.Sidecar.OCI.HTTPTimeout)
 	}
+}
+
+func TestLoadSidecarRuntimeConfig_LocalMode(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sidecar_config.json")
+
+	t.Run("local_mode true", func(t *testing.T) {
+		json := `{
+  "base_url": "http://localhost:8082",
+  "local_mode": true,
+  "eval_hub": { "base_url": "http://localhost:8080" }
+}`
+		if err := os.WriteFile(path, []byte(json), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := LoadSidecarRuntimeConfig(path, "v1", "b1", "d1")
+		if err != nil {
+			t.Fatalf("LoadSidecarRuntimeConfig: %v", err)
+		}
+		if !cfg.Sidecar.LocalMode {
+			t.Fatal("expected LocalMode true")
+		}
+		if cfg.Sidecar.Port != 8082 {
+			t.Fatalf("expected port 8082, got %d", cfg.Sidecar.Port)
+		}
+	})
+
+	t.Run("local_mode defaults to false", func(t *testing.T) {
+		json := `{
+  "base_url": "http://localhost:8080",
+  "eval_hub": { "base_url": "http://localhost:8080" }
+}`
+		if err := os.WriteFile(path, []byte(json), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := LoadSidecarRuntimeConfig(path, "v1", "b1", "d1")
+		if err != nil {
+			t.Fatalf("LoadSidecarRuntimeConfig: %v", err)
+		}
+		if cfg.Sidecar.LocalMode {
+			t.Fatal("expected LocalMode false by default")
+		}
+	})
+}
+
+func TestLoadSidecarRuntimeConfig_LocalConfig(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sidecar_config.json")
+
+	t.Run("parses local block with custom values", func(t *testing.T) {
+		json := `{
+  "base_url": "http://localhost:8082",
+  "local_mode": true,
+  "local": {
+    "job_cache_sweep_interval": "1h30m",
+    "job_cache_entry_ttl": "2h"
+  },
+  "eval_hub": { "base_url": "http://localhost:8080" }
+}`
+		if err := os.WriteFile(path, []byte(json), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := LoadSidecarRuntimeConfig(path, "v1", "b1", "d1")
+		if err != nil {
+			t.Fatalf("LoadSidecarRuntimeConfig: %v", err)
+		}
+		if cfg.Sidecar.Local == nil {
+			t.Fatal("expected Local config")
+		}
+		if cfg.Sidecar.Local.JobCacheSweepInterval.Duration != 90*time.Minute {
+			t.Errorf("sweep interval = %v, want 1h30m", cfg.Sidecar.Local.JobCacheSweepInterval)
+		}
+		if cfg.Sidecar.Local.JobCacheEntryTTL.Duration != 2*time.Hour {
+			t.Errorf("entry TTL = %v, want 2h", cfg.Sidecar.Local.JobCacheEntryTTL)
+		}
+	})
+
+	t.Run("local block nil when omitted", func(t *testing.T) {
+		json := `{
+  "base_url": "http://localhost:8082",
+  "local_mode": true,
+  "eval_hub": { "base_url": "http://localhost:8080" }
+}`
+		if err := os.WriteFile(path, []byte(json), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := LoadSidecarRuntimeConfig(path, "v1", "b1", "d1")
+		if err != nil {
+			t.Fatalf("LoadSidecarRuntimeConfig: %v", err)
+		}
+		if cfg.Sidecar.Local != nil {
+			t.Errorf("expected Local nil when omitted, got %+v", cfg.Sidecar.Local)
+		}
+	})
 }
 
 func TestLoadSidecarRuntimeConfig_OTEL(t *testing.T) {

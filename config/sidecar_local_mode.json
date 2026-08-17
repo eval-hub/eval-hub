@@ -1,0 +1,11 @@
+{
+  "base_url": "http://localhost:8082",
+  "local_mode": true,
+  "local": {
+    "job_cache_sweep_interval": "1h30m",
+    "job_cache_entry_ttl": "2h"
+  },
+  "eval_hub": {
+    "base_url": "http://localhost:8080"
+  }
+}

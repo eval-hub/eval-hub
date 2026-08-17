@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,7 +32,7 @@ type Handlers struct {
 	ociProxy         *httputil.ReverseProxy
 	ociTokenProducer *proxy.OCITokenProducer // created once at startup for OCI auth
 	ociRepository    string                  // from job spec; used to route requests to /registry/{ociRepository}
-	modelProxy       *httputil.ReverseProxy  // model credential-injection proxy; nil when not configured
+	modelProxy       http.Handler            // k8s: credential-injection proxy; local: per-job routing proxy
 
 	// gitSHA is the commit SHA from .git-metadata (isGitJob only). Best-effort load in New();
 	// if still empty, tryLoadGitSHA retries on each events POST until success, then the value
@@ -43,30 +44,47 @@ type Handlers struct {
 }
 
 // New creates handlers and builds reverse proxies for eval-hub, MLflow, OCI, and optionally model.
-func New(config *config.Config, logger *slog.Logger) (*Handlers, error) {
-	evalHubProxy, err := newEvalhubProxy(config, logger)
+// The ctx parameter controls the lifetime of background goroutines (e.g. local mode cache sweep).
+func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*Handlers, error) {
+	evalHubProxy, err := newEvalhubProxy(cfg, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	mlflowProxy, err := newMlflowProxy(config, logger)
-	if err != nil {
-		return nil, err
+	var mlflowProxy *httputil.ReverseProxy
+	var ociProxy *httputil.ReverseProxy
+	var ociTokenProducer *proxy.OCITokenProducer
+	var ociRepository string
+	if !cfg.Sidecar.LocalMode {
+		mlflowProxy, err = newMlflowProxy(cfg, logger)
+		if err != nil {
+			return nil, err
+		}
+		ociProxy, ociTokenProducer, ociRepository, err = newOciProxy(cfg, logger)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		logger.Info("Local mode: skipping MLflow and OCI proxy initialization")
 	}
 
-	ociProxy, ociTokenProducer, ociRepository, err := newOciProxy(config, logger)
-	if err != nil {
-		return nil, err
-	}
-
-	modelProxy, err := newModelProxy(config, logger)
-	if err != nil {
-		return nil, err
+	var modelProxy http.Handler
+	if cfg.Sidecar.LocalMode {
+		modelProxy = newLocalModelProxy(ctx, cfg.Sidecar.Local, logger)
+		logger.Info("Local model proxy enabled with per-job routing")
+	} else {
+		rp, rpErr := newModelProxy(cfg, logger)
+		if rpErr != nil {
+			return nil, rpErr
+		}
+		if rp != nil {
+			modelProxy = rp
+		}
 	}
 
 	h := &Handlers{
 		logger:           logger,
-		serviceConfig:    config,
+		serviceConfig:    cfg,
 		evalHubProxy:     evalHubProxy,
 		mlflowProxy:      mlflowProxy,
 		ociProxy:         ociProxy,
@@ -257,17 +275,18 @@ func requestPathForRouting(uri string) string {
 	return u.EscapedPath()
 }
 
-func (h *Handlers) parseProxyCall(r *http.Request) (*httputil.ReverseProxy, *proxy.AuthTokenInput, error) {
+func (h *Handlers) parseProxyCall(r *http.Request) (http.Handler, *proxy.AuthTokenInput, error) {
 	switch {
 	case strings.HasPrefix(r.RequestURI, "/api/v1/evaluations/"):
 		ehClientConfig := h.serviceConfig.Sidecar.EvalHub
 		if ehClientConfig != nil {
-			return h.evalHubProxy, &proxy.AuthTokenInput{
-				TargetEndpoint:    "eval-hub",
-				AuthTokenPath:     ServiceAccountAuthFileDefault,
-				AuthToken:         ehClientConfig.Token,
-				TokenCacheTimeout: ehClientConfig.TokenCacheTimeout,
-			}, nil
+			input := proxy.AuthTokenInput{TargetEndpoint: "eval-hub"}
+			if !h.serviceConfig.Sidecar.LocalMode {
+				input.AuthTokenPath = ServiceAccountAuthFileDefault
+				input.AuthToken = ehClientConfig.Token
+				input.TokenCacheTimeout = ehClientConfig.TokenCacheTimeout
+			}
+			return h.evalHubProxy, &input, nil
 		}
 		return nil, nil, fmt.Errorf("eval-hub proxy is not configured")
 
@@ -296,11 +315,11 @@ func (h *Handlers) parseProxyCall(r *http.Request) (*httputil.ReverseProxy, *pro
 			}, nil
 		}
 		return nil, nil, fmt.Errorf("oci proxy is not configured")
+	// Model credential-injection proxy is the catch-all: when configured, any request
+	// not matched by the specific prefixes above is forwarded to the model target URL.
+	// The model proxy's Rewrite function performs ref-token substitution and dynamic URL
+	// routing; it does not use AuthTokenInput, so an empty value is returned.
 	default:
-		// Model credential-injection proxy is the catch-all: when configured, any request
-		// not matched by the specific prefixes above is forwarded to the model target URL.
-		// The model proxy's Rewrite function performs ref-token substitution and dynamic URL
-		// routing; it does not use AuthTokenInput, so an empty value is returned.
 		if h.modelProxy != nil {
 			return h.modelProxy, &proxy.AuthTokenInput{}, nil
 		}

@@ -1,6 +1,102 @@
 package config
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+	"time"
+)
+
+func TestDuration_MarshalJSON(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		dur  Duration
+		want string
+	}{
+		{"five minutes", Duration{5 * time.Minute}, `"5m0s"`},
+		{"two hours", Duration{2 * time.Hour}, `"2h0m0s"`},
+		{"thirty seconds", Duration{30 * time.Second}, `"30s"`},
+		{"zero", Duration{0}, `"0s"`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := json.Marshal(tc.dur)
+			if err != nil {
+				t.Fatalf("MarshalJSON: %v", err)
+			}
+			if string(got) != tc.want {
+				t.Fatalf("MarshalJSON = %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDuration_UnmarshalJSON(t *testing.T) {
+	t.Parallel()
+
+	t.Run("valid durations", func(t *testing.T) {
+		tests := []struct {
+			name string
+			json string
+			want time.Duration
+		}{
+			{"minutes", `"5m"`, 5 * time.Minute},
+			{"hours", `"2h"`, 2 * time.Hour},
+			{"seconds", `"30s"`, 30 * time.Second},
+			{"compound", `"1h30m"`, 90 * time.Minute},
+			{"zero", `"0s"`, 0},
+		}
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				var d Duration
+				if err := json.Unmarshal([]byte(tc.json), &d); err != nil {
+					t.Fatalf("UnmarshalJSON(%s): %v", tc.json, err)
+				}
+				if d.Duration != tc.want {
+					t.Fatalf("UnmarshalJSON(%s) = %v, want %v", tc.json, d.Duration, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("invalid duration string", func(t *testing.T) {
+		var d Duration
+		if err := json.Unmarshal([]byte(`"notaduration"`), &d); err == nil {
+			t.Fatal("expected error for invalid duration string, got nil")
+		}
+	})
+
+	t.Run("non-string JSON type", func(t *testing.T) {
+		var d Duration
+		if err := json.Unmarshal([]byte(`123`), &d); err == nil {
+			t.Fatal("expected error for non-string JSON, got nil")
+		}
+	})
+}
+
+func TestDuration_JSONRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	original := LocalConfig{
+		JobCacheSweepInterval: Duration{5 * time.Minute},
+		JobCacheEntryTTL:      Duration{1 * time.Hour},
+	}
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	var decoded LocalConfig
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if decoded.JobCacheSweepInterval.Duration != original.JobCacheSweepInterval.Duration {
+		t.Fatalf("sweep interval = %v, want %v", decoded.JobCacheSweepInterval.Duration, original.JobCacheSweepInterval.Duration)
+	}
+	if decoded.JobCacheEntryTTL.Duration != original.JobCacheEntryTTL.Duration {
+		t.Fatalf("entry TTL = %v, want %v", decoded.JobCacheEntryTTL.Duration, original.JobCacheEntryTTL.Duration)
+	}
+}
 
 func TestEffectiveBaseURL(t *testing.T) {
 	t.Parallel()
