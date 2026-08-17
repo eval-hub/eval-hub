@@ -25,6 +25,13 @@ else
     mkdir -p /tmp
 fi
 
+echo "Checking sidecar binary is available..."
+if ! command -v eval-runtime-sidecar >/dev/null 2>&1; then
+    echo "FAIL: eval-runtime-sidecar not found on PATH"
+    exit 1
+fi
+echo "eval-runtime-sidecar found: $(command -v eval-runtime-sidecar)"
+
 echo "Starting: ${BINARY} -configdir ${CONFIG_DIR} -local"
 "${BINARY}" -configdir "${CONFIG_DIR}" -local > "${LOGFILE}" 2>&1 &
 SERVER_PID=$!

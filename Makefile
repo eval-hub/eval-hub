@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp start-service stop-service start-sidecar stop-sidecar lint golangci-lint validate-configs test test-fuzz test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp cross-compile-sidecar build-all-platforms-sidecar start-service stop-service start-sidecar stop-sidecar lint golangci-lint validate-configs test test-fuzz test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build
 
 GOPATH := $(shell go env GOPATH)
 GOBIN := $(shell go env GOPATH)/bin
@@ -337,6 +337,23 @@ build-mcp-platform-%:
 build-all-platforms-mcp: ## Build MCP for all supported platforms (parallel: make -j5 build-all-platforms-mcp)
 	@$(MAKE) -j5 $(addprefix build-mcp-platform-,$(SUPPORTED_PLATFORMS))
 
+# Sidecar cross-compilation
+SIDECAR_CROSS_OUTPUT = bin/eval-runtime-sidecar-$(CROSS_GOOS)-$(CROSS_GOARCH)$(if $(filter windows,$(CROSS_GOOS)),.exe,)
+
+.PHONY: cross-compile-sidecar
+cross-compile-sidecar: ## Build sidecar for specific platform: make cross-compile-sidecar CROSS_GOOS=linux CROSS_GOARCH=amd64
+	@echo "Cross-compiling sidecar for $(CROSS_GOOS)/$(CROSS_GOARCH)..."
+	@mkdir -p $(BIN_DIR)
+	GOOS=$(CROSS_GOOS) GOARCH=$(CROSS_GOARCH) CGO_ENABLED=0 go build -o $(SIDECAR_CROSS_OUTPUT) -ldflags="-s -w ${LDFLAGS_X}" $(SIDECAR_CMD_PATH)
+	@echo "Built: $(SIDECAR_CROSS_OUTPUT)"
+
+build-sidecar-platform-%:
+	@$(MAKE) cross-compile-sidecar CROSS_GOOS=$(word 1,$(subst -, ,$*)) CROSS_GOARCH=$(word 2,$(subst -, ,$*))
+
+.PHONY: build-all-platforms-sidecar
+build-all-platforms-sidecar: ## Build sidecar for all supported platforms (parallel: make -j5 build-all-platforms-sidecar)
+	@$(MAKE) -j5 $(addprefix build-sidecar-platform-,$(SUPPORTED_PLATFORMS))
+
 # Python virtual environment - expects uv venv
 VENV_DIR = .venv
 VENV_PYTHON = $(VENV_DIR)/bin/python
@@ -363,6 +380,7 @@ install-wheel-tools: venv ## Install Python wheel build tools using uv
 WHEEL_BUILD_DIR = python-server/build-$(CROSS_GOOS)-$(CROSS_GOARCH)
 
 WHEEL_BINARY_NAME = eval-hub$(if $(filter windows,$(CROSS_GOOS)),.exe,)
+SIDECAR_WHEEL_BINARY_NAME = eval-runtime-sidecar$(if $(filter windows,$(CROSS_GOOS)),.exe,)
 
 .PHONY: clean-wheels
 clean-wheels: ## Clean Python wheel build artifacts
@@ -389,6 +407,10 @@ build-wheel: ## Build Python wheel: make build-wheel WHEEL_PLATFORM=manylinux_2_
 	@echo "Staging binary $(CROSS_OUTPUT) as $(WHEEL_BINARY_NAME)"
 	@cp $(CROSS_OUTPUT) $(WHEEL_BUILD_DIR)/binaries/$(WHEEL_BINARY_NAME)
 	@chmod +x $(WHEEL_BUILD_DIR)/binaries/$(WHEEL_BINARY_NAME)
+	@test -f $(SIDECAR_CROSS_OUTPUT) || $(MAKE) cross-compile-sidecar
+	@echo "Staging sidecar binary $(SIDECAR_CROSS_OUTPUT) as $(SIDECAR_WHEEL_BINARY_NAME)"
+	@cp $(SIDECAR_CROSS_OUTPUT) $(WHEEL_BUILD_DIR)/binaries/$(SIDECAR_WHEEL_BINARY_NAME)
+	@chmod +x $(WHEEL_BUILD_DIR)/binaries/$(SIDECAR_WHEEL_BINARY_NAME)
 	@echo "Building wheel for $(WHEEL_PLATFORM)..."
 	WHEEL_PLATFORM=$(WHEEL_PLATFORM) uv build --wheel $(WHEEL_BUILD_DIR) --out-dir python-server/dist
 	@rm -rf $(WHEEL_BUILD_DIR)
