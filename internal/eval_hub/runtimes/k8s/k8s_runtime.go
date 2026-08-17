@@ -228,6 +228,7 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		return fmt.Errorf("service config is required")
 	}
 	jobConfig.testDataInitImage = r.serviceConfig.Service.EvalInitImage
+	jobConfig.mlflowCABundleConfigMap = r.resolveMLFlowCABundleConfigMap(ctx, jobConfig, logger)
 	logger.Info(
 		"kubernetes job config",
 		"job_id", evaluation.Resource.ID,
@@ -485,4 +486,33 @@ func rewriteModelURLForSidecar(sidecarBaseURL, modelURL string) (string, error) 
 		Fragment: model.Fragment,
 	}
 	return out.String(), nil
+}
+
+// resolveMLFlowCABundleConfigMap enables mounting {instance}-mlflow-ca-bundle only when
+// that ConfigMap already exists in the job namespace (propagated by the operator). The
+// job-pod mount path is independent of the EvalHub API's MLFLOW_CA_CERT_PATH.
+func (r *K8sRuntime) resolveMLFlowCABundleConfigMap(ctx context.Context, cfg *jobConfig, logger *slog.Logger) string {
+	if cfg == nil || cfg.evalHubInstanceName == "" || cfg.mlflowTrackingURI == "" {
+		return ""
+	}
+	cmName := mlflowCABundleConfigMapName(cfg.evalHubInstanceName)
+	_, err := r.helper.GetConfigMap(ctx, cfg.namespace, cmName)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Info(
+				"MLflow CA bundle ConfigMap not found; falling back to service CA / configured CA path",
+				"configmap", cmName,
+				"namespace", cfg.namespace,
+			)
+			return ""
+		}
+		logger.Warn(
+			"failed to check MLflow CA bundle ConfigMap; falling back to service CA / configured CA path",
+			"configmap", cmName,
+			"namespace", cfg.namespace,
+			"error", err,
+		)
+		return ""
+	}
+	return cmName
 }

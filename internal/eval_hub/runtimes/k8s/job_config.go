@@ -60,7 +60,9 @@ type jobConfig struct {
 	serviceAccountName string
 	serviceCAConfigMap string
 	// mlflowCABundleConfigMap is the operator-managed merged CA bundle
-	// ({instance}-mlflow-ca-bundle). Empty when EVALHUB_INSTANCE_NAME is unset.
+	// ({instance}-mlflow-ca-bundle) in the job namespace. Set only after a
+	// Get confirms the ConfigMap exists; otherwise jobs fall back to service CA
+	// / configured CA path and do not mount a missing ConfigMap.
 	mlflowCABundleConfigMap string
 	evalHubURL              string // in-cluster URL for sidecar to call eval-hub
 	sidecarBaseURL          string // base URL for adapter/runtime to call sidecar's proxy (config.Sidecar.BaseURL)
@@ -150,7 +152,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	// The SA name uses the instance namespace (not the tenant namespace) to match
 	// the operator's naming convention: <instance>-<instance-namespace>-job.
 	instanceNamespace := readInClusterNamespace()
-	var serviceAccountName, serviceCAConfigMap, mlflowCABundleConfigMap, evalHubURL string
+	var serviceAccountName, serviceCAConfigMap, evalHubURL string
 	var evalHubCRNamespace string
 	if evalHubInstanceName != "" {
 		saNamespace := instanceNamespace
@@ -160,7 +162,8 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		evalHubCRNamespace = saNamespace
 		serviceAccountName = evalHubInstanceName + "-" + saNamespace + serviceAccountNameSuffix
 		serviceCAConfigMap = evalHubInstanceName + serviceCAConfigMapSuffix
-		mlflowCABundleConfigMap = evalHubInstanceName + mlflowCABundleCMSuffix
+		// mlflowCABundleConfigMap is resolved later once we confirm
+		// {instance}-mlflow-ca-bundle exists in the job namespace.
 		// EvalHub URL points to the kube-rbac-proxy HTTPS endpoint in the instance namespace.
 		// Use saNamespace (which falls back to namespace when not in-cluster) to avoid a malformed host
 		// when instanceNamespace is empty.
@@ -249,7 +252,6 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		jobSpec:                    *spec,
 		serviceAccountName:         serviceAccountName,
 		serviceCAConfigMap:         serviceCAConfigMap,
-		mlflowCABundleConfigMap:    mlflowCABundleConfigMap,
 		evalHubInstanceName:        evalHubInstanceName,
 		evalHubCRNamespace:         evalHubCRNamespace,
 		mlflowTrackingURI:          mlflowTrackingURI,
@@ -475,6 +477,10 @@ func defaultIfEmpty(value string, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func mlflowCABundleConfigMapName(instanceName string) string {
+	return instanceName + mlflowCABundleCMSuffix
 }
 
 func resolveNamespace(configured string) string {

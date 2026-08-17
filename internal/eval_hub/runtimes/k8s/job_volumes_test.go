@@ -108,6 +108,34 @@ func TestBuildJobMountsMLFlowCABundle(t *testing.T) {
 	}
 }
 
+func TestEnsureMLFlowCABundleVolumeAndMountIdempotent(t *testing.T) {
+	const cmName = "evalhub-mlflow-ca-bundle"
+
+	vols := ensureMLFlowCABundleVolume(nil, cmName)
+	if len(vols) != 1 {
+		t.Fatalf("first ensure volume len = %d, want 1", len(vols))
+	}
+	volsAgain := ensureMLFlowCABundleVolume(vols, cmName)
+	if len(volsAgain) != 1 {
+		t.Fatalf("second ensure volume len = %d, want 1 (no duplicate)", len(volsAgain))
+	}
+	if volsAgain[0].ConfigMap == nil || volsAgain[0].ConfigMap.Name != cmName {
+		t.Fatalf("ConfigMap name = %v, want %q", volsAgain[0].ConfigMap, cmName)
+	}
+
+	mounts := ensureMLFlowCABundleMount(nil)
+	if len(mounts) != 1 {
+		t.Fatalf("first ensure mount len = %d, want 1", len(mounts))
+	}
+	mountsAgain := ensureMLFlowCABundleMount(mounts)
+	if len(mountsAgain) != 1 {
+		t.Fatalf("second ensure mount len = %d, want 1 (no duplicate)", len(mountsAgain))
+	}
+	if mountsAgain[0].MountPath != mlflowCABundleMountPath {
+		t.Fatalf("MountPath = %q, want %q", mountsAgain[0].MountPath, mlflowCABundleMountPath)
+	}
+}
+
 func TestBuildJobWithOCICredentials(t *testing.T) {
 	cfg := &jobConfig{
 		jobID:                "job-oci",

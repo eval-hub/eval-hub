@@ -43,10 +43,8 @@ const (
 	mlflowTokenVolumeName             = "mlflow-token"
 	mlflowAuthMountPath               = "/var/run/secrets/mlflow"
 	mlflowTokenFile                   = "token"
-	// MLflow CA bundle: operator-merged trust store (service-serving CA + ODH trusted CA +
-	// optional user CA). Must stay aligned with trustyai-service-operator constants
-	// (mlflowCABundle*). Job pods mount {instance}-mlflow-ca-bundle at this path so the
-	// sidecar can reach MLflow over either the internal Service or the public Route.
+	// MLflow CA bundle: operator-merged trust store mounted into job pods from
+	// {instance}-mlflow-ca-bundle.
 	mlflowCABundleVolumeName = "mlflow-ca-bundle"
 	mlflowCABundleMountPath  = "/etc/evalhub/mlflow-ca"
 	mlflowCABundleFile       = "ca-bundle.crt"
