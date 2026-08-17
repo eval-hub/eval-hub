@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"fmt"
-	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -133,17 +132,9 @@ func NewModelReverseProxy(defaultTarget *url.URL, client *http.Client, logger *s
 		reqLog.Info("Proxying model request", "method", pr.Out.Method, "url", pr.Out.URL.String())
 	}
 
-	rp.ModifyResponse = func(resp *http.Response) error {
-		if resp.Request != nil {
-			loggerForRequest(logger, resp.Request).Info("Response from model proxy", "method", resp.Request.Method, "url", resp.Request.URL.String(), "status", resp.StatusCode)
-		}
-		return nil
-	}
+	rp.ModifyResponse = proxyModifyResponse(logger, "Response from model proxy")
 
-	rp.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {
-		loggerForRequest(logger, req).Error("Error proxying model request", "method", req.Method, "url", req.URL.String(), "error", err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
-	}
+	rp.ErrorHandler = proxyErrorHandler(logger, "Error proxying model request")
 
 	return rp
 }
@@ -158,20 +149,9 @@ type modelRoundTripper struct {
 func (t *modelRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	if errMsg := req.Header.Get(xModelAuthError); errMsg != "" {
 		req.Header.Del(xModelAuthError)
-		reqID := getOrCreateRequestID(req)
-		t.logger.Error("model credential resolution failed, returning 400", "request_id", reqID, "error", errMsg)
-		respHeader := make(http.Header)
-		respHeader.Set(globalTransactionIDHeader, reqID)
-		return &http.Response{
-			StatusCode: http.StatusBadRequest,
-			Status:     "400 Bad Request",
-			Body:       io.NopCloser(strings.NewReader(errMsg + "\n")),
-			Header:     respHeader,
-			Request:    req,
-			Proto:      "HTTP/1.1",
-			ProtoMajor: 1,
-			ProtoMinor: 1,
-		}, nil
+		t.logger.Error("model credential resolution failed, returning 400",
+			"request_id", getOrCreateRequestID(req), "error", errMsg)
+		return newSyntheticResponse(req, http.StatusBadRequest, strings.NewReader(errMsg+"\n")), nil
 	}
 	return t.inner.RoundTrip(req)
 }

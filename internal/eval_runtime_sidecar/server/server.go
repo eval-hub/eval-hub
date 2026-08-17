@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
@@ -14,10 +15,13 @@ import (
 )
 
 type SidecarServer struct {
+	mu         sync.Mutex
 	httpServer *http.Server
 	port       int32
 	logger     *slog.Logger
 	config     *config.Config
+	ctx        context.Context
+	cancel     context.CancelFunc
 }
 
 // NewSidecarServer creates a new sidecar HTTP server with the given logger and config.
@@ -36,10 +40,13 @@ func NewSidecarServer(logger *slog.Logger,
 		return nil, fmt.Errorf("sidecar config is required")
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	return &SidecarServer{
 		port:   cfg.Sidecar.Port,
 		logger: logger,
 		config: cfg,
+		ctx:    ctx,
+		cancel: cancel,
 	}, nil
 }
 
@@ -53,7 +60,7 @@ func (s *SidecarServer) GetPort() int {
 
 func (s *SidecarServer) setupRoutes() (http.Handler, error) {
 	router := http.NewServeMux()
-	h, err := handlers.New(s.config, s.logger)
+	h, err := handlers.New(s.ctx, s.config, s.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create handlers: %w", err)
 	}
@@ -61,9 +68,7 @@ func (s *SidecarServer) setupRoutes() (http.Handler, error) {
 	s.handleFunc(router, "GET /health", h.HandleHealth)
 	s.handleFunc(router, "/", h.HandleProxyCall)
 
-	handler := http.Handler(router)
-
-	return handler, nil
+	return http.Handler(router), nil
 }
 
 func (s *SidecarServer) handleFunc(router *http.ServeMux, pattern string, handler func(http.ResponseWriter, *http.Request)) {
@@ -75,7 +80,7 @@ func (s *SidecarServer) handleFunc(router *http.ServeMux, pattern string, handle
 	router.Handle(pattern, h)
 }
 
-// SetupRoutes exposes the route setup for testing
+// SetupRoutes exposes the route setup for testing.
 func (s *SidecarServer) SetupRoutes() (http.Handler, error) {
 	return s.setupRoutes()
 }
@@ -85,7 +90,8 @@ func (s *SidecarServer) Start() error {
 	if err != nil {
 		return err
 	}
-	s.httpServer = &http.Server{
+
+	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.port),
 		Handler: handler,
 		// ReadHeaderTimeout bounds slow-header attacks; ReadTimeout is left unset so the
@@ -103,8 +109,18 @@ func (s *SidecarServer) Start() error {
 		},
 	}
 
+	s.mu.Lock()
+	s.httpServer = srv
+	alreadyCancelled := s.ctx.Err() != nil
+	s.mu.Unlock()
+
+	if alreadyCancelled {
+		s.logger.Info("Shutdown was requested before Start completed")
+		return &ServerClosedError{}
+	}
+
 	s.logger.Info("Sidecar server starting", "port", s.port)
-	err = s.httpServer.ListenAndServe()
+	err = srv.ListenAndServe()
 
 	if err == http.ErrServerClosed {
 		s.logger.Info("Sidecar server closed gracefully")
@@ -115,7 +131,16 @@ func (s *SidecarServer) Start() error {
 
 func (s *SidecarServer) Shutdown(ctx context.Context) error {
 	s.logger.Info("Shutting down sidecar server gracefully...")
-	return s.httpServer.Shutdown(ctx)
+	s.cancel()
+
+	s.mu.Lock()
+	srv := s.httpServer
+	s.mu.Unlock()
+
+	if srv != nil {
+		return srv.Shutdown(ctx)
+	}
+	return nil
 }
 
 type ServerClosedError struct {
