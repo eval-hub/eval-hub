@@ -36,6 +36,33 @@ func TestCreateConfigMapRequiresNamespaceAndName(t *testing.T) {
 	}
 }
 
+func TestGetConfigMap(t *testing.T) {
+	t.Run("requires namespace and name", func(t *testing.T) {
+		helper := &KubernetesHelper{clientset: fake.NewSimpleClientset()}
+		if _, err := helper.GetConfigMap(context.Background(), "", "name"); err == nil {
+			t.Fatal("expected error for missing namespace")
+		}
+		if _, err := helper.GetConfigMap(context.Background(), "default", ""); err == nil {
+			t.Fatal("expected error for missing name")
+		}
+	})
+
+	t.Run("returns existing ConfigMap", func(t *testing.T) {
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: "my-evalhub-mlflow-ca-bundle", Namespace: "team-a"},
+			Data:       map[string]string{"ca-bundle.crt": "PEM"},
+		}
+		helper := &KubernetesHelper{clientset: fake.NewSimpleClientset(cm)}
+		got, err := helper.GetConfigMap(context.Background(), "team-a", "my-evalhub-mlflow-ca-bundle")
+		if err != nil {
+			t.Fatalf("GetConfigMap: %v", err)
+		}
+		if got.Data["ca-bundle.crt"] != "PEM" {
+			t.Fatalf("unexpected data: %#v", got.Data)
+		}
+	})
+}
+
 func TestCreateJobRequiresNamespaceAndName(t *testing.T) {
 	helper := &KubernetesHelper{}
 	if _, err := helper.CreateJob(context.Background(), nil); err == nil {
