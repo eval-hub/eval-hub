@@ -85,18 +85,20 @@ func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 		seen[envOCIAuthConfigPathName] = true
 	}
 
-	// Set MLFLOW_TRACKING_SERVER_CERT_PATH so mlflow's tracking client
-	// trusts the OpenShift service-serving CA certificate for internal calls.
+	// Set MLFLOW_TRACKING_SERVER_CERT_PATH so mlflow's tracking client trusts the
+	// same CA bundle the sidecar uses (operator-merged MLflow CA, else service CA).
 	// Note: we intentionally do NOT set REQUESTS_CA_BUNDLE, because it
 	// overrides the system CA bundle globally for all Python requests calls,
 	// breaking external HTTPS connections (e.g. HuggingFace tokenizer downloads).
 	// The adapter SDK's httpx client auto-detects the service CA independently.
-	if cfg.serviceCAConfigMap != "" && cfg.mlflowTrackingURI != "" {
-		env = append(env, corev1.EnvVar{
-			Name:  envMLFlowCertPathName,
-			Value: serviceCAMountPath + "/" + serviceCABundleFile,
-		})
-		seen[envMLFlowCertPathName] = true
+	if cfg.mlflowTrackingURI != "" {
+		if certPath := mlflowCACertPathForJob(cfg, nil); certPath != "" {
+			env = append(env, corev1.EnvVar{
+				Name:  envMLFlowCertPathName,
+				Value: certPath,
+			})
+			seen[envMLFlowCertPathName] = true
+		}
 	}
 
 	// Add provider-specific environment variables

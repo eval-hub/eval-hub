@@ -234,6 +234,7 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		"benchmark_id", benchmarkID,
 		"service_account", jobConfig.serviceAccountName,
 		"service_ca_configmap", jobConfig.serviceCAConfigMap,
+		"mlflow_ca_bundle_configmap", jobConfig.mlflowCABundleConfigMap,
 		"eval_hub_url", jobConfig.evalHubURL,
 	)
 	// The sidecar model proxy is always active for all jobs. When model.auth is set,

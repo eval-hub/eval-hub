@@ -30,37 +30,41 @@ const (
 	inClusterNamespaceFile      = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 	serviceAccountNameSuffix    = "-job"
 	serviceCAConfigMapSuffix    = "-service-ca"
+	mlflowCABundleCMSuffix      = "-mlflow-ca-bundle"
 	defaultTestDataInitCmd      = "/app/eval-runtime-init"
 	defaultEvalHubPort          = "8443"
 )
 
 type jobConfig struct {
-	jobID               string
-	resourceGUID        string
-	namespace           string
-	providerID          string
-	benchmarkID         string
-	benchmarkIndex      int
-	adapterImage        string
-	adapterPullPolicy   corev1.PullPolicy
-	sidecarImage        string
-	entrypoint          []string
-	defaultEnv          []api.EnvVar
-	cpuRequest          string
-	memoryRequest       string
-	cpuLimit            string
-	memoryLimit         string
-	gpuResource         string            // Kubernetes extended resource name (e.g. "nvidia.com/gpu")
-	gpuCount            int               // number of GPU units to request (0 = CPU-only)
-	nodeSelector        map[string]string // pod nodeSelector; nil when a queue is set (HardwareProfile or hardware_config.queue)
-	tolerations         []corev1.Toleration
-	priorityClassName   string // pod PriorityClassName and/or Kueue priority-class label
-	jobSpec             shared.JobSpec
-	serviceAccountName  string
-	serviceCAConfigMap  string
-	evalHubURL          string // in-cluster URL for sidecar to call eval-hub
-	sidecarBaseURL      string // base URL for adapter/runtime to call sidecar's proxy (config.Sidecar.BaseURL)
-	evalHubInstanceName string
+	jobID              string
+	resourceGUID       string
+	namespace          string
+	providerID         string
+	benchmarkID        string
+	benchmarkIndex     int
+	adapterImage       string
+	adapterPullPolicy  corev1.PullPolicy
+	sidecarImage       string
+	entrypoint         []string
+	defaultEnv         []api.EnvVar
+	cpuRequest         string
+	memoryRequest      string
+	cpuLimit           string
+	memoryLimit        string
+	gpuResource        string            // Kubernetes extended resource name (e.g. "nvidia.com/gpu")
+	gpuCount           int               // number of GPU units to request (0 = CPU-only)
+	nodeSelector       map[string]string // pod nodeSelector; nil when a queue is set (HardwareProfile or hardware_config.queue)
+	tolerations        []corev1.Toleration
+	priorityClassName  string // pod PriorityClassName and/or Kueue priority-class label
+	jobSpec            shared.JobSpec
+	serviceAccountName string
+	serviceCAConfigMap string
+	// mlflowCABundleConfigMap is the operator-managed merged CA bundle
+	// ({instance}-mlflow-ca-bundle). Empty when EVALHUB_INSTANCE_NAME is unset.
+	mlflowCABundleConfigMap string
+	evalHubURL              string // in-cluster URL for sidecar to call eval-hub
+	sidecarBaseURL          string // base URL for adapter/runtime to call sidecar's proxy (config.Sidecar.BaseURL)
+	evalHubInstanceName     string
 	// evalHubCRNamespace is the namespace of the EvalHub CR (control plane); used for Job labels.
 	evalHubCRNamespace         string
 	mlflowTrackingURI          string
@@ -146,7 +150,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	// The SA name uses the instance namespace (not the tenant namespace) to match
 	// the operator's naming convention: <instance>-<instance-namespace>-job.
 	instanceNamespace := readInClusterNamespace()
-	var serviceAccountName, serviceCAConfigMap, evalHubURL string
+	var serviceAccountName, serviceCAConfigMap, mlflowCABundleConfigMap, evalHubURL string
 	var evalHubCRNamespace string
 	if evalHubInstanceName != "" {
 		saNamespace := instanceNamespace
@@ -156,6 +160,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		evalHubCRNamespace = saNamespace
 		serviceAccountName = evalHubInstanceName + "-" + saNamespace + serviceAccountNameSuffix
 		serviceCAConfigMap = evalHubInstanceName + serviceCAConfigMapSuffix
+		mlflowCABundleConfigMap = evalHubInstanceName + mlflowCABundleCMSuffix
 		// EvalHub URL points to the kube-rbac-proxy HTTPS endpoint in the instance namespace.
 		// Use saNamespace (which falls back to namespace when not in-cluster) to avoid a malformed host
 		// when instanceNamespace is empty.
@@ -244,6 +249,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		jobSpec:                    *spec,
 		serviceAccountName:         serviceAccountName,
 		serviceCAConfigMap:         serviceCAConfigMap,
+		mlflowCABundleConfigMap:    mlflowCABundleConfigMap,
 		evalHubInstanceName:        evalHubInstanceName,
 		evalHubCRNamespace:         evalHubCRNamespace,
 		mlflowTrackingURI:          mlflowTrackingURI,
