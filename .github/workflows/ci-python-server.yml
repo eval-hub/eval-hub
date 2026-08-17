@@ -7,6 +7,7 @@ on:
       - 'python-server/**'
       - 'config/**'
       - 'cmd/eval_hub/**'
+      - 'cmd/eval_runtime_sidecar/**'
       - 'internal/**'
       - 'pkg/**'
       - 'Makefile'
@@ -36,8 +37,10 @@ jobs:
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           python-version: '3.11'
-      - name: Build binary for this platform via cross-compile target
+      - name: Build server binary for this platform via cross-compile target
         run: make cross-compile
+      - name: Build sidecar binary for this platform via cross-compile target
+        run: make cross-compile-sidecar
       - name: Build wheel
         run: make build-wheel
       - name: Install wheel
