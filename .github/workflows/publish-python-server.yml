@@ -30,20 +30,25 @@ jobs:
           - goos: linux
             goarch: amd64
             output: bin/eval-hub-linux-amd64
+            sidecar-output: bin/eval-runtime-sidecar-linux-amd64
           - goos: linux
             goarch: arm64
             output: bin/eval-hub-linux-arm64
+            sidecar-output: bin/eval-runtime-sidecar-linux-arm64
           # macOS
           - goos: darwin
             goarch: amd64
             output: bin/eval-hub-darwin-amd64
+            sidecar-output: bin/eval-runtime-sidecar-darwin-amd64
           - goos: darwin
             goarch: arm64
             output: bin/eval-hub-darwin-arm64
+            sidecar-output: bin/eval-runtime-sidecar-darwin-arm64
           # Windows
           - goos: windows
             goarch: amd64
             output: bin/eval-hub-windows-amd64.exe
+            sidecar-output: bin/eval-runtime-sidecar-windows-amd64.exe
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -62,14 +67,19 @@ jobs:
           go-version-file: "go.mod"
           cache: true
 
-      - name: Build binary
+      - name: Build server binary
         run: make cross-compile CROSS_GOOS=${{ matrix.goos }} CROSS_GOARCH=${{ matrix.goarch }}
 
-      - name: Upload binary
+      - name: Build sidecar binary
+        run: make cross-compile-sidecar CROSS_GOOS=${{ matrix.goos }} CROSS_GOARCH=${{ matrix.goarch }}
+
+      - name: Upload binaries
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ matrix.output }}
+          path: |
+            ${{ matrix.output }}
+            ${{ matrix.sidecar-output }}
           retention-days: 7
 
   build-wheels:
@@ -112,7 +122,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up uv python
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           python-version: "3.11"
 
@@ -186,7 +196,7 @@ jobs:
           cache: true
 
       - name: Set up uv python
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           python-version: "3.11"
 
