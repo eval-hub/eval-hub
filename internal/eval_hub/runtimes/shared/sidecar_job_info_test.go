@@ -130,7 +130,14 @@ func TestRewriteModelURLForLocalSidecar(t *testing.T) {
 			sidecarBaseURL: "http://localhost:8082",
 			jobID:          "job-abc",
 			modelURL:       "https://model-serving.example.com/v1/",
-			want:           "http://localhost:8082/model/job-abc/v1",
+			want:           "http://localhost:8082/model/job-abc/v1/",
+		},
+		{
+			name:           "model URL host only with trailing slash",
+			sidecarBaseURL: "http://localhost:8082",
+			jobID:          "job-abc",
+			modelURL:       "https://model-serving.example.com/",
+			want:           "http://localhost:8082/model/job-abc/",
 		},
 		{
 			name:           "model URL with query string",

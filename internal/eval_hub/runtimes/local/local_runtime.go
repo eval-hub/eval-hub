@@ -281,6 +281,7 @@ func (r *LocalRuntime) runBenchmark(
 	// Set environment variables
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("EVALHUB_JOB_SPEC_PATH=%s", absJobSpecPath),
+		"EVALHUB_MODE=local",
 	)
 	for _, envVar := range provider.Runtime.Local.Env {
 		if envVar.Name != "" {
