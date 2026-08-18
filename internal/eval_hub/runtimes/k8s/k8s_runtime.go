@@ -489,14 +489,14 @@ func rewriteModelURLForSidecar(sidecarBaseURL, modelURL string) (string, error) 
 }
 
 // resolveMLFlowCABundleConfigMap enables mounting {instance}-mlflow-ca-bundle only when
-// that ConfigMap already exists in the job namespace (propagated by the operator). The
-// job-pod mount path is independent of the EvalHub API's MLFLOW_CA_CERT_PATH.
+// that ConfigMap already exists in the job namespace with a non-empty ca-bundle.crt entry.
+// The job-pod mount path is independent of the EvalHub API's MLFLOW_CA_CERT_PATH.
 func (r *K8sRuntime) resolveMLFlowCABundleConfigMap(ctx context.Context, cfg *jobConfig, logger *slog.Logger) string {
 	if cfg == nil || cfg.evalHubInstanceName == "" || cfg.mlflowTrackingURI == "" {
 		return ""
 	}
 	cmName := mlflowCABundleConfigMapName(cfg.evalHubInstanceName)
-	_, err := r.helper.GetConfigMap(ctx, cfg.namespace, cmName)
+	cm, err := r.helper.GetConfigMap(ctx, cfg.namespace, cmName)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.Info(
@@ -511,6 +511,15 @@ func (r *K8sRuntime) resolveMLFlowCABundleConfigMap(ctx context.Context, cfg *jo
 			"configmap", cmName,
 			"namespace", cfg.namespace,
 			"error", err,
+		)
+		return ""
+	}
+	if strings.TrimSpace(cm.Data[mlflowCABundleFile]) == "" {
+		logger.Info(
+			"MLflow CA bundle ConfigMap missing or empty ca-bundle.crt; falling back to service CA / configured CA path",
+			"configmap", cmName,
+			"namespace", cfg.namespace,
+			"key", mlflowCABundleFile,
 		)
 		return ""
 	}

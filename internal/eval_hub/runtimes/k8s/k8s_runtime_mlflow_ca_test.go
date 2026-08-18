@@ -60,6 +60,40 @@ func TestK8sRuntimeResolveMLFlowCABundleConfigMap(t *testing.T) {
 		}
 	})
 
+	t.Run("empty when bundle key missing", func(t *testing.T) {
+		cmName := mlflowCABundleConfigMapName("my-evalhub")
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: cmName, Namespace: "team-a"},
+			Data:       map[string]string{"other.crt": "PEM"},
+		}
+		r := &K8sRuntime{helper: &KubernetesHelper{clientset: fake.NewSimpleClientset(cm)}}
+		cfg := &jobConfig{
+			evalHubInstanceName: "my-evalhub",
+			mlflowTrackingURI:   "https://mlflow.example",
+			namespace:           "team-a",
+		}
+		if got := r.resolveMLFlowCABundleConfigMap(ctx, cfg, logger); got != "" {
+			t.Fatalf("got %q, want empty when %s missing", got, mlflowCABundleFile)
+		}
+	})
+
+	t.Run("empty when bundle key empty", func(t *testing.T) {
+		cmName := mlflowCABundleConfigMapName("my-evalhub")
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: cmName, Namespace: "team-a"},
+			Data:       map[string]string{mlflowCABundleFile: "   "},
+		}
+		r := &K8sRuntime{helper: &KubernetesHelper{clientset: fake.NewSimpleClientset(cm)}}
+		cfg := &jobConfig{
+			evalHubInstanceName: "my-evalhub",
+			mlflowTrackingURI:   "https://mlflow.example",
+			namespace:           "team-a",
+		}
+		if got := r.resolveMLFlowCABundleConfigMap(ctx, cfg, logger); got != "" {
+			t.Fatalf("got %q, want empty when %s is blank", got, mlflowCABundleFile)
+		}
+	})
+
 	t.Run("empty on non-NotFound Get error", func(t *testing.T) {
 		clientset := fake.NewSimpleClientset()
 		clientset.PrependReactor("get", "configmaps", func(action ktesting.Action) (bool, kruntime.Object, error) {
