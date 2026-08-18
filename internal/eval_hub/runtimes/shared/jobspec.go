@@ -2,6 +2,7 @@ package shared
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -79,6 +80,7 @@ func cloneModelRef(m *api.ModelRef) *api.ModelRef {
 		return nil
 	}
 	out := *m
+	out.URL = strings.TrimSpace(out.URL)
 	if m.Auth != nil {
 		auth := *m.Auth
 		out.Auth = &auth

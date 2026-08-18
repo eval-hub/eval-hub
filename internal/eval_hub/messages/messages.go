@@ -274,6 +274,13 @@ var (
 		"hardware_profile_invalid",
 	)
 
+	// InvalidSecretRefURI The model.auth.secret_ref '{{.SecretRef}}' must use the file:/// URI scheme in local mode.
+	InvalidSecretRefURI = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The model.auth.secret_ref '{{.SecretRef}}' must use the file:/// URI scheme in local mode.",
+		"invalid_secret_ref_uri",
+	)
+
 	// ResolvedSHAReadOnly The field 'resolved_sha' is read-only and must not be set on create.
 	ResolvedSHAReadOnly = createMessage(
 		constants.HTTPCodeBadRequest,

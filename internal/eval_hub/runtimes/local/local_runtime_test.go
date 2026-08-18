@@ -15,6 +15,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -933,7 +934,7 @@ func runSidecarEvalJob(t *testing.T) string {
 	t.Helper()
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
-	evaluation.Model.Auth = &api.ModelAuth{SecretRef: "/home/user1/model-auth"}
+	evaluation.Model.Auth = &api.ModelAuth{SecretRef: "file:///home/user1/model-auth"}
 	dirName := localJobDir("job-1", 0, providerID, "bench-1")
 	sentinelPath := filepath.Join(dirName, "done")
 	providers := sampleLocalProviders(providerID, fmt.Sprintf("touch %s", sentinelPath))
@@ -982,8 +983,8 @@ func TestRunEvaluationJobWithSidecarWritesSidecarJobInfo(t *testing.T) {
 	if info.Model.URL != "http://model.example" {
 		t.Fatalf("expected model URL %q, got %q", "http://model.example", info.Model.URL)
 	}
-	if info.Model.AuthSecretMountPath != "/home/user1/model-auth" {
-		t.Fatalf("expected auth path %q, got %q", "/home/user1/model-auth", info.Model.AuthSecretMountPath)
+	if info.Model.AuthSecretMountPath != "file:///home/user1/model-auth" {
+		t.Fatalf("expected auth path %q, got %q", "file:///home/user1/model-auth", info.Model.AuthSecretMountPath)
 	}
 	if info.Model.HTTPTimeout != shared.DefaultModelHTTPTimeout {
 		t.Fatalf("expected timeout %v, got %v", shared.DefaultModelHTTPTimeout, info.Model.HTTPTimeout)
@@ -1020,15 +1021,15 @@ func TestRunEvaluationJobWithSidecarRewritesJobSpec(t *testing.T) {
 	if spec.Model.Auth == nil {
 		t.Fatal("expected model auth to be set, got nil")
 	}
-	if spec.Model.Auth.SecretRef != "/home/user1/model-auth" {
-		t.Fatalf("expected auth secret_ref %q, got %q", "/home/user1/model-auth", spec.Model.Auth.SecretRef)
+	if spec.Model.Auth.SecretRef != "file:///home/user1/model-auth" {
+		t.Fatalf("expected auth secret_ref %q, got %q", "file:///home/user1/model-auth", spec.Model.Auth.SecretRef)
 	}
 }
 
 func TestRunEvaluationJobWithSidecarModelDefaults(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
-	evaluation.Model.Auth = &api.ModelAuth{SecretRef: "/home/user1/model-auth"}
+	evaluation.Model.Auth = &api.ModelAuth{SecretRef: "file:///home/user1/model-auth"}
 	dirName := localJobDir("job-1", 0, providerID, "bench-1")
 	sentinelPath := filepath.Join(dirName, "done")
 	providers := sampleLocalProviders(providerID, fmt.Sprintf("touch %s", sentinelPath))
@@ -1123,6 +1124,44 @@ func TestRunEvaluationJobSidecarRewriteError(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for failed benchmark status update")
+	}
+}
+
+func TestRunEvaluationJobSidecarRejectsRawSecretRefPath(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Model.Auth = &api.ModelAuth{SecretRef: "/home/user1/model-auth"}
+
+	providers := sampleLocalProviders(providerID, "true")
+	cleanupDir(t, "job-1")
+
+	cfg := &config.Config{
+		Service: &config.ServiceConfig{Port: 8080},
+		Sidecar: &config.SidecarConfig{LocalMode: true, BaseURL: "http://localhost:8082"},
+	}
+	rt, err := NewLocalRuntime(discardLogger(), cfg)
+	if err != nil {
+		t.Fatalf("NewLocalRuntime failed: %v", err)
+	}
+	rt = rt.WithContext(testContext(t))
+
+	storage := &fakeStorage{providerConfigs: providers}
+
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("failed to resolve benchmarks: %v", err)
+	}
+
+	err = rt.RunEvaluationJob(evaluation, benchmarks, storage)
+	if err == nil {
+		t.Fatal("expected error for secret_ref without file:/// prefix, got nil")
+	}
+	svcErr, ok := err.(abstractions.ServiceError)
+	if !ok {
+		t.Fatalf("expected ServiceError, got %T: %v", err, err)
+	}
+	if svcErr.MessageCode() != messages.InvalidSecretRefURI {
+		t.Fatalf("expected message code %q, got %q", messages.InvalidSecretRefURI.GetCode(), svcErr.MessageCode().GetCode())
 	}
 }
 

@@ -168,6 +168,11 @@ func (r *LocalRuntime) RunEvaluationJob(
 
 	callbackURL := r.callbackURL
 	if r.sidecarEnabled() {
+		if evaluation.Model != nil && evaluation.Model.Auth != nil && evaluation.Model.Auth.SecretRef != "" {
+			if !strings.HasPrefix(evaluation.Model.Auth.SecretRef, "file:///") {
+				return serviceerrors.NewServiceError(messages.InvalidSecretRefURI, "SecretRef", evaluation.Model.Auth.SecretRef)
+			}
+		}
 		if err := r.writeSidecarJobInfo(evaluation); err != nil {
 			return fmt.Errorf("write sidecar job info: %w", err)
 		}
@@ -224,9 +229,6 @@ func (r *LocalRuntime) runBenchmark(
 		return fmt.Errorf("build job spec: %w", err)
 	}
 
-	if spec.Model != nil {
-		spec.Model.URL = strings.TrimSpace(spec.Model.URL)
-	}
 	if r.sidecarEnabled() && spec.Model != nil && spec.Model.URL != "" {
 		modelCopy := *spec.Model
 		rewrittenURL, err := shared.RewriteModelURLForLocalSidecar(r.sidecarBaseURL, jobID, modelCopy.URL)
