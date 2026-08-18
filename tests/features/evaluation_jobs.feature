@@ -48,6 +48,11 @@ Feature: Evaluation Jobs
     And the response should contain the value "lm_evaluation_harness" at path "$.results.benchmarks[0].provider_id"
     And the response should contain at least the value "0.2" at path "$.results.benchmarks[0].metrics.acc"
     And the response should contain at least the value "0.4" at path "$.results.benchmarks[0].metrics.acc_norm"
+    And the array at path "$.results.benchmarks[0].metrics_schema" in the response should have length at least 2
+    And the response should contain the value "acc" at path "$.results.benchmarks[0].metrics_schema[?(@.name == &quot;acc&quot;)].name"
+    And the response should contain the value "numeric" at path "$.results.benchmarks[0].metrics_schema[?(@.name == &quot;acc&quot;)].type"
+    And the response should contain the value "acc_norm" at path "$.results.benchmarks[0].metrics_schema[?(@.name == &quot;acc_norm&quot;)].name"
+    And the response should contain the value "numeric" at path "$.results.benchmarks[0].metrics_schema[?(@.name == &quot;acc_norm&quot;)].type"
     And the response should contain the value "{{env:MODEL_NAME|test}}" at path "$.model.name"
     And the response should contain the value "{{env:MODEL_URL|http://test.com}}" at path "$.model.url"
     And the response should contain the value "test-evaluation-job" at path "$.name"
@@ -120,6 +125,12 @@ Feature: Evaluation Jobs
     And the response should contain at least the value "0.4" at path "$.results.benchmarks[0].metrics.acc_norm"
     And the response should contain at least the value "0.2" at path "$.results.benchmarks[1].metrics.acc"
     And the response should contain at least the value "0.4" at path "$.results.benchmarks[1].metrics.acc_norm"
+    And the array at path "$.results.benchmarks[0].metrics_schema" in the response should have length at least 2
+    And the response should contain the value "numeric" at path "$.results.benchmarks[0].metrics_schema[?(@.name == &quot;acc&quot;)].type"
+    And the response should contain the value "numeric" at path "$.results.benchmarks[0].metrics_schema[?(@.name == &quot;acc_norm&quot;)].type"
+    And the array at path "$.results.benchmarks[1].metrics_schema" in the response should have length at least 2
+    And the response should contain the value "numeric" at path "$.results.benchmarks[1].metrics_schema[?(@.name == &quot;acc&quot;)].type"
+    And the response should contain the value "numeric" at path "$.results.benchmarks[1].metrics_schema[?(@.name == &quot;acc_norm&quot;)].type"
     And the response should contain the value "arc_easy" at path "$.benchmarks[0].id"
     And the response should contain the value "5" at path "$.benchmarks[0].parameters.num_examples"
     And the response should contain the value "arc_easy" at path "$.benchmarks[1].id"
