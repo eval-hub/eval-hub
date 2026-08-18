@@ -68,7 +68,7 @@ type jobConfig struct {
 	ociCredentialsSecret       string
 	modelAuthSecretRef         string // user's real credentials secret mounted only in sidecar
 	modelInternalRefSecretName string // ephemeral internalModelRef secret mounted in adapter; empty when credential injection is not active
-	modelTargetURL             string // real model URL forwarded by the sidecar model proxy; always set for all jobs
+	modelTargetURL             string // real model URL forwarded by the sidecar model proxy; empty for pre-recorded-data jobs
 	sidecarResources           corev1.ResourceRequirements
 	testDataS3                 s3TestDataConfig
 	testDataPVC                pvcTestDataConfig
@@ -114,8 +114,10 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	if runtime.K8s.Image == "" {
 		return nil, fmt.Errorf("runtime adapter image is required")
 	}
-	if evaluation.Model.URL == "" || evaluation.Model.Name == "" {
-		return nil, fmt.Errorf("model url and name are required")
+	// evaluation.Model.URL is optional (for pre-recorded datasets) and will have
+	// been checked by the API layer but evaluation.Model.Name is required
+	if evaluation.Model.Name == "" {
+		return nil, fmt.Errorf("model name is required")
 	}
 
 	sidecarBaseURL := config.DefaultSidecarBaseURL
@@ -177,13 +179,10 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	}
 
 	// modelInternalRefSecretName is set in createBenchmarkResources after inspectModelSecret
-	// confirms proxy-injectable keys. modelTargetURL is always set so the sidecar model proxy
-	// is active for all jobs — open and authenticated alike.
+	// confirms proxy-injectable keys. modelTargetURL is set when the user supplies a model URL;
+	// it remains empty for pre-recorded-data jobs where no live model endpoint is needed.
 	modelInternalRefSecretName := ""
 	modelTargetURL := strings.TrimSpace(evaluation.Model.URL)
-	if modelTargetURL == "" {
-		return nil, fmt.Errorf("model URL must not be empty")
-	}
 
 	sidecarImage, sidecarResources, err := sidecarImageAndResources(serviceConfig)
 	if err != nil {

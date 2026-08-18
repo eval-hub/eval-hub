@@ -236,24 +236,17 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		"service_ca_configmap", jobConfig.serviceCAConfigMap,
 		"eval_hub_url", jobConfig.evalHubURL,
 	)
-	// The sidecar model proxy is always active for all jobs. When model.auth is set,
-	// the secret is inspected to determine if credential injection (ref-token resolution)
-	// is needed. Proxy-injectable keys (api-key, *_api-key, *_url) cause an ephemeral
-	// internalModelRef secret to be created; the adapter sends ref tokens that the sidecar
-	// resolves to real credentials.
-	// Always redirect the adapter through the sidecar model proxy so all model traffic
-	// (open and authenticated) flows through the sidecar. This gives a single forwarding
-	// path and allows SA token injection for models that need it.
-	// Redirect the adapter to the sidecar, preserving the full path from the user's model URL.
-	// The sidecar Rewrite function swaps only scheme+host from its configured target, so
-	// whatever path the adapter sends is forwarded verbatim to the real upstream model host.
-	rewrittenModelURL, err := rewriteModelURLForSidecar(jobConfig.sidecarBaseURL, jobConfig.modelTargetURL)
-	if err != nil {
-		return fmt.Errorf("job %s benchmark %s: rewriting model URL for sidecar: %w", evaluation.Resource.ID, benchmarkID, err)
-	}
-	jobConfig.jobSpec.Model.URL = rewrittenModelURL
-
+	// When a model URL is present, redirect the adapter through the sidecar model proxy so
+	// all model traffic (open and authenticated) flows through the sidecar. For pre-recorded-data
+	// jobs the model URL is empty and the sidecar model proxy is not configured.
 	var secretInfo modelSecretInfo
+	if jobConfig.modelTargetURL != "" {
+		rewrittenModelURL, err := rewriteModelURLForSidecar(jobConfig.sidecarBaseURL, jobConfig.modelTargetURL)
+		if err != nil {
+			return fmt.Errorf("job %s benchmark %s: rewriting model URL for sidecar: %w", evaluation.Resource.ID, benchmarkID, err)
+		}
+		jobConfig.jobSpec.Model.URL = rewrittenModelURL
+	}
 	if jobConfig.modelAuthSecretRef != "" {
 		secretInfo, err = inspectModelSecret(ctx, jobConfig.namespace, jobConfig.modelAuthSecretRef, r.helper)
 		if err != nil {
