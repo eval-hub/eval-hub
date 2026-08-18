@@ -68,11 +68,11 @@ func (r *K8sRuntime) NotifyJobPhaseTransition(ctx context.Context, evaluation *a
 			)
 		}
 		statusPayload := map[string]any{
-			"phase":           phase,
-			"timestamp":       time.Now().UTC().Format(time.RFC3339),
+			"phase":          phase,
+			"timestamp":      time.Now().UTC().Format(time.RFC3339),
 			"evaluationId":   evaluation.Resource.ID,
 			"benchmarkIndex": benchmarkIndex,
-			"summaryMetrics":  nil,
+			"summaryMetrics": nil,
 		}
 		if annotErr := r.helper.PatchJobStatusAnnotation(signalCtx, namespace, job.Name, statusPayload); annotErr != nil {
 			r.logger.WarnContext(signalCtx, "lifecycle signal: patch status annotation failed",
