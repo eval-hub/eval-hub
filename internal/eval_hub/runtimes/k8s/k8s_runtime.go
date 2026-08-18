@@ -238,7 +238,7 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 	)
 	// When a model URL is present, redirect the adapter through the sidecar model proxy so
 	// all model traffic (open and authenticated) flows through the sidecar. For pre-recorded-data
-	// jobs the model URL is empty and the sidecar model proxy is not configured.
+	// jobs the model URL is empty and the entire model proxy / auth pipeline is skipped.
 	var secretInfo modelSecretInfo
 	if jobConfig.modelTargetURL != "" {
 		rewrittenModelURL, err := rewriteModelURLForSidecar(jobConfig.sidecarBaseURL, jobConfig.modelTargetURL)
@@ -246,17 +246,18 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 			return fmt.Errorf("job %s benchmark %s: rewriting model URL for sidecar: %w", evaluation.Resource.ID, benchmarkID, err)
 		}
 		jobConfig.jobSpec.Model.URL = rewrittenModelURL
-	}
-	if jobConfig.modelAuthSecretRef != "" {
-		secretInfo, err = inspectModelSecret(ctx, jobConfig.namespace, jobConfig.modelAuthSecretRef, r.helper)
-		if err != nil {
-			logger.Error("kubernetes model secret inspect error", "benchmark_id", benchmarkID, "error", err)
-			return fmt.Errorf("job %s benchmark %s: reading model auth secret: %w", evaluation.Resource.ID, benchmarkID, err)
-		}
-		if secretInfo.hasCredentialKeys {
-			jobConfig.modelInternalRefSecretName = buildK8sName(jobConfig.jobID, jobConfig.resourceGUID, "-model-ref")
-		} else {
-			logger.Info("model credential secret has no proxy-injectable keys; sidecar proxy active for SA token")
+
+		if jobConfig.modelAuthSecretRef != "" {
+			secretInfo, err = inspectModelSecret(ctx, jobConfig.namespace, jobConfig.modelAuthSecretRef, r.helper)
+			if err != nil {
+				logger.Error("kubernetes model secret inspect error", "benchmark_id", benchmarkID, "error", err)
+				return fmt.Errorf("job %s benchmark %s: reading model auth secret: %w", evaluation.Resource.ID, benchmarkID, err)
+			}
+			if secretInfo.hasCredentialKeys {
+				jobConfig.modelInternalRefSecretName = buildK8sName(jobConfig.jobID, jobConfig.resourceGUID, "-model-ref")
+			} else {
+				logger.Info("model credential secret has no proxy-injectable keys; sidecar proxy active for SA token")
+			}
 		}
 	}
 	// Build sidecar config after inspecting the model secret so modelInternalRefSecretName is set.

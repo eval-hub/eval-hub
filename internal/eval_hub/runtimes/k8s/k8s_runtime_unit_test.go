@@ -1644,6 +1644,17 @@ func TestModelAuthCombinations(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			// Whitespace-only URL is normalized to empty; treated the same as empty.
+			name:    "whitespace-only model URL",
+			wantErr: false,
+		},
+		{
+			// Whitespace URL with auth secret: secret inspection is skipped because
+			// there is no model endpoint to authenticate with.
+			name:    "whitespace-only model URL with auth",
+			wantErr: false,
+		},
+		{
 			name: "api-key only",
 			secretData: map[string][]byte{
 				"api-key": []byte("sk-real"),
@@ -1831,6 +1842,16 @@ func TestModelAuthCombinations(t *testing.T) {
 			if tc.name == "empty model URL" {
 				evaluation.Model.URL = ""
 				clientset = fake.NewClientset()
+			} else if tc.name == "whitespace-only model URL" {
+				evaluation.Model.URL = "   "
+				clientset = fake.NewClientset()
+			} else if tc.name == "whitespace-only model URL with auth" {
+				evaluation.Model.URL = "   "
+				evaluation.Model.Auth = &api.ModelAuth{SecretRef: secretName}
+				clientset = fake.NewClientset(&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "default"},
+					Data:       map[string][]byte{"api-key": []byte("sk-real")},
+				})
 			} else if tc.wantErr {
 				// secret_ref set but secret absent from fake store → error expected
 				evaluation.Model.Auth = &api.ModelAuth{SecretRef: secretName}
@@ -1879,7 +1900,7 @@ func TestModelAuthCombinations(t *testing.T) {
 			}
 
 			sidecarCfg := cm.Data["sidecar_config.json"]
-			if evaluation.Model.URL != "" {
+			if strings.TrimSpace(evaluation.Model.URL) != "" {
 				// adapter URL routes through the sidecar when a model URL is present
 				if strings.Contains(cm.Data["job.json"], "model.example.com") {
 					t.Errorf("job.json must not contain direct model URL; adapter should talk to sidecar")

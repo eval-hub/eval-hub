@@ -224,7 +224,10 @@ func (r *LocalRuntime) runBenchmark(
 		return fmt.Errorf("build job spec: %w", err)
 	}
 
-	if r.sidecarEnabled() && spec.Model != nil && strings.TrimSpace(spec.Model.URL) != "" {
+	if spec.Model != nil {
+		spec.Model.URL = strings.TrimSpace(spec.Model.URL)
+	}
+	if r.sidecarEnabled() && spec.Model != nil && spec.Model.URL != "" {
 		modelCopy := *spec.Model
 		rewrittenURL, err := shared.RewriteModelURLForLocalSidecar(r.sidecarBaseURL, jobID, modelCopy.URL)
 		if err != nil {
@@ -394,9 +397,10 @@ func (r *LocalRuntime) sidecarEnabled() bool {
 
 func (r *LocalRuntime) writeSidecarJobInfo(evaluation *api.EvaluationJobResource) error {
 	var modelConfig *config.SidecarModelConfig
-	if strings.TrimSpace(evaluation.Model.URL) != "" {
+	modelURL := strings.TrimSpace(evaluation.Model.URL)
+	if modelURL != "" {
 		modelConfig = &config.SidecarModelConfig{
-			URL:         evaluation.Model.URL,
+			URL:         modelURL,
 			HTTPTimeout: shared.DefaultModelHTTPTimeout,
 		}
 		if r.sidecarModelDefaults != nil {

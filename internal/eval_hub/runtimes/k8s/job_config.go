@@ -129,6 +129,9 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	if err != nil {
 		return nil, err
 	}
+	if spec.Model != nil {
+		spec.Model.URL = strings.TrimSpace(spec.Model.URL)
+	}
 
 	// Get EvalHub instance name from environment (set by operator in deployment)
 	evalHubInstanceName := strings.TrimSpace(os.Getenv(evalHubInstanceNameEnv))
@@ -173,16 +176,19 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		ociCredentialsSecret = evaluation.Exports.OCI.K8s.Connection
 	}
 
+	// modelTargetURL is set when the user supplies a model URL; it remains empty for
+	// pre-recorded-data jobs where no live model endpoint is needed.
+	modelTargetURL := strings.TrimSpace(evaluation.Model.URL)
+
+	// Model auth is only relevant when there is a model URL to authenticate with.
 	modelAuthSecretRef := ""
-	if evaluation.Model.Auth != nil {
+	if modelTargetURL != "" && evaluation.Model.Auth != nil {
 		modelAuthSecretRef = strings.TrimSpace(evaluation.Model.Auth.SecretRef)
 	}
 
 	// modelInternalRefSecretName is set in createBenchmarkResources after inspectModelSecret
-	// confirms proxy-injectable keys. modelTargetURL is set when the user supplies a model URL;
-	// it remains empty for pre-recorded-data jobs where no live model endpoint is needed.
+	// confirms proxy-injectable keys.
 	modelInternalRefSecretName := ""
-	modelTargetURL := strings.TrimSpace(evaluation.Model.URL)
 
 	sidecarImage, sidecarResources, err := sidecarImageAndResources(serviceConfig)
 	if err != nil {
