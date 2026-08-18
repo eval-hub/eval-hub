@@ -1638,10 +1638,21 @@ func TestModelAuthCombinations(t *testing.T) {
 			wantErrContains: "reading model auth secret",
 		},
 		{
-			// blank Model.URL must be caught at job-creation time, not silently misdirect traffic
-			name:            "empty model URL",
-			wantErr:         true,
-			wantErrContains: "model url and name are required",
+			// Empty Model.URL is valid for pre-recorded-data jobs; sidecar model proxy is
+			// simply not configured and the adapter runs without a live model endpoint.
+			name:    "empty model URL",
+			wantErr: false,
+		},
+		{
+			// Whitespace-only URL is normalized to empty; treated the same as empty.
+			name:    "whitespace-only model URL",
+			wantErr: false,
+		},
+		{
+			// Whitespace URL with auth secret: secret inspection is skipped because
+			// there is no model endpoint to authenticate with.
+			name:    "whitespace-only model URL with auth",
+			wantErr: false,
 		},
 		{
 			name: "api-key only",
@@ -1831,6 +1842,16 @@ func TestModelAuthCombinations(t *testing.T) {
 			if tc.name == "empty model URL" {
 				evaluation.Model.URL = ""
 				clientset = fake.NewClientset()
+			} else if tc.name == "whitespace-only model URL" {
+				evaluation.Model.URL = "   "
+				clientset = fake.NewClientset()
+			} else if tc.name == "whitespace-only model URL with auth" {
+				evaluation.Model.URL = "   "
+				evaluation.Model.Auth = &api.ModelAuth{SecretRef: secretName}
+				clientset = fake.NewClientset(&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "default"},
+					Data:       map[string][]byte{"api-key": []byte("sk-real")},
+				})
 			} else if tc.wantErr {
 				// secret_ref set but secret absent from fake store → error expected
 				evaluation.Model.Auth = &api.ModelAuth{SecretRef: secretName}
@@ -1872,23 +1893,30 @@ func TestModelAuthCombinations(t *testing.T) {
 			job := jobs[0]
 			adapterContainer := job.Spec.Template.Spec.Containers[0]
 
-			// adapter URL always routes through the sidecar
 			cmName := findConfigMapVolumeName(t, job.Spec.Template.Spec.Volumes)
 			cm, err := clientset.CoreV1().ConfigMaps("default").Get(context.Background(), cmName, metav1.GetOptions{})
 			if err != nil {
 				t.Fatalf("get configmap: %v", err)
 			}
-			if strings.Contains(cm.Data["job.json"], "model.example.com") {
-				t.Errorf("job.json must not contain direct model URL; adapter should talk to sidecar")
-			}
-			if !strings.Contains(cm.Data["job.json"], "localhost") {
-				t.Errorf("job.json model URL must point to sidecar (localhost), got: %s", cm.Data["job.json"])
-			}
 
-			// sidecar_config.json: real URL always present; auth_secret_mount_path conditional
 			sidecarCfg := cm.Data["sidecar_config.json"]
-			if !strings.Contains(sidecarCfg, "model.example.com") {
-				t.Errorf("sidecar_config.json must always contain the real model URL, got: %s", sidecarCfg)
+			if strings.TrimSpace(evaluation.Model.URL) != "" {
+				// adapter URL routes through the sidecar when a model URL is present
+				if strings.Contains(cm.Data["job.json"], "model.example.com") {
+					t.Errorf("job.json must not contain direct model URL; adapter should talk to sidecar")
+				}
+				if !strings.Contains(cm.Data["job.json"], "localhost") {
+					t.Errorf("job.json model URL must point to sidecar (localhost), got: %s", cm.Data["job.json"])
+				}
+				// sidecar_config.json: real URL present; auth_secret_mount_path conditional
+				if !strings.Contains(sidecarCfg, "model.example.com") {
+					t.Errorf("sidecar_config.json must contain the real model URL, got: %s", sidecarCfg)
+				}
+			} else {
+				// pre-recorded-data jobs: no sidecar model proxy configured
+				if strings.Contains(sidecarCfg, "model") {
+					t.Errorf("sidecar_config.json must not have model config when model URL is empty, got: %s", sidecarCfg)
+				}
 			}
 			if tc.wantAuthMountInSidecarCfg && !strings.Contains(sidecarCfg, "auth_secret_mount_path") {
 				t.Errorf("sidecar_config.json must have auth_secret_mount_path when secret is configured")

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
@@ -223,7 +224,10 @@ func (r *LocalRuntime) runBenchmark(
 		return fmt.Errorf("build job spec: %w", err)
 	}
 
-	if r.sidecarEnabled() && spec.Model != nil {
+	if spec.Model != nil {
+		spec.Model.URL = strings.TrimSpace(spec.Model.URL)
+	}
+	if r.sidecarEnabled() && spec.Model != nil && spec.Model.URL != "" {
 		modelCopy := *spec.Model
 		rewrittenURL, err := shared.RewriteModelURLForLocalSidecar(r.sidecarBaseURL, jobID, modelCopy.URL)
 		if err != nil {
@@ -392,18 +396,22 @@ func (r *LocalRuntime) sidecarEnabled() bool {
 }
 
 func (r *LocalRuntime) writeSidecarJobInfo(evaluation *api.EvaluationJobResource) error {
-	modelConfig := &config.SidecarModelConfig{
-		URL:         evaluation.Model.URL,
-		HTTPTimeout: shared.DefaultModelHTTPTimeout,
-	}
-	if r.sidecarModelDefaults != nil {
-		if r.sidecarModelDefaults.HTTPTimeout > 0 {
-			modelConfig.HTTPTimeout = r.sidecarModelDefaults.HTTPTimeout
+	var modelConfig *config.SidecarModelConfig
+	modelURL := strings.TrimSpace(evaluation.Model.URL)
+	if modelURL != "" {
+		modelConfig = &config.SidecarModelConfig{
+			URL:         modelURL,
+			HTTPTimeout: shared.DefaultModelHTTPTimeout,
 		}
-		modelConfig.InsecureSkipVerify = r.sidecarModelDefaults.InsecureSkipVerify
-	}
-	if evaluation.Model.Auth != nil && evaluation.Model.Auth.SecretRef != "" {
-		modelConfig.AuthSecretMountPath = evaluation.Model.Auth.SecretRef
+		if r.sidecarModelDefaults != nil {
+			if r.sidecarModelDefaults.HTTPTimeout > 0 {
+				modelConfig.HTTPTimeout = r.sidecarModelDefaults.HTTPTimeout
+			}
+			modelConfig.InsecureSkipVerify = r.sidecarModelDefaults.InsecureSkipVerify
+		}
+		if evaluation.Model.Auth != nil && evaluation.Model.Auth.SecretRef != "" {
+			modelConfig.AuthSecretMountPath = evaluation.Model.Auth.SecretRef
+		}
 	}
 
 	info := &shared.SidecarJobInfo{Model: modelConfig}
