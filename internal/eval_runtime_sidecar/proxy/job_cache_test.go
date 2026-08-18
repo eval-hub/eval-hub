@@ -204,6 +204,26 @@ func TestJobInfoCache_Get(t *testing.T) {
 		}
 	})
 
+	t.Run("returns error when auth_secret_mount_path uses non-local file URI authority", func(t *testing.T) {
+		t.Parallel()
+		jobsDir := t.TempDir()
+		writeJobInfo(t, jobsDir, "job-file-authority", `{
+			"model": {
+				"url": "https://api.example.com/v1",
+				"auth_secret_mount_path": "file://host/path"
+			}
+		}`)
+
+		cache := NewJobInfoCache(jobsDir, DefaultJobCacheTTL, logger)
+		_, _, err := cache.Get("job-file-authority")
+		if err == nil {
+			t.Fatal("expected error for file:// URI with authority component")
+		}
+		if !errors.Is(err, ErrInvalidAuthSecretPath) {
+			t.Errorf("expected ErrInvalidAuthSecretPath, got: %v", err)
+		}
+	})
+
 	t.Run("accepts empty auth_secret_mount_path", func(t *testing.T) {
 		t.Parallel()
 		jobsDir := t.TempDir()

@@ -134,6 +134,12 @@ func (c *JobInfoCache) loadEntry(jobID string) (*jobCacheEntry, error) {
 			return nil, fmt.Errorf("%w: missing file:/// prefix in %q for job %q",
 				ErrInvalidAuthSecretPath, mountPath, jobID)
 		}
+		if !strings.HasPrefix(fsPath, "/") {
+			c.logger.Error("auth_secret_mount_path has non-local authority component",
+				"job_id", jobID, "auth_secret_mount_path", mountPath)
+			return nil, fmt.Errorf("%w: file:// URI must use an empty authority (file:///…), got %q for job %q",
+				ErrInvalidAuthSecretPath, mountPath, jobID)
+		}
 		candidate := filepath.Join(fsPath, "ca_cert")
 		if _, statErr := os.Stat(candidate); statErr == nil {
 			caCertPath = candidate
