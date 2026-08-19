@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -97,12 +98,13 @@ func (c *JobInfoCache) loadEntry(jobID string) (*jobCacheEntry, error) {
 		return nil, fmt.Errorf("invalid job-id %q", jobID)
 	}
 
-	infoPath := filepath.Join(c.jobsDir, jobID, shared.SidecarJobInfoFileName)
-	cleanBase := filepath.Clean(c.jobsDir) + string(os.PathSeparator)
-	if !strings.HasPrefix(filepath.Clean(infoPath), cleanBase) {
-		return nil, fmt.Errorf("invalid job-id %q: resolved path escapes base directory", jobID)
+	relPath := filepath.Join(jobID, shared.SidecarJobInfoFileName)
+	f, err := os.OpenInRoot(c.jobsDir, relPath)
+	if err != nil {
+		return nil, fmt.Errorf("job info not found for %q: %w", jobID, err)
 	}
-	data, err := os.ReadFile(infoPath) // #nosec G304,G703 -- path validated to stay within jobsDir
+	defer func() { _ = f.Close() }()
+	data, err := io.ReadAll(f)
 	if err != nil {
 		return nil, fmt.Errorf("job info not found for %q: %w", jobID, err)
 	}

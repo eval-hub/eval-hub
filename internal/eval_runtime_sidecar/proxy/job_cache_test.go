@@ -289,6 +289,62 @@ func TestJobInfoCache_Get(t *testing.T) {
 		}
 	})
 
+	t.Run("rejects symlinked job directory escaping jobsDir", func(t *testing.T) {
+		t.Parallel()
+		jobsDir := t.TempDir()
+		outsideDir := t.TempDir()
+
+		writeJobInfo(t, outsideDir, "real-job", `{
+			"model": {"url": "https://model.example.com/v1"}
+		}`)
+
+		// Create a symlink inside jobsDir that points to outsideDir/real-job
+		if err := os.Symlink(
+			filepath.Join(outsideDir, "real-job"),
+			filepath.Join(jobsDir, "symlink-job"),
+		); err != nil {
+			t.Skipf("symlinks not supported: %v", err)
+		}
+
+		cache := NewJobInfoCache(jobsDir, DefaultJobCacheTTL, logger)
+		_, _, err := cache.Get("symlink-job")
+		if err == nil {
+			t.Fatal("expected error when job directory is a symlink escaping jobsDir")
+		}
+	})
+
+	t.Run("rejects symlinked job-info file escaping jobsDir", func(t *testing.T) {
+		t.Parallel()
+		jobsDir := t.TempDir()
+		outsideDir := t.TempDir()
+
+		// Write a valid job-info file outside jobsDir
+		outsideFile := filepath.Join(outsideDir, shared.SidecarJobInfoFileName)
+		if err := os.WriteFile(outsideFile, []byte(`{
+			"model": {"url": "https://model.example.com/v1"}
+		}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create the job directory inside jobsDir, then symlink the info file out
+		jobDir := filepath.Join(jobsDir, "symlink-file-job")
+		if err := os.MkdirAll(jobDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(
+			outsideFile,
+			filepath.Join(jobDir, shared.SidecarJobInfoFileName),
+		); err != nil {
+			t.Skipf("symlinks not supported: %v", err)
+		}
+
+		cache := NewJobInfoCache(jobsDir, DefaultJobCacheTTL, logger)
+		_, _, err := cache.Get("symlink-file-job")
+		if err == nil {
+			t.Fatal("expected error when job-info file is a symlink escaping jobsDir")
+		}
+	})
+
 	t.Run("strips trailing slash from model URL", func(t *testing.T) {
 		t.Parallel()
 		jobsDir := t.TempDir()
