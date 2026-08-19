@@ -207,6 +207,7 @@ pre-commit run --all-files
 - **Error Handling**: Always check and handle errors explicitly
 - **Documentation**: Use godoc-style comments for exported types and functions
 - **Import Grouping**: Standard library, then external packages, then internal packages
+- **No `#nosec` annotations**: CI rejects PRs containing inline `#nosec` comments. Fix the underlying code instead (e.g. use `os.OpenInRoot` for path-traversal-safe file access). If a gosec finding cannot be structurally fixed, add a path-scoped `--exclude-rules` entry in the Gosec Security Scanner step of `.github/workflows/ci.yml`
 
 ### Code Organization
 
