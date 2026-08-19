@@ -527,9 +527,10 @@ benchmarks:
       metric: telemath_scorer/accuracy
       lower_is_better: false
     pass_criteria:
-      # GSMA leaderboard (Mar 2026): median ≈ 0.42, GPT-5 ≈ 0.79, top ≈ 0.87.
       threshold: 0.50
     tags: [telecom, math, reasoning, open-telco, inspect-ai]
+    agent:
+      result_interpretation: "Accuracy on telecom-domain numerical math; HIGHER is better. GSMA leaderboard (Mar 2026): median ≈ 0.42, GPT-5 ≈ 0.79, top ≈ 0.87."
 
   - id: inspect/teleqna
     name: TeleQnA
@@ -546,9 +547,10 @@ benchmarks:
       metric: choice/accuracy
       lower_is_better: false
     pass_criteria:
-      # GSMA leaderboard (Mar 2026): median ≈ 0.75, GPT-5 ≈ 0.84, top ≈ 0.91.
       threshold: 0.70
     tags: [telecom, knowledge, qa, open-telco, inspect-ai]
+    agent:
+      result_interpretation: "Accuracy on telecom domain MCQ; HIGHER is better. GSMA leaderboard (Mar 2026): median ≈ 0.75, GPT-5 ≈ 0.84, top ≈ 0.91."
 
   - id: inspect/telelogs
     name: TeleLogs
@@ -566,9 +568,10 @@ benchmarks:
       metric: telelogs_scorer/accuracy
       lower_is_better: false
     pass_criteria:
-      # GSMA leaderboard (Mar 2026): median ≈ 0.23, GPT-5 ≈ 0.78, top ≈ 0.96.
       threshold: 0.25
     tags: [telecom, operations, rca, troubleshooting, open-telco, inspect-ai]
+    agent:
+      result_interpretation: "Accuracy on 5G root-cause analysis; HIGHER is better. GSMA leaderboard (Mar 2026): median ≈ 0.23, GPT-5 ≈ 0.78, top ≈ 0.96."
 
   - id: inspect/3gpp-tsg
     name: 3GPP-TSG
@@ -585,9 +588,10 @@ benchmarks:
       metric: pattern/accuracy
       lower_is_better: false
     pass_criteria:
-      # GSMA leaderboard (Mar 2026): median ≈ 0.43, GPT-5 ≈ 0.58, top ≈ 0.81.
       threshold: 0.45
     tags: [telecom, standards, 3gpp, knowledge, open-telco, inspect-ai]
+    agent:
+      result_interpretation: "Accuracy on 3GPP working-group classification; HIGHER is better. GSMA leaderboard (Mar 2026): median ≈ 0.43, GPT-5 ≈ 0.58, top ≈ 0.81."
 
   # Knowledge & reasoning
   - id: inspect/mmlu
