@@ -149,7 +149,7 @@ func TestHandleProxyCall_LocalMode_ModelRouting(t *testing.T) {
 	if err := os.MkdirAll(jobDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	jobInfo := `{"model": {"url": "` + upstream.URL + `", "auth_secret_mount_path": "` + authDir + `"}}`
+	jobInfo := `{"model": {"url": "` + upstream.URL + `", "auth_secret_mount_path": "file://` + authDir + `"}}`
 	if err := os.WriteFile(filepath.Join(jobDir, "sidecar-job-info.json"), []byte(jobInfo), 0o600); err != nil {
 		t.Fatal(err)
 	}

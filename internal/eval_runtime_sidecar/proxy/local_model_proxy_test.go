@@ -249,6 +249,40 @@ func TestLocalModelProxy_MultipleJobsRoutedIndependently(t *testing.T) {
 	}
 }
 
+func TestLocalModelProxy_InvalidAuthSecretPathReturns400(t *testing.T) {
+	t.Parallel()
+
+	jobsDir := t.TempDir()
+	writeJobInfo(t, jobsDir, "job-bad-path", `{
+		"model": {
+			"url": "https://api.example.com/v1",
+			"auth_secret_mount_path": "/home/user/model-auth"
+		}
+	}`)
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	cache := NewJobInfoCache(jobsDir, DefaultJobCacheTTL, logger)
+	proxy := NewLocalModelReverseProxy(cache, logger)
+
+	req := httptest.NewRequest(http.MethodGet, "/model/job-bad-path/v1/models", nil)
+	rw := httptest.NewRecorder()
+	proxy.ServeHTTP(rw, req)
+
+	if rw.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rw.Code)
+	}
+	var body map[string]string
+	if err := json.NewDecoder(rw.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if body["error"] != "invalid auth_secret_mount_path: missing file:/// prefix" {
+		t.Errorf("error = %q, want %q", body["error"], "invalid auth_secret_mount_path: missing file:/// prefix")
+	}
+	if body["job_id"] != "job-bad-path" {
+		t.Errorf("job_id = %q, want %q", body["job_id"], "job-bad-path")
+	}
+}
+
 func TestLocalModelProxy_UsesPerJobCACert(t *testing.T) {
 	t.Parallel()
 
@@ -271,7 +305,7 @@ func TestLocalModelProxy_UsesPerJobCACert(t *testing.T) {
 	writeJobInfo(t, jobsDir, "job-tls", `{
 		"model": {
 			"url": "`+upstream.URL+`",
-			"auth_secret_mount_path": "`+authDir+`"
+			"auth_secret_mount_path": "file://`+authDir+`"
 		}
 	}`)
 

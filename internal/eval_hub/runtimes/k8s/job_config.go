@@ -129,10 +129,6 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	if err != nil {
 		return nil, err
 	}
-	if spec.Model != nil {
-		spec.Model.URL = strings.TrimSpace(spec.Model.URL)
-	}
-
 	// Get EvalHub instance name from environment (set by operator in deployment)
 	evalHubInstanceName := strings.TrimSpace(os.Getenv(evalHubInstanceNameEnv))
 
