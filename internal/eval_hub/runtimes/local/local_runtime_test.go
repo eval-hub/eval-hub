@@ -1203,6 +1203,82 @@ func TestRunEvaluationJobSidecarRejectsFileURIWithAuthority(t *testing.T) {
 	}
 }
 
+func TestRunEvaluationJobSidecarRejectsFileSingleSlash(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Model.Auth = &api.ModelAuth{SecretRef: "file:/tmp/key"}
+
+	providers := sampleLocalProviders(providerID, "true")
+	cleanupDir(t, "job-1")
+
+	cfg := &config.Config{
+		Service: &config.ServiceConfig{Port: 8080},
+		Sidecar: &config.SidecarConfig{LocalMode: true, BaseURL: "http://localhost:8082"},
+	}
+	rt, err := NewLocalRuntime(discardLogger(), cfg)
+	if err != nil {
+		t.Fatalf("NewLocalRuntime failed: %v", err)
+	}
+	rt = rt.WithContext(testContext(t))
+
+	storage := &fakeStorage{providerConfigs: providers}
+
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("failed to resolve benchmarks: %v", err)
+	}
+
+	err = rt.RunEvaluationJob(evaluation, benchmarks, storage)
+	if err == nil {
+		t.Fatal("expected error for file:/path (missing authority), got nil")
+	}
+	svcErr, ok := err.(abstractions.ServiceError)
+	if !ok {
+		t.Fatalf("expected ServiceError, got %T: %v", err, err)
+	}
+	if svcErr.MessageCode() != messages.InvalidSecretRefURI {
+		t.Fatalf("expected message code %q, got %q", messages.InvalidSecretRefURI.GetCode(), svcErr.MessageCode().GetCode())
+	}
+}
+
+func TestRunEvaluationJobSidecarRejectsFileOpaqueRelative(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Model.Auth = &api.ModelAuth{SecretRef: "file:tmp/key"}
+
+	providers := sampleLocalProviders(providerID, "true")
+	cleanupDir(t, "job-1")
+
+	cfg := &config.Config{
+		Service: &config.ServiceConfig{Port: 8080},
+		Sidecar: &config.SidecarConfig{LocalMode: true, BaseURL: "http://localhost:8082"},
+	}
+	rt, err := NewLocalRuntime(discardLogger(), cfg)
+	if err != nil {
+		t.Fatalf("NewLocalRuntime failed: %v", err)
+	}
+	rt = rt.WithContext(testContext(t))
+
+	storage := &fakeStorage{providerConfigs: providers}
+
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("failed to resolve benchmarks: %v", err)
+	}
+
+	err = rt.RunEvaluationJob(evaluation, benchmarks, storage)
+	if err == nil {
+		t.Fatal("expected error for file:relative/path (opaque URI), got nil")
+	}
+	svcErr, ok := err.(abstractions.ServiceError)
+	if !ok {
+		t.Fatalf("expected ServiceError, got %T: %v", err, err)
+	}
+	if svcErr.MessageCode() != messages.InvalidSecretRefURI {
+		t.Fatalf("expected message code %q, got %q", messages.InvalidSecretRefURI.GetCode(), svcErr.MessageCode().GetCode())
+	}
+}
+
 func TestRunEvaluationJobWithoutSidecarNoRewrite(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)

@@ -171,7 +171,8 @@ func (r *LocalRuntime) RunEvaluationJob(
 	if r.sidecarEnabled() {
 		if evaluation.Model != nil && evaluation.Model.Auth != nil && evaluation.Model.Auth.SecretRef != "" {
 			parsed, err := url.Parse(evaluation.Model.Auth.SecretRef)
-			if err != nil || parsed.Scheme != "file" || parsed.Host != "" {
+			if err != nil || parsed.Scheme != "file" || parsed.Host != "" ||
+				!strings.HasPrefix(evaluation.Model.Auth.SecretRef, "file:///") {
 				return serviceerrors.NewServiceError(messages.InvalidSecretRefURI, "SecretRef", evaluation.Model.Auth.SecretRef)
 			}
 		}
