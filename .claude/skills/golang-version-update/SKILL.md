@@ -14,7 +14,7 @@ allowed-tools:
   - Bash(gh *)
   - Bash(go *)
   - Bash(make *)
-  - Bash(*fetch-go-toolset-tags.sh)
+  - Bash(*fetch-go-toolset-tags.sh*)
 ---
 
 # Go Version Update Skill
