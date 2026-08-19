@@ -274,10 +274,10 @@ var (
 		"hardware_profile_invalid",
 	)
 
-	// InvalidSecretRefURI The model.auth.secret_ref '{{.SecretRef}}' must use the file:/// URI scheme in local mode.
+	// InvalidSecretRefURI The model.auth.secret_ref '{{.SecretRef}}' must use the file:///path form in local mode.
 	InvalidSecretRefURI = createMessage(
 		constants.HTTPCodeBadRequest,
-		"The model.auth.secret_ref '{{.SecretRef}}' must use the file:/// URI scheme in local mode.",
+		"The model.auth.secret_ref '{{.SecretRef}}' must use the file:///path form (e.g. file:///home/user/secret) in local mode.",
 		"invalid_secret_ref_uri",
 	)
 

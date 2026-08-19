@@ -171,8 +171,11 @@ func (r *LocalRuntime) RunEvaluationJob(
 	if r.sidecarEnabled() {
 		if evaluation.Model != nil && evaluation.Model.Auth != nil && evaluation.Model.Auth.SecretRef != "" {
 			parsed, err := url.Parse(evaluation.Model.Auth.SecretRef)
-			if err != nil || parsed.Scheme != "file" || parsed.Host != "" ||
-				!strings.HasPrefix(evaluation.Model.Auth.SecretRef, "file:///") {
+			if err != nil {
+				return fmt.Errorf("invalid secret_ref URI %q: %w", evaluation.Model.Auth.SecretRef, err)
+			}
+			// Only the file:/// form (empty authority, non-empty path) is accepted.
+			if parsed.Scheme != "file" || parsed.Host != "" || parsed.Opaque != "" || parsed.Path == "" || parsed.OmitHost {
 				return serviceerrors.NewServiceError(messages.InvalidSecretRefURI, "SecretRef", evaluation.Model.Auth.SecretRef)
 			}
 		}
