@@ -63,7 +63,7 @@ while [ -n "$url" ]; do
     url=""
   fi
 
-  (( page++ ))
+  (( ++page ))
 done \
   | sort -t. -k1,1n -k2,2n -k3,3n \
   | uniq
