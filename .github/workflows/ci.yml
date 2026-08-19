@@ -131,7 +131,7 @@ jobs:
         args: >-
           -fmt sarif -out gosec-results.sarif -stdout -verbose=text
           -exclude-dir=tests
-          --exclude-rules="internal/eval_hub/runtimes/local/local_runtime\.go:G204"
+          --exclude-rules=internal/eval_hub/runtimes/local/local_runtime\.go:G204
           ./...
 
     - name: Upload SARIF file to GitHub Security tab
