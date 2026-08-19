@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -22,7 +23,7 @@ func TestJobInfoCache_Get(t *testing.T) {
 		writeJobInfo(t, jobsDir, jobID, `{
 			"model": {
 				"url": "https://model.example.com/v1",
-				"auth_secret_mount_path": "/home/user/creds"
+				"auth_secret_mount_path": "file:///home/user/creds"
 			}
 		}`)
 
@@ -166,7 +167,7 @@ func TestJobInfoCache_Get(t *testing.T) {
 		writeJobInfo(t, jobsDir, "job-with-creds", `{
 			"model": {
 				"url": "https://api.example.com:443/v1",
-				"auth_secret_mount_path": "`+authDir+`"
+				"auth_secret_mount_path": "file://`+authDir+`"
 			}
 		}`)
 
@@ -177,6 +178,66 @@ func TestJobInfoCache_Get(t *testing.T) {
 		}
 		if target.Host != "api.example.com:443" {
 			t.Errorf("target host = %q, want %q", target.Host, "api.example.com:443")
+		}
+		if client == nil {
+			t.Error("expected non-nil HTTP client")
+		}
+	})
+
+	t.Run("returns error when auth_secret_mount_path missing file prefix", func(t *testing.T) {
+		t.Parallel()
+		jobsDir := t.TempDir()
+		writeJobInfo(t, jobsDir, "job-bad-auth", `{
+			"model": {
+				"url": "https://api.example.com/v1",
+				"auth_secret_mount_path": "/home/user/model-auth"
+			}
+		}`)
+
+		cache := NewJobInfoCache(jobsDir, DefaultJobCacheTTL, logger)
+		_, _, err := cache.Get("job-bad-auth")
+		if err == nil {
+			t.Fatal("expected error for auth_secret_mount_path without file:/// prefix")
+		}
+		if !errors.Is(err, ErrInvalidAuthSecretPath) {
+			t.Errorf("expected ErrInvalidAuthSecretPath, got: %v", err)
+		}
+	})
+
+	t.Run("returns error when auth_secret_mount_path uses non-local file URI authority", func(t *testing.T) {
+		t.Parallel()
+		jobsDir := t.TempDir()
+		writeJobInfo(t, jobsDir, "job-file-authority", `{
+			"model": {
+				"url": "https://api.example.com/v1",
+				"auth_secret_mount_path": "file://host/path"
+			}
+		}`)
+
+		cache := NewJobInfoCache(jobsDir, DefaultJobCacheTTL, logger)
+		_, _, err := cache.Get("job-file-authority")
+		if err == nil {
+			t.Fatal("expected error for file:// URI with authority component")
+		}
+		if !errors.Is(err, ErrInvalidAuthSecretPath) {
+			t.Errorf("expected ErrInvalidAuthSecretPath, got: %v", err)
+		}
+	})
+
+	t.Run("accepts empty auth_secret_mount_path", func(t *testing.T) {
+		t.Parallel()
+		jobsDir := t.TempDir()
+		writeJobInfo(t, jobsDir, "job-no-auth", `{
+			"model": {
+				"url": "https://api.example.com/v1",
+				"auth_secret_mount_path": ""
+			}
+		}`)
+
+		cache := NewJobInfoCache(jobsDir, DefaultJobCacheTTL, logger)
+		_, client, err := cache.Get("job-no-auth")
+		if err != nil {
+			t.Fatalf("Get() error: %v", err)
 		}
 		if client == nil {
 			t.Error("expected non-nil HTTP client")
@@ -225,6 +286,62 @@ func TestJobInfoCache_Get(t *testing.T) {
 		}
 		if client.Timeout != 120*time.Second {
 			t.Errorf("timeout = %v, want 2m", client.Timeout)
+		}
+	})
+
+	t.Run("rejects symlinked job directory escaping jobsDir", func(t *testing.T) {
+		t.Parallel()
+		jobsDir := t.TempDir()
+		outsideDir := t.TempDir()
+
+		writeJobInfo(t, outsideDir, "real-job", `{
+			"model": {"url": "https://model.example.com/v1"}
+		}`)
+
+		// Create a symlink inside jobsDir that points to outsideDir/real-job
+		if err := os.Symlink(
+			filepath.Join(outsideDir, "real-job"),
+			filepath.Join(jobsDir, "symlink-job"),
+		); err != nil {
+			t.Skipf("symlinks not supported: %v", err)
+		}
+
+		cache := NewJobInfoCache(jobsDir, DefaultJobCacheTTL, logger)
+		_, _, err := cache.Get("symlink-job")
+		if err == nil {
+			t.Fatal("expected error when job directory is a symlink escaping jobsDir")
+		}
+	})
+
+	t.Run("rejects symlinked job-info file escaping jobsDir", func(t *testing.T) {
+		t.Parallel()
+		jobsDir := t.TempDir()
+		outsideDir := t.TempDir()
+
+		// Write a valid job-info file outside jobsDir
+		outsideFile := filepath.Join(outsideDir, shared.SidecarJobInfoFileName)
+		if err := os.WriteFile(outsideFile, []byte(`{
+			"model": {"url": "https://model.example.com/v1"}
+		}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create the job directory inside jobsDir, then symlink the info file out
+		jobDir := filepath.Join(jobsDir, "symlink-file-job")
+		if err := os.MkdirAll(jobDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(
+			outsideFile,
+			filepath.Join(jobDir, shared.SidecarJobInfoFileName),
+		); err != nil {
+			t.Skipf("symlinks not supported: %v", err)
+		}
+
+		cache := NewJobInfoCache(jobsDir, DefaultJobCacheTTL, logger)
+		_, _, err := cache.Get("symlink-file-job")
+		if err == nil {
+			t.Fatal("expected error when job-info file is a symlink escaping jobsDir")
 		}
 	})
 

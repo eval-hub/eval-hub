@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -16,6 +18,10 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 )
+
+// ErrInvalidAuthSecretPath indicates that auth_secret_mount_path is present
+// but does not use the required file:/// URI scheme.
+var ErrInvalidAuthSecretPath = errors.New("invalid auth_secret_mount_path")
 
 const (
 	DefaultJobCacheTTL           = 2 * time.Hour
@@ -92,12 +98,13 @@ func (c *JobInfoCache) loadEntry(jobID string) (*jobCacheEntry, error) {
 		return nil, fmt.Errorf("invalid job-id %q", jobID)
 	}
 
-	infoPath := filepath.Join(c.jobsDir, jobID, shared.SidecarJobInfoFileName)
-	cleanBase := filepath.Clean(c.jobsDir) + string(os.PathSeparator)
-	if !strings.HasPrefix(filepath.Clean(infoPath), cleanBase) {
-		return nil, fmt.Errorf("invalid job-id %q: resolved path escapes base directory", jobID)
+	relPath := filepath.Join(jobID, shared.SidecarJobInfoFileName)
+	f, err := os.OpenInRoot(c.jobsDir, relPath)
+	if err != nil {
+		return nil, fmt.Errorf("job info not found for %q: %w", jobID, err)
 	}
-	data, err := os.ReadFile(infoPath) // #nosec G304,G703 -- path validated to stay within jobsDir
+	defer func() { _ = f.Close() }()
+	data, err := io.ReadAll(f)
 	if err != nil {
 		return nil, fmt.Errorf("job info not found for %q: %w", jobID, err)
 	}
@@ -122,7 +129,20 @@ func (c *JobInfoCache) loadEntry(jobID string) (*jobCacheEntry, error) {
 
 	caCertPath := ""
 	if mountPath := strings.TrimSpace(info.Model.AuthSecretMountPath); mountPath != "" {
-		candidate := filepath.Join(mountPath, "ca_cert")
+		fsPath, ok := strings.CutPrefix(mountPath, "file://")
+		if !ok {
+			c.logger.Error("auth_secret_mount_path missing file:/// prefix",
+				"job_id", jobID, "auth_secret_mount_path", mountPath)
+			return nil, fmt.Errorf("%w: missing file:/// prefix in %q for job %q",
+				ErrInvalidAuthSecretPath, mountPath, jobID)
+		}
+		if !strings.HasPrefix(fsPath, "/") {
+			c.logger.Error("auth_secret_mount_path has non-local authority component",
+				"job_id", jobID, "auth_secret_mount_path", mountPath)
+			return nil, fmt.Errorf("%w: file:// URI must use an empty authority (file:///…), got %q for job %q",
+				ErrInvalidAuthSecretPath, mountPath, jobID)
+		}
+		candidate := filepath.Join(fsPath, "ca_cert")
 		if _, statErr := os.Stat(candidate); statErr == nil {
 			caCertPath = candidate
 		}

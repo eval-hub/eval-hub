@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
@@ -93,10 +94,17 @@ func NewLocalModelReverseProxy(cache *JobInfoCache, logger *slog.Logger) http.Ha
 		target, jobClient, err := cache.Get(jobID)
 		if err != nil {
 			reqLog.Error("Job info lookup failed", "job_id", jobID, "error", err)
-			writeJSONError(w, reqID, http.StatusNotFound, map[string]string{
-				"error":  "unknown job-id",
-				"job_id": jobID,
-			})
+			if errors.Is(err, ErrInvalidAuthSecretPath) {
+				writeJSONError(w, reqID, http.StatusBadRequest, map[string]string{
+					"error":  "invalid auth_secret_mount_path: missing file:/// prefix",
+					"job_id": jobID,
+				})
+			} else {
+				writeJSONError(w, reqID, http.StatusNotFound, map[string]string{
+					"error":  "unknown job-id",
+					"job_id": jobID,
+				})
+			}
 			return
 		}
 
