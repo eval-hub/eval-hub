@@ -908,6 +908,81 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 		}
 	})
 
+	t.Run("UpdateEvaluationJob persists metrics_schema and backfills numeric defaults on read", func(t *testing.T) {
+		jobID := common.GUID()
+		now := time.Now()
+		job := &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{
+					ID:        jobID,
+					Tenant:    api.Tenant(tenant),
+					CreatedAt: now,
+					UpdatedAt: now,
+				},
+				MLFlowExperimentID: "experiment-1",
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{
+					State: api.OverallStateRunning,
+					Message: &api.MessageInfo{
+						Message:     "Job is running",
+						MessageCode: "JOB_RUNNING",
+					},
+				},
+			},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Model:      &api.ModelRef{URL: "http://test.com", Name: "test"},
+				Benchmarks: []api.EvaluationBenchmarkConfig{benchmarkConfig},
+			},
+		}
+		if err := store.CreateEvaluationJob(job); err != nil {
+			t.Fatalf("CreateEvaluationJob: %v", err)
+		}
+
+		explicitSchema := []api.MetricSchema{
+			{Name: "labels", Type: api.ResultTypeArrayUnordered},
+		}
+		status := &api.StatusEvent{
+			BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+				ID:             benchmarkConfig.ID,
+				ProviderID:     benchmarkConfig.ProviderID,
+				BenchmarkIndex: 0,
+				Status:         api.StateCompleted,
+				Metrics: map[string]any{
+					"acc":    0.85,
+					"labels": []string{"A", "B"},
+				},
+				MetricsSchema: explicitSchema,
+			},
+		}
+		status.BenchmarkStatusEvent.StampRuntimeMessageOrigins()
+		if err := store.UpdateEvaluationJob(jobID, status); err != nil {
+			t.Fatalf("UpdateEvaluationJob: %v", err)
+		}
+
+		got, err := store.GetEvaluationJob(jobID)
+		if err != nil {
+			t.Fatalf("GetEvaluationJob: %v", err)
+		}
+		if len(got.Results.Benchmarks) != 1 {
+			t.Fatalf("benchmark results len = %d, want 1", len(got.Results.Benchmarks))
+		}
+		schema := got.Results.Benchmarks[0].MetricsSchema
+		if len(schema) != 2 {
+			t.Fatalf("metrics_schema len = %d, want 2 after backfill", len(schema))
+		}
+		byName := make(map[string]api.ResultType, len(schema))
+		for _, entry := range schema {
+			byName[entry.Name] = entry.Type
+		}
+		if byName["labels"] != api.ResultTypeArrayUnordered {
+			t.Fatalf("labels type = %q, want array_unordered", byName["labels"])
+		}
+		if byName["acc"] != api.ResultTypeNumeric {
+			t.Fatalf("acc type = %q, want numeric backfill", byName["acc"])
+		}
+	})
+
 	t.Run("UpdateEvaluationJob persists endpoint HTTP error detail without truncation", func(t *testing.T) {
 		jobID := common.GUID()
 		now := time.Now()
