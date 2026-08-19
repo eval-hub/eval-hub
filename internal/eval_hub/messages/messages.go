@@ -274,6 +274,20 @@ var (
 		"hardware_profile_invalid",
 	)
 
+	// InvalidSecretRefURIParse The model.auth.secret_ref '{{.SecretRef}}' is not a valid URI: {{.Detail}}.
+	InvalidSecretRefURIParse = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The model.auth.secret_ref '{{.SecretRef}}' is not a valid URI: {{.Detail}}.",
+		"invalid_secret_ref_uri_parse",
+	)
+
+	// InvalidSecretRefURI The model.auth.secret_ref '{{.SecretRef}}' must use the file:///path form in local mode.
+	InvalidSecretRefURI = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The model.auth.secret_ref '{{.SecretRef}}' must use the file:///path form (e.g. file:///home/user/secret) in local mode.",
+		"invalid_secret_ref_uri",
+	)
+
 	// ResolvedSHAReadOnly The field 'resolved_sha' is read-only and must not be set on create.
 	ResolvedSHAReadOnly = createMessage(
 		constants.HTTPCodeBadRequest,

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -168,6 +169,17 @@ func (r *LocalRuntime) RunEvaluationJob(
 
 	callbackURL := r.callbackURL
 	if r.sidecarEnabled() {
+		if evaluation.Model != nil && evaluation.Model.Auth != nil && evaluation.Model.Auth.SecretRef != "" {
+			parsed, err := url.Parse(evaluation.Model.Auth.SecretRef)
+			if err != nil {
+				return serviceerrors.NewServiceError(messages.InvalidSecretRefURIParse,
+					"SecretRef", evaluation.Model.Auth.SecretRef, "Detail", err.Error())
+			}
+			// Only the file:/// form (empty authority, non-empty path) is accepted.
+			if parsed.Scheme != "file" || parsed.Host != "" || parsed.Opaque != "" || parsed.Path == "" || parsed.OmitHost {
+				return serviceerrors.NewServiceError(messages.InvalidSecretRefURI, "SecretRef", evaluation.Model.Auth.SecretRef)
+			}
+		}
 		if err := r.writeSidecarJobInfo(evaluation); err != nil {
 			return fmt.Errorf("write sidecar job info: %w", err)
 		}
@@ -224,9 +236,6 @@ func (r *LocalRuntime) runBenchmark(
 		return fmt.Errorf("build job spec: %w", err)
 	}
 
-	if spec.Model != nil {
-		spec.Model.URL = strings.TrimSpace(spec.Model.URL)
-	}
 	if r.sidecarEnabled() && spec.Model != nil && spec.Model.URL != "" {
 		modelCopy := *spec.Model
 		rewrittenURL, err := shared.RewriteModelURLForLocalSidecar(r.sidecarBaseURL, jobID, modelCopy.URL)
