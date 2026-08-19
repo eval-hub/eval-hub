@@ -50,6 +50,15 @@ jobs:
         make fmt
         git diff --exit-code -- '*.go' || (echo "Code is not formatted. Run 'make fmt' locally." && exit 1)
 
+    - name: Reject inline gosec suppressions
+      run: |
+        if grep -rn '#nosec' --include='*.go' .; then
+          echo "Found #nosec annotations in Go files. Remove them and fix the underlying code."
+          echo "If a finding cannot be structurally fixed, add a path-scoped --exclude-rules entry"
+          echo "in the Gosec Security Scanner step of this workflow instead."
+          exit 1
+        fi
+
     - name: Run linter
       run: make lint
 
@@ -106,13 +115,24 @@ jobs:
       # https://github.com/securego/gosec#integrating-with-code-scanning
       # The problem is that this can hide some errors (such as golang version mismatch)
       # that are not caught by the following steps.
+      #
+      # --exclude-rules: G204 is suppressed only for local_runtime.go because
+      # the local runtime intentionally executes provider-configured shell
+      # commands (exec.Command("sh", "-c", …)); there is no structural
+      # alternative.  Inline #nosec annotations are banned by the "Reject
+      # inline gosec suppressions" CI step; all exclusions must be managed
+      # here via --exclude-rules with a path-scoped regex.
       env:
         # make sure that we use the golang version required by the project
         GOSECGOVERSION: go1.26.5
         GOTOOLCHAIN: go1.26.5
       uses: securego/gosec@9e75c0576c9878035d4221392108d458abe10fc3 # v2.28.0
       with:
-        args: '-fmt sarif -out gosec-results.sarif -stdout -verbose=text -exclude-dir=tests ./...'
+        args: >-
+          -fmt sarif -out gosec-results.sarif -stdout -verbose=text
+          -exclude-dir=tests
+          --exclude-rules="internal/eval_hub/runtimes/local/local_runtime\.go:G204"
+          ./...
 
     - name: Upload SARIF file to GitHub Security tab
       uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
