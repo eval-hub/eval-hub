@@ -46,7 +46,7 @@ while [ -n "$url" ]; do
     exit 1
   fi
 
-  echo "$resp" | jq -r '.tags[]'
+  echo "$resp" | jq -r '.tags[] | select(test("^1\\.[0-9]+(\\.[0-9]+)?$"))'
 
   next=$(grep -i '^link:' "$headers_file" | tr -d '\r' \
     | sed -n 's/.*<\([^>]*\)>; *rel="next".*/\1/p')
@@ -65,6 +65,5 @@ while [ -n "$url" ]; do
 
   (( page++ ))
 done \
-  | grep -E '^1\.[0-9]+(\.[0-9]+)?$' \
   | sort -t. -k1,1n -k2,2n -k3,3n \
   | uniq
