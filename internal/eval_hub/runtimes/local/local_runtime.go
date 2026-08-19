@@ -172,7 +172,8 @@ func (r *LocalRuntime) RunEvaluationJob(
 		if evaluation.Model != nil && evaluation.Model.Auth != nil && evaluation.Model.Auth.SecretRef != "" {
 			parsed, err := url.Parse(evaluation.Model.Auth.SecretRef)
 			if err != nil {
-				return fmt.Errorf("invalid secret_ref URI %q: %w", evaluation.Model.Auth.SecretRef, err)
+				return serviceerrors.NewServiceError(messages.InvalidSecretRefURIParse,
+					"SecretRef", evaluation.Model.Auth.SecretRef, "Detail", err.Error())
 			}
 			// Only the file:/// form (empty authority, non-empty path) is accepted.
 			if parsed.Scheme != "file" || parsed.Host != "" || parsed.Opaque != "" || parsed.Path == "" || parsed.OmitHost {
