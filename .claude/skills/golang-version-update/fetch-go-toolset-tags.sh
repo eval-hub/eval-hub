@@ -48,7 +48,7 @@ while [ -n "$url" ]; do
 
   echo "$resp" | jq -r '.tags[] | select(test("^1\\.[0-9]+(\\.[0-9]+)?$"))'
 
-  next=$(grep -i '^link:' "$headers_file" | tr -d '\r' \
+  next=$({ grep -i '^link:' "$headers_file" || true; } | tr -d '\r' \
     | sed -n 's/.*<\([^>]*\)>; *rel="next".*/\1/p')
   if [ -n "$next" ]; then
     case "$next" in
