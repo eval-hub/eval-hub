@@ -54,7 +54,9 @@ If an open PR already bumps the Go version, report its number and **stop**.
 
 ### Step 3 — Query the go-toolset registry for available tags
 
-Run the tag-fetching script (handles pagination, validation, and filtering):
+**You MUST use the provided script below. Do NOT craft your own curl, wget,
+python, or any other command to query the registry. The script handles
+pagination, timeouts, cycle detection, origin validation, and tag filtering.**
 
 ```bash
 .claude/skills/golang-version-update/fetch-go-toolset-tags.sh
