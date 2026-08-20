@@ -26,7 +26,7 @@ func TestBuildJobUsesJobConfigSidecarPort(t *testing.T) {
 		sidecarConfig:  sc,
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestBuildJobRejectsOutOfRangeSidecarPort(t *testing.T) {
 				Port: port,
 			},
 		}
-		_, err := buildJob(cfg)
+		_, err := buildJob(cfg, nil)
 		if err == nil {
 			t.Fatalf("expected error for sidecar port %d", port)
 		}
@@ -171,7 +171,7 @@ func TestBuildJobHasEvaluationPhasePendingLabel(t *testing.T) {
 		benchmarkID:    "bench-1",
 		adapterImage:   "adapter:latest",
 	}
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestBuildJobRequiresAdapterImage(t *testing.T) {
 		benchmarkID:    "bench-1",
 	}
 
-	_, err := buildJob(cfg)
+	_, err := buildJob(cfg, nil)
 	if err == nil {
 		t.Fatalf("expected error for missing adapter image")
 	}
@@ -208,7 +208,7 @@ func TestBuildJobAnnotations(t *testing.T) {
 		defaultEnv:     []api.EnvVar{},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}

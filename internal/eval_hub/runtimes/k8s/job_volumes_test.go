@@ -20,7 +20,7 @@ func TestBuildJobSidecarMountsMLFlowToken(t *testing.T) {
 		defaultEnv:        []api.EnvVar{},
 		mlflowTrackingURI: "http://mlflow:5000",
 	}
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestBuildJobMountsMLFlowCABundle(t *testing.T) {
 		mlflowCABundleConfigMap: "my-evalhub-mlflow-ca-bundle",
 		serviceCAConfigMap:      "my-evalhub-service-ca",
 	}
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestBuildJobWithOCICredentials(t *testing.T) {
 		ociCredentialsSecret: "my-pull-secret",
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -208,7 +208,7 @@ func TestBuildJobTerminationFileVolume(t *testing.T) {
 		adapterImage:   "adapter:latest",
 		defaultEnv:     []api.EnvVar{},
 	}
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestBuildJobSidecarDoesNotUseEvalhubConfigVolume(t *testing.T) {
 		adapterImage:   "adapter:latest",
 		defaultEnv:     []api.EnvVar{},
 	}
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -280,7 +280,7 @@ func TestBuildJobWithoutOCICredentials(t *testing.T) {
 		defaultEnv:     []api.EnvVar{},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestBuildJobWithS3TestData(t *testing.T) {
 		},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -395,7 +395,7 @@ func TestBuildJobWithS3TestDataSkipsEmptyNormalizedKey(t *testing.T) {
 		},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -428,7 +428,7 @@ func TestBuildJobWithModelAuthSecret(t *testing.T) {
 		modelAuthSecretRef: "model-auth-secret",
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -482,7 +482,7 @@ func TestBuildJobWithoutModelAuthSecret(t *testing.T) {
 		defaultEnv:     []api.EnvVar{},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -516,7 +516,7 @@ func TestBuildJobSATokenSidecarOnly(t *testing.T) {
 		adapterImage:   "adapter:latest",
 		defaultEnv:     []api.EnvVar{},
 	}
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -616,7 +616,7 @@ func TestBuildJobWithGitTestDataPublicRepo(t *testing.T) {
 		},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -705,7 +705,7 @@ func TestBuildJobWithGitTestDataPrivateRepo(t *testing.T) {
 		},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -776,7 +776,7 @@ func TestBuildJobSidecarMountsTestDataVolumeForGitSource(t *testing.T) {
 		},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -811,7 +811,7 @@ func TestBuildJobSidecarDoesNotMountTestDataVolumeForNonGitSource(t *testing.T) 
 		sidecarConfig:  &config.SidecarConfig{BaseURL: config.DefaultSidecarBaseURL},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -845,7 +845,7 @@ func TestBuildJobWithGitTestDataMissingInitImage(t *testing.T) {
 		},
 	}
 
-	_, err := buildJob(cfg)
+	_, err := buildJob(cfg, nil)
 	if err == nil {
 		t.Fatal("expected error when git test data is set but init image is missing")
 	}

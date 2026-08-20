@@ -64,7 +64,7 @@ func sidecarForJobPod(cfg *config.Config, jc *jobConfig) (*config.SidecarConfig,
 	return export, nil
 }
 
-// mlflowCACertPathForJob returns the PEM CA path the sidecar should use for MLflow TLS.
+// mlflowCACertPathForJob returns the PEM CA path job containers should use for MLflow TLS.
 // Preference order:
 //  1. Operator-merged MLflow CA bundle mounted on the job pod
 //  2. Top-level mlflow.ca_cert_path / MLFLOW_CA_CERT_PATH from the API process

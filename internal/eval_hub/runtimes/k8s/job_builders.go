@@ -143,7 +143,7 @@ func buildConfigMap(cfg *jobConfig) (*corev1.ConfigMap, error) {
 	}, nil
 }
 
-func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
+func buildJob(cfg *jobConfig, serviceConfig *config.Config) (*batchv1.Job, error) {
 	if cfg.adapterImage == "" {
 		return nil, fmt.Errorf("adapter image is required")
 	}
@@ -155,7 +155,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	ttl := defaultJobTTLSeconds
 	backoff := defaultJobBackoffLimit
 
-	adapterEnvVars := buildEnvVars(cfg)
+	adapterEnvVars := buildEnvVars(cfg, serviceConfig)
 	resources, err := buildResources(cfg)
 	if err != nil {
 		return nil, err

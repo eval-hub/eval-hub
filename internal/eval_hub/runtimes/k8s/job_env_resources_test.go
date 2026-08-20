@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -23,7 +24,7 @@ func TestBuildJobAdapterImagePullPolicy(t *testing.T) {
 	t.Run("uses IfNotPresent from job config", func(t *testing.T) {
 		cfg := *base
 		cfg.adapterPullPolicy = corev1.PullIfNotPresent
-		job, err := buildJob(&cfg)
+		job, err := buildJob(&cfg, nil)
 		if err != nil {
 			t.Fatalf("buildJob: %v", err)
 		}
@@ -35,7 +36,7 @@ func TestBuildJobAdapterImagePullPolicy(t *testing.T) {
 	t.Run("honors Always override", func(t *testing.T) {
 		cfg := *base
 		cfg.adapterPullPolicy = corev1.PullAlways
-		job, err := buildJob(&cfg)
+		job, err := buildJob(&cfg, nil)
 		if err != nil {
 			t.Fatalf("buildJob: %v", err)
 		}
@@ -56,7 +57,7 @@ func TestBuildJobAdapterEvalHubModeEnv(t *testing.T) {
 		adapterImage:   "adapter:latest",
 		defaultEnv:     []api.EnvVar{},
 	}
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -90,7 +91,7 @@ func TestBuildJobSecurityContext(t *testing.T) {
 		defaultEnv:     []api.EnvVar{},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -226,7 +227,7 @@ func TestBuildJobGPUResourcesPropagated(t *testing.T) {
 		gpuResource:    "nvidia.com/gpu",
 		gpuCount:       1,
 	}
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -257,7 +258,7 @@ func TestBuildJobNodeSelector(t *testing.T) {
 		gpuCount:       1,
 		nodeSelector:   sel,
 	}
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -277,7 +278,7 @@ func TestBuildJobNoNodeSelectorWhenAbsent(t *testing.T) {
 		adapterImage:   "adapter:latest",
 		defaultEnv:     []api.EnvVar{},
 	}
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -291,3 +292,71 @@ func TestBuildJobNoNodeSelectorWhenAbsent(t *testing.T) {
 //   - the evalhub-sa-token projected volume exists on the pod and is mounted in the sidecar
 //   - the adapter container has no evalhub-sa-token mount
 //   - the adapter has the pod-namespace DownwardAPI volume mounted at k8sSAMountPath
+
+func TestBuildEnvVarsMLFlowCertPathMatchesSidecarResolution(t *testing.T) {
+	serviceConfig := &config.Config{
+		Sidecar: &config.SidecarConfig{BaseURL: config.DefaultSidecarBaseURL},
+		MLFlow:  &config.MLFlowConfig{CACertPath: "/etc/evalhub/mlflow-ca/ca-bundle.crt"},
+	}
+	base := &jobConfig{
+		jobID:             "job-mlflow-cert",
+		resourceGUID:      "guid-mlflow-cert",
+		benchmarkIndex:    0,
+		namespace:         "team-a",
+		providerID:        "provider-1",
+		benchmarkID:       "bench-1",
+		adapterImage:      "adapter:latest",
+		defaultEnv:        []api.EnvVar{},
+		sidecarBaseURL:    config.DefaultSidecarBaseURL,
+		mlflowTrackingURI: "https://mlflow.example:443",
+		mlflowWorkspace:   "team-a",
+	}
+
+	t.Run("prefers operator-merged MLflow CA bundle", func(t *testing.T) {
+		cfg := *base
+		cfg.mlflowCABundleConfigMap = "evalhub-mlflow-ca-bundle"
+		job, err := buildJob(&cfg, serviceConfig)
+		if err != nil {
+			t.Fatalf("buildJob: %v", err)
+		}
+		got := envValue(job.Spec.Template.Spec.Containers[0].Env, envMLFlowCertPathName)
+		want := mlflowCABundleMountPath + "/" + mlflowCABundleFile
+		if got != want {
+			t.Fatalf("MLFLOW_TRACKING_SERVER_CERT_PATH = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("falls back to MLFLOW_CA_CERT_PATH when bundle unset", func(t *testing.T) {
+		job, err := buildJob(base, serviceConfig)
+		if err != nil {
+			t.Fatalf("buildJob: %v", err)
+		}
+		got := envValue(job.Spec.Template.Spec.Containers[0].Env, envMLFlowCertPathName)
+		if got != serviceConfig.MLFlow.CACertPath {
+			t.Fatalf("MLFLOW_TRACKING_SERVER_CERT_PATH = %q, want %q", got, serviceConfig.MLFlow.CACertPath)
+		}
+	})
+
+	t.Run("falls back to service CA when no bundle or custom path", func(t *testing.T) {
+		cfg := *base
+		cfg.serviceCAConfigMap = "evalhub-service-ca"
+		job, err := buildJob(&cfg, &config.Config{Sidecar: &config.SidecarConfig{}})
+		if err != nil {
+			t.Fatalf("buildJob: %v", err)
+		}
+		got := envValue(job.Spec.Template.Spec.Containers[0].Env, envMLFlowCertPathName)
+		want := serviceCAMountPath + "/" + serviceCABundleFile
+		if got != want {
+			t.Fatalf("MLFLOW_TRACKING_SERVER_CERT_PATH = %q, want %q", got, want)
+		}
+	})
+}
+
+func envValue(env []corev1.EnvVar, name string) string {
+	for _, e := range env {
+		if e.Name == name {
+			return e.Value
+		}
+	}
+	return ""
+}
