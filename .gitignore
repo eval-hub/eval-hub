@@ -255,6 +255,7 @@ mlflow.log
 !.claude/skills/release-notes/
 .claude/skills/release-notes/*
 !.claude/skills/release-notes/SKILL.md
+!.claude/skills/golang-version-update/fetch-go-toolset-tags.sh
 !.claude/skills/release-notes/template.md
 
 .agentready/

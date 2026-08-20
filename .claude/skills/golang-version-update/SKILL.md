@@ -14,10 +14,7 @@ allowed-tools:
   - Bash(gh *)
   - Bash(go *)
   - Bash(make *)
-  - Bash(curl *)
-  - Bash(jq *)
-  - Bash(sort *)
-  - Bash(sed *)
+  - Bash(*/golang-version-update/fetch-go-toolset-tags.sh*)
 ---
 
 # Go Version Update Skill
@@ -57,36 +54,12 @@ If an open PR already bumps the Go version, report its number and **stop**.
 
 ### Step 3 — Query the go-toolset registry for available tags
 
-List available go-toolset tags from the registry tags API (paginated via `Link: rel="next"`):
+**You MUST use the provided script below. Do NOT craft your own curl, wget,
+python, or any other command to query the registry. The script handles
+pagination, timeouts, cycle detection, origin validation, and tag filtering.**
 
 ```bash
-url='https://registry.access.redhat.com/v2/ubi9/go-toolset/tags/list?n=100'
-while [ -n "$url" ]; do
-  resp=$(curl -fsS -D /tmp/go-toolset-headers.txt "$url") || {
-    echo "error: failed to fetch go-toolset tags from $url" >&2
-    exit 1
-  }
-  if ! echo "$resp" | jq -e 'has("tags") and (.tags | type == "array")' >/dev/null; then
-    echo "error: invalid go-toolset tags response (missing tags array) from $url" >&2
-    exit 1
-  fi
-  echo "$resp" | jq -r '.tags[]'
-  next=$(grep -i '^link:' /tmp/go-toolset-headers.txt | tr -d '\r' \
-    | sed -n 's/.*<\([^>]*\)>; *rel="next".*/\1/p')
-  if [ -n "$next" ]; then
-    case "$next" in
-      http*) url="$next" ;;
-      /*) url="https://registry.access.redhat.com${next}" ;;
-      *) url="" ;;
-    esac
-  else
-    url=""
-  fi
-done \
-  | grep -E '^1\.[0-9]+(\.[0-9]+)?$' \
-  | sort -t. -k1,1n -k2,2n -k3,3n \
-  | uniq \
-  | tail -20
+.claude/skills/golang-version-update/fetch-go-toolset-tags.sh
 ```
 
 Identify:
