@@ -127,17 +127,15 @@ func (r *fakeRuntime) DeleteEvaluationJobResources(_ *api.EvaluationJobResource)
 	r.called = true
 	return r.err
 }
-func (r *fakeRuntime) GetEvaluationLogs(
+func (r *fakeRuntime) StreamEvaluationLogs(
 	_ *api.EvaluationJobResource,
 	_ []api.EvaluationBenchmarkConfig,
 	_ *int,
 	_ api.EvaluationLogOptions,
-) (string, error) {
+	_ io.Writer,
+) error {
 	r.called = true
-	if r.err != nil {
-		return "", r.err
-	}
-	return "", nil
+	return r.err
 }
 func (r *fakeRuntime) ValidateHardwareProfiles(benchmarks []api.EvaluationBenchmarkConfig) error {
 	r.validateHWCalled = true
