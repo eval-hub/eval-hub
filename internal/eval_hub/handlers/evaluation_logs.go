@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/httpwrappers"
@@ -83,12 +84,17 @@ func (h *Handlers) handleGetEvaluationLogs(
 			w.SetStatusCode(200)
 
 			var limit int64 = -1
+			streamTimeout := config.DefaultLogStreamTimeout
 			if h.serviceConfig != nil && h.serviceConfig.Service != nil {
 				limit = h.serviceConfig.Service.EffectiveMaxLogResponseBytes()
+				streamTimeout = h.serviceConfig.Service.EffectiveLogStreamTimeout()
 			}
 			lw := &LimitedWriter{W: responseWriterAdapter{w}, Limit: limit}
 
-			err = h.runtime.WithLogger(ctx.Logger).WithContext(runtimeCtx).StreamEvaluationLogs(job, benchmarks, benchmarkIndex, logOpts, lw)
+			streamCtx, cancel := context.WithTimeout(runtimeCtx, streamTimeout)
+			defer cancel()
+
+			err = h.runtime.WithLogger(ctx.Logger).WithContext(streamCtx).StreamEvaluationLogs(job, benchmarks, benchmarkIndex, logOpts, lw)
 			if err != nil {
 				if errors.Is(err, ErrLogResponseTruncated) {
 					w.SetHeader("X-Log-Truncated", "true")

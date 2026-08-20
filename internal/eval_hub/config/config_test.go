@@ -300,6 +300,18 @@ func TestServiceConfig_HTTP(t *testing.T) {
 			t.Errorf("explicit: got %d", got)
 		}
 	})
+	t.Run("EffectiveLogStreamTimeout", func(t *testing.T) {
+		var c *config.ServiceConfig
+		if got := c.EffectiveLogStreamTimeout(); got != config.DefaultLogStreamTimeout {
+			t.Errorf("nil: got %v", got)
+		}
+		if got := (&config.ServiceConfig{}).EffectiveLogStreamTimeout(); got != config.DefaultLogStreamTimeout {
+			t.Errorf("zero: got %v", got)
+		}
+		if got := (&config.ServiceConfig{LogStreamTimeout: 10 * time.Minute}).EffectiveLogStreamTimeout(); got != 10*time.Minute {
+			t.Errorf("explicit: got %v", got)
+		}
+	})
 	t.Run("ValidateHTTPConfig", func(t *testing.T) {
 		if err := (&config.ServiceConfig{}).ValidateHTTPConfig(); err != nil {
 			t.Errorf("empty: %v", err)
@@ -327,6 +339,9 @@ func TestServiceConfig_HTTP(t *testing.T) {
 		}
 		if err := (&config.ServiceConfig{MaxLogResponseBytes: -1}).ValidateHTTPConfig(); err != nil {
 			t.Errorf("max log response -1 should be valid: %v", err)
+		}
+		if err := (&config.ServiceConfig{LogStreamTimeout: -1}).ValidateHTTPConfig(); err == nil {
+			t.Error("negative log_stream_timeout: want error")
 		}
 	})
 }
