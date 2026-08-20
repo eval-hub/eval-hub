@@ -43,12 +43,17 @@ const (
 	mlflowTokenVolumeName             = "mlflow-token"
 	mlflowAuthMountPath               = "/var/run/secrets/mlflow"
 	mlflowTokenFile                   = "token"
-	ociCredentialsVolumeName          = "oci-credentials"
-	ociAuthMountPath                  = "/etc/evalhub/.docker/config.json"
-	ociDockerConfigSubPath            = ".dockerconfigjson"
-	envOCIAuthConfigPathName          = "OCI_AUTH_CONFIG_PATH"
-	modelAuthVolumeName               = "model-auth" // credentials secret; mounted in sidecar only
-	modelAuthMountPath                = "/var/run/secrets/model"
+	// MLflow CA bundle: operator-merged trust store mounted into job pods from
+	// {instance}-mlflow-ca-bundle.
+	mlflowCABundleVolumeName = "mlflow-ca-bundle"
+	mlflowCABundleMountPath  = "/etc/evalhub/mlflow-ca"
+	mlflowCABundleFile       = "ca-bundle.crt"
+	ociCredentialsVolumeName = "oci-credentials"
+	ociAuthMountPath         = "/etc/evalhub/.docker/config.json"
+	ociDockerConfigSubPath   = ".dockerconfigjson"
+	envOCIAuthConfigPathName = "OCI_AUTH_CONFIG_PATH"
+	modelAuthVolumeName      = "model-auth" // credentials secret; mounted in sidecar only
+	modelAuthMountPath       = "/var/run/secrets/model"
 	// Standard Kubernetes SA mount path; used by both the sidecar SA token volume and the
 	// adapter DownwardAPI namespace volume so the SDK finds files at the expected locations.
 	k8sSAMountPath = "/var/run/secrets/kubernetes.io/serviceaccount"
@@ -138,7 +143,7 @@ func buildConfigMap(cfg *jobConfig) (*corev1.ConfigMap, error) {
 	}, nil
 }
 
-func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
+func buildJob(cfg *jobConfig, serviceConfig *config.Config) (*batchv1.Job, error) {
 	if cfg.adapterImage == "" {
 		return nil, fmt.Errorf("adapter image is required")
 	}
@@ -150,7 +155,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	ttl := defaultJobTTLSeconds
 	backoff := defaultJobBackoffLimit
 
-	adapterEnvVars := buildEnvVars(cfg)
+	adapterEnvVars := buildEnvVars(cfg, serviceConfig)
 	resources, err := buildResources(cfg)
 	if err != nil {
 		return nil, err

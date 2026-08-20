@@ -228,12 +228,14 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		return fmt.Errorf("service config is required")
 	}
 	jobConfig.testDataInitImage = r.serviceConfig.Service.EvalInitImage
+	jobConfig.mlflowCABundleConfigMap = r.resolveMLFlowCABundleConfigMap(ctx, jobConfig, logger)
 	logger.Info(
 		"kubernetes job config",
 		"job_id", evaluation.Resource.ID,
 		"benchmark_id", benchmarkID,
 		"service_account", jobConfig.serviceAccountName,
 		"service_ca_configmap", jobConfig.serviceCAConfigMap,
+		"mlflow_ca_bundle_configmap", jobConfig.mlflowCABundleConfigMap,
 		"eval_hub_url", jobConfig.evalHubURL,
 	)
 	// When a model URL is present, redirect the adapter through the sidecar model proxy so
@@ -272,7 +274,7 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		logger.Error("kubernetes configmap build error", "benchmark_id", benchmarkID, "error", err)
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
 	}
-	job, err := buildJob(jobConfig)
+	job, err := buildJob(jobConfig, r.serviceConfig)
 	if err != nil {
 		logger.Error("kubernetes job build error", "benchmark_id", benchmarkID, "error", err)
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
@@ -478,4 +480,42 @@ func rewriteModelURLForSidecar(sidecarBaseURL, modelURL string) (string, error) 
 		Fragment: model.Fragment,
 	}
 	return out.String(), nil
+}
+
+// resolveMLFlowCABundleConfigMap enables mounting {instance}-mlflow-ca-bundle only when
+// that ConfigMap already exists in the job namespace with a non-empty ca-bundle.crt entry.
+// The job-pod mount path is independent of the EvalHub API's MLFLOW_CA_CERT_PATH.
+func (r *K8sRuntime) resolveMLFlowCABundleConfigMap(ctx context.Context, cfg *jobConfig, logger *slog.Logger) string {
+	if cfg == nil || cfg.evalHubInstanceName == "" || cfg.mlflowTrackingURI == "" {
+		return ""
+	}
+	cmName := mlflowCABundleConfigMapName(cfg.evalHubInstanceName)
+	cm, err := r.helper.GetConfigMap(ctx, cfg.namespace, cmName)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Info(
+				"MLflow CA bundle ConfigMap not found; falling back to service CA / configured CA path",
+				"configmap", cmName,
+				"namespace", cfg.namespace,
+			)
+			return ""
+		}
+		logger.Warn(
+			"failed to check MLflow CA bundle ConfigMap; falling back to service CA / configured CA path",
+			"configmap", cmName,
+			"namespace", cfg.namespace,
+			"error", err,
+		)
+		return ""
+	}
+	if strings.TrimSpace(cm.Data[mlflowCABundleFile]) == "" {
+		logger.Info(
+			"MLflow CA bundle ConfigMap missing or empty ca-bundle.crt; falling back to service CA / configured CA path",
+			"configmap", cmName,
+			"namespace", cfg.namespace,
+			"key", mlflowCABundleFile,
+		)
+		return ""
+	}
+	return cmName
 }

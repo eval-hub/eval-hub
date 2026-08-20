@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
@@ -47,7 +48,7 @@ func boolPtr(value bool) *bool {
 }
 
 // buildEnvVars builds environment variables for the adapter container.
-func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
+func buildEnvVars(jc *jobConfig, serviceConfig *config.Config) []corev1.EnvVar {
 	var env []corev1.EnvVar
 	seen := map[string]bool{}
 
@@ -58,9 +59,9 @@ func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 	seen[envEvalHubModeName] = true
 
 	// When sidecar is at play, mlflow calls are proxied through the sidecar.
-	mlflowTrackingURI := cfg.sidecarBaseURL
+	mlflowTrackingURI := jc.sidecarBaseURL
 	// Add MLFlow environment variables if tracking is configured
-	if cfg.mlflowTrackingURI != "" {
+	if jc.mlflowTrackingURI != "" {
 		env = append(env, corev1.EnvVar{
 			Name:  envMLFlowTrackingURIName,
 			Value: mlflowTrackingURI,
@@ -68,16 +69,16 @@ func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 		seen[envMLFlowTrackingURIName] = true
 
 	}
-	if cfg.mlflowWorkspace != "" {
+	if jc.mlflowWorkspace != "" {
 		env = append(env, corev1.EnvVar{
 			Name:  envMLFlowWorkspaceName,
-			Value: cfg.mlflowWorkspace,
+			Value: jc.mlflowWorkspace,
 		})
 		seen[envMLFlowWorkspaceName] = true
 	}
 
 	// Add OCI auth config path when credentials secret is configured
-	if cfg.ociCredentialsSecret != "" {
+	if jc.ociCredentialsSecret != "" {
 		env = append(env, corev1.EnvVar{
 			Name:  envOCIAuthConfigPathName,
 			Value: ociAuthMountPath,
@@ -85,22 +86,24 @@ func buildEnvVars(cfg *jobConfig) []corev1.EnvVar {
 		seen[envOCIAuthConfigPathName] = true
 	}
 
-	// Set MLFLOW_TRACKING_SERVER_CERT_PATH so mlflow's tracking client
-	// trusts the OpenShift service-serving CA certificate for internal calls.
+	// Set MLFLOW_TRACKING_SERVER_CERT_PATH so mlflow's tracking client trusts the
+	// same CA bundle the sidecar uses (operator-merged MLflow CA, else service CA).
 	// Note: we intentionally do NOT set REQUESTS_CA_BUNDLE, because it
 	// overrides the system CA bundle globally for all Python requests calls,
 	// breaking external HTTPS connections (e.g. HuggingFace tokenizer downloads).
 	// The adapter SDK's httpx client auto-detects the service CA independently.
-	if cfg.serviceCAConfigMap != "" && cfg.mlflowTrackingURI != "" {
-		env = append(env, corev1.EnvVar{
-			Name:  envMLFlowCertPathName,
-			Value: serviceCAMountPath + "/" + serviceCABundleFile,
-		})
-		seen[envMLFlowCertPathName] = true
+	if jc.mlflowTrackingURI != "" {
+		if certPath := mlflowCACertPathForJob(jc, serviceConfig); certPath != "" {
+			env = append(env, corev1.EnvVar{
+				Name:  envMLFlowCertPathName,
+				Value: certPath,
+			})
+			seen[envMLFlowCertPathName] = true
+		}
 	}
 
 	// Add provider-specific environment variables
-	for _, item := range cfg.defaultEnv {
+	for _, item := range jc.defaultEnv {
 		if item.Name == "" || seen[item.Name] {
 			continue
 		}

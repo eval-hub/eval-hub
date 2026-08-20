@@ -33,6 +33,76 @@ func TestSidecarForJobPodSetsMLFlowTokenPath(t *testing.T) {
 	}
 }
 
+func TestSidecarForJobPodSetsMLFlowCACertPath(t *testing.T) {
+	cfg := &config.Config{
+		Sidecar: &config.SidecarConfig{BaseURL: config.DefaultSidecarBaseURL},
+		MLFlow:  &config.MLFlowConfig{CACertPath: "/custom/mlflow-ca.pem"},
+	}
+
+	t.Run("prefers operator-merged MLflow CA bundle", func(t *testing.T) {
+		jc := &jobConfig{
+			mlflowTrackingURI:       "https://mlflow.example:443",
+			mlflowCABundleConfigMap: "evalhub-mlflow-ca-bundle",
+			serviceCAConfigMap:      "evalhub-service-ca",
+		}
+		export, err := sidecarForJobPod(cfg, jc)
+		if err != nil {
+			t.Fatalf("sidecarForJobPod: %v", err)
+		}
+		want := mlflowCABundleMountPath + "/" + mlflowCABundleFile
+		if export.MLFlow.CACertPath != want {
+			t.Fatalf("CACertPath = %q, want %q", export.MLFlow.CACertPath, want)
+		}
+	})
+
+	t.Run("falls back to MLFLOW_CA_CERT_PATH when bundle unset", func(t *testing.T) {
+		jc := &jobConfig{mlflowTrackingURI: "https://mlflow.example:443"}
+		export, err := sidecarForJobPod(cfg, jc)
+		if err != nil {
+			t.Fatalf("sidecarForJobPod: %v", err)
+		}
+		if export.MLFlow.CACertPath != "/custom/mlflow-ca.pem" {
+			t.Fatalf("CACertPath = %q, want custom path", export.MLFlow.CACertPath)
+		}
+	})
+
+	t.Run("falls back to service CA when no bundle or custom path", func(t *testing.T) {
+		jc := &jobConfig{
+			mlflowTrackingURI:  "https://mlflow.example:443",
+			serviceCAConfigMap: "evalhub-service-ca",
+		}
+		export, err := sidecarForJobPod(&config.Config{Sidecar: &config.SidecarConfig{}}, jc)
+		if err != nil {
+			t.Fatalf("sidecarForJobPod: %v", err)
+		}
+		want := serviceCAMountPath + "/" + serviceCABundleFile
+		if export.MLFlow.CACertPath != want {
+			t.Fatalf("CACertPath = %q, want %q", export.MLFlow.CACertPath, want)
+		}
+	})
+
+	t.Run("keeps EvalHub API TLS on service CA", func(t *testing.T) {
+		jc := &jobConfig{
+			evalHubURL:              "https://evalhub.svc:8443",
+			mlflowTrackingURI:       "https://mlflow.example:443",
+			mlflowCABundleConfigMap: "evalhub-mlflow-ca-bundle",
+			serviceCAConfigMap:      "evalhub-service-ca",
+		}
+		export, err := sidecarForJobPod(cfg, jc)
+		if err != nil {
+			t.Fatalf("sidecarForJobPod: %v", err)
+		}
+		wantEvalHub := serviceCAMountPath + "/" + serviceCABundleFile
+		if export.EvalHub.CACertPath != wantEvalHub {
+			t.Fatalf("EvalHub.CACertPath = %q, want %q", export.EvalHub.CACertPath, wantEvalHub)
+		}
+		wantMLFlow := mlflowCABundleMountPath + "/" + mlflowCABundleFile
+		if export.MLFlow.CACertPath != wantMLFlow {
+			t.Fatalf("MLFlow.CACertPath = %q, want %q", export.MLFlow.CACertPath, wantMLFlow)
+		}
+	})
+}
+
 func TestOtelConfigForJobPod(t *testing.T) {
 	t.Run("nil when OTEL disabled", func(t *testing.T) {
 		cfg := &config.Config{OTEL: &config.OTELConfig{Enabled: false}}

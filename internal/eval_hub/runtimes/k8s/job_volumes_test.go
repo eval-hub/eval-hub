@@ -5,6 +5,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	corev1 "k8s.io/api/core/v1"
 )
 
 func TestBuildJobSidecarMountsMLFlowToken(t *testing.T) {
@@ -19,7 +20,7 @@ func TestBuildJobSidecarMountsMLFlowToken(t *testing.T) {
 		defaultEnv:        []api.EnvVar{},
 		mlflowTrackingURI: "http://mlflow:5000",
 	}
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -43,6 +44,98 @@ func TestBuildJobSidecarMountsMLFlowToken(t *testing.T) {
 	}
 }
 
+func TestBuildJobMountsMLFlowCABundle(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:                   "job-mlflow-ca",
+		resourceGUID:            "guid-mlflow-ca",
+		benchmarkIndex:          0,
+		namespace:               "default",
+		providerID:              "provider-1",
+		benchmarkID:             "bench-1",
+		adapterImage:            "adapter:latest",
+		defaultEnv:              []api.EnvVar{},
+		mlflowTrackingURI:       "https://mlflow.example:443",
+		mlflowCABundleConfigMap: "my-evalhub-mlflow-ca-bundle",
+		serviceCAConfigMap:      "my-evalhub-service-ca",
+	}
+	job, err := buildJob(cfg, nil)
+	if err != nil {
+		t.Fatalf("buildJob: %v", err)
+	}
+
+	foundVol := findVolume(job.Spec.Template.Spec.Volumes, mlflowCABundleVolumeName)
+	if foundVol == nil {
+		t.Fatalf("expected volume %q", mlflowCABundleVolumeName)
+	}
+	if foundVol.ConfigMap == nil || foundVol.ConfigMap.Name != "my-evalhub-mlflow-ca-bundle" {
+		t.Fatalf("unexpected ConfigMap volume source: %+v", foundVol.ConfigMap)
+	}
+
+	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
+	if sidecar == nil {
+		t.Fatal("expected sidecar init container")
+	}
+	sidecarMount := findVolumeMount(sidecar.VolumeMounts, mlflowCABundleVolumeName)
+	if sidecarMount == nil {
+		t.Fatalf("expected sidecar mount %q", mlflowCABundleVolumeName)
+	}
+	if sidecarMount.MountPath != mlflowCABundleMountPath {
+		t.Fatalf("sidecar MountPath = %q, want %q", sidecarMount.MountPath, mlflowCABundleMountPath)
+	}
+
+	adapter := findContainer(job.Spec.Template.Spec.Containers, adapterContainerName)
+	if adapter == nil {
+		t.Fatal("expected adapter container")
+	}
+	adapterMount := findVolumeMount(adapter.VolumeMounts, mlflowCABundleVolumeName)
+	if adapterMount == nil {
+		t.Fatalf("expected adapter mount %q", mlflowCABundleVolumeName)
+	}
+
+	var certEnv *corev1.EnvVar
+	for i := range adapter.Env {
+		if adapter.Env[i].Name == envMLFlowCertPathName {
+			certEnv = &adapter.Env[i]
+			break
+		}
+	}
+	if certEnv == nil {
+		t.Fatalf("expected adapter env %q", envMLFlowCertPathName)
+	}
+	wantCert := mlflowCABundleMountPath + "/" + mlflowCABundleFile
+	if certEnv.Value != wantCert {
+		t.Fatalf("%s = %q, want %q", envMLFlowCertPathName, certEnv.Value, wantCert)
+	}
+}
+
+func TestEnsureMLFlowCABundleVolumeAndMountIdempotent(t *testing.T) {
+	const cmName = "evalhub-mlflow-ca-bundle"
+
+	vols := ensureMLFlowCABundleVolume(nil, cmName)
+	if len(vols) != 1 {
+		t.Fatalf("first ensure volume len = %d, want 1", len(vols))
+	}
+	volsAgain := ensureMLFlowCABundleVolume(vols, cmName)
+	if len(volsAgain) != 1 {
+		t.Fatalf("second ensure volume len = %d, want 1 (no duplicate)", len(volsAgain))
+	}
+	if volsAgain[0].ConfigMap == nil || volsAgain[0].ConfigMap.Name != cmName {
+		t.Fatalf("ConfigMap name = %v, want %q", volsAgain[0].ConfigMap, cmName)
+	}
+
+	mounts := ensureMLFlowCABundleMount(nil)
+	if len(mounts) != 1 {
+		t.Fatalf("first ensure mount len = %d, want 1", len(mounts))
+	}
+	mountsAgain := ensureMLFlowCABundleMount(mounts)
+	if len(mountsAgain) != 1 {
+		t.Fatalf("second ensure mount len = %d, want 1 (no duplicate)", len(mountsAgain))
+	}
+	if mountsAgain[0].MountPath != mlflowCABundleMountPath {
+		t.Fatalf("MountPath = %q, want %q", mountsAgain[0].MountPath, mlflowCABundleMountPath)
+	}
+}
+
 func TestBuildJobWithOCICredentials(t *testing.T) {
 	cfg := &jobConfig{
 		jobID:                "job-oci",
@@ -56,7 +149,7 @@ func TestBuildJobWithOCICredentials(t *testing.T) {
 		ociCredentialsSecret: "my-pull-secret",
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -115,7 +208,7 @@ func TestBuildJobTerminationFileVolume(t *testing.T) {
 		adapterImage:   "adapter:latest",
 		defaultEnv:     []api.EnvVar{},
 	}
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -152,7 +245,7 @@ func TestBuildJobSidecarDoesNotUseEvalhubConfigVolume(t *testing.T) {
 		adapterImage:   "adapter:latest",
 		defaultEnv:     []api.EnvVar{},
 	}
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -187,7 +280,7 @@ func TestBuildJobWithoutOCICredentials(t *testing.T) {
 		defaultEnv:     []api.EnvVar{},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -223,7 +316,7 @@ func TestBuildJobWithS3TestData(t *testing.T) {
 		},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -302,7 +395,7 @@ func TestBuildJobWithS3TestDataSkipsEmptyNormalizedKey(t *testing.T) {
 		},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -335,7 +428,7 @@ func TestBuildJobWithModelAuthSecret(t *testing.T) {
 		modelAuthSecretRef: "model-auth-secret",
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -389,7 +482,7 @@ func TestBuildJobWithoutModelAuthSecret(t *testing.T) {
 		defaultEnv:     []api.EnvVar{},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -423,7 +516,7 @@ func TestBuildJobSATokenSidecarOnly(t *testing.T) {
 		adapterImage:   "adapter:latest",
 		defaultEnv:     []api.EnvVar{},
 	}
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -523,7 +616,7 @@ func TestBuildJobWithGitTestDataPublicRepo(t *testing.T) {
 		},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -612,7 +705,7 @@ func TestBuildJobWithGitTestDataPrivateRepo(t *testing.T) {
 		},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -683,7 +776,7 @@ func TestBuildJobSidecarMountsTestDataVolumeForGitSource(t *testing.T) {
 		},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -718,7 +811,7 @@ func TestBuildJobSidecarDoesNotMountTestDataVolumeForNonGitSource(t *testing.T) 
 		sidecarConfig:  &config.SidecarConfig{BaseURL: config.DefaultSidecarBaseURL},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -752,7 +845,7 @@ func TestBuildJobWithGitTestDataMissingInitImage(t *testing.T) {
 		},
 	}
 
-	_, err := buildJob(cfg)
+	_, err := buildJob(cfg, nil)
 	if err == nil {
 		t.Fatal("expected error when git test data is set but init image is missing")
 	}

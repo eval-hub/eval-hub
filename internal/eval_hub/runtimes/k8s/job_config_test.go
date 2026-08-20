@@ -49,6 +49,9 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
+	if cfg.mlflowCABundleConfigMap != "" {
+		t.Fatalf("expected empty mlflowCABundleConfigMap without instance name, got %q", cfg.mlflowCABundleConfigMap)
+	}
 	if cfg.jobID != "job-123" {
 		t.Fatalf("expected job id to be set")
 	}
@@ -101,6 +104,57 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 	callback := spec.CallbackURL
 	if callback == nil || *callback != callbackURL {
 		t.Fatalf("expected job spec json callback_url to be %q, got %v", callbackURL, callback)
+	}
+}
+
+func TestBuildJobConfigSetsMLFlowCABundleFromInstanceName(t *testing.T) {
+	t.Setenv(evalHubInstanceNameEnv, "my-evalhub")
+	t.Setenv(mlflowTrackingURIEnv, "https://mlflow.example:443")
+
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-mlflow-ca", Tenant: "team-a"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: &api.ModelRef{
+				URL:  "http://model",
+				Name: "model",
+			},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}},
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+				},
+			},
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	// Bundle ConfigMap is resolved later via cluster lookup, not from MLFLOW_CA_CERT_PATH.
+	if cfg.mlflowCABundleConfigMap != "" {
+		t.Fatalf("mlflowCABundleConfigMap = %q, want empty until ConfigMap existence is confirmed", cfg.mlflowCABundleConfigMap)
+	}
+	if cfg.serviceCAConfigMap != "my-evalhub"+serviceCAConfigMapSuffix {
+		t.Fatalf("serviceCAConfigMap = %q", cfg.serviceCAConfigMap)
+	}
+	if cfg.evalHubInstanceName != "my-evalhub" {
+		t.Fatalf("evalHubInstanceName = %q", cfg.evalHubInstanceName)
+	}
+}
+
+func TestMLFlowCABundleConfigMapName(t *testing.T) {
+	if got := mlflowCABundleConfigMapName("my-evalhub"); got != "my-evalhub"+mlflowCABundleCMSuffix {
+		t.Fatalf("got %q", got)
 	}
 }
 

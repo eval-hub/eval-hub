@@ -201,6 +201,14 @@ func (h *KubernetesHelper) ListConfigMaps(ctx context.Context, namespace, labelS
 	return list.Items, nil
 }
 
+// GetConfigMap returns the ConfigMap with the given name in namespace.
+func (h *KubernetesHelper) GetConfigMap(ctx context.Context, namespace, name string) (*corev1.ConfigMap, error) {
+	if namespace == "" || name == "" {
+		return nil, fmt.Errorf("namespace and name are required")
+	}
+	return h.clientset.CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
+}
+
 // SetConfigMapOwner sets a single owner reference on the ConfigMap.
 func (h *KubernetesHelper) SetConfigMapOwner(ctx context.Context, namespace, name string, owner metav1.OwnerReference) error {
 	if namespace == "" || name == "" {

@@ -135,8 +135,10 @@ type EvalHubClientConfig struct {
 
 // SidecarMLFlowConfig holds sidecar-specific MLflow settings (e.g. token cache TTL).
 // CACertPath may also be set under sidecar.mlflow in YAML; when writing sidecar_config.json
-// for job pods, that field is overwritten from top-level mlflow config. TLS verification
-// is always enabled for MLflow; use CACertPath for custom CAs.
+// for job pods, that field is overwritten from the operator-merged MLflow CA bundle
+// ({instance}-mlflow-ca-bundle), falling back to top-level mlflow.ca_cert_path /
+// MLFLOW_CA_CERT_PATH, then the service-serving CA. TLS verification is always enabled
+// for MLflow; use CACertPath for custom CAs.
 type SidecarMLFlowConfig struct {
 	TrackingURI       string        `mapstructure:"tracking_uri,omitempty" json:"tracking_uri,omitempty"`
 	TokenPath         string        `mapstructure:"token_path,omitempty" json:"token_path,omitempty"`

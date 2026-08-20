@@ -93,10 +93,16 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 	}
 
 	serviceCAConfigMap := cfg.serviceCAConfigMap
-	// Ensure service CA volume/mount when configured.
+	// Ensure service CA volume/mount when configured (EvalHub API TLS).
 	if serviceCAConfigMap != "" {
 		volumes = ensureServiceCAVolume(volumes, serviceCAConfigMap)
 		volumeMounts = ensureServiceCAMount(volumeMounts)
+	}
+	// Mount the operator-merged MLflow CA bundle when MLflow is configured so
+	// MLFLOW_TRACKING_SERVER_CERT_PATH (if set) resolves inside the adapter.
+	if cfg.mlflowCABundleConfigMap != "" && cfg.mlflowTrackingURI != "" {
+		volumes = ensureMLFlowCABundleVolume(volumes, cfg.mlflowCABundleConfigMap)
+		volumeMounts = ensureMLFlowCABundleMount(volumeMounts)
 	}
 
 	// Add OCI credentials volume/mount when a K8s secret connection is configured.
@@ -240,10 +246,16 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 	}
 
 	serviceCAConfigMap := cfg.serviceCAConfigMap
-	// Ensure service CA volume/mount when configured.
+	// Ensure service CA volume/mount when configured (EvalHub API TLS).
 	if serviceCAConfigMap != "" {
 		volumes = ensureServiceCAVolume(volumes, serviceCAConfigMap)
 		volumeMounts = ensureServiceCAMount(volumeMounts)
+	}
+	// Mount the operator-merged MLflow CA bundle so the sidecar can verify MLflow
+	// over either the in-cluster Service hostname or the public Route.
+	if cfg.mlflowCABundleConfigMap != "" && cfg.mlflowTrackingURI != "" {
+		volumes = ensureMLFlowCABundleVolume(volumes, cfg.mlflowCABundleConfigMap)
+		volumeMounts = ensureMLFlowCABundleMount(volumeMounts)
 	}
 
 	// Projected ServiceAccountToken for the sidecar only.
@@ -509,6 +521,35 @@ func ensureServiceCAMount(mounts []corev1.VolumeMount) []corev1.VolumeMount {
 	return append(mounts, corev1.VolumeMount{
 		Name:      serviceCAVolumeName,
 		MountPath: serviceCAMountPath,
+		ReadOnly:  true,
+	})
+}
+
+func ensureMLFlowCABundleVolume(volumes []corev1.Volume, configMapName string) []corev1.Volume {
+	for _, volume := range volumes {
+		if volume.Name == mlflowCABundleVolumeName {
+			return volumes
+		}
+	}
+	return append(volumes, corev1.Volume{
+		Name: mlflowCABundleVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{Name: configMapName},
+			},
+		},
+	})
+}
+
+func ensureMLFlowCABundleMount(mounts []corev1.VolumeMount) []corev1.VolumeMount {
+	for _, mount := range mounts {
+		if mount.Name == mlflowCABundleVolumeName {
+			return mounts
+		}
+	}
+	return append(mounts, corev1.VolumeMount{
+		Name:      mlflowCABundleVolumeName,
+		MountPath: mlflowCABundleMountPath,
 		ReadOnly:  true,
 	})
 }
