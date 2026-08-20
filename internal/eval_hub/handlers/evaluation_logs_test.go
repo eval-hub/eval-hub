@@ -24,7 +24,7 @@ import (
 type logsRuntime struct {
 	logs                   string
 	err                    error
-	getLogsCalled          bool
+	streamLogsCalled       bool
 	capturedBenchmarkIndex *int
 	capturedOpts           api.EvaluationLogOptions
 }
@@ -46,19 +46,23 @@ func (r *logsRuntime) NotifyJobPhaseTransition(_ context.Context, _ *api.Evaluat
 }
 func (r *logsRuntime) NotifyThresholdViolation(_ context.Context, _ *api.EvaluationJobResource, _ int, _ string, _, _ float32) {
 }
-func (r *logsRuntime) GetEvaluationLogs(
+func (r *logsRuntime) StreamEvaluationLogs(
 	_ *api.EvaluationJobResource,
 	_ []api.EvaluationBenchmarkConfig,
 	benchmarkIndex *int,
 	opts api.EvaluationLogOptions,
-) (string, error) {
-	r.getLogsCalled = true
+	w io.Writer,
+) error {
+	r.streamLogsCalled = true
 	r.capturedBenchmarkIndex = benchmarkIndex
 	r.capturedOpts = opts
 	if r.err != nil {
-		return "", r.err
+		return r.err
 	}
-	return r.logs, nil
+	if r.logs != "" {
+		_, _ = io.WriteString(w, r.logs)
+	}
+	return nil
 }
 func (r *logsRuntime) ValidateHardwareProfiles(_ []api.EvaluationBenchmarkConfig) error {
 	return nil
@@ -121,8 +125,8 @@ func TestHandleGetEvaluationJobLogs(t *testing.T) {
 	if body := strings.TrimSpace(rec.Body.String()); body != "hello logs" {
 		t.Fatalf("body = %q, want %q", body, "hello logs")
 	}
-	if !runtime.getLogsCalled {
-		t.Fatal("expected GetEvaluationLogs to be called")
+	if !runtime.streamLogsCalled {
+		t.Fatal("expected StreamEvaluationLogs to be called")
 	}
 	if runtime.capturedBenchmarkIndex != nil {
 		t.Fatalf("benchmark index = %v, want nil", runtime.capturedBenchmarkIndex)
@@ -217,8 +221,8 @@ func TestHandleGetEvaluationJobLogsRejectsInvalidTailLines(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", rec.Code)
 	}
-	if runtime.getLogsCalled {
-		t.Fatal("expected GetEvaluationLogs not to be called")
+	if runtime.streamLogsCalled {
+		t.Fatal("expected StreamEvaluationLogs not to be called")
 	}
 }
 
@@ -252,8 +256,8 @@ func TestHandleGetEvaluationJobLogsRejectsEmptySinceSeconds(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", rec.Code)
 	}
-	if runtime.getLogsCalled {
-		t.Fatal("expected GetEvaluationLogs not to be called")
+	if runtime.streamLogsCalled {
+		t.Fatal("expected StreamEvaluationLogs not to be called")
 	}
 }
 
@@ -358,8 +362,10 @@ func TestHandleGetEvaluationJobLogsRuntimeError(t *testing.T) {
 
 	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
 
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("status = %d, want 500", rec.Code)
+	// With streaming, the 200 status is committed before the runtime is called.
+	// Runtime errors mid-stream cannot change the status code.
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (streaming commits status before runtime call)", rec.Code)
 	}
 }
 
@@ -379,6 +385,67 @@ func TestHandleGetEvaluationJobLogsRejectsTailLinesOverMax(t *testing.T) {
 		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
 		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
 		queryValues: map[string][]string{"tail_lines": {strconv.Itoa(api.MaxLogTailLines + 1)}},
+	}
+
+	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestHandleGetEvaluationJobLogsAcceptsMinusOneForAllLines(t *testing.T) {
+	jobID := "job-logs-all"
+	runtime := &logsRuntime{logs: "all the logs"}
+	storage := &fakeStorage{
+		job: &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Benchmarks: []api.EvaluationBenchmarkConfig{
+					{Ref: api.Ref{ID: "bench-1"}, ProviderID: "provider-1"},
+				},
+			},
+		},
+	}
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil)
+	rec := httptest.NewRecorder()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-all", logger, "test-user", "test-tenant")
+	req := &logsRequest{
+		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
+		queryValues: map[string][]string{"tail_lines": {"-1"}},
+	}
+
+	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if body := strings.TrimSpace(rec.Body.String()); body != "all the logs" {
+		t.Fatalf("body = %q, want %q", body, "all the logs")
+	}
+	if runtime.capturedOpts.TailLines != api.AllLogLines {
+		t.Fatalf("tail_lines = %d, want %d", runtime.capturedOpts.TailLines, api.AllLogLines)
+	}
+}
+
+func TestHandleGetEvaluationJobLogsRejectsMinusTwo(t *testing.T) {
+	jobID := "job-logs-minus2"
+	storage := &fakeStorage{
+		job: &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+		},
+	}
+	runtime := &logsRuntime{}
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil)
+	rec := httptest.NewRecorder()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-m2", logger, "test-user", "test-tenant")
+	req := &logsRequest{
+		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
+		queryValues: map[string][]string{"tail_lines": {"-2"}},
 	}
 
 	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
@@ -451,8 +518,8 @@ func TestHandleGetEvaluationJobLogsResolvesCollectionBenchmarks(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
-	if !runtime.getLogsCalled {
-		t.Fatal("expected GetEvaluationLogs to be called")
+	if !runtime.streamLogsCalled {
+		t.Fatal("expected StreamEvaluationLogs to be called")
 	}
 }
 

@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -16,7 +17,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-func TestGetEvaluationLogsReturnsAdapterLogs(t *testing.T) {
+func TestStreamEvaluationLogsReturnsAdapterLogs(t *testing.T) {
 	evaluation := sampleEvaluation("provider-1")
 	jobID := evaluation.Resource.ID
 	namespace := "default"
@@ -56,17 +57,18 @@ func TestGetEvaluationLogsReturnsAdapterLogs(t *testing.T) {
 		t.Fatalf("GetJobBenchmarks: %v", err)
 	}
 
+	var buf bytes.Buffer
 	idx := 0
-	got, err := runtime.GetEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10})
+	err = runtime.StreamEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10}, &buf)
 	if err != nil {
-		t.Fatalf("GetEvaluationLogs: %v", err)
+		t.Fatalf("StreamEvaluationLogs: %v", err)
 	}
-	if got != "fake logs" {
+	if got := buf.String(); got != "fake logs" {
 		t.Fatalf("got %q, want %q", got, "fake logs")
 	}
 }
 
-func TestGetEvaluationLogsAllBenchmarkSections(t *testing.T) {
+func TestStreamEvaluationLogsAllBenchmarkSections(t *testing.T) {
 	evaluation := sampleEvaluation("provider-1")
 	namespace := "default"
 	jobName := "eval-job-logs-0"
@@ -96,17 +98,18 @@ func TestGetEvaluationLogsAllBenchmarkSections(t *testing.T) {
 		t.Fatalf("GetJobBenchmarks: %v", err)
 	}
 
-	got, err := runtime.GetEvaluationLogs(evaluation, benchmarks, nil, api.EvaluationLogOptions{TailLines: 10})
+	var buf bytes.Buffer
+	err = runtime.StreamEvaluationLogs(evaluation, benchmarks, nil, api.EvaluationLogOptions{TailLines: 10}, &buf)
 	if err != nil {
-		t.Fatalf("GetEvaluationLogs: %v", err)
+		t.Fatalf("StreamEvaluationLogs: %v", err)
 	}
 	want := fmt.Sprintf("=== pod=%s container=%s benchmark_id=bench-1 ===", jobName, adapterContainerName)
-	if got != want {
+	if got := buf.String(); got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
 
-func TestGetEvaluationLogsSectionWithPodLogContent(t *testing.T) {
+func TestStreamEvaluationLogsSectionWithPodLogContent(t *testing.T) {
 	evaluation := sampleEvaluation("provider-1")
 	namespace := "default"
 	jobName := "eval-job-logs-full"
@@ -147,21 +150,22 @@ func TestGetEvaluationLogsSectionWithPodLogContent(t *testing.T) {
 		t.Fatalf("GetJobBenchmarks: %v", err)
 	}
 
-	got, err := runtime.GetEvaluationLogs(evaluation, benchmarks, nil, api.EvaluationLogOptions{
+	var buf bytes.Buffer
+	err = runtime.StreamEvaluationLogs(evaluation, benchmarks, nil, api.EvaluationLogOptions{
 		TailLines:    25,
 		Timestamps:   true,
 		SinceSeconds: &since,
-	})
+	}, &buf)
 	if err != nil {
-		t.Fatalf("GetEvaluationLogs: %v", err)
+		t.Fatalf("StreamEvaluationLogs: %v", err)
 	}
 	want := fmt.Sprintf("=== pod=%s container=%s benchmark_id=bench-1 ===\nfake logs", podName, adapterContainerName)
-	if got != want {
+	if got := buf.String(); got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
 
-func TestGetEvaluationLogsSingleBenchmarkNoJob(t *testing.T) {
+func TestStreamEvaluationLogsSingleBenchmarkNoJob(t *testing.T) {
 	evaluation := sampleEvaluation("provider-1")
 	runtime := &K8sRuntime{
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -174,30 +178,32 @@ func TestGetEvaluationLogsSingleBenchmarkNoJob(t *testing.T) {
 		t.Fatalf("GetJobBenchmarks: %v", err)
 	}
 
+	var buf bytes.Buffer
 	idx := 0
-	got, err := runtime.GetEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10})
+	err = runtime.StreamEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10}, &buf)
 	if err != nil {
-		t.Fatalf("GetEvaluationLogs: %v", err)
+		t.Fatalf("StreamEvaluationLogs: %v", err)
 	}
-	if got != "" {
+	if got := buf.String(); got != "" {
 		t.Fatalf("got %q, want empty", got)
 	}
 }
 
-func TestGetEvaluationLogsRequiresContext(t *testing.T) {
+func TestStreamEvaluationLogsRequiresContext(t *testing.T) {
 	evaluation := sampleEvaluation("provider-1")
 	runtime := &K8sRuntime{
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper: &KubernetesHelper{clientset: fake.NewClientset()},
 	}
 
-	_, err := runtime.GetEvaluationLogs(evaluation, evaluation.Benchmarks, nil, api.EvaluationLogOptions{TailLines: 10})
+	var buf bytes.Buffer
+	err := runtime.StreamEvaluationLogs(evaluation, evaluation.Benchmarks, nil, api.EvaluationLogOptions{TailLines: 10}, &buf)
 	if err == nil {
 		t.Fatal("expected error for nil context")
 	}
 }
 
-func TestGetEvaluationLogsRejectsEmptyBenchmarks(t *testing.T) {
+func TestStreamEvaluationLogsRejectsEmptyBenchmarks(t *testing.T) {
 	evaluation := sampleEvaluation("provider-1")
 	runtime := &K8sRuntime{
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -205,13 +211,14 @@ func TestGetEvaluationLogsRejectsEmptyBenchmarks(t *testing.T) {
 		ctx:    context.Background(),
 	}
 
-	_, err := runtime.GetEvaluationLogs(evaluation, nil, nil, api.EvaluationLogOptions{TailLines: 10})
+	var buf bytes.Buffer
+	err := runtime.StreamEvaluationLogs(evaluation, nil, nil, api.EvaluationLogOptions{TailLines: 10}, &buf)
 	if err == nil {
 		t.Fatal("expected error for empty benchmarks")
 	}
 }
 
-func TestGetEvaluationLogsRejectsNegativeBenchmarkIndex(t *testing.T) {
+func TestStreamEvaluationLogsRejectsNegativeBenchmarkIndex(t *testing.T) {
 	evaluation := sampleEvaluation("provider-1")
 	runtime := &K8sRuntime{
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -224,8 +231,9 @@ func TestGetEvaluationLogsRejectsNegativeBenchmarkIndex(t *testing.T) {
 		t.Fatalf("GetJobBenchmarks: %v", err)
 	}
 
+	var buf bytes.Buffer
 	idx := -1
-	_, err = runtime.GetEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10})
+	err = runtime.StreamEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10}, &buf)
 	if err == nil {
 		t.Fatal("expected error for negative benchmark index")
 	}
