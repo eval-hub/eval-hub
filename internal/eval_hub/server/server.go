@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
@@ -255,6 +256,7 @@ func (s *Server) setupEvaluationJobLogsRoutes(h *handlers.Handlers, router *http
 		}
 		switch r.Method {
 		case http.MethodGet:
+			s.extendWriteDeadlineForLogStream(w)
 			h.HandleGetEvaluationBenchmarkLogs(ctx, req, resp)
 		default:
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
@@ -270,11 +272,21 @@ func (s *Server) setupEvaluationJobLogsRoutes(h *handlers.Handlers, router *http
 		}
 		switch r.Method {
 		case http.MethodGet:
+			s.extendWriteDeadlineForLogStream(w)
 			h.HandleGetEvaluationJobLogs(ctx, req, resp)
 		default:
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
+}
+
+// extendWriteDeadlineForLogStream extends the HTTP write deadline for log
+// streaming routes so the server WriteTimeout does not kill long-running
+// log streams before LogStreamTimeout expires.
+func (s *Server) extendWriteDeadlineForLogStream(w http.ResponseWriter) {
+	timeout := s.serviceConfig.Service.EffectiveLogStreamTimeout()
+	rc := http.NewResponseController(w)
+	_ = rc.SetWriteDeadline(time.Now().Add(timeout + 30*time.Second))
 }
 
 func (s *Server) setupEvaluationJobEventsRoutes(h *handlers.Handlers, router *http.ServeMux) {

@@ -22,9 +22,12 @@ get:
       in: query
       required: false
       schema:
-        type: integer
-        minimum: -1
-        maximum: 10000
+        oneOf:
+          - type: integer
+            const: -1
+          - type: integer
+            minimum: 1
+            maximum: 10000
         default: 1000
         description: |
           Maximum number of log lines to return per benchmark. The response
