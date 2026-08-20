@@ -280,7 +280,8 @@ func (r *LocalRuntime) runBenchmark(
 
 	// Build command using shell interpretation
 	command := provider.Runtime.Local.Command
-	cmd := exec.Command("sh", "-c", command) // #nosec G204 -- local runtime executes provider-defined commands by design
+	// G204 -- local runtime executes provider-defined commands by design
+	cmd := exec.Command("sh", "-c", command)
 	// Setpgid places the child in its own process group (PGID = child PID).
 	// This is critical for two reasons:
 	//   1. cancelJob calls Kill(-PID, SIGKILL) which targets the entire process
