@@ -62,7 +62,10 @@ func (r *logsRuntime) StreamEvaluationLogs(
 		return r.err
 	}
 	if r.logs != "" {
-		_, _ = io.WriteString(w, r.logs)
+		_, err := io.WriteString(w, r.logs)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -622,6 +625,46 @@ func TestHandleGetEvaluationJobLogsRejectsInvalidTimestamps(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestHandleGetEvaluationJobLogsTruncation(t *testing.T) {
+	jobID := "job-logs-truncated"
+	runtime := &logsRuntime{logs: strings.Repeat("x", 100)}
+	storage := &fakeStorage{
+		job: &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Benchmarks: []api.EvaluationBenchmarkConfig{
+					{Ref: api.Ref{ID: "bench-1"}, ProviderID: "provider-1"},
+				},
+			},
+		},
+	}
+	cfg := &config.Config{
+		Service: &config.ServiceConfig{
+			MaxLogResponseBytes: 10,
+		},
+	}
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, cfg, nil)
+	rec := httptest.NewRecorder()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-trunc", logger, "test-user", "test-tenant")
+	req := &logsRequest{
+		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
+	}
+
+	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if got := rec.Header().Get("X-Log-Truncated"); got != "true" {
+		t.Fatalf("X-Log-Truncated = %q, want %q", got, "true")
+	}
+	if body := rec.Body.String(); len(body) > 10 {
+		t.Fatalf("body length = %d, want <= 10", len(body))
 	}
 }
 

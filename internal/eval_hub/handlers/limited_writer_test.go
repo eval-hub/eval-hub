@@ -90,3 +90,51 @@ func TestLimitedWriterMultipleWrites(t *testing.T) {
 		t.Fatalf("buf = %q, want %q", buf.String(), "hello worldtrun")
 	}
 }
+
+type errWriter struct {
+	errAfter int
+	written  int
+}
+
+func (ew *errWriter) Write(p []byte) (int, error) {
+	if ew.written+len(p) > ew.errAfter {
+		allowed := ew.errAfter - ew.written
+		ew.written += allowed
+		return allowed, errors.New("write error")
+	}
+	ew.written += len(p)
+	return len(p), nil
+}
+
+func TestLimitedWriterUnderlyingWriterError(t *testing.T) {
+	ew := &errWriter{errAfter: 3}
+	lw := &LimitedWriter{W: ew, Limit: 100}
+
+	n, err := lw.Write([]byte("hello"))
+	if err == nil {
+		t.Fatal("expected underlying writer error")
+	}
+	if err.Error() != "write error" {
+		t.Fatalf("got err %v, want 'write error'", err)
+	}
+	if n != 3 {
+		t.Fatalf("wrote %d, want 3", n)
+	}
+}
+
+func TestLimitedWriterPartialWriteUnderlyingError(t *testing.T) {
+	ew := &errWriter{errAfter: 2}
+	lw := &LimitedWriter{W: ew, Limit: 5}
+
+	// Write data that is within the limit but exceeds what the underlying writer allows
+	n, err := lw.Write([]byte("abcde"))
+	if err == nil {
+		t.Fatal("expected error from underlying writer")
+	}
+	if err.Error() != "write error" {
+		t.Fatalf("got err %v, want 'write error'", err)
+	}
+	if n != 2 {
+		t.Fatalf("wrote %d, want 2", n)
+	}
+}
