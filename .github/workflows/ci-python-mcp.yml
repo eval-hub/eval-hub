@@ -36,6 +36,7 @@ jobs:
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           python-version: '3.11'
+          ignore-empty-workdir: true
       - name: Build MCP binary for this platform via cross-compile target
         run: make cross-compile-mcp
       - name: Build MCP wheel
