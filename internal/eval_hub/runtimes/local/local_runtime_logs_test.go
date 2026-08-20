@@ -149,3 +149,68 @@ func TestStreamEvaluationLogsHeaderOnlyWhenLogMissing(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
+
+func TestStreamEvaluationLogsAllLines(t *testing.T) {
+	providerID := "provider-1"
+	jobID := "job-logs-all"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Resource.ID = jobID
+	dirName := localJobDir(jobID, 0, providerID, "bench-1")
+	cleanupDir(t, jobID)
+
+	if err := os.MkdirAll(dirName, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	content := "line1\nline2\nline3\n"
+	if err := os.WriteFile(filepath.Join(dirName, "jobrun.log"), []byte(content), 0644); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+
+	rt := &LocalRuntime{logger: discardLogger(), ctx: context.Background()}
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("GetJobBenchmarks: %v", err)
+	}
+
+	var buf bytes.Buffer
+	idx := 0
+	err = rt.StreamEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: api.AllLogLines}, &buf)
+	if err != nil {
+		t.Fatalf("StreamEvaluationLogs: %v", err)
+	}
+	if got := buf.String(); got != content {
+		t.Fatalf("got %q, want %q", got, content)
+	}
+}
+
+func TestStreamEvaluationLogsSingleBenchmarkNoHeader(t *testing.T) {
+	providerID := "provider-1"
+	jobID := "job-logs-no-header"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Resource.ID = jobID
+	dirName := localJobDir(jobID, 0, providerID, "bench-1")
+	cleanupDir(t, jobID)
+
+	if err := os.MkdirAll(dirName, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dirName, "jobrun.log"), []byte("data\n"), 0644); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+
+	rt := &LocalRuntime{logger: discardLogger(), ctx: context.Background()}
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("GetJobBenchmarks: %v", err)
+	}
+
+	var buf bytes.Buffer
+	idx := 0
+	err = rt.StreamEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10}, &buf)
+	if err != nil {
+		t.Fatalf("StreamEvaluationLogs: %v", err)
+	}
+	if got := buf.String(); got != "data" {
+		t.Fatalf("got %q, want %q (no header for single benchmark)", got, "data")
+	}
+}
