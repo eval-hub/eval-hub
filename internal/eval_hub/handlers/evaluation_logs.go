@@ -81,9 +81,10 @@ func (h *Handlers) handleGetEvaluationLogs(
 			if ctx.RequestID != "" {
 				w.SetHeader("X-Global-Transaction-Id", ctx.RequestID)
 			}
+			w.SetHeader("Trailer", "X-Log-Truncated")
 			w.SetStatusCode(200)
 
-			var limit int64 = -1
+			limit := config.DefaultMaxLogResponseBytes
 			streamTimeout := config.DefaultLogStreamTimeout
 			if h.serviceConfig != nil && h.serviceConfig.Service != nil {
 				limit = h.serviceConfig.Service.EffectiveMaxLogResponseBytes()

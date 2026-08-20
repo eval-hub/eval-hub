@@ -660,6 +660,9 @@ func TestHandleGetEvaluationJobLogsTruncation(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
+	if got := rec.Header().Get("Trailer"); got != "X-Log-Truncated" {
+		t.Fatalf("Trailer = %q, want %q", got, "X-Log-Truncated")
+	}
 	if got := rec.Header().Get("X-Log-Truncated"); got != "true" {
 		t.Fatalf("X-Log-Truncated = %q, want %q", got, "true")
 	}
