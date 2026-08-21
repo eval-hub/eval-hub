@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
@@ -620,6 +621,73 @@ func TestHandleGetEvaluationJobLogsRejectsInvalidTimestamps(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+}
+
+func TestHandleGetEvaluationJobLogsTruncationSetsHeader(t *testing.T) {
+	jobID := "job-logs-truncated"
+	runtime := &logsRuntime{err: handlers.ErrLogResponseTruncated}
+	storage := &fakeStorage{
+		job: &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Benchmarks: []api.EvaluationBenchmarkConfig{
+					{Ref: api.Ref{ID: "bench-1"}, ProviderID: "provider-1"},
+				},
+			},
+		},
+	}
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil)
+	rec := httptest.NewRecorder()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-trunc", logger, "test-user", "test-tenant")
+	req := &logsRequest{
+		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
+	}
+
+	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if got := rec.Header().Get("X-Log-Truncated"); got != "true" {
+		t.Fatalf("X-Log-Truncated = %q, want %q", got, "true")
+	}
+}
+
+func TestHandleGetEvaluationJobLogsWithMaxLogBytesConfig(t *testing.T) {
+	jobID := "job-logs-config"
+	runtime := &logsRuntime{logs: "hello"}
+	storage := &fakeStorage{
+		job: &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Benchmarks: []api.EvaluationBenchmarkConfig{
+					{Ref: api.Ref{ID: "bench-1"}, ProviderID: "provider-1"},
+				},
+			},
+		},
+	}
+	cfg := &config.Config{
+		Service: &config.ServiceConfig{MaxLogResponseBytes: 1024},
+	}
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, cfg, nil)
+	rec := httptest.NewRecorder()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-cfg", logger, "test-user", "test-tenant")
+	req := &logsRequest{
+		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
+	}
+
+	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if body := strings.TrimSpace(rec.Body.String()); body != "hello" {
+		t.Fatalf("body = %q, want %q", body, "hello")
 	}
 }
 

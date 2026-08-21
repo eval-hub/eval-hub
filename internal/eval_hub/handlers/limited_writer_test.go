@@ -90,3 +90,33 @@ func TestLimitedWriterMultipleWrites(t *testing.T) {
 		t.Fatalf("buf = %q, want %q", buf.String(), "hello worldtrun")
 	}
 }
+
+type failAfterNWriter struct {
+	n       int
+	written int
+}
+
+func (w *failAfterNWriter) Write(p []byte) (int, error) {
+	if w.written+len(p) > w.n {
+		allowed := w.n - w.written
+		w.written = w.n
+		return allowed, errors.New("disk full")
+	}
+	w.written += len(p)
+	return len(p), nil
+}
+
+func TestLimitedWriterUnderlyingWriteError(t *testing.T) {
+	fw := &failAfterNWriter{n: 3}
+	lw := &LimitedWriter{W: fw, Limit: 10}
+	n, err := lw.Write([]byte("hello"))
+	if err == nil {
+		t.Fatal("expected error from underlying writer")
+	}
+	if errors.Is(err, ErrLogResponseTruncated) {
+		t.Fatal("expected underlying writer error, not ErrLogResponseTruncated")
+	}
+	if n != 3 {
+		t.Fatalf("wrote %d, want 3", n)
+	}
+}
