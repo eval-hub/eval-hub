@@ -123,7 +123,6 @@ func TestStreamFileAll(t *testing.T) {
 		}
 	})
 
-
 	t.Run("missing file writes nothing", func(t *testing.T) {
 		var buf bytes.Buffer
 		err := StreamFileAll(filepath.Join(dir, "missing.log"), &buf)

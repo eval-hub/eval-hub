@@ -125,7 +125,6 @@ func TestLimitedWriterPartialWriteUnderlyingError(t *testing.T) {
 	fw := &failAfterNWriter{n: 2}
 	lw := &LimitedWriter{W: fw, Limit: 5}
 
-
 	n, err := lw.Write([]byte("abcde"))
 	if err == nil {
 		t.Fatal("expected error from underlying writer")
