@@ -27,6 +27,45 @@ properties:
     items:
       $ref: ./CollectionBenchmarkConfig.yaml
     description: Benchmarks in the collection.
+  use_cases:
+    type: array
+    items:
+      type: string
+      enum:
+        - rag
+        - llm_quality
+        - safety
+        - qa
+        - summarization
+        - custom
+    description: >
+      Controlled vocabulary list of use cases this collection covers.
+      A collection can cover more than one (e.g. ["rag", "qa"]).
+      Available to CLI, SDK, and non-curated-collections consumers without
+      needing to know about UI metadata.
+  modalities:
+    type: array
+    items:
+      type: string
+    description: Data modalities this collection covers (e.g. ["Text", "Vision"]).
+  tasks:
+    type: array
+    items:
+      type: string
+    description: ML task types covered (e.g. ["Question Answering", "Summarization"]).
+  ui:
+    $ref: ./CollectionUIMetadata.yaml
+    description: >
+      When present, marks this collection as part of the Curated Collections feature
+      and carries UI-specific display metadata. Collections without a ui block are
+      unaffected.
+  clone_from_id:
+    type: string
+    description: >
+      When provided on collection creation, records this collection's origin
+      by setting clone_of_id in the returned state. The collection is created
+      from the provided request body spec as usual; this field only affects
+      provenance tracking. Write-only — not returned in responses.
 required:
   - name
   - category

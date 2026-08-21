@@ -6,4 +6,10 @@ allOf:
       resource:
         $ref: ./Resource.yaml
         description: Resource metadata
+      state:
+        $ref: ./CollectionState.yaml
+        description: >
+          Server-managed runtime state for curated collections.
+          Present only when the collection has a ui block (i.e. is part of
+          the Curated Collections feature). Never user-supplied.
   - $ref: ./CollectionConfig.yaml

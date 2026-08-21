@@ -59,6 +59,26 @@ get:
       description: >
         Set to `system` to get only system defined collections, or `tenant` to get only user defined collections.
         If `scope` is not provided, both system and user defined collections will be returned.
+    - name: ui
+      in: query
+      required: false
+      schema:
+        type: boolean
+        title: Curated Collections filter
+      description: >
+        When `true`, returns only collections that have a `ui` block (i.e. curated collections).
+        When omitted, all collections are returned regardless of whether they have a `ui` block.
+    - name: ui_info
+      in: query
+      required: false
+      schema:
+        type: boolean
+        default: true
+        title: Include UI metadata
+      description: >
+        When `false`, strips the `ui` field from the response body.
+        Useful for SDK/CLI consumers that want lean payloads and do not need UI metadata.
+        Defaults to `true`; existing callers that do not pass this parameter are unaffected.
   responses:
     '200':
       description: Successful Response

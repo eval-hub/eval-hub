@@ -11,6 +11,16 @@ get:
       schema:
         type: string
         title: Collection Id
+    - name: ui_info
+      in: query
+      required: false
+      schema:
+        type: boolean
+        default: true
+        title: Include UI metadata
+      description: >
+        When `false`, strips the `ui` field from the response body.
+        Defaults to `true`; existing callers are unaffected.
   responses:
     '200':
       description: Successful Response

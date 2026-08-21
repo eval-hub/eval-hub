@@ -1,0 +1,98 @@
+get:
+  tags:
+    - Collections
+  summary: Get Collection Metadata
+  description: >
+    Returns aggregated counts for Curated Collections UI filter dropdowns and statistics.
+    The response is a lightweight metadata summary, not a list of collections.
+  operationId: get_collections_meta
+  parameters:
+    - name: ui
+      in: query
+      required: false
+      schema:
+        type: boolean
+        title: Curated Collections filter
+      description: >
+        When `true`, scopes the counts to curated collections only (those with a `ui` block).
+        When omitted, counts cover all collections.
+  responses:
+    '200':
+      description: Successful Response
+      content:
+        application/json:
+          schema:
+            type: object
+            description: Aggregated metadata counts for Curated Collections filter dropdowns.
+            properties:
+              total_count:
+                type: integer
+                description: Total number of collections matching the filter.
+              use_cases:
+                type: array
+                description: Use case values with counts.
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    label:
+                      type: string
+                    count:
+                      type: integer
+              modalities:
+                type: array
+                description: Modality values with counts.
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    label:
+                      type: string
+                    count:
+                      type: integer
+              tasks:
+                type: array
+                description: Task values with counts.
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    label:
+                      type: string
+                    count:
+                      type: integer
+          examples:
+            response:
+              summary: Metadata for curated collections
+              value:
+                total_count: 8
+                use_cases:
+                  - id: rag
+                    label: RAG
+                    count: 3
+                  - id: safety
+                    label: Safety
+                    count: 2
+                  - id: llm_quality
+                    label: LLM Quality
+                    count: 2
+                  - id: summarization
+                    label: Summarization
+                    count: 1
+                modalities:
+                  - id: Text
+                    label: Text
+                    count: 8
+                tasks:
+                  - id: Question Answering (RAG)
+                    label: Question Answering (RAG)
+                    count: 3
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml

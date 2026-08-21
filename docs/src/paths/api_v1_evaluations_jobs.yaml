@@ -226,6 +226,16 @@ get:
         type: string
         title: Tags
       description: Tags to search for
+    - name: collection_id
+      in: query
+      required: false
+      schema:
+        type: string
+        title: Collection Id
+      description: >
+        Filter by the ID of the collection the job was created from.
+        Maps to the collection.id field on the job record.
+        Returns all jobs for the collection, ordered by date.
   responses:
     '200':
       description: Successful Response
