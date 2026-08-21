@@ -12,4 +12,10 @@ allOf:
           Server-managed runtime state for curated collections.
           Present only when the collection has a ui block (i.e. is part of
           the Curated Collections feature). Never user-supplied.
+      ui:
+        $ref: ./CollectionUIMetadata.yaml
+        description: >
+          UI-specific display metadata for curated collections.
+          Set by system operators via YAML configuration only; not accepted
+          in request bodies. Present only on curated collections.
   - $ref: ./CollectionConfig.yaml
