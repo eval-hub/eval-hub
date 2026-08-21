@@ -286,10 +286,10 @@ func (h *KubernetesHelper) ListPods(ctx context.Context, namespace, labelSelecto
 	return list.Items, nil
 }
 
-// GetPodLogs returns plain-text logs for a pod container.
-func (h *KubernetesHelper) GetPodLogs(ctx context.Context, namespace, podName string, opts *corev1.PodLogOptions) (string, error) {
+// StreamPodLogs streams plain-text logs for a pod container directly to w.
+func (h *KubernetesHelper) StreamPodLogs(ctx context.Context, namespace, podName string, opts *corev1.PodLogOptions, w io.Writer) error {
 	if namespace == "" || podName == "" {
-		return "", fmt.Errorf("namespace and pod name are required")
+		return fmt.Errorf("namespace and pod name are required")
 	}
 	if opts == nil {
 		opts = &corev1.PodLogOptions{}
@@ -297,14 +297,11 @@ func (h *KubernetesHelper) GetPodLogs(ctx context.Context, namespace, podName st
 	req := h.clientset.CoreV1().Pods(namespace).GetLogs(podName, opts)
 	stream, err := req.Stream(ctx)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer func() { _ = stream.Close() }()
-	data, err := io.ReadAll(stream)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
+	_, err = io.Copy(w, stream)
+	return err
 }
 
 // EmitEvent emits a Kubernetes Event against the given Job using the configured EventRecorder.

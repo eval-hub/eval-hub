@@ -183,7 +183,7 @@ When `otel.enable_logs` is true:
 
 When `otel.enable_job_container_logs` is also true (eval-hub API only):
 
-- On transition to a terminal job state (`completed`, `failed`, `partially_failed`, `cancelled`), eval-hub asynchronously calls `Runtime.GetEvaluationLogs` (tail capped at `DefaultLogTailLines`, 1000) and emits each log line as an OTEL log record with attributes such as `evalhub.job.id`, `evalhub.benchmark.id`, and `evalhub.log.source=container`.
+- On transition to a terminal job state (`completed`, `failed`, `partially_failed`, `cancelled`), eval-hub asynchronously calls `Runtime.StreamEvaluationLogs` (tail capped at `DefaultLogTailLines`, 1000) and emits each log line as an OTEL log record with attributes such as `evalhub.job.id`, `evalhub.benchmark.id`, and `evalhub.log.source=container`.
 - Hook points: `POST /api/v1/evaluations/jobs/{id}/events` and runtime-initiated status updates (`runtimeStorage.UpdateEvaluationJob`).
 - Export runs in a background goroutine (30s timeout) so workload callbacks are not blocked.
 - **Limitations:** cancelled jobs may delete runtime resources before logs are fetched; log export is not triggered on per-benchmark events (only overall job terminal transition).

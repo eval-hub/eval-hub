@@ -2,9 +2,9 @@ package k8s
 
 import (
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
@@ -14,49 +14,51 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
-func (r *K8sRuntime) GetEvaluationLogs(
+func (r *K8sRuntime) StreamEvaluationLogs(
 	evaluation *api.EvaluationJobResource,
 	benchmarks []api.EvaluationBenchmarkConfig,
 	benchmarkIndex *int,
 	opts api.EvaluationLogOptions,
-) (string, error) {
+	w io.Writer,
+) error {
 	if r.ctx == nil {
-		return "", fmt.Errorf("kubernetes runtime: nil context — WithContext must be called before GetEvaluationLogs")
+		return fmt.Errorf("kubernetes runtime: nil context — WithContext must be called before StreamEvaluationLogs")
 	}
 	if len(benchmarks) == 0 {
-		return "", serviceerrors.NewServiceError(messages.EvaluationJobEmpty, "EvaluationJobID", evaluation.Resource.ID)
+		return serviceerrors.NewServiceError(messages.EvaluationJobEmpty, "EvaluationJobID", evaluation.Resource.ID)
 	}
 	if benchmarkIndex != nil {
 		if *benchmarkIndex < 0 || *benchmarkIndex >= len(benchmarks) {
-			return "", serviceerrors.NewServiceError(
+			return serviceerrors.NewServiceError(
 				messages.ResourceNotFound,
 				"Type", "benchmark",
 				"ResourceId", fmt.Sprintf("%d", *benchmarkIndex),
 			)
 		}
-		return r.readBenchmarkLogs(evaluation, benchmarks[*benchmarkIndex], *benchmarkIndex, opts, false)
+		return r.streamBenchmarkLogs(evaluation, benchmarks[*benchmarkIndex], *benchmarkIndex, opts, false, w)
 	}
 
-	var sections []string
 	for i, bench := range benchmarks {
-		section, err := r.readBenchmarkLogs(evaluation, bench, i, opts, true)
-		if err != nil {
-			return "", err
+		if i > 0 {
+			if _, err := fmt.Fprint(w, "\n"); err != nil {
+				return err
+			}
 		}
-		if section != "" {
-			sections = append(sections, section)
+		if err := r.streamBenchmarkLogs(evaluation, bench, i, opts, true, w); err != nil {
+			return err
 		}
 	}
-	return strings.Join(sections, "\n"), nil
+	return nil
 }
 
-func (r *K8sRuntime) readBenchmarkLogs(
+func (r *K8sRuntime) streamBenchmarkLogs(
 	evaluation *api.EvaluationJobResource,
 	bench api.EvaluationBenchmarkConfig,
 	benchmarkIndex int,
 	opts api.EvaluationLogOptions,
 	includeHeader bool,
-) (string, error) {
+	w io.Writer,
+) error {
 	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
 	labelSelector := fmt.Sprintf(
 		"%s=%s,%s=%s",
@@ -65,25 +67,34 @@ func (r *K8sRuntime) readBenchmarkLogs(
 	)
 	jobs, err := r.helper.ListJobs(r.ctx, namespace, labelSelector)
 	if err != nil {
-		return "", err
+		return err
 	}
 	if len(jobs) == 0 {
 		if includeHeader {
-			return shared.FormatLogSectionHeader("unknown", adapterContainerName, bench.ID), nil
+			_, err = fmt.Fprint(w, shared.FormatLogSectionHeader("unknown", adapterContainerName, bench.ID))
+			return err
 		}
-		return "", nil
+		return nil
 	}
 
 	job := jobs[0]
 	pod, err := r.latestJobPod(namespace, job.Name)
 	if err != nil {
-		return "", err
+		return err
 	}
 	if pod == nil {
 		if includeHeader {
-			return shared.FormatLogSectionHeader(job.Name, adapterContainerName, bench.ID), nil
+			_, err = fmt.Fprint(w, shared.FormatLogSectionHeader(job.Name, adapterContainerName, bench.ID))
+			return err
 		}
-		return "", nil
+		return nil
+	}
+
+	if includeHeader {
+		header := shared.FormatLogSectionHeader(pod.Name, adapterContainerName, bench.ID)
+		if _, err = fmt.Fprint(w, header+"\n"); err != nil {
+			return err
+		}
 	}
 
 	logOpts := &corev1.PodLogOptions{
@@ -99,23 +110,14 @@ func (r *K8sRuntime) readBenchmarkLogs(
 		logOpts.SinceSeconds = &since
 	}
 
-	logs, err := r.helper.GetPodLogs(r.ctx, namespace, pod.Name, logOpts)
+	err = r.helper.StreamPodLogs(r.ctx, namespace, pod.Name, logOpts, w)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logs = ""
-		} else {
-			return "", err
+			return nil
 		}
+		return err
 	}
-	logs = strings.TrimRight(logs, "\n")
-	if !includeHeader {
-		return logs, nil
-	}
-	header := shared.FormatLogSectionHeader(pod.Name, adapterContainerName, bench.ID)
-	if logs == "" {
-		return header, nil
-	}
-	return header + "\n" + logs, nil
+	return nil
 }
 
 func (r *K8sRuntime) latestJobPod(namespace, jobName string) (*corev1.Pod, error) {
