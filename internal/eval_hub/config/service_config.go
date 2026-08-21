@@ -15,7 +15,6 @@ const DefaultMaxLogResponseBytes int64 = 50 << 20 // 50 MiB
 // DefaultLogStreamTimeout is applied when service.log_stream_timeout is omitted or zero.
 const DefaultLogStreamTimeout = 5 * time.Minute
 
-
 type ServiceConfig struct {
 	Version         string `mapstructure:"version,omitempty"`
 	Build           string `mapstructure:"build,omitempty"`
@@ -151,7 +150,6 @@ func (c *ServiceConfig) EffectiveLogStreamTimeout() time.Duration {
 	}
 	return c.LogStreamTimeout
 }
-
 
 // ValidateHTTPConfig returns an error when HTTP-related settings are invalid.
 func (c *ServiceConfig) ValidateHTTPConfig() error {
