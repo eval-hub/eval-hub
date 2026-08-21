@@ -53,12 +53,6 @@ properties:
     items:
       type: string
     description: ML task types covered (e.g. ["Question Answering", "Summarization"]).
-  ui:
-    $ref: ./CollectionUIMetadata.yaml
-    description: >
-      When present, marks this collection as part of the Curated Collections feature
-      and carries UI-specific display metadata. Collections without a ui block are
-      unaffected.
   clone_from_id:
     type: string
     description: >
