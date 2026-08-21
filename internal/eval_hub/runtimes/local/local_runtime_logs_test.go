@@ -126,6 +126,56 @@ func TestStreamEvaluationLogsRejectsEmptyBenchmarks(t *testing.T) {
 	}
 }
 
+func TestStreamEvaluationLogsTailLinesAllLines(t *testing.T) {
+	providerID := "provider-1"
+	jobID := "job-logs-alllines"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Resource.ID = jobID
+	dirName := localJobDir(jobID, 0, providerID, "bench-1")
+	cleanupDir(t, jobID)
+
+	if err := os.MkdirAll(dirName, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	logPath := filepath.Join(dirName, "jobrun.log")
+	if err := os.WriteFile(logPath, []byte("line1\nline2\nline3\n"), 0644); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+
+	rt := &LocalRuntime{logger: discardLogger(), ctx: context.Background()}
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("GetJobBenchmarks: %v", err)
+	}
+
+	var buf bytes.Buffer
+	idx := 0
+	err = rt.StreamEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: api.AllLogLines}, &buf)
+	if err != nil {
+		t.Fatalf("StreamEvaluationLogs: %v", err)
+	}
+	if got := buf.String(); got != "line1\nline2\nline3\n" {
+		t.Fatalf("got %q, want %q", got, "line1\nline2\nline3\n")
+	}
+}
+
+func TestStreamEvaluationLogsNegativeBenchmarkIndex(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	rt := &LocalRuntime{logger: discardLogger(), ctx: context.Background()}
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("GetJobBenchmarks: %v", err)
+	}
+
+	var buf bytes.Buffer
+	idx := -1
+	err = rt.StreamEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10}, &buf)
+	if err == nil {
+		t.Fatal("expected error for negative benchmark index")
+	}
+}
+
 func TestStreamEvaluationLogsHeaderOnlyWhenLogMissing(t *testing.T) {
 	providerID := "provider-1"
 	jobID := "job-logs-missing-file"

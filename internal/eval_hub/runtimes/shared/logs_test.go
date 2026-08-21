@@ -108,6 +108,22 @@ func TestTailFileLines(t *testing.T) {
 func TestStreamFileAll(t *testing.T) {
 	dir := t.TempDir()
 
+	t.Run("streams existing file content", func(t *testing.T) {
+		path := filepath.Join(dir, "existing.log")
+		content := "line1\nline2\nline3\n"
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+		var buf bytes.Buffer
+		if err := StreamFileAll(path, &buf); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if buf.String() != content {
+			t.Fatalf("got %q, want %q", buf.String(), content)
+		}
+	})
+
+
 	t.Run("missing file writes nothing", func(t *testing.T) {
 		var buf bytes.Buffer
 		err := StreamFileAll(filepath.Join(dir, "missing.log"), &buf)
@@ -115,23 +131,7 @@ func TestStreamFileAll(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if buf.Len() != 0 {
-			t.Fatalf("expected empty buffer, got %q", buf.String())
-		}
-	})
-
-	t.Run("streams entire file content", func(t *testing.T) {
-		path := filepath.Join(dir, "full.log")
-		content := "line1\nline2\nline3\n"
-		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-			t.Fatalf("write file: %v", err)
-		}
-		var buf bytes.Buffer
-		err := StreamFileAll(path, &buf)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if buf.String() != content {
-			t.Fatalf("got %q, want %q", buf.String(), content)
+			t.Fatalf("got %q, want empty", buf.String())
 		}
 	})
 
@@ -141,12 +141,11 @@ func TestStreamFileAll(t *testing.T) {
 			t.Fatalf("write file: %v", err)
 		}
 		var buf bytes.Buffer
-		err := StreamFileAll(path, &buf)
-		if err != nil {
+		if err := StreamFileAll(path, &buf); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if buf.Len() != 0 {
-			t.Fatalf("expected empty, got %q", buf.String())
+			t.Fatalf("got %q, want empty", buf.String())
 		}
 	})
 }

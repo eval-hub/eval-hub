@@ -91,31 +91,30 @@ func TestLimitedWriterMultipleWrites(t *testing.T) {
 	}
 }
 
-type errWriter struct {
-	errAfter int
-	written  int
+type failAfterNWriter struct {
+	n       int
+	written int
 }
 
-func (ew *errWriter) Write(p []byte) (int, error) {
-	if ew.written+len(p) > ew.errAfter {
-		allowed := ew.errAfter - ew.written
-		ew.written += allowed
-		return allowed, errors.New("write error")
+func (w *failAfterNWriter) Write(p []byte) (int, error) {
+	if w.written+len(p) > w.n {
+		allowed := w.n - w.written
+		w.written = w.n
+		return allowed, errors.New("disk full")
 	}
-	ew.written += len(p)
+	w.written += len(p)
 	return len(p), nil
 }
 
-func TestLimitedWriterUnderlyingWriterError(t *testing.T) {
-	ew := &errWriter{errAfter: 3}
-	lw := &LimitedWriter{W: ew, Limit: 100}
-
+func TestLimitedWriterUnderlyingWriteError(t *testing.T) {
+	fw := &failAfterNWriter{n: 3}
+	lw := &LimitedWriter{W: fw, Limit: 10}
 	n, err := lw.Write([]byte("hello"))
 	if err == nil {
-		t.Fatal("expected underlying writer error")
+		t.Fatal("expected error from underlying writer")
 	}
-	if err.Error() != "write error" {
-		t.Fatalf("got err %v, want 'write error'", err)
+	if errors.Is(err, ErrLogResponseTruncated) {
+		t.Fatal("expected underlying writer error, not ErrLogResponseTruncated")
 	}
 	if n != 3 {
 		t.Fatalf("wrote %d, want 3", n)
@@ -123,16 +122,16 @@ func TestLimitedWriterUnderlyingWriterError(t *testing.T) {
 }
 
 func TestLimitedWriterPartialWriteUnderlyingError(t *testing.T) {
-	ew := &errWriter{errAfter: 2}
-	lw := &LimitedWriter{W: ew, Limit: 5}
+	fw := &failAfterNWriter{n: 2}
+	lw := &LimitedWriter{W: fw, Limit: 5}
 
-	// Write data that is within the limit but exceeds what the underlying writer allows
+
 	n, err := lw.Write([]byte("abcde"))
 	if err == nil {
 		t.Fatal("expected error from underlying writer")
 	}
-	if err.Error() != "write error" {
-		t.Fatalf("got err %v, want 'write error'", err)
+	if errors.Is(err, ErrLogResponseTruncated) {
+		t.Fatal("expected underlying writer error, not ErrLogResponseTruncated")
 	}
 	if n != 2 {
 		t.Fatalf("wrote %d, want 2", n)
