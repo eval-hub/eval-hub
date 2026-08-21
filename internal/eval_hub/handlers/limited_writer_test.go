@@ -120,3 +120,19 @@ func TestLimitedWriterUnderlyingWriteError(t *testing.T) {
 		t.Fatalf("wrote %d, want 3", n)
 	}
 }
+
+func TestLimitedWriterPartialWriteUnderlyingError(t *testing.T) {
+	fw := &failAfterNWriter{n: 2}
+	lw := &LimitedWriter{W: fw, Limit: 5}
+
+	n, err := lw.Write([]byte("abcde"))
+	if err == nil {
+		t.Fatal("expected error from underlying writer")
+	}
+	if errors.Is(err, ErrLogResponseTruncated) {
+		t.Fatal("expected underlying writer error, not ErrLogResponseTruncated")
+	}
+	if n != 2 {
+		t.Fatalf("wrote %d, want 2", n)
+	}
+}
