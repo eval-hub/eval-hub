@@ -742,10 +742,10 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "minimum": 1,
+              "minimum": -1,
               "maximum": 10000,
               "default": 1000,
-              "description": "Maximum number of log lines to return per benchmark. The response\nconcatenates one section per benchmark; each section is capped\nindependently, not as a total across the full response.\n"
+              "description": "Maximum number of log lines to return per benchmark. The response\nconcatenates one section per benchmark; each section is capped\nindependently, not as a total across the full response.\nUse `-1` to request all available log lines (no tail limit).\nValid values: 1–10000, or -1 for all lines.\n"
             }
           },
           {
@@ -772,6 +772,17 @@
         "responses": {
           "200": {
             "description": "Successful Response",
+            "headers": {
+              "X-Log-Truncated": {
+                "description": "Present and set to `true` when the response was truncated because it\nexceeded the server's configured `max_log_response_bytes` limit.\n",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
             "content": {
               "text/plain": {
                 "schema": {
@@ -835,10 +846,10 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "minimum": 1,
+              "minimum": -1,
               "maximum": 10000,
               "default": 1000,
-              "description": "Maximum number of log lines to return"
+              "description": "Maximum number of log lines to return.\nUse `-1` to request all available log lines (no tail limit).\nValid values: 1–10000, or -1 for all lines.\n"
             }
           },
           {
@@ -865,6 +876,17 @@
         "responses": {
           "200": {
             "description": "Successful Response",
+            "headers": {
+              "X-Log-Truncated": {
+                "description": "Present and set to `true` when the response was truncated because it\nexceeded the server's configured `max_log_response_bytes` limit.\n",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
             "content": {
               "text/plain": {
                 "schema": {

@@ -88,13 +88,14 @@ func (r *stubRuntime) DeleteEvaluationJobResources(_ *api.EvaluationJobResource)
 	return nil
 }
 
-func (r *stubRuntime) GetEvaluationLogs(
+func (r *stubRuntime) StreamEvaluationLogs(
 	_ *api.EvaluationJobResource,
 	_ []api.EvaluationBenchmarkConfig,
 	_ *int,
 	_ api.EvaluationLogOptions,
-) (string, error) {
-	return "", nil
+	_ io.Writer,
+) error {
+	return nil
 }
 func (r *stubRuntime) NotifyJobPhaseTransition(_ context.Context, _ *api.EvaluationJobResource, _ int, _ api.State) {
 }
