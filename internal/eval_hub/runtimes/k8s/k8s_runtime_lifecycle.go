@@ -20,12 +20,12 @@ const (
 	// on each lifecycle transition via PatchJobPhaseLabel.
 	EvaluationPhasePending           = "Pending"
 	EvaluationPhaseRunning           = "Running"
-	EvaluationPhaseCompleted         = "Completed"
+	EvaluationPhaseCompleted         = "Succeeded"
 	EvaluationPhaseFailed            = "Failed"
 	EvaluationPhaseThresholdViolated = "ThresholdViolated"
 
 	// Kubernetes Event reasons emitted on lifecycle transitions.
-	eventReasonRunning           = "EvaluationRunning"
+	eventReasonRunning           = "EvaluationStarted"
 	eventReasonCompleted         = "EvaluationCompleted"
 	eventReasonFailed            = "EvaluationFailed"
 	eventReasonThresholdViolated = "EvaluationThresholdViolated"
@@ -68,10 +68,11 @@ func (r *K8sRuntime) NotifyJobPhaseTransition(ctx context.Context, evaluation *a
 			)
 		}
 		statusPayload := map[string]any{
-			"phase":           phase,
-			"timestamp":       time.Now().UTC().Format(time.RFC3339),
-			"evaluation_id":   evaluation.Resource.ID,
-			"benchmark_index": benchmarkIndex,
+			"phase":          phase,
+			"timestamp":      time.Now().UTC().Format(time.RFC3339),
+			"evaluationId":   evaluation.Resource.ID,
+			"benchmarkIndex": benchmarkIndex,
+			"summaryMetrics": nil,
 		}
 		if annotErr := r.helper.PatchJobStatusAnnotation(signalCtx, namespace, job.Name, statusPayload); annotErr != nil {
 			r.logger.WarnContext(signalCtx, "lifecycle signal: patch status annotation failed",
