@@ -131,10 +131,10 @@ func (r *stubLogsRuntime) DeleteEvaluationJobResources(_ *api.EvaluationJobResou
 	return nil
 }
 func (r *stubLogsRuntime) StreamEvaluationLogs(_ *api.EvaluationJobResource, _ []api.EvaluationBenchmarkConfig, _ *int, _ api.EvaluationLogOptions, w io.Writer) error {
-	close(r.exported)
 	if r.logs != "" {
 		_, _ = io.WriteString(w, r.logs)
 	}
+	close(r.exported)
 	return nil
 }
 func (r *stubLogsRuntime) ValidateHardwareProfiles(_ []api.EvaluationBenchmarkConfig) error {
