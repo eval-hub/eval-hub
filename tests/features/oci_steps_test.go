@@ -78,22 +78,27 @@ func (tc *scenarioConfig) getOCIBearerToken(repository string) (string, error) {
 	}
 
 	var tokenResp struct {
-		Token string `json:"token"`
+		Token       string `json:"token"`
+		AccessToken string `json:"access_token"`
 	}
 	if err := json.Unmarshal(body, &tokenResp); err != nil {
 		return "", fmt.Errorf("failed to parse token response: %w", err)
 	}
-	if tokenResp.Token == "" {
+	tok := tokenResp.Token
+	if tok == "" {
+		tok = tokenResp.AccessToken
+	}
+	if tok == "" {
 		return "", fmt.Errorf("token endpoint returned empty token")
 	}
 
 	if tc.ociBearerTokens == nil {
 		tc.ociBearerTokens = make(map[string]string)
 	}
-	tc.ociBearerTokens[repository] = tokenResp.Token
+	tc.ociBearerTokens[repository] = tok
 
 	tc.logDebug("Bearer token obtained for repository %s\n", repository)
-	return tokenResp.Token, nil
+	return tok, nil
 }
 
 // --- OCI Artifact Step Definitions ---
