@@ -1712,15 +1712,17 @@ paths:
         Returns aggregated counts for Collections UI filter dropdowns and statistics. The response is a lightweight metadata summary, not a list of collections.
       operationId: get_collections_meta
       parameters:
-        - name: curated
+        - name: scope
           in: query
           required: false
           schema:
-            type: boolean
-            default: false
-            title: Curated Collections filter
+            type: string
+            enum:
+              - system
+              - tenant
+            title: Scope filter
           description: |
-            When `true`, scopes the counts to curated collections only. Defaults to `false`; counts cover all collections when omitted.
+            Set to `system` to count only curated (system-defined) collections, or `tenant` to count only custom (tenant-defined) collections. When omitted, counts cover all collections. Mirrors the `scope` parameter on `GET /collections`.
       responses:
         '200':
           description: Successful Response
@@ -1769,6 +1771,18 @@ paths:
                           type: string
                         count:
                           type: integer
+                  categories:
+                    type: array
+                    description: Category values with counts. Mirrors the existing category field on collections.
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        label:
+                          type: string
+                        count:
+                          type: integer
               examples:
                 response:
                   summary: Metadata for curated collections
@@ -1794,6 +1808,16 @@ paths:
                     tasks:
                       - id: Question Answering (RAG)
                         label: Question Answering (RAG)
+                        count: 3
+                    categories:
+                      - id: rag
+                        label: rag
+                        count: 3
+                      - id: safety
+                        label: safety
+                        count: 2
+                      - id: reasoning
+                        label: reasoning
                         count: 3
         '400':
           $ref: '#/components/responses/BadRequest'
