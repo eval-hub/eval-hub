@@ -1353,7 +1353,7 @@ paths:
             default: true
             title: Include curated metadata
           description: |
-            When `false`, strips the `ui` field from the response body. Useful for SDK/CLI consumers that want lean payloads and do not need curated metadata. Defaults to `true`; existing callers that do not pass this parameter are unaffected.
+            When `false`, strips the `ui` field from the response body. Defaults to `true`; existing callers that do not pass this parameter are unaffected.
         - name: use_cases
           in: query
           required: false
@@ -1579,7 +1579,7 @@ paths:
         - Collections
       summary: Get Collection Metadata
       description: |
-        Returns aggregated counts for Curated Collections UI filter dropdowns and statistics. The response is a lightweight metadata summary, not a list of collections.
+        Returns aggregated counts for Collections UI filter dropdowns and statistics. The response is a lightweight metadata summary, not a list of collections.
       operationId: get_collections_meta
       parameters:
         - name: curated
@@ -1598,7 +1598,7 @@ paths:
             application/json:
               schema:
                 type: object
-                description: Aggregated metadata counts for Curated Collections filter dropdowns.
+                description: Aggregated metadata counts for Collections filter dropdowns.
                 properties:
                   total_count:
                     type: integer

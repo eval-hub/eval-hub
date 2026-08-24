@@ -78,7 +78,6 @@ get:
         title: Include curated metadata
       description: >
         When `false`, strips the `ui` field from the response body.
-        Useful for SDK/CLI consumers that want lean payloads and do not need curated metadata.
         Defaults to `true`; existing callers that do not pass this parameter are unaffected.
     - name: use_cases
       in: query

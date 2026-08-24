@@ -1917,7 +1917,7 @@
               "default": true,
               "title": "Include curated metadata"
             },
-            "description": "When `false`, strips the `ui` field from the response body. Useful for SDK/CLI consumers that want lean payloads and do not need curated metadata. Defaults to `true`; existing callers that do not pass this parameter are unaffected.\n"
+            "description": "When `false`, strips the `ui` field from the response body. Defaults to `true`; existing callers that do not pass this parameter are unaffected.\n"
           },
           {
             "name": "use_cases",
@@ -2249,7 +2249,7 @@
           "Collections"
         ],
         "summary": "Get Collection Metadata",
-        "description": "Returns aggregated counts for Curated Collections UI filter dropdowns and statistics. The response is a lightweight metadata summary, not a list of collections.\n",
+        "description": "Returns aggregated counts for Collections UI filter dropdowns and statistics. The response is a lightweight metadata summary, not a list of collections.\n",
         "operationId": "get_collections_meta",
         "parameters": [
           {
@@ -2271,7 +2271,7 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Aggregated metadata counts for Curated Collections filter dropdowns.",
+                  "description": "Aggregated metadata counts for Collections filter dropdowns.",
                   "properties": {
                     "total_count": {
                       "type": "integer",
