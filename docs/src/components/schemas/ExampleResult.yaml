@@ -1,6 +1,6 @@
 type: object
 description: >
-  A durable display-only result snapshot for a curated collection.
+  A durable display-only result snapshot for a collection.
   Scores are copied from the source evaluation job at promotion time and do not
   depend on the originating job remaining in the database.
 properties:
@@ -23,7 +23,7 @@ properties:
   overall:
     type: number
     format: float
-    description: Weighted aggregate score across all benchmarks.
+    description: Weighted aggregate score.
   passed:
     type: boolean
     description: True if the overall score meets the collection pass_criteria threshold.
@@ -31,12 +31,7 @@ properties:
     $ref: ./EvalCardRef.yaml
     description: >
       Optional reference to the full EvalCard artifact for this result.
-      Populated once EvalCard storage is resolved; static score fields above
-      are always used for display regardless.
 required:
   - label
   - model_name
   - date
-  - scores
-  - overall
-  - passed

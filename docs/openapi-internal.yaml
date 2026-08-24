@@ -3517,7 +3517,7 @@ components:
     ExampleResult:
       type: object
       description: |
-        A durable display-only result snapshot for a curated collection. Scores are copied from the source evaluation job at promotion time and do not depend on the originating job remaining in the database.
+        A durable display-only result snapshot for a collection. Scores are copied from the source evaluation job at promotion time and do not depend on the originating job remaining in the database.
       properties:
         label:
           type: string
@@ -3538,30 +3538,27 @@ components:
         overall:
           type: number
           format: float
-          description: Weighted aggregate score across all benchmarks.
+          description: Weighted aggregate score.
         passed:
           type: boolean
           description: True if the overall score meets the collection pass_criteria threshold.
         eval_card_ref:
           $ref: '#/components/schemas/EvalCardRef'
           description: |
-            Optional reference to the full EvalCard artifact for this result. Populated once EvalCard storage is resolved; static score fields above are always used for display regardless.
+            Optional reference to the full EvalCard artifact for this result.
       required:
         - label
         - model_name
         - date
-        - scores
-        - overall
-        - passed
     CollectionState:
       type: object
       description: |
-        Server-managed runtime state for custom (tenant-scoped) collections. Never user-supplied and never written to YAML configuration. Present only on custom collections (scope=tenant); curated system collections carry ui metadata instead.
+        Server-managed runtime state for custom (tenant-scoped) collections. Never user-supplied and never written to YAML configuration.
       properties:
         clone_of_id:
           type: string
           description: |
-            ID of the collection this was cloned from. Set by the server when a collection is created with clone_from_id; never user-supplied. Provides provenance so the UI can show "forked from <name>".
+            ID of the collection this was cloned from. Set by the server when a collection is created with clone_from_id.
         run_count:
           type: integer
           description: |
@@ -3571,18 +3568,18 @@ components:
           items:
             $ref: '#/components/schemas/ExampleResult'
           description: |
-            Result snapshots promoted by the tenant as featured examples. Scores are copied from the source job at promotion time — durable, survives job deletion. Populated via PATCH /collections/{id}.
+            Result snapshots promoted by the tenant as featured examples. Scores are copied from the source job at promotion time — durable, survives job deletion.
     CollectionUIMetadata:
       type: object
-      description: UI-specific display metadata for curated collections. Present only on collections that are part of the Curated Collections feature.
+      description: UI-specific display metadata for curated collections. Set via operator YAML only; not settable via API.
       properties:
         icon:
           type: string
-          description: Identifier for the collection card icon (a name token, not a URL).
+          description: Identifier for the collection card icon.
         is_featured:
           type: boolean
           description: |
-            When true, this collection is shown prominently in the Curated Collections UI. Set via operator YAML only; not settable via API.
+            When true, this collection is shown prominently in the Curated Collections UI.
     CollectionBenchmarkConfig:
       type: object
       description: |
@@ -3687,7 +3684,7 @@ components:
             state:
               $ref: '#/components/schemas/CollectionState'
               description: |
-                Server-managed runtime state for custom (tenant-scoped) collections. Present only on collections with scope=tenant; absent on curated system collections. Never user-supplied.
+                Server-managed runtime state for custom (tenant-scoped) collections. Present only on collections with scope=tenant; absent on system collections. Never user-supplied.
             ui:
               $ref: '#/components/schemas/CollectionUIMetadata'
               description: |

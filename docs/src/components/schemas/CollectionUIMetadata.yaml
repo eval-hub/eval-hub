@@ -1,11 +1,10 @@
 type: object
-description: UI-specific display metadata for curated collections. Present only on collections that are part of the Curated Collections feature.
+description: UI-specific display metadata for curated collections. Set via operator YAML only; not settable via API.
 properties:
   icon:
     type: string
-    description: Identifier for the collection card icon (a name token, not a URL).
+    description: Identifier for the collection card icon.
   is_featured:
     type: boolean
     description: >
       When true, this collection is shown prominently in the Curated Collections UI.
-      Set via operator YAML only; not settable via API.

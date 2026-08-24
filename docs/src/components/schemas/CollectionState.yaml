@@ -2,15 +2,12 @@ type: object
 description: >
   Server-managed runtime state for custom (tenant-scoped) collections.
   Never user-supplied and never written to YAML configuration.
-  Present only on custom collections (scope=tenant); curated system
-  collections carry ui metadata instead.
 properties:
   clone_of_id:
     type: string
     description: >
       ID of the collection this was cloned from. Set by the server when a
-      collection is created with clone_from_id; never user-supplied.
-      Provides provenance so the UI can show "forked from <name>".
+      collection is created with clone_from_id.
   run_count:
     type: integer
     description: >
@@ -23,4 +20,4 @@ properties:
     description: >
       Result snapshots promoted by the tenant as featured examples.
       Scores are copied from the source job at promotion time — durable,
-      survives job deletion. Populated via PATCH /collections/{id}.
+      survives job deletion.
