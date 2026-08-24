@@ -32,10 +32,8 @@ properties:
     items:
       type: string
     description: >
-      List of use cases this collection covers. A collection can cover more than one
-      (e.g. ["rag", "qa"]). Known values include: rag, llm_quality, safety, qa,
-      summarization, custom. Available to CLI, SDK, and non-curated-collections
-      consumers without needing to know about UI metadata.
+      List of use cases this collection covers. Known values include: rag, llm_quality,
+      safety, qa, summarization, custom.
   modalities:
     type: array
     items:
@@ -52,7 +50,7 @@ properties:
       When provided on collection creation, records this collection's origin
       by setting clone_of_id in the returned state. The collection is created
       from the provided request body spec as usual; this field only affects
-      provenance tracking. Write-only — not returned in responses.
+      provenance tracking.
 required:
   - name
   - category
