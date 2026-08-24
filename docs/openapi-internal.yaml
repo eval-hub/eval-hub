@@ -1466,23 +1466,48 @@ paths:
             title: Scope of collections
           description: |
             Set to `system` to get only system defined collections, or `tenant` to get only user defined collections. If `scope` is not provided, both system and user defined collections will be returned.
-        - name: ui
+        - name: curated
           in: query
           required: false
           schema:
             type: boolean
+            default: false
             title: Curated Collections filter
           description: |
-            When `true`, returns only collections that have a `ui` block (i.e. curated collections). When omitted, all collections are returned regardless of whether they have a `ui` block.
-        - name: ui_info
+            When `true`, returns only curated collections (those with a `ui` block). Defaults to `false`; all collections are returned when omitted.
+        - name: curated_info
           in: query
           required: false
           schema:
             type: boolean
             default: true
-            title: Include UI metadata
+            title: Include curated metadata
           description: |
-            When `false`, strips the `ui` field from the response body. Useful for SDK/CLI consumers that want lean payloads and do not need UI metadata. Defaults to `true`; existing callers that do not pass this parameter are unaffected.
+            When `false`, strips the `ui` field from the response body. Useful for SDK/CLI consumers that want lean payloads and do not need curated metadata. Defaults to `true`; existing callers that do not pass this parameter are unaffected.
+        - name: use_cases
+          in: query
+          required: false
+          schema:
+            type: string
+            title: Use case filter
+          description: |
+            Filter collections by use case. Returns collections whose use_cases array contains this value (e.g. `?use_cases=rag`). May be repeated for multiple values.
+        - name: modalities
+          in: query
+          required: false
+          schema:
+            type: string
+            title: Modality filter
+          description: |
+            Filter collections by modality. Returns collections whose modalities array contains this value (e.g. `?modalities=Text`). May be repeated for multiple values.
+        - name: tasks
+          in: query
+          required: false
+          schema:
+            type: string
+            title: Task filter
+          description: |
+            Filter collections by task type. Returns collections whose tasks array contains this value. May be repeated for multiple values.
       responses:
         '200':
           description: Successful Response
@@ -1687,14 +1712,15 @@ paths:
         Returns aggregated counts for Curated Collections UI filter dropdowns and statistics. The response is a lightweight metadata summary, not a list of collections.
       operationId: get_collections_meta
       parameters:
-        - name: ui
+        - name: curated
           in: query
           required: false
           schema:
             type: boolean
+            default: false
             title: Curated Collections filter
           description: |
-            When `true`, scopes the counts to curated collections only (those with a `ui` block). When omitted, counts cover all collections.
+            When `true`, scopes the counts to curated collections only. Defaults to `false`; counts cover all collections when omitted.
       responses:
         '200':
           description: Successful Response
@@ -1789,13 +1815,13 @@ paths:
           schema:
             type: string
             title: Collection Id
-        - name: ui_info
+        - name: curated_info
           in: query
           required: false
           schema:
             type: boolean
             default: true
-            title: Include UI metadata
+            title: Include curated metadata
           description: |
             When `false`, strips the `ui` field from the response body. Defaults to `true`; existing callers are unaffected.
       responses:

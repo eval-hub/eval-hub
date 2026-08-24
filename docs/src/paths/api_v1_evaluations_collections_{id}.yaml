@@ -11,13 +11,13 @@ get:
       schema:
         type: string
         title: Collection Id
-    - name: ui_info
+    - name: curated_info
       in: query
       required: false
       schema:
         type: boolean
         default: true
-        title: Include UI metadata
+        title: Include curated metadata
       description: >
         When `false`, strips the `ui` field from the response body.
         Defaults to `true`; existing callers are unaffected.
