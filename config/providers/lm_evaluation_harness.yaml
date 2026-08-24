@@ -3471,7 +3471,7 @@ benchmarks:
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Multiple-choice accuracy (mc1) on multiple-choice questions; higher is better.
+    result_interpretation: Multiple-choice accuracy (acc) on multiple-choice questions; higher is better.
     score_ranges:
     - range: 0.0-0.25
       meaning: Below random chance for 4-choice questions
