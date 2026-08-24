@@ -4953,17 +4953,9 @@
           "use_cases": {
             "type": "array",
             "items": {
-              "type": "string",
-              "enum": [
-                "rag",
-                "llm_quality",
-                "safety",
-                "qa",
-                "summarization",
-                "custom"
-              ]
+              "type": "string"
             },
-            "description": "Controlled vocabulary list of use cases this collection covers. A collection can cover more than one (e.g. [\"rag\", \"qa\"]). Available to CLI, SDK, and non-curated-collections consumers without needing to know about UI metadata.\n"
+            "description": "List of use cases this collection covers. A collection can cover more than one (e.g. [\"rag\", \"qa\"]). Known values include: rag, llm_quality, safety, qa, summarization, custom. Available to CLI, SDK, and non-curated-collections consumers without needing to know about UI metadata.\n"
           },
           "modalities": {
             "type": "array",
