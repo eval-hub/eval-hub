@@ -9,9 +9,9 @@ allOf:
       state:
         $ref: ./CollectionState.yaml
         description: >
-          Server-managed runtime state for curated collections.
-          Present only when the collection has a ui block (i.e. is part of
-          the Curated Collections feature). Never user-supplied.
+          Server-managed runtime state for custom (tenant-scoped) collections.
+          Present only on collections with scope=tenant; absent on curated
+          system collections. Never user-supplied.
       ui:
         $ref: ./CollectionUIMetadata.yaml
         description: >

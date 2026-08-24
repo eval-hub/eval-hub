@@ -1,8 +1,9 @@
 type: object
 description: >
-  Server-managed runtime state for curated collections.
+  Server-managed runtime state for custom (tenant-scoped) collections.
   Never user-supplied and never written to YAML configuration.
-  Present only on collections that are part of the Curated Collections feature.
+  Present only on custom collections (scope=tenant); curated system
+  collections carry ui metadata instead.
 properties:
   clone_of_id:
     type: string
@@ -14,13 +15,7 @@ properties:
     type: integer
     description: >
       Number of evaluation jobs created from this collection by its owning tenant.
-      Per-tenant counter incremented at job creation.
-  benchmark_count:
-    type: integer
-    description: Number of benchmarks in this collection, denormalized for display. Populated and updated by the server.
-  dataset_count:
-    type: integer
-    description: Number of datasets associated with this collection, denormalized for display. Populated and updated by the server.
+      Per-tenant counter, incremented at job creation.
   example_results:
     type: array
     items:

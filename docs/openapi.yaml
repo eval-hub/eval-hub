@@ -3341,7 +3341,7 @@ components:
     CollectionState:
       type: object
       description: |
-        Server-managed runtime state for curated collections. Never user-supplied and never written to YAML configuration. Present only on collections that are part of the Curated Collections feature.
+        Server-managed runtime state for custom (tenant-scoped) collections. Never user-supplied and never written to YAML configuration. Present only on custom collections (scope=tenant); curated system collections carry ui metadata instead.
       properties:
         clone_of_id:
           type: string
@@ -3350,13 +3350,7 @@ components:
         run_count:
           type: integer
           description: |
-            Number of evaluation jobs created from this collection by its owning tenant. Per-tenant counter incremented at job creation.
-        benchmark_count:
-          type: integer
-          description: Number of benchmarks in this collection, denormalized for display. Populated and updated by the server.
-        dataset_count:
-          type: integer
-          description: Number of datasets associated with this collection, denormalized for display. Populated and updated by the server.
+            Number of evaluation jobs created from this collection by its owning tenant. Per-tenant counter, incremented at job creation.
         example_results:
           type: array
           items:
@@ -3447,7 +3441,7 @@ components:
           items:
             type: string
           description: |
-            List of use cases this collection covers. A collection can cover more than one (e.g. ["rag", "qa"]). Known values include: rag, llm_quality, safety, qa, summarization, custom. Available to CLI, SDK, and non-curated-collections consumers without needing to know about UI metadata.
+            List of use cases this collection covers. Known values include: rag, llm_quality, safety, qa, summarization, custom.
         modalities:
           type: array
           items:
@@ -3461,7 +3455,7 @@ components:
         clone_from_id:
           type: string
           description: |
-            When provided on collection creation, records this collection's origin by setting clone_of_id in the returned state. The collection is created from the provided request body spec as usual; this field only affects provenance tracking. Write-only — not returned in responses.
+            When provided on collection creation, records this collection's origin by setting clone_of_id in the returned state. The collection is created from the provided request body spec as usual; this field only affects provenance tracking.
       required:
         - name
         - category
@@ -3478,7 +3472,7 @@ components:
             state:
               $ref: '#/components/schemas/CollectionState'
               description: |
-                Server-managed runtime state for curated collections. Present only when the collection has a ui block (i.e. is part of the Curated Collections feature). Never user-supplied.
+                Server-managed runtime state for custom (tenant-scoped) collections. Present only on collections with scope=tenant; absent on curated system collections. Never user-supplied.
             ui:
               $ref: '#/components/schemas/CollectionUIMetadata'
               description: |
