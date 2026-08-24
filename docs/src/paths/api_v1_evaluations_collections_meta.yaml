@@ -14,13 +14,15 @@ get:
         type: string
         enum:
           - system
+          - curated
           - tenant
         title: Scope filter
       description: >
-        Set to `system` to count only curated (system-defined) collections,
-        or `tenant` to count only custom (tenant-defined) collections.
+        Scopes the counts by collection type. Mirrors the `scope` parameter on `GET /collections`.
+        `system` counts all system-defined collections.
+        `curated` counts only curated system collections (those with a `ui` block).
+        `tenant` counts only tenant (custom) collections.
         When omitted, counts cover all collections.
-        Mirrors the `scope` parameter on `GET /collections`.
   responses:
     '200':
       description: Successful Response

@@ -1891,22 +1891,12 @@
               "type": "string",
               "enum": [
                 "system",
+                "curated",
                 "tenant"
               ],
               "title": "Scope of collections"
             },
-            "description": "Set to `system` to get only system defined collections, or `tenant` to get only user defined collections. If `scope` is not provided, both system and user defined collections will be returned.\n"
-          },
-          {
-            "name": "curated",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false,
-              "title": "Curated Collections filter"
-            },
-            "description": "When `true`, returns only curated collections (those with a `ui` block). Defaults to `false`; all collections are returned when omitted.\n"
+            "description": "Filters the result set by collection scope. `system` returns all system-defined collections (curated and non-curated). `curated` returns only curated system collections (those with a `ui` block). `tenant` returns only tenant (custom) collections. When omitted, all collections are returned.\n"
           },
           {
             "name": "curated_info",
@@ -2260,11 +2250,12 @@
               "type": "string",
               "enum": [
                 "system",
+                "curated",
                 "tenant"
               ],
               "title": "Scope filter"
             },
-            "description": "Set to `system` to count only curated (system-defined) collections, or `tenant` to count only custom (tenant-defined) collections. When omitted, counts cover all collections. Mirrors the `scope` parameter on `GET /collections`.\n"
+            "description": "Scopes the counts by collection type. Mirrors the `scope` parameter on `GET /collections`. `system` counts all system-defined collections. `curated` counts only curated system collections (those with a `ui` block). `tenant` counts only tenant (custom) collections. When omitted, counts cover all collections.\n"
           }
         ],
         "responses": {
