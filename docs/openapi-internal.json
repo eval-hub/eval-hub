@@ -520,6 +520,16 @@
               "title": "Tags"
             },
             "description": "Tags to search for"
+          },
+          {
+            "name": "collection_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            },
+            "description": "Filter by the ID of the collection the job was created from. Maps to the collection.id field on the job record. Returns all jobs for the collection, ordered by date.\n"
           }
         ],
         "responses": {
@@ -2080,6 +2090,27 @@
               "title": "Scope of collections"
             },
             "description": "Set to `system` to get only system defined collections, or `tenant` to get only user defined collections. If `scope` is not provided, both system and user defined collections will be returned.\n"
+          },
+          {
+            "name": "ui",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "title": "Curated Collections filter"
+            },
+            "description": "When `true`, returns only collections that have a `ui` block (i.e. curated collections). When omitted, all collections are returned regardless of whether they have a `ui` block.\n"
+          },
+          {
+            "name": "ui_info",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Include UI metadata"
+            },
+            "description": "When `false`, strips the `ui` field from the response body. Useful for SDK/CLI consumers that want lean payloads and do not need UI metadata. Defaults to `true`; existing callers that do not pass this parameter are unaffected.\n"
           }
         ],
         "responses": {
@@ -2375,6 +2406,154 @@
         }
       }
     },
+    "/api/v1/evaluations/collections/meta": {
+      "get": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Get Collection Metadata",
+        "description": "Returns aggregated counts for Curated Collections UI filter dropdowns and statistics. The response is a lightweight metadata summary, not a list of collections.\n",
+        "operationId": "get_collections_meta",
+        "parameters": [
+          {
+            "name": "ui",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "title": "Curated Collections filter"
+            },
+            "description": "When `true`, scopes the counts to curated collections only (those with a `ui` block). When omitted, counts cover all collections.\n"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Aggregated metadata counts for Curated Collections filter dropdowns.",
+                  "properties": {
+                    "total_count": {
+                      "type": "integer",
+                      "description": "Total number of collections matching the filter."
+                    },
+                    "use_cases": {
+                      "type": "array",
+                      "description": "Use case values with counts.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "modalities": {
+                      "type": "array",
+                      "description": "Modality values with counts.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "tasks": {
+                      "type": "array",
+                      "description": "Task values with counts.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "response": {
+                    "summary": "Metadata for curated collections",
+                    "value": {
+                      "total_count": 8,
+                      "use_cases": [
+                        {
+                          "id": "rag",
+                          "label": "RAG",
+                          "count": 3
+                        },
+                        {
+                          "id": "safety",
+                          "label": "Safety",
+                          "count": 2
+                        },
+                        {
+                          "id": "llm_quality",
+                          "label": "LLM Quality",
+                          "count": 2
+                        },
+                        {
+                          "id": "summarization",
+                          "label": "Summarization",
+                          "count": 1
+                        }
+                      ],
+                      "modalities": [
+                        {
+                          "id": "Text",
+                          "label": "Text",
+                          "count": 8
+                        }
+                      ],
+                      "tasks": [
+                        {
+                          "id": "Question Answering (RAG)",
+                          "label": "Question Answering (RAG)",
+                          "count": 3
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
     "/api/v1/evaluations/collections/{id}": {
       "get": {
         "tags": [
@@ -2392,6 +2571,17 @@
               "type": "string",
               "title": "Collection Id"
             }
+          },
+          {
+            "name": "ui_info",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Include UI metadata"
+            },
+            "description": "When `false`, strips the `ui` field from the response body. Defaults to `true`; existing callers are unaffected.\n"
           }
         ],
         "responses": {
@@ -4566,6 +4756,115 @@
           "path"
         ]
       },
+      "EvalCardRef": {
+        "type": "object",
+        "description": "Opaque reference to an EvalCard artifact stored externally.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Storage backend identifier (e.g. \"oci\", \"mlflow\")."
+          },
+          "ref": {
+            "type": "string",
+            "description": "Opaque reference within the storage backend."
+          }
+        },
+        "required": [
+          "type",
+          "ref"
+        ]
+      },
+      "ExampleResult": {
+        "type": "object",
+        "description": "A durable display-only result snapshot for a curated collection. Scores are copied from the source evaluation job at promotion time and do not depend on the originating job remaining in the database.\n",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Display label for this result (e.g. \"RAG Eval Run"
+          },
+          "model_name": {
+            "type": "string",
+            "description": "Name of the model that produced this result."
+          },
+          "date": {
+            "type": "string",
+            "format": "date-time",
+            "description": "RFC3339 timestamp when this result was produced."
+          },
+          "scores": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number",
+              "format": "float"
+            },
+            "description": "Map of metric name to score value."
+          },
+          "overall": {
+            "type": "number",
+            "format": "float",
+            "description": "Weighted aggregate score across all benchmarks."
+          },
+          "passed": {
+            "type": "boolean",
+            "description": "True if the overall score meets the collection pass_criteria threshold."
+          },
+          "eval_card_ref": {
+            "$ref": "#/components/schemas/EvalCardRef",
+            "description": "Optional reference to the full EvalCard artifact for this result. Populated once EvalCard storage is resolved; static score fields above are always used for display regardless.\n"
+          }
+        },
+        "required": [
+          "label",
+          "model_name",
+          "date",
+          "scores",
+          "overall",
+          "passed"
+        ]
+      },
+      "CollectionState": {
+        "type": "object",
+        "description": "Server-managed runtime state for curated collections. Never user-supplied and never written to YAML configuration. Present only on collections that are part of the Curated Collections feature.\n",
+        "properties": {
+          "clone_of_id": {
+            "type": "string",
+            "description": "ID of the collection this was cloned from. Set by the server when a collection is created with clone_from_id; never user-supplied. Provides provenance so the UI can show \"forked from <name>\".\n"
+          },
+          "run_count": {
+            "type": "integer",
+            "description": "Number of evaluation jobs created from this collection by its owning tenant. Per-tenant counter incremented at job creation.\n"
+          },
+          "benchmark_count": {
+            "type": "integer",
+            "description": "Number of benchmarks in this collection, denormalized for display. Populated and updated by the server."
+          },
+          "dataset_count": {
+            "type": "integer",
+            "description": "Number of datasets associated with this collection, denormalized for display. Populated and updated by the server."
+          },
+          "example_results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExampleResult"
+            },
+            "description": "Result snapshots promoted by the tenant as featured examples. Scores are copied from the source job at promotion time — durable, survives job deletion. Populated via PATCH /collections/{id}.\n"
+          }
+        }
+      },
+      "CollectionUIMetadata": {
+        "type": "object",
+        "description": "UI-specific display metadata for curated collections. Present only on collections that are part of the Curated Collections feature.",
+        "properties": {
+          "icon": {
+            "type": "string",
+            "description": "Identifier for the collection card icon (a name token, not a URL)."
+          },
+          "is_featured": {
+            "type": "boolean",
+            "description": "When true, this collection is shown prominently in the Curated Collections UI. Set via operator YAML only; not settable via API.\n"
+          }
+        }
+      },
       "CollectionBenchmarkConfig": {
         "type": "object",
         "description": "Reference to a benchmark in a collection (create, update, list, or get collection).\nThe **url** field is set by the server from the provider definition when a collection is created (POST), fully replaced (PUT), or when a whole benchmark array element is added or replaced via PATCH (paths `/benchmarks/<index>` or `/benchmarks/-`), then stored and returned on list/get; omitted when unknown. Field-level benchmark patches (e.g. `/benchmarks/0/id`) do not trigger this. It is not used on evaluation jobs.\n",
@@ -4650,6 +4949,39 @@
               "$ref": "#/components/schemas/CollectionBenchmarkConfig"
             },
             "description": "Benchmarks in the collection."
+          },
+          "use_cases": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "rag",
+                "llm_quality",
+                "safety",
+                "qa",
+                "summarization",
+                "custom"
+              ]
+            },
+            "description": "Controlled vocabulary list of use cases this collection covers. A collection can cover more than one (e.g. [\"rag\", \"qa\"]). Available to CLI, SDK, and non-curated-collections consumers without needing to know about UI metadata.\n"
+          },
+          "modalities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Data modalities this collection covers (e.g. [\"Text\", \"Vision\"])."
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "ML task types covered (e.g. [\"Question Answering\", \"Summarization\"])."
+          },
+          "clone_from_id": {
+            "type": "string",
+            "description": "When provided on collection creation, records this collection's origin by setting clone_of_id in the returned state. The collection is created from the provided request body spec as usual; this field only affects provenance tracking. Write-only — not returned in responses.\n"
           }
         },
         "required": [
@@ -4668,6 +5000,14 @@
               "resource": {
                 "$ref": "#/components/schemas/Resource",
                 "description": "Resource metadata"
+              },
+              "state": {
+                "$ref": "#/components/schemas/CollectionState",
+                "description": "Server-managed runtime state for curated collections. Present only when the collection has a ui block (i.e. is part of the Curated Collections feature). Never user-supplied.\n"
+              },
+              "ui": {
+                "$ref": "#/components/schemas/CollectionUIMetadata",
+                "description": "UI-specific display metadata for curated collections. Set by system operators via YAML configuration only; not accepted in request bodies. Present only on curated collections.\n"
               }
             }
           },
