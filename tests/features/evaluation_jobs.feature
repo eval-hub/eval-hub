@@ -2026,7 +2026,7 @@ Feature: Evaluation Jobs
     And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.collection.benchmarks[2].hardware_config.queue.name"
     And the response should contain the value "kueue" at path "$.collection.benchmarks[3].hardware_config.queue.kind"
     And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.collection.benchmarks[3].hardware_config.queue.name"
-  
+
   @mlflow
   Scenario: Card generated for completed job with collection - open-telco-v1
     Given the service is running
