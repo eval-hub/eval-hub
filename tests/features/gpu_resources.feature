@@ -77,6 +77,8 @@ Feature: GPU Resource Management
     Then the Job spec should have GPU request set to "1"
     And the Job spec should have GPU limit set to "1"
     And the Job spec should have label "kueue.x-k8s.io/queue-name=test-local-queue"
+    # eval-hub must not set a nodeSelector for a queue-backed job; Kueue may inject the
+    # admitted ResourceFlavor's label (nvidia.com/gpu.product=<GPU_PRODUCT>), which is tolerated
     And the Job spec should not have nodeSelector
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
@@ -97,6 +99,8 @@ Feature: GPU Resource Management
     And I wait for the Kubernetes Job to be created for evaluation job "{id}"
     Then the Job spec should have GPU request set to "1"
     And the Job spec should have GPU limit set to "1"
+    # eval-hub must strip the provider's conflicting node_selector (DOES_NOT_EXIST) so Kueue
+    # can schedule via the ResourceFlavor; the injected flavor label (GPU_PRODUCT) is tolerated
     And the Job spec should not have nodeSelector
     And the Job spec should have label "kueue.x-k8s.io/queue-name=test-local-queue"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
