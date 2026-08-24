@@ -2006,6 +2006,12 @@ Feature: Evaluation Jobs
     Then the response code should be 202
     And the response should contain the value "kueue" at path "$.collection.benchmarks[0].hardware_config.queue.kind"
     And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.collection.benchmarks[0].hardware_config.queue.name"
+    And the response should contain the value "kueue" at path "$.collection.benchmarks[1].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.collection.benchmarks[1].hardware_config.queue.name"
+    And the response should contain the value "kueue" at path "$.collection.benchmarks[2].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.collection.benchmarks[2].hardware_config.queue.name"
+    And the response should contain the value "kueue" at path "$.collection.benchmarks[3].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.collection.benchmarks[3].hardware_config.queue.name"
     And the response should contain the value "open-telco-v1" at path "$.collection.id"
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
@@ -2014,6 +2020,12 @@ Feature: Evaluation Jobs
     And the response should contain the value "open-telco-v1" at path "$.collection.id"
     And the response should contain the value "kueue" at path "$.collection.benchmarks[0].hardware_config.queue.kind"
     And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.collection.benchmarks[0].hardware_config.queue.name"
+    And the response should contain the value "kueue" at path "$.collection.benchmarks[1].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.collection.benchmarks[1].hardware_config.queue.name"
+    And the response should contain the value "kueue" at path "$.collection.benchmarks[2].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.collection.benchmarks[2].hardware_config.queue.name"
+    And the response should contain the value "kueue" at path "$.collection.benchmarks[3].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.collection.benchmarks[3].hardware_config.queue.name"
   
   @mlflow
   Scenario: Card generated for completed job with collection - open-telco-v1
