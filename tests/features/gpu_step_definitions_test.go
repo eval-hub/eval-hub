@@ -774,9 +774,14 @@ func (tc *scenarioConfig) jobSpecShouldHaveNodeSelector(selectorKeyValue string)
 // so assertions must distinguish them by value.
 const gpuProductNodeSelectorKey = "nvidia.com/gpu.product"
 
-// getJobNodeSelector returns the nodeSelector map from the evaluation job's Kubernetes
-// Job pod template. Returns an empty (non-nil) map when no nodeSelector is set.
-func (tc *scenarioConfig) getJobNodeSelector() (map[string]string, error) {
+// kueueQueueNameLabelKey is set by eval-hub at Job creation for queue-backed Kueue
+// Jobs. Its presence is the race-free signal that a GPU_PRODUCT nodeSelector may
+// have been injected by Kueue admission rather than leaked by eval-hub.
+const kueueQueueNameLabelKey = "kueue.x-k8s.io/queue-name"
+
+// getJobNodeSelector returns the nodeSelector map and Job labels from the
+// evaluation job's Kubernetes Job. Maps are empty (non-nil) when unset.
+func (tc *scenarioConfig) getJobNodeSelector() (map[string]string, map[string]string, error) {
 	namespace := tc.reqHeaders["X-Tenant"]
 	if namespace == "" {
 		namespace = "test-tenant"
@@ -784,7 +789,7 @@ func (tc *scenarioConfig) getJobNodeSelector() (map[string]string, error) {
 
 	id := tc.lastId
 	if id == "" {
-		return nil, tc.logError(fmt.Errorf("no evaluation job ID found"))
+		return nil, nil, tc.logError(fmt.Errorf("no evaluation job ID found"))
 	}
 
 	cmd := exec.Command("oc", "get", "job", "-n", namespace, "-l",
@@ -792,11 +797,14 @@ func (tc *scenarioConfig) getJobNodeSelector() (map[string]string, error) {
 		"-o", "json")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, tc.logError(fmt.Errorf("failed to get Job for nodeSelector: %v, output: %s", err, string(output)))
+		return nil, nil, tc.logError(fmt.Errorf("failed to get Job for nodeSelector: %v, output: %s", err, string(output)))
 	}
 
 	var list struct {
 		Items []struct {
+			Metadata struct {
+				Labels map[string]string `json:"labels"`
+			} `json:"metadata"`
 			Spec struct {
 				Template struct {
 					Spec struct {
@@ -807,44 +815,58 @@ func (tc *scenarioConfig) getJobNodeSelector() (map[string]string, error) {
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(output, &list); err != nil {
-		return nil, tc.logError(fmt.Errorf("failed to parse Job JSON for nodeSelector: %v", err))
+		return nil, nil, tc.logError(fmt.Errorf("failed to parse Job JSON for nodeSelector: %v", err))
 	}
 	if len(list.Items) == 0 {
-		return nil, tc.logError(fmt.Errorf("no Job found for job_id=%s in namespace %s", id, namespace))
+		return nil, nil, tc.logError(fmt.Errorf("no Job found for job_id=%s in namespace %s", id, namespace))
 	}
 	sel := list.Items[0].Spec.Template.Spec.NodeSelector
 	if sel == nil {
 		sel = map[string]string{}
 	}
-	return sel, nil
+	labels := list.Items[0].Metadata.Labels
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	return sel, labels, nil
 }
 
 // jobSpecShouldNotHaveNodeSelector asserts that eval-hub did not set a nodeSelector on
-// the Job. For queue-backed jobs, Kueue injects the admitted ResourceFlavor's nodeLabels
-// (nvidia.com/gpu.product=<GPU_PRODUCT>) onto the pod template *on admission*, which races
-// with the read. That Kueue-injected label is expected and tolerated; any other selector —
-// including nvidia.com/gpu.product with a value other than GPU_PRODUCT (e.g. a provider's
-// leaked node_selector) — can only come from eval-hub and fails the assertion. This is
-// race-free: eval-hub sets nodeSelector synchronously at Job creation, so a leak is present
-// immediately, whereas Kueue can only ever inject the flavor's own product value.
+// the Job. For queue-backed Kueue Jobs (kueue.x-k8s.io/queue-name set), Kueue injects
+// the admitted ResourceFlavor's nodeLabels (nvidia.com/gpu.product=<GPU_PRODUCT>) onto
+// the pod template *on admission*, which races with the read. That Kueue-injected label
+// is expected and tolerated only for those Jobs. Non-Kueue Jobs (e.g. scenario 1a) must
+// have an empty nodeSelector. Any other selector — including nvidia.com/gpu.product with
+// a value other than GPU_PRODUCT (e.g. a provider's leaked node_selector) — can only
+// come from eval-hub and fails the assertion. This is race-free: eval-hub sets
+// nodeSelector and the queue-name label synchronously at Job creation, so a leak is
+// present immediately, whereas Kueue can only ever inject the flavor's own product value.
 func (tc *scenarioConfig) jobSpecShouldNotHaveNodeSelector() error {
-	sel, err := tc.getJobNodeSelector()
+	sel, labels, err := tc.getJobNodeSelector()
 	if err != nil {
 		return err
 	}
 
 	gpuProduct := os.Getenv("GPU_PRODUCT")
+	queueBacked := labels[kueueQueueNameLabelKey] != ""
 	for k, v := range sel {
-		// Tolerate only the Kueue-injected ResourceFlavor label.
-		if k == gpuProductNodeSelectorKey && gpuProduct != "" && v == gpuProduct {
+		// Tolerate the ResourceFlavor label only on queue-backed Kueue Jobs.
+		if queueBacked && k == gpuProductNodeSelectorKey && gpuProduct != "" && v == gpuProduct {
 			continue
 		}
-		return tc.logError(fmt.Errorf(
-			"expected no eval-hub-set nodeSelector, but found %s=%s (only the Kueue-injected ResourceFlavor label %s=%s is allowed)",
-			k, v, gpuProductNodeSelectorKey, gpuProduct))
+		if queueBacked {
+			return tc.logError(fmt.Errorf(
+				"expected no eval-hub-set nodeSelector, but found %s=%s (only the Kueue-injected ResourceFlavor label %s=%s is allowed)",
+				k, v, gpuProductNodeSelectorKey, gpuProduct))
+		}
+		return tc.logError(fmt.Errorf("expected no nodeSelector, but found %s=%s", k, v))
 	}
 
-	logDebug("Job has no eval-hub-set nodeSelector (Kueue flavor label %s=%s tolerated)\n", gpuProductNodeSelectorKey, gpuProduct)
+	if queueBacked {
+		logDebug("Job has no eval-hub-set nodeSelector (Kueue flavor label %s=%s tolerated)\n", gpuProductNodeSelectorKey, gpuProduct)
+	} else {
+		logDebug("Job has no nodeSelector\n")
+	}
 	return nil
 }
 
