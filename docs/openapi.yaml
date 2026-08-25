@@ -1346,14 +1346,6 @@ paths:
             title: Include curated metadata
           description: |
             When `false`, strips the `ui` field from the response body. Defaults to `true`; existing callers that do not pass this parameter are unaffected.
-        - name: use_cases
-          in: query
-          required: false
-          schema:
-            type: string
-            title: Use case filter
-          description: |
-            Filter collections by use case. Returns collections whose use_cases array contains this value (e.g. `?use_cases=rag`). May be repeated for multiple values.
         - name: modalities
           in: query
           required: false
@@ -3455,7 +3447,8 @@ components:
           description: Collection name.
         category:
           type: string
-          description: Collection category.
+          description: |
+            Broad evaluation domain. Known values align with the enterprise LLM quality taxonomy: knowledge_reasoning, document_understanding, instruction_output, tool_use, software, trustworthiness, multilingual, multimodal.
         description:
           type: string
           description: Optional description.
@@ -3476,12 +3469,6 @@ components:
           items:
             $ref: '#/components/schemas/CollectionBenchmarkConfig'
           description: Benchmarks in the collection.
-        use_cases:
-          type: array
-          items:
-            type: string
-          description: |
-            List of use cases this collection covers. Known values include: rag, llm_quality, safety, qa, summarization, custom.
         modalities:
           type: array
           items:
@@ -3491,7 +3478,8 @@ components:
           type: array
           items:
             type: string
-          description: ML task types covered (e.g. ["Question Answering", "Summarization"]).
+          description: |
+            Evaluation subtasks covered within the collection's domain. Known values align with the enterprise LLM quality taxonomy subtasks, e.g.: Reasoning, Data Analysis, Extraction, Summarization, Full-document QA, Long-context Understanding, RAG, Citation/Attribution, Grounding Discipline, Instruction Following, Structured Output, Constraint Following, Call Generation, Code Generation, Safety, Abstention, Adversarial/Injection Resistance, Translation, Document/Chart VQA, General Visual Reasoning. A collection may cover more than one subtask.
         clone_from_id:
           type: string
           description: |

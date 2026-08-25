@@ -73,15 +73,6 @@ get:
       description: >
         When `false`, strips the `ui` field from the response body.
         Defaults to `true`; existing callers that do not pass this parameter are unaffected.
-    - name: use_cases
-      in: query
-      required: false
-      schema:
-        type: string
-        title: Use case filter
-      description: >
-        Filter collections by use case. Returns collections whose use_cases array contains
-        this value (e.g. `?use_cases=rag`). May be repeated for multiple values.
     - name: modalities
       in: query
       required: false

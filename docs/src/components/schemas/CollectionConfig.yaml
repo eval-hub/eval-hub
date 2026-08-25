@@ -6,7 +6,10 @@ properties:
     description: Collection name.
   category:
     type: string
-    description: Collection category.
+    description: >
+      Broad evaluation domain. Known values align with the enterprise LLM quality taxonomy:
+      knowledge_reasoning, document_understanding, instruction_output, tool_use,
+      software, trustworthiness, multilingual, multimodal.
   description:
     type: string
     description: Optional description.
@@ -27,13 +30,6 @@ properties:
     items:
       $ref: ./CollectionBenchmarkConfig.yaml
     description: Benchmarks in the collection.
-  use_cases:
-    type: array
-    items:
-      type: string
-    description: >
-      List of use cases this collection covers. Known values include: rag, llm_quality,
-      safety, qa, summarization, custom.
   modalities:
     type: array
     items:
@@ -43,7 +39,14 @@ properties:
     type: array
     items:
       type: string
-    description: ML task types covered (e.g. ["Question Answering", "Summarization"]).
+    description: >
+      Evaluation subtasks covered within the collection's domain. Known values align with
+      the enterprise LLM quality taxonomy subtasks, e.g.: Reasoning, Data Analysis,
+      Extraction, Summarization, Full-document QA, Long-context Understanding, RAG,
+      Citation/Attribution, Grounding Discipline, Instruction Following, Structured Output,
+      Constraint Following, Call Generation, Code Generation, Safety, Abstention,
+      Adversarial/Injection Resistance, Translation, Document/Chart VQA, General Visual
+      Reasoning. A collection may cover more than one subtask.
   clone_from_id:
     type: string
     description: >
