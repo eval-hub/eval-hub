@@ -8,12 +8,98 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
 )
+
+// getOCIBearerToken exchanges OCI_USERNAME/OCI_PASSWORD for a Bearer token
+// using the registry's token endpoint. The registry URL and service name are
+// derived from OCI_REGISTRY (e.g. https://quay.io → service "quay.io",
+// token endpoint https://quay.io/v2/auth).
+//
+// Tokens are cached per repository for the lifetime of the scenario.
+// Returns an empty string (no error) when OCI_USERNAME / OCI_PASSWORD are not
+// set, so unauthenticated registries still work.
+func (tc *scenarioConfig) getOCIBearerToken(repository string) (string, error) {
+	username := os.Getenv("OCI_USERNAME")
+	password := os.Getenv("OCI_PASSWORD")
+	if username == "" || password == "" {
+		tc.logDebug("OCI_USERNAME/OCI_PASSWORD not set — skipping Bearer token exchange\n")
+		return "", nil
+	}
+
+	if tc.ociBearerTokens != nil {
+		if cached, ok := tc.ociBearerTokens[repository]; ok {
+			return cached, nil
+		}
+	}
+
+	baseURL := ociBaseURL()
+	registryURL, err := url.Parse(baseURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse OCI_REGISTRY URL: %w", err)
+	}
+	service := registryURL.Hostname()
+
+	scope := fmt.Sprintf("repository:%s:pull", repository)
+	params := url.Values{
+		"service": {service},
+		"scope":   {scope},
+	}
+	tokenURL := fmt.Sprintf("%s/v2/auth?%s", baseURL, params.Encode())
+
+	req, err := http.NewRequest("GET", tokenURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create token request: %w", err)
+	}
+	req.SetBasicAuth(username, password)
+
+	resp, err := tc.getOCIHTTPClient().Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to request Bearer token: %w", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			tc.logDebug("Failed to close token response body: %v\n", closeErr)
+		}
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read token response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("token endpoint returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var tokenResp struct {
+		Token       string `json:"token"`
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.Unmarshal(body, &tokenResp); err != nil {
+		return "", fmt.Errorf("failed to parse token response: %w", err)
+	}
+	tok := tokenResp.Token
+	if tok == "" {
+		tok = tokenResp.AccessToken
+	}
+	if tok == "" {
+		return "", fmt.Errorf("token endpoint returned empty token")
+	}
+
+	if tc.ociBearerTokens == nil {
+		tc.ociBearerTokens = make(map[string]string)
+	}
+	tc.ociBearerTokens[repository] = tok
+
+	tc.logDebug("Bearer token obtained for repository %s\n", repository)
+	return tok, nil
+}
 
 // --- OCI Artifact Step Definitions ---
 
@@ -44,6 +130,11 @@ func (tc *scenarioConfig) iFetchOCIManifestByRepoAndTag(repository, tag string) 
 		return tc.logError(fmt.Errorf("failed to resolve tag value %q: %w", tag, err))
 	}
 
+	token, err := tc.getOCIBearerToken(repositoryResolved)
+	if err != nil {
+		return tc.logError(fmt.Errorf("failed to obtain OCI Bearer token: %w", err))
+	}
+
 	baseURL := ociBaseURL()
 	manifestURL := fmt.Sprintf("%s/v2/%s/manifests/%s", baseURL, repositoryResolved, tagResolved)
 
@@ -53,6 +144,9 @@ func (tc *scenarioConfig) iFetchOCIManifestByRepoAndTag(repository, tag string) 
 	}
 
 	req.Header.Set("Accept", "application/vnd.oci.image.manifest.v1+json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	resp, err := tc.getOCIHTTPClient().Do(req)
 	if err != nil {
@@ -138,12 +232,20 @@ func (tc *scenarioConfig) iFetchOCIManifestByRepoAndTag(repository, tag string) 
 
 // iFetchOCIBlobByDigest fetches the OCI blob content by digest
 func (tc *scenarioConfig) iFetchOCIBlobByDigest(repository, digest string) error {
+	token, err := tc.getOCIBearerToken(repository)
+	if err != nil {
+		return tc.logError(fmt.Errorf("failed to obtain OCI Bearer token for blob fetch: %w", err))
+	}
+
 	baseURL := ociBaseURL()
 	blobURL := fmt.Sprintf("%s/v2/%s/blobs/%s", baseURL, repository, digest)
 
 	req, err := http.NewRequest("GET", blobURL, nil)
 	if err != nil {
 		return tc.logError(fmt.Errorf("failed to create blob request: %w", err))
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
 	resp, err := tc.getOCIHTTPClient().Do(req)
