@@ -3282,19 +3282,19 @@ benchmarks:
   description: 12,000+ complex graduate-level questions across 14+ academic domains with reasoning focus.
   category: reasoning
   metrics:
-  - acc_norm
+  - acc
   num_few_shot: 0
   tags:
   - reasoning
   - science
   - lm_eval
   primary_score:
-    metric: acc_norm
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Length-normalized accuracy on multiple-choice questions; higher is better.
+    result_interpretation: Accuracy (acc) on multiple-choice questions; higher is better.
     score_ranges:
     - range: 0.0-0.25
       meaning: Below random chance for 4-choice questions
@@ -3485,7 +3485,7 @@ benchmarks:
     Tests whether the model selects responses that are helpful, honest, and harmless — evaluating alignment with core ethical principles across paired-response comparisons.
   category: safety
   metrics:
-  - hhh_acc
+  - acc
   num_few_shot: 0
   tags:
   - safety
@@ -3493,12 +3493,12 @@ benchmarks:
   - hhh
   - lm_eval
   primary_score:
-    metric: hhh_acc
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Hhh alignment score; higher is better.
+    result_interpretation: HHH alignment accuracy (acc); higher is better.
     score_ranges:
     - range: 0.0-0.25
       meaning: Below default pass threshold
