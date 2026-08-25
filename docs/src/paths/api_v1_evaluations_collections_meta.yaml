@@ -3,7 +3,7 @@ get:
     - Collections
   summary: Get Collection Metadata
   description: >
-    Returns aggregated counts for Collections UI filter dropdowns and statistics.
+    Returns aggregated counts for the Curated Collections UI filter dropdowns.
     The response is a lightweight metadata summary, not a list of collections.
   operationId: get_collections_meta
   parameters:
@@ -20,7 +20,7 @@ get:
       description: >
         Scopes the counts by collection type. Mirrors the `scope` parameter on `GET /collections`.
         `system` counts all system-defined collections.
-        `curated` counts only curated system collections (those with a `ui` block).
+        `curated` counts only curated system collections (those with a `curated` block).
         `tenant` counts only tenant (custom) collections.
         When omitted, counts cover all collections.
   responses:
@@ -30,14 +30,14 @@ get:
         application/json:
           schema:
             type: object
-            description: Aggregated metadata counts for Collections filter dropdowns.
+            description: Aggregated metadata counts for Curated Collections filter dropdowns.
             properties:
               total_count:
                 type: integer
                 description: Total number of collections matching the filter.
-              use_cases:
+              categories:
                 type: array
-                description: Use case values with counts.
+                description: Category values with counts. Maps to Michal's 8 enterprise LLM quality domains.
                 items:
                   type: object
                   properties:
@@ -61,19 +61,7 @@ get:
                       type: integer
               tasks:
                 type: array
-                description: Task values with counts.
-                items:
-                  type: object
-                  properties:
-                    id:
-                      type: string
-                    label:
-                      type: string
-                    count:
-                      type: integer
-              categories:
-                type: array
-                description: Category values with counts. Mirrors the existing category field on collections.
+                description: Task/subtask values with counts.
                 items:
                   type: object
                   properties:
@@ -88,37 +76,33 @@ get:
               summary: Metadata for curated collections
               value:
                 total_count: 8
-                use_cases:
-                  - id: rag
-                    label: RAG
+                categories:
+                  - id: document_understanding
+                    label: Grounded Document Understanding
                     count: 3
-                  - id: safety
-                    label: Safety
+                  - id: trustworthiness
+                    label: Trustworthiness
                     count: 2
-                  - id: llm_quality
-                    label: LLM Quality
+                  - id: knowledge_reasoning
+                    label: Knowledge & Reasoning
                     count: 2
-                  - id: summarization
-                    label: Summarization
+                  - id: software
+                    label: Software
                     count: 1
                 modalities:
                   - id: Text
                     label: Text
-                    count: 8
+                    count: 7
+                  - id: Vision
+                    label: Vision
+                    count: 1
                 tasks:
-                  - id: Question Answering (RAG)
-                    label: Question Answering (RAG)
+                  - id: RAG
+                    label: RAG
                     count: 3
-                categories:
-                  - id: rag
-                    label: rag
-                    count: 3
-                  - id: safety
-                    label: safety
+                  - id: Safety
+                    label: Safety
                     count: 2
-                  - id: reasoning
-                    label: reasoning
-                    count: 3
     '400':
       $ref: ../components/responses/BadRequest.yaml
     '401':

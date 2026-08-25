@@ -56,3 +56,5 @@ paths:
     $ref: paths/api_v1_evaluations_collections_meta.yaml
   /api/v1/evaluations/collections/{id}:
     $ref: paths/api_v1_evaluations_collections_{id}.yaml
+  /api/v1/evaluations/collections/{id}/examples:
+    $ref: paths/api_v1_evaluations_collections_{id}_examples.yaml

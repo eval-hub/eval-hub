@@ -19,7 +19,7 @@ get:
         default: true
         title: Include curated metadata
       description: >
-        When `false`, strips the `ui` field from the response body.
+        When `false`, strips the `curated` field from the response body.
         Defaults to `true`; existing callers are unaffected.
   responses:
     '200':

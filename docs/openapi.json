@@ -1896,7 +1896,7 @@
               ],
               "title": "Scope of collections"
             },
-            "description": "Filters the result set by collection scope. `system` returns all system-defined collections (curated and non-curated). `curated` returns only curated system collections (those with a `ui` block). `tenant` returns only tenant (custom) collections. When omitted, all collections are returned.\n"
+            "description": "Filters the result set by collection scope. `system` returns all system-defined collections (curated and non-curated). `curated` returns only curated system collections (those with a `curated` block). `tenant` returns only tenant (custom) collections. When omitted, all collections are returned.\n"
           },
           {
             "name": "curated_info",
@@ -1907,7 +1907,7 @@
               "default": true,
               "title": "Include curated metadata"
             },
-            "description": "When `false`, strips the `ui` field from the response body. Defaults to `true`; existing callers that do not pass this parameter are unaffected.\n"
+            "description": "When `false`, strips the `curated` field from the response body. Defaults to `true`; existing callers that do not pass this parameter are unaffected.\n"
           },
           {
             "name": "modalities",
@@ -2229,7 +2229,7 @@
           "Collections"
         ],
         "summary": "Get Collection Metadata",
-        "description": "Returns aggregated counts for Collections UI filter dropdowns and statistics. The response is a lightweight metadata summary, not a list of collections.\n",
+        "description": "Returns aggregated counts for the Curated Collections UI filter dropdowns. The response is a lightweight metadata summary, not a list of collections.\n",
         "operationId": "get_collections_meta",
         "parameters": [
           {
@@ -2245,7 +2245,7 @@
               ],
               "title": "Scope filter"
             },
-            "description": "Scopes the counts by collection type. Mirrors the `scope` parameter on `GET /collections`. `system` counts all system-defined collections. `curated` counts only curated system collections (those with a `ui` block). `tenant` counts only tenant (custom) collections. When omitted, counts cover all collections.\n"
+            "description": "Scopes the counts by collection type. Mirrors the `scope` parameter on `GET /collections`. `system` counts all system-defined collections. `curated` counts only curated system collections (those with a `curated` block). `tenant` counts only tenant (custom) collections. When omitted, counts cover all collections.\n"
           }
         ],
         "responses": {
@@ -2255,15 +2255,15 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Aggregated metadata counts for Collections filter dropdowns.",
+                  "description": "Aggregated metadata counts for Curated Collections filter dropdowns.",
                   "properties": {
                     "total_count": {
                       "type": "integer",
                       "description": "Total number of collections matching the filter."
                     },
-                    "use_cases": {
+                    "categories": {
                       "type": "array",
-                      "description": "Use case values with counts.",
+                      "description": "Category values with counts. Maps to Michal's 8 enterprise LLM quality domains.",
                       "items": {
                         "type": "object",
                         "properties": {
@@ -2299,25 +2299,7 @@
                     },
                     "tasks": {
                       "type": "array",
-                      "description": "Task values with counts.",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "label": {
-                            "type": "string"
-                          },
-                          "count": {
-                            "type": "integer"
-                          }
-                        }
-                      }
-                    },
-                    "categories": {
-                      "type": "array",
-                      "description": "Category values with counts. Mirrors the existing category field on collections.",
+                      "description": "Task/subtask values with counts.",
                       "items": {
                         "type": "object",
                         "properties": {
@@ -2340,25 +2322,25 @@
                     "summary": "Metadata for curated collections",
                     "value": {
                       "total_count": 8,
-                      "use_cases": [
+                      "categories": [
                         {
-                          "id": "rag",
-                          "label": "RAG",
+                          "id": "document_understanding",
+                          "label": "Grounded Document Understanding",
                           "count": 3
                         },
                         {
-                          "id": "safety",
-                          "label": "Safety",
+                          "id": "trustworthiness",
+                          "label": "Trustworthiness",
                           "count": 2
                         },
                         {
-                          "id": "llm_quality",
-                          "label": "LLM Quality",
+                          "id": "knowledge_reasoning",
+                          "label": "Knowledge & Reasoning",
                           "count": 2
                         },
                         {
-                          "id": "summarization",
-                          "label": "Summarization",
+                          "id": "software",
+                          "label": "Software",
                           "count": 1
                         }
                       ],
@@ -2366,31 +2348,24 @@
                         {
                           "id": "Text",
                           "label": "Text",
-                          "count": 8
+                          "count": 7
+                        },
+                        {
+                          "id": "Vision",
+                          "label": "Vision",
+                          "count": 1
                         }
                       ],
                       "tasks": [
                         {
-                          "id": "Question Answering (RAG)",
-                          "label": "Question Answering (RAG)",
-                          "count": 3
-                        }
-                      ],
-                      "categories": [
-                        {
-                          "id": "rag",
-                          "label": "rag",
+                          "id": "RAG",
+                          "label": "RAG",
                           "count": 3
                         },
                         {
-                          "id": "safety",
-                          "label": "safety",
+                          "id": "Safety",
+                          "label": "Safety",
                           "count": 2
-                        },
-                        {
-                          "id": "reasoning",
-                          "label": "reasoning",
-                          "count": 3
                         }
                       ]
                     }
@@ -2438,7 +2413,7 @@
               "default": true,
               "title": "Include curated metadata"
             },
-            "description": "When `false`, strips the `ui` field from the response body. Defaults to `true`; existing callers are unaffected.\n"
+            "description": "When `false`, strips the `curated` field from the response body. Defaults to `true`; existing callers are unaffected.\n"
           }
         ],
         "responses": {
@@ -2924,6 +2899,83 @@
         "responses": {
           "204": {
             "description": "Success"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/v1/evaluations/collections/{id}/examples": {
+      "post": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Promote Job as Featured Example",
+        "description": "Promotes a completed evaluation job as a featured example result for a custom collection. The server fetches the job's scores, builds an ExampleResult snapshot, and appends it to the collection's state.example_results. Scores are copied at promotion time and do not depend on the originating job remaining in the database. Only applicable to tenant-scoped (custom) collections that have a CollectionState.\n",
+        "operationId": "post_collections_id_examples",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "job_id": {
+                    "type": "string",
+                    "description": "ID of the completed evaluation job whose results should be promoted."
+                  },
+                  "label": {
+                    "type": "string",
+                    "description": "Optional display label for this example result (e.g. \"RAG Eval Run #14\"). Defaults to the job name if not provided.\n"
+                  }
+                },
+                "required": [
+                  "job_id"
+                ]
+              },
+              "examples": {
+                "request": {
+                  "summary": "Promote a completed job as a featured example",
+                  "value": {
+                    "job_id": "a1b2c3d4-5678-9abc-def0-1234567890ab",
+                    "label": "RAG Eval Run #14"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Example result added successfully. Returns the updated collection.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResource"
+                }
+              }
+            }
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -4584,7 +4636,7 @@
           }
         }
       },
-      "CollectionUIMetadata": {
+      "CollectionCuratedMetadata": {
         "type": "object",
         "description": "UI-specific display metadata for curated collections. Set via operator YAML only; not settable via API.",
         "properties": {
@@ -4721,11 +4773,11 @@
               },
               "state": {
                 "$ref": "#/components/schemas/CollectionState",
-                "description": "Server-managed runtime state for custom (tenant-scoped) collections. Present only on collections with scope=tenant; absent on system collections. Never user-supplied.\n"
+                "description": "Server-managed runtime state for custom (tenant-scoped) collections. Present only on collections with scope=tenant; absent on curated system collections. Never user-supplied.\n"
               },
-              "ui": {
-                "$ref": "#/components/schemas/CollectionUIMetadata",
-                "description": "UI-specific display metadata for curated collections. Set by system operators via YAML configuration only; not accepted in request bodies. Present only on curated collections.\n"
+              "curated": {
+                "$ref": "#/components/schemas/CollectionCuratedMetadata",
+                "description": "Display metadata for curated collections. Set by system operators via YAML configuration only; not accepted in request bodies. Present only on curated collections.\n"
               }
             }
           },

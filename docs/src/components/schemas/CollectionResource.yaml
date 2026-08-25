@@ -10,12 +10,12 @@ allOf:
         $ref: ./CollectionState.yaml
         description: >
           Server-managed runtime state for custom (tenant-scoped) collections.
-          Present only on collections with scope=tenant; absent on system
+          Present only on collections with scope=tenant; absent on curated system
           collections. Never user-supplied.
-      ui:
-        $ref: ./CollectionUIMetadata.yaml
+      curated:
+        $ref: ./CollectionCuratedMetadata.yaml
         description: >
-          UI-specific display metadata for curated collections.
+          Display metadata for curated collections.
           Set by system operators via YAML configuration only; not accepted
           in request bodies. Present only on curated collections.
   - $ref: ./CollectionConfig.yaml
