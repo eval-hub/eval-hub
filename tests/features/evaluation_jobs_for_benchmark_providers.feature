@@ -228,7 +228,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 5
 
   # skipping scenario for now as we need to set up access to a ragas dataset on the cluster
-  @skip
+  @ignore
   Scenario: Verifying results returned for Evaluation job - ragas
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_ragas.json"
@@ -246,6 +246,6 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 2
 
   # MTEB not implemented due to https://redhat.atlassian.net/browse/RHOAIENG-85265
-  @skip
+  @ignore
   Scenario: Verifying results returned for Evaluation job - MTEB
     Given the service is running
