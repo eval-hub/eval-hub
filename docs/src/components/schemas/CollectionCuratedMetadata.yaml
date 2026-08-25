@@ -1,10 +1,9 @@
 type: object
-description: UI-specific display metadata for curated collections. Set via operator YAML only; not settable via API.
+description: Display metadata for curated collections. Set via operator YAML only; not settable via API.
 properties:
-  icon:
-    type: string
-    description: Identifier for the collection card icon.
-  is_featured:
-    type: boolean
+  curation_order:
+    type: integer
     description: >
-      When true, this collection is shown prominently in the Curated Collections UI.
+      Controls whether and where this collection appears on the Curated Collections landing page.
+      0 = not featured. Positive integers give explicit tile ordering (ascending).
+      Admin-only; the server rejects writes from tenant API consumers.

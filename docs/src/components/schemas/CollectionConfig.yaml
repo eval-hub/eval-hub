@@ -34,26 +34,21 @@ properties:
     type: array
     items:
       type: string
-    description: Data modalities this collection covers (e.g. ["Text", "Vision"]).
+    description: >
+      Data modalities this collection covers. Values use snake_case matching the category
+      convention. Known values: text, vision, multimodal.
   tasks:
     type: array
     items:
       type: string
     description: >
-      Evaluation subtasks covered within the collection's domain. Known values align with
-      the enterprise LLM quality taxonomy subtasks, e.g.: Reasoning, Data Analysis,
-      Extraction, Summarization, Full-document QA, Long-context Understanding, RAG,
-      Citation/Attribution, Grounding Discipline, Instruction Following, Structured Output,
-      Constraint Following, Call Generation, Code Generation, Safety, Abstention,
-      Adversarial/Injection Resistance, Translation, Document/Chart VQA, General Visual
-      Reasoning. A collection may cover more than one subtask.
-  clone_from_id:
-    type: string
-    description: >
-      When provided on collection creation, records this collection's origin
-      by setting clone_of_id in the returned state. The collection is created
-      from the provided request body spec as usual; this field only affects
-      provenance tracking.
+      Evaluation subtasks covered within the collection's domain. Values use snake_case
+      matching the category convention. Known values: reasoning, data_analysis, extraction,
+      summarization, full_document_qa, long_context_understanding, rag,
+      citation_attribution, grounding_discipline, instruction_following, structured_output,
+      constraint_following, call_generation, code_generation, code_understanding, code_repair,
+      safety, calibration, abstention, adversarial_injection, translation,
+      document_chart_vqa, general_visual_reasoning. A collection may cover more than one subtask.
 required:
   - name
   - category

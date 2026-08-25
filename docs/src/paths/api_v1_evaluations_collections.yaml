@@ -89,8 +89,23 @@ get:
         type: string
         title: Task filter
       description: >
-        Filter collections by task type. Returns collections whose tasks array contains
-        this value. May be repeated for multiple values.
+        Filter collections by task type (snake_case). Returns collections whose tasks array
+        contains this value. May be repeated for multiple values.
+    - name: sort_by
+      in: query
+      required: false
+      schema:
+        type: string
+        enum:
+          - name
+          - created_at
+          - curation_order
+        default: created_at
+        title: Sort order
+      description: >
+        Sort field for the result set. Applied server-side across all matching collections
+        before pagination. curation_order sorts featured tiles ascending (0 last).
+        Default: created_at descending.
   responses:
     '200':
       description: Successful Response

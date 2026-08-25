@@ -2121,7 +2121,23 @@
               "type": "string",
               "title": "Task filter"
             },
-            "description": "Filter collections by task type. Returns collections whose tasks array contains this value. May be repeated for multiple values.\n"
+            "description": "Filter collections by task type (snake_case). Returns collections whose tasks array contains this value. May be repeated for multiple values.\n"
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "created_at",
+                "curation_order"
+              ],
+              "default": "created_at",
+              "title": "Sort order"
+            },
+            "description": "Sort field for the result set. Applied server-side across all matching collections before pagination. curation_order sorts featured tiles ascending (0 last). Default: created_at descending.\n"
           }
         ],
         "responses": {
@@ -3109,6 +3125,116 @@
         }
       }
     },
+    "/api/v1/evaluations/collections/{id}/clone": {
+      "post": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Clone Collection",
+        "description": "Creates a new tenant-scoped (custom) collection as a clone of the specified source collection. The server copies all CollectionConfig fields from the source, assigns a new ID with scope=tenant, and records the source ID in CollectionState.clone_of_id for provenance. The request body may include optional overrides (e.g. a new name). No client-side GET + POST orchestration needed.\n",
+        "operationId": "post_collections_id_clone",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            },
+            "description": "ID of the source collection to clone."
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Optional new name for the cloned collection. Defaults to the source name."
+                  }
+                }
+              },
+              "examples": {
+                "CloneWithNewName": {
+                  "summary": "Clone with a custom name",
+                  "value": {
+                    "name": "my-rag-evaluation"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Cloned collection created successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResource"
+                },
+                "examples": {
+                  "response": {
+                    "summary": "Newly cloned custom collection",
+                    "value": {
+                      "resource": {
+                        "id": "b2c3d4e5-6789-0abc-def1-23456789abcd",
+                        "tenant": "my-tenant",
+                        "created_at": "2026-08-25T10:00:00Z",
+                        "updated_at": "2026-08-25T10:00:00Z",
+                        "owner": "user@example.com",
+                        "version": 1
+                      },
+                      "state": {
+                        "clone_of_id": "e5f6a7b8-9012-3456-cdef-0123456789ab",
+                        "run_count": 0,
+                        "pinned_order": 0
+                      },
+                      "name": "my-rag-evaluation",
+                      "category": "document_understanding",
+                      "tasks": [
+                        "rag",
+                        "grounding_discipline"
+                      ],
+                      "modalities": [
+                        "text"
+                      ],
+                      "benchmarks": [
+                        {
+                          "id": "crag",
+                          "provider_id": "ragas",
+                          "weight": 1,
+                          "primary_score": {
+                            "metric": "answer_correctness",
+                            "lower_is_better": false
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
     "/api/v1/evaluations/collections/{id}/examples": {
       "post": {
         "tags": [
@@ -3287,6 +3413,10 @@
           "owner": {
             "type": "string",
             "description": "Owner of the resource"
+          },
+          "version": {
+            "type": "integer",
+            "description": "Monotonic version counter, auto-incremented by the server on each successful PUT or PATCH. Starts at 1. Lets consumers detect mutations and lets evaluation jobs record \"I ran against version N of this collection\" (R8 reproducibility).\n"
           }
         }
       },
@@ -4924,36 +5054,36 @@
       },
       "CollectionState": {
         "type": "object",
-        "description": "Server-managed runtime state for custom (tenant-scoped) collections. Never user-supplied and never written to YAML configuration.\n",
+        "description": "Server-managed runtime state for custom (tenant-scoped) collections. Never user-supplied and never written to YAML configuration. Present only on collections with scope=tenant; absent on system and curated collections.\n",
         "properties": {
           "clone_of_id": {
             "type": "string",
-            "description": "ID of the collection this was cloned from. Set by the server when a collection is created with clone_from_id.\n"
+            "description": "ID of the collection this was cloned from. Set by the server when POST /collections/{id}/clone is called; never user-supplied. Provides provenance (e.g. \"forked from RAG Evaluation v1\").\n"
           },
           "run_count": {
             "type": "integer",
             "description": "Number of evaluation jobs created from this collection by its owning tenant. Per-tenant counter, incremented at job creation.\n"
+          },
+          "pinned_order": {
+            "type": "integer",
+            "description": "Tenant-controlled pin ordering. 0 = not pinned. Positive integers give the tenant's personal tile ordering (ascending). Settable by the collection owner via PATCH /collections/{id}.\n"
           },
           "example_results": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ExampleResult"
             },
-            "description": "Result snapshots promoted by the tenant as featured examples. Scores are copied from the source job at promotion time — durable, survives job deletion.\n"
+            "description": "Result snapshots promoted by the tenant as featured examples. Scores are copied from the source job at promotion time — durable, survives job deletion. Managed via POST /collections/{id}/examples.\n"
           }
         }
       },
       "CollectionCuratedMetadata": {
         "type": "object",
-        "description": "UI-specific display metadata for curated collections. Set via operator YAML only; not settable via API.",
+        "description": "Display metadata for curated collections. Set via operator YAML only; not settable via API.",
         "properties": {
-          "icon": {
-            "type": "string",
-            "description": "Identifier for the collection card icon."
-          },
-          "is_featured": {
-            "type": "boolean",
-            "description": "When true, this collection is shown prominently in the Curated Collections UI.\n"
+          "curation_order": {
+            "type": "integer",
+            "description": "Controls whether and where this collection appears on the Curated Collections landing page. 0 = not featured. Positive integers give explicit tile ordering (ascending). Admin-only; the server rejects writes from tenant API consumers.\n"
           }
         }
       },
@@ -5047,18 +5177,14 @@
             "items": {
               "type": "string"
             },
-            "description": "Data modalities this collection covers (e.g. [\"Text\", \"Vision\"])."
+            "description": "Data modalities this collection covers. Values use snake_case matching the category convention. Known values: text, vision, multimodal.\n"
           },
           "tasks": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "Evaluation subtasks covered within the collection's domain. Known values align with the enterprise LLM quality taxonomy subtasks, e.g.: Reasoning, Data Analysis, Extraction, Summarization, Full-document QA, Long-context Understanding, RAG, Citation/Attribution, Grounding Discipline, Instruction Following, Structured Output, Constraint Following, Call Generation, Code Generation, Safety, Abstention, Adversarial/Injection Resistance, Translation, Document/Chart VQA, General Visual Reasoning. A collection may cover more than one subtask.\n"
-          },
-          "clone_from_id": {
-            "type": "string",
-            "description": "When provided on collection creation, records this collection's origin by setting clone_of_id in the returned state. The collection is created from the provided request body spec as usual; this field only affects provenance tracking.\n"
+            "description": "Evaluation subtasks covered within the collection's domain. Values use snake_case matching the category convention. Known values: reasoning, data_analysis, extraction, summarization, full_document_qa, long_context_understanding, rag, citation_attribution, grounding_discipline, instruction_following, structured_output, constraint_following, call_generation, code_generation, code_understanding, code_repair, safety, calibration, abstention, adversarial_injection, translation, document_chart_vqa, general_visual_reasoning. A collection may cover more than one subtask.\n"
           }
         },
         "required": [

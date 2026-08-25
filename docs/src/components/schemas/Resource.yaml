@@ -18,3 +18,9 @@ properties:
   owner:
     type: string
     description: Owner of the resource
+  version:
+    type: integer
+    description: >
+      Monotonic version counter, auto-incremented by the server on each successful
+      PUT or PATCH. Starts at 1. Lets consumers detect mutations and lets evaluation
+      jobs record "I ran against version N of this collection" (R8 reproducibility).
