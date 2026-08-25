@@ -135,6 +135,8 @@ type scenarioConfig struct {
 
 	// Shared HTTP client for OCI operations
 	ociHTTPClient *http.Client
+	// Cached Bearer tokens keyed by repository (avoids redundant token exchanges)
+	ociBearerTokens map[string]string
 }
 
 func getLogger() *log.Logger {
