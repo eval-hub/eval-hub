@@ -90,9 +90,10 @@ type scenarioConfig struct {
 
 	reqHeaders map[string]string
 
-	lastURL    string
-	lastMethod string
-	lastId     string
+	lastURL        string
+	lastMethod     string
+	lastId         string
+	lastK8sJobName string
 
 	// MCP-specific fields
 	mcpToolResult    *mcp.CallToolResult
@@ -135,6 +136,8 @@ type scenarioConfig struct {
 
 	// Shared HTTP client for OCI operations
 	ociHTTPClient *http.Client
+	// Cached Bearer tokens keyed by repository (avoids redundant token exchanges)
+	ociBearerTokens map[string]string
 }
 
 func getLogger() *log.Logger {

@@ -1332,16 +1332,16 @@ Feature: Evaluation Jobs
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "completed" at path "$.status.state"
-    And the response should contain the value "completed" at path "$.status.benchmarks[0].status"
-    And the response should contain the value "completed" at path "$.status.benchmarks[1].status"
-    And the response should contain the value "arc_easy" at path "$.status.benchmarks[0].id"
-    And the response should contain the value "truthfulqa_mc1" at path "$.status.benchmarks[1].id"
+    And the response should contain the value "completed" at path "$.status.benchmarks[?(@.id == &quot;arc_easy&quot;)].status"
+    And the response should contain the value "completed" at path "$.status.benchmarks[?(@.id == &quot;truthfulqa_mc1&quot;)].status"
+    And the response should contain the value "arc_easy" at path "$.status.benchmarks[?(@.id == &quot;arc_easy&quot;)].id"
+    And the response should contain the value "truthfulqa_mc1" at path "$.status.benchmarks[?(@.id == &quot;truthfulqa_mc1&quot;)].id"
     And the response should contain "results"
     And the array at path "results.benchmarks" in the response should have length 2
-    And the response should contain the value "arc_easy" at path "$.results.benchmarks[0].id"
-    And the response should contain the value "truthfulqa_mc1" at path "$.results.benchmarks[1].id"
-    And the response should contain at least the value "0.2" at path "$.results.benchmarks[0].metrics.acc"
-    And the response should contain at least the value "0.2" at path "$.results.benchmarks[0].metrics.acc_norm"
+    And the response should contain the value "arc_easy" at path "$.results.benchmarks[?(@.id == &quot;arc_easy&quot;)].id"
+    And the response should contain the value "truthfulqa_mc1" at path "$.results.benchmarks[?(@.id == &quot;truthfulqa_mc1&quot;)].id"
+    And the response should contain at least the value "0.2" at path "$.results.benchmarks[?(@.id == &quot;arc_easy&quot;)].metrics.acc"
+    And the response should contain at least the value "0.2" at path "$.results.benchmarks[?(@.id == &quot;arc_easy&quot;)].metrics.acc_norm"
     And the response should contain the value "{{env:TEST_DATA_GIT_URL|https://github.com/eval-hub/eval-hub}}" at path "$.benchmarks[0].test_data_ref.git.url"
     And the response should contain the value "{{env:TEST_DATA_GIT_REF|main}}" at path "$.benchmarks[0].test_data_ref.git.ref"
     And the response should contain the value "{{env:TEST_DATA_GIT_SUB_PATH|tests/git-testdata}}" at path "$.benchmarks[0].test_data_ref.git.sub_path"
@@ -1968,3 +1968,77 @@ Feature: Evaluation Jobs
     Then the MLflow artifact should exist
     And the MLflow artifact should contain "card_version"
     And the MLflow artifact should contain "schema_version"
+
+  Scenario: Verify Evaluation Jobs Can Use OOB Collections - open-telco-v1
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oob_open_telco_v1.json"
+    Then the response code should be 202
+    And the response should contain the value "open-telco-v1" at path "$.collection.id"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "open-telco-v1" at path "$.collection.id"
+    And the response should contain the value "Evaluation job is completed" at path "$.status.message.message"
+    And the response should contain the value "completed" at path "$.status.benchmarks[0].status"
+    And the response should contain the value "completed" at path "$.status.benchmarks[1].status"
+    And the response should contain the value "completed" at path "$.status.benchmarks[2].status"
+    And the response should contain the value "completed" at path "$.status.benchmarks[3].status"
+    And the array at path "results.benchmarks" in the response should have length 4
+    And the response should contain the value "inspect/telemath" at path "$.results.benchmarks[*].id"
+    And the response should contain the value "inspect/teleqna" at path "$.results.benchmarks[*].id"
+    And the response should contain the value "inspect/telelogs" at path "$.results.benchmarks[*].id"
+    And the response should contain the value "inspect/3gpp-tsg" at path "$.results.benchmarks[*].id"
+    And the response should equal the value "5" at path "$.collection.benchmarks[0].parameters.num_examples"
+    And the response should equal the value "5" at path "$.collection.benchmarks[1].parameters.num_examples"
+    And the response should equal the value "5" at path "$.collection.benchmarks[2].parameters.num_examples"
+    And the response should equal the value "5" at path "$.collection.benchmarks[3].parameters.num_examples"
+    And the response should contain "results"
+    And the response should contain the value "telemath_scorer/accuracy" at path "$.results.benchmarks[?(@.id=='inspect/telemath')].metrics[*].name"
+    And the response should contain the value "choice/accuracy" at path "$.results.benchmarks[?(@.id=='inspect/teleqna')].metrics[*].name"
+    And the response should contain the value "telelogs_scorer/accuracy" at path "$.results.benchmarks[?(@.id=='inspect/telelogs')].metrics[*].name"
+    And the response should contain the value "pattern/accuracy" at path "$.results.benchmarks[?(@.id=='inspect/3gpp-tsg')].metrics[*].name"
+    # TODO: Add metric value validations once a job completes successfully on a cluster with the telco inspect runner - https://redhat.atlassian.net/browse/RHOAIENG-87955
+
+  @kueue
+  Scenario: Create evaluation job with queue and collection - open-telco-v1
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_kueue_oob_open_telco_v1.json"
+    Then the response code should be 202
+    And the response should contain the value "kueue" at path "$.collection.benchmarks[0].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.collection.benchmarks[0].hardware_config.queue.name"
+    And the response should contain the value "kueue" at path "$.collection.benchmarks[1].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.collection.benchmarks[1].hardware_config.queue.name"
+    And the response should contain the value "kueue" at path "$.collection.benchmarks[2].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.collection.benchmarks[2].hardware_config.queue.name"
+    And the response should contain the value "kueue" at path "$.collection.benchmarks[3].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.collection.benchmarks[3].hardware_config.queue.name"
+    And the response should contain the value "open-telco-v1" at path "$.collection.id"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    And the response should contain the value "open-telco-v1" at path "$.collection.id"
+    And the response should contain the value "kueue" at path "$.collection.benchmarks[0].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.collection.benchmarks[0].hardware_config.queue.name"
+    And the response should contain the value "kueue" at path "$.collection.benchmarks[1].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.collection.benchmarks[1].hardware_config.queue.name"
+    And the response should contain the value "kueue" at path "$.collection.benchmarks[2].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.collection.benchmarks[2].hardware_config.queue.name"
+    And the response should contain the value "kueue" at path "$.collection.benchmarks[3].hardware_config.queue.kind"
+    And the response should contain the value "{{env:QUEUE_NAME|user-queue}}" at path "$.collection.benchmarks[3].hardware_config.queue.name"
+
+  @mlflow
+  Scenario: Card generated for completed job with collection - open-telco-v1
+    Given the service is running
+    And there is a system collection with id "open-telco-v1"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_collection_telco.json"
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:job_id"
+    And the "resource.mlflow_experiment_id" field in the response should be saved as "value:mlflow_experiment_id"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    Then the MLflow artifact should exist
+    And the MLflow artifact should contain "context.collection_id"
+    And the MLflow artifact should contain the value "open-telco-v1" at path "$.context.collection_id"
