@@ -220,6 +220,7 @@ func (tc *scenarioConfig) getJsonPath(jsonPath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	raw = unwrapIfFilterResult(raw, jsonPath)
 	return fmt.Sprintf("%v", raw), nil
 }
 
