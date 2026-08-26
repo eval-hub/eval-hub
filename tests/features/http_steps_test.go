@@ -331,6 +331,7 @@ func (tc *scenarioConfig) iSendARequestImpl(method, path, body, caller string) e
 			if tc.lastId == "" {
 				return tc.logError(fmt.Errorf("response does not contain an ID in response %s", string(tc.body)))
 			}
+			tc.lastK8sJobName = ""
 			tc.addAsset(assetName, tc.lastId)
 			tc.values["id"] = tc.lastId
 		}
