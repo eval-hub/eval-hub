@@ -7,9 +7,9 @@ properties:
   category:
     type: string
     description: >
-      Broad evaluation domain. Known values align with the enterprise LLM quality taxonomy:
-      knowledge_reasoning, document_understanding, instruction_output, tool_use,
-      software, trustworthiness, multilingual, multimodal.
+      DEPRECATED — use `domains` instead. Retained for backwards compatibility;
+      will be made optional and eventually removed in a future version.
+      Previously used as the broad evaluation domain grouping.
   description:
     type: string
     description: Optional description.
@@ -30,25 +30,65 @@ properties:
     items:
       $ref: ./CollectionBenchmarkConfig.yaml
     description: Benchmarks in the collection.
-  modalities:
+  domains:
     type: array
     items:
       type: string
     description: >
-      Data modalities this collection covers. Values use snake_case matching the category
-      convention. Known values: text, vision, multimodal.
+      High-level evaluation domains this collection addresses (snake_case).
+      If not explicitly set, the handler returns the union of domains from
+      the collection's benchmarks (via BenchmarkResource.domains).
+      Canonical values from the enterprise LLM quality taxonomy:
+      knowledge_and_reasoning, grounded_document_understanding,
+      instruction_and_output_reliability, tool_use_and_function_calling,
+      software, trustworthiness, multilingual, multimodal.
+      A collection may cover more than one domain.
   tasks:
     type: array
     items:
       type: string
     description: >
-      Evaluation subtasks covered within the collection's domain. Values use snake_case
-      matching the category convention. Known values: reasoning, data_analysis, extraction,
-      summarization, full_document_qa, long_context_understanding, rag,
-      citation_attribution, grounding_discipline, instruction_following, structured_output,
-      constraint_following, call_generation, code_generation, code_understanding, code_repair,
-      safety, calibration, abstention, adversarial_injection, translation,
-      document_chart_vqa, general_visual_reasoning. A collection may cover more than one subtask.
+      ML tasks this collection evaluates (snake_case).
+      If not explicitly set, the handler returns the union of tasks from
+      the collection's benchmarks (via BenchmarkResource.tasks).
+      Known values: reasoning, data_analysis, extraction, summarization,
+      full_document_qa, long_context_understanding, rag, citation_attribution,
+      grounding_discipline, instruction_following, structured_output,
+      constraint_following, call_generation, code_generation, code_understanding,
+      code_repair, safety, calibration, abstention, adversarial_injection,
+      translation, document_chart_vqa, general_visual_reasoning.
+  modalities:
+    type: array
+    items:
+      type: string
+    description: >
+      Data modalities this collection covers (snake_case).
+      If not explicitly set, the handler returns the union of modalities from
+      the collection's benchmarks (via BenchmarkResource.modalities).
+      Known values: text, vision, multimodal.
+  industries:
+    type: array
+    items:
+      type: string
+    description: >
+      Business industries this collection is relevant for (snake_case).
+      This is a collection-level field reflecting the author's intent;
+      the same benchmarks may serve different industries depending on context.
+      Example values: health, telco, financial, government.
+  ai_entities:
+    type: array
+    items:
+      type: string
+    description: >
+      AI entity types this collection evaluates (snake_case).
+      Example values: model, agent. All current system collections target model.
+  version:
+    type: string
+    description: >
+      Semantic version label for this collection configuration, set by the
+      operator in YAML (e.g. "1.0.0" or "v2"). Informational — displayed in
+      the UI and available for reference. Distinct from Resource.version which
+      is a server-managed runtime integer auto-incremented on every PUT/PATCH.
 required:
   - name
   - category

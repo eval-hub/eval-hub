@@ -35,9 +35,45 @@ get:
               total_count:
                 type: integer
                 description: Total number of collections matching the filter.
+              domains:
+                type: array
+                description: Evaluation domain values with counts (from CollectionConfig.domains).
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    label:
+                      type: string
+                    count:
+                      type: integer
+              industries:
+                type: array
+                description: Industry values with counts (from CollectionConfig.industries).
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    label:
+                      type: string
+                    count:
+                      type: integer
+              ai_entities:
+                type: array
+                description: AI entity type values with counts (from CollectionConfig.ai_entities).
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    label:
+                      type: string
+                    count:
+                      type: integer
               categories:
                 type: array
-                description: Category values with counts. Maps to Michal's 8 enterprise LLM quality domains.
+                description: Deprecated category values with counts. Retained for backwards compatibility.
                 items:
                   type: object
                   properties:
@@ -61,7 +97,7 @@ get:
                       type: integer
               tasks:
                 type: array
-                description: Task/subtask values with counts.
+                description: Task values with counts.
                 items:
                   type: object
                   properties:

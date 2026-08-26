@@ -91,6 +91,33 @@ get:
       description: >
         Filter collections by task type (snake_case). Returns collections whose tasks array
         contains this value. May be repeated for multiple values.
+    - name: domains
+      in: query
+      required: false
+      schema:
+        type: string
+        title: Domain filter
+      description: >
+        Filter collections by evaluation domain (snake_case). Returns collections whose
+        domains array contains this value. May be repeated for multiple values.
+    - name: industries
+      in: query
+      required: false
+      schema:
+        type: string
+        title: Industry filter
+      description: >
+        Filter collections by target industry (snake_case, e.g. health, telco).
+        May be repeated for multiple values.
+    - name: ai_entities
+      in: query
+      required: false
+      schema:
+        type: string
+        title: AI entity filter
+      description: >
+        Filter collections by AI entity type (e.g. model, agent).
+        May be repeated for multiple values.
     - name: sort_by
       in: query
       required: false

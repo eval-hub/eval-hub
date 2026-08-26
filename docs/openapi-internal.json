@@ -2124,6 +2124,36 @@
             "description": "Filter collections by task type (snake_case). Returns collections whose tasks array contains this value. May be repeated for multiple values.\n"
           },
           {
+            "name": "domains",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Domain filter"
+            },
+            "description": "Filter collections by evaluation domain (snake_case). Returns collections whose domains array contains this value. May be repeated for multiple values.\n"
+          },
+          {
+            "name": "industries",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Industry filter"
+            },
+            "description": "Filter collections by target industry (snake_case, e.g. health, telco). May be repeated for multiple values.\n"
+          },
+          {
+            "name": "ai_entities",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "AI entity filter"
+            },
+            "description": "Filter collections by AI entity type (e.g. model, agent). May be repeated for multiple values.\n"
+          },
+          {
             "name": "sort_by",
             "in": "query",
             "required": false,
@@ -2471,9 +2501,63 @@
                       "type": "integer",
                       "description": "Total number of collections matching the filter."
                     },
+                    "domains": {
+                      "type": "array",
+                      "description": "Evaluation domain values with counts (from CollectionConfig.domains).",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "industries": {
+                      "type": "array",
+                      "description": "Industry values with counts (from CollectionConfig.industries).",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "ai_entities": {
+                      "type": "array",
+                      "description": "AI entity type values with counts (from CollectionConfig.ai_entities).",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
                     "categories": {
                       "type": "array",
-                      "description": "Category values with counts. Maps to Michal's 8 enterprise LLM quality domains.",
+                      "description": "Deprecated category values with counts. Retained for backwards compatibility.",
                       "items": {
                         "type": "object",
                         "properties": {
@@ -2509,7 +2593,7 @@
                     },
                     "tasks": {
                       "type": "array",
-                      "description": "Task/subtask values with counts.",
+                      "description": "Task values with counts.",
                       "items": {
                         "type": "object",
                         "properties": {
@@ -3416,7 +3500,7 @@
           },
           "version": {
             "type": "integer",
-            "description": "Monotonic version counter, auto-incremented by the server on each successful PUT or PATCH. Starts at 1. Lets consumers detect mutations and lets evaluation jobs record \"I ran against version N of this collection\" (R8 reproducibility).\n"
+            "description": "Monotonic version counter, auto-incremented by the server on every successful PUT or PATCH regardless of which fields changed. Starts at 1. Lets consumers detect any mutation and lets evaluation jobs record \"I ran against version N of this collection\" (R8 reproducibility). Distinct from CollectionConfig.version which is a semantic label set by operators.\n"
           }
         }
       },
@@ -4866,6 +4950,27 @@
           "agent": {
             "$ref": "#/components/schemas/BenchmarkAgentMetadata",
             "description": "Agent discoverability metadata for this benchmark"
+          },
+          "domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "High-level eval domains this benchmark addresses (snake_case). Matches the CollectionConfig.domains vocabulary. Used to auto-populate collection-level domains when not explicitly set on the collection. Example values: knowledge_and_reasoning, grounded_document_understanding, instruction_and_output_reliability, tool_use_and_function_calling, software, trustworthiness, multilingual, multimodal.\n"
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "ML tasks this benchmark evaluates (snake_case). Matches the CollectionConfig.tasks vocabulary. Used to auto-populate collection-level tasks when not explicitly set on the collection. Example values: reasoning, rag, code_generation, safety, translation.\n"
+          },
+          "modalities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Data modalities this benchmark uses (snake_case). Matches the CollectionConfig.modalities vocabulary. Used to auto-populate collection-level modalities when not explicitly set on the collection. Known values: text, vision, multimodal.\n"
           }
         }
       },
@@ -5143,7 +5248,7 @@
           },
           "category": {
             "type": "string",
-            "description": "Broad evaluation domain. Known values align with the enterprise LLM quality taxonomy: knowledge_reasoning, document_understanding, instruction_output, tool_use, software, trustworthiness, multilingual, multimodal.\n"
+            "description": "DEPRECATED — use `domains` instead. Retained for backwards compatibility; will be made optional and eventually removed in a future version. Previously used as the broad evaluation domain grouping.\n"
           },
           "description": {
             "type": "string",
@@ -5172,19 +5277,44 @@
             },
             "description": "Benchmarks in the collection."
           },
-          "modalities": {
+          "domains": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "Data modalities this collection covers. Values use snake_case matching the category convention. Known values: text, vision, multimodal.\n"
+            "description": "High-level evaluation domains this collection addresses (snake_case). If not explicitly set, the handler returns the union of domains from the collection's benchmarks (via BenchmarkResource.domains). Canonical values from the enterprise LLM quality taxonomy: knowledge_and_reasoning, grounded_document_understanding, instruction_and_output_reliability, tool_use_and_function_calling, software, trustworthiness, multilingual, multimodal. A collection may cover more than one domain.\n"
           },
           "tasks": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "Evaluation subtasks covered within the collection's domain. Values use snake_case matching the category convention. Known values: reasoning, data_analysis, extraction, summarization, full_document_qa, long_context_understanding, rag, citation_attribution, grounding_discipline, instruction_following, structured_output, constraint_following, call_generation, code_generation, code_understanding, code_repair, safety, calibration, abstention, adversarial_injection, translation, document_chart_vqa, general_visual_reasoning. A collection may cover more than one subtask.\n"
+            "description": "ML tasks this collection evaluates (snake_case). If not explicitly set, the handler returns the union of tasks from the collection's benchmarks (via BenchmarkResource.tasks). Known values: reasoning, data_analysis, extraction, summarization, full_document_qa, long_context_understanding, rag, citation_attribution, grounding_discipline, instruction_following, structured_output, constraint_following, call_generation, code_generation, code_understanding, code_repair, safety, calibration, abstention, adversarial_injection, translation, document_chart_vqa, general_visual_reasoning.\n"
+          },
+          "modalities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Data modalities this collection covers (snake_case). If not explicitly set, the handler returns the union of modalities from the collection's benchmarks (via BenchmarkResource.modalities). Known values: text, vision, multimodal.\n"
+          },
+          "industries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Business industries this collection is relevant for (snake_case). This is a collection-level field reflecting the author's intent; the same benchmarks may serve different industries depending on context. Example values: health, telco, financial, government.\n"
+          },
+          "ai_entities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "AI entity types this collection evaluates (snake_case). Example values: model, agent. All current system collections target model.\n"
+          },
+          "version": {
+            "type": "string",
+            "description": "Semantic version label for this collection configuration, set by the operator in YAML (e.g. \"1.0.0\" or \"v2\"). Informational — displayed in the UI and available for reference. Distinct from Resource.version which is a server-managed runtime integer auto-incremented on every PUT/PATCH.\n"
           }
         },
         "required": [
