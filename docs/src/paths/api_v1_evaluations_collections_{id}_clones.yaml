@@ -1,14 +1,14 @@
 post:
   tags:
     - Collections
-  summary: Clone Collection
+  summary: Copy Collection
   description: >
-    Creates a new tenant-scoped (custom) collection as a clone of the specified source
+    Creates a new tenant-scoped (custom) collection as a copy of the specified source
     collection. The server copies all CollectionConfig fields from the source, assigns
-    a new ID with scope=tenant, and records the source ID in CollectionState.clone_of_id
+    a new ID with scope=tenant, and records the source ID in CollectionState.derived_from
     for provenance. The request body may include optional overrides (e.g. a new name).
     No client-side GET + POST orchestration needed.
-  operationId: post_collections_id_clone
+  operationId: post_collections_id_clones
   parameters:
     - name: id
       in: path
@@ -16,7 +16,7 @@ post:
       schema:
         type: string
         title: Collection Id
-      description: ID of the source collection to clone.
+      description: ID of the source collection to copy.
   requestBody:
     required: false
     content:
@@ -51,7 +51,7 @@ post:
                   owner: "user@example.com"
                   version: 1
                 state:
-                  clone_of_id: "e5f6a7b8-9012-3456-cdef-0123456789ab"
+                  derived_from: "e5f6a7b8-9012-3456-cdef-0123456789ab"
                   run_count: 0
                   pinned_order: 0
                 name: "my-rag-evaluation"

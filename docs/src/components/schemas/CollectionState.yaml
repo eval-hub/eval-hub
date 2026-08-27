@@ -2,14 +2,14 @@ type: object
 description: >
   Server-managed runtime state for custom (tenant-scoped) collections.
   Never user-supplied and never written to YAML configuration.
-  Present only on collections with scope=tenant; absent on system and curated collections.
+  Present only on collections with scope=tenant; absent on system collections.
 properties:
-  clone_of_id:
+  derived_from:
     type: string
     description: >
-      ID of the collection this was cloned from. Set by the server when
-      POST /collections/{id}/clone is called; never user-supplied.
-      Provides provenance (e.g. "forked from RAG Evaluation v1").
+      ID of the collection this was copied from. Set by the server when
+      POST /collections/{id}/clones is called; never user-supplied.
+      Provides provenance (e.g. "copied from RAG Evaluation v1").
   run_count:
     type: integer
     description: >
@@ -21,11 +21,3 @@ properties:
       Tenant-controlled pin ordering. 0 = not pinned. Positive integers give
       the tenant's personal tile ordering (ascending). Settable by the
       collection owner via PATCH /collections/{id}.
-  example_results:
-    type: array
-    items:
-      $ref: ./ExampleResult.yaml
-    description: >
-      Result snapshots promoted by the tenant as featured examples.
-      Scores are copied from the source job at promotion time — durable,
-      survives job deletion. Managed via POST /collections/{id}/examples.

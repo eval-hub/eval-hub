@@ -60,7 +60,7 @@ get:
       description: >
         Filters the result set by collection scope.
         `system` returns all system-defined collections (curated and non-curated).
-        `curated` returns only curated system collections (those with a `curated` block).
+        `curated` returns only curated system collections (those with curation_order > 0).
         `tenant` returns only tenant (custom) collections.
         When omitted, all collections are returned.
     - name: curated_info
@@ -71,7 +71,7 @@ get:
         default: true
         title: Include curated metadata
       description: >
-        When `false`, strips the `curated` field from the response body.
+        When `false`, strips curation metadata from the response body (for SDK/CLI consumers that do not need it).
         Defaults to `true`; existing callers that do not pass this parameter are unaffected.
     - name: modalities
       in: query

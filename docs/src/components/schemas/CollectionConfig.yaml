@@ -9,7 +9,6 @@ properties:
     description: >
       DEPRECATED — use `domains` instead. Retained for backwards compatibility;
       will be made optional and eventually removed in a future version.
-      Previously used as the broad evaluation domain grouping.
   description:
     type: string
     description: Optional description.
@@ -30,6 +29,15 @@ properties:
     items:
       $ref: ./CollectionBenchmarkConfig.yaml
     description: Benchmarks in the collection.
+  curation_order:
+    type: integer
+    description: >
+      Controls whether and where this collection appears on the Curated Collections
+      landing page. 0 (or absent) means not curated. Positive integers give the
+      tile position (lower value = higher on page; 1 appears before 2).
+      Set by system operators in YAML only; the server rejects writes from
+      tenant API consumers. System collections are sorted by curation_order
+      ascending, curated tiles before uncurated ones.
   domains:
     type: array
     items:
@@ -38,11 +46,9 @@ properties:
       High-level evaluation domains this collection addresses (snake_case).
       If not explicitly set, the handler returns the union of domains from
       the collection's benchmarks (via BenchmarkResource.domains).
-      Canonical values from the enterprise LLM quality taxonomy:
-      knowledge_and_reasoning, grounded_document_understanding,
+      Canonical values: knowledge_and_reasoning, grounded_document_understanding,
       instruction_and_output_reliability, tool_use_and_function_calling,
       software, trustworthiness, multilingual, multimodal.
-      A collection may cover more than one domain.
   tasks:
     type: array
     items:
@@ -72,8 +78,7 @@ properties:
       type: string
     description: >
       Business industries this collection is relevant for (snake_case).
-      This is a collection-level field reflecting the author's intent;
-      the same benchmarks may serve different industries depending on context.
+      Collection-level field; the same benchmarks may serve different industries.
       Example values: health, telco, financial, government.
   ai_entities:
     type: array
@@ -82,13 +87,12 @@ properties:
     description: >
       AI entity types this collection evaluates (snake_case).
       Example values: model, agent. All current system collections target model.
-  version:
+  derived_from:
     type: string
     description: >
-      Semantic version label for this collection configuration, set by the
-      operator in YAML (e.g. "1.0.0" or "v2"). Informational — displayed in
-      the UI and available for reference. Distinct from Resource.version which
-      is a server-managed runtime integer auto-incremented on every PUT/PATCH.
+      When provided on collection creation via POST /collections/{id}/clones,
+      records the ID of the source collection. Write-only — not returned in
+      responses (provenance is in CollectionState.derived_from on the resource).
 required:
   - name
   - category

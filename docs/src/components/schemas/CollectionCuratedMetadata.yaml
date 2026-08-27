@@ -1,9 +1,0 @@
-type: object
-description: Display metadata for curated collections. Set via operator YAML only; not settable via API.
-properties:
-  curation_order:
-    type: integer
-    description: >
-      Controls whether and where this collection appears on the Curated Collections landing page.
-      0 = not featured. Positive integers give explicit tile ordering (ascending).
-      Admin-only; the server rejects writes from tenant API consumers.
