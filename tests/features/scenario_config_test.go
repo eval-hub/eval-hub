@@ -90,9 +90,10 @@ type scenarioConfig struct {
 
 	reqHeaders map[string]string
 
-	lastURL    string
-	lastMethod string
-	lastId     string
+	lastURL        string
+	lastMethod     string
+	lastId         string
+	lastK8sJobName string
 
 	// MCP-specific fields
 	mcpToolResult    *mcp.CallToolResult
