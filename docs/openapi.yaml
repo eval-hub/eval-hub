@@ -1336,7 +1336,7 @@ paths:
               - tenant
             title: Scope of collections
           description: |
-            Filters the result set by collection scope, within the collections visible to the requesting tenant. `system` returns all system-defined collections visible to this tenant (curated and non-curated). `curated` returns only curated system collections (those with curation_order > 0). `tenant` returns only this tenant's own custom collections. When omitted, all collections accessible to this tenant are returned (system + this tenant's custom).
+            Filters the result set by collection scope, within the collections visible to the requesting tenant. `system` returns all system-defined collections (curated and non-curated). `curated` returns only curated system collections (those with curation_order > 0). `tenant` returns only this tenant's own custom collections. When omitted, all collections visible to this tenant are returned (system + this tenant's custom collections).
         - name: modalities
           in: query
           required: false
