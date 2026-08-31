@@ -141,7 +141,7 @@ func TestCollectionConfigNewFieldsAreOptional(t *testing.T) {
 
 func TestCollectionStateFieldsSerialization(t *testing.T) {
 	resource := api.CollectionResource{
-		Resource: api.Resource{ID: "abc123", Version: 3},
+		Resource: api.Resource{ID: "abc123", VersionCounter: 3},
 		CollectionConfig: api.CollectionConfig{
 			Name:     "my-collection",
 			Category: "software",
@@ -178,8 +178,8 @@ func TestCollectionStateFieldsSerialization(t *testing.T) {
 	if rt.State.PinnedOrder != 2 {
 		t.Errorf("PinnedOrder: got %d, want 2", rt.State.PinnedOrder)
 	}
-	if rt.Resource.Version != 3 {
-		t.Errorf("Resource.Version: got %d, want 3", rt.Resource.Version)
+	if rt.Resource.VersionCounter != 3 {
+		t.Errorf("Resource.VersionCounter: got %d, want 3", rt.Resource.VersionCounter)
 	}
 }
 
@@ -206,7 +206,7 @@ func TestCollectionStateAbsentForSystemCollections(t *testing.T) {
 }
 
 func TestResourceVersionField(t *testing.T) {
-	r := api.Resource{ID: "r1", Version: 7}
+	r := api.Resource{ID: "r1", VersionCounter: 7}
 	out, err := json.Marshal(r)
 	if err != nil {
 		t.Fatalf("marshal failed: %v", err)
@@ -216,8 +216,8 @@ func TestResourceVersionField(t *testing.T) {
 	if err := json.Unmarshal(out, &rt); err != nil {
 		t.Fatalf("unmarshal failed: %v", err)
 	}
-	if rt.Version != 7 {
-		t.Errorf("Version: got %d, want 7", rt.Version)
+	if rt.VersionCounter != 7 {
+		t.Errorf("Version: got %d, want 7", rt.VersionCounter)
 	}
 }
 
@@ -228,7 +228,7 @@ func TestResourceVersionOmittedWhenZero(t *testing.T) {
 		t.Fatalf("marshal failed: %v", err)
 	}
 
-	if strings.Contains(string(out), `"version"`) {
-		t.Error("version must be omitted when zero")
+	if strings.Contains(string(out), `"version_counter"`) {
+		t.Error("version_counter must be omitted when zero")
 	}
 }
