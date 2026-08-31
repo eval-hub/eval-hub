@@ -69,6 +69,11 @@ type Resource struct {
 	CreatedAt time.Time `json:"created_at,omitzero"`
 	UpdatedAt time.Time `json:"updated_at,omitzero"`
 	Owner     User      `json:"owner,omitempty"`
+
+	// Version is a monotonic counter auto-incremented by the server on every successful
+	// PUT or PATCH to a custom collection. Starts at 1. Zero for resources that do not
+	// support versioning (system collections, evaluations, providers).
+	Version int `json:"version,omitempty"`
 }
 
 func (r Resource) IsSystemResource() bool {
