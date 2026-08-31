@@ -87,7 +87,7 @@ properties:
       type: string
     description: >
       AI entity types this collection evaluates (snake_case).
-      Example values: model, agent. All current system collections target model.
+      Example values: model, agent.
 required:
   - name
   - category

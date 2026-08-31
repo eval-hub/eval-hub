@@ -7,7 +7,6 @@ post:
     collection. The server copies all CollectionConfig fields from the source, assigns
     a new ID with scope=tenant, and records the source ID in CollectionState.derived_from
     for provenance. The request body may include optional overrides (e.g. a new name).
-    No client-side GET + POST orchestration needed.
   operationId: post_collections_id_clones
   parameters:
     - name: id

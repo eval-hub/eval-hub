@@ -1896,7 +1896,7 @@
               ],
               "title": "Scope of collections"
             },
-            "description": "Filters the result set by collection scope. `system` returns all system-defined collections (curated and non-curated). `curated` returns only curated system collections (those with curation_order > 0). `tenant` returns only tenant (custom) collections. When omitted, all collections are returned.\n"
+            "description": "Filters the result set by collection scope. `system` returns all system-defined collections (curated and non-curated). `curated` returns only curated system collections (those with curation_order > 0). `tenant` returns only tenant (custom) collections. When omitted, all accessible collections are returned.\n"
           },
           {
             "name": "curated_info",
@@ -1907,7 +1907,7 @@
               "default": true,
               "title": "Include curated metadata"
             },
-            "description": "When `false`, strips curation metadata from the response body (for SDK/CLI consumers that do not need it). Defaults to `true`; existing callers that do not pass this parameter are unaffected.\n"
+            "description": "When `false`, strips curation metadata from the response body (for consumers that do not need it). Defaults to `true`; existing callers that do not pass this parameter are unaffected.\n"
           },
           {
             "name": "modalities",
@@ -1917,7 +1917,7 @@
               "type": "string",
               "title": "Modality filter"
             },
-            "description": "Filter collections by modality. Returns collections whose modalities array contains this value (e.g. `?modalities=Text`). May be repeated for multiple values.\n"
+            "description": "Filter collections by modality (snake_case). Returns collections whose modalities array contains this value. May be repeated for multiple values.\n"
           },
           {
             "name": "tasks",
@@ -1947,7 +1947,7 @@
               "type": "string",
               "title": "Industry filter"
             },
-            "description": "Filter collections by target industry (snake_case, e.g. health, telco). May be repeated for multiple values.\n"
+            "description": "Filter collections by target industry (snake_case). May be repeated for multiple values.\n"
           },
           {
             "name": "ai_entities",
@@ -1957,7 +1957,7 @@
               "type": "string",
               "title": "AI entity filter"
             },
-            "description": "Filter collections by AI entity type (e.g. model, agent). May be repeated for multiple values.\n"
+            "description": "Filter collections by AI entity type (snake_case). May be repeated for multiple values.\n"
           },
           {
             "name": "sort_by",
@@ -2296,7 +2296,7 @@
               "default": true,
               "title": "Include curated metadata"
             },
-            "description": "When `false`, strips curation metadata from the response body (for SDK/CLI consumers that do not need it). Defaults to `true`; existing callers are unaffected.\n"
+            "description": "When `false`, strips curation metadata from the response body (for consumers that do not need it). Defaults to `true`; existing callers are unaffected.\n"
           }
         ],
         "responses": {
@@ -2804,7 +2804,7 @@
           "Collections"
         ],
         "summary": "Copy Collection",
-        "description": "Creates a new tenant-scoped (custom) collection as a copy of the specified source collection. The server copies all CollectionConfig fields from the source, assigns a new ID with scope=tenant, and records the source ID in CollectionState.derived_from for provenance. The request body may include optional overrides (e.g. a new name). No client-side GET + POST orchestration needed.\n",
+        "description": "Creates a new tenant-scoped (custom) collection as a copy of the specified source collection. The server copies all CollectionConfig fields from the source, assigns a new ID with scope=tenant, and records the source ID in CollectionState.derived_from for provenance. The request body may include optional overrides (e.g. a new name).\n",
         "operationId": "post_collections_id_clones",
         "parameters": [
           {
@@ -3012,7 +3012,7 @@
           },
           "version": {
             "type": "integer",
-            "description": "Monotonic version counter, auto-incremented by the server on every successful PUT or PATCH regardless of which fields changed. Starts at 1. Lets consumers detect any mutation and lets evaluation jobs record \"I ran against version N of this collection\" (R8 reproducibility). Distinct from CollectionConfig.version which is a semantic label set by operators.\n"
+            "description": "Monotonic version counter, auto-incremented by the server on every successful PUT or PATCH regardless of which fields changed. Starts at 1. Lets consumers detect any mutation and lets evaluation jobs record which version of the collection they ran against (R8 reproducibility).\n"
           }
         }
       },
@@ -4634,7 +4634,7 @@
             "items": {
               "type": "string"
             },
-            "description": "AI entity types this collection evaluates (snake_case). Example values: model, agent. All current system collections target model.\n"
+            "description": "AI entity types this collection evaluates (snake_case). Example values: model, agent.\n"
           }
         },
         "required": [

@@ -19,7 +19,7 @@ get:
         default: true
         title: Include curated metadata
       description: >
-        When `false`, strips curation metadata from the response body (for SDK/CLI consumers that do not need it).
+        When `false`, strips curation metadata from the response body (for consumers that do not need it).
         Defaults to `true`; existing callers are unaffected.
   responses:
     '200':

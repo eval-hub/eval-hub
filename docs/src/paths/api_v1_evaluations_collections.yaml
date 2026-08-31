@@ -62,7 +62,7 @@ get:
         `system` returns all system-defined collections (curated and non-curated).
         `curated` returns only curated system collections (those with curation_order > 0).
         `tenant` returns only tenant (custom) collections.
-        When omitted, all collections are returned.
+        When omitted, all accessible collections are returned.
     - name: curated_info
       in: query
       required: false
@@ -71,7 +71,7 @@ get:
         default: true
         title: Include curated metadata
       description: >
-        When `false`, strips curation metadata from the response body (for SDK/CLI consumers that do not need it).
+        When `false`, strips curation metadata from the response body (for consumers that do not need it).
         Defaults to `true`; existing callers that do not pass this parameter are unaffected.
     - name: modalities
       in: query
@@ -80,8 +80,8 @@ get:
         type: string
         title: Modality filter
       description: >
-        Filter collections by modality. Returns collections whose modalities array contains
-        this value (e.g. `?modalities=Text`). May be repeated for multiple values.
+        Filter collections by modality (snake_case). Returns collections whose modalities array contains
+        this value. May be repeated for multiple values.
     - name: tasks
       in: query
       required: false
@@ -107,7 +107,7 @@ get:
         type: string
         title: Industry filter
       description: >
-        Filter collections by target industry (snake_case, e.g. health, telco).
+        Filter collections by target industry (snake_case).
         May be repeated for multiple values.
     - name: ai_entities
       in: query
@@ -116,7 +116,7 @@ get:
         type: string
         title: AI entity filter
       description: >
-        Filter collections by AI entity type (e.g. model, agent).
+        Filter collections by AI entity type (snake_case).
         May be repeated for multiple values.
     - name: sort_by
       in: query

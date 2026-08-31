@@ -1336,7 +1336,7 @@ paths:
               - tenant
             title: Scope of collections
           description: |
-            Filters the result set by collection scope. `system` returns all system-defined collections (curated and non-curated). `curated` returns only curated system collections (those with curation_order > 0). `tenant` returns only tenant (custom) collections. When omitted, all collections are returned.
+            Filters the result set by collection scope. `system` returns all system-defined collections (curated and non-curated). `curated` returns only curated system collections (those with curation_order > 0). `tenant` returns only tenant (custom) collections. When omitted, all accessible collections are returned.
         - name: curated_info
           in: query
           required: false
@@ -1345,7 +1345,7 @@ paths:
             default: true
             title: Include curated metadata
           description: |
-            When `false`, strips curation metadata from the response body (for SDK/CLI consumers that do not need it). Defaults to `true`; existing callers that do not pass this parameter are unaffected.
+            When `false`, strips curation metadata from the response body (for consumers that do not need it). Defaults to `true`; existing callers that do not pass this parameter are unaffected.
         - name: modalities
           in: query
           required: false
@@ -1353,7 +1353,7 @@ paths:
             type: string
             title: Modality filter
           description: |
-            Filter collections by modality. Returns collections whose modalities array contains this value (e.g. `?modalities=Text`). May be repeated for multiple values.
+            Filter collections by modality (snake_case). Returns collections whose modalities array contains this value. May be repeated for multiple values.
         - name: tasks
           in: query
           required: false
@@ -1377,7 +1377,7 @@ paths:
             type: string
             title: Industry filter
           description: |
-            Filter collections by target industry (snake_case, e.g. health, telco). May be repeated for multiple values.
+            Filter collections by target industry (snake_case). May be repeated for multiple values.
         - name: ai_entities
           in: query
           required: false
@@ -1385,7 +1385,7 @@ paths:
             type: string
             title: AI entity filter
           description: |
-            Filter collections by AI entity type (e.g. model, agent). May be repeated for multiple values.
+            Filter collections by AI entity type (snake_case). May be repeated for multiple values.
         - name: sort_by
           in: query
           required: false
@@ -1616,7 +1616,7 @@ paths:
             default: true
             title: Include curated metadata
           description: |
-            When `false`, strips curation metadata from the response body (for SDK/CLI consumers that do not need it). Defaults to `true`; existing callers are unaffected.
+            When `false`, strips curation metadata from the response body (for consumers that do not need it). Defaults to `true`; existing callers are unaffected.
       responses:
         '200':
           description: Successful Response
@@ -1955,7 +1955,7 @@ paths:
         - Collections
       summary: Copy Collection
       description: |
-        Creates a new tenant-scoped (custom) collection as a copy of the specified source collection. The server copies all CollectionConfig fields from the source, assigns a new ID with scope=tenant, and records the source ID in CollectionState.derived_from for provenance. The request body may include optional overrides (e.g. a new name). No client-side GET + POST orchestration needed.
+        Creates a new tenant-scoped (custom) collection as a copy of the specified source collection. The server copies all CollectionConfig fields from the source, assigns a new ID with scope=tenant, and records the source ID in CollectionState.derived_from for provenance. The request body may include optional overrides (e.g. a new name).
       operationId: post_collections_id_clones
       parameters:
         - name: id
@@ -2103,7 +2103,7 @@ components:
         version:
           type: integer
           description: |
-            Monotonic version counter, auto-incremented by the server on every successful PUT or PATCH regardless of which fields changed. Starts at 1. Lets consumers detect any mutation and lets evaluation jobs record "I ran against version N of this collection" (R8 reproducibility). Distinct from CollectionConfig.version which is a semantic label set by operators.
+            Monotonic version counter, auto-incremented by the server on every successful PUT or PATCH regardless of which fields changed. Starts at 1. Lets consumers detect any mutation and lets evaluation jobs record which version of the collection they ran against (R8 reproducibility).
     EvaluationResource:
       type: object
       description: Evaluation resource (base fields for an evaluation)
@@ -3452,7 +3452,7 @@ components:
           items:
             type: string
           description: |
-            AI entity types this collection evaluates (snake_case). Example values: model, agent. All current system collections target model.
+            AI entity types this collection evaluates (snake_case). Example values: model, agent.
       required:
         - name
         - category
