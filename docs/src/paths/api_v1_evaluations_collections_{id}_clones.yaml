@@ -48,7 +48,7 @@ post:
                   created_at: "2026-08-25T10:00:00Z"
                   updated_at: "2026-08-25T10:00:00Z"
                   owner: "user@example.com"
-                  version: 1
+                  version_counter: 1
                 state:
                   derived_from: "e5f6a7b8-9012-3456-cdef-0123456789ab"
                   run_count: 0

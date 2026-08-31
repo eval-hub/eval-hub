@@ -18,7 +18,7 @@ properties:
   owner:
     type: string
     description: Owner of the resource
-  version:
+  version_counter:
     type: integer
     description: >
       Server-managed mutation counter for custom (tenant-scoped) collections.
@@ -26,6 +26,6 @@ properties:
       successful PUT or PATCH; starts at 1 on creation. Zero for resources that
       do not support versioning (system collections, evaluations, providers).
       Purpose: lets users verify that a collection definition did not change
-      between two evaluation runs by comparing the version field recorded on
-      each job result — if both runs reference the same collection_id and version,
+      between two evaluation runs by comparing the version_counter field recorded on
+      each job result — if both runs reference the same collection_id and version_counter,
       the collection was unchanged (R8 reproducibility).
