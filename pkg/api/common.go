@@ -70,9 +70,9 @@ type Resource struct {
 	UpdatedAt time.Time `json:"updated_at,omitzero"`
 	Owner     User      `json:"owner,omitempty"`
 
-	// Version is a monotonic counter auto-incremented by the server on every successful
+	// VersionCounter is a monotonic counter auto-incremented by the server on every successful
 	// PUT or PATCH to a custom collection. Starts at 1. Zero for resources that do not
-	// support versioning (system collections, evaluations, providers).
+	// support versioning (e.g. system collections, evaluations, providers).
 	VersionCounter int `json:"version_counter,omitempty"`
 }
 
