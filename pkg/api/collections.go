@@ -39,8 +39,8 @@ type CollectionAgentMetadata struct {
 type CollectionConfig struct {
 	Name        string `mapstructure:"name" json:"name" validate:"required"`
 	Description string `mapstructure:"description" json:"description,omitempty" validate:"omitempty,max=1024,min=1"`
-	// Deprecated: use Domains instead. Retained for backwards compatibility; will be made
-	// optional and eventually removed in a future version.
+	// Category is deprecated. Use Domains instead. Retained for backwards compatibility.
+	// Will be made optional and eventually removed in a future version.
 	Category     string                      `mapstructure:"category" json:"category" validate:"required,max=128,min=1"`
 	Tags         []string                    `mapstructure:"tags" json:"tags,omitempty" validate:"omitempty,dive,tagname"`
 	Custom       *map[string]any             `mapstructure:"custom" json:"custom,omitempty"`
@@ -48,9 +48,9 @@ type CollectionConfig struct {
 	Benchmarks   []CollectionBenchmarkConfig `mapstructure:"benchmarks" json:"benchmarks" validate:"required,min=1,dive"`
 	Agent        *CollectionAgentMetadata    `mapstructure:"agent" json:"agent,omitempty"`
 
-	// CurationOrder controls tile placement on the Curated Collections landing page.
-	// 0 (or absent) means not curated. Positive integers give tile position:
-	// lower value = higher on page (1 appears before 2). Admin-only via YAML;
+	// CurationOrder enables to sort curated collections for display.
+	// 0 (or absent) means not curated. Positive integers give display position:
+	// lower value = higher on the display (1 appears before 2). Admin-only via YAML;
 	// the server rejects writes from tenant API consumers.
 	CurationOrder int `mapstructure:"curation_order" json:"curation_order,omitempty" validate:"omitempty,min=0"`
 
@@ -71,7 +71,7 @@ type CollectionConfig struct {
 	Industries []string `mapstructure:"industries" json:"industries,omitempty"`
 
 	// AIEntities lists the AI entity types evaluated (snake_case).
-	// Example values: model, agent. All current system collections target model.
+	// Example values: model, agent.
 	AIEntities []string `mapstructure:"ai_entities" json:"ai_entities,omitempty"`
 }
 
