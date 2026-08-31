@@ -125,8 +125,8 @@ jobs:
       # here via --exclude-rules with a path-scoped regex.
       env:
         # make sure that we use the golang version required by the project
-        GOSECGOVERSION: go1.26.5
-        GOTOOLCHAIN: go1.26.5
+        GOSECGOVERSION: go1.26.7
+        GOTOOLCHAIN: go1.26.7
       uses: securego/gosec@deb54465fea23d19a77f037e11e6589021f8501d # v2.29.0
       with:
         args: >-
