@@ -58,21 +58,11 @@ get:
           - tenant
         title: Scope of collections
       description: >
-        Filters the result set by collection scope.
-        `system` returns all system-defined collections (curated and non-curated).
+        Filters the result set by collection scope, within the collections visible to the requesting tenant.
+        `system` returns all system-defined collections visible to this tenant (curated and non-curated).
         `curated` returns only curated system collections (those with curation_order > 0).
-        `tenant` returns only tenant (custom) collections.
-        When omitted, all accessible collections are returned.
-    - name: curated_info
-      in: query
-      required: false
-      schema:
-        type: boolean
-        default: true
-        title: Include curated metadata
-      description: >
-        When `false`, strips curation metadata from the response body (for consumers that do not need it).
-        Defaults to `true`; existing callers that do not pass this parameter are unaffected.
+        `tenant` returns only this tenant's own custom collections.
+        When omitted, all collections accessible to this tenant are returned (system + this tenant's custom).
     - name: modalities
       in: query
       required: false
