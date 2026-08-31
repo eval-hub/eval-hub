@@ -3452,10 +3452,6 @@ components:
             type: string
           description: |
             AI entity types this collection evaluates (snake_case). Example values: model, agent. All current system collections target model.
-        derived_from:
-          type: string
-          description: |
-            When provided on collection creation via POST /collections/{id}/clones, records the ID of the source collection. Write-only — not returned in responses (provenance is in CollectionState.derived_from on the resource).
       required:
         - name
         - category
