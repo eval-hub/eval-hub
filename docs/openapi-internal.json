@@ -2141,7 +2141,7 @@
               "type": "string",
               "title": "Industry filter"
             },
-            "description": "Filter collections by target industry (snake_case). May be repeated for multiple values.\n"
+            "description": "Filter collections by target industry (snake_case). Returns collections whose industries array contains this value. May be repeated for multiple values.\n"
           },
           {
             "name": "ai_entities",
@@ -2151,7 +2151,7 @@
               "type": "string",
               "title": "AI entity filter"
             },
-            "description": "Filter collections by AI entity type (snake_case). May be repeated for multiple values.\n"
+            "description": "Filter collections by AI entity type (snake_case). Example values: model, agent. Returns collections whose AI entities array contains this value. May be repeated for multiple values.\n"
           },
           {
             "name": "sort_by",
