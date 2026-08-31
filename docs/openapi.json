@@ -4566,6 +4566,7 @@
             "description": "Collection name."
           },
           "category": {
+            "deprecated": true,
             "type": "string",
             "description": "DEPRECATED — use `domains` instead. Retained for backwards compatibility; will be made optional and eventually removed in a future version.\n"
           },

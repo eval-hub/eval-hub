@@ -5,6 +5,7 @@ properties:
     type: string
     description: Collection name.
   category:
+    deprecated: true
     type: string
     description: >
       DEPRECATED — use `domains` instead. Retained for backwards compatibility;
