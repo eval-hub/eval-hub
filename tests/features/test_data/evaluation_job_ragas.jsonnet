@@ -8,8 +8,24 @@ test.mergeOptional(
       name: 'test-evaluation-job-for-ragas-benchmark',
     } + if collectionId == '' then {
       benchmarks: [
-        test.benchmark('ragas_rag_default', 'ragas', { num_examples: 1 }),
-        test.benchmark('ragas_rag_full', 'ragas', { num_examples: 1 }),
+        test.benchmark('ragas_rag_default', 'ragas', { num_examples: 1 }) + {
+          test_data_ref: {
+            s3: {
+              bucket: 'ai-eng-canada',
+              key: 'datasets/ragas/dataset.jsonl',
+              secret_ref: 's3-ragas-credentials',
+            },
+          },
+        },
+        test.benchmark('ragas_rag_full', 'ragas', { num_examples: 1 }) + {
+          test_data_ref: {
+            s3: {
+              bucket: 'ai-eng-canada',
+              key: 'datasets/ragas/dataset.jsonl',
+              secret_ref: 's3-ragas-credentials',
+            },
+          },
+        },
       ],
       tags: ['benchmark-providers', 'ragas'],
     } else {},
