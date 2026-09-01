@@ -382,6 +382,11 @@ type EvaluationExports struct {
 type CollectionRef struct {
 	ID         string                      `mapstructure:"id" json:"id" validate:"required"`
 	Benchmarks []EvaluationBenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,dive"`
+
+	// VersionCounter is the version_counter of the referenced collection at the time this
+	// evaluation job was created. Set by the server; not accepted from the client.
+	// Lets users verify the collection definition was unchanged across evaluation runs (R8).
+	VersionCounter int `json:"version_counter,omitempty"`
 }
 
 // QueueConfig represents an optional scheduling queue under hardware_config
