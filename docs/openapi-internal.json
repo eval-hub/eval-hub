@@ -4135,6 +4135,10 @@
             "type": "string",
             "description": "The unique identifier of the collection.\n"
           },
+          "version_counter": {
+            "type": "integer",
+            "description": "The version_counter of the collection at the time this evaluation job was created. Set by the server when the job is created; not accepted from the client. Lets users verify whether the collection definition was the same across multiple evaluation runs: if two jobs reference the same collection id and version_counter, the collection was unchanged between those runs (R8 reproducibility).\n"
+          },
           "benchmarks": {
             "type": "array",
             "items": {
