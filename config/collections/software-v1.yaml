@@ -13,6 +13,8 @@ tags:
   - curated
 domains:
   - software
+pass_criteria:
+  threshold: 0.20
 benchmarks:
   - id: lcb:codegeneration_v6
     provider_id: lighteval

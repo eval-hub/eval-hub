@@ -16,6 +16,8 @@ tags:
   - curated
 domains:
   - trustworthiness
+pass_criteria:
+  threshold: 0.325
 benchmarks:
   - id: inspect/strong-reject
     provider_id: inspect

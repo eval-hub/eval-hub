@@ -15,6 +15,8 @@ tags:
   - curated
 domains:
   - grounded_document_understanding
+pass_criteria:
+  threshold: 0.35
 benchmarks:
   - id: niah-single-noise
     provider_id: ruler

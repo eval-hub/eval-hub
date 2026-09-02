@@ -13,6 +13,8 @@ tags:
   - curated
 domains:
   - tool_use_and_function_calling
+pass_criteria:
+  threshold: 0.60
 benchmarks:
   - id: inspect/bfcl
     provider_id: inspect
