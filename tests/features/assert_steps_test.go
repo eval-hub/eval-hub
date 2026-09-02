@@ -472,6 +472,103 @@ func (tc *scenarioConfig) theFieldShouldBeSaved(path string, name string) error 
 	return nil
 }
 
+func (tc *scenarioConfig) theBenchmarkShouldHaveMetric(benchmarkID, metricName string) error {
+	raw, err := tc.getJsonPathValue("$.results.benchmarks")
+	if err != nil {
+		return tc.logError(err)
+	}
+	benchmarks, ok := raw.([]any)
+	if !ok {
+		return tc.logError(fmt.Errorf("$.results.benchmarks is not an array, got %T", raw))
+	}
+	for _, b := range benchmarks {
+		bm, ok := b.(map[string]any)
+		if !ok {
+			continue
+		}
+		id, _ := bm["id"].(string)
+		if id != benchmarkID {
+			continue
+		}
+		metrics, _ := bm["metrics"].(map[string]any)
+		if _, exists := metrics[metricName]; exists {
+			return nil
+		}
+		keys := make([]string, 0, len(metrics))
+		for k := range metrics {
+			keys = append(keys, k)
+		}
+		return tc.logError(fmt.Errorf("benchmark %q does not have metric %q, available: %v in %s",
+			benchmarkID, metricName, keys, asPrettyJson(string(tc.body))))
+	}
+	return tc.logError(fmt.Errorf("benchmark %q not found in $.results.benchmarks in %s", benchmarkID, asPrettyJson(string(tc.body))))
+}
+
+func (tc *scenarioConfig) theAllBenchmarksHaveMetrics() error {
+	raw, err := tc.getJsonPathValue("$.results.benchmarks")
+	if err != nil {
+		return tc.logError(err)
+	}
+	benchmarks, ok := raw.([]any)
+	if !ok {
+		return tc.logError(fmt.Errorf("$.results.benchmarks is not an array, got %T", raw))
+	}
+	var missing []string
+	for i, b := range benchmarks {
+		bm, ok := b.(map[string]any)
+		if !ok {
+			continue
+		}
+		id, _ := bm["id"].(string)
+		if id == "" {
+			id = fmt.Sprintf("<unnamed@index %d>", i)
+		}
+		metrics, _ := bm["metrics"].(map[string]any)
+		if len(metrics) == 0 {
+			missing = append(missing, id)
+		}
+	}
+	if len(missing) > 0 {
+		return tc.logError(fmt.Errorf("expected all benchmarks to have metrics, but these had none: %s in %s",
+			strings.Join(missing, ", "), asPrettyJson(string(tc.body))))
+	}
+	return nil
+}
+
+func (tc *scenarioConfig) theAllBenchmarksInStatusShouldBe(expectedStatus string) error {
+	raw, err := tc.getJsonPathValue("$.status.benchmarks")
+	if err != nil {
+		return tc.logError(err)
+	}
+	benchmarks, ok := raw.([]any)
+	if !ok {
+		return tc.logError(fmt.Errorf("$.status.benchmarks is not an array, got %T", raw))
+	}
+	if len(benchmarks) == 0 {
+		return tc.logError(fmt.Errorf("$.status.benchmarks is empty; cannot assert status %q", expectedStatus))
+	}
+	var failures []string
+	for i, b := range benchmarks {
+		bm, ok := b.(map[string]any)
+		if !ok {
+			continue
+		}
+		id, _ := bm["id"].(string)
+		if id == "" {
+			id = fmt.Sprintf("<unnamed@index %d>", i)
+		}
+		status, _ := bm["status"].(string)
+		if status != expectedStatus {
+			failures = append(failures, fmt.Sprintf("%s: %s", id, status))
+		}
+	}
+	if len(failures) > 0 {
+		return tc.logError(fmt.Errorf("expected all benchmarks to have status %q, but found: %s in %s",
+			expectedStatus, strings.Join(failures, ", "), asPrettyJson(string(tc.body))))
+	}
+	return nil
+}
+
 func (tc *scenarioConfig) fixThisStep() error {
 	tc.logDebug("TODO: fix this step")
 	return godog.ErrSkip
