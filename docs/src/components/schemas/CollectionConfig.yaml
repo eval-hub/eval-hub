@@ -5,8 +5,11 @@ properties:
     type: string
     description: Collection name.
   category:
+    deprecated: true
     type: string
-    description: Collection category.
+    description: >
+      DEPRECATED — use `domains` instead. Retained for backwards compatibility;
+      will be made optional and eventually removed in a future version.
   description:
     type: string
     description: Optional description.
@@ -27,6 +30,64 @@ properties:
     items:
       $ref: ./CollectionBenchmarkConfig.yaml
     description: Benchmarks in the collection.
+  curation_order:
+    type: integer
+    description: >
+      Controls whether and where this collection appears on the Curated Collections
+      landing page. 0 (or absent) means not curated. Positive integers give the
+      tile position (lower value = higher on page; 1 appears before 2).
+      Set by system operators in YAML only; the server rejects writes from
+      tenant API consumers. System collections are sorted by curation_order
+      ascending, curated tiles before uncurated ones.
+  domains:
+    type: array
+    items:
+      type: string
+    description: >
+      High-level evaluation domains this collection addresses (snake_case).
+      If not explicitly set, the handler returns the union of domains from
+      the collection's benchmarks (via BenchmarkResource.domains).
+      Canonical values: knowledge_and_reasoning, grounded_document_understanding,
+      instruction_and_output_reliability, tool_use_and_function_calling,
+      software, trustworthiness, multilingual, multimodal.
+  tasks:
+    type: array
+    items:
+      type: string
+    description: >
+      ML tasks this collection evaluates (snake_case).
+      If not explicitly set, the handler returns the union of tasks from
+      the collection's benchmarks (via BenchmarkResource.tasks).
+      Known values: reasoning, data_analysis, extraction, summarization,
+      full_document_qa, long_context_understanding, rag, citation_attribution,
+      grounding_discipline, instruction_following, structured_output,
+      constraint_following, call_generation, code_generation, code_understanding,
+      code_repair, safety, calibration, abstention, adversarial_injection,
+      translation, document_chart_vqa, general_visual_reasoning.
+  modalities:
+    type: array
+    items:
+      type: string
+    description: >
+      Data modalities this collection covers (snake_case).
+      If not explicitly set, the handler returns the union of modalities from
+      the collection's benchmarks (via BenchmarkResource.modalities).
+      Known values: text, vision, multimodal.
+  industries:
+    type: array
+    items:
+      type: string
+    description: >
+      Business industries this collection is relevant for (snake_case).
+      Collection-level field; the same benchmarks may serve different industries.
+      Example values: health, telco, financial, government.
+  ai_entities:
+    type: array
+    items:
+      type: string
+    description: >
+      AI entity types this collection evaluates (snake_case).
+      Example values: model, agent.
 required:
   - name
   - category

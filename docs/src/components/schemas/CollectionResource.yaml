@@ -6,4 +6,10 @@ allOf:
       resource:
         $ref: ./Resource.yaml
         description: Resource metadata
+      state:
+        $ref: ./CollectionState.yaml
+        description: >
+          Server-managed runtime state for custom (tenant-scoped) collections.
+          Present only on collections with scope=tenant; absent on system
+          collections. Never user-supplied.
   - $ref: ./CollectionConfig.yaml
