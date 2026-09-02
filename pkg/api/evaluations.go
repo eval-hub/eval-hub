@@ -383,16 +383,11 @@ type CollectionRef struct {
 	ID         string                      `mapstructure:"id" json:"id" validate:"required"`
 	Benchmarks []EvaluationBenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 
-	// VersionCounter is the VersionCounter of the referenced collection at the moment this
+	// VersionCounter is the version counter of the referenced collection at the moment this
 	// evaluation job was created. Set by the server; never accepted from the client.
-	// Stored as part of the evaluation job's JSON entity blob — no DB schema change needed.
-	//
-	// Backward compatibility: jobs created before version tracking was introduced will have
-	// VersionCounter = 0 when read from the DB (field absent in stored JSON → Go zero value).
 	//
 	// Sentinel values:
 	//   0 — job predates version tracking; collection version at that time is unknown.
-	//       Reproducibility comparison is not possible. UI should display "version unknown".
 	//  >0 — collection's VersionCounter at job-creation time. Two runs with the same
 	//       collection id and VersionCounter used an identical collection definition.
 	VersionCounter int `json:"version_counter,omitempty"`

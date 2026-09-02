@@ -12,18 +12,13 @@ properties:
     type: integer
     description: >
       The version_counter of the referenced collection at the moment this evaluation
-      job was created. Set by the server; not accepted from the client. Stored as
-      part of the evaluation job's JSON entity blob — no schema migration required.
-
-      Backward compatibility: evaluation jobs created before version tracking was
-      introduced will return version_counter = 0 (field absent in stored JSON
-      deserializes to zero).
+      job was created. Set by the server; not accepted from the client.
 
       Sentinel values:
-        0 — job predates version tracking; the collection's state at that time is
+        0 — job predates version tracking; the collection's version at that time is
             unknown. Reproducibility comparison against other runs is not possible.
-       >0 — the collection's version_counter at job-creation time. Two runs that
-            reference the same collection id and version_counter used an identical
+       >0 — the collection's version_counter at job-creation time. Two evaluation jobs
+            that reference the same collection_id and version_counter used an identical
             collection definition (R8 reproducibility).
   benchmarks:
     type: array
