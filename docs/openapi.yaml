@@ -2085,7 +2085,16 @@ components:
         version_counter:
           type: integer
           description: |
-            Server-managed mutation counter for custom (tenant-scoped) collections. Persisted in the database; not lost on restart. Auto-incremented on every successful PUT or PATCH; starts at 1 on creation. Zero for resources that do not support versioning (system collections, evaluations, providers). Purpose: lets users verify that a collection definition did not change between two evaluation runs by comparing the version_counter field recorded on each job result — if both runs reference the same collection_id and version_counter, the collection was unchanged (R8 reproducibility).
+            Server-managed mutation counter for custom (tenant-scoped) collections. Persisted in the database as part of the JSON entity blob — no schema migration is required when this field is introduced. Auto-incremented on every successful PUT or PATCH; starts at 1 on creation.
+            Backward compatibility: resources created before version tracking was introduced will return version_counter = 0 (field absent in stored JSON deserializes to zero). Zero is a sentinel meaning "pre-versioning era" — no history is available for these resources.
+            Sentinel values:
+              0 — pre-versioning era, or resource type that does not support versioning
+                  (system collections, evaluations, providers).
+             >0 — valid version counter. Two evaluation runs that reference the same
+                  collection_id and version_counter used an identical collection definition
+                  (R8 reproducibility).
+
+            Zero for resources that do not support versioning: system collections, evaluations, providers.
     EvaluationResource:
       type: object
       description: Evaluation resource (base fields for an evaluation)
@@ -2943,7 +2952,14 @@ components:
         version_counter:
           type: integer
           description: |
-            The version_counter of the collection at the time this evaluation job was created. Set by the server when the job is created; not accepted from the client. Lets users verify whether the collection definition was the same across multiple evaluation runs: if two jobs reference the same collection id and version_counter, the collection was unchanged between those runs (R8 reproducibility).
+            The version_counter of the referenced collection at the moment this evaluation job was created. Set by the server; not accepted from the client. Stored as part of the evaluation job's JSON entity blob — no schema migration required.
+            Backward compatibility: evaluation jobs created before version tracking was introduced will return version_counter = 0 (field absent in stored JSON deserializes to zero).
+            Sentinel values:
+              0 — job predates version tracking; the collection's state at that time is
+                  unknown. Reproducibility comparison against other runs is not possible.
+             >0 — the collection's version_counter at job-creation time. Two runs that
+                  reference the same collection id and version_counter used an identical
+                  collection definition (R8 reproducibility).
         benchmarks:
           type: array
           items:

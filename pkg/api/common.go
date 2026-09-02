@@ -73,18 +73,14 @@ type Resource struct {
 	// VersionCounter is a server-managed monotonic counter for custom (tenant-scoped) collections.
 	// Auto-incremented on every successful PUT or PATCH. Starts at 1 on creation.
 	//
-	// Backward compatibility: this field is stored as part of the JSON entity blob (not a
-	// separate DB column), so no schema migration is needed. Resources created before version
-	// tracking was introduced will have VersionCounter = 0 when read from the database.
+	// Backward compatibility: stored as part of the JSON entity blob (not a separate DB column),
+	// so no schema migration is needed. Resources created before version tracking was introduced
+	// will have VersionCounter = 0 when read from the database.
 	//
 	// Sentinel values:
 	//   0 — pre-versioning era, or resource type that does not support versioning
 	//       (system collections, evaluations, providers). No history is available.
 	//  >0 — valid version; the collection has been versioned since at least counter = 1.
-	//
-	// UI note: display VersionCounter = 0 as "version unknown (pre-versioning era)"
-	// rather than a raw zero, and flag that reproducibility comparison is not available
-	// for runs with VersionCounter = 0.
 	VersionCounter int `json:"version_counter,omitempty"`
 }
 
