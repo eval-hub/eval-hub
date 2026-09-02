@@ -33,7 +33,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     # TODO: Add per-benchmark status and metrics_schema checks once resolved: RHOAIENG-84701
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
-  
+
   Scenario: Verifying results returned for Evaluation job - guidellm - group 1
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_guidellm.json"
@@ -260,7 +260,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     # TODO: Add per-benchmark status and metrics_schema checks once resolved: RHOAIENG-85389, RHOAIENG-85386
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
-  
+
   Scenario: Verifying results returned for Evaluation job - lm_evaluation_harness - group 4
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_lm_evaluation_harness_4.json"
@@ -384,7 +384,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     # TODO: Add per-benchmark status and metrics_schema checks once resolved: RHOAIENG-85386, RHOAIENG-85388, RHOAIENG-85393, RHOAIENG-85410
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
-  
+
   Scenario: Verifying results returned for Evaluation job - lm_evaluation_harness - group 7
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_lm_evaluation_harness_7.json"
