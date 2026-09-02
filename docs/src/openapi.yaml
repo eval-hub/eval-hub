@@ -54,3 +54,5 @@ paths:
     $ref: paths/api_v1_evaluations_collections.yaml
   /api/v1/evaluations/collections/{id}:
     $ref: paths/api_v1_evaluations_collections_{id}.yaml
+  /api/v1/evaluations/collections/{id}/clones:
+    $ref: paths/api_v1_evaluations_collections_{id}_clones.yaml
