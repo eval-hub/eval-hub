@@ -39,3 +39,32 @@ properties:
   agent:
     $ref: ./BenchmarkAgentMetadata.yaml
     description: Agent discoverability metadata for this benchmark
+  domains:
+    type: array
+    items:
+      type: string
+    description: >
+      High-level eval domains this benchmark addresses (snake_case).
+      Matches the CollectionConfig.domains vocabulary. Used to auto-populate
+      collection-level domains when not explicitly set on the collection.
+      Example values: knowledge_and_reasoning, grounded_document_understanding,
+      instruction_and_output_reliability, tool_use_and_function_calling,
+      software, trustworthiness, multilingual, multimodal.
+  tasks:
+    type: array
+    items:
+      type: string
+    description: >
+      ML tasks this benchmark evaluates (snake_case). Matches the
+      CollectionConfig.tasks vocabulary. Used to auto-populate collection-level
+      tasks when not explicitly set on the collection.
+      Example values: reasoning, rag, code_generation, safety, translation.
+  modalities:
+    type: array
+    items:
+      type: string
+    description: >
+      Data modalities this benchmark uses (snake_case). Matches the
+      CollectionConfig.modalities vocabulary. Used to auto-populate
+      collection-level modalities when not explicitly set on the collection.
+      Known values: text, vision, multimodal.

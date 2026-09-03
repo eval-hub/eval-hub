@@ -402,6 +402,16 @@
               "title": "Tags"
             },
             "description": "Tags to search for"
+          },
+          {
+            "name": "collection_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            },
+            "description": "Filter by the ID of the collection the job was created from. Maps to the collection.id field on the job record. Returns all jobs for the collection, ordered by date.\n"
           }
         ],
         "responses": {
@@ -1881,11 +1891,78 @@
               "type": "string",
               "enum": [
                 "system",
+                "curated",
                 "tenant"
               ],
               "title": "Scope of collections"
             },
-            "description": "Set to `system` to get only system defined collections, or `tenant` to get only user defined collections. If `scope` is not provided, both system and user defined collections will be returned.\n"
+            "description": "Filters the result set by collection scope, within the collections visible to the requesting tenant. `system` returns all system-defined collections (curated and non-curated). `curated` returns only curated system collections (those with curation_order > 0). `tenant` returns only this tenant's own custom collections. When omitted, all collections visible to this tenant are returned (system + this tenant's custom collections).\n"
+          },
+          {
+            "name": "modalities",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Modality filter"
+            },
+            "description": "Filter collections by modality (snake_case). Returns collections whose modalities array contains this value. May be repeated for multiple values.\n"
+          },
+          {
+            "name": "tasks",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Task filter"
+            },
+            "description": "Filter collections by task type (snake_case). Returns collections whose tasks array contains this value. May be repeated for multiple values.\n"
+          },
+          {
+            "name": "domains",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Domain filter"
+            },
+            "description": "Filter collections by evaluation domain (snake_case). Returns collections whose domains array contains this value. May be repeated for multiple values.\n"
+          },
+          {
+            "name": "industries",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Industry filter"
+            },
+            "description": "Filter collections by target industry (snake_case). Returns collections whose industries array contains this value. May be repeated for multiple values.\n"
+          },
+          {
+            "name": "ai_entities",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "AI entity filter"
+            },
+            "description": "Filter collections by AI entity type (snake_case). Example values: model, agent. Returns collections whose AI entities array contains this value. May be repeated for multiple values.\n"
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "created_at",
+                "curation_order"
+              ],
+              "default": "created_at",
+              "title": "Sort order"
+            },
+            "description": "Sort field for the result set. Applied server-side across all matching collections before pagination. curation_order sorts featured tiles ascending (0 last). Default: created_at descending.\n"
           }
         ],
         "responses": {
@@ -2698,6 +2775,116 @@
           }
         }
       }
+    },
+    "/api/v1/evaluations/collections/{id}/clones": {
+      "post": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Copy Collection",
+        "description": "Creates a new tenant-scoped (custom) collection as a copy of the specified source collection. The server copies all CollectionConfig fields from the source, assigns a new ID with scope=tenant, and records the source ID in CollectionState.derived_from for provenance. The request body may include optional overrides (e.g. a new name).\n",
+        "operationId": "post_collections_id_clones",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            },
+            "description": "ID of the source collection to copy."
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Optional new name for the cloned collection. Defaults to the source name."
+                  }
+                }
+              },
+              "examples": {
+                "CloneWithNewName": {
+                  "summary": "Clone with a custom name",
+                  "value": {
+                    "name": "my-rag-evaluation"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Cloned collection created successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResource"
+                },
+                "examples": {
+                  "response": {
+                    "summary": "Newly cloned custom collection",
+                    "value": {
+                      "resource": {
+                        "id": "b2c3d4e5-6789-0abc-def1-23456789abcd",
+                        "tenant": "my-tenant",
+                        "created_at": "2026-08-25T10:00:00Z",
+                        "updated_at": "2026-08-25T10:00:00Z",
+                        "owner": "user@example.com",
+                        "version_counter": 1
+                      },
+                      "state": {
+                        "derived_from": "e5f6a7b8-9012-3456-cdef-0123456789ab",
+                        "run_count": 0,
+                        "pinned_order": 0
+                      },
+                      "name": "my-rag-evaluation",
+                      "category": "document_understanding",
+                      "tasks": [
+                        "rag",
+                        "grounding_discipline"
+                      ],
+                      "modalities": [
+                        "text"
+                      ],
+                      "benchmarks": [
+                        {
+                          "id": "crag",
+                          "provider_id": "ragas",
+                          "weight": 1,
+                          "primary_score": {
+                            "metric": "answer_correctness",
+                            "lower_is_better": false
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2800,6 +2987,10 @@
           "owner": {
             "type": "string",
             "description": "Owner of the resource"
+          },
+          "version_counter": {
+            "type": "integer",
+            "description": "Server-managed mutation counter for custom (tenant-scoped) collections. Persisted in the database; not lost on restart. Auto-incremented on every successful PUT or PATCH; starts at 1 on creation. Zero for resources that do not support versioning (system collections, evaluations, providers). Purpose: lets users verify that a collection definition did not change between two evaluation runs by comparing the version_counter field recorded on each job result — if both runs reference the same collection_id and version_counter, the collection was unchanged (R8 reproducibility).\n"
           }
         }
       },
@@ -3750,6 +3941,10 @@
             "type": "string",
             "description": "The unique identifier of the collection.\n"
           },
+          "version_counter": {
+            "type": "integer",
+            "description": "The version_counter of the collection at the time this evaluation job was created. Set by the server when the job is created; not accepted from the client. Lets users verify whether the collection definition was the same across multiple evaluation runs: if two jobs reference the same collection id and version_counter, the collection was unchanged between those runs (R8 reproducibility).\n"
+          },
           "benchmarks": {
             "type": "array",
             "items": {
@@ -4136,6 +4331,27 @@
           "agent": {
             "$ref": "#/components/schemas/BenchmarkAgentMetadata",
             "description": "Agent discoverability metadata for this benchmark"
+          },
+          "domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "High-level eval domains this benchmark addresses (snake_case). Matches the CollectionConfig.domains vocabulary. Used to auto-populate collection-level domains when not explicitly set on the collection. Example values: knowledge_and_reasoning, grounded_document_understanding, instruction_and_output_reliability, tool_use_and_function_calling, software, trustworthiness, multilingual, multimodal.\n"
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "ML tasks this benchmark evaluates (snake_case). Matches the CollectionConfig.tasks vocabulary. Used to auto-populate collection-level tasks when not explicitly set on the collection. Example values: reasoning, rag, code_generation, safety, translation.\n"
+          },
+          "modalities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Data modalities this benchmark uses (snake_case). Matches the CollectionConfig.modalities vocabulary. Used to auto-populate collection-level modalities when not explicitly set on the collection. Known values: text, vision, multimodal.\n"
           }
         }
       },
@@ -4259,6 +4475,24 @@
           "path"
         ]
       },
+      "CollectionState": {
+        "type": "object",
+        "description": "Server-managed runtime state for custom (tenant-scoped) collections. Never user-supplied and never written to YAML configuration. Present only on collections with scope=tenant; absent on system collections.\n",
+        "properties": {
+          "derived_from": {
+            "type": "string",
+            "description": "ID of the collection this was copied from. Set by the server when POST /collections/{id}/clones is called; never user-supplied. Provides provenance (e.g. \"copied from RAG Evaluation v1\").\n"
+          },
+          "run_count": {
+            "type": "integer",
+            "description": "Number of evaluation jobs created from this collection by its owning tenant. Per-tenant counter, incremented at job creation.\n"
+          },
+          "pinned_order": {
+            "type": "integer",
+            "description": "Tenant-controlled pin ordering. 0 = not pinned. Positive integers give the tenant's personal tile ordering (ascending). Settable by the collection owner via PATCH /collections/{id}.\n"
+          }
+        }
+      },
       "CollectionBenchmarkConfig": {
         "type": "object",
         "description": "Reference to a benchmark in a collection (create, update, list, or get collection).\nThe **url** field is set by the server from the provider definition when a collection is created (POST), fully replaced (PUT), or when a whole benchmark array element is added or replaced via PATCH (paths `/benchmarks/<index>` or `/benchmarks/-`), then stored and returned on list/get; omitted when unknown. Field-level benchmark patches (e.g. `/benchmarks/0/id`) do not trigger this. It is not used on evaluation jobs.\n",
@@ -4314,8 +4548,9 @@
             "description": "Collection name."
           },
           "category": {
+            "deprecated": true,
             "type": "string",
-            "description": "Collection category."
+            "description": "DEPRECATED — use `domains` instead. Retained for backwards compatibility; will be made optional and eventually removed in a future version.\n"
           },
           "description": {
             "type": "string",
@@ -4343,6 +4578,45 @@
               "$ref": "#/components/schemas/CollectionBenchmarkConfig"
             },
             "description": "Benchmarks in the collection."
+          },
+          "curation_order": {
+            "type": "integer",
+            "description": "Controls whether and where this collection appears on the Curated Collections landing page. 0 (or absent) means not curated. Positive integers give the tile position (lower value = higher on page; 1 appears before 2). Set by system operators in YAML only; the server rejects writes from tenant API consumers. System collections are sorted by curation_order ascending, curated tiles before uncurated ones.\n"
+          },
+          "domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "High-level evaluation domains this collection addresses (snake_case). If not explicitly set, the handler returns the union of domains from the collection's benchmarks (via BenchmarkResource.domains). Canonical values: knowledge_and_reasoning, grounded_document_understanding, instruction_and_output_reliability, tool_use_and_function_calling, software, trustworthiness, multilingual, multimodal.\n"
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "ML tasks this collection evaluates (snake_case). If not explicitly set, the handler returns the union of tasks from the collection's benchmarks (via BenchmarkResource.tasks). Known values: reasoning, data_analysis, extraction, summarization, full_document_qa, long_context_understanding, rag, citation_attribution, grounding_discipline, instruction_following, structured_output, constraint_following, call_generation, code_generation, code_understanding, code_repair, safety, calibration, abstention, adversarial_injection, translation, document_chart_vqa, general_visual_reasoning.\n"
+          },
+          "modalities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Data modalities this collection covers (snake_case). If not explicitly set, the handler returns the union of modalities from the collection's benchmarks (via BenchmarkResource.modalities). Known values: text, vision, multimodal.\n"
+          },
+          "industries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Business industries this collection is relevant for (snake_case). Collection-level field; the same benchmarks may serve different industries. Example values: health, telco, financial, government.\n"
+          },
+          "ai_entities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "AI entity types this collection evaluates (snake_case). Example values: model, agent.\n"
           }
         },
         "required": [
@@ -4361,6 +4635,10 @@
               "resource": {
                 "$ref": "#/components/schemas/Resource",
                 "description": "Resource metadata"
+              },
+              "state": {
+                "$ref": "#/components/schemas/CollectionState",
+                "description": "Server-managed runtime state for custom (tenant-scoped) collections. Present only on collections with scope=tenant; absent on system collections. Never user-supplied.\n"
               }
             }
           },
