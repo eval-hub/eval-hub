@@ -30,10 +30,11 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the response should contain the value "test-evaluation-job-for-garak-benchmark" at path "$.name"
     And the response should contain "results"
     And the array at path "results.benchmarks" in the response should have length 9
-    # TODO: Add per-benchmark status and metrics checks once resolved: RHOAIENG-84701
+    And all benchmarks in the response should have status "completed"
+    And all benchmarks in the response should have metrics matching the provider config
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
-
+  @f3
   Scenario: Verifying results returned for Evaluation job - guidellm - group 1
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_guidellm.json"
@@ -50,8 +51,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the response should contain "results"
     And the array at path "results.benchmarks" in the response should have length 4
     And all benchmarks in the response should have status "completed"
-    And all benchmarks in the response should have metrics
-    And the benchmark "sweep" in the response should have metric "requests_per_second"
+    And all benchmarks in the response should have metrics matching the provider config
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -71,8 +71,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the response should contain "results"
     And the array at path "results.benchmarks" in the response should have length 3
     And all benchmarks in the response should have status "completed"
-    And all benchmarks in the response should have metrics
-    And the benchmark "poisson" in the response should have metric "requests_per_second"
+    And all benchmarks in the response should have metrics matching the provider config
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -94,8 +93,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the response should contain "results"
     And the array at path "results.benchmarks" in the response should have length 11
     And all benchmarks in the response should have status "completed"
-    And all benchmarks in the response should have metrics
-    And the benchmark "knowledge" in the response should have metric "acc"
+    And all benchmarks in the response should have metrics matching the provider config
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -116,7 +114,8 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the response should contain the value "test-evaluation-job-for-lighteval-benchmark-loglikelihood" at path "$.name"
     And the response should contain "results"
     And the array at path "results.benchmarks" in the response should have length 17
-    # TODO: Add per-benchmark status and metrics checks once resolved: RHOAIENG-84704
+    And all benchmarks in the response should have status "completed"
+    And all benchmarks in the response should have metrics matching the provider config
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -139,8 +138,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the response should contain "results"
     And the array at path "results.benchmarks" in the response should have length 25
     And all benchmarks in the response should have status "completed"
-    And all benchmarks in the response should have metrics
-    And the benchmark "arc_easy" in the response should have metric "acc"
+    And all benchmarks in the response should have metrics matching the provider config
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -162,7 +160,8 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the response should contain the value "test-evaluation-job-for-lm_evaluation_harness-benchmark" at path "$.name"
     And the response should contain "results"
     And the array at path "results.benchmarks" in the response should have length 30
-    # TODO: Add per-benchmark status and metrics checks once resolved: RHOAIENG-85386, RHOAIENG-85389, RHOAIENG-85388
+    And all benchmarks in the response should have status "completed"
+    And all benchmarks in the response should have metrics matching the provider config
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -183,7 +182,8 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the response should contain the value "test-evaluation-job-for-lm_evaluation_harness-benchmark" at path "$.name"
     And the response should contain "results"
     And the array at path "results.benchmarks" in the response should have length 30
-    # TODO: Add per-benchmark status and metrics checks once resolved: RHOAIENG-85389, RHOAIENG-85386
+    And all benchmarks in the response should have status "completed"
+    And all benchmarks in the response should have metrics matching the provider config
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -204,8 +204,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the response should contain "results"
     And the array at path "results.benchmarks" in the response should have length 30
     And all benchmarks in the response should have status "completed"
-    And all benchmarks in the response should have metrics
-    And the benchmark "AraDiCE_ArabicMMLU_middle_social-science_civics_egy" in the response should have metric "acc"
+    And all benchmarks in the response should have metrics matching the provider config
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -228,7 +227,8 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the response should contain the value "test-evaluation-job-for-lm_evaluation_harness-benchmark" at path "$.name"
     And the response should contain "results"
     And the array at path "results.benchmarks" in the response should have length 30
-    # TODO: Add per-benchmark status and metrics checks once resolved: RHOAIENG-85389, RHOAIENG-85386, RHOAIENG-85388, RHOAIENG-85393
+    And all benchmarks in the response should have status "completed"
+    And all benchmarks in the response should have metrics matching the provider config
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -251,7 +251,8 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the response should contain the value "test-evaluation-job-for-lm_evaluation_harness-benchmark" at path "$.name"
     And the response should contain "results"
     And the array at path "results.benchmarks" in the response should have length 38
-    # TODO: Add per-benchmark status and metrics checks once resolved: RHOAIENG-85386, RHOAIENG-85388, RHOAIENG-85393, RHOAIENG-85410
+    And all benchmarks in the response should have status "completed"
+    And all benchmarks in the response should have metrics matching the provider config
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -271,8 +272,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the response should contain "results"
     And the array at path "results.benchmarks" in the response should have length 5
     And all benchmarks in the response should have status "completed"
-    And all benchmarks in the response should have metrics
-    And the benchmark "blimp" in the response should have metric "acc"
+    And all benchmarks in the response should have metrics matching the provider config
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -293,7 +293,8 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the response should contain the value "test-evaluation-job-for-ragas-benchmark" at path "$.name"
     And the response should contain "results"
     And the array at path "results.benchmarks" in the response should have length 2
-    # TODO: Add per-benchmark status and metrics checks once resolved: RHOAIENG-89382, RHOAIENG-89395
+    And all benchmarks in the response should have status "completed"
+    And all benchmarks in the response should have metrics matching the provider config
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
