@@ -619,3 +619,174 @@ func TestModelProxySATokenSuffixReturns400WhenEmptyAndNoSAToken(t *testing.T) {
 		t.Fatalf("expected 400 when _sa_token empty and no SA token, got %d", rr.Code)
 	}
 }
+
+func TestLoadSecretCache_EmptyMountPath(t *testing.T) {
+	t.Parallel()
+	cache := loadSecretCache("", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if len(cache) != 0 {
+		t.Fatalf("cache = %#v, want empty", cache)
+	}
+}
+
+func TestLoadSecretCache_SkipsDirectoriesAndLoadsFiles(t *testing.T) {
+	t.Parallel()
+	var logBuf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	secretDir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(secretDir, "ignored-dir"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(secretDir, "api-key"), []byte("sk-test"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cache := loadSecretCache(secretDir, log)
+	if cache["api-key"] != "sk-test" {
+		t.Fatalf("cache = %#v, want api-key loaded", cache)
+	}
+	if _, ok := cache["ignored-dir"]; ok {
+		t.Fatal("expected directories to be skipped")
+	}
+	if !strings.Contains(logBuf.String(), "Loaded model secret cache") {
+		t.Fatalf("logs = %q, want cache loaded info", logBuf.String())
+	}
+}
+
+func TestLoadSecretCache_SkipsUnreadableSecretFile(t *testing.T) {
+	t.Parallel()
+	var logBuf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	secretDir := t.TempDir()
+	if err := os.Symlink(filepath.Join(secretDir, "missing-target"), filepath.Join(secretDir, "broken-link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(secretDir, "api-key"), []byte("sk-test"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cache := loadSecretCache(secretDir, log)
+	if cache["api-key"] != "sk-test" {
+		t.Fatalf("cache = %#v, want readable secret loaded", cache)
+	}
+	if !strings.Contains(logBuf.String(), "skipping unreadable secret file") {
+		t.Fatalf("logs = %q, want unreadable file warning", logBuf.String())
+	}
+}
+
+func TestResolveModelCredentialRejectsInvalidRefKey(t *testing.T) {
+	t.Parallel()
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	target, _ := url.Parse("https://model.example.com/v1")
+
+	for _, authHeader := range []string{"Bearer :ref", `Bearer bad/key:ref`} {
+		_, _, err := resolveModelCredential(log, authHeader, map[string]string{}, target, "")
+		if err == nil {
+			t.Fatalf("resolveModelCredential(%q) = nil, want error", authHeader)
+		}
+		if !strings.Contains(err.Error(), "invalid key") {
+			t.Fatalf("error = %q, want invalid key", err.Error())
+		}
+	}
+}
+
+func TestResolveUpstreamURLInvalidFallsBackToDefault(t *testing.T) {
+	t.Parallel()
+	var logBuf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	defaultTarget, _ := url.Parse("https://default.example.com/v1")
+	cache := map[string]string{
+		"model-1_api-key": "sk-test",
+		"model-1_url":     "://invalid",
+	}
+
+	got := resolveUpstreamURL(log, "model-1_api-key", cache, defaultTarget)
+	if got.String() != defaultTarget.String() {
+		t.Fatalf("got %q, want default %q", got, defaultTarget)
+	}
+	if !strings.Contains(logBuf.String(), "service URL in secret cache is invalid") {
+		t.Fatalf("logs = %q, want invalid URL warning", logBuf.String())
+	}
+}
+
+func TestModelProxyExplicitEmptyTokenPrefixOnHTTPS(t *testing.T) {
+	var gotAuth string
+	var logBuf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	target, client := startModelTestUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}, true)
+
+	rp := NewModelReverseProxy(target, client, log, t.TempDir(), "")
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	req.Header.Set("Authorization", "Bearer token:")
+	rr := httptest.NewRecorder()
+	rp.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if gotAuth != "Bearer token:" {
+		t.Fatalf("expected adapter Authorization unchanged on HTTPS when token empty, got %q", gotAuth)
+	}
+	if !strings.Contains(logBuf.String(), "Explicit token: prefix with empty value") {
+		t.Fatalf("logs = %q, want empty token warning", logBuf.String())
+	}
+}
+
+func TestModelProxySATokenUnavailableOnHTTPS(t *testing.T) {
+	var gotAuth string
+	var logBuf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	target, client := startModelTestUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}, true)
+
+	rp := NewModelReverseProxy(target, client, log, t.TempDir(), "")
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	rr := httptest.NewRecorder()
+	rp.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if gotAuth != "" {
+		t.Fatalf("expected no Authorization when SA token unavailable, got %q", gotAuth)
+	}
+	if !strings.Contains(logBuf.String(), "SA token injection skipped") {
+		t.Fatalf("logs = %q, want SA token unavailable warning", logBuf.String())
+	}
+}
+
+func TestModelProxyDropsCopiedAdapterAuthOnHTTPWithoutCredential(t *testing.T) {
+	var gotAuth string
+	var logBuf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	target, client := startModelTestUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}, false)
+
+	rp := NewModelReverseProxy(target, client, log, t.TempDir(), "")
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	req.Header.Set("Authorization", "Bearer token:")
+	rr := httptest.NewRecorder()
+	rp.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if gotAuth != "" {
+		t.Fatalf("expected adapter Authorization stripped on HTTP upstream, got %q", gotAuth)
+	}
+	if !strings.Contains(logBuf.String(), "Dropping model Authorization header") {
+		t.Fatalf("logs = %q, want auth drop warning", logBuf.String())
+	}
+}
