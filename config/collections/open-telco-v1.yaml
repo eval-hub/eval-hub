@@ -29,7 +29,7 @@ agent:
 pass_criteria:
   threshold: 0.475
 benchmarks:
-  - id: inspect/telemath
+  - id: telemath
     provider_id: inspect
     weight: 1
     primary_score:
@@ -41,7 +41,7 @@ benchmarks:
       full: true
       num_examples: 50
 
-  - id: inspect/teleqna
+  - id: teleqna
     provider_id: inspect
     weight: 1
     primary_score:
@@ -54,7 +54,7 @@ benchmarks:
       subject: full
       num_examples: 50
 
-  - id: inspect/telelogs
+  - id: telelogs
     provider_id: inspect
     weight: 1
     primary_score:
@@ -67,7 +67,7 @@ benchmarks:
       eval_type: soft
       num_examples: 50
 
-  - id: inspect/3gpp-tsg
+  - id: 3gpp-tsg
     provider_id: inspect
     weight: 1
     primary_score:

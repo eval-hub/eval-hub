@@ -986,10 +986,10 @@ Feature: Collections Endpoint
     Then the response code should be 200
     And the response should contain "benchmarks"
     And the array at path "benchmarks" in the response should have length 4
-    And the response should contain the value "inspect/telemath" at path "$.benchmarks[0].id"
-    And the response should contain the value "inspect/teleqna" at path "$.benchmarks[1].id"
-    And the response should contain the value "inspect/telelogs" at path "$.benchmarks[2].id"
-    And the response should contain the value "inspect/3gpp-tsg" at path "$.benchmarks[3].id"
+    And the response should contain the value "telemath" at path "$.benchmarks[0].id"
+    And the response should contain the value "teleqna" at path "$.benchmarks[1].id"
+    And the response should contain the value "telelogs" at path "$.benchmarks[2].id"
+    And the response should contain the value "3gpp-tsg" at path "$.benchmarks[3].id"
     And the response should contain the value "inspect" at path "$.benchmarks[0].provider_id"
     And the response should contain the value "inspect" at path "$.benchmarks[1].provider_id"
     And the response should contain the value "inspect" at path "$.benchmarks[2].provider_id"
