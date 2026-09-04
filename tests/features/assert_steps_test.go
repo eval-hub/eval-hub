@@ -3,10 +3,14 @@ package features
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
+	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/Jeffail/gabs/v2"
 	"github.com/PaesslerAG/jsonpath"
@@ -472,7 +476,238 @@ func (tc *scenarioConfig) theFieldShouldBeSaved(path string, name string) error 
 	return nil
 }
 
+func (tc *scenarioConfig) theBenchmarkShouldHaveMetric(benchmarkID, metricName string) error {
+	raw, err := tc.getJsonPathValue("$.results.benchmarks")
+	if err != nil {
+		return tc.logError(err)
+	}
+	benchmarks, ok := raw.([]any)
+	if !ok {
+		return tc.logError(fmt.Errorf("$.results.benchmarks is not an array, got %T", raw))
+	}
+	for _, b := range benchmarks {
+		bm, ok := b.(map[string]any)
+		if !ok {
+			continue
+		}
+		id, _ := bm["id"].(string)
+		if id != benchmarkID {
+			continue
+		}
+		metrics, _ := bm["metrics"].(map[string]any)
+		if _, exists := metrics[metricName]; exists {
+			return nil
+		}
+		keys := make([]string, 0, len(metrics))
+		for k := range metrics {
+			keys = append(keys, k)
+		}
+		return tc.logError(fmt.Errorf("benchmark %q does not have metric %q, available: %v in %s",
+			benchmarkID, metricName, keys, asPrettyJson(string(tc.body))))
+	}
+	return tc.logError(fmt.Errorf("benchmark %q not found in $.results.benchmarks in %s", benchmarkID, asPrettyJson(string(tc.body))))
+}
+
+func (tc *scenarioConfig) theAllBenchmarksHaveMetrics() error {
+	raw, err := tc.getJsonPathValue("$.results.benchmarks")
+	if err != nil {
+		return tc.logError(err)
+	}
+	benchmarks, ok := raw.([]any)
+	if !ok {
+		return tc.logError(fmt.Errorf("$.results.benchmarks is not an array, got %T", raw))
+	}
+	var missing []string
+	for i, b := range benchmarks {
+		bm, ok := b.(map[string]any)
+		if !ok {
+			continue
+		}
+		id, _ := bm["id"].(string)
+		if id == "" {
+			id = fmt.Sprintf("<unnamed@index %d>", i)
+		}
+		metrics, _ := bm["metrics"].(map[string]any)
+		if len(metrics) == 0 {
+			missing = append(missing, id)
+		}
+	}
+	if len(missing) > 0 {
+		return tc.logError(fmt.Errorf("expected all benchmarks to have metrics, but these had none: %s in %s",
+			strings.Join(missing, ", "), asPrettyJson(string(tc.body))))
+	}
+	return nil
+}
+
+func (tc *scenarioConfig) theAllBenchmarksInStatusShouldBe(expectedStatus string) error {
+	raw, err := tc.getJsonPathValue("$.status.benchmarks")
+	if err != nil {
+		return tc.logError(err)
+	}
+	benchmarks, ok := raw.([]any)
+	if !ok {
+		return tc.logError(fmt.Errorf("$.status.benchmarks is not an array, got %T", raw))
+	}
+	if len(benchmarks) == 0 {
+		return tc.logError(fmt.Errorf("$.status.benchmarks is empty; cannot assert status %q", expectedStatus))
+	}
+	var failures []string
+	for i, b := range benchmarks {
+		bm, ok := b.(map[string]any)
+		if !ok {
+			continue
+		}
+		id, _ := bm["id"].(string)
+		if id == "" {
+			id = fmt.Sprintf("<unnamed@index %d>", i)
+		}
+		status, _ := bm["status"].(string)
+		if status != expectedStatus {
+			failures = append(failures, fmt.Sprintf("%s: %s", id, status))
+		}
+	}
+	if len(failures) > 0 {
+		return tc.logError(fmt.Errorf("expected all benchmarks to have status %q, but found: %s in %s",
+			expectedStatus, strings.Join(failures, ", "), asPrettyJson(string(tc.body))))
+	}
+	return nil
+}
+
 func (tc *scenarioConfig) fixThisStep() error {
 	tc.logDebug("TODO: fix this step")
 	return godog.ErrSkip
+}
+
+var (
+	providerCacheMu sync.RWMutex
+	// providerCache caches declared metrics per provider and benchmark, fetched from the API.
+	// key: providerID → benchmarkID → []metricName
+	providerCache = map[string]map[string][]string{}
+)
+
+// fetchProviderMetrics returns the declared metric names for a benchmark from the eval-hub
+// providers API. Results are cached per provider to avoid redundant API calls. The request
+// is made independently of tc.body / tc.response so the current scenario state is preserved.
+func (tc *scenarioConfig) fetchProviderMetrics(providerID, benchmarkID string) ([]string, error) {
+	providerCacheMu.RLock()
+	if cached, ok := providerCache[providerID]; ok {
+		providerCacheMu.RUnlock()
+		metrics, found := cached[benchmarkID]
+		if !found {
+			return nil, fmt.Errorf("benchmark %q not found in provider %q", benchmarkID, providerID)
+		}
+		return metrics, nil
+	}
+	providerCacheMu.RUnlock()
+
+	endpoint := joinBaseURL(tc.apiFeature.baseURL, "/api/v1/evaluations/providers/"+providerID)
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create provider config request: %w", err)
+	}
+	if authToken := os.Getenv("AUTH_TOKEN"); authToken != "" {
+		req.Header.Set("Authorization", "Bearer "+authToken)
+	}
+	for k, v := range tc.reqHeaders {
+		req.Header.Set(k, v)
+	}
+	resp, err := tc.apiFeature.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch provider config for %s: %w", providerID, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("provider config API returned %d for %s", resp.StatusCode, providerID)
+	}
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read provider config response: %w", err)
+	}
+
+	var providerResp struct {
+		Benchmarks []struct {
+			ID      string   `json:"id"`
+			Metrics []string `json:"metrics"`
+		} `json:"benchmarks"`
+	}
+	if err := json.Unmarshal(respBody, &providerResp); err != nil {
+		return nil, fmt.Errorf("failed to parse provider config response: %w", err)
+	}
+
+	benchmarkMetrics := make(map[string][]string, len(providerResp.Benchmarks))
+	for _, b := range providerResp.Benchmarks {
+		benchmarkMetrics[b.ID] = b.Metrics
+	}
+	providerCacheMu.Lock()
+	if _, ok := providerCache[providerID]; !ok {
+		providerCache[providerID] = benchmarkMetrics
+	}
+	providerCacheMu.Unlock()
+
+	metrics, found := benchmarkMetrics[benchmarkID]
+	if !found {
+		return nil, fmt.Errorf("benchmark %q not found in provider %q", benchmarkID, providerID)
+	}
+	return metrics, nil
+}
+
+// theAllBenchmarksHaveMetricsMatchingProviderConfig asserts that every metric declared in the
+// provider config for a benchmark is present in the API response. This forward check catches
+// metrics that have silently stopped being reported.
+func (tc *scenarioConfig) theAllBenchmarksHaveMetricsMatchingProviderConfig() error {
+	raw, err := tc.getJsonPathValue("$.results.benchmarks")
+	if err != nil {
+		return tc.logError(err)
+	}
+	benchmarks, ok := raw.([]any)
+	if !ok {
+		return tc.logError(fmt.Errorf("$.results.benchmarks is not an array, got %T", raw))
+	}
+	if len(benchmarks) == 0 {
+		return tc.logError(fmt.Errorf("$.results.benchmarks is empty"))
+	}
+	var failures []string
+	for i, b := range benchmarks {
+		bm, ok := b.(map[string]any)
+		if !ok {
+			continue
+		}
+		id, _ := bm["id"].(string)
+		if id == "" {
+			id = fmt.Sprintf("<unnamed@index %d>", i)
+		}
+		providerID, _ := bm["provider_id"].(string)
+		if providerID == "" {
+			failures = append(failures, fmt.Sprintf("%s: has no provider_id in job response", id))
+			continue
+		}
+		actualMetrics, _ := bm["metrics"].(map[string]any)
+		if len(actualMetrics) == 0 {
+			failures = append(failures, fmt.Sprintf("%s: no metrics returned", id))
+			continue
+		}
+		declaredMetrics, err := tc.fetchProviderMetrics(providerID, id)
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("%s: config lookup failed: %v", id, err))
+			continue
+		}
+		if len(declaredMetrics) == 0 {
+			failures = append(failures, fmt.Sprintf("%s: provider config declares no metrics for this benchmark", id))
+			continue
+		}
+		declared := make(map[string]struct{}, len(declaredMetrics))
+		for _, m := range declaredMetrics {
+			declared[m] = struct{}{}
+		}
+		for _, declaredMetric := range declaredMetrics {
+			if _, present := actualMetrics[declaredMetric]; !present {
+				failures = append(failures, fmt.Sprintf("%s: declared metric %q not returned by API", id, declaredMetric))
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return tc.logError(fmt.Errorf("benchmark metric mismatches:\n%s\nin %s",
+			strings.Join(failures, "\n"), asPrettyJson(string(tc.body))))
+	}
+	return nil
 }
