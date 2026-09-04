@@ -1,0 +1,49 @@
+id: software-v1
+name: Software v1
+category: software
+description: >
+  Evaluates code generation and program comprehension. LiveCodeBench uses post-cutoff
+  competitive programming problems (contamination-free). BigCodeBench tests practical
+  coding tasks. CRUXEval tests code output prediction.
+  Part of the Curated Collections taxonomy (#916).
+tags:
+  - code
+  - software
+  - competitive-programming
+  - curated
+domains:
+  - software
+pass_criteria:
+  threshold: 0.20
+benchmarks:
+  - id: lcb:codegeneration_v6
+    provider_id: lighteval
+    weight: 1
+    primary_score:
+      metric: codegen_pass@1
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.25
+    parameters:
+      num_fewshot: 0
+      apply_chat_template: true
+      pass_at_k: 1
+      num_samples: 3
+
+  - id: inspect/bigcodebench
+    provider_id: inspect
+    weight: 1
+    primary_score:
+      metric: accuracy/accuracy
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.20
+
+  - id: cruxeval_output
+    provider_id: lm_evaluation_harness
+    weight: 1
+    primary_score:
+      metric: pass@1
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.15

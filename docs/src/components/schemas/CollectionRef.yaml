@@ -11,11 +11,15 @@ properties:
   version_counter:
     type: integer
     description: >
-      The version_counter of the collection at the time this evaluation job was created.
-      Set by the server when the job is created; not accepted from the client.
-      Lets users verify whether the collection definition was the same across multiple
-      evaluation runs: if two jobs reference the same collection id and version_counter,
-      the collection was unchanged between those runs (R8 reproducibility).
+      The version_counter of the referenced collection at the moment this evaluation
+      job was created. Set by the server; not accepted from the client.
+
+      Sentinel values:
+        0 — job predates version tracking; the collection's version at that time is
+            unknown. Reproducibility comparison against other runs is not possible.
+       >0 — the collection's version_counter at job-creation time. Two evaluation jobs
+            that reference the same collection_id and version_counter used an identical
+            collection definition (R8 reproducibility).
   benchmarks:
     type: array
     items:
