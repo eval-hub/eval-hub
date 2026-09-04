@@ -728,8 +728,8 @@ func TestModelProxyExplicitEmptyTokenPrefixOnHTTPS(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
 	}
-	if gotAuth != "Bearer token:" {
-		t.Fatalf("expected adapter Authorization unchanged on HTTPS when token empty, got %q", gotAuth)
+	if gotAuth != "" {
+		t.Fatalf("expected adapter Authorization stripped when token empty, got %q", gotAuth)
 	}
 	if !strings.Contains(logBuf.String(), "Explicit token: prefix with empty value") {
 		t.Fatalf("logs = %q, want empty token warning", logBuf.String())
@@ -786,7 +786,7 @@ func TestModelProxyDropsCopiedAdapterAuthOnHTTPWithoutCredential(t *testing.T) {
 	if gotAuth != "" {
 		t.Fatalf("expected adapter Authorization stripped on HTTP upstream, got %q", gotAuth)
 	}
-	if !strings.Contains(logBuf.String(), "Dropping model Authorization header") {
-		t.Fatalf("logs = %q, want auth drop warning", logBuf.String())
+	if !strings.Contains(logBuf.String(), "Explicit token: prefix with empty value") {
+		t.Fatalf("logs = %q, want empty token warning", logBuf.String())
 	}
 }

@@ -121,6 +121,7 @@ func NewModelReverseProxy(defaultTarget *url.URL, client *http.Client, logger *s
 			if tok := extractExplicitHardcodedToken(authHeader); tok != "" {
 				credential = tok
 			} else {
+				pr.Out.Header.Del("Authorization")
 				reqLog.Warn("Explicit token: prefix with empty value; SA token not injected")
 			}
 		default:
