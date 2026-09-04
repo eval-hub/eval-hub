@@ -81,6 +81,8 @@ func loggerForRequest(logger *slog.Logger, req *http.Request) *slog.Logger {
 //     placeholder (e.g. "Bearer local" from OPENAI_API_KEY workarounds) or absent/empty auth.
 //     The adapter cannot read the SA token (pod-level auto-mount is disabled); the sidecar
 //     injects it on its behalf.
+//  5. When the resolved upstream uses HTTP, Authorization is removed and a warning is logged
+//     so credentials are not sent in the clear. The request is still forwarded.
 func NewModelReverseProxy(defaultTarget *url.URL, client *http.Client, logger *slog.Logger, secretMountPath, saTokenPath string) *httputil.ReverseProxy {
 	secretCache := loadSecretCache(secretMountPath, logger)
 
@@ -100,6 +102,7 @@ func NewModelReverseProxy(defaultTarget *url.URL, client *http.Client, logger *s
 		target := defaultTarget
 
 		authHeader := pr.In.Header.Get("Authorization")
+		var credential string
 		switch {
 		case isModelRefToken(authHeader):
 			resolvedTarget, realToken, err := resolveModelCredential(reqLog, authHeader, secretCache, defaultTarget, saTokenPath)
@@ -113,11 +116,10 @@ func NewModelReverseProxy(defaultTarget *url.URL, client *http.Client, logger *s
 				return
 			}
 			target = resolvedTarget
-			SetAuthHeader(pr.Out, realToken)
+			credential = realToken
 		case isExplicitHardcodedToken(authHeader):
 			if tok := extractExplicitHardcodedToken(authHeader); tok != "" {
-				SetAuthHeader(pr.Out, tok)
-				reqLog.Info("Using adapter hardcoded token (token: prefix)")
+				credential = tok
 			} else {
 				reqLog.Warn("Explicit token: prefix with empty value; SA token not injected")
 			}
@@ -128,10 +130,24 @@ func NewModelReverseProxy(defaultTarget *url.URL, client *http.Client, logger *s
 				TargetEndpoint: "model-sa",
 				AuthTokenPath:  saTokenPath,
 			}); tok != "" {
-				SetAuthHeader(pr.Out, tok)
-				reqLog.Info("Injected SA token for model request")
+				credential = tok
 			} else {
 				reqLog.Warn("SA token injection skipped: token unavailable", "path", saTokenPath)
+			}
+		}
+
+		if modelTargetUsesHTTP(target) {
+			if credential != "" || pr.Out.Header.Get("Authorization") != "" {
+				pr.Out.Header.Del("Authorization")
+				reqLog.Warn("Dropping model Authorization header: upstream URL uses HTTP", "target_host", target.Host)
+			}
+		} else if credential != "" {
+			SetAuthHeader(pr.Out, credential)
+			switch {
+			case isExplicitHardcodedToken(authHeader):
+				reqLog.Info("Using adapter hardcoded token (token: prefix)")
+			case !isModelRefToken(authHeader):
+				reqLog.Info("Injected SA token for model request")
 			}
 		}
 
@@ -152,6 +168,10 @@ func NewModelReverseProxy(defaultTarget *url.URL, client *http.Client, logger *s
 	rp.ErrorHandler = proxyErrorHandler(logger, "Error proxying model request")
 
 	return rp
+}
+
+func modelTargetUsesHTTP(u *url.URL) bool {
+	return u != nil && strings.EqualFold(u.Scheme, "http")
 }
 
 // modelRoundTripper wraps an inner RoundTripper and intercepts requests marked with the
