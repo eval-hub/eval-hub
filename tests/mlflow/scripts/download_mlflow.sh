@@ -57,10 +57,14 @@ if ! command -v uv >/dev/null 2>&1; then
     exit 1
 fi
 
+# anyio 4.15+ lazy-imports break starlette WSGI in mlflow server (/health returns 500).
+# See https://anyio.readthedocs.io/en/stable/versionhistory.html#id1
+ANYIO_PIN="anyio<4.15"
+
 if [[ -n "${REQUESTED_VERSION}" ]]; then
-    uv pip install --python "${PYTHON}" "mlflow==${REQUESTED_VERSION}"
+    uv pip install --python "${PYTHON}" "mlflow==${REQUESTED_VERSION}" "${ANYIO_PIN}"
 else
-    uv pip install --python "${PYTHON}" mlflow
+    uv pip install --python "${PYTHON}" mlflow "${ANYIO_PIN}"
 fi
 
 if [ -x "${VENV_DIR}/bin/mlflow" ]; then
