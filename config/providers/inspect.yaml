@@ -673,6 +673,9 @@ benchmarks:
     metrics: [accuracy/accuracy]
     tags: [knowledge, factuality, inspect-evals]
 
+  # HLE requires a grader model for scoring. Pass model_roles.grader
+  # at run time via collection override, e.g.:
+  #   "parameters": { "model_roles": { "grader": "openai/gpt-4o-mini" } }
   - id: inspect/hle
     name: "Humanity's Last Exam"
     description: >
@@ -690,8 +693,6 @@ benchmarks:
       task_args:
         include_multi_modal: false
         graders: [grader]
-      model_roles:
-        grader: openai/gpt-4o-mini
     tags: [knowledge, reasoning, multimodal, inspect-evals]
 
   # Agent capabilities

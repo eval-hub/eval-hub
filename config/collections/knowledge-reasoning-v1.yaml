@@ -39,5 +39,3 @@ benchmarks:
       task_args:
         include_multi_modal: false
         graders: [grader]
-      model_roles:
-        grader: openai/gpt-4o-mini
