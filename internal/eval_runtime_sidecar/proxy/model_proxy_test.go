@@ -210,7 +210,7 @@ func TestModelProxyMultiModelRoutesToCorrectUpstream(t *testing.T) {
 	}
 }
 
-func TestModelProxyNonRefTokenPassthrough(t *testing.T) {
+func TestModelProxySATokenInjectedWhenPlaceholderToken(t *testing.T) {
 	var gotAuth string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
@@ -218,19 +218,30 @@ func TestModelProxyNonRefTokenPassthrough(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	target, _ := url.Parse(upstream.URL)
-	rp := NewModelReverseProxy(target, &http.Client{}, slog.New(slog.NewTextHandler(io.Discard, nil)), t.TempDir(), "")
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
-	req.Header.Set("Authorization", "Bearer sk-already-real")
-	rr := httptest.NewRecorder()
-	rp.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rr.Code)
+	saTokenDir := t.TempDir()
+	saTokenPath := filepath.Join(saTokenDir, "token")
+	if err := os.WriteFile(saTokenPath, []byte("sa-token-from-sidecar"), 0600); err != nil {
+		t.Fatal(err)
 	}
-	if gotAuth != "Bearer sk-already-real" {
-		t.Fatalf("expected auth passed through unchanged, got %q", gotAuth)
+
+	target, _ := url.Parse(upstream.URL)
+	rp := NewModelReverseProxy(target, &http.Client{}, slog.New(slog.NewTextHandler(io.Discard, nil)), t.TempDir(), saTokenPath)
+
+	for _, placeholder := range []string{"Bearer local", "Bearer sk-already-real"} {
+		t.Run(placeholder, func(t *testing.T) {
+			gotAuth = ""
+			req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+			req.Header.Set("Authorization", placeholder)
+			rr := httptest.NewRecorder()
+			rp.ServeHTTP(rr, req)
+
+			if rr.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d", rr.Code)
+			}
+			if gotAuth != "Bearer sa-token-from-sidecar" {
+				t.Fatalf("expected SA token injected for %q, got %q", placeholder, gotAuth)
+			}
+		})
 	}
 }
 
@@ -358,30 +369,42 @@ func TestModelProxySATokenInjectedWhenEmptyBearer(t *testing.T) {
 	}
 }
 
-func TestIsBearerEmpty(t *testing.T) {
+func TestIsExplicitHardcodedToken(t *testing.T) {
 	cases := []struct {
 		header string
 		want   bool
 	}{
-		{"", true},
-		{"Bearer", true}, // Go HTTP parser strips trailing space from "Bearer " sent by Python requests
-		{"Bearer ", true},
-		{"Bearer  ", true},
-		{"Bearer \t", true},
-		{"Bearer sk-real", false},
+		{"Bearer token:my-secret", true},
+		{"Bearer token:", true},
+		{"Bearer local", false},
 		{"Bearer api-key:ref", false},
-		{"Token abc", false},
+		{"Bearer sk-real", false},
+		{"", false},
 	}
 	for _, tc := range cases {
-		if got := isBearerEmpty(tc.header); got != tc.want {
-			t.Errorf("isBearerEmpty(%q) = %v, want %v", tc.header, got, tc.want)
+		if got := isExplicitHardcodedToken(tc.header); got != tc.want {
+			t.Errorf("isExplicitHardcodedToken(%q) = %v, want %v", tc.header, got, tc.want)
 		}
 	}
 }
 
-// TestModelProxySATokenNotInjectedWhenAuthPresent verifies that an explicit Authorization
-// header from the adapter is forwarded unchanged even when a SA token path is configured.
-func TestModelProxySATokenNotInjectedWhenAuthPresent(t *testing.T) {
+func TestExtractExplicitHardcodedToken(t *testing.T) {
+	cases := []struct {
+		header string
+		want   string
+	}{
+		{"Bearer token:my-secret", "my-secret"},
+		{"Bearer token:", ""},
+		{"Bearer local", ""},
+	}
+	for _, tc := range cases {
+		if got := extractExplicitHardcodedToken(tc.header); got != tc.want {
+			t.Errorf("extractExplicitHardcodedToken(%q) = %q, want %q", tc.header, got, tc.want)
+		}
+	}
+}
+
+func TestModelProxyExplicitHardcodedToken(t *testing.T) {
 	var gotAuth string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
@@ -399,15 +422,15 @@ func TestModelProxySATokenNotInjectedWhenAuthPresent(t *testing.T) {
 	rp := NewModelReverseProxy(target, &http.Client{}, slog.New(slog.NewTextHandler(io.Discard, nil)), t.TempDir(), saTokenPath)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
-	req.Header.Set("Authorization", "Bearer sk-explicit-key")
+	req.Header.Set("Authorization", "Bearer token:adapter-hardcoded-secret")
 	rr := httptest.NewRecorder()
 	rp.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
 	}
-	if gotAuth != "Bearer sk-explicit-key" {
-		t.Fatalf("expected explicit auth forwarded unchanged, got %q", gotAuth)
+	if gotAuth != "Bearer adapter-hardcoded-secret" {
+		t.Fatalf("expected explicit hardcoded token forwarded, got %q", gotAuth)
 	}
 }
 
