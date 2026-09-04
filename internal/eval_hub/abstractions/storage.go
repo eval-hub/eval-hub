@@ -85,6 +85,12 @@ type Storage interface {
 	UpdateCollection(id string, collection *api.CollectionConfig) (*api.CollectionResource, error)
 	PatchCollection(id string, patches *api.Patch) (*api.CollectionResource, error)
 	DeleteCollection(id string) error
+	// SetCollectionState overwrites the State field on an existing collection.
+	// Used by the clone handler (to set DerivedFrom) and by job creation (to increment RunCount).
+	SetCollectionState(id string, state *api.CollectionState) (*api.CollectionResource, error)
+	// IncrementCollectionVersionCounter atomically increments the version_counter on a
+	// custom (tenant-scoped) collection. No-op for system collections.
+	IncrementCollectionVersionCounter(id string) (*api.CollectionResource, error)
 
 	// Provider operations
 	CreateProvider(provider *api.ProviderResource) error

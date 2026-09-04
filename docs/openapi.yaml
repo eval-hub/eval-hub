@@ -1949,19 +1949,49 @@ paths:
           description: ID of the source collection to copy.
       requestBody:
         required: false
+        description: |
+          Optional field overrides applied on top of the copied source collection. Any fields provided here replace the corresponding value from the source. Fields not provided keep the source collection's value. The fields that are required in CollectionConfig (name, category, benchmarks) are not required here since they are inherited from the source unless explicitly overridden. The curation_order field is always reset to 0 — copies are never curated.
         content:
           application/json:
             schema:
               type: object
+              description: Optional field overrides for the cloned collection.
               properties:
                 name:
                   type: string
-                  description: Optional new name for the cloned collection. Defaults to the source name.
+                  description: New name for the copy. Defaults to source name.
+                description:
+                  type: string
+                category:
+                  type: string
+                  description: Deprecated — use domains.
+                domains:
+                  type: array
+                  items:
+                    type: string
+                tasks:
+                  type: array
+                  items:
+                    type: string
+                modalities:
+                  type: array
+                  items:
+                    type: string
+                industries:
+                  type: array
+                  items:
+                    type: string
+                ai_entities:
+                  type: array
+                  items:
+                    type: string
             examples:
-              CloneWithNewName:
-                summary: Clone with a custom name
+              CopyWithNewName:
+                summary: Copy with a new name and domain override
                 value:
-                  name: my-rag-evaluation
+                  name: my-custom-rag-eval
+                  domains:
+                    - grounded_document_understanding
       responses:
         '201':
           description: Cloned collection created successfully.

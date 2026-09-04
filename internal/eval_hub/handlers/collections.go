@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	// these are the allowed patches for the user-defined collection config
+	// allowedCollectionPatches are the allowed patches for user-defined collection config fields.
 	allowedCollectionPatches = []allowedPatch{
 		{Path: "/name", Op: api.PatchOpReplace, Prefix: false},
 
@@ -44,6 +44,30 @@ var (
 		{Path: "/pass_criteria", Op: api.PatchOpAdd, Prefix: false},
 		{Path: "/pass_criteria", Op: api.PatchOpRemove, Prefix: false},
 		{Path: "/pass_criteria", Op: api.PatchOpReplace, Prefix: false},
+
+		{Path: "/domains", Op: api.PatchOpAdd, Prefix: true},
+		{Path: "/domains", Op: api.PatchOpRemove, Prefix: true},
+		{Path: "/domains", Op: api.PatchOpReplace, Prefix: true},
+
+		{Path: "/tasks", Op: api.PatchOpAdd, Prefix: true},
+		{Path: "/tasks", Op: api.PatchOpRemove, Prefix: true},
+		{Path: "/tasks", Op: api.PatchOpReplace, Prefix: true},
+
+		{Path: "/modalities", Op: api.PatchOpAdd, Prefix: true},
+		{Path: "/modalities", Op: api.PatchOpRemove, Prefix: true},
+		{Path: "/modalities", Op: api.PatchOpReplace, Prefix: true},
+
+		{Path: "/industries", Op: api.PatchOpAdd, Prefix: true},
+		{Path: "/industries", Op: api.PatchOpRemove, Prefix: true},
+		{Path: "/industries", Op: api.PatchOpReplace, Prefix: true},
+
+		{Path: "/ai_entities", Op: api.PatchOpAdd, Prefix: true},
+		{Path: "/ai_entities", Op: api.PatchOpRemove, Prefix: true},
+		{Path: "/ai_entities", Op: api.PatchOpReplace, Prefix: true},
+
+		// Tenant-controlled pin ordering (state field)
+		{Path: "/state/pinned_order", Op: api.PatchOpAdd, Prefix: false},
+		{Path: "/state/pinned_order", Op: api.PatchOpReplace, Prefix: false},
 	}
 )
 
@@ -69,16 +93,28 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 				return err
 			}
 
-			err = CheckScope(filter)
-			if err != nil {
-				return err
+			// Translate scope=curated to an internal filter key
+			if scope, ok := filter.Params["scope"]; ok && scope == "curated" {
+				filter.Params["scope_curated"] = "true"
+				delete(filter.Params, "scope")
+			} else {
+				if err = CheckScope(filter); err != nil {
+					return err
+				}
 			}
 
-			allowedParams := []string{"limit", "offset", "name", "category", "tags", "owner", "scope"}
+			allowedParams := []string{"limit", "offset", "name", "category", "tags", "owner", "scope",
+				"domains", "tasks", "modalities", "industries", "ai_entities", "sort_by"}
 			badParams := getAllParams(req, allowedParams...)
 			if len(badParams) > 0 {
-				// just report the first bad parameter
 				return serviceerrors.NewServiceError(messages.QueryBadParameter, "ParameterName", badParams[0], "AllowedParameters", strings.Join(allowedParams, ", "))
+			}
+
+			// Handle new array filters (use first value from each param)
+			for _, key := range []string{"domains", "tasks", "modalities", "industries", "ai_entities"} {
+				if vals := req.Query(key); len(vals) > 0 && vals[0] != "" {
+					filter.Params[key] = vals[0]
+				}
 			}
 
 			ofilter = filter
@@ -98,7 +134,8 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			collections, err := storage.WithContext(runtimeCtx).GetCollections(ofilter)
+			scoped := storage.WithContext(runtimeCtx)
+			collections, err := scoped.GetCollections(ofilter)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -109,6 +146,13 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 				w.Error(err, ctx.RequestID)
 				return err
 			}
+
+			// Enrich benchmarks from providers and auto-populate classification fields
+			ptrs := make([]*api.CollectionResource, len(collections.Items))
+			for i := range collections.Items {
+				ptrs[i] = &collections.Items[i]
+			}
+			EnrichCollectionFromProviders(scoped, ptrs...)
 
 			result := api.CollectionResourceList{
 				Page:  *page,
@@ -125,6 +169,80 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 		"count", strconv.Itoa(count),
 		"total_count", strconv.Itoa(totalCount),
 	)
+}
+
+// EnrichCollectionFromProviders enriches each collection's benchmarks with Description and URL
+// from the provider config, and auto-populates Domains/Tasks/Modalities on the collection
+// from the union of its benchmarks' corresponding fields when not explicitly set.
+func EnrichCollectionFromProviders(storage abstractions.Storage, collections ...*api.CollectionResource) {
+	loaded := make(map[string]*api.ProviderResource)
+	failed := make(map[string]struct{})
+	for _, coll := range collections {
+		if coll == nil {
+			continue
+		}
+		domainsSet := make(map[string]struct{})
+		tasksSet := make(map[string]struct{})
+		modalitiesSet := make(map[string]struct{})
+
+		for j := range coll.Benchmarks {
+			b := &coll.Benchmarks[j]
+			pid, bid := b.ProviderID, b.ID
+			if pid == "" || bid == "" {
+				continue
+			}
+			b.URL = ""
+			if _, miss := failed[pid]; miss {
+				continue
+			}
+			p, ok := loaded[pid]
+			if !ok {
+				var err error
+				p, err = storage.GetProvider(pid)
+				if err != nil || p == nil {
+					failed[pid] = struct{}{}
+					continue
+				}
+				loaded[pid] = p
+			}
+			for k := range p.Benchmarks {
+				pb := &p.Benchmarks[k]
+				if pb.ID != bid {
+					continue
+				}
+				if pb.URL != "" {
+					b.URL = pb.URL
+				}
+				for _, d := range pb.Domains {
+					domainsSet[d] = struct{}{}
+				}
+				for _, t := range pb.Tasks {
+					tasksSet[t] = struct{}{}
+				}
+				for _, m := range pb.Modalities {
+					modalitiesSet[m] = struct{}{}
+				}
+				break
+			}
+		}
+
+		// Auto-populate classification fields from benchmarks if not explicitly set
+		if len(coll.Domains) == 0 {
+			for d := range domainsSet {
+				coll.Domains = append(coll.Domains, d)
+			}
+		}
+		if len(coll.Tasks) == 0 {
+			for t := range tasksSet {
+				coll.Tasks = append(coll.Tasks, t)
+			}
+		}
+		if len(coll.Modalities) == 0 {
+			for m := range modalitiesSet {
+				coll.Modalities = append(coll.Modalities, m)
+			}
+		}
+	}
 }
 
 // EnrichBenchmarkURLsFromProviders clears each benchmark URL (when provider_id and id are set), then sets it
@@ -309,6 +427,7 @@ func (h *Handlers) HandleGetCollection(ctx *executioncontext.ExecutionContext, r
 				w.Error(err, ctx.RequestID)
 				return err
 			}
+			EnrichCollectionFromProviders(scoped, response)
 			w.WriteJSON(response, 200)
 			return nil
 		},
@@ -356,14 +475,31 @@ func (h *Handlers) HandleUpdateCollection(ctx *executioncontext.ExecutionContext
 		ctx,
 		func(runtimeCtx context.Context) error {
 			scoped := storage.WithContext(runtimeCtx)
-			toUpdate := &api.CollectionResource{CollectionConfig: *request}
-			EnrichBenchmarkURLsFromProviders(scoped, toUpdate)
-			result, err := scoped.UpdateCollection(collectionID, &toUpdate.CollectionConfig)
+
+			// 403 for system or curated (curation_order > 0) collections
+			existing, err := scoped.GetCollection(collectionID)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
 			}
-			w.WriteJSON(result, 200)
+			if existing.Resource.IsSystemResource() || existing.CurationOrder > 0 {
+				w.Error(serviceerrors.NewServiceError(messages.ReadOnlyCollection, "CollectionID", collectionID), ctx.RequestID)
+				return nil
+			}
+
+			toUpdate := &api.CollectionResource{CollectionConfig: *request}
+			EnrichCollectionFromProviders(scoped, toUpdate)
+			if _, err = scoped.UpdateCollection(collectionID, &toUpdate.CollectionConfig); err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			// Increment version counter on successful mutation
+			updated, err := scoped.IncrementCollectionVersionCounter(collectionID)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			w.WriteJSON(updated, 200)
 			return nil
 		},
 		"storage",
@@ -416,22 +552,140 @@ func (h *Handlers) HandlePatchCollection(ctx *executioncontext.ExecutionContext,
 		ctx,
 		func(runtimeCtx context.Context) error {
 			scoped := storage.WithContext(runtimeCtx)
-			if err := enrichEntireBenchmarkPatchValues(scoped, &patches); err != nil {
-				w.Error(err, ctx.RequestID)
-				return err
-			}
-			result, err := scoped.PatchCollection(collectionID, &patches)
+
+			// 403 for system or curated (curation_order > 0) collections
+			existing, err := scoped.GetCollection(collectionID)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
 			}
+			if existing.Resource.IsSystemResource() || existing.CurationOrder > 0 {
+				w.Error(serviceerrors.NewServiceError(messages.ReadOnlyCollection, "CollectionID", collectionID), ctx.RequestID)
+				return nil
+			}
 
-			w.WriteJSON(result, 200)
+			if err := enrichEntireBenchmarkPatchValues(scoped, &patches); err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			if _, err = scoped.PatchCollection(collectionID, &patches); err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			// Increment version counter on successful mutation
+			patched, err := scoped.IncrementCollectionVersionCounter(collectionID)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			w.WriteJSON(patched, 200)
 			return nil
 		},
 		"storage",
 		"patch-collection",
 		"collection.id", collectionID,
+	)
+}
+
+// HandleCloneCollection handles POST /api/v1/evaluations/collections/{collection_id}/clones
+func (h *Handlers) HandleCloneCollection(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
+
+	logging.LogRequestStarted(ctx)
+
+	sourceID := req.PathValue(constants.PathParameterCollectionID)
+	if sourceID == "" {
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PathParameterCollectionID), ctx.RequestID)
+		return
+	}
+
+	_ = h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			scoped := storage.WithContext(runtimeCtx)
+
+			// Fetch source collection
+			source, err := scoped.GetCollection(sourceID)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+
+			// Parse optional body as overrides (fields not required — copied from source)
+			overrides := &api.CollectionConfig{}
+			if bodyBytes, bErr := req.BodyAsBytes(); bErr == nil && len(bodyBytes) > 0 {
+				// Unmarshal without validation — required fields come from the source
+				_ = json.Unmarshal(bodyBytes, overrides)
+			}
+
+			// Build the new config: start from source, apply non-zero overrides
+			newConfig := source.CollectionConfig
+			if overrides.Name != "" {
+				newConfig.Name = overrides.Name
+			}
+			if overrides.Description != "" {
+				newConfig.Description = overrides.Description
+			}
+			if overrides.Category != "" {
+				newConfig.Category = overrides.Category
+			}
+			if len(overrides.Tags) > 0 {
+				newConfig.Tags = overrides.Tags
+			}
+			if overrides.PassCriteria != nil {
+				newConfig.PassCriteria = overrides.PassCriteria
+			}
+			if len(overrides.Benchmarks) > 0 {
+				newConfig.Benchmarks = overrides.Benchmarks
+			}
+			if len(overrides.Domains) > 0 {
+				newConfig.Domains = overrides.Domains
+			}
+			if len(overrides.Tasks) > 0 {
+				newConfig.Tasks = overrides.Tasks
+			}
+			if len(overrides.Modalities) > 0 {
+				newConfig.Modalities = overrides.Modalities
+			}
+			if len(overrides.Industries) > 0 {
+				newConfig.Industries = overrides.Industries
+			}
+			if len(overrides.AIEntities) > 0 {
+				newConfig.AIEntities = overrides.AIEntities
+			}
+			// CurationOrder is admin-only — never copied or overridden by users
+			newConfig.CurationOrder = 0
+
+			newID := common.GUID()
+			now := time.Now()
+			newCollection := &api.CollectionResource{
+				Resource: api.Resource{
+					ID:             newID,
+					CreatedAt:      now,
+					UpdatedAt:      now,
+					Owner:          ctx.User,
+					Tenant:         ctx.Tenant,
+					VersionCounter: 1,
+				},
+				CollectionConfig: newConfig,
+				State: &api.CollectionState{
+					DerivedFrom: sourceID,
+				},
+			}
+
+			EnrichCollectionFromProviders(scoped, newCollection)
+
+			if err = scoped.CreateCollection(newCollection); err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+
+			w.WriteJSON(newCollection, 201)
+			return nil
+		},
+		"storage",
+		"clone-collection",
+		"collection.source_id", sourceID,
 	)
 }
 
