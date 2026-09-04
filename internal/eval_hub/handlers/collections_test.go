@@ -1009,7 +1009,7 @@ type cloneCollectionStorage struct {
 	created *api.CollectionResource
 }
 
-func (s *cloneCollectionStorage) WithLogger(_ *slog.Logger) abstractions.Storage   { return s }
+func (s *cloneCollectionStorage) WithLogger(_ *slog.Logger) abstractions.Storage     { return s }
 func (s *cloneCollectionStorage) WithContext(_ context.Context) abstractions.Storage { return s }
 func (s *cloneCollectionStorage) WithTenant(_ api.Tenant) abstractions.Storage       { return s }
 func (s *cloneCollectionStorage) WithOwner(_ api.User) abstractions.Storage          { return s }
