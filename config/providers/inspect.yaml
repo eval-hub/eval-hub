@@ -512,7 +512,7 @@ benchmarks:
     tags: [reasoning, math, inspect-evals]
 
   # Telecom (GSMA Open-Telco)
-  - id: inspect/telemath
+  - id: telemath
     name: TeleMath
     description: >
       Telecom-domain mathematical problem solving — 500 numerical Q&A pairs covering
@@ -532,7 +532,7 @@ benchmarks:
     agent:
       result_interpretation: "Accuracy on telecom-domain numerical math; HIGHER is better. GSMA leaderboard (Mar 2026): median ≈ 0.42, GPT-5 ≈ 0.79, top ≈ 0.87."
 
-  - id: inspect/teleqna
+  - id: teleqna
     name: TeleQnA
     description: >
       Telecom domain knowledge — multiple-choice questions on standards, research,
@@ -552,7 +552,7 @@ benchmarks:
     agent:
       result_interpretation: "Accuracy on telecom domain MCQ; HIGHER is better. GSMA leaderboard (Mar 2026): median ≈ 0.75, GPT-5 ≈ 0.84, top ≈ 0.91."
 
-  - id: inspect/telelogs
+  - id: telelogs
     name: TeleLogs
     description: >
       Root-cause analysis on 5G network data — models identify which of several
@@ -573,7 +573,7 @@ benchmarks:
     agent:
       result_interpretation: "Accuracy on 5G root-cause analysis; HIGHER is better. GSMA leaderboard (Mar 2026): median ≈ 0.23, GPT-5 ≈ 0.78, top ≈ 0.96."
 
-  - id: inspect/3gpp-tsg
+  - id: 3gpp-tsg
     name: 3GPP-TSG
     description: >
       3GPP technical specification group classification — models identify the
