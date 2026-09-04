@@ -69,6 +69,15 @@ type Resource struct {
 	CreatedAt time.Time `json:"created_at,omitzero"`
 	UpdatedAt time.Time `json:"updated_at,omitzero"`
 	Owner     User      `json:"owner,omitempty"`
+
+	// VersionCounter is a server-managed monotonic counter for custom (tenant-scoped) collections.
+	// Auto-incremented on every successful PUT or PATCH. Starts at 1 on creation.
+	//
+	// Sentinel values:
+	//   0 — pre-versioning mechanism, or resource type that does not support versioning
+	//       (e.g. system collections, evaluations, providers).
+	//  >0 — valid version; the collection has been versioned since at least counter = 1.
+	VersionCounter int `json:"version_counter,omitempty"`
 }
 
 func (r Resource) IsSystemResource() bool {
