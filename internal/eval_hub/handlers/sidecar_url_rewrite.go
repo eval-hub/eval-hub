@@ -68,7 +68,7 @@ func mlflowTrackingURIFromConfig(cfg *config.Config) string {
 	if cfg == nil || cfg.MLFlow == nil {
 		return ""
 	}
-	return strings.TrimSpace(cfg.MLFlow.TrackingURI)
+	return cfg.MLFlow.EffectiveTrackingURI()
 }
 
 // evalHubServiceURL builds the in-cluster eval-hub URL the same way job pods do
