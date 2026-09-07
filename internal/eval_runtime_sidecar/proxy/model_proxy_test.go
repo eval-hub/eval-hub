@@ -13,6 +13,63 @@ import (
 	"testing"
 )
 
+func startModelTestUpstream(t *testing.T, handler http.HandlerFunc, useTLS bool) (*url.URL, *http.Client) {
+	t.Helper()
+	if useTLS {
+		srv := httptest.NewTLSServer(handler)
+		t.Cleanup(srv.Close)
+		target, err := url.Parse(srv.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return target, srv.Client()
+	}
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+	target, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return target, &http.Client{}
+}
+
+func TestModelProxyDropsAuthOnHTTPUpstream(t *testing.T) {
+	var gotAuth string
+	var logBuf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	target, client := startModelTestUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}, false)
+
+	saTokenDir := t.TempDir()
+	saTokenPath := filepath.Join(saTokenDir, "token")
+	if err := os.WriteFile(saTokenPath, []byte("sa-token-from-sidecar"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	rp := NewModelReverseProxy(target, client, log, t.TempDir(), saTokenPath)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	req.Header.Set("Authorization", "Bearer local")
+	rr := httptest.NewRecorder()
+	rp.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if gotAuth != "" {
+		t.Fatalf("expected no Authorization on HTTP upstream, got %q", gotAuth)
+	}
+	if !strings.Contains(logBuf.String(), "Dropping model Authorization header") {
+		t.Fatalf("logs = %q, want auth drop warning", logBuf.String())
+	}
+	if !strings.Contains(logBuf.String(), "upstream URL uses HTTP") {
+		t.Fatalf("logs = %q, want HTTP upstream warning", logBuf.String())
+	}
+}
+
 func TestLoadSecretCache_OpenRootFails(t *testing.T) {
 	t.Parallel()
 	var logBuf bytes.Buffer
@@ -126,19 +183,16 @@ func TestModelProxyReturns400OnMissingRef(t *testing.T) {
 
 func TestModelProxySingleModelResolves(t *testing.T) {
 	var gotAuth string
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	target, client := startModelTestUpstream(t, func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
 		w.WriteHeader(http.StatusOK)
-	}))
-	defer upstream.Close()
-
-	target, _ := url.Parse(upstream.URL)
+	}, true)
 	secretDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(secretDir, "api-key"), []byte("sk-real-key"), 0600); err != nil {
 		t.Fatal(err)
 	}
 
-	rp := NewModelReverseProxy(target, &http.Client{}, slog.New(slog.NewTextHandler(io.Discard, nil)), secretDir, "")
+	rp := NewModelReverseProxy(target, client, slog.New(slog.NewTextHandler(io.Discard, nil)), secretDir, "")
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
 	req.Header.Set("Authorization", "Bearer api-key:ref")
@@ -156,20 +210,21 @@ func TestModelProxySingleModelResolves(t *testing.T) {
 func TestModelProxyMultiModelRoutesToCorrectUpstream(t *testing.T) {
 	var model1GotAuth, model2GotAuth string
 
-	upstream1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	upstream1 := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		model1GotAuth = r.Header.Get("Authorization")
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer upstream1.Close()
+	t.Cleanup(upstream1.Close)
 
-	upstream2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	upstream2 := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		model2GotAuth = r.Header.Get("Authorization")
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer upstream2.Close()
+	t.Cleanup(upstream2.Close)
 
 	// defaultTarget is upstream1 (also what model-1 resolves to via _url file).
 	defaultTarget, _ := url.Parse(upstream1.URL)
+	client := upstream1.Client()
 	secretDir := t.TempDir()
 
 	writeFile := func(name, content string) {
@@ -183,7 +238,7 @@ func TestModelProxyMultiModelRoutesToCorrectUpstream(t *testing.T) {
 	writeFile("model-2_api-key", "sk-model2")
 	writeFile("model-2_url", upstream2.URL)
 
-	rp := NewModelReverseProxy(defaultTarget, &http.Client{}, slog.New(slog.NewTextHandler(io.Discard, nil)), secretDir, "")
+	rp := NewModelReverseProxy(defaultTarget, client, slog.New(slog.NewTextHandler(io.Discard, nil)), secretDir, "")
 
 	// Request for model-1 should go to upstream1 with model-1's real key.
 	req1 := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
@@ -210,27 +265,36 @@ func TestModelProxyMultiModelRoutesToCorrectUpstream(t *testing.T) {
 	}
 }
 
-func TestModelProxyNonRefTokenPassthrough(t *testing.T) {
+func TestModelProxySATokenInjectedWhenPlaceholderToken(t *testing.T) {
 	var gotAuth string
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	target, client := startModelTestUpstream(t, func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
 		w.WriteHeader(http.StatusOK)
-	}))
-	defer upstream.Close()
+	}, true)
 
-	target, _ := url.Parse(upstream.URL)
-	rp := NewModelReverseProxy(target, &http.Client{}, slog.New(slog.NewTextHandler(io.Discard, nil)), t.TempDir(), "")
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
-	req.Header.Set("Authorization", "Bearer sk-already-real")
-	rr := httptest.NewRecorder()
-	rp.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rr.Code)
+	saTokenDir := t.TempDir()
+	saTokenPath := filepath.Join(saTokenDir, "token")
+	if err := os.WriteFile(saTokenPath, []byte("sa-token-from-sidecar"), 0600); err != nil {
+		t.Fatal(err)
 	}
-	if gotAuth != "Bearer sk-already-real" {
-		t.Fatalf("expected auth passed through unchanged, got %q", gotAuth)
+
+	rp := NewModelReverseProxy(target, client, slog.New(slog.NewTextHandler(io.Discard, nil)), t.TempDir(), saTokenPath)
+
+	for _, placeholder := range []string{"Bearer local", "Bearer sk-already-real"} {
+		t.Run(placeholder, func(t *testing.T) {
+			gotAuth = ""
+			req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+			req.Header.Set("Authorization", placeholder)
+			rr := httptest.NewRecorder()
+			rp.ServeHTTP(rr, req)
+
+			if rr.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d", rr.Code)
+			}
+			if gotAuth != "Bearer sa-token-from-sidecar" {
+				t.Fatalf("expected SA token injected for %q, got %q", placeholder, gotAuth)
+			}
+		})
 	}
 }
 
@@ -263,11 +327,10 @@ func TestModelProxyReturns400OnEmptyCredential(t *testing.T) {
 // header, the sidecar injects the SA token as a Bearer token before forwarding to the model.
 func TestModelProxySATokenInjectedWhenNoAuth(t *testing.T) {
 	var gotAuth string
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	target, client := startModelTestUpstream(t, func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
 		w.WriteHeader(http.StatusOK)
-	}))
-	defer upstream.Close()
+	}, true)
 
 	saTokenDir := t.TempDir()
 	saTokenPath := filepath.Join(saTokenDir, "token")
@@ -275,8 +338,7 @@ func TestModelProxySATokenInjectedWhenNoAuth(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	target, _ := url.Parse(upstream.URL)
-	rp := NewModelReverseProxy(target, &http.Client{}, slog.New(slog.NewTextHandler(io.Discard, nil)), t.TempDir(), saTokenPath)
+	rp := NewModelReverseProxy(target, client, slog.New(slog.NewTextHandler(io.Discard, nil)), t.TempDir(), saTokenPath)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
 	// No Authorization header set — simulates adapter with no SA token access.
@@ -296,11 +358,10 @@ func TestModelProxySATokenInjectedWhenNoAuth(t *testing.T) {
 // token injection. This is the primary on-wire form when OPENAI_API_KEY is unset.
 func TestModelProxySATokenInjectedWhenBareBearer(t *testing.T) {
 	var gotAuth string
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	target, client := startModelTestUpstream(t, func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
 		w.WriteHeader(http.StatusOK)
-	}))
-	defer upstream.Close()
+	}, true)
 
 	saTokenDir := t.TempDir()
 	saTokenPath := filepath.Join(saTokenDir, "token")
@@ -308,8 +369,7 @@ func TestModelProxySATokenInjectedWhenBareBearer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	target, _ := url.Parse(upstream.URL)
-	rp := NewModelReverseProxy(target, &http.Client{}, slog.New(slog.NewTextHandler(io.Discard, nil)), t.TempDir(), saTokenPath)
+	rp := NewModelReverseProxy(target, client, slog.New(slog.NewTextHandler(io.Discard, nil)), t.TempDir(), saTokenPath)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/completions", nil)
 	// Go HTTP parser strips trailing space: Python's "Bearer " arrives as "Bearer".
@@ -330,11 +390,10 @@ func TestModelProxySATokenInjectedWhenBareBearer(t *testing.T) {
 // the SA token is injected. This is the real SA-token-auth path from the adapter.
 func TestModelProxySATokenInjectedWhenEmptyBearer(t *testing.T) {
 	var gotAuth string
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	target, client := startModelTestUpstream(t, func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
 		w.WriteHeader(http.StatusOK)
-	}))
-	defer upstream.Close()
+	}, true)
 
 	saTokenDir := t.TempDir()
 	saTokenPath := filepath.Join(saTokenDir, "token")
@@ -342,8 +401,7 @@ func TestModelProxySATokenInjectedWhenEmptyBearer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	target, _ := url.Parse(upstream.URL)
-	rp := NewModelReverseProxy(target, &http.Client{}, slog.New(slog.NewTextHandler(io.Discard, nil)), t.TempDir(), saTokenPath)
+	rp := NewModelReverseProxy(target, client, slog.New(slog.NewTextHandler(io.Discard, nil)), t.TempDir(), saTokenPath)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
 	req.Header.Set("Authorization", "Bearer ") // lm-eval sends this when OPENAI_API_KEY=""
@@ -358,36 +416,47 @@ func TestModelProxySATokenInjectedWhenEmptyBearer(t *testing.T) {
 	}
 }
 
-func TestIsBearerEmpty(t *testing.T) {
+func TestIsExplicitHardcodedToken(t *testing.T) {
 	cases := []struct {
 		header string
 		want   bool
 	}{
-		{"", true},
-		{"Bearer", true}, // Go HTTP parser strips trailing space from "Bearer " sent by Python requests
-		{"Bearer ", true},
-		{"Bearer  ", true},
-		{"Bearer \t", true},
-		{"Bearer sk-real", false},
+		{"Bearer token:my-secret", true},
+		{"Bearer token:", true},
+		{"Bearer local", false},
 		{"Bearer api-key:ref", false},
-		{"Token abc", false},
+		{"Bearer sk-real", false},
+		{"", false},
 	}
 	for _, tc := range cases {
-		if got := isBearerEmpty(tc.header); got != tc.want {
-			t.Errorf("isBearerEmpty(%q) = %v, want %v", tc.header, got, tc.want)
+		if got := isExplicitHardcodedToken(tc.header); got != tc.want {
+			t.Errorf("isExplicitHardcodedToken(%q) = %v, want %v", tc.header, got, tc.want)
 		}
 	}
 }
 
-// TestModelProxySATokenNotInjectedWhenAuthPresent verifies that an explicit Authorization
-// header from the adapter is forwarded unchanged even when a SA token path is configured.
-func TestModelProxySATokenNotInjectedWhenAuthPresent(t *testing.T) {
+func TestExtractExplicitHardcodedToken(t *testing.T) {
+	cases := []struct {
+		header string
+		want   string
+	}{
+		{"Bearer token:my-secret", "my-secret"},
+		{"Bearer token:", ""},
+		{"Bearer local", ""},
+	}
+	for _, tc := range cases {
+		if got := extractExplicitHardcodedToken(tc.header); got != tc.want {
+			t.Errorf("extractExplicitHardcodedToken(%q) = %q, want %q", tc.header, got, tc.want)
+		}
+	}
+}
+
+func TestModelProxyExplicitHardcodedToken(t *testing.T) {
 	var gotAuth string
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	target, client := startModelTestUpstream(t, func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
 		w.WriteHeader(http.StatusOK)
-	}))
-	defer upstream.Close()
+	}, true)
 
 	saTokenDir := t.TempDir()
 	saTokenPath := filepath.Join(saTokenDir, "token")
@@ -395,19 +464,18 @@ func TestModelProxySATokenNotInjectedWhenAuthPresent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	target, _ := url.Parse(upstream.URL)
-	rp := NewModelReverseProxy(target, &http.Client{}, slog.New(slog.NewTextHandler(io.Discard, nil)), t.TempDir(), saTokenPath)
+	rp := NewModelReverseProxy(target, client, slog.New(slog.NewTextHandler(io.Discard, nil)), t.TempDir(), saTokenPath)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
-	req.Header.Set("Authorization", "Bearer sk-explicit-key")
+	req.Header.Set("Authorization", "Bearer token:adapter-hardcoded-secret")
 	rr := httptest.NewRecorder()
 	rp.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
 	}
-	if gotAuth != "Bearer sk-explicit-key" {
-		t.Fatalf("expected explicit auth forwarded unchanged, got %q", gotAuth)
+	if gotAuth != "Bearer adapter-hardcoded-secret" {
+		t.Fatalf("expected explicit hardcoded token forwarded, got %q", gotAuth)
 	}
 }
 
@@ -417,17 +485,17 @@ func TestModelProxySATokenSuffixInjectsSATokenWhenEmpty(t *testing.T) {
 	// Clear the shared SA token cache so we read from the file written by this test.
 	UpdateCachedToken(AuthTokenInput{TargetEndpoint: "model-sa"}, "")
 	var gotAuth, gotHost string
-	kfpUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	kfpUpstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
 		gotHost = r.Host
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer kfpUpstream.Close()
+	t.Cleanup(kfpUpstream.Close)
 
-	defaultUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	defaultUpstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer defaultUpstream.Close()
+	t.Cleanup(defaultUpstream.Close)
 
 	saTokenDir := t.TempDir()
 	saTokenPath := filepath.Join(saTokenDir, "token")
@@ -447,7 +515,7 @@ func TestModelProxySATokenSuffixInjectsSATokenWhenEmpty(t *testing.T) {
 	writeFile("kfp_url", kfpUpstream.URL)
 
 	defaultTarget, _ := url.Parse(defaultUpstream.URL)
-	rp := NewModelReverseProxy(defaultTarget, &http.Client{}, slog.New(slog.NewTextHandler(io.Discard, nil)), secretDir, saTokenPath)
+	rp := NewModelReverseProxy(defaultTarget, defaultUpstream.Client(), slog.New(slog.NewTextHandler(io.Discard, nil)), secretDir, saTokenPath)
 
 	req := httptest.NewRequest(http.MethodGet, "/apis/v1beta1/runs", nil)
 	req.Header.Set("Authorization", "Bearer kfp_sa_token:ref")
@@ -460,7 +528,7 @@ func TestModelProxySATokenSuffixInjectsSATokenWhenEmpty(t *testing.T) {
 	if gotAuth != "Bearer sa-token-injected" {
 		t.Fatalf("expected SA token injected, got %q", gotAuth)
 	}
-	kfpHost := strings.TrimPrefix(kfpUpstream.URL, "http://")
+	kfpHost := strings.TrimPrefix(strings.TrimPrefix(kfpUpstream.URL, "https://"), "http://")
 	if gotHost != kfpHost {
 		t.Fatalf("expected request routed to kfp upstream %q, got host %q", kfpHost, gotHost)
 	}
@@ -470,19 +538,17 @@ func TestModelProxySATokenSuffixInjectsSATokenWhenEmpty(t *testing.T) {
 // non-empty value (e.g. a user-provided JWT), it is forwarded as-is without SA injection.
 func TestModelProxySATokenSuffixUsesExplicitValueWhenNonEmpty(t *testing.T) {
 	var gotAuth string
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	target, client := startModelTestUpstream(t, func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
 		w.WriteHeader(http.StatusOK)
-	}))
-	defer upstream.Close()
+	}, true)
 
 	secretDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(secretDir, "kfp_sa_token"), []byte("user-provided-jwt"), 0600); err != nil {
 		t.Fatal(err)
 	}
 
-	target, _ := url.Parse(upstream.URL)
-	rp := NewModelReverseProxy(target, &http.Client{}, slog.New(slog.NewTextHandler(io.Discard, nil)), secretDir, "")
+	rp := NewModelReverseProxy(target, client, slog.New(slog.NewTextHandler(io.Discard, nil)), secretDir, "")
 
 	req := httptest.NewRequest(http.MethodGet, "/apis/v1beta1/runs", nil)
 	req.Header.Set("Authorization", "Bearer kfp_sa_token:ref")
@@ -551,5 +617,176 @@ func TestModelProxySATokenSuffixReturns400WhenEmptyAndNoSAToken(t *testing.T) {
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 when _sa_token empty and no SA token, got %d", rr.Code)
+	}
+}
+
+func TestLoadSecretCache_EmptyMountPath(t *testing.T) {
+	t.Parallel()
+	cache := loadSecretCache("", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if len(cache) != 0 {
+		t.Fatalf("cache = %#v, want empty", cache)
+	}
+}
+
+func TestLoadSecretCache_SkipsDirectoriesAndLoadsFiles(t *testing.T) {
+	t.Parallel()
+	var logBuf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	secretDir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(secretDir, "ignored-dir"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(secretDir, "api-key"), []byte("sk-test"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cache := loadSecretCache(secretDir, log)
+	if cache["api-key"] != "sk-test" {
+		t.Fatalf("cache = %#v, want api-key loaded", cache)
+	}
+	if _, ok := cache["ignored-dir"]; ok {
+		t.Fatal("expected directories to be skipped")
+	}
+	if !strings.Contains(logBuf.String(), "Loaded model secret cache") {
+		t.Fatalf("logs = %q, want cache loaded info", logBuf.String())
+	}
+}
+
+func TestLoadSecretCache_SkipsUnreadableSecretFile(t *testing.T) {
+	t.Parallel()
+	var logBuf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	secretDir := t.TempDir()
+	if err := os.Symlink(filepath.Join(secretDir, "missing-target"), filepath.Join(secretDir, "broken-link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(secretDir, "api-key"), []byte("sk-test"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cache := loadSecretCache(secretDir, log)
+	if cache["api-key"] != "sk-test" {
+		t.Fatalf("cache = %#v, want readable secret loaded", cache)
+	}
+	if !strings.Contains(logBuf.String(), "skipping unreadable secret file") {
+		t.Fatalf("logs = %q, want unreadable file warning", logBuf.String())
+	}
+}
+
+func TestResolveModelCredentialRejectsInvalidRefKey(t *testing.T) {
+	t.Parallel()
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	target, _ := url.Parse("https://model.example.com/v1")
+
+	for _, authHeader := range []string{"Bearer :ref", `Bearer bad/key:ref`} {
+		_, _, err := resolveModelCredential(log, authHeader, map[string]string{}, target, "")
+		if err == nil {
+			t.Fatalf("resolveModelCredential(%q) = nil, want error", authHeader)
+		}
+		if !strings.Contains(err.Error(), "invalid key") {
+			t.Fatalf("error = %q, want invalid key", err.Error())
+		}
+	}
+}
+
+func TestResolveUpstreamURLInvalidFallsBackToDefault(t *testing.T) {
+	t.Parallel()
+	var logBuf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	defaultTarget, _ := url.Parse("https://default.example.com/v1")
+	cache := map[string]string{
+		"model-1_api-key": "sk-test",
+		"model-1_url":     "://invalid",
+	}
+
+	got := resolveUpstreamURL(log, "model-1_api-key", cache, defaultTarget)
+	if got.String() != defaultTarget.String() {
+		t.Fatalf("got %q, want default %q", got, defaultTarget)
+	}
+	if !strings.Contains(logBuf.String(), "service URL in secret cache is invalid") {
+		t.Fatalf("logs = %q, want invalid URL warning", logBuf.String())
+	}
+}
+
+func TestModelProxyExplicitEmptyTokenPrefixOnHTTPS(t *testing.T) {
+	var gotAuth string
+	var logBuf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	target, client := startModelTestUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}, true)
+
+	rp := NewModelReverseProxy(target, client, log, t.TempDir(), "")
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	req.Header.Set("Authorization", "Bearer token:")
+	rr := httptest.NewRecorder()
+	rp.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if gotAuth != "" {
+		t.Fatalf("expected adapter Authorization stripped when token empty, got %q", gotAuth)
+	}
+	if !strings.Contains(logBuf.String(), "Explicit token: prefix with empty value") {
+		t.Fatalf("logs = %q, want empty token warning", logBuf.String())
+	}
+}
+
+func TestModelProxySATokenUnavailableOnHTTPS(t *testing.T) {
+	var gotAuth string
+	var logBuf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	target, client := startModelTestUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}, true)
+
+	rp := NewModelReverseProxy(target, client, log, t.TempDir(), "")
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	rr := httptest.NewRecorder()
+	rp.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if gotAuth != "" {
+		t.Fatalf("expected no Authorization when SA token unavailable, got %q", gotAuth)
+	}
+	if !strings.Contains(logBuf.String(), "SA token injection skipped") {
+		t.Fatalf("logs = %q, want SA token unavailable warning", logBuf.String())
+	}
+}
+
+func TestModelProxyDropsCopiedAdapterAuthOnHTTPWithoutCredential(t *testing.T) {
+	var gotAuth string
+	var logBuf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	target, client := startModelTestUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}, false)
+
+	rp := NewModelReverseProxy(target, client, log, t.TempDir(), "")
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	req.Header.Set("Authorization", "Bearer token:")
+	rr := httptest.NewRecorder()
+	rp.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if gotAuth != "" {
+		t.Fatalf("expected adapter Authorization stripped on HTTP upstream, got %q", gotAuth)
+	}
+	if !strings.Contains(logBuf.String(), "Explicit token: prefix with empty value") {
+		t.Fatalf("logs = %q, want empty token warning", logBuf.String())
 	}
 }
