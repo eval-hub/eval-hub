@@ -3549,16 +3549,18 @@
             "description": "Name of a Kubernetes **`Secret`** in the evaluation job namespace, mounted\nread-only into the test-data init container.\n"
           }
         },
-        "example": {
-          "bucket": "my-eval-bucket",
-          "key": "datasets/benchmark-a/v1",
-          "secret_ref": "my-s3-connection-secret"
-        }
+        "examples": [
+          {
+            "bucket": "my-eval-bucket",
+            "key": "datasets/benchmark-a/v1",
+            "secret_ref": "my-s3-connection-secret"
+          }
+        ]
       },
       "TestDataRefResolvedSHA": {
         "type": "string",
         "readOnly": true,
-        "description": "Resolved content identity for the test data source (e.g. git commit SHA).\nServer-populated after the evaluation run for reproducibility of the exact data\nstate used. Not set on job submission.\n",
+        "description": "Resolved content identity for the test data source (e.g. git or Hugging Face commit SHA).\nServer-populated after the evaluation run for reproducibility of the exact data\nstate used. Not set on job submission.\n",
         "examples": [
           "a3f9c12e8b4d6f1c2e9a7b3d5f0e8c4a2b6d9e1f"
         ]
@@ -3628,7 +3630,10 @@
           },
           "secret_ref": {
             "type": "string",
-            "description": "Name of a Kubernetes **`Secret`** of type `kubernetes.io/basic-auth` in the\nevaluation job namespace, mounted read-only into the git-clone init container.\nOmit for public repositories.\nexamples:\n- my-git-credentials\n"
+            "description": "Name of a Kubernetes **`Secret`** of type `kubernetes.io/basic-auth` in the\nevaluation job namespace, mounted read-only into the git-clone init container.\nOmit for public repositories.\n",
+            "examples": [
+              "my-git-credentials"
+            ]
           }
         },
         "examples": [
@@ -3640,9 +3645,44 @@
           }
         ]
       },
+      "TestDataRefHF": {
+        "type": "object",
+        "description": "Hugging Face Hub repository test data. Only applies when Eval Hub runs the benchmark as a\n**Kubernetes Job** (cluster execution). It does not apply to local-only evaluation runs.\n\nThe repository is downloaded at **`revision`** (or the default branch when omitted) into\n**`/test_data`** before the adapter runs. If **`sub_path`** is provided, only that path\nwithin the repository is exposed.\n\nThe resolved commit SHA is recorded as **`resolved_sha`** on the parent\n**`test_data_ref`** object on the evaluation job response, providing revision-level\nreproducibility.\n\n**Public repositories** — omit `secret_ref`; the repository may be downloaded without\ncredentials.\n\n**Gated repositories** — supply a **`secret_ref`** pointing to a Kubernetes Secret of type\n`Opaque` in the same namespace as the evaluation job:\n\n```yaml\napiVersion: v1\nkind: Secret\nmetadata:\n  name: my-hf-credentials\ntype: Opaque\nstringData:\n  token: hf_xxxxxxxxxxxx\n```\n\nDo not put credentials in the Eval Hub API request body; only reference an existing\nSecret via **`secret_ref`**.\n",
+        "required": [
+          "repo_id"
+        ],
+        "properties": {
+          "repo_id": {
+            "type": "string",
+            "description": "Hugging Face Hub repository ID (for example `cais/mmlu` or `my-org/my-dataset`).\n",
+            "example": "cais/mmlu"
+          },
+          "revision": {
+            "type": "string",
+            "description": "Revision to download — a branch name, tag name, or commit SHA. When omitted, the\nrepository default branch is used.\n\n- **Branch**: `main`, `feat/my-branch`\n- **Tag**: `v1.0.0`\n- **Commit SHA**: `a3f9c12e8b...` (full or abbreviated hex)\n",
+            "example": "main"
+          },
+          "sub_path": {
+            "type": "string",
+            "description": "Optional path within the repository to mount at `/test_data` instead of the\nrepository root. Useful when the repository contains data for multiple benchmarks\nin separate directories.\n",
+            "example": "data/train"
+          },
+          "secret_ref": {
+            "type": "string",
+            "description": "Name of a Kubernetes **`Secret`** of type `Opaque` containing a **`token`** key in the\nevaluation job namespace, mounted read-only into the test-data init container.\nOmit for public repositories.\n",
+            "example": "my-hf-credentials"
+          }
+        },
+        "example": {
+          "repo_id": "cais/mmlu",
+          "revision": "main",
+          "sub_path": "data/train",
+          "secret_ref": "my-hf-credentials"
+        }
+      },
       "TestDataRef": {
         "type": "object",
-        "description": "Reference to external test data for a benchmark. Exactly one of `s3`, `pvc`, or `git` must be set.\n\n**`s3`** — When the evaluation runs as a **Kubernetes Job**, Eval Hub schedules an\n**init container** on the evaluation job pod before the adapter runs. That init container:\n\n- Reads **`bucket`**, **`key`**, and **`secret_ref`** from the job spec (same JSON\n  mounted into the pod).\n- Uses credentials from the Kubernetes **Secret** named by **`secret_ref`**\n  (read-only mount; typical sources include an ODH/RHOAI S3 connection Secret).\n- Lists and downloads all objects under the **`key`** prefix into a shared\n  **`emptyDir`** volume at **`/test_data`**, preserving relative paths.\n- Exits; the **adapter container** mounts `/test_data` and reads the files.\n\n**`pvc`** — The PersistentVolumeClaim is mounted **read-only** directly into the evaluation\ncontainer at **`/test_data`**. No init container is used; the PVC must already contain the\ndata and must exist in the same namespace as the evaluation job.\n\n**`git`** — The specified repository is cloned and checked out at the given ref into\n**`/test_data`** before the adapter runs. The resolved commit SHA is recorded as\n**`resolved_sha`** on this object on the evaluation job for reproducibility.\n\nDo not put credentials in the Eval Hub API request body; only reference an existing\nSecret via **`secret_ref`** (for S3 or git).\n",
+        "description": "Reference to external test data for a benchmark. Exactly one of `s3`, `pvc`, `git`, or `hf` must be set.\n\n**`s3`** — When the evaluation runs as a **Kubernetes Job**, Eval Hub schedules an\n**init container** on the evaluation job pod before the adapter runs. That init container:\n\n- Reads **`bucket`**, **`key`**, and **`secret_ref`** from the job spec (same JSON\n  mounted into the pod).\n- Uses credentials from the Kubernetes **Secret** named by **`secret_ref`**\n  (read-only mount; typical sources include an ODH/RHOAI S3 connection Secret).\n- Lists and downloads all objects under the **`key`** prefix into a shared\n  **`emptyDir`** volume at **`/test_data`**, preserving relative paths.\n- Exits; the **adapter container** mounts `/test_data` and reads the files.\n\n**`pvc`** — The PersistentVolumeClaim is mounted **read-only** directly into the evaluation\ncontainer at **`/test_data`**. No init container is used; the PVC must already contain the\ndata and must exist in the same namespace as the evaluation job.\n\n**`git`** — The specified repository is cloned and checked out at the given ref into\n**`/test_data`** before the adapter runs. The resolved commit SHA is recorded as\n**`resolved_sha`** on this object on the evaluation job for reproducibility.\n\n**`hf`** — The specified Hugging Face Hub repository is downloaded at the given revision\ninto **`/test_data`** before the adapter runs. The resolved commit SHA is recorded as\n**`resolved_sha`** on this object on the evaluation job for reproducibility.\n\nDo not put credentials in the Eval Hub API request body; only reference an existing\nSecret via **`secret_ref`** (for S3, git, or hf).\n",
         "oneOf": [
           {
             "type": "object",
@@ -3700,6 +3740,25 @@
               "git"
             ],
             "title": "Git"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "hf": {
+                "$ref": "#/components/schemas/TestDataRefHF"
+              },
+              "resolved_sha": {
+                "$ref": "#/components/schemas/TestDataRefResolvedSHA"
+              },
+              "type": {
+                "$ref": "#/components/schemas/TestDataRefType"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "hf"
+            ],
+            "title": "HuggingFace"
           }
         ]
       },
@@ -3743,7 +3802,7 @@
               },
               "test_data_ref": {
                 "$ref": "#/components/schemas/TestDataRef",
-                "description": "Optional external test data mounted at **`/test_data`** for **Kubernetes Job** runs.\nSet **`s3`** to download objects via a pre-run init container, **`pvc`** to mount\nan existing PersistentVolumeClaim read-only with no init container, or **`git`**\nto clone a repository via a pre-run init container. Omit if the benchmark does\nnot need mounted files.\n"
+                "description": "Optional external test data mounted at **`/test_data`** for **Kubernetes Job** runs.\nSet **`s3`** to download objects via a pre-run init container, **`pvc`** to mount\nan existing PersistentVolumeClaim read-only with no init container, **`git`**\nto clone a repository via a pre-run init container, or **`hf`** to download content\nfrom a Hugging Face Hub repository via a pre-run init container. Omit if the benchmark does\nnot need mounted files.\n"
               }
             }
           }
@@ -4552,7 +4611,7 @@
               },
               "test_data_ref": {
                 "$ref": "#/components/schemas/TestDataRef",
-                "description": "Optional external test data mounted at **`/test_data`** for **Kubernetes Job** runs.\nSet **`s3`** to download objects via a pre-run init container, **`pvc`** to mount\nan existing PersistentVolumeClaim read-only with no init container, or **`git`**\nto clone a repository via a pre-run init container. Omit if the benchmark does\nnot need mounted files.\n"
+                "description": "Optional external test data mounted at **`/test_data`** for **Kubernetes Job** runs.\nSet **`s3`** to download objects via a pre-run init container, **`pvc`** to mount\nan existing PersistentVolumeClaim read-only with no init container, **`git`**\nto clone a repository via a pre-run init container, or **`hf`** to download content\nfrom a Hugging Face Hub repository via a pre-run init container. Omit if the benchmark does\nnot need mounted files.\n"
               }
             }
           }

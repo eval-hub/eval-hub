@@ -1,7 +1,7 @@
 type: string
 readOnly: true
 description: |
-  Resolved content identity for the test data source (e.g. git commit SHA).
+  Resolved content identity for the test data source (e.g. git or Hugging Face commit SHA).
   Server-populated after the evaluation run for reproducibility of the exact data
   state used. Not set on job submission.
 examples:
