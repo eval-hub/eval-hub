@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -30,6 +31,26 @@ type fakeStorage struct {
 	updateErr         error
 	providerConfigs   map[string]api.ProviderResource
 	collectionConfigs map[string]api.CollectionResource
+}
+
+func TestReplaceEnvironmentVariable(t *testing.T) {
+	env := []string{
+		"KEEP=value",
+		"TARGET=old",
+		"TARGET=duplicate",
+		"target=case-variant",
+		"TARGET_SUFFIX=unrelated",
+	}
+
+	got := replaceEnvironmentVariable(env, "TARGET", "new")
+	want := []string{"KEEP=value", "TARGET_SUFFIX=unrelated", "TARGET=new"}
+	if runtime.GOOS != "windows" {
+		want = []string{"KEEP=value", "target=case-variant", "TARGET_SUFFIX=unrelated", "TARGET=new"}
+	}
+
+	if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
+		t.Fatalf("replaceEnvironmentVariable() = %v, want %v", got, want)
+	}
 }
 
 func (f *fakeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
@@ -277,6 +298,160 @@ func TestNewLocalRuntime(t *testing.T) {
 	}
 }
 
+func TestNewLocalRuntimeMLFlowTrackingURI(t *testing.T) {
+	tests := []struct {
+		name   string
+		config *config.Config
+		want   string
+	}{
+		{name: "nil config", config: nil},
+		{name: "nil mlflow config", config: &config.Config{}},
+		{
+			name: "blank tracking URI",
+			config: &config.Config{MLFlow: &config.MLFlowConfig{
+				TrackingURI: " \t\n",
+			}},
+		},
+		{
+			name: "trimmed tracking URI",
+			config: &config.Config{MLFlow: &config.MLFlowConfig{
+				TrackingURI: "  http://mlflow.example:5000/  ",
+			}},
+			want: "http://mlflow.example:5000/",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rt, err := NewLocalRuntime(discardLogger(), tc.config)
+			if err != nil {
+				t.Fatalf("NewLocalRuntime failed: %v", err)
+			}
+			localRuntime, ok := rt.(*LocalRuntime)
+			if !ok {
+				t.Fatalf("runtime type = %T, want *LocalRuntime", rt)
+			}
+			if localRuntime.mlflowTrackingURI != tc.want {
+				t.Fatalf("mlflowTrackingURI = %q, want %q", localRuntime.mlflowTrackingURI, tc.want)
+			}
+		})
+	}
+}
+
+func TestLocalRuntimeMLFlowTrackingURISurvivesCloning(t *testing.T) {
+	rt, err := NewLocalRuntime(discardLogger(), &config.Config{
+		MLFlow: &config.MLFlowConfig{TrackingURI: "  http://mlflow.example:5000  "},
+	})
+	if err != nil {
+		t.Fatalf("NewLocalRuntime failed: %v", err)
+	}
+	base := rt.(*LocalRuntime)
+
+	loggerClone, ok := base.WithLogger(discardLogger()).(*LocalRuntime)
+	if !ok {
+		t.Fatal("WithLogger did not return *LocalRuntime")
+	}
+	if loggerClone.mlflowTrackingURI != "http://mlflow.example:5000" {
+		t.Fatalf("WithLogger lost mlflowTrackingURI: %q", loggerClone.mlflowTrackingURI)
+	}
+
+	contextClone, ok := base.WithContext(context.Background()).(*LocalRuntime)
+	if !ok {
+		t.Fatal("WithContext did not return *LocalRuntime")
+	}
+	if contextClone.mlflowTrackingURI != "http://mlflow.example:5000" {
+		t.Fatalf("WithContext lost mlflowTrackingURI: %q", contextClone.mlflowTrackingURI)
+	}
+}
+
+func TestRunEvaluationJobMLFlowTrackingURIEnvironment(t *testing.T) {
+	tests := []struct {
+		name          string
+		serviceConfig *config.Config
+		inheritedURI  string
+		providerURI   string
+		wantURI       string
+	}{
+		{
+			name:          "configured URI overrides inherited URI",
+			serviceConfig: &config.Config{MLFlow: &config.MLFlowConfig{TrackingURI: "  http://configured:5000  "}},
+			inheritedURI:  "http://inherited:5000",
+			wantURI:       "http://configured:5000",
+		},
+		{
+			name:          "nil MLflow configuration does not inject a URI",
+			serviceConfig: &config.Config{},
+			wantURI:       "",
+		},
+		{
+			name:          "blank MLflow configuration does not inject a URI",
+			serviceConfig: &config.Config{MLFlow: &config.MLFlowConfig{TrackingURI: " \t\n"}},
+			wantURI:       "",
+		},
+		{
+			name:          "inherited URI is preserved without service or provider value",
+			serviceConfig: &config.Config{},
+			inheritedURI:  "http://inherited:5000",
+			wantURI:       "http://inherited:5000",
+		},
+		{
+			name:          "provider URI overrides configured URI",
+			serviceConfig: &config.Config{MLFlow: &config.MLFlowConfig{TrackingURI: "http://configured:5000"}},
+			inheritedURI:  "http://inherited:5000",
+			providerURI:   "http://provider:5000",
+			wantURI:       "http://provider:5000",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			const providerID = "provider-1"
+			t.Setenv(mlflowTrackingURIEnv, tc.inheritedURI)
+			evaluation := sampleEvaluation(providerID)
+			cleanupDir(t, "job-1")
+
+			dirName := localJobDir("job-1", 0, providerID, "bench-1")
+			outputFile := filepath.Join(dirName, "mlflow_env.txt")
+			sentinelPath := filepath.Join(dirName, "done")
+			command := fmt.Sprintf("env | grep '^%s=' > %s && touch %s", mlflowTrackingURIEnv, outputFile, sentinelPath)
+			providers := sampleLocalProviders(providerID, command)
+			if tc.providerURI != "" {
+				provider := providers[providerID]
+				provider.Runtime.Local.Env = append(provider.Runtime.Local.Env, api.EnvVar{
+					Name:  mlflowTrackingURIEnv,
+					Value: tc.providerURI,
+				})
+				providers[providerID] = provider
+			}
+
+			rt, err := NewLocalRuntime(discardLogger(), tc.serviceConfig)
+			if err != nil {
+				t.Fatalf("NewLocalRuntime failed: %v", err)
+			}
+			rt = rt.WithContext(testContext(t))
+			storage := &fakeStorage{providerConfigs: providers}
+			benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+			if err != nil {
+				t.Fatalf("failed to resolve benchmarks: %v", err)
+			}
+			if err := rt.RunEvaluationJob(evaluation, benchmarks, storage); err != nil {
+				t.Fatalf("RunEvaluationJob failed: %v", err)
+			}
+
+			waitForFile(t, sentinelPath, 5*time.Second)
+			data, err := os.ReadFile(outputFile)
+			if err != nil {
+				t.Fatalf("failed to read environment output: %v", err)
+			}
+			lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+			if len(lines) != 1 {
+				t.Fatalf("got %d MLFLOW_TRACKING_URI entries, want 1: %q", len(lines), string(data))
+			}
+			if lines[0] != mlflowTrackingURIEnv+"="+tc.wantURI {
+				t.Fatalf("MLFLOW_TRACKING_URI = %q, want %q", lines[0], mlflowTrackingURIEnv+"="+tc.wantURI)
+			}
+		})
+	}
+}
+
 func TestRunEvaluationJobWritesJobSpec(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
@@ -341,6 +516,9 @@ func TestRunEvaluationJobPassesEnvVar(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 	cleanupDir(t, "job-1")
+	t.Setenv(evalHubJobSpecPathEnv, "inherited-job-spec-path")
+	t.Setenv(evalHubModeEnv, "inherited-mode")
+	t.Setenv("TEST_VAR", "inherited-test-value")
 
 	dirName := localJobDir("job-1", 0, providerID, "bench-1")
 	outputFile := filepath.Join(dirName, "env_output.txt")

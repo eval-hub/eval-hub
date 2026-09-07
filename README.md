@@ -272,6 +272,12 @@ eval-hub/
 
 EvalHub can run evaluations locally without a Kubernetes cluster. See the [local mode guide](https://eval-hub.github.io/guides/local-mode/) for configuration, architecture details, and troubleshooting, and the [local mode tutorial](https://eval-hub.github.io/guides/local-mode-tutorial/) for a step-by-step walkthrough. A self-contained [LightEval example](examples/local-lighteval/) is included in this repository.
 
+When local mode has `mlflow.tracking_uri` configured, each local evaluation subprocess automatically receives that direct URI as `MLFLOW_TRACKING_URI`. Local subprocess environment variables are applied in this order, with later values replacing matching earlier values:
+
+1. Inherited process environment
+2. EvalHub and service configuration values
+3. Provider `runtime.local.env` values
+
 ## Further reading
 
 - [API documentation](https://eval-hub.github.io/eval-hub/) -- full endpoint reference
