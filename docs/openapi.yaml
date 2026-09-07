@@ -2212,7 +2212,8 @@ components:
         name:
           type: string
           description: Metric name that also appears as a key in the metrics map.
-          example: acc
+          examples:
+            - acc
         type:
           type: string
           enum:
@@ -2223,7 +2224,8 @@ components:
             - time_series
           description: |
             Result type for this metric. One of numeric, categorical, array_ordered, array_unordered, or time_series.
-          example: numeric
+          examples:
+            - numeric
     BenchmarkTest:
       type: object
       description: The test result of a single benchmark run
@@ -2257,21 +2259,21 @@ components:
           additionalProperties: true
           description: |
             Metrics produced by evaluating the model on this benchmark, keyed by metric name. Each value may be a scalar, list, or object.
-          example:
-            acc: 0.691
-            acc_norm: 0.637
-            acc_stderr: 0.009
+          examples:
+            - acc: 0.691
+              acc_norm: 0.637
+              acc_stderr: 0.009
         metrics_schema:
           type: array
           description: |
             Metadata describing how each metric in metrics should be interpreted. Each entry names a metric key and its result type. Metrics without an entry default to numeric.
-          example:
-            - name: acc
-              type: numeric
-            - name: acc_norm
-              type: numeric
-            - name: acc_stderr
-              type: numeric
+          examples:
+            - - name: acc
+                type: numeric
+              - name: acc_norm
+                type: numeric
+              - name: acc_stderr
+                type: numeric
           items:
             $ref: '#/components/schemas/MetricSchema'
         additional_info:
@@ -2558,7 +2560,8 @@ components:
         Resolved content identity for the test data source (e.g. git commit SHA).
         Server-populated after the evaluation run for reproducibility of the exact data
         state used. Not set on job submission.
-      example: a3f9c12e8b4d6f1c2e9a7b3d5f0e8c4a2b6d9e1f
+      examples:
+        - a3f9c12e8b4d6f1c2e9a7b3d5f0e8c4a2b6d9e1f
     TestDataRefType:
       type: string
       description: |
@@ -2597,9 +2600,9 @@ components:
           description: |
             Optional path within the PVC to mount at `/test_data` instead of the PVC root.
             Useful when a single PVC contains data for multiple benchmarks in separate directories.
-      example:
-        claim_name: eval-datasets-pvc
-        sub_path: benchmark-a/v1
+      examples:
+        - claim_name: eval-datasets-pvc
+          sub_path: benchmark-a/v1
     TestDataRefGit:
       type: object
       description: |
@@ -2643,7 +2646,8 @@ components:
             HTTP(S) URL of the git repository to clone. SSH URLs are not supported.
             Plain `http://` is allowed only for unauthenticated clones; when **`secret_ref`**
             is set the URL must use **`https://`**.
-          example: https://github.com/my-org/my-eval-datasets.git
+          examples:
+            - https://github.com/my-org/my-eval-datasets.git
         ref:
           type: string
           description: |
@@ -2653,26 +2657,29 @@ components:
             - **Branch**: `main`, `feat/my-branch`
             - **Tag**: `v1.2.0`, `release-3.6`
             - **Commit SHA**: `a3f9c12e8b...` (7–40 hex characters)
-          example: main
+          examples:
+            - main
         sub_path:
           type: string
           description: |
             Optional path within the cloned repository to mount at `/test_data` instead of
             the repository root. Useful when the repository contains data for multiple
             benchmarks in separate directories.
-          example: datasets/lm-eval
+          examples:
+            - datasets/lm-eval
         secret_ref:
           type: string
           description: |
             Name of a Kubernetes **`Secret`** of type `kubernetes.io/basic-auth` in the
             evaluation job namespace, mounted read-only into the git-clone init container.
             Omit for public repositories.
-          example: my-git-credentials
-      example:
-        url: https://github.com/my-org/my-eval-datasets.git
-        ref: main
-        sub_path: datasets/lm-eval
-        secret_ref: my-git-credentials
+            examples:
+            - my-git-credentials
+      examples:
+        - url: https://github.com/my-org/my-eval-datasets.git
+          ref: main
+          sub_path: datasets/lm-eval
+          secret_ref: my-git-credentials
     TestDataRef:
       type: object
       description: |
