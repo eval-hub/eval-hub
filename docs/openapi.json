@@ -3655,30 +3655,40 @@
           "repo_id": {
             "type": "string",
             "description": "Hugging Face Hub repository ID (for example `cais/mmlu` or `my-org/my-dataset`).\n",
-            "example": "cais/mmlu"
+            "examples": [
+              "cais/mmlu"
+            ]
           },
           "revision": {
             "type": "string",
             "description": "Revision to download — a branch name, tag name, or commit SHA. When omitted, the\nrepository default branch is used.\n\n- **Branch**: `main`, `feat/my-branch`\n- **Tag**: `v1.0.0`\n- **Commit SHA**: `a3f9c12e8b...` (full or abbreviated hex)\n",
-            "example": "main"
+            "examples": [
+              "main"
+            ]
           },
           "sub_path": {
             "type": "string",
             "description": "Optional path within the repository to mount at `/test_data` instead of the\nrepository root. Useful when the repository contains data for multiple benchmarks\nin separate directories.\n",
-            "example": "data/train"
+            "examples": [
+              "data/train"
+            ]
           },
           "secret_ref": {
             "type": "string",
             "description": "Name of a Kubernetes **`Secret`** of type `Opaque` containing a **`token`** key in the\nevaluation job namespace, mounted read-only into the test-data init container.\nOmit for public repositories.\n",
-            "example": "my-hf-credentials"
+            "examples": [
+              "my-hf-credentials"
+            ]
           }
         },
-        "example": {
-          "repo_id": "cais/mmlu",
-          "revision": "main",
-          "sub_path": "data/train",
-          "secret_ref": "my-hf-credentials"
-        }
+        "examples": [
+          {
+            "repo_id": "cais/mmlu",
+            "revision": "main",
+            "sub_path": "data/train",
+            "secret_ref": "my-hf-credentials"
+          }
+        ]
       },
       "TestDataRef": {
         "type": "object",
