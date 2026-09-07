@@ -1,0 +1,27 @@
+id: instruction-output-v1
+name: Instruction & Output Reliability v1
+category: instruction_output
+description: >
+  Evaluates whether models produce outputs that conform to structural constraints.
+  JSONSchemaBench tests JSON schema compliance across easy, medium, and hard splits.
+  Note: lm-eval runs LM-only (no constrained decoding); scores vary drastically by split.
+  Part of the Curated Collections taxonomy (#916).
+tags:
+  - instruction-following
+  - structured-output
+  - json
+  - lm_eval
+  - curated
+domains:
+  - instruction_and_output_reliability
+pass_criteria:
+  threshold: 0.60
+benchmarks:
+  - id: jsonschema_bench
+    provider_id: lm_evaluation_harness
+    weight: 1
+    primary_score:
+      metric: schema_compliance
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.60

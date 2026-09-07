@@ -1,0 +1,308 @@
+# RULER Provider Configuration
+# RULER: What's the Real Context Size of Your LLM?
+# Reference: https://github.com/NVIDIA/RULER
+
+id: ruler
+name: RULER
+description: >
+  NVIDIA RULER long-context evaluation benchmark. Tests LLMs across 13 synthetic
+  tasks spanning needle-in-a-haystack retrieval, variable tracking, aggregation,
+  and question answering at multiple context lengths.
+type: community
+
+runtime:
+  k8s:
+    image: quay.io/evalhub/community-ruler:latest
+    entrypoint:
+      - python
+      - main.py
+    cpu_request: 500m
+    memory_request: 1Gi
+    cpu_limit: 4000m
+    memory_limit: 8Gi
+  local:
+    # used for local mode tests (FVT)
+    # To run real benchmarks locally, override with the actual adapter path:
+    #   command: python /path/to/eval-hub-contrib/adapters/ruler/main.py
+    command: python tests/features/test_data/runtime/main.py
+
+benchmarks:
+  # Needle-in-a-Haystack — single needle variants
+  - id: niah-single-noise
+    name: NIAH Single (Noise Haystack)
+    description: Single needle/value pair hidden in random noise background
+    category: needle_in_a_haystack
+    metrics:
+      - string_match_all
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.50
+    tags:
+      - ruler
+      - niah
+      - retrieval
+      - long_context
+
+  - id: niah-single-essay
+    name: NIAH Single (Essay Haystack)
+    description: Single needle/value pair hidden in Paul Graham essays
+    category: needle_in_a_haystack
+    metrics:
+      - string_match_all
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.50
+    tags:
+      - ruler
+      - niah
+      - retrieval
+      - long_context
+
+  - id: niah-single-uuid
+    name: NIAH Single (UUID Values)
+    description: Single needle/UUID-value pair hidden in essay background
+    category: needle_in_a_haystack
+    metrics:
+      - string_match_all
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.50
+    tags:
+      - ruler
+      - niah
+      - retrieval
+      - long_context
+
+  # Needle-in-a-Haystack — multi-key / multi-value / multi-query variants
+  - id: niah-multikey
+    name: NIAH Multi-Key
+    description: Multiple distinct needle keys hidden in essay background
+    category: needle_in_a_haystack
+    metrics:
+      - string_match_all
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.50
+    tags:
+      - ruler
+      - niah
+      - retrieval
+      - long_context
+
+  - id: niah-needle-bg
+    name: NIAH Needle Background
+    description: Single needle with other needles used as background noise
+    category: needle_in_a_haystack
+    metrics:
+      - string_match_all
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.50
+    tags:
+      - ruler
+      - niah
+      - retrieval
+      - long_context
+
+  - id: niah-multikey-uuid
+    name: NIAH Multi-Key UUID
+    description: UUID keys and UUID values — hardest retrieval variant
+    category: needle_in_a_haystack
+    metrics:
+      - string_match_all
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.50
+    tags:
+      - ruler
+      - niah
+      - retrieval
+      - long_context
+
+  - id: niah-multivalue
+    name: NIAH Multi-Value
+    description: Single key associated with multiple values in essay background
+    category: needle_in_a_haystack
+    metrics:
+      - string_match_all
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.50
+    tags:
+      - ruler
+      - niah
+      - retrieval
+      - long_context
+
+  - id: niah-multiquery
+    name: NIAH Multi-Query
+    description: Multiple queries each targeting a distinct needle/value pair
+    category: needle_in_a_haystack
+    metrics:
+      - string_match_all
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.50
+    tags:
+      - ruler
+      - niah
+      - retrieval
+      - long_context
+
+  # Variable Tracking
+  - id: variable-tracking
+    name: Variable Tracking
+    description: Track chains of variable assignments and return the final value
+    category: variable_tracking
+    metrics:
+      - string_match_all
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.10
+    tags:
+      - ruler
+      - tracking
+      - long_context
+
+  # Aggregation tasks
+  - id: common-words-extraction
+    name: Common Words Extraction
+    description: Identify the 10 most frequently appearing words in a long list
+    category: aggregation
+    metrics:
+      - string_match_all
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.10
+    tags:
+      - ruler
+      - aggregation
+      - long_context
+
+  - id: frequency-words-extraction
+    name: Frequency Words Extraction
+    description: Find the three most frequent coded words in a Zipf-distributed list
+    category: aggregation
+    metrics:
+      - string_match_all
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.10
+    tags:
+      - ruler
+      - aggregation
+      - long_context
+
+  # Question Answering
+  - id: qa-squad
+    name: QA — SQuAD
+    description: Long-context question answering with SQuAD passages as context
+    category: question_answering
+    metrics:
+      - string_match_part
+    primary_score:
+      metric: string_match_part
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.15
+    tags:
+      - ruler
+      - qa
+      - squad
+      - long_context
+
+  - id: qa-hotpotqa
+    name: QA — HotpotQA
+    description: Multi-hop long-context question answering with HotpotQA passages
+    category: question_answering
+    metrics:
+      - string_match_part
+    primary_score:
+      metric: string_match_part
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.15
+    tags:
+      - ruler
+      - qa
+      - hotpotqa
+      - long_context
+
+parameters:
+  - name: benchmarks
+    type: array
+    default: null
+    description: >
+      Optional list of RULER benchmark IDs to run in a single job
+      (e.g. [niah-single-essay, variable-tracking]). When set, overrides benchmark_id.
+
+  - name: context_lengths
+    type: array
+    default:
+      - 4096
+      - 8192
+      - 16384
+    description: Context lengths (in tokens) at which each task is evaluated.
+
+  - name: num_samples
+    type: integer
+    default: 10
+    description: Number of examples to generate per (task, context_length) pair.
+
+  - name: tokenizer_path
+    type: string
+    default: null
+    description: >
+      HuggingFace model ID or tiktoken model name used for context-length-aware
+      dataset generation. Defaults to model.name from the JobSpec.
+
+  - name: tokenizer_type
+    type: string
+    default: hf
+    description: Tokenizer backend — "hf" (HuggingFace) or "openai" (tiktoken).
+
+  - name: model_template
+    type: string
+    default: base
+    description: >
+      Chat prompt template to wrap each task prompt. See scripts/data/template.py
+      for available keys (base, meta-llama3, meta-chat, Phi3, …).
+
+  - name: tokens_to_generate
+    type: integer
+    default: null
+    description: >
+      Maximum tokens the model may generate per sample. When null, the per-task
+      default from synthetic.yaml is used (128 for NIAH, 30 for VT, etc.).
+
+  - name: batch_size
+    type: integer
+    default: 1
+    description: Number of concurrent requests to send to the inference endpoint.
+
+  - name: random_seed
+    type: integer
+    default: 42
+    description: Random seed for reproducible dataset generation.

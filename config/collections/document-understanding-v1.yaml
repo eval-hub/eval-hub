@@ -1,0 +1,145 @@
+id: document-understanding-v1
+name: Grounded Document Understanding v1
+category: document_understanding
+description: >
+  Evaluates long-context retrieval, comprehension, and reasoning over extended documents.
+  RULER tests 13 synthetic tasks (needle-in-a-haystack, variable tracking, aggregation,
+  QA) at configurable context lengths. LongBench v2 provides real-world long-document
+  questions requiring multi-step reasoning.
+  Part of the Curated Collections taxonomy (#916).
+tags:
+  - long_context
+  - retrieval
+  - comprehension
+  - ruler
+  - curated
+domains:
+  - grounded_document_understanding
+pass_criteria:
+  threshold: 0.35
+benchmarks:
+  - id: niah-single-noise
+    provider_id: ruler
+    weight: 1
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.50
+
+  - id: niah-single-essay
+    provider_id: ruler
+    weight: 1
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.50
+
+  - id: niah-single-uuid
+    provider_id: ruler
+    weight: 1
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.50
+
+  - id: niah-multikey
+    provider_id: ruler
+    weight: 1
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.50
+
+  - id: niah-needle-bg
+    provider_id: ruler
+    weight: 1
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.50
+
+  - id: niah-multikey-uuid
+    provider_id: ruler
+    weight: 1
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.50
+
+  - id: niah-multivalue
+    provider_id: ruler
+    weight: 1
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.50
+
+  - id: niah-multiquery
+    provider_id: ruler
+    weight: 1
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.50
+
+  - id: variable-tracking
+    provider_id: ruler
+    weight: 1
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.10
+
+  - id: common-words-extraction
+    provider_id: ruler
+    weight: 1
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.10
+
+  - id: frequency-words-extraction
+    provider_id: ruler
+    weight: 1
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.10
+
+  - id: qa-squad
+    provider_id: ruler
+    weight: 1
+    primary_score:
+      metric: string_match_part
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.15
+
+  - id: qa-hotpotqa
+    provider_id: ruler
+    weight: 1
+    primary_score:
+      metric: string_match_part
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.15
+
+  - id: longbenchv2
+    provider_id: lm_evaluation_harness
+    weight: 1
+    primary_score:
+      metric: accuracy
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.30

@@ -3756,3 +3756,58 @@ benchmarks:
       meaning: Random baseline
     - range: 0.35-1.0
       meaning: Meets default pass threshold (0.35 or above)
+
+- id: longbenchv2
+  name: "LongBench v2"
+  description: |-
+    Real-world long-document questions requiring multi-step reasoning across extended contexts.
+    Tests comprehension beyond simple retrieval with 4-choice multiple-choice format.
+  category: long_context
+  metrics:
+  - accuracy
+  tags:
+  - long_context
+  - reasoning
+  - lm_eval
+  primary_score:
+    metric: accuracy
+    lower_is_better: false
+  pass_criteria:
+    threshold: 0.30
+
+- id: jsonschema_bench
+  name: "JSONSchemaBench"
+  description: |-
+    Tests JSON schema compliance across easy, medium, and hard splits.
+    LM-only evaluation (no constrained decoding); scores vary drastically by split.
+  category: structured_output
+  metrics:
+  - schema_compliance
+  tags:
+  - instruction-following
+  - structured-output
+  - json
+  - lm_eval
+  primary_score:
+    metric: schema_compliance
+    lower_is_better: false
+  pass_criteria:
+    threshold: 0.60
+
+- id: cruxeval_output
+  name: "CRUXEval (Output Prediction)"
+  description: |-
+    Tests code output prediction — given a Python function and input, predict the output.
+    Measures program comprehension without requiring code generation.
+  category: coding
+  metrics:
+  - pass@1
+  tags:
+  - code
+  - comprehension
+  - lm_eval
+  primary_score:
+    metric: pass@1
+    lower_is_better: false
+  pass_criteria:
+    threshold: 0.15
