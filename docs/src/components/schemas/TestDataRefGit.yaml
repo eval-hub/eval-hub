@@ -67,7 +67,7 @@ properties:
       Name of a Kubernetes **`Secret`** of type `kubernetes.io/basic-auth` in the
       evaluation job namespace, mounted read-only into the git-clone init container.
       Omit for public repositories.
-      examples:
+    examples:
       - my-git-credentials
 examples:
   - url: https://github.com/my-org/my-eval-datasets.git
