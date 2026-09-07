@@ -122,6 +122,7 @@ When a change is assisted by AI, add one of these lines, as appropriate, to the 
 Assisted-by: Cursor
 Made-with: Cursor
 Generated with: Claude Code
+Assisted-by: Codex
 ```
 
 For DCO sign-off, use `git commit -s` (or `git commit --signoff`). Do **not** include a `Signed-off-by` line in the commit message body; `-s` appends it from the author's configured `user.name` and `user.email`.
