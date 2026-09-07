@@ -5,22 +5,22 @@ local test = import 'test.libsonnet';
   collection: {
     id: 'open-telco-v1',
     benchmarks: [
-      test.benchmark('inspect/telemath', 'inspect', { num_examples: 5 }) + {
+      test.benchmark('telemath', 'inspect', { num_examples: 5 }) + {
         hardware_config: {
           queue: test.queueConfig(),
         },
       },
-      test.benchmark('inspect/teleqna', 'inspect', { num_examples: 5 }) + {
+      test.benchmark('teleqna', 'inspect', { num_examples: 5 }) + {
         hardware_config: {
           queue: test.queueConfig(),
         },
       },
-      test.benchmark('inspect/telelogs', 'inspect', { num_examples: 5 }) + {
+      test.benchmark('telelogs', 'inspect', { num_examples: 5 }) + {
         hardware_config: {
           queue: test.queueConfig(),
         },
       },
-      test.benchmark('inspect/3gpp-tsg', 'inspect', { num_examples: 5 }) + {
+      test.benchmark('3gpp-tsg', 'inspect', { num_examples: 5 }) + {
         hardware_config: {
           queue: test.queueConfig(),
         },
