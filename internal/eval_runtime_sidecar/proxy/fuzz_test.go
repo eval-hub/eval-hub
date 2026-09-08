@@ -18,23 +18,33 @@ func FuzzParseLocalModelPath(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, path string) {
 		jobID, remaining, ok := ParseLocalModelPath(path)
+
+		// Derive expected outcome from the /model/<jobID>[/<remaining>] grammar.
+		rest, hasPrefix := strings.CutPrefix(path, "/model/")
+		wantOK := hasPrefix && rest != "" && strings.IndexByte(rest, '/') != 0
+		if ok != wantOK {
+			t.Fatalf("ParseLocalModelPath(%q): ok=%v, want %v", path, ok, wantOK)
+		}
+
 		if !ok {
 			if jobID != "" || remaining != "" {
-				t.Fatalf("expected empty values on !ok, got jobID=%q remaining=%q", jobID, remaining)
+				t.Fatalf("expected empty on !ok, got jobID=%q remaining=%q", jobID, remaining)
 			}
 			return
 		}
 
-		if jobID == "" {
-			t.Fatalf("ok=true but jobID is empty for path %q", path)
+		var wantJobID, wantRemaining string
+		if i := strings.IndexByte(rest, '/'); i >= 0 {
+			wantJobID = rest[:i]
+			wantRemaining = rest[i:]
+		} else {
+			wantJobID = rest
 		}
-
-		if strings.Contains(jobID, "/") {
-			t.Fatalf("jobID %q contains '/' for path %q", jobID, path)
+		if jobID != wantJobID {
+			t.Fatalf("ParseLocalModelPath(%q): jobID=%q, want %q", path, jobID, wantJobID)
 		}
-
-		if remaining != "" && !strings.HasPrefix(remaining, "/") {
-			t.Fatalf("remaining %q does not start with '/' for path %q", remaining, path)
+		if remaining != wantRemaining {
+			t.Fatalf("ParseLocalModelPath(%q): remaining=%q, want %q", path, remaining, wantRemaining)
 		}
 	})
 }
@@ -52,14 +62,14 @@ func FuzzIsModelRefToken(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, authHeader string) {
 		got := isModelRefToken(authHeader)
-		if got {
-			if !strings.HasPrefix(authHeader, "Bearer ") {
-				t.Fatalf("isModelRefToken(%q) = true but no Bearer prefix", authHeader)
-			}
+
+		want := false
+		if strings.HasPrefix(authHeader, "Bearer ") {
 			token := strings.TrimPrefix(authHeader, "Bearer ")
-			if !strings.HasSuffix(token, ":ref") {
-				t.Fatalf("isModelRefToken(%q) = true but token %q doesn't end with :ref", authHeader, token)
-			}
+			want = strings.HasSuffix(token, ":ref")
+		}
+		if got != want {
+			t.Fatalf("isModelRefToken(%q) = %v, want %v", authHeader, got, want)
 		}
 	})
 }
@@ -74,14 +84,14 @@ func FuzzIsExplicitHardcodedToken(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, authHeader string) {
 		got := isExplicitHardcodedToken(authHeader)
-		if got {
-			if !strings.HasPrefix(authHeader, "Bearer ") {
-				t.Fatalf("isExplicitHardcodedToken(%q) = true without Bearer prefix", authHeader)
-			}
+
+		want := false
+		if strings.HasPrefix(authHeader, "Bearer ") {
 			token := strings.TrimPrefix(authHeader, "Bearer ")
-			if !strings.HasPrefix(token, "token:") {
-				t.Fatalf("isExplicitHardcodedToken(%q) = true but token %q lacks token: prefix", authHeader, token)
-			}
+			want = strings.HasPrefix(token, "token:")
+		}
+		if got != want {
+			t.Fatalf("isExplicitHardcodedToken(%q) = %v, want %v", authHeader, got, want)
 		}
 	})
 }
@@ -94,15 +104,16 @@ func FuzzExtractExplicitHardcodedToken(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, authHeader string) {
 		got := extractExplicitHardcodedToken(authHeader)
-		if !isExplicitHardcodedToken(authHeader) {
-			if got != "" {
-				t.Fatalf("non-explicit token header returned non-empty extraction: %q", got)
+
+		var want string
+		if strings.HasPrefix(authHeader, "Bearer ") {
+			token := strings.TrimPrefix(authHeader, "Bearer ")
+			if strings.HasPrefix(token, "token:") {
+				want = strings.TrimPrefix(token, "token:")
 			}
-			return
 		}
-		expected := strings.TrimPrefix(strings.TrimPrefix(authHeader, "Bearer "), "token:")
-		if got != expected {
-			t.Fatalf("extractExplicitHardcodedToken(%q) = %q, want %q", authHeader, got, expected)
+		if got != want {
+			t.Fatalf("extractExplicitHardcodedToken(%q) = %q, want %q", authHeader, got, want)
 		}
 	})
 }
