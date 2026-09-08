@@ -1,0 +1,84 @@
+# IFBench Provider Configuration
+# IFBench: Generalizing Verifiable Instruction Following
+# Reference: https://github.com/allenai/IFBench
+
+id: ifbench
+name: IFBench
+description: >
+  IFBench (AllenAI) evaluates precise instruction-following generalization using 58
+  out-of-domain verifiable constraints. The adapter loads the bundled IFBench test set,
+  generates model completions via an OpenAI-compatible endpoint, and scores responses
+  with programmatic constraint checkers.
+type: community
+
+runtime:
+  k8s:
+    image: quay.io/evalhub/community-ifbench:latest
+    image_pull_policy: Always
+    entrypoint:
+      - python
+      - main.py
+    cpu_request: 100m
+    memory_request: 512Mi
+    cpu_limit: 2000m
+    memory_limit: 4Gi
+  local:
+    # used for local mode tests (FVT)
+    # To run real benchmarks locally, override with the actual adapter path:
+    #   command: python /path/to/eval-hub-contrib/adapters/ifbench/main.py
+    command: python tests/features/test_data/runtime/main.py
+
+benchmarks:
+  - id: ifbench
+    name: IFBench OOD Instruction Following
+    description: >
+      Evaluates the model on the IFBench test split (299 prompts, 58 OOD constraint
+      types). Primary metric is prompt-level loose accuracy per the IFBench paper.
+    category: instruction_following
+    metrics:
+      - accuracy
+      - prompt_level_strict
+      - prompt_level_loose
+      - inst_level_strict
+      - inst_level_loose
+      - n_evaluated
+    primary_score:
+      metric: accuracy
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.05
+    tags:
+      - instruction-following
+      - ifbench
+      - allenai
+      - curated
+
+parameters:
+  - name: scoring_mode
+    type: string
+    default: loose
+    description: Primary scoring mode for overall_score — "loose" (paper default) or "strict".
+
+  - name: num_examples
+    type: integer
+    description: Optional cap on the number of IFBench prompts evaluated.
+
+  - name: max_concurrent
+    type: integer
+    default: 4
+    description: Maximum number of concurrent API calls to the model endpoint.
+
+  - name: max_tokens
+    type: integer
+    default: 2048
+    description: Maximum tokens generated per prompt.
+
+  - name: temperature
+    type: number
+    default: 0.0
+    description: Sampling temperature for generation.
+
+  - name: request_timeout
+    type: integer
+    default: 120
+    description: Per-request timeout in seconds for API calls.
