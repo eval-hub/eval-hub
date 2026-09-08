@@ -77,6 +77,9 @@ func getPromMetricWithLabels(name string, labels map[string]string) *dto.Metric 
 }
 
 func matchLabels(pairs []*dto.LabelPair, want map[string]string) bool {
+	if len(pairs) != len(want) {
+		return false
+	}
 	have := make(map[string]string, len(pairs))
 	for _, p := range pairs {
 		have[p.GetName()] = p.GetValue()

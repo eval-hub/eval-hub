@@ -352,15 +352,18 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 						MessageCode: constants.MessageCodeEvaluationJobFailed,
 					}, api.MessageOriginServer)
 					metrics.RecordEvaluationJobRuntimeStartFailed(ctx.Ctx, h.runtimeName())
-					metrics.RecordEvaluationJobTerminalState(ctx.Ctx, api.OverallStatePending, state)
 					for _, pid := range providerIDs {
-						metrics.RecordEvaluationJobStateTransition(ctx.Ctx, pid, collectionID, string(state))
 						metrics.RecordEvaluationError(ctx.Ctx, "runtime_start_failed", pid)
 					}
-					metrics.DecActiveJobs(ctx.Ctx)
-					metrics.DecQueueDepth(ctx.Ctx)
 					if err := storage.WithContext(runtimeCtx).UpdateEvaluationJobStatus(job.Resource.ID, state, message); err != nil {
 						ctx.Logger.Error("Failed to update evaluation status", "error", err, "job_id", job.Resource.ID)
+					} else {
+						metrics.RecordEvaluationJobTerminalState(ctx.Ctx, api.OverallStatePending, state)
+						for _, pid := range providerIDs {
+							metrics.RecordEvaluationJobStateTransition(ctx.Ctx, pid, collectionID, string(state))
+						}
+						metrics.DecActiveJobs(ctx.Ctx)
+						metrics.DecQueueDepth(ctx.Ctx)
 					}
 					// return the first error encountered
 					w.Error(runErr, ctx.RequestID)
@@ -733,7 +736,7 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 				}
 				metrics.RecordEvaluationJobCancelled(ctx.Ctx)
 				metrics.RecordEvaluationJobTerminalState(ctx.Ctx, previousState, api.OverallStateCancelled)
-				if jobErr == nil && job != nil {
+				if jobErr == nil && job != nil && !previousState.IsTerminalState() {
 					cID := jobCollectionID(&job.EvaluationJobConfig)
 					for _, pid := range jobProviderIDs(nil, &job.EvaluationJobConfig) {
 						metrics.RecordEvaluationJobStateTransition(ctx.Ctx, pid, cID, string(api.OverallStateCancelled))
@@ -761,10 +764,15 @@ func jobCollectionID(cfg *api.EvaluationJobConfig) string {
 	return ""
 }
 
-// jobProviderIDs returns deduplicated provider IDs from benchmarks or the job config's inline benchmarks.
+// jobProviderIDs returns deduplicated provider IDs from benchmarks, the job
+// config's inline benchmarks, or the collection override list (for
+// collection-backed jobs where cfg.Benchmarks is empty).
 func jobProviderIDs(benchmarks []api.EvaluationBenchmarkConfig, cfg *api.EvaluationJobConfig) []string {
 	if len(benchmarks) == 0 && cfg != nil {
 		benchmarks = cfg.Benchmarks
+	}
+	if len(benchmarks) == 0 && cfg != nil && cfg.Collection != nil {
+		benchmarks = cfg.Collection.Benchmarks
 	}
 	seen := make(map[string]struct{}, len(benchmarks))
 	var ids []string

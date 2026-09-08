@@ -26,6 +26,15 @@ func recordEvaluationJobTerminalStateAfterUpdate(
 
 	collectionID := jobCollectionID(&job.EvaluationJobConfig)
 	providerIDs := jobProviderIDs(nil, &job.EvaluationJobConfig)
+	if len(providerIDs) == 0 && job.Status != nil {
+		seen := make(map[string]struct{})
+		for _, bs := range job.Status.Benchmarks {
+			if _, ok := seen[bs.ProviderID]; !ok {
+				seen[bs.ProviderID] = struct{}{}
+				providerIDs = append(providerIDs, bs.ProviderID)
+			}
+		}
+	}
 
 	for _, pid := range providerIDs {
 		metrics.RecordEvaluationJobStateTransition(ctx, pid, collectionID, string(newState))
