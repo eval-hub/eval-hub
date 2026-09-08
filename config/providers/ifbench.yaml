@@ -14,7 +14,7 @@ type: community
 runtime:
   k8s:
     image: quay.io/evalhub/community-ifbench:latest
-    image_pull_policy: Always
+    image_pull_policy: always
     entrypoint:
       - python
       - main.py
