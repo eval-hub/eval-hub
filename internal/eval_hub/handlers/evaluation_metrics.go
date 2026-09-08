@@ -44,7 +44,7 @@ func recordEvaluationJobTerminalStateAfterUpdate(
 		metrics.DecQueueDepth(ctx)
 	}
 
-	if newState.IsTerminalState() {
+	if newState.IsTerminalState() && !previousState.IsTerminalState() {
 		metrics.DecActiveJobs(ctx)
 		if previousState == api.OverallStatePending {
 			metrics.DecQueueDepth(ctx)
