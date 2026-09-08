@@ -117,8 +117,38 @@ func TestInitCreatesEvaluationJobInstruments(t *testing.T) {
 	}
 }
 
+func TestInitCreatesEvaluationDomainOTELInstruments(t *testing.T) {
+	reader, ctx := setupOTEL(t)
+
+	metrics.RecordEvaluationJobStateTransition(ctx, "prov", "coll", "pending")
+	metrics.ObserveEvaluationJobDuration(ctx, "prov", "coll", 10.0)
+	metrics.IncActiveJobs(ctx)
+	metrics.DecActiveJobs(ctx)
+	metrics.IncQueueDepth(ctx)
+	metrics.DecQueueDepth(ctx)
+	metrics.RecordEvaluationError(ctx, "test_err", "prov")
+	metrics.ObserveBenchmarkDuration(ctx, "mmlu", "prov", 5.0)
+	metrics.ObserveAPIRequestDuration(ctx, "/health", "GET", "", "", 0.01)
+
+	names := collectOTELNames(t, reader, ctx)
+
+	for _, want := range []string{
+		"evalhub.eval.job_state_transitions",
+		"evalhub.eval.job_duration",
+		"evalhub.eval.active_jobs",
+		"evalhub.eval.queue_depth",
+		"evalhub.eval.errors",
+		"evalhub.eval.benchmark_duration",
+		"evalhub.eval.api_request_duration",
+	} {
+		if _, ok := names[want]; !ok {
+			t.Errorf("missing OTEL evaluation-domain metric %q", want)
+		}
+	}
+}
+
 func TestRecordEvaluationJobStateTransition(t *testing.T) {
-	_, ctx := setupOTEL(t)
+	reader, ctx := setupOTEL(t)
 
 	metrics.RecordEvaluationJobStateTransition(ctx, "llm-judge", "safety", "pending")
 	metrics.RecordEvaluationJobStateTransition(ctx, "llm-judge", "safety", "running")
@@ -132,6 +162,11 @@ func TestRecordEvaluationJobStateTransition(t *testing.T) {
 	}
 	if got := m.GetCounter().GetValue(); got != 1 {
 		t.Errorf("expected counter=1, got %v", got)
+	}
+
+	names := collectOTELNames(t, reader, ctx)
+	if _, ok := names["evalhub.eval.job_state_transitions"]; !ok {
+		t.Error("OTEL instrument evalhub.eval.job_state_transitions not recorded")
 	}
 }
 

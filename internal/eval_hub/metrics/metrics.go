@@ -13,11 +13,29 @@ import (
 
 const instrumentationScope = "github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
 
+// Separate OTEL meter scope for evaluation-domain instruments.
+// Distinct from instrumentationScope so the bridged Prometheus names
+// (evalhub_eval_*) don't collide with the promauto names (evalhub_evaluation_*).
+const evaluationInstrumentationScope = "evalhub.evaluation"
+
 // Existing OTEL-only instruments (dot-naming convention).
 var (
 	evaluationJobsTotal         metric.Int64Counter
 	evaluationJobCompletions    metric.Int64Counter
 	benchmarkRuntimeErrorsTotal metric.Int64Counter
+)
+
+// OTEL evaluation-domain instruments for OTLP export.
+// These use the evaluationInstrumentationScope meter so their bridged
+// Prometheus names (evalhub_eval_*) are distinct from the promauto names.
+var (
+	otelEvalJobStateTransitions metric.Int64Counter
+	otelEvalJobDuration         metric.Float64Histogram
+	otelEvalActiveJobs          metric.Int64UpDownCounter
+	otelEvalQueueDepth          metric.Int64UpDownCounter
+	otelEvalErrors              metric.Int64Counter
+	otelEvalBenchmarkDuration   metric.Float64Histogram
+	otelEvalAPIRequestDuration  metric.Float64Histogram
 )
 
 // Prometheus-native evaluation-domain metrics.
@@ -91,7 +109,73 @@ func Init() error {
 		return err
 	}
 
-	return initHTTPMetrics(meter)
+	if err := initHTTPMetrics(meter); err != nil {
+		return err
+	}
+
+	return initEvaluationOTELMetrics()
+}
+
+func initEvaluationOTELMetrics() error {
+	evalMeter := otel.Meter(evaluationInstrumentationScope)
+
+	var err error
+	otelEvalJobStateTransitions, err = evalMeter.Int64Counter(
+		"evalhub.eval.job_state_transitions",
+		metric.WithDescription("Evaluation job state transitions by provider, collection, and status"),
+	)
+	if err != nil {
+		return err
+	}
+
+	otelEvalJobDuration, err = evalMeter.Float64Histogram(
+		"evalhub.eval.job_duration",
+		metric.WithDescription("Wall-clock duration from job creation to terminal state"),
+		metric.WithUnit("s"),
+	)
+	if err != nil {
+		return err
+	}
+
+	otelEvalActiveJobs, err = evalMeter.Int64UpDownCounter(
+		"evalhub.eval.active_jobs",
+		metric.WithDescription("Current count of non-terminal evaluation jobs (pending + running)"),
+	)
+	if err != nil {
+		return err
+	}
+
+	otelEvalQueueDepth, err = evalMeter.Int64UpDownCounter(
+		"evalhub.eval.queue_depth",
+		metric.WithDescription("Current count of evaluation jobs in pending state"),
+	)
+	if err != nil {
+		return err
+	}
+
+	otelEvalErrors, err = evalMeter.Int64Counter(
+		"evalhub.eval.errors",
+		metric.WithDescription("Evaluation errors by type and provider"),
+	)
+	if err != nil {
+		return err
+	}
+
+	otelEvalBenchmarkDuration, err = evalMeter.Float64Histogram(
+		"evalhub.eval.benchmark_duration",
+		metric.WithDescription("Per-benchmark execution duration"),
+		metric.WithUnit("s"),
+	)
+	if err != nil {
+		return err
+	}
+
+	otelEvalAPIRequestDuration, err = evalMeter.Float64Histogram(
+		"evalhub.eval.api_request_duration",
+		metric.WithDescription("API request duration with domain-enriched labels"),
+		metric.WithUnit("s"),
+	)
+	return err
 }
 
 // RecordEvaluationJobCreated increments the counter when a job is persisted successfully.
