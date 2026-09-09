@@ -711,3 +711,60 @@ func (tc *scenarioConfig) theAllBenchmarksHaveMetricsMatchingProviderConfig() er
 	}
 	return nil
 }
+
+// theAllBenchmarksHaveTestBlock asserts that every benchmark result contains a valid test block
+// with primary_score (number), primary_score_metric (non-empty string), threshold (number),
+// and pass (boolean) — as required by the eval-hub job result schema.
+func (tc *scenarioConfig) theAllBenchmarksHaveTestBlock() error {
+	raw, err := tc.getJsonPathValue("$.results.benchmarks")
+	if err != nil {
+		return tc.logError(err)
+	}
+	benchmarks, ok := raw.([]any)
+	if !ok {
+		return tc.logError(fmt.Errorf("$.results.benchmarks is not an array, got %T", raw))
+	}
+	if len(benchmarks) == 0 {
+		return tc.logError(fmt.Errorf("$.results.benchmarks is empty"))
+	}
+	var failures []string
+	for i, b := range benchmarks {
+		bm, ok := b.(map[string]any)
+		if !ok {
+			failures = append(failures, fmt.Sprintf("benchmark at index %d is not an object, got %T", i, b))
+			continue
+		}
+		id, _ := bm["id"].(string)
+		if id == "" {
+			id = fmt.Sprintf("<unnamed@index %d>", i)
+		}
+		testRaw, exists := bm["test"]
+		if !exists {
+			failures = append(failures, fmt.Sprintf("%s: missing \"test\" field", id))
+			continue
+		}
+		testBlock, ok := testRaw.(map[string]any)
+		if !ok {
+			failures = append(failures, fmt.Sprintf("%s: \"test\" field is not an object, got %T", id, testRaw))
+			continue
+		}
+		if _, ok := testBlock["primary_score"].(float64); !ok {
+			failures = append(failures, fmt.Sprintf("%s: \"test.primary_score\" is missing or not a number", id))
+		}
+		metric, _ := testBlock["primary_score_metric"].(string)
+		if metric == "" {
+			failures = append(failures, fmt.Sprintf("%s: \"test.primary_score_metric\" is missing or empty", id))
+		}
+		if _, ok := testBlock["threshold"].(float64); !ok {
+			failures = append(failures, fmt.Sprintf("%s: \"test.threshold\" is missing or not a number", id))
+		}
+		if _, ok := testBlock["pass"].(bool); !ok {
+			failures = append(failures, fmt.Sprintf("%s: \"test.pass\" is missing or not a boolean", id))
+		}
+	}
+	if len(failures) > 0 {
+		return tc.logError(fmt.Errorf("benchmark test block validation failures:\n%s\nin %s",
+			strings.Join(failures, "\n"), asPrettyJson(string(tc.body))))
+	}
+	return nil
+}

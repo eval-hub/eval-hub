@@ -1,6 +1,6 @@
 type: object
 description: |
-  Reference to external test data for a benchmark. Exactly one of `s3`, `pvc`, or `git` must be set.
+  Reference to external test data for a benchmark. Exactly one of `s3`, `pvc`, `git`, or `hf` must be set.
 
   **`s3`** — When the evaluation runs as a **Kubernetes Job**, Eval Hub schedules an
   **init container** on the evaluation job pod before the adapter runs. That init container:
@@ -21,8 +21,12 @@ description: |
   **`/test_data`** before the adapter runs. The resolved commit SHA is recorded as
   **`resolved_sha`** on this object on the evaluation job for reproducibility.
 
+  **`hf`** — The specified Hugging Face Hub repository is downloaded at the given revision
+  into **`/test_data`** before the adapter runs. The resolved commit SHA is recorded as
+  **`resolved_sha`** on this object on the evaluation job for reproducibility.
+
   Do not put credentials in the Eval Hub API request body; only reference an existing
-  Secret via **`secret_ref`** (for S3 or git).
+  Secret via **`secret_ref`** (for S3, git, or hf).
 oneOf:
   - type: object
     properties:
@@ -60,3 +64,15 @@ oneOf:
     required:
       - git
     title: Git
+  - type: object
+    properties:
+      hf:
+        $ref: ./TestDataRefHF.yaml
+      resolved_sha:
+        $ref: ./TestDataRefResolvedSHA.yaml
+      type:
+        $ref: ./TestDataRefType.yaml
+    additionalProperties: false
+    required:
+      - hf
+    title: HuggingFace

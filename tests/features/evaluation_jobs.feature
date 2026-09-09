@@ -1535,7 +1535,7 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain "results.benchmarks[0]"
     And the MLflow artifact should contain "results.benchmarks[1]"
@@ -1984,19 +1984,19 @@ Feature: Evaluation Jobs
     And the response should contain the value "completed" at path "$.status.benchmarks[2].status"
     And the response should contain the value "completed" at path "$.status.benchmarks[3].status"
     And the array at path "results.benchmarks" in the response should have length 4
-    And the response should contain the value "inspect/telemath" at path "$.results.benchmarks[*].id"
-    And the response should contain the value "inspect/teleqna" at path "$.results.benchmarks[*].id"
-    And the response should contain the value "inspect/telelogs" at path "$.results.benchmarks[*].id"
-    And the response should contain the value "inspect/3gpp-tsg" at path "$.results.benchmarks[*].id"
+    And the response should contain the value "telemath" at path "$.results.benchmarks[*].id"
+    And the response should contain the value "teleqna" at path "$.results.benchmarks[*].id"
+    And the response should contain the value "telelogs" at path "$.results.benchmarks[*].id"
+    And the response should contain the value "3gpp-tsg" at path "$.results.benchmarks[*].id"
     And the response should equal the value "5" at path "$.collection.benchmarks[0].parameters.num_examples"
     And the response should equal the value "5" at path "$.collection.benchmarks[1].parameters.num_examples"
     And the response should equal the value "5" at path "$.collection.benchmarks[2].parameters.num_examples"
     And the response should equal the value "5" at path "$.collection.benchmarks[3].parameters.num_examples"
     And the response should contain "results"
-    And the response should contain the value "telemath_scorer/accuracy" at path "$.results.benchmarks[?(@.id=='inspect/telemath')].metrics[*].name"
-    And the response should contain the value "choice/accuracy" at path "$.results.benchmarks[?(@.id=='inspect/teleqna')].metrics[*].name"
-    And the response should contain the value "telelogs_scorer/accuracy" at path "$.results.benchmarks[?(@.id=='inspect/telelogs')].metrics[*].name"
-    And the response should contain the value "pattern/accuracy" at path "$.results.benchmarks[?(@.id=='inspect/3gpp-tsg')].metrics[*].name"
+    And the response should contain the value "telemath_scorer/accuracy" at path "$.results.benchmarks[?(@.id=='telemath')].metrics[*].name"
+    And the response should contain the value "choice/accuracy" at path "$.results.benchmarks[?(@.id=='teleqna')].metrics[*].name"
+    And the response should contain the value "telelogs_scorer/accuracy" at path "$.results.benchmarks[?(@.id=='telelogs')].metrics[*].name"
+    And the response should contain the value "pattern/accuracy" at path "$.results.benchmarks[?(@.id=='3gpp-tsg')].metrics[*].name"
     # TODO: Add metric value validations once a job completes successfully on a cluster with the telco inspect runner - https://redhat.atlassian.net/browse/RHOAIENG-87955
 
   @kueue

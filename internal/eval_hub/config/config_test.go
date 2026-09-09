@@ -8,6 +8,29 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 )
 
+func TestMLFlowConfigEffectiveTrackingURI(t *testing.T) {
+	tests := []struct {
+		name   string
+		config *config.MLFlowConfig
+		want   string
+	}{
+		{name: "nil config", config: nil},
+		{name: "blank URI", config: &config.MLFlowConfig{TrackingURI: " \t\n"}},
+		{
+			name:   "trimmed URI",
+			config: &config.MLFlowConfig{TrackingURI: "  http://mlflow.example:5000  "},
+			want:   "http://mlflow.example:5000",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.config.EffectiveTrackingURI(); got != tc.want {
+				t.Fatalf("EffectiveTrackingURI() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestIsOTELEnabled(t *testing.T) {
 	t.Run("nil config returns false", func(t *testing.T) {
 		var c *config.Config

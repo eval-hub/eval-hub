@@ -17,8 +17,9 @@ import (
 // is configured. Returns (nil, nil) when no model URL is configured (standalone sidecar use).
 // For eval-hub job pods, sidecar_config.json always contains a model section so this proxy
 // is always active. The proxy resolves ref-token Authorization headers (e.g. "Bearer api-key:ref")
-// to real credentials, injects the SA token when no auth is present, and forwards to the
-// configured target URL.
+// to real credentials, injects the SA token for all other requests (replacing adapter
+// placeholders such as "Bearer local"), and forwards explicit hardcoded tokens sent as
+// "Bearer token:<secret>".
 func newModelProxy(config *config.Config, logger *slog.Logger) (*httputil.ReverseProxy, error) {
 	if config == nil || config.Sidecar == nil || config.Sidecar.Model == nil {
 		return nil, nil

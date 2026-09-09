@@ -1160,3 +1160,222 @@ func TestHandleListCollections_NewParamsAccepted(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleCloneCollection_CopiesToTenantScope(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	validator := testhelpers.NewValidator(t)
+
+	source := &api.CollectionResource{
+		Resource: api.Resource{ID: "src-2", Owner: "system"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "Curated Source", Category: "doc", CurationOrder: 5,
+			Domains:    []string{"grounded_document_understanding"},
+			Tasks:      []string{"rag"},
+			Modalities: []string{"text"},
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	storage := &cloneCollectionStorage{fakeStorage: &fakeStorage{}, source: source}
+	h := handlers.New(storage, validator, &fakeRuntime{}, nil, nil, nil)
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/collections/src-2/clones"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{constants.PathParameterCollectionID: "src-2"},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "cloner", "tenant-x")
+
+	h.HandleCloneCollection(ctx, req, resp)
+
+	if recorder.Code != 201 {
+		t.Fatalf("expected 201, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if storage.created == nil {
+		t.Fatal("expected collection to be created")
+	}
+	// Domains/Tasks/Modalities are copied from source
+	if len(storage.created.Domains) == 0 {
+		t.Error("expected Domains to be copied from source")
+	}
+	// CurationOrder must be reset to 0
+	if storage.created.CurationOrder != 0 {
+		t.Errorf("CurationOrder must be 0 for clone, got %d", storage.created.CurationOrder)
+	}
+	// Owner should be the cloner, not "system"
+	if storage.created.Resource.Owner != "cloner" {
+		t.Errorf("Owner: got %q, want %q", storage.created.Resource.Owner, "cloner")
+	}
+}
+
+func TestHandlePatchCollection_CuratedReturns400(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	validator := testhelpers.NewValidator(t)
+
+	curated := &api.CollectionResource{
+		Resource: api.Resource{ID: "curated-patch", Owner: "tenant-user"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "Curated", Category: "rag", CurationOrder: 1,
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "crag"}, ProviderID: "ragas"}},
+		},
+	}
+	storage := &updatePatchDeleteCollectionStorage{fakeStorage: &fakeStorage{}, collection: curated}
+	h := handlers.New(storage, validator, &fakeRuntime{}, nil, nil, nil)
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("PATCH", "/api/v1/evaluations/collections/curated-patch"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{constants.PathParameterCollectionID: "curated-patch"},
+	}
+	req.SetBody([]byte(`[{"op":"replace","path":"/name","value":"new"}]`))
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user1", "tenant1")
+
+	h.HandlePatchCollection(ctx, req, resp)
+
+	if recorder.Code != 400 {
+		t.Errorf("expected 400 (ReadOnlyCollection) for curated collection, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestHandleUpdateCollection_SystemCollectionReturns400(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	validator := testhelpers.NewValidator(t)
+
+	sysColl := &api.CollectionResource{
+		Resource: api.Resource{ID: "sys-put", Owner: "system"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "System", Category: "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	storage := &updatePatchDeleteCollectionStorage{fakeStorage: &fakeStorage{}, collection: sysColl}
+	h := handlers.New(storage, validator, &fakeRuntime{}, nil, nil, nil)
+
+	body := `{"name":"new","category":"test","benchmarks":[{"id":"b1","provider_id":"p1"}]}`
+	req := &providersRequest{
+		MockRequest: createMockRequest("PUT", "/api/v1/evaluations/collections/sys-put"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{constants.PathParameterCollectionID: "sys-put"},
+	}
+	req.SetBody([]byte(body))
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user1", "tenant1")
+
+	h.HandleUpdateCollection(ctx, req, resp)
+
+	if recorder.Code != 400 {
+		t.Errorf("expected 400 for system collection, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestEnrichCollectionFromProviders_AutoPopulatesDomains(t *testing.T) {
+	t.Parallel()
+	storage := &fakeStorage{
+		providerConfigs: map[string]api.ProviderResource{
+			"p1": {
+				Resource: api.Resource{ID: "p1"},
+				ProviderConfig: api.ProviderConfig{
+					Benchmarks: []api.BenchmarkResource{{
+						ID:         "b1",
+						URL:        "https://example.com/b1",
+						Domains:    []string{"knowledge_and_reasoning"},
+						Tasks:      []string{"reasoning"},
+						Modalities: []string{"text"},
+					}},
+				},
+			},
+		},
+	}
+
+	coll := &api.CollectionResource{
+		CollectionConfig: api.CollectionConfig{
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	handlers.EnrichCollectionFromProviders(storage, coll)
+
+	if len(coll.Domains) == 0 {
+		t.Error("Domains should be auto-populated from benchmarks")
+	}
+	if len(coll.Tasks) == 0 {
+		t.Error("Tasks should be auto-populated from benchmarks")
+	}
+	if len(coll.Modalities) == 0 {
+		t.Error("Modalities should be auto-populated from benchmarks")
+	}
+	if coll.Benchmarks[0].URL != "https://example.com/b1" {
+		t.Errorf("URL should be enriched from provider, got %q", coll.Benchmarks[0].URL)
+	}
+}
+
+func TestEnrichCollectionFromProviders_ExplicitValuesNotOverridden(t *testing.T) {
+	t.Parallel()
+	storage := &fakeStorage{
+		providerConfigs: map[string]api.ProviderResource{
+			"p1": {
+				Resource: api.Resource{ID: "p1"},
+				ProviderConfig: api.ProviderConfig{
+					Benchmarks: []api.BenchmarkResource{{
+						ID:      "b1",
+						Domains: []string{"knowledge_and_reasoning"},
+					}},
+				},
+			},
+		},
+	}
+
+	coll := &api.CollectionResource{
+		CollectionConfig: api.CollectionConfig{
+			Domains:    []string{"software"}, // explicitly set — should not be overridden
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	handlers.EnrichCollectionFromProviders(storage, coll)
+
+	if len(coll.Domains) != 1 || coll.Domains[0] != "software" {
+		t.Errorf("explicit Domains should not be overridden, got %v", coll.Domains)
+	}
+}
+
+func TestHandleListCollections_ScopeCuratedFilter(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	validator := testhelpers.NewValidator(t)
+
+	collections := []api.CollectionResource{
+		{
+			Resource: api.Resource{ID: "curated-c"},
+			CollectionConfig: api.CollectionConfig{
+				Name:          "Curated",
+				Category:      "test",
+				CurationOrder: 1,
+				Benchmarks:    []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+			},
+		},
+	}
+	storage := &listCollectionsStorage{fakeStorage: &fakeStorage{}, collections: collections}
+	h := handlers.New(storage, validator, &fakeRuntime{}, nil, nil, nil)
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("GET", "/api/v1/evaluations/collections"),
+		queryValues: map[string][]string{"scope": {"curated"}},
+		pathValues:  map[string]string{},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user1", "tenant1")
+
+	h.HandleListCollections(ctx, req, resp)
+
+	// Should not return 400 — scope=curated is a valid value now
+	if recorder.Code == 400 {
+		t.Errorf("scope=curated should be accepted, got 400: %s", recorder.Body.String())
+	}
+}

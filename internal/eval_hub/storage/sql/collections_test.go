@@ -248,3 +248,215 @@ func TestApplyPatches(t *testing.T) {
 		}
 	})
 }
+
+func TestCollectionState_SetAndIncrement(t *testing.T) {
+	for _, driver := range []string{"sqlite"} {
+		driver := driver
+		t.Run(driver, func(t *testing.T) {
+			t.Parallel()
+			store, err := getTestStorage(t, driver, getDBName())
+			if err != nil {
+				t.Fatalf("getTestStorage: %v", err)
+			}
+
+			coll := &api.CollectionResource{
+				Resource: api.Resource{ID: "coll-state-test", Owner: "user1", Tenant: "t1"},
+				CollectionConfig: api.CollectionConfig{
+					Name:     "State Test",
+					Category: "test",
+					Benchmarks: []api.CollectionBenchmarkConfig{
+						{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"},
+					},
+				},
+			}
+			if err := store.WithTenant("t1").WithOwner("user1").CreateCollection(coll); err != nil {
+				t.Fatalf("CreateCollection: %v", err)
+			}
+
+			scoped := store.WithTenant("t1").WithOwner("user1")
+
+			// SetCollectionState
+			state := &api.CollectionState{DerivedFrom: "original-id", RunCount: 3, PinnedOrder: 2}
+			updated, err := scoped.SetCollectionState("coll-state-test", state)
+			if err != nil {
+				t.Fatalf("SetCollectionState: %v", err)
+			}
+			if updated.State == nil {
+				t.Fatal("expected State to be set")
+			}
+			if updated.State.DerivedFrom != "original-id" {
+				t.Errorf("DerivedFrom: got %q, want %q", updated.State.DerivedFrom, "original-id")
+			}
+			if updated.State.RunCount != 3 {
+				t.Errorf("RunCount: got %d, want 3", updated.State.RunCount)
+			}
+
+			// IncrementCollectionVersionCounter
+			v1, err := scoped.IncrementCollectionVersionCounter("coll-state-test")
+			if err != nil {
+				t.Fatalf("IncrementCollectionVersionCounter (first): %v", err)
+			}
+			if v1.Resource.VersionCounter != 1 {
+				t.Errorf("VersionCounter after first increment: got %d, want 1", v1.Resource.VersionCounter)
+			}
+
+			v2, err := scoped.IncrementCollectionVersionCounter("coll-state-test")
+			if err != nil {
+				t.Fatalf("IncrementCollectionVersionCounter (second): %v", err)
+			}
+			if v2.Resource.VersionCounter != 2 {
+				t.Errorf("VersionCounter after second increment: got %d, want 2", v2.Resource.VersionCounter)
+			}
+
+			// Verify State is preserved through increment
+			if v2.State == nil || v2.State.DerivedFrom != "original-id" {
+				t.Error("State should be preserved through version increment")
+			}
+		})
+	}
+}
+
+func TestCollectionState_SystemCollectionVersionNotIncremented(t *testing.T) {
+	t.Parallel()
+	store, err := getTestStorage(t, "sqlite", getDBName())
+	if err != nil {
+		t.Fatalf("getTestStorage: %v", err)
+	}
+
+	sysColl := &api.CollectionResource{
+		Resource: api.Resource{ID: "sys-coll-v", Owner: "system", Tenant: ""},
+		CollectionConfig: api.CollectionConfig{
+			Name: "Sys Coll", Category: "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	if err := store.CreateCollection(sysColl); err != nil {
+		t.Fatalf("CreateCollection: %v", err)
+	}
+
+	result, err := store.IncrementCollectionVersionCounter("sys-coll-v")
+	if err != nil {
+		t.Fatalf("IncrementCollectionVersionCounter: %v", err)
+	}
+	// System collections are not incremented
+	if result.Resource.VersionCounter != 0 {
+		t.Errorf("system collection VersionCounter should stay 0, got %d", result.Resource.VersionCounter)
+	}
+}
+
+func TestCollectionFilters_ScopeCurated(t *testing.T) {
+	t.Parallel()
+	store, err := getTestStorage(t, "sqlite", getDBName())
+	if err != nil {
+		t.Fatalf("getTestStorage: %v", err)
+	}
+
+	scoped := store.WithTenant("t1").WithOwner("user1")
+
+	// Create a curated collection (curation_order > 0)
+	curatedColl := &api.CollectionResource{
+		Resource: api.Resource{ID: "curated-filter", Owner: "user1", Tenant: "t1"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "Curated", Category: "test", CurationOrder: 1,
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	if err := scoped.CreateCollection(curatedColl); err != nil {
+		t.Fatalf("CreateCollection curated: %v", err)
+	}
+
+	// Create a non-curated collection (curation_order == 0)
+	plainColl := &api.CollectionResource{
+		Resource: api.Resource{ID: "plain-filter", Owner: "user1", Tenant: "t1"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "Plain", Category: "test", CurationOrder: 0,
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b2"}, ProviderID: "p1"}},
+		},
+	}
+	if err := scoped.CreateCollection(plainColl); err != nil {
+		t.Fatalf("CreateCollection plain: %v", err)
+	}
+
+	// Filter scope_curated should return only curated
+	filter := &abstractions.QueryFilter{
+		Limit: 50, Offset: 0,
+		Params: map[string]any{"scope_curated": "true"},
+	}
+	results, err := scoped.GetCollections(filter)
+	if err != nil {
+		t.Fatalf("GetCollections scope_curated: %v", err)
+	}
+	for _, c := range results.Items {
+		if c.CurationOrder <= 0 {
+			t.Errorf("scope_curated filter returned non-curated collection %q", c.Resource.ID)
+		}
+	}
+	found := false
+	for _, c := range results.Items {
+		if c.Resource.ID == "curated-filter" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("curated collection not returned by scope_curated filter")
+	}
+}
+
+func TestCollectionFilters_ArrayFields(t *testing.T) {
+	t.Parallel()
+	store, err := getTestStorage(t, "sqlite", getDBName())
+	if err != nil {
+		t.Fatalf("getTestStorage: %v", err)
+	}
+
+	scoped := store.WithTenant("t1").WithOwner("user1")
+
+	coll := &api.CollectionResource{
+		Resource: api.Resource{ID: "array-filter-test", Owner: "user1", Tenant: "t1"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "Array Filter", Category: "test",
+			Domains:    []string{"grounded_document_understanding"},
+			Tasks:      []string{"rag", "summarization"},
+			Modalities: []string{"text"},
+			Industries: []string{"health"},
+			AIEntities: []string{"model"},
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	if err := scoped.CreateCollection(coll); err != nil {
+		t.Fatalf("CreateCollection: %v", err)
+	}
+
+	for _, tc := range []struct {
+		key   string
+		value string
+	}{
+		{"domains", "grounded_document_understanding"},
+		{"tasks", "rag"},
+		{"modalities", "text"},
+		{"industries", "health"},
+		{"ai_entities", "model"},
+	} {
+		tc := tc
+		t.Run(tc.key, func(t *testing.T) {
+			t.Parallel()
+			filter := &abstractions.QueryFilter{
+				Limit: 50, Offset: 0,
+				Params: map[string]any{tc.key: tc.value},
+			}
+			results, err := scoped.GetCollections(filter)
+			if err != nil {
+				t.Fatalf("GetCollections %s=%s: %v", tc.key, tc.value, err)
+			}
+			found := false
+			for _, c := range results.Items {
+				if c.Resource.ID == "array-filter-test" {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("collection not found with filter %s=%s", tc.key, tc.value)
+			}
+		})
+	}
+}

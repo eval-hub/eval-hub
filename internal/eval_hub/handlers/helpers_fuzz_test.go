@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -48,8 +49,32 @@ func FuzzIsAllowedPatch(f *testing.F) {
 	f.Add("bogus", "/status")
 	f.Add(string(api.PatchOpAdd), "/metadata")
 	f.Add(string(api.PatchOpAdd), "/metadatax")
+	f.Add(string(api.PatchOpReplace), "/status/extra")
+	f.Add(string(api.PatchOpAdd), "/metadata/")
+	f.Add(string(api.PatchOpRemove), "/metadata/a/b/c")
 
 	f.Fuzz(func(t *testing.T, op, path string) {
-		_ = isAllowedPatch(allowed, api.PatchOp(op), path)
+		got := isAllowedPatch(allowed, api.PatchOp(op), path)
+
+		// Oracle: check exact match, then prefix match.
+		want := false
+		for _, a := range allowed {
+			if a.Path == path && a.Op == api.PatchOp(op) {
+				want = true
+				break
+			}
+		}
+		if !want {
+			for _, a := range allowed {
+				if a.Prefix && a.Op == api.PatchOp(op) && strings.HasPrefix(path, a.Path+"/") {
+					want = true
+					break
+				}
+			}
+		}
+
+		if got != want {
+			t.Fatalf("isAllowedPatch(op=%q, path=%q) = %v, oracle = %v", op, path, got, want)
+		}
 	})
 }

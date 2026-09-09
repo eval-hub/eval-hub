@@ -332,6 +332,14 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 
 	metrics.RecordEvaluationJobCreated(ctx.Ctx, h.runtimeName())
 
+	collectionID := jobCollectionID(evaluation)
+	providerIDs := jobProviderIDs(benchmarks, evaluation)
+	for _, pid := range providerIDs {
+		metrics.RecordEvaluationJobStateTransition(ctx.Ctx, pid, collectionID, string(api.OverallStatePending))
+	}
+	metrics.IncActiveJobs(ctx.Ctx)
+	metrics.IncQueueDepth(ctx.Ctx)
+
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
@@ -344,9 +352,18 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 						MessageCode: constants.MessageCodeEvaluationJobFailed,
 					}, api.MessageOriginServer)
 					metrics.RecordEvaluationJobRuntimeStartFailed(ctx.Ctx, h.runtimeName())
-					metrics.RecordEvaluationJobTerminalState(ctx.Ctx, api.OverallStatePending, state)
+					for _, pid := range providerIDs {
+						metrics.RecordEvaluationError(ctx.Ctx, "runtime_start_failed", pid)
+					}
 					if err := storage.WithContext(runtimeCtx).UpdateEvaluationJobStatus(job.Resource.ID, state, message); err != nil {
 						ctx.Logger.Error("Failed to update evaluation status", "error", err, "job_id", job.Resource.ID)
+					} else {
+						metrics.RecordEvaluationJobTerminalState(ctx.Ctx, api.OverallStatePending, state)
+						for _, pid := range providerIDs {
+							metrics.RecordEvaluationJobStateTransition(ctx.Ctx, pid, collectionID, string(state))
+						}
+						metrics.DecActiveJobs(ctx.Ctx)
+						metrics.DecQueueDepth(ctx.Ctx)
 					}
 					// return the first error encountered
 					w.Error(runErr, ctx.RequestID)
@@ -719,6 +736,16 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 				}
 				metrics.RecordEvaluationJobCancelled(ctx.Ctx)
 				metrics.RecordEvaluationJobTerminalState(ctx.Ctx, previousState, api.OverallStateCancelled)
+				if jobErr == nil && job != nil && !previousState.IsTerminalState() {
+					cID := jobCollectionID(&job.EvaluationJobConfig)
+					for _, pid := range jobProviderIDs(nil, &job.EvaluationJobConfig) {
+						metrics.RecordEvaluationJobStateTransition(ctx.Ctx, pid, cID, string(api.OverallStateCancelled))
+					}
+					metrics.DecActiveJobs(ctx.Ctx)
+					if previousState == api.OverallStatePending {
+						metrics.DecQueueDepth(ctx.Ctx)
+					}
+				}
 			}
 			w.WriteJSON(nil, 204)
 			return nil
@@ -727,4 +754,33 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 		operation,
 		"job.id", evaluationJobID,
 	)
+}
+
+// jobCollectionID returns the collection ID from the job config, or empty string.
+func jobCollectionID(cfg *api.EvaluationJobConfig) string {
+	if cfg != nil && cfg.Collection != nil {
+		return cfg.Collection.ID
+	}
+	return ""
+}
+
+// jobProviderIDs returns deduplicated provider IDs from benchmarks, the job
+// config's inline benchmarks, or the collection override list (for
+// collection-backed jobs where cfg.Benchmarks is empty).
+func jobProviderIDs(benchmarks []api.EvaluationBenchmarkConfig, cfg *api.EvaluationJobConfig) []string {
+	if len(benchmarks) == 0 && cfg != nil {
+		benchmarks = cfg.Benchmarks
+	}
+	if len(benchmarks) == 0 && cfg != nil && cfg.Collection != nil {
+		benchmarks = cfg.Collection.Benchmarks
+	}
+	seen := make(map[string]struct{}, len(benchmarks))
+	var ids []string
+	for _, b := range benchmarks {
+		if _, ok := seen[b.ProviderID]; !ok {
+			seen[b.ProviderID] = struct{}{}
+			ids = append(ids, b.ProviderID)
+		}
+	}
+	return ids
 }
