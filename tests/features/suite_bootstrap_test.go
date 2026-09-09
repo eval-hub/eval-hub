@@ -617,6 +617,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	// MLflow artifact steps
 	ctx.Step(`^I fetch the MLflow artifact "([^"]*)" for run "([^"]*)"$`, tc.iFetchMLflowArtifact)
 	ctx.Step(`^I fetch the MLflow artifact "([^"]*)" for experiment "([^"]*)" and job "([^"]*)"$`, tc.iFetchMLflowArtifactByExperimentAndJob)
+	ctx.Step(`^I wait for the MLflow artifact "([^"]*)" for experiment "([^"]*)" and job "([^"]*)"$`, tc.iWaitForMLflowArtifactByExperimentAndJob)
 	ctx.Step(`^the MLflow artifact should exist$`, tc.theMLflowArtifactShouldExist)
 	ctx.Step(`^the MLflow artifact "([^"]*)" should not exist for experiment "([^"]*)" and job "([^"]*)"$`, tc.theMLflowArtifactShouldNotExistForExperimentAndJob)
 	ctx.Step(`^the MLflow artifact should contain "([^"]*)"$`, tc.theMLflowArtifactShouldContain)

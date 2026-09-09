@@ -18,6 +18,11 @@ import (
 
 // --- MLflow Artifact Step Definitions ---
 
+const (
+	maxMLflowArtifactWait     = 1 * time.Minute
+	maxMLflowArtifactInterval = 5 * time.Second
+)
+
 func (tc *scenarioConfig) iFetchMLflowArtifact(artifactPath, runIDPattern string) error {
 	// Resolve run ID from saved values or use literal
 	runID, err := tc.getValue(runIDPattern)
@@ -172,6 +177,60 @@ func (tc *scenarioConfig) iFetchMLflowArtifactByExperimentAndJob(artifactName, e
 	}
 
 	return tc.fetchMLflowArtifactWithExperimentID(artifactName, experimentIDResolved, runID)
+}
+
+func (tc *scenarioConfig) iWaitForMLflowArtifactByExperimentAndJob(artifactName, experimentID, jobID string) error {
+	experimentIDResolved, jobIDResolved, err := tc.resolveMLflowExperimentAndJobIDs(experimentID, jobID)
+	if err != nil {
+		return err
+	}
+
+	deadline := time.Now().Add(maxMLflowArtifactWait)
+	if tc.waitDeadline > 0 && tc.waitDeadline < maxMLflowArtifactWait {
+		deadline = time.Now().Add(tc.waitDeadline)
+	}
+	interval := maxMLflowArtifactInterval
+	if tc.waitInterval > 0 && tc.waitInterval < interval {
+		interval = tc.waitInterval
+	}
+
+	var lastErr error
+	for {
+		runID, err := tc.findMLflowRunIDForJob(experimentIDResolved, jobIDResolved)
+		if err != nil {
+			// Search failures other than an absent run indicate MLflow configuration,
+			// authentication, or connectivity problems and should fail immediately.
+			return err
+		}
+		if runID == "" {
+			lastErr = fmt.Errorf("no MLflow run found for job %s in experiment %s", jobIDResolved, experimentIDResolved)
+		} else if fetchErr := tc.fetchMLflowArtifactWithExperimentID(artifactName, experimentIDResolved, runID); fetchErr == nil {
+			return nil
+		} else if !isTransientMLflowNotFound(tc.mlflowArtifactError) {
+			return fetchErr
+		} else {
+			lastErr = fetchErr
+		}
+
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			break
+		}
+		waitFor := interval
+		if remaining < waitFor {
+			waitFor = remaining
+		}
+		tc.logDebug("MLflow artifact %q is not available yet; retrying in %s\n", artifactName, waitFor)
+		timer := time.NewTimer(waitFor)
+		<-timer.C
+	}
+
+	return tc.logError(fmt.Errorf("timed out waiting for MLflow artifact %q: %w", artifactName, lastErr))
+}
+
+func isTransientMLflowNotFound(err error) bool {
+	var apiErr *mlflowclient.APIError
+	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound
 }
 
 func (tc *scenarioConfig) theMLflowArtifactShouldNotExistForExperimentAndJob(artifactName, experimentID, jobID string) error {
