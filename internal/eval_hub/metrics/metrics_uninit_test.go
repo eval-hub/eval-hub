@@ -24,4 +24,14 @@ func TestRecordMetricsBeforeInitNoPanic(t *testing.T) {
 	}
 	IncHTTPServerActiveRequests(ctx, req)
 	DecHTTPServerActiveRequests(ctx, req)
+
+	RecordEvaluationJobStateTransition(ctx, "prov", "coll", "pending")
+	ObserveEvaluationJobDuration(ctx, "prov", "coll", 10.5)
+	IncActiveJobs(ctx)
+	DecActiveJobs(ctx)
+	IncQueueDepth(ctx)
+	DecQueueDepth(ctx)
+	RecordEvaluationError(ctx, "k8s_create_failed", "prov")
+	ObserveBenchmarkDuration(ctx, "mmlu", "prov", 42.0)
+	ObserveAPIRequestDuration(ctx, "/api/v1/health", "GET", "", "", 0.05)
 }
