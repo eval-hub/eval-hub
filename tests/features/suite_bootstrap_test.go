@@ -604,6 +604,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^all benchmarks in the response should have metrics$`, tc.theAllBenchmarksHaveMetrics)
 	ctx.Step(`^the benchmark "([^"]*)" in the response should have metric "([^"]*)"$`, tc.theBenchmarkShouldHaveMetric)
 	ctx.Step(`^all benchmarks in the response should have metrics matching the provider config$`, tc.theAllBenchmarksHaveMetricsMatchingProviderConfig)
+	ctx.Step(`^all benchmarks in the response should have a test block with pass criteria$`, tc.theAllBenchmarksHaveTestBlock)
 	ctx.Step(`^I wait for the evaluation job status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatus)
 	ctx.Step(`^I wait for the evaluation job "([^"]*)" status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatusByID)
 	ctx.Step(`^I set the wait deadline to "([^"]*)"$`, tc.iSetWaitDeadlineTo)
