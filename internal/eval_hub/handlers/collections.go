@@ -94,7 +94,7 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 			}
 
 			// Translate scope=curated to an internal filter key
-			if scope, ok := filter.Params["scope"]; ok && scope == "curated" {
+			if scope, ok := filter.Params["scope"]; ok && scope == abstractions.ScopeCurated {
 				filter.Params["scope_curated"] = "true"
 				delete(filter.Params, "scope")
 			} else {

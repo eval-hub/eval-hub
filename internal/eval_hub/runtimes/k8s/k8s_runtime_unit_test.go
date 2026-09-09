@@ -87,7 +87,7 @@ func (f *fakeStorage) PatchCollection(_ string, _ *api.Patch) (*api.CollectionRe
 	return nil, nil
 }
 func (f *fakeStorage) DeleteCollection(_ string) error { return nil }
-func (f *fakeStorage) SetCollectionState(_ string, _ *api.CollectionState) (*api.CollectionResource, error) {
+func (f *fakeStorage) UpdateCollectionState(_ string, _ *api.CollectionState) (*api.CollectionResource, error) {
 	return nil, nil
 }
 func (f *fakeStorage) IncrementCollectionVersionCounter(_ string) (*api.CollectionResource, error) {

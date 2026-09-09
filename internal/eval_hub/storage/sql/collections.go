@@ -186,10 +186,10 @@ func (s *sqlStorage) DeleteCollection(id string) error {
 	})
 }
 
-func (s *sqlStorage) SetCollectionState(id string, state *api.CollectionState) (*api.CollectionResource, error) {
+func (s *sqlStorage) UpdateCollectionState(id string, state *api.CollectionState) (*api.CollectionResource, error) {
 	var updated *api.CollectionResource
 
-	err := s.withTransaction("set collection state", id, func(txn *sql.Tx) error {
+	err := s.withTransaction("update collection state", id, func(txn *sql.Tx) error {
 		coll, err := s.getCollectionTransactional(txn, id)
 		if err != nil {
 			return err

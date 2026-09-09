@@ -275,11 +275,11 @@ func TestCollectionState_SetAndIncrement(t *testing.T) {
 
 			scoped := store.WithTenant("t1").WithOwner("user1")
 
-			// SetCollectionState
+			// UpdateCollectionState
 			state := &api.CollectionState{DerivedFrom: "original-id", RunCount: 3, PinnedOrder: 2}
-			updated, err := scoped.SetCollectionState("coll-state-test", state)
+			updated, err := scoped.UpdateCollectionState("coll-state-test", state)
 			if err != nil {
-				t.Fatalf("SetCollectionState: %v", err)
+				t.Fatalf("UpdateCollectionState: %v", err)
 			}
 			if updated.State == nil {
 				t.Fatal("expected State to be set")
