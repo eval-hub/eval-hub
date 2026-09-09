@@ -277,9 +277,11 @@ install-deps: ## Install dependencies
 	@go mod tidy
 	@echo "Dependencies installed"
 
+GO_VERSION = $(shell awk '/^go /{print $$2}' go.mod)
+
 update-deps: ## Update all dependencies to latest versions
 	@echo "Updating dependencies to latest versions..."
-	@go get -t -u ./...
+	GOTOOLCHAIN=go${GO_VERSION} go get -t -u ./...
 	@go mod tidy
 	@echo "Dependencies updated"
 
