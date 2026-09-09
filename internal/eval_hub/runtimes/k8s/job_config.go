@@ -131,7 +131,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		sidecarBaseURL = serviceConfig.Sidecar.EffectiveBaseURL()
 	}
 	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
-	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, benchmarkConfig, benchmarkIndex, &sidecarBaseURL)
+	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, benchmarkConfig, benchmarkIndex, &sidecarBaseURL, provider)
 	if err != nil {
 		return nil, err
 	}
