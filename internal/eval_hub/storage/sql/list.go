@@ -43,6 +43,10 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 			tenant = ""
 		case abstractions.ScopeTenant:
 			params["owner"] = "!" + abstractions.OwnerSystem
+		case abstractions.ScopeCurated:
+			// Curated = system collections with curation_order > 0
+			params["scope_curated"] = "true"
+			tenant = ""
 		}
 		delete(params, "scope")
 	}

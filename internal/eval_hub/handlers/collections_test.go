@@ -47,10 +47,6 @@ func (f *fakeStorage) UpdateCollectionState(_ string, _ *api.CollectionState) (*
 	return nil, nil
 }
 
-func (f *fakeStorage) IncrementCollectionVersionCounter(id string) (*api.CollectionResource, error) {
-	return &api.CollectionResource{Resource: api.Resource{ID: id}}, nil
-}
-
 type listCollectionsStorage struct {
 	*fakeStorage
 	collections []api.CollectionResource
@@ -206,14 +202,6 @@ func (s *updatePatchDeleteCollectionStorage) DeleteCollection(id string) error {
 		return s.deleteErr
 	}
 	return nil
-}
-
-func (s *updatePatchDeleteCollectionStorage) IncrementCollectionVersionCounter(_ string) (*api.CollectionResource, error) {
-	if s.collection != nil {
-		s.collection.Resource.VersionCounter++
-		return s.collection, nil
-	}
-	return &api.CollectionResource{}, nil
 }
 
 func TestHandleListCollections(t *testing.T) {

@@ -90,9 +90,6 @@ func (f *fakeStorage) DeleteCollection(_ string) error { return nil }
 func (f *fakeStorage) UpdateCollectionState(_ string, _ *api.CollectionState) (*api.CollectionResource, error) {
 	return nil, nil
 }
-func (f *fakeStorage) IncrementCollectionVersionCounter(_ string) (*api.CollectionResource, error) {
-	return &api.CollectionResource{}, nil
-}
 func (f *fakeStorage) CreateProvider(_ *api.ProviderResource) error {
 	return nil
 }

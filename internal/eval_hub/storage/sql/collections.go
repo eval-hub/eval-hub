@@ -131,6 +131,7 @@ func (s *sqlStorage) UpdateCollection(id string, collection *api.CollectionConfi
 			)
 		}
 		persistedCollection.CollectionConfig = *collection
+		persistedCollection.Resource.VersionCounter++
 		err = s.updateCollectionTransactional(txn, id, persistedCollection)
 		if err != nil {
 			return err
@@ -205,30 +206,6 @@ func (s *sqlStorage) UpdateCollectionState(id string, state *api.CollectionState
 	return updated, err
 }
 
-func (s *sqlStorage) IncrementCollectionVersionCounter(id string) (*api.CollectionResource, error) {
-	var updated *api.CollectionResource
-
-	err := s.withTransaction("increment collection version counter", id, func(txn *sql.Tx) error {
-		coll, err := s.getCollectionTransactional(txn, id)
-		if err != nil {
-			return err
-		}
-		if coll.Resource.IsSystemResource() {
-			// system collections are immutable — do not increment
-			updated = coll
-			return nil
-		}
-		coll.Resource.VersionCounter++
-		if err = s.updateCollectionTransactional(txn, id, coll); err != nil {
-			return err
-		}
-		updated, err = s.getCollectionTransactional(txn, id)
-		return err
-	})
-
-	return updated, err
-}
-
 func (s *sqlStorage) PatchCollection(id string, patches *api.Patch) (*api.CollectionResource, error) {
 	var updated *api.CollectionResource
 
@@ -266,7 +243,7 @@ func (s *sqlStorage) PatchCollection(id string, patches *api.Patch) (*api.Collec
 		if resource.UpdatedAt.IsZero() {
 			resource.UpdatedAt = resource.CreatedAt
 		}
-		resource.VersionCounter = patchedEntity.VersionCounter
+		resource.VersionCounter = patchedEntity.VersionCounter + 1
 		result := api.CollectionResource{
 			Resource:         resource,
 			CollectionConfig: patchedEntity.CollectionConfig,

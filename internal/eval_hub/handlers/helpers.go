@@ -115,10 +115,10 @@ func CheckScope(filter *abstractions.QueryFilter) error {
 	// scope==tenant ==> owner NE system
 	if scope, ok := filter.Params["scope"]; ok {
 		switch scope {
-		case abstractions.ScopeSystem, abstractions.ScopeTenant:
+		case abstractions.ScopeSystem, abstractions.ScopeTenant, abstractions.ScopeCurated:
 			return nil
 		default:
-			return serviceerrors.NewServiceError(messages.QueryParameterValueInvalid, "ParameterName", "scope", "AllowedValues", strings.Join([]string{abstractions.ScopeSystem, abstractions.ScopeTenant}, "|"))
+			return serviceerrors.NewServiceError(messages.QueryParameterValueInvalid, "ParameterName", "scope", "AllowedValues", strings.Join([]string{abstractions.ScopeSystem, abstractions.ScopeCurated, abstractions.ScopeTenant}, "|"))
 		}
 	}
 

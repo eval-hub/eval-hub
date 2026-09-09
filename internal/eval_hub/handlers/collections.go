@@ -93,14 +93,8 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 				return err
 			}
 
-			// Translate scope=curated to an internal filter key
-			if scope, ok := filter.Params["scope"]; ok && scope == abstractions.ScopeCurated {
-				filter.Params["scope_curated"] = "true"
-				delete(filter.Params, "scope")
-			} else {
-				if err = CheckScope(filter); err != nil {
-					return err
-				}
+			if err = CheckScope(filter); err != nil {
+				return err
 			}
 
 			allowedParams := []string{"limit", "offset", "name", "category", "tags", "owner", "scope",
@@ -489,17 +483,12 @@ func (h *Handlers) HandleUpdateCollection(ctx *executioncontext.ExecutionContext
 
 			toUpdate := &api.CollectionResource{CollectionConfig: *request}
 			EnrichCollectionFromProviders(scoped, toUpdate)
-			if _, err = scoped.UpdateCollection(collectionID, &toUpdate.CollectionConfig); err != nil {
-				w.Error(err, ctx.RequestID)
-				return err
-			}
-			// Increment version counter on successful mutation
-			updated, err := scoped.IncrementCollectionVersionCounter(collectionID)
+			result, err := scoped.UpdateCollection(collectionID, &toUpdate.CollectionConfig)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
 			}
-			w.WriteJSON(updated, 200)
+			w.WriteJSON(result, 200)
 			return nil
 		},
 		"storage",
@@ -568,17 +557,12 @@ func (h *Handlers) HandlePatchCollection(ctx *executioncontext.ExecutionContext,
 				w.Error(err, ctx.RequestID)
 				return err
 			}
-			if _, err = scoped.PatchCollection(collectionID, &patches); err != nil {
-				w.Error(err, ctx.RequestID)
-				return err
-			}
-			// Increment version counter on successful mutation
-			patched, err := scoped.IncrementCollectionVersionCounter(collectionID)
+			result, err := scoped.PatchCollection(collectionID, &patches)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
 			}
-			w.WriteJSON(patched, 200)
+			w.WriteJSON(result, 200)
 			return nil
 		},
 		"storage",
@@ -611,50 +595,18 @@ func (h *Handlers) HandleCloneCollection(ctx *executioncontext.ExecutionContext,
 				return err
 			}
 
-			// Parse optional body as overrides (fields not required — copied from source)
+			// Parse optional body as overrides — required fields are inherited from source.
+			// Invalid JSON is rejected; missing body or empty body is accepted (no overrides).
 			overrides := &api.CollectionConfig{}
 			if bodyBytes, bErr := req.BodyAsBytes(); bErr == nil && len(bodyBytes) > 0 {
-				// Unmarshal without validation — required fields come from the source
-				_ = json.Unmarshal(bodyBytes, overrides)
+				if err = json.Unmarshal(bodyBytes, overrides); err != nil {
+					return serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", err.Error())
+				}
 			}
 
-			// Build the new config: start from source, apply non-zero overrides
-			newConfig := source.CollectionConfig
-			if overrides.Name != "" {
-				newConfig.Name = overrides.Name
-			}
-			if overrides.Description != "" {
-				newConfig.Description = overrides.Description
-			}
-			if overrides.Category != "" {
-				newConfig.Category = overrides.Category
-			}
-			if len(overrides.Tags) > 0 {
-				newConfig.Tags = overrides.Tags
-			}
-			if overrides.PassCriteria != nil {
-				newConfig.PassCriteria = overrides.PassCriteria
-			}
-			if len(overrides.Benchmarks) > 0 {
-				newConfig.Benchmarks = overrides.Benchmarks
-			}
-			if len(overrides.Domains) > 0 {
-				newConfig.Domains = overrides.Domains
-			}
-			if len(overrides.Tasks) > 0 {
-				newConfig.Tasks = overrides.Tasks
-			}
-			if len(overrides.Modalities) > 0 {
-				newConfig.Modalities = overrides.Modalities
-			}
-			if len(overrides.Industries) > 0 {
-				newConfig.Industries = overrides.Industries
-			}
-			if len(overrides.AIEntities) > 0 {
-				newConfig.AIEntities = overrides.AIEntities
-			}
-			// CurationOrder is admin-only — never copied or overridden by users
-			newConfig.CurationOrder = 0
+			// Build new config by applying overrides on top of the source.
+			// ApplyOverrides always resets CurationOrder to 0.
+			newConfig := source.ApplyOverrides(overrides)
 
 			newID := common.GUID()
 			now := time.Now()

@@ -2803,7 +2803,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "description": "Optional field overrides for the cloned collection.",
+                "description": "Optional field overrides for the cloned collection. All fields are optional — any field omitted here is inherited from the source collection. This schema mirrors CollectionConfig but with no required fields, since the required values (name, category, benchmarks) are inherited from the source. curation_order is never accepted here; copies are always non-curated.\n",
                 "properties": {
                   "name": {
                     "type": "string",
@@ -2815,6 +2815,22 @@
                   "category": {
                     "type": "string",
                     "description": "Deprecated — use domains."
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "pass_criteria": {
+                    "$ref": "#/components/schemas/PassCriteria"
+                  },
+                  "benchmarks": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/CollectionBenchmarkConfig"
+                    },
+                    "description": "Override benchmarks. Defaults to source benchmarks."
                   },
                   "domains": {
                     "type": "array",

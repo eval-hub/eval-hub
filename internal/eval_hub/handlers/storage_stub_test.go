@@ -53,9 +53,6 @@ func (noopStorage) DeleteCollection(_ string) error { return nil }
 func (noopStorage) UpdateCollectionState(_ string, _ *api.CollectionState) (*api.CollectionResource, error) {
 	return nil, nil
 }
-func (noopStorage) IncrementCollectionVersionCounter(_ string) (*api.CollectionResource, error) {
-	return &api.CollectionResource{}, nil
-}
 func (noopStorage) CreateProvider(_ *api.ProviderResource) error { return nil }
 func (noopStorage) GetProvider(_ string) (*api.ProviderResource, error) {
 	return nil, nil

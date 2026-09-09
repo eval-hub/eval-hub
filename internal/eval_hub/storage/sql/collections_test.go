@@ -291,32 +291,33 @@ func TestCollectionState_SetAndIncrement(t *testing.T) {
 				t.Errorf("RunCount: got %d, want 3", updated.State.RunCount)
 			}
 
-			// IncrementCollectionVersionCounter
-			v1, err := scoped.IncrementCollectionVersionCounter("coll-state-test")
+			// VersionCounter increments on each UpdateCollection
+			config := coll.CollectionConfig
+			v1, err := scoped.UpdateCollection("coll-state-test", &config)
 			if err != nil {
-				t.Fatalf("IncrementCollectionVersionCounter (first): %v", err)
+				t.Fatalf("UpdateCollection (first): %v", err)
 			}
 			if v1.Resource.VersionCounter != 1 {
-				t.Errorf("VersionCounter after first increment: got %d, want 1", v1.Resource.VersionCounter)
+				t.Errorf("VersionCounter after first update: got %d, want 1", v1.Resource.VersionCounter)
 			}
 
-			v2, err := scoped.IncrementCollectionVersionCounter("coll-state-test")
+			v2, err := scoped.UpdateCollection("coll-state-test", &config)
 			if err != nil {
-				t.Fatalf("IncrementCollectionVersionCounter (second): %v", err)
+				t.Fatalf("UpdateCollection (second): %v", err)
 			}
 			if v2.Resource.VersionCounter != 2 {
-				t.Errorf("VersionCounter after second increment: got %d, want 2", v2.Resource.VersionCounter)
+				t.Errorf("VersionCounter after second update: got %d, want 2", v2.Resource.VersionCounter)
 			}
 
-			// Verify State is preserved through increment
+			// State should be preserved through UpdateCollection
 			if v2.State == nil || v2.State.DerivedFrom != "original-id" {
-				t.Error("State should be preserved through version increment")
+				t.Error("State should be preserved through UpdateCollection")
 			}
 		})
 	}
 }
 
-func TestCollectionState_SystemCollectionVersionNotIncremented(t *testing.T) {
+func TestCollectionState_SystemCollectionVersionCounterZero(t *testing.T) {
 	t.Parallel()
 	store, err := getTestStorage(t, "sqlite", getDBName())
 	if err != nil {
@@ -334,13 +335,13 @@ func TestCollectionState_SystemCollectionVersionNotIncremented(t *testing.T) {
 		t.Fatalf("CreateCollection: %v", err)
 	}
 
-	result, err := store.IncrementCollectionVersionCounter("sys-coll-v")
+	// System collections always have VersionCounter == 0 (version tracking is for custom only)
+	fetched, err := store.GetCollection("sys-coll-v")
 	if err != nil {
-		t.Fatalf("IncrementCollectionVersionCounter: %v", err)
+		t.Fatalf("GetCollection: %v", err)
 	}
-	// System collections are not incremented
-	if result.Resource.VersionCounter != 0 {
-		t.Errorf("system collection VersionCounter should stay 0, got %d", result.Resource.VersionCounter)
+	if fetched.Resource.VersionCounter != 0 {
+		t.Errorf("system collection VersionCounter should be 0, got %d", fetched.Resource.VersionCounter)
 	}
 }
 
