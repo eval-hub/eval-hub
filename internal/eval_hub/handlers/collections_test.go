@@ -1367,3 +1367,213 @@ func TestHandleListCollections_ScopeCuratedFilter(t *testing.T) {
 		t.Errorf("scope=curated should be accepted, got 400: %s", recorder.Body.String())
 	}
 }
+
+func TestHandleDeleteCollection_Success(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	validator := testhelpers.NewValidator(t)
+
+	coll := &api.CollectionResource{
+		Resource: api.Resource{ID: "del-ok", Owner: "user1"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "Delete Me", Category: "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	storage := &updatePatchDeleteCollectionStorage{fakeStorage: &fakeStorage{}, collection: coll}
+	h := handlers.New(storage, validator, &fakeRuntime{}, nil, nil, nil)
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("DELETE", "/api/v1/evaluations/collections/del-ok"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{constants.PathParameterCollectionID: "del-ok"},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user1", "tenant1")
+
+	h.HandleDeleteCollection(ctx, req, resp)
+
+	if recorder.Code != 204 {
+		t.Errorf("expected 204, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestHandleDeleteCollection_MissingPathParam(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	validator := testhelpers.NewValidator(t)
+
+	h := handlers.New(&fakeStorage{}, validator, &fakeRuntime{}, nil, nil, nil)
+	req := &providersRequest{
+		MockRequest: createMockRequest("DELETE", "/api/v1/evaluations/collections/"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user1", "tenant1")
+
+	h.HandleDeleteCollection(ctx, req, resp)
+
+	if recorder.Code == 204 {
+		t.Error("expected non-204 for missing path param")
+	}
+}
+
+func TestHandleDeleteCollection_StorageError(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	validator := testhelpers.NewValidator(t)
+
+	storage := &updatePatchDeleteCollectionStorage{
+		fakeStorage: &fakeStorage{},
+		collection: &api.CollectionResource{
+			Resource: api.Resource{ID: "del-err", Owner: "user1"},
+			CollectionConfig: api.CollectionConfig{
+				Name: "N", Category: "c",
+				Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+			},
+		},
+		deleteErr: serviceerrors.NewServiceError(messages.InternalServerError, "Error", "db error"),
+	}
+	h := handlers.New(storage, validator, &fakeRuntime{}, nil, nil, nil)
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("DELETE", "/api/v1/evaluations/collections/del-err"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{constants.PathParameterCollectionID: "del-err"},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user1", "tenant1")
+
+	h.HandleDeleteCollection(ctx, req, resp)
+
+	if recorder.Code == 204 {
+		t.Errorf("expected error response, got 204")
+	}
+}
+
+func TestHandlePatchCollection_MissingPathParam(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	validator := testhelpers.NewValidator(t)
+
+	h := handlers.New(&fakeStorage{}, validator, &fakeRuntime{}, nil, nil, nil)
+	req := &providersRequest{
+		MockRequest: createMockRequest("PATCH", "/api/v1/evaluations/collections/"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user1", "tenant1")
+
+	h.HandlePatchCollection(ctx, req, resp)
+
+	if recorder.Code == 200 {
+		t.Error("expected non-200 for missing path param")
+	}
+}
+
+func TestHandlePatchCollection_InvalidJSON(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	validator := testhelpers.NewValidator(t)
+
+	h := handlers.New(&fakeStorage{}, validator, &fakeRuntime{}, nil, nil, nil)
+	req := &providersRequest{
+		MockRequest: createMockRequest("PATCH", "/api/v1/evaluations/collections/coll-1"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{constants.PathParameterCollectionID: "coll-1"},
+	}
+	req.SetBody([]byte(`not-valid-json`))
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user1", "tenant1")
+
+	h.HandlePatchCollection(ctx, req, resp)
+
+	if recorder.Code == 200 {
+		t.Error("expected non-200 for invalid JSON patch body")
+	}
+}
+
+func TestHandleCloneCollection_InvalidJSONBody(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	validator := testhelpers.NewValidator(t)
+
+	source := &api.CollectionResource{
+		Resource: api.Resource{ID: "src-json", Owner: "system"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "Source", Category: "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	storage := &cloneCollectionStorage{fakeStorage: &fakeStorage{}, source: source}
+	h := handlers.New(storage, validator, &fakeRuntime{}, nil, nil, nil)
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/collections/src-json/clones"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{constants.PathParameterCollectionID: "src-json"},
+	}
+	req.SetBody([]byte(`{invalid json`))
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user1", "tenant1")
+
+	h.HandleCloneCollection(ctx, req, resp)
+
+	if recorder.Code != 400 {
+		t.Errorf("expected 400 for invalid JSON body, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestApplyOverrides_AllFields(t *testing.T) {
+	t.Parallel()
+	base := api.CollectionConfig{
+		Name: "Base", Category: "base", CurationOrder: 5,
+		Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b-base"}, ProviderID: "p1"}},
+	}
+	customData := map[string]any{"key": "value"}
+	overrides := &api.CollectionConfig{
+		Name:        "Override",
+		Description: "desc",
+		Category:    "override-cat",
+		Tags:        []string{"t1"},
+		Custom:      &customData,
+		Domains:     []string{"d1"},
+		Tasks:       []string{"t1"},
+		Modalities:  []string{"text"},
+		Industries:  []string{"health"},
+		AIEntities:  []string{"agent"},
+	}
+
+	result := base.ApplyOverrides(overrides)
+
+	if result.Name != "Override" {
+		t.Errorf("Name: got %q", result.Name)
+	}
+	if result.Description != "desc" {
+		t.Errorf("Description: got %q", result.Description)
+	}
+	if result.Category != "override-cat" {
+		t.Errorf("Category: got %q", result.Category)
+	}
+	if len(result.Tags) == 0 || result.Tags[0] != "t1" {
+		t.Errorf("Tags: got %v", result.Tags)
+	}
+	if result.Custom == nil {
+		t.Error("Custom should be set")
+	}
+	if result.CurationOrder != 0 {
+		t.Errorf("CurationOrder should be 0 (admin-only), got %d", result.CurationOrder)
+	}
+	// Benchmarks not overridden (no override provided for benchmarks)
+	if result.Benchmarks[0].ID != "b-base" {
+		t.Errorf("Benchmarks should keep base when no override, got %v", result.Benchmarks)
+	}
+}

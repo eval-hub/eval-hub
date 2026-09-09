@@ -461,3 +461,131 @@ func TestCollectionFilters_ArrayFields(t *testing.T) {
 		})
 	}
 }
+
+func TestCollectionDeleteCollection(t *testing.T) {
+	for _, driver := range []string{"sqlite"} {
+		driver := driver
+		t.Run(driver, func(t *testing.T) {
+			t.Parallel()
+			store, err := getTestStorage(t, driver, getDBName())
+			if err != nil {
+				t.Fatalf("getTestStorage: %v", err)
+			}
+			scoped := store.WithTenant("t1").WithOwner("user1")
+
+			coll := &api.CollectionResource{
+				Resource: api.Resource{ID: "del-test", Owner: "user1", Tenant: "t1"},
+				CollectionConfig: api.CollectionConfig{
+					Name: "Delete Me", Category: "test",
+					Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+				},
+			}
+			if err := scoped.CreateCollection(coll); err != nil {
+				t.Fatalf("CreateCollection: %v", err)
+			}
+
+			// Verify it exists
+			if _, err := scoped.GetCollection("del-test"); err != nil {
+				t.Fatalf("GetCollection before delete: %v", err)
+			}
+
+			// Delete it
+			if err := scoped.DeleteCollection("del-test"); err != nil {
+				t.Fatalf("DeleteCollection: %v", err)
+			}
+
+			// Verify it's gone
+			if _, err := scoped.GetCollection("del-test"); err == nil {
+				t.Error("expected error after deletion, got nil")
+			}
+		})
+	}
+}
+
+func TestCollectionDeleteSystemCollectionRejected(t *testing.T) {
+	t.Parallel()
+	store, err := getTestStorage(t, "sqlite", getDBName())
+	if err != nil {
+		t.Fatalf("getTestStorage: %v", err)
+	}
+
+	sysColl := &api.CollectionResource{
+		Resource: api.Resource{ID: "sys-del", Owner: "system"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "System", Category: "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	if err := store.CreateCollection(sysColl); err != nil {
+		t.Fatalf("CreateCollection: %v", err)
+	}
+
+	if err := store.DeleteCollection("sys-del"); err == nil {
+		t.Error("expected error deleting system collection, got nil")
+	}
+}
+
+func TestCollectionPatchCollection(t *testing.T) {
+	for _, driver := range []string{"sqlite"} {
+		driver := driver
+		t.Run(driver, func(t *testing.T) {
+			t.Parallel()
+			store, err := getTestStorage(t, driver, getDBName())
+			if err != nil {
+				t.Fatalf("getTestStorage: %v", err)
+			}
+			scoped := store.WithTenant("t1").WithOwner("user1")
+
+			coll := &api.CollectionResource{
+				Resource: api.Resource{ID: "patch-test", Owner: "user1", Tenant: "t1"},
+				CollectionConfig: api.CollectionConfig{
+					Name: "Original Name", Category: "test",
+					Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+				},
+			}
+			if err := scoped.CreateCollection(coll); err != nil {
+				t.Fatalf("CreateCollection: %v", err)
+			}
+
+			patchOp := api.PatchOpReplace
+			patches := &api.Patch{
+				{Op: patchOp, Path: "/name", Value: "Patched Name"},
+			}
+			updated, err := scoped.PatchCollection("patch-test", patches)
+			if err != nil {
+				t.Fatalf("PatchCollection: %v", err)
+			}
+			if updated.Name != "Patched Name" {
+				t.Errorf("expected name 'Patched Name', got %q", updated.Name)
+			}
+			// VersionCounter should have been incremented
+			if updated.Resource.VersionCounter != 1 {
+				t.Errorf("expected VersionCounter=1 after patch, got %d", updated.Resource.VersionCounter)
+			}
+		})
+	}
+}
+
+func TestCollectionPatchSystemCollectionRejected(t *testing.T) {
+	t.Parallel()
+	store, err := getTestStorage(t, "sqlite", getDBName())
+	if err != nil {
+		t.Fatalf("getTestStorage: %v", err)
+	}
+
+	sysColl := &api.CollectionResource{
+		Resource: api.Resource{ID: "sys-patch", Owner: "system"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "System", Category: "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	if err := store.CreateCollection(sysColl); err != nil {
+		t.Fatalf("CreateCollection: %v", err)
+	}
+
+	patches := &api.Patch{{Op: api.PatchOpReplace, Path: "/name", Value: "New Name"}}
+	if _, err := store.PatchCollection("sys-patch", patches); err == nil {
+		t.Error("expected error patching system collection, got nil")
+	}
+}

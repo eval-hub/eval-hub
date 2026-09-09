@@ -142,6 +142,9 @@ func (c CollectionConfig) ApplyOverrides(overrides *CollectionConfig) Collection
 	if len(overrides.AIEntities) > 0 {
 		c.AIEntities = overrides.AIEntities
 	}
+	if overrides.Custom != nil {
+		c.Custom = overrides.Custom
+	}
 	// CurationOrder is admin-only — never accepted from user overrides
 	c.CurationOrder = 0
 	return c

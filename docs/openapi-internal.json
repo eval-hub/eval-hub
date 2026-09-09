@@ -3063,6 +3063,11 @@
                       "type": "string"
                     },
                     "description": "Override AI entities."
+                  },
+                  "custom": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Override custom key-value data."
                   }
                 }
               },

@@ -82,6 +82,10 @@ post:
               items:
                 type: string
               description: Override AI entities.
+            custom:
+              type: object
+              additionalProperties: true
+              description: Override custom key-value data.
         examples:
           CopyWithNewName:
             summary: Copy with a new name and domain override

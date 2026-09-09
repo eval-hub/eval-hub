@@ -600,7 +600,9 @@ func (h *Handlers) HandleCloneCollection(ctx *executioncontext.ExecutionContext,
 			overrides := &api.CollectionConfig{}
 			if bodyBytes, bErr := req.BodyAsBytes(); bErr == nil && len(bodyBytes) > 0 {
 				if err = json.Unmarshal(bodyBytes, overrides); err != nil {
-					return serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", err.Error())
+					svcErr := serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", err.Error())
+					w.Error(svcErr, ctx.RequestID)
+					return svcErr
 				}
 			}
 
