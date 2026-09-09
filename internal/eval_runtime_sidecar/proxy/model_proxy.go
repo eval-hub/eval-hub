@@ -81,8 +81,9 @@ func loggerForRequest(logger *slog.Logger, req *http.Request) *slog.Logger {
 //     placeholder (e.g. "Bearer local" from OPENAI_API_KEY workarounds) or absent/empty auth.
 //     The adapter cannot read the SA token (pod-level auto-mount is disabled); the sidecar
 //     injects it on its behalf.
-//  5. When the resolved upstream uses HTTP, Authorization is removed and a warning is logged
-//     so credentials are not sent in the clear. The request is still forwarded.
+//  5. Resolved credentials are forwarded on both HTTP and HTTPS upstreams. In-cluster model
+//     endpoints are often plain HTTP but still require SA or secret-backed auth; stripping
+//     Authorization on HTTP caused 401s for those services.
 func NewModelReverseProxy(defaultTarget *url.URL, client *http.Client, logger *slog.Logger, secretMountPath, saTokenPath string) *httputil.ReverseProxy {
 	secretCache := loadSecretCache(secretMountPath, logger)
 
@@ -137,12 +138,7 @@ func NewModelReverseProxy(defaultTarget *url.URL, client *http.Client, logger *s
 			}
 		}
 
-		if modelTargetUsesHTTP(target) {
-			if credential != "" || pr.Out.Header.Get("Authorization") != "" {
-				pr.Out.Header.Del("Authorization")
-				reqLog.Warn("Dropping model Authorization header: upstream URL uses HTTP", "target_host", target.Host)
-			}
-		} else if credential != "" {
+		if credential != "" {
 			SetAuthHeader(pr.Out, credential)
 			switch {
 			case isExplicitHardcodedToken(authHeader):
@@ -169,10 +165,6 @@ func NewModelReverseProxy(defaultTarget *url.URL, client *http.Client, logger *s
 	rp.ErrorHandler = proxyErrorHandler(logger, "Error proxying model request")
 
 	return rp
-}
-
-func modelTargetUsesHTTP(u *url.URL) bool {
-	return u != nil && strings.EqualFold(u.Scheme, "http")
 }
 
 // modelRoundTripper wraps an inner RoundTripper and intercepts requests marked with the
