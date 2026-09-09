@@ -163,15 +163,41 @@ func (tc *scenarioConfig) iFetchMLflowArtifactByExperimentAndJob(artifactName, e
 		return err
 	}
 
-	runID, err := tc.findMLflowRunIDForJob(experimentIDResolved, jobIDResolved)
-	if err != nil {
-		return err
-	}
-	if runID == "" {
-		return tc.logError(fmt.Errorf("no MLflow run found for job %s in experiment %s", jobIDResolved, experimentIDResolved))
+	// Eval card generation is asynchronous — the MLflow run and artifact may
+	// not exist yet when the job status first transitions to "completed".
+	// Poll with a short timeout to allow the card to be created.
+	const artifactPollTimeout = 30 * time.Second
+	const artifactPollInterval = 2 * time.Second
+
+	deadline := time.Now().Add(artifactPollTimeout)
+	var lastErr error
+
+	for time.Now().Before(deadline) {
+		runID, err := tc.findMLflowRunIDForJob(experimentIDResolved, jobIDResolved)
+		if err != nil {
+			lastErr = err
+			tc.logDebug("Waiting for MLflow run for job %s: %v\n", jobIDResolved, err)
+			time.Sleep(artifactPollInterval)
+			continue
+		}
+		if runID == "" {
+			lastErr = fmt.Errorf("no MLflow run found for job %s in experiment %s", jobIDResolved, experimentIDResolved)
+			tc.logDebug("Waiting for MLflow run for job %s in experiment %s\n", jobIDResolved, experimentIDResolved)
+			time.Sleep(artifactPollInterval)
+			continue
+		}
+
+		err = tc.fetchMLflowArtifactWithExperimentID(artifactName, experimentIDResolved, runID)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		tc.logDebug("Waiting for MLflow artifact %s for job %s: %v\n", artifactName, jobIDResolved, err)
+		time.Sleep(artifactPollInterval)
 	}
 
-	return tc.fetchMLflowArtifactWithExperimentID(artifactName, experimentIDResolved, runID)
+	return tc.logError(fmt.Errorf("timed out after %v waiting for MLflow artifact %s for job %s in experiment %s: %w",
+		artifactPollTimeout, artifactName, jobIDResolved, experimentIDResolved, lastErr))
 }
 
 func (tc *scenarioConfig) theMLflowArtifactShouldNotExistForExperimentAndJob(artifactName, experimentID, jobID string) error {
