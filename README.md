@@ -206,6 +206,23 @@ Configuration is loaded from `config/config.yaml`, overridden by environment var
 
 Provider configurations live in `config/providers/` as YAML files. The default set includes lm-evaluation-harness (167 benchmarks), RAGAS, Garak, GuideLLM, LightEval, and MTEB.
 
+### Syncing providers and collections to the TrustyAI operator
+
+Provider and collection definitions are maintained here and mirrored as ConfigMaps in the [TrustyAI Service Operator](https://github.com/trustyai-explainability/trustyai-service-operator):
+
+- Providers: `config/providers/` → `config/configmaps/evalhub/provider-*.yaml`
+- Collections: `config/collections/` → `config/configmaps/evalhub/collection-*.yaml`
+
+When adding or changing a provider or collection, update the source YAML in this repository and the corresponding embedded ConfigMap in the operator repository. Add new ConfigMaps to the operator's `config/configmaps/evalhub/kustomization.yaml`. Keep the two repositories' changes coordinated so the operator can deploy the same definitions.
+
+The sync check compares the embedded ConfigMap YAML with the source files. Run it locally with:
+
+```bash
+python scripts/check_configmap_sync.py
+```
+
+The same check runs in CI through the [TrustyAI Operator ConfigMap Sync workflow](.github/workflows/check-trustyai-service-operator-configmap-sync.yml).
+
 ## API overview
 
 All endpoints are versioned under `/api/v1`. Full specification at [eval-hub.github.io/eval-hub](https://eval-hub.github.io/eval-hub/).
