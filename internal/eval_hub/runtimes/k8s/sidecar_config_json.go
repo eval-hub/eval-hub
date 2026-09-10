@@ -31,7 +31,7 @@ func sidecarForJobPod(cfg *config.Config, jc *jobConfig) (*config.SidecarConfig,
 				export.EvalHub.InsecureSkipVerify = false
 			}
 		}
-		if hasGitTestData(jc) {
+		if hasGitTestData(jc) || hasHFTestData(jc) {
 			export.InitContainer = &config.InitContainerConfig{IsGitJob: true}
 		}
 		if jc.mlflowTrackingURI != "" {

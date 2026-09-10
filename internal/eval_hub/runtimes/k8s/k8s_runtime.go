@@ -228,6 +228,8 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		return fmt.Errorf("service config is required")
 	}
 	jobConfig.testDataInitImage = r.serviceConfig.Service.EvalInitImage
+	jobConfig.testDataDownloadTimeout = r.serviceConfig.Service.EffectiveTestDataRefDownloadTimeout()
+	jobConfig.testDataHF.hubEndpoint = r.serviceConfig.Service.EffectiveHFHubEndpoint()
 	jobConfig.mlflowCABundleConfigMap = r.resolveMLFlowCABundleConfigMap(ctx, jobConfig, logger)
 	logger.Info(
 		"kubernetes job config",

@@ -11,7 +11,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -20,6 +19,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"github.com/eval-hub/eval-hub/internal/runtimeenv"
+	"github.com/eval-hub/eval-hub/internal/testdatainit"
 )
 
 const (
@@ -37,8 +37,6 @@ const (
 	envGitRef     = "TEST_DATA_GIT_REF"
 	envGitSubPath = "TEST_DATA_GIT_SUBPATH"
 	envGitTimeout = "TEST_DATA_GIT_TIMEOUT"
-
-	defaultTimeout = 10 * time.Minute
 )
 
 // Paths and URL validation are package vars so unit tests can redirect mounts and
@@ -75,16 +73,9 @@ func runS3() error {
 	}
 
 	keyPrefix = strings.TrimPrefix(keyPrefix, "/")
-	timeout := defaultTimeout
-	if raw := strings.TrimSpace(os.Getenv(envS3Timeout)); raw != "" {
-		parsed, err := time.ParseDuration(raw)
-		if err != nil {
-			return fmt.Errorf("invalid %s: %w", envS3Timeout, err)
-		}
-		if parsed <= 0 {
-			return fmt.Errorf("invalid %s: must be a positive duration", envS3Timeout)
-		}
-		timeout = parsed
+	timeout, err := testdatainit.ParseDownloadTimeout(envS3Timeout)
+	if err != nil {
+		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()

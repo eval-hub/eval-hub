@@ -16,17 +16,18 @@ const DefaultMaxLogResponseBytes int64 = 50 << 20 // 50 MiB
 const DefaultLogStreamTimeout = 5 * time.Minute
 
 type ServiceConfig struct {
-	Version         string `mapstructure:"version,omitempty"`
-	Build           string `mapstructure:"build,omitempty"`
-	BuildDate       string `mapstructure:"build_date,omitempty"`
-	GitHash         string `mapstructure:"git_hash,omitempty"`
-	Port            int    `mapstructure:"port,omitempty"`
-	Host            string `mapstructure:"host,omitempty"`
-	TerminationFile string `mapstructure:"termination_file"`
-	EvalInitImage   string `mapstructure:"eval_init_image,omitempty"`
-	LocalMode       bool   `mapstructure:"local_mode,omitempty"`
-	TLSCertFile     string `mapstructure:"tls_cert_file,omitempty"`
-	TLSKeyFile      string `mapstructure:"tls_key_file,omitempty"`
+	Version         string                    `mapstructure:"version,omitempty"`
+	Build           string                    `mapstructure:"build,omitempty"`
+	BuildDate       string                    `mapstructure:"build_date,omitempty"`
+	GitHash         string                    `mapstructure:"git_hash,omitempty"`
+	Port            int                       `mapstructure:"port,omitempty"`
+	Host            string                    `mapstructure:"host,omitempty"`
+	TerminationFile string                    `mapstructure:"termination_file"`
+	EvalInitImage   string                    `mapstructure:"eval_init_image,omitempty"`
+	TestDataRef     *TestDataRefServiceConfig `mapstructure:"test_data_ref,omitempty"`
+	LocalMode       bool                      `mapstructure:"local_mode,omitempty"`
+	TLSCertFile     string                    `mapstructure:"tls_cert_file,omitempty"`
+	TLSKeyFile      string                    `mapstructure:"tls_key_file,omitempty"`
 	// ReadTimeout is http.Server ReadTimeout (entire request read). Zero uses default (15s).
 	ReadTimeout time.Duration `mapstructure:"read_timeout,omitempty"`
 	// WriteTimeout is http.Server WriteTimeout. Zero uses default (15s).
@@ -151,6 +152,22 @@ func (c *ServiceConfig) EffectiveLogStreamTimeout() time.Duration {
 	return c.LogStreamTimeout
 }
 
+// EffectiveTestDataRefDownloadTimeout returns the shared test-data init download timeout.
+func (c *ServiceConfig) EffectiveTestDataRefDownloadTimeout() time.Duration {
+	if c == nil || c.TestDataRef == nil {
+		return DefaultTestDataRefDownloadTimeout
+	}
+	return c.TestDataRef.EffectiveDownloadTimeout()
+}
+
+// EffectiveHFHubEndpoint returns the Hugging Face Hub API base URL for HF test-data jobs.
+func (c *ServiceConfig) EffectiveHFHubEndpoint() string {
+	if c == nil || c.TestDataRef == nil {
+		return DefaultHFHubEndpoint
+	}
+	return c.TestDataRef.EffectiveHFEndpoint()
+}
+
 // ValidateHTTPConfig returns an error when HTTP-related settings are invalid.
 func (c *ServiceConfig) ValidateHTTPConfig() error {
 	if c == nil {
@@ -179,6 +196,11 @@ func (c *ServiceConfig) ValidateHTTPConfig() error {
 	}
 	if c.LogStreamTimeout < 0 {
 		return fmt.Errorf("service.log_stream_timeout must not be negative")
+	}
+	if c.TestDataRef != nil {
+		if err := c.TestDataRef.Validate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

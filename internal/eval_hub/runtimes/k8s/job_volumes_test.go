@@ -2,8 +2,10 @@ package k8s
 
 import (
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/testdatainit"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -848,5 +850,157 @@ func TestBuildJobWithGitTestDataMissingInitImage(t *testing.T) {
 	_, err := buildJob(cfg, nil)
 	if err == nil {
 		t.Fatal("expected error when git test data is set but init image is missing")
+	}
+}
+
+func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:                   "job-hf-public",
+		resourceGUID:            "guid-hf-public",
+		benchmarkIndex:          0,
+		namespace:               "default",
+		providerID:              "provider-1",
+		benchmarkID:             "bench-1",
+		adapterImage:            "adapter:latest",
+		defaultEnv:              []api.EnvVar{},
+		testDataInitImage:       "quay.io/evalhub/evalhub:test",
+		testDataDownloadTimeout: 15 * time.Minute,
+		testDataHF: hfTestDataConfig{
+			repoID:      "cais/mmlu",
+			revision:    "main",
+			hubEndpoint: "https://huggingface.co",
+		},
+	}
+
+	job, err := buildJob(cfg, nil)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	initContainer := findContainer(job.Spec.Template.Spec.InitContainers, initContainerName)
+	if initContainer == nil {
+		t.Fatal("expected HF init container")
+	}
+	if initContainer.Image != "quay.io/evalhub/evalhub:test" {
+		t.Fatalf("unexpected init image: %s", initContainer.Image)
+	}
+	if len(initContainer.Command) != 2 || initContainer.Command[0] != defaultTestDataHFInitCmd || initContainer.Command[1] != defaultTestDataHFInitScript {
+		t.Fatalf("expected init command [%q, %q], got %v", defaultTestDataHFInitCmd, defaultTestDataHFInitScript, initContainer.Command)
+	}
+
+	var foundRepoID, foundEndpoint, foundTimeout bool
+	for _, env := range initContainer.Env {
+		switch env.Name {
+		case envTestDataHFRepoIDName:
+			foundRepoID = env.Value == "cais/mmlu"
+		case envTestDataHFRevisionName:
+			if env.Value != "main" {
+				t.Fatalf("expected revision main, got %q", env.Value)
+			}
+		case envTestDataHFEndpointName:
+			foundEndpoint = env.Value == "https://huggingface.co"
+		case testdatainit.EnvDownloadTimeout:
+			foundTimeout = env.Value == (15 * time.Minute).String()
+		}
+	}
+	if !foundRepoID {
+		t.Fatal("expected repo_id env var on HF init container")
+	}
+	if !foundEndpoint {
+		t.Fatal("expected HF endpoint env var on HF init container")
+	}
+	if !foundTimeout {
+		t.Fatal("expected download timeout env var on HF init container")
+	}
+
+	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
+	if sidecar == nil {
+		t.Fatal("expected sidecar init container")
+	}
+	var foundMetadataMount bool
+	for _, m := range sidecar.VolumeMounts {
+		if m.Name == initMetadataVolumeName {
+			foundMetadataMount = true
+		}
+	}
+	if !foundMetadataMount {
+		t.Fatal("expected sidecar to mount init-metadata volume for HF source")
+	}
+}
+
+func TestBuildJobWithHFTestDataPrivateRepo(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:             "job-hf-private",
+		resourceGUID:      "guid-hf-private",
+		benchmarkIndex:    0,
+		namespace:         "default",
+		providerID:        "provider-1",
+		benchmarkID:       "bench-1",
+		adapterImage:      "adapter:latest",
+		defaultEnv:        []api.EnvVar{},
+		testDataInitImage: "quay.io/evalhub/evalhub:test",
+		testDataHF: hfTestDataConfig{
+			repoID:      "org/gated-dataset",
+			secretRef:   "my-hf-secret",
+			hubEndpoint: "https://huggingface.co",
+		},
+	}
+
+	job, err := buildJob(cfg, nil)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	initContainer := findContainer(job.Spec.Template.Spec.InitContainers, initContainerName)
+	if initContainer == nil {
+		t.Fatal("expected HF init container")
+	}
+
+	var foundSecretVolume, foundSecretMount bool
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == testDataHFAuthVolumeName {
+			foundSecretVolume = true
+			if v.Secret == nil || v.Secret.SecretName != "my-hf-secret" {
+				t.Fatalf("expected secret volume with secret %q", "my-hf-secret")
+			}
+		}
+	}
+	for _, m := range initContainer.VolumeMounts {
+		if m.Name == testDataHFAuthVolumeName && m.MountPath == testDataInitMountPath && m.ReadOnly {
+			foundSecretMount = true
+		}
+	}
+	if !foundSecretVolume {
+		t.Fatal("expected HF secret volume for gated repo")
+	}
+	if !foundSecretMount {
+		t.Fatal("expected HF secret mount in init container for gated repo")
+	}
+
+	for _, m := range job.Spec.Template.Spec.Containers[0].VolumeMounts {
+		if m.Name == testDataHFAuthVolumeName {
+			t.Fatalf("adapter must not mount HF secret volume")
+		}
+	}
+}
+
+func TestBuildJobWithHFTestDataMissingInitImage(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "job-hf-no-image",
+		resourceGUID:   "guid-hf-no-image",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
+		testDataHF: hfTestDataConfig{
+			repoID: "cais/mmlu",
+		},
+	}
+
+	_, err := buildJob(cfg, nil)
+	if err == nil {
+		t.Fatal("expected error when HF test data is set but init image is missing")
 	}
 }
