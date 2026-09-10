@@ -51,7 +51,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -o evalhub-mcp \
     ./cmd/evalhub_mcp
 
-# Runtime stage
+# Runtime stage (ubi-minimal + python3.11 for optional HF init entrypoint)
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 # Create user and app directory
@@ -65,6 +65,14 @@ COPY --from=builder --chown=evalhub:evalhub /build/eval-hub /app/eval-hub
 COPY --from=builder --chown=evalhub:evalhub /build/eval-runtime-sidecar /app/eval-runtime-sidecar
 COPY --from=builder --chown=evalhub:evalhub /build/eval-runtime-init /app/eval-runtime-init
 COPY --from=builder --chown=evalhub:evalhub /build/evalhub-mcp /app/evalhub-mcp
+
+# Hugging Face Hub test-data download entrypoint (python3.11 /app/hf_download.py)
+COPY cmd/eval_hf_runtime_init/requirements.txt /app/hf-requirements.txt
+RUN microdnf install -y python3.11 python3.11-pip && \
+    microdnf clean all && \
+    pip3.11 install --no-cache-dir -r /app/hf-requirements.txt
+COPY --chown=evalhub:evalhub cmd/eval_hf_runtime_init/hf_download.py /app/hf_download.py
+RUN chmod 755 /app/hf_download.py && chown evalhub:evalhub /app/hf_download.py
 
 # The swagger source files required for the openapi.yaml and docs
 COPY --chown=evalhub:evalhub docs/openapi.* /app/docs/

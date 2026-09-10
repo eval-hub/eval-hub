@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
@@ -79,7 +80,9 @@ type jobConfig struct {
 	testDataS3                 s3TestDataConfig
 	testDataPVC                pvcTestDataConfig
 	testDataGit                gitTestDataConfig
+	testDataHF                 hfTestDataConfig
 	testDataInitImage          string
+	testDataDownloadTimeout    time.Duration
 	sidecarConfig              *config.SidecarConfig
 	// queueKind and queueName come from a queue-backed HardwareProfile when set,
 	// otherwise from effective hardware_config.queue, else deprecated evaluation.queue
@@ -104,6 +107,14 @@ type gitTestDataConfig struct {
 	ref       string
 	subPath   string
 	secretRef string
+}
+
+type hfTestDataConfig struct {
+	repoID      string
+	revision    string
+	subPath     string
+	secretRef   string
+	hubEndpoint string // service.test_data_ref.hf.endpoint; injected into HF init container
 }
 
 func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkConfig *api.EvaluationBenchmarkConfig, benchmarkIndex int, serviceConfig *config.Config, hardwareProfile *hardwareProfileResources) (*jobConfig, error) {
@@ -220,6 +231,14 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		testDataGitSecretRef = strings.TrimSpace(benchmarkConfig.TestDataRef.Git.SecretRef)
 	}
 
+	var testDataHFRepoID, testDataHFRevision, testDataHFSubPath, testDataHFSecretRef string
+	if benchmarkConfig.TestDataRef != nil && benchmarkConfig.TestDataRef.HF != nil {
+		testDataHFRepoID = strings.TrimSpace(benchmarkConfig.TestDataRef.HF.RepoID)
+		testDataHFRevision = strings.TrimSpace(benchmarkConfig.TestDataRef.HF.Revision)
+		testDataHFSubPath = strings.TrimSpace(benchmarkConfig.TestDataRef.HF.SubPath)
+		testDataHFSecretRef = strings.TrimSpace(benchmarkConfig.TestDataRef.HF.SecretRef)
+	}
+
 	// GPU resource requests/limits are always propagated to the pod spec so that Kueue can
 	// account for GPU quota. Provider nodeSelector is the default; a HardwareProfile with
 	// Node scheduling overrides it, and a Queue-backed profile (or hardware_config.queue /
@@ -278,6 +297,12 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 			ref:       testDataGitRef,
 			subPath:   testDataGitSubPath,
 			secretRef: testDataGitSecretRef,
+		},
+		testDataHF: hfTestDataConfig{
+			repoID:    testDataHFRepoID,
+			revision:  testDataHFRevision,
+			subPath:   testDataHFSubPath,
+			secretRef: testDataHFSecretRef,
 		},
 	}
 	applyHardwareProfileResources(out, hardwareProfile)

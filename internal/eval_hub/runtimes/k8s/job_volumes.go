@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/eval-hub/eval-hub/internal/testdatainit"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
@@ -168,7 +169,7 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 	// PVC test data: mount the PVC directly — no init container required.
 	// Git and S3 are exclusive with PVC (enforced by the API validator).
 	// All test-data mounts are read-only on the adapter; result files go to /data.
-	if hasS3TestData(cfg) || hasGitTestData(cfg) {
+	if hasS3TestData(cfg) || hasGitTestData(cfg) || hasHFTestData(cfg) {
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      testDataVolumeName,
 			MountPath: testDataMountPath,
@@ -338,7 +339,7 @@ func buildSidecarContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 	// Mount the init-metadata volume on the sidecar so it can read .git-metadata written
 	// by the init container and report the resolved commit SHA to eval-hub.
 	// The volume is declared by initContainerVolumesAndMounts; only the mount is added here.
-	if hasGitTestData(cfg) {
+	if hasGitTestData(cfg) || hasHFTestData(cfg) {
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      initMetadataVolumeName,
 			MountPath: initMetadataMountPath,
@@ -410,10 +411,10 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 			ImagePullPolicy: corev1.PullIfNotPresent,
 			Command:         []string{defaultTestDataInitCmd},
 			Resources:       initResources,
-			Env: []corev1.EnvVar{
+			Env: appendTestDataDownloadTimeoutEnv([]corev1.EnvVar{
 				{Name: envTestDataS3BucketName, Value: cfg.testDataS3.bucket},
 				{Name: envTestDataS3KeyName, Value: normalizeS3Key(cfg.testDataS3.key)},
-			},
+			}, cfg),
 			SecurityContext: defaultSecurityContext(),
 			VolumeMounts: []corev1.VolumeMount{
 				{
@@ -447,10 +448,10 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 			},
 		)
 
-		envVars := []corev1.EnvVar{
+		envVars := appendTestDataDownloadTimeoutEnv([]corev1.EnvVar{
 			{Name: envTestDataGitURLName, Value: cfg.testDataGit.url},
 			{Name: envTestDataGitRefName, Value: cfg.testDataGit.ref},
-		}
+		}, cfg)
 		if cfg.testDataGit.subPath != "" {
 			envVars = append(envVars, corev1.EnvVar{Name: envTestDataGitSubPathName, Value: cfg.testDataGit.subPath})
 		}
@@ -491,6 +492,74 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 			Env:             envVars,
 			SecurityContext: defaultSecurityContext(),
 			VolumeMounts:    gitInitVolumeMounts,
+		})
+	}
+	if hasHFTestData(cfg) {
+		if cfg.testDataInitImage == "" {
+			return nil, nil, fmt.Errorf("init image is required when Hugging Face test data is configured")
+		}
+		volumes = append(volumes,
+			corev1.Volume{
+				Name: testDataVolumeName,
+				VolumeSource: corev1.VolumeSource{
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
+				},
+			},
+			corev1.Volume{
+				Name: initMetadataVolumeName,
+				VolumeSource: corev1.VolumeSource{
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
+				},
+			},
+		)
+
+		envVars := appendTestDataDownloadTimeoutEnv([]corev1.EnvVar{
+			{Name: envTestDataHFRepoIDName, Value: cfg.testDataHF.repoID},
+			{Name: envTestDataHFEndpointName, Value: cfg.testDataHF.hubEndpoint},
+		}, cfg)
+		if cfg.testDataHF.revision != "" {
+			envVars = append(envVars, corev1.EnvVar{Name: envTestDataHFRevisionName, Value: cfg.testDataHF.revision})
+		}
+		if cfg.testDataHF.subPath != "" {
+			envVars = append(envVars, corev1.EnvVar{Name: envTestDataHFSubPathName, Value: cfg.testDataHF.subPath})
+		}
+
+		hfInitVolumeMounts := []corev1.VolumeMount{
+			{
+				Name:      testDataVolumeName,
+				MountPath: testDataMountPath,
+			},
+			{
+				Name:      initMetadataVolumeName,
+				MountPath: initMetadataMountPath,
+			},
+		}
+
+		if cfg.testDataHF.secretRef != "" {
+			volumes = append(volumes, corev1.Volume{
+				Name: testDataHFAuthVolumeName,
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: cfg.testDataHF.secretRef,
+					},
+				},
+			})
+			hfInitVolumeMounts = append(hfInitVolumeMounts, corev1.VolumeMount{
+				Name:      testDataHFAuthVolumeName,
+				MountPath: testDataInitMountPath,
+				ReadOnly:  true,
+			})
+		}
+
+		initContainers = append(initContainers, corev1.Container{
+			Name:            initContainerName,
+			Image:           cfg.testDataInitImage,
+			ImagePullPolicy: corev1.PullIfNotPresent,
+			Command:         []string{defaultTestDataHFInitCmd, defaultTestDataHFInitScript},
+			Resources:       initResources,
+			Env:             envVars,
+			SecurityContext: defaultSecurityContext(),
+			VolumeMounts:    hfInitVolumeMounts,
 		})
 	}
 	return initContainers, volumes, nil
@@ -569,6 +638,20 @@ func hasPVCTestData(cfg *jobConfig) bool {
 // secretRef is intentionally not required here — public repos need no auth.
 func hasGitTestData(cfg *jobConfig) bool {
 	return cfg.testDataGit.url != "" && cfg.testDataGit.ref != ""
+}
+
+func hasHFTestData(cfg *jobConfig) bool {
+	return strings.TrimSpace(cfg.testDataHF.repoID) != ""
+}
+
+func appendTestDataDownloadTimeoutEnv(envVars []corev1.EnvVar, cfg *jobConfig) []corev1.EnvVar {
+	if cfg == nil || cfg.testDataDownloadTimeout <= 0 {
+		return envVars
+	}
+	return append(envVars, corev1.EnvVar{
+		Name:  testdatainit.EnvDownloadTimeout,
+		Value: cfg.testDataDownloadTimeout.String(),
+	})
 }
 
 func normalizeS3Key(key string) string {

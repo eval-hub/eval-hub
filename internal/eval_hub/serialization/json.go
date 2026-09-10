@@ -41,11 +41,11 @@ func formatValidationError(errs validator.ValidationErrors) string {
 		return fmt.Sprintf("%s must be one of: %s", e.Field(), strings.ReplaceAll(e.Param(), " ", ", "))
 	case "excluded_with":
 		if isTestDataRefSourceField(e.Field()) {
-			return "test_data_ref: exactly one of s3, pvc, or git must be set"
+			return "test_data_ref: exactly one of s3, pvc, git, or hf must be set"
 		}
 	case "required_without_all":
 		if isTestDataRefSourceField(e.Field()) {
-			return "test_data_ref: one of s3, pvc, or git must be set"
+			return "test_data_ref: one of s3, pvc, git, or hf must be set"
 		}
 	case "git_http_with_secret":
 		if param := e.Param(); param != "" {
@@ -62,7 +62,7 @@ func formatValidationError(errs validator.ValidationErrors) string {
 
 func isTestDataRefSourceField(field string) bool {
 	switch field {
-	case "s3", "pvc", "git":
+	case "s3", "pvc", "git", "hf":
 		return true
 	default:
 		return false
