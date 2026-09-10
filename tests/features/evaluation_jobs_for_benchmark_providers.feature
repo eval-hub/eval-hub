@@ -32,9 +32,10 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 9
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
-  @f3
+
   Scenario: Verifying results returned for Evaluation job - guidellm - group 1
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_guidellm.json"
@@ -52,6 +53,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 4
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -72,6 +74,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 3
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -94,6 +97,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 11
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -116,6 +120,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 17
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -139,6 +144,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 25
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -162,6 +168,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 30
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -184,6 +191,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 30
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -205,6 +213,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 30
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -229,6 +238,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 30
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -253,6 +263,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 38
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -273,6 +284,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 5
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
@@ -295,6 +307,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 2
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 

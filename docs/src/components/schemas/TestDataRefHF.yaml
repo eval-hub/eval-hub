@@ -36,7 +36,8 @@ properties:
     type: string
     description: |
       Hugging Face Hub repository ID (for example `cais/mmlu` or `my-org/my-dataset`).
-    example: cais/mmlu
+    examples:
+      - cais/mmlu
   revision:
     type: string
     description: |
@@ -46,23 +47,26 @@ properties:
       - **Branch**: `main`, `feat/my-branch`
       - **Tag**: `v1.0.0`
       - **Commit SHA**: `a3f9c12e8b...` (full or abbreviated hex)
-    example: main
+    examples:
+      - main
   sub_path:
     type: string
     description: |
       Optional path within the repository to mount at `/test_data` instead of the
       repository root. Useful when the repository contains data for multiple benchmarks
       in separate directories.
-    example: data/train
+    examples:
+      - data/train
   secret_ref:
     type: string
     description: |
       Name of a Kubernetes **`Secret`** of type `Opaque` containing a **`token`** key in the
       evaluation job namespace, mounted read-only into the test-data init container.
       Omit for public repositories.
-    example: my-hf-credentials
-example:
-  repo_id: cais/mmlu
-  revision: main
-  sub_path: data/train
-  secret_ref: my-hf-credentials
+    examples:
+      - my-hf-credentials
+examples:
+  - repo_id: cais/mmlu
+    revision: main
+    sub_path: data/train
+    secret_ref: my-hf-credentials

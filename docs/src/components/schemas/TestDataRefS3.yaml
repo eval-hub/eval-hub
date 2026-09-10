@@ -33,7 +33,7 @@ properties:
     description: |
       Name of a Kubernetes **`Secret`** in the evaluation job namespace, mounted
       read-only into the test-data init container.
-example:
-  bucket: my-eval-bucket
-  key: datasets/benchmark-a/v1
-  secret_ref: my-s3-connection-secret
+examples:
+  - bucket: my-eval-bucket
+    key: datasets/benchmark-a/v1
+    secret_ref: my-s3-connection-secret

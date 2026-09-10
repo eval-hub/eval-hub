@@ -1535,7 +1535,7 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain "results.benchmarks[0]"
     And the MLflow artifact should contain "results.benchmarks[1]"
