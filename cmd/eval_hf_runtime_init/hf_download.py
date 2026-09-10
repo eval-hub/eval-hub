@@ -10,12 +10,15 @@ import os
 import re
 import shutil
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 if TYPE_CHECKING:
     from multiprocessing.context import BaseContext
+
+ExecuteDownloadFn = Callable[..., str]
 
 DEST_DIR = Path("/test_data")
 METADATA_DIR = Path("/run/init-metadata")
@@ -312,12 +315,13 @@ def _download_process_worker(
     token: str | None,
     hf_cache_dir: str,
     timeout_seconds: float,
+    execute_download: ExecuteDownloadFn,
     result_queue: multiprocessing.Queue,
 ) -> None:
     try:
         _configure_logging()
         _configure_hf_hub_timeouts(timeout_seconds)
-        commit_sha = _execute_download(
+        commit_sha = execute_download(
             repo_id=repo_id,
             revision=revision,
             sub_path=sub_path,
@@ -338,7 +342,9 @@ def _run_download_with_timeout(
     endpoint: str | None,
     token: str | None,
     hf_cache_dir: Path,
+    execute_download: ExecuteDownloadFn | None = None,
 ) -> DownloadResult:
+    download_fn = execute_download or _execute_download
     ctx = _multiprocessing_context()
     result_queue = ctx.Queue()
     process = ctx.Process(
@@ -351,6 +357,7 @@ def _run_download_with_timeout(
             token,
             str(hf_cache_dir),
             timeout_seconds,
+            download_fn,
             result_queue,
         ),
     )
