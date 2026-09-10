@@ -4,10 +4,12 @@ on:
   pull_request:
     paths:
       - "config/providers/**"
+      - ".github/workflows/validate-provider-images.yml"
   push:
     branches: [main]
     paths:
       - "config/providers/**"
+      - ".github/workflows/validate-provider-images.yml"
   workflow_dispatch: {}
 
 permissions:
@@ -29,9 +31,26 @@ jobs:
       - name: Install crane
         env:
           CRANE_VERSION: v0.22.1
+          SLSA_VERIFIER_VERSION: v2.7.1
         run: |
-          curl -sSL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" \
-            | tar -xzf - crane
+          ARCHIVE="go-containerregistry_Linux_x86_64.tar.gz"
+          PROVENANCE="multiple.intoto.jsonl"
+
+          curl -sSL -o "$ARCHIVE" \
+            "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/${ARCHIVE}"
+          curl -sSL -o "$PROVENANCE" \
+            "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/${PROVENANCE}"
+
+          curl -sSL -o slsa-verifier \
+            "https://github.com/slsa-framework/slsa-verifier/releases/download/${SLSA_VERIFIER_VERSION}/slsa-verifier-linux-amd64"
+          chmod +x slsa-verifier
+
+          ./slsa-verifier verify-artifact "$ARCHIVE" \
+            --provenance-path "$PROVENANCE" \
+            --source-uri github.com/google/go-containerregistry \
+            --source-tag "$CRANE_VERSION"
+
+          tar -xzf "$ARCHIVE" crane
           sudo mv crane /usr/local/bin/
           crane version
 
