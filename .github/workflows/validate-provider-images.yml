@@ -1,0 +1,81 @@
+name: Validate provider container images exist
+
+on:
+  pull_request:
+    paths:
+      - "config/providers/**"
+      - ".github/workflows/validate-provider-images.yml"
+  push:
+    branches: [main]
+    paths:
+      - "config/providers/**"
+      - ".github/workflows/validate-provider-images.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check-images:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install crane
+        env:
+          CRANE_VERSION: v0.22.1
+          SLSA_VERIFIER_VERSION: v2.7.1
+        run: |
+          ARCHIVE="go-containerregistry_Linux_x86_64.tar.gz"
+          PROVENANCE="multiple.intoto.jsonl"
+
+          curl -sSL -o "$ARCHIVE" \
+            "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/${ARCHIVE}"
+          curl -sSL -o "$PROVENANCE" \
+            "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/${PROVENANCE}"
+
+          curl -sSL -o slsa-verifier \
+            "https://github.com/slsa-framework/slsa-verifier/releases/download/${SLSA_VERIFIER_VERSION}/slsa-verifier-linux-amd64"
+          chmod +x slsa-verifier
+
+          ./slsa-verifier verify-artifact "$ARCHIVE" \
+            --provenance-path "$PROVENANCE" \
+            --source-uri github.com/google/go-containerregistry \
+            --source-tag "$CRANE_VERSION"
+
+          tar -xzf "$ARCHIVE" crane
+          sudo mv crane /usr/local/bin/
+          crane version
+
+      - name: Verify provider images exist in registry
+        run: |
+          EXIT=0
+          echo "Checking container images referenced in provider configs..."
+          echo ""
+          for file in config/providers/*.yaml; do
+            image=$(yq -r '.runtime.k8s.image // ""' "$file")
+            [ -z "$image" ] && continue
+            name=$(basename "$file")
+            printf "  %-40s %-60s " "$name" "$image"
+            if crane manifest "$image" > /dev/null 2>&1; then
+              echo "OK"
+            else
+              echo "NOT FOUND"
+              EXIT=1
+            fi
+          done
+          echo ""
+          if [ "$EXIT" -ne 0 ]; then
+            echo "One or more provider images could not be found in their registry."
+            echo "Verify the image name, org, and tag are correct."
+          else
+            echo "All provider images verified."
+          fi
+          exit $EXIT
