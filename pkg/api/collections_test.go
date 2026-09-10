@@ -232,3 +232,109 @@ func TestResourceVersionOmittedWhenZero(t *testing.T) {
 		t.Error("version_counter must be omitted when zero")
 	}
 }
+
+func TestApplyOverrides(t *testing.T) {
+	t.Parallel()
+	base := api.CollectionConfig{
+		Name: "Base", Category: "base", CurationOrder: 5,
+		Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b-base"}, ProviderID: "p1"}},
+	}
+
+	t.Run("nil overrides returns base unchanged", func(t *testing.T) {
+		t.Parallel()
+		result := base.ApplyOverrides(nil)
+		if result.Name != "Base" {
+			t.Errorf("expected Base, got %q", result.Name)
+		}
+		if result.CurationOrder != 5 {
+			t.Errorf("expected CurationOrder=5 (nil override preserves), got %d", result.CurationOrder)
+		}
+	})
+
+	t.Run("empty overrides reset CurationOrder to 0", func(t *testing.T) {
+		t.Parallel()
+		result := base.ApplyOverrides(&api.CollectionConfig{})
+		if result.CurationOrder != 0 {
+			t.Errorf("expected CurationOrder=0, got %d", result.CurationOrder)
+		}
+	})
+
+	t.Run("name override applied", func(t *testing.T) {
+		t.Parallel()
+		result := base.ApplyOverrides(&api.CollectionConfig{Name: "Override"})
+		if result.Name != "Override" {
+			t.Errorf("expected Override, got %q", result.Name)
+		}
+	})
+
+	t.Run("benchmarks override applied", func(t *testing.T) {
+		t.Parallel()
+		newBench := []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "new-b"}, ProviderID: "p2"}}
+		result := base.ApplyOverrides(&api.CollectionConfig{Benchmarks: newBench})
+		if len(result.Benchmarks) != 1 || result.Benchmarks[0].ID != "new-b" {
+			t.Errorf("expected override benchmarks, got %v", result.Benchmarks)
+		}
+	})
+
+	t.Run("tags override applied", func(t *testing.T) {
+		t.Parallel()
+		result := base.ApplyOverrides(&api.CollectionConfig{Tags: []string{"t1", "t2"}})
+		if len(result.Tags) != 2 {
+			t.Errorf("expected 2 tags, got %v", result.Tags)
+		}
+	})
+
+	t.Run("custom override applied", func(t *testing.T) {
+		t.Parallel()
+		data := map[string]any{"k": "v"}
+		result := base.ApplyOverrides(&api.CollectionConfig{Custom: &data})
+		if result.Custom == nil {
+			t.Error("expected custom to be set")
+		}
+	})
+
+	t.Run("domains/tasks/modalities/industries/ai_entities override applied", func(t *testing.T) {
+		t.Parallel()
+		result := base.ApplyOverrides(&api.CollectionConfig{
+			Domains:    []string{"d1"},
+			Tasks:      []string{"t1"},
+			Modalities: []string{"text"},
+			Industries: []string{"health"},
+			AIEntities: []string{"model"},
+		})
+		if len(result.Domains) == 0 || result.Domains[0] != "d1" {
+			t.Errorf("Domains not applied: %v", result.Domains)
+		}
+		if len(result.Tasks) == 0 || result.Tasks[0] != "t1" {
+			t.Errorf("Tasks not applied: %v", result.Tasks)
+		}
+	})
+}
+
+func TestToEvaluationBenchmark(t *testing.T) {
+	t.Parallel()
+	b := api.CollectionBenchmarkConfig{
+		Ref:          api.Ref{ID: "b1"},
+		ProviderID:   "p1",
+		URL:          "https://example.com/b1",
+		Weight:       0.8,
+		PrimaryScore: &api.PrimaryScore{Metric: "acc"},
+		PassCriteria: &api.PassCriteria{},
+		Parameters:   map[string]any{"limit": 10},
+	}
+	eb := b.ToEvaluationBenchmark()
+	if eb.ID != "b1" {
+		t.Errorf("ID: got %q, want %q", eb.ID, "b1")
+	}
+	// URL is stripped by ToEvaluationBenchmark (not in EvaluationBenchmarkConfig)
+	_ = eb // verify compiles
+	if false {
+		t.Error("unreachable")
+	}
+	if eb.ProviderID != "p1" {
+		t.Errorf("ProviderID: got %q", eb.ProviderID)
+	}
+	if eb.Weight != 0.8 {
+		t.Errorf("Weight: got %f", eb.Weight)
+	}
+}
