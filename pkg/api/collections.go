@@ -145,6 +145,9 @@ func (c CollectionConfig) ApplyOverrides(overrides *CollectionConfig) Collection
 	if overrides.Custom != nil {
 		c.Custom = overrides.Custom
 	}
+	if overrides.Agent != nil {
+		c.Agent = overrides.Agent
+	}
 	// CurationOrder is admin-only — never accepted from user overrides
 	c.CurationOrder = 0
 	return c

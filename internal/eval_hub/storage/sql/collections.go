@@ -124,7 +124,7 @@ func (s *sqlStorage) UpdateCollection(id string, collection *api.CollectionConfi
 		if err != nil {
 			return err
 		}
-		if persistedCollection.Resource.IsSystemResource() {
+		if persistedCollection.Resource.IsSystemResource() || persistedCollection.CurationOrder > 0 {
 			return serviceerrors.NewServiceError(
 				messages.ReadOnlyCollection,
 				"CollectionID", id,
@@ -214,11 +214,16 @@ func (s *sqlStorage) PatchCollection(id string, patches *api.Patch) (*api.Collec
 		if err != nil {
 			return err
 		}
-		if persistedCollection.Resource.Owner == "system" {
+		if persistedCollection.Resource.Owner == "system" || persistedCollection.CurationOrder > 0 {
 			return serviceerrors.NewServiceError(
 				messages.ReadOnlyCollection,
 				"CollectionID", id,
 			)
+		}
+		// Ensure State is non-nil before serializing for JSON Patch so that
+		// /state/pinned_order add/replace operations have a parent key to target.
+		if persistedCollection.State == nil {
+			persistedCollection.State = &api.CollectionState{}
 		}
 		// convert persistedCollection to json
 		persistedCollectionJSON, err := s.createCollectionEntity(persistedCollection)

@@ -598,7 +598,12 @@ func (h *Handlers) HandleCloneCollection(ctx *executioncontext.ExecutionContext,
 			// Parse optional body as overrides — required fields are inherited from source.
 			// Invalid JSON is rejected; missing body or empty body is accepted (no overrides).
 			overrides := &api.CollectionConfig{}
-			if bodyBytes, bErr := req.BodyAsBytes(); bErr == nil && len(bodyBytes) > 0 {
+			bodyBytes, bErr := req.BodyAsBytes()
+			if bErr != nil {
+				w.Error(bErr, ctx.RequestID)
+				return bErr
+			}
+			if len(bodyBytes) > 0 {
 				if err = json.Unmarshal(bodyBytes, overrides); err != nil {
 					svcErr := serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", err.Error())
 					w.Error(svcErr, ctx.RequestID)
@@ -609,6 +614,13 @@ func (h *Handlers) HandleCloneCollection(ctx *executioncontext.ExecutionContext,
 			// Build new config by applying overrides on top of the source.
 			// ApplyOverrides always resets CurationOrder to 0.
 			newConfig := source.ApplyOverrides(overrides)
+
+			// Validate merged config — benchmarks still require non-empty id and provider_id.
+			if err = h.validate.StructCtx(runtimeCtx, newConfig); err != nil {
+				svcErr := serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error", err.Error())
+				w.Error(svcErr, ctx.RequestID)
+				return svcErr
+			}
 
 			newID := common.GUID()
 			now := time.Now()

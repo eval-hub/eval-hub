@@ -1532,6 +1532,42 @@ func TestHandleCloneCollection_InvalidJSONBody(t *testing.T) {
 	}
 }
 
+func TestHandleCloneCollection_InvalidBenchmarkOverride(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	validator := testhelpers.NewValidator(t)
+
+	source := &api.CollectionResource{
+		Resource: api.Resource{ID: "src-bench", Owner: "system"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "Source", Category: "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	storage := &cloneCollectionStorage{fakeStorage: &fakeStorage{}, source: source}
+	h := handlers.New(storage, validator, &fakeRuntime{}, nil, nil, nil)
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/collections/src-bench/clones"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{constants.PathParameterCollectionID: "src-bench"},
+	}
+	// Override benchmarks with an entry missing required provider_id
+	req.SetBody([]byte(`{"benchmarks":[{"id":"","provider_id":""}]}`))
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user1", "tenant1")
+
+	h.HandleCloneCollection(ctx, req, resp)
+
+	if recorder.Code != 400 {
+		t.Errorf("expected 400 for invalid benchmark override, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if storage.created != nil {
+		t.Error("collection must not be persisted when validation fails")
+	}
+}
+
 func TestApplyOverrides_AllFields(t *testing.T) {
 	t.Parallel()
 	base := api.CollectionConfig{
@@ -1550,6 +1586,7 @@ func TestApplyOverrides_AllFields(t *testing.T) {
 		Modalities:  []string{"text"},
 		Industries:  []string{"health"},
 		AIEntities:  []string{"agent"},
+		Agent:       &api.CollectionAgentMetadata{Summary: "override-agent"},
 	}
 
 	result := base.ApplyOverrides(overrides)
@@ -1575,5 +1612,8 @@ func TestApplyOverrides_AllFields(t *testing.T) {
 	// Benchmarks not overridden (no override provided for benchmarks)
 	if result.Benchmarks[0].ID != "b-base" {
 		t.Errorf("Benchmarks should keep base when no override, got %v", result.Benchmarks)
+	}
+	if result.Agent == nil || result.Agent.Summary != "override-agent" {
+		t.Errorf("Agent: expected override, got %v", result.Agent)
 	}
 }

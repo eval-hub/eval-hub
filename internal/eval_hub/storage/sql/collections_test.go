@@ -588,3 +588,83 @@ func TestCollectionPatchSystemCollectionRejected(t *testing.T) {
 		t.Error("expected error patching system collection, got nil")
 	}
 }
+
+func TestCollectionUpdateCuratedCollectionRejected(t *testing.T) {
+	t.Parallel()
+	store, err := getTestStorage(t, "sqlite", getDBName())
+	if err != nil {
+		t.Fatalf("getTestStorage: %v", err)
+	}
+
+	curated := &api.CollectionResource{
+		Resource: api.Resource{ID: "curated-update", Owner: "system"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "Curated", Category: "test", CurationOrder: 1,
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	if err := store.CreateCollection(curated); err != nil {
+		t.Fatalf("CreateCollection: %v", err)
+	}
+
+	updated := api.CollectionConfig{Name: "Hacked", Category: "test",
+		Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}}}
+	if _, err := store.UpdateCollection("curated-update", &updated); err == nil {
+		t.Error("expected error updating curated collection, got nil")
+	}
+}
+
+func TestCollectionPatchCuratedCollectionRejected(t *testing.T) {
+	t.Parallel()
+	store, err := getTestStorage(t, "sqlite", getDBName())
+	if err != nil {
+		t.Fatalf("getTestStorage: %v", err)
+	}
+
+	curated := &api.CollectionResource{
+		Resource: api.Resource{ID: "curated-patch", Owner: "system"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "Curated", Category: "test", CurationOrder: 2,
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	if err := store.CreateCollection(curated); err != nil {
+		t.Fatalf("CreateCollection: %v", err)
+	}
+
+	patches := &api.Patch{{Op: api.PatchOpReplace, Path: "/name", Value: "Hacked"}}
+	if _, err := store.PatchCollection("curated-patch", patches); err == nil {
+		t.Error("expected error patching curated collection, got nil")
+	}
+}
+
+func TestCollectionPatch_NilStateInitialized(t *testing.T) {
+	t.Parallel()
+	store, err := getTestStorage(t, "sqlite", getDBName())
+	if err != nil {
+		t.Fatalf("getTestStorage: %v", err)
+	}
+	scoped := store.WithTenant("t-patch-state").WithOwner("user1")
+
+	// Create a tenant collection without explicit State (simulates legacy record)
+	coll := &api.CollectionResource{
+		Resource: api.Resource{ID: "patch-state-nil", Owner: "user1", Tenant: "t-patch-state"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "NilState", Category: "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+		State: nil,
+	}
+	if err := scoped.CreateCollection(coll); err != nil {
+		t.Fatalf("CreateCollection: %v", err)
+	}
+
+	patches := &api.Patch{{Op: api.PatchOpAdd, Path: "/state/pinned_order", Value: float64(3)}}
+	updated, err := scoped.PatchCollection("patch-state-nil", patches)
+	if err != nil {
+		t.Fatalf("PatchCollection /state/pinned_order on nil-State collection: %v", err)
+	}
+	if updated.State == nil || updated.State.PinnedOrder != 3 {
+		t.Errorf("expected PinnedOrder=3, got state=%+v", updated.State)
+	}
+}
