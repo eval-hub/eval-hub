@@ -114,7 +114,11 @@ func resolvePrimaryScore(bench *api.EvaluationBenchmarkConfig, provider *api.Pro
 	if provider != nil {
 		for i := range provider.Benchmarks {
 			if provider.Benchmarks[i].ID == bench.ID {
-				return provider.Benchmarks[i].PrimaryScore
+				ps := provider.Benchmarks[i].PrimaryScore
+				if ps != nil && ps.Metric != "" {
+					return ps
+				}
+				return nil
 			}
 		}
 	}

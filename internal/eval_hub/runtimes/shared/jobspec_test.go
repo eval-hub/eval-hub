@@ -468,3 +468,22 @@ func TestBuildJobSpec_NoPrimaryScoreWhenNeitherSet(t *testing.T) {
 		t.Fatalf("expected nil PrimaryScore when neither benchmark nor provider define it, got %+v", spec.PrimaryScore)
 	}
 }
+
+func TestBuildJobSpec_NoPrimaryScoreWhenProviderBenchmarkMatchesButNil(t *testing.T) {
+	t.Parallel()
+	eval := baseEvaluation()
+	provider := &api.ProviderResource{
+		ProviderConfig: api.ProviderConfig{
+			Benchmarks: []api.BenchmarkResource{
+				{ID: "bench-1"},
+			},
+		},
+	}
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil, provider)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if spec.PrimaryScore != nil {
+		t.Fatalf("expected nil PrimaryScore when provider benchmark has none, got %+v", spec.PrimaryScore)
+	}
+}
