@@ -7,7 +7,7 @@ type: builtin
 
 runtime:
   k8s:
-    image: quay.io/eval-hub/nemo-guardrails:latest
+    image: quay.io/eval-hub/community-nemo-guardrails:latest
     image_pull_policy: always
     entrypoint: [python, main.py]
     cpu_request: 500m
