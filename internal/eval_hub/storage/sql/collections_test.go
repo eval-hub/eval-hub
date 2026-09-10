@@ -440,7 +440,6 @@ func TestCollectionFilters_ArrayFields(t *testing.T) {
 	} {
 		tc := tc
 		t.Run(tc.key, func(t *testing.T) {
-			t.Parallel()
 			filter := &abstractions.QueryFilter{
 				Limit: 50, Offset: 0,
 				Params: map[string]any{tc.key: tc.value},
