@@ -5,13 +5,17 @@ from __future__ import annotations
 
 import logging
 import math
+import multiprocessing
 import os
 import re
 import shutil
-import signal
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
+
+if TYPE_CHECKING:
+    from multiprocessing.context import BaseContext
 
 DEST_DIR = Path("/test_data")
 METADATA_DIR = Path("/run/init-metadata")
@@ -33,8 +37,12 @@ DEFAULT_HF_CACHE_DIR = Path("/tmp/huggingface")
 DEFAULT_TERMINATION_MESSAGE_PATH = Path("/dev/termination-log")
 # Kubelet reads at most 4 KiB from the termination message file.
 _MAX_TERMINATION_MESSAGE_BYTES = 4096
+_PROCESS_TERMINATE_GRACE_SECONDS = 5.0
 
 logger = logging.getLogger(__name__)
+
+# (status, commit_sha, error_message)
+DownloadResult = tuple[str, str, str]
 
 
 class DownloadTimeoutError(TimeoutError):
@@ -186,21 +194,6 @@ def _dest_has_data(root: Path) -> bool:
     return any(root.iterdir())
 
 
-def _install_timeout(seconds: float) -> None:
-    if seconds <= 0:
-        return
-
-    def _handle_timeout(signum, frame):  # noqa: ARG001
-        raise DownloadTimeoutError(f"download exceeded timeout of {seconds:g}s")
-
-    signal.signal(signal.SIGALRM, _handle_timeout)
-    signal.setitimer(signal.ITIMER_REAL, seconds)
-
-
-def _clear_timeout() -> None:
-    signal.setitimer(signal.ITIMER_REAL, 0)
-
-
 def _termination_message_path() -> Path:
     raw = os.environ.get("TERMINATION_MESSAGE_PATH", "").strip()
     if raw:
@@ -229,6 +222,151 @@ def _fail(message: str) -> int:
     return 1
 
 
+def _multiprocessing_context() -> BaseContext:
+    try:
+        return multiprocessing.get_context("fork")
+    except ValueError:
+        return multiprocessing.get_context("spawn")
+
+
+def _terminate_stuck_process(process: multiprocessing.Process) -> None:
+    process.terminate()
+    process.join(_PROCESS_TERMINATE_GRACE_SECONDS)
+    if process.is_alive():
+        process.kill()
+        process.join()
+
+
+def _worker_error_result(err: BaseException) -> DownloadResult:
+    try:
+        from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError
+    except ModuleNotFoundError:
+        return ("error", "", str(err))
+
+    if isinstance(err, GatedRepoError):
+        return ("gated", "", "")
+    if isinstance(err, RepositoryNotFoundError):
+        return ("not_found", "", str(err))
+    return ("error", "", str(err))
+
+
+def _execute_download(
+    repo_id: str,
+    revision: str | None,
+    sub_path: str,
+    endpoint: str | None,
+    token: str | None,
+    hf_cache_dir: Path,
+) -> str:
+    from huggingface_hub import HfApi, snapshot_download
+
+    api = HfApi(endpoint=endpoint, token=token)
+
+    logger.info("resolving revision for repo_id=%s revision=%s", repo_id, revision or "default")
+    info = api.repo_info(repo_id=repo_id, revision=revision, repo_type="dataset")
+    commit_sha = info.sha
+    if not commit_sha:
+        raise RuntimeError(f"could not resolve commit SHA for {repo_id}")
+
+    logger.info("downloading repository repo_id=%s revision=%s", repo_id, commit_sha)
+    snapshot_kwargs = {
+        "repo_id": repo_id,
+        "repo_type": "dataset",
+        "revision": commit_sha,
+        "token": token,
+        "endpoint": endpoint,
+    }
+    _clear_dest_dir(DEST_DIR)
+    if sub_path:
+        download_root = Path(
+            snapshot_download(
+                **snapshot_kwargs,
+                cache_dir=str(hf_cache_dir),
+                allow_patterns=_sub_path_allow_patterns(sub_path),
+            )
+        )
+        _stage_sub_path(download_root, sub_path, DEST_DIR)
+    else:
+        # Download into /tmp cache and copy into DEST_DIR. Using local_dir=DEST_DIR
+        # on OpenShift writes staging files under /test_data/.cache; permission
+        # errors there can leave DEST_DIR empty after metadata cleanup.
+        download_root = Path(
+            snapshot_download(
+                **snapshot_kwargs,
+                cache_dir=str(hf_cache_dir),
+            )
+        )
+        _copy_tree(download_root, DEST_DIR)
+
+    if not _dest_has_data(DEST_DIR):
+        raise RuntimeError(f"no files were staged under {DEST_DIR}")
+
+    return commit_sha
+
+
+def _download_process_worker(
+    repo_id: str,
+    revision: str | None,
+    sub_path: str,
+    endpoint: str | None,
+    token: str | None,
+    hf_cache_dir: str,
+    timeout_seconds: float,
+    result_queue: multiprocessing.Queue,
+) -> None:
+    try:
+        _configure_logging()
+        _configure_hf_hub_timeouts(timeout_seconds)
+        commit_sha = _execute_download(
+            repo_id=repo_id,
+            revision=revision,
+            sub_path=sub_path,
+            endpoint=endpoint,
+            token=token,
+            hf_cache_dir=Path(hf_cache_dir),
+        )
+        result_queue.put(("ok", commit_sha, ""))
+    except Exception as err:  # noqa: BLE001
+        result_queue.put(_worker_error_result(err))
+
+
+def _run_download_with_timeout(
+    timeout_seconds: float,
+    repo_id: str,
+    revision: str | None,
+    sub_path: str,
+    endpoint: str | None,
+    token: str | None,
+    hf_cache_dir: Path,
+) -> DownloadResult:
+    ctx = _multiprocessing_context()
+    result_queue = ctx.Queue()
+    process = ctx.Process(
+        target=_download_process_worker,
+        args=(
+            repo_id,
+            revision,
+            sub_path,
+            endpoint,
+            token,
+            str(hf_cache_dir),
+            timeout_seconds,
+            result_queue,
+        ),
+    )
+    process.start()
+    process.join(timeout_seconds)
+    if process.is_alive():
+        _terminate_stuck_process(process)
+        raise DownloadTimeoutError(f"download exceeded timeout of {timeout_seconds:g}s")
+
+    if result_queue.empty():
+        exit_code = process.exitcode
+        raise RuntimeError(f"download worker exited without reporting a result (exit code {exit_code})")
+
+    return result_queue.get()
+
+
 def main() -> int:
     _configure_logging()
     hf_cache_dir = _configure_hf_cache()
@@ -249,71 +387,32 @@ def main() -> int:
     if endpoint:
         os.environ["HF_ENDPOINT"] = endpoint
 
-    _configure_hf_hub_timeouts(timeout_seconds)
-    from huggingface_hub import HfApi, snapshot_download
-    from huggingface_hub.utils import GatedRepoError, RepositoryNotFoundError
-
-    token = _read_token()
-    api = HfApi(endpoint=endpoint or None, token=token)
-
-    logger.info("resolving revision for repo_id=%s revision=%s", repo_id, revision or "default")
-    _install_timeout(timeout_seconds)
-    commit_sha = ""
     try:
-        info = api.repo_info(repo_id=repo_id, revision=revision, repo_type="dataset")
-        commit_sha = info.sha
-        if not commit_sha:
-            raise RuntimeError(f"could not resolve commit SHA for {repo_id}")
-
-        logger.info("downloading repository repo_id=%s revision=%s", repo_id, commit_sha)
-        snapshot_kwargs = {
-            "repo_id": repo_id,
-            "repo_type": "dataset",
-            "revision": commit_sha,
-            "token": token,
-            "endpoint": endpoint or None,
-        }
-        _clear_dest_dir(DEST_DIR)
-        if sub_path:
-            download_root = Path(
-                snapshot_download(
-                    **snapshot_kwargs,
-                    cache_dir=str(hf_cache_dir),
-                    allow_patterns=_sub_path_allow_patterns(sub_path),
-                )
-            )
-            _stage_sub_path(download_root, sub_path, DEST_DIR)
-        else:
-            # Download into /tmp cache and copy into DEST_DIR. Using local_dir=DEST_DIR
-            # on OpenShift writes staging files under /test_data/.cache; permission
-            # errors there can leave DEST_DIR empty after metadata cleanup.
-            download_root = Path(
-                snapshot_download(
-                    **snapshot_kwargs,
-                    cache_dir=str(hf_cache_dir),
-                )
-            )
-            _copy_tree(download_root, DEST_DIR)
-
-        if not _dest_has_data(DEST_DIR):
-            raise RuntimeError(f"no files were staged under {DEST_DIR}")
-
-        _write_metadata(commit_sha)
-        logger.info("hf source ready dest=%s commit_sha=%s", DEST_DIR, commit_sha)
+        status, commit_sha, error_message = _run_download_with_timeout(
+            timeout_seconds=timeout_seconds,
+            repo_id=repo_id,
+            revision=revision,
+            sub_path=sub_path,
+            endpoint=endpoint,
+            token=_read_token(),
+            hf_cache_dir=hf_cache_dir,
+        )
     except DownloadTimeoutError as err:
         return _fail(str(err))
-    except GatedRepoError:
+    except Exception as err:  # noqa: BLE001
+        return _fail(f"hf download failed: {err}")
+
+    if status == "ok":
+        _write_metadata(commit_sha)
+        logger.info("hf source ready dest=%s commit_sha=%s", DEST_DIR, commit_sha)
+        return 0
+    if status == "gated":
         return _fail(
             f"repository {repo_id} is gated; provide secret_ref with a Hugging Face token"
         )
-    except RepositoryNotFoundError as err:
-        return _fail(f"repository not found: {err}")
-    except Exception as err:  # noqa: BLE001
-        return _fail(f"hf download failed: {err}")
-    finally:
-        _clear_timeout()
-
-    return 0
+    if status == "not_found":
+        return _fail(f"repository not found: {error_message}")
+    return _fail(f"hf download failed: {error_message}")
 
 
 if __name__ == "__main__":
