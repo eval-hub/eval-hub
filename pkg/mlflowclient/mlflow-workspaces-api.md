@@ -21,7 +21,7 @@
 Reports whether the MLflow server supports workspace-scoped APIs.
 Returns `404 Not Found` on MLflow releases that pre-date workspace support.
 
-#### Response Structure
+#### Server Info Response
 
 | Field Name           | Type | Description                                           |
 | -------------------- | ---- | ----------------------------------------------------- |
@@ -48,7 +48,7 @@ specific workspace.
 Create a new workspace. This is a **global** operation — the `X-MLFLOW-WORKSPACE`
 header is **not** sent with this request.
 
-#### Request Structure
+#### Create Workspace Request
 
 | Field Name             | Type                                            | Description                                                        |
 | ---------------------- | ----------------------------------------------- | ------------------------------------------------------------------ |
@@ -57,13 +57,13 @@ header is **not** sent with this request.
 | `default_artifact_root`| STRING                                          | Optional default artifact root override to apply at creation time. |
 | `trace_archival_config`| [TraceArchivalConfig](#tracearchivalconfig)      | Optional trace archival settings to apply at creation time.        |
 
-#### Response Structure
+#### Create Workspace Response
 
 | Field Name  | Type                        | Description                                |
 | ----------- | --------------------------- | ------------------------------------------ |
 | `workspace` | [Workspace](#workspace)     | Metadata describing the created workspace. |
 
-#### Errors
+#### Create Workspace Errors
 
 | Error Code                | HTTP Status | Description                                        |
 | ------------------------- | ----------- | -------------------------------------------------- |
@@ -79,19 +79,19 @@ header is **not** sent with this request.
 
 Retrieve metadata for a single workspace.
 
-#### Path Parameters
+#### Get Workspace Path Parameters
 
 | Parameter        | Type   | Description                                             |
 | ---------------- | ------ | ------------------------------------------------------- |
 | `workspace_name` | STRING | Name of the workspace to fetch. **Required.**           |
 
-#### Response Structure
+#### Get Workspace Response
 
 | Field Name  | Type                        | Description                                  |
 | ----------- | --------------------------- | -------------------------------------------- |
 | `workspace` | [Workspace](#workspace)     | Metadata describing the requested workspace. |
 
-#### Errors
+#### Get Workspace Errors
 
 | Error Code                  | HTTP Status | Description                             |
 | --------------------------- | ----------- | --------------------------------------- |
@@ -107,13 +107,13 @@ Retrieve metadata for a single workspace.
 
 Update workspace metadata.
 
-#### Path Parameters
+#### Update Workspace Path Parameters
 
 | Parameter        | Type   | Description                                              |
 | ---------------- | ------ | -------------------------------------------------------- |
 | `workspace_name` | STRING | Name of the workspace to update. **Required.**           |
 
-#### Request Structure
+#### Update Workspace Request
 
 | Field Name             | Type                                            | Description                                     |
 | ---------------------- | ----------------------------------------------- | ----------------------------------------------- |
@@ -121,7 +121,7 @@ Update workspace metadata.
 | `default_artifact_root`| STRING                                          | Optional default artifact root override update. |
 | `trace_archival_config`| [TraceArchivalConfig](#tracearchivalconfig)      | Optional trace archival settings update.        |
 
-#### Response Structure
+#### Update Workspace Response
 
 | Field Name  | Type                        | Description                                |
 | ----------- | --------------------------- | ------------------------------------------ |
@@ -137,7 +137,7 @@ Update workspace metadata.
 
 Delete a workspace.
 
-#### Path Parameters
+#### Delete Workspace Path Parameters
 
 | Parameter        | Type   | Description                                              |
 | ---------------- | ------ | -------------------------------------------------------- |
@@ -153,7 +153,7 @@ Delete a workspace.
 
 List all workspaces.
 
-#### Response Structure
+#### List Workspaces Response
 
 | Field Name   | Type                                | Description                      |
 | ------------ | ----------------------------------- | -------------------------------- |
